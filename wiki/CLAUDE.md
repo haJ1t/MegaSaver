@@ -9,6 +9,8 @@ updated: 2026-05-03
 This vault is the **persistent memory** for the Mega Saver project. It compounds across sessions so future Claude instances do not re-discover decisions, re-read the original `fikri.txt`, or re-explain the architecture.
 
 > **Read order at session start:** `wiki/index.md` first (catalog) → targeted page reads on demand. Do NOT read all pages.
+>
+> **Wiki-first hard rule (user directive 2026-05-03):** the wiki is the ONLY memory channel for project knowledge. Do NOT skip the wiki and dive into raw fikri / spec / plan files for orientation. Wiki pages are the index and the synthesis; raw files are accessed only after the wiki points at them with a specific reason (a quote needed, a detail not yet captured). If the wiki lacks a needed page, the right move is to write it during the work, not to bypass the wiki.
 
 ## Purpose
 
