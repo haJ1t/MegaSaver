@@ -38,6 +38,16 @@ yarn-error.log*
 .megasaver/sessions/
 .megasaver/cache/
 
+# Wiki raw sources — local-only.
+# Per the wiki schema (wiki/CLAUDE.md), raw/ contents are read by the
+# agent but never modified. Some raw sources contain pre-publication
+# product notes and are excluded from public history. The agent works
+# from the indexed summary in wiki/sources/ instead.
+wiki/raw/*.txt
+wiki/raw/*.md
+wiki/raw/*.pdf
+!wiki/raw/.gitkeep
+
 # OMC runtime
 .omc/state/
 .omc/sessions/
