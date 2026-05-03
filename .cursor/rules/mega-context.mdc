@@ -1,0 +1,50 @@
+---
+description: Mega Saver — mission, repo layout, stack
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Mega Saver — Context
+
+Source-of-truth references:
+- `docs/conventions/mission.md`
+- `docs/conventions/repo-layout.md`
+- `docs/conventions/stack-and-commands.md`
+
+## Mission
+
+Mega Saver is the ContextOps platform for frontier coding agents.
+Core is agent-agnostic; connectors are thin adapters. Tagline:
+"Less tokens. More signal. Same or better agent performance."
+
+Mega Saver is NOT a model proxy, NOT an LLM-blinder, NOT a team
+chatops tool.
+
+## Repo Layout
+
+Monorepo. pnpm workspaces. Turborepo orchestration.
+
+```
+apps/cli                          # `mega` CLI
+packages/core                     # Core Engine
+packages/mcp-bridge               # MCP server (v0.2)
+packages/connectors/claude-code   # First connector
+packages/connectors/generic-cli   # CLI wrapper
+packages/skill-packs              # Skill pack templates (v0.2)
+packages/shared                   # Types, schemas, util
+docs/conventions                  # Single source of truth
+docs/superpowers/{specs,plans}    # Brainstorm + implementation
+```
+
+## Stack
+
+Node 22 LTS · TypeScript strict ESM · pnpm · Turborepo · tsup ·
+Vitest · Biome · Citty · Changesets.
+
+## Commands
+
+```bash
+pnpm dev / build / test / lint / typecheck / verify
+pnpm --filter @megasaver/<pkg> <cmd>
+```

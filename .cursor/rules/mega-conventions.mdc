@@ -1,0 +1,80 @@
+---
+description: Mega Saver — code conventions, git, anti-patterns
+globs:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.md"
+  - "**/*.mdx"
+alwaysApply: false
+---
+
+# Mega Saver — Code & Git Conventions
+
+Source-of-truth references:
+- `docs/conventions/code-conventions.md`
+- `docs/conventions/git-and-commits.md`
+- `docs/conventions/anti-patterns.md`
+- `docs/conventions/language.md`
+
+## Code
+
+TypeScript strict + ESM + NodeNext. `noUncheckedIndexedAccess`,
+`exactOptionalPropertyTypes`, `isolatedModules`, target `ES2023`.
+Project references for monorepo.
+
+Files ≤ 300 LOC, single responsibility. One package = one bounded
+context. Cross-package import only via public `exports`. No
+circular imports.
+
+Validate at boundaries with Zod. Trust internals.
+
+Default no comments. Exception: WHY non-obvious only.
+
+3 similar lines > premature abstraction. No half-implementations.
+No impossible-case fallbacks. No pre-1.0 backward-compat shims.
+
+Naming: packages `@megasaver/<name>`, files `kebab-case.ts`,
+types `PascalCase`, vars/fns `camelCase`, true consts only as
+`SCREAMING_SNAKE_CASE`.
+
+## Language
+
+Code, docs, comments, commits: English. Conversation may vary;
+output always English. Product user-facing strings v0.1 English
+only; v0.2+ adds `tr` via `packages/shared/i18n`. Never hardcode
+Turkish in code.
+
+## Git & Commits
+
+Trunk-based with feature worktrees. Branch names:
+`feat/<scope>-<slug>`, `fix/<scope>-<slug>`, `chore/<slug>`,
+`docs/<slug>`.
+
+Conventional Commits + `caveman-commit` style. Subject ≤ 50 chars,
+imperative. Body explains WHY only when non-obvious. One logical
+change per commit. No "wip" pollution on `main`.
+
+Pre-merge: rebase on `main`, `pnpm verify` green, reviewer agent
+pass, PR template filled.
+
+No `--no-verify`, no force-push to `main`, no `git reset --hard`
+without confirmation.
+
+## Anti-Patterns
+
+- No half-implementations. No impossible-case fallbacks.
+- No pre-1.0 backward-compat shims.
+- No premature abstraction. 3 lines > 1 fragile abstraction.
+- No comments without WHY.
+- No "wip" / "fix typo" commits on `main`.
+- No hook bypass unless asked.
+- No silent retries on error.
+- No raw tool output / test logs into context.
+- No agent-specific logic in `@megasaver/core`.
+- No memory writes without metadata.
+- No destructive ops without explicit confirmation.
+- No "too small for a spec."
+- No `author == reviewer`.
+- No editing this file without also editing
+  `docs/conventions/`.
+- No "done" claim before all DoD items pass.

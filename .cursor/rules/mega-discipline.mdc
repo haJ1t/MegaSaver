@@ -1,0 +1,60 @@
+---
+description: Mega Saver — process discipline, DoD, skill routing
+globs:
+  - "packages/**"
+  - "apps/**"
+  - "docs/superpowers/**"
+alwaysApply: true
+---
+
+# Mega Saver — Discipline
+
+Source-of-truth references:
+- `docs/conventions/process-discipline.md`
+- `docs/conventions/definition-of-done.md`
+- `docs/conventions/skill-routing.md`
+- `docs/conventions/risk-modes.md`
+
+## Process — every feature
+
+In order, no exceptions:
+
+1. Spec at `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`.
+2. Plan at `docs/superpowers/plans/YYYY-MM-DD-<topic>-plan.md`.
+3. TDD — failing test before production code.
+4. Verification — `pnpm verify` plus smoke evidence.
+5. External review — fresh-context reviewer agent.
+
+Hard gates: no impl without spec; no merge without `pnpm verify`
+green and external review pass; no "done" without evidence.
+
+## Definition of Done
+
+ALL must hold: spec ✓ plan ✓ TDD ✓ `pnpm verify` green ✓
+smoke evidence ✓ reviewer pass ✓ verifier pass ✓ zero pending
+todos ✓ changeset (if public API) ✓ agent files in sync (if
+conventions changed) ✓.
+
+Do NOT claim "complete" / "fixed" / "passing" / "shipped" before
+items 4–7 met.
+
+## Risk modes
+
+| Level    | Examples                                | Required                                                      |
+|----------|-----------------------------------------|---------------------------------------------------------------|
+| LOW      | docs, copy, log message                 | brainstorm + lite verify                                      |
+| MEDIUM   | normal feature, refactor, non-critical fix | full chain + reviewer                                      |
+| HIGH     | Core, connector core, public surface, user files at scale | full chain + architect + critic + worktree |
+| CRITICAL | crypto, data delete, permissions, incident | HIGH + tracer + security-reviewer + manual confirmation. NO autopilot/ralph |
+
+## Skill routing
+
+GUI phase (v0.3+): `huashu-design` (concept) → `taste-skill` /
+`gpt-tasteskill` (impl) → `impeccable` (audit/polish).
+Accessibility: `design:accessibility-review`. Critique:
+`design:design-critique`. Style packs: `ui-ux-pro-max`,
+`minimalist`, `soft`, `brutalist`.
+
+OMC: `omc:plan`, `omc:ultrawork`, `omc:ralph`, `omc:team`,
+`omc:debug`, `omc:trace`, `omc:verify`, `omc:wiki`. Avoid
+`omc:autopilot` until v0.2.
