@@ -47,7 +47,10 @@ items 4–7 met.
 | HIGH     | Core, connector core, public surface, user files at scale | full chain + architect + critic + worktree |
 | CRITICAL | crypto, data delete, permissions, incident | HIGH + tracer + security-reviewer + manual confirmation. NO autopilot/ralph |
 
-## Skill routing
+## Skill routing (Cursor-relevant subset)
+
+> This is a curated subset for Cursor. The full canonical list lives
+> in `docs/conventions/skill-routing.md`. When in doubt, consult it.
 
 GUI phase (v0.3+): `huashu-design` (concept) → `taste-skill` /
 `gpt-tasteskill` (impl) → `impeccable` (audit/polish).
@@ -56,5 +59,5 @@ Accessibility: `design:accessibility-review`. Critique:
 `minimalist`, `soft`, `brutalist`.
 
 OMC: `omc:plan`, `omc:ultrawork`, `omc:ralph`, `omc:team`,
-`omc:debug`, `omc:trace`, `omc:verify`, `omc:wiki`. Avoid
-`omc:autopilot` until v0.2.
+`omc:debug`, `omc:trace`, `omc:verify`, `omc:deepinit`, `omc:wiki`.
+Avoid `omc:autopilot` until v0.2.

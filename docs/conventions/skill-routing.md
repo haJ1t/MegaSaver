@@ -58,6 +58,9 @@ Agents (via Agent tool):
 - `writer` — docs/comments.
 - `document-specialist` — external SDK/API docs.
 - `security-reviewer` — OWASP/secrets pass.
+- `test-engineer` — test strategy, integration/e2e, flaky-test hardening.
+- `tracer` — evidence-driven causal tracing with competing hypotheses.
+- `designer` — UI/UX implementation work (GUI phase).
 
 ## claude-api skill
 
