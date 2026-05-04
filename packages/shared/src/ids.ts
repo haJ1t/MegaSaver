@@ -6,8 +6,5 @@ export type ProjectId = z.infer<typeof projectIdSchema>;
 export const sessionIdSchema = z.string().uuid().brand<"SessionId">();
 export type SessionId = z.infer<typeof sessionIdSchema>;
 
-export const memoryEntryIdSchema = z
-  .string()
-  .uuid()
-  .brand<"MemoryEntryId">();
+export const memoryEntryIdSchema = z.string().uuid().brand<"MemoryEntryId">();
 export type MemoryEntryId = z.infer<typeof memoryEntryIdSchema>;

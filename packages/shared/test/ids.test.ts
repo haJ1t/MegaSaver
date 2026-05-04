@@ -2,15 +2,14 @@ import * as fc from "fast-check";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   type MemoryEntryId,
-  memoryEntryIdSchema,
   type ProjectId,
-  projectIdSchema,
   type SessionId,
+  memoryEntryIdSchema,
+  projectIdSchema,
   sessionIdSchema,
 } from "../src/ids.js";
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SAMPLE_UUID = "11111111-1111-4111-8111-111111111111";
 
 describe.each([
