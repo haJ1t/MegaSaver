@@ -1,13 +1,8 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { riskLevelSchema, type RiskLevel } from "../src/risk-level.js";
+import { type RiskLevel, riskLevelSchema } from "../src/risk-level.js";
 
-const members: ReadonlyArray<RiskLevel> = [
-  "low",
-  "medium",
-  "high",
-  "critical",
-];
+const members: ReadonlyArray<RiskLevel> = ["low", "medium", "high", "critical"];
 
 describe("riskLevelSchema", () => {
   it("parses every enum member to itself", () => {
