@@ -93,12 +93,21 @@ This task locks the build pipeline before any production code is written. The sm
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "incremental": false,
+    "composite": false
   },
   "include": ["src/**/*"],
   "exclude": ["test", "dist", "node_modules", ".turbo"]
 }
 ```
+
+`incremental: false, composite: false` override the base config
+because tsup 8.x's DTS worker spawns `tsc` with single-file emit,
+which fails with `TS5074` when `incremental: true` is inherited
+without `--tsBuildInfoFile`. Project references are not yet active
+(no consuming package); when `@megasaver/core` lands, revisit this
+override (e.g., a dedicated `tsconfig.build.json` for tsup).
 
 - [ ] **Step 3: Create `packages/shared/tsconfig.test.json`**
 
@@ -157,7 +166,7 @@ export {};
 - [ ] **Step 7: Create smoke test `packages/shared/test/smoke.test.ts`**
 
 ```ts
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as shared from "../src/index.js";
 
 describe("@megasaver/shared barrel", () => {
@@ -170,6 +179,11 @@ describe("@megasaver/shared barrel", () => {
 Relative import — the package is not yet built, so `dist/` does not
 exist and the bare-specifier `@megasaver/shared` would not resolve.
 Subsequent test files use the same relative pattern.
+
+Imports in every test file are alphabetically sorted (`describe,
+expect, it`) because Biome's `organizeImports` rule rewrites them
+otherwise. Use this order from the start to keep `pnpm lint` green
+on first run.
 
 - [ ] **Step 8: Install dependencies from the repo root**
 
@@ -189,7 +203,12 @@ Expected: `tsc -b --noEmit` exits 0; no diagnostics.
 - [ ] **Step 11: Run build**
 
 Run: `pnpm --filter @megasaver/shared build`
-Expected: `dist/` is created with `index.js`, `index.d.ts`, `index.js.map`, `index.d.ts.map`. No other files. Build exits 0.
+Expected: `dist/` is created with `index.js`, `index.d.ts`, `index.js.map`. No other files. Build exits 0.
+
+(`index.d.ts.map` is intentionally NOT expected: tsup 8.x's DTS
+pipeline does not emit declaration source maps from the `dts: true`
+shorthand. Adding declaration-map support is deferred to a future
+spec — runtime sourcemaps are sufficient for v0.1 debug ergonomics.)
 
 - [ ] **Step 12: Run lint**
 
@@ -215,8 +234,8 @@ git commit -m "chore(shared): scaffold package"
 - [ ] **Step 1: Write the failing test `packages/shared/test/risk-level.test.ts`**
 
 ```ts
-import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
+import { describe, expect, it } from "vitest";
 import { riskLevelSchema, type RiskLevel } from "../src/risk-level.js";
 
 const members: ReadonlyArray<RiskLevel> = [
@@ -319,8 +338,8 @@ git commit -m "feat(shared): add riskLevelSchema"
 - [ ] **Step 1: Write the failing test `packages/shared/test/agent-id.test.ts`**
 
 ```ts
-import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
+import { describe, expect, it } from "vitest";
 import { agentIdSchema, type AgentId } from "../src/agent-id.js";
 
 const members: ReadonlyArray<AgentId> = ["claude-code", "generic-cli"];
@@ -416,15 +435,15 @@ This task ships the three IDs together because they share an identical schema sh
 - [ ] **Step 1: Write the failing test `packages/shared/test/ids.test.ts`**
 
 ```ts
-import { describe, it, expect, expectTypeOf } from "vitest";
 import * as fc from "fast-check";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
+  memoryEntryIdSchema,
   projectIdSchema,
   sessionIdSchema,
-  memoryEntryIdSchema,
+  type MemoryEntryId,
   type ProjectId,
   type SessionId,
-  type MemoryEntryId,
 } from "../src/ids.js";
 
 const UUID_RE =
@@ -726,10 +745,11 @@ ls -1 packages/shared/dist
 Expected, exactly:
 ```
 index.d.ts
-index.d.ts.map
 index.js
 index.js.map
 ```
+
+(`index.d.ts.map` is intentionally absent; see Task 1 step 11.)
 
 - [ ] **Step 4: Capture public API surface evidence**
 
@@ -742,7 +762,7 @@ Expected: 10 lines covering `riskLevelSchema`, `RiskLevel`, `agentIdSchema`, `Ag
 - [ ] **Step 5: Capture test count evidence**
 
 Run: `pnpm --filter @megasaver/shared test`
-Expected tail line resembles `Test Files  3 passed (3)` and `Tests  20 passed (20)` (4 risk-level + 4 agent-id + 12 ids + 2 brand-discrimination compile-time descriptors). Save into PR description.
+Expected tail line resembles `Test Files  3 passed (3)` and `Tests  22 passed (22)` (4 risk-level + 4 agent-id + 12 ids schema + 2 brand-discrimination compile-time tests). Save into PR description.
 
 - [ ] **Step 6: Push the branch and open the PR**
 
