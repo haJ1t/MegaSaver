@@ -57,6 +57,6 @@ Process pages will be added as we hit each phase. Slot reserved for: `multi-agen
 
 ## Status
 
-Core foundation review-passed phase. Bootstrap, project skeleton, and
-`@megasaver/shared` are merged; `@megasaver/core` is implemented in
-`feat/core-package` and ready for integration choice.
+Core foundation published phase. Bootstrap, project skeleton,
+`@megasaver/shared`, and `@megasaver/core` are merged and pushed to
+`origin/main`.

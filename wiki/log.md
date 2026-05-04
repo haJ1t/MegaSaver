@@ -84,3 +84,7 @@ Addressed first external review findings for `@megasaver/core`: entity schemas n
 ## [2026-05-04] schema | core review passed
 
 External review gate passed for `@megasaver/core` after fixes. Code-reviewer re-check found no Critical, Important, or Minor issues and reported ready to merge. Critic re-check found no Critical, Important, or Minor issues and reported ready to merge, with normal HIGH-risk requirement satisfied by the recorded external reviewer pass.
+
+## [2026-05-04] schema | core package pushed to main
+
+Fast-forward merged `feat/core-package` into `main`, verified the merged result, removed the temporary worktree and local feature branch, and pushed `main` to <https://github.com/haJ1t/MegaSaver>. `@megasaver/core` is now part of `origin/main`.

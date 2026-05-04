@@ -4,7 +4,7 @@ tags: [entity, package, core-engine, v0.1]
 sources:
   - docs/superpowers/specs/2026-05-04-core-package-design.md
   - docs/superpowers/plans/2026-05-04-core-package-plan.md
-status: review-passed
+status: published
 created: 2026-05-04
 updated: 2026-05-04
 ---
@@ -34,7 +34,8 @@ their own spec.
 Implementation plan written:
 `docs/superpowers/plans/2026-05-04-core-package-plan.md`.
 
-Implementation is complete and external review passed.
+Implementation is complete, external review passed, and the package is
+published on `origin/main`.
 
 ## Implementation evidence
 
@@ -42,7 +43,7 @@ Implementation is complete and external review passed.
   53 tests after review hardening.
 - `pnpm --filter @megasaver/core typecheck` passes.
 - `pnpm --filter @megasaver/core build` passes.
-- `pnpm verify` passes before review.
+- `pnpm verify` passes on `main` after local merge.
 
 ## Boundary rules
 
@@ -58,7 +59,8 @@ Implementation is complete and external review passed.
 Risk level is HIGH because this package defines the engine boundary
 and public surface. Work happened in `feat/core-package`; both
 code-reviewer and critic passes returned merge-ready after review
-fixes.
+fixes. The feature branch was fast-forward merged into `main` and
+pushed to GitHub.
 
 ## Related
 
