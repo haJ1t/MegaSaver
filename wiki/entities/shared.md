@@ -21,14 +21,13 @@ Contracts only — no runtime util, no constants, no agent-specific
 knowledge. v0.1 surface:
 
 - `RiskLevel` — `"low" | "medium" | "high" | "critical"` enum
-  (CLAUDE.md §12).
+  (source: `docs/conventions/risk-modes.md`).
 - `AgentId` — closed enum of agents that ship a v0.1 connector
   (`claude-code`, `generic-cli`). New agents are added by their own
   connector spec.
 - `ProjectId`, `SessionId`, `MemoryEntryId` — UUID strings branded
-  for compile-time discrimination.
-
-Out of scope is recorded in the spec §11.
+  for compile-time discrimination. `ProjectId` is not assignable to
+  `SessionId` even though both are `string` at runtime.
 
 ## Authoring style
 
@@ -48,6 +47,8 @@ brand discrimination via Vitest's `expectTypeOf`.
 
 ## Related
 
-- [[decisions/bootstrap-matrix]] — sets the package roster.
+- [[decisions/bootstrap-matrix]] — locks the v0.1 MVP slice
+  (Decision #3).
 - [[concepts/agent-agnostic-core]] — why scope is contracts-only.
-- [[syntheses/mega-saver-product]] — v0.1 slice membership.
+- [[syntheses/mega-saver-product]] — v0.1 package roster
+  (`@megasaver/shared` + four siblings).
