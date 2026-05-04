@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-05-03
+updated: 2026-05-04
 ---
 
 # Wiki Index — Mega Saver
@@ -18,9 +18,11 @@ updated: 2026-05-03
 - [[concepts/risk-aware-development]] — LOW / MEDIUM / HIGH / CRITICAL gating skills.
 - [[concepts/superpowers-discipline]] — mandatory chain on every feature.
 
-## Entities (none seeded yet)
+## Entities
 
-Subsystem pages will land as features get built. Slot reserved for: `core-engine`, `cli`, `connectors-claude-code`, `connectors-generic-cli`, `mcp-bridge`, `app`, `skill-packs`.
+- [[entities/shared]] — `@megasaver/shared` contracts package (v0.1).
+
+More subsystem pages land as features get built. Slot reserved for: `core-engine`, `cli`, `connectors-claude-code`, `connectors-generic-cli`, `mcp-bridge`, `app`, `skill-packs`.
 
 ## Workflows (none seeded yet)
 
