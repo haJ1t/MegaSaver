@@ -1,8 +1,4 @@
-import type {
-  MemoryEntryId,
-  ProjectId,
-  SessionId,
-} from "@megasaver/shared";
+import type { MemoryEntryId, ProjectId, SessionId } from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
 import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
 import { type Project, projectSchema } from "./project.js";
@@ -27,10 +23,7 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
 
   const requireProject = (projectId: ProjectId): void => {
     if (!projects.has(projectId)) {
-      throw new CoreRegistryError(
-        "project_not_found",
-        `Project does not exist: ${projectId}`,
-      );
+      throw new CoreRegistryError("project_not_found", `Project does not exist: ${projectId}`);
     }
   };
 
@@ -54,9 +47,7 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
     },
 
     listProjects() {
-      return Array.from(projects.values(), (project) =>
-        projectSchema.parse(project),
-      );
+      return Array.from(projects.values(), (project) => projectSchema.parse(project));
     },
 
     createSession(session) {

@@ -9,9 +9,7 @@ export const coreRegistryErrorCodeSchema = z.enum([
   "memory_entry_already_exists",
 ]);
 
-export type CoreRegistryErrorCode = z.infer<
-  typeof coreRegistryErrorCodeSchema
->;
+export type CoreRegistryErrorCode = z.infer<typeof coreRegistryErrorCodeSchema>;
 
 export class CoreRegistryError extends Error {
   readonly code: CoreRegistryErrorCode;

@@ -71,9 +71,7 @@ describe("projectSchema", () => {
       fc.property(
         fc.string().filter((value) => value.trim().length > 0),
         (name) => {
-          expect(projectSchema.safeParse({ ...validProject, name }).success).toBe(
-            true,
-          );
+          expect(projectSchema.safeParse({ ...validProject, name }).success).toBe(true);
         },
       ),
     );

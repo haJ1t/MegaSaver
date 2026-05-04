@@ -40,15 +40,11 @@ describe("memoryScopeSchema", () => {
 
 describe("memoryEntrySchema", () => {
   it("parses project-scoped memory", () => {
-    expect(memoryEntrySchema.parse(validProjectMemory)).toEqual(
-      validProjectMemory,
-    );
+    expect(memoryEntrySchema.parse(validProjectMemory)).toEqual(validProjectMemory);
   });
 
   it("parses session-scoped memory", () => {
-    expect(memoryEntrySchema.parse(validSessionMemory)).toEqual(
-      validSessionMemory,
-    );
+    expect(memoryEntrySchema.parse(validSessionMemory)).toEqual(validSessionMemory);
   });
 
   it("trims content", () => {
@@ -81,9 +77,7 @@ describe("memoryEntrySchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0]?.path).toEqual(["sessionId"]);
-      expect(result.error.issues[0]?.message).toBe(
-        "Session-scoped memory requires sessionId.",
-      );
+      expect(result.error.issues[0]?.message).toBe("Session-scoped memory requires sessionId.");
     }
   });
 
@@ -125,10 +119,9 @@ describe("memoryEntrySchema", () => {
       fc.property(
         fc.string().filter((value) => value.trim().length > 0),
         (content) => {
-          expect(
-            memoryEntrySchema.safeParse({ ...validProjectMemory, content })
-              .success,
-          ).toBe(true);
+          expect(memoryEntrySchema.safeParse({ ...validProjectMemory, content }).success).toBe(
+            true,
+          );
         },
       ),
     );

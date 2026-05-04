@@ -1,8 +1,4 @@
-import {
-  memoryEntryIdSchema,
-  projectIdSchema,
-  sessionIdSchema,
-} from "@megasaver/shared";
+import { memoryEntryIdSchema, projectIdSchema, sessionIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 
 export const memoryScopeSchema = z.enum(["project", "session"]);

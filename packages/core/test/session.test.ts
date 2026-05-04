@@ -30,15 +30,13 @@ describe("sessionSchema", () => {
   });
 
   it("allows a null title", () => {
-    expect(sessionSchema.parse({ ...validSession, title: null }).title).toBe(
-      null,
-    );
+    expect(sessionSchema.parse({ ...validSession, title: null }).title).toBe(null);
   });
 
   it("trims non-null titles", () => {
-    expect(
-      sessionSchema.parse({ ...validSession, title: "  Core work  " }).title,
-    ).toBe("Core work");
+    expect(sessionSchema.parse({ ...validSession, title: "  Core work  " }).title).toBe(
+      "Core work",
+    );
   });
 
   it("rejects empty titles after trimming", () => {
@@ -77,9 +75,7 @@ describe("sessionSchema", () => {
   it("property: any shipped v0.1 agent id is accepted", () => {
     fc.assert(
       fc.property(fc.constantFrom("claude-code", "generic-cli"), (agentId) => {
-        expect(
-          sessionSchema.safeParse({ ...validSession, agentId }).success,
-        ).toBe(true);
+        expect(sessionSchema.safeParse({ ...validSession, agentId }).success).toBe(true);
       }),
     );
   });
