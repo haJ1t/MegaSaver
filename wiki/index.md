@@ -20,9 +20,10 @@ updated: 2026-05-04
 
 ## Entities
 
+- [[entities/core]] — `@megasaver/core` agent-agnostic engine foundation (v0.1).
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1).
 
-More subsystem pages land as features get built. Slot reserved for: `core-engine`, `cli`, `connectors-claude-code`, `connectors-generic-cli`, `mcp-bridge`, `app`, `skill-packs`.
+More subsystem pages land as features get built. Slot reserved for: `cli`, `connectors-claude-code`, `connectors-generic-cli`, `mcp-bridge`, `app`, `skill-packs`.
 
 ## Workflows (none seeded yet)
 
@@ -56,4 +57,6 @@ Process pages will be added as we hit each phase. Slot reserved for: `multi-agen
 
 ## Status
 
-Bootstrap phase. Wiki seeded 2026-05-03. Next ingest: when first feature spec lands.
+Core foundation spec phase. Bootstrap, project skeleton, and
+`@megasaver/shared` are merged; `@megasaver/core` is in
+`feat/core-package`.
