@@ -4,7 +4,7 @@ tags: [entity, package, core-engine, v0.1]
 sources:
   - docs/superpowers/specs/2026-05-04-core-package-design.md
   - docs/superpowers/plans/2026-05-04-core-package-plan.md
-status: plan-written
+status: implemented-awaiting-review
 created: 2026-05-04
 updated: 2026-05-04
 ---
@@ -29,13 +29,20 @@ Storage is intentionally in-memory only. Filesystem persistence,
 memory search, token audit, context packing, and compression each need
 their own spec.
 
-## Plan status
+## Implementation status
 
 Implementation plan written:
 `docs/superpowers/plans/2026-05-04-core-package-plan.md`.
 
-Execution has not started. The next gate is choosing
-subagent-driven or inline execution, then strict TDD task-by-task.
+Implementation is complete and awaiting external review.
+
+## Implementation evidence
+
+- `pnpm --filter @megasaver/core test` passes: 5 test files,
+  50 tests.
+- `pnpm --filter @megasaver/core typecheck` passes.
+- `pnpm --filter @megasaver/core build` passes.
+- `pnpm verify` passes before review.
 
 ## Boundary rules
 
