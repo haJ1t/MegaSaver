@@ -3,7 +3,8 @@ title: '@megasaver/core'
 tags: [entity, package, core-engine, v0.1]
 sources:
   - docs/superpowers/specs/2026-05-04-core-package-design.md
-status: spec-approved
+  - docs/superpowers/plans/2026-05-04-core-package-plan.md
+status: plan-written
 created: 2026-05-04
 updated: 2026-05-04
 ---
@@ -27,6 +28,14 @@ The first core slice is foundation-only:
 Storage is intentionally in-memory only. Filesystem persistence,
 memory search, token audit, context packing, and compression each need
 their own spec.
+
+## Plan status
+
+Implementation plan written:
+`docs/superpowers/plans/2026-05-04-core-package-plan.md`.
+
+Execution has not started. The next gate is choosing
+subagent-driven or inline execution, then strict TDD task-by-task.
 
 ## Boundary rules
 
