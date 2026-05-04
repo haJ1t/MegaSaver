@@ -236,14 +236,9 @@ git commit -m "chore(shared): scaffold package"
 ```ts
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { riskLevelSchema, type RiskLevel } from "../src/risk-level.js";
+import { type RiskLevel, riskLevelSchema } from "../src/risk-level.js";
 
-const members: ReadonlyArray<RiskLevel> = [
-  "low",
-  "medium",
-  "high",
-  "critical",
-];
+const members: ReadonlyArray<RiskLevel> = ["low", "medium", "high", "critical"];
 
 describe("riskLevelSchema", () => {
   it("parses every enum member to itself", () => {
@@ -281,6 +276,13 @@ describe("riskLevelSchema", () => {
 });
 ```
 
+Two formatting points enforced by Biome (apply to every test file
+in this plan):
+- The named-import list uses `type`-prefixed members in alphabetical
+  order: `{ type RiskLevel, riskLevelSchema }`, not `{ riskLevelSchema, type RiskLevel }`.
+- Short array literals stay on a single line (Biome's default 100-char
+  `lineWidth`).
+
 - [ ] **Step 2: Run the test — confirm failure**
 
 Run: `pnpm --filter @megasaver/shared test`
@@ -291,12 +293,7 @@ Expected: FAIL with module-not-found for `../src/risk-level.js`.
 ```ts
 import { z } from "zod";
 
-export const riskLevelSchema = z.enum([
-  "low",
-  "medium",
-  "high",
-  "critical",
-]);
+export const riskLevelSchema = z.enum(["low", "medium", "high", "critical"]);
 
 export type RiskLevel = z.infer<typeof riskLevelSchema>;
 ```
@@ -340,7 +337,7 @@ git commit -m "feat(shared): add riskLevelSchema"
 ```ts
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { agentIdSchema, type AgentId } from "../src/agent-id.js";
+import { type AgentId, agentIdSchema } from "../src/agent-id.js";
 
 const members: ReadonlyArray<AgentId> = ["claude-code", "generic-cli"];
 
@@ -438,12 +435,12 @@ This task ships the three IDs together because they share an identical schema sh
 import * as fc from "fast-check";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
-  memoryEntryIdSchema,
-  projectIdSchema,
-  sessionIdSchema,
   type MemoryEntryId,
+  memoryEntryIdSchema,
   type ProjectId,
+  projectIdSchema,
   type SessionId,
+  sessionIdSchema,
 } from "../src/ids.js";
 
 const UUID_RE =
