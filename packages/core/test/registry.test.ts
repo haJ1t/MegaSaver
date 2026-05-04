@@ -1,4 +1,8 @@
-import { projectIdSchema, sessionIdSchema } from "@megasaver/shared";
+import {
+  memoryEntryIdSchema,
+  projectIdSchema,
+  sessionIdSchema,
+} from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { CoreRegistryError } from "../src/errors.js";
 import { createInMemoryCoreRegistry } from "../src/registry.js";
@@ -17,6 +21,15 @@ const SESSION_ID_B = sessionIdSchema.parse(
 );
 const MISSING_SESSION_ID = sessionIdSchema.parse(
   "66666666-6666-4666-8666-666666666666",
+);
+const MEMORY_ENTRY_ID_A = memoryEntryIdSchema.parse(
+  "33333333-3333-4333-8333-333333333333",
+);
+const MEMORY_ENTRY_ID_B = memoryEntryIdSchema.parse(
+  "77777777-7777-4777-8777-777777777777",
+);
+const MISSING_MEMORY_ENTRY_ID = memoryEntryIdSchema.parse(
+  "88888888-8888-4888-8888-888888888888",
 );
 
 const projectA = {
@@ -47,9 +60,32 @@ const sessionA = {
 const sessionB = {
   ...sessionA,
   id: SESSION_ID_B,
+  projectId: PROJECT_ID_B,
   agentId: "generic-cli",
   riskLevel: "medium",
   title: null,
+} as const;
+
+const sessionAInProjectB = {
+  ...sessionA,
+  projectId: PROJECT_ID_B,
+} as const;
+
+const projectMemory = {
+  id: MEMORY_ENTRY_ID_A,
+  projectId: PROJECT_ID_A,
+  sessionId: null,
+  scope: "project",
+  content: "Repo uses strict ESM.",
+  createdAt: "2026-05-04T12:30:00.000Z",
+} as const;
+
+const sessionMemory = {
+  ...projectMemory,
+  id: MEMORY_ENTRY_ID_B,
+  sessionId: SESSION_ID_A,
+  scope: "session",
+  content: "Core package spec is HIGH risk.",
 } as const;
 
 describe("createInMemoryCoreRegistry project operations", () => {
@@ -74,7 +110,6 @@ describe("createInMemoryCoreRegistry project operations", () => {
     const registry = createInMemoryCoreRegistry();
     registry.createProject(projectA);
 
-    expect(() => registry.createProject(projectA)).toThrow(CoreRegistryError);
     try {
       registry.createProject(projectA);
     } catch (error) {
@@ -109,11 +144,16 @@ describe("createInMemoryCoreRegistry session operations", () => {
     registry.createProject(projectA);
 
     expect(registry.createSession(sessionA)).toEqual(sessionA);
-    expect(registry.createSession(sessionB)).toEqual(sessionB);
+
+    const secondSession = { ...sessionA, id: SESSION_ID_B };
+    expect(registry.createSession(secondSession)).toEqual(secondSession);
 
     expect(registry.getSession(SESSION_ID_A)).toEqual(sessionA);
-    expect(registry.getSession(SESSION_ID_B)).toEqual(sessionB);
-    expect(registry.listSessions(PROJECT_ID_A)).toEqual([sessionA, sessionB]);
+    expect(registry.getSession(SESSION_ID_B)).toEqual(secondSession);
+    expect(registry.listSessions(PROJECT_ID_A)).toEqual([
+      sessionA,
+      secondSession,
+    ]);
   });
 
   it("returns null for a missing session", () => {
@@ -176,5 +216,113 @@ describe("createInMemoryCoreRegistry session operations", () => {
 
     expect(registry.getSession(SESSION_ID_A)).toEqual(sessionA);
     expect(registry.listSessions(PROJECT_ID_A)).toEqual([sessionA]);
+  });
+});
+
+describe("createInMemoryCoreRegistry memory entry operations", () => {
+  it("creates, gets, and lists memory entries for one project in insertion order", () => {
+    const registry = createInMemoryCoreRegistry();
+    registry.createProject(projectA);
+    registry.createSession(sessionA);
+
+    expect(registry.createMemoryEntry(projectMemory)).toEqual(projectMemory);
+    expect(registry.createMemoryEntry(sessionMemory)).toEqual(sessionMemory);
+
+    expect(registry.getMemoryEntry(MEMORY_ENTRY_ID_A)).toEqual(projectMemory);
+    expect(registry.getMemoryEntry(MEMORY_ENTRY_ID_B)).toEqual(sessionMemory);
+    expect(registry.listMemoryEntries(PROJECT_ID_A)).toEqual([
+      projectMemory,
+      sessionMemory,
+    ]);
+  });
+
+  it("returns null for a missing memory entry", () => {
+    const registry = createInMemoryCoreRegistry();
+
+    expect(registry.getMemoryEntry(MISSING_MEMORY_ENTRY_ID)).toBeNull();
+  });
+
+  it("rejects duplicate memory entry ids", () => {
+    const registry = createInMemoryCoreRegistry();
+    registry.createProject(projectA);
+    registry.createMemoryEntry(projectMemory);
+
+    try {
+      registry.createMemoryEntry(projectMemory);
+    } catch (error) {
+      expect(error).toBeInstanceOf(CoreRegistryError);
+      expect((error as CoreRegistryError).code).toBe(
+        "memory_entry_already_exists",
+      );
+    }
+  });
+
+  it("rejects memory entries whose project does not exist", () => {
+    const registry = createInMemoryCoreRegistry();
+
+    try {
+      registry.createMemoryEntry(projectMemory);
+    } catch (error) {
+      expect(error).toBeInstanceOf(CoreRegistryError);
+      expect((error as CoreRegistryError).code).toBe("project_not_found");
+    }
+  });
+
+  it("rejects session-scoped memory whose session does not exist", () => {
+    const registry = createInMemoryCoreRegistry();
+    registry.createProject(projectA);
+
+    try {
+      registry.createMemoryEntry(sessionMemory);
+    } catch (error) {
+      expect(error).toBeInstanceOf(CoreRegistryError);
+      expect((error as CoreRegistryError).code).toBe("session_not_found");
+    }
+  });
+
+  it("rejects session-scoped memory linked to a session in another project", () => {
+    const registry = createInMemoryCoreRegistry();
+    registry.createProject(projectA);
+    registry.createProject(projectB);
+    registry.createSession(sessionAInProjectB);
+
+    try {
+      registry.createMemoryEntry(sessionMemory);
+    } catch (error) {
+      expect(error).toBeInstanceOf(CoreRegistryError);
+      expect((error as CoreRegistryError).code).toBe("session_project_mismatch");
+    }
+  });
+
+  it("rejects listing memory entries for a missing project", () => {
+    const registry = createInMemoryCoreRegistry();
+
+    try {
+      registry.listMemoryEntries(PROJECT_ID_A);
+    } catch (error) {
+      expect(error).toBeInstanceOf(CoreRegistryError);
+      expect((error as CoreRegistryError).code).toBe("project_not_found");
+    }
+  });
+
+  it("validates memory entries before storing them", () => {
+    const registry = createInMemoryCoreRegistry();
+    registry.createProject(projectA);
+
+    expect(() =>
+      registry.createMemoryEntry({ ...projectMemory, content: "   " }),
+    ).toThrow();
+    expect(registry.getMemoryEntry(MEMORY_ENTRY_ID_A)).toBeNull();
+  });
+
+  it("returns copies so callers cannot mutate stored memory entries", () => {
+    const registry = createInMemoryCoreRegistry();
+    registry.createProject(projectA);
+    const created = registry.createMemoryEntry(projectMemory);
+
+    created.content = "Mutated";
+
+    expect(registry.getMemoryEntry(MEMORY_ENTRY_ID_A)).toEqual(projectMemory);
+    expect(registry.listMemoryEntries(PROJECT_ID_A)).toEqual([projectMemory]);
   });
 });

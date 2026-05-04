@@ -1,5 +1,10 @@
-import type { ProjectId, SessionId } from "@megasaver/shared";
+import type {
+  MemoryEntryId,
+  ProjectId,
+  SessionId,
+} from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
+import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
 import { type Project, projectSchema } from "./project.js";
 import { type Session, sessionSchema } from "./session.js";
 
@@ -10,11 +15,15 @@ export interface CoreRegistry {
   createSession(session: Session): Session;
   getSession(id: SessionId): Session | null;
   listSessions(projectId: ProjectId): Session[];
+  createMemoryEntry(entry: MemoryEntry): MemoryEntry;
+  getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
+  listMemoryEntries(projectId: ProjectId): MemoryEntry[];
 }
 
 export function createInMemoryCoreRegistry(): CoreRegistry {
   const projects = new Map<ProjectId, Project>();
   const sessions = new Map<SessionId, Session>();
+  const memoryEntries = new Map<MemoryEntryId, MemoryEntry>();
 
   const requireProject = (projectId: ProjectId): void => {
     if (!projects.has(projectId)) {
@@ -74,6 +83,50 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       return Array.from(sessions.values())
         .filter((session) => session.projectId === projectId)
         .map((session) => sessionSchema.parse(session));
+    },
+
+    createMemoryEntry(entry) {
+      const parsed = memoryEntrySchema.parse(entry);
+      if (memoryEntries.has(parsed.id)) {
+        throw new CoreRegistryError(
+          "memory_entry_already_exists",
+          `Memory entry already exists: ${parsed.id}`,
+        );
+      }
+
+      requireProject(parsed.projectId);
+
+      if (parsed.scope === "session" && parsed.sessionId !== null) {
+        const session = sessions.get(parsed.sessionId);
+        if (!session) {
+          throw new CoreRegistryError(
+            "session_not_found",
+            `Session does not exist: ${parsed.sessionId}`,
+          );
+        }
+
+        if (session.projectId !== parsed.projectId) {
+          throw new CoreRegistryError(
+            "session_project_mismatch",
+            `Session ${parsed.sessionId} does not belong to project ${parsed.projectId}`,
+          );
+        }
+      }
+
+      memoryEntries.set(parsed.id, parsed);
+      return memoryEntrySchema.parse(parsed);
+    },
+
+    getMemoryEntry(id) {
+      const entry = memoryEntries.get(id);
+      return entry ? memoryEntrySchema.parse(entry) : null;
+    },
+
+    listMemoryEntries(projectId) {
+      requireProject(projectId);
+      return Array.from(memoryEntries.values())
+        .filter((entry) => entry.projectId === projectId)
+        .map((entry) => memoryEntrySchema.parse(entry));
     },
   };
 }
