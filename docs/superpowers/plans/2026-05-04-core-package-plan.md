@@ -77,7 +77,7 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b --noEmit",
+    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
@@ -501,13 +501,15 @@ Expected: shared build exits 0.
 import { projectIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 
-export const projectSchema = z.object({
-  id: projectIdSchema,
-  name: z.string().trim().min(1),
-  rootPath: z.string().trim().min(1),
-  createdAt: z.string().datetime({ offset: true }),
-  updatedAt: z.string().datetime({ offset: true }),
-});
+export const projectSchema = z
+  .object({
+    id: projectIdSchema,
+    name: z.string().trim().min(1),
+    rootPath: z.string().trim().min(1),
+    createdAt: z.string().datetime({ offset: true }),
+    updatedAt: z.string().datetime({ offset: true }),
+  })
+  .strict();
 
 export type Project = z.infer<typeof projectSchema>;
 ```
@@ -695,15 +697,17 @@ import {
 } from "@megasaver/shared";
 import { z } from "zod";
 
-export const sessionSchema = z.object({
-  id: sessionIdSchema,
-  projectId: projectIdSchema,
-  agentId: agentIdSchema,
-  riskLevel: riskLevelSchema,
-  title: z.string().trim().min(1).nullable(),
-  startedAt: z.string().datetime({ offset: true }),
-  endedAt: z.string().datetime({ offset: true }).nullable(),
-});
+export const sessionSchema = z
+  .object({
+    id: sessionIdSchema,
+    projectId: projectIdSchema,
+    agentId: agentIdSchema,
+    riskLevel: riskLevelSchema,
+    title: z.string().trim().min(1).nullable(),
+    startedAt: z.string().datetime({ offset: true }),
+    endedAt: z.string().datetime({ offset: true }).nullable(),
+  })
+  .strict();
 
 export type Session = z.infer<typeof sessionSchema>;
 ```
@@ -951,6 +955,7 @@ export const memoryEntrySchema = z
     content: z.string().trim().min(1),
     createdAt: z.string().datetime({ offset: true }),
   })
+  .strict()
   .superRefine((entry, ctx) => {
     if (entry.scope === "session" && entry.sessionId === null) {
       ctx.addIssue({

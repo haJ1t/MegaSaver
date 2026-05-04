@@ -39,7 +39,7 @@ Implementation is complete and awaiting external review.
 ## Implementation evidence
 
 - `pnpm --filter @megasaver/core test` passes: 5 test files,
-  50 tests.
+  53 tests after review hardening.
 - `pnpm --filter @megasaver/core typecheck` passes.
 - `pnpm --filter @megasaver/core build` passes.
 - `pnpm verify` passes before review.

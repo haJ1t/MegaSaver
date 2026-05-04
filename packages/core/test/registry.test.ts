@@ -1,6 +1,6 @@
 import { memoryEntryIdSchema, projectIdSchema, sessionIdSchema } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
-import { CoreRegistryError } from "../src/errors.js";
+import { CoreRegistryError, type CoreRegistryErrorCode } from "../src/errors.js";
 import { createInMemoryCoreRegistry } from "../src/registry.js";
 
 const PROJECT_ID_A = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
@@ -68,6 +68,18 @@ const sessionMemory = {
   content: "Core package spec is HIGH risk.",
 } as const;
 
+function expectRegistryError(action: () => unknown, code: CoreRegistryErrorCode): void {
+  let thrown: unknown;
+  try {
+    action();
+  } catch (error) {
+    thrown = error;
+  }
+
+  expect(thrown).toBeInstanceOf(CoreRegistryError);
+  expect((thrown as CoreRegistryError).code).toBe(code);
+}
+
 describe("createInMemoryCoreRegistry project operations", () => {
   it("creates, gets, and lists projects in insertion order", () => {
     const registry = createInMemoryCoreRegistry();
@@ -90,12 +102,7 @@ describe("createInMemoryCoreRegistry project operations", () => {
     const registry = createInMemoryCoreRegistry();
     registry.createProject(projectA);
 
-    try {
-      registry.createProject(projectA);
-    } catch (error) {
-      expect(error).toBeInstanceOf(CoreRegistryError);
-      expect((error as CoreRegistryError).code).toBe("project_already_exists");
-    }
+    expectRegistryError(() => registry.createProject(projectA), "project_already_exists");
   });
 
   it("validates projects before storing them", () => {
@@ -113,6 +120,20 @@ describe("createInMemoryCoreRegistry project operations", () => {
 
     expect(registry.getProject(PROJECT_ID_A)).toEqual(projectA);
     expect(registry.listProjects()).toEqual([projectA]);
+
+    const fetched = registry.getProject(PROJECT_ID_A);
+    if (!fetched) {
+      throw new Error("Expected project to exist.");
+    }
+    fetched.name = "Fetched mutation";
+
+    const listed = registry.listProjects()[0];
+    if (!listed) {
+      throw new Error("Expected project list item.");
+    }
+    listed.name = "Listed mutation";
+
+    expect(registry.getProject(PROJECT_ID_A)).toEqual(projectA);
   });
 });
 
@@ -142,34 +163,19 @@ describe("createInMemoryCoreRegistry session operations", () => {
     registry.createProject(projectA);
     registry.createSession(sessionA);
 
-    try {
-      registry.createSession(sessionA);
-    } catch (error) {
-      expect(error).toBeInstanceOf(CoreRegistryError);
-      expect((error as CoreRegistryError).code).toBe("session_already_exists");
-    }
+    expectRegistryError(() => registry.createSession(sessionA), "session_already_exists");
   });
 
   it("rejects sessions whose project does not exist", () => {
     const registry = createInMemoryCoreRegistry();
 
-    try {
-      registry.createSession(sessionA);
-    } catch (error) {
-      expect(error).toBeInstanceOf(CoreRegistryError);
-      expect((error as CoreRegistryError).code).toBe("project_not_found");
-    }
+    expectRegistryError(() => registry.createSession(sessionA), "project_not_found");
   });
 
   it("rejects listing sessions for a missing project", () => {
     const registry = createInMemoryCoreRegistry();
 
-    try {
-      registry.listSessions(PROJECT_ID_A);
-    } catch (error) {
-      expect(error).toBeInstanceOf(CoreRegistryError);
-      expect((error as CoreRegistryError).code).toBe("project_not_found");
-    }
+    expectRegistryError(() => registry.listSessions(PROJECT_ID_A), "project_not_found");
   });
 
   it("validates sessions before storing them", () => {
@@ -189,6 +195,20 @@ describe("createInMemoryCoreRegistry session operations", () => {
 
     expect(registry.getSession(SESSION_ID_A)).toEqual(sessionA);
     expect(registry.listSessions(PROJECT_ID_A)).toEqual([sessionA]);
+
+    const fetched = registry.getSession(SESSION_ID_A);
+    if (!fetched) {
+      throw new Error("Expected session to exist.");
+    }
+    fetched.title = "Fetched mutation";
+
+    const listed = registry.listSessions(PROJECT_ID_A)[0];
+    if (!listed) {
+      throw new Error("Expected session list item.");
+    }
+    listed.title = "Listed mutation";
+
+    expect(registry.getSession(SESSION_ID_A)).toEqual(sessionA);
   });
 });
 
@@ -217,35 +237,23 @@ describe("createInMemoryCoreRegistry memory entry operations", () => {
     registry.createProject(projectA);
     registry.createMemoryEntry(projectMemory);
 
-    try {
-      registry.createMemoryEntry(projectMemory);
-    } catch (error) {
-      expect(error).toBeInstanceOf(CoreRegistryError);
-      expect((error as CoreRegistryError).code).toBe("memory_entry_already_exists");
-    }
+    expectRegistryError(
+      () => registry.createMemoryEntry(projectMemory),
+      "memory_entry_already_exists",
+    );
   });
 
   it("rejects memory entries whose project does not exist", () => {
     const registry = createInMemoryCoreRegistry();
 
-    try {
-      registry.createMemoryEntry(projectMemory);
-    } catch (error) {
-      expect(error).toBeInstanceOf(CoreRegistryError);
-      expect((error as CoreRegistryError).code).toBe("project_not_found");
-    }
+    expectRegistryError(() => registry.createMemoryEntry(projectMemory), "project_not_found");
   });
 
   it("rejects session-scoped memory whose session does not exist", () => {
     const registry = createInMemoryCoreRegistry();
     registry.createProject(projectA);
 
-    try {
-      registry.createMemoryEntry(sessionMemory);
-    } catch (error) {
-      expect(error).toBeInstanceOf(CoreRegistryError);
-      expect((error as CoreRegistryError).code).toBe("session_not_found");
-    }
+    expectRegistryError(() => registry.createMemoryEntry(sessionMemory), "session_not_found");
   });
 
   it("rejects session-scoped memory linked to a session in another project", () => {
@@ -254,23 +262,16 @@ describe("createInMemoryCoreRegistry memory entry operations", () => {
     registry.createProject(projectB);
     registry.createSession(sessionAInProjectB);
 
-    try {
-      registry.createMemoryEntry(sessionMemory);
-    } catch (error) {
-      expect(error).toBeInstanceOf(CoreRegistryError);
-      expect((error as CoreRegistryError).code).toBe("session_project_mismatch");
-    }
+    expectRegistryError(
+      () => registry.createMemoryEntry(sessionMemory),
+      "session_project_mismatch",
+    );
   });
 
   it("rejects listing memory entries for a missing project", () => {
     const registry = createInMemoryCoreRegistry();
 
-    try {
-      registry.listMemoryEntries(PROJECT_ID_A);
-    } catch (error) {
-      expect(error).toBeInstanceOf(CoreRegistryError);
-      expect((error as CoreRegistryError).code).toBe("project_not_found");
-    }
+    expectRegistryError(() => registry.listMemoryEntries(PROJECT_ID_A), "project_not_found");
   });
 
   it("validates memory entries before storing them", () => {
@@ -290,5 +291,19 @@ describe("createInMemoryCoreRegistry memory entry operations", () => {
 
     expect(registry.getMemoryEntry(MEMORY_ENTRY_ID_A)).toEqual(projectMemory);
     expect(registry.listMemoryEntries(PROJECT_ID_A)).toEqual([projectMemory]);
+
+    const fetched = registry.getMemoryEntry(MEMORY_ENTRY_ID_A);
+    if (!fetched) {
+      throw new Error("Expected memory entry to exist.");
+    }
+    fetched.content = "Fetched mutation";
+
+    const listed = registry.listMemoryEntries(PROJECT_ID_A)[0];
+    if (!listed) {
+      throw new Error("Expected memory entry list item.");
+    }
+    listed.content = "Listed mutation";
+
+    expect(registry.getMemoryEntry(MEMORY_ENTRY_ID_A)).toEqual(projectMemory);
   });
 });

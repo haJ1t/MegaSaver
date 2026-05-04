@@ -66,6 +66,18 @@ describe("projectSchema", () => {
     }
   });
 
+  it("rejects unknown fields", () => {
+    const result = projectSchema.safeParse({
+      ...validProject,
+      claudeMdPath: "/tmp/CLAUDE.md",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.code).toBe("unrecognized_keys");
+    }
+  });
+
   it("property: non-empty names are accepted after trimming", () => {
     fc.assert(
       fc.property(

@@ -72,6 +72,18 @@ describe("sessionSchema", () => {
     }
   });
 
+  it("rejects unknown fields", () => {
+    const result = sessionSchema.safeParse({
+      ...validSession,
+      agentConfigPath: "/tmp/AGENTS.md",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.code).toBe("unrecognized_keys");
+    }
+  });
+
   it("property: any shipped v0.1 agent id is accepted", () => {
     fc.assert(
       fc.property(fc.constantFrom("claude-code", "generic-cli"), (agentId) => {

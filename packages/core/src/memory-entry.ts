@@ -13,6 +13,7 @@ export const memoryEntrySchema = z
     content: z.string().trim().min(1),
     createdAt: z.string().datetime({ offset: true }),
   })
+  .strict()
   .superRefine((entry, ctx) => {
     if (entry.scope === "session" && entry.sessionId === null) {
       ctx.addIssue({

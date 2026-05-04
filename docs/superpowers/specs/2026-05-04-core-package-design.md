@@ -67,11 +67,12 @@ Required controls:
 | 1 | First core slice | Foundation only: entities + in-memory registry. |
 | 2 | Storage | In-memory only. Filesystem persistence is a later `memory-vault` spec. |
 | 3 | Entity style | Schema-first via Zod; TypeScript types derive from schemas. |
-| 4 | IDs | Use branded UUID ID types from `@megasaver/shared`; core does not invent ID formats. |
-| 5 | Agent knowledge | `AgentId` is allowed as neutral data; no agent config, file format, or CLI behavior enters core. |
-| 6 | Registry lists | Deterministic insertion order. No sorting policy yet. |
-| 7 | Registry output | Return parsed copies so callers cannot mutate stored state by reference. |
-| 8 | Missing reads | `get*` returns `null`; writes and child lists throw typed registry errors when parent references are invalid. |
+| 4 | Entity boundaries | Entity schemas are strict; unknown public-surface fields are rejected instead of stripped. |
+| 5 | IDs | Use branded UUID ID types from `@megasaver/shared`; core does not invent ID formats. |
+| 6 | Agent knowledge | `AgentId` is allowed as neutral data; no agent config, file format, or CLI behavior enters core. |
+| 7 | Registry lists | Deterministic insertion order. No sorting policy yet. |
+| 8 | Registry output | Return parsed copies so callers cannot mutate stored state by reference. |
+| 9 | Missing reads | `get*` returns `null`; writes and child lists throw typed registry errors when parent references are invalid. |
 
 These decisions require a follow-up spec to change.
 
@@ -95,13 +96,15 @@ No subpath exports. No unstable internal exports.
 import { projectIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 
-export const projectSchema = z.object({
-  id: projectIdSchema,
-  name: z.string().trim().min(1),
-  rootPath: z.string().trim().min(1),
-  createdAt: z.string().datetime({ offset: true }),
-  updatedAt: z.string().datetime({ offset: true }),
-});
+export const projectSchema = z
+  .object({
+    id: projectIdSchema,
+    name: z.string().trim().min(1),
+    rootPath: z.string().trim().min(1),
+    createdAt: z.string().datetime({ offset: true }),
+    updatedAt: z.string().datetime({ offset: true }),
+  })
+  .strict();
 
 export type Project = z.infer<typeof projectSchema>;
 ```
@@ -120,15 +123,17 @@ import {
 } from "@megasaver/shared";
 import { z } from "zod";
 
-export const sessionSchema = z.object({
-  id: sessionIdSchema,
-  projectId: projectIdSchema,
-  agentId: agentIdSchema,
-  riskLevel: riskLevelSchema,
-  title: z.string().trim().min(1).nullable(),
-  startedAt: z.string().datetime({ offset: true }),
-  endedAt: z.string().datetime({ offset: true }).nullable(),
-});
+export const sessionSchema = z
+  .object({
+    id: sessionIdSchema,
+    projectId: projectIdSchema,
+    agentId: agentIdSchema,
+    riskLevel: riskLevelSchema,
+    title: z.string().trim().min(1).nullable(),
+    startedAt: z.string().datetime({ offset: true }),
+    endedAt: z.string().datetime({ offset: true }).nullable(),
+  })
+  .strict();
 
 export type Session = z.infer<typeof sessionSchema>;
 ```
@@ -158,6 +163,7 @@ export const memoryEntrySchema = z
     content: z.string().trim().min(1),
     createdAt: z.string().datetime({ offset: true }),
   })
+  .strict()
   .superRefine((entry, ctx) => {
     if (entry.scope === "session" && entry.sessionId === null) {
       ctx.addIssue({

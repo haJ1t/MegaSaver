@@ -57,6 +57,6 @@ Process pages will be added as we hit each phase. Slot reserved for: `multi-agen
 
 ## Status
 
-Core foundation spec phase. Bootstrap, project skeleton, and
-`@megasaver/shared` are merged; `@megasaver/core` is in
-`feat/core-package`.
+Core foundation review-fix phase. Bootstrap, project skeleton, and
+`@megasaver/shared` are merged; `@megasaver/core` is implemented in
+`feat/core-package` and awaiting reviewer re-check.

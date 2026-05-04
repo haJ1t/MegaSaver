@@ -114,6 +114,18 @@ describe("memoryEntrySchema", () => {
     }
   });
 
+  it("rejects unknown fields", () => {
+    const result = memoryEntrySchema.safeParse({
+      ...validProjectMemory,
+      embedding: [0.1, 0.2],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.code).toBe("unrecognized_keys");
+    }
+  });
+
   it("property: non-empty content is accepted after trimming", () => {
     fc.assert(
       fc.property(
