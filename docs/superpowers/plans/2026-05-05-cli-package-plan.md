@@ -60,9 +60,11 @@ Wrote `docs/superpowers/plans/2026-05-05-cli-package-plan.md`. Plan breaks imple
 - [ ] **Step 2: Commit**
 
 ```bash
-git add wiki/log.md docs/superpowers/plans/2026-05-05-cli-package-plan.md
-git commit -m "docs(cli): plan for cli scaffold app"
+git add wiki/log.md
+git commit -m "docs(wiki): log cli spec and plan"
 ```
+
+> **Note:** the spec was committed in `c268def` and the plan in `9e54ff6` before execution started. This task only records both artifacts in `wiki/log.md`.
 
 ---
 
