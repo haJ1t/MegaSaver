@@ -5,7 +5,8 @@ sources:
   - docs/superpowers/specs/2026-05-04-core-package-design.md
   - docs/superpowers/plans/2026-05-04-core-package-plan.md
   - docs/superpowers/specs/2026-05-05-core-persistence-design.md
-status: persistence-spec
+  - docs/superpowers/plans/2026-05-05-core-persistence-plan.md
+status: persistence-plan
 created: 2026-05-04
 updated: 2026-05-05
 ---
@@ -44,8 +45,8 @@ Implementation plan written:
 `docs/superpowers/plans/2026-05-04-core-package-plan.md`.
 
 Foundation implementation is complete, external review passed, and the
-package is published on `origin/main`. Persistence spec is approved;
-implementation plan is next.
+package is published on `origin/main`. Persistence spec and
+implementation plan are approved; implementation is next.
 
 ## Implementation evidence
 

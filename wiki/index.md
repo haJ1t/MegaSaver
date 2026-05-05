@@ -58,7 +58,7 @@ Process pages will be added as we hit each phase. Slot reserved for: `multi-agen
 
 ## Status
 
-Core persistence spec phase. Bootstrap, project skeleton,
+Core persistence plan phase. Bootstrap, project skeleton,
 `@megasaver/shared`, `@megasaver/core`, and `@megasaver/cli` are
-merged and pushed to `origin/main`; the next approved slice is
-JSON directory persistence for `@megasaver/core`.
+merged and pushed to `origin/main`; JSON directory persistence for
+`@megasaver/core` has an approved spec and implementation plan.
