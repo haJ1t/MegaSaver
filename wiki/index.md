@@ -58,6 +58,7 @@ Process pages will be added as we hit each phase. Slot reserved for: `multi-agen
 
 ## Status
 
-CLI scaffold published phase. Bootstrap, project skeleton,
+Core persistence spec phase. Bootstrap, project skeleton,
 `@megasaver/shared`, `@megasaver/core`, and `@megasaver/cli` are
-merged and pushed to `origin/main`.
+merged and pushed to `origin/main`; the next approved slice is
+JSON directory persistence for `@megasaver/core`.

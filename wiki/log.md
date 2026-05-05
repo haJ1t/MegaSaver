@@ -112,3 +112,7 @@ External review gate passed for `apps/cli` (MEDIUM risk). Final whole-branch `co
 ## [2026-05-05] schema | cli scaffold pushed to main
 
 Fast-forward merged `feat/cli-package` into `main`, verified the merged result, removed the temporary worktree and local feature branch, and pushed `main` to <https://github.com/haJ1t/MegaSaver>. `@megasaver/cli` is now part of `origin/main`.
+
+## [2026-05-05] ingest | core persistence spec
+
+Wrote `docs/superpowers/specs/2026-05-05-core-persistence-design.md`. Locked v0.1 durable storage as a JSON directory store with caller-provided `rootDir`, `projects.json`, `sessions.json`, project memory JSONL files, temp-file plus rename writes, typed persistence errors, and no CLI defaults, migrations, file locks, updates, deletes, search, compression, or connector behavior. Risk HIGH.
