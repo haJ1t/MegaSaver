@@ -6,7 +6,7 @@ sources:
   - docs/superpowers/plans/2026-05-04-core-package-plan.md
   - docs/superpowers/specs/2026-05-05-core-persistence-design.md
   - docs/superpowers/plans/2026-05-05-core-persistence-plan.md
-status: persistence-implemented
+status: persistence-review-passed
 created: 2026-05-04
 updated: 2026-05-05
 ---
@@ -48,7 +48,7 @@ Implementation plan written:
 Foundation implementation is complete, external review passed, and the
 package is published on `origin/main`. Persistence spec and
 implementation plan are approved; JSON directory persistence is
-implemented in `feat/core-persistence` and awaiting external review.
+implemented in `feat/core-persistence` and external review passed.
 
 ## Foundation evidence
 
@@ -69,6 +69,10 @@ implemented in `feat/core-persistence` and awaiting external review.
 - Public export smoke passed:
   `node --input-type=module -e "import { createJsonDirectoryCoreRegistry } from './packages/core/dist/index.js'; ..."`
   printed `0`; `.tmp-core-smoke` was removed.
+- Final production code-reviewer re-check found no Critical,
+  Important, or Minor issues and reported ready to merge.
+- Final adversarial critic re-check found no Critical, Important, or
+  Minor issues and reported ready to merge.
 
 ## Boundary rules
 
