@@ -21,3 +21,22 @@ export function checkPlatform(platform: NodeJS.Platform = process.platform): Che
 export function checkCwd(cwd: string = process.cwd()): Check {
   return { key: "cwd", value: cwd, pass: true };
 }
+
+export function runChecks(): Check[] {
+  return [checkNode(), checkPlatform(), checkCwd()];
+}
+
+export function renderReport(checks: Check[]): string {
+  const lines = checks.map((c) => {
+    const status = c.pass ? "PASS" : "FAIL";
+    const reason = c.reason ? ` (${c.reason})` : "";
+    return `${c.key} ${c.value} ${status}${reason}`;
+  });
+  const passCount = checks.filter((c) => c.pass).length;
+  const failCount = checks.length - passCount;
+  return `${lines.join("\n")}\n\n${passCount} PASS / ${failCount} FAIL`;
+}
+
+export function exitCodeFor(checks: Check[]): 0 | 1 {
+  return checks.some((c) => !c.pass) ? 1 : 0;
+}
