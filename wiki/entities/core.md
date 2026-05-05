@@ -63,8 +63,9 @@ implemented in `feat/core-persistence` and awaiting external review.
   `pnpm --filter @megasaver/core typecheck` passes.
 - Persistence implementation evidence before review:
   `pnpm --filter @megasaver/core build` passes.
-- Public export smoke with a temp store directory passed: command
-  printed `0` and `.tmp-core-smoke` was removed.
+- Public export smoke passed:
+  `node --input-type=module -e "import { createJsonDirectoryCoreRegistry } from './packages/core/dist/index.js'; ..."`
+  printed `0`; `.tmp-core-smoke` was removed.
 
 ## Boundary rules
 
