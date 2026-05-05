@@ -120,3 +120,7 @@ Wrote `docs/superpowers/specs/2026-05-05-core-persistence-design.md`. Locked v0.
 ## [2026-05-05] ingest | core persistence plan
 
 Wrote `docs/superpowers/plans/2026-05-05-core-persistence-plan.md`. Plan breaks implementation into TDD tasks for typed persistence errors, JSON directory store helpers, `createJsonDirectoryCoreRegistry`, corrupt-store hardening, changeset/build smoke evidence, wiki evidence, full verification, and separate code-reviewer plus critic passes.
+
+## [2026-05-05] schema | core persistence plan adjusted
+
+Adjusted the core persistence plan before Task 3 execution to keep tests within the repo's 300 LOC file convention. Corrupt-store tests now land in `packages/core/test/json-directory-registry-corrupt.test.ts` instead of appending to the already-large happy-path registry test file.

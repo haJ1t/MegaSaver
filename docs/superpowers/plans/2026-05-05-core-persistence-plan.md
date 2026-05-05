@@ -25,7 +25,9 @@
 - Modify `packages/core/test/errors.test.ts`
   - Add persistence error schema and class tests.
 - Create `packages/core/test/json-directory-registry.test.ts`
-  - TDD coverage for factory options, empty store behavior, project/session/memory persistence, copy behavior, and corrupt store handling.
+  - TDD coverage for factory options, empty store behavior, project/session/memory persistence, duplicate handling, and copy behavior.
+- Create `packages/core/test/json-directory-registry-corrupt.test.ts`
+  - TDD coverage for corrupt JSON, corrupt JSONL, and invalid stored entities without pushing the main registry test file over 300 LOC.
 - Create `.changeset/core-persistence.md`
   - Record the public `@megasaver/core` surface addition.
 - Modify `wiki/entities/core.md`
@@ -746,11 +748,19 @@ git commit -m "feat(core): add json registry store"
 
 **Files:**
 - Modify: `packages/core/src/json-directory-store.ts`
-- Modify: `packages/core/test/json-directory-registry.test.ts`
+- Create: `packages/core/test/json-directory-registry-corrupt.test.ts`
 
 - [ ] **Step 1: Add failing corrupt store tests**
 
-Append this block to `packages/core/test/json-directory-registry.test.ts`:
+Create `packages/core/test/json-directory-registry-corrupt.test.ts`.
+Do not append these tests to `json-directory-registry.test.ts`; that
+file is already near the repo's 300 LOC limit after Task 2.
+
+Use the same fixed IDs and fixture shape as
+`json-directory-registry.test.ts`, but define only the fixtures needed
+for corrupt-store cases. Include temp root cleanup via `afterEach`.
+
+Add this test block:
 
 ```ts
 describe("createJsonDirectoryCoreRegistry corrupt store handling", () => {
@@ -814,7 +824,7 @@ describe("createJsonDirectoryCoreRegistry corrupt store handling", () => {
 Run:
 
 ```bash
-pnpm --filter @megasaver/core test -- json-directory-registry.test.ts
+pnpm --filter @megasaver/core test -- json-directory-registry-corrupt.test.ts
 ```
 
 Expected: FAIL if any corrupt store case leaks a raw `SyntaxError`, `ZodError`, or non-typed filesystem error.
@@ -869,7 +879,7 @@ if (line.trim().length === 0) {
 Run:
 
 ```bash
-pnpm --filter @megasaver/core test -- json-directory-registry.test.ts
+pnpm --filter @megasaver/core test -- json-directory-registry-corrupt.test.ts
 ```
 
 Expected: PASS.
@@ -889,7 +899,7 @@ Expected: PASS.
 Run:
 
 ```bash
-git add packages/core/src/json-directory-store.ts packages/core/test/json-directory-registry.test.ts
+git add packages/core/src/json-directory-store.ts packages/core/test/json-directory-registry-corrupt.test.ts
 git commit -m "test(core): harden corrupt store cases"
 ```
 
