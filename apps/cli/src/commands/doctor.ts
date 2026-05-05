@@ -13,3 +13,11 @@ export function checkNode(version: string = process.versions.node): Check {
   }
   return { key: "node", value, pass: false, reason: "need ≥22" };
 }
+
+export function checkPlatform(platform: NodeJS.Platform = process.platform): Check {
+  return { key: "platform", value: platform, pass: true };
+}
+
+export function checkCwd(cwd: string = process.cwd()): Check {
+  return { key: "cwd", value: cwd, pass: true };
+}

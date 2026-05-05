@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkNode } from "../src/commands/doctor.js";
+import { checkCwd, checkNode, checkPlatform } from "../src/commands/doctor.js";
 
 describe("checkNode", () => {
   it("PASSes for Node 22.x", () => {
@@ -49,6 +49,34 @@ describe("checkNode", () => {
       value: "v18.20.0",
       pass: false,
       reason: "need ≥22",
+    });
+  });
+});
+
+describe("checkPlatform", () => {
+  it("PASSes and returns the platform string", () => {
+    expect(checkPlatform("darwin")).toEqual({
+      key: "platform",
+      value: "darwin",
+      pass: true,
+    });
+  });
+
+  it("PASSes for linux", () => {
+    expect(checkPlatform("linux")).toEqual({
+      key: "platform",
+      value: "linux",
+      pass: true,
+    });
+  });
+});
+
+describe("checkCwd", () => {
+  it("PASSes and returns the cwd string", () => {
+    expect(checkCwd("/foo/bar")).toEqual({
+      key: "cwd",
+      value: "/foo/bar",
+      pass: true,
     });
   });
 });
