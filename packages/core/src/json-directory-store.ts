@@ -1,0 +1,200 @@
+import { randomUUID } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import type { ProjectId } from "@megasaver/shared";
+import { CorePersistenceError } from "./errors.js";
+import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
+import { type Project, projectSchema } from "./project.js";
+import { type Session, sessionSchema } from "./session.js";
+
+export type StorePaths = {
+  rootDir: string;
+  projectsPath: string;
+  sessionsPath: string;
+  memoryDir: string;
+};
+
+export function resolveStorePaths(rootDir: string): StorePaths {
+  const trimmedRootDir = rootDir.trim();
+  if (trimmedRootDir.length === 0) {
+    throw new CorePersistenceError("store_root_invalid", "Store root is invalid.");
+  }
+
+  const resolvedRootDir = resolve(trimmedRootDir);
+  try {
+    if (existsSync(resolvedRootDir) && !statSync(resolvedRootDir).isDirectory()) {
+      throw new CorePersistenceError("store_root_invalid", "Store root is invalid.", {
+        filePath: resolvedRootDir,
+      });
+    }
+  } catch (error) {
+    if (error instanceof CorePersistenceError) {
+      throw error;
+    }
+
+    throw new CorePersistenceError("store_root_invalid", "Store root is invalid.", {
+      filePath: resolvedRootDir,
+      cause: error,
+    });
+  }
+
+  return {
+    rootDir: resolvedRootDir,
+    projectsPath: join(resolvedRootDir, "projects.json"),
+    sessionsPath: join(resolvedRootDir, "sessions.json"),
+    memoryDir: join(resolvedRootDir, "memory"),
+  };
+}
+
+export function readProjects(paths: StorePaths): Project[] {
+  return readJsonArray(paths.projectsPath).map((project) =>
+    parseEntity(project, projectSchema.parse),
+  );
+}
+
+export function writeProjects(paths: StorePaths, projects: readonly Project[]): void {
+  atomicWriteFile(paths.projectsPath, `${JSON.stringify(projects, null, 2)}\n`);
+}
+
+export function readSessions(paths: StorePaths): Session[] {
+  return readJsonArray(paths.sessionsPath).map((session) =>
+    parseEntity(session, sessionSchema.parse),
+  );
+}
+
+export function writeSessions(paths: StorePaths, sessions: readonly Session[]): void {
+  atomicWriteFile(paths.sessionsPath, `${JSON.stringify(sessions, null, 2)}\n`);
+}
+
+export function readMemoryEntriesForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+): MemoryEntry[] {
+  return readJsonLines(join(paths.memoryDir, `${projectId}.jsonl`)).map((entry) =>
+    parseEntity(entry, memoryEntrySchema.parse),
+  );
+}
+
+export function readAllMemoryEntries(paths: StorePaths): MemoryEntry[] {
+  let fileNames: string[];
+  try {
+    fileNames = readdirSync(paths.memoryDir);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath: paths.memoryDir,
+      cause: error,
+    });
+  }
+
+  return fileNames
+    .filter((fileName) => fileName.endsWith(".jsonl"))
+    .flatMap((fileName) => readJsonLines(join(paths.memoryDir, fileName)))
+    .map((entry) => parseEntity(entry, memoryEntrySchema.parse));
+}
+
+export function writeMemoryEntriesForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+  entries: readonly MemoryEntry[],
+): void {
+  const content = entries.map((entry) => JSON.stringify(entry)).join("\n");
+  atomicWriteFile(
+    join(paths.memoryDir, `${projectId}.jsonl`),
+    content.length === 0 ? "" : `${content}\n`,
+  );
+}
+
+function readJsonArray(filePath: string): unknown[] {
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, "utf8"));
+    if (!Array.isArray(parsed)) {
+      throw new Error("Expected JSON array.");
+    }
+
+    return parsed;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath,
+      cause: error,
+    });
+  }
+}
+
+function readJsonLines(filePath: string): unknown[] {
+  let content: string;
+  try {
+    content = readFileSync(filePath, "utf8");
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath,
+      cause: error,
+    });
+  }
+
+  try {
+    return content
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line));
+  } catch (error) {
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath,
+      cause: error,
+    });
+  }
+}
+
+function parseEntity<T>(entity: unknown, parse: (entity: unknown) => T): T {
+  try {
+    return parse(entity);
+  } catch (error) {
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", { cause: error });
+  }
+}
+
+function atomicWriteFile(filePath: string, content: string): void {
+  const parentDir = dirname(filePath);
+  const tempPath = join(parentDir, `.${randomUUID()}.tmp`);
+
+  try {
+    mkdirSync(parentDir, { recursive: true });
+    writeFileSync(tempPath, content);
+    renameSync(tempPath, filePath);
+  } catch (error) {
+    try {
+      rmSync(tempPath, { force: true });
+    } catch {
+      // Ignore cleanup failures; callers need the original write failure.
+    }
+
+    throw new CorePersistenceError("store_write_failed", "Store write failed.", {
+      filePath,
+      cause: error,
+    });
+  }
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
+}
