@@ -20,3 +20,29 @@ export class CoreRegistryError extends Error {
     this.code = coreRegistryErrorCodeSchema.parse(code);
   }
 }
+
+export const corePersistenceErrorCodeSchema = z.enum([
+  "store_root_invalid",
+  "store_read_failed",
+  "store_write_failed",
+  "store_json_invalid",
+  "store_entity_invalid",
+]);
+
+export type CorePersistenceErrorCode = z.infer<typeof corePersistenceErrorCodeSchema>;
+
+export class CorePersistenceError extends Error {
+  readonly code: CorePersistenceErrorCode;
+  readonly filePath: string | null;
+
+  constructor(
+    code: CorePersistenceErrorCode,
+    message: string,
+    options?: { filePath?: string; cause?: unknown },
+  ) {
+    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
+    this.name = "CorePersistenceError";
+    this.code = corePersistenceErrorCodeSchema.parse(code);
+    this.filePath = options?.filePath ?? null;
+  }
+}
