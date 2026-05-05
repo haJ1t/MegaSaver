@@ -6,7 +6,7 @@ sources:
   - docs/superpowers/plans/2026-05-04-core-package-plan.md
   - docs/superpowers/specs/2026-05-05-core-persistence-design.md
   - docs/superpowers/plans/2026-05-05-core-persistence-plan.md
-status: persistence-plan
+status: persistence-implemented
 created: 2026-05-04
 updated: 2026-05-05
 ---
@@ -31,13 +31,14 @@ Storage is intentionally in-memory only. Filesystem persistence,
 memory search, token audit, context packing, and compression each need
 their own spec.
 
-The next approved Core slice is JSON directory persistence:
+The next Core slice is JSON directory persistence:
 
 - caller-provided `rootDir`;
 - `projects.json` and `sessions.json`;
 - `memory/<project-id>.jsonl`;
 - typed persistence errors for invalid roots, I/O failures, corrupt
   JSON/JSONL, and invalid stored entities.
+- public factory `createJsonDirectoryCoreRegistry()`.
 
 ## Implementation status
 
@@ -46,7 +47,8 @@ Implementation plan written:
 
 Foundation implementation is complete, external review passed, and the
 package is published on `origin/main`. Persistence spec and
-implementation plan are approved; implementation is next.
+implementation plan are approved; JSON directory persistence is
+implemented in `feat/core-persistence` and awaiting external review.
 
 ## Implementation evidence
 
@@ -55,6 +57,14 @@ implementation plan are approved; implementation is next.
 - `pnpm --filter @megasaver/core typecheck` passes.
 - `pnpm --filter @megasaver/core build` passes.
 - `pnpm verify` passes on `main` after local merge.
+- Persistence implementation evidence before review:
+  `pnpm --filter @megasaver/core test` passes.
+- Persistence implementation evidence before review:
+  `pnpm --filter @megasaver/core typecheck` passes.
+- Persistence implementation evidence before review:
+  `pnpm --filter @megasaver/core build` passes.
+- Public export smoke with a temp store directory passed: command
+  printed `0` and `.tmp-core-smoke` was removed.
 
 ## Boundary rules
 

@@ -124,3 +124,7 @@ Wrote `docs/superpowers/plans/2026-05-05-core-persistence-plan.md`. Plan breaks 
 ## [2026-05-05] schema | core persistence plan adjusted
 
 Adjusted the core persistence plan before Task 3 execution to keep tests within the repo's 300 LOC file convention. Corrupt-store tests now land in `packages/core/test/json-directory-registry-corrupt.test.ts` instead of appending to the already-large happy-path registry test file.
+
+## [2026-05-05] schema | core persistence implemented
+
+Implemented JSON directory persistence for `@megasaver/core` in `feat/core-persistence`: caller-provided `rootDir`, `projects.json`, `sessions.json`, project memory JSONL files, temp-file plus rename writes, typed persistence errors, and package export. Evidence before review: `pnpm --filter @megasaver/core test`, `pnpm --filter @megasaver/core typecheck`, `pnpm --filter @megasaver/core build`, and a public export smoke command pass.
