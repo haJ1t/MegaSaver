@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { ProjectId } from "@megasaver/shared";
+import { z } from "zod";
 import { CorePersistenceError } from "./errors.js";
 import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
 import { type Project, projectSchema } from "./project.js";
@@ -56,7 +57,7 @@ export function resolveStorePaths(rootDir: string): StorePaths {
 
 export function readProjects(paths: StorePaths): Project[] {
   return readJsonArray(paths.projectsPath).map((project) =>
-    parseEntity(project, projectSchema.parse),
+    parseEntity(projectSchema, project, paths.projectsPath),
   );
 }
 
@@ -66,7 +67,7 @@ export function writeProjects(paths: StorePaths, projects: readonly Project[]): 
 
 export function readSessions(paths: StorePaths): Session[] {
   return readJsonArray(paths.sessionsPath).map((session) =>
-    parseEntity(session, sessionSchema.parse),
+    parseEntity(sessionSchema, session, paths.sessionsPath),
   );
 }
 
@@ -79,7 +80,7 @@ export function readMemoryEntriesForProject(
   projectId: ProjectId,
 ): MemoryEntry[] {
   return readJsonLines(join(paths.memoryDir, `${projectId}.jsonl`)).map((entry) =>
-    parseEntity(entry, memoryEntrySchema.parse),
+    parseEntity(memoryEntrySchema, entry, join(paths.memoryDir, `${projectId}.jsonl`)),
   );
 }
 
@@ -100,8 +101,12 @@ export function readAllMemoryEntries(paths: StorePaths): MemoryEntry[] {
 
   return fileNames
     .filter((fileName) => fileName.endsWith(".jsonl"))
-    .flatMap((fileName) => readJsonLines(join(paths.memoryDir, fileName)))
-    .map((entry) => parseEntity(entry, memoryEntrySchema.parse));
+    .flatMap((fileName) => {
+      const filePath = join(paths.memoryDir, fileName);
+      return readJsonLines(filePath).map((entry) =>
+        parseEntity(memoryEntrySchema, entry, filePath),
+      );
+    });
 }
 
 export function writeMemoryEntriesForProject(
@@ -118,15 +123,18 @@ export function writeMemoryEntriesForProject(
 
 function readJsonArray(filePath: string): unknown[] {
   try {
-    const parsed = JSON.parse(readFileSync(filePath, "utf8"));
-    if (!Array.isArray(parsed)) {
-      throw new Error("Expected JSON array.");
-    }
-
-    return parsed;
+    return parseEntity(
+      z.array(z.unknown()),
+      parseJson(readFileSync(filePath, "utf8"), filePath),
+      filePath,
+    );
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") {
       return [];
+    }
+
+    if (error instanceof CorePersistenceError) {
+      throw error;
     }
 
     throw new CorePersistenceError("store_read_failed", "Store read failed.", {
@@ -151,24 +159,57 @@ function readJsonLines(filePath: string): unknown[] {
     });
   }
 
+  if (content.length === 0) {
+    return [];
+  }
+
+  const lines = content.split("\n");
+  if (content.endsWith("\n")) {
+    lines.pop();
+  }
+
+  return lines.map((line) => {
+    if (line.trim().length === 0) {
+      throw new CorePersistenceError(
+        "store_json_invalid",
+        `Store JSONL has a blank line: ${filePath}`,
+        { filePath },
+      );
+    }
+
+    return parseJson(line, filePath);
+  });
+}
+
+function parseJson(text: string, filePath: string): unknown {
+  if (text.length === 0) {
+    throw new CorePersistenceError("store_json_invalid", `Store file is empty: ${filePath}`, {
+      filePath,
+    });
+  }
+
   try {
-    return content
-      .split("\n")
-      .filter((line) => line.trim().length > 0)
-      .map((line) => JSON.parse(line));
+    return JSON.parse(text) as unknown;
   } catch (error) {
-    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+    throw new CorePersistenceError("store_json_invalid", `Store JSON is invalid: ${filePath}`, {
       filePath,
       cause: error,
     });
   }
 }
 
-function parseEntity<T>(entity: unknown, parse: (entity: unknown) => T): T {
+function parseEntity<T extends z.ZodTypeAny>(
+  schema: T,
+  value: unknown,
+  filePath: string,
+): z.output<T> {
   try {
-    return parse(entity);
+    return schema.parse(value);
   } catch (error) {
-    throw new CorePersistenceError("store_read_failed", "Store read failed.", { cause: error });
+    throw new CorePersistenceError("store_entity_invalid", `Store entity is invalid: ${filePath}`, {
+      filePath,
+      cause: error,
+    });
   }
 }
 
