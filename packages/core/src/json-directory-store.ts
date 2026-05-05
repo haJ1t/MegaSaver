@@ -24,12 +24,11 @@ export type StorePaths = {
 };
 
 export function resolveStorePaths(rootDir: string): StorePaths {
-  const trimmedRootDir = rootDir.trim();
-  if (trimmedRootDir.length === 0) {
+  if (rootDir.trim().length === 0) {
     throw new CorePersistenceError("store_root_invalid", "Store root is invalid.");
   }
 
-  const resolvedRootDir = resolve(trimmedRootDir);
+  const resolvedRootDir = resolve(rootDir);
   try {
     if (existsSync(resolvedRootDir) && !statSync(resolvedRootDir).isDirectory()) {
       throw new CorePersistenceError("store_root_invalid", "Store root is invalid.", {

@@ -115,6 +115,18 @@ describe("createJsonDirectoryCoreRegistry factory", () => {
     );
   });
 
+  it("preserves trailing-space rootDir path characters", () => {
+    const baseRoot = createTempRoot();
+    const rootWithSpace = `${baseRoot} `;
+    roots.push(rootWithSpace);
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: rootWithSpace });
+
+    registry.createProject(projectA);
+
+    expect(existsSync(join(rootWithSpace, "projects.json"))).toBe(true);
+    expect(existsSync(join(baseRoot, "projects.json"))).toBe(false);
+  });
+
   it("resolves relative rootDir values consistently and returns empty projects", () => {
     const root = createTempRoot();
     const relativeRoot = resolve(root, "..", root.split("/").at(-1) ?? "");
