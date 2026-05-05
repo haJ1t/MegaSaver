@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-05-04
+updated: 2026-05-05
 ---
 
 # Wiki Index — Mega Saver
@@ -20,10 +20,11 @@ updated: 2026-05-04
 
 ## Entities
 
+- [[entities/cli]] — `@megasaver/cli` `mega` command scaffold (v0.1).
 - [[entities/core]] — `@megasaver/core` agent-agnostic engine foundation (v0.1).
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1).
 
-More subsystem pages land as features get built. Slot reserved for: `cli`, `connectors-claude-code`, `connectors-generic-cli`, `mcp-bridge`, `app`, `skill-packs`.
+More subsystem pages land as features get built. Slot reserved for: `connectors-claude-code`, `connectors-generic-cli`, `mcp-bridge`, `app`, `skill-packs`.
 
 ## Workflows (none seeded yet)
 
@@ -57,6 +58,6 @@ Process pages will be added as we hit each phase. Slot reserved for: `multi-agen
 
 ## Status
 
-Core foundation published phase. Bootstrap, project skeleton,
-`@megasaver/shared`, and `@megasaver/core` are merged and pushed to
-`origin/main`.
+CLI scaffold published phase. Bootstrap, project skeleton,
+`@megasaver/shared`, `@megasaver/core`, and `@megasaver/cli` are
+merged and pushed to `origin/main`.
