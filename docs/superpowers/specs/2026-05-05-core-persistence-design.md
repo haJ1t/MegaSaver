@@ -161,8 +161,10 @@ export function createJsonDirectoryCoreRegistry(
 
 `rootDir` is resolved with `path.resolve`. It must be a non-empty
 string after trimming. If the resolved root exists and is not a
-directory, the factory throws `CorePersistenceError` with
-`store_root_invalid`. The implementation never writes outside that
+directory, or is a symlink, the factory throws
+`CorePersistenceError` with `store_root_invalid`. Existing symlink
+store subdirectories, including `memory/`, are rejected before writes
+rather than followed. The implementation never writes outside that
 resolved root.
 
 The existing in-memory API remains:

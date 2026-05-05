@@ -50,19 +50,22 @@ package is published on `origin/main`. Persistence spec and
 implementation plan are approved; JSON directory persistence is
 implemented in `feat/core-persistence` and awaiting external review.
 
-## Implementation evidence
+## Foundation evidence
 
-- `pnpm --filter @megasaver/core test` passes: 5 test files,
-  53 tests after review hardening.
-- `pnpm --filter @megasaver/core typecheck` passes.
-- `pnpm --filter @megasaver/core build` passes.
-- `pnpm verify` passes on `main` after local merge.
-- Persistence implementation evidence before review:
-  `pnpm --filter @megasaver/core test` passes.
-- Persistence implementation evidence before review:
-  `pnpm --filter @megasaver/core typecheck` passes.
-- Persistence implementation evidence before review:
-  `pnpm --filter @megasaver/core build` passes.
+- `pnpm --filter @megasaver/core test` passed for the foundation
+  slice.
+- `pnpm --filter @megasaver/core typecheck` passed.
+- `pnpm --filter @megasaver/core build` passed.
+- `pnpm verify` passed on `main` after local merge.
+
+## Persistence evidence
+
+- Persistence implementation evidence before final re-review:
+  `pnpm --filter @megasaver/core test` passed.
+- Persistence implementation evidence before final re-review:
+  `pnpm --filter @megasaver/core typecheck` passed.
+- Persistence implementation evidence before final re-review:
+  `pnpm --filter @megasaver/core build` passed.
 - Public export smoke passed:
   `node --input-type=module -e "import { createJsonDirectoryCoreRegistry } from './packages/core/dist/index.js'; ..."`
   printed `0`; `.tmp-core-smoke` was removed.

@@ -74,6 +74,16 @@ describe("createJsonDirectoryCoreRegistry corrupt store handling", () => {
     expectPersistenceError(() => registry.getMemoryEntry(MEMORY_ENTRY_ID_A), "store_json_invalid");
   });
 
+  it("throws a persistence error for an empty memory JSONL file", () => {
+    const root = makeRoot();
+    mkdirSync(join(root, "memory"), { recursive: true });
+    writeFileSync(join(root, "memory", `${PROJECT_ID_A}.jsonl`), "");
+
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: root });
+
+    expectPersistenceError(() => registry.getMemoryEntry(MEMORY_ENTRY_ID_A), "store_json_invalid");
+  });
+
   it("throws a persistence error for schema-invalid stored projects", () => {
     const root = makeRoot();
     mkdirSync(root, { recursive: true });

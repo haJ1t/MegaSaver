@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -31,12 +31,22 @@ export function resolveStorePaths(rootDir: string): StorePaths {
 
   const resolvedRootDir = resolve(rootDir);
   try {
-    if (existsSync(resolvedRootDir) && !statSync(resolvedRootDir).isDirectory()) {
+    const rootStats = lstatSync(resolvedRootDir);
+    if (rootStats.isSymbolicLink() || !rootStats.isDirectory()) {
       throw new CorePersistenceError("store_root_invalid", "Store root is invalid.", {
         filePath: resolvedRootDir,
       });
     }
   } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return {
+        rootDir: resolvedRootDir,
+        projectsPath: join(resolvedRootDir, "projects.json"),
+        sessionsPath: join(resolvedRootDir, "sessions.json"),
+        memoryDir: join(resolvedRootDir, "memory"),
+      };
+    }
+
     if (error instanceof CorePersistenceError) {
       throw error;
     }
@@ -160,7 +170,9 @@ function readJsonLines(filePath: string): unknown[] {
   }
 
   if (content.length === 0) {
-    return [];
+    throw new CorePersistenceError("store_json_invalid", `Store JSONL file is empty: ${filePath}`, {
+      filePath,
+    });
   }
 
   const lines = content.split("\n");
@@ -218,6 +230,12 @@ function atomicWriteFile(filePath: string, content: string): void {
   const tempPath = join(parentDir, `.${randomUUID()}.tmp`);
 
   try {
+    if (existsSync(parentDir) && lstatSync(parentDir).isSymbolicLink()) {
+      throw new CorePersistenceError("store_write_failed", "Store write failed.", {
+        filePath: parentDir,
+      });
+    }
+
     mkdirSync(parentDir, { recursive: true });
     writeFileSync(tempPath, content);
     renameSync(tempPath, filePath);
