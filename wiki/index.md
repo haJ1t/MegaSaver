@@ -58,8 +58,10 @@ Process pages will be added as we hit each phase. Slot reserved for: `multi-agen
 
 ## Status
 
-Core persistence review-passed phase. Bootstrap, project skeleton,
-`@megasaver/shared`, `@megasaver/core`, and `@megasaver/cli` are
-merged and pushed to `origin/main`; JSON directory persistence is
-implemented in `feat/core-persistence` and ready for integration
-choice.
+Core persistence merged. Bootstrap, project skeleton,
+`@megasaver/shared`, `@megasaver/core` (with JSON directory
+persistence via PR #4), and `@megasaver/cli` are all on
+`origin/main`. Next slot: a feature that consumes the persistent
+registry — candidates are first CLI CRUD command,
+`connectors/claude-code`, or `connectors/generic-cli` (each picked
+via its own spec).

@@ -6,7 +6,7 @@ sources:
   - docs/superpowers/plans/2026-05-04-core-package-plan.md
   - docs/superpowers/specs/2026-05-05-core-persistence-design.md
   - docs/superpowers/plans/2026-05-05-core-persistence-plan.md
-status: persistence-review-passed
+status: persistence-merged
 created: 2026-05-04
 updated: 2026-05-05
 ---
@@ -46,9 +46,9 @@ Implementation plan written:
 `docs/superpowers/plans/2026-05-04-core-package-plan.md`.
 
 Foundation implementation is complete, external review passed, and the
-package is published on `origin/main`. Persistence spec and
-implementation plan are approved; JSON directory persistence is
-implemented in `feat/core-persistence` and external review passed.
+package is published on `origin/main`. JSON directory persistence is
+also merged: PR <https://github.com/haJ1t/MegaSaver/pull/4> landed on
+`origin/main` (merge commit `0656114`).
 
 ## Foundation evidence
 
