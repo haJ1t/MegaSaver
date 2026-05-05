@@ -1,3 +1,5 @@
+import { defineCommand } from "citty";
+
 export type Check = {
   key: string;
   value: string;
@@ -40,3 +42,19 @@ export function renderReport(checks: Check[]): string {
 export function exitCodeFor(checks: Check[]): 0 | 1 {
   return checks.some((c) => !c.pass) ? 1 : 0;
 }
+
+export const doctorCommand = defineCommand({
+  meta: {
+    name: "doctor",
+    description: "Environment diagnostics.",
+  },
+  args: {},
+  run() {
+    const checks = runChecks();
+    console.log(renderReport(checks));
+    const code = exitCodeFor(checks);
+    if (code !== 0) {
+      process.exitCode = code;
+    }
+  },
+});

@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type Check,
   checkCwd,
   checkNode,
   checkPlatform,
+  doctorCommand,
   exitCodeFor,
   renderReport,
   runChecks,
@@ -140,5 +141,51 @@ describe("exitCodeFor", () => {
       { key: "cwd", value: "/foo", pass: true },
     ];
     expect(exitCodeFor(checks)).toBe(1);
+  });
+});
+
+describe("doctorCommand", () => {
+  let logSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+    process.exitCode = 0;
+  });
+
+  it("calls console.log exactly once", async () => {
+    await doctorCommand.run?.({
+      args: {},
+      cmd: doctorCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("prints a report that ends with the summary line", async () => {
+    await doctorCommand.run?.({
+      args: {},
+      cmd: doctorCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+    const output = logSpy.mock.calls[0]?.[0] as string;
+    expect(output).toMatch(/^node v\d+\.\d+\.\d+/);
+    expect(output).toContain("\n\n3 PASS / 0 FAIL");
+  });
+
+  it("leaves process.exitCode at 0 on Node 22+", async () => {
+    await doctorCommand.run?.({
+      args: {},
+      cmd: doctorCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+    expect(process.exitCode).toBe(0);
   });
 });
