@@ -8,9 +8,7 @@ export const claudeCodeConnectorErrorCodeSchema = z.enum([
   "project_root_invalid",
 ]);
 
-export type ClaudeCodeConnectorErrorCode = z.infer<
-  typeof claudeCodeConnectorErrorCodeSchema
->;
+export type ClaudeCodeConnectorErrorCode = z.infer<typeof claudeCodeConnectorErrorCodeSchema>;
 
 export interface ClaudeCodeConnectorErrorOptions {
   cause?: unknown;

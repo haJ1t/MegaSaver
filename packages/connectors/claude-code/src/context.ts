@@ -1,10 +1,6 @@
 import { memoryEntrySchema, projectSchema, sessionSchema } from "@megasaver/core";
 import { z } from "zod";
-import {
-  CLAUDE_CODE_AGENT_ID,
-  MEGA_SAVER_BLOCK_END,
-  MEGA_SAVER_BLOCK_START,
-} from "./constants.js";
+import { CLAUDE_CODE_AGENT_ID, MEGA_SAVER_BLOCK_END, MEGA_SAVER_BLOCK_START } from "./constants.js";
 import { ClaudeCodeConnectorError } from "./errors.js";
 
 const sentinels = [MEGA_SAVER_BLOCK_START, MEGA_SAVER_BLOCK_END] as const;

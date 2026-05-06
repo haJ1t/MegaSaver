@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
   ClaudeCodeConnectorError,
-  claudeCodeConnectorErrorCodeSchema,
   type ClaudeCodeConnectorErrorCode,
+  claudeCodeConnectorErrorCodeSchema,
 } from "../src/index.js";
 
 describe("ClaudeCodeConnectorError", () => {

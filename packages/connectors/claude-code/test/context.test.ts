@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest";
 import { projectIdSchema, sessionIdSchema } from "@megasaver/shared";
+import { describe, expect, test } from "vitest";
 import {
   ClaudeCodeConnectorError,
   ClaudeCodeContextSchema,
@@ -8,19 +8,13 @@ import {
 } from "../src/index.js";
 import { project, projectMemory, session, sessionMemory } from "./fixtures.js";
 
-const otherProjectId = projectIdSchema.parse(
-  "55555555-5555-4555-8555-555555555555",
-);
-const otherSessionId = sessionIdSchema.parse(
-  "66666666-6666-4666-8666-666666666666",
-);
+const otherProjectId = projectIdSchema.parse("55555555-5555-4555-8555-555555555555");
+const otherSessionId = sessionIdSchema.parse("66666666-6666-4666-8666-666666666666");
 
 function issuePaths(input: unknown): string[] {
   const result = ClaudeCodeContextSchema.safeParse(input);
   expect(result.success).toBe(false);
-  return result.success
-    ? []
-    : result.error.issues.map((issue) => issue.path.join("."));
+  return result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
 }
 
 describe("ClaudeCodeContextSchema", () => {
