@@ -88,21 +88,23 @@ mega project list
 `<name>` is a single positional argument. It is required. The
 underlying `Project` schema requires a non-empty trimmed string.
 
-### 4.2 Global flag
+### 4.2 `--store` flag
 
 ```
-mega [--store <dir>] <subcommand> [...]
+mega project create [--store <dir>] <name>
+mega project list   [--store <dir>]
 ```
 
-`--store <dir>` is a root-level flag that applies to every
-subcommand whose handler resolves a store path (currently the two
-`project` commands). When provided, it overrides the default. When
-absent, the default store directory is used. The flag accepts an
-absolute path or a path relative to the process working directory.
+`--store <dir>` is declared on each store-touching subcommand
+(`project create`, `project list`). It overrides the default
+store directory for the duration of that invocation. The flag
+accepts an absolute path or a path relative to the process
+working directory.
 
-`mega doctor` does not read the store and ignores `--store` if it
-is passed. Citty's automatic `--help` is the only other supported
-top-level surface.
+`mega doctor` does not accept `--store` because it does not
+resolve a store; passing it is a usage error. Citty's
+automatic `--help` is the only other supported top-level
+surface.
 
 ### 4.3 Default store directory
 
@@ -359,11 +361,11 @@ down on completion. No test ever touches the real XDG path.
 
 After `pnpm build`, a manual sequence is captured for the wiki:
 
-```
+```bash
 SMOKE_STORE="$(mktemp -d -t megasaver-smoke.XXXXXX)"
-node apps/cli/dist/cli.js --store "$SMOKE_STORE" project list
-node apps/cli/dist/cli.js --store "$SMOKE_STORE" project create demo
-node apps/cli/dist/cli.js --store "$SMOKE_STORE" project list
+node apps/cli/dist/cli.js project list --store "$SMOKE_STORE"
+node apps/cli/dist/cli.js project create demo --store "$SMOKE_STORE"
+node apps/cli/dist/cli.js project list --store "$SMOKE_STORE"
 rm -rf "$SMOKE_STORE"
 ```
 

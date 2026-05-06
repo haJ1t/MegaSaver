@@ -40,8 +40,9 @@ Prints nothing (empty stdout) when the store is empty.
 
 Default store: `$XDG_DATA_HOME/megasaver` (fallback
 `~/.local/share/megasaver`). macOS and Linux only in v0.1;
-Windows deferred. The root-level `--store <dir>` flag overrides the
-default for any command.
+Windows deferred. `--store <dir>` is declared on each `project`
+subcommand; it appears after the subcommand chain, e.g.
+`mega project list --store /tmp/x`.
 
 On first use against an uninitialized directory the CLI calls
 `initStore` (from `@megasaver/core`) which creates `rootDir`,
