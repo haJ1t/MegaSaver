@@ -2,8 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ensureStoreReady } from "../src/store.js";
-import { resolveStorePath } from "../src/store.js";
+import { ensureStoreReady, resolveStorePath } from "../src/store.js";
 
 describe("resolveStorePath", () => {
   const home = "/home/user";
