@@ -162,6 +162,18 @@ describe("upsertMegaSaverBlock", () => {
       }),
     ).toBe(`# Human\n\n${newBlock}`);
   });
+
+  test("normalizes blank lines when replacing an adjacent managed block", () => {
+    const oldBlock = renderClaudeCodeContext({ project, session, memoryEntries: [] });
+    const newBlock = renderClaudeCodeContext(context);
+
+    expect(
+      upsertMegaSaverBlock({
+        existingContent: `# Human\n${oldBlock}After\n`,
+        context,
+      }),
+    ).toBe(`# Human\n\n${newBlock}\nAfter\n`);
+  });
 });
 
 describe("removeMegaSaverBlock", () => {

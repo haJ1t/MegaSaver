@@ -87,7 +87,7 @@ export function upsertMegaSaverBlock(input: UpsertMegaSaverBlockInput): string {
   const parsed = parseClaudeMd(input.existingContent);
 
   if (parsed.hasManagedBlock) {
-    return ensureTrailingNewline(`${parsed.contentBeforeBlock}${block}${parsed.contentAfterBlock}`);
+    return joinWithManagedBlock(parsed.contentBeforeBlock, block, parsed.contentAfterBlock);
   }
 
   const humanContent = trimTrailingNewlines(parsed.contentBeforeBlock);
@@ -178,6 +178,15 @@ function joinHumanContent(before: string, after: string): string {
   }
 
   return `${normalizedBefore}\n\n${normalizedAfter}`;
+}
+
+function joinWithManagedBlock(before: string, block: string, after: string): string {
+  const normalizedBefore = trimTrailingNewlines(before);
+  const normalizedAfter = trimLeadingNewlines(after);
+  const prefix = normalizedBefore.length === 0 ? "" : `${normalizedBefore}\n\n`;
+  const suffix = normalizedAfter.length === 0 ? "" : `\n${normalizedAfter}`;
+
+  return ensureTrailingNewline(`${prefix}${block}${suffix}`);
 }
 
 function ensureTrailingNewline(content: string): string {
