@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   ClaudeCodeConnectorError,
   MEGA_SAVER_BLOCK_END,
@@ -8,6 +8,7 @@ import {
   renderClaudeCodeContext,
   upsertMegaSaverBlock,
 } from "../src/index.js";
+import type { ClaudeCodeContext } from "../src/index.js";
 import { project, projectMemory, session, sessionMemory } from "./fixtures.js";
 
 const context = {
@@ -27,6 +28,26 @@ function expectBlockConflict(action: () => unknown): void {
 }
 
 describe("renderClaudeCodeContext", () => {
+  test("requires typed Claude Code context inputs", () => {
+    expectTypeOf(renderClaudeCodeContext).parameter(0).toEqualTypeOf<ClaudeCodeContext>();
+    expectTypeOf(upsertMegaSaverBlock).parameter(0).toEqualTypeOf<{
+      existingContent: string;
+      context: ClaudeCodeContext;
+    }>();
+
+    const assertInvalidInputsAreRejected = (): void => {
+      // @ts-expect-error Missing session and memoryEntries must be rejected at compile time.
+      renderClaudeCodeContext({ project });
+      upsertMegaSaverBlock({
+        existingContent: "",
+        // @ts-expect-error Missing session and memoryEntries must be rejected at compile time.
+        context: { project },
+      });
+    };
+
+    expect(assertInvalidInputsAreRejected).toBeTypeOf("function");
+  });
+
   test("renders only the managed block with context metadata and memory", () => {
     expect(renderClaudeCodeContext(context)).toBe(
       `${MEGA_SAVER_BLOCK_START}

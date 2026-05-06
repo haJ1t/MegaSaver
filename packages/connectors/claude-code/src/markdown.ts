@@ -11,7 +11,7 @@ export interface ClaudeMdDocument {
 
 export interface UpsertMegaSaverBlockInput {
   existingContent: string;
-  context: unknown;
+  context: ClaudeCodeContext;
 }
 
 interface IndexedLine {
@@ -19,7 +19,7 @@ interface IndexedLine {
   raw: string;
 }
 
-export function renderClaudeCodeContext(input: unknown): string {
+export function renderClaudeCodeContext(input: ClaudeCodeContext): string {
   const context = assertClaudeCodeContext(input);
   const sessionLabel = context.session?.title ?? context.session?.id ?? "none";
   const riskLevel = context.session?.riskLevel ?? "none";
