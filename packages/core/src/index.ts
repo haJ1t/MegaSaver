@@ -1,4 +1,5 @@
 export * from "./errors.js";
+export * from "./init-store.js";
 export * from "./json-directory-registry.js";
 export * from "./memory-entry.js";
 export * from "./project.js";
