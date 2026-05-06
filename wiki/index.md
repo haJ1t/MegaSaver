@@ -22,10 +22,11 @@ updated: 2026-05-06
 ## Entities
 
 - [[entities/cli]] — `@megasaver/cli` `mega` command scaffold (v0.1).
+- [[entities/connectors-claude-code]] — `@megasaver/connector-claude-code` root `CLAUDE.md` adapter (spec-written).
 - [[entities/core]] — `@megasaver/core` agent-agnostic engine foundation (v0.1).
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1).
 
-More subsystem pages land as features get built. Slot reserved for: `connectors-claude-code`, `connectors-generic-cli`, `mcp-bridge`, `app`, `skill-packs`.
+More subsystem pages land as features get built. Slot reserved for: `connectors-generic-cli`, `mcp-bridge`, `app`, `skill-packs`.
 
 ## Workflows
 
@@ -59,6 +60,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 | What risk level applies and what does it gate?    | [[concepts/risk-aware-development]]             |
 | What schemas / registry / errors does Core export? | [[entities/core]]                              |
 | What commands / flags does the CLI support?       | [[entities/cli]]                                |
+| What does the Claude Code connector write?        | [[entities/connectors-claude-code]]             |
 | What types / IDs does Shared export?              | [[entities/shared]]                             |
 | How do I write a CLI handler test?                | [[workflows/cli-test-pattern]]                  |
 | What's in the original product idea?              | [[sources/fikri-original]]                      |
@@ -66,10 +68,10 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
+Claude Code connector spec written on `codex/connectors-claude-code`.
 CLI project CRUD merged. Bootstrap, project skeleton,
 `@megasaver/shared`, `@megasaver/core` (with `initStore` and
 JSON directory persistence), and `@megasaver/cli` (with
 `mega doctor`, `mega project create`, `mega project list`) are
-all on `origin/main` via PR #5. Next slot: connector specs
-(`connectors/claude-code` or `connectors/generic-cli`) or first
-`Session` CRUD.
+all on `origin/main` via PR #5. Next slot after this connector:
+`connectors/generic-cli` or first `Session` CRUD.
