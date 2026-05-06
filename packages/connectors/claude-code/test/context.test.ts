@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { projectIdSchema, sessionIdSchema } from "@megasaver/shared";
 import {
   ClaudeCodeConnectorError,
   ClaudeCodeContextSchema,
@@ -6,6 +7,21 @@ import {
   assertClaudeCodeContext,
 } from "../src/index.js";
 import { project, projectMemory, session, sessionMemory } from "./fixtures.js";
+
+const otherProjectId = projectIdSchema.parse(
+  "55555555-5555-4555-8555-555555555555",
+);
+const otherSessionId = sessionIdSchema.parse(
+  "66666666-6666-4666-8666-666666666666",
+);
+
+function issuePaths(input: unknown): string[] {
+  const result = ClaudeCodeContextSchema.safeParse(input);
+  expect(result.success).toBe(false);
+  return result.success
+    ? []
+    : result.error.issues.map((issue) => issue.path.join("."));
+}
 
 describe("ClaudeCodeContextSchema", () => {
   test("accepts a valid Claude Code context", () => {
@@ -29,6 +45,26 @@ describe("ClaudeCodeContextSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  test("rejects a session from another project", () => {
+    expect(
+      issuePaths({
+        project,
+        session: { ...session, projectId: otherProjectId },
+        memoryEntries: [projectMemory],
+      }),
+    ).toContain("session.projectId");
+  });
+
+  test("rejects memory from another project", () => {
+    expect(
+      issuePaths({
+        project,
+        session,
+        memoryEntries: [{ ...projectMemory, projectId: otherProjectId }],
+      }),
+    ).toContain("memoryEntries.0.projectId");
+  });
+
   test("rejects session memory without matching session", () => {
     const result = ClaudeCodeContextSchema.safeParse({
       project,
@@ -37,6 +73,16 @@ describe("ClaudeCodeContextSchema", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  test("rejects session memory from another session", () => {
+    expect(
+      issuePaths({
+        project,
+        session,
+        memoryEntries: [{ ...sessionMemory, sessionId: otherSessionId }],
+      }),
+    ).toContain("memoryEntries.0.sessionId");
   });
 
   test("rejects sentinel injection in rendered values", () => {
