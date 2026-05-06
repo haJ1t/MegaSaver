@@ -17,6 +17,13 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
     if (ctx?.kind === "store") {
       return { message: "error: --store path must be non-empty", exitCode: 1 };
     }
+    const firstIssue = err.issues[0];
+    if (firstIssue?.message === "name must not contain control characters") {
+      return {
+        message: "error: name must not contain control characters",
+        exitCode: 1,
+      };
+    }
     return { message: "error: name must be non-empty", exitCode: 1 };
   }
   if (err instanceof CorePersistenceError) {

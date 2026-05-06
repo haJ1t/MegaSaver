@@ -155,11 +155,18 @@ optional auto-init notice on stderr is independent of stdout.
 line per persisted project otherwise, in `projects.json` array
 order.
 
+Project names containing C0/C1 control characters or DEL are
+rejected at create time (see §4.7); the wire-format depends on
+names being newline-free.
+
 ### 4.6 Duplicate-name policy
 
 `create` rejects a name that exactly matches an existing
 project's `name` field (case-sensitive, post-trim comparison
-matching the schema's normalization). The check is performed in
+matching the schema's normalization (control characters are
+already rejected by the §4.7 row above, so duplicate-name
+comparison only ever sees control-char-free trimmed names)). The
+check is performed in
 the CLI handler by calling `listProjects()` before
 `createProject()`. Core does not enforce a unique-name constraint
 because uniqueness is a CLI/store-policy decision, not a Core
@@ -173,6 +180,7 @@ The error path is described in §4.7.
 | Condition                                    | Stderr message                                            | Exit |
 |----------------------------------------------|-----------------------------------------------------------|------|
 | Empty or whitespace-only `<name>` (Zod fail)         | `error: name must be non-empty`                           | 1    |
+| Name contains a C0/C1 control character or DEL  | `error: name must not contain control characters`         | 1    |
 | Duplicate name (post-trim)                           | `error: project "<trimmed-name>" already exists`          | 1    |
 | Persistence I/O failure                              | `error: store I/O failed: <reason>`                       | 1    |
 | Corrupt store JSON or JSONL                          | `error: store at <path> is corrupt: <reason>`             | 1    |
@@ -422,6 +430,7 @@ process. No network calls. No telemetry.
 - Slug fields, free-text search, or any indexing on top of the
   flat JSON layout.
 - ANSI color, table formatting, or shell completion scripts.
+- Unicode normalization (NFC vs NFD) — names are stored verbatim in the trimmed, control-char-free form they were submitted in. v0.2 may add canonicalization.
 
 ## 12. Open questions
 

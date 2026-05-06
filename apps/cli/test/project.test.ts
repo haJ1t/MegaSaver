@@ -159,6 +159,20 @@ describe("projectCreateCommand", () => {
     await expect(readFile(join(root, "projects.json"), "utf8")).rejects.toThrow();
   });
 
+  it("rejects a name containing control characters with the documented message", async () => {
+    await runCreate("demo\nfake");
+
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.map((c) => c[0])).toEqual([
+      "error: name must not contain control characters",
+    ]);
+    expect(logSpy).not.toHaveBeenCalled();
+
+    // Implementation rejects the name before ensureStoreReady runs,
+    // so projects.json must NOT have been created.
+    await expect(readFile(join(root, "projects.json"), "utf8")).rejects.toThrow();
+  });
+
   it("rejects a duplicate name with the documented message and leaves projects.json unchanged", async () => {
     await runCreate("demo");
     logSpy.mockClear();

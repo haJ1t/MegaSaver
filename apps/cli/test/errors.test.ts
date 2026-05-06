@@ -66,6 +66,21 @@ describe("mapErrorToCliMessage", () => {
     });
   });
 
+  it("maps a Zod failure for control-character names to a distinct message", () => {
+    const result = z
+      .string()
+      .trim()
+      .min(1)
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — mirrors the production schema guard
+      .regex(/^[^\x00-\x1f\x7f]+$/, "name must not contain control characters")
+      .safeParse("demo\nfake");
+    if (result.success) throw new Error("unreachable");
+    expect(mapErrorToCliMessage(result.error, { kind: "name" })).toEqual({
+      message: "error: name must not contain control characters",
+      exitCode: 1,
+    });
+  });
+
   it("rewraps an unknown Error to a generic message (no leak)", () => {
     expect(mapErrorToCliMessage(new Error("boom"))).toEqual({
       message: "error: unexpected failure: boom",
