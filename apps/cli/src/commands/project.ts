@@ -163,3 +163,11 @@ export const projectCreateCommand = defineCommand({
     if (code !== 0) process.exitCode = code;
   },
 });
+
+export const projectCommand = defineCommand({
+  meta: { name: "project", description: "Manage Mega Saver projects." },
+  subCommands: {
+    create: projectCreateCommand,
+    list: projectListCommand,
+  },
+});
