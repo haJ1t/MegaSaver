@@ -4,9 +4,11 @@ tags: [entity, app, cli, v0.1]
 sources:
   - docs/superpowers/specs/2026-05-05-cli-package-design.md
   - docs/superpowers/plans/2026-05-05-cli-package-plan.md
+  - docs/superpowers/specs/2026-05-06-cli-project-crud-design.md
+  - docs/superpowers/plans/2026-05-06-cli-project-crud-plan.md
 status: published
 created: 2026-05-05
-updated: 2026-05-05
+updated: 2026-05-06
 ---
 
 # `@megasaver/cli`
@@ -17,71 +19,65 @@ in `apps/cli/package.json` maps `mega → ./dist/cli.js`.
 
 ## Current slice
 
-The first CLI slice is scaffold only:
+### `mega doctor`
 
-- `mega --version` — reads `apps/cli/package.json` via
-  `createRequire`.
-- `mega --help` — Citty default help with the `doctor` subcommand
-  listed.
-- `mega doctor` — three stateless checks (Node version ≥22, platform,
-  cwd). Plain text output, summary line, exit 0 on all-PASS, exit 1
-  on any FAIL.
+Three stateless checks (Node version ≥22, platform, cwd). Plain text
+output, summary line, exit 0 on all-PASS, exit 1 on any FAIL.
 
-The CLI does not import `@megasaver/core` or `@megasaver/shared` in
-this slice. Real CRUD commands and registry consumption land in their
-own specs once durable storage exists.
+### `mega project create <name>`
 
-## Implementation status
+Creates a project in the store. Sets `rootPath = process.cwd()` and
+stamps RFC 3339 `createdAt`/`updatedAt`. Prints `<id>  <name>` on
+success. Rejects duplicate names with `error: project "<name>"
+already exists` and exit 1.
 
-Implementation is complete and external review passed.
+### `mega project list`
 
-## Implementation evidence
+Lists all projects as `<id>  <name>` lines, one per project.
+Prints nothing (empty stdout) when the store is empty.
 
-- `pnpm --filter @megasaver/cli test` passes: 1 test file, 17 tests.
-- `pnpm --filter @megasaver/cli typecheck` passes.
-- `pnpm --filter @megasaver/cli build` emits `dist/cli.js` with
-  shebang `#!/usr/bin/env node` and a sourcemap; no `dist/cli.d.ts`.
-- `pnpm verify` passes (lint + typecheck + test on all 3 packages).
-- `node apps/cli/dist/cli.js doctor` prints `3 PASS / 0 FAIL` on
-  Node 22+.
+### Store resolution
+
+Default store: `$XDG_DATA_HOME/megasaver` (fallback
+`~/.local/share/megasaver`). macOS and Linux only in v0.1;
+Windows deferred. The root-level `--store <dir>` flag overrides the
+default for any command.
+
+On first use against an uninitialized directory the CLI calls
+`initStore` (from `@megasaver/core`) which creates `rootDir`,
+`projects.json`, and `sessions.json` without overwriting existing
+files. A one-time notice is printed to stderr:
+`note: initialized store at <path>`.
+
+### Error handling
+
+Every typed core error is caught and funneled to a single exit 1
+path (`errors.ts`). No typed error is silently swallowed.
 
 ## Dev invocation
 
 `pnpm exec mega` does NOT resolve at the workspace root. pnpm v9 only
-symlinks a workspace package's bin when another package depends on
-it; nothing depends on `@megasaver/cli` (it is the consumer). For dev
-loops in v0.1 the canonical invocation is:
+symlinks a workspace package's bin when another package depends on it.
+Canonical dev loop:
 
 ```bash
 pnpm --filter @megasaver/cli build
-node apps/cli/dist/cli.js doctor
+node apps/cli/dist/cli.js project list --store /tmp/demo-store
 ```
-
-When the package is later published (post-v0.1, after dropping
-`private: true` in its own spec), `pnpm install -g @megasaver/cli`
-will create the global `mega` symlink via the standard npm bin field
-contract. The bin field is correct today; only the workspace-local
-symlink is missing by pnpm design.
 
 ## Boundary rules
 
-- The CLI app has no public library export.
-- The CLI app has `private: true` and is never published from v0.1.
-- The CLI does not import `@megasaver/core` or `@megasaver/shared`
-  in this slice — adding either is a follow-up spec decision.
-- The `doctor` command must remain stateless until persistence lands
-  in its own spec.
-- Pure check functions (`checkNode`, `checkPlatform`, `checkCwd`)
-  accept dependency-injected parameters so tests do not have to mock
+- No public library export; `private: true`.
+- The CLI imports `@megasaver/core` for store and registry operations.
+- `doctor` remains stateless; no store interaction.
+- Pure functions accept injected parameters so tests avoid mocking
   `process` globals.
 
 ## Risk
 
-Risk MEDIUM (default per `docs/conventions/risk-modes.md`). This app
-introduces the `mega` command name and the top-level CLI surface but
-mutates no state, exposes no public library API, and touches no
-durable storage. Full superpowers chain applies; `critic` is not
-required at MEDIUM.
+Risk HIGH (`docs/superpowers/specs/2026-05-06-cli-project-crud-design.md`).
+Full superpowers chain applied; code-reviewer and critic passes
+required before merge.
 
 ## Related
 
