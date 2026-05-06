@@ -17,6 +17,7 @@ updated: 2026-05-06
 - [[concepts/agent-agnostic-core]] — non-negotiable: agents connect to core, never reverse.
 - [[concepts/risk-aware-development]] — LOW / MEDIUM / HIGH / CRITICAL gating skills.
 - [[concepts/superpowers-discipline]] — mandatory chain on every feature.
+- [[concepts/wiki-first-token-discipline]] — wiki is the only sanctioned project memory; question → entry mapping; hard rules to avoid raw spec/code reads.
 
 ## Entities
 
@@ -26,9 +27,11 @@ updated: 2026-05-06
 
 More subsystem pages land as features get built. Slot reserved for: `connectors-claude-code`, `connectors-generic-cli`, `mcp-bridge`, `app`, `skill-packs`.
 
-## Workflows (none seeded yet)
+## Workflows
 
-Process pages will be added as we hit each phase. Slot reserved for: `multi-agent-dogfood`, `design-skill-routing`.
+- [[workflows/cli-test-pattern]] — Citty handler test shape, env injection, biome ↔ TS strict conflict resolution.
+
+Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-routing`, `core-registry-consumer-pattern`.
 
 ## Syntheses (cross-page answers)
 
@@ -46,15 +49,20 @@ Process pages will be added as we hit each phase. Slot reserved for: `multi-agen
 
 ## Quick links by question
 
-| Question                                       | Read                                            |
-|------------------------------------------------|-------------------------------------------------|
-| What is Mega Saver?                            | [[syntheses/mega-saver-product]]                |
-| What did we decide for the bootstrap?          | [[decisions/bootstrap-matrix]]                  |
-| Why is the core agent-agnostic?                | [[concepts/agent-agnostic-core]]                |
-| What process do I follow for a new feature?    | [[concepts/superpowers-discipline]]             |
-| What risk level applies and what does it gate? | [[concepts/risk-aware-development]]             |
-| What's in the original product idea?           | [[sources/fikri-original]]                      |
-| Where's the bootstrap spec/plan?               | [[sources/spec-bootstrap]] / [[sources/plan-bootstrap]] |
+| Question                                          | Read                                            |
+|---------------------------------------------------|-------------------------------------------------|
+| What is Mega Saver?                               | [[syntheses/mega-saver-product]]                |
+| What did we decide for the bootstrap?             | [[decisions/bootstrap-matrix]]                  |
+| Why is the core agent-agnostic?                   | [[concepts/agent-agnostic-core]]                |
+| What process do I follow for a new feature?       | [[concepts/superpowers-discipline]]             |
+| Which wiki page answers my question?              | [[concepts/wiki-first-token-discipline]]        |
+| What risk level applies and what does it gate?    | [[concepts/risk-aware-development]]             |
+| What schemas / registry / errors does Core export? | [[entities/core]]                              |
+| What commands / flags does the CLI support?       | [[entities/cli]]                                |
+| What types / IDs does Shared export?              | [[entities/shared]]                             |
+| How do I write a CLI handler test?                | [[workflows/cli-test-pattern]]                  |
+| What's in the original product idea?              | [[sources/fikri-original]]                      |
+| Where's the bootstrap spec/plan?                  | [[sources/spec-bootstrap]] / [[sources/plan-bootstrap]] |
 
 ## Status
 

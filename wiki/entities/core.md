@@ -3,11 +3,8 @@ title: '@megasaver/core'
 tags: [entity, package, core-engine, v0.1]
 sources:
   - docs/superpowers/specs/2026-05-04-core-package-design.md
-  - docs/superpowers/plans/2026-05-04-core-package-plan.md
   - docs/superpowers/specs/2026-05-05-core-persistence-design.md
-  - docs/superpowers/plans/2026-05-05-core-persistence-plan.md
   - docs/superpowers/specs/2026-05-06-cli-project-crud-design.md
-  - docs/superpowers/plans/2026-05-06-cli-project-crud-plan.md
 status: persistence-merged
 created: 2026-05-04
 updated: 2026-05-06
@@ -15,57 +12,86 @@ updated: 2026-05-06
 
 # `@megasaver/core`
 
-The agent-agnostic Core Engine package. Future v0.1 packages
-(`cli`, `connectors/claude-code`, `connectors/generic-cli`) build on
-this neutral package rather than importing each other.
+Agent-agnostic Core Engine. CLI and connectors build on this neutral package; never the reverse ([[concepts/agent-agnostic-core]]).
+
+## Schemas (Zod, all `.strict()`)
+
+`Project` — `packages/core/src/project.ts:4`:
+
+- `id: ProjectId` (branded UUID)
+- `name: string` (`.trim().min(1)`)
+- `rootPath: string` (`.trim().min(1)`)
+- `createdAt: string` (`.datetime({ offset: true })` — RFC 3339)
+- `updatedAt: string` (`.datetime({ offset: true })`)
+
+`Session` — `packages/core/src/session.ts:4`:
+
+- `id: SessionId`
+- `projectId: ProjectId`
+- `agentId: AgentId`
+- `riskLevel: RiskLevel`
+- `title: string | null`
+- `startedAt: string` (RFC 3339)
+- `endedAt: string | null` (RFC 3339)
+
+`MemoryEntry` — `packages/core/src/memory-entry.ts:4`:
+
+- `id: MemoryEntryId`
+- `projectId: ProjectId`
+- `sessionId: SessionId | null`
+- `scope: "project" | "session"`
+- `content: string` (`.trim().min(1)`)
+- `createdAt: string` (RFC 3339)
+- Cross-field rule: `scope === "session"` requires `sessionId !== null`.
+
+## Registry interface (`packages/core/src/registry.ts:7`)
+
+All methods are **synchronous** (return value, not Promise). Registry implementations may do file I/O internally but the surface stays sync.
+
+```ts
+interface CoreRegistry {
+  createProject(project: Project): Project;
+  getProject(id: ProjectId): Project | null;
+  listProjects(): Project[];
+  createSession(session: Session): Session;
+  getSession(id: SessionId): Session | null;
+  listSessions(projectId: ProjectId): Session[];
+  createMemoryEntry(entry: MemoryEntry): MemoryEntry;
+  getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
+  listMemoryEntries(projectId: ProjectId): MemoryEntry[];
+}
+```
+
+CLI must construct **full** entities — registry parses with strict Zod and rejects partials with `CorePersistenceError("store_entity_invalid", ...)`.
 
 ## Public surface
 
-- `Project`, `Session`, `MemoryEntry` schemas (Zod, strict).
-- Typed registry errors.
-- `createInMemoryCoreRegistry()` — deterministic in-memory registry.
-- `createJsonDirectoryCoreRegistry(rootDir)` — durable JSON directory
-  store: `projects.json`, `sessions.json`, `memory/<id>.jsonl`,
-  temp-file plus rename writes, typed persistence errors.
-- `initStore(rootDir)` — idempotent helper that creates `rootDir`,
-  `projects.json`, and `sessions.json` (each `[]`) without overwriting
-  existing files. Used by `@megasaver/cli` for first-run auto-init.
-
-## Implementation status
-
-Foundation, JSON directory persistence, and `initStore` are all
-implemented and merged. Foundation + persistence: PR
-<https://github.com/haJ1t/MegaSaver/pull/4> (merge commit `0656114`)
-on `origin/main`. `initStore` + changeset: PR
-<https://github.com/haJ1t/MegaSaver/pull/5> (merge commit `9003968`)
-on `origin/main`.
-
-## Evidence
-
-- `pnpm --filter @megasaver/core test` passed: 89 tests, 10 files
-  (foundation + persistence + initStore).
-- `pnpm --filter @megasaver/core typecheck` passed.
-- `pnpm --filter @megasaver/core build` passed.
-- `pnpm verify` green (6/6 turbo tasks).
+- Schemas above + their inferred types.
+- `createInMemoryCoreRegistry()` — deterministic, no I/O.
+- `createJsonDirectoryCoreRegistry({ rootDir }): CoreRegistry` — durable: `projects.json`, `sessions.json`, `memory/<projectId>.jsonl`. Temp-file + rename writes.
+- `initStore(rootDir): Promise<void>` — async, idempotent. Creates rootDir + empty `projects.json` + empty `sessions.json` if missing. Used by CLI auto-init.
+- `CoreRegistryError extends Error { code: CoreRegistryErrorCode }` — codes: `project_already_exists`, `project_not_found`, `session_already_exists`, `session_not_found`, `session_project_mismatch`, `memory_entry_already_exists`. Source: `packages/core/src/errors.ts:3`.
+- `CorePersistenceError extends Error { code: CorePersistenceErrorCode; filePath: string | null }` — codes: `store_root_invalid`, `store_read_failed`, `store_write_failed`, `store_json_invalid`, `store_entity_invalid`. Source: `packages/core/src/errors.ts:23`.
 
 ## Boundary rules
 
-- Core may depend on `@megasaver/shared`.
-- Core may use `AgentId` as neutral data.
-- Core must not know any agent config format (`CLAUDE.md`, `AGENTS.md`,
-  `.cursor/rules/*.mdc`).
+- Core may depend on `@megasaver/shared`. Never on `@megasaver/cli` or any connector.
+- Core must not know any agent config format (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/*.mdc`).
 - Core must not start agents or shell commands.
-- Core persistence must remain a neutral storage implementation and
-  must not infer CLI defaults or agent-specific file formats.
+- Core must not enforce display-layer policies (e.g. unique names) — that lives in CLI/connector.
+- Storage implementations stay neutral: no CLI defaults, no agent-specific layout assumptions.
+
+## Implementation status
+
+Foundation + JSON persistence: PR <https://github.com/haJ1t/MegaSaver/pull/4> (`0656114`). `initStore` + cli project CRUD consumer: PR <https://github.com/haJ1t/MegaSaver/pull/5> (`9003968`). Both on `origin/main`. 89 tests across 10 files.
 
 ## Risk
 
-Risk HIGH. Full superpowers chain applied; code-reviewer and critic
-passes required per `docs/conventions/risk-modes.md`.
+Risk HIGH. Full superpowers chain; code-reviewer + critic both required.
 
 ## Related
 
-- [[concepts/agent-agnostic-core]]
-- [[concepts/contextops]]
-- [[entities/shared]]
-- [[syntheses/mega-saver-product]]
+- [[concepts/agent-agnostic-core]] — non-negotiable boundary.
+- [[entities/shared]] — branded id types, `RiskLevel`, `AgentId`.
+- [[entities/cli]] — first consumer of the persistent registry.
+- [[workflows/cli-test-pattern]] — how CLI handlers consume this surface in tests.
