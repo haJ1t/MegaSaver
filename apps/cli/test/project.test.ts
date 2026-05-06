@@ -173,6 +173,18 @@ describe("projectCreateCommand", () => {
     await expect(readFile(join(root, "projects.json"), "utf8")).rejects.toThrow();
   });
 
+  it("rejects a name containing a C1 control character (NEL) with the documented message", async () => {
+    await runCreate("name\x85nel");
+
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.map((c) => c[0])).toEqual([
+      "error: name must not contain control characters",
+    ]);
+    expect(logSpy).not.toHaveBeenCalled();
+
+    await expect(readFile(join(root, "projects.json"), "utf8")).rejects.toThrow();
+  });
+
   it("rejects a duplicate name with the documented message and leaves projects.json unchanged", async () => {
     await runCreate("demo");
     logSpy.mockClear();

@@ -1,7 +1,7 @@
 import { CorePersistenceError } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { mapErrorToCliMessage } from "../src/errors.js";
+import { NAME_CONTROL_CHARS_MESSAGE, mapErrorToCliMessage } from "../src/errors.js";
 
 describe("mapErrorToCliMessage", () => {
   it("maps a Zod validation failure on `name` to the documented message", () => {
@@ -72,8 +72,23 @@ describe("mapErrorToCliMessage", () => {
       .trim()
       .min(1)
       // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — mirrors the production schema guard
-      .regex(/^[^\x00-\x1f\x7f]+$/, "name must not contain control characters")
+      .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
       .safeParse("demo\nfake");
+    if (result.success) throw new Error("unreachable");
+    expect(mapErrorToCliMessage(result.error, { kind: "name" })).toEqual({
+      message: "error: name must not contain control characters",
+      exitCode: 1,
+    });
+  });
+
+  it("maps a Zod failure for a C1 control character (NEL) to the same distinct message", () => {
+    const result = z
+      .string()
+      .trim()
+      .min(1)
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — mirrors the production schema guard
+      .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
+      .safeParse("name\x85nel");
     if (result.success) throw new Error("unreachable");
     expect(mapErrorToCliMessage(result.error, { kind: "name" })).toEqual({
       message: "error: name must not contain control characters",

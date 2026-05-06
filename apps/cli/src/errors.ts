@@ -5,6 +5,8 @@ export type CliMessage = { message: string; exitCode: 1 };
 
 export type ZodContext = { kind: "name" | "store" };
 
+export const NAME_CONTROL_CHARS_MESSAGE = "name must not contain control characters";
+
 export function duplicateNameMessage(name: string): CliMessage {
   return {
     message: `error: project "${name}" already exists`,
@@ -18,7 +20,7 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
       return { message: "error: --store path must be non-empty", exitCode: 1 };
     }
     const firstIssue = err.issues[0];
-    if (firstIssue?.message === "name must not contain control characters") {
+    if (firstIssue?.message === NAME_CONTROL_CHARS_MESSAGE) {
       return {
         message: "error: name must not contain control characters",
         exitCode: 1,

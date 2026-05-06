@@ -164,16 +164,14 @@ names being newline-free.
 ### 4.6 Duplicate-name policy
 
 `create` rejects a name that exactly matches an existing
-project's `name` field (case-sensitive, post-trim comparison
-matching the schema's normalization (control characters are
-already rejected by the §4.7 row above, so duplicate-name
-comparison only ever sees control-char-free trimmed names)). The
-check is performed in
-the CLI handler by calling `listProjects()` before
-`createProject()`. Core does not enforce a unique-name constraint
-because uniqueness is a CLI/store-policy decision, not a Core
-invariant (an agent-agnostic Core must not assume display-layer
-rules).
+project's `name` field, using a case-sensitive post-trim
+comparison. Control characters are already rejected by the §4.7
+row above, so duplicate-name comparison only ever sees
+control-char-free trimmed names. The check is performed in the
+CLI handler by calling `listProjects()` before `createProject()`.
+Core does not enforce a unique-name constraint because uniqueness
+is a CLI/store-policy decision, not a Core invariant (an
+agent-agnostic Core must not assume display-layer rules).
 
 The error path is described in §4.7.
 
@@ -393,9 +391,10 @@ In addition to CLAUDE.md §9 generic items:
 consumers of `createJsonDirectoryCoreRegistry` see no behavioral
 change. CLI users who only run `mega doctor` see no change.
 
-The `--store` flag is new and lives at the root command. It is
-ignored by `doctor`, so adding it does not regress `doctor`
-behavior or its existing tests.
+The `--store` flag is new and is declared on each store-touching
+subcommand (`project create`, `project list`). `mega doctor` does
+not declare it; passing `--store` to `doctor` is a Citty parsing
+concern and produces no regression to `doctor`'s existing tests.
 
 ## 9. Security and privacy
 

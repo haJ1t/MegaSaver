@@ -3,7 +3,11 @@ import type { Project } from "@megasaver/core";
 import { projectIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { z } from "zod";
-import { duplicateNameMessage, mapErrorToCliMessage } from "../errors.js";
+import {
+  NAME_CONTROL_CHARS_MESSAGE,
+  duplicateNameMessage,
+  mapErrorToCliMessage,
+} from "../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../store.js";
 
 export function formatProjectLine(project: Pick<Project, "id" | "name">): string {
@@ -77,7 +81,7 @@ const nameSchema = z
   .min(1)
   // C0/C1 control chars and DEL break the line-oriented output protocol.
   // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — this regex IS the guard against control chars
-  .regex(/^[^\x00-\x1f\x7f]+$/, "name must not contain control characters");
+  .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE);
 
 export type RunProjectCreateInput = {
   name: string;
