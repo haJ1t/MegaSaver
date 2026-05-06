@@ -29,9 +29,15 @@ importers:
 
   apps/cli:
     dependencies:
+      '@megasaver/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       citty:
         specifier: ^0.1.6
         version: 0.1.6
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
