@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   ClaudeCodeConnectorError,
+  claudeCodeConnectorErrorCodeSchema,
   type ClaudeCodeConnectorErrorCode,
 } from "../src/index.js";
 
@@ -29,5 +30,28 @@ describe("ClaudeCodeConnectorError", () => {
     ];
 
     expect(codes).toHaveLength(5);
+  });
+
+  test("rejects invalid public error codes", () => {
+    expect(() => claudeCodeConnectorErrorCodeSchema.parse("bad")).toThrow();
+  });
+
+  test("rejects invalid constructor error codes", () => {
+    expect(
+      () => new ClaudeCodeConnectorError("bad" as ClaudeCodeConnectorErrorCode, "bad"),
+    ).toThrow();
+  });
+
+  test("omits own cause property when cause is absent", () => {
+    const error = new ClaudeCodeConnectorError("claude_md_read_failed", "x");
+
+    expect(Object.hasOwn(error, "cause")).toBe(false);
+  });
+
+  test("preserves cause when cause is provided", () => {
+    const cause = new Error("cause");
+    const error = new ClaudeCodeConnectorError("claude_md_read_failed", "x", { cause });
+
+    expect(error.cause).toBe(cause);
   });
 });
