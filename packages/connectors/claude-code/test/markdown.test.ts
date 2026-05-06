@@ -31,14 +31,16 @@ describe("renderClaudeCodeContext", () => {
     expect(renderClaudeCodeContext(context)).toBe(
       `${MEGA_SAVER_BLOCK_START}
 # Mega Saver Context
+
 Agent: claude-code
 Project: Mega Saver (${project.id})
 Session: Connector implementation
 Risk: medium
 
 ## Memory
-- [project:${project.id}] Project-level convention for Claude Code.
-- [session:${session.id}] Session-specific context for Claude Code.
+
+- [project:${projectMemory.id}] Project-level convention for Claude Code.
+- [session:${sessionMemory.id}] Session-specific context for Claude Code.
 ${MEGA_SAVER_BLOCK_END}
 `,
     );
@@ -51,7 +53,7 @@ ${MEGA_SAVER_BLOCK_END}
         session: null,
         memoryEntries: [],
       }),
-    ).toContain("Session: none\nRisk: none\n\n## Memory\n- none\n");
+    ).toContain("Session: none\nRisk: none\n\n## Memory\n\n- none\n");
   });
 
   test("indents multiline memory continuation lines", () => {
@@ -67,7 +69,7 @@ ${MEGA_SAVER_BLOCK_END}
         ],
       }),
     ).toContain(
-      `- [project:${project.id}] first line
+      `- [project:${projectMemory.id}] first line
   second line
   third line
 `,
@@ -123,14 +125,21 @@ describe("parseClaudeMd", () => {
 describe("upsertMegaSaverBlock", () => {
   test("appends a managed block after human content with one blank line", () => {
     const block = renderClaudeCodeContext(context);
-    expect(upsertMegaSaverBlock("# Human\n", block)).toBe(`# Human\n\n${block}`);
+    expect(upsertMegaSaverBlock({ existingContent: "# Human\n", context })).toBe(
+      `# Human\n\n${block}`,
+    );
   });
 
   test("replaces an existing valid managed block", () => {
     const oldBlock = renderClaudeCodeContext({ project, session, memoryEntries: [] });
     const newBlock = renderClaudeCodeContext(context);
 
-    expect(upsertMegaSaverBlock(`# Human\n\n${oldBlock}`, newBlock)).toBe(`# Human\n\n${newBlock}`);
+    expect(
+      upsertMegaSaverBlock({
+        existingContent: `# Human\n\n${oldBlock}`,
+        context,
+      }),
+    ).toBe(`# Human\n\n${newBlock}`);
   });
 });
 

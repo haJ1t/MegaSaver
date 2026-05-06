@@ -9,6 +9,11 @@ export interface ClaudeMdDocument {
   contentAfterBlock: string;
 }
 
+export interface UpsertMegaSaverBlockInput {
+  existingContent: string;
+  context: unknown;
+}
+
 interface IndexedLine {
   text: string;
   raw: string;
@@ -22,12 +27,14 @@ export function renderClaudeCodeContext(input: unknown): string {
   return [
     MEGA_SAVER_BLOCK_START,
     "# Mega Saver Context",
+    "",
     "Agent: claude-code",
     `Project: ${context.project.name} (${context.project.id})`,
     `Session: ${sessionLabel}`,
     `Risk: ${riskLevel}`,
     "",
     "## Memory",
+    "",
     ...renderMemoryEntries(context),
     MEGA_SAVER_BLOCK_END,
     "",
@@ -75,9 +82,9 @@ export function parseClaudeMd(content: string): ClaudeMdDocument {
   };
 }
 
-export function upsertMegaSaverBlock(content: string, managedBlock: string): string {
-  const block = ensureTrailingNewline(managedBlock);
-  const parsed = parseClaudeMd(content);
+export function upsertMegaSaverBlock(input: UpsertMegaSaverBlockInput): string {
+  const block = renderClaudeCodeContext(input.context);
+  const parsed = parseClaudeMd(input.existingContent);
 
   if (parsed.hasManagedBlock) {
     return ensureTrailingNewline(`${parsed.contentBeforeBlock}${block}${parsed.contentAfterBlock}`);
@@ -111,8 +118,7 @@ function renderMemoryEntries(context: ClaudeCodeContext): string[] {
   }
 
   return context.memoryEntries.map((entry) => {
-    const target =
-      entry.scope === "project" ? `project:${entry.projectId}` : `session:${entry.sessionId}`;
+    const target = `${entry.scope}:${entry.id}`;
     const [firstLine = "", ...continuationLines] = entry.content.split("\n");
     const renderedContinuation = continuationLines.map((line) => `  ${line}`).join("\n");
 
