@@ -36,8 +36,9 @@ this neutral package rather than importing each other.
 Foundation, JSON directory persistence, and `initStore` are all
 implemented and merged. Foundation + persistence: PR
 <https://github.com/haJ1t/MegaSaver/pull/4> (merge commit `0656114`)
-on `origin/main`. `initStore` + changeset shipped on
-`feat/cli-project-crud`, awaiting external review and merge.
+on `origin/main`. `initStore` + changeset: PR
+<https://github.com/haJ1t/MegaSaver/pull/5> (merge commit `9003968`)
+on `origin/main`.
 
 ## Evidence
 

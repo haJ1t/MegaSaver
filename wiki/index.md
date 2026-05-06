@@ -58,11 +58,10 @@ Process pages will be added as we hit each phase. Slot reserved for: `multi-agen
 
 ## Status
 
-CLI project CRUD implemented. Bootstrap, project skeleton,
+CLI project CRUD merged. Bootstrap, project skeleton,
 `@megasaver/shared`, `@megasaver/core` (with `initStore` and
 JSON directory persistence), and `@megasaver/cli` (with
 `mega doctor`, `mega project create`, `mega project list`) are
-all on `feat/cli-project-crud`, awaiting external review and
-merge to `origin/main`. Next slot: connector specs
+all on `origin/main` via PR #5. Next slot: connector specs
 (`connectors/claude-code` or `connectors/generic-cli`) or first
 `Session` CRUD.
