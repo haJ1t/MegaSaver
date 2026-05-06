@@ -188,22 +188,31 @@ single helper (§5.4).
 
 ```
 src/
-├─ cli.ts                     # Citty entry; wires --store + subcommands
-├─ main.ts                    # registers `doctor` and `project`
-├─ doctor/                    # unchanged
-├─ project/
-│  ├─ index.ts                # `project` parent command
-│  ├─ create.ts               # createCommand handler
-│  ├─ list.ts                 # listCommand handler
-│  └─ format.ts               # formatProjectLine(p): string (pure)
-├─ store/
-│  ├─ resolve.ts              # resolveStorePath(input): string (pure)
-│  └─ context.ts              # ensureStoreReady → registry factory
-└─ errors.ts                  # mapCoreErrorToCliError; format
+├─ cli.ts                     # Citty entry (unchanged)
+├─ main.ts                    # registers `doctor` and `project` (modify: add `project`)
+├─ commands/
+│  ├─ doctor.ts               # unchanged
+│  └─ project.ts              # NEW: `project` parent + `create` + `list` + format + duplicate-check
+├─ store.ts                   # NEW: resolveStorePath (pure) + ensureStoreReady (I/O)
+└─ errors.ts                  # NEW: mapCoreErrorToCliError (pure)
 ```
 
-Every file holds one responsibility. Per `docs/conventions/code-conventions.md`,
+Layout follows the existing `commands/doctor.ts` precedent
+(one file per top-level command, helpers inline). `store.ts` and
+`errors.ts` are extracted as their own files because they are
+reused by every future store-touching command and benefit from
+isolated unit tests. Per `docs/conventions/code-conventions.md`,
 files split before reaching 300 LOC.
+
+Test layout mirrors the doctor pattern (flat under `apps/cli/test/`):
+
+```
+test/
+├─ doctor.test.ts             # unchanged
+├─ project.test.ts            # unit tests for format + handlers + integration
+├─ store.test.ts              # resolveStorePath + ensureStoreReady
+└─ errors.test.ts             # mapCoreErrorToCliError
+```
 
 ### 5.2 Pure helpers
 
@@ -288,42 +297,45 @@ test before the production change.
 
 ### 6.1 Pure unit tests
 
-- `apps/cli/test/store/resolve.test.ts`
+- `apps/cli/test/store.test.ts` (`resolveStorePath`)
   - flag wins over XDG and HOME.
   - `XDG_DATA_HOME` set and non-empty wins over HOME.
   - HOME-derived fallback when XDG is missing or empty.
   - relative `--store` resolves against the supplied process cwd.
-  - empty `--store` is rejected at the boundary, not silently.
-- `apps/cli/test/project/format.test.ts`
+  - empty / whitespace-only `--store` is rejected at the boundary.
+- `apps/cli/test/project.test.ts` (`formatProjectLine`)
   - canonical `<id>  <name>` rendering with two ASCII spaces.
   - names containing whitespace remain verbatim (no quoting).
-- `apps/cli/test/errors.test.ts`
+- `apps/cli/test/errors.test.ts` (`mapCoreErrorToCliError`)
   - each row of the §4.7 table maps to the documented message.
   - unknown errors do not pass through unwrapped.
 
 ### 6.2 Integration tests (temporary store directory)
 
-Each integration test creates its own temp directory under
-`os.tmpdir()` and tears it down on completion. No test ever
-touches the real XDG path.
+Integration tests live in the same flat test files alongside the
+unit tests (`store.test.ts` and `project.test.ts`). Each test
+creates its own temp directory under `os.tmpdir()` and tears it
+down on completion. No test ever touches the real XDG path.
 
-- `apps/cli/test/project/create.integration.test.ts`
-  - creates a project; `projects.json` contains exactly one entry
-    with the expected shape.
-  - exit code `0`; stdout matches `^<uuid>  my-app\n$`.
-- `apps/cli/test/project/list.integration.test.ts`
-  - empty store prints nothing, exit `0`.
-  - populated store prints in `projects.json` array order.
-- `apps/cli/test/project/auto-init.integration.test.ts`
-  - first run prints exactly one `note: initialized store at …`
-    line on stderr.
-  - second run against the same dir prints no notice.
-  - partially initialized dir (only `projects.json` present) is
-    completed without overwriting the existing file.
-- `apps/cli/test/project/duplicate-name.integration.test.ts`
-  - second `create` with the same name exits `1`, prints the
-    documented message, and leaves `projects.json` unchanged
-    (still one entry).
+- `store.test.ts` (`ensureStoreReady`)
+  - empty parent dir → both files created, `initialized: true`.
+  - already-initialized dir → no file mutation, `initialized: false`.
+  - partial dir (only `projects.json`) → completes the missing
+    file without overwriting the existing one,
+    `initialized: true`.
+- `project.test.ts` (handlers)
+  - `create` against an empty store: returns exit `0`, stdout
+    matches `^<uuid>  demo\n$`, `projects.json` contains exactly
+    one entry with the expected shape.
+  - `list` against empty store: stdout empty, exit `0`.
+  - `list` against populated store: prints in `projects.json`
+    array order.
+  - first invocation prints exactly one `note: initialized store at …`
+    line on stderr; second invocation against the same dir prints
+    none.
+  - duplicate name: second `create` with the same name exits `1`,
+    prints `error: project "demo" already exists` on stderr, and
+    leaves `projects.json` unchanged (still one entry).
 
 ### 6.3 Core test
 
