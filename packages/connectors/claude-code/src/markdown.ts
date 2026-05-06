@@ -9,7 +9,7 @@ export interface ClaudeMdDocument {
   contentAfterBlock: string;
 }
 
-export interface UpsertMegaSaverBlockInput {
+interface UpsertMegaSaverBlockInput {
   existingContent: string;
   context: ClaudeCodeContext;
 }
