@@ -7,7 +7,11 @@ async function writeIfMissing(path: string): Promise<void> {
   try {
     await writeFile(path, EMPTY_ARRAY_JSON, { flag: "wx" });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error as NodeJS.ErrnoException).code === "EEXIST"
+    ) {
       return;
     }
     throw error;
