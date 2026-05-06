@@ -899,11 +899,14 @@ describe("projectListCommand", () => {
 
   it("prints one line per project in projects.json array order", async () => {
     await mkdir(root, { recursive: true });
+    const aId = "11111111-1111-4111-8111-111111111111";
+    const bId = "22222222-2222-4222-8222-222222222222";
+    const ts = "2026-05-06T00:00:00.000Z";
     await writeFile(
       join(root, "projects.json"),
       JSON.stringify([
-        { id: "id-a", name: "alpha" },
-        { id: "id-b", name: "beta" },
+        { id: aId, name: "alpha", rootPath: "/tmp/a", createdAt: ts, updatedAt: ts },
+        { id: bId, name: "beta", rootPath: "/tmp/b", createdAt: ts, updatedAt: ts },
       ]),
     );
     await writeFile(join(root, "sessions.json"), "[]");
@@ -911,8 +914,8 @@ describe("projectListCommand", () => {
     await runList();
 
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
-      "id-a  alpha",
-      "id-b  beta",
+      `${aId}  alpha`,
+      `${bId}  beta`,
     ]);
     expect(errSpy).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(0);
@@ -1168,6 +1171,8 @@ export type RunProjectCreateInput = {
   stderr: (line: string) => void;
   /** Override for tests; defaults to crypto.randomUUID. */
   newId?: () => string;
+  /** Override for tests; defaults to () => new Date().toISOString(). */
+  now?: () => string;
 };
 
 export async function runProjectCreate(
@@ -1208,7 +1213,14 @@ export async function runProjectCreate(
       return cli.exitCode;
     }
     const id = projectIdSchema.parse((input.newId ?? randomUUID)());
-    const created = registry.createProject({ id, name: trimmedName });
+    const now = (input.now ?? (() => new Date().toISOString()))();
+    const created = registry.createProject({
+      id,
+      name: trimmedName,
+      rootPath: input.cwd,
+      createdAt: now,
+      updatedAt: now,
+    });
     input.stdout(formatProjectLine(created));
     return 0;
   } catch (err) {
@@ -1243,7 +1255,7 @@ export const projectCreateCommand = defineCommand({
 });
 ```
 
-Note: `registry.createProject(project: Project): Project` is synchronous and takes the FULL `Project` (`{ id, name }`). The CLI generates a UUID via `crypto.randomUUID()` and brands it through `projectIdSchema.parse(...)`. Verified against `packages/core/src/registry.ts` (interface) and `packages/core/src/json-directory-registry.ts` (impl).
+Note: `registry.createProject(project: Project): Project` is synchronous and takes the FULL `Project` (`{ id, name, rootPath, createdAt, updatedAt }`). The CLI generates a UUID via `crypto.randomUUID()` and brands it through `projectIdSchema.parse(...)`. The CLI sets `rootPath` to the invocation cwd (v0.1 default — no `--root` flag yet) and `createdAt`/`updatedAt` to `new Date().toISOString()` (RFC 3339 with offset, the schema requires `.datetime({ offset: true })`). Verified against `packages/core/src/registry.ts` (interface), `packages/core/src/json-directory-registry.ts` (impl), and `packages/core/src/project.ts` (schema with 5 required fields).
 
 - [ ] **Step 4: Run tests to confirm pass**
 
