@@ -4,7 +4,7 @@ tags: [entity, connector, claude-code, v0.1]
 sources:
   - docs/superpowers/specs/2026-05-06-claude-code-connector-design.md
   - https://code.claude.com/docs/en/memory
-status: spec-written
+status: plan-written
 created: 2026-05-06
 updated: 2026-05-06
 ---
