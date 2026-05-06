@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ensureStoreReady } from "../src/store.js";
 import { resolveStorePath } from "../src/store.js";
 
 describe("resolveStorePath", () => {
@@ -101,5 +105,57 @@ describe("resolveStorePath", () => {
         xdgDataHome: undefined,
       }),
     ).toBe("/abs/with-spaces");
+  });
+});
+
+describe("ensureStoreReady", () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "megasaver-cli-store-"));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("creates the layout when rootDir does not exist and reports initialized:true", async () => {
+    const target = join(root, "fresh");
+    const result = await ensureStoreReady(target);
+    expect(result.initialized).toBe(true);
+    expect(await readFile(join(target, "projects.json"), "utf8")).toBe("[]");
+    expect(await readFile(join(target, "sessions.json"), "utf8")).toBe("[]");
+    expect(result.registry).toBeDefined();
+  });
+
+  it("reports initialized:false against an already-complete store and does not mutate", async () => {
+    const target = join(root, "complete");
+    await mkdir(target, { recursive: true });
+    await writeFile(join(target, "projects.json"), '[{"id":"x","name":"y"}]');
+    await writeFile(join(target, "sessions.json"), "[]");
+    const before = await stat(join(target, "projects.json"));
+
+    const result = await ensureStoreReady(target);
+
+    expect(result.initialized).toBe(false);
+    expect(await readFile(join(target, "projects.json"), "utf8")).toBe(
+      '[{"id":"x","name":"y"}]',
+    );
+    const after = await stat(join(target, "projects.json"));
+    expect(after.mtimeMs).toBe(before.mtimeMs);
+  });
+
+  it("reports initialized:true when a partial store is completed and preserves the existing file", async () => {
+    const target = join(root, "partial");
+    await mkdir(target, { recursive: true });
+    await writeFile(join(target, "projects.json"), '[{"id":"x","name":"y"}]');
+
+    const result = await ensureStoreReady(target);
+
+    expect(result.initialized).toBe(true);
+    expect(await readFile(join(target, "projects.json"), "utf8")).toBe(
+      '[{"id":"x","name":"y"}]',
+    );
+    expect(await readFile(join(target, "sessions.json"), "utf8")).toBe("[]");
   });
 });
