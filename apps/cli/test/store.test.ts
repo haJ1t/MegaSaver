@@ -91,4 +91,15 @@ describe("resolveStorePath", () => {
       }),
     ).toBe("/abs/override");
   });
+
+  it("trims whitespace around the --store flag before resolving", () => {
+    expect(
+      resolveStorePath({
+        storeFlag: "  /abs/with-spaces  ",
+        cwd: "/repo",
+        home,
+        xdgDataHome: undefined,
+      }),
+    ).toBe("/abs/with-spaces");
+  });
 });

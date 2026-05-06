@@ -13,8 +13,8 @@ const storeFlagSchema = z.string().trim().min(1);
 export function resolveStorePath(input: ResolveStorePathInput): string {
   const { storeFlag, cwd, home, xdgDataHome } = input;
   if (storeFlag !== undefined) {
-    storeFlagSchema.parse(storeFlag);
-    return isAbsolute(storeFlag) ? storeFlag : resolve(cwd, storeFlag);
+    const trimmed = storeFlagSchema.parse(storeFlag);
+    return isAbsolute(trimmed) ? trimmed : resolve(cwd, trimmed);
   }
   if (xdgDataHome && xdgDataHome.length > 0) {
     return resolve(xdgDataHome, "megasaver");
