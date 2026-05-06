@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { formatProjectLine } from "../src/commands/project.js";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { formatProjectLine, projectListCommand } from "../src/commands/project.js";
 
 describe("formatProjectLine", () => {
   it("renders id and name separated by exactly two spaces", () => {
@@ -18,5 +21,79 @@ describe("formatProjectLine", () => {
         name: "two words",
       }),
     ).toBe("id1  two words");
+  });
+});
+
+describe("projectListCommand", () => {
+  let root: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "megasaver-cli-list-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function runList(): Promise<void> {
+    await projectListCommand.run?.({
+      args: { store: root },
+      cmd: projectListCommand,
+      rawArgs: ["--store", root],
+      data: undefined,
+    } as never);
+  }
+
+  it("prints nothing on an empty store, exits 0, and notes first init", async () => {
+    await runList();
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    expect(errSpy.mock.calls[0]?.[0] as string).toMatch(
+      /^note: initialized store at /,
+    );
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("prints one line per project in projects.json array order", async () => {
+    await mkdir(root, { recursive: true });
+    const aId = "11111111-1111-4111-8111-111111111111";
+    const bId = "22222222-2222-4222-8222-222222222222";
+    const ts = "2026-05-06T00:00:00.000Z";
+    await writeFile(
+      join(root, "projects.json"),
+      JSON.stringify([
+        { id: aId, name: "alpha", rootPath: "/tmp/a", createdAt: ts, updatedAt: ts },
+        { id: bId, name: "beta", rootPath: "/tmp/b", createdAt: ts, updatedAt: ts },
+      ]),
+    );
+    await writeFile(join(root, "sessions.json"), "[]");
+
+    await runList();
+
+    expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
+      `${aId}  alpha`,
+      `${bId}  beta`,
+    ]);
+    expect(errSpy).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("prints no init notice on the second run against the same store", async () => {
+    await runList(); // first run initializes
+    logSpy.mockClear();
+    errSpy.mockClear();
+    await runList(); // second run
+
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(errSpy).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(0);
   });
 });
