@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-05-05
+updated: 2026-05-06
 ---
 
 # Wiki Index — Mega Saver
@@ -58,10 +58,11 @@ Process pages will be added as we hit each phase. Slot reserved for: `multi-agen
 
 ## Status
 
-Core persistence merged. Bootstrap, project skeleton,
-`@megasaver/shared`, `@megasaver/core` (with JSON directory
-persistence via PR #4), and `@megasaver/cli` are all on
-`origin/main`. Next slot: a feature that consumes the persistent
-registry — candidates are first CLI CRUD command,
-`connectors/claude-code`, or `connectors/generic-cli` (each picked
-via its own spec).
+CLI project CRUD implemented. Bootstrap, project skeleton,
+`@megasaver/shared`, `@megasaver/core` (with `initStore` and
+JSON directory persistence), and `@megasaver/cli` (with
+`mega doctor`, `mega project create`, `mega project list`) are
+all on `feat/cli-project-crud`, awaiting external review and
+merge to `origin/main`. Next slot: connector specs
+(`connectors/claude-code` or `connectors/generic-cli`) or first
+`Session` CRUD.

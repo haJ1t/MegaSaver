@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { defineCommand } from "citty";
 import { doctorCommand } from "./commands/doctor.js";
+import { projectCommand } from "./commands/project.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
@@ -13,5 +14,6 @@ export const mainCommand = defineCommand({
   },
   subCommands: {
     doctor: doctorCommand,
+    project: projectCommand,
   },
 });
