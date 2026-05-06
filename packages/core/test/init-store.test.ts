@@ -30,9 +30,7 @@ describe("initStore", () => {
 
     await initStore(target);
 
-    expect(await readFile(join(target, "projects.json"), "utf8")).toBe(
-      '[{"id":"x","name":"y"}]',
-    );
+    expect(await readFile(join(target, "projects.json"), "utf8")).toBe('[{"id":"x","name":"y"}]');
     expect(await readFile(join(target, "sessions.json"), "utf8")).toBe(
       '[{"id":"a","projectId":"x"}]',
     );
@@ -45,9 +43,7 @@ describe("initStore", () => {
 
     await initStore(target);
 
-    expect(await readFile(join(target, "projects.json"), "utf8")).toBe(
-      '[{"id":"x","name":"y"}]',
-    );
+    expect(await readFile(join(target, "projects.json"), "utf8")).toBe('[{"id":"x","name":"y"}]');
     expect(await readFile(join(target, "sessions.json"), "utf8")).toBe("[]");
   });
 

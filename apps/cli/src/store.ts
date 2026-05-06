@@ -1,10 +1,6 @@
 import { access } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
-import {
-  type CoreRegistry,
-  createJsonDirectoryCoreRegistry,
-  initStore,
-} from "@megasaver/core";
+import { type CoreRegistry, createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
 import { z } from "zod";
 
 export type ResolveStorePathInput = {
@@ -42,9 +38,7 @@ export type EnsureStoreReadyResult = {
   initialized: boolean;
 };
 
-export async function ensureStoreReady(
-  rootDir: string,
-): Promise<EnsureStoreReadyResult> {
+export async function ensureStoreReady(rootDir: string): Promise<EnsureStoreReadyResult> {
   const projectsPath = resolve(rootDir, "projects.json");
   const sessionsPath = resolve(rootDir, "sessions.json");
   const [rootExists, projectsExists, sessionsExists] = await Promise.all([

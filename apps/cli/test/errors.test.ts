@@ -1,6 +1,6 @@
+import { CorePersistenceError } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { CorePersistenceError } from "@megasaver/core";
 import { mapErrorToCliMessage } from "../src/errors.js";
 
 describe("mapErrorToCliMessage", () => {
@@ -23,27 +23,21 @@ describe("mapErrorToCliMessage", () => {
   });
 
   it("maps store_json_invalid to a path-bearing corrupt-store message", () => {
-    const err = new CorePersistenceError(
-      "store_json_invalid",
-      "projects.json is not valid JSON",
-      { filePath: "/tmp/x/projects.json" },
-    );
+    const err = new CorePersistenceError("store_json_invalid", "projects.json is not valid JSON", {
+      filePath: "/tmp/x/projects.json",
+    });
     expect(mapErrorToCliMessage(err)).toEqual({
-      message:
-        "error: store at /tmp/x/projects.json is corrupt: projects.json is not valid JSON",
+      message: "error: store at /tmp/x/projects.json is corrupt: projects.json is not valid JSON",
       exitCode: 1,
     });
   });
 
   it("maps store_entity_invalid the same way as store_json_invalid", () => {
-    const err = new CorePersistenceError(
-      "store_entity_invalid",
-      "stored project failed schema",
-      { filePath: "/tmp/y/projects.json" },
-    );
+    const err = new CorePersistenceError("store_entity_invalid", "stored project failed schema", {
+      filePath: "/tmp/y/projects.json",
+    });
     expect(mapErrorToCliMessage(err)).toEqual({
-      message:
-        "error: store at /tmp/y/projects.json is corrupt: stored project failed schema",
+      message: "error: store at /tmp/y/projects.json is corrupt: stored project failed schema",
       exitCode: 1,
     });
   });

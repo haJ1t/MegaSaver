@@ -32,6 +32,9 @@ importers:
       '@megasaver/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       citty:
         specifier: ^0.1.6
         version: 0.1.6

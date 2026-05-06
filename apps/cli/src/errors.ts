@@ -1,5 +1,5 @@
-import { ZodError } from "zod";
 import { CorePersistenceError } from "@megasaver/core";
+import { ZodError } from "zod";
 
 export type CliMessage = { message: string; exitCode: 1 };
 
@@ -12,10 +12,7 @@ export function duplicateNameMessage(name: string): CliMessage {
   };
 }
 
-export function mapErrorToCliMessage(
-  err: unknown,
-  ctx?: ZodContext,
-): CliMessage {
+export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage {
   if (err instanceof ZodError) {
     if (ctx?.kind === "store") {
       return { message: "error: --store path must be non-empty", exitCode: 1 };

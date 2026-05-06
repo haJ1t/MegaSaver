@@ -137,9 +137,7 @@ describe("ensureStoreReady", () => {
     const result = await ensureStoreReady(target);
 
     expect(result.initialized).toBe(false);
-    expect(await readFile(join(target, "projects.json"), "utf8")).toBe(
-      '[{"id":"x","name":"y"}]',
-    );
+    expect(await readFile(join(target, "projects.json"), "utf8")).toBe('[{"id":"x","name":"y"}]');
     const after = await stat(join(target, "projects.json"));
     expect(after.mtimeMs).toBe(before.mtimeMs);
   });
@@ -152,9 +150,7 @@ describe("ensureStoreReady", () => {
     const result = await ensureStoreReady(target);
 
     expect(result.initialized).toBe(true);
-    expect(await readFile(join(target, "projects.json"), "utf8")).toBe(
-      '[{"id":"x","name":"y"}]',
-    );
+    expect(await readFile(join(target, "projects.json"), "utf8")).toBe('[{"id":"x","name":"y"}]');
     expect(await readFile(join(target, "sessions.json"), "utf8")).toBe("[]");
   });
 });

@@ -60,7 +60,9 @@ export const projectListCommand = defineCommand({
     const code = await runProjectList({
       storeFlag: typeof args.store === "string" ? args.store : undefined,
       cwd: process.cwd(),
+      // biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket access for process.env
       home: process.env["HOME"] ?? "",
+      // biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket access for process.env
       xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
@@ -85,9 +87,7 @@ export type RunProjectCreateInput = {
   now?: () => string;
 };
 
-export async function runProjectCreate(
-  input: RunProjectCreateInput,
-): Promise<0 | 1> {
+export async function runProjectCreate(input: RunProjectCreateInput): Promise<0 | 1> {
   let rootDir: string;
   try {
     rootDir = resolveStorePath({
@@ -155,7 +155,9 @@ export const projectCreateCommand = defineCommand({
       name: typeof args.name === "string" ? args.name : "",
       storeFlag: typeof args.store === "string" ? args.store : undefined,
       cwd: process.cwd(),
+      // biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket access for process.env
       home: process.env["HOME"] ?? "",
+      // biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket access for process.env
       xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
