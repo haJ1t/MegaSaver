@@ -13,6 +13,15 @@ describe("removeBlock", () => {
     expect(removed).toBe("intro\n");
   });
 
+  it("removeBlock preserves CRLF dominant input", () => {
+    const inserted = upsertBlock({
+      existingContent: "intro\r\n",
+      context: buildContext(),
+    });
+    const removed = removeBlock(inserted);
+    expect(removed.includes("\r\n")).toBe(true);
+  });
+
   it("is a no-op when no block exists", () => {
     expect(removeBlock("# README\n")).toBe("# README\n");
   });
