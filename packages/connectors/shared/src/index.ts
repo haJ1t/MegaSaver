@@ -11,3 +11,4 @@ export {
 } from "./errors.js";
 export { renderBlock } from "./render.js";
 export { parseBlock, type ParsedBlock } from "./parse.js";
+export { removeBlock, upsertBlock } from "./upsert.js";
