@@ -49,11 +49,7 @@ export function removeBlock(content: string): string {
   return eol === "\r\n" ? result.replace(/\n/g, "\r\n") : result;
 }
 
-function joinWithManagedBlock(
-  before: string,
-  after: string,
-  newBlock: string,
-): string {
+function joinWithManagedBlock(before: string, after: string, newBlock: string): string {
   const normalizedBefore = trimTrailingBoundaryForJoin(before);
   const normalizedAfter = trimLeadingBoundaryLines(after);
   const prefix = normalizedBefore.length === 0 ? "" : `${normalizedBefore}\n\n`;

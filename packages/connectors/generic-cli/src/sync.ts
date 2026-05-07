@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import {
-  assertProjectRoot,
   type ConnectorContext,
+  assertProjectRoot,
   readTargetFile,
   syncTargetBlock,
   writeTargetFile,

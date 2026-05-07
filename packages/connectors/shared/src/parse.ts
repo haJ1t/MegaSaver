@@ -64,8 +64,7 @@ export function sentinelIndexes(lines: IndexedLine[], sentinel: string): number[
 }
 
 function throwBlockConflict(begins: number[], ends: number[]): never {
-  const toLines = (indexes: number[]): string =>
-    indexes.map((i) => `line ${i + 1}`).join(", ");
+  const toLines = (indexes: number[]): string => indexes.map((i) => `line ${i + 1}`).join(", ");
 
   let message: string;
   if (begins.length === 0) {

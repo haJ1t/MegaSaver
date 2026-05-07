@@ -3,7 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ConnectorError } from "../src/errors.js";
-import { assertProjectRoot, readTargetFile, syncTargetBlock, writeTargetFile } from "../src/filesystem.js";
+import {
+  assertProjectRoot,
+  readTargetFile,
+  syncTargetBlock,
+  writeTargetFile,
+} from "../src/filesystem.js";
 import { buildContext } from "./fixtures.js";
 
 describe("filesystem helpers", () => {
