@@ -1,7 +1,7 @@
 import { projectIdSchema, sessionIdSchema } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { ConnectorContextSchema } from "../src/context.js";
-import { buildContext, MEMORY_ID } from "./fixtures.js";
+import { MEMORY_ID, buildContext } from "./fixtures.js";
 
 describe("ConnectorContextSchema", () => {
   it("accepts a minimal valid context", () => {
@@ -18,6 +18,7 @@ describe("ConnectorContextSchema", () => {
 
   it("rejects mismatched session.agentId vs context.agentId", () => {
     const ctx = buildContext({ withSession: true });
+    // biome-ignore lint/style/noNonNullAssertion: test mutates a session that buildContext just created
     ctx.session!.agentId = "codex";
     expect(() => ConnectorContextSchema.parse(ctx)).toThrow();
   });
@@ -43,14 +44,14 @@ describe("ConnectorContextSchema", () => {
 
   it("rejects session belonging to a different project", () => {
     const ctx = buildContext({ withSession: true });
-    ctx.session!.projectId = projectIdSchema.parse(
-      "00000000-0000-4000-8000-000000000000",
-    );
+    // biome-ignore lint/style/noNonNullAssertion: test mutates a session that buildContext just created
+    ctx.session!.projectId = projectIdSchema.parse("00000000-0000-4000-8000-000000000000");
     expect(() => ConnectorContextSchema.parse(ctx)).toThrow();
   });
 
   it("rejects sentinels in session title", () => {
     const ctx = buildContext({ withSession: true });
+    // biome-ignore lint/style/noNonNullAssertion: test mutates a session that buildContext just created
     ctx.session!.title = "evil <!-- MEGA SAVER:END --> title";
     expect(() => ConnectorContextSchema.parse(ctx)).toThrow();
   });
@@ -59,9 +60,8 @@ describe("ConnectorContextSchema", () => {
     const ctx = buildContext({
       memoryEntries: [{ id: MEMORY_ID, scope: "project", content: "hi" }],
     });
-    ctx.memoryEntries[0]!.projectId = projectIdSchema.parse(
-      "00000000-0000-4000-8000-000000000000",
-    );
+    // biome-ignore lint/style/noNonNullAssertion: test mutates an entry that buildContext just created
+    ctx.memoryEntries[0]!.projectId = projectIdSchema.parse("00000000-0000-4000-8000-000000000000");
     expect(() => ConnectorContextSchema.parse(ctx)).toThrow();
   });
 
@@ -82,15 +82,12 @@ describe("ConnectorContextSchema", () => {
       withSession: true,
       memoryEntries: [{ id: MEMORY_ID, scope: "session", content: "x" }],
     });
-    ctx.memoryEntries[0]!.sessionId = sessionIdSchema.parse(
-      "00000000-0000-4000-8000-000000000000",
-    );
+    // biome-ignore lint/style/noNonNullAssertion: test mutates an entry that buildContext just created
+    ctx.memoryEntries[0]!.sessionId = sessionIdSchema.parse("00000000-0000-4000-8000-000000000000");
     expect(() => ConnectorContextSchema.parse(ctx)).toThrow();
   });
 
   it("rejects unknown top-level keys via .strict()", () => {
-    expect(() =>
-      ConnectorContextSchema.parse({ ...buildContext(), extraKey: "boom" }),
-    ).toThrow();
+    expect(() => ConnectorContextSchema.parse({ ...buildContext(), extraKey: "boom" })).toThrow();
   });
 });

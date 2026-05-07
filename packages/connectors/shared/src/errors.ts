@@ -18,11 +18,7 @@ export class ConnectorError extends Error {
   readonly code: ConnectorErrorCode;
   readonly filePath: string | null;
 
-  constructor(
-    code: ConnectorErrorCode,
-    message: string,
-    options: ConnectorErrorOptions = {},
-  ) {
+  constructor(code: ConnectorErrorCode, message: string, options: ConnectorErrorOptions = {}) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = "ConnectorError";
     this.code = connectorErrorCodeSchema.parse(code);

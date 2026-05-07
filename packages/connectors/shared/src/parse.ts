@@ -31,9 +31,18 @@ export function parseBlock(content: string): ParsedBlock {
   }
 
   return {
-    before: lines.slice(0, startIndex).map((l) => l.raw).join(""),
-    block: lines.slice(startIndex, endIndex + 1).map((l) => l.raw).join(""),
-    after: lines.slice(endIndex + 1).map((l) => l.raw).join(""),
+    before: lines
+      .slice(0, startIndex)
+      .map((l) => l.raw)
+      .join(""),
+    block: lines
+      .slice(startIndex, endIndex + 1)
+      .map((l) => l.raw)
+      .join(""),
+    after: lines
+      .slice(endIndex + 1)
+      .map((l) => l.raw)
+      .join(""),
   };
 }
 

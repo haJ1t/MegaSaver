@@ -1,11 +1,11 @@
+import { stat } from "node:fs/promises";
+import { isAbsolute, join } from "node:path";
 import {
   type ConnectorContext,
   readTargetFile,
   syncTargetBlock,
   writeTargetFile,
 } from "@megasaver/connectors-shared";
-import { stat } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
 import { assertGenericCliContext } from "./context.js";
 import { GenericCliConnectorError, wrapSharedConnectorError } from "./errors.js";
 import type { ConnectorTarget } from "./targets.js";
@@ -27,9 +27,7 @@ interface WriteGenericCliTargetInput {
   content: string;
 }
 
-export async function syncGenericCliTarget(
-  input: SyncGenericCliTargetInput,
-): Promise<string> {
+export async function syncGenericCliTarget(input: SyncGenericCliTargetInput): Promise<string> {
   const filePath = await targetPath(input.projectRoot, input.target);
   const context = assertGenericCliContext(input.context, input.target);
   try {
@@ -52,9 +50,7 @@ export async function readGenericCliTarget(
   }
 }
 
-export async function writeGenericCliTarget(
-  input: WriteGenericCliTargetInput,
-): Promise<void> {
+export async function writeGenericCliTarget(input: WriteGenericCliTargetInput): Promise<void> {
   const filePath = await targetPath(input.projectRoot, input.target);
   try {
     await writeTargetFile({ absPath: filePath, content: input.content });

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { type ConnectorContext } from "./context.js";
+import type { ConnectorContext } from "./context.js";
 import { ConnectorError } from "./errors.js";
 import { upsertBlock } from "./upsert.js";
 
@@ -49,5 +49,7 @@ export async function syncTargetBlock(input: SyncTargetBlockInput): Promise<stri
 }
 
 function isNodeErrorWithCode(error: unknown, code: string): boolean {
-  return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === code;
+  return (
+    error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === code
+  );
 }

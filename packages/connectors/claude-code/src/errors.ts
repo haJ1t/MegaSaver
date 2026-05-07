@@ -1,7 +1,4 @@
-import {
-  ConnectorError,
-  type ConnectorErrorCode,
-} from "@megasaver/connectors-shared";
+import { ConnectorError, type ConnectorErrorCode } from "@megasaver/connectors-shared";
 import { z } from "zod";
 
 export const claudeCodeConnectorErrorCodeSchema = z.enum([
@@ -49,16 +46,12 @@ export function mapSharedErrorCode(code: ConnectorErrorCode): ClaudeCodeConnecto
   }
 }
 
-export function wrapSharedConnectorError(
-  error: unknown,
-  filePath: string | null,
-): never {
+export function wrapSharedConnectorError(error: unknown, filePath: string | null): never {
   if (error instanceof ConnectorError) {
-    throw new ClaudeCodeConnectorError(
-      mapSharedErrorCode(error.code),
-      error.message,
-      { cause: error, filePath: filePath ?? error.filePath },
-    );
+    throw new ClaudeCodeConnectorError(mapSharedErrorCode(error.code), error.message, {
+      cause: error,
+      filePath: filePath ?? error.filePath,
+    });
   }
   throw error;
 }

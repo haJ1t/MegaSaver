@@ -1,5 +1,5 @@
 import { ConnectorContextSchema } from "@megasaver/connectors-shared";
-import { z } from "zod";
+import type { z } from "zod";
 import { CLAUDE_CODE_AGENT_ID } from "./constants.js";
 import { ClaudeCodeConnectorError } from "./errors.js";
 

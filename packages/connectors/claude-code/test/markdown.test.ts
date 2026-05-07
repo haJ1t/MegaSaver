@@ -163,7 +163,12 @@ describe("upsertMegaSaverBlock", () => {
   });
 
   test("replaces an existing valid managed block", () => {
-    const oldBlock = renderClaudeCodeContext({ agentId: "claude-code" as const, project, session, memoryEntries: [] });
+    const oldBlock = renderClaudeCodeContext({
+      agentId: "claude-code" as const,
+      project,
+      session,
+      memoryEntries: [],
+    });
     const newBlock = renderClaudeCodeContext(context);
 
     expect(
@@ -175,7 +180,12 @@ describe("upsertMegaSaverBlock", () => {
   });
 
   test("normalizes blank lines when replacing an adjacent managed block", () => {
-    const oldBlock = renderClaudeCodeContext({ agentId: "claude-code" as const, project, session, memoryEntries: [] });
+    const oldBlock = renderClaudeCodeContext({
+      agentId: "claude-code" as const,
+      project,
+      session,
+      memoryEntries: [],
+    });
     const newBlock = renderClaudeCodeContext(context);
 
     expect(
@@ -187,7 +197,12 @@ describe("upsertMegaSaverBlock", () => {
   });
 
   test("normalizes whitespace-only blank lines around replaced block", () => {
-    const oldBlock = renderClaudeCodeContext({ agentId: "claude-code" as const, project, session, memoryEntries: [] });
+    const oldBlock = renderClaudeCodeContext({
+      agentId: "claude-code" as const,
+      project,
+      session,
+      memoryEntries: [],
+    });
     const newBlock = renderClaudeCodeContext(context);
 
     expect(

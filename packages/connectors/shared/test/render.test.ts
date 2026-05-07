@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderBlock } from "../src/render.js";
-import { buildContext, MEMORY_ID } from "./fixtures.js";
+import { MEMORY_ID, buildContext } from "./fixtures.js";
 
 describe("renderBlock", () => {
   it("renders the canonical block with no session and no memory", () => {
@@ -36,9 +36,7 @@ describe("renderBlock", () => {
   it("renders memory entries", () => {
     const block = renderBlock(
       buildContext({
-        memoryEntries: [
-          { id: MEMORY_ID, scope: "project", content: "first" },
-        ],
+        memoryEntries: [{ id: MEMORY_ID, scope: "project", content: "first" }],
       }),
     );
     expect(block).toContain(`- [project:${MEMORY_ID}] first`);
@@ -47,9 +45,7 @@ describe("renderBlock", () => {
   it("renders multi-line memory entries with continuation indent", () => {
     const block = renderBlock(
       buildContext({
-        memoryEntries: [
-          { id: MEMORY_ID, scope: "project", content: "line1\nline2" },
-        ],
+        memoryEntries: [{ id: MEMORY_ID, scope: "project", content: "line1\nline2" }],
       }),
     );
     expect(block).toContain(`- [project:${MEMORY_ID}] line1\n  line2`);

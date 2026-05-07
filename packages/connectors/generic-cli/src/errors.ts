@@ -1,7 +1,4 @@
-import {
-  ConnectorError,
-  type ConnectorErrorCode,
-} from "@megasaver/connectors-shared";
+import { ConnectorError, type ConnectorErrorCode } from "@megasaver/connectors-shared";
 import { z } from "zod";
 
 export const genericCliConnectorErrorCodeSchema = z.enum([
@@ -12,9 +9,7 @@ export const genericCliConnectorErrorCodeSchema = z.enum([
   "file_write_failed",
   "project_root_invalid",
 ]);
-export type GenericCliConnectorErrorCode = z.infer<
-  typeof genericCliConnectorErrorCodeSchema
->;
+export type GenericCliConnectorErrorCode = z.infer<typeof genericCliConnectorErrorCodeSchema>;
 
 interface GenericCliConnectorErrorOptions {
   cause?: unknown;
@@ -52,16 +47,12 @@ export function mapSharedErrorCode(code: ConnectorErrorCode): GenericCliConnecto
   }
 }
 
-export function wrapSharedConnectorError(
-  error: unknown,
-  filePath: string | null,
-): never {
+export function wrapSharedConnectorError(error: unknown, filePath: string | null): never {
   if (error instanceof ConnectorError) {
-    throw new GenericCliConnectorError(
-      mapSharedErrorCode(error.code),
-      error.message,
-      { cause: error, filePath: filePath ?? error.filePath },
-    );
+    throw new GenericCliConnectorError(mapSharedErrorCode(error.code), error.message, {
+      cause: error,
+      filePath: filePath ?? error.filePath,
+    });
   }
   throw error;
 }

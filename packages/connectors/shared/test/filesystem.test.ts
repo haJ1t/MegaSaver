@@ -3,11 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ConnectorError } from "../src/errors.js";
-import {
-  readTargetFile,
-  syncTargetBlock,
-  writeTargetFile,
-} from "../src/filesystem.js";
+import { readTargetFile, syncTargetBlock, writeTargetFile } from "../src/filesystem.js";
 import { buildContext } from "./fixtures.js";
 
 describe("filesystem helpers", () => {
@@ -48,8 +44,8 @@ describe("filesystem helpers", () => {
 
   it("writeTargetFile surfaces ENOTDIR/EACCES as file_write_failed", async () => {
     const bogus = join(root, "does", "not", "exist", "AGENTS.md");
-    await expect(
-      writeTargetFile({ absPath: bogus, content: "x" }),
-    ).rejects.toBeInstanceOf(ConnectorError);
+    await expect(writeTargetFile({ absPath: bogus, content: "x" })).rejects.toBeInstanceOf(
+      ConnectorError,
+    );
   });
 });

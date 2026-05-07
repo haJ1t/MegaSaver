@@ -3,11 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GenericCliConnectorError } from "../src/errors.js";
-import {
-  readGenericCliTarget,
-  syncGenericCliTarget,
-  writeGenericCliTarget,
-} from "../src/sync.js";
+import { readGenericCliTarget, syncGenericCliTarget, writeGenericCliTarget } from "../src/sync.js";
 import { codexTarget } from "../src/targets.js";
 import { buildCodexContext } from "./fixtures.js";
 

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  ConnectorError,
-  connectorErrorCodeSchema,
-} from "../src/errors.js";
+import { ConnectorError, connectorErrorCodeSchema } from "../src/errors.js";
 
 describe("ConnectorError", () => {
   it("enumerates the v0.1 code union", () => {

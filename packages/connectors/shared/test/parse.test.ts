@@ -35,8 +35,8 @@ describe("parseBlock", () => {
   });
 
   it("rejects end before begin", () => {
-    expect(() =>
-      parseBlock("<!-- MEGA SAVER:END -->\n<!-- MEGA SAVER:BEGIN -->\n"),
-    ).toThrow(ConnectorError);
+    expect(() => parseBlock("<!-- MEGA SAVER:END -->\n<!-- MEGA SAVER:BEGIN -->\n")).toThrow(
+      ConnectorError,
+    );
   });
 });

@@ -1,9 +1,4 @@
-import {
-  parseBlock,
-  removeBlock,
-  renderBlock,
-  upsertBlock,
-} from "@megasaver/connectors-shared";
+import { parseBlock, removeBlock, renderBlock, upsertBlock } from "@megasaver/connectors-shared";
 import { type ClaudeCodeContext, assertClaudeCodeContext } from "./context.js";
 import { wrapSharedConnectorError } from "./errors.js";
 

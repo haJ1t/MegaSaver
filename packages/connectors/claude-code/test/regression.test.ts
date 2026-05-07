@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { renderClaudeCodeContext } from "../src/index.js";
-import { PRE_REFACTOR_BLOCK } from "./regression-fixture.js";
 import {
   agentIdSchema,
   memoryEntryIdSchema,
   projectIdSchema,
   sessionIdSchema,
 } from "@megasaver/shared";
+import { describe, expect, it } from "vitest";
+import { renderClaudeCodeContext } from "../src/index.js";
+import { PRE_REFACTOR_BLOCK } from "./regression-fixture.js";
 
 describe("claude-code render — pre-refactor parity", () => {
   it("produces byte-identical output for the canonical context", () => {

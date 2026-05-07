@@ -16,8 +16,6 @@ describe("assertGenericCliContext", () => {
   });
 
   it("rejects malformed input via shared schema", () => {
-    expect(() => assertGenericCliContext({}, codexTarget)).toThrow(
-      GenericCliConnectorError,
-    );
+    expect(() => assertGenericCliContext({}, codexTarget)).toThrow(GenericCliConnectorError);
   });
 });

@@ -1,4 +1,4 @@
-import { type ConnectorContext } from "./context.js";
+import type { ConnectorContext } from "./context.js";
 import { type IndexedLine, parseBlock, splitIndexedLines } from "./parse.js";
 import { renderBlock } from "./render.js";
 
@@ -59,7 +59,10 @@ function trimTrailingBoundaryLines(content: string): string {
   const lines = splitIndexedLines(content);
   let end = lines.length;
   while (end > 0 && normalizedLineIsBlank(lines[end - 1] as IndexedLine)) end -= 1;
-  return lines.slice(0, end).map((l) => l.raw).join("");
+  return lines
+    .slice(0, end)
+    .map((l) => l.raw)
+    .join("");
 }
 
 function trimTrailingBoundaryForJoin(content: string): string {
@@ -70,7 +73,10 @@ function trimLeadingBoundaryLines(content: string): string {
   const lines = splitIndexedLines(content);
   let start = 0;
   while (start < lines.length && normalizedLineIsBlank(lines[start] as IndexedLine)) start += 1;
-  return lines.slice(start).map((l) => l.raw).join("");
+  return lines
+    .slice(start)
+    .map((l) => l.raw)
+    .join("");
 }
 
 function normalizedLineIsBlank(line: IndexedLine): boolean {
