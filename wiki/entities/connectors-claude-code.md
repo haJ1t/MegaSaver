@@ -4,7 +4,7 @@ tags: [entity, connector, claude-code, v0.1]
 sources:
   - docs/superpowers/specs/2026-05-06-claude-code-connector-design.md
   - https://code.claude.com/docs/en/memory
-status: review-passed
+status: merged
 created: 2026-05-06
 updated: 2026-05-07
 ---
@@ -111,7 +111,7 @@ External review gate passed at commit `d447622`:
   generated declaration output, parser/updater/filesystem boundaries,
   and full `pnpm verify`.
 
-Draft PR opened as <https://github.com/haJ1t/MegaSaver/pull/6>.
+Merged into `main` via PR <https://github.com/haJ1t/MegaSaver/pull/6>.
 
 Accepted v0.1 residual risks: no optimistic concurrency on `CLAUDE.md`
 writes, no file mode/xattr preservation guarantees, and no
