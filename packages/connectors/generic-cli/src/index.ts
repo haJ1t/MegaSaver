@@ -15,3 +15,9 @@ export {
   assertGenericCliContext,
   GenericCliContextSchema,
 } from "./context.js";
+
+export {
+  readGenericCliTarget,
+  syncGenericCliTarget,
+  writeGenericCliTarget,
+} from "./sync.js";
