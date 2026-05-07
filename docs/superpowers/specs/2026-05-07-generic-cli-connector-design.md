@@ -17,8 +17,11 @@ related:
 Ship `@megasaver/connector-generic-cli`: a manifest-driven connector
 package that synchronises a Mega Saver managed block into a per-agent
 config file. v0.1 lands a single concrete target (Codex, root
-`AGENTS.md`); the manifest API is generic so additional targets land
-as data + smoke tests in later specs without API change.
+`AGENTS.md`); the manifest covers single-Markdown-file targets
+data-only. Adding non-Markdown or multi-file targets (Cursor mdc,
+Aider YAML) will require additive `ConnectorTarget` fields and per
+those targets' own block-format strategies — minor semver bumps,
+not breaking, when the additions stay optional.
 
 The same spec carries two co-changes required to keep the connector
 surface coherent:
@@ -190,8 +193,9 @@ export async function writeTargetFile(args: {
 export async function syncTargetBlock(args: {
   absPath: string;
   context: ConnectorContext;
-}): Promise<void>;
-// → readTargetFile → upsertBlock → writeTargetFile.
+}): Promise<string>;
+// → readTargetFile → upsertBlock → writeTargetFile; returns the
+//   final file content for caller-visible verification.
 ```
 
 When `readTargetFile` returns `null` (file does not yet exist),
@@ -324,7 +328,7 @@ export async function syncGenericCliTarget(args: {
   projectRoot: string;
   target: ConnectorTarget;
   context: ConnectorContext;
-}): Promise<void>;
+}): Promise<string>;
 
 export async function readGenericCliTarget(args: {
   projectRoot: string;
