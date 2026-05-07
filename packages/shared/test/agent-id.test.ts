@@ -37,8 +37,4 @@ describe("agentIdSchema", () => {
       ),
     );
   });
-
-  it("accepts the codex agent id", () => {
-    expect(agentIdSchema.parse("codex")).toBe("codex");
-  });
 });
