@@ -2,7 +2,7 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { type AgentId, agentIdSchema } from "../src/agent-id.js";
 
-const members: ReadonlyArray<AgentId> = ["claude-code", "generic-cli"];
+const members: ReadonlyArray<AgentId> = ["claude-code", "codex", "generic-cli"];
 
 describe("agentIdSchema", () => {
   it("parses every v0.1 connector id", () => {
@@ -11,8 +11,8 @@ describe("agentIdSchema", () => {
     }
   });
 
-  it("rejects an agent that has no v0.1 connector (codex)", () => {
-    const result = agentIdSchema.safeParse("codex");
+  it("rejects an unknown agent id", () => {
+    const result = agentIdSchema.safeParse("unknown-agent");
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0]?.code).toBe("invalid_enum_value");

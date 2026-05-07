@@ -38,7 +38,7 @@ describe("public exports", () => {
       createdAt: "2026-05-06T00:00:00.000Z",
       updatedAt: "2026-05-06T00:00:00.000Z",
     };
-    const context = { project, session: null, memoryEntries: [] };
+    const context = { agentId: "claude-code", project, session: null, memoryEntries: [] };
 
     try {
       const rendered = connector.renderClaudeCodeContext(context);

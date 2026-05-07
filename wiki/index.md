@@ -23,10 +23,12 @@ updated: 2026-05-07
 
 - [[entities/cli]] — `@megasaver/cli` `mega` command scaffold (v0.1).
 - [[entities/connectors-claude-code]] — `@megasaver/connector-claude-code` root `CLAUDE.md` adapter (merged).
+- [[entities/connectors-generic-cli]] — `@megasaver/connector-generic-cli` manifest-driven connector (v0.1 = Codex `AGENTS.md`).
+- [[entities/connectors-shared]] — `@megasaver/connectors-shared` block helpers + context schema.
 - [[entities/core]] — `@megasaver/core` agent-agnostic engine foundation (v0.1).
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1).
 
-More subsystem pages land as features get built. Slot reserved for: `connectors-generic-cli`, `mcp-bridge`, `app`, `skill-packs`.
+More subsystem pages land as features get built. Slot reserved for: `mcp-bridge`, `app`, `skill-packs`.
 
 ## Workflows
 
@@ -61,6 +63,8 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 | What schemas / registry / errors does Core export? | [[entities/core]]                              |
 | What commands / flags does the CLI support?       | [[entities/cli]]                                |
 | What does the Claude Code connector write?        | [[entities/connectors-claude-code]]             |
+| What does the generic-CLI connector ship?         | [[entities/connectors-generic-cli]]             |
+| Where do shared connector helpers live?           | [[entities/connectors-shared]]                  |
 | What types / IDs does Shared export?              | [[entities/shared]]                             |
 | How do I write a CLI handler test?                | [[workflows/cli-test-pattern]]                  |
 | What's in the original product idea?              | [[sources/fikri-original]]                      |
@@ -68,11 +72,12 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Claude Code connector merged via PR #6. README refresh is open as
-draft PR #7 on `codex/readme-current-state`.
-CLI project CRUD merged. Bootstrap, project skeleton,
-`@megasaver/shared`, `@megasaver/core` (with `initStore` and
-JSON directory persistence), and `@megasaver/cli` (with
-`mega doctor`, `mega project create`, `mega project list`) are
-all on `origin/main` via PR #5. Next implementation slot:
-`connectors/generic-cli` or first `Session` CRUD.
+generic-cli connector implementation complete on
+`feat/generic-cli-connector`: `@megasaver/connectors-shared` plus
+`@megasaver/connector-generic-cli` (Codex `AGENTS.md` target).
+Claude-code connector refactored to consume shared helpers; render
+byte-identical (regression test asserts). `pnpm verify` green
+across 6 packages. PR + reviewers pending. Previously merged:
+README refresh PR #7, Claude Code connector PR #6, CLI project CRUD
+PR #5, bootstrap PRs. Next slot after this connector: Session CRUD,
+or the `mega connector sync` CLI command spec.

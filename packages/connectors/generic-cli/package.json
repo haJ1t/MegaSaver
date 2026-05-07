@@ -1,8 +1,8 @@
 {
-  "name": "@megasaver/connector-claude-code",
+  "name": "@megasaver/connector-generic-cli",
   "version": "0.0.0",
   "private": true,
-  "description": "Claude Code connector for Mega Saver.",
+  "description": "Manifest-driven generic-CLI connector for Mega Saver.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

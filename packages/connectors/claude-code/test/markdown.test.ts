@@ -12,6 +12,7 @@ import type { ClaudeCodeContext } from "../src/index.js";
 import { project, projectMemory, session, sessionMemory } from "./fixtures.js";
 
 const context = {
+  agentId: "claude-code" as const,
   project,
   session,
   memoryEntries: [projectMemory, sessionMemory],
@@ -70,6 +71,7 @@ ${MEGA_SAVER_BLOCK_END}
   test("renders none for absent session metadata and empty memory", () => {
     expect(
       renderClaudeCodeContext({
+        agentId: "claude-code" as const,
         project,
         session: null,
         memoryEntries: [],
@@ -80,6 +82,7 @@ ${MEGA_SAVER_BLOCK_END}
   test("indents multiline memory continuation lines", () => {
     expect(
       renderClaudeCodeContext({
+        agentId: "claude-code" as const,
         project,
         session,
         memoryEntries: [
@@ -160,7 +163,12 @@ describe("upsertMegaSaverBlock", () => {
   });
 
   test("replaces an existing valid managed block", () => {
-    const oldBlock = renderClaudeCodeContext({ project, session, memoryEntries: [] });
+    const oldBlock = renderClaudeCodeContext({
+      agentId: "claude-code" as const,
+      project,
+      session,
+      memoryEntries: [],
+    });
     const newBlock = renderClaudeCodeContext(context);
 
     expect(
@@ -172,7 +180,12 @@ describe("upsertMegaSaverBlock", () => {
   });
 
   test("normalizes blank lines when replacing an adjacent managed block", () => {
-    const oldBlock = renderClaudeCodeContext({ project, session, memoryEntries: [] });
+    const oldBlock = renderClaudeCodeContext({
+      agentId: "claude-code" as const,
+      project,
+      session,
+      memoryEntries: [],
+    });
     const newBlock = renderClaudeCodeContext(context);
 
     expect(
@@ -184,7 +197,12 @@ describe("upsertMegaSaverBlock", () => {
   });
 
   test("normalizes whitespace-only blank lines around replaced block", () => {
-    const oldBlock = renderClaudeCodeContext({ project, session, memoryEntries: [] });
+    const oldBlock = renderClaudeCodeContext({
+      agentId: "claude-code" as const,
+      project,
+      session,
+      memoryEntries: [],
+    });
     const newBlock = renderClaudeCodeContext(context);
 
     expect(

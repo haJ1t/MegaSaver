@@ -1,8 +1,8 @@
 {
-  "name": "@megasaver/connector-claude-code",
+  "name": "@megasaver/connectors-shared",
   "version": "0.0.0",
   "private": true,
-  "description": "Claude Code connector for Mega Saver.",
+  "description": "Shared helpers for Mega Saver connectors (block render, parse, filesystem).",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -23,7 +23,6 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@megasaver/connectors-shared": "workspace:*",
     "@megasaver/core": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "zod": "^3.24.1"
