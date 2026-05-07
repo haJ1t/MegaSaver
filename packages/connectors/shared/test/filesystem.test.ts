@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -47,5 +47,15 @@ describe("filesystem helpers", () => {
     await expect(writeTargetFile({ absPath: bogus, content: "x" })).rejects.toBeInstanceOf(
       ConnectorError,
     );
+  });
+
+  it("writeTargetFile refuses to replace a symlink", async () => {
+    const real = join(root, "real.md");
+    const link = join(root, "AGENTS.md");
+    await writeTargetFile({ absPath: real, content: "real\n" });
+    await symlink(real, link);
+    const err = await writeTargetFile({ absPath: link, content: "x" }).catch((e) => e);
+    expect(err).toBeInstanceOf(ConnectorError);
+    expect(err.code).toBe("file_write_failed");
   });
 });

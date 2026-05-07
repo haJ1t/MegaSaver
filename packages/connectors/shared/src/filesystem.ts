@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { ConnectorContext } from "./context.js";
 import { ConnectorError } from "./errors.js";
@@ -28,6 +28,25 @@ export async function readTargetFile(absPath: string): Promise<string | null> {
 }
 
 export async function writeTargetFile(input: WriteTargetFileInput): Promise<void> {
+  try {
+    const st = await lstat(input.absPath);
+    if (st.isSymbolicLink()) {
+      throw new ConnectorError(
+        "file_write_failed",
+        "Target file is a symbolic link; refuse to replace.",
+        { filePath: input.absPath },
+      );
+    }
+  } catch (error) {
+    if (error instanceof ConnectorError) throw error;
+    if (!isNodeErrorWithCode(error, "ENOENT")) {
+      throw new ConnectorError("file_write_failed", "Failed to stat target file.", {
+        cause: error,
+        filePath: input.absPath,
+      });
+    }
+  }
+
   const tempPath = join(dirname(input.absPath), `.${randomUUID()}.tmp`);
   try {
     await writeFile(tempPath, input.content, "utf8");
