@@ -12,4 +12,4 @@ export {
 export { renderBlock } from "./render.js";
 export { parseBlock, type ParsedBlock } from "./parse.js";
 export { removeBlock, upsertBlock } from "./upsert.js";
-export { readTargetFile, syncTargetBlock, writeTargetFile } from "./filesystem.js";
+export { assertProjectRoot, readTargetFile, syncTargetBlock, writeTargetFile } from "./filesystem.js";

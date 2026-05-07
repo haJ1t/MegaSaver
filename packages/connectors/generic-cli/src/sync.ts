@@ -1,13 +1,13 @@
-import { stat } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
 import {
+  assertProjectRoot,
   type ConnectorContext,
   readTargetFile,
   syncTargetBlock,
   writeTargetFile,
 } from "@megasaver/connectors-shared";
 import { assertGenericCliContext } from "./context.js";
-import { GenericCliConnectorError, wrapSharedConnectorError } from "./errors.js";
+import { wrapSharedConnectorError } from "./errors.js";
 import type { ConnectorTarget } from "./targets.js";
 
 interface SyncGenericCliTargetInput {
@@ -60,25 +60,10 @@ export async function writeGenericCliTarget(input: WriteGenericCliTargetInput): 
 }
 
 async function targetPath(projectRoot: string, target: ConnectorTarget): Promise<string> {
-  await assertProjectRoot(projectRoot);
-  return join(projectRoot, target.relativePath);
-}
-
-async function assertProjectRoot(projectRoot: string): Promise<void> {
-  if (!isAbsolute(projectRoot)) throwInvalidProjectRoot(projectRoot);
   try {
-    const projectRootStat = await stat(projectRoot);
-    if (!projectRootStat.isDirectory()) throwInvalidProjectRoot(projectRoot);
+    await assertProjectRoot(projectRoot);
   } catch (error) {
-    if (error instanceof GenericCliConnectorError) throw error;
-    throwInvalidProjectRoot(projectRoot, error);
+    wrapSharedConnectorError(error, projectRoot);
   }
-}
-
-function throwInvalidProjectRoot(projectRoot: string, cause?: unknown): never {
-  throw new GenericCliConnectorError(
-    "project_root_invalid",
-    "Project root must be an absolute path to an existing directory.",
-    { cause, filePath: projectRoot },
-  );
+  return join(projectRoot, target.relativePath);
 }

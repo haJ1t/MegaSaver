@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { chmod, lstat, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import type { ConnectorContext } from "./context.js";
 import { ConnectorError } from "./errors.js";
 import { upsertBlock } from "./upsert.js";
@@ -77,6 +77,33 @@ export async function syncTargetBlock(input: SyncTargetBlockInput): Promise<stri
   const content = upsertBlock({ existingContent: existing, context: input.context });
   await writeTargetFile({ absPath: input.absPath, content });
   return content;
+}
+
+export async function assertProjectRoot(projectRoot: string): Promise<void> {
+  if (!isAbsolute(projectRoot)) {
+    throw new ConnectorError(
+      "target_path_invalid",
+      "Project root must be an absolute path to an existing directory.",
+      { filePath: projectRoot },
+    );
+  }
+  try {
+    const projectRootStat = await stat(projectRoot);
+    if (!projectRootStat.isDirectory()) {
+      throw new ConnectorError(
+        "target_path_invalid",
+        "Project root must be an absolute path to an existing directory.",
+        { filePath: projectRoot },
+      );
+    }
+  } catch (error) {
+    if (error instanceof ConnectorError) throw error;
+    throw new ConnectorError(
+      "target_path_invalid",
+      "Project root must be an absolute path to an existing directory.",
+      { cause: error, filePath: projectRoot },
+    );
+  }
 }
 
 function isNodeErrorWithCode(error: unknown, code: string): boolean {

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ConnectorError } from "../src/errors.js";
-import { readTargetFile, syncTargetBlock, writeTargetFile } from "../src/filesystem.js";
+import { assertProjectRoot, readTargetFile, syncTargetBlock, writeTargetFile } from "../src/filesystem.js";
 import { buildContext } from "./fixtures.js";
 
 describe("filesystem helpers", () => {
@@ -66,5 +66,23 @@ describe("filesystem helpers", () => {
     await writeTargetFile({ absPath: path, content: "v2\n" });
     const s = await stat(path);
     expect(s.mode & 0o777).toBe(0o600);
+  });
+
+  it("assertProjectRoot rejects relative paths with target_path_invalid", async () => {
+    const err = await assertProjectRoot("relative/path").catch((e) => e);
+    expect(err).toBeInstanceOf(ConnectorError);
+    expect(err.code).toBe("target_path_invalid");
+  });
+
+  it("assertProjectRoot rejects non-directory targets with target_path_invalid", async () => {
+    const filePath = join(root, "file.txt");
+    await writeTargetFile({ absPath: filePath, content: "x" });
+    const err = await assertProjectRoot(filePath).catch((e) => e);
+    expect(err).toBeInstanceOf(ConnectorError);
+    expect(err.code).toBe("target_path_invalid");
+  });
+
+  it("assertProjectRoot accepts an existing absolute directory", async () => {
+    await expect(assertProjectRoot(root)).resolves.toBeUndefined();
   });
 });
