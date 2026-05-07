@@ -4,7 +4,7 @@ tags: [entity, connector, claude-code, v0.1]
 sources:
   - docs/superpowers/specs/2026-05-06-claude-code-connector-design.md
   - https://code.claude.com/docs/en/memory
-status: plan-written
+status: implemented-review-pending
 created: 2026-05-06
 updated: 2026-05-06
 ---
@@ -47,13 +47,16 @@ Risk: <risk/none>
 <!-- MEGA SAVER:END -->
 ```
 
-## Public surface planned
+## Public surface
 
 - `CLAUDE_CODE_AGENT_ID`
 - `CLAUDE_MD_FILE`
 - `MEGA_SAVER_BLOCK_START`
 - `MEGA_SAVER_BLOCK_END`
+- `claudeCodeConnectorErrorCodeSchema`
+- `ClaudeCodeConnectorError`
 - `ClaudeCodeContextSchema`
+- `assertClaudeCodeContext(input)`
 - `renderClaudeCodeContext(context)`
 - `parseClaudeMd(content)`
 - `upsertMegaSaverBlock({ existingContent, context })`
@@ -73,7 +76,7 @@ Risk: <risk/none>
 - Session-scoped memory requires the selected session.
 - Sentinel strings inside rendered values are rejected.
 
-## Error codes planned
+## Error codes
 
 `ClaudeCodeConnectorErrorCode`:
 
@@ -90,6 +93,14 @@ Risk: <risk/none>
 - No Claude process launch in this slice.
 - No `.claude/CLAUDE.md`, `.claude/rules/`, `CLAUDE.local.md`, imports,
   auto memory, memory retrieval, compression, or token audit yet.
+
+## Implementation evidence
+
+Implemented on `codex/connectors-claude-code`. Tests: 43 connector
+tests across 5 files. Full `pnpm verify` passes with 4 packages and 205
+total tests. Built-package smoke imported `dist/index.js`,
+`syncClaudeMdContext` wrote root `CLAUDE.md`, and printed `true` /
+`true`.
 
 ## Related
 
