@@ -87,6 +87,7 @@ compatibility.
 ```ts
 export const ConnectorContextSchema = z
   .object({
+    agentId: agentIdSchema,
     project: ProjectSchema,
     session: SessionSchema.nullable(),
     memoryEntries: z.array(MemoryEntrySchema).max(20),
@@ -94,6 +95,7 @@ export const ConnectorContextSchema = z
   .strict()
   .superRefine((ctx, issues) => {
     // session.projectId === project.id
+    // session.agentId === context.agentId when session !== null
     // memoryEntries[i].projectId === project.id
     // session-scoped memory requires non-null session
     // memoryEntries[i].sessionId === session.id when session-scoped
@@ -103,10 +105,12 @@ export const ConnectorContextSchema = z
 export type ConnectorContext = z.infer<typeof ConnectorContextSchema>;
 ```
 
-`agentId` lives on `Session`, not on `ConnectorContext` itself; the
-context is purely a data envelope for one project plus optional
-session plus selected memory entries. Per-target packages enforce
-`agentId` matching when the target requires it.
+`agentId` is part of `ConnectorContext` so that `renderBlock` can
+emit `Agent: <agent-id>` deterministically without an extra
+parameter and without depending on whether a session is present.
+Per-target packages narrow `agentId` to the literal they support
+(`"claude-code"` for the claude-code wrapper; `target.agentId` for
+generic-cli wrappers).
 
 ### Pure render / parse / upsert helpers
 
@@ -146,11 +150,10 @@ Risk: <risk-or-"none">
 <!-- MEGA SAVER:END -->
 ```
 
-`<agent-id>` is read from `context.session?.agentId` when a session
-is present, else from a per-target literal injected by the wrapper
-(see §4 for claude-code, §5 for generic-cli). Render is deterministic
-and contains no per-target customisation hooks; customisation is
-explicitly deferred (R2/R3 in §7).
+`<agent-id>` is read from `context.agentId` (always present per the
+schema). Render is deterministic and contains no per-target
+customisation hooks; customisation is explicitly deferred (R2/R3 in
+§7).
 
 `parseBlock` walks the input by sentinel pair. Behaviour:
 
@@ -234,7 +237,7 @@ wrapper:
 | `MEGA_SAVER_BLOCK_START` / `MEGA_SAVER_BLOCK_END` | re-exports from `connectors-shared` |
 | `CLAUDE_CODE_AGENT_ID` (`"claude-code"`) | unchanged literal |
 | `CLAUDE_MD_FILE` (`"CLAUDE.md"`) | unchanged literal |
-| `ClaudeCodeContextSchema` | `ConnectorContextSchema` + extra refinement: when `session !== null`, `session.agentId === "claude-code"` |
+| `ClaudeCodeContextSchema` | `ConnectorContextSchema` narrowed via refinement: `agentId === "claude-code"` (and the inherited shared rule already enforces `session.agentId === agentId` when session is present) |
 | `assertClaudeCodeContext(input)` | `ClaudeCodeContextSchema.parse` |
 | `renderClaudeCodeContext(context)` | thin call into `renderBlock` |
 | `parseClaudeMd(content)` | thin call into `parseBlock` |
@@ -350,11 +353,10 @@ export class GenericCliConnectorError extends Error {
 ```
 
 `assertGenericCliContext(input, target)` runs `ConnectorContextSchema.parse(input)`
-and additionally enforces:
-
-- when `session !== null`, `session.agentId === target.agentId`;
-- when `session === null` and any memory entry is `scope: "session"`,
-  reject (already covered by shared schema, restated for clarity).
+and additionally enforces `context.agentId === target.agentId`. The
+shared schema already enforces `session.agentId === context.agentId`
+when a session is present, so target/session alignment is
+transitive.
 
 `syncGenericCliTarget` validates `projectRoot` (must be an absolute
 path, must exist as a directory) and joins it with `target.relativePath`,
@@ -380,7 +382,9 @@ of the caller that decided to fail rather than fall back.
 - Sentinel strings (`<!-- MEGA SAVER:BEGIN -->`, `<!-- MEGA SAVER:END -->`)
   are not substrings of any rendered field (project name, session
   title, memory content).
-- `target.agentId` matches `session.agentId` when session is present.
+- `context.agentId === target.agentId`.
+- `session.agentId === context.agentId` when session is present
+  (already enforced by the shared schema).
 - `projectRoot` is absolute and points to an existing directory at
   write time.
 
