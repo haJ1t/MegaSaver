@@ -10,3 +10,8 @@ export {
   type GenericCliConnectorErrorCode,
   genericCliConnectorErrorCodeSchema,
 } from "./errors.js";
+
+export {
+  assertGenericCliContext,
+  GenericCliContextSchema,
+} from "./context.js";
