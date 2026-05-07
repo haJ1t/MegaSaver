@@ -29,5 +29,6 @@ describe("upsertBlock", () => {
     });
     expect(replaced).toContain("Project: second");
     expect(replaced).not.toContain("Project: first");
+    expect(replaced.split("<!-- MEGA SAVER:BEGIN -->").length - 1).toBe(1);
   });
 });
