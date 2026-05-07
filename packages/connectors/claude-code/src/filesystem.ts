@@ -1,9 +1,13 @@
-import { stat } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
-import { readTargetFile, syncTargetBlock, writeTargetFile } from "@megasaver/connectors-shared";
+import { join } from "node:path";
+import {
+  assertProjectRoot,
+  readTargetFile,
+  syncTargetBlock,
+  writeTargetFile,
+} from "@megasaver/connectors-shared";
 import { CLAUDE_MD_FILE } from "./constants.js";
 import type { ClaudeCodeContext } from "./context.js";
-import { ClaudeCodeConnectorError, wrapSharedConnectorError } from "./errors.js";
+import { wrapSharedConnectorError } from "./errors.js";
 
 interface WriteClaudeMdInput {
   projectRoot: string;
@@ -45,25 +49,10 @@ export async function syncClaudeMdContext(input: SyncClaudeMdContextInput): Prom
 }
 
 async function claudeMdPath(projectRoot: string): Promise<string> {
-  await assertProjectRoot(projectRoot);
-  return join(projectRoot, CLAUDE_MD_FILE);
-}
-
-async function assertProjectRoot(projectRoot: string): Promise<void> {
-  if (!isAbsolute(projectRoot)) throwInvalidProjectRoot(projectRoot);
   try {
-    const projectRootStat = await stat(projectRoot);
-    if (!projectRootStat.isDirectory()) throwInvalidProjectRoot(projectRoot);
+    await assertProjectRoot(projectRoot);
   } catch (error) {
-    if (error instanceof ClaudeCodeConnectorError) throw error;
-    throwInvalidProjectRoot(projectRoot, error);
+    wrapSharedConnectorError(error, projectRoot);
   }
-}
-
-function throwInvalidProjectRoot(projectRoot: string, cause?: unknown): never {
-  throw new ClaudeCodeConnectorError(
-    "project_root_invalid",
-    "Project root must be an absolute path to an existing directory.",
-    { cause, filePath: projectRoot },
-  );
+  return join(projectRoot, CLAUDE_MD_FILE);
 }

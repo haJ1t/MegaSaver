@@ -39,4 +39,78 @@ describe("parseBlock", () => {
       ConnectorError,
     );
   });
+
+  it("block_conflict message identifies multi-begin line numbers", () => {
+    const content =
+      "<!-- MEGA SAVER:BEGIN -->\nx\n<!-- MEGA SAVER:BEGIN -->\n<!-- MEGA SAVER:END -->\n";
+    const err = (() => {
+      try {
+        parseBlock(content);
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(ConnectorError);
+    expect((err as ConnectorError).message).toContain("line 1");
+    expect((err as ConnectorError).message).toContain("line 3");
+  });
+
+  it("block_conflict message identifies multi-end line numbers", () => {
+    const content =
+      "<!-- MEGA SAVER:BEGIN -->\n<!-- MEGA SAVER:END -->\nx\n<!-- MEGA SAVER:END -->\n";
+    const err = (() => {
+      try {
+        parseBlock(content);
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(ConnectorError);
+    expect((err as ConnectorError).message).toContain("line 2");
+    expect((err as ConnectorError).message).toContain("line 4");
+  });
+
+  it("block_conflict message identifies begin-only line number", () => {
+    const err = (() => {
+      try {
+        parseBlock("prefix\n<!-- MEGA SAVER:BEGIN -->\n");
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(ConnectorError);
+    expect((err as ConnectorError).message).toContain("line 2");
+    expect((err as ConnectorError).message).toContain("no end sentinel");
+  });
+
+  it("block_conflict message identifies end-only line number", () => {
+    const err = (() => {
+      try {
+        parseBlock("prefix\n<!-- MEGA SAVER:END -->\n");
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(ConnectorError);
+    expect((err as ConnectorError).message).toContain("line 2");
+    expect((err as ConnectorError).message).toContain("no begin sentinel");
+  });
+
+  it("block_conflict message identifies end-before-begin line numbers", () => {
+    const err = (() => {
+      try {
+        parseBlock("<!-- MEGA SAVER:END -->\n<!-- MEGA SAVER:BEGIN -->\n");
+        return null;
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(err).toBeInstanceOf(ConnectorError);
+    expect((err as ConnectorError).message).toContain("line 1");
+    expect((err as ConnectorError).message).toContain("line 2");
+  });
 });

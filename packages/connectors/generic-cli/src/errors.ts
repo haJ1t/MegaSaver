@@ -2,7 +2,6 @@ import { ConnectorError, type ConnectorErrorCode } from "@megasaver/connectors-s
 import { z } from "zod";
 
 export const genericCliConnectorErrorCodeSchema = z.enum([
-  "target_unknown",
   "context_invalid",
   "block_conflict",
   "file_read_failed",

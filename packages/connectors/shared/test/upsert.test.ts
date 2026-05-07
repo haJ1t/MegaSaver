@@ -18,6 +18,23 @@ describe("upsertBlock", () => {
     expect(result).toContain("<!-- MEGA SAVER:BEGIN -->");
   });
 
+  it("upsertBlock preserves CRLF dominant input", () => {
+    const result = upsertBlock({
+      existingContent: "# H\r\n\r\nintro\r\n",
+      context: buildContext(),
+    });
+    expect(result.includes("\r\n")).toBe(true);
+    expect(/(?<!\r)\n/.test(result)).toBe(false);
+  });
+
+  it("upsertBlock keeps LF when LF-dominant", () => {
+    const result = upsertBlock({
+      existingContent: "# H\n\nintro\n",
+      context: buildContext(),
+    });
+    expect(result.includes("\r\n")).toBe(false);
+  });
+
   it("replaces an existing block in place", () => {
     const first = upsertBlock({
       existingContent: "intro\n",

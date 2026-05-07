@@ -1,5 +1,7 @@
+import { closeSync, mkdirSync, openSync, rmSync } from "node:fs";
+import path from "node:path";
 import type { ProjectId } from "@megasaver/shared";
-import { CoreRegistryError } from "./errors.js";
+import { CorePersistenceError, CoreRegistryError } from "./errors.js";
 import {
   readAllMemoryEntries,
   readMemoryEntriesForProject,
@@ -19,6 +21,51 @@ export type JsonDirectoryCoreRegistryOptions = {
   rootDir: string;
 };
 
+// Single-developer scale: a .lock file in rootDir acts as a mutex for
+// create operations that follow a read-check-write pattern (TOCTOU).
+// A stale lock (e.g. from a crashed process) will block new creates
+// for up to 5 seconds before surfacing store_write_failed — acceptable
+// for v0.1 where concurrent writers are rare.
+function withDirLock<T>(rootDir: string, fn: () => T): T {
+  const lockPath = path.join(rootDir, ".projects.lock");
+  // Ensure rootDir exists before attempting to create the lock file.
+  // The store creates it lazily on first write, but we need it earlier.
+  mkdirSync(rootDir, { recursive: true });
+  const deadline = Date.now() + 5000; // 5s acquire timeout
+  let fd: number | undefined;
+  while (Date.now() < deadline) {
+    try {
+      fd = openSync(lockPath, "wx");
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw new CorePersistenceError("store_write_failed", "Failed to acquire registry lock.", {
+          cause: error,
+          filePath: lockPath,
+        });
+      }
+      // Brief sync wait to avoid tight-spinning while lock is held.
+      const buf = new Int32Array(new SharedArrayBuffer(4));
+      Atomics.wait(buf, 0, 0, 50);
+    }
+  }
+  if (fd === undefined) {
+    throw new CorePersistenceError("store_write_failed", "Timed out acquiring registry lock.", {
+      filePath: lockPath,
+    });
+  }
+  try {
+    return fn();
+  } finally {
+    try {
+      closeSync(fd);
+    } catch {}
+    try {
+      rmSync(lockPath, { force: true });
+    } catch {}
+  }
+}
+
 export function createJsonDirectoryCoreRegistry(
   options: JsonDirectoryCoreRegistryOptions,
 ): CoreRegistry {
@@ -35,17 +82,19 @@ export function createJsonDirectoryCoreRegistry(
 
   return {
     createProject(project) {
-      const parsed = projectSchema.parse(project);
-      const projects = readProjects(paths);
-      if (projects.some((existingProject) => existingProject.id === parsed.id)) {
-        throw new CoreRegistryError(
-          "project_already_exists",
-          `Project already exists: ${parsed.id}`,
-        );
-      }
+      return withDirLock(options.rootDir, () => {
+        const parsed = projectSchema.parse(project);
+        const projects = readProjects(paths);
+        if (projects.some((existingProject) => existingProject.id === parsed.id)) {
+          throw new CoreRegistryError(
+            "project_already_exists",
+            `Project already exists: ${parsed.id}`,
+          );
+        }
 
-      writeProjects(paths, [...projects, parsed]);
-      return projectSchema.parse(parsed);
+        writeProjects(paths, [...projects, parsed]);
+        return projectSchema.parse(parsed);
+      });
     },
 
     getProject(id) {
@@ -58,18 +107,20 @@ export function createJsonDirectoryCoreRegistry(
     },
 
     createSession(session) {
-      const parsed = sessionSchema.parse(session);
-      const sessions = readSessions(paths);
-      if (sessions.some((existingSession) => existingSession.id === parsed.id)) {
-        throw new CoreRegistryError(
-          "session_already_exists",
-          `Session already exists: ${parsed.id}`,
-        );
-      }
+      return withDirLock(options.rootDir, () => {
+        const parsed = sessionSchema.parse(session);
+        const sessions = readSessions(paths);
+        if (sessions.some((existingSession) => existingSession.id === parsed.id)) {
+          throw new CoreRegistryError(
+            "session_already_exists",
+            `Session already exists: ${parsed.id}`,
+          );
+        }
 
-      requireProject(parsed.projectId);
-      writeSessions(paths, [...sessions, parsed]);
-      return sessionSchema.parse(parsed);
+        requireProject(parsed.projectId);
+        writeSessions(paths, [...sessions, parsed]);
+        return sessionSchema.parse(parsed);
+      });
     },
 
     getSession(id) {
@@ -85,36 +136,40 @@ export function createJsonDirectoryCoreRegistry(
     },
 
     createMemoryEntry(entry) {
-      const parsed = memoryEntrySchema.parse(entry);
-      if (readAllMemoryEntries(paths).some((existingEntry) => existingEntry.id === parsed.id)) {
-        throw new CoreRegistryError(
-          "memory_entry_already_exists",
-          `Memory entry already exists: ${parsed.id}`,
-        );
-      }
-
-      requireProject(parsed.projectId);
-
-      if (parsed.scope === "session" && parsed.sessionId !== null) {
-        const session = readSessions(paths).find((candidate) => candidate.id === parsed.sessionId);
-        if (!session) {
+      return withDirLock(options.rootDir, () => {
+        const parsed = memoryEntrySchema.parse(entry);
+        if (readAllMemoryEntries(paths).some((existingEntry) => existingEntry.id === parsed.id)) {
           throw new CoreRegistryError(
-            "session_not_found",
-            `Session does not exist: ${parsed.sessionId}`,
+            "memory_entry_already_exists",
+            `Memory entry already exists: ${parsed.id}`,
           );
         }
 
-        if (session.projectId !== parsed.projectId) {
-          throw new CoreRegistryError(
-            "session_project_mismatch",
-            `Session ${parsed.sessionId} does not belong to project ${parsed.projectId}`,
-          );
-        }
-      }
+        requireProject(parsed.projectId);
 
-      const projectEntries = readMemoryEntriesForProject(paths, parsed.projectId);
-      writeMemoryEntriesForProject(paths, parsed.projectId, [...projectEntries, parsed]);
-      return memoryEntrySchema.parse(parsed);
+        if (parsed.scope === "session" && parsed.sessionId !== null) {
+          const session = readSessions(paths).find(
+            (candidate) => candidate.id === parsed.sessionId,
+          );
+          if (!session) {
+            throw new CoreRegistryError(
+              "session_not_found",
+              `Session does not exist: ${parsed.sessionId}`,
+            );
+          }
+
+          if (session.projectId !== parsed.projectId) {
+            throw new CoreRegistryError(
+              "session_project_mismatch",
+              `Session ${parsed.sessionId} does not belong to project ${parsed.projectId}`,
+            );
+          }
+        }
+
+        const projectEntries = readMemoryEntriesForProject(paths, parsed.projectId);
+        writeMemoryEntriesForProject(paths, parsed.projectId, [...projectEntries, parsed]);
+        return memoryEntrySchema.parse(parsed);
+      });
     },
 
     getMemoryEntry(id) {

@@ -90,4 +90,24 @@ describe("ConnectorContextSchema", () => {
   it("rejects unknown top-level keys via .strict()", () => {
     expect(() => ConnectorContextSchema.parse({ ...buildContext(), extraKey: "boom" })).toThrow();
   });
+
+  it("rejects sentinel lookalikes with zero-width chars", () => {
+    expect(() =>
+      ConnectorContextSchema.parse(
+        buildContext({
+          projectName: "evil <!-- MEGA SAVER:BEGIN --​> name",
+        }),
+      ),
+    ).toThrow();
+  });
+
+  it("rejects sentinel lookalikes with bidi controls", () => {
+    expect(() =>
+      ConnectorContextSchema.parse(
+        buildContext({
+          projectName: "x <!-- MEGA SAVER:‪BEGIN --> y",
+        }),
+      ),
+    ).toThrow();
+  });
 });

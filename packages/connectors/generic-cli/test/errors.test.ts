@@ -9,7 +9,6 @@ import {
 describe("GenericCliConnectorError", () => {
   it("enumerates the v0.1 code union", () => {
     expect(genericCliConnectorErrorCodeSchema.options).toEqual([
-      "target_unknown",
       "context_invalid",
       "block_conflict",
       "file_read_failed",
@@ -27,8 +26,8 @@ describe("GenericCliConnectorError", () => {
   });
 
   it("captures code and filePath", () => {
-    const err = new GenericCliConnectorError("target_unknown", "msg");
-    expect(err.code).toBe("target_unknown");
+    const err = new GenericCliConnectorError("context_invalid", "msg");
+    expect(err.code).toBe("context_invalid");
     expect(err.filePath).toBeNull();
     expect(err.name).toBe("GenericCliConnectorError");
   });

@@ -21,13 +21,13 @@ export function parseBlock(content: string): ParsedBlock {
     return { before: content, block: null, after: "" };
   }
   if (starts.length !== 1 || ends.length !== 1) {
-    throwBlockConflict();
+    throwBlockConflict(starts, ends);
   }
 
   const startIndex = starts[0] as number;
   const endIndex = ends[0] as number;
   if (endIndex < startIndex) {
-    throwBlockConflict();
+    throwBlockConflict(starts, ends);
   }
 
   return {
@@ -63,11 +63,32 @@ export function sentinelIndexes(lines: IndexedLine[], sentinel: string): number[
   return lines.flatMap((line, index) => (line.text === sentinel ? [index] : []));
 }
 
-function throwBlockConflict(): never {
-  throw new ConnectorError(
-    "block_conflict",
-    "File contains conflicting Mega Saver managed block sentinels.",
-  );
+function throwBlockConflict(begins: number[], ends: number[]): never {
+  const toLines = (indexes: number[]): string => indexes.map((i) => `line ${i + 1}`).join(", ");
+
+  let message: string;
+  if (begins.length === 0) {
+    const endLines = toLines(ends);
+    const count = ends.length;
+    const plural = count === 1 ? "sentinel" : "sentinels";
+    message = `File contains ${count} end ${plural} at ${endLines} but no begin sentinel.`;
+  } else if (ends.length === 0) {
+    const beginLines = toLines(begins);
+    const count = begins.length;
+    const plural = count === 1 ? "sentinel" : "sentinels";
+    message = `File contains ${count} begin ${plural} at ${beginLines} but no end sentinel.`;
+  } else if (begins.length > 1) {
+    const beginLines = toLines(begins);
+    message = `File contains ${begins.length} begin sentinels at ${beginLines}; expected exactly 1.`;
+  } else if (ends.length > 1) {
+    const endLines = toLines(ends);
+    message = `File contains ${ends.length} end sentinels at ${endLines}; expected exactly 1.`;
+  } else {
+    // exactly one of each but end before begin
+    message = `File contains end sentinel at line ${(ends[0] as number) + 1} before begin sentinel at line ${(begins[0] as number) + 1}.`;
+  }
+
+  throw new ConnectorError("block_conflict", message);
 }
 
 export type { IndexedLine };

@@ -8,38 +8,48 @@ interface UpsertBlockInput {
 }
 
 export function upsertBlock(input: UpsertBlockInput): string {
+  const eol = detectDominantEol(input.existingContent);
+  const normalized = input.existingContent.replace(/\r\n/g, "\n");
+
   const block = renderBlock(input.context);
-  const parsed = parseBlock(input.existingContent);
+  const parsed = parseBlock(normalized);
 
+  let result: string;
   if (parsed.block !== null) {
-    return joinWithManagedBlock(parsed.before, parsed.block, parsed.after, block);
+    result = joinWithManagedBlock(parsed.before, parsed.after, block);
+  } else {
+    const humanContent = trimTrailingBoundaryForJoin(parsed.before);
+    if (humanContent.length === 0) {
+      result = block;
+    } else {
+      result = `${humanContent}\n\n${block}`;
+    }
   }
 
-  const humanContent = trimTrailingBoundaryForJoin(parsed.before);
-  if (humanContent.length === 0) {
-    return block;
-  }
-  return `${humanContent}\n\n${block}`;
+  return eol === "\r\n" ? result.replace(/\n/g, "\r\n") : result;
 }
 
 export function removeBlock(content: string): string {
-  const parsed = parseBlock(content);
+  const eol = detectDominantEol(content);
+  const normalized = content.replace(/\r\n/g, "\n");
+
+  let result: string;
+  const parsed = parseBlock(normalized);
   if (parsed.block === null) {
-    return content.length === 0 ? "" : ensureTrailingNewline(content);
+    result = normalized.length === 0 ? "" : ensureTrailingNewline(normalized);
+  } else {
+    const remaining = joinHumanContent(parsed.before, parsed.after);
+    if (remaining.trim().length === 0) {
+      result = "";
+    } else {
+      result = ensureTrailingNewline(remaining);
+    }
   }
-  const remaining = joinHumanContent(parsed.before, parsed.after);
-  if (remaining.trim().length === 0) {
-    return "";
-  }
-  return ensureTrailingNewline(remaining);
+
+  return eol === "\r\n" ? result.replace(/\n/g, "\r\n") : result;
 }
 
-function joinWithManagedBlock(
-  before: string,
-  _existingBlock: string,
-  after: string,
-  newBlock: string,
-): string {
+function joinWithManagedBlock(before: string, after: string, newBlock: string): string {
   const normalizedBefore = trimTrailingBoundaryForJoin(before);
   const normalizedAfter = trimLeadingBoundaryLines(after);
   const prefix = normalizedBefore.length === 0 ? "" : `${normalizedBefore}\n\n`;
@@ -86,4 +96,10 @@ function normalizedLineIsBlank(line: IndexedLine): boolean {
 function ensureTrailingNewline(content: string): string {
   const normalized = trimTrailingBoundaryLines(content);
   return normalized.endsWith("\n") ? normalized : `${normalized}\n`;
+}
+
+function detectDominantEol(content: string): "\n" | "\r\n" {
+  const crlfCount = (content.match(/\r\n/g) ?? []).length;
+  const lfCount = (content.match(/(?<!\r)\n/g) ?? []).length;
+  return crlfCount > lfCount ? "\r\n" : "\n";
 }
