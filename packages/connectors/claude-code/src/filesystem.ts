@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { access, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import type { ClaudeCodeContext } from "./context.js";
 import { ClaudeCodeConnectorError } from "./errors.js";
@@ -21,21 +21,12 @@ export async function readClaudeMd(projectRoot: string): Promise<string | null> 
   const filePath = await claudeMdPath(projectRoot);
 
   try {
-    await access(filePath);
+    return await readFile(filePath, "utf8");
   } catch (error) {
     if (isNodeErrorWithCode(error, "ENOENT")) {
       return null;
     }
 
-    throw new ClaudeCodeConnectorError("claude_md_read_failed", "Failed to access CLAUDE.md.", {
-      cause: error,
-      filePath,
-    });
-  }
-
-  try {
-    return await readFile(filePath, "utf8");
-  } catch (error) {
     throw new ClaudeCodeConnectorError("claude_md_read_failed", "Failed to read CLAUDE.md.", {
       cause: error,
       filePath,
