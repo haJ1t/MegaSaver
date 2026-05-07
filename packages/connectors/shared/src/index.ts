@@ -9,3 +9,4 @@ export {
   type ConnectorErrorCode,
   connectorErrorCodeSchema,
 } from "./errors.js";
+export { renderBlock } from "./render.js";

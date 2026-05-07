@@ -32,7 +32,7 @@ export function buildContext(overrides?: {
           id: SESSION_ID,
           projectId: PROJECT_ID,
           agentId,
-          riskLevel: "MEDIUM",
+          riskLevel: "medium" as const,
           title: "smoke session",
           startedAt: NOW,
           endedAt: null,
