@@ -184,3 +184,7 @@ External review gate passed for `codex/connectors-claude-code` at commit `d44762
 ## [2026-05-07] schema | claude-code connector PR opened
 
 Pushed `codex/connectors-claude-code` to `origin` and opened draft PR <https://github.com/haJ1t/MegaSaver/pull/6> targeting `main`. Worktree preserved for PR iteration. Connector is not merged yet.
+
+## [2026-05-07] docs | readme refreshed
+
+Updated `README.md` on `codex/connectors-claude-code` to describe the current Mega Saver state: product mission, current packages, implemented bootstrap/shared/core/CLI/Claude connector slices, local development commands, wiki-first process, and not-yet-built v0.1 follow-ups. This is documentation-only and keeps the PR branch self-describing before merge review.
