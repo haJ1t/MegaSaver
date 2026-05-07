@@ -12,7 +12,7 @@ export function upsertBlock(input: UpsertBlockInput): string {
   const parsed = parseBlock(input.existingContent);
 
   if (parsed.block !== null) {
-    return joinWithManagedBlock(parsed.before, parsed.block, parsed.after, block);
+    return joinWithManagedBlock(parsed.before, parsed.after, block);
   }
 
   const humanContent = trimTrailingBoundaryForJoin(parsed.before);
@@ -36,7 +36,6 @@ export function removeBlock(content: string): string {
 
 function joinWithManagedBlock(
   before: string,
-  _existingBlock: string,
   after: string,
   newBlock: string,
 ): string {
