@@ -111,6 +111,8 @@ External review gate passed at commit `d447622`:
   generated declaration output, parser/updater/filesystem boundaries,
   and full `pnpm verify`.
 
+Draft PR opened as <https://github.com/haJ1t/MegaSaver/pull/6>.
+
 Accepted v0.1 residual risks: no optimistic concurrency on `CLAUDE.md`
 writes, no file mode/xattr preservation guarantees, and no
 `.claude/CLAUDE.md` support.

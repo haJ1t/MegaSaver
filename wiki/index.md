@@ -69,7 +69,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 ## Status
 
 Claude Code connector review passed on `codex/connectors-claude-code`;
-ready for PR/merge.
+draft PR #6 is open for merge review.
 CLI project CRUD merged. Bootstrap, project skeleton,
 `@megasaver/shared`, `@megasaver/core` (with `initStore` and
 JSON directory persistence), and `@megasaver/cli` (with
