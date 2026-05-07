@@ -43,7 +43,7 @@ describe("filesystem helpers", () => {
     await writeTargetFile({ absPath: path, content: "# user\n\n" });
     await syncTargetBlock({ absPath: path, context: buildContext() });
     const written = await readFile(path, "utf8");
-    expect(written.startsWith("# user\n\n\n<!--")).toBe(true);
+    expect(written.startsWith("# user\n\n<!--")).toBe(true);
   });
 
   it("writeTargetFile surfaces ENOTDIR/EACCES as file_write_failed", async () => {

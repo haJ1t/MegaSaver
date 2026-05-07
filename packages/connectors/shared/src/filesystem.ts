@@ -3,8 +3,6 @@ import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { type ConnectorContext } from "./context.js";
 import { ConnectorError } from "./errors.js";
-import { parseBlock } from "./parse.js";
-import { renderBlock } from "./render.js";
 import { upsertBlock } from "./upsert.js";
 
 interface WriteTargetFileInput {
@@ -45,16 +43,7 @@ export async function writeTargetFile(input: WriteTargetFileInput): Promise<void
 
 export async function syncTargetBlock(input: SyncTargetBlockInput): Promise<string> {
   const existing = (await readTargetFile(input.absPath)) ?? "";
-  const parsed = parseBlock(existing);
-  let content: string;
-  if (parsed.block !== null || existing.length === 0) {
-    // Replace existing block in place, or write fresh to an empty file — delegate to upsertBlock.
-    content = upsertBlock({ existingContent: existing, context: input.context });
-  } else {
-    // Human content exists but no managed block yet: preserve raw content (including trailing
-    // whitespace) and append one newline + the rendered block so user formatting is not altered.
-    content = `${existing}\n${renderBlock(input.context)}`;
-  }
+  const content = upsertBlock({ existingContent: existing, context: input.context });
   await writeTargetFile({ absPath: input.absPath, content });
   return content;
 }
