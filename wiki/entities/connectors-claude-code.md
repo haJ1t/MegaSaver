@@ -117,6 +117,15 @@ Accepted v0.1 residual risks: no optimistic concurrency on `CLAUDE.md`
 writes, no file mode/xattr preservation guarantees, and no
 `.claude/CLAUDE.md` support.
 
+## Refactor (2026-05-07)
+
+`@megasaver/connector-claude-code` is now a thin wrapper over
+`@megasaver/connectors-shared`. Render output is byte-identical to
+the pre-refactor implementation; a regression fixture
+(`test/regression-fixture.ts`) plus `test/regression.test.ts`
+enforces this. Public surface unchanged; `ClaudeCodeConnectorError`
+codes still exist as a 1:1 alias of the shared error codes.
+
 ## Related
 
 - [[entities/core]]
