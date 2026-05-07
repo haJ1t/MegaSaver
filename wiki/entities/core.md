@@ -7,7 +7,7 @@ sources:
   - docs/superpowers/specs/2026-05-06-cli-project-crud-design.md
 status: persistence-merged
 created: 2026-05-04
-updated: 2026-05-06
+updated: 2026-05-08
 ---
 
 # `@megasaver/core`
@@ -46,7 +46,7 @@ Agent-agnostic Core Engine. CLI and connectors build on this neutral package; ne
 
 ## Registry interface (`packages/core/src/registry.ts:7`)
 
-All methods are **synchronous** (return value, not Promise). Registry implementations may do file I/O internally but the surface stays sync.
+All methods are **synchronous** (return value, not Promise). Registry implementations may do file I/O internally but the surface stays sync. JSON-directory registry serialises create-style mutations (`createProject`, `createSession`, `createMemoryEntry`) via a sync `.projects.lock` file (5s acquire timeout, `Atomics.wait` 50ms backoff) — closes the duplicate-name TOCTOU race against concurrent writers. Stale-lock detection deferred (M3).
 
 ```ts
 interface CoreRegistry {
@@ -83,7 +83,7 @@ CLI must construct **full** entities — registry parses with strict Zod and rej
 
 ## Implementation status
 
-Foundation + JSON persistence: PR <https://github.com/haJ1t/MegaSaver/pull/4> (`0656114`). `initStore` + cli project CRUD consumer: PR <https://github.com/haJ1t/MegaSaver/pull/5> (`9003968`). Both on `origin/main`. 89 tests across 10 files.
+Foundation + JSON persistence: PR <https://github.com/haJ1t/MegaSaver/pull/4> (`0656114`). `initStore` + cli project CRUD consumer: PR <https://github.com/haJ1t/MegaSaver/pull/5> (`9003968`). M1 lock + M2 failure-mode tests: PR <https://github.com/haJ1t/MegaSaver/pull/9> (`0dc2e29`). All on `origin/main`. 96 tests across 12 files.
 
 ## Risk
 

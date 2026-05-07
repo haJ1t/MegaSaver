@@ -123,8 +123,22 @@ writes, no file mode/xattr preservation guarantees, and no
 `@megasaver/connectors-shared`. Render output is byte-identical to
 the pre-refactor implementation; a regression fixture
 (`test/regression-fixture.ts`) plus `test/regression.test.ts`
-enforces this. Public surface unchanged; `ClaudeCodeConnectorError`
+enforces this. Public surface preserved; `ClaudeCodeConnectorError`
 codes still exist as a 1:1 alias of the shared error codes.
+
+## Follow-ups merged (PR #9, 2026-05-08)
+
+`assertProjectRoot` now lives in `@megasaver/connectors-shared`
+(F3 hoist). `claudeMdPath` calls the shared helper through the
+existing `wrapSharedConnectorError` mapper, so callers still see
+`project_root_invalid`. Filesystem behaviour gained a symlink
+guard (refuse to replace symlinks) and file-mode preservation via
+the shared `writeTargetFile`. Render parity, public surface, and
+error codes are unchanged.
+
+Note (semver): `ClaudeCodeContextSchema` now requires a top-level
+`agentId: "claude-code"` field. PR #8 changeset was bumped from
+`patch` to `minor` to acknowledge this required-field addition.
 
 ## Related
 

@@ -72,12 +72,13 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-generic-cli connector implementation complete on
-`feat/generic-cli-connector`: `@megasaver/connectors-shared` plus
-`@megasaver/connector-generic-cli` (Codex `AGENTS.md` target).
-Claude-code connector refactored to consume shared helpers; render
-byte-identical (regression test asserts). `pnpm verify` green
-across 6 packages. PR + reviewers pending. Previously merged:
-README refresh PR #7, Claude Code connector PR #6, CLI project CRUD
-PR #5, bootstrap PRs. Next slot after this connector: Session CRUD,
-or the `mega connector sync` CLI command spec.
+generic-cli connector landed on `main` via PR #8 (`8679c4c`).
+Connector follow-ups (F1–F10) + core M1 file-lock + M2 failure-mode
+tests landed via PR #9 (`0dc2e29`). Six packages on `main`:
+`@megasaver/shared`, `@megasaver/core` (96 tests), `@megasaver/cli`,
+`@megasaver/connectors-shared` (56 tests), `@megasaver/connector-claude-code`
+(45 tests, byte-identical render parity), and
+`@megasaver/connector-generic-cli` (21 tests, Codex `AGENTS.md`
+target). Previously merged: README refresh PR #7, Claude Code
+connector PR #6, CLI project CRUD PR #5, bootstrap PRs. Next slot:
+Session CRUD, or the `mega connector sync` CLI command spec.

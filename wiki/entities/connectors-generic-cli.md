@@ -5,7 +5,7 @@ sources:
   - docs/superpowers/specs/2026-05-07-generic-cli-connector-design.md
 status: shipped
 created: 2026-05-07
-updated: 2026-05-07
+updated: 2026-05-08
 ---
 
 # `@megasaver/connector-generic-cli`
@@ -18,12 +18,18 @@ Manifest-driven connector. v0.1 ships one target: `codexTarget`
 - `ConnectorTarget` (interface): `{ id, agentId, relativePath }`
 - `codexTarget`, `builtinTargets`, `findTarget(id)`
 - `GenericCliContextSchema`, `assertGenericCliContext(input, target)`
-- `syncGenericCliTarget({ projectRoot, target, context })`
+- `syncGenericCliTarget({ projectRoot, target, context })` →
+  `Promise<string>`
 - `readGenericCliTarget({ projectRoot, target })`
 - `writeGenericCliTarget({ projectRoot, target, content })`
 - `GenericCliConnectorError`, `genericCliConnectorErrorCodeSchema`
-  codes: `target_unknown`, `context_invalid`, `block_conflict`,
-  `file_read_failed`, `file_write_failed`, `project_root_invalid`
+  codes: `context_invalid`, `block_conflict`, `file_read_failed`,
+  `file_write_failed`, `project_root_invalid`. (`target_unknown`
+  was reserved in v0.1 init but dropped in PR #9 — `findTarget`
+  returns `null`; thrower-style helper deferred until needed.)
+- `assertProjectRoot` delegated to `@megasaver/connectors-shared`
+  (PR #9 F3); per-connector wrappers map the shared
+  `target_path_invalid` to `project_root_invalid`.
 
 ## Validation
 
