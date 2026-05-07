@@ -158,11 +158,11 @@ function throwBlockConflict(): never {
 }
 
 function trimTrailingNewlines(content: string): string {
-  return content.replace(/(?:\r?\n)+$/u, "");
+  return content.replace(/[ \t]*(?:\r?\n[ \t]*)+$/u, "");
 }
 
 function trimLeadingNewlines(content: string): string {
-  return content.replace(/^(?:\r?\n)+/u, "");
+  return content.replace(/^(?:[ \t]*\r?\n)+[ \t]*/u, "");
 }
 
 function joinHumanContent(before: string, after: string): string {

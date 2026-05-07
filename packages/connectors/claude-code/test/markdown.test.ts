@@ -151,6 +151,14 @@ describe("upsertMegaSaverBlock", () => {
     );
   });
 
+  test("normalizes whitespace-only blank lines before appended block", () => {
+    const block = renderClaudeCodeContext(context);
+
+    expect(upsertMegaSaverBlock({ existingContent: "# Human\n   \n\t\n", context })).toBe(
+      `# Human\n\n${block}`,
+    );
+  });
+
   test("replaces an existing valid managed block", () => {
     const oldBlock = renderClaudeCodeContext({ project, session, memoryEntries: [] });
     const newBlock = renderClaudeCodeContext(context);
@@ -170,6 +178,18 @@ describe("upsertMegaSaverBlock", () => {
     expect(
       upsertMegaSaverBlock({
         existingContent: `# Human\n${oldBlock}After\n`,
+        context,
+      }),
+    ).toBe(`# Human\n\n${newBlock}\nAfter\n`);
+  });
+
+  test("normalizes whitespace-only blank lines around replaced block", () => {
+    const oldBlock = renderClaudeCodeContext({ project, session, memoryEntries: [] });
+    const newBlock = renderClaudeCodeContext(context);
+
+    expect(
+      upsertMegaSaverBlock({
+        existingContent: `# Human\n   \n${oldBlock}\t\nAfter\n`,
         context,
       }),
     ).toBe(`# Human\n\n${newBlock}\nAfter\n`);
