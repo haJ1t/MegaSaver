@@ -430,7 +430,7 @@ export function buildContext(overrides?: {
           id: SESSION_ID,
           projectId: PROJECT_ID,
           agentId,
-          riskLevel: "MEDIUM",
+          riskLevel: "medium",
           title: "smoke session",
           startedAt: NOW,
           endedAt: null,
@@ -671,7 +671,7 @@ describe("renderBlock", () => {
   it("renders session title and risk", () => {
     const block = renderBlock(buildContext({ withSession: true }));
     expect(block).toContain("Session: smoke session");
-    expect(block).toContain("Risk: MEDIUM");
+    expect(block).toContain("Risk: medium");
   });
 
   it("renders memory entries", () => {
@@ -1308,7 +1308,7 @@ const memoryId = memoryEntryIdSchema.parse("33333333-3333-4333-8333-333333333333
 
 const ctx = {
   project: { id: projectId, name: "demo", rootPath: "/tmp/demo", createdAt: "2026-05-07T12:00:00.000Z", updatedAt: "2026-05-07T12:00:00.000Z" },
-  session: { id: sessionId, projectId, agentId: "claude-code", riskLevel: "MEDIUM", title: "smoke session", startedAt: "2026-05-07T12:00:00.000Z", endedAt: null },
+  session: { id: sessionId, projectId, agentId: "claude-code", riskLevel: "medium", title: "smoke session", startedAt: "2026-05-07T12:00:00.000Z", endedAt: null },
   memoryEntries: [{ id: memoryId, projectId, sessionId, scope: "session", content: "first", createdAt: "2026-05-07T12:00:00.000Z" }],
 };
 process.stdout.write(JSON.stringify(renderClaudeCodeContext(ctx)));
@@ -1334,7 +1334,7 @@ Create `packages/connectors/claude-code/test/regression-fixture.ts`:
 // commit as a refactor of renderClaudeCodeContext defeats the purpose.
 export const PRE_REFACTOR_BLOCK = JSON.parse(
   // paste the JSON-encoded string from Step 2 here
-  '"<!-- MEGA SAVER:BEGIN -->\\n# Mega Saver Context\\n\\nAgent: claude-code\\nProject: demo (11111111-1111-4111-8111-111111111111)\\nSession: smoke session\\nRisk: MEDIUM\\n\\n## Memory\\n\\n- [session:33333333-3333-4333-8333-333333333333] first\\n<!-- MEGA SAVER:END -->\\n"',
+  '"<!-- MEGA SAVER:BEGIN -->\\n# Mega Saver Context\\n\\nAgent: claude-code\\nProject: demo (11111111-1111-4111-8111-111111111111)\\nSession: smoke session\\nRisk: medium\\n\\n## Memory\\n\\n- [session:33333333-3333-4333-8333-333333333333] first\\n<!-- MEGA SAVER:END -->\\n"',
 );
 ```
 
@@ -1842,7 +1842,7 @@ describe("claude-code render — pre-refactor parity", () => {
         id: sessionId,
         projectId,
         agentId,
-        riskLevel: "MEDIUM" as const,
+        riskLevel: "medium" as const,
         title: "smoke session",
         startedAt: NOW,
         endedAt: null,
