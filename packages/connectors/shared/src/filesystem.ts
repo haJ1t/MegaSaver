@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { lstat, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { ConnectorContext } from "./context.js";
 import { ConnectorError } from "./errors.js";
@@ -47,6 +47,14 @@ export async function writeTargetFile(input: WriteTargetFileInput): Promise<void
     }
   }
 
+  let existingMode: number | undefined;
+  try {
+    const st = await stat(input.absPath);
+    existingMode = st.mode & 0o777;
+  } catch {
+    // ENOENT — new file, skip mode preservation
+  }
+
   const tempPath = join(dirname(input.absPath), `.${randomUUID()}.tmp`);
   try {
     await writeFile(tempPath, input.content, "utf8");
@@ -57,6 +65,10 @@ export async function writeTargetFile(input: WriteTargetFileInput): Promise<void
       cause: error,
       filePath: input.absPath,
     });
+  }
+
+  if (existingMode !== undefined) {
+    await chmod(input.absPath, existingMode);
   }
 }
 

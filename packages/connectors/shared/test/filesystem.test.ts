@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -57,5 +57,14 @@ describe("filesystem helpers", () => {
     const err = await writeTargetFile({ absPath: link, content: "x" }).catch((e) => e);
     expect(err).toBeInstanceOf(ConnectorError);
     expect(err.code).toBe("file_write_failed");
+  });
+
+  it("writeTargetFile preserves existing file mode", async () => {
+    const path = join(root, "AGENTS.md");
+    await writeTargetFile({ absPath: path, content: "v1\n" });
+    await chmod(path, 0o600);
+    await writeTargetFile({ absPath: path, content: "v2\n" });
+    const s = await stat(path);
+    expect(s.mode & 0o777).toBe(0o600);
   });
 });
