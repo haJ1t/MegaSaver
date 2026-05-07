@@ -20,6 +20,7 @@ function issuePaths(input: unknown): string[] {
 describe("ClaudeCodeContextSchema", () => {
   test("accepts a valid Claude Code context", () => {
     const parsed = ClaudeCodeContextSchema.parse({
+      agentId: "claude-code",
       project,
       session,
       memoryEntries: [projectMemory, sessionMemory],
@@ -31,6 +32,7 @@ describe("ClaudeCodeContextSchema", () => {
 
   test("rejects a session from another agent", () => {
     const result = ClaudeCodeContextSchema.safeParse({
+      agentId: "claude-code",
       project,
       session: { ...session, agentId: "generic-cli" },
       memoryEntries: [projectMemory],
@@ -42,6 +44,7 @@ describe("ClaudeCodeContextSchema", () => {
   test("rejects a session from another project", () => {
     expect(
       issuePaths({
+        agentId: "claude-code",
         project,
         session: { ...session, projectId: otherProjectId },
         memoryEntries: [projectMemory],
@@ -52,6 +55,7 @@ describe("ClaudeCodeContextSchema", () => {
   test("rejects memory from another project", () => {
     expect(
       issuePaths({
+        agentId: "claude-code",
         project,
         session,
         memoryEntries: [{ ...projectMemory, projectId: otherProjectId }],
@@ -61,6 +65,7 @@ describe("ClaudeCodeContextSchema", () => {
 
   test("rejects session memory without matching session", () => {
     const result = ClaudeCodeContextSchema.safeParse({
+      agentId: "claude-code",
       project,
       session: null,
       memoryEntries: [sessionMemory],
@@ -72,6 +77,7 @@ describe("ClaudeCodeContextSchema", () => {
   test("rejects session memory from another session", () => {
     expect(
       issuePaths({
+        agentId: "claude-code",
         project,
         session,
         memoryEntries: [{ ...sessionMemory, sessionId: otherSessionId }],
@@ -81,6 +87,7 @@ describe("ClaudeCodeContextSchema", () => {
 
   test("rejects sentinel injection in rendered values", () => {
     const result = ClaudeCodeContextSchema.safeParse({
+      agentId: "claude-code",
       project: { ...project, name: MEGA_SAVER_BLOCK_START },
       session,
       memoryEntries: [projectMemory],
@@ -92,6 +99,7 @@ describe("ClaudeCodeContextSchema", () => {
   test("assertClaudeCodeContext throws a typed connector error", () => {
     expect(() =>
       assertClaudeCodeContext({
+        agentId: "claude-code",
         project,
         session: { ...session, agentId: "generic-cli" },
         memoryEntries: [],

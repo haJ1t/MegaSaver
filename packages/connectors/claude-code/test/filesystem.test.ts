@@ -13,6 +13,7 @@ import { project, projectMemory, session, sessionMemory } from "./fixtures.js";
 
 const roots: string[] = [];
 const context = {
+  agentId: "claude-code" as const,
   project,
   session,
   memoryEntries: [projectMemory, sessionMemory],
