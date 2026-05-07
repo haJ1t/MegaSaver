@@ -30,4 +30,15 @@ describe("ConnectorError", () => {
   it("rejects unknown codes via schema", () => {
     expect(() => new ConnectorError("nope" as never, "msg")).toThrow();
   });
+
+  it("forwards cause to Error.cause", () => {
+    const underlying = new Error("underlying");
+    const err = new ConnectorError("file_read_failed", "outer", { cause: underlying });
+    expect(err.cause).toBe(underlying);
+  });
+
+  it("does not set cause when omitted", () => {
+    const err = new ConnectorError("file_read_failed", "outer");
+    expect("cause" in err).toBe(false);
+  });
 });
