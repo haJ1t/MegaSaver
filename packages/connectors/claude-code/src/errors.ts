@@ -10,7 +10,7 @@ export const claudeCodeConnectorErrorCodeSchema = z.enum([
 
 export type ClaudeCodeConnectorErrorCode = z.infer<typeof claudeCodeConnectorErrorCodeSchema>;
 
-export interface ClaudeCodeConnectorErrorOptions {
+interface ClaudeCodeConnectorErrorOptions {
   cause?: unknown;
   filePath?: string | null;
 }
