@@ -22,7 +22,7 @@ updated: 2026-05-07
 ## Entities
 
 - [[entities/cli]] — `@megasaver/cli` `mega` command scaffold (v0.1).
-- [[entities/connectors-claude-code]] — `@megasaver/connector-claude-code` root `CLAUDE.md` adapter (review passed).
+- [[entities/connectors-claude-code]] — `@megasaver/connector-claude-code` root `CLAUDE.md` adapter (merged).
 - [[entities/core]] — `@megasaver/core` agent-agnostic engine foundation (v0.1).
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1).
 
@@ -68,11 +68,11 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Claude Code connector review passed on `codex/connectors-claude-code`;
-draft PR #6 is open for merge review.
+Claude Code connector merged via PR #6. README refresh is open as
+draft PR #7 on `codex/readme-current-state`.
 CLI project CRUD merged. Bootstrap, project skeleton,
 `@megasaver/shared`, `@megasaver/core` (with `initStore` and
 JSON directory persistence), and `@megasaver/cli` (with
 `mega doctor`, `mega project create`, `mega project list`) are
-all on `origin/main` via PR #5. Next slot after this connector:
+all on `origin/main` via PR #5. Next implementation slot:
 `connectors/generic-cli` or first `Session` CRUD.
