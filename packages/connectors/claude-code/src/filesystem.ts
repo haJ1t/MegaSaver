@@ -7,12 +7,12 @@ import { upsertMegaSaverBlock } from "./markdown.js";
 
 const CLAUDE_MD_FILE_NAME = "CLAUDE.md";
 
-export interface WriteClaudeMdInput {
+interface WriteClaudeMdInput {
   projectRoot: string;
   content: string;
 }
 
-export interface SyncClaudeMdContextInput {
+interface SyncClaudeMdContextInput {
   projectRoot: string;
   context: ClaudeCodeContext;
 }
