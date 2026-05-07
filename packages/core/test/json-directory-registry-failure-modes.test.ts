@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projectIdSchema } from "@megasaver/shared";
-import { afterEach, describe, it, expect } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { CorePersistenceError, createJsonDirectoryCoreRegistry } from "../src/index.js";
 
 const roots: string[] = [];

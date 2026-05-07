@@ -39,11 +39,10 @@ function withDirLock<T>(rootDir: string, fn: () => T): T {
       break;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-        throw new CorePersistenceError(
-          "store_write_failed",
-          "Failed to acquire registry lock.",
-          { cause: error, filePath: lockPath },
-        );
+        throw new CorePersistenceError("store_write_failed", "Failed to acquire registry lock.", {
+          cause: error,
+          filePath: lockPath,
+        });
       }
       // Brief sync wait to avoid tight-spinning while lock is held.
       const buf = new Int32Array(new SharedArrayBuffer(4));
