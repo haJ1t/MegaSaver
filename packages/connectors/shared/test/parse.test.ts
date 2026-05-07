@@ -26,8 +26,11 @@ describe("parseBlock", () => {
     expect(() => parseBlock(content)).toThrow(ConnectorError);
   });
 
-  it("rejects mismatched sentinel counts", () => {
+  it("rejects begin-only sentinel", () => {
     expect(() => parseBlock("<!-- MEGA SAVER:BEGIN -->\n")).toThrow(ConnectorError);
+  });
+
+  it("rejects end-only sentinel", () => {
     expect(() => parseBlock("<!-- MEGA SAVER:END -->\n")).toThrow(ConnectorError);
   });
 
