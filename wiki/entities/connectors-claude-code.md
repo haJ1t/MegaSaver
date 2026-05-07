@@ -4,9 +4,9 @@ tags: [entity, connector, claude-code, v0.1]
 sources:
   - docs/superpowers/specs/2026-05-06-claude-code-connector-design.md
   - https://code.claude.com/docs/en/memory
-status: implemented-review-pending
+status: review-passed
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
 # `@megasaver/connector-claude-code`
@@ -97,11 +97,23 @@ Risk: <risk/none>
 
 ## Implementation evidence
 
-Implemented on `codex/connectors-claude-code`. Tests: 43 connector
-tests across 5 files. Full `pnpm verify` passes with 4 packages and 205
-total tests. Built-package smoke imported `dist/index.js`,
-`syncClaudeMdContext` wrote root `CLAUDE.md`, and printed `true` /
-`true`.
+Implemented on `codex/connectors-claude-code`. Connector tests: 44
+tests across 5 files, including a built-package public export smoke.
+Full `pnpm verify` passes with 4 packages and 206 total tests.
+Built-package smoke imported `dist/index.js`, `syncClaudeMdContext`
+wrote root `CLAUDE.md`, and printed `true` / `true`.
+
+External review gate passed at commit `d447622`:
+
+- Production reviewer approved after connector typecheck, build, test,
+  and lint evidence.
+- Critic reviewer approved after checking named public exports,
+  generated declaration output, parser/updater/filesystem boundaries,
+  and full `pnpm verify`.
+
+Accepted v0.1 residual risks: no optimistic concurrency on `CLAUDE.md`
+writes, no file mode/xattr preservation guarantees, and no
+`.claude/CLAUDE.md` support.
 
 ## Related
 

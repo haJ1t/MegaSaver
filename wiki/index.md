@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
 # Wiki Index — Mega Saver
@@ -22,7 +22,7 @@ updated: 2026-05-06
 ## Entities
 
 - [[entities/cli]] — `@megasaver/cli` `mega` command scaffold (v0.1).
-- [[entities/connectors-claude-code]] — `@megasaver/connector-claude-code` root `CLAUDE.md` adapter (implemented, review pending).
+- [[entities/connectors-claude-code]] — `@megasaver/connector-claude-code` root `CLAUDE.md` adapter (review passed).
 - [[entities/core]] — `@megasaver/core` agent-agnostic engine foundation (v0.1).
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1).
 
@@ -68,8 +68,8 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Claude Code connector implemented on `codex/connectors-claude-code`;
-review gate pending.
+Claude Code connector review passed on `codex/connectors-claude-code`;
+ready for PR/merge.
 CLI project CRUD merged. Bootstrap, project skeleton,
 `@megasaver/shared`, `@megasaver/core` (with `initStore` and
 JSON directory persistence), and `@megasaver/cli` (with
