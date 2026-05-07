@@ -62,6 +62,22 @@ importers:
         specifier: ^22.0.0
         version: 22.19.17
 
+  packages/connectors/shared:
+    dependencies:
+      '@megasaver/core':
+        specifier: workspace:*
+        version: link:../../core
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+
   packages/core:
     dependencies:
       '@megasaver/shared':
