@@ -53,7 +53,7 @@ describe("sessionSchema", () => {
       ...validSession,
       id: "not-a-uuid",
       projectId: "not-a-uuid",
-      agentId: "codex",
+      agentId: "not-an-agent",
       riskLevel: "extreme",
       startedAt: "now",
       endedAt: "later",
@@ -86,7 +86,7 @@ describe("sessionSchema", () => {
 
   it("property: any shipped v0.1 agent id is accepted", () => {
     fc.assert(
-      fc.property(fc.constantFrom("claude-code", "generic-cli"), (agentId) => {
+      fc.property(fc.constantFrom("claude-code", "codex", "generic-cli"), (agentId) => {
         expect(sessionSchema.safeParse({ ...validSession, agentId }).success).toBe(true);
       }),
     );
@@ -96,7 +96,7 @@ describe("sessionSchema", () => {
     expectTypeOf<Session>().toMatchTypeOf<{
       id: string;
       projectId: string;
-      agentId: "claude-code" | "generic-cli";
+      agentId: "claude-code" | "codex" | "generic-cli";
       riskLevel: "low" | "medium" | "high" | "critical";
       title: string | null;
       startedAt: string;
