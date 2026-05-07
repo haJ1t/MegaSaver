@@ -54,6 +54,7 @@ Risk: <risk/none>
 - `MEGA_SAVER_BLOCK_START`
 - `MEGA_SAVER_BLOCK_END`
 - `claudeCodeConnectorErrorCodeSchema`
+- `ClaudeCodeConnectorErrorCode`
 - `ClaudeCodeConnectorError`
 - `ClaudeCodeContextSchema`
 - `assertClaudeCodeContext(input)`

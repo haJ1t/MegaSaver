@@ -91,6 +91,21 @@ export const CLAUDE_MD_FILE = "CLAUDE.md";
 export const MEGA_SAVER_BLOCK_START = "<!-- MEGA SAVER:BEGIN -->";
 export const MEGA_SAVER_BLOCK_END = "<!-- MEGA SAVER:END -->";
 
+export const claudeCodeConnectorErrorCodeSchema: z.ZodEnum<[
+  "claude_md_context_invalid",
+  "claude_md_block_conflict",
+  "claude_md_read_failed",
+  "claude_md_write_failed",
+  "project_root_invalid",
+]>;
+export type ClaudeCodeConnectorErrorCode = z.infer<
+  typeof claudeCodeConnectorErrorCodeSchema
+>;
+export class ClaudeCodeConnectorError extends Error {
+  readonly code: ClaudeCodeConnectorErrorCode;
+  readonly filePath: string | null;
+}
+
 export const ClaudeCodeContextSchema: z.ZodType<ClaudeCodeContext>;
 
 export interface ClaudeCodeContext {
@@ -105,6 +120,8 @@ export interface ClaudeMdDocument {
   managedBlock: string | null;
   contentAfterBlock: string;
 }
+
+export function assertClaudeCodeContext(input: unknown): ClaudeCodeContext;
 
 export function renderClaudeCodeContext(
   context: ClaudeCodeContext,
