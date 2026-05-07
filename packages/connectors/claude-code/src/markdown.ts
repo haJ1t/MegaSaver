@@ -90,7 +90,7 @@ export function upsertMegaSaverBlock(input: UpsertMegaSaverBlockInput): string {
     return joinWithManagedBlock(parsed.contentBeforeBlock, block, parsed.contentAfterBlock);
   }
 
-  const humanContent = trimTrailingNewlines(parsed.contentBeforeBlock);
+  const humanContent = trimTrailingBoundaryForJoin(parsed.contentBeforeBlock);
   if (humanContent.length === 0) {
     return block;
   }
@@ -157,17 +157,45 @@ function throwBlockConflict(): never {
   );
 }
 
-function trimTrailingNewlines(content: string): string {
-  return content.replace(/[ \t]*(?:\r?\n[ \t]*)+$/u, "");
+function trimTrailingBoundaryLines(content: string): string {
+  const lines = splitIndexedLines(content);
+  let end = lines.length;
+
+  while (end > 0 && normalizedLineIsBlank(lines[end - 1] as IndexedLine)) {
+    end -= 1;
+  }
+
+  return lines
+    .slice(0, end)
+    .map((line) => line.raw)
+    .join("");
 }
 
-function trimLeadingNewlines(content: string): string {
-  return content.replace(/^(?:[ \t]*\r?\n)+[ \t]*/u, "");
+function trimTrailingBoundaryForJoin(content: string): string {
+  return trimTrailingBoundaryLines(content).replace(/\r?\n$/u, "");
+}
+
+function trimLeadingBoundaryLines(content: string): string {
+  const lines = splitIndexedLines(content);
+  let start = 0;
+
+  while (start < lines.length && normalizedLineIsBlank(lines[start] as IndexedLine)) {
+    start += 1;
+  }
+
+  return lines
+    .slice(start)
+    .map((line) => line.raw)
+    .join("");
+}
+
+function normalizedLineIsBlank(line: IndexedLine): boolean {
+  return line.text.trim().length === 0;
 }
 
 function joinHumanContent(before: string, after: string): string {
-  const normalizedBefore = trimTrailingNewlines(before);
-  const normalizedAfter = trimLeadingNewlines(after);
+  const normalizedBefore = trimTrailingBoundaryForJoin(before);
+  const normalizedAfter = trimLeadingBoundaryLines(after);
 
   if (normalizedBefore.length === 0) {
     return normalizedAfter;
@@ -181,8 +209,8 @@ function joinHumanContent(before: string, after: string): string {
 }
 
 function joinWithManagedBlock(before: string, block: string, after: string): string {
-  const normalizedBefore = trimTrailingNewlines(before);
-  const normalizedAfter = trimLeadingNewlines(after);
+  const normalizedBefore = trimTrailingBoundaryForJoin(before);
+  const normalizedAfter = trimLeadingBoundaryLines(after);
   const prefix = normalizedBefore.length === 0 ? "" : `${normalizedBefore}\n\n`;
   const suffix = normalizedAfter.length === 0 ? "" : `\n${normalizedAfter}`;
 
@@ -190,5 +218,7 @@ function joinWithManagedBlock(before: string, block: string, after: string): str
 }
 
 function ensureTrailingNewline(content: string): string {
-  return `${trimTrailingNewlines(content)}\n`;
+  const normalized = trimTrailingBoundaryLines(content);
+
+  return normalized.endsWith("\n") ? normalized : `${normalized}\n`;
 }

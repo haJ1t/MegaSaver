@@ -194,6 +194,14 @@ describe("upsertMegaSaverBlock", () => {
       }),
     ).toBe(`# Human\n\n${newBlock}\nAfter\n`);
   });
+
+  test("preserves meaningful trailing spaces before the managed block", () => {
+    const block = renderClaudeCodeContext(context);
+
+    expect(upsertMegaSaverBlock({ existingContent: "# Human  \n", context })).toBe(
+      `# Human  \n\n${block}`,
+    );
+  });
 });
 
 describe("removeMegaSaverBlock", () => {
@@ -204,5 +212,11 @@ describe("removeMegaSaverBlock", () => {
 
   test("returns an empty string when only the managed block remains", () => {
     expect(removeMegaSaverBlock(renderClaudeCodeContext(context))).toBe("");
+  });
+
+  test("preserves indentation after the managed block", () => {
+    const block = renderClaudeCodeContext(context);
+
+    expect(removeMegaSaverBlock(`${block}\n  indented\n`)).toBe("  indented\n");
   });
 });
