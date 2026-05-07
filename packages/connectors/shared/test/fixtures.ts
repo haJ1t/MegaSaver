@@ -1,5 +1,5 @@
 import { memoryEntryIdSchema, projectIdSchema, sessionIdSchema } from "@megasaver/shared";
-import type { AgentId } from "@megasaver/shared";
+import type { AgentId, MemoryEntryId } from "@megasaver/shared";
 
 export const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 export const SESSION_ID = sessionIdSchema.parse("22222222-2222-4222-8222-222222222222");
@@ -11,7 +11,7 @@ export function buildContext(overrides?: {
   projectName?: string;
   withSession?: boolean;
   memoryEntries?: Array<{
-    id: string;
+    id: MemoryEntryId;
     scope: "project" | "session";
     content: string;
   }>;
@@ -39,7 +39,7 @@ export function buildContext(overrides?: {
         }
       : null,
     memoryEntries: (overrides?.memoryEntries ?? []).map((entry) => ({
-      id: entry.id as never,
+      id: entry.id,
       projectId: PROJECT_ID,
       sessionId: entry.scope === "session" ? SESSION_ID : null,
       scope: entry.scope,
