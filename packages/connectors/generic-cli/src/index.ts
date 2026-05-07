@@ -1,1 +1,6 @@
-export const PACKAGE_NAME = "@megasaver/connector-generic-cli";
+export {
+  builtinTargets,
+  codexTarget,
+  type ConnectorTarget,
+  findTarget,
+} from "./targets.js";
