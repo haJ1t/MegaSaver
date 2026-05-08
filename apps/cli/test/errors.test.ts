@@ -1,7 +1,12 @@
-import { CorePersistenceError } from "@megasaver/core";
+import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { NAME_CONTROL_CHARS_MESSAGE, mapErrorToCliMessage } from "../src/errors.js";
+import {
+  NAME_CONTROL_CHARS_MESSAGE,
+  mapErrorToCliMessage,
+  sessionAlreadyEndedMessage,
+  sessionNotFoundMessage,
+} from "../src/errors.js";
 
 describe("mapErrorToCliMessage", () => {
   it("maps a Zod validation failure on `name` to the documented message", () => {
@@ -106,6 +111,38 @@ describe("mapErrorToCliMessage", () => {
   it("rewraps a non-Error throwable to a generic message", () => {
     expect(mapErrorToCliMessage("plain string")).toEqual({
       message: "error: unexpected failure",
+      exitCode: 1,
+    });
+  });
+});
+
+describe("session error mappings", () => {
+  it("sessionNotFoundMessage formats the documented text and exit code 1", () => {
+    expect(sessionNotFoundMessage("abc")).toEqual({
+      message: 'error: session "abc" not found',
+      exitCode: 1,
+    });
+  });
+
+  it("sessionAlreadyEndedMessage includes the existing endedAt timestamp", () => {
+    expect(sessionAlreadyEndedMessage("abc", "2026-05-08T13:00:00.000Z")).toEqual({
+      message: 'error: session "abc" already ended at 2026-05-08T13:00:00.000Z',
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage funnels session_not_found through sessionNotFoundMessage", () => {
+    const err = new CoreRegistryError("session_not_found", "Session does not exist: abc");
+    expect(mapErrorToCliMessage(err, { kind: "session", id: "abc" })).toEqual({
+      message: 'error: session "abc" not found',
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage funnels project_not_found through projectNotFoundMessage", () => {
+    const err = new CoreRegistryError("project_not_found", "Project does not exist: demo");
+    expect(mapErrorToCliMessage(err, { kind: "project", name: "demo" })).toEqual({
+      message: 'error: project "demo" not found',
       exitCode: 1,
     });
   });
