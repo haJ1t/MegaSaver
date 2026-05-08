@@ -24,6 +24,9 @@ const titleSchema = z
   .string()
   .trim()
   .min(1)
+  // Same C0/C1 + DEL guard as projectNameSchema — keeps line-oriented output safe.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional
+  .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
   .transform((value) => value.normalize("NFC"));
 
 export type RunSessionCreateInput = {

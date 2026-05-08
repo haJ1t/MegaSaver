@@ -177,4 +177,14 @@ describe("sessionCreateCommand", () => {
     }>;
     expect(persisted[0]?.title).toBe("first session");
   });
+
+  it("rejects a title containing a control character with the documented error", async () => {
+    await seedProject(root, "demo");
+    await runCreate({ projectName: "demo", title: "first\nsession" });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.map((c) => c[0])).toEqual([
+      "error: title must not contain control characters",
+    ]);
+    expect(logSpy).not.toHaveBeenCalled();
+  });
 });

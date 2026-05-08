@@ -199,6 +199,21 @@ describe("error helpers — additional coverage", () => {
     });
   });
 
+  it("mapErrorToCliMessage maps ZodError + title with control-chars first issue to TITLE_CONTROL_CHARS_MESSAGE", () => {
+    const result = z
+      .string()
+      .trim()
+      .min(1)
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — mirrors the production schema guard
+      .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
+      .safeParse("first\nsession");
+    if (result.success) throw new Error("unreachable");
+    expect(mapErrorToCliMessage(result.error, { kind: "title" })).toEqual({
+      message: "error: title must not contain control characters",
+      exitCode: 1,
+    });
+  });
+
   it("mapErrorToCliMessage maps ZodError + sessionId to invalidSessionIdMessage with received value", () => {
     const err = new ZodError([
       {

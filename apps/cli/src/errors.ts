@@ -14,6 +14,7 @@ export type ZodContext =
 
 export const NAME_CONTROL_CHARS_MESSAGE = "name must not contain control characters";
 export const TITLE_EMPTY_MESSAGE = "title must not be empty";
+export const TITLE_CONTROL_CHARS_MESSAGE = "title must not contain control characters";
 export const AGENT_INVALID_MESSAGE_PREFIX = "error: invalid agent";
 export const RISK_INVALID_MESSAGE_PREFIX = "error: invalid risk";
 export const SESSION_ID_INVALID_PREFIX = "error: invalid session id";
@@ -76,6 +77,10 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
       return { message: "error: --store path must be non-empty", exitCode: 1 };
     }
     if (ctx?.kind === "title") {
+      const firstIssue = err.issues[0];
+      if (firstIssue?.message === NAME_CONTROL_CHARS_MESSAGE) {
+        return { message: `error: ${TITLE_CONTROL_CHARS_MESSAGE}`, exitCode: 1 };
+      }
       return { message: `error: ${TITLE_EMPTY_MESSAGE}`, exitCode: 1 };
     }
     if (ctx?.kind === "sessionId") {
