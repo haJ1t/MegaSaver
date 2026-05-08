@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { CoreRegistryError } from "@megasaver/core";
 import { agentIdSchema, riskLevelSchema, sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import {
   invalidRiskMessage,
   mapErrorToCliMessage,
   projectNotFoundMessage,
+  sessionAlreadyEndedMessage,
   sessionNotFoundMessage,
 } from "../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../store.js";
@@ -381,11 +383,120 @@ export const sessionShowCommand = defineCommand({
   },
 });
 
+export type RunSessionEndInput = {
+  sessionId: string;
+  storeFlag: string | undefined;
+  cwd: string;
+  home: string;
+  xdgDataHome: string | undefined;
+  stdout: (line: string) => void;
+  stderr: (line: string) => void;
+  /** Override for tests; defaults to () => new Date().toISOString(). */
+  now?: () => string;
+};
+
+export async function runSessionEnd(input: RunSessionEndInput): Promise<0 | 1> {
+  let rootDir: string;
+  try {
+    rootDir = resolveStorePath({
+      storeFlag: input.storeFlag,
+      cwd: input.cwd,
+      home: input.home,
+      xdgDataHome: input.xdgDataHome,
+    });
+  } catch (err) {
+    const cli = mapErrorToCliMessage(err, { kind: "store" });
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+
+  let id: ReturnType<typeof sessionIdSchema.parse>;
+  try {
+    id = sessionIdSchema.parse(input.sessionId);
+  } catch (err) {
+    const cli = mapErrorToCliMessage(err, { kind: "sessionId" });
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+
+  try {
+    const { registry, initialized } = await ensureStoreReady(rootDir);
+    if (initialized) {
+      input.stderr(`note: initialized store at ${rootDir}`);
+    }
+    const existing = registry.getSession(id);
+    if (!existing) {
+      const cli = sessionNotFoundMessage(id);
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
+    if (existing.endedAt !== null) {
+      const cli = sessionAlreadyEndedMessage(id, existing.endedAt);
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
+    const endedAt = (input.now ?? (() => new Date().toISOString()))();
+    try {
+      registry.endSession(id, { endedAt });
+    } catch (err) {
+      if (err instanceof CoreRegistryError && err.code === "session_already_ended") {
+        // Race with concurrent process: refresh and format the rich message.
+        const refreshed = registry.getSession(id);
+        const ts = refreshed?.endedAt ?? "unknown";
+        const cli = sessionAlreadyEndedMessage(id, ts);
+        input.stderr(cli.message);
+        return cli.exitCode;
+      }
+      throw err;
+    }
+    input.stdout(id);
+    return 0;
+  } catch (err) {
+    const cli = mapErrorToCliMessage(err);
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+}
+
+export const sessionEndCommand = defineCommand({
+  meta: { name: "end", description: "Mark a session as ended." },
+  args: {
+    sessionId: {
+      type: "positional",
+      required: true,
+      description: "Session id (UUID).",
+    },
+    store: { type: "string", description: "Override store directory." },
+  },
+  async run({ args }) {
+    const nowEnv =
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      typeof process.env["MEGA_TEST_NOW"] === "string"
+        ? // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+          process.env["MEGA_TEST_NOW"]
+        : undefined;
+    const code = await runSessionEnd({
+      sessionId: typeof args.sessionId === "string" ? args.sessionId : "",
+      storeFlag: typeof args.store === "string" ? args.store : undefined,
+      cwd: process.cwd(),
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      home: process.env["HOME"] ?? "",
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      xdgDataHome: process.env["XDG_DATA_HOME"],
+      stdout: (line) => console.log(line),
+      stderr: (line) => console.error(line),
+      ...(nowEnv !== undefined ? { now: () => nowEnv } : {}),
+    });
+    if (code !== 0) process.exitCode = code;
+  },
+});
+
 export const sessionCommand = defineCommand({
   meta: { name: "session", description: "Manage Mega Saver sessions." },
   subCommands: {
     create: sessionCreateCommand,
     list: sessionListCommand,
     show: sessionShowCommand,
+    end: sessionEndCommand,
   },
 });

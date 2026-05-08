@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   sessionCreateCommand,
+  sessionEndCommand,
   sessionListCommand,
   sessionShowCommand,
 } from "../src/commands/session.js";
@@ -401,6 +402,118 @@ describe("sessionShowCommand", () => {
       errSpy.mock.calls.some(
         (c) => c[0] === 'error: session "99999999-9999-4999-8999-999999999999" not found',
       ),
+    ).toBe(true);
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("sessionEndCommand", () => {
+  let root: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const originalNow = process.env["MEGA_TEST_NOW"];
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "megasaver-cli-session-end-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    process.env["MEGA_TEST_NOW"] = "2026-05-08T13:00:00.000Z";
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    // biome-ignore lint/performance/noDelete: restoring env to absent state requires delete
+    if (originalNow === undefined) delete process.env["MEGA_TEST_NOW"];
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    else process.env["MEGA_TEST_NOW"] = originalNow;
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function runEnd(id: string): Promise<void> {
+    await sessionEndCommand.run?.({
+      args: { sessionId: id, store: root },
+      cmd: sessionEndCommand,
+      rawArgs: [id, "--store", root],
+      data: undefined,
+    } as never);
+  }
+
+  async function seedSession(endedAt: string | null): Promise<void> {
+    await mkdir(root, { recursive: true });
+    const ts = "2026-05-08T12:00:00.000Z";
+    await writeFile(
+      join(root, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "demo", rootPath: "/tmp/demo", createdAt: ts, updatedAt: ts },
+      ]),
+    );
+    await writeFile(
+      join(root, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESSION_ID,
+          projectId: PROJECT_ID,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: null,
+          startedAt: ts,
+          endedAt,
+        },
+      ]),
+    );
+  }
+
+  it("ends an open session, prints the id, and persists endedAt", async () => {
+    await seedSession(null);
+    await runEnd(SESSION_ID);
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls.map((c) => c[0])).toEqual([SESSION_ID]);
+    const persisted = JSON.parse(await readFile(join(root, "sessions.json"), "utf8")) as Array<{
+      endedAt: string | null;
+    }>;
+    expect(persisted[0]?.endedAt).toBe("2026-05-08T13:00:00.000Z");
+  });
+
+  it("rejects an already-ended session with the documented message including the original endedAt", async () => {
+    await seedSession("2026-05-08T13:00:00.000Z");
+    await runEnd(SESSION_ID);
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some(
+        (c) => c[0] === `error: session "${SESSION_ID}" already ended at 2026-05-08T13:00:00.000Z`,
+      ),
+    ).toBe(true);
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing session with the documented error", async () => {
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "projects.json"), "[]");
+    await writeFile(join(root, "sessions.json"), "[]");
+    await runEnd("99999999-9999-4999-8999-999999999999");
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some(
+        (c) => c[0] === 'error: session "99999999-9999-4999-8999-999999999999" not found',
+      ),
+    ).toBe(true);
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid session id with the documented error", async () => {
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "projects.json"), "[]");
+    await writeFile(join(root, "sessions.json"), "[]");
+    await runEnd("nope");
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some((c) => (c[0] as string).startsWith("error: invalid session id")),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
   });
