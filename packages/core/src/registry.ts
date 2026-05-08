@@ -11,6 +11,7 @@ export interface CoreRegistry {
   createSession(session: Session): Session;
   getSession(id: SessionId): Session | null;
   listSessions(projectId: ProjectId): Session[];
+  endSession(id: SessionId, opts: { endedAt: string }): Session;
   createMemoryEntry(entry: MemoryEntry): MemoryEntry;
   getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
   listMemoryEntries(projectId: ProjectId): MemoryEntry[];
@@ -74,6 +75,21 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       return Array.from(sessions.values())
         .filter((session) => session.projectId === projectId)
         .map((session) => sessionSchema.parse(session));
+    },
+
+    endSession(id, opts) {
+      // No requireProject check: a session existing in the registry implies its project
+      // existed at create-time, and the registry does not delete projects.
+      const existing = sessions.get(id);
+      if (!existing) {
+        throw new CoreRegistryError("session_not_found", `Session does not exist: ${id}`);
+      }
+      if (existing.endedAt !== null) {
+        throw new CoreRegistryError("session_already_ended", `Session already ended: ${id}`);
+      }
+      const updated = sessionSchema.parse({ ...existing, endedAt: opts.endedAt });
+      sessions.set(id, updated);
+      return updated;
     },
 
     createMemoryEntry(entry) {

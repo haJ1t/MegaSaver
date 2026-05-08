@@ -13,6 +13,7 @@ const codes: ReadonlyArray<CoreRegistryErrorCode> = [
   "project_already_exists",
   "project_not_found",
   "session_already_exists",
+  "session_already_ended",
   "session_not_found",
   "session_project_mismatch",
   "memory_entry_already_exists",
