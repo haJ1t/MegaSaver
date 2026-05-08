@@ -203,4 +203,26 @@ describe("projectCreateCommand", () => {
     }>;
     expect(persisted).toHaveLength(1);
   });
+
+  it("rejects NFD-equivalent of an existing NFC project name with the CLI duplicate message", async () => {
+    // First create with NFC name: "café" where é is U+00E9 (precomposed).
+    await runCreate("café");
+    logSpy.mockClear();
+    errSpy.mockClear();
+    process.exitCode = 0;
+
+    // Now try to create with NFD-equivalent: "café" where é is e + U+0301 (combining acute).
+    // nameSchema normalizes both to NFC, so the CLI duplicate guard fires.
+    await runCreate("café");
+
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.some((c) => (c[0] as string).includes("already exists"))).toBe(true);
+    expect(logSpy).not.toHaveBeenCalled();
+
+    const persisted = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
+      id: string;
+      name: string;
+    }>;
+    expect(persisted).toHaveLength(1);
+  });
 });

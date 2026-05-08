@@ -98,4 +98,55 @@ describe("projectSchema", () => {
       updatedAt: string;
     }>();
   });
+
+  it("normalizes name to NFC form", () => {
+    const NOW = "2026-05-08T12:00:00.000Z";
+    // NFD input: "caf" + e (U+0065) + combining acute accent (U+0301) = 5 chars
+    const nfdName = "café";
+    const parsed = projectSchema.parse({
+      id: PROJECT_ID,
+      name: nfdName,
+      rootPath: "/tmp/demo",
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    // NFC output: "caf" + e-with-acute (U+00E9) = 4 chars
+    expect(parsed.name).toBe("café");
+    expect(parsed.name.length).toBe(4);
+  });
+
+  it("re-parsing transformed output is byte-equal", () => {
+    const NOW = "2026-05-08T12:00:00.000Z";
+    // Use explicit \u escapes to lock the byte sequence regardless of
+    // how the editor saves multibyte characters in the source file.
+    const nfdInput = "café"; // NFD: 5 code units
+    const nfcExpected = "café"; // NFC: 4 code units
+    const first = projectSchema.parse({
+      id: PROJECT_ID,
+      name: nfdInput,
+      rootPath: "/tmp/demo",
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(first.name).toBe(nfcExpected);
+    expect(first.name.length).toBe(4);
+    // Second parse on already-NFC output is a no-op (idempotent).
+    const second = projectSchema.parse(first);
+    expect(second.name).toBe(first.name);
+    expect(second.name.length).toBe(4);
+  });
+
+  it("does not normalize rootPath", () => {
+    const NOW = "2026-05-08T12:00:00.000Z";
+    // NFD bytes in rootPath — schema must not touch it
+    const rootPath = "/tmp/café";
+    const parsed = projectSchema.parse({
+      id: PROJECT_ID,
+      name: "demo",
+      rootPath,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(parsed.rootPath).toBe(rootPath);
+  });
 });

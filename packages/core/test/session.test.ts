@@ -103,4 +103,25 @@ describe("sessionSchema", () => {
       endedAt: string | null;
     }>();
   });
+
+  it("normalizes title to NFC form", () => {
+    // NFD input: c-a-f-e-́ (5 code units, combining acute accent)
+    const nfdTitle = "café";
+    // NFC expected: c-a-f-é (4 code units, precomposed é)
+    const nfcExpected = "café";
+    const parsed = sessionSchema.parse({
+      ...validSession,
+      title: nfdTitle,
+    });
+    expect(parsed.title).toBe(nfcExpected);
+    expect(parsed.title?.length).toBe(4);
+  });
+
+  it("preserves null title without normalization", () => {
+    const parsed = sessionSchema.parse({
+      ...validSession,
+      title: null,
+    });
+    expect(parsed.title).toBeNull();
+  });
 });

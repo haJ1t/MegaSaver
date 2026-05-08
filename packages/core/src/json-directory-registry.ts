@@ -1,4 +1,4 @@
-import { closeSync, mkdirSync, openSync, rmSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from "node:fs";
 import path from "node:path";
 import type { ProjectId } from "@megasaver/shared";
 import { CorePersistenceError, CoreRegistryError } from "./errors.js";
@@ -21,21 +21,44 @@ export type JsonDirectoryCoreRegistryOptions = {
   rootDir: string;
 };
 
+function isLockHolderAlive(lockPath: string): boolean {
+  let raw: string;
+  try {
+    raw = readFileSync(lockPath, "utf8");
+  } catch {
+    // lockfile vanished between EEXIST and read — treat as gone
+    return false;
+  }
+  const pid = Number.parseInt(raw.trim(), 10);
+  if (!Number.isInteger(pid) || pid <= 0) {
+    // malformed payload — treat as stale, reclaim
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") {
+      return false; // confirmed dead
+    }
+    // EPERM (process exists but signal blocked), other → conservative alive
+    return true;
+  }
+}
+
 // Single-developer scale: a .lock file in rootDir acts as a mutex for
 // create operations that follow a read-check-write pattern (TOCTOU).
-// A stale lock (e.g. from a crashed process) will block new creates
-// for up to 5 seconds before surfacing store_write_failed — acceptable
-// for v0.1 where concurrent writers are rare.
+// PID is written into the lock file; a stale holder (crashed process)
+// is detected via process.kill(pid, 0) and the lock is reclaimed.
 function withDirLock<T>(rootDir: string, fn: () => T): T {
   const lockPath = path.join(rootDir, ".projects.lock");
-  // Ensure rootDir exists before attempting to create the lock file.
-  // The store creates it lazily on first write, but we need it earlier.
   mkdirSync(rootDir, { recursive: true });
   const deadline = Date.now() + 5000; // 5s acquire timeout
   let fd: number | undefined;
   while (Date.now() < deadline) {
     try {
       fd = openSync(lockPath, "wx");
+      writeSync(fd, String(process.pid));
       break;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
@@ -44,7 +67,14 @@ function withDirLock<T>(rootDir: string, fn: () => T): T {
           filePath: lockPath,
         });
       }
-      // Brief sync wait to avoid tight-spinning while lock is held.
+      if (!isLockHolderAlive(lockPath)) {
+        try {
+          rmSync(lockPath, { force: true });
+          continue; // reclaim succeeded — immediate retry
+        } catch {
+          // reclaim failed (e.g. permission denied) — fall through to backoff
+        }
+      }
       const buf = new Int32Array(new SharedArrayBuffer(4));
       Atomics.wait(buf, 0, 0, 50);
     }
