@@ -106,6 +106,16 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
     if (err.code === "session_not_found" && ctx?.kind === "session") {
       return sessionNotFoundMessage(ctx.id);
     }
+    // Outer-catch fall-through from runSessionEnd's three-way race (session
+    // vanished after the pre-check AND after the inner catch's getSession
+    // refresh). We have no endedAt in scope here, so produce the id-only
+    // shape rather than the rich "already ended at <ts>" shape.
+    if (err.code === "session_already_ended" && ctx?.kind === "session") {
+      return {
+        message: `error: session "${ctx.id}" already ended`,
+        exitCode: 1,
+      };
+    }
     return { message: `error: ${err.message}`, exitCode: 1 };
   }
   if (err instanceof CorePersistenceError) {
