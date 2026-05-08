@@ -115,20 +115,21 @@ describe("projectSchema", () => {
     expect(parsed.name.length).toBe(4);
   });
 
-  it("is idempotent on already-NFC names", () => {
+  it("re-parsing transformed output is byte-equal", () => {
     const NOW = "2026-05-08T12:00:00.000Z";
-    // NFC input: "caf" + e-with-acute (U+00E9)
-    const nfcName = "café";
+    // Input is NFD; first parse must transform to NFC.
     const first = projectSchema.parse({
       id: PROJECT_ID,
-      name: nfcName,
+      name: "café", // NFD: "cafe" + combining U+0301
       rootPath: "/tmp/demo",
       createdAt: NOW,
       updatedAt: NOW,
     });
+    expect(first.name).toBe("café"); // NFC: precomposed U+00E9
+    // Second parse on already-NFC output is a no-op (idempotent).
     const second = projectSchema.parse(first);
     expect(second.name).toBe(first.name);
-    expect(second.name).toBe("café");
+    expect(second.name.length).toBe(4); // NFC: 4 code units
   });
 
   it("does not normalize rootPath", () => {
