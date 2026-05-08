@@ -1,9 +1,13 @@
 import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
+import { ZodError, z } from "zod";
 import {
   NAME_CONTROL_CHARS_MESSAGE,
+  invalidAgentMessage,
+  invalidRiskMessage,
+  invalidSessionIdMessage,
   mapErrorToCliMessage,
+  projectNotFoundMessage,
   sessionAlreadyEndedMessage,
   sessionNotFoundMessage,
 } from "../src/errors.js";
@@ -143,6 +147,78 @@ describe("session error mappings", () => {
     const err = new CoreRegistryError("project_not_found", "Project does not exist: demo");
     expect(mapErrorToCliMessage(err, { kind: "project", name: "demo" })).toEqual({
       message: 'error: project "demo" not found',
+      exitCode: 1,
+    });
+  });
+});
+
+describe("error helpers — additional coverage", () => {
+  it("invalidAgentMessage formats expected list of valid agents", () => {
+    expect(invalidAgentMessage("totally-fake")).toEqual({
+      message: 'error: invalid agent "totally-fake", expected: claude-code | codex | generic-cli',
+      exitCode: 1,
+    });
+  });
+
+  it("invalidRiskMessage formats expected list of valid risk levels", () => {
+    expect(invalidRiskMessage("ULTRA")).toEqual({
+      message: 'error: invalid risk "ULTRA", expected: low | medium | high | critical',
+      exitCode: 1,
+    });
+  });
+
+  it("invalidSessionIdMessage formats the offending value", () => {
+    expect(invalidSessionIdMessage("nope")).toEqual({
+      message: 'error: invalid session id "nope"',
+      exitCode: 1,
+    });
+  });
+
+  it("projectNotFoundMessage formats the documented text", () => {
+    expect(projectNotFoundMessage("ghost")).toEqual({
+      message: 'error: project "ghost" not found',
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage maps ZodError + title to TITLE_EMPTY_MESSAGE", () => {
+    const err = new ZodError([
+      {
+        code: "too_small",
+        minimum: 1,
+        type: "string",
+        inclusive: true,
+        exact: false,
+        path: [],
+        message: "Too small",
+      },
+    ]);
+    expect(mapErrorToCliMessage(err, { kind: "title" })).toEqual({
+      message: "error: title must not be empty",
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage maps ZodError + sessionId to invalidSessionIdMessage with received value", () => {
+    const err = new ZodError([
+      {
+        code: "invalid_type",
+        expected: "string",
+        received: "number",
+        path: [],
+        message: "Expected string",
+      },
+    ]);
+    expect(mapErrorToCliMessage(err, { kind: "sessionId" })).toEqual({
+      message: 'error: invalid session id "number"',
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage maps ZodError + sessionId without received to <unknown>", () => {
+    const err = new ZodError([{ code: "custom", path: [], message: "no received field here" }]);
+    expect(mapErrorToCliMessage(err, { kind: "sessionId" })).toEqual({
+      message: 'error: invalid session id "<unknown>"',
       exitCode: 1,
     });
   });

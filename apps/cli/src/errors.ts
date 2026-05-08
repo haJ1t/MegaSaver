@@ -1,4 +1,5 @@
 import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
+import type { AgentId, RiskLevel } from "@megasaver/shared";
 import { ZodError } from "zod";
 
 export type CliMessage = { message: string; exitCode: 1 };
@@ -6,8 +7,6 @@ export type CliMessage = { message: string; exitCode: 1 };
 export type ZodContext =
   | { kind: "name" }
   | { kind: "store" }
-  | { kind: "agent" }
-  | { kind: "risk" }
   | { kind: "title" }
   | { kind: "sessionId" }
   | { kind: "project"; name: string }
@@ -19,8 +18,11 @@ export const AGENT_INVALID_MESSAGE_PREFIX = "error: invalid agent";
 export const RISK_INVALID_MESSAGE_PREFIX = "error: invalid risk";
 export const SESSION_ID_INVALID_PREFIX = "error: invalid session id";
 
-const AGENT_VALUES = ["claude-code", "codex", "generic-cli"] as const;
-const RISK_VALUES = ["low", "medium", "high", "critical"] as const;
+// Keep in sync with agentIdSchema in @megasaver/shared.
+// `satisfies` makes a new variant in the shared schema fail typecheck here.
+const AGENT_VALUES = ["claude-code", "codex", "generic-cli"] as const satisfies readonly AgentId[];
+// Keep in sync with riskLevelSchema in @megasaver/shared.
+const RISK_VALUES = ["low", "medium", "high", "critical"] as const satisfies readonly RiskLevel[];
 
 export function duplicateNameMessage(name: string): CliMessage {
   return {
@@ -77,8 +79,10 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
       return { message: `error: ${TITLE_EMPTY_MESSAGE}`, exitCode: 1 };
     }
     if (ctx?.kind === "sessionId") {
+      // Zod's `invalid_type` issue carries a `received` field with the offending value;
+      // other issue codes don't, so fall back to "<unknown>".
       const issue = err.issues[0];
-      const value = (issue && "received" in issue ? String(issue.received) : "<unknown>");
+      const value = issue && "received" in issue ? String(issue.received) : "<unknown>";
       return invalidSessionIdMessage(value);
     }
     const firstIssue = err.issues[0];
@@ -96,10 +100,6 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
     }
     if (err.code === "session_not_found" && ctx?.kind === "session") {
       return sessionNotFoundMessage(ctx.id);
-    }
-    if (err.code === "session_not_found") {
-      // Fallback when no ctx is supplied (rare; surface the raw message).
-      return { message: `error: ${err.message}`, exitCode: 1 };
     }
     return { message: `error: ${err.message}`, exitCode: 1 };
   }
