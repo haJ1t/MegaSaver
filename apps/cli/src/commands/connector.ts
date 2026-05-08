@@ -6,6 +6,7 @@ import {
   assertProjectRoot,
   readTargetFile,
   renderBlock,
+  upsertBlock,
   writeTargetFile,
 } from "@megasaver/connectors-shared";
 import type { Project, Session } from "@megasaver/core";
@@ -154,8 +155,14 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
         continue;
       }
 
-      // wrote/noop branches land in T4.
-      input.stdout(formatStatusLine(target, "skipped"));
+      const context = buildConnectorContext(target, project, registry.listSessions(project.id));
+      const newContent = upsertBlock({ existingContent: existing, context });
+      if (newContent === existing) {
+        input.stdout(formatStatusLine(target, "noop"));
+        continue;
+      }
+      await writeTargetFile({ absPath, content: newContent });
+      input.stdout(formatStatusLine(target, "wrote"));
     }
     return 0;
   } catch (err) {
