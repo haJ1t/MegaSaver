@@ -117,19 +117,23 @@ describe("projectSchema", () => {
 
   it("re-parsing transformed output is byte-equal", () => {
     const NOW = "2026-05-08T12:00:00.000Z";
-    // Input is NFD; first parse must transform to NFC.
+    // Use explicit \u escapes to lock the byte sequence regardless of
+    // how the editor saves multibyte characters in the source file.
+    const nfdInput = "café"; // NFD: 5 code units
+    const nfcExpected = "café"; // NFC: 4 code units
     const first = projectSchema.parse({
       id: PROJECT_ID,
-      name: "café", // NFD: "cafe" + combining U+0301
+      name: nfdInput,
       rootPath: "/tmp/demo",
       createdAt: NOW,
       updatedAt: NOW,
     });
-    expect(first.name).toBe("café"); // NFC: precomposed U+00E9
+    expect(first.name).toBe(nfcExpected);
+    expect(first.name.length).toBe(4);
     // Second parse on already-NFC output is a no-op (idempotent).
     const second = projectSchema.parse(first);
     expect(second.name).toBe(first.name);
-    expect(second.name.length).toBe(4); // NFC: 4 code units
+    expect(second.name.length).toBe(4);
   });
 
   it("does not normalize rootPath", () => {
