@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { sessionCreateCommand, sessionListCommand } from "../src/commands/session.js";
+import {
+  sessionCreateCommand,
+  sessionListCommand,
+  sessionShowCommand,
+} from "../src/commands/session.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const SESSION_ID = "22222222-2222-4222-8222-222222222222";
@@ -285,6 +289,112 @@ describe("sessionListCommand", () => {
     await runList("ghost");
     expect(process.exitCode).toBe(1);
     expect(errSpy.mock.calls.some((c) => c[0] === 'error: project "ghost" not found')).toBe(true);
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("sessionShowCommand", () => {
+  let root: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "megasaver-cli-session-show-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function runShow(id: string): Promise<void> {
+    await sessionShowCommand.run?.({
+      args: { sessionId: id, store: root },
+      cmd: sessionShowCommand,
+      rawArgs: [id, "--store", root],
+      data: undefined,
+    } as never);
+  }
+
+  async function seedSession(opts: {
+    title: string | null;
+    endedAt: string | null;
+  }): Promise<void> {
+    await mkdir(root, { recursive: true });
+    const ts = "2026-05-08T00:00:00.000Z";
+    await writeFile(
+      join(root, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "demo", rootPath: "/tmp/demo", createdAt: ts, updatedAt: ts },
+      ]),
+    );
+    await writeFile(
+      join(root, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESSION_ID,
+          projectId: PROJECT_ID,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: opts.title,
+          startedAt: ts,
+          endedAt: opts.endedAt,
+        },
+      ]),
+    );
+  }
+
+  it("prints seven aligned key=value lines for a session with null title and null endedAt", async () => {
+    await seedSession({ title: null, endedAt: null });
+    await runShow(SESSION_ID);
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
+      `id          ${SESSION_ID}`,
+      `project     ${PROJECT_ID}`,
+      "agent       claude-code",
+      "risk        medium",
+      "title       -",
+      "startedAt   2026-05-08T00:00:00.000Z",
+      "endedAt     -",
+    ]);
+  });
+
+  it("renders a non-null title and a non-null endedAt without the dash placeholder", async () => {
+    await seedSession({ title: "first", endedAt: "2026-05-08T01:00:00.000Z" });
+    await runShow(SESSION_ID);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines).toContain("title       first");
+    expect(lines).toContain("endedAt     2026-05-08T01:00:00.000Z");
+  });
+
+  it("rejects an invalid session id (not a UUID) with the documented error", async () => {
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "projects.json"), "[]");
+    await writeFile(join(root, "sessions.json"), "[]");
+    await runShow("not-a-uuid");
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some((c) => (c[0] as string).startsWith("error: invalid session id")),
+    ).toBe(true);
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing session with the documented error", async () => {
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "projects.json"), "[]");
+    await writeFile(join(root, "sessions.json"), "[]");
+    await runShow("99999999-9999-4999-8999-999999999999");
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some(
+        (c) => c[0] === 'error: session "99999999-9999-4999-8999-999999999999" not found',
+      ),
+    ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
   });
 });
