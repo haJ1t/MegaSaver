@@ -12,7 +12,12 @@ export const sessionSchema = z
     projectId: projectIdSchema,
     agentId: agentIdSchema,
     riskLevel: riskLevelSchema,
-    title: z.string().trim().min(1).nullable(),
+    title: z
+      .string()
+      .trim()
+      .min(1)
+      .transform((value) => value.normalize("NFC"))
+      .nullable(),
     startedAt: z.string().datetime({ offset: true }),
     endedAt: z.string().datetime({ offset: true }).nullable(),
   })
