@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { sessionCreateCommand } from "../src/commands/session.js";
+import { sessionCreateCommand, sessionListCommand } from "../src/commands/session.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const SESSION_ID = "22222222-2222-4222-8222-222222222222";
@@ -185,6 +185,106 @@ describe("sessionCreateCommand", () => {
     expect(errSpy.mock.calls.map((c) => c[0])).toEqual([
       "error: title must not contain control characters",
     ]);
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("sessionListCommand", () => {
+  let root: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "megasaver-cli-session-list-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function runList(projectName: string): Promise<void> {
+    await sessionListCommand.run?.({
+      args: { projectName, store: root },
+      cmd: sessionListCommand,
+      rawArgs: [projectName, "--store", root],
+      data: undefined,
+    } as never);
+  }
+
+  async function seedTwoSessions(): Promise<void> {
+    await mkdir(root, { recursive: true });
+    const ts = "2026-05-08T00:00:00.000Z";
+    await writeFile(
+      join(root, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "demo", rootPath: "/tmp/demo", createdAt: ts, updatedAt: ts },
+      ]),
+    );
+    await writeFile(
+      join(root, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESSION_ID,
+          projectId: PROJECT_ID,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: null,
+          startedAt: ts,
+          endedAt: null,
+        },
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          projectId: PROJECT_ID,
+          agentId: "codex",
+          riskLevel: "high",
+          title: "second",
+          startedAt: ts,
+          endedAt: null,
+        },
+      ]),
+    );
+  }
+
+  it("prints one line per session in array order with the documented columns", async () => {
+    await seedTwoSessions();
+    await runList("demo");
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
+      `${SESSION_ID}  claude-code  medium  -`,
+      "33333333-3333-4333-8333-333333333333  codex  high  second",
+    ]);
+  });
+
+  it("prints empty stdout for a project with no sessions", async () => {
+    await mkdir(root, { recursive: true });
+    const ts = "2026-05-08T00:00:00.000Z";
+    await writeFile(
+      join(root, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "empty", rootPath: "/tmp/x", createdAt: ts, updatedAt: ts },
+      ]),
+    );
+    await writeFile(join(root, "sessions.json"), "[]");
+
+    await runList("empty");
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing project name with the documented error", async () => {
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "projects.json"), "[]");
+    await writeFile(join(root, "sessions.json"), "[]");
+
+    await runList("ghost");
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.some((c) => c[0] === 'error: project "ghost" not found')).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
   });
 });
