@@ -7,7 +7,7 @@ sources:
   - docs/superpowers/specs/2026-05-06-cli-project-crud-design.md
 status: persistence-merged
 created: 2026-05-04
-updated: 2026-05-09
+updated: 2026-05-08
 ---
 
 # `@megasaver/core`
@@ -56,6 +56,7 @@ interface CoreRegistry {
   createSession(session: Session): Session;
   getSession(id: SessionId): Session | null;
   listSessions(projectId: ProjectId): Session[];
+  endSession(id: SessionId, opts: { endedAt: string }): Session;
   createMemoryEntry(entry: MemoryEntry): MemoryEntry;
   getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
   listMemoryEntries(projectId: ProjectId): MemoryEntry[];
@@ -70,7 +71,7 @@ CLI must construct **full** entities — registry parses with strict Zod and rej
 - `createInMemoryCoreRegistry()` — deterministic, no I/O.
 - `createJsonDirectoryCoreRegistry({ rootDir }): CoreRegistry` — durable: `projects.json`, `sessions.json`, `memory/<projectId>.jsonl`. Temp-file + rename writes.
 - `initStore(rootDir): Promise<void>` — async, idempotent. Creates rootDir + empty `projects.json` + empty `sessions.json` if missing. Used by CLI auto-init.
-- `CoreRegistryError extends Error { code: CoreRegistryErrorCode }` — codes: `project_already_exists`, `project_not_found`, `session_already_exists`, `session_not_found`, `session_project_mismatch`, `memory_entry_already_exists`. Source: `packages/core/src/errors.ts:3`.
+- `CoreRegistryError extends Error { code: CoreRegistryErrorCode }` — codes: `project_already_exists`, `project_not_found`, `session_already_exists`, `session_already_ended`, `session_not_found`, `session_project_mismatch`, `memory_entry_already_exists`. Source: `packages/core/src/errors.ts:3`.
 - `CorePersistenceError extends Error { code: CorePersistenceErrorCode; filePath: string | null }` — codes: `store_root_invalid`, `store_read_failed`, `store_write_failed`, `store_json_invalid`, `store_entity_invalid`. Source: `packages/core/src/errors.ts:23`.
 
 ## Boundary rules
@@ -83,7 +84,7 @@ CLI must construct **full** entities — registry parses with strict Zod and rej
 
 ## Implementation status
 
-Foundation + JSON persistence: PR <https://github.com/haJ1t/MegaSaver/pull/4> (`0656114`). `initStore` + cli project CRUD consumer: PR <https://github.com/haJ1t/MegaSaver/pull/5> (`9003968`). M1 lock + M2 failure-mode tests: PR <https://github.com/haJ1t/MegaSaver/pull/9> (`0dc2e29`). M3 stale-lock detection + M4 NFC normalization: PR <https://github.com/haJ1t/MegaSaver/pull/10> (`ac27142`). All on `origin/main`. 106 tests across 13 files.
+Foundation + JSON persistence: PR <https://github.com/haJ1t/MegaSaver/pull/4> (`0656114`). `initStore` + cli project CRUD consumer: PR <https://github.com/haJ1t/MegaSaver/pull/5> (`9003968`). M1 lock + M2 failure-mode tests: PR <https://github.com/haJ1t/MegaSaver/pull/9> (`0dc2e29`). M3 stale-lock detection + M4 NFC normalization: PR <https://github.com/haJ1t/MegaSaver/pull/10> (`ac27142`). All on `origin/main`. 106 tests across 13 files. Session CRUD: `endSession` mutation + `session_already_ended` code: PR #TBD (`<merge-sha>`).
 
 ## Risk
 

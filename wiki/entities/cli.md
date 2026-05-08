@@ -8,7 +8,7 @@ sources:
   - docs/superpowers/plans/2026-05-06-cli-project-crud-plan.md
 status: published
 created: 2026-05-05
-updated: 2026-05-06
+updated: 2026-05-08
 ---
 
 # `@megasaver/cli`
@@ -35,6 +35,30 @@ already exists` and exit 1.
 
 Lists all projects as `<id>  <name>` lines, one per project.
 Prints nothing (empty stdout) when the store is empty.
+
+### `mega session create <projectName> --agent <id> [--risk medium] [--title "..."]`
+
+Creates a session against an existing project resolved by name.
+`--agent` is required (`claude-code | codex | generic-cli`),
+`--risk` defaults to `medium`, `--title` is optional and stored
+as `null` when omitted. Output is the new session id on stdout.
+
+### `mega session list <projectName>`
+
+Lists sessions for a project as `<id>  <agent>  <risk>  <title|->`,
+two spaces between fields. Empty project → empty stdout.
+
+### `mega session show <sessionId>`
+
+Prints seven aligned `key=value` lines (12-char key column,
+two-space gutter): `id`, `project`, `agent`, `risk`, `title`,
+`startedAt`, `endedAt`. `null` fields render as `-`.
+
+### `mega session end <sessionId>`
+
+Stamps `endedAt` on an open session. Idempotency rejected by
+design: a second call surfaces `error: session "<id>" already
+ended at <ts>` and exits 1.
 
 ### Store resolution
 
@@ -79,6 +103,8 @@ node apps/cli/dist/cli.js project list --store /tmp/demo-store
 Risk HIGH (`docs/superpowers/specs/2026-05-06-cli-project-crud-design.md`).
 Full superpowers chain applied; code-reviewer and critic passes
 required before merge.
+
+Session CRUD: PR #TBD (`<merge-sha>`).
 
 ## Related
 
