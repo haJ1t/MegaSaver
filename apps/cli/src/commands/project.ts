@@ -81,7 +81,8 @@ const nameSchema = z
   .min(1)
   // C0/C1 control chars and DEL break the line-oriented output protocol.
   // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — this regex IS the guard against control chars
-  .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE);
+  .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
+  .transform((value) => value.normalize("NFC"));
 
 export type RunProjectCreateInput = {
   name: string;

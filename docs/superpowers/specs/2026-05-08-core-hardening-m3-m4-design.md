@@ -119,8 +119,12 @@ requires manual `rm`.
 
    ```ts
    if (!isLockHolderAlive(lockPath)) {
-     rmSync(lockPath, { force: true });
-     continue; // immediate retry, skip the 50ms backoff
+     try {
+       rmSync(lockPath, { force: true });
+       continue; // reclaim succeeded — immediate retry, skip backoff
+     } catch {
+       // reclaim failed (e.g. permission denied) — fall through to backoff
+     }
    }
    const buf = new Int32Array(new SharedArrayBuffer(4));
    Atomics.wait(buf, 0, 0, 50);
@@ -210,9 +214,9 @@ Three new cases in `packages/core/test/json-directory-registry-lock.test.ts`
 
 | Test | Setup | Expectation |
 |---|---|---|
-| stale PID recovery | `writeFileSync(lockPath, "99999999")` (PID guaranteed not alive) | `createProject` succeeds; elapsed time well under 5s; lock file is removed after success. |
-| live PID conservative wait | `writeFileSync(lockPath, String(process.pid))` (current process always alive) | `createProject` blocks for 5s and throws `store_write_failed`. Confirms PID-reuse fail-safe is the worst case (same as pre-M3 behaviour). |
-| malformed lock content | `writeFileSync(lockPath, "not-a-number")` | `createProject` succeeds quickly; lock content treated as stale. |
+| recovers when a stale lock contains a dead PID | `writeFileSync(lockPath, "99999999")` (PID guaranteed not alive) | `createProject` succeeds; elapsed time well under 5s; lock file is removed after success. |
+| times out when the lock holder PID is alive | `writeFileSync(lockPath, String(process.pid))` (current process always alive) | `createProject` blocks for 5s and throws `store_write_failed`. Confirms PID-reuse fail-safe is the worst case (same as pre-M3 behaviour). |
+| recovers when a stale lock has malformed payload | `writeFileSync(lockPath, "not-a-number")` | `createProject` succeeds quickly; lock content treated as stale. |
 
 The existing 2 lock tests (lock cleanup on success, lock failure
 on chmod-restricted root) stay green unchanged.
