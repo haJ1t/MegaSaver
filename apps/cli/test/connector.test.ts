@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ConnectorError } from "@megasaver/connectors-shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectorSyncCommand } from "../src/commands/connector.js";
 
@@ -455,5 +456,120 @@ describe("connectorSyncCommand — wrote + noop", () => {
     await runSync({ projectName: "demo", target: "claude-code" });
     const claudeMd = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     expect(claudeMd).toContain("Session: none");
+  });
+});
+
+describe("connectorSyncCommand — best-effort partial failure", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-connector-fail-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-connector-fail-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function seedSimple(): Promise<void> {
+    await mkdir(store, { recursive: true });
+    const ts = "2026-05-09T00:00:00.000Z";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "demo", rootPath: projectRoot, createdAt: ts, updatedAt: ts },
+      ]),
+    );
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESSION_ID,
+          projectId: PROJECT_ID,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: "smoke",
+          startedAt: STARTED_AT,
+          endedAt: null,
+        },
+      ]),
+    );
+  }
+
+  async function runSync(args: { projectName: string; target?: string }): Promise<void> {
+    const cliArgs: Record<string, string> = { projectName: args.projectName, store };
+    if (args.target !== undefined) cliArgs.target = args.target;
+    await connectorSyncCommand.run?.({
+      args: cliArgs,
+      cmd: connectorSyncCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  it("continues past a per-target block_conflict, reports both targets, exits 1", async () => {
+    await seedSimple();
+    // Seed CLAUDE.md cleanly so it can be written.
+    await writeFile(join(projectRoot, "CLAUDE.md"), "# Notes\n");
+    // Seed AGENTS.md with two BEGIN sentinels — parseBlock throws block_conflict.
+    await writeFile(
+      join(projectRoot, "AGENTS.md"),
+      [
+        "<!-- MEGA SAVER:BEGIN -->",
+        "first block",
+        "<!-- MEGA SAVER:END -->",
+        "",
+        "<!-- MEGA SAVER:BEGIN -->",
+        "second block",
+        "<!-- MEGA SAVER:END -->",
+        "",
+      ].join("\n"),
+    );
+
+    await runSync({ projectName: "demo" });
+
+    expect(process.exitCode).toBe(1);
+    const stdoutLines = logSpy.mock.calls.map((c) => c[0]);
+    expect(stdoutLines).toEqual(["claude-code  CLAUDE.md  wrote", "codex        AGENTS.md  error"]);
+    expect(
+      errSpy.mock.calls.some(
+        (c) =>
+          (c[0] as string).startsWith("error: connector block conflict in AGENTS.md:") &&
+          (c[0] as string).includes("begin sentinel"),
+      ),
+    ).toBe(true);
+  });
+
+  it("surfaces a ConnectorError(file_write_failed) as per-target error, exit 1", async () => {
+    await seedSimple();
+    // Seed CLAUDE.md as a SYMLINK — connectors-shared writeTargetFile refuses to replace it.
+    const { symlink } = await import("node:fs/promises");
+    const tempTarget = join(
+      tmpdir(),
+      `megasaver-symlink-target-${Math.random().toString(36).slice(2)}`,
+    );
+    await writeFile(tempTarget, "not the real target\n");
+    await symlink(tempTarget, join(projectRoot, "CLAUDE.md"));
+
+    await runSync({ projectName: "demo" });
+
+    expect(process.exitCode).toBe(1);
+    expect(logSpy.mock.calls.map((c) => c[0])[0]).toBe("claude-code  CLAUDE.md  error");
+    expect(
+      errSpy.mock.calls.some((c) =>
+        (c[0] as string).startsWith("error: connector failed to write CLAUDE.md:"),
+      ),
+    ).toBe(true);
+    await rm(tempTarget, { force: true });
   });
 });

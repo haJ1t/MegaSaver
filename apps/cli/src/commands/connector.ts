@@ -137,34 +137,45 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
       return cli.exitCode;
     }
 
+    let anyFailed = false;
     for (const target of KNOWN_TARGETS) {
-      const absPath = join(project.rootPath, target.relativePath);
-      const existing = await readTargetFile(absPath);
+      try {
+        const absPath = join(project.rootPath, target.relativePath);
+        const existing = await readTargetFile(absPath);
 
-      if (existing === null && input.targetFlag !== target.id) {
-        input.stdout(formatStatusLine(target, "skipped"));
-        continue;
-      }
+        if (existing === null && input.targetFlag !== target.id) {
+          input.stdout(formatStatusLine(target, "skipped"));
+          continue;
+        }
 
-      if (existing === null) {
-        // --target flag matched; seed the file with a fresh block.
         const context = buildConnectorContext(target, project, registry.listSessions(project.id));
-        const newContent = renderBlock(context);
-        await writeTargetFile({ absPath, content: newContent });
-        input.stdout(formatStatusLine(target, "created"));
-        continue;
-      }
 
-      const context = buildConnectorContext(target, project, registry.listSessions(project.id));
-      const newContent = upsertBlock({ existingContent: existing, context });
-      if (newContent === existing) {
-        input.stdout(formatStatusLine(target, "noop"));
-        continue;
+        if (existing === null) {
+          const newContent = renderBlock(context);
+          await writeTargetFile({ absPath, content: newContent });
+          input.stdout(formatStatusLine(target, "created"));
+          continue;
+        }
+
+        const newContent = upsertBlock({ existingContent: existing, context });
+        if (newContent === existing) {
+          input.stdout(formatStatusLine(target, "noop"));
+          continue;
+        }
+        await writeTargetFile({ absPath, content: newContent });
+        input.stdout(formatStatusLine(target, "wrote"));
+      } catch (err) {
+        anyFailed = true;
+        input.stdout(formatStatusLine(target, "error"));
+        const cli = mapErrorToCliMessage(err, {
+          kind: "connector",
+          targetId: target.id,
+          relativePath: target.relativePath,
+        });
+        input.stderr(cli.message);
       }
-      await writeTargetFile({ absPath, content: newContent });
-      input.stdout(formatStatusLine(target, "wrote"));
     }
-    return 0;
+    return anyFailed ? 1 : 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err);
     input.stderr(cli.message);
