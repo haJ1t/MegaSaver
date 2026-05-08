@@ -150,6 +150,14 @@ describe("session error mappings", () => {
       exitCode: 1,
     });
   });
+
+  it("mapErrorToCliMessage funnels session_already_ended through a stable session-scoped message", () => {
+    const err = new CoreRegistryError("session_already_ended", "Session already ended: abc");
+    expect(mapErrorToCliMessage(err, { kind: "session", id: "abc" })).toEqual({
+      message: 'error: session "abc" already ended',
+      exitCode: 1,
+    });
+  });
 });
 
 describe("error helpers — additional coverage", () => {

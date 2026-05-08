@@ -351,7 +351,7 @@ export async function runSessionShow(input: RunSessionShowInput): Promise<0 | 1>
     }
     return 0;
   } catch (err) {
-    const cli = mapErrorToCliMessage(err);
+    const cli = mapErrorToCliMessage(err, { kind: "session", id });
     input.stderr(cli.message);
     return cli.exitCode;
   }
@@ -461,7 +461,7 @@ export async function runSessionEnd(input: RunSessionEndInput): Promise<0 | 1> {
     input.stdout(id);
     return 0;
   } catch (err) {
-    const cli = mapErrorToCliMessage(err);
+    const cli = mapErrorToCliMessage(err, { kind: "session", id });
     input.stderr(cli.message);
     return cli.exitCode;
   }

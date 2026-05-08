@@ -3,7 +3,7 @@ title: CLI Session CRUD — design
 risk: HIGH
 status: draft
 created: 2026-05-08
-updated: 2026-05-08
+updated: 2026-05-09
 related:
   - docs/superpowers/specs/2026-05-06-cli-project-crud-design.md
   - docs/superpowers/specs/2026-05-05-core-persistence-design.md
@@ -229,7 +229,8 @@ Add to `mapErrorToCliMessage`:
   produces a parallel error message.
 - `--title` — optional, default `null`. NFC-normalized via the
   schema's existing `.transform`. Empty after trim → reject as
-  with `name`.
+  with `name`. Control characters (C0/C1, DEL) rejected via the
+  same regex as `<projectName>` to keep line-oriented output safe.
 - `--store` — same semantics as `mega project list/create`.
 
 Behaviour:
