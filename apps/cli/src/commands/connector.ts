@@ -1,4 +1,14 @@
-import { assertProjectRoot } from "@megasaver/connectors-shared";
+import { join } from "node:path";
+import { type ConnectorTarget, codexTarget } from "@megasaver/connector-generic-cli";
+import {
+  type ConnectorContext,
+  assertConnectorContext,
+  assertProjectRoot,
+  readTargetFile,
+  renderBlock,
+  writeTargetFile,
+} from "@megasaver/connectors-shared";
+import type { Project, Session } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { z } from "zod";
 import {
@@ -24,6 +34,45 @@ type KnownTargetId = (typeof KNOWN_TARGET_IDS)[number];
 
 function isKnownTargetId(value: string): value is KnownTargetId {
   return (KNOWN_TARGET_IDS as readonly string[]).includes(value);
+}
+
+const CLAUDE_CODE_TARGET: ConnectorTarget = {
+  id: "claude-code",
+  agentId: "claude-code",
+  relativePath: "CLAUDE.md",
+};
+
+const KNOWN_TARGETS: readonly ConnectorTarget[] = [CLAUDE_CODE_TARGET, codexTarget];
+
+const TARGET_ID_COLUMN_WIDTH = Math.max(...KNOWN_TARGETS.map((t) => t.id.length));
+
+function formatStatusLine(target: ConnectorTarget, status: string): string {
+  return `${target.id.padEnd(TARGET_ID_COLUMN_WIDTH, " ")}  ${target.relativePath}  ${status}`;
+}
+
+function pickLatestOpenSession(
+  sessions: readonly Session[],
+  agentId: ConnectorTarget["agentId"],
+): Session | null {
+  const candidates = sessions.filter((s) => s.endedAt === null && s.agentId === agentId);
+  if (candidates.length === 0) return null;
+  return candidates.reduce((latest, current) =>
+    current.startedAt > latest.startedAt ? current : latest,
+  );
+}
+
+function buildConnectorContext(
+  target: ConnectorTarget,
+  project: Project,
+  allSessions: readonly Session[],
+): ConnectorContext {
+  const session = pickLatestOpenSession(allSessions, target.agentId);
+  return assertConnectorContext({
+    agentId: target.agentId,
+    project,
+    session,
+    memoryEntries: [],
+  });
 }
 
 export type RunConnectorSyncInput = {
@@ -87,7 +136,27 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
       return cli.exitCode;
     }
 
-    // Per-target loop lands in T3.
+    for (const target of KNOWN_TARGETS) {
+      const absPath = join(project.rootPath, target.relativePath);
+      const existing = await readTargetFile(absPath);
+
+      if (existing === null && input.targetFlag !== target.id) {
+        input.stdout(formatStatusLine(target, "skipped"));
+        continue;
+      }
+
+      if (existing === null) {
+        // --target flag matched; seed the file with a fresh block.
+        const context = buildConnectorContext(target, project, registry.listSessions(project.id));
+        const newContent = renderBlock(context);
+        await writeTargetFile({ absPath, content: newContent });
+        input.stdout(formatStatusLine(target, "created"));
+        continue;
+      }
+
+      // wrote/noop branches land in T4.
+      input.stdout(formatStatusLine(target, "skipped"));
+    }
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err);
