@@ -435,15 +435,24 @@ export async function runSessionEnd(input: RunSessionEndInput): Promise<0 | 1> {
       input.stderr(cli.message);
       return cli.exitCode;
     }
+    // Same inline default as runSessionCreate; if a third call site lands,
+    // extract a shared readNow() helper instead of duplicating again.
     const endedAt = (input.now ?? (() => new Date().toISOString()))();
     try {
       registry.endSession(id, { endedAt });
     } catch (err) {
       if (err instanceof CoreRegistryError && err.code === "session_already_ended") {
         // Race with concurrent process: refresh and format the rich message.
+        // Not reachable in unit tests — requires a second process to hold the lock
+        // and end the session between our pre-check and the endSession call.
         const refreshed = registry.getSession(id);
-        const ts = refreshed?.endedAt ?? "unknown";
-        const cli = sessionAlreadyEndedMessage(id, ts);
+        if (!refreshed || refreshed.endedAt === null) {
+          // Three-way race: session vanished or was reverted. Fall through to
+          // the outer catch with the original error rather than fabricating a
+          // timestamp.
+          throw err;
+        }
+        const cli = sessionAlreadyEndedMessage(id, refreshed.endedAt);
         input.stderr(cli.message);
         return cli.exitCode;
       }
