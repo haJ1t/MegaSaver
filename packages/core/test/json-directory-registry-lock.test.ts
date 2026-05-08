@@ -58,4 +58,64 @@ describe("createJsonDirectoryCoreRegistry — lock", () => {
     expect((err as Error).constructor.name).toBe("CorePersistenceError");
     expect(err).toBeInstanceOf(CorePersistenceError);
   }, 10000); // 10s timeout (lock has 5s acquire timeout)
+
+  it("recovers when a stale lock contains a dead PID", async () => {
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(join(rootDir, ".projects.lock"), "99999999", "utf8");
+    const registry = createJsonDirectoryCoreRegistry({ rootDir });
+    const project = {
+      id: projectIdSchema.parse("44444444-4444-4444-8444-444444444444"),
+      name: "stale-recovery",
+      rootPath: "/tmp/demo",
+      createdAt: "2026-05-08T12:00:00.000Z",
+      updatedAt: "2026-05-08T12:00:00.000Z",
+    };
+    const start = Date.now();
+    registry.createProject(project);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(2000);
+    const { existsSync } = await import("node:fs");
+    expect(existsSync(join(rootDir, ".projects.lock"))).toBe(false);
+  });
+
+  it("times out when the lock holder PID is alive", async () => {
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(join(rootDir, ".projects.lock"), String(process.pid), "utf8");
+    const registry = createJsonDirectoryCoreRegistry({ rootDir });
+    const project = {
+      id: projectIdSchema.parse("55555555-5555-4555-8555-555555555555"),
+      name: "live-pid-block",
+      rootPath: "/tmp/demo",
+      createdAt: "2026-05-08T12:00:00.000Z",
+      updatedAt: "2026-05-08T12:00:00.000Z",
+    };
+    const start = Date.now();
+    let err: unknown;
+    try {
+      registry.createProject(project);
+    } catch (e) {
+      err = e;
+    }
+    const elapsed = Date.now() - start;
+    expect(err).toBeDefined();
+    expect((err as Error).constructor.name).toBe("CorePersistenceError");
+    expect(elapsed).toBeGreaterThanOrEqual(4500);
+  }, 10000);
+
+  it("recovers when a stale lock has malformed payload", async () => {
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(join(rootDir, ".projects.lock"), "not-a-number", "utf8");
+    const registry = createJsonDirectoryCoreRegistry({ rootDir });
+    const project = {
+      id: projectIdSchema.parse("66666666-6666-4666-8666-666666666666"),
+      name: "malformed-recovery",
+      rootPath: "/tmp/demo",
+      createdAt: "2026-05-08T12:00:00.000Z",
+      updatedAt: "2026-05-08T12:00:00.000Z",
+    };
+    const start = Date.now();
+    registry.createProject(project);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(2000);
+  });
 });
