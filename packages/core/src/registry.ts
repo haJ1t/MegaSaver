@@ -78,15 +78,14 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
     },
 
     endSession(id, opts) {
+      // No requireProject check: a session existing in the registry implies its project
+      // existed at create-time, and the registry does not delete projects.
       const existing = sessions.get(id);
       if (!existing) {
         throw new CoreRegistryError("session_not_found", `Session does not exist: ${id}`);
       }
       if (existing.endedAt !== null) {
-        throw new CoreRegistryError(
-          "session_already_ended",
-          `Session already ended: ${id}`,
-        );
+        throw new CoreRegistryError("session_already_ended", `Session already ended: ${id}`);
       }
       const updated = sessionSchema.parse({ ...existing, endedAt: opts.endedAt });
       sessions.set(id, updated);

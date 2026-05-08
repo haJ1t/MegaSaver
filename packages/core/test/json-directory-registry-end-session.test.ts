@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -53,9 +54,10 @@ describe("createJsonDirectoryCoreRegistry — endSession", () => {
     const ended = registry.endSession(SESSION_ID, { endedAt: ENDED_AT });
 
     expect(ended.endedAt).toBe(ENDED_AT);
-    const persisted = JSON.parse(
-      await readFile(join(rootDir, "sessions.json"), "utf8"),
-    ) as Array<{ id: string; endedAt: string | null }>;
+    const persisted = JSON.parse(await readFile(join(rootDir, "sessions.json"), "utf8")) as Array<{
+      id: string;
+      endedAt: string | null;
+    }>;
     expect(persisted).toHaveLength(1);
     expect(persisted[0]?.endedAt).toBe(ENDED_AT);
   });
@@ -97,9 +99,9 @@ describe("createJsonDirectoryCoreRegistry — endSession", () => {
   it("releases the .projects.lock after a successful end", async () => {
     const registry = createJsonDirectoryCoreRegistry({ rootDir });
     seed(registry);
-    registry.endSession(SESSION_ID, { endedAt: ENDED_AT });
+    const ended = registry.endSession(SESSION_ID, { endedAt: ENDED_AT });
+    expect(ended.endedAt).toBe(ENDED_AT);
 
-    const { existsSync } = await import("node:fs");
     expect(existsSync(join(rootDir, ".projects.lock"))).toBe(false);
   });
 });

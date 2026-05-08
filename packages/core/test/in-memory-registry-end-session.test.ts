@@ -84,8 +84,15 @@ describe("createInMemoryCoreRegistry — endSession", () => {
     } catch (e) {
       err = e;
     }
-    expect(err).toBeDefined();
+    expect(err).toBeInstanceOf(Error);
     // ZodError or CorePersistenceError("store_entity_invalid") — either is acceptable
     // for the in-memory layer; the JSON-directory layer wraps it as the latter.
+    const isZod =
+      err !== null && typeof err === "object" && (err as { name?: string }).name === "ZodError";
+    const isCorePersist =
+      err !== null &&
+      typeof err === "object" &&
+      (err as { code?: string }).code === "store_entity_invalid";
+    expect(isZod || isCorePersist).toBe(true);
   });
 });
