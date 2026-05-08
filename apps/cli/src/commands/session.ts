@@ -14,6 +14,20 @@ import {
 } from "../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../store.js";
 
+/**
+ * Read a deterministic test-injection env var. Returns the raw string
+ * value only when NODE_ENV is "test"; in production builds the env var
+ * is silently ignored so a leaked `MEGA_TEST_*` shell export cannot
+ * override `randomUUID()` or `Date.now()`. Vitest sets NODE_ENV=test
+ * automatically.
+ */
+function readTestEnv(name: string): string | undefined {
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  if (process.env["NODE_ENV"] !== "test") return undefined;
+  const raw = process.env[name];
+  return typeof raw === "string" ? raw : undefined;
+}
+
 const projectNameSchema = z
   .string()
   .trim()
@@ -154,18 +168,8 @@ export const sessionCreateCommand = defineCommand({
     store: { type: "string", description: "Override store directory." },
   },
   async run({ args }) {
-    const newIdEnv =
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      typeof process.env["MEGA_TEST_SESSION_ID"] === "string"
-        ? // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-          process.env["MEGA_TEST_SESSION_ID"]
-        : undefined;
-    const nowEnv =
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      typeof process.env["MEGA_TEST_NOW"] === "string"
-        ? // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-          process.env["MEGA_TEST_NOW"]
-        : undefined;
+    const newIdEnv = readTestEnv("MEGA_TEST_SESSION_ID");
+    const nowEnv = readTestEnv("MEGA_TEST_NOW");
     const code = await runSessionCreate({
       projectName: typeof args.projectName === "string" ? args.projectName : "",
       agent: typeof args.agent === "string" ? args.agent : "",
@@ -478,12 +482,7 @@ export const sessionEndCommand = defineCommand({
     store: { type: "string", description: "Override store directory." },
   },
   async run({ args }) {
-    const nowEnv =
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      typeof process.env["MEGA_TEST_NOW"] === "string"
-        ? // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-          process.env["MEGA_TEST_NOW"]
-        : undefined;
+    const nowEnv = readTestEnv("MEGA_TEST_NOW");
     const code = await runSessionEnd({
       sessionId: typeof args.sessionId === "string" ? args.sessionId : "",
       storeFlag: typeof args.store === "string" ? args.store : undefined,

@@ -4,11 +4,12 @@ tags: [workflow, testing, cli, citty]
 sources:
   - apps/cli/src/commands/doctor.ts
   - apps/cli/src/commands/project.ts
+  - apps/cli/src/commands/session.ts
   - apps/cli/test/doctor.test.ts
   - apps/cli/test/project.test.ts
 status: active
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-05-09
 ---
 
 # CLI handler test pattern
@@ -96,6 +97,47 @@ describe("<cmd>Command", () => {
 ## Filesystem isolation
 
 Tests that touch the store use `mkdtemp(join(tmpdir(), "megasaver-..."))` in `beforeEach` and `rm(root, { recursive: true, force: true })` in `afterEach`. Pass `--store: root` via `args` so `resolveStorePath` short-circuits the XDG branch. Never let a test write under the real `$XDG_DATA_HOME`.
+
+## Deterministic test injection
+
+Citty `run` closures cannot accept extra parameters from tests, so per-test deterministic IDs and timestamps go through env vars. The wrapper reads them via the `readTestEnv` helper which is gated on `NODE_ENV === "test"` so a leaked shell export cannot fire in production builds (Vitest sets `NODE_ENV=test` automatically).
+
+Pattern:
+
+```ts
+function readTestEnv(name: string): string | undefined {
+  if (process.env["NODE_ENV"] !== "test") return undefined;
+  const raw = process.env[name];
+  return typeof raw === "string" ? raw : undefined;
+}
+
+// Inside Citty `run` closure:
+const newIdEnv = readTestEnv("MEGA_TEST_SESSION_ID");
+const nowEnv = readTestEnv("MEGA_TEST_NOW");
+
+const code = await run<Cmd>({
+  // ...
+  ...(newIdEnv !== undefined ? { newId: () => newIdEnv } : {}),
+  ...(nowEnv !== undefined ? { now: () => nowEnv } : {}),
+});
+```
+
+Test setup uses save+restore in `beforeEach`/`afterEach` so vars don't leak between describes:
+
+```ts
+const originalNow = process.env["MEGA_TEST_NOW"];
+
+beforeEach(async () => {
+  process.env["MEGA_TEST_NOW"] = "2026-05-08T12:00:00.000Z";
+});
+
+afterEach(() => {
+  if (originalNow === undefined) delete process.env["MEGA_TEST_NOW"];
+  else process.env["MEGA_TEST_NOW"] = originalNow;
+});
+```
+
+When NOT to use env-var injection: tests that exercise the inner `runX` function directly (not through Citty) should pass `newId`/`now` as RunInput fields and skip the env vars entirely. Use env-var injection only when the test invokes `defineCommand.run({ args })`.
 
 ## Known toolchain conflicts
 
