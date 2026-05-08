@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,7 +9,7 @@ import {
   sessionIdSchema,
 } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CoreRegistryError } from "../src/errors.js";
+import { CorePersistenceError, CoreRegistryError } from "../src/errors.js";
 import { createJsonDirectoryCoreRegistry } from "../src/json-directory-registry.js";
 
 const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
@@ -103,5 +103,36 @@ describe("createJsonDirectoryCoreRegistry — endSession", () => {
     expect(ended.endedAt).toBe(ENDED_AT);
 
     expect(existsSync(join(rootDir, ".projects.lock"))).toBe(false);
+  });
+
+  it("blocks while a stale lock holder PID is alive (5s timeout, surfaces CorePersistenceError)", async () => {
+    const registry = createJsonDirectoryCoreRegistry({ rootDir });
+    seed(registry);
+
+    await writeFile(join(rootDir, ".projects.lock"), String(process.pid), "utf8");
+
+    const start = Date.now();
+    let err: unknown;
+    try {
+      registry.endSession(SESSION_ID, { endedAt: ENDED_AT });
+    } catch (e) {
+      err = e;
+    }
+    const elapsed = Date.now() - start;
+    expect(err).toBeInstanceOf(CorePersistenceError);
+    expect(elapsed).toBeGreaterThanOrEqual(4500);
+  }, 10000);
+
+  it("recovers immediately when the lock holder PID is dead", async () => {
+    const registry = createJsonDirectoryCoreRegistry({ rootDir });
+    seed(registry);
+
+    await writeFile(join(rootDir, ".projects.lock"), "99999999", "utf8");
+
+    const start = Date.now();
+    const ended = registry.endSession(SESSION_ID, { endedAt: ENDED_AT });
+    const elapsed = Date.now() - start;
+    expect(ended.endedAt).toBe(ENDED_AT);
+    expect(elapsed).toBeLessThan(2000);
   });
 });
