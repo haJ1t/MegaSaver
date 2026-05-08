@@ -26,10 +26,12 @@ function isLockHolderAlive(lockPath: string): boolean {
   try {
     raw = readFileSync(lockPath, "utf8");
   } catch {
+    // lockfile vanished between EEXIST and read — treat as gone
     return false;
   }
   const pid = Number.parseInt(raw.trim(), 10);
   if (!Number.isInteger(pid) || pid <= 0) {
+    // malformed payload — treat as stale, reclaim
     return false;
   }
   try {
@@ -37,8 +39,9 @@ function isLockHolderAlive(lockPath: string): boolean {
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ESRCH") {
-      return false;
+      return false; // confirmed dead
     }
+    // EPERM (process exists but signal blocked), other → conservative alive
     return true;
   }
 }
@@ -50,7 +53,7 @@ function isLockHolderAlive(lockPath: string): boolean {
 function withDirLock<T>(rootDir: string, fn: () => T): T {
   const lockPath = path.join(rootDir, ".projects.lock");
   mkdirSync(rootDir, { recursive: true });
-  const deadline = Date.now() + 5000;
+  const deadline = Date.now() + 5000; // 5s acquire timeout
   let fd: number | undefined;
   while (Date.now() < deadline) {
     try {
@@ -67,8 +70,10 @@ function withDirLock<T>(rootDir: string, fn: () => T): T {
       if (!isLockHolderAlive(lockPath)) {
         try {
           rmSync(lockPath, { force: true });
-        } catch {}
-        continue;
+          continue; // reclaim succeeded — immediate retry
+        } catch {
+          // reclaim failed (e.g. permission denied) — fall through to backoff
+        }
       }
       const buf = new Int32Array(new SharedArrayBuffer(4));
       Atomics.wait(buf, 0, 0, 50);
