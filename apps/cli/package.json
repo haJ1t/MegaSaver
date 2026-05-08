@@ -18,6 +18,8 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@megasaver/connector-generic-cli": "workspace:*",
+    "@megasaver/connectors-shared": "workspace:*",
     "@megasaver/core": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "citty": "^0.1.6",

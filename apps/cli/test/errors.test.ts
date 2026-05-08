@@ -1,3 +1,4 @@
+import { ConnectorError } from "@megasaver/connectors-shared";
 import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
 import { ZodError, z } from "zod";
@@ -6,6 +7,7 @@ import {
   invalidAgentMessage,
   invalidRiskMessage,
   invalidSessionIdMessage,
+  invalidTargetMessage,
   mapErrorToCliMessage,
   projectNotFoundMessage,
   sessionAlreadyEndedMessage,
@@ -242,6 +244,100 @@ describe("error helpers — additional coverage", () => {
     const err = new ZodError([{ code: "custom", path: [], message: "no received field here" }]);
     expect(mapErrorToCliMessage(err, { kind: "sessionId" })).toEqual({
       message: 'error: invalid session id "<unknown>"',
+      exitCode: 1,
+    });
+  });
+});
+
+describe("connector error mappings", () => {
+  it("invalidTargetMessage formats expected list of valid targets", () => {
+    expect(invalidTargetMessage("nope")).toEqual({
+      message: 'error: invalid target "nope", expected: claude-code | codex',
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage funnels ConnectorError(context_invalid) with connector ctx", () => {
+    const err = new ConnectorError("context_invalid", "Connector context is invalid.");
+    expect(
+      mapErrorToCliMessage(err, {
+        kind: "connector",
+        targetId: "claude-code",
+        relativePath: "CLAUDE.md",
+      }),
+    ).toEqual({
+      message:
+        'error: connector context invalid for target "claude-code": Connector context is invalid.',
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage funnels ConnectorError(block_conflict)", () => {
+    const err = new ConnectorError("block_conflict", "Found 2 BEGIN sentinels at lines 3, 17.", {
+      filePath: "/tmp/CLAUDE.md",
+    });
+    expect(
+      mapErrorToCliMessage(err, {
+        kind: "connector",
+        targetId: "claude-code",
+        relativePath: "CLAUDE.md",
+      }),
+    ).toEqual({
+      message:
+        "error: connector block conflict in CLAUDE.md: Found 2 BEGIN sentinels at lines 3, 17.",
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage funnels ConnectorError(file_read_failed)", () => {
+    const err = new ConnectorError("file_read_failed", "Failed to read target file.", {
+      filePath: "/tmp/CLAUDE.md",
+    });
+    expect(
+      mapErrorToCliMessage(err, {
+        kind: "connector",
+        targetId: "claude-code",
+        relativePath: "CLAUDE.md",
+      }),
+    ).toEqual({
+      message: "error: connector failed to read CLAUDE.md: Failed to read target file.",
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage funnels ConnectorError(file_write_failed)", () => {
+    const err = new ConnectorError("file_write_failed", "Failed to write target file.", {
+      filePath: "/tmp/CLAUDE.md",
+    });
+    expect(
+      mapErrorToCliMessage(err, {
+        kind: "connector",
+        targetId: "claude-code",
+        relativePath: "CLAUDE.md",
+      }),
+    ).toEqual({
+      message: "error: connector failed to write CLAUDE.md: Failed to write target file.",
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage funnels ConnectorError(target_path_invalid)", () => {
+    const err = new ConnectorError(
+      "target_path_invalid",
+      "Project root must be an absolute path to an existing directory.",
+      { filePath: "/tmp/missing" },
+    );
+    expect(mapErrorToCliMessage(err)).toEqual({
+      message:
+        "error: project root invalid: Project root must be an absolute path to an existing directory.",
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage falls back to raw message for ConnectorError without ctx", () => {
+    const err = new ConnectorError("context_invalid", "Connector context is invalid.");
+    expect(mapErrorToCliMessage(err)).toEqual({
+      message: "error: context_invalid: Connector context is invalid.",
       exitCode: 1,
     });
   });

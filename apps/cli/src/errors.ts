@@ -1,3 +1,4 @@
+import { ConnectorError } from "@megasaver/connectors-shared";
 import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
 import type { AgentId, RiskLevel } from "@megasaver/shared";
 import { ZodError } from "zod";
@@ -10,7 +11,8 @@ export type ZodContext =
   | { kind: "title" }
   | { kind: "sessionId" }
   | { kind: "project"; name: string }
-  | { kind: "session"; id: string };
+  | { kind: "session"; id: string }
+  | { kind: "connector"; targetId: string; relativePath: string };
 
 export const NAME_CONTROL_CHARS_MESSAGE = "name must not contain control characters";
 export const TITLE_EMPTY_MESSAGE = "title must not be empty";
@@ -69,6 +71,17 @@ export function invalidRiskMessage(value: string): CliMessage {
 
 export function invalidSessionIdMessage(value: string): CliMessage {
   return { message: `${SESSION_ID_INVALID_PREFIX} "${value}"`, exitCode: 1 };
+}
+
+// Keep in sync with KNOWN_TARGETS in apps/cli/src/commands/connector.ts.
+// Two-line tripwire so a third target lands intentionally with both arrays bumped.
+const KNOWN_TARGET_IDS = ["claude-code", "codex"] as const;
+
+export function invalidTargetMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid target "${value}", expected: ${KNOWN_TARGET_IDS.join(" | ")}`,
+    exitCode: 1,
+  };
 }
 
 export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage {
@@ -130,6 +143,44 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
       message: `error: store I/O failed: ${err.message}`,
       exitCode: 1,
     };
+  }
+  if (err instanceof ConnectorError) {
+    if (ctx?.kind === "connector") {
+      switch (err.code) {
+        case "context_invalid":
+          return {
+            message: `error: connector context invalid for target "${ctx.targetId}": ${err.message}`,
+            exitCode: 1,
+          };
+        case "block_conflict":
+          return {
+            message: `error: connector block conflict in ${ctx.relativePath}: ${err.message}`,
+            exitCode: 1,
+          };
+        case "file_read_failed":
+          return {
+            message: `error: connector failed to read ${ctx.relativePath}: ${err.message}`,
+            exitCode: 1,
+          };
+        case "file_write_failed":
+          return {
+            message: `error: connector failed to write ${ctx.relativePath}: ${err.message}`,
+            exitCode: 1,
+          };
+        case "target_path_invalid":
+          return {
+            message: `error: project root invalid: ${err.message}`,
+            exitCode: 1,
+          };
+      }
+    }
+    if (err.code === "target_path_invalid") {
+      return {
+        message: `error: project root invalid: ${err.message}`,
+        exitCode: 1,
+      };
+    }
+    return { message: `error: ${err.code}: ${err.message}`, exitCode: 1 };
   }
   if (err instanceof Error) {
     return { message: `error: unexpected failure: ${err.message}`, exitCode: 1 };
