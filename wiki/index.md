@@ -72,13 +72,16 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-generic-cli connector landed on `main` via PR #8 (`8679c4c`).
-Connector follow-ups (F1–F10) + core M1 file-lock + M2 failure-mode
-tests landed via PR #9 (`0dc2e29`). Six packages on `main`:
-`@megasaver/shared`, `@megasaver/core` (96 tests), `@megasaver/cli`,
-`@megasaver/connectors-shared` (56 tests), `@megasaver/connector-claude-code`
-(45 tests, byte-identical render parity), and
-`@megasaver/connector-generic-cli` (21 tests, Codex `AGENTS.md`
-target). Previously merged: README refresh PR #7, Claude Code
-connector PR #6, CLI project CRUD PR #5, bootstrap PRs. Next slot:
-Session CRUD, or the `mega connector sync` CLI command spec.
+Core hardening landed on `main` via PR #10 (`ac27142`): M3
+PID-in-`.projects.lock` stale-holder detection (<100 ms recovery via
+`process.kill(pid, 0)` ESRCH check) and M4 NFC normalization on
+`Project.name` + `Session.title` (Zod `.transform()`). Six packages
+on `main`: `@megasaver/shared`, `@megasaver/core` (106 tests),
+`@megasaver/cli` (52 tests), `@megasaver/connectors-shared`
+(56 tests), `@megasaver/connector-claude-code` (45 tests,
+byte-identical render parity), and `@megasaver/connector-generic-cli`
+(21 tests, Codex `AGENTS.md` target). Previously merged: connector
+follow-ups + core M1/M2 PR #9 (`0dc2e29`), generic-cli connector
+PR #8 (`8679c4c`), README refresh PR #7, Claude Code connector PR #6,
+CLI project CRUD PR #5, bootstrap PRs. Next slot: Session CRUD, or
+the `mega connector sync` CLI command spec.
