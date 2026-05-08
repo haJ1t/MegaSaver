@@ -165,6 +165,30 @@ export function createJsonDirectoryCoreRegistry(
         .map((session) => sessionSchema.parse(session));
     },
 
+    endSession(id, opts) {
+      return withDirLock(options.rootDir, () => {
+        const sessions = readSessions(paths);
+        const existingRaw = sessions.find((candidate) => candidate.id === id);
+        if (!existingRaw) {
+          throw new CoreRegistryError(
+            "session_not_found",
+            `Session does not exist: ${id}`,
+          );
+        }
+        const existing = sessionSchema.parse(existingRaw);
+        if (existing.endedAt !== null) {
+          throw new CoreRegistryError(
+            "session_already_ended",
+            `Session already ended: ${id}`,
+          );
+        }
+        const updated = sessionSchema.parse({ ...existing, endedAt: opts.endedAt });
+        const next = sessions.map((session) => (session.id === id ? updated : session));
+        writeSessions(paths, next);
+        return updated;
+      });
+    },
+
     createMemoryEntry(entry) {
       return withDirLock(options.rootDir, () => {
         const parsed = memoryEntrySchema.parse(entry);
