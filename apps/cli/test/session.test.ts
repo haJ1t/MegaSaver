@@ -367,9 +367,16 @@ describe("sessionShowCommand", () => {
   it("renders a non-null title and a non-null endedAt without the dash placeholder", async () => {
     await seedSession({ title: "first", endedAt: "2026-05-08T01:00:00.000Z" });
     await runShow(SESSION_ID);
-    const lines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(lines).toContain("title       first");
-    expect(lines).toContain("endedAt     2026-05-08T01:00:00.000Z");
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
+      `id          ${SESSION_ID}`,
+      `project     ${PROJECT_ID}`,
+      "agent       claude-code",
+      "risk        medium",
+      "title       first",
+      "startedAt   2026-05-08T00:00:00.000Z",
+      "endedAt     2026-05-08T01:00:00.000Z",
+    ]);
   });
 
   it("rejects an invalid session id (not a UUID) with the documented error", async () => {
