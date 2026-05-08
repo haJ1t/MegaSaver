@@ -337,12 +337,18 @@ path is unchanged in behaviour; this slice does not touch it.
 ### CLI duplicate-name check
 
 `apps/cli/src/commands/project.ts` performs duplicate-name detection
-by comparing post-parse names of existing projects against the
-incoming new project (also post-parse). Both sides go through
-`projectSchema.parse`, so both are NFC. NFD input creates an NFC
-post-parse name, which collides with an existing NFC name in
-`projects.json` correctly. **No CLI source change required** — the
-fix is entirely at the schema layer.
+by comparing the input name against the post-parse names of existing
+projects. **The CLI's local `nameSchema` (regex + length validation)
+must also `.transform(s => s.normalize("NFC"))`**, because the
+incoming name does not go through `projectSchema.parse` until after
+the duplicate check. Without the CLI-side transform, an NFD input
+would compare byte-unequal against the NFC names returned by
+`listProjects()` and the CLI duplicate-name path would miss; core's
+existence check would still reject the create, but with a less
+polished error message. The CLI gets the matching `.transform()`
+appended to `nameSchema`, plus a regression test that covers the
+NFD-input duplicate path and asserts the CLI emits its own
+`duplicateNameMessage`.
 
 ### Test plan
 
