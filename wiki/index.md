@@ -72,16 +72,25 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Core hardening landed on `main` via PR #10 (`ac27142`): M3
-PID-in-`.projects.lock` stale-holder detection (<100 ms recovery via
-`process.kill(pid, 0)` ESRCH check) and M4 NFC normalization on
-`Project.name` + `Session.title` (Zod `.transform()`). Six packages
-on `main`: `@megasaver/shared`, `@megasaver/core` (106 tests),
-`@megasaver/cli` (52 tests), `@megasaver/connectors-shared`
-(56 tests), `@megasaver/connector-claude-code` (45 tests,
-byte-identical render parity), and `@megasaver/connector-generic-cli`
-(21 tests, Codex `AGENTS.md` target). Previously merged: connector
-follow-ups + core M1/M2 PR #9 (`0dc2e29`), generic-cli connector
-PR #8 (`8679c4c`), README refresh PR #7, Claude Code connector PR #6,
-CLI project CRUD PR #5, bootstrap PRs. Next slot: Session CRUD, or
-the `mega connector sync` CLI command spec.
+CLI Session CRUD landed on `main` via PR #11 (`9c5a388`): four new
+`mega session` subcommands (`create`, `list`, `show`, `end`),
+`CoreRegistry.endSession(id, { endedAt })` mutation on both
+in-memory and JSON-directory registries, `session_already_ended`
+error code, CLI errors module widened with discriminated `ZodContext`
+and 6 new helpers + `as const satisfies` drift guards. Six packages
+on `main`: `@megasaver/shared` (22 tests), `@megasaver/core`
+(116 tests, 15 files), `@megasaver/cli` (84 tests),
+`@megasaver/connectors-shared` (56 tests),
+`@megasaver/connector-claude-code` (45 tests, byte-identical render
+parity), and `@megasaver/connector-generic-cli` (21 tests, Codex
+`AGENTS.md` target). 344 total. Previously merged: core M3+M4 PR
+#10 (`ac27142`), connector follow-ups + core M1/M2 PR #9
+(`0dc2e29`), generic-cli connector PR #8 (`8679c4c`), README
+refresh PR #7, Claude Code connector PR #6, CLI project CRUD
+PR #5, bootstrap PRs. Next slots (v0.2 follow-ups from critic):
+I1 `MEGA_TEST_*` env-var injection cleanup, I2 `session_already_ended`
+mapper case, I3 dead `kind: "session"` mapper branch, I4 spec §4
+title control-char amendment, I5 split `commands/session.ts` when
+`update` lands, cross-process lock integration test,
+`atomicWriteFile` + `fsync` durability, `mega connector sync`
+CLI command spec.

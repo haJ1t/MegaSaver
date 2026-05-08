@@ -104,7 +104,7 @@ Risk HIGH (`docs/superpowers/specs/2026-05-06-cli-project-crud-design.md`).
 Full superpowers chain applied; code-reviewer and critic passes
 required before merge.
 
-Session CRUD: PR #TBD (`<merge-sha>`).
+Session CRUD: PR <https://github.com/haJ1t/MegaSaver/pull/11> (`9c5a388`).
 
 ## Related
 

@@ -84,7 +84,7 @@ CLI must construct **full** entities — registry parses with strict Zod and rej
 
 ## Implementation status
 
-Foundation + JSON persistence: PR <https://github.com/haJ1t/MegaSaver/pull/4> (`0656114`). `initStore` + cli project CRUD consumer: PR <https://github.com/haJ1t/MegaSaver/pull/5> (`9003968`). M1 lock + M2 failure-mode tests: PR <https://github.com/haJ1t/MegaSaver/pull/9> (`0dc2e29`). M3 stale-lock detection + M4 NFC normalization: PR <https://github.com/haJ1t/MegaSaver/pull/10> (`ac27142`). All on `origin/main`. 106 tests across 13 files. Session CRUD: `endSession` mutation + `session_already_ended` code: PR #TBD (`<merge-sha>`).
+Foundation + JSON persistence: PR <https://github.com/haJ1t/MegaSaver/pull/4> (`0656114`). `initStore` + cli project CRUD consumer: PR <https://github.com/haJ1t/MegaSaver/pull/5> (`9003968`). M1 lock + M2 failure-mode tests: PR <https://github.com/haJ1t/MegaSaver/pull/9> (`0dc2e29`). M3 stale-lock detection + M4 NFC normalization: PR <https://github.com/haJ1t/MegaSaver/pull/10> (`ac27142`). Session CRUD: `endSession` mutation + `session_already_ended` code: PR <https://github.com/haJ1t/MegaSaver/pull/11> (`9c5a388`). All on `origin/main`. 116 tests across 15 files.
 
 ## Risk
 

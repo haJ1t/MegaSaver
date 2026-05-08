@@ -215,12 +215,7 @@ Shipped on `feat/core-hardening-m3-m4`: M3 PID-in-`.projects.lock` plus `process
 
 ## [2026-05-08] schema | cli session CRUD
 
-PR #TBD (`<merge-sha>`): four new `mega session` subcommands
-(`create`, `list`, `show`, `end`). Core gains
-`CoreRegistry.endSession(id, { endedAt })` and
-`session_already_ended` error code. Tests: 6 new core (in-memory
-parity + json-directory happy/missing/already-ended/lock-recovery
-+ stale-recovery), 20 new CLI (9 create, 3 list, 4 show, 4 end).
+PR <https://github.com/haJ1t/MegaSaver/pull/11> merged into `main` (merge commit `9c5a388`): four new `mega session` subcommands (`create`, `list`, `show`, `end`). Core gains `CoreRegistry.endSession(id, { endedAt })` and `session_already_ended` error code. CLI errors module widened with `ZodContext` discriminated union (6 variants), 6 new helper functions, `as const satisfies` drift guards on `AGENT_VALUES`/`RISK_VALUES` against `@megasaver/shared`. Race-fallback in `runSessionEnd` re-throws on three-way race (concurrent process ends + deletes between pre-check and `endSession`) rather than fabricating a timestamp. Tests: 10 new core (4 in-memory parity + 4 json-directory happy/missing/already-ended/lock-released + 2 lock concurrency), 32 new CLI (20 session: 9 create / 3 list / 4 show / 4 end; +12 errors module). Two-stage external review per task (subagent-driven development) plus final critic (HIGH-risk holistic) returned 0 Blocking, 2 Important deferred to v0.2, 5 Minor. Tracked follow-ups for v0.2: I1 `MEGA_TEST_*` env-var injection cleanup (refactor session tests to project-test pattern OR gate on `NODE_ENV === "test"`), I2 explicit `session_already_ended` mapper case for the rare three-way-race fall-through, I3 dead `kind: "session"` mapper branch (delete or use), I4 spec §4 amendment for title control-char guard (drift), I5 split `commands/session.ts` (511 LOC > §8 300 threshold) when `update` lands, cross-process lock integration test, `atomicWriteFile` + `fsync` durability.
 
 ## [2026-05-09] schema | core M3+M4 merged
 
