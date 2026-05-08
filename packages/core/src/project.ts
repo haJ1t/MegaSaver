@@ -4,7 +4,11 @@ import { z } from "zod";
 export const projectSchema = z
   .object({
     id: projectIdSchema,
-    name: z.string().trim().min(1),
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .transform((value) => value.normalize("NFC")),
     rootPath: z.string().trim().min(1),
     createdAt: z.string().datetime({ offset: true }),
     updatedAt: z.string().datetime({ offset: true }),

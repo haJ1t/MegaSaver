@@ -98,4 +98,50 @@ describe("projectSchema", () => {
       updatedAt: string;
     }>();
   });
+
+  it("normalizes name to NFC form", () => {
+    const NOW = "2026-05-08T12:00:00.000Z";
+    // NFD input: "caf" + e (U+0065) + combining acute accent (U+0301) = 5 chars
+    const nfdName = "café";
+    const parsed = projectSchema.parse({
+      id: PROJECT_ID,
+      name: nfdName,
+      rootPath: "/tmp/demo",
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    // NFC output: "caf" + e-with-acute (U+00E9) = 4 chars
+    expect(parsed.name).toBe("café");
+    expect(parsed.name.length).toBe(4);
+  });
+
+  it("is idempotent on already-NFC names", () => {
+    const NOW = "2026-05-08T12:00:00.000Z";
+    // NFC input: "caf" + e-with-acute (U+00E9)
+    const nfcName = "café";
+    const first = projectSchema.parse({
+      id: PROJECT_ID,
+      name: nfcName,
+      rootPath: "/tmp/demo",
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    const second = projectSchema.parse(first);
+    expect(second.name).toBe(first.name);
+    expect(second.name).toBe("café");
+  });
+
+  it("does not normalize rootPath", () => {
+    const NOW = "2026-05-08T12:00:00.000Z";
+    // NFD bytes in rootPath — schema must not touch it
+    const rootPath = "/tmp/café";
+    const parsed = projectSchema.parse({
+      id: PROJECT_ID,
+      name: "demo",
+      rootPath,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(parsed.rootPath).toBe(rootPath);
+  });
 });
