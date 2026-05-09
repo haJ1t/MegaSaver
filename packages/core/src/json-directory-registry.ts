@@ -185,6 +185,10 @@ export function createJsonDirectoryCoreRegistry(
       });
     },
 
+    updateSession() {
+      throw new Error("updateSession not implemented yet (T1 stub; lands in T3)");
+    },
+
     createMemoryEntry(entry) {
       return withDirLock(options.rootDir, () => {
         const parsed = memoryEntrySchema.parse(entry);

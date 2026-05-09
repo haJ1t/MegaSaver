@@ -2,7 +2,7 @@ import type { MemoryEntryId, ProjectId, SessionId } from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
 import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
 import { type Project, projectSchema } from "./project.js";
-import { type Session, sessionSchema } from "./session.js";
+import { type Session, type SessionUpdatePatch, sessionSchema } from "./session.js";
 
 export interface CoreRegistry {
   createProject(project: Project): Project;
@@ -12,6 +12,7 @@ export interface CoreRegistry {
   getSession(id: SessionId): Session | null;
   listSessions(projectId: ProjectId): Session[];
   endSession(id: SessionId, opts: { endedAt: string }): Session;
+  updateSession(id: SessionId, patch: SessionUpdatePatch): Session;
   createMemoryEntry(entry: MemoryEntry): MemoryEntry;
   getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
   listMemoryEntries(projectId: ProjectId): MemoryEntry[];
@@ -90,6 +91,10 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       const updated = sessionSchema.parse({ ...existing, endedAt: opts.endedAt });
       sessions.set(id, updated);
       return updated;
+    },
+
+    updateSession() {
+      throw new Error("updateSession not implemented yet (T1 stub; lands in T2)");
     },
 
     createMemoryEntry(entry) {
