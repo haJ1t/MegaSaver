@@ -1,4 +1,5 @@
 export {
+  aiderTarget,
   builtinTargets,
   codexTarget,
   type ConnectorTarget,
