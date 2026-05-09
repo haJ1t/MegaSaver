@@ -228,6 +228,14 @@ describe("sessionCreateCommand", () => {
   });
 });
 
+describe("sessionUpdateCommand — drift guards", () => {
+  it("--agent description on update lists every agentIdSchema member", async () => {
+    const { agentIdSchema } = await import("@megasaver/shared");
+    const desc = sessionUpdateCommand.args?.agent?.description ?? "";
+    for (const m of agentIdSchema.options) expect(desc).toContain(m);
+  });
+});
+
 describe("sessionListCommand", () => {
   let root: string;
   let logSpy: ReturnType<typeof vi.spyOn>;
