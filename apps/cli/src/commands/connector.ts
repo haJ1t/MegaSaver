@@ -125,7 +125,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
     const sessions = registry.listSessions(project.id);
     const memoryEntries = registry.listMemoryEntries(project.id);
     let anyFailed = false;
-    for (const target of KNOWN_TARGETS) {
+    for (const target of KNOWN_TARGETS as readonly ConnectorTarget[]) {
       try {
         const absPath = join(project.rootPath, target.relativePath);
         const existing = await readTargetFile(absPath);

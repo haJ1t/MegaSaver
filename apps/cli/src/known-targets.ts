@@ -6,8 +6,7 @@ export const CLAUDE_CODE_TARGET = {
   id: "claude-code",
   agentId: "claude-code" satisfies AgentId,
   relativePath: "CLAUDE.md",
-  header: undefined,
-} satisfies ConnectorTarget;
+} as const;
 
 export const KNOWN_TARGETS = [
   CLAUDE_CODE_TARGET,
