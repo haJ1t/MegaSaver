@@ -74,7 +74,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-MemoryEntry CLI landed via PR #TBD (`TBD`): new
+MemoryEntry CLI landed via PR #19 (`7a199b6`): new
 `mega memory create/list/show` subcommands as a thin CLI layer
 over the existing `CoreRegistry.{createMemoryEntry,getMemoryEntry,
 listMemoryEntries}` surface. Append-only ledger; no delete/update
@@ -120,10 +120,10 @@ error code, CLI errors module widened with discriminated
 `ZodContext` + 7 helpers + `as const satisfies` drift guards.
 Six packages on `main`: `@megasaver/shared` (24 tests),
 `@megasaver/core` (128 tests, 15 files), `@megasaver/cli`
-(166 tests), `@megasaver/connectors-shared` (56 tests),
+(169 tests), `@megasaver/connectors-shared` (56 tests),
 `@megasaver/connector-claude-code` (45 tests, byte-identical
 render parity), and `@megasaver/connector-generic-cli` (26 tests,
-Codex `AGENTS.md` + Cursor `.cursor/rules/megasaver.mdc` targets). 445 total. Previously merged: core
+Codex `AGENTS.md` + Cursor `.cursor/rules/megasaver.mdc` targets). 448 total. Previously merged: core
 M3+M4 PR #10 (`ac27142`), connector follow-ups + core M1/M2 PR #9
 (`0dc2e29`), generic-cli connector PR #8 (`8679c4c`), README
 refresh PR #7, Claude Code connector PR #6, CLI project CRUD
@@ -207,3 +207,24 @@ error surfaces first); V8 pin `kind: "session_update"` Zod-error
 message format in a test (currently asserts only `startsWith
 "error:"`); V9 wiki entity refresh — `wiki/entities/core.md`
 test-count line still claims 116 instead of 128 post-merge.
+Critic v0.2 followups for PR #19 (MemoryEntry CLI slot):
+W1 + W2 + W3 closed inline in PR #19 (`b186679`) — `projectNameSchema`
+hoisted to `commands/shared/schemas.ts` (5-site consolidation +
+cross-command consistency test); `readTestEnv` deduplicated to the
+canonical `session/shared.ts` copy; `session_project_mismatch`
+mapper branch with canonical CLI message + cross-project create
+test. Still open: W4 decide `mega memory create --scope session`
+policy on ended sessions (today accepts; spec silent); W5
+explicit `memory_entry_already_exists` mapper branch (defensive
+parallel to `memory_entry_not_found`); W6 widen `contentSchema`
+regex to block U+2028 / U+2029 (also affects `titleSchema`); W7
+switch list `truncate` to `Intl.Segmenter` for grapheme-aware
+splitting (or accept codepoint-only as v0.1); W8 README refresh —
+list all v0.1 subcommands (chronic drift since PR #11); W9
+parse-on-handoff consistency policy between `memory create` (re-
+parses) and `session create` (trusts registry); W10 restore
+NODE_ENV in `apps/cli/test/memory.test.ts` afterEach (mirror
+session.test.ts save/restore pattern); W11 lock deferred
+connector-context-wiring state with integration test asserting
+`mega connector sync` block is unchanged after `mega memory
+create` until the wiring slot lands.

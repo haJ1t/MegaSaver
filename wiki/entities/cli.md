@@ -177,7 +177,7 @@ Connector status: PR <https://github.com/haJ1t/MegaSaver/pull/15> (`b1a81cc`).
 Connector status S1+S2 followups: PR <https://github.com/haJ1t/MegaSaver/pull/16> (`eb21060`).
 Cursor connector target: PR <https://github.com/haJ1t/MegaSaver/pull/17> (`f2d7f63`).
 Session update + I5 split: PR <https://github.com/haJ1t/MegaSaver/pull/18> (`04987a8`).
-MemoryEntry CLI: PR <https://github.com/haJ1t/MegaSaver/pull/TBD> (TBD).
+MemoryEntry CLI: PR <https://github.com/haJ1t/MegaSaver/pull/19> (`7a199b6`).
 
 ## Related
 

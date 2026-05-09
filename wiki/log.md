@@ -336,11 +336,20 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
 
 - Spec: `docs/superpowers/specs/2026-05-09-memory-entry-cli-design.md`
 - Plan: `docs/superpowers/plans/2026-05-09-memory-entry-cli-plan.md`
-- Branch: `feat/memory-cli`
+- Branch: `feat/memory-cli` (deleted post-merge)
 - Result: `mega memory create/list/show` lands as a thin CLI layer
   over the existing CoreRegistry surface. Append-only ledger; no
   delete/update. `--content` control-char guard at the CLI
   boundary; cross-field scope/session guard. Connector context
   wiring (sync/status reading real `listMemoryEntries`) deferred
-  to a separate slot. 24 new tests (19 memory + 5 errors).
-  cli 142 → 166, total 421 → 445. PR: TBD.
+  to a separate slot. Critic re-pass returned APPROVED_WITH_FOLLOWUPS
+  with 3 IMPORTANT findings closed inline (`b186679`): I1
+  `readTestEnv` deduplicated to canonical session/shared.ts copy;
+  I2 `projectNameSchema` hoisted to `commands/shared/schemas.ts`
+  (5 sites consolidated) + cross-command consistency test; I3
+  `session_project_mismatch` mapper branch + cross-project create
+  test. 27 new tests (19 memory + 5 errors + 3 critic-fix).
+  cli 142 → 169, total 421 → 448. PR
+  <https://github.com/haJ1t/MegaSaver/pull/19> merged into `main`
+  (merge commit `7a199b6`). W4–W11 backlog recorded in
+  `wiki/index.md` Status section.
