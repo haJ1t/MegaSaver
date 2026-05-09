@@ -231,7 +231,11 @@ describe("connectorStatusCommand — in-sync + drift", () => {
 
   it("reports in-sync immediately after sync writes the block", async () => {
     await seedProject("demo", projectRoot);
-    await seedSession("33333333-3333-4333-8333-333333333333", "claude-code", "2026-05-09T00:00:00.000Z");
+    await seedSession(
+      "33333333-3333-4333-8333-333333333333",
+      "claude-code",
+      "2026-05-09T00:00:00.000Z",
+    );
     await writeFile(join(projectRoot, "CLAUDE.md"), "");
     await runSync({ projectName: "demo" });
     logSpy.mockClear();
@@ -247,7 +251,11 @@ describe("connectorStatusCommand — in-sync + drift", () => {
 
   it("reports drift after the open session is ended", async () => {
     await seedProject("demo", projectRoot);
-    await seedSession("33333333-3333-4333-8333-333333333333", "claude-code", "2026-05-09T00:00:00.000Z");
+    await seedSession(
+      "33333333-3333-4333-8333-333333333333",
+      "claude-code",
+      "2026-05-09T00:00:00.000Z",
+    );
     await writeFile(join(projectRoot, "CLAUDE.md"), "");
     await runSync({ projectName: "demo" });
     logSpy.mockClear();
@@ -262,7 +270,11 @@ describe("connectorStatusCommand — in-sync + drift", () => {
 
   it("reports drift when the block was edited manually", async () => {
     await seedProject("demo", projectRoot);
-    await seedSession("33333333-3333-4333-8333-333333333333", "claude-code", "2026-05-09T00:00:00.000Z");
+    await seedSession(
+      "33333333-3333-4333-8333-333333333333",
+      "claude-code",
+      "2026-05-09T00:00:00.000Z",
+    );
     await writeFile(join(projectRoot, "CLAUDE.md"), "");
     await runSync({ projectName: "demo" });
     const tampered = (await readFile(join(projectRoot, "CLAUDE.md"), "utf8")).replace(

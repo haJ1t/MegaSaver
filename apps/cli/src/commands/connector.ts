@@ -48,11 +48,7 @@ const KNOWN_TARGETS: readonly ConnectorTarget[] = [CLAUDE_CODE_TARGET, codexTarg
 
 const TARGET_ID_COLUMN_WIDTH = Math.max(...KNOWN_TARGETS.map((t) => t.id.length));
 
-function formatStatusLine(
-  target: ConnectorTarget,
-  status: string,
-  session?: string,
-): string {
+function formatStatusLine(target: ConnectorTarget, status: string, session?: string): string {
   const base = `${target.id.padEnd(TARGET_ID_COLUMN_WIDTH, " ")}  ${target.relativePath}  ${status}`;
   return session === undefined ? base : `${base}  session=${session}`;
 }
@@ -280,9 +276,10 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
       return cli.exitCode;
     }
 
-    const targets = input.targetFlag === undefined
-      ? KNOWN_TARGETS
-      : KNOWN_TARGETS.filter((t) => t.id === input.targetFlag);
+    const targets =
+      input.targetFlag === undefined
+        ? KNOWN_TARGETS
+        : KNOWN_TARGETS.filter((t) => t.id === input.targetFlag);
 
     const sessions = registry.listSessions(project.id);
     let anyDriftOrError = false;
