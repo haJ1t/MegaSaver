@@ -225,6 +225,28 @@ PR <https://github.com/haJ1t/MegaSaver/pull/10> merged into `main` (merge commit
 
 PR <https://github.com/haJ1t/MegaSaver/pull/12> merged into `main` (merge commit `5b3923a`). Three of seven critic-flagged v0.2 follow-ups closed: I2 added explicit `session_already_ended` mapper case in `apps/cli/src/errors.ts` (id-only form `error: session "<id>" already ended` — outer-catch fall-through has no `endedAt` in scope; rich form stays for pre-check + race-fallback paths). I3 outer catches in `runSessionShow` and `runSessionEnd` now pass `{ kind: "session", id }`, activating the previously-dead `session_not_found` mapper branch and routing the new I2 case. I4 spec §4 `--title` bullet amended with the C0/C1+DEL control-character guard sentence (drift correction for commit `b09b907`). One new errors-module test asserts the I2 case. CLI test totals 84 → 85; core unchanged at 116; full suite 344 → 345. Code-reviewer pass returned APPROVE with one pre-existing LOW observation (no action). Worktree removed; branch deleted. Open v0.2 items now: I1 `MEGA_TEST_*` env-var gate, I5 file split at `update` time, cross-process lock test, `atomicWriteFile` + `fsync`.
 
+## [2026-05-09] schema | mega connector sync
+
+PR #TBD (`<merge-sha>`): new `mega connector sync <projectName>`
+CLI command. Wires `@megasaver/connectors-shared` primitives
+(`readTargetFile`, `upsertBlock`, `renderBlock`, `writeTargetFile`,
+`assertProjectRoot`) into a per-target loop with five status
+words (`wrote`, `noop`, `created`, `skipped`, `error`). Two known
+targets in v0.1: `claude-code` (`CLAUDE.md`) and `codex`
+(`AGENTS.md`). `--target <id>` opts in to seed a missing file.
+CLI errors module gained the `ConnectorError` mapping branch + the
+`{ kind: "connector"; targetId; relativePath }` `ZodContext`
+variant + the `invalidTargetMessage` helper with a matching
+`KNOWN_TARGET_IDS` drift guard. Tests: 14 new CLI (4 pre-target
+gates + 3 skipped/created + 5 wrote/noop/agent-selection + 2
+best-effort failure), 7 new errors-module. Two-stage external
+review per task (subagent-driven development) returned 0 Blocking.
+Tracked follow-ups for v0.2: `mega project create --root <dir>`
+to remove the smoke flow's manual `projects.json` edit, `mega
+connector status` (read-only), per-project manifest, MemoryEntry
+CLI integration to populate the now-empty memory list, JSON output
+flag pass, Cursor + Aider targets.
+
 ## [2026-05-09] chore | gate test env-vars on NODE_ENV (I1) merged
 
 PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit `0facd09`). Closes critic finding I1: `MEGA_TEST_SESSION_ID` and `MEGA_TEST_NOW` reads in `sessionCreateCommand.run` and `sessionEndCommand.run` are now gated by a new `readTestEnv(name)` helper that returns `undefined` unless `process.env["NODE_ENV"] === "test"`. Vitest sets NODE_ENV=test automatically, so existing tests pass without modification (20 session tests + 65 others = 85 CLI total, unchanged). Smoke evidence: in a clean shell with `MEGA_TEST_SESSION_ID="aaaaaaaa-..."` exported but `NODE_ENV` unset, `mega session create` emits a real `randomUUID()` rather than the injected value — gate effective. `wiki/workflows/cli-test-pattern.md` extended with a "Deterministic test injection" section documenting the helper, the save/restore `beforeEach`/`afterEach` pattern, and when NOT to use env-var injection (inner `runX` should accept `newId`/`now` directly). Net diff: 19 lines removed (four noisy inline ternaries with biome-ignore), 14 lines added (helper + doc). Code-reviewer pass returned APPROVE with 0 issues. Worktree removed; branch deleted. Open v0.2 items now: I5 file split when `update` lands, cross-process lock integration test (forked process), `atomicWriteFile` + `fsync` durability.

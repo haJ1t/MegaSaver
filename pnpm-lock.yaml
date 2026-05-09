@@ -29,6 +29,12 @@ importers:
 
   apps/cli:
     dependencies:
+      '@megasaver/connector-generic-cli':
+        specifier: workspace:*
+        version: link:../../packages/connectors/generic-cli
+      '@megasaver/connectors-shared':
+        specifier: workspace:*
+        version: link:../../packages/connectors/shared
       '@megasaver/core':
         specifier: workspace:*
         version: link:../../packages/core
