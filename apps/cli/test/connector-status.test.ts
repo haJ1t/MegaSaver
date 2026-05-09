@@ -397,7 +397,7 @@ describe("connectorStatusCommand — error + cross-target", () => {
     await runStatus({ projectName: "demo", target: "claude-code" });
     expect(process.exitCode).toBe(1);
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(lines).toEqual(["claude-code  CLAUDE.md  error"]);
+    expect(lines).toEqual(["claude-code  CLAUDE.md  error  session=none"]);
     const errors = errSpy.mock.calls.map((c) => c[0] as string).join("\n");
     expect(errors).toContain("begin sentinel");
     expect(errors).toContain("CLAUDE.md");
@@ -410,7 +410,7 @@ describe("connectorStatusCommand — error + cross-target", () => {
     await runStatus({ projectName: "demo" });
     expect(process.exitCode).toBe(1);
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(lines[0]).toBe("claude-code  CLAUDE.md  error");
+    expect(lines[0]).toBe("claude-code  CLAUDE.md  error  session=none");
     expect(lines[1]).toBe("codex        AGENTS.md  missing  session=none");
   });
 
