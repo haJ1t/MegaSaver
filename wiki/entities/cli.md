@@ -172,6 +172,28 @@ node apps/cli/dist/cli.js project list --store /tmp/demo-store
 - Pure functions accept injected parameters so tests avoid mocking
   `process` globals.
 
+## Closed-set surface derivation
+
+The following closed enums / sets have ALL their CLI surfaces
+(error messages and `--help` descriptions) derived from the source
+schema. Adding a member to the source auto-updates every surface
+without manual mirroring.
+
+| Closed enum / set | Source schema | Derived surfaces |
+|---|---|---|
+| `agentIdSchema` | `@megasaver/shared` | `invalidAgentMessage` error text (PR #22); `--agent` description on `session create` / `session update` (PR #23) |
+| `riskLevelSchema` | `@megasaver/shared` | `invalidRiskMessage` error text (PR #22); `--risk` description on `session create` / `session update` (PR #23) |
+| `memoryScopeSchema` | `@megasaver/shared` | `invalidScopeMessage` error text (PR #22); `--scope` description on `memory create` (PR #23) |
+| `KNOWN_TARGETS` (registry) | `apps/cli/src/known-targets.ts` | `KNOWN_TARGET_IDS` derivation; `invalidTargetMessage` error text (PR #22); `--target` description on `connector sync` / `connector status` (PR #25) |
+
+The "Keep in sync with X in Y" comments that previously annotated
+these sites were removed across PRs #22, #23, and #25.
+
+**Drift-guard test pattern:** each derived string is locked with a
+`toBe` pinned-format assertion (not `toContain`) that catches both
+member drift and format drift. Introduced in PR #23; extended to
+`KNOWN_TARGET_IDS` in PR #25.
+
 ## Risk
 
 Risk HIGH (`docs/superpowers/specs/2026-05-06-cli-project-crud-design.md`).
