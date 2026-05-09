@@ -37,4 +37,8 @@ describe("riskLevelSchema", () => {
       ),
     );
   });
+
+  it("preserves severity-ascending order — AA3 convention", () => {
+    expect(riskLevelSchema.options).toEqual(["low", "medium", "high", "critical"]);
+  });
 });
