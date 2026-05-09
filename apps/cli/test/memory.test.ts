@@ -251,8 +251,10 @@ describe("memoryCreateCommand", () => {
     logSpy.mockRestore();
     errSpy.mockRestore();
     process.exitCode = 0;
-    process.env.MEGA_TEST_MEMORY_ENTRY_ID = undefined;
-    process.env.MEGA_TEST_NOW = undefined;
+    // biome-ignore lint/performance/noDelete: process.env clear semantics require delete
+    delete process.env.MEGA_TEST_MEMORY_ENTRY_ID;
+    // biome-ignore lint/performance/noDelete: process.env clear semantics require delete
+    delete process.env.MEGA_TEST_NOW;
     await rm(store, { recursive: true, force: true });
   });
 

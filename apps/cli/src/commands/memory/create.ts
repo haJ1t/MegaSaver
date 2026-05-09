@@ -9,6 +9,7 @@ import {
   projectNotFoundMessage,
   scopeProjectWithSessionMessage,
   scopeSessionWithoutSessionMessage,
+  sessionNotFoundMessage,
 } from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
 import { contentSchema } from "./shared.js";
@@ -123,8 +124,9 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
     if (parsedSessionId !== null) {
       const session = registry.getSession(parsedSessionId);
       if (!session) {
-        input.stderr(`error: session "${parsedSessionId}" not found`);
-        return 1;
+        const cli = sessionNotFoundMessage(parsedSessionId);
+        input.stderr(cli.message);
+        return cli.exitCode;
       }
     }
 
