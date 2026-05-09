@@ -7,6 +7,7 @@ import {
   sessionEndCommand,
   sessionListCommand,
   sessionShowCommand,
+  sessionUpdateCommand,
 } from "../src/commands/session/index.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
@@ -537,5 +538,167 @@ describe("sessionEndCommand", () => {
       errSpy.mock.calls.some((c) => (c[0] as string).startsWith("error: invalid session id")),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("sessionUpdateCommand", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-update-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-update-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+  const SESSION_ID = "22222222-2222-4222-8222-222222222222";
+
+  async function seedOpenSession(): Promise<void> {
+    await mkdir(store, { recursive: true });
+    const ts = "2026-05-09T00:00:00.000Z";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "demo", rootPath: projectRoot, createdAt: ts, updatedAt: ts },
+      ]),
+    );
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESSION_ID,
+          projectId: PROJECT_ID,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: null,
+          startedAt: ts,
+          endedAt: null,
+        },
+      ]),
+    );
+  }
+
+  async function runUpdate(args: Record<string, string>): Promise<void> {
+    await sessionUpdateCommand.run?.({
+      args: { ...args, store },
+      cmd: sessionUpdateCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  async function readSessions(): Promise<Array<Record<string, unknown>>> {
+    return JSON.parse(await readFile(join(store, "sessions.json"), "utf8"));
+  }
+
+  it("sets title with --title 'foo'", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: SESSION_ID, title: "foo" });
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).not.toHaveBeenCalled();
+    const arr = await readSessions();
+    expect(arr[0]?.title).toBe("foo");
+  });
+
+  it("clears title with --title ''", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: SESSION_ID, title: "" });
+    expect(process.exitCode).toBe(0);
+    const arr = await readSessions();
+    expect(arr[0]?.title).toBeNull();
+  });
+
+  it("sets riskLevel with --risk high", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: SESSION_ID, risk: "high" });
+    const arr = await readSessions();
+    expect(arr[0]?.riskLevel).toBe("high");
+  });
+
+  it("sets agentId with --agent cursor", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: SESSION_ID, agent: "cursor" });
+    const arr = await readSessions();
+    expect(arr[0]?.agentId).toBe("cursor");
+  });
+
+  it("rejects empty update (no flags) with 'nothing to update'", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: SESSION_ID });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.some((c) => c[0] === "error: nothing to update")).toBe(true);
+    const arr = await readSessions();
+    expect(arr[0]?.title).toBeNull();
+  });
+
+  it("applies multi-field patch atomically", async () => {
+    await seedOpenSession();
+    await runUpdate({
+      sessionId: SESSION_ID,
+      title: "x",
+      risk: "high",
+      agent: "cursor",
+    });
+    const arr = await readSessions();
+    expect(arr[0]?.title).toBe("x");
+    expect(arr[0]?.riskLevel).toBe("high");
+    expect(arr[0]?.agentId).toBe("cursor");
+  });
+
+  it("rejects invalid session id with non-zero exit", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: "not-a-uuid", title: "foo" });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("rejects unknown session id with session_not_found", async () => {
+    await seedOpenSession();
+    await runUpdate({
+      sessionId: "99999999-9999-4999-8999-999999999999",
+      title: "x",
+    });
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some((c) => /session.*not found|does not exist/i.test(c[0] as string)),
+    ).toBe(true);
+  });
+
+  it("rejects ended session with session_already_ended", async () => {
+    await seedOpenSession();
+    const ended = JSON.parse(await readFile(join(store, "sessions.json"), "utf8"));
+    ended[0].endedAt = "2026-05-09T01:00:00.000Z";
+    await writeFile(join(store, "sessions.json"), JSON.stringify(ended));
+
+    await runUpdate({ sessionId: SESSION_ID, title: "x" });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.some((c) => /already ended/i.test(c[0] as string))).toBe(true);
+  });
+
+  it("rejects --risk with unknown level", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: SESSION_ID, risk: "bogus" });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("rejects --agent with unknown id", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: SESSION_ID, agent: "ghost-agent" });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.length).toBeGreaterThan(0);
   });
 });

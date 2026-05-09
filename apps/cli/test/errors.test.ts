@@ -1,5 +1,5 @@
 import { ConnectorError } from "@megasaver/connectors-shared";
-import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
+import { CorePersistenceError, CoreRegistryError, sessionUpdatePatchSchema } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
 import { ZodError, z } from "zod";
 import {
@@ -9,6 +9,7 @@ import {
   invalidSessionIdMessage,
   invalidTargetMessage,
   mapErrorToCliMessage,
+  nothingToUpdateMessage,
   projectNotFoundMessage,
   sessionAlreadyEndedMessage,
   sessionNotFoundMessage,
@@ -341,5 +342,24 @@ describe("connector error mappings", () => {
       message: "error: context_invalid: Connector context is invalid.",
       exitCode: 1,
     });
+  });
+});
+
+describe("errors — session update", () => {
+  it("nothingToUpdateMessage returns the documented shape", () => {
+    expect(nothingToUpdateMessage()).toEqual({
+      message: "error: nothing to update",
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage routes a Zod issue under kind: session_update", () => {
+    const result = sessionUpdatePatchSchema.safeParse({});
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const cli = mapErrorToCliMessage(result.error, { kind: "session_update" });
+      expect(cli.exitCode).toBe(1);
+      expect(cli.message.startsWith("error:")).toBe(true);
+    }
   });
 });
