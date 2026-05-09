@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   formatProjectLine,
@@ -224,5 +224,46 @@ describe("projectCreateCommand", () => {
       name: string;
     }>;
     expect(persisted).toHaveLength(1);
+  });
+
+  it("stores rootPath from --root when an absolute path is given", async () => {
+    await projectCreateCommand.run?.({
+      args: { name: "demo", store: root, root: "/tmp/abs-root-test" },
+      cmd: projectCreateCommand,
+      rawArgs: ["demo", "--store", root, "--root", "/tmp/abs-root-test"],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    const persisted = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
+      rootPath: string;
+    }>;
+    expect(persisted[0]?.rootPath).toBe("/tmp/abs-root-test");
+  });
+
+  it("resolves a relative --root to an absolute path", async () => {
+    await projectCreateCommand.run?.({
+      args: { name: "demo", store: root, root: "." },
+      cmd: projectCreateCommand,
+      rawArgs: ["demo", "--store", root, "--root", "."],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    const persisted = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
+      rootPath: string;
+    }>;
+    expect(persisted[0]?.rootPath).toBe(resolve("."));
+    expect(persisted[0]?.rootPath.startsWith("/")).toBe(true);
+  });
+
+  it("stores process.cwd() as rootPath when --root is omitted (regression)", async () => {
+    await runCreate("demo");
+
+    expect(process.exitCode).toBe(0);
+    const persisted = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
+      rootPath: string;
+    }>;
+    expect(persisted[0]?.rootPath).toBe(process.cwd());
   });
 });

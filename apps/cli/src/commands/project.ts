@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 import type { Project } from "@megasaver/core";
 import { projectIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
@@ -87,6 +88,7 @@ const nameSchema = z
 export type RunProjectCreateInput = {
   name: string;
   storeFlag: string | undefined;
+  rootFlag: string | undefined;
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
@@ -138,7 +140,7 @@ export async function runProjectCreate(input: RunProjectCreateInput): Promise<0 
     const created = registry.createProject({
       id,
       name: trimmedName,
-      rootPath: input.cwd,
+      rootPath: input.rootFlag !== undefined ? resolve(input.rootFlag) : input.cwd,
       createdAt: now,
       updatedAt: now,
     });
@@ -160,11 +162,16 @@ export const projectCreateCommand = defineCommand({
       description: "Project name (non-empty after trim).",
     },
     store: { type: "string", description: "Override store directory." },
+    root: {
+      type: "string",
+      description: "Project root directory (absolute or relative; defaults to current directory).",
+    },
   },
   async run({ args }) {
     const code = await runProjectCreate({
       name: typeof args.name === "string" ? args.name : "",
       storeFlag: typeof args.store === "string" ? args.store : undefined,
+      rootFlag: typeof args.root === "string" ? args.root : undefined,
       cwd: process.cwd(),
       // biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket access for process.env
       home: process.env["HOME"] ?? "",
