@@ -204,6 +204,15 @@ describe("sessionCreateCommand", () => {
     expect(sessions).toHaveLength(1);
     expect(sessions[0]?.agentId).toBe("cursor");
   });
+
+  it("--agent description lists every agentIdSchema member", async () => {
+    const { agentIdSchema } = await import("@megasaver/shared");
+    const members = agentIdSchema.options;
+    const desc = sessionCreateCommand.args?.agent?.description ?? "";
+    for (const m of members) {
+      expect(desc).toContain(m);
+    }
+  });
 });
 
 describe("sessionListCommand", () => {
