@@ -71,7 +71,11 @@ Without this command:
   (NFC-normalized via the existing `projectNameSchema`).
 - Session selection: latest open session whose `agentId` matches
   the target's `agentId`. `null` if no match.
-- Memory entries: always `[]` in v0.1.
+- Memory entries: project-scoped entries (always) plus
+  session-scoped entries belonging to the target's currently-
+  picked open session (`pickLatestOpenSession`). Other agents'
+  session-scoped memory is filtered out so each block reflects
+  only the relevant context.
 - Output: per-target line on stdout, errors to stderr.
 - Best-effort partial failure: continue past per-target errors;
   exit 1 if any failed.
