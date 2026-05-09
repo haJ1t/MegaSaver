@@ -235,9 +235,9 @@ describe("projectCreateCommand", () => {
     } as never);
 
     expect(process.exitCode).toBe(0);
-    const persisted = JSON.parse(
-      await readFile(join(root, "projects.json"), "utf8"),
-    ) as Array<{ rootPath: string }>;
+    const persisted = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
+      rootPath: string;
+    }>;
     expect(persisted[0]?.rootPath).toBe("/tmp/abs-root-test");
   });
 
@@ -250,9 +250,9 @@ describe("projectCreateCommand", () => {
     } as never);
 
     expect(process.exitCode).toBe(0);
-    const persisted = JSON.parse(
-      await readFile(join(root, "projects.json"), "utf8"),
-    ) as Array<{ rootPath: string }>;
+    const persisted = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
+      rootPath: string;
+    }>;
     expect(persisted[0]?.rootPath).toBe(resolve("."));
     expect(persisted[0]?.rootPath.startsWith("/")).toBe(true);
   });
@@ -261,9 +261,9 @@ describe("projectCreateCommand", () => {
     await runCreate("demo");
 
     expect(process.exitCode).toBe(0);
-    const persisted = JSON.parse(
-      await readFile(join(root, "projects.json"), "utf8"),
-    ) as Array<{ rootPath: string }>;
+    const persisted = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
+      rootPath: string;
+    }>;
     expect(persisted[0]?.rootPath).toBe(process.cwd());
   });
 });
