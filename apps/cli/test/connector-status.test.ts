@@ -63,7 +63,7 @@ describe("connectorStatusCommand — pre-target gates", () => {
     expect(process.exitCode).toBe(1);
     expect(
       errSpy.mock.calls.some(
-        (c) => c[0] === 'error: invalid target "nope", expected: claude-code | codex',
+        (c) => c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor',
       ),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
@@ -130,6 +130,7 @@ describe("connectorStatusCommand — missing + no-block", () => {
     expect(lines).toEqual([
       "claude-code  CLAUDE.md  missing  session=none",
       "codex        AGENTS.md  missing  session=none",
+      "cursor       .cursor/rules/megasaver.mdc  missing  session=none",
     ]);
   });
 
@@ -462,5 +463,106 @@ describe("connectorStatusCommand — error + cross-target", () => {
     const errors = errSpy.mock.calls.map((c) => c[0] as string).join("\n");
     expect(errors).toContain("begin sentinel");
     expect(errors).toContain("CLAUDE.md");
+  });
+});
+
+describe("connectorStatusCommand — cursor target", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-cursor-status-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-cursor-status-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  const PROJECT_ID_CURSOR_S = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const SESS_CURSOR_S = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+  async function seedProject(name: string, rootPath: string): Promise<void> {
+    await mkdir(store, { recursive: true });
+    const ts = "2026-05-09T00:00:00.000Z";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([{ id: PROJECT_ID_CURSOR_S, name, rootPath, createdAt: ts, updatedAt: ts }]),
+    );
+    await writeFile(join(store, "sessions.json"), "[]");
+  }
+
+  async function seedSession(id: string, agentId: string, startedAt: string): Promise<void> {
+    const arr = JSON.parse(await readFile(join(store, "sessions.json"), "utf8"));
+    arr.push({
+      id,
+      projectId: PROJECT_ID_CURSOR_S,
+      agentId,
+      riskLevel: "medium",
+      title: null,
+      startedAt,
+      endedAt: null,
+    });
+    await writeFile(join(store, "sessions.json"), JSON.stringify(arr));
+  }
+
+  async function runSync(args: { projectName: string; target?: string }): Promise<void> {
+    await runConnectorSync({
+      projectName: args.projectName,
+      targetFlag: args.target,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      stdout: () => {},
+      stderr: () => {},
+    });
+  }
+
+  async function runStatus(args: { projectName: string; target?: string }): Promise<void> {
+    const cliArgs: Record<string, string> = { projectName: args.projectName, store };
+    if (args.target !== undefined) cliArgs.target = args.target;
+    await connectorStatusCommand.run?.({
+      args: cliArgs,
+      cmd: connectorStatusCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  it("reports cursor as missing when no .cursor/rules/megasaver.mdc exists", async () => {
+    await seedProject("demo", projectRoot);
+    await runStatus({ projectName: "demo" });
+    expect(process.exitCode).toBe(0);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines).toEqual([
+      "claude-code  CLAUDE.md  missing  session=none",
+      "codex        AGENTS.md  missing  session=none",
+      "cursor       .cursor/rules/megasaver.mdc  missing  session=none",
+    ]);
+  });
+
+  it("round-trips cursor: sync seed then status reports in-sync", async () => {
+    await seedProject("demo", projectRoot);
+    await seedSession(SESS_CURSOR_S, "cursor", "2026-05-09T00:00:00.000Z");
+    await runSync({ projectName: "demo", target: "cursor" });
+    logSpy.mockClear();
+    errSpy.mockClear();
+
+    await runStatus({ projectName: "demo", target: "cursor" });
+    expect(process.exitCode).toBe(0);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines).toEqual([
+      `cursor       .cursor/rules/megasaver.mdc  in-sync  session=${SESS_CURSOR_S}`,
+    ]);
   });
 });

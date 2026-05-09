@@ -66,6 +66,7 @@ Writes the Mega Saver context block into each known agent file
 under the project's `rootPath`. v0.1 known targets:
 - `claude-code` → `CLAUDE.md`
 - `codex` → `AGENTS.md`
+- `cursor` → `.cursor/rules/megasaver.mdc` (frontmatter prepended on first seed)
 
 For each target the command reads the existing file, runs
 `upsertBlock`, diff-checks against the existing content, and writes
@@ -142,6 +143,7 @@ Session CRUD: PR <https://github.com/haJ1t/MegaSaver/pull/11> (`9c5a388`).
 Connector sync: PR <https://github.com/haJ1t/MegaSaver/pull/14> (`204f922`).
 Connector status: PR <https://github.com/haJ1t/MegaSaver/pull/15> (`b1a81cc`).
 Connector status S1+S2 followups: PR <https://github.com/haJ1t/MegaSaver/pull/16> (`eb21060`).
+Cursor connector target: PR <https://github.com/haJ1t/MegaSaver/pull/TBD> (TBD).
 
 ## Related
 

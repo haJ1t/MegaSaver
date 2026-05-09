@@ -134,7 +134,7 @@ describe("sessionCreateCommand", () => {
     await runCreate({ projectName: "demo", agent: "totally-fake" });
     expect(process.exitCode).toBe(1);
     expect(errSpy.mock.calls.map((c) => c[0])).toEqual([
-      'error: invalid agent "totally-fake", expected: claude-code | codex | generic-cli',
+      'error: invalid agent "totally-fake", expected: claude-code | codex | cursor | generic-cli',
     ]);
     expect(logSpy).not.toHaveBeenCalled();
   });
@@ -191,6 +191,27 @@ describe("sessionCreateCommand", () => {
       "error: title must not contain control characters",
     ]);
     expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it("creates a session with --agent cursor", async () => {
+    await seedProject(root, "demo");
+    await runCreate({ projectName: "demo", agent: "cursor", risk: "medium" });
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls).toHaveLength(1);
+    const sessions = JSON.parse(await readFile(join(root, "sessions.json"), "utf8")) as Array<{
+      agentId: string;
+    }>;
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.agentId).toBe("cursor");
+  });
+
+  it("--agent description lists every agentIdSchema member", async () => {
+    const { agentIdSchema } = await import("@megasaver/shared");
+    const members = agentIdSchema.options;
+    const desc = sessionCreateCommand.args?.agent?.description ?? "";
+    for (const m of members) {
+      expect(desc).toContain(m);
+    }
   });
 });
 

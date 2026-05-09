@@ -1,5 +1,6 @@
-import { join } from "node:path";
-import { type ConnectorTarget, codexTarget } from "@megasaver/connector-generic-cli";
+import { mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { type ConnectorTarget, codexTarget, cursorTarget } from "@megasaver/connector-generic-cli";
 import {
   type ConnectorContext,
   assertConnectorContext,
@@ -31,7 +32,7 @@ const projectNameSchema = z
   .transform((value) => value.normalize("NFC"));
 
 // Keep in sync with KNOWN_TARGET_IDS in apps/cli/src/errors.ts.
-const KNOWN_TARGET_IDS = ["claude-code", "codex"] as const;
+const KNOWN_TARGET_IDS = ["claude-code", "codex", "cursor"] as const;
 type KnownTargetId = (typeof KNOWN_TARGET_IDS)[number];
 
 function isKnownTargetId(value: string): value is KnownTargetId {
@@ -44,7 +45,7 @@ const CLAUDE_CODE_TARGET: ConnectorTarget = {
   relativePath: "CLAUDE.md",
 };
 
-const KNOWN_TARGETS: readonly ConnectorTarget[] = [CLAUDE_CODE_TARGET, codexTarget];
+const KNOWN_TARGETS: readonly ConnectorTarget[] = [CLAUDE_CODE_TARGET, codexTarget, cursorTarget];
 
 const TARGET_ID_COLUMN_WIDTH = Math.max(...KNOWN_TARGETS.map((t) => t.id.length));
 
@@ -153,7 +154,8 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
         const context = buildConnectorContext(target, project, registry.listSessions(project.id));
 
         if (existing === null) {
-          const newContent = renderBlock(context);
+          const newContent = (target.header ?? "") + renderBlock(context);
+          await mkdir(dirname(absPath), { recursive: true });
           await writeTargetFile({ absPath, content: newContent });
           input.stdout(formatStatusLine(target, "created"));
           continue;

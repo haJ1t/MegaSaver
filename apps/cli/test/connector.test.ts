@@ -67,7 +67,7 @@ describe("connectorSyncCommand — pre-target gates", () => {
     expect(process.exitCode).toBe(1);
     expect(
       errSpy.mock.calls.some(
-        (c) => c[0] === 'error: invalid target "nope", expected: claude-code | codex',
+        (c) => c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor',
       ),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
@@ -171,6 +171,7 @@ describe("connectorSyncCommand — skipped + created", () => {
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
       "claude-code  CLAUDE.md  skipped",
       "codex        AGENTS.md  skipped",
+      "cursor       .cursor/rules/megasaver.mdc  skipped",
     ]);
   });
 
@@ -181,6 +182,7 @@ describe("connectorSyncCommand — skipped + created", () => {
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
       "claude-code  CLAUDE.md  skipped",
       "codex        AGENTS.md  created",
+      "cursor       .cursor/rules/megasaver.mdc  skipped",
     ]);
     const written = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
     expect(written).toMatch(/<!-- MEGA SAVER:BEGIN -->/);
@@ -195,6 +197,7 @@ describe("connectorSyncCommand — skipped + created", () => {
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
       "claude-code  CLAUDE.md  created",
       "codex        AGENTS.md  skipped",
+      "cursor       .cursor/rules/megasaver.mdc  skipped",
     ]);
     const written = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     expect(written).toContain("Agent: claude-code");
@@ -322,6 +325,7 @@ describe("connectorSyncCommand — wrote + noop", () => {
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
       "claude-code  CLAUDE.md  wrote",
       "codex        AGENTS.md  wrote",
+      "cursor       .cursor/rules/megasaver.mdc  skipped",
     ]);
     const claudeMd = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     const agentsMd = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
@@ -359,6 +363,7 @@ describe("connectorSyncCommand — wrote + noop", () => {
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
       "claude-code  CLAUDE.md  noop",
       "codex        AGENTS.md  skipped",
+      "cursor       .cursor/rules/megasaver.mdc  skipped",
     ]);
   });
 
@@ -402,6 +407,7 @@ describe("connectorSyncCommand — wrote + noop", () => {
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
       "claude-code  CLAUDE.md  wrote",
       "codex        AGENTS.md  noop",
+      "cursor       .cursor/rules/megasaver.mdc  skipped",
     ]);
   });
 
@@ -540,7 +546,11 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
 
     expect(process.exitCode).toBe(1);
     const stdoutLines = logSpy.mock.calls.map((c) => c[0]);
-    expect(stdoutLines).toEqual(["claude-code  CLAUDE.md  wrote", "codex        AGENTS.md  error"]);
+    expect(stdoutLines).toEqual([
+      "claude-code  CLAUDE.md  wrote",
+      "codex        AGENTS.md  error",
+      "cursor       .cursor/rules/megasaver.mdc  skipped",
+    ]);
     expect(
       errSpy.mock.calls.some(
         (c) =>
@@ -655,5 +665,115 @@ describe("pickLatestOpenSession — numeric ranking", () => {
 
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
     expect(lines).toEqual([`claude-code  CLAUDE.md  missing  session=${SESS_B}`]);
+  });
+});
+
+describe("connectorSyncCommand — cursor target", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-cursor-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-cursor-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  const PROJECT_ID_CURSOR = "88888888-8888-4888-8888-888888888888";
+  const SESS_CURSOR = "99999999-9999-4999-8999-999999999999";
+
+  async function seedProject(name: string, rootPath: string): Promise<void> {
+    await mkdir(store, { recursive: true });
+    const ts = "2026-05-09T00:00:00.000Z";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([{ id: PROJECT_ID_CURSOR, name, rootPath, createdAt: ts, updatedAt: ts }]),
+    );
+    await writeFile(join(store, "sessions.json"), "[]");
+  }
+
+  async function seedSession(id: string, agentId: string, startedAt: string): Promise<void> {
+    const arr = JSON.parse(await readFile(join(store, "sessions.json"), "utf8"));
+    arr.push({
+      id,
+      projectId: PROJECT_ID_CURSOR,
+      agentId,
+      riskLevel: "medium",
+      title: null,
+      startedAt,
+      endedAt: null,
+    });
+    await writeFile(join(store, "sessions.json"), JSON.stringify(arr));
+  }
+
+  async function runSync(args: { projectName: string; target?: string }): Promise<void> {
+    const cliArgs: Record<string, string> = { projectName: args.projectName, store };
+    if (args.target !== undefined) cliArgs.target = args.target;
+    await connectorSyncCommand.run?.({
+      args: cliArgs,
+      cmd: connectorSyncCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  it("seeds .cursor/rules/megasaver.mdc with frontmatter + block on first sync", async () => {
+    await seedProject("demo", projectRoot);
+    await seedSession(SESS_CURSOR, "cursor", "2026-05-09T00:00:00.000Z");
+    await runSync({ projectName: "demo", target: "cursor" });
+
+    const path = join(projectRoot, ".cursor/rules/megasaver.mdc");
+    const content = await readFile(path, "utf8");
+    expect(content).toMatch(/^---\n/);
+    expect(content).toContain("alwaysApply: true");
+    expect(content).toContain("description: Mega Saver project context");
+    expect(content).toContain("<!-- MEGA SAVER:BEGIN -->");
+    expect(content).toContain("<!-- MEGA SAVER:END -->");
+
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines).toContain("cursor       .cursor/rules/megasaver.mdc  created");
+  });
+
+  it("preserves the seeded frontmatter on subsequent syncs (block-only update)", async () => {
+    await seedProject("demo", projectRoot);
+    await seedSession(SESS_CURSOR, "cursor", "2026-05-09T00:00:00.000Z");
+    await runSync({ projectName: "demo", target: "cursor" });
+    const path = join(projectRoot, ".cursor/rules/megasaver.mdc");
+    const seeded = await readFile(path, "utf8");
+    const seededFrontmatter = seeded.split("<!-- MEGA SAVER:BEGIN -->")[0] ?? "";
+
+    // mutate the session list so the rendered block changes
+    logSpy.mockClear();
+    await seedSession("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "cursor", "2026-05-09T01:00:00.000Z");
+    await runSync({ projectName: "demo", target: "cursor" });
+
+    const updated = await readFile(path, "utf8");
+    const updatedFrontmatter = updated.split("<!-- MEGA SAVER:BEGIN -->")[0] ?? "";
+    expect(updatedFrontmatter).toBe(seededFrontmatter);
+
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines).toContain("cursor       .cursor/rules/megasaver.mdc  wrote");
+  });
+
+  it("default sync (no --target) silently skips a missing cursor file", async () => {
+    await seedProject("demo", projectRoot);
+    await runSync({ projectName: "demo" });
+
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines).toContain("cursor       .cursor/rules/megasaver.mdc  skipped");
+    await expect(
+      readFile(join(projectRoot, ".cursor/rules/megasaver.mdc"), "utf8"),
+    ).rejects.toThrow();
   });
 });

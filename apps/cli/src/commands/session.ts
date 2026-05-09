@@ -158,7 +158,8 @@ export const sessionCreateCommand = defineCommand({
     agent: {
       type: "string",
       required: true,
-      description: "Agent id (claude-code | codex | generic-cli).",
+      // Keep in sync with agentIdSchema in @megasaver/shared.
+      description: "Agent id (claude-code | codex | cursor | generic-cli).",
     },
     risk: {
       type: "string",

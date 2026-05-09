@@ -10,13 +10,22 @@ updated: 2026-05-08
 
 # `@megasaver/connector-generic-cli`
 
-Manifest-driven connector. v0.1 ships one target: `codexTarget`
-(writes `AGENTS.md` at project root, agent id `"codex"`).
+Manifest-driven connector. v0.1 ships two targets: `codexTarget`
+(writes `AGENTS.md` at project root, agent id `"codex"`) and
+`cursorTarget` (writes `.cursor/rules/megasaver.mdc`, agent id
+`"cursor"`).
+
+The package now exports `cursorTarget` alongside `codexTarget`.
+`cursorTarget` writes `.cursor/rules/megasaver.mdc` and carries an
+optional `header` field on the `ConnectorTarget` interface that
+CLI consumers prepend exactly once when seeding a non-existing
+file. Empty header on `codexTarget` keeps existing AGENTS.md
+writes byte-identical.
 
 ## Public surface
 
-- `ConnectorTarget` (interface): `{ id, agentId, relativePath }`
-- `codexTarget`, `builtinTargets`, `findTarget(id)`
+- `ConnectorTarget` (interface): `{ id, agentId, relativePath, header? }`
+- `codexTarget`, `cursorTarget`, `builtinTargets`, `findTarget(id)`
 - `GenericCliContextSchema`, `assertGenericCliContext(input, target)`
 - `syncGenericCliTarget({ projectRoot, target, context })` →
   `Promise<string>`
