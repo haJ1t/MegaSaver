@@ -192,6 +192,18 @@ describe("sessionCreateCommand", () => {
     ]);
     expect(logSpy).not.toHaveBeenCalled();
   });
+
+  it("creates a session with --agent cursor", async () => {
+    await seedProject(root, "demo");
+    await runCreate({ projectName: "demo", agent: "cursor", risk: "medium" });
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls).toHaveLength(1);
+    const sessions = JSON.parse(await readFile(join(root, "sessions.json"), "utf8")) as Array<{
+      agentId: string;
+    }>;
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.agentId).toBe("cursor");
+  });
 });
 
 describe("sessionListCommand", () => {
