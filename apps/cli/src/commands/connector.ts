@@ -60,7 +60,7 @@ function pickLatestOpenSession(
   const candidates = sessions.filter((s) => s.endedAt === null && s.agentId === agentId);
   if (candidates.length === 0) return null;
   return candidates.reduce((latest, current) =>
-    current.startedAt > latest.startedAt ? current : latest,
+    Date.parse(current.startedAt) > Date.parse(latest.startedAt) ? current : latest,
   );
 }
 
@@ -284,11 +284,11 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
     const sessions = registry.listSessions(project.id);
     let anyDriftOrError = false;
     for (const target of targets) {
+      const session = pickLatestOpenSession(sessions, target.agentId);
+      const sessionLabel = session === null ? "none" : session.id;
       try {
         const absPath = join(project.rootPath, target.relativePath);
         const existing = await readTargetFile(absPath);
-        const session = pickLatestOpenSession(sessions, target.agentId);
-        const sessionLabel = session === null ? "none" : session.id;
 
         if (existing === null) {
           input.stdout(formatStatusLine(target, "missing", sessionLabel));
@@ -312,7 +312,7 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
         input.stdout(formatStatusLine(target, "drift", sessionLabel));
       } catch (err) {
         anyDriftOrError = true;
-        input.stdout(formatStatusLine(target, "error"));
+        input.stdout(formatStatusLine(target, "error", sessionLabel));
         const cli = mapErrorToCliMessage(err, {
           kind: "connector",
           targetId: target.id,

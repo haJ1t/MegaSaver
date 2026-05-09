@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConnectorError } from "@megasaver/connectors-shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { connectorSyncCommand } from "../src/commands/connector.js";
+import { connectorStatusCommand, connectorSyncCommand } from "../src/commands/connector.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -571,5 +571,89 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
       ),
     ).toBe(true);
     await rm(tempTarget, { force: true });
+  });
+});
+
+describe("pickLatestOpenSession — numeric ranking", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-pickrank-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-pickrank-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  const PROJECT_ID_RANK = "44444444-4444-4444-8444-444444444444";
+  const SESS_A = "55555555-5555-4555-8555-555555555555";
+  const SESS_B = "66666666-6666-4666-8666-666666666666";
+
+  it("ranks open sessions by UTC instant, not lexicographic order", async () => {
+    // Two open claude-code sessions whose lexicographic compare
+    // disagrees with the numeric (instant) compare.
+    //   sess-A startedAt = 2026-05-09T10:00:00+02:00 (UTC 08:00 — earlier)
+    //   sess-B startedAt = 2026-05-09T09:00:00Z      (UTC 09:00 — later)
+    // Lexicographic ">" picks A ("10..." > "09...").
+    // Numeric Date.parse picks B (later instant).
+    // Expected: status emits B's id.
+    await mkdir(store, { recursive: true });
+    const ts = "2026-05-09T00:00:00.000Z";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        {
+          id: PROJECT_ID_RANK,
+          name: "rank",
+          rootPath: projectRoot,
+          createdAt: ts,
+          updatedAt: ts,
+        },
+      ]),
+    );
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESS_A,
+          projectId: PROJECT_ID_RANK,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: null,
+          startedAt: "2026-05-09T10:00:00+02:00",
+          endedAt: null,
+        },
+        {
+          id: SESS_B,
+          projectId: PROJECT_ID_RANK,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: null,
+          startedAt: "2026-05-09T09:00:00Z",
+          endedAt: null,
+        },
+      ]),
+    );
+
+    await connectorStatusCommand.run?.({
+      args: { projectName: "rank", store, target: "claude-code" },
+      cmd: connectorStatusCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines).toEqual([`claude-code  CLAUDE.md  missing  session=${SESS_B}`]);
   });
 });

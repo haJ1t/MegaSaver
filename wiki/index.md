@@ -107,22 +107,21 @@ PR #5, bootstrap PRs. Open v0.2 follow-ups: I5 split
 (forked process), `atomicWriteFile` + `fsync` durability, plus
 the deferred slices `mega project create --root <dir>`, Cursor
 `.cursor/rules/*.mdc` target, Aider YAML target, MemoryEntry CLI
-commands, `--json` output flag pass. Critic v0.2 followups for
-PR #15 (`mega connector status`): S1 tighten `Session.startedAt`
-to Z-only or switch `pickLatestOpenSession` to `Date.parse`
-compare (same predicate also in `runConnectorSync`); S2 add
-`session=<id|none>` suffix to `error` status line for column
-symmetry; S3 extract `resolveProjectAndRoot` shared prologue
+commands, `--json` output flag pass. Critic v0.2 followups for PR #15 (`mega connector status`):
+S1 + S2 + S12 closed in PR #TBD (`TBD`) — `pickLatestOpenSession`
+switched to `Date.parse` numeric compare; `error` status line now
+carries `session=<id|none>` for column symmetry; S12 closed by
+decision (the duplicate compute inside `buildConnectorContext`
+is kept deliberately to preserve its self-contained shape).
+Still open: S3 extract `resolveProjectAndRoot` shared prologue
 between sync + status when third consumer arrives; S4 split
 `apps/cli/src/commands/connector.ts` (366 LOC) into
 `connector/{sync,status,shared,index}.ts`; S5 harden read-path
 symlink semantics (`readTargetFile` lstat-first or
 `assertTargetWithinProject`); S6 regression-fixture asserting
 `upsertBlock(existing, ctx) === existing` for seeded files
-inoculates byte-equality predicate; S7 multi-open-session test
-for `pickLatestOpenSession`; S8 `--target` help-text divergence
-(filter ≠ seed); S9 spec §4 example uses 3-space gutter, impl +
-tests use 2; S10 spec §11 concurrency stanza for status vs
-concurrent sync; S11 `targets.length > 0` invariant after
-filter; S12 dedupe per-target session compute in
-`runConnectorStatus`.
+inoculates byte-equality predicate; S7 multi-open-session
+tie-break test; S8 `--target` help-text divergence (filter ≠
+seed); S9 spec §4 example uses 3-space gutter, impl + tests use
+2; S10 spec §11 concurrency stanza for status vs concurrent
+sync; S11 `targets.length > 0` invariant after filter.
