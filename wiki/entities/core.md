@@ -57,17 +57,23 @@ interface CoreRegistry {
   getSession(id: SessionId): Session | null;
   listSessions(projectId: ProjectId): Session[];
   endSession(id: SessionId, opts: { endedAt: string }): Session;
+  updateSession(id: SessionId, patch: SessionUpdatePatch): Session;
   createMemoryEntry(entry: MemoryEntry): MemoryEntry;
   getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
   listMemoryEntries(projectId: ProjectId): MemoryEntry[];
 }
 ```
 
+`updateSession(id, patch)` — partial mutation on an open session.
+Throws `session_not_found` (unknown id) or `session_already_ended`
+(closed session). Patch validated by `sessionUpdatePatchSchema`
+(Zod, strict + ≥1 key required).
+
 CLI must construct **full** entities — registry parses with strict Zod and rejects partials with `CorePersistenceError("store_entity_invalid", ...)`.
 
 ## Public surface
 
-- Schemas above + their inferred types.
+- Schemas above + their inferred types, including `sessionUpdatePatchSchema`.
 - `createInMemoryCoreRegistry()` — deterministic, no I/O.
 - `createJsonDirectoryCoreRegistry({ rootDir }): CoreRegistry` — durable: `projects.json`, `sessions.json`, `memory/<projectId>.jsonl`. Temp-file + rename writes.
 - `initStore(rootDir): Promise<void>` — async, idempotent. Creates rootDir + empty `projects.json` + empty `sessions.json` if missing. Used by CLI auto-init.

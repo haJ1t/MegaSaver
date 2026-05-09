@@ -24,3 +24,16 @@ export const sessionSchema = z
   .strict();
 
 export type Session = z.infer<typeof sessionSchema>;
+
+export const sessionUpdatePatchSchema = z
+  .object({
+    title: z.string().nullable().optional(),
+    riskLevel: riskLevelSchema.optional(),
+    agentId: agentIdSchema.optional(),
+  })
+  .strict()
+  .refine((p) => Object.keys(p).length > 0, {
+    message: "patch must contain at least one field",
+  });
+
+export type SessionUpdatePatch = z.infer<typeof sessionUpdatePatchSchema>;

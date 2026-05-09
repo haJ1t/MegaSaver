@@ -73,7 +73,16 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Cursor connector target landed via PR #17 (`f2d7f63`): `agentIdSchema`
+`mega session update` + I5 split landed via PR #TBD (`TBD`):
+new `mega session update <sessionId> [--title …] [--risk …]
+[--agent …]` for partial mutation of an open session. `--title ""`
+clears to `null`; ended sessions are rejected. `@megasaver/core`
+exports `sessionUpdatePatchSchema` and a new
+`CoreRegistry.updateSession(id, patch)` method on both the
+in-memory and JSON-directory implementations. `apps/cli`'s
+`commands/session.ts` (511 LOC > §8 300 threshold) is split into
+`commands/session/{create,list,show,end,update,shared,index}.ts`
+closing v0.1 backlog item I5. Previously: Cursor connector target landed via PR #17 (`f2d7f63`): `agentIdSchema`
 widens to four members (adds `"cursor"`),
 `@megasaver/connector-generic-cli` ships `cursorTarget` writing
 `.cursor/rules/megasaver.mdc` with optional `ConnectorTarget.header`
@@ -101,11 +110,11 @@ in-memory and JSON-directory registries, `session_already_ended`
 error code, CLI errors module widened with discriminated
 `ZodContext` + 7 helpers + `as const satisfies` drift guards.
 Six packages on `main`: `@megasaver/shared` (24 tests),
-`@megasaver/core` (116 tests, 15 files), `@megasaver/cli`
-(128 tests), `@megasaver/connectors-shared` (56 tests),
+`@megasaver/core` (128 tests, 15 files), `@megasaver/cli`
+(141 tests), `@megasaver/connectors-shared` (56 tests),
 `@megasaver/connector-claude-code` (45 tests, byte-identical
 render parity), and `@megasaver/connector-generic-cli` (26 tests,
-Codex `AGENTS.md` + Cursor `.cursor/rules/megasaver.mdc` targets). 395 total. Previously merged: core
+Codex `AGENTS.md` + Cursor `.cursor/rules/megasaver.mdc` targets). 420 total. Previously merged: core
 M3+M4 PR #10 (`ac27142`), connector follow-ups + core M1/M2 PR #9
 (`0dc2e29`), generic-cli connector PR #8 (`8679c4c`), README
 refresh PR #7, Claude Code connector PR #6, CLI project CRUD

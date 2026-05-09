@@ -294,3 +294,93 @@ describe("createJsonDirectoryCoreRegistry copy behavior", () => {
     expect(registry.getMemoryEntry(MEMORY_ENTRY_ID_A)).toEqual(projectMemory);
   });
 });
+
+describe("updateSession (json-directory)", () => {
+  const PROJECT_ID = projectIdSchema.parse("33333333-3333-4333-8333-333333333333");
+  const SESSION_ID = sessionIdSchema.parse("44444444-4444-4444-8444-444444444444");
+  const TS = "2026-05-09T00:00:00.000Z";
+  const ENDED_TS = "2026-05-09T01:00:00.000Z";
+
+  function buildRegistry() {
+    const root = createTempRoot();
+    const reg = createJsonDirectoryCoreRegistry({ rootDir: root });
+    reg.createProject({
+      id: PROJECT_ID,
+      name: "test project",
+      rootPath: "/tmp/test",
+      createdAt: TS,
+      updatedAt: TS,
+    });
+    reg.createSession({
+      id: SESSION_ID,
+      projectId: PROJECT_ID,
+      agentId: "claude-code",
+      riskLevel: "medium",
+      title: null,
+      startedAt: TS,
+      endedAt: null,
+    });
+    return { reg, root };
+  }
+
+  it("persists title change to sessions.json on disk", () => {
+    const { reg, root } = buildRegistry();
+    reg.updateSession(SESSION_ID, { title: "auth refactor" });
+    const arr = JSON.parse(readFileSync(join(root, "sessions.json"), "utf8")) as Array<{
+      title: string | null;
+    }>;
+    expect(arr[0]?.title).toBe("auth refactor");
+  });
+
+  it("persists null clear on disk", () => {
+    const { reg, root } = buildRegistry();
+    reg.updateSession(SESSION_ID, { title: "first" });
+    reg.updateSession(SESSION_ID, { title: null });
+    const arr = JSON.parse(readFileSync(join(root, "sessions.json"), "utf8")) as Array<{
+      title: string | null;
+    }>;
+    expect(arr[0]?.title).toBeNull();
+  });
+
+  it("persists multi-field patch on disk", () => {
+    const { reg, root } = buildRegistry();
+    const updated = reg.updateSession(SESSION_ID, {
+      title: "x",
+      riskLevel: "high",
+      agentId: "cursor",
+    });
+    expect(updated.title).toBe("x");
+    expect(updated.riskLevel).toBe("high");
+    expect(updated.agentId).toBe("cursor");
+    const arr = JSON.parse(readFileSync(join(root, "sessions.json"), "utf8")) as Array<{
+      title: string | null;
+      riskLevel: string;
+      agentId: string;
+    }>;
+    expect(arr[0]?.title).toBe("x");
+    expect(arr[0]?.riskLevel).toBe("high");
+    expect(arr[0]?.agentId).toBe("cursor");
+  });
+
+  it("throws Zod error on empty patch", () => {
+    const { reg } = buildRegistry();
+    expect(() => reg.updateSession(SESSION_ID, {})).toThrow(/at least one field/);
+  });
+
+  it("throws session_not_found for unknown id", () => {
+    const { reg } = buildRegistry();
+    expectRegistryError(
+      () =>
+        reg.updateSession(sessionIdSchema.parse("99999999-9999-4999-8999-999999999999"), {
+          title: "x",
+        }),
+      "session_not_found",
+    );
+  });
+
+  it("throws session_already_ended for ended session", () => {
+    const { reg } = buildRegistry();
+    reg.endSession(SESSION_ID, { endedAt: ENDED_TS });
+    expect(() => reg.updateSession(SESSION_ID, { title: "x" })).toThrow(/already ended/);
+  });
+});

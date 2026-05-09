@@ -307,3 +307,17 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   381 → 395. PR <https://github.com/haJ1t/MegaSaver/pull/17>
   merged into `main` (merge commit `f2d7f63`). U2–U10 backlog
   recorded in `wiki/index.md` Status section.
+
+## [2026-05-09] schema | mega session update + I5 split
+
+- Spec: `docs/superpowers/specs/2026-05-09-mega-session-update-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-mega-session-update-plan.md`
+- Branch: `feat/session-update`
+- Result: `mega session update <sessionId> [--title …] [--risk …]
+  [--agent …]` for partial open-session mutation. `@megasaver/core`
+  ships `sessionUpdatePatchSchema` and `CoreRegistry.updateSession`
+  on both in-memory and JSON-directory implementations. CLI's
+  `commands/session.ts` (511 LOC) split into `commands/session/`
+  directory; closes v0.1 backlog item I5. 25 new tests (12 core +
+  13 cli). core 116 → 128, cli 128 → 141, total 395 → 420.
+  PR: TBD.

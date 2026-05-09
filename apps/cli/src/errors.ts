@@ -12,6 +12,7 @@ export type ZodContext =
   | { kind: "sessionId" }
   | { kind: "project"; name: string }
   | { kind: "session"; id: string }
+  | { kind: "session_update"; id: string }
   | { kind: "connector"; targetId: string; relativePath: string };
 
 export const NAME_CONTROL_CHARS_MESSAGE = "name must not contain control characters";
@@ -82,6 +83,10 @@ export function invalidSessionIdMessage(value: string): CliMessage {
 // Two-line tripwire so a third target lands intentionally with both arrays bumped.
 const KNOWN_TARGET_IDS = ["claude-code", "codex", "cursor"] as const;
 
+export function nothingToUpdateMessage(): CliMessage {
+  return { message: "error: nothing to update", exitCode: 1 };
+}
+
 export function invalidTargetMessage(value: string): CliMessage {
   return {
     message: `error: invalid target "${value}", expected: ${KNOWN_TARGET_IDS.join(" | ")}`,
@@ -108,6 +113,12 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
       const value = issue && "received" in issue ? String(issue.received) : "<unknown>";
       return invalidSessionIdMessage(value);
     }
+    if (ctx?.kind === "session_update") {
+      const issue = err.issues[0];
+      const path = issue && issue.path.length > 0 ? issue.path.join(".") : "<unknown>";
+      const msg = issue?.message ?? "invalid";
+      return { message: `error: invalid session update: ${path}: ${msg}`, exitCode: 1 };
+    }
     const firstIssue = err.issues[0];
     if (firstIssue?.message === NAME_CONTROL_CHARS_MESSAGE) {
       return {
@@ -121,14 +132,20 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
     if (err.code === "project_not_found" && ctx?.kind === "project") {
       return projectNotFoundMessage(ctx.name);
     }
-    if (err.code === "session_not_found" && ctx?.kind === "session") {
+    if (
+      err.code === "session_not_found" &&
+      (ctx?.kind === "session" || ctx?.kind === "session_update")
+    ) {
       return sessionNotFoundMessage(ctx.id);
     }
     // Outer-catch fall-through from runSessionEnd's three-way race (session
     // vanished after the pre-check AND after the inner catch's getSession
     // refresh). We have no endedAt in scope here, so produce the id-only
     // shape rather than the rich "already ended at <ts>" shape.
-    if (err.code === "session_already_ended" && ctx?.kind === "session") {
+    if (
+      err.code === "session_already_ended" &&
+      (ctx?.kind === "session" || ctx?.kind === "session_update")
+    ) {
       return {
         message: `error: session "${ctx.id}" already ended`,
         exitCode: 1,
