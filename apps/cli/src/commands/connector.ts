@@ -15,7 +15,6 @@ import { defineCommand } from "citty";
 import { invalidTargetMessage, mapErrorToCliMessage, projectNotFoundMessage } from "../errors.js";
 import {
   KNOWN_TARGETS,
-  KNOWN_TARGET_IDS,
   type KnownTargetId,
   isKnownTargetId,
 } from "../known-targets.js";
