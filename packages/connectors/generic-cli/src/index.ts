@@ -2,6 +2,7 @@ export {
   builtinTargets,
   codexTarget,
   type ConnectorTarget,
+  cursorTarget,
   findTarget,
 } from "./targets.js";
 
