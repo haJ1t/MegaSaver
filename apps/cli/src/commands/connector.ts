@@ -13,7 +13,12 @@ import {
 import type { MemoryEntry, Project, Session } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { invalidTargetMessage, mapErrorToCliMessage, projectNotFoundMessage } from "../errors.js";
-import { KNOWN_TARGETS, type KnownTargetId, isKnownTargetId } from "../known-targets.js";
+import {
+  KNOWN_TARGETS,
+  KNOWN_TARGET_IDS,
+  type KnownTargetId,
+  isKnownTargetId,
+} from "../known-targets.js";
 import { ensureStoreReady, resolveStorePath } from "../store.js";
 import { projectNameSchema } from "./shared/schemas.js";
 
@@ -181,7 +186,7 @@ export const connectorSyncCommand = defineCommand({
     },
     target: {
       type: "string",
-      description: "Optional target id to seed when its file does not exist.",
+      description: `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to seed when its file does not exist.`,
     },
     store: { type: "string", description: "Override store directory." },
   },
@@ -324,7 +329,10 @@ export const connectorStatusCommand = defineCommand({
       required: true,
       description: "Project name (must already exist).",
     },
-    target: { type: "string", description: "Optional target id to filter the report." },
+    target: {
+      type: "string",
+      description: `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to filter the report.`,
+    },
     store: { type: "string", description: "Override store directory." },
   },
   async run({ args }) {

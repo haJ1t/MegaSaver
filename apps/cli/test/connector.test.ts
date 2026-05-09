@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { ConnectorError } from "@megasaver/connectors-shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectorStatusCommand, connectorSyncCommand } from "../src/commands/connector.js";
+import { KNOWN_TARGET_IDS } from "../src/known-targets.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -1072,5 +1073,17 @@ describe("connectorSyncCommand — memoryEntries wiring", () => {
     expect(claude).not.toContain(MEM_CODEX);
     expect(agents).toContain(MEM_CODEX);
     expect(agents).not.toContain(MEM_CC_CURRENT);
+  });
+});
+
+describe("connector --target drift guards", () => {
+  it("--target description on connectorSyncCommand derives from KNOWN_TARGET_IDS", () => {
+    const expected = `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to seed when its file does not exist.`;
+    expect(connectorSyncCommand.args?.target?.description).toBe(expected);
+  });
+
+  it("--target description on connectorStatusCommand derives from KNOWN_TARGET_IDS", () => {
+    const expected = `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to filter the report.`;
+    expect(connectorStatusCommand.args?.target?.description).toBe(expected);
   });
 });
