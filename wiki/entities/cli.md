@@ -8,7 +8,7 @@ sources:
   - docs/superpowers/plans/2026-05-06-cli-project-crud-plan.md
 status: published
 created: 2026-05-05
-updated: 2026-05-08
+updated: 2026-05-09
 ---
 
 # `@megasaver/cli`
@@ -60,6 +60,25 @@ Stamps `endedAt` on an open session. Idempotency rejected by
 design: a second call surfaces `error: session "<id>" already
 ended at <ts>` and exits 1.
 
+### `mega connector sync <projectName> [--target <id>]`
+
+Writes the Mega Saver context block into each known agent file
+under the project's `rootPath`. v0.1 known targets:
+- `claude-code` → `CLAUDE.md`
+- `codex` → `AGENTS.md`
+
+For each target the command reads the existing file, runs
+`upsertBlock`, diff-checks against the existing content, and writes
+only when the block changed. Files that do not yet exist are
+silently `skipped` unless `--target <id>` opts in to seed exactly
+that one. The session embedded in the block is the latest open
+session whose `agentId` matches the target; `null` (`Session: none`)
+when no match. Memory entries are empty in v0.1.
+
+Status words on stdout: `wrote`, `noop`, `created`, `skipped`,
+`error`. Best-effort partial failure: per-target errors emit on
+stderr, the loop continues, exit 1 if any target failed.
+
 ### Store resolution
 
 Default store: `$XDG_DATA_HOME/megasaver` (fallback
@@ -105,6 +124,7 @@ Full superpowers chain applied; code-reviewer and critic passes
 required before merge.
 
 Session CRUD: PR <https://github.com/haJ1t/MegaSaver/pull/11> (`9c5a388`).
+Connector sync: PR #TBD (`<merge-sha>`).
 
 ## Related
 

@@ -72,9 +72,12 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Critic v0.2 followups I1–I4 closed via PR #13 (`0facd09`,
-NODE_ENV gate on `MEGA_TEST_*` env-vars + `readTestEnv` helper +
-workflow doc) and PR #12 (`5b3923a`, `session_already_ended`
+`mega connector sync` landed via PR #TBD (`<merge-sha>`): new
+`mega connector sync <projectName> [--target <id>]` command wiring
+`connectors-shared` primitives into a per-target loop with five
+status words. Critic v0.2 followups I1–I4 closed via PR #13
+(`0facd09`, NODE_ENV gate on `MEGA_TEST_*` env-vars + `readTestEnv`
+helper + workflow doc) and PR #12 (`5b3923a`, `session_already_ended`
 mapper case + outer-catch ctx using `kind: "session"` + spec §4
 title control-char drift correction). CLI Session CRUD itself
 landed on `main` via PR #11 (`9c5a388`): four `mega session`
@@ -85,10 +88,10 @@ error code, CLI errors module widened with discriminated
 `ZodContext` + 7 helpers + `as const satisfies` drift guards.
 Six packages on `main`: `@megasaver/shared` (22 tests),
 `@megasaver/core` (116 tests, 15 files), `@megasaver/cli`
-(85 tests), `@megasaver/connectors-shared` (56 tests),
+(106 tests), `@megasaver/connectors-shared` (56 tests),
 `@megasaver/connector-claude-code` (45 tests, byte-identical
 render parity), and `@megasaver/connector-generic-cli` (21 tests,
-Codex `AGENTS.md` target). 345 total. Previously merged: core
+Codex `AGENTS.md` target). 366 total. Previously merged: core
 M3+M4 PR #10 (`ac27142`), connector follow-ups + core M1/M2 PR #9
 (`0dc2e29`), generic-cli connector PR #8 (`8679c4c`), README
 refresh PR #7, Claude Code connector PR #6, CLI project CRUD
@@ -96,6 +99,6 @@ PR #5, bootstrap PRs. Open v0.2 follow-ups: I5 split
 `commands/session.ts` (511 LOC > §8 300 threshold) when
 `mega session update` lands, cross-process lock integration test
 (forked process), `atomicWriteFile` + `fsync` durability, plus
-the deferred slices `mega connector sync` CLI spec, Cursor
+the deferred slices `mega project create --root <dir>`, Cursor
 `.cursor/rules/*.mdc` target, Aider YAML target, MemoryEntry CLI
-commands, `--json` output flag pass.
+commands, `--json` output flag pass, `mega connector status`.
