@@ -250,3 +250,13 @@ flag pass, Cursor + Aider targets.
 ## [2026-05-09] chore | gate test env-vars on NODE_ENV (I1) merged
 
 PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit `0facd09`). Closes critic finding I1: `MEGA_TEST_SESSION_ID` and `MEGA_TEST_NOW` reads in `sessionCreateCommand.run` and `sessionEndCommand.run` are now gated by a new `readTestEnv(name)` helper that returns `undefined` unless `process.env["NODE_ENV"] === "test"`. Vitest sets NODE_ENV=test automatically, so existing tests pass without modification (20 session tests + 65 others = 85 CLI total, unchanged). Smoke evidence: in a clean shell with `MEGA_TEST_SESSION_ID="aaaaaaaa-..."` exported but `NODE_ENV` unset, `mega session create` emits a real `randomUUID()` rather than the injected value — gate effective. `wiki/workflows/cli-test-pattern.md` extended with a "Deterministic test injection" section documenting the helper, the save/restore `beforeEach`/`afterEach` pattern, and when NOT to use env-var injection (inner `runX` should accept `newId`/`now` directly). Net diff: 19 lines removed (four noisy inline ternaries with biome-ignore), 14 lines added (helper + doc). Code-reviewer pass returned APPROVE with 0 issues. Worktree removed; branch deleted. Open v0.2 items now: I5 file split when `update` lands, cross-process lock integration test (forked process), `atomicWriteFile` + `fsync` durability.
+
+## [2026-05-09] schema | mega connector status
+
+- Spec: `docs/superpowers/specs/2026-05-09-mega-connector-status-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-mega-connector-status-plan.md`
+- Branch: `feat/mega-connector-status`
+- Result: `mega connector status <projectName> [--target <id>]` —
+  read-only per-target report. 13 new tests (CLI 106 → 119, total
+  366 → 379). Status words: in-sync | drift | no-block | missing |
+  error. PR: TBD.
