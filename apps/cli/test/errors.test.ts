@@ -6,11 +6,15 @@ import {
   NAME_CONTROL_CHARS_MESSAGE,
   invalidAgentMessage,
   invalidRiskMessage,
+  invalidScopeMessage,
   invalidSessionIdMessage,
   invalidTargetMessage,
   mapErrorToCliMessage,
+  memoryEntryNotFoundMessage,
   nothingToUpdateMessage,
   projectNotFoundMessage,
+  scopeProjectWithSessionMessage,
+  scopeSessionWithoutSessionMessage,
   sessionAlreadyEndedMessage,
   sessionNotFoundMessage,
 } from "../src/errors.js";
@@ -358,6 +362,46 @@ describe("errors — session update", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const cli = mapErrorToCliMessage(result.error, { kind: "session_update" });
+      expect(cli.exitCode).toBe(1);
+      expect(cli.message.startsWith("error:")).toBe(true);
+    }
+  });
+});
+
+describe("errors — memory", () => {
+  it("memoryEntryNotFoundMessage returns the documented shape", () => {
+    expect(memoryEntryNotFoundMessage("01abcdef-abcd-4abc-8abc-abcdefabcdef")).toEqual({
+      message: 'error: memory entry "01abcdef-abcd-4abc-8abc-abcdefabcdef" not found',
+      exitCode: 1,
+    });
+  });
+
+  it("invalidScopeMessage returns the documented shape", () => {
+    expect(invalidScopeMessage("bogus")).toEqual({
+      message: 'error: invalid scope "bogus", expected: project | session',
+      exitCode: 1,
+    });
+  });
+
+  it("scopeProjectWithSessionMessage returns the documented shape", () => {
+    expect(scopeProjectWithSessionMessage()).toEqual({
+      message: "error: --session is not allowed when --scope is project",
+      exitCode: 1,
+    });
+  });
+
+  it("scopeSessionWithoutSessionMessage returns the documented shape", () => {
+    expect(scopeSessionWithoutSessionMessage()).toEqual({
+      message: "error: --session is required when --scope is session",
+      exitCode: 1,
+    });
+  });
+
+  it("mapErrorToCliMessage routes a Zod issue under kind: memory_create", () => {
+    const result = z.string().min(5).safeParse("ab");
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const cli = mapErrorToCliMessage(result.error, { kind: "memory_create" });
       expect(cli.exitCode).toBe(1);
       expect(cli.message.startsWith("error:")).toBe(true);
     }

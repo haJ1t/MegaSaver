@@ -1,5 +1,5 @@
 import { ConnectorError } from "@megasaver/connectors-shared";
-import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
+import { CorePersistenceError, CoreRegistryError, type MemoryScope } from "@megasaver/core";
 import type { AgentId, RiskLevel } from "@megasaver/shared";
 import { ZodError } from "zod";
 
@@ -10,6 +10,8 @@ export type ZodContext =
   | { kind: "store" }
   | { kind: "title" }
   | { kind: "sessionId" }
+  | { kind: "memoryEntryId" }
+  | { kind: "memory_create" }
   | { kind: "project"; name: string }
   | { kind: "session"; id: string }
   | { kind: "session_update"; id: string }
@@ -82,6 +84,8 @@ export function invalidSessionIdMessage(value: string): CliMessage {
 // Keep in sync with KNOWN_TARGETS in apps/cli/src/commands/connector.ts.
 // Two-line tripwire so a third target lands intentionally with both arrays bumped.
 const KNOWN_TARGET_IDS = ["claude-code", "codex", "cursor"] as const;
+// Keep in sync with memoryScopeSchema in @megasaver/core.
+const KNOWN_SCOPE_IDS = ["project", "session"] as const satisfies readonly MemoryScope[];
 
 export function nothingToUpdateMessage(): CliMessage {
   return { message: "error: nothing to update", exitCode: 1 };
@@ -151,6 +155,9 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
         exitCode: 1,
       };
     }
+    if (err.code === "memory_entry_not_found") {
+      return { message: "error: memory entry not found", exitCode: 1 };
+    }
     return { message: `error: ${err.message}`, exitCode: 1 };
   }
   if (err instanceof CorePersistenceError) {
@@ -208,4 +215,29 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
     return { message: `error: unexpected failure: ${err.message}`, exitCode: 1 };
   }
   return { message: "error: unexpected failure", exitCode: 1 };
+}
+
+export function memoryEntryNotFoundMessage(id: string): CliMessage {
+  return { message: `error: memory entry "${id}" not found`, exitCode: 1 };
+}
+
+export function invalidScopeMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid scope "${value}", expected: ${KNOWN_SCOPE_IDS.join(" | ")}`,
+    exitCode: 1,
+  };
+}
+
+export function scopeProjectWithSessionMessage(): CliMessage {
+  return {
+    message: "error: --session is not allowed when --scope is project",
+    exitCode: 1,
+  };
+}
+
+export function scopeSessionWithoutSessionMessage(): CliMessage {
+  return {
+    message: "error: --session is required when --scope is session",
+    exitCode: 1,
+  };
 }
