@@ -125,7 +125,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
     const sessions = registry.listSessions(project.id);
     const memoryEntries = registry.listMemoryEntries(project.id);
     let anyFailed = false;
-    for (const target of KNOWN_TARGETS as readonly ConnectorTarget[]) {
+    for (const target of KNOWN_TARGETS) {
       try {
         const absPath = join(project.rootPath, target.relativePath);
         const existing = await readTargetFile(absPath);
@@ -138,7 +138,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
         const context = buildConnectorContext(target, project, sessions, memoryEntries);
 
         if (existing === null) {
-          const newContent = (target.header ?? "") + renderBlock(context);
+          const newContent = ("header" in target ? target.header : "") + renderBlock(context);
           await mkdir(dirname(absPath), { recursive: true });
           await writeTargetFile({ absPath, content: newContent });
           input.stdout(formatStatusLine(target, "created"));

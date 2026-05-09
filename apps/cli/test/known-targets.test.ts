@@ -31,6 +31,10 @@ describe("known-targets", () => {
     expect(isKnownTargetId("")).toBe(false);
   });
 
+  // NOTE: this expectTypeOf is enforced by tsconfig.test.json's `tsc -b --noEmit`
+  // pass (run via `pnpm typecheck`), NOT by `vitest run` alone. vitest 2.1.x
+  // without `typecheck: true` mode treats expectTypeOf as a runtime no-op.
+  // pnpm verify runs both, so the type assertion holds end-to-end.
   it("KnownTargetId resolves to the closed literal union", () => {
     expectTypeOf<KnownTargetId>().toEqualTypeOf<"claude-code" | "codex" | "cursor" | "aider">();
   });
