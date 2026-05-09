@@ -252,7 +252,7 @@ describe("error helpers — additional coverage", () => {
 describe("connector error mappings", () => {
   it("invalidTargetMessage formats expected list of valid targets", () => {
     expect(invalidTargetMessage("nope")).toEqual({
-      message: 'error: invalid target "nope", expected: claude-code | codex',
+      message: 'error: invalid target "nope", expected: claude-code | codex | cursor',
       exitCode: 1,
     });
   });

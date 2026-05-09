@@ -75,7 +75,7 @@ export function invalidSessionIdMessage(value: string): CliMessage {
 
 // Keep in sync with KNOWN_TARGETS in apps/cli/src/commands/connector.ts.
 // Two-line tripwire so a third target lands intentionally with both arrays bumped.
-const KNOWN_TARGET_IDS = ["claude-code", "codex"] as const;
+const KNOWN_TARGET_IDS = ["claude-code", "codex", "cursor"] as const;
 
 export function invalidTargetMessage(value: string): CliMessage {
   return {
