@@ -112,6 +112,33 @@ describe("memoryShowCommand", () => {
     expect(process.exitCode).toBe(1);
     expect(errSpy.mock.calls.length).toBeGreaterThan(0);
   });
+
+  it("emits compact JSON object when --json is set", async () => {
+    await seed();
+    await memoryShowCommand.run?.({
+      args: { memoryEntryId: MEMORY_ID_PROJECT, store, json: true },
+      cmd: memoryShowCommand,
+      rawArgs: [MEMORY_ID_PROJECT, "--store", store, "--json"],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as {
+      id: string;
+      projectId: string;
+      scope: string;
+      sessionId: string | null;
+      content: string;
+      createdAt: string;
+    };
+    expect(parsed.id).toBe(MEMORY_ID_PROJECT);
+    expect(parsed.projectId).toBe(PROJECT_ID);
+    expect(parsed.scope).toBe("project");
+    expect(parsed.sessionId).toBeNull();
+    expect(parsed.content).toBe("user prefers TS");
+    expect(parsed.createdAt).toBe(TS);
+  });
 });
 
 describe("memoryListCommand", () => {
@@ -232,6 +259,67 @@ describe("memoryListCommand", () => {
     await runList();
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
     expect(lines[0]).toMatch(/a{59}…$/);
+  });
+
+  it("emits JSON array with full content when --json is set", async () => {
+    await seedProject();
+    await seedEntries([
+      {
+        id: MEMORY_ID_PROJECT,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        content: "user prefers TS",
+        createdAt: TS,
+      },
+      {
+        id: MEMORY_ID_SESSION,
+        projectId: PROJECT_ID,
+        sessionId: SESSION_ID,
+        scope: "session",
+        content: "checked CSRF token expiry",
+        createdAt: TS,
+      },
+    ]);
+    await memoryListCommand.run?.({
+      args: { projectName: "demo", store, json: true },
+      cmd: memoryListCommand,
+      rawArgs: ["demo", "--store", store, "--json"],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as Array<{
+      id: string;
+      projectId: string;
+      scope: string;
+      sessionId: string | null;
+      content: string;
+      createdAt: string;
+    }>;
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]?.id).toBe(MEMORY_ID_PROJECT);
+    expect(parsed[0]?.scope).toBe("project");
+    expect(parsed[0]?.sessionId).toBeNull();
+    expect(parsed[0]?.content).toBe("user prefers TS");
+    expect(parsed[1]?.id).toBe(MEMORY_ID_SESSION);
+    expect(parsed[1]?.sessionId).toBe(SESSION_ID);
+  });
+
+  it("emits [] for empty project when --json is set", async () => {
+    await seedProject();
+
+    await memoryListCommand.run?.({
+      args: { projectName: "demo", store, json: true },
+      cmd: memoryListCommand,
+      rawArgs: ["demo", "--store", store, "--json"],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(logSpy.mock.calls[0]?.[0]).toBe("[]");
   });
 });
 

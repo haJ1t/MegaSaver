@@ -7,6 +7,7 @@ import { formatMemoryListLine } from "./shared.js";
 export type RunMemoryListInput = {
   projectName: string;
   storeFlag: string | undefined;
+  jsonFlag: boolean;
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
@@ -49,8 +50,13 @@ export async function runMemoryList(input: RunMemoryListInput): Promise<0 | 1> {
       return cli.exitCode;
     }
 
-    for (const entry of registry.listMemoryEntries(project.id)) {
-      input.stdout(formatMemoryListLine(entry));
+    const entries = registry.listMemoryEntries(project.id);
+    if (input.jsonFlag) {
+      input.stdout(JSON.stringify(entries));
+    } else {
+      for (const entry of entries) {
+        input.stdout(formatMemoryListLine(entry));
+      }
     }
     return 0;
   } catch (err) {
@@ -69,11 +75,16 @@ export const memoryListCommand = defineCommand({
       description: "Project name (must already exist).",
     },
     store: { type: "string", description: "Override store directory." },
+    json: {
+      type: "boolean",
+      description: "Emit JSON instead of formatted text.",
+    },
   },
   async run({ args }) {
     const code = await runMemoryList({
       projectName: typeof args.projectName === "string" ? args.projectName : "",
       storeFlag: typeof args.store === "string" ? args.store : undefined,
+      jsonFlag: args.json === true,
       cwd: process.cwd(),
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       home: process.env["HOME"] ?? "",

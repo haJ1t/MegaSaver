@@ -6,6 +6,7 @@ import { formatMemoryShowLines, memoryEntryIdSchema } from "./shared.js";
 export type RunMemoryShowInput = {
   memoryEntryId: string;
   storeFlag: string | undefined;
+  jsonFlag: boolean;
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
@@ -46,7 +47,11 @@ export async function runMemoryShow(input: RunMemoryShowInput): Promise<0 | 1> {
       input.stderr(cli.message);
       return cli.exitCode;
     }
-    for (const line of formatMemoryShowLines(entry)) input.stdout(line);
+    if (input.jsonFlag) {
+      input.stdout(JSON.stringify(entry));
+    } else {
+      for (const line of formatMemoryShowLines(entry)) input.stdout(line);
+    }
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err);
@@ -64,11 +69,16 @@ export const memoryShowCommand = defineCommand({
       description: "Memory entry id (UUID).",
     },
     store: { type: "string", description: "Override store directory." },
+    json: {
+      type: "boolean",
+      description: "Emit JSON instead of formatted text.",
+    },
   },
   async run({ args }) {
     const code = await runMemoryShow({
       memoryEntryId: typeof args.memoryEntryId === "string" ? args.memoryEntryId : "",
       storeFlag: typeof args.store === "string" ? args.store : undefined,
+      jsonFlag: args.json === true,
       cwd: process.cwd(),
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       home: process.env["HOME"] ?? "",
