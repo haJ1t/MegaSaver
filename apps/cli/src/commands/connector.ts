@@ -4,6 +4,7 @@ import {
   type ConnectorContext,
   assertConnectorContext,
   assertProjectRoot,
+  parseBlock,
   readTargetFile,
   renderBlock,
   upsertBlock,
@@ -279,8 +280,45 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
       return cli.exitCode;
     }
 
-    // Per-target loop lands in T2.
-    return 0;
+    const targets = input.targetFlag === undefined
+      ? KNOWN_TARGETS
+      : KNOWN_TARGETS.filter((t) => t.id === input.targetFlag);
+
+    const sessions = registry.listSessions(project.id);
+    let anyDriftOrError = false;
+    for (const target of targets) {
+      try {
+        const absPath = join(project.rootPath, target.relativePath);
+        const existing = await readTargetFile(absPath);
+        const session = pickLatestOpenSession(sessions, target.agentId);
+        const sessionLabel = session === null ? "none" : session.id;
+
+        if (existing === null) {
+          input.stdout(formatStatusLine(target, "missing", sessionLabel));
+          continue;
+        }
+
+        const parsed = parseBlock(existing);
+        if (parsed.block === null) {
+          anyDriftOrError = true;
+          input.stdout(formatStatusLine(target, "no-block", sessionLabel));
+          continue;
+        }
+
+        // upsertBlock + in-sync/drift comparison lands in T3.
+        input.stdout(formatStatusLine(target, "in-sync", sessionLabel));
+      } catch (err) {
+        anyDriftOrError = true;
+        input.stdout(formatStatusLine(target, "error"));
+        const cli = mapErrorToCliMessage(err, {
+          kind: "connector",
+          targetId: target.id,
+          relativePath: target.relativePath,
+        });
+        input.stderr(cli.message);
+      }
+    }
+    return anyDriftOrError ? 1 : 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err);
     input.stderr(cli.message);
