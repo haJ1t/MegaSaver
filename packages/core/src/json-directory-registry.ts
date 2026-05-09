@@ -15,7 +15,7 @@ import {
 import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
 import { type Project, projectSchema } from "./project.js";
 import type { CoreRegistry } from "./registry.js";
-import { type Session, sessionSchema } from "./session.js";
+import { type Session, sessionSchema, sessionUpdatePatchSchema } from "./session.js";
 
 export type JsonDirectoryCoreRegistryOptions = {
   rootDir: string;
@@ -185,8 +185,23 @@ export function createJsonDirectoryCoreRegistry(
       });
     },
 
-    updateSession() {
-      throw new Error("updateSession not implemented yet (T1 stub; lands in T3)");
+    updateSession(id, patch) {
+      const parsedPatch = sessionUpdatePatchSchema.parse(patch);
+      return withDirLock(options.rootDir, () => {
+        const sessions = readSessions(paths);
+        const existingRaw = sessions.find((candidate) => candidate.id === id);
+        if (!existingRaw) {
+          throw new CoreRegistryError("session_not_found", `Session does not exist: ${id}`);
+        }
+        const existing = sessionSchema.parse(existingRaw);
+        if (existing.endedAt !== null) {
+          throw new CoreRegistryError("session_already_ended", `Session already ended: ${id}`);
+        }
+        const updated = sessionSchema.parse({ ...existing, ...parsedPatch });
+        const next = sessions.map((session) => (session.id === id ? updated : session));
+        writeSessions(paths, next);
+        return updated;
+      });
     },
 
     createMemoryEntry(entry) {
