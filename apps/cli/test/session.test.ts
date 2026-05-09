@@ -240,6 +240,12 @@ describe("sessionUpdateCommand — drift guards", () => {
     const desc = sessionUpdateCommand.args?.agent?.description ?? "";
     for (const m of agentIdSchema.options) expect(desc).toContain(m);
   });
+
+  it("--risk description on update lists every riskLevelSchema member", async () => {
+    const { riskLevelSchema } = await import("@megasaver/shared");
+    const desc = sessionUpdateCommand.args?.risk?.description ?? "";
+    for (const m of riskLevelSchema.options) expect(desc).toContain(m);
+  });
 });
 
 describe("sessionListCommand", () => {

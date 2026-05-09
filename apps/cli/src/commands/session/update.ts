@@ -123,15 +123,13 @@ export const sessionUpdateCommand = defineCommand({
       description: "Session id (UUID).",
     },
     title: { type: "string", description: "New title (empty string clears)." },
-    // Keep in sync with riskLevelSchema in @megasaver/shared.
     risk: {
       type: "string",
-      description: "New risk level (low | medium | high | critical).",
+      description: `New risk level (${riskLevelSchema.options.join(" | ")}).`,
     },
-    // Keep in sync with agentIdSchema in @megasaver/shared.
     agent: {
       type: "string",
-      description: "New agent id (claude-code | codex | cursor | aider | generic-cli).",
+      description: `New agent id (${agentIdSchema.options.join(" | ")}).`,
     },
     store: { type: "string", description: "Override store directory." },
   },
