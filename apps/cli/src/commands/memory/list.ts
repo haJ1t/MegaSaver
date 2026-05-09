@@ -2,9 +2,9 @@ import { defineCommand } from "citty";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
 import { projectNameSchema } from "../shared/schemas.js";
-import { formatSessionLine } from "./shared.js";
+import { formatMemoryListLine } from "./shared.js";
 
-export type RunSessionListInput = {
+export type RunMemoryListInput = {
   projectName: string;
   storeFlag: string | undefined;
   cwd: string;
@@ -14,7 +14,7 @@ export type RunSessionListInput = {
   stderr: (line: string) => void;
 };
 
-export async function runSessionList(input: RunSessionListInput): Promise<0 | 1> {
+export async function runMemoryList(input: RunMemoryListInput): Promise<0 | 1> {
   let rootDir: string;
   try {
     rootDir = resolveStorePath({
@@ -40,18 +40,17 @@ export async function runSessionList(input: RunSessionListInput): Promise<0 | 1>
 
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
-    if (initialized) {
-      input.stderr(`note: initialized store at ${rootDir}`);
-    }
+    if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
+
     const project = registry.listProjects().find((p) => p.name === projectName);
     if (!project) {
       const cli = projectNotFoundMessage(projectName);
       input.stderr(cli.message);
       return cli.exitCode;
     }
-    const sessions = registry.listSessions(project.id);
-    for (const session of sessions) {
-      input.stdout(formatSessionLine(session));
+
+    for (const entry of registry.listMemoryEntries(project.id)) {
+      input.stdout(formatMemoryListLine(entry));
     }
     return 0;
   } catch (err) {
@@ -61,18 +60,18 @@ export async function runSessionList(input: RunSessionListInput): Promise<0 | 1>
   }
 }
 
-export const sessionListCommand = defineCommand({
-  meta: { name: "list", description: "List sessions for a project." },
+export const memoryListCommand = defineCommand({
+  meta: { name: "list", description: "List memory entries under a project." },
   args: {
     projectName: {
       type: "positional",
       required: true,
-      description: "Project name to filter by.",
+      description: "Project name (must already exist).",
     },
     store: { type: "string", description: "Override store directory." },
   },
   async run({ args }) {
-    const code = await runSessionList({
+    const code = await runMemoryList({
       projectName: typeof args.projectName === "string" ? args.projectName : "",
       storeFlag: typeof args.store === "string" ? args.store : undefined,
       cwd: process.cwd(),

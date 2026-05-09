@@ -1,11 +1,10 @@
 import { defineCommand } from "citty";
-import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
+import { mapErrorToCliMessage, memoryEntryNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
-import { projectNameSchema } from "../shared/schemas.js";
-import { formatSessionLine } from "./shared.js";
+import { formatMemoryShowLines, memoryEntryIdSchema } from "./shared.js";
 
-export type RunSessionListInput = {
-  projectName: string;
+export type RunMemoryShowInput = {
+  memoryEntryId: string;
   storeFlag: string | undefined;
   cwd: string;
   home: string;
@@ -14,7 +13,7 @@ export type RunSessionListInput = {
   stderr: (line: string) => void;
 };
 
-export async function runSessionList(input: RunSessionListInput): Promise<0 | 1> {
+export async function runMemoryShow(input: RunMemoryShowInput): Promise<0 | 1> {
   let rootDir: string;
   try {
     rootDir = resolveStorePath({
@@ -29,30 +28,25 @@ export async function runSessionList(input: RunSessionListInput): Promise<0 | 1>
     return cli.exitCode;
   }
 
-  let projectName: string;
+  let parsedId: ReturnType<typeof memoryEntryIdSchema.parse>;
   try {
-    projectName = projectNameSchema.parse(input.projectName);
+    parsedId = memoryEntryIdSchema.parse(input.memoryEntryId);
   } catch (err) {
-    const cli = mapErrorToCliMessage(err, { kind: "name" });
+    const cli = mapErrorToCliMessage(err, { kind: "memoryEntryId" });
     input.stderr(cli.message);
     return cli.exitCode;
   }
 
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
-    if (initialized) {
-      input.stderr(`note: initialized store at ${rootDir}`);
-    }
-    const project = registry.listProjects().find((p) => p.name === projectName);
-    if (!project) {
-      const cli = projectNotFoundMessage(projectName);
+    if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
+    const entry = registry.getMemoryEntry(parsedId);
+    if (!entry) {
+      const cli = memoryEntryNotFoundMessage(parsedId);
       input.stderr(cli.message);
       return cli.exitCode;
     }
-    const sessions = registry.listSessions(project.id);
-    for (const session of sessions) {
-      input.stdout(formatSessionLine(session));
-    }
+    for (const line of formatMemoryShowLines(entry)) input.stdout(line);
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err);
@@ -61,19 +55,19 @@ export async function runSessionList(input: RunSessionListInput): Promise<0 | 1>
   }
 }
 
-export const sessionListCommand = defineCommand({
-  meta: { name: "list", description: "List sessions for a project." },
+export const memoryShowCommand = defineCommand({
+  meta: { name: "show", description: "Show a memory entry's full details." },
   args: {
-    projectName: {
+    memoryEntryId: {
       type: "positional",
       required: true,
-      description: "Project name to filter by.",
+      description: "Memory entry id (UUID).",
     },
     store: { type: "string", description: "Override store directory." },
   },
   async run({ args }) {
-    const code = await runSessionList({
-      projectName: typeof args.projectName === "string" ? args.projectName : "",
+    const code = await runMemoryShow({
+      memoryEntryId: typeof args.memoryEntryId === "string" ? args.memoryEntryId : "",
       storeFlag: typeof args.store === "string" ? args.store : undefined,
       cwd: process.cwd(),
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature

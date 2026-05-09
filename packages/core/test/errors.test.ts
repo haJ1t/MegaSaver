@@ -17,6 +17,7 @@ const codes: ReadonlyArray<CoreRegistryErrorCode> = [
   "session_not_found",
   "session_project_mismatch",
   "memory_entry_already_exists",
+  "memory_entry_not_found",
 ];
 
 const persistenceCodes: ReadonlyArray<CorePersistenceErrorCode> = [

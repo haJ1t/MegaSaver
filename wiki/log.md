@@ -331,3 +331,16 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   merged into `main` (merge commit `04987a8`). Critic verdict
   APPROVED_WITH_FOLLOWUPS, V1–V4 + V6–V9 backlog recorded in
   `wiki/index.md` Status section.
+
+## [2026-05-09] schema | MemoryEntry CLI
+
+- Spec: `docs/superpowers/specs/2026-05-09-memory-entry-cli-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-memory-entry-cli-plan.md`
+- Branch: `feat/memory-cli`
+- Result: `mega memory create/list/show` lands as a thin CLI layer
+  over the existing CoreRegistry surface. Append-only ledger; no
+  delete/update. `--content` control-char guard at the CLI
+  boundary; cross-field scope/session guard. Connector context
+  wiring (sync/status reading real `listMemoryEntries`) deferred
+  to a separate slot. 24 new tests (19 memory + 5 errors).
+  cli 142 → 166, total 421 → 445. PR: TBD.
