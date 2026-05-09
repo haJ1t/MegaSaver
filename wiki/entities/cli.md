@@ -6,9 +6,10 @@ sources:
   - docs/superpowers/plans/2026-05-05-cli-package-plan.md
   - docs/superpowers/specs/2026-05-06-cli-project-crud-design.md
   - docs/superpowers/plans/2026-05-06-cli-project-crud-plan.md
+  - docs/superpowers/specs/2026-05-10-aa4-wiki-cli-surfaces-design.md
 status: published
 created: 2026-05-05
-updated: 2026-05-09
+updated: 2026-05-10
 ---
 
 # `@megasaver/cli`
@@ -171,6 +172,32 @@ node apps/cli/dist/cli.js project list --store /tmp/demo-store
 - `doctor` remains stateless; no store interaction.
 - Pure functions accept injected parameters so tests avoid mocking
   `process` globals.
+
+## Closed-set surface derivation
+
+The following closed enums / sets have ALL their CLI surfaces
+(error messages and `--help` descriptions) derived from the source
+schema. Adding a member to the source auto-updates every surface
+without manual mirroring.
+
+| Closed enum / set | Source | Derived surfaces |
+|---|---|---|
+| `agentIdSchema` | `@megasaver/shared` | `invalidAgentMessage` error text (PR #22); `--agent` description on `session create` / `session update` (PR #23) |
+| `riskLevelSchema` | `@megasaver/shared` | `invalidRiskMessage` error text (PR #22); `--risk` description on `session create` / `session update` (PR #23) |
+| `memoryScopeSchema` | `@megasaver/core` | `invalidScopeMessage` error text (PR #22); `--scope` description on `memory create` (PR #23) |
+| `KNOWN_TARGETS` (registry) | `apps/cli/src/known-targets.ts` | `invalidTargetMessage` error text (PR #22); `--target` description on `connector sync` / `connector status` (PR #25) |
+
+The "Keep in sync with X in Y" comments that previously annotated
+these sites were removed across PRs #22, #23, and #25.
+
+**Drift-guard test layers:**
+
+1. **Description surfaces** (`--agent`, `--risk`, `--scope`, `--target`) — pinned
+   with `toBe` against the exact derived format string (catches both member drift
+   AND format drift). Introduced PR #23; extended to `KNOWN_TARGET_IDS` in PR #25.
+2. **Error-message surfaces** (`invalidAgentMessage`, `invalidRiskMessage`,
+   `invalidScopeMessage`) — asserted with `toContain` over `<schema>.options`
+   (catches member drift only). Introduced PR #22.
 
 ## Risk
 
