@@ -1,25 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { agentIdSchema, riskLevelSchema, sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
-import { z } from "zod";
 import {
-  NAME_CONTROL_CHARS_MESSAGE,
   invalidAgentMessage,
   invalidRiskMessage,
   mapErrorToCliMessage,
   projectNotFoundMessage,
 } from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
+import { projectNameSchema } from "../shared/schemas.js";
 import { readTestEnv, titleSchema } from "./shared.js";
-
-const projectNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  // C0/C1 control chars and DEL break the line-oriented output protocol.
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional
-  .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
-  .transform((value) => value.normalize("NFC"));
 
 export type RunSessionCreateInput = {
   projectName: string;

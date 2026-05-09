@@ -158,6 +158,12 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
     if (err.code === "memory_entry_not_found") {
       return { message: "error: memory entry not found", exitCode: 1 };
     }
+    if (err.code === "session_project_mismatch") {
+      return {
+        message: "error: --session does not belong to the specified project",
+        exitCode: 1,
+      };
+    }
     return { message: `error: ${err.message}`, exitCode: 1 };
   }
   if (err instanceof CorePersistenceError) {

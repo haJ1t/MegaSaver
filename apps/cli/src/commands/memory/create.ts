@@ -1,9 +1,7 @@
 import { type MemoryEntry, memoryEntrySchema, memoryScopeSchema } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
-import { z } from "zod";
 import {
-  NAME_CONTROL_CHARS_MESSAGE,
   invalidScopeMessage,
   mapErrorToCliMessage,
   projectNotFoundMessage,
@@ -12,21 +10,9 @@ import {
   sessionNotFoundMessage,
 } from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
+import { readTestEnv } from "../session/shared.js";
+import { projectNameSchema } from "../shared/schemas.js";
 import { contentSchema } from "./shared.js";
-
-const projectNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional
-  .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
-  .transform((value) => value.normalize("NFC"));
-
-function readTestEnv(name: string): string | undefined {
-  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-  if (process.env["NODE_ENV"] !== "test") return undefined;
-  return process.env[name];
-}
 
 export type RunMemoryCreateInput = {
   projectName: string;

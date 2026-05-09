@@ -422,4 +422,46 @@ describe("memoryCreateCommand", () => {
       ),
     ).toBe(true);
   });
+
+  it("rejects --session belonging to a different project", async () => {
+    // Seed two projects, one session belonging to project B.
+    await mkdir(store, { recursive: true });
+    const PROJECT_B = "55555555-5555-4555-8555-555555555555";
+    const SESSION_B = "66666666-6666-4666-8666-666666666666";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "demo-a", rootPath: "/tmp", createdAt: TS, updatedAt: TS },
+        { id: PROJECT_B, name: "demo-b", rootPath: "/tmp", createdAt: TS, updatedAt: TS },
+      ]),
+    );
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESSION_B,
+          projectId: PROJECT_B,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: null,
+          startedAt: TS,
+          endedAt: null,
+        },
+      ]),
+    );
+    await mkdir(join(store, "memory"), { recursive: true });
+
+    await runCreate({
+      projectName: "demo-a",
+      scope: "session",
+      content: "x",
+      session: SESSION_B,
+    });
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some(
+        (c) => c[0] === "error: --session does not belong to the specified project",
+      ),
+    ).toBe(true);
+  });
 });

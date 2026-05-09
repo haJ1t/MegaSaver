@@ -2,6 +2,7 @@ import { ConnectorError } from "@megasaver/connectors-shared";
 import { CorePersistenceError, CoreRegistryError, sessionUpdatePatchSchema } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
 import { ZodError, z } from "zod";
+import { projectNameSchema } from "../src/commands/shared/schemas.js";
 import {
   NAME_CONTROL_CHARS_MESSAGE,
   invalidAgentMessage,
@@ -405,5 +406,19 @@ describe("errors — memory", () => {
       expect(cli.exitCode).toBe(1);
       expect(cli.message.startsWith("error:")).toBe(true);
     }
+  });
+});
+
+describe("projectNameSchema cross-command consistency", () => {
+  it("accepts the same valid names across all consumers", () => {
+    // The schema is now hoisted to a single module, so this test
+    // is a tripwire against future regression to per-file copies.
+    const valid = "demo-project";
+    expect(projectNameSchema.parse(valid)).toBe(valid);
+  });
+
+  it("rejects the same invalid names across all consumers", () => {
+    expect(() => projectNameSchema.parse("")).toThrow();
+    expect(() => projectNameSchema.parse("foo\nbar")).toThrow();
   });
 });

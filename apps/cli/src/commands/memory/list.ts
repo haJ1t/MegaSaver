@@ -1,20 +1,8 @@
 import { defineCommand } from "citty";
-import { z } from "zod";
-import {
-  NAME_CONTROL_CHARS_MESSAGE,
-  mapErrorToCliMessage,
-  projectNotFoundMessage,
-} from "../../errors.js";
+import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
+import { projectNameSchema } from "../shared/schemas.js";
 import { formatMemoryListLine } from "./shared.js";
-
-const projectNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional
-  .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
-  .transform((value) => value.normalize("NFC"));
 
 export type RunMemoryListInput = {
   projectName: string;

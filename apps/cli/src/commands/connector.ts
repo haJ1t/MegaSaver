@@ -13,23 +13,9 @@ import {
 } from "@megasaver/connectors-shared";
 import type { Project, Session } from "@megasaver/core";
 import { defineCommand } from "citty";
-import { z } from "zod";
-import {
-  NAME_CONTROL_CHARS_MESSAGE,
-  invalidTargetMessage,
-  mapErrorToCliMessage,
-  projectNotFoundMessage,
-} from "../errors.js";
+import { invalidTargetMessage, mapErrorToCliMessage, projectNotFoundMessage } from "../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../store.js";
-
-const projectNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  // C0/C1 control chars and DEL break the line-oriented output protocol.
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional
-  .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
-  .transform((value) => value.normalize("NFC"));
+import { projectNameSchema } from "./shared/schemas.js";
 
 // Keep in sync with KNOWN_TARGET_IDS in apps/cli/src/errors.ts.
 const KNOWN_TARGET_IDS = ["claude-code", "codex", "cursor"] as const;
