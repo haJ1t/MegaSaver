@@ -39,7 +39,7 @@ Prints nothing (empty stdout) when the store is empty.
 ### `mega session create <projectName> --agent <id> [--risk medium] [--title "..."]`
 
 Creates a session against an existing project resolved by name.
-`--agent` is required (`claude-code | codex | generic-cli`),
+`--agent` is required (`claude-code | codex | cursor | generic-cli`),
 `--risk` defaults to `medium`, `--title` is optional and stored
 as `null` when omitted. Output is the new session id on stdout.
 
@@ -143,7 +143,7 @@ Session CRUD: PR <https://github.com/haJ1t/MegaSaver/pull/11> (`9c5a388`).
 Connector sync: PR <https://github.com/haJ1t/MegaSaver/pull/14> (`204f922`).
 Connector status: PR <https://github.com/haJ1t/MegaSaver/pull/15> (`b1a81cc`).
 Connector status S1+S2 followups: PR <https://github.com/haJ1t/MegaSaver/pull/16> (`eb21060`).
-Cursor connector target: PR <https://github.com/haJ1t/MegaSaver/pull/TBD> (TBD).
+Cursor connector target: PR <https://github.com/haJ1t/MegaSaver/pull/17> (`f2d7f63`).
 
 ## Related
 

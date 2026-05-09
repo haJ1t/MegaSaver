@@ -289,7 +289,7 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
 
 - Spec: `docs/superpowers/specs/2026-05-09-cursor-connector-target-design.md`
 - Plan: `docs/superpowers/plans/2026-05-09-cursor-connector-target-plan.md`
-- Branch: `feat/cursor-target`
+- Branch: `feat/cursor-target` (deleted post-merge)
 - Result: `cursor` is now a v0.1 connector target alongside
   `claude-code` and `codex`. `agentIdSchema` widens to 4 members.
   `@megasaver/connector-generic-cli` ships `cursorTarget` and an
@@ -297,6 +297,13 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   `KNOWN_TARGET_IDS` and `KNOWN_TARGETS` register cursor; sync
   prepends `target.header` once on first seed. Side fix: `AGENT_VALUES`
   in `apps/cli/src/errors.ts` updated to include cursor so the
-  invalid-agent error message lists all four. 13 new tests
-  (2 shared + 5 generic-cli + 6 cli). shared 22 → 24, generic-cli
-  21 → 26, cli 121 → 127, total 381 → 394. PR: TBD.
+  invalid-agent error message lists all four. Critic re-pass on
+  PR #17 returned APPROVED_WITH_FOLLOWUPS; U1 (session help text
+  drift) closed inline with snapshot test that derives the
+  expected agent list from `agentIdSchema.options` so the next
+  enum widening is mechanically caught. 14 new tests (2 shared +
+  5 generic-cli + 7 cli — the +7 includes the inline U1 snapshot).
+  shared 22 → 24, generic-cli 21 → 26, cli 121 → 128, total
+  381 → 395. PR <https://github.com/haJ1t/MegaSaver/pull/17>
+  merged into `main` (merge commit `f2d7f63`). U2–U10 backlog
+  recorded in `wiki/index.md` Status section.

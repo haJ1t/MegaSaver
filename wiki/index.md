@@ -73,7 +73,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Cursor connector target landed via PR #TBD (`TBD`): `agentIdSchema`
+Cursor connector target landed via PR #17 (`f2d7f63`): `agentIdSchema`
 widens to four members (adds `"cursor"`),
 `@megasaver/connector-generic-cli` ships `cursorTarget` writing
 `.cursor/rules/megasaver.mdc` with optional `ConnectorTarget.header`
@@ -102,10 +102,10 @@ error code, CLI errors module widened with discriminated
 `ZodContext` + 7 helpers + `as const satisfies` drift guards.
 Six packages on `main`: `@megasaver/shared` (24 tests),
 `@megasaver/core` (116 tests, 15 files), `@megasaver/cli`
-(127 tests), `@megasaver/connectors-shared` (56 tests),
+(128 tests), `@megasaver/connectors-shared` (56 tests),
 `@megasaver/connector-claude-code` (45 tests, byte-identical
 render parity), and `@megasaver/connector-generic-cli` (26 tests,
-Codex `AGENTS.md` + Cursor `.cursor/rules/megasaver.mdc` targets). 394 total. Previously merged: core
+Codex `AGENTS.md` + Cursor `.cursor/rules/megasaver.mdc` targets). 395 total. Previously merged: core
 M3+M4 PR #10 (`ac27142`), connector follow-ups + core M1/M2 PR #9
 (`0dc2e29`), generic-cli connector PR #8 (`8679c4c`), README
 refresh PR #7, Claude Code connector PR #6, CLI project CRUD
@@ -146,3 +146,26 @@ T7 §4 worked-example annotation in
 three lines are from multiple runs; T8 restructure
 `wiki/index.md` Status section paragraph into a list when next
 critic finding closes.
+Critic v0.2 followups for PR #17 (cursor connector target slot):
+U1 (session `--agent` help text drift) closed inline in PR #17
+(`c9ddfc8`) with a snapshot test that derives the expected agent
+list from `agentIdSchema.options`. Still open: U2 cursor-specific
+`no-block` test (current coverage tests claude-code only); U3
+test cursor sync into existing user-content `.cursor/rules/*.mdc`
+file (humanContent path through `joinWithManagedBlock`); U4
+document user-edit frontmatter contract (which edits survive
+`upsertBlock` round-trip); U5 cursor multi-open-session test for
+`pickLatestOpenSession` correctness when both claude-code and
+cursor sessions are open; U6 `mkdir({recursive:true})` failure
+path test (EACCES / ENOSPC / ENOTDIR); U7 wrap mkdir failures as
+`ConnectorError("file_write_failed", …)` for consistent error
+shape (today they fall through the unexpected-failure branch);
+U8 README refresh — `Claude Code connector` section is stale,
+codex (PR #8) and cursor (PR #17) targets unmentioned;
+U9 validate `ConnectorTarget.header` does not contain
+`MEGA_SAVER_BLOCK_START` / `MEGA_SAVER_BLOCK_END` literals at
+registration time (latent footgun for external targets); U10
+add `// claude-code lives in @megasaver/connector-claude-code;
+this aggregates across packages.` comment at
+`apps/cli/src/commands/connector.ts:48` so the cross-package
+`KNOWN_TARGETS` aggregation is discoverable for new contributors.
