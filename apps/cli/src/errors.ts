@@ -25,8 +25,9 @@ export const RISK_INVALID_MESSAGE_PREFIX = "error: invalid risk";
 export const SESSION_ID_INVALID_PREFIX = "error: invalid session id";
 
 // Keep in sync with agentIdSchema in @megasaver/shared.
-// `satisfies` makes a new variant in the shared schema fail typecheck here.
+// satisfies permits subset; widen AGENT_VALUES manually when the schema grows.
 const AGENT_VALUES = [
+  "aider",
   "claude-code",
   "codex",
   "cursor",
