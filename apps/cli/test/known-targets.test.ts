@@ -13,12 +13,7 @@ describe("known-targets", () => {
   });
 
   it("KNOWN_TARGETS includes claude-code, codex, cursor, aider in launch order", () => {
-    expect(KNOWN_TARGETS.map((t) => t.id)).toEqual([
-      "claude-code",
-      "codex",
-      "cursor",
-      "aider",
-    ]);
+    expect(KNOWN_TARGETS.map((t) => t.id)).toEqual(["claude-code", "codex", "cursor", "aider"]);
   });
 
   it("CLAUDE_CODE_TARGET shape matches the inline definition contract", () => {
@@ -37,8 +32,6 @@ describe("known-targets", () => {
   });
 
   it("KnownTargetId resolves to the closed literal union", () => {
-    expectTypeOf<KnownTargetId>().toEqualTypeOf<
-      "claude-code" | "codex" | "cursor" | "aider"
-    >();
+    expectTypeOf<KnownTargetId>().toEqualTypeOf<"claude-code" | "codex" | "cursor" | "aider">();
   });
 });

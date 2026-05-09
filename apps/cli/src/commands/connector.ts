@@ -13,11 +13,7 @@ import {
 import type { MemoryEntry, Project, Session } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { invalidTargetMessage, mapErrorToCliMessage, projectNotFoundMessage } from "../errors.js";
-import {
-  KNOWN_TARGETS,
-  type KnownTargetId,
-  isKnownTargetId,
-} from "../known-targets.js";
+import { KNOWN_TARGETS, type KnownTargetId, isKnownTargetId } from "../known-targets.js";
 import { ensureStoreReady, resolveStorePath } from "../store.js";
 import { projectNameSchema } from "./shared/schemas.js";
 

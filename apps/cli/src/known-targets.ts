@@ -1,12 +1,13 @@
-import type { AgentId } from "@megasaver/shared";
 import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
 import { aiderTarget, codexTarget, cursorTarget } from "@megasaver/connector-generic-cli";
+import type { AgentId } from "@megasaver/shared";
 
 export const CLAUDE_CODE_TARGET = {
   id: "claude-code",
   agentId: "claude-code" satisfies AgentId,
   relativePath: "CLAUDE.md",
-} as const;
+  header: undefined,
+} satisfies ConnectorTarget;
 
 export const KNOWN_TARGETS = [
   CLAUDE_CODE_TARGET,

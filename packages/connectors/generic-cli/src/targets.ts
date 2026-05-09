@@ -4,14 +4,15 @@ export interface ConnectorTarget {
   readonly id: string;
   readonly agentId: AgentId;
   readonly relativePath: string;
-  readonly header?: string;
+  readonly header?: string | undefined;
 }
 
 export const codexTarget = Object.freeze({
   id: "codex",
   agentId: "codex" satisfies AgentId,
   relativePath: "AGENTS.md",
-});
+  header: undefined,
+}) satisfies ConnectorTarget;
 
 export const cursorTarget = Object.freeze({
   id: "cursor",
@@ -31,7 +32,8 @@ export const aiderTarget = Object.freeze({
   id: "aider",
   agentId: "aider" satisfies AgentId,
   relativePath: "CONVENTIONS.md",
-});
+  header: undefined,
+}) satisfies ConnectorTarget;
 
 export const builtinTargets: readonly ConnectorTarget[] = Object.freeze([
   codexTarget,
