@@ -1,4 +1,4 @@
-import { type SessionUpdatePatch, sessionUpdatePatchSchema } from "@megasaver/core";
+import type { SessionUpdatePatch } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, nothingToUpdateMessage } from "../../errors.js";
@@ -13,7 +13,6 @@ export type RunSessionUpdateInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
-  stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
 
@@ -36,7 +35,7 @@ export async function runSessionUpdate(input: RunSessionUpdateInput): Promise<0 
   try {
     parsedSessionId = sessionIdSchema.parse(input.sessionId);
   } catch (err) {
-    const cli = mapErrorToCliMessage(err, { kind: "session" });
+    const cli = mapErrorToCliMessage(err, { kind: "sessionId" });
     input.stderr(cli.message);
     return cli.exitCode;
   }
@@ -54,20 +53,20 @@ export async function runSessionUpdate(input: RunSessionUpdateInput): Promise<0 
 
   // Build patch. Patch validation runs inside Core's updateSession via
   // sessionUpdatePatchSchema, so we just construct an unvalidated object here.
-  const patch: Record<string, unknown> = {};
+  const patch: SessionUpdatePatch = {};
   if (input.titleFlag !== undefined) {
     patch.title = input.titleFlag === "" ? null : input.titleFlag;
   }
-  if (input.riskFlag !== undefined) patch.riskLevel = input.riskFlag;
-  if (input.agentFlag !== undefined) patch.agentId = input.agentFlag;
+  if (input.riskFlag !== undefined) patch.riskLevel = input.riskFlag as never;
+  if (input.agentFlag !== undefined) patch.agentId = input.agentFlag as never;
 
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
-    registry.updateSession(parsedSessionId, patch as SessionUpdatePatch);
+    registry.updateSession(parsedSessionId, patch);
     return 0;
   } catch (err) {
-    const cli = mapErrorToCliMessage(err, { kind: "session_update" });
+    const cli = mapErrorToCliMessage(err, { kind: "session_update", id: parsedSessionId });
     input.stderr(cli.message);
     return cli.exitCode;
   }
@@ -106,12 +105,8 @@ export const sessionUpdateCommand = defineCommand({
       home: process.env["HOME"] ?? "",
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       xdgDataHome: process.env["XDG_DATA_HOME"],
-      stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
     });
     if (code !== 0) process.exitCode = code;
   },
 });
-
-// Re-export schema for consumers that need it at the CLI boundary.
-export { sessionUpdatePatchSchema };

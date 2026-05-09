@@ -12,7 +12,7 @@ export type ZodContext =
   | { kind: "sessionId" }
   | { kind: "project"; name: string }
   | { kind: "session"; id: string }
-  | { kind: "session_update" }
+  | { kind: "session_update"; id: string }
   | { kind: "connector"; targetId: string; relativePath: string };
 
 export const NAME_CONTROL_CHARS_MESSAGE = "name must not contain control characters";
@@ -132,14 +132,20 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
     if (err.code === "project_not_found" && ctx?.kind === "project") {
       return projectNotFoundMessage(ctx.name);
     }
-    if (err.code === "session_not_found" && ctx?.kind === "session") {
+    if (
+      err.code === "session_not_found" &&
+      (ctx?.kind === "session" || ctx?.kind === "session_update")
+    ) {
       return sessionNotFoundMessage(ctx.id);
     }
     // Outer-catch fall-through from runSessionEnd's three-way race (session
     // vanished after the pre-check AND after the inner catch's getSession
     // refresh). We have no endedAt in scope here, so produce the id-only
     // shape rather than the rich "already ended at <ts>" shape.
-    if (err.code === "session_already_ended" && ctx?.kind === "session") {
+    if (
+      err.code === "session_already_ended" &&
+      (ctx?.kind === "session" || ctx?.kind === "session_update")
+    ) {
       return {
         message: `error: session "${ctx.id}" already ended`,
         exitCode: 1,

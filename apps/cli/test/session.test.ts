@@ -673,7 +673,7 @@ describe("sessionUpdateCommand", () => {
     });
     expect(process.exitCode).toBe(1);
     expect(
-      errSpy.mock.calls.some((c) => /session.*not found|does not exist/i.test(c[0] as string)),
+      errSpy.mock.calls.some((c) => /^error: session ".*" not found/.test(c[0] as string)),
     ).toBe(true);
   });
 
@@ -685,7 +685,9 @@ describe("sessionUpdateCommand", () => {
 
     await runUpdate({ sessionId: SESSION_ID, title: "x" });
     expect(process.exitCode).toBe(1);
-    expect(errSpy.mock.calls.some((c) => /already ended/i.test(c[0] as string))).toBe(true);
+    expect(
+      errSpy.mock.calls.some((c) => /^error: session ".*" already ended/.test(c[0] as string)),
+    ).toBe(true);
   });
 
   it("rejects --risk with unknown level", async () => {
