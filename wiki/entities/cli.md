@@ -99,6 +99,7 @@ under the project's `rootPath`. v0.1 known targets:
 - `claude-code` → `CLAUDE.md`
 - `codex` → `AGENTS.md`
 - `cursor` → `.cursor/rules/megasaver.mdc` (frontmatter prepended on first seed)
+- `aider` → `CONVENTIONS.md` (plain markdown, no frontmatter; user wires `aider --read CONVENTIONS.md`)
 
 For each target the command reads the existing file, runs
 `upsertBlock`, diff-checks against the existing content, and writes
@@ -181,6 +182,7 @@ Cursor connector target: PR <https://github.com/haJ1t/MegaSaver/pull/17> (`f2d7f
 Session update + I5 split: PR <https://github.com/haJ1t/MegaSaver/pull/18> (`04987a8`).
 MemoryEntry CLI: PR <https://github.com/haJ1t/MegaSaver/pull/19> (`7a199b6`).
 Connector memoryEntries wiring: PR <https://github.com/haJ1t/MegaSaver/pull/20> (`b0e4382`).
+Aider connector target: PR <https://github.com/haJ1t/MegaSaver/pull/21> (`184b13d`).
 
 ## Related
 

@@ -74,11 +74,38 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Connector memoryEntries wiring landed via PR #20 (`b0e4382`):
-`mega connector sync` and `mega connector status` now read real
-memory entries via `registry.listMemoryEntries(project.id)` and
-filter them per-target to "project-scoped + current-session-
-scoped". Empty-memory projects continue to render `- none`
+Aider connector target landed via PR #21 (`184b13d`): 4th
+built-in connector target ships — `aider` → `CONVENTIONS.md`
+(plain markdown, no frontmatter; user wires `aider --read
+CONVENTIONS.md` themselves). Closes the v0.1 connector matrix
+promised in `CLAUDE.md §1` (claude-code + codex + cursor +
+aider). `agentIdSchema` widens to 5 members (alphabetic-first
+insert); `aiderTarget` joins `builtinTargets`; CLI
+`KNOWN_TARGETS` appends in launch order. Critic re-pass caught
+CRITICAL Y1 (silent stale `AGENT_VALUES` in
+`apps/cli/src/errors.ts` — `as const satisfies readonly
+AgentId[]` permits subset, so the supposed tripwire failed open
+and `mega session create --agent <typo>` lied to the user with a
+4-member valid-agent list) and MAJOR Y2 (parallel `update.ts`
+`--agent` description drift + missing drift-guard test for
+`sessionUpdateCommand`); both closed inline before merge (Y1 in
+`585554f`, Y2 in `dbad49e`). Open Y-series backlog: **Y3** docs
+drift (`CLAUDE.md §7` / `AGENTS.md` / `.cursor/rules/*.mdc`
+enumerate 3 agent files but 4 now ship); **Y4** add `aiderTarget`
+assertion to `packages/connectors/generic-cli/test/public-export.test.ts`;
+**Y5** noop + stale-block-replace coverage holes for aider sync;
+**Y6** repo-wide closed-enum drift-guard refactor (replace
+`as const satisfies readonly T[]` with proper `Equal<>`
+exhaustiveness check or use `schema.options` directly — the
+recurring fix-up pattern across cursor + aider proves the current
+tripwire is structurally insufficient); **Y7** document
+launch-order vs alphabetic convention in `docs/conventions/`.
+Previously: Connector memoryEntries wiring landed via PR #20
+(`b0e4382`): `mega connector sync` and `mega connector status`
+now read real memory entries via
+`registry.listMemoryEntries(project.id)` and filter them
+per-target to "project-scoped + current-session-scoped".
+Empty-memory projects continue to render `- none`
 byte-identically. Critic backlog item W11 (deferred-state lock
 test) closes by superseding — the wiring slot itself locks the
 real state. Previously: `mega session update` + I5 split landed via PR #18 (`04987a8`):

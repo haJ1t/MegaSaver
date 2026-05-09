@@ -374,3 +374,52 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   PR <https://github.com/haJ1t/MegaSaver/pull/20> merged into
   `main` (merge commit `b0e4382`). X4–X6 backlog recorded in
   `wiki/index.md` Status section.
+
+## [2026-05-09] schema | aider connector target
+
+- Spec: `docs/superpowers/specs/2026-05-09-aider-connector-target-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-aider-connector-target-plan.md`
+- Branch: `feat/aider-target` (deleted post-merge)
+- Result: 4th built-in connector target lands. `aider` writes
+  to `CONVENTIONS.md` (plain markdown, no frontmatter — user
+  wires `aider --read CONVENTIONS.md` themselves; auto-load
+  via `.aider.conf.yml` is YAGNI per spec §2). Closes the
+  v0.1 connector matrix promised in `CLAUDE.md §1`: claude-code
+  + codex + cursor + aider all have working `mega connector
+  sync --target <id>` and `mega session create --agent <id>`.
+  `agentIdSchema` widens 4 → 5 members (alphabetic-first
+  insert: aider, claude-code, codex, cursor, generic-cli);
+  `aiderTarget` joins `builtinTargets` in launch order; CLI
+  `KNOWN_TARGETS` and `KNOWN_TARGET_IDS` append `aider`. The
+  cursor pattern was the line-for-line precedent — the new
+  wrinkle is `header` field absent (plain markdown), proving
+  the bare-target case of the `ConnectorTarget` interface.
+  Critic re-pass found CRITICAL Y1: `AGENT_VALUES` in
+  `apps/cli/src/errors.ts` was silently stale because
+  `as const satisfies readonly AgentId[]` permits a narrower
+  type than its target — the supposed tripwire failed open
+  when `agentIdSchema` widened, leaving `mega session create
+  --agent <typo>` to print `expected: claude-code | codex |
+  cursor | generic-cli` (omitting aider). Tests at
+  `errors.test.ts:175` and `session.test.ts:138` actively
+  asserted the buggy 4-member string. Y1 closed inline in
+  `585554f` (added `aider` to AGENT_VALUES alphabetic-first +
+  honest comment + 2 test assertions updated). MAJOR Y2:
+  parallel `apps/cli/src/commands/session/update.ts:134`
+  `--agent` description still listed 4 agents; existing
+  drift-guard test only covered `sessionCreateCommand`. Y2
+  closed inline in `dbad49e` (description updated +
+  drift-guard test extended to `sessionUpdateCommand`).
+  Bonus stale-snapshot fix during Task 6 verify (`947ee8c`)
+  caught a parallel `errors.test.ts:262` snapshot still
+  pinned to 3-target `KNOWN_TARGET_IDS`. cli 176 → 183,
+  total 455 → ~466. PR
+  <https://github.com/haJ1t/MegaSaver/pull/21> merged into
+  `main` (merge commit `184b13d`). Open Y-series backlog
+  (Y3–Y7) recorded in `wiki/index.md` Status section: docs
+  enumeration drift (CLAUDE.md/AGENTS.md/.cursor still list
+  3 agent files), public-export aider assertion gap, noop +
+  stale-block-replace coverage holes, repo-wide closed-enum
+  drift-guard pattern refactor (the recurring cursor + aider
+  fix-up cycle is the proof point), launch-order vs
+  alphabetic ordering convention undocumented.
