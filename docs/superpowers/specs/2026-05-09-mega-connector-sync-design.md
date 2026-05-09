@@ -24,7 +24,7 @@ shipped `ConnectorTarget` set (claude-code → `CLAUDE.md`, codex →
 
 1. reads the existing file (`null` on ENOENT),
 2. picks the latest open session for the target's `agentId`,
-3. builds a `ConnectorContext` (memory entries empty in v0.1),
+3. builds a `ConnectorContext` (memory entries: project-scoped + current-session-scoped),
 4. computes the new block via `upsertBlock` / `renderBlock`,
 5. skips if the file is unchanged (`noop`), creates if missing and
    the user opted in (`--target <id>`), or writes the diff (`wrote`).
@@ -71,7 +71,11 @@ Without this command:
   (NFC-normalized via the existing `projectNameSchema`).
 - Session selection: latest open session whose `agentId` matches
   the target's `agentId`. `null` if no match.
-- Memory entries: always `[]` in v0.1.
+- Memory entries: project-scoped entries (always) plus
+  session-scoped entries belonging to the target's currently-
+  picked open session (`pickLatestOpenSession`). Other agents'
+  session-scoped memory is filtered out so each block reflects
+  only the relevant context.
 - Output: per-target line on stdout, errors to stderr.
 - Best-effort partial failure: continue past per-target errors;
   exit 1 if any failed.
@@ -82,8 +86,7 @@ Without this command:
 
 ### Out of scope (deferred)
 
-- MemoryEntry CLI integration. Memory rendering stays empty until
-  the `mega memory` slice lands; sync passes `memoryEntries: []`.
+- MemoryEntry CLI integration. sync passes `memoryEntries: <filtered list>` (project-scoped + current-session-scoped); see §3 for the filter rule.
 - `mega connector status` (read-only inspection).
 - `--all` flag (current default already syncs every existing
   target; flag is redundant).
@@ -200,9 +203,8 @@ for target of KNOWN_TARGETS:
     agentId: target.agentId,
     project,
     session,                  // Session | null
-    memoryEntries: [],
+    memoryEntries: filterMemoryEntriesForSession(allMemoryEntries, session),
   }
-  assertConnectorContext(context)        // throws ConnectorError
 
   newContent =
     existing === null

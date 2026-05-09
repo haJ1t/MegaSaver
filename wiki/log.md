@@ -353,3 +353,18 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   <https://github.com/haJ1t/MegaSaver/pull/19> merged into `main`
   (merge commit `7a199b6`). W4–W11 backlog recorded in
   `wiki/index.md` Status section.
+
+## [2026-05-09] schema | connector memoryEntries wiring
+
+- Spec: `docs/superpowers/specs/2026-05-09-connector-memory-wiring-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-connector-memory-wiring-plan.md`
+- Branch: `feat/connector-memory-wiring`
+- Result: `mega connector sync` / `status` flow real memory
+  entries through `buildConnectorContext`, filtered to
+  "project-scoped + current-session-scoped" per target.
+  Production change is one new helper + one signature widen + 2
+  call site updates. 7 new tests (5 sync + 2 status) lock the
+  filter contract end-to-end. Spec drift in
+  `2026-05-09-mega-connector-sync-design.md` ("memory entries
+  empty in v0.1") corrected. Closes critic backlog W11.
+  cli 169 → 176, total 448 → 455. PR: TBD.

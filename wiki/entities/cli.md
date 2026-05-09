@@ -106,7 +106,9 @@ only when the block changed. Files that do not yet exist are
 silently `skipped` unless `--target <id>` opts in to seed exactly
 that one. The session embedded in the block is the latest open
 session whose `agentId` matches the target; `null` (`Session: none`)
-when no match. Memory entries are empty in v0.1.
+when no match. Memory entries: project-scoped (always) plus session-scoped
+entries belonging to the target's currently-picked open
+session. Other agents' session-scoped memory is filtered out.
 
 Status words on stdout: `wrote`, `noop`, `created`, `skipped`,
 `error`. Best-effort partial failure: per-target errors emit on
@@ -178,6 +180,7 @@ Connector status S1+S2 followups: PR <https://github.com/haJ1t/MegaSaver/pull/16
 Cursor connector target: PR <https://github.com/haJ1t/MegaSaver/pull/17> (`f2d7f63`).
 Session update + I5 split: PR <https://github.com/haJ1t/MegaSaver/pull/18> (`04987a8`).
 MemoryEntry CLI: PR <https://github.com/haJ1t/MegaSaver/pull/19> (`7a199b6`).
+Connector memoryEntries wiring: PR <https://github.com/haJ1t/MegaSaver/pull/TBD> (TBD).
 
 ## Related
 

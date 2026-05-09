@@ -3,7 +3,6 @@ import { dirname, join } from "node:path";
 import { type ConnectorTarget, codexTarget, cursorTarget } from "@megasaver/connector-generic-cli";
 import {
   type ConnectorContext,
-  assertConnectorContext,
   assertProjectRoot,
   parseBlock,
   readTargetFile,
@@ -11,7 +10,7 @@ import {
   upsertBlock,
   writeTargetFile,
 } from "@megasaver/connectors-shared";
-import type { Project, Session } from "@megasaver/core";
+import type { MemoryEntry, Project, Session } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { invalidTargetMessage, mapErrorToCliMessage, projectNotFoundMessage } from "../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../store.js";
@@ -51,18 +50,30 @@ function pickLatestOpenSession(
   );
 }
 
+function filterMemoryEntriesForSession(
+  entries: readonly MemoryEntry[],
+  session: Session | null,
+): MemoryEntry[] {
+  return entries.filter((entry) => {
+    if (entry.scope === "project") return true;
+    return session !== null && entry.sessionId === session.id;
+  });
+}
+
 function buildConnectorContext(
   target: ConnectorTarget,
   project: Project,
   allSessions: readonly Session[],
+  allMemoryEntries: readonly MemoryEntry[],
 ): ConnectorContext {
   const session = pickLatestOpenSession(allSessions, target.agentId);
-  return assertConnectorContext({
+  const memoryEntries = filterMemoryEntriesForSession(allMemoryEntries, session);
+  return {
     agentId: target.agentId,
     project,
     session,
-    memoryEntries: [],
-  });
+    memoryEntries,
+  };
 }
 
 export type RunConnectorSyncInput = {
@@ -126,6 +137,8 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
       return cli.exitCode;
     }
 
+    const sessions = registry.listSessions(project.id);
+    const memoryEntries = registry.listMemoryEntries(project.id);
     let anyFailed = false;
     for (const target of KNOWN_TARGETS) {
       try {
@@ -137,7 +150,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           continue;
         }
 
-        const context = buildConnectorContext(target, project, registry.listSessions(project.id));
+        const context = buildConnectorContext(target, project, sessions, memoryEntries);
 
         if (existing === null) {
           const newContent = (target.header ?? "") + renderBlock(context);
@@ -270,6 +283,7 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
         : KNOWN_TARGETS.filter((t) => t.id === input.targetFlag);
 
     const sessions = registry.listSessions(project.id);
+    const memoryEntries = registry.listMemoryEntries(project.id);
     let anyDriftOrError = false;
     for (const target of targets) {
       const session = pickLatestOpenSession(sessions, target.agentId);
@@ -290,7 +304,7 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
           continue;
         }
 
-        const context = buildConnectorContext(target, project, sessions);
+        const context = buildConnectorContext(target, project, sessions, memoryEntries);
         const upserted = upsertBlock({ existingContent: existing, context });
         if (upserted === existing) {
           input.stdout(formatStatusLine(target, "in-sync", sessionLabel));

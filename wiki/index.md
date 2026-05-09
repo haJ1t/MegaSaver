@@ -74,15 +74,14 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-MemoryEntry CLI landed via PR #19 (`7a199b6`): new
-`mega memory create/list/show` subcommands as a thin CLI layer
-over the existing `CoreRegistry.{createMemoryEntry,getMemoryEntry,
-listMemoryEntries}` surface. Append-only ledger; no delete/update
-in v0.1. `--content` rejects empty / control-char / multi-line at
-the CLI boundary; `--scope` cross-field guard enforces
-project↔session pairing. `mega connector sync` / `status` continue
-to pass `memoryEntries: []` to the block context — wiring to read
-the real list is a separate slot. Previously: `mega session update` + I5 split landed via PR #18 (`04987a8`):
+Connector memoryEntries wiring landed via PR #TBD (`TBD`):
+`mega connector sync` and `mega connector status` now read real
+memory entries via `registry.listMemoryEntries(project.id)` and
+filter them per-target to "project-scoped + current-session-
+scoped". Empty-memory projects continue to render `- none`
+byte-identically. Critic backlog item W11 (deferred-state lock
+test) closes by superseding — the wiring slot itself locks the
+real state. Previously: `mega session update` + I5 split landed via PR #18 (`04987a8`):
 new `mega session update <sessionId> [--title …] [--risk …]
 [--agent …]` for partial mutation of an open session. `--title ""`
 clears to `null`; ended sessions are rejected. `@megasaver/core`
@@ -120,10 +119,10 @@ error code, CLI errors module widened with discriminated
 `ZodContext` + 7 helpers + `as const satisfies` drift guards.
 Six packages on `main`: `@megasaver/shared` (24 tests),
 `@megasaver/core` (128 tests, 15 files), `@megasaver/cli`
-(169 tests), `@megasaver/connectors-shared` (56 tests),
+(176 tests), `@megasaver/connectors-shared` (56 tests),
 `@megasaver/connector-claude-code` (45 tests, byte-identical
 render parity), and `@megasaver/connector-generic-cli` (26 tests,
-Codex `AGENTS.md` + Cursor `.cursor/rules/megasaver.mdc` targets). 448 total. Previously merged: core
+Codex `AGENTS.md` + Cursor `.cursor/rules/megasaver.mdc` targets). 455 total. Previously merged: core
 M3+M4 PR #10 (`ac27142`), connector follow-ups + core M1/M2 PR #9
 (`0dc2e29`), generic-cli connector PR #8 (`8679c4c`), README
 refresh PR #7, Claude Code connector PR #6, CLI project CRUD

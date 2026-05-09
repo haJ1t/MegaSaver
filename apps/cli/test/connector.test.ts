@@ -777,3 +777,244 @@ describe("connectorSyncCommand — cursor target", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("connectorSyncCommand — memoryEntries wiring", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-conn-mem-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-conn-mem-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+  const SESSION_CC = "22222222-2222-4222-8222-222222222222";
+  const SESSION_CC_OLD = "33333333-3333-4333-8333-333333333333";
+  const SESSION_CODEX = "44444444-4444-4444-8444-444444444444";
+  const MEM_PROJECT = "55555555-5555-4555-8555-555555555555";
+  const MEM_CC_CURRENT = "66666666-6666-4666-8666-666666666666";
+  const MEM_CC_OLD = "77777777-7777-4777-8777-777777777777";
+  const MEM_CODEX = "88888888-8888-4888-8888-888888888888";
+  const MEM_ORPHAN = "99999999-9999-4999-8999-999999999999";
+  const TS = "2026-05-09T00:00:00.000Z";
+  const TS_LATER = "2026-05-09T01:00:00.000Z";
+
+  async function seedProject(): Promise<void> {
+    await mkdir(store, { recursive: true });
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "demo", rootPath: projectRoot, createdAt: TS, updatedAt: TS },
+      ]),
+    );
+    await writeFile(join(store, "sessions.json"), "[]");
+    await mkdir(join(store, "memory"), { recursive: true });
+  }
+
+  async function seedSessions(sessions: object[]): Promise<void> {
+    await writeFile(join(store, "sessions.json"), JSON.stringify(sessions));
+  }
+
+  async function seedMemory(entries: object[]): Promise<void> {
+    const body = entries.map((e) => JSON.stringify(e)).join("\n") + (entries.length ? "\n" : "");
+    await writeFile(join(store, "memory", `${PROJECT_ID}.jsonl`), body);
+  }
+
+  async function runSync(args: { target?: string }): Promise<void> {
+    const cliArgs: Record<string, string> = { projectName: "demo", store };
+    if (args.target !== undefined) cliArgs.target = args.target;
+    await connectorSyncCommand.run?.({
+      args: cliArgs,
+      cmd: connectorSyncCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  it("renders project-scoped memory in the block", async () => {
+    await seedProject();
+    await seedSessions([
+      {
+        id: SESSION_CC,
+        projectId: PROJECT_ID,
+        agentId: "claude-code",
+        riskLevel: "medium",
+        title: null,
+        startedAt: TS,
+        endedAt: null,
+      },
+    ]);
+    await seedMemory([
+      {
+        id: MEM_PROJECT,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        content: "user prefers TS",
+        createdAt: TS,
+      },
+    ]);
+    await writeFile(join(projectRoot, "CLAUDE.md"), "");
+    await runSync({ target: "claude-code" });
+
+    const claude = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    expect(claude).toContain(`- [project:${MEM_PROJECT}] user prefers TS`);
+  });
+
+  it("includes session-scoped memory belonging to the current session", async () => {
+    await seedProject();
+    await seedSessions([
+      {
+        id: SESSION_CC,
+        projectId: PROJECT_ID,
+        agentId: "claude-code",
+        riskLevel: "medium",
+        title: null,
+        startedAt: TS,
+        endedAt: null,
+      },
+    ]);
+    await seedMemory([
+      {
+        id: MEM_CC_CURRENT,
+        projectId: PROJECT_ID,
+        sessionId: SESSION_CC,
+        scope: "session",
+        content: "checked CSRF token expiry",
+        createdAt: TS,
+      },
+    ]);
+    await writeFile(join(projectRoot, "CLAUDE.md"), "");
+    await runSync({ target: "claude-code" });
+
+    const claude = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    expect(claude).toContain(`- [session:${MEM_CC_CURRENT}] checked CSRF token expiry`);
+  });
+
+  it("excludes session-scoped memory belonging to other sessions", async () => {
+    await seedProject();
+    await seedSessions([
+      {
+        id: SESSION_CC,
+        projectId: PROJECT_ID,
+        agentId: "claude-code",
+        riskLevel: "medium",
+        title: null,
+        startedAt: TS_LATER,
+        endedAt: null,
+      },
+      {
+        id: SESSION_CC_OLD,
+        projectId: PROJECT_ID,
+        agentId: "claude-code",
+        riskLevel: "medium",
+        title: null,
+        startedAt: TS,
+        endedAt: TS_LATER,
+      },
+    ]);
+    await seedMemory([
+      {
+        id: MEM_CC_OLD,
+        projectId: PROJECT_ID,
+        sessionId: SESSION_CC_OLD,
+        scope: "session",
+        content: "old work note",
+        createdAt: TS,
+      },
+    ]);
+    await writeFile(join(projectRoot, "CLAUDE.md"), "");
+    await runSync({ target: "claude-code" });
+
+    const claude = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    expect(claude).not.toContain(MEM_CC_OLD);
+    expect(claude).toContain("- none");
+  });
+
+  it("filters out session-scoped memory when no current session", async () => {
+    await seedProject();
+    // No sessions seeded → pickLatestOpenSession returns null
+    await seedMemory([
+      {
+        id: MEM_ORPHAN,
+        projectId: PROJECT_ID,
+        sessionId: SESSION_CC,
+        scope: "session",
+        content: "orphan note",
+        createdAt: TS,
+      },
+    ]);
+    await writeFile(join(projectRoot, "CLAUDE.md"), "");
+    await runSync({ target: "claude-code" });
+
+    const claude = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    expect(claude).toContain("Session: none");
+    expect(claude).not.toContain(MEM_ORPHAN);
+    expect(claude).toContain("- none");
+  });
+
+  it("isolates per-agent session-scoped memory across targets", async () => {
+    await seedProject();
+    await seedSessions([
+      {
+        id: SESSION_CC,
+        projectId: PROJECT_ID,
+        agentId: "claude-code",
+        riskLevel: "medium",
+        title: null,
+        startedAt: TS,
+        endedAt: null,
+      },
+      {
+        id: SESSION_CODEX,
+        projectId: PROJECT_ID,
+        agentId: "codex",
+        riskLevel: "medium",
+        title: null,
+        startedAt: TS,
+        endedAt: null,
+      },
+    ]);
+    await seedMemory([
+      {
+        id: MEM_CC_CURRENT,
+        projectId: PROJECT_ID,
+        sessionId: SESSION_CC,
+        scope: "session",
+        content: "claude-code note",
+        createdAt: TS,
+      },
+      {
+        id: MEM_CODEX,
+        projectId: PROJECT_ID,
+        sessionId: SESSION_CODEX,
+        scope: "session",
+        content: "codex note",
+        createdAt: TS,
+      },
+    ]);
+    await writeFile(join(projectRoot, "CLAUDE.md"), "");
+    await writeFile(join(projectRoot, "AGENTS.md"), "");
+    await runSync({});
+
+    const claude = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    const agents = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
+    expect(claude).toContain(MEM_CC_CURRENT);
+    expect(claude).not.toContain(MEM_CODEX);
+    expect(agents).toContain(MEM_CODEX);
+    expect(agents).not.toContain(MEM_CC_CURRENT);
+  });
+});

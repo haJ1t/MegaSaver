@@ -566,3 +566,173 @@ describe("connectorStatusCommand — cursor target", () => {
     ]);
   });
 });
+
+describe("connectorStatusCommand — memoryEntries drift", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-status-mem-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-status-mem-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  const PROJECT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const SESSION_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const MEM_FIRST = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const MEM_SECOND = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  const TS = "2026-05-09T00:00:00.000Z";
+  const TS_LATER = "2026-05-09T01:00:00.000Z";
+
+  async function seedProject(): Promise<void> {
+    await mkdir(store, { recursive: true });
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "demo", rootPath: projectRoot, createdAt: TS, updatedAt: TS },
+      ]),
+    );
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESSION_ID,
+          projectId: PROJECT_ID,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: null,
+          startedAt: TS,
+          endedAt: null,
+        },
+      ]),
+    );
+    await mkdir(join(store, "memory"), { recursive: true });
+  }
+
+  async function writeMemory(entries: object[]): Promise<void> {
+    const body = entries.map((e) => JSON.stringify(e)).join("\n") + (entries.length ? "\n" : "");
+    await writeFile(join(store, "memory", `${PROJECT_ID}.jsonl`), body);
+  }
+
+  async function runSync(args: { target?: string }): Promise<void> {
+    await runConnectorSync({
+      projectName: "demo",
+      targetFlag: args.target,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      stdout: () => {},
+      stderr: () => {},
+    });
+  }
+
+  async function runStatus(args: { target?: string }): Promise<void> {
+    const cliArgs: Record<string, string> = { projectName: "demo", store };
+    if (args.target !== undefined) cliArgs.target = args.target;
+    await connectorStatusCommand.run?.({
+      args: cliArgs,
+      cmd: connectorStatusCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  it("reports drift after a new memory entry is created post-sync", async () => {
+    await seedProject();
+    await writeMemory([
+      {
+        id: MEM_FIRST,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        content: "first",
+        createdAt: TS,
+      },
+    ]);
+    await writeFile(join(projectRoot, "CLAUDE.md"), "");
+    await runSync({ target: "claude-code" });
+    logSpy.mockClear();
+    errSpy.mockClear();
+
+    await writeMemory([
+      {
+        id: MEM_FIRST,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        content: "first",
+        createdAt: TS,
+      },
+      {
+        id: MEM_SECOND,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        content: "second",
+        createdAt: TS_LATER,
+      },
+    ]);
+
+    await runStatus({ target: "claude-code" });
+    expect(process.exitCode).toBe(1);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines.some((l) => l.includes("drift"))).toBe(true);
+  });
+
+  it("reports in-sync after re-sync following a memory create", async () => {
+    await seedProject();
+    await writeMemory([
+      {
+        id: MEM_FIRST,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        content: "first",
+        createdAt: TS,
+      },
+    ]);
+    await writeFile(join(projectRoot, "CLAUDE.md"), "");
+    await runSync({ target: "claude-code" });
+
+    await writeMemory([
+      {
+        id: MEM_FIRST,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        content: "first",
+        createdAt: TS,
+      },
+      {
+        id: MEM_SECOND,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        content: "second",
+        createdAt: TS_LATER,
+      },
+    ]);
+
+    await runSync({ target: "claude-code" });
+    logSpy.mockClear();
+    errSpy.mockClear();
+
+    await runStatus({ target: "claude-code" });
+    expect(process.exitCode).toBe(0);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines.some((l) => l.includes("in-sync"))).toBe(true);
+  });
+});
