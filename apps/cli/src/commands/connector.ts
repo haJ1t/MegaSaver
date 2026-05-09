@@ -3,7 +3,6 @@ import { dirname, join } from "node:path";
 import { type ConnectorTarget, codexTarget, cursorTarget } from "@megasaver/connector-generic-cli";
 import {
   type ConnectorContext,
-  assertConnectorContext,
   assertProjectRoot,
   parseBlock,
   readTargetFile,
@@ -69,12 +68,12 @@ function buildConnectorContext(
 ): ConnectorContext {
   const session = pickLatestOpenSession(allSessions, target.agentId);
   const memoryEntries = filterMemoryEntriesForSession(allMemoryEntries, session);
-  return assertConnectorContext({
+  return {
     agentId: target.agentId,
     project,
     session,
     memoryEntries,
-  });
+  };
 }
 
 export type RunConnectorSyncInput = {
