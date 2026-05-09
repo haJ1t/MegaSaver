@@ -141,6 +141,7 @@ required before merge.
 Session CRUD: PR <https://github.com/haJ1t/MegaSaver/pull/11> (`9c5a388`).
 Connector sync: PR <https://github.com/haJ1t/MegaSaver/pull/14> (`204f922`).
 Connector status: PR <https://github.com/haJ1t/MegaSaver/pull/15> (`b1a81cc`).
+Connector status S1+S2 followups: PR <https://github.com/haJ1t/MegaSaver/pull/16> (`eb21060`).
 
 ## Related
 

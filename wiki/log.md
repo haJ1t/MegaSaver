@@ -268,7 +268,7 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
 
 - Spec: `docs/superpowers/specs/2026-05-09-connector-status-followups-design.md`
 - Plan: `docs/superpowers/plans/2026-05-09-connector-status-followups-plan.md`
-- Branch: `feat/connector-status-followups`
+- Branch: `feat/connector-status-followups` (deleted post-merge)
 - Result: closes critic findings S1 + S2 + S12 against PR #15.
   S1 swaps `pickLatestOpenSession` from lexicographic compare to
   `Date.parse` numeric compare (one line, both call sites — sync
@@ -277,6 +277,10 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   line carries `session=<id|none>` matching the other four
   status words. S12 closed by decision (the duplicate
   `pickLatestOpenSession` call inside `buildConnectorContext` is
-  kept deliberately). 1 new CLI test (offset-vs-instant
-  ranking), 2 existing tests flip wording. CLI 119 → 120,
-  total 379 → 380. PR: TBD.
+  kept deliberately). 2 new CLI tests (offset-vs-instant
+  ranking + error-line carries open-session id, the latter from
+  inline G4 fix), 2 existing tests flip wording. CLI 119 → 121,
+  total 379 → 381. PR <https://github.com/haJ1t/MegaSaver/pull/16>
+  merged into `main` (merge commit `eb21060`). Critic re-pass on
+  PR #16 returned APPROVED_WITH_FOLLOWUPS; T2 closed inline,
+  T1 / T3–T8 recorded in `wiki/index.md` Status section.
