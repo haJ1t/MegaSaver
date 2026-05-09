@@ -2,7 +2,11 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { connectorStatusCommand, runConnectorSync } from "../src/commands/connector.js";
+import {
+  connectorStatusCommand,
+  runConnectorStatus,
+  runConnectorSync,
+} from "../src/commands/connector.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -837,5 +841,132 @@ describe("connectorStatusCommand — memoryEntries drift", () => {
     expect(process.exitCode).toBe(0);
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
     expect(lines.some((l) => l.includes("in-sync"))).toBe(true);
+  });
+});
+
+const PROJECT_ID_JSON = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const SESS_JSON = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+describe("connectorStatusCommand — --json output", () => {
+  let store: string;
+  let projectRoot: string;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-cstatus-json-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-cstatus-json-root-"));
+  });
+
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function seedProject(): Promise<void> {
+    await mkdir(store, { recursive: true });
+    const ts = "2026-05-10T00:00:00.000Z";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        {
+          id: PROJECT_ID_JSON,
+          name: "json-demo",
+          rootPath: projectRoot,
+          createdAt: ts,
+          updatedAt: ts,
+        },
+      ]),
+    );
+    await writeFile(join(store, "sessions.json"), "[]");
+    await writeFile(join(store, "memories.json"), "[]");
+  }
+
+  async function seedSession(): Promise<void> {
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESS_JSON,
+          projectId: PROJECT_ID_JSON,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: null,
+          startedAt: "2026-05-10T00:00:00.000Z",
+          endedAt: null,
+        },
+      ]),
+    );
+  }
+
+  async function runStatus(args: { target?: string; json: boolean }): Promise<{
+    out: string[];
+    err: string[];
+    code: number;
+  }> {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runConnectorStatus({
+      projectName: "json-demo",
+      targetFlag: args.target,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      json: args.json,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+    });
+    return { out, err, code };
+  }
+
+  it("all targets missing → JSON array with 4 missing records, session null", async () => {
+    await seedProject();
+    const { out, code } = await runStatus({ json: true });
+    expect(code).toBe(0);
+    expect(out).toHaveLength(1);
+    const records = JSON.parse(out[0] as string);
+    expect(records).toEqual([
+      { id: "claude-code", relativePath: "CLAUDE.md", status: "missing", session: null },
+      { id: "codex", relativePath: "AGENTS.md", status: "missing", session: null },
+      {
+        id: "cursor",
+        relativePath: ".cursor/rules/megasaver.mdc",
+        status: "missing",
+        session: null,
+      },
+      { id: "aider", relativePath: "CONVENTIONS.md", status: "missing", session: null },
+    ]);
+  });
+
+  it("--target claude-code with synced file → 1-element array, status in-sync, session id", async () => {
+    await seedProject();
+    await seedSession();
+    await writeFile(join(projectRoot, "CLAUDE.md"), "");
+    await runConnectorSync({
+      projectName: "json-demo",
+      targetFlag: "claude-code",
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      stdout: () => {},
+      stderr: () => {},
+    });
+    const { out, code } = await runStatus({ target: "claude-code", json: true });
+    expect(code).toBe(0);
+    expect(out).toHaveLength(1);
+    const records = JSON.parse(out[0] as string);
+    expect(records).toEqual([
+      { id: "claude-code", relativePath: "CLAUDE.md", status: "in-sync", session: SESS_JSON },
+    ]);
+  });
+
+  it("default (no --json) → stdout receives text lines, not JSON", async () => {
+    await seedProject();
+    const { out, code } = await runStatus({ json: false });
+    expect(code).toBe(0);
+    expect(out.length).toBeGreaterThan(0);
+    for (const line of out) {
+      expect(() => JSON.parse(line)).toThrow();
+    }
   });
 });
