@@ -74,8 +74,46 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Aider connector target landed via PR #21 (`184b13d`): 4th
-built-in connector target ships — `aider` → `CONVENTIONS.md`
+Closed-enum tripwire refactor landed via PR #22 (`489f7d0`):
+the broken `as const satisfies readonly T[]` mirror pattern in
+`apps/cli/src/errors.ts` (4 sites: `AGENT_VALUES`, `RISK_VALUES`,
+`KNOWN_SCOPE_IDS`, local `KNOWN_TARGET_IDS`) is replaced with
+schema-derived sources: `agentIdSchema.options` /
+`riskLevelSchema.options` from `@megasaver/shared`,
+`memoryScopeSchema.options` from `@megasaver/core`,
+`KNOWN_TARGET_IDS` from a new `apps/cli/src/known-targets.ts`
+canonical registry (`KNOWN_TARGETS.map((t) => t.id)`). New
+file owns `CLAUDE_CODE_TARGET`, `KNOWN_TARGETS`,
+`KnownTargetId` literal union, `isKnownTargetId` helper. The
+duplicated `KNOWN_TARGET_IDS` in `connector.ts` collapses to
+the same import. Individual `codexTarget`/`cursorTarget`/
+`aiderTarget` `: ConnectorTarget` annotations dropped so
+`(typeof KNOWN_TARGETS)[number]["id"]` resolves to the literal
+union (verified empirically with `@ts-expect-error` probe).
++8 net tests (5 known-targets + 3 errors drift-guards). Mid-
+execution `43205c8` regressed `KnownTargetId` to `string` by
+removing `as const` from `CLAUDE_CODE_TARGET`; recovered in
+`79eb9d8` (revert + `Object.hasOwn`-style header absence
+checks in `targets.test.ts`). Critic re-pass IMPORTANT-2
+(loop-cast structural smell at `connector.ts:128`) +
+IMPORTANT-3 (expectTypeOf runtime no-op clarification) closed
+inline (`67b6515`). Behavior byte-identical: 4 smoke strings
+match before/after. Closes the bug class behind cursor PR #17
++ aider PR #21 CRITICAL fix-ups for **error messages**. Open
+**Z-series backlog**: **Z1** *FIRST-CRITICAL* — citty
+`description` strings in `apps/cli/src/commands/session/create.ts`,
+`session/update.ts`, `memory/create.ts` still hand-mirror the
+same enum lists with "Keep in sync" comments → next agent
+widening recreates the bug class on the help-text surface;
+**Z2** vitest `typecheck: true` mode wire (so `expectTypeOf`
+catches regressions in `vitest run` alone, not just via
+`pnpm typecheck`); **Z3** add `.test-d.ts` regression suite
+with `@ts-expect-error` directives pinning the literal union;
+**Z4** document in `wiki/entities/cli.md` which closed-set
+surfaces are schema-derived (errors.ts) vs still hand-mirrored
+(citty descriptions). Previously: Aider connector target
+landed via PR #21 (`184b13d`): 4th built-in connector target
+ships — `aider` → `CONVENTIONS.md`
 (plain markdown, no frontmatter; user wires `aider --read
 CONVENTIONS.md` themselves). Closes the v0.1 connector matrix
 promised in `CLAUDE.md §1` (claude-code + codex + cursor +

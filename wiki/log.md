@@ -423,3 +423,54 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   drift-guard pattern refactor (the recurring cursor + aider
   fix-up cycle is the proof point), launch-order vs
   alphabetic ordering convention undocumented.
+
+## [2026-05-09] schema | closed-enum tripwire refactor
+
+- Spec: `docs/superpowers/specs/2026-05-09-closed-enum-tripwire-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-closed-enum-tripwire-plan.md`
+- Branch: `feat/closed-enum-tripwire` (deleted post-merge)
+- Result: Eliminates the `as const satisfies readonly T[]`
+  tripwire pattern that produced two CRITICAL fix-ups in cursor
+  PR #17 + aider PR #21 (the supposed tripwire failed open
+  because `satisfies` permits a subset). 4 sites in
+  `apps/cli/src/errors.ts` (`AGENT_VALUES`, `RISK_VALUES`,
+  `KNOWN_SCOPE_IDS`, local `KNOWN_TARGET_IDS`) replaced with
+  schema-derived sources: `agentIdSchema.options` /
+  `riskLevelSchema.options` from `@megasaver/shared`,
+  `memoryScopeSchema.options` from `@megasaver/core`,
+  `KNOWN_TARGET_IDS` from a new `apps/cli/src/known-targets.ts`
+  canonical registry (`KNOWN_TARGETS.map((t) => t.id)`). New
+  file owns `CLAUDE_CODE_TARGET`, `KNOWN_TARGETS`,
+  `KnownTargetId` literal union, `isKnownTargetId` helper.
+  Duplicated `KNOWN_TARGET_IDS` in `apps/cli/src/commands/connector.ts`
+  collapses to a single import. Individual `codexTarget`/
+  `cursorTarget`/`aiderTarget` `: ConnectorTarget` annotations
+  dropped (`packages/connectors/generic-cli/src/targets.ts`)
+  so the tuple element types stay literal — empirically verified
+  via `@ts-expect-error` probe that `KnownTargetId` resolves to
+  `"claude-code" | "codex" | "cursor" | "aider"`. Drift impossible
+  by construction (KNOWN_TARGET_IDS = KNOWN_TARGETS.map(...);
+  consumer = schema.options). Behavior byte-identical: all 4
+  smoke strings (`invalidAgentMessage` / `invalidRiskMessage` /
+  `invalidScopeMessage` / `invalidTargetMessage`) match
+  pre-refactor output verbatim. Mid-execution regression
+  `43205c8` removed `as const` from `CLAUDE_CODE_TARGET` to
+  satisfy `exactOptionalPropertyTypes`, silently widening
+  `KnownTargetId` to `string` (vitest's `expectTypeOf` is
+  runtime no-op without `vitest typecheck` mode); recovered in
+  `79eb9d8` (revert + `Object.hasOwn(target, "header")` test
+  pattern that doesn't require `.header` access on narrow
+  types). Critic re-pass returned ACCEPT-WITH-RESERVATIONS.
+  IMPORTANT-2 (loop-cast at `connector.ts:128` papering over
+  type discrimination) + IMPORTANT-3 (expectTypeOf
+  enforcement-channel clarification comment) closed inline
+  (`67b6515`). cli 183 → 191, total 466 → 474 (+8 net: 5
+  known-targets + 3 errors drift-guards). PR
+  <https://github.com/haJ1t/MegaSaver/pull/22> merged into
+  `main` (merge commit `489f7d0`). Z1–Z4 backlog recorded in
+  `wiki/index.md` Status section. **Z1** is FIRST-CRITICAL:
+  citty `description` strings in 3 files (`session/create.ts`,
+  `session/update.ts`, `memory/create.ts`) still hand-mirror
+  the same enum lists with "Keep in sync" comments — the bug
+  class survives on the help-text surface and the next agent
+  widening will recreate it.
