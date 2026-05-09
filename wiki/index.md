@@ -73,7 +73,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-`mega connector status` landed via PR #TBD (`TBD`): new
+`mega connector status` landed via PR #15 (`b1a81cc`): new
 `mega connector status <projectName> [--target <id>]` adds read-only
 per-target reporting on top of the connector primitives.
 Status words: `in-sync` | `drift` | `no-block` | `missing` | `error`.
