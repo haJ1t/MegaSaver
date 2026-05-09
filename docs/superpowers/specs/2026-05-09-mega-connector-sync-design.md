@@ -172,17 +172,17 @@ Before the loop, validate the project root exactly once via the
 shared helper:
 
 ```
-assertProjectRoot(project.rootPath)   // throws target_path_invalid
+await assertProjectRoot(project.rootPath)   // throws target_path_invalid
 ```
 
 This produces a single, clean `target_path_invalid` failure when
 the project's `rootPath` is missing or not a directory, instead of
 N per-target ENOENT failures from the per-target write step. The
-shared helper is sync (`@megasaver/connectors-shared` wiki entry)
-so no `await`. The check runs after the project resolution but
-before the target loop. If it throws, the CLI surfaces the
-documented stderr message and exits 1 without printing any
-per-target line.
+shared helper is async (Promise<void>) — it runs `stat` under the
+hood (`packages/connectors/shared/src/filesystem.ts`). The check
+runs after the project resolution but before the target loop. If
+it throws, the CLI surfaces the documented stderr message and
+exits 1 without printing any per-target line.
 
 Pseudocode, executed once per target in `KNOWN_TARGETS`:
 
