@@ -37,12 +37,12 @@ specific to the CLI entity).
 
 ### Closed-set surface derivation
 
-| Closed enum / set | Source schema | Derived surfaces |
+| Closed enum / set | Source | Derived surfaces |
 |---|---|---|
 | `agentIdSchema` | `@megasaver/shared` | `invalidAgentMessage` error text (PR #22); `--agent` description on `session create` / `session update` (PR #23) |
 | `riskLevelSchema` | `@megasaver/shared` | `invalidRiskMessage` error text (PR #22); `--risk` description on `session create` / `session update` (PR #23) |
-| `memoryScopeSchema` | `@megasaver/shared` | `invalidScopeMessage` error text (PR #22); `--scope` description on `memory create` (PR #23) |
-| `KNOWN_TARGETS` (registry) | `apps/cli/src/known-targets.ts` | `KNOWN_TARGET_IDS` derivation; `invalidTargetMessage` error text (PR #22); `--target` description on `connector sync` / `connector status` (PR #25) |
+| `memoryScopeSchema` | `@megasaver/core` | `invalidScopeMessage` error text (PR #22); `--scope` description on `memory create` (PR #23) |
+| `KNOWN_TARGETS` (registry) | `apps/cli/src/known-targets.ts` | `invalidTargetMessage` error text (PR #22); `--target` description on `connector sync` / `connector status` (PR #25) |
 
 **Why it matters:** adding a member to any source schema or registry
 auto-updates ALL derived surfaces (error messages and `--help` text)
