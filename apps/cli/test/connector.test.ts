@@ -822,6 +822,7 @@ describe("connectorSyncCommand — cursor target", () => {
     await runSync({ projectName: "demo" });
     expect(process.exitCode).toBe(0);
     expect(logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+skipped$/.test(c[0] as string))).toBe(true);
+    await expect(readFile(join(projectRoot, "CONVENTIONS.md"), "utf8")).rejects.toThrow();
   });
 });
 
