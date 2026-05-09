@@ -230,7 +230,7 @@ config. We dogfood by writing all four agent files from day one
 and keeping them in sync via a single source of truth.
 
 **Source of truth:** `docs/conventions/*.md`. Thirteen canonical
-files.
+files, one per `CLAUDE.md` section §1–§13.
 
 **File scopes:**
 
