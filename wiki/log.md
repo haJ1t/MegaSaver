@@ -312,12 +312,22 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
 
 - Spec: `docs/superpowers/specs/2026-05-09-mega-session-update-design.md`
 - Plan: `docs/superpowers/plans/2026-05-09-mega-session-update-plan.md`
-- Branch: `feat/session-update`
+- Branch: `feat/session-update` (deleted post-merge)
 - Result: `mega session update <sessionId> [--title …] [--risk …]
   [--agent …]` for partial open-session mutation. `@megasaver/core`
   ships `sessionUpdatePatchSchema` and `CoreRegistry.updateSession`
   on both in-memory and JSON-directory implementations. CLI's
   `commands/session.ts` (511 LOC) split into `commands/session/`
-  directory; closes v0.1 backlog item I5. 25 new tests (12 core +
-  13 cli). core 116 → 128, cli 128 → 141, total 395 → 420.
-  PR: TBD.
+  directory; closes v0.1 backlog item I5. Final code-review pass
+  identified IMPORTANT-1 (UX asymmetry between create/update for
+  --risk/--agent error format) and V5 (--title control-char/newline
+  guard bypass on update); both fixed inline pre-merge by parsing
+  agentIdSchema/riskLevelSchema/titleSchema at the CLI boundary
+  (mirrors create.ts pattern, drops `as never` casts) and
+  extracting titleSchema into commands/session/shared.ts. 26 new
+  tests (12 core + 14 cli — the +14 includes the inline V5
+  newline-rejection test). core 116 → 128, cli 128 → 142, total
+  395 → 421. PR <https://github.com/haJ1t/MegaSaver/pull/18>
+  merged into `main` (merge commit `04987a8`). Critic verdict
+  APPROVED_WITH_FOLLOWUPS, V1–V4 + V6–V9 backlog recorded in
+  `wiki/index.md` Status section.

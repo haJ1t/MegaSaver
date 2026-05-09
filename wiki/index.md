@@ -73,7 +73,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-`mega session update` + I5 split landed via PR #TBD (`TBD`):
+`mega session update` + I5 split landed via PR #18 (`04987a8`):
 new `mega session update <sessionId> [--title …] [--risk …]
 [--agent …]` for partial mutation of an open session. `--title ""`
 clears to `null`; ended sessions are rejected. `@megasaver/core`
@@ -111,20 +111,19 @@ error code, CLI errors module widened with discriminated
 `ZodContext` + 7 helpers + `as const satisfies` drift guards.
 Six packages on `main`: `@megasaver/shared` (24 tests),
 `@megasaver/core` (128 tests, 15 files), `@megasaver/cli`
-(141 tests), `@megasaver/connectors-shared` (56 tests),
+(142 tests), `@megasaver/connectors-shared` (56 tests),
 `@megasaver/connector-claude-code` (45 tests, byte-identical
 render parity), and `@megasaver/connector-generic-cli` (26 tests,
-Codex `AGENTS.md` + Cursor `.cursor/rules/megasaver.mdc` targets). 420 total. Previously merged: core
+Codex `AGENTS.md` + Cursor `.cursor/rules/megasaver.mdc` targets). 421 total. Previously merged: core
 M3+M4 PR #10 (`ac27142`), connector follow-ups + core M1/M2 PR #9
 (`0dc2e29`), generic-cli connector PR #8 (`8679c4c`), README
 refresh PR #7, Claude Code connector PR #6, CLI project CRUD
-PR #5, bootstrap PRs. Open v0.2 follow-ups: I5 split
-`commands/session.ts` (511 LOC > §8 300 threshold) when
-`mega session update` lands, cross-process lock integration test
-(forked process), `atomicWriteFile` + `fsync` durability, plus
-the deferred slices `mega project create --root <dir>`,
-Aider YAML target, MemoryEntry CLI
-commands, `--json` output flag pass. Critic v0.2 followups for PR #15 (`mega connector status`):
+PR #5, bootstrap PRs. Open v0.2 follow-ups: I5 closed in PR #18
+(commands/session.ts split into commands/session/), cross-process
+lock integration test (forked process), `atomicWriteFile` + `fsync`
+durability, plus the deferred slices `mega project create --root
+<dir>`, Aider YAML target, MemoryEntry CLI commands, `--json`
+output flag pass. Critic v0.2 followups for PR #15 (`mega connector status`):
 S1 + S2 + S12 closed in PR #16 (`eb21060`) — `pickLatestOpenSession`
 switched to `Date.parse` numeric compare; `error` status line now
 carries `session=<id|none>` for column symmetry; S12 closed by
@@ -178,3 +177,24 @@ add `// claude-code lives in @megasaver/connector-claude-code;
 this aggregates across packages.` comment at
 `apps/cli/src/commands/connector.ts:48` so the cross-package
 `KNOWN_TARGETS` aggregation is discoverable for new contributors.
+Critic v0.2 followups for PR #18 (session update + I5 split slot):
+IMPORTANT-1 (UX asymmetry between create/update for --risk/--agent
+error format) and V5 (--title control-char/newline guard bypass on
+update) both closed inline in PR #18 (`6841bbb`) by parsing
+agentIdSchema/riskLevelSchema/titleSchema at the CLI boundary in
+`update.ts` and extracting `titleSchema` into
+`commands/session/shared.ts`. Still open: V1 concurrent-update
+race test (process fork) — pairs with the existing cross-process
+lock integration test followup; V2 partial-write recovery test
+(kill between temp-write and rename in `json-directory-store.ts`);
+V3 schema drift property test (fast-check) ensuring every random
+session × random patch keys merges cleanly through `sessionSchema`;
+V4 whitespace-only `--title "   "` semantics decision (today
+update accepts, create rejects); V6 update-then-end durability
+test (open → `update --risk high` → `end` → assert ended session
+carries `riskLevel: "high"`); V7 multi-flag error precedence pin
+(`update <bad-uuid> --risk bogus --agent unknown` — assert which
+error surfaces first); V8 pin `kind: "session_update"` Zod-error
+message format in a test (currently asserts only `startsWith
+"error:"`); V9 wiki entity refresh — `wiki/entities/core.md`
+test-count line still claims 116 instead of 128 post-merge.
