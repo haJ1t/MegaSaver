@@ -119,12 +119,17 @@ Format details:
 - Lines are emitted in `KNOWN_TARGETS` declaration order. With
   `--target <id>` only the matching line is emitted.
 
+Every status word — including `error` — emits the session suffix. The
+session is the latest open session for the target's `agentId`, or `none`
+if no such session exists.
+
 Worked example (claude-code in sync, codex with no block, project has
 one open claude-code session `01HXY...`):
 
 ```text
 claude-code  CLAUDE.md   in-sync   session=01HXY...
 codex        AGENTS.md   no-block  session=none
+codex        AGENTS.md   error     session=none
 ```
 
 Stderr is reserved for:

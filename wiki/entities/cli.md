@@ -89,9 +89,7 @@ rendered block (`upsertBlock` predicate); the in-sync notion is
 byte-identical to what `sync` would write.
 
 Status words on stdout: `in-sync`, `drift`, `no-block`, `missing`,
-`error`. Output line is
-`<id>  <relPath>  <status>  session=<id|none>` (no session suffix on
-`error`). Exit `0` when every line is `in-sync` or `missing`; exit
+`error`. Output line is `<id>  <relPath>  <status>  session=<id|none>`. Exit `0` when every line is `in-sync` or `missing`; exit
 `1` if any line is `drift`, `no-block`, or `error`. Pre-loop failures
 (project not found, unknown target, project root missing)
 short-circuit before any line is emitted.

@@ -263,3 +263,20 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   `main` (merge commit `b1a81cc`). Critic verdict
   APPROVED_WITH_FOLLOWUPS, S1–S12 backlog recorded in
   `wiki/index.md` Status section.
+
+## [2026-05-09] schema | connector status S1+S2 followups
+
+- Spec: `docs/superpowers/specs/2026-05-09-connector-status-followups-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-connector-status-followups-plan.md`
+- Branch: `feat/connector-status-followups`
+- Result: closes critic findings S1 + S2 + S12 against PR #15.
+  S1 swaps `pickLatestOpenSession` from lexicographic compare to
+  `Date.parse` numeric compare (one line, both call sites — sync
+  and status — fixed). S2 hoists `sessionLabel` above the
+  per-target try/catch in `runConnectorStatus` so the `error`
+  line carries `session=<id|none>` matching the other four
+  status words. S12 closed by decision (the duplicate
+  `pickLatestOpenSession` call inside `buildConnectorContext` is
+  kept deliberately). 1 new CLI test (offset-vs-instant
+  ranking), 2 existing tests flip wording. CLI 119 → 120,
+  total 379 → 380. PR: TBD.
