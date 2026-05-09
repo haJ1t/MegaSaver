@@ -74,7 +74,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Connector memoryEntries wiring landed via PR #TBD (`TBD`):
+Connector memoryEntries wiring landed via PR #20 (`b0e4382`):
 `mega connector sync` and `mega connector status` now read real
 memory entries via `registry.listMemoryEntries(project.id)` and
 filter them per-target to "project-scoped + current-session-
@@ -223,7 +223,23 @@ list all v0.1 subcommands (chronic drift since PR #11); W9
 parse-on-handoff consistency policy between `memory create` (re-
 parses) and `session create` (trusts registry); W10 restore
 NODE_ENV in `apps/cli/test/memory.test.ts` afterEach (mirror
-session.test.ts save/restore pattern); W11 lock deferred
-connector-context-wiring state with integration test asserting
-`mega connector sync` block is unchanged after `mega memory
-create` until the wiring slot lands.
+session.test.ts save/restore pattern); W11 closed in PR #20
+(`b0e4382`) by superseding — the wiring slot itself locks the
+real state via integration tests asserting block contents after
+`mega memory create` + `mega connector sync`.
+Critic v0.2 followups for PR #20 (connector memoryEntries
+wiring slot): X1 + X2 closed inline in PR #20 (`65cbd12`) — 3
+stale references in `2026-05-09-mega-connector-sync-design.md`
+(§0 TL;DR + §2 + §3d pseudocode) corrected; redundant
+`assertConnectorContext` call dropped from `buildConnectorContext`
+(renderer already validates at the boundary). Still open: X4
+decide and document `memoryEntries.length > 20` policy
+(`ConnectorContextSchema` enforces `.max(20)` — current behavior
+is hard-fail; filter-then-cap-by-recency is the natural answer);
+X5 delete dead continuation-indent path in
+`packages/connectors/shared/src/render.ts:32-37` (CLI
+`contentSchema` rejects newlines so the path is unreachable
+through the public surface) or document the invariant; X6 fix
+S4 backlog tracker entry — actual `connector.ts` LOC is now
+369 (354 → 369 = +15 in this slot, not +3 as PR description
+implied; S4 split urgency higher than tracked).

@@ -358,7 +358,7 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
 
 - Spec: `docs/superpowers/specs/2026-05-09-connector-memory-wiring-design.md`
 - Plan: `docs/superpowers/plans/2026-05-09-connector-memory-wiring-plan.md`
-- Branch: `feat/connector-memory-wiring`
+- Branch: `feat/connector-memory-wiring` (deleted post-merge)
 - Result: `mega connector sync` / `status` flow real memory
   entries through `buildConnectorContext`, filtered to
   "project-scoped + current-session-scoped" per target.
@@ -366,5 +366,11 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   call site updates. 7 new tests (5 sync + 2 status) lock the
   filter contract end-to-end. Spec drift in
   `2026-05-09-mega-connector-sync-design.md` ("memory entries
-  empty in v0.1") corrected. Closes critic backlog W11.
-  cli 169 → 176, total 448 → 455. PR: TBD.
+  empty in v0.1") corrected. Closes critic backlog W11. Critic
+  re-pass returned APPROVED_WITH_FOLLOWUPS with X1 (incomplete
+  spec drift fix — 3 stale references in same file) + X2
+  (`assertConnectorContext` re-validation §13 anti-pattern) both
+  closed inline (`65cbd12`). cli 169 → 176, total 448 → 455.
+  PR <https://github.com/haJ1t/MegaSaver/pull/20> merged into
+  `main` (merge commit `b0e4382`). X4–X6 backlog recorded in
+  `wiki/index.md` Status section.

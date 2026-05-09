@@ -180,7 +180,7 @@ Connector status S1+S2 followups: PR <https://github.com/haJ1t/MegaSaver/pull/16
 Cursor connector target: PR <https://github.com/haJ1t/MegaSaver/pull/17> (`f2d7f63`).
 Session update + I5 split: PR <https://github.com/haJ1t/MegaSaver/pull/18> (`04987a8`).
 MemoryEntry CLI: PR <https://github.com/haJ1t/MegaSaver/pull/19> (`7a199b6`).
-Connector memoryEntries wiring: PR <https://github.com/haJ1t/MegaSaver/pull/TBD> (TBD).
+Connector memoryEntries wiring: PR <https://github.com/haJ1t/MegaSaver/pull/20> (`b0e4382`).
 
 ## Related
 
