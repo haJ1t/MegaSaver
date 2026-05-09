@@ -74,7 +74,40 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Closed-enum tripwire refactor landed via PR #22 (`489f7d0`):
+Citty description derive (Z1) landed via PR #23 (`4722a3a`):
+closes the closed-enum bug class on the **help-text** surface
+(PR #22 closed the **error-message** surface). 5 citty
+`description` strings in `apps/cli/src/commands/session/create.ts`,
+`session/update.ts`, `memory/create.ts` now derive from
+`agentIdSchema.options` / `riskLevelSchema.options` /
+`memoryScopeSchema.options` via module-load template
+interpolation. All 5 "Keep in sync with X in Y" comments
+removed. After this slot, adding a member to any of the 3
+schemas auto-updates BOTH error messages AND `--help` text —
+the recurrence-prevention promise is now structurally
+delivered for both surfaces. Critic re-pass returned
+ACCEPT-WITH-RESERVATIONS: CRITICAL #1 (PR body falsely
+claimed byte-identical for `--agent` strings while order
+shifted from brand-prominent to schema-canonical alphabetic)
++ MAJOR AA1 (toContain drift-guards tautological — caught
+member drift but not format drift). Both closed inline
+(`1cfb2d9`): all 5 drift-guards (this PR's 3 + Y1+Y2's 2)
+converted from `toContain` loops to `toBe` pinned-format
+assertions that catch member AND format drift; PR body
+edited to honestly disclose the agent order shift (matching
+PR #22's `errors.ts` convention). cli 191 → 194, total
+474 → 477 (+3 net drift-guards). Open **AA-series backlog**:
+**AA2** derive `connector --target` description from
+`KNOWN_TARGET_IDS` (4th closed-enum surface, parallel pattern
+to Z1); **AA3** document schema member-ordering convention
+in `packages/shared/src/agent-id.ts` / `risk-level.ts` /
+`packages/core/src/memory-entry.ts` with one-line WHY
+comments (alphabetic for agent, severity for risk, semantic
+for scope); **AA4** update `wiki/entities/cli.md` to
+enumerate which closed-set surfaces are schema-derived
+(promoted from Z4). **Z2** (vitest `typecheck: true` mode)
+and **Z3** (`.test-d.ts` regression suite) remain open.
+Previously: Closed-enum tripwire refactor landed via PR #22 (`489f7d0`):
 the broken `as const satisfies readonly T[]` mirror pattern in
 `apps/cli/src/errors.ts` (4 sites: `AGENT_VALUES`, `RISK_VALUES`,
 `KNOWN_SCOPE_IDS`, local `KNOWN_TARGET_IDS`) is replaced with

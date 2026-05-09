@@ -474,3 +474,41 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   the same enum lists with "Keep in sync" comments — the bug
   class survives on the help-text surface and the next agent
   widening will recreate it.
+
+## [2026-05-09] schema | citty description derive (Z1)
+
+- Spec: `docs/superpowers/specs/2026-05-09-citty-description-derive-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-citty-description-derive-plan.md`
+- Branch: `feat/citty-description-derive` (deleted post-merge)
+- Result: Closes PR #22's bug class on the help-text surface.
+  5 citty `description` strings in
+  `apps/cli/src/commands/session/{create,update}.ts` and
+  `apps/cli/src/commands/memory/create.ts` now derive from
+  their source schemas (`agentIdSchema.options`,
+  `riskLevelSchema.options`, `memoryScopeSchema.options`) via
+  module-load template interpolation. All 5 "Keep in sync
+  with X in Y" comments removed — derivation is its own
+  documentation. After this slot, adding a member to any of
+  the 3 schemas auto-updates BOTH the error messages (PR #22)
+  AND the `--help` text (this slot). Recurrence-prevention
+  promise structurally delivered for both surfaces. Critic
+  re-pass returned ACCEPT-WITH-RESERVATIONS with two findings
+  closed inline in `1cfb2d9`: CRITICAL #1 — PR body's
+  "byte-identical" claim was false for the 2 `--agent`
+  strings (member order shifted from brand-prominent
+  `claude-code | codex | cursor | aider | generic-cli` to
+  schema-canonical alphabetic `aider | claude-code | codex |
+  cursor | generic-cli`, matching the convention PR #22
+  established for `errors.ts`); PR body edited to honestly
+  disclose. MAJOR AA1 — all 5 drift-guards (3 added by Z1 + 2
+  inherited from Y1+Y2) used `toContain` loop pattern, which
+  was tautological after the refactor and didn't catch
+  format drift; replaced with `toBe` pinned-format
+  assertions that catch both member drift AND format drift.
+  cli 191 → 194, total 474 → 477 (+3 net drift-guards). PR
+  <https://github.com/haJ1t/MegaSaver/pull/23> merged into
+  `main` (merge commit `4722a3a`). Open AA-series backlog
+  recorded in `wiki/index.md` Status section: AA2 derive
+  `connector --target` description from `KNOWN_TARGET_IDS`;
+  AA3 document schema member-ordering convention; AA4
+  promote Z4 wiki documentation to higher priority.
