@@ -1,7 +1,9 @@
 import { memoryEntryIdSchema, projectIdSchema, sessionIdSchema } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { CoreRegistryError, type CoreRegistryErrorCode } from "../src/errors.js";
+import { projectSchema } from "../src/project.js";
 import { createInMemoryCoreRegistry } from "../src/registry.js";
+import { sessionSchema } from "../src/session.js";
 
 const PROJECT_ID_A = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const PROJECT_ID_B = projectIdSchema.parse("44444444-4444-4444-8444-444444444444");
@@ -305,5 +307,76 @@ describe("createInMemoryCoreRegistry memory entry operations", () => {
     listed.content = "Listed mutation";
 
     expect(registry.getMemoryEntry(MEMORY_ENTRY_ID_A)).toEqual(projectMemory);
+  });
+});
+
+describe("updateSession (in-memory)", () => {
+  function buildRegistry() {
+    const reg = createInMemoryCoreRegistry();
+    const project = projectSchema.parse({
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "demo",
+      rootPath: "/tmp",
+      createdAt: "2026-05-09T00:00:00.000Z",
+      updatedAt: "2026-05-09T00:00:00.000Z",
+    });
+    reg.createProject(project);
+    const session = sessionSchema.parse({
+      id: "22222222-2222-4222-8222-222222222222",
+      projectId: project.id,
+      agentId: "claude-code",
+      riskLevel: "medium",
+      title: null,
+      startedAt: "2026-05-09T00:00:00.000Z",
+      endedAt: null,
+    });
+    reg.createSession(session);
+    return { reg, project, session };
+  }
+
+  it("sets a single field (title) on an open session", () => {
+    const { reg, session } = buildRegistry();
+    const updated = reg.updateSession(session.id, { title: "auth refactor" });
+    expect(updated.title).toBe("auth refactor");
+    expect(updated.id).toBe(session.id);
+    expect(updated.riskLevel).toBe("medium");
+    expect(updated.agentId).toBe("claude-code");
+  });
+
+  it("clears title to null", () => {
+    const { reg, session } = buildRegistry();
+    reg.updateSession(session.id, { title: "first" });
+    const cleared = reg.updateSession(session.id, { title: null });
+    expect(cleared.title).toBeNull();
+  });
+
+  it("mutates all three fields atomically", () => {
+    const { reg, session } = buildRegistry();
+    const updated = reg.updateSession(session.id, {
+      title: "x",
+      riskLevel: "high",
+      agentId: "cursor",
+    });
+    expect(updated.title).toBe("x");
+    expect(updated.riskLevel).toBe("high");
+    expect(updated.agentId).toBe("cursor");
+  });
+
+  it("throws Zod error on empty patch", () => {
+    const { reg, session } = buildRegistry();
+    expect(() => reg.updateSession(session.id, {})).toThrow(/at least one field/);
+  });
+
+  it("throws session_not_found for unknown id", () => {
+    const { reg } = buildRegistry();
+    expect(() => reg.updateSession("99999999-9999-4999-8999-999999999999", { title: "x" })).toThrow(
+      CoreRegistryError,
+    );
+  });
+
+  it("throws session_already_ended for ended session", () => {
+    const { reg, session } = buildRegistry();
+    reg.endSession(session.id, { endedAt: "2026-05-09T01:00:00.000Z" });
+    expect(() => reg.updateSession(session.id, { title: "x" })).toThrow(/already ended/);
   });
 });

@@ -2,7 +2,12 @@ import type { MemoryEntryId, ProjectId, SessionId } from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
 import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
 import { type Project, projectSchema } from "./project.js";
-import { type Session, type SessionUpdatePatch, sessionSchema } from "./session.js";
+import {
+  type Session,
+  type SessionUpdatePatch,
+  sessionSchema,
+  sessionUpdatePatchSchema,
+} from "./session.js";
 
 export interface CoreRegistry {
   createProject(project: Project): Project;
@@ -93,8 +98,18 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       return updated;
     },
 
-    updateSession() {
-      throw new Error("updateSession not implemented yet (T1 stub; lands in T2)");
+    updateSession(id, patch) {
+      const parsedPatch = sessionUpdatePatchSchema.parse(patch);
+      const existing = sessions.get(id);
+      if (!existing) {
+        throw new CoreRegistryError("session_not_found", `Session does not exist: ${id}`);
+      }
+      if (existing.endedAt !== null) {
+        throw new CoreRegistryError("session_already_ended", `Session already ended: ${id}`);
+      }
+      const updated = sessionSchema.parse({ ...existing, ...parsedPatch });
+      sessions.set(id, updated);
+      return updated;
     },
 
     createMemoryEntry(entry) {
