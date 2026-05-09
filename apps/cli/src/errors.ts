@@ -23,7 +23,12 @@ export const SESSION_ID_INVALID_PREFIX = "error: invalid session id";
 
 // Keep in sync with agentIdSchema in @megasaver/shared.
 // `satisfies` makes a new variant in the shared schema fail typecheck here.
-const AGENT_VALUES = ["claude-code", "codex", "generic-cli"] as const satisfies readonly AgentId[];
+const AGENT_VALUES = [
+  "claude-code",
+  "codex",
+  "cursor",
+  "generic-cli",
+] as const satisfies readonly AgentId[];
 // Keep in sync with riskLevelSchema in @megasaver/shared.
 const RISK_VALUES = ["low", "medium", "high", "critical"] as const satisfies readonly RiskLevel[];
 

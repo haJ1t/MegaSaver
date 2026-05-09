@@ -134,7 +134,7 @@ describe("sessionCreateCommand", () => {
     await runCreate({ projectName: "demo", agent: "totally-fake" });
     expect(process.exitCode).toBe(1);
     expect(errSpy.mock.calls.map((c) => c[0])).toEqual([
-      'error: invalid agent "totally-fake", expected: claude-code | codex | generic-cli',
+      'error: invalid agent "totally-fake", expected: claude-code | codex | cursor | generic-cli',
     ]);
     expect(logSpy).not.toHaveBeenCalled();
   });

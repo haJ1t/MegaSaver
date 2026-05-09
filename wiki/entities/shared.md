@@ -23,8 +23,8 @@ knowledge. v0.1 surface:
 - `RiskLevel` — `"low" | "medium" | "high" | "critical"` enum
   (source: `docs/conventions/risk-modes.md`).
 - `AgentId` — closed enum of agents that ship a v0.1 connector
-  (`claude-code`, `generic-cli`). New agents are added by their own
-  connector spec.
+  (`claude-code`, `codex`, `cursor`, `generic-cli`; 4 members).
+  New agents are added by their own connector spec.
 - `ProjectId`, `SessionId`, `MemoryEntryId` — UUID strings branded
   for compile-time discrimination. `ProjectId` is not assignable to
   `SessionId` even though both are `string` at runtime.

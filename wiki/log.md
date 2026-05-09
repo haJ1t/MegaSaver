@@ -284,3 +284,19 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   merged into `main` (merge commit `eb21060`). Critic re-pass on
   PR #16 returned APPROVED_WITH_FOLLOWUPS; T2 closed inline,
   T1 / T3–T8 recorded in `wiki/index.md` Status section.
+
+## [2026-05-09] schema | cursor connector target
+
+- Spec: `docs/superpowers/specs/2026-05-09-cursor-connector-target-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-cursor-connector-target-plan.md`
+- Branch: `feat/cursor-target`
+- Result: `cursor` is now a v0.1 connector target alongside
+  `claude-code` and `codex`. `agentIdSchema` widens to 4 members.
+  `@megasaver/connector-generic-cli` ships `cursorTarget` and an
+  optional `ConnectorTarget.header` field. `apps/cli`'s
+  `KNOWN_TARGET_IDS` and `KNOWN_TARGETS` register cursor; sync
+  prepends `target.header` once on first seed. Side fix: `AGENT_VALUES`
+  in `apps/cli/src/errors.ts` updated to include cursor so the
+  invalid-agent error message lists all four. 13 new tests
+  (2 shared + 5 generic-cli + 6 cli). shared 22 → 24, generic-cli
+  21 → 26, cli 121 → 127, total 381 → 394. PR: TBD.

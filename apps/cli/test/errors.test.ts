@@ -165,7 +165,8 @@ describe("session error mappings", () => {
 describe("error helpers — additional coverage", () => {
   it("invalidAgentMessage formats expected list of valid agents", () => {
     expect(invalidAgentMessage("totally-fake")).toEqual({
-      message: 'error: invalid agent "totally-fake", expected: claude-code | codex | generic-cli',
+      message:
+        'error: invalid agent "totally-fake", expected: claude-code | codex | cursor | generic-cli',
       exitCode: 1,
     });
   });

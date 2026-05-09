@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-05-07
+updated: 2026-05-09
 ---
 
 # Wiki Index — Mega Saver
@@ -73,7 +73,15 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-`mega connector status` landed via PR #15 (`b1a81cc`): new
+Cursor connector target landed via PR #TBD (`TBD`): `agentIdSchema`
+widens to four members (adds `"cursor"`),
+`@megasaver/connector-generic-cli` ships `cursorTarget` writing
+`.cursor/rules/megasaver.mdc` with optional `ConnectorTarget.header`
+for first-seed YAML frontmatter, and the CLI registers cursor in
+`KNOWN_TARGET_IDS` / `KNOWN_TARGETS`. `mega session create --agent
+cursor` and `mega connector sync demo --target cursor` work
+end-to-end. Existing `claude-code` and `codex` paths byte-identical.
+Previously: `mega connector status` landed via PR #15 (`b1a81cc`): new
 `mega connector status <projectName> [--target <id>]` adds read-only
 per-target reporting on top of the connector primitives.
 Status words: `in-sync` | `drift` | `no-block` | `missing` | `error`.
@@ -92,12 +100,12 @@ subcommands (`create`, `list`, `show`, `end`),
 in-memory and JSON-directory registries, `session_already_ended`
 error code, CLI errors module widened with discriminated
 `ZodContext` + 7 helpers + `as const satisfies` drift guards.
-Six packages on `main`: `@megasaver/shared` (22 tests),
+Six packages on `main`: `@megasaver/shared` (24 tests),
 `@megasaver/core` (116 tests, 15 files), `@megasaver/cli`
-(121 tests), `@megasaver/connectors-shared` (56 tests),
+(127 tests), `@megasaver/connectors-shared` (56 tests),
 `@megasaver/connector-claude-code` (45 tests, byte-identical
-render parity), and `@megasaver/connector-generic-cli` (21 tests,
-Codex `AGENTS.md` target). 381 total. Previously merged: core
+render parity), and `@megasaver/connector-generic-cli` (26 tests,
+Codex `AGENTS.md` + Cursor `.cursor/rules/megasaver.mdc` targets). 394 total. Previously merged: core
 M3+M4 PR #10 (`ac27142`), connector follow-ups + core M1/M2 PR #9
 (`0dc2e29`), generic-cli connector PR #8 (`8679c4c`), README
 refresh PR #7, Claude Code connector PR #6, CLI project CRUD
@@ -105,8 +113,8 @@ PR #5, bootstrap PRs. Open v0.2 follow-ups: I5 split
 `commands/session.ts` (511 LOC > §8 300 threshold) when
 `mega session update` lands, cross-process lock integration test
 (forked process), `atomicWriteFile` + `fsync` durability, plus
-the deferred slices `mega project create --root <dir>`, Cursor
-`.cursor/rules/*.mdc` target, Aider YAML target, MemoryEntry CLI
+the deferred slices `mega project create --root <dir>`,
+Aider YAML target, MemoryEntry CLI
 commands, `--json` output flag pass. Critic v0.2 followups for PR #15 (`mega connector status`):
 S1 + S2 + S12 closed in PR #16 (`eb21060`) — `pickLatestOpenSession`
 switched to `Date.parse` numeric compare; `error` status line now
