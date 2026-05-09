@@ -255,8 +255,11 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
 
 - Spec: `docs/superpowers/specs/2026-05-09-mega-connector-status-design.md`
 - Plan: `docs/superpowers/plans/2026-05-09-mega-connector-status-plan.md`
-- Branch: `feat/mega-connector-status`
+- Branch: `feat/mega-connector-status` (deleted post-merge)
 - Result: `mega connector status <projectName> [--target <id>]` —
   read-only per-target report. 13 new tests (CLI 106 → 119, total
   366 → 379). Status words: in-sync | drift | no-block | missing |
-  error. PR: TBD.
+  error. PR <https://github.com/haJ1t/MegaSaver/pull/15> merged into
+  `main` (merge commit `b1a81cc`). Critic verdict
+  APPROVED_WITH_FOLLOWUPS, S1–S12 backlog recorded in
+  `wiki/index.md` Status section.
