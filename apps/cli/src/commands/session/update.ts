@@ -131,7 +131,7 @@ export const sessionUpdateCommand = defineCommand({
     // Keep in sync with agentIdSchema in @megasaver/shared.
     agent: {
       type: "string",
-      description: "New agent id (claude-code | codex | cursor | generic-cli).",
+      description: "New agent id (claude-code | codex | cursor | aider | generic-cli).",
     },
     store: { type: "string", description: "Override store directory." },
   },

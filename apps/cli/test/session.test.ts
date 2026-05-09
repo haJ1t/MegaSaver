@@ -135,7 +135,7 @@ describe("sessionCreateCommand", () => {
     await runCreate({ projectName: "demo", agent: "totally-fake" });
     expect(process.exitCode).toBe(1);
     expect(errSpy.mock.calls.map((c) => c[0])).toEqual([
-      'error: invalid agent "totally-fake", expected: claude-code | codex | cursor | generic-cli',
+      'error: invalid agent "totally-fake", expected: aider | claude-code | codex | cursor | generic-cli',
     ]);
     expect(logSpy).not.toHaveBeenCalled();
   });
@@ -206,6 +206,18 @@ describe("sessionCreateCommand", () => {
     expect(sessions[0]?.agentId).toBe("cursor");
   });
 
+  it("creates a session with --agent aider", async () => {
+    await seedProject(root, "demo");
+    await runCreate({ projectName: "demo", agent: "aider", risk: "medium" });
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls).toHaveLength(1);
+    const sessions = JSON.parse(await readFile(join(root, "sessions.json"), "utf8")) as Array<{
+      agentId: string;
+    }>;
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.agentId).toBe("aider");
+  });
+
   it("--agent description lists every agentIdSchema member", async () => {
     const { agentIdSchema } = await import("@megasaver/shared");
     const members = agentIdSchema.options;
@@ -213,6 +225,14 @@ describe("sessionCreateCommand", () => {
     for (const m of members) {
       expect(desc).toContain(m);
     }
+  });
+});
+
+describe("sessionUpdateCommand — drift guards", () => {
+  it("--agent description on update lists every agentIdSchema member", async () => {
+    const { agentIdSchema } = await import("@megasaver/shared");
+    const desc = sessionUpdateCommand.args?.agent?.description ?? "";
+    for (const m of agentIdSchema.options) expect(desc).toContain(m);
   });
 });
 

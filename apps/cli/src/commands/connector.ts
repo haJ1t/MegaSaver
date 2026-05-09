@@ -1,6 +1,11 @@
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { type ConnectorTarget, codexTarget, cursorTarget } from "@megasaver/connector-generic-cli";
+import {
+  type ConnectorTarget,
+  aiderTarget,
+  codexTarget,
+  cursorTarget,
+} from "@megasaver/connector-generic-cli";
 import {
   type ConnectorContext,
   assertProjectRoot,
@@ -17,7 +22,7 @@ import { ensureStoreReady, resolveStorePath } from "../store.js";
 import { projectNameSchema } from "./shared/schemas.js";
 
 // Keep in sync with KNOWN_TARGET_IDS in apps/cli/src/errors.ts.
-const KNOWN_TARGET_IDS = ["claude-code", "codex", "cursor"] as const;
+const KNOWN_TARGET_IDS = ["claude-code", "codex", "cursor", "aider"] as const;
 type KnownTargetId = (typeof KNOWN_TARGET_IDS)[number];
 
 function isKnownTargetId(value: string): value is KnownTargetId {
@@ -30,7 +35,12 @@ const CLAUDE_CODE_TARGET: ConnectorTarget = {
   relativePath: "CLAUDE.md",
 };
 
-const KNOWN_TARGETS: readonly ConnectorTarget[] = [CLAUDE_CODE_TARGET, codexTarget, cursorTarget];
+const KNOWN_TARGETS: readonly ConnectorTarget[] = [
+  CLAUDE_CODE_TARGET,
+  codexTarget,
+  cursorTarget,
+  aiderTarget,
+];
 
 const TARGET_ID_COLUMN_WIDTH = Math.max(...KNOWN_TARGETS.map((t) => t.id.length));
 

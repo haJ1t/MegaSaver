@@ -27,9 +27,16 @@ export const cursorTarget: ConnectorTarget = Object.freeze({
   ].join("\n"),
 });
 
+export const aiderTarget: ConnectorTarget = Object.freeze({
+  id: "aider",
+  agentId: "aider" satisfies AgentId,
+  relativePath: "CONVENTIONS.md",
+});
+
 export const builtinTargets: readonly ConnectorTarget[] = Object.freeze([
   codexTarget,
   cursorTarget,
+  aiderTarget,
 ]);
 
 export function findTarget(id: string): ConnectorTarget | null {

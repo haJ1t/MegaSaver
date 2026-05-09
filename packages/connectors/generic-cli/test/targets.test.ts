@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { builtinTargets, codexTarget, cursorTarget, findTarget } from "../src/targets.js";
+import {
+  aiderTarget,
+  builtinTargets,
+  codexTarget,
+  cursorTarget,
+  findTarget,
+} from "../src/targets.js";
 
 describe("ConnectorTarget registry", () => {
   it("ships the codex target", () => {
@@ -42,13 +48,28 @@ describe("ConnectorTarget registry", () => {
     expect(findTarget("cursor")).toBe(cursorTarget);
   });
 
-  it("builtinTargets contains both codex and cursor", () => {
-    expect(builtinTargets).toHaveLength(2);
+  it("builtinTargets contains codex, cursor, and aider", () => {
+    expect(builtinTargets).toHaveLength(3);
     expect(builtinTargets).toContain(codexTarget);
     expect(builtinTargets).toContain(cursorTarget);
+    expect(builtinTargets).toContain(aiderTarget);
   });
 
   it("codexTarget has no header (legacy targets stay byte-identical)", () => {
     expect(codexTarget.header).toBeUndefined();
+  });
+
+  it("ships the aider target", () => {
+    expect(aiderTarget.id).toBe("aider");
+    expect(aiderTarget.agentId).toBe("aider");
+    expect(aiderTarget.relativePath).toBe("CONVENTIONS.md");
+  });
+
+  it("aiderTarget has no header (markdown plain target)", () => {
+    expect(aiderTarget.header).toBeUndefined();
+  });
+
+  it("findTarget returns the aider target by id", () => {
+    expect(findTarget("aider")).toBe(aiderTarget);
   });
 });

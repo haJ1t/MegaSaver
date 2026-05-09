@@ -25,8 +25,9 @@ export const RISK_INVALID_MESSAGE_PREFIX = "error: invalid risk";
 export const SESSION_ID_INVALID_PREFIX = "error: invalid session id";
 
 // Keep in sync with agentIdSchema in @megasaver/shared.
-// `satisfies` makes a new variant in the shared schema fail typecheck here.
+// satisfies permits subset; widen AGENT_VALUES manually when the schema grows.
 const AGENT_VALUES = [
+  "aider",
   "claude-code",
   "codex",
   "cursor",
@@ -83,7 +84,7 @@ export function invalidSessionIdMessage(value: string): CliMessage {
 
 // Keep in sync with KNOWN_TARGETS in apps/cli/src/commands/connector.ts.
 // Two-line tripwire so a third target lands intentionally with both arrays bumped.
-const KNOWN_TARGET_IDS = ["claude-code", "codex", "cursor"] as const;
+const KNOWN_TARGET_IDS = ["claude-code", "codex", "cursor", "aider"] as const;
 // Keep in sync with memoryScopeSchema in @megasaver/core.
 const KNOWN_SCOPE_IDS = ["project", "session"] as const satisfies readonly MemoryScope[];
 

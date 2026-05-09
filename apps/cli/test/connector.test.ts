@@ -67,7 +67,8 @@ describe("connectorSyncCommand — pre-target gates", () => {
     expect(process.exitCode).toBe(1);
     expect(
       errSpy.mock.calls.some(
-        (c) => c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor',
+        (c) =>
+          c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor | aider',
       ),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
@@ -172,6 +173,7 @@ describe("connectorSyncCommand — skipped + created", () => {
       "claude-code  CLAUDE.md  skipped",
       "codex        AGENTS.md  skipped",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
   });
 
@@ -183,6 +185,7 @@ describe("connectorSyncCommand — skipped + created", () => {
       "claude-code  CLAUDE.md  skipped",
       "codex        AGENTS.md  created",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
     const written = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
     expect(written).toMatch(/<!-- MEGA SAVER:BEGIN -->/);
@@ -198,6 +201,7 @@ describe("connectorSyncCommand — skipped + created", () => {
       "claude-code  CLAUDE.md  created",
       "codex        AGENTS.md  skipped",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
     const written = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     expect(written).toContain("Agent: claude-code");
@@ -326,6 +330,7 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "claude-code  CLAUDE.md  wrote",
       "codex        AGENTS.md  wrote",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
     const claudeMd = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     const agentsMd = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
@@ -364,6 +369,7 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "claude-code  CLAUDE.md  noop",
       "codex        AGENTS.md  skipped",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
   });
 
@@ -408,6 +414,7 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "claude-code  CLAUDE.md  wrote",
       "codex        AGENTS.md  noop",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
   });
 
@@ -550,6 +557,7 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
       "claude-code  CLAUDE.md  wrote",
       "codex        AGENTS.md  error",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
     expect(
       errSpy.mock.calls.some(
@@ -775,6 +783,54 @@ describe("connectorSyncCommand — cursor target", () => {
     await expect(
       readFile(join(projectRoot, ".cursor/rules/megasaver.mdc"), "utf8"),
     ).rejects.toThrow();
+  });
+
+  it("creates CONVENTIONS.md with no frontmatter when --target aider on empty project", async () => {
+    await seedProject("demo", projectRoot);
+    await runSync({ projectName: "demo", target: "aider" });
+    expect(process.exitCode).toBe(0);
+    const written = await readFile(join(projectRoot, "CONVENTIONS.md"), "utf8");
+    // Plain markdown — no YAML frontmatter prefix.
+    expect(written.startsWith("---\n")).toBe(false);
+    expect(written).toContain("<!-- MEGA SAVER:BEGIN -->");
+    expect(written).toContain("Agent: aider");
+    expect(written).toContain("<!-- MEGA SAVER:END -->");
+    expect(
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+created$/.test(c[0] as string)),
+    ).toBe(true);
+  });
+
+  it("appends the block to a pre-existing CONVENTIONS.md and preserves user content", async () => {
+    await seedProject("demo", projectRoot);
+    const userContent =
+      "# Team Conventions\n\n- Use 2-space indent.\n- Run pnpm verify before push.\n";
+    await writeFile(join(projectRoot, "CONVENTIONS.md"), userContent);
+
+    await runSync({ projectName: "demo", target: "aider" });
+
+    expect(process.exitCode).toBe(0);
+    const written = await readFile(join(projectRoot, "CONVENTIONS.md"), "utf8");
+    // User content stays intact at the top.
+    expect(written.startsWith("# Team Conventions\n")).toBe(true);
+    expect(written).toContain("- Use 2-space indent.");
+    expect(written).toContain("- Run pnpm verify before push.");
+    // Block is appended below.
+    expect(written).toMatch(/Run pnpm verify before push\.\n+<!-- MEGA SAVER:BEGIN -->/);
+    expect(written.endsWith("<!-- MEGA SAVER:END -->\n")).toBe(true);
+    // Status word is "wrote" because file existed (not "created").
+    expect(
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+wrote$/.test(c[0] as string)),
+    ).toBe(true);
+  });
+
+  it("default sync (no --target) silently skips a missing CONVENTIONS.md", async () => {
+    await seedProject("demo", projectRoot);
+    await runSync({ projectName: "demo" });
+    expect(process.exitCode).toBe(0);
+    expect(
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+skipped$/.test(c[0] as string)),
+    ).toBe(true);
+    await expect(readFile(join(projectRoot, "CONVENTIONS.md"), "utf8")).rejects.toThrow();
   });
 });
 

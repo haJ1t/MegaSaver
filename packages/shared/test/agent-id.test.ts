@@ -2,7 +2,7 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { type AgentId, agentIdSchema } from "../src/agent-id.js";
 
-const members: ReadonlyArray<AgentId> = ["claude-code", "codex", "cursor", "generic-cli"];
+const members: ReadonlyArray<AgentId> = ["aider", "claude-code", "codex", "cursor", "generic-cli"];
 
 describe("agentIdSchema", () => {
   it("parses every v0.1 connector id", () => {
@@ -42,7 +42,11 @@ describe("agentIdSchema", () => {
     expect(agentIdSchema.parse("cursor")).toBe("cursor");
   });
 
-  it("widens to 4 closed-set members", () => {
-    expect(members).toHaveLength(4);
+  it("explicitly accepts 'aider'", () => {
+    expect(agentIdSchema.parse("aider")).toBe("aider");
+  });
+
+  it("widens to 5 closed-set members", () => {
+    expect(members).toHaveLength(5);
   });
 });
