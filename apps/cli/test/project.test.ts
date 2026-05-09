@@ -266,4 +266,50 @@ describe("projectCreateCommand", () => {
     }>;
     expect(persisted[0]?.rootPath).toBe(process.cwd());
   });
+
+  it("resolves --root foo/bar (relative with subdir) to absolute path", async () => {
+    await projectCreateCommand.run?.({
+      args: { name: "demo", store: root, root: "foo/bar" },
+      cmd: projectCreateCommand,
+      rawArgs: ["demo", "--store", root, "--root", "foo/bar"],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    const persisted1 = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
+      rootPath: string;
+    }>;
+    expect(persisted1[0]?.rootPath).toBe(join(process.cwd(), "foo/bar"));
+  });
+
+  it("stores --root /nonexistent as-is without error (Option B: no fs check)", async () => {
+    await projectCreateCommand.run?.({
+      args: { name: "demo", store: root, root: "/nonexistent-path-gap4" },
+      cmd: projectCreateCommand,
+      rawArgs: ["demo", "--store", root, "--root", "/nonexistent-path-gap4"],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const persisted2 = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
+      rootPath: string;
+    }>;
+    expect(persisted2[0]?.rootPath).toBe("/nonexistent-path-gap4");
+  });
+
+  it("treats --root '' (empty string) as process.cwd() via path.resolve semantics", async () => {
+    await projectCreateCommand.run?.({
+      args: { name: "demo", store: root, root: "" },
+      cmd: projectCreateCommand,
+      rawArgs: ["demo", "--store", root, "--root", ""],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    const persisted3 = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
+      rootPath: string;
+    }>;
+    expect(persisted3[0]?.rootPath).toBe(process.cwd());
+  });
 });
