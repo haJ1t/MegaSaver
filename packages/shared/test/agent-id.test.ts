@@ -51,6 +51,12 @@ describe("agentIdSchema", () => {
   });
 
   it("preserves alphabetic order — AA3 convention", () => {
-    expect(agentIdSchema.options).toEqual(["aider", "claude-code", "codex", "cursor", "generic-cli"]);
+    expect(agentIdSchema.options).toEqual([
+      "aider",
+      "claude-code",
+      "codex",
+      "cursor",
+      "generic-cli",
+    ]);
   });
 });
