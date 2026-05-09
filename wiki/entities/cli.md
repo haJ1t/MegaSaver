@@ -124,7 +124,7 @@ Full superpowers chain applied; code-reviewer and critic passes
 required before merge.
 
 Session CRUD: PR <https://github.com/haJ1t/MegaSaver/pull/11> (`9c5a388`).
-Connector sync: PR #TBD (`<merge-sha>`).
+Connector sync: PR <https://github.com/haJ1t/MegaSaver/pull/14> (`204f922`).
 
 ## Related
 

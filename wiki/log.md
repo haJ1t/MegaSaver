@@ -227,7 +227,7 @@ PR <https://github.com/haJ1t/MegaSaver/pull/12> merged into `main` (merge commit
 
 ## [2026-05-09] schema | mega connector sync
 
-PR #TBD (`<merge-sha>`): new `mega connector sync <projectName>`
+PR <https://github.com/haJ1t/MegaSaver/pull/14> merged into `main` (merge commit `204f922`): new `mega connector sync <projectName>`
 CLI command. Wires `@megasaver/connectors-shared` primitives
 (`readTargetFile`, `upsertBlock`, `renderBlock`, `writeTargetFile`,
 `assertProjectRoot`) into a per-target loop with five status

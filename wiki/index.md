@@ -72,7 +72,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-`mega connector sync` landed via PR #TBD (`<merge-sha>`): new
+`mega connector sync` landed via PR #14 (`204f922`): new
 `mega connector sync <projectName> [--target <id>]` command wiring
 `connectors-shared` primitives into a per-target loop with five
 status words. Critic v0.2 followups I1–I4 closed via PR #13
