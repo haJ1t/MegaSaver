@@ -512,3 +512,103 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   `connector --target` description from `KNOWN_TARGET_IDS`;
   AA3 document schema member-ordering convention; AA4
   promote Z4 wiki documentation to higher priority.
+
+## [2026-05-10] schema | parallel team batch (Y3 + AA2 + project-root)
+
+- Team: `megasaver-v02-parallel` (config:
+  `~/.claude/teams/megasaver-v02-parallel/config.json`)
+- Spawned 4 teammates in parallel via TeamCreate + 4 Agent calls
+  with `team_name` + `name`. Each teammate worked in own worktree
+  (`.worktrees/{slot}`) on isolated branch (`feat/{slot}`),
+  followed full superpowers chain (brainstorm Q1 → spec → plan →
+  TDD execute → DoD gate → push → PR), and SendMessaged team-lead
+  with PR URL when ready.
+- 3 of 4 PRs merged in this batch:
+  - **PR #24** (`f0135f7`) Y3 docs drift fix
+  - **PR #25** (`a8fb044`) AA2 connector --target description derive
+  - **PR #26** (`b20c9b6`) project create --root flag
+- 4th teammate `aa3-schema-docs` still working on AA3 (schema
+  member-ordering convention docs) at this batch close — will land
+  separately.
+- Inter-session communication: SendMessage tool, idle/awake
+  lifecycle, shared TaskList. Team coordination patterns proven
+  for further parallel slot batches.
+
+## [2026-05-10] schema | Y3 docs drift fix (PR #24)
+
+- Spec: `docs/superpowers/specs/2026-05-09-y3-docs-drift-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-y3-docs-drift-plan.md`
+- Branch: `feat/y3-docs-drift` (deleted post-merge)
+- Result: PR #21 (aider connector target) added a 4th built-in
+  connector target (`aider` → `CONVENTIONS.md`), but governance
+  docs still listed only 3 agent file scopes. Y3 closes the gap:
+  `CLAUDE.md §7` (header callout + scope list), `AGENTS.md` (new
+  Multi-Agent Dogfood section), `.cursor/rules/mega-context.mdc`,
+  and new `docs/conventions/multi-agent-dogfood.md` (source-of-truth
+  per §7's pointer rule) all enumerate 4 file scopes (CLAUDE.md,
+  AGENTS.md, `.cursor/rules/*.mdc`, `CONVENTIONS.md`). Convention
+  count updated 12 → 13 canonical files. Out of scope (per
+  team-lead's clarifications): `.cursor/rules/megasaver.mdc`
+  (connector-managed by PR #17 cursor target), `§2 repo layout
+  CONVENTIONS.md` (connector output, not repo-tracked). Critic
+  re-pass returned ACCEPT-WITH-RESERVATIONS with MAJOR #1 closed
+  inline (`f7d07f6`): the deleted "§7 is the only section without
+  its own conventions file" parenthetical was replaced with the
+  new positive invariant "Thirteen canonical files, one per
+  CLAUDE.md section §1-§13" — turning a now-stale negative claim
+  into a forward-looking structural rule. PR
+  <https://github.com/haJ1t/MegaSaver/pull/24> merged into `main`
+  (merge commit `f0135f7`).
+
+## [2026-05-10] schema | AA2 connector --target description derive (PR #25)
+
+- Spec: `docs/superpowers/specs/2026-05-09-aa2-connector-target-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-aa2-connector-target-plan.md`
+- Branch: `feat/aa2-connector-target` (deleted post-merge)
+- Result: Extends PR #22 + PR #23's schema-derived pattern to the
+  4th closed-enum surface (target IDs). Both
+  `connectorSyncCommand.args.target.description` and
+  `connectorStatusCommand.args.target.description` now derive from
+  `KNOWN_TARGET_IDS.join(" | ")` (launch order from
+  `KNOWN_TARGETS` in `apps/cli/src/known-targets.ts`). Resulting
+  `--help` strings:
+  - `Optional target id (claude-code | codex | cursor | aider) to seed when its file does not exist.`
+  - `Optional target id (claude-code | codex | cursor | aider) to filter the report.`
+  Adding a 5th target now requires editing only
+  `apps/cli/src/known-targets.ts`'s `KNOWN_TARGETS` array — the
+  description, validator (`isKnownTargetId`), error messages
+  (PR #22), and `--help` text (this PR) all derive. +2 `toBe`
+  pinned-format drift-guard tests in `apps/cli/test/connector.test.ts`
+  parallel to PR #23's `session.test.ts:222` pattern. cli 194 →
+  196. Critic returned ACCEPT (THOROUGH mode, no escalation), zero
+  CRITICAL / HIGH / MAJOR / MEDIUM findings; OBSERVATION-grade
+  notes only (commit subject lengths 54-56 chars exceeded the
+  ≤ 50 cap; pre-existing `KNOWN_TARGET_IDS: readonly string[]`
+  type widening from PR #22). PR
+  <https://github.com/haJ1t/MegaSaver/pull/25> merged into `main`
+  (merge commit `a8fb044`).
+
+## [2026-05-10] schema | project create --root flag (PR #26)
+
+- Spec: `docs/superpowers/specs/2026-05-09-project-create-root-flag-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-project-create-root-flag-plan.md`
+- Branch: `feat/project-root-flag` (deleted post-merge)
+- Result: Adds optional `--root <dir>` flag to `mega project
+  create <name>`. Default behavior (omit `--root`) preserves
+  byte-identical `rootPath = process.cwd()`. With `--root`:
+  `rootPath = path.resolve(args.root)` (absolute path; supports
+  relative inputs like `--root .`). No existence check at create
+  time (Option B per teammate's brainstorm with team-lead) —
+  downstream `assertProjectRoot` (called by `mega connector sync`)
+  is the validation gate. Use case: register a project for a
+  directory that will be cloned/scaffolded next; or invoke from
+  one directory while pointing at another root. +3 tests
+  (absolute pass-through, relative resolve via `path.resolve(".")`,
+  omit-default regression guard byte-identical to pre-refactor).
+  cli 196 → 199. Critic returned ACCEPT (THOROUGH mode, zero
+  CRITICAL / HIGH / MAJOR), MINOR-grade backlog (commit subject
+  lengths 52-53 chars; one noise format-fix commit; missing
+  tests for `--root foo/bar` and `--root /nonexistent` —
+  OBSERVATION-grade follow-ups). PR
+  <https://github.com/haJ1t/MegaSaver/pull/26> merged into `main`
+  (merge commit `b20c9b6`).

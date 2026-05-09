@@ -24,12 +24,16 @@ in `apps/cli/package.json` maps `mega → ./dist/cli.js`.
 Three stateless checks (Node version ≥22, platform, cwd). Plain text
 output, summary line, exit 0 on all-PASS, exit 1 on any FAIL.
 
-### `mega project create <name>`
+### `mega project create <name> [--root <dir>]`
 
-Creates a project in the store. Sets `rootPath = process.cwd()` and
-stamps RFC 3339 `createdAt`/`updatedAt`. Prints `<id>  <name>` on
-success. Rejects duplicate names with `error: project "<name>"
-already exists` and exit 1.
+Creates a project in the store. `rootPath` defaults to `process.cwd()`
+if `--root` omitted; otherwise `rootPath = path.resolve(args.root)`
+(absolute, supports relative inputs like `--root .`). No existence
+check at create time — downstream `assertProjectRoot` is the validation
+gate (e.g., `mega connector sync` will surface invalid roots). Stamps
+RFC 3339 `createdAt`/`updatedAt`. Prints `<id>  <name>` on success.
+Rejects duplicate names with `error: project "<name>" already exists`
+and exit 1.
 
 ### `mega project list`
 
@@ -183,6 +187,11 @@ Session update + I5 split: PR <https://github.com/haJ1t/MegaSaver/pull/18> (`049
 MemoryEntry CLI: PR <https://github.com/haJ1t/MegaSaver/pull/19> (`7a199b6`).
 Connector memoryEntries wiring: PR <https://github.com/haJ1t/MegaSaver/pull/20> (`b0e4382`).
 Aider connector target: PR <https://github.com/haJ1t/MegaSaver/pull/21> (`184b13d`).
+Closed-enum tripwire refactor: PR <https://github.com/haJ1t/MegaSaver/pull/22> (`489f7d0`).
+Citty description derive (Z1): PR <https://github.com/haJ1t/MegaSaver/pull/23> (`4722a3a`).
+Y3 docs drift fix (4 agent files): PR <https://github.com/haJ1t/MegaSaver/pull/24> (`f0135f7`).
+AA2 connector --target description derive: PR <https://github.com/haJ1t/MegaSaver/pull/25> (`a8fb044`).
+Project create --root flag: PR <https://github.com/haJ1t/MegaSaver/pull/26> (`b20c9b6`).
 
 ## Related
 

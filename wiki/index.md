@@ -74,7 +74,43 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-Citty description derive (Z1) landed via PR #23 (`4722a3a`):
+**Parallel team batch (3 PRs merged 2026-05-10) via `megasaver-v02-parallel` team:**
+
+- **PR #24 (`f0135f7`)** — Y3 docs drift fix: `CLAUDE.md §7` /
+  `AGENTS.md` / `.cursor/rules/mega-context.mdc` / new
+  `docs/conventions/multi-agent-dogfood.md` now enumerate 4 agent
+  file scopes (CLAUDE.md, AGENTS.md, `.cursor/rules/*.mdc`,
+  `CONVENTIONS.md`). New invariant: every CLAUDE.md §1-§13 has its
+  own conventions file (count: 12 → 13 canonical conventions
+  files). `CONVENTIONS.md` is connector output (not repo-tracked).
+  Critic ACCEPT-WITH-RESERVATIONS, MAJOR #1 inline fix `f7d07f6`
+  (replaced deleted parenthetical with positive "one per
+  §1-§13" invariant).
+
+- **PR #25 (`a8fb044`)** — AA2 connector `--target` description
+  derive: extends PR #22+#23's schema-derived pattern to the 4th
+  closed-enum surface. Both `connectorSyncCommand` and
+  `connectorStatusCommand` `--target` descriptions now derive from
+  `KNOWN_TARGET_IDS.join(" | ")` (launch order:
+  `claude-code | codex | cursor | aider`). `--help` text auto-updates
+  on future target additions. +2 `toBe` drift-guard tests parallel
+  to PR #23's pattern. Critic ACCEPT, no merge blockers.
+
+- **PR #26 (`b20c9b6`)** — `mega project create --root <dir>`:
+  optional `--root` flag added; default behavior (omit) preserves
+  byte-identical `rootPath = process.cwd()`. With `--root`,
+  `path.resolve(args.root)` (absolute, supports relative inputs).
+  No existence check at create time — downstream `assertProjectRoot`
+  is the validation gate (Option B). +3 tests (absolute pass-through,
+  relative resolve, omit-default regression). Critic ACCEPT, no
+  merge blockers.
+
+Total cli test count: 197 → 199 (+2 from AA2, +3 - 1 from
+project-root which had no behavior changes for omit-path tests).
+Open: aa3-schema-docs teammate still working on AA3 (schema
+member-ordering convention docs); will land separately.
+
+Previously: Citty description derive (Z1) landed via PR #23 (`4722a3a`):
 closes the closed-enum bug class on the **help-text** surface
 (PR #22 closed the **error-message** surface). 5 citty
 `description` strings in `apps/cli/src/commands/session/create.ts`,
