@@ -67,7 +67,7 @@ describe("connectorSyncCommand — pre-target gates", () => {
     expect(process.exitCode).toBe(1);
     expect(
       errSpy.mock.calls.some(
-        (c) => c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor',
+        (c) => c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor | aider',
       ),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
@@ -172,6 +172,7 @@ describe("connectorSyncCommand — skipped + created", () => {
       "claude-code  CLAUDE.md  skipped",
       "codex        AGENTS.md  skipped",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
   });
 
@@ -183,6 +184,7 @@ describe("connectorSyncCommand — skipped + created", () => {
       "claude-code  CLAUDE.md  skipped",
       "codex        AGENTS.md  created",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
     const written = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
     expect(written).toMatch(/<!-- MEGA SAVER:BEGIN -->/);
@@ -198,6 +200,7 @@ describe("connectorSyncCommand — skipped + created", () => {
       "claude-code  CLAUDE.md  created",
       "codex        AGENTS.md  skipped",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
     const written = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     expect(written).toContain("Agent: claude-code");
@@ -326,6 +329,7 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "claude-code  CLAUDE.md  wrote",
       "codex        AGENTS.md  wrote",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
     const claudeMd = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     const agentsMd = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
@@ -364,6 +368,7 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "claude-code  CLAUDE.md  noop",
       "codex        AGENTS.md  skipped",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
   });
 
@@ -408,6 +413,7 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "claude-code  CLAUDE.md  wrote",
       "codex        AGENTS.md  noop",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
   });
 
@@ -550,6 +556,7 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
       "claude-code  CLAUDE.md  wrote",
       "codex        AGENTS.md  error",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
     ]);
     expect(
       errSpy.mock.calls.some(

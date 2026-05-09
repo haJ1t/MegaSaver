@@ -63,7 +63,7 @@ describe("connectorStatusCommand — pre-target gates", () => {
     expect(process.exitCode).toBe(1);
     expect(
       errSpy.mock.calls.some(
-        (c) => c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor',
+        (c) => c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor | aider',
       ),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
@@ -131,6 +131,7 @@ describe("connectorStatusCommand — missing + no-block", () => {
       "claude-code  CLAUDE.md  missing  session=none",
       "codex        AGENTS.md  missing  session=none",
       "cursor       .cursor/rules/megasaver.mdc  missing  session=none",
+      "aider        CONVENTIONS.md  missing  session=none",
     ]);
   });
 
@@ -548,6 +549,7 @@ describe("connectorStatusCommand — cursor target", () => {
       "claude-code  CLAUDE.md  missing  session=none",
       "codex        AGENTS.md  missing  session=none",
       "cursor       .cursor/rules/megasaver.mdc  missing  session=none",
+      "aider        CONVENTIONS.md  missing  session=none",
     ]);
   });
 
