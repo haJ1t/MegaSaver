@@ -11,6 +11,7 @@ Source-of-truth references:
 - `docs/conventions/mission.md`
 - `docs/conventions/repo-layout.md`
 - `docs/conventions/stack-and-commands.md`
+- `docs/conventions/multi-agent-dogfood.md`
 
 ## Mission
 
@@ -48,3 +49,16 @@ Vitest · Biome · Citty · Changesets.
 pnpm dev / build / test / lint / typecheck / verify
 pnpm --filter @megasaver/<pkg> <cmd>
 ```
+
+## Agent File Scopes
+
+Four agent files are kept in sync via `docs/conventions/`:
+
+- `CLAUDE.md` — full reference. Used by Claude Code.
+- `AGENTS.md` — Codex format. Slim mirror.
+- `.cursor/rules/*.mdc` — modular, auto-loaded by Cursor on globs.
+- `CONVENTIONS.md` — plain markdown, written by
+  `mega connector sync --target aider`. Loaded by Aider via
+  `--read CONVENTIONS.md` or `.aider.conf.yml`.
+
+Source: `docs/conventions/multi-agent-dogfood.md`
