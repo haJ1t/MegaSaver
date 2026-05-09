@@ -1,6 +1,8 @@
 import { memoryEntryIdSchema, projectIdSchema, sessionIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 
+// Order: semantic — project precedes session because sessions belong to
+// projects (containment hierarchy). Used for derived CLI strings.
 export const memoryScopeSchema = z.enum(["project", "session"]);
 export type MemoryScope = z.infer<typeof memoryScopeSchema>;
 

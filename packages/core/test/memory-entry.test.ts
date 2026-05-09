@@ -36,6 +36,10 @@ describe("memoryScopeSchema", () => {
   it("rejects unknown scopes", () => {
     expect(memoryScopeSchema.safeParse("global").success).toBe(false);
   });
+
+  it("preserves semantic order project→session — AA3 convention", () => {
+    expect(memoryScopeSchema.options).toEqual(["project", "session"]);
+  });
 });
 
 describe("memoryEntrySchema", () => {
