@@ -95,6 +95,59 @@ describe("projectListCommand", () => {
     expect(errSpy).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(0);
   });
+
+  it("--json on empty store emits `[]` on stdout and exits 0", async () => {
+    await projectListCommand.run?.({
+      args: { store: root, json: true },
+      cmd: projectListCommand,
+      rawArgs: ["--store", root, "--json"],
+      data: undefined,
+    } as never);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(logSpy.mock.calls[0]?.[0]).toBe("[]");
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("--json with 2 projects emits compact JSON array with all 5 fields", async () => {
+    await mkdir(root, { recursive: true });
+    const aId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const bId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const ts = "2026-05-10T00:00:00.000Z";
+    await writeFile(
+      join(root, "projects.json"),
+      JSON.stringify([
+        { id: aId, name: "alpha", rootPath: "/tmp/a", createdAt: ts, updatedAt: ts },
+        { id: bId, name: "beta", rootPath: "/tmp/b", createdAt: ts, updatedAt: ts },
+      ]),
+    );
+    await writeFile(join(root, "sessions.json"), "[]");
+
+    await projectListCommand.run?.({
+      args: { store: root, json: true },
+      cmd: projectListCommand,
+      rawArgs: ["--store", root, "--json"],
+      data: undefined,
+    } as never);
+
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as unknown[];
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]).toEqual({
+      id: aId,
+      name: "alpha",
+      rootPath: "/tmp/a",
+      createdAt: ts,
+      updatedAt: ts,
+    });
+    expect(parsed[1]).toEqual({
+      id: bId,
+      name: "beta",
+      rootPath: "/tmp/b",
+      createdAt: ts,
+      updatedAt: ts,
+    });
+    expect(process.exitCode).toBe(0);
+  });
 });
 
 describe("projectCreateCommand", () => {
@@ -311,5 +364,37 @@ describe("projectCreateCommand", () => {
       rootPath: string;
     }>;
     expect(persisted3[0]?.rootPath).toBe(process.cwd());
+  });
+
+  it("--json emits compact JSON object with all 5 fields", async () => {
+    await projectCreateCommand.run?.({
+      args: { name: "demo", store: root, json: true },
+      cmd: projectCreateCommand,
+      rawArgs: ["demo", "--store", root, "--json"],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as Record<string, unknown>;
+    expect(parsed.name).toBe("demo");
+    expect(typeof parsed.id).toBe("string");
+    expect(parsed.rootPath).toBe(process.cwd());
+    expect(typeof parsed.createdAt).toBe("string");
+    expect(typeof parsed.updatedAt).toBe("string");
+  });
+
+  it("--json + --root emits JSON with resolved rootPath", async () => {
+    await projectCreateCommand.run?.({
+      args: { name: "demo", store: root, root: "/tmp/json-root-test", json: true },
+      cmd: projectCreateCommand,
+      rawArgs: ["demo", "--store", root, "--root", "/tmp/json-root-test", "--json"],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as Record<string, unknown>;
+    expect(parsed.rootPath).toBe("/tmp/json-root-test");
   });
 });

@@ -22,6 +22,7 @@ export type RunProjectListInput = {
   xdgDataHome: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+  json?: boolean;
 };
 
 export async function runProjectList(input: RunProjectListInput): Promise<0 | 1> {
@@ -45,8 +46,12 @@ export async function runProjectList(input: RunProjectListInput): Promise<0 | 1>
       input.stderr(`note: initialized store at ${rootDir}`);
     }
     const projects = registry.listProjects();
-    for (const project of projects) {
-      input.stdout(formatProjectLine(project));
+    if (input.json) {
+      input.stdout(JSON.stringify(projects));
+    } else {
+      for (const project of projects) {
+        input.stdout(formatProjectLine(project));
+      }
     }
     return 0;
   } catch (err) {
@@ -60,6 +65,7 @@ export const projectListCommand = defineCommand({
   meta: { name: "list", description: "List persisted projects." },
   args: {
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const code = await runProjectList({
@@ -71,6 +77,7 @@ export const projectListCommand = defineCommand({
       xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
+      json: !!args.json,
     });
     if (code !== 0) process.exitCode = code;
   },
@@ -94,6 +101,7 @@ export type RunProjectCreateInput = {
   xdgDataHome: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+  json?: boolean;
   /** Override for tests; defaults to crypto.randomUUID. */
   newId?: () => string;
   /** Override for tests; defaults to () => new Date().toISOString(). */
@@ -144,7 +152,7 @@ export async function runProjectCreate(input: RunProjectCreateInput): Promise<0 
       createdAt: now,
       updatedAt: now,
     });
-    input.stdout(formatProjectLine(created));
+    input.stdout(input.json ? JSON.stringify(created) : formatProjectLine(created));
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err);
@@ -166,6 +174,7 @@ export const projectCreateCommand = defineCommand({
       type: "string",
       description: "Project root directory (absolute or relative; defaults to current directory).",
     },
+    json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const code = await runProjectCreate({
@@ -179,6 +188,7 @@ export const projectCreateCommand = defineCommand({
       xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
+      json: !!args.json,
     });
     if (code !== 0) process.exitCode = code;
   },
