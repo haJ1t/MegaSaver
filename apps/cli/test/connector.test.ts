@@ -750,27 +750,20 @@ describe("connectorSyncCommand — cursor target", () => {
     await seedSession(SESS_CURSOR, "cursor", "2026-05-09T00:00:00.000Z");
     await runSync({ projectName: "demo", target: "cursor" });
     const path = join(projectRoot, ".cursor/rules/megasaver.mdc");
+    const seeded = await readFile(path, "utf8");
+    const seededFrontmatter = seeded.split("<!-- MEGA SAVER:BEGIN -->")[0] ?? "";
 
-    // mutate the session list so the rendered block changes on second sync
+    // mutate the session list so the rendered block changes
     logSpy.mockClear();
     await seedSession("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "cursor", "2026-05-09T01:00:00.000Z");
     await runSync({ projectName: "demo", target: "cursor" });
 
-    const afterSecond = await readFile(path, "utf8");
-    const frontmatterAfterSecond = afterSecond.split("<!-- MEGA SAVER:BEGIN -->")[0] ?? "";
-    // frontmatter still contains all expected fields
-    expect(frontmatterAfterSecond).toContain("alwaysApply: true");
-    expect(frontmatterAfterSecond).toContain("description: Mega Saver project context");
+    const updated = await readFile(path, "utf8");
+    const updatedFrontmatter = updated.split("<!-- MEGA SAVER:BEGIN -->")[0] ?? "";
+    expect(updatedFrontmatter).toBe(seededFrontmatter);
 
-    const linesSecond = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(linesSecond).toContain("cursor       .cursor/rules/megasaver.mdc  wrote");
-
-    // third sync: block is now stable — frontmatter must not change further
-    logSpy.mockClear();
-    await runSync({ projectName: "demo", target: "cursor" });
-    const afterThird = await readFile(path, "utf8");
-    const frontmatterAfterThird = afterThird.split("<!-- MEGA SAVER:BEGIN -->")[0] ?? "";
-    expect(frontmatterAfterThird).toBe(frontmatterAfterSecond);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines).toContain("cursor       .cursor/rules/megasaver.mdc  wrote");
   });
 
   it("default sync (no --target) silently skips a missing cursor file", async () => {

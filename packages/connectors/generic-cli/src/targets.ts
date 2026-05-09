@@ -24,7 +24,6 @@ export const cursorTarget: ConnectorTarget = Object.freeze({
     "---",
     "",
     "",
-    "",
   ].join("\n"),
 });
 

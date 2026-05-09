@@ -35,7 +35,7 @@ describe("ConnectorTarget registry", () => {
     expect(h ?? "").toMatch(/^---\n/);
     expect(h ?? "").toContain("alwaysApply: true");
     expect(h ?? "").toContain("description: Mega Saver project context");
-    expect(h ?? "").toMatch(/---\n\n\n$/);
+    expect(h ?? "").toMatch(/---\n\n$/);
   });
 
   it("findTarget returns the cursor target by id", () => {
