@@ -1,8 +1,14 @@
 import type { SessionUpdatePatch } from "@megasaver/core";
-import { sessionIdSchema } from "@megasaver/shared";
+import { agentIdSchema, riskLevelSchema, sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
-import { mapErrorToCliMessage, nothingToUpdateMessage } from "../../errors.js";
+import {
+  invalidAgentMessage,
+  invalidRiskMessage,
+  mapErrorToCliMessage,
+  nothingToUpdateMessage,
+} from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
+import { titleSchema } from "./shared.js";
 
 export type RunSessionUpdateInput = {
   sessionId: string;
@@ -51,14 +57,50 @@ export async function runSessionUpdate(input: RunSessionUpdateInput): Promise<0 
     return cli.exitCode;
   }
 
-  // Build patch. Patch validation runs inside Core's updateSession via
-  // sessionUpdatePatchSchema, so we just construct an unvalidated object here.
+  // Parse and validate agent at the CLI boundary (mirrors create.ts).
+  let parsedAgent: ReturnType<typeof agentIdSchema.parse> | undefined;
+  if (input.agentFlag !== undefined) {
+    try {
+      parsedAgent = agentIdSchema.parse(input.agentFlag);
+    } catch {
+      const cli = invalidAgentMessage(input.agentFlag);
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
+  }
+
+  // Parse and validate risk at the CLI boundary (mirrors create.ts).
+  let parsedRisk: ReturnType<typeof riskLevelSchema.parse> | undefined;
+  if (input.riskFlag !== undefined) {
+    try {
+      parsedRisk = riskLevelSchema.parse(input.riskFlag);
+    } catch {
+      const cli = invalidRiskMessage(input.riskFlag);
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
+  }
+
+  // Parse and validate title at the CLI boundary (mirrors create.ts).
+  // Empty string is the clear-title sentinel — skip schema for that case.
+  let parsedTitle: string | undefined;
+  if (input.titleFlag !== undefined && input.titleFlag !== "") {
+    try {
+      parsedTitle = titleSchema.parse(input.titleFlag);
+    } catch (err) {
+      const cli = mapErrorToCliMessage(err, { kind: "title" });
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
+  }
+
+  // Build patch with validated values — no `as never` casts.
   const patch: SessionUpdatePatch = {};
   if (input.titleFlag !== undefined) {
-    patch.title = input.titleFlag === "" ? null : input.titleFlag;
+    patch.title = input.titleFlag === "" ? null : (parsedTitle ?? null);
   }
-  if (input.riskFlag !== undefined) patch.riskLevel = input.riskFlag as never;
-  if (input.agentFlag !== undefined) patch.agentId = input.agentFlag as never;
+  if (parsedRisk !== undefined) patch.riskLevel = parsedRisk;
+  if (parsedAgent !== undefined) patch.agentId = parsedAgent;
 
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);

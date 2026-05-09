@@ -1,3 +1,16 @@
+import { z } from "zod";
+import { NAME_CONTROL_CHARS_MESSAGE } from "../../errors.js";
+
+// Shared title schema — reused by create.ts and update.ts.
+// C0/C1 control chars and DEL break the line-oriented output protocol.
+export const titleSchema = z
+  .string()
+  .trim()
+  .min(1)
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional
+  .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
+  .transform((value) => value.normalize("NFC"));
+
 /**
  * Read a deterministic test-injection env var. Returns the raw string
  * value only when NODE_ENV is "test"; in production builds the env var

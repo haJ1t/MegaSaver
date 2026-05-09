@@ -694,13 +694,29 @@ describe("sessionUpdateCommand", () => {
     await seedOpenSession();
     await runUpdate({ sessionId: SESSION_ID, risk: "bogus" });
     expect(process.exitCode).toBe(1);
-    expect(errSpy.mock.calls.length).toBeGreaterThan(0);
+    expect(
+      errSpy.mock.calls.some((c) => /^error: invalid risk "bogus", expected:/.test(c[0] as string)),
+    ).toBe(true);
   });
 
   it("rejects --agent with unknown id", async () => {
     await seedOpenSession();
     await runUpdate({ sessionId: SESSION_ID, agent: "ghost-agent" });
     expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some((c) =>
+        /^error: invalid agent "ghost-agent", expected:/.test(c[0] as string),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects --title with embedded newline", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: SESSION_ID, title: "first\nsecond" });
+    expect(process.exitCode).toBe(1);
     expect(errSpy.mock.calls.length).toBeGreaterThan(0);
+    // session unchanged
+    const arr = await readSessions();
+    expect(arr[0]?.title).toBeNull();
   });
 });

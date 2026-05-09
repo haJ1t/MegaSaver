@@ -10,22 +10,13 @@ import {
   projectNotFoundMessage,
 } from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
-import { readTestEnv } from "./shared.js";
+import { readTestEnv, titleSchema } from "./shared.js";
 
 const projectNameSchema = z
   .string()
   .trim()
   .min(1)
   // C0/C1 control chars and DEL break the line-oriented output protocol.
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional
-  .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
-  .transform((value) => value.normalize("NFC"));
-
-const titleSchema = z
-  .string()
-  .trim()
-  .min(1)
-  // Same C0/C1 + DEL guard as projectNameSchema — keeps line-oriented output safe.
   // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional
   .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
   .transform((value) => value.normalize("NFC"));
@@ -145,6 +136,7 @@ export const sessionCreateCommand = defineCommand({
       // Keep in sync with agentIdSchema in @megasaver/shared.
       description: "Agent id (claude-code | codex | cursor | generic-cli).",
     },
+    // Keep in sync with riskLevelSchema in @megasaver/shared.
     risk: {
       type: "string",
       description: "Risk level (low | medium | high | critical). Default: medium.",
