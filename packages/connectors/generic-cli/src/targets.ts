@@ -7,13 +7,13 @@ export interface ConnectorTarget {
   readonly header?: string;
 }
 
-export const codexTarget: ConnectorTarget = Object.freeze({
+export const codexTarget = Object.freeze({
   id: "codex",
   agentId: "codex" satisfies AgentId,
   relativePath: "AGENTS.md",
 });
 
-export const cursorTarget: ConnectorTarget = Object.freeze({
+export const cursorTarget = Object.freeze({
   id: "cursor",
   agentId: "cursor" satisfies AgentId,
   relativePath: ".cursor/rules/megasaver.mdc",
@@ -27,7 +27,7 @@ export const cursorTarget: ConnectorTarget = Object.freeze({
   ].join("\n"),
 });
 
-export const aiderTarget: ConnectorTarget = Object.freeze({
+export const aiderTarget = Object.freeze({
   id: "aider",
   agentId: "aider" satisfies AgentId,
   relativePath: "CONVENTIONS.md",

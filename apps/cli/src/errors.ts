@@ -1,7 +1,8 @@
 import { ConnectorError } from "@megasaver/connectors-shared";
-import { CorePersistenceError, CoreRegistryError, type MemoryScope } from "@megasaver/core";
-import type { AgentId, RiskLevel } from "@megasaver/shared";
+import { CorePersistenceError, CoreRegistryError, memoryScopeSchema } from "@megasaver/core";
+import { agentIdSchema, riskLevelSchema } from "@megasaver/shared";
 import { ZodError } from "zod";
+import { KNOWN_TARGET_IDS } from "./known-targets.js";
 
 export type CliMessage = { message: string; exitCode: 1 };
 
@@ -23,18 +24,6 @@ export const TITLE_CONTROL_CHARS_MESSAGE = "title must not contain control chara
 export const AGENT_INVALID_MESSAGE_PREFIX = "error: invalid agent";
 export const RISK_INVALID_MESSAGE_PREFIX = "error: invalid risk";
 export const SESSION_ID_INVALID_PREFIX = "error: invalid session id";
-
-// Keep in sync with agentIdSchema in @megasaver/shared.
-// satisfies permits subset; widen AGENT_VALUES manually when the schema grows.
-const AGENT_VALUES = [
-  "aider",
-  "claude-code",
-  "codex",
-  "cursor",
-  "generic-cli",
-] as const satisfies readonly AgentId[];
-// Keep in sync with riskLevelSchema in @megasaver/shared.
-const RISK_VALUES = ["low", "medium", "high", "critical"] as const satisfies readonly RiskLevel[];
 
 export function duplicateNameMessage(name: string): CliMessage {
   return {
@@ -66,14 +55,14 @@ export function sessionAlreadyEndedMessage(id: string, endedAt: string): CliMess
 
 export function invalidAgentMessage(value: string): CliMessage {
   return {
-    message: `${AGENT_INVALID_MESSAGE_PREFIX} "${value}", expected: ${AGENT_VALUES.join(" | ")}`,
+    message: `${AGENT_INVALID_MESSAGE_PREFIX} "${value}", expected: ${agentIdSchema.options.join(" | ")}`,
     exitCode: 1,
   };
 }
 
 export function invalidRiskMessage(value: string): CliMessage {
   return {
-    message: `${RISK_INVALID_MESSAGE_PREFIX} "${value}", expected: ${RISK_VALUES.join(" | ")}`,
+    message: `${RISK_INVALID_MESSAGE_PREFIX} "${value}", expected: ${riskLevelSchema.options.join(" | ")}`,
     exitCode: 1,
   };
 }
@@ -81,12 +70,6 @@ export function invalidRiskMessage(value: string): CliMessage {
 export function invalidSessionIdMessage(value: string): CliMessage {
   return { message: `${SESSION_ID_INVALID_PREFIX} "${value}"`, exitCode: 1 };
 }
-
-// Keep in sync with KNOWN_TARGETS in apps/cli/src/commands/connector.ts.
-// Two-line tripwire so a third target lands intentionally with both arrays bumped.
-const KNOWN_TARGET_IDS = ["claude-code", "codex", "cursor", "aider"] as const;
-// Keep in sync with memoryScopeSchema in @megasaver/core.
-const KNOWN_SCOPE_IDS = ["project", "session"] as const satisfies readonly MemoryScope[];
 
 export function nothingToUpdateMessage(): CliMessage {
   return { message: "error: nothing to update", exitCode: 1 };
@@ -230,7 +213,7 @@ export function memoryEntryNotFoundMessage(id: string): CliMessage {
 
 export function invalidScopeMessage(value: string): CliMessage {
   return {
-    message: `error: invalid scope "${value}", expected: ${KNOWN_SCOPE_IDS.join(" | ")}`,
+    message: `error: invalid scope "${value}", expected: ${memoryScopeSchema.options.join(" | ")}`,
     exitCode: 1,
   };
 }

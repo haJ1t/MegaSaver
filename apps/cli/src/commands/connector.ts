@@ -1,11 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import {
-  type ConnectorTarget,
-  aiderTarget,
-  codexTarget,
-  cursorTarget,
-} from "@megasaver/connector-generic-cli";
+import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
 import {
   type ConnectorContext,
   assertProjectRoot,
@@ -18,29 +13,9 @@ import {
 import type { MemoryEntry, Project, Session } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { invalidTargetMessage, mapErrorToCliMessage, projectNotFoundMessage } from "../errors.js";
+import { KNOWN_TARGETS, type KnownTargetId, isKnownTargetId } from "../known-targets.js";
 import { ensureStoreReady, resolveStorePath } from "../store.js";
 import { projectNameSchema } from "./shared/schemas.js";
-
-// Keep in sync with KNOWN_TARGET_IDS in apps/cli/src/errors.ts.
-const KNOWN_TARGET_IDS = ["claude-code", "codex", "cursor", "aider"] as const;
-type KnownTargetId = (typeof KNOWN_TARGET_IDS)[number];
-
-function isKnownTargetId(value: string): value is KnownTargetId {
-  return (KNOWN_TARGET_IDS as readonly string[]).includes(value);
-}
-
-const CLAUDE_CODE_TARGET: ConnectorTarget = {
-  id: "claude-code",
-  agentId: "claude-code",
-  relativePath: "CLAUDE.md",
-};
-
-const KNOWN_TARGETS: readonly ConnectorTarget[] = [
-  CLAUDE_CODE_TARGET,
-  codexTarget,
-  cursorTarget,
-  aiderTarget,
-];
 
 const TARGET_ID_COLUMN_WIDTH = Math.max(...KNOWN_TARGETS.map((t) => t.id.length));
 
@@ -163,7 +138,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
         const context = buildConnectorContext(target, project, sessions, memoryEntries);
 
         if (existing === null) {
-          const newContent = (target.header ?? "") + renderBlock(context);
+          const newContent = ("header" in target ? target.header : "") + renderBlock(context);
           await mkdir(dirname(absPath), { recursive: true });
           await writeTargetFile({ absPath, content: newContent });
           input.stdout(formatStatusLine(target, "created"));

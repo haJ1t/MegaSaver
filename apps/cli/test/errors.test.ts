@@ -254,6 +254,24 @@ describe("error helpers — additional coverage", () => {
       exitCode: 1,
     });
   });
+
+  it("invalidAgentMessage enumerates every agentIdSchema member", async () => {
+    const { agentIdSchema } = await import("@megasaver/shared");
+    const msg = invalidAgentMessage("nope").message;
+    for (const m of agentIdSchema.options) expect(msg).toContain(m);
+  });
+
+  it("invalidRiskMessage enumerates every riskLevelSchema member", async () => {
+    const { riskLevelSchema } = await import("@megasaver/shared");
+    const msg = invalidRiskMessage("nope").message;
+    for (const m of riskLevelSchema.options) expect(msg).toContain(m);
+  });
+
+  it("invalidScopeMessage enumerates every memoryScopeSchema member", async () => {
+    const { memoryScopeSchema } = await import("@megasaver/core");
+    const msg = invalidScopeMessage("nope").message;
+    for (const m of memoryScopeSchema.options) expect(msg).toContain(m);
+  });
 });
 
 describe("connector error mappings", () => {

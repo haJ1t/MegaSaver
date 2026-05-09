@@ -56,7 +56,7 @@ describe("ConnectorTarget registry", () => {
   });
 
   it("codexTarget has no header (legacy targets stay byte-identical)", () => {
-    expect(codexTarget.header).toBeUndefined();
+    expect(Object.hasOwn(codexTarget, "header")).toBe(false);
   });
 
   it("ships the aider target", () => {
@@ -66,7 +66,7 @@ describe("ConnectorTarget registry", () => {
   });
 
   it("aiderTarget has no header (markdown plain target)", () => {
-    expect(aiderTarget.header).toBeUndefined();
+    expect(Object.hasOwn(aiderTarget, "header")).toBe(false);
   });
 
   it("findTarget returns the aider target by id", () => {
