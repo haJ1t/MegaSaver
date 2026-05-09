@@ -123,13 +123,11 @@ export const sessionCreateCommand = defineCommand({
     agent: {
       type: "string",
       required: true,
-      // Keep in sync with agentIdSchema in @megasaver/shared.
-      description: "Agent id (claude-code | codex | cursor | aider | generic-cli).",
+      description: `Agent id (${agentIdSchema.options.join(" | ")}).`,
     },
-    // Keep in sync with riskLevelSchema in @megasaver/shared.
     risk: {
       type: "string",
-      description: "Risk level (low | medium | high | critical). Default: medium.",
+      description: `Risk level (${riskLevelSchema.options.join(" | ")}). Default: medium.`,
     },
     title: { type: "string", description: "Optional session title." },
     store: { type: "string", description: "Override store directory." },

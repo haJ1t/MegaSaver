@@ -465,3 +465,11 @@ describe("memoryCreateCommand", () => {
     ).toBe(true);
   });
 });
+
+describe("memoryCreateCommand — drift guards", () => {
+  it("--scope description on memory create derives from memoryScopeSchema.options", async () => {
+    const { memoryScopeSchema } = await import("@megasaver/core");
+    const expected = `Memory scope (${memoryScopeSchema.options.join(" | ")}).`;
+    expect(memoryCreateCommand.args?.scope?.description).toBe(expected);
+  });
+});

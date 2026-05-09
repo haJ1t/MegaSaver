@@ -148,11 +148,10 @@ export const memoryCreateCommand = defineCommand({
       required: true,
       description: "Project name (must already exist).",
     },
-    // Keep in sync with memoryScopeSchema in @megasaver/core.
     scope: {
       type: "string",
       required: true,
-      description: "Memory scope (project | session).",
+      description: `Memory scope (${memoryScopeSchema.options.join(" | ")}).`,
     },
     content: {
       type: "string",
