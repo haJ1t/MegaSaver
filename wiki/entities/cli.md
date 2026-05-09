@@ -69,6 +69,29 @@ with `error: nothing to update`. `--title ""` clears the title to
 sessions are rejected with `session_already_ended`. Silent stdout
 on success, exit 0.
 
+### `mega memory create <projectName> --scope <project|session> --content "..." [--session <uuid>]`
+
+Append a memory entry under a project. `--scope` is required and
+must be `project` or `session`. `--content` is required, non-empty,
+and rejects control characters / multi-line input. When
+`--scope session`, `--session <uuid>` is required and must resolve
+to an open or ended session under the same project; when
+`--scope project`, `--session` is rejected. Output is the new
+memory entry id on stdout.
+
+### `mega memory list <projectName>`
+
+Lists memory entries under a project as
+`<id>  <scope>  <session|->  <content-truncated>` lines, two
+spaces between fields. Content is truncated to 59 chars + `…` when
+longer than 60. Empty project → empty stdout, exit 0.
+
+### `mega memory show <memoryEntryId>`
+
+Prints six aligned `key=value` lines (12-char key column,
+two-space gutter): `id`, `project`, `session`, `scope`, `content`,
+`createdAt`. `null` sessionId renders as `-`.
+
 ### `mega connector sync <projectName> [--target <id>]`
 
 Writes the Mega Saver context block into each known agent file
@@ -154,6 +177,7 @@ Connector status: PR <https://github.com/haJ1t/MegaSaver/pull/15> (`b1a81cc`).
 Connector status S1+S2 followups: PR <https://github.com/haJ1t/MegaSaver/pull/16> (`eb21060`).
 Cursor connector target: PR <https://github.com/haJ1t/MegaSaver/pull/17> (`f2d7f63`).
 Session update + I5 split: PR <https://github.com/haJ1t/MegaSaver/pull/18> (`04987a8`).
+MemoryEntry CLI: PR <https://github.com/haJ1t/MegaSaver/pull/TBD> (TBD).
 
 ## Related
 
