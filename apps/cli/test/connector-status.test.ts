@@ -63,7 +63,8 @@ describe("connectorStatusCommand — pre-target gates", () => {
     expect(process.exitCode).toBe(1);
     expect(
       errSpy.mock.calls.some(
-        (c) => c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor | aider',
+        (c) =>
+          c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor | aider',
       ),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
@@ -665,9 +666,7 @@ describe("connectorStatusCommand — aider target", () => {
     await runStatus({ projectName: "demo", target: "aider" });
     expect(process.exitCode).toBe(0);
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(lines).toEqual([
-      `aider        CONVENTIONS.md  in-sync  session=${SESS_AIDER_S}`,
-    ]);
+    expect(lines).toEqual([`aider        CONVENTIONS.md  in-sync  session=${SESS_AIDER_S}`]);
   });
 });
 

@@ -67,7 +67,8 @@ describe("connectorSyncCommand — pre-target gates", () => {
     expect(process.exitCode).toBe(1);
     expect(
       errSpy.mock.calls.some(
-        (c) => c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor | aider',
+        (c) =>
+          c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor | aider',
       ),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
@@ -794,12 +795,15 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(written).toContain("<!-- MEGA SAVER:BEGIN -->");
     expect(written).toContain("Agent: aider");
     expect(written).toContain("<!-- MEGA SAVER:END -->");
-    expect(logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+created$/.test(c[0] as string))).toBe(true);
+    expect(
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+created$/.test(c[0] as string)),
+    ).toBe(true);
   });
 
   it("appends the block to a pre-existing CONVENTIONS.md and preserves user content", async () => {
     await seedProject("demo", projectRoot);
-    const userContent = "# Team Conventions\n\n- Use 2-space indent.\n- Run pnpm verify before push.\n";
+    const userContent =
+      "# Team Conventions\n\n- Use 2-space indent.\n- Run pnpm verify before push.\n";
     await writeFile(join(projectRoot, "CONVENTIONS.md"), userContent);
 
     await runSync({ projectName: "demo", target: "aider" });
@@ -814,14 +818,18 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(written).toMatch(/Run pnpm verify before push\.\n+<!-- MEGA SAVER:BEGIN -->/);
     expect(written.endsWith("<!-- MEGA SAVER:END -->\n")).toBe(true);
     // Status word is "wrote" because file existed (not "created").
-    expect(logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+wrote$/.test(c[0] as string))).toBe(true);
+    expect(
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+wrote$/.test(c[0] as string)),
+    ).toBe(true);
   });
 
   it("default sync (no --target) silently skips a missing CONVENTIONS.md", async () => {
     await seedProject("demo", projectRoot);
     await runSync({ projectName: "demo" });
     expect(process.exitCode).toBe(0);
-    expect(logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+skipped$/.test(c[0] as string))).toBe(true);
+    expect(
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+skipped$/.test(c[0] as string)),
+    ).toBe(true);
     await expect(readFile(join(projectRoot, "CONVENTIONS.md"), "utf8")).rejects.toThrow();
   });
 });

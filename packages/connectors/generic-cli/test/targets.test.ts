@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { aiderTarget, builtinTargets, codexTarget, cursorTarget, findTarget } from "../src/targets.js";
+import {
+  aiderTarget,
+  builtinTargets,
+  codexTarget,
+  cursorTarget,
+  findTarget,
+} from "../src/targets.js";
 
 describe("ConnectorTarget registry", () => {
   it("ships the codex target", () => {
