@@ -440,4 +440,27 @@ describe("connectorStatusCommand — error + cross-target", () => {
     );
     expect(lines[1]).toBe("codex        AGENTS.md  drift  session=none");
   });
+
+  it("emits the open-session id on the error line, not just none", async () => {
+    const SESS_OPEN = "77777777-7777-4777-8777-777777777777";
+    await seedProject("demo", projectRoot);
+    await seedSession(SESS_OPEN, "claude-code", "2026-05-09T00:00:00.000Z");
+    const malformed = [
+      "<!-- MEGA SAVER:BEGIN -->",
+      "first",
+      "<!-- MEGA SAVER:END -->",
+      "<!-- MEGA SAVER:BEGIN -->",
+      "second",
+      "<!-- MEGA SAVER:END -->",
+      "",
+    ].join("\n");
+    await writeFile(join(projectRoot, "CLAUDE.md"), malformed);
+    await runStatus({ projectName: "demo", target: "claude-code" });
+    expect(process.exitCode).toBe(1);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines).toEqual([`claude-code  CLAUDE.md  error  session=${SESS_OPEN}`]);
+    const errors = errSpy.mock.calls.map((c) => c[0] as string).join("\n");
+    expect(errors).toContain("begin sentinel");
+    expect(errors).toContain("CLAUDE.md");
+  });
 });
