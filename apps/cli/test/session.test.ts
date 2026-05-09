@@ -218,33 +218,30 @@ describe("sessionCreateCommand", () => {
     expect(sessions[0]?.agentId).toBe("aider");
   });
 
-  it("--agent description lists every agentIdSchema member", async () => {
+  it("--agent description on create derives from agentIdSchema.options", async () => {
     const { agentIdSchema } = await import("@megasaver/shared");
-    const members = agentIdSchema.options;
-    const desc = sessionCreateCommand.args?.agent?.description ?? "";
-    for (const m of members) {
-      expect(desc).toContain(m);
-    }
+    const expected = `Agent id (${agentIdSchema.options.join(" | ")}).`;
+    expect(sessionCreateCommand.args?.agent?.description).toBe(expected);
   });
 
-  it("--risk description on create lists every riskLevelSchema member", async () => {
+  it("--risk description on create derives from riskLevelSchema.options", async () => {
     const { riskLevelSchema } = await import("@megasaver/shared");
-    const desc = sessionCreateCommand.args?.risk?.description ?? "";
-    for (const m of riskLevelSchema.options) expect(desc).toContain(m);
+    const expected = `Risk level (${riskLevelSchema.options.join(" | ")}). Default: medium.`;
+    expect(sessionCreateCommand.args?.risk?.description).toBe(expected);
   });
 });
 
 describe("sessionUpdateCommand — drift guards", () => {
-  it("--agent description on update lists every agentIdSchema member", async () => {
+  it("--agent description on update derives from agentIdSchema.options", async () => {
     const { agentIdSchema } = await import("@megasaver/shared");
-    const desc = sessionUpdateCommand.args?.agent?.description ?? "";
-    for (const m of agentIdSchema.options) expect(desc).toContain(m);
+    const expected = `New agent id (${agentIdSchema.options.join(" | ")}).`;
+    expect(sessionUpdateCommand.args?.agent?.description).toBe(expected);
   });
 
-  it("--risk description on update lists every riskLevelSchema member", async () => {
+  it("--risk description on update derives from riskLevelSchema.options", async () => {
     const { riskLevelSchema } = await import("@megasaver/shared");
-    const desc = sessionUpdateCommand.args?.risk?.description ?? "";
-    for (const m of riskLevelSchema.options) expect(desc).toContain(m);
+    const expected = `New risk level (${riskLevelSchema.options.join(" | ")}).`;
+    expect(sessionUpdateCommand.args?.risk?.description).toBe(expected);
   });
 });
 
