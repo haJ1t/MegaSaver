@@ -833,6 +833,41 @@ describe("connectorSyncCommand — cursor target", () => {
     ).toBe(true);
     await expect(readFile(join(projectRoot, "CONVENTIONS.md"), "utf8")).rejects.toThrow();
   });
+
+  it("emits noop on idempotent aider rerun (block content unchanged)", async () => {
+    await seedProject("demo", projectRoot);
+    await seedSession(SESS_CURSOR, "aider", "2026-05-09T00:00:00.000Z");
+    // First sync seeds CONVENTIONS.md.
+    await runSync({ projectName: "demo", target: "aider" });
+    logSpy.mockClear();
+    errSpy.mockClear();
+
+    await runSync({ projectName: "demo", target: "aider" });
+
+    expect(process.exitCode).toBe(0);
+    expect(
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+noop$/.test(c[0] as string)),
+    ).toBe(true);
+  });
+
+  it("replaces stale aider block in-place (CONVENTIONS.md already exists)", async () => {
+    await seedProject("demo", projectRoot);
+    await seedSession(SESS_CURSOR, "aider", "2026-05-09T00:00:00.000Z");
+    await writeFile(
+      join(projectRoot, "CONVENTIONS.md"),
+      MEGA_BLOCK_PLACEHOLDER("demo", "old-aider-id", "aider"),
+    );
+
+    await runSync({ projectName: "demo", target: "aider" });
+
+    expect(process.exitCode).toBe(0);
+    const written = await readFile(join(projectRoot, "CONVENTIONS.md"), "utf8");
+    expect(written).toContain(`Project: demo (${PROJECT_ID_CURSOR})`);
+    expect(written).not.toContain("old-aider-id");
+    expect(
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+wrote$/.test(c[0] as string)),
+    ).toBe(true);
+  });
 });
 
 describe("connectorSyncCommand — memoryEntries wiring", () => {
