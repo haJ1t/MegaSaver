@@ -60,7 +60,7 @@ function pickLatestOpenSession(
   const candidates = sessions.filter((s) => s.endedAt === null && s.agentId === agentId);
   if (candidates.length === 0) return null;
   return candidates.reduce((latest, current) =>
-    current.startedAt > latest.startedAt ? current : latest,
+    Date.parse(current.startedAt) > Date.parse(latest.startedAt) ? current : latest,
   );
 }
 
