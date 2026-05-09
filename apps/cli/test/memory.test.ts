@@ -1,7 +1,8 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { memoryCreateCommand } from "../src/commands/memory/create.js";
 import { memoryListCommand } from "../src/commands/memory/list.js";
 import { memoryShowCommand } from "../src/commands/memory/show.js";
 
@@ -231,5 +232,192 @@ describe("memoryListCommand", () => {
     await runList();
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
     expect(lines[0]).toMatch(/a{59}…$/);
+  });
+});
+
+describe("memoryCreateCommand", () => {
+  let store: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-memcreate-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    process.env.MEGA_TEST_MEMORY_ENTRY_ID = undefined;
+    process.env.MEGA_TEST_NOW = undefined;
+    await rm(store, { recursive: true, force: true });
+  });
+
+  async function seedProjectOnly(): Promise<void> {
+    await mkdir(store, { recursive: true });
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "demo", rootPath: "/tmp", createdAt: TS, updatedAt: TS },
+      ]),
+    );
+    await writeFile(join(store, "sessions.json"), "[]");
+    await mkdir(join(store, "memory"), { recursive: true });
+  }
+
+  async function seedSessionToo(): Promise<void> {
+    await seedProjectOnly();
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESSION_ID,
+          projectId: PROJECT_ID,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: null,
+          startedAt: TS,
+          endedAt: null,
+        },
+      ]),
+    );
+  }
+
+  async function readMemoryJsonl(): Promise<Array<Record<string, unknown>>> {
+    const path = join(store, "memory", `${PROJECT_ID}.jsonl`);
+    const raw = await readFile(path, "utf8").catch(() => "");
+    return raw
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line));
+  }
+
+  async function runCreate(args: Record<string, string>): Promise<void> {
+    process.env.NODE_ENV = "test";
+    process.env.MEGA_TEST_MEMORY_ENTRY_ID = MEMORY_ID_PROJECT;
+    process.env.MEGA_TEST_NOW = TS;
+    await memoryCreateCommand.run?.({
+      args: { ...args, store },
+      cmd: memoryCreateCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  it("creates a project-scoped entry", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "demo", scope: "project", content: "user prefers TS" });
+    expect(process.exitCode).toBe(0);
+    const arr = await readMemoryJsonl();
+    expect(arr).toHaveLength(1);
+    expect(arr[0]?.scope).toBe("project");
+    expect(arr[0]?.sessionId).toBeNull();
+    expect(arr[0]?.content).toBe("user prefers TS");
+  });
+
+  it("creates a session-scoped entry with --session", async () => {
+    await seedSessionToo();
+    await runCreate({
+      projectName: "demo",
+      scope: "session",
+      content: "checked CSRF token expiry",
+      session: SESSION_ID,
+    });
+    expect(process.exitCode).toBe(0);
+    const arr = await readMemoryJsonl();
+    expect(arr[0]?.scope).toBe("session");
+    expect(arr[0]?.sessionId).toBe(SESSION_ID);
+  });
+
+  it("stamps id from MEGA_TEST_MEMORY_ENTRY_ID under NODE_ENV=test", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "demo", scope: "project", content: "x" });
+    const arr = await readMemoryJsonl();
+    expect(arr[0]?.id).toBe(MEMORY_ID_PROJECT);
+  });
+
+  it("stamps createdAt from MEGA_TEST_NOW under NODE_ENV=test", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "demo", scope: "project", content: "x" });
+    const arr = await readMemoryJsonl();
+    expect(arr[0]?.createdAt).toBe(TS);
+  });
+
+  it("rejects missing project with project_not_found", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "nope", scope: "project", content: "x" });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.some((c) => /project "nope" not found/.test(c[0] as string))).toBe(
+      true,
+    );
+  });
+
+  it("rejects unknown session id (with --scope session)", async () => {
+    await seedProjectOnly(); // session is NOT seeded
+    await runCreate({
+      projectName: "demo",
+      scope: "session",
+      content: "x",
+      session: "99999999-9999-4999-8999-999999999999",
+    });
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some((c) => /session "99999999.*" not found/.test(c[0] as string)),
+    ).toBe(true);
+  });
+
+  it("rejects empty --content", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "demo", scope: "project", content: "" });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("rejects --content with embedded newline", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "demo", scope: "project", content: "first\nsecond" });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("rejects --scope bogus with documented enum error", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "demo", scope: "bogus", content: "x" });
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some((c) =>
+        /^error: invalid scope "bogus", expected: project \| session/.test(c[0] as string),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects --scope project --session combo", async () => {
+    await seedProjectOnly();
+    await runCreate({
+      projectName: "demo",
+      scope: "project",
+      content: "x",
+      session: SESSION_ID,
+    });
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some(
+        (c) => c[0] === "error: --session is not allowed when --scope is project",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects --scope session without --session", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "demo", scope: "session", content: "x" });
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some(
+        (c) => c[0] === "error: --session is required when --scope is session",
+      ),
+    ).toBe(true);
   });
 });
