@@ -49,4 +49,8 @@ describe("agentIdSchema", () => {
   it("widens to 5 closed-set members", () => {
     expect(members).toHaveLength(5);
   });
+
+  it("preserves alphabetic order — AA3 convention", () => {
+    expect(agentIdSchema.options).toEqual(["aider", "claude-code", "codex", "cursor", "generic-cli"]);
+  });
 });
