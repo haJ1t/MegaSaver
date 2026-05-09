@@ -206,6 +206,18 @@ describe("sessionCreateCommand", () => {
     expect(sessions[0]?.agentId).toBe("cursor");
   });
 
+  it("creates a session with --agent aider", async () => {
+    await seedProject(root, "demo");
+    await runCreate({ projectName: "demo", agent: "aider", risk: "medium" });
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls).toHaveLength(1);
+    const sessions = JSON.parse(await readFile(join(root, "sessions.json"), "utf8")) as Array<{
+      agentId: string;
+    }>;
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.agentId).toBe("aider");
+  });
+
   it("--agent description lists every agentIdSchema member", async () => {
     const { agentIdSchema } = await import("@megasaver/shared");
     const members = agentIdSchema.options;

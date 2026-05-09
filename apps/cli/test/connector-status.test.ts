@@ -569,6 +569,106 @@ describe("connectorStatusCommand — cursor target", () => {
   });
 });
 
+describe("connectorStatusCommand — aider target", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-aider-status-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-aider-status-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  const PROJECT_ID_AIDER_S = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  const SESS_AIDER_S = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+
+  async function seedProject(name: string, rootPath: string): Promise<void> {
+    await mkdir(store, { recursive: true });
+    const ts = "2026-05-09T00:00:00.000Z";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([{ id: PROJECT_ID_AIDER_S, name, rootPath, createdAt: ts, updatedAt: ts }]),
+    );
+    await writeFile(join(store, "sessions.json"), "[]");
+  }
+
+  async function seedSession(id: string, agentId: string, startedAt: string): Promise<void> {
+    const arr = JSON.parse(await readFile(join(store, "sessions.json"), "utf8"));
+    arr.push({
+      id,
+      projectId: PROJECT_ID_AIDER_S,
+      agentId,
+      riskLevel: "medium",
+      title: null,
+      startedAt,
+      endedAt: null,
+    });
+    await writeFile(join(store, "sessions.json"), JSON.stringify(arr));
+  }
+
+  async function runSync(args: { projectName: string; target?: string }): Promise<void> {
+    await runConnectorSync({
+      projectName: args.projectName,
+      targetFlag: args.target,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      stdout: () => {},
+      stderr: () => {},
+    });
+  }
+
+  async function runStatus(args: { projectName: string; target?: string }): Promise<void> {
+    const cliArgs: Record<string, string> = { projectName: args.projectName, store };
+    if (args.target !== undefined) cliArgs.target = args.target;
+    await connectorStatusCommand.run?.({
+      args: cliArgs,
+      cmd: connectorStatusCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  it("reports all four targets missing on an empty project root", async () => {
+    await seedProject("demo", projectRoot);
+    await runStatus({ projectName: "demo" });
+    expect(process.exitCode).toBe(0);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines.some((l) => /^claude-code\s+CLAUDE\.md\s+missing/.test(l))).toBe(true);
+    expect(lines.some((l) => /^codex\s+AGENTS\.md\s+missing/.test(l))).toBe(true);
+    expect(lines.some((l) => /^cursor\s+\.cursor\/rules\/megasaver\.mdc\s+missing/.test(l))).toBe(true);
+    expect(lines.some((l) => /^aider\s+CONVENTIONS\.md\s+missing/.test(l))).toBe(true);
+  });
+
+  it("reports aider in-sync after sync --target aider seeds the file", async () => {
+    await seedProject("demo", projectRoot);
+    await seedSession(SESS_AIDER_S, "aider", "2026-05-09T00:00:00.000Z");
+    await runSync({ projectName: "demo", target: "aider" });
+    logSpy.mockClear();
+    errSpy.mockClear();
+
+    await runStatus({ projectName: "demo", target: "aider" });
+    expect(process.exitCode).toBe(0);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines).toEqual([
+      `aider        CONVENTIONS.md  in-sync  session=${SESS_AIDER_S}`,
+    ]);
+  });
+});
+
 describe("connectorStatusCommand — memoryEntries drift", () => {
   let store: string;
   let projectRoot: string;
