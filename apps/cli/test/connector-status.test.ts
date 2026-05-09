@@ -647,10 +647,12 @@ describe("connectorStatusCommand — aider target", () => {
     await runStatus({ projectName: "demo" });
     expect(process.exitCode).toBe(0);
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(lines.some((l) => /^claude-code\s+CLAUDE\.md\s+missing/.test(l))).toBe(true);
-    expect(lines.some((l) => /^codex\s+AGENTS\.md\s+missing/.test(l))).toBe(true);
-    expect(lines.some((l) => /^cursor\s+\.cursor\/rules\/megasaver\.mdc\s+missing/.test(l))).toBe(true);
-    expect(lines.some((l) => /^aider\s+CONVENTIONS\.md\s+missing/.test(l))).toBe(true);
+    expect(lines).toEqual([
+      "claude-code  CLAUDE.md  missing  session=none",
+      "codex        AGENTS.md  missing  session=none",
+      "cursor       .cursor/rules/megasaver.mdc  missing  session=none",
+      "aider        CONVENTIONS.md  missing  session=none",
+    ]);
   });
 
   it("reports aider in-sync after sync --target aider seeds the file", async () => {
