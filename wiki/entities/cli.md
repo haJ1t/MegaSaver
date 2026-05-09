@@ -79,6 +79,23 @@ Status words on stdout: `wrote`, `noop`, `created`, `skipped`,
 `error`. Best-effort partial failure: per-target errors emit on
 stderr, the loop continues, exit 1 if any target failed.
 
+### `mega connector status <projectName> [--target <id>]`
+
+Read-only inspection of every known agent file under the project's
+`rootPath`. Reuses the same `KNOWN_TARGETS` set as `sync` and the
+same per-target latest-open-session rule. For each target the command
+reads the file, runs `parseBlock`, and compares against the freshly
+rendered block (`upsertBlock` predicate); the in-sync notion is
+byte-identical to what `sync` would write.
+
+Status words on stdout: `in-sync`, `drift`, `no-block`, `missing`,
+`error`. Output line is
+`<id>  <relPath>  <status>  session=<id|none>` (no session suffix on
+`error`). Exit `0` when every line is `in-sync` or `missing`; exit
+`1` if any line is `drift`, `no-block`, or `error`. Pre-loop failures
+(project not found, unknown target, project root missing)
+short-circuit before any line is emitted.
+
 ### Store resolution
 
 Default store: `$XDG_DATA_HOME/megasaver` (fallback
@@ -125,6 +142,7 @@ required before merge.
 
 Session CRUD: PR <https://github.com/haJ1t/MegaSaver/pull/11> (`9c5a388`).
 Connector sync: PR <https://github.com/haJ1t/MegaSaver/pull/14> (`204f922`).
+Connector status: PR <https://github.com/haJ1t/MegaSaver/pull/TBD> (TBD).
 
 ## Related
 
