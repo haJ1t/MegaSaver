@@ -305,8 +305,14 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
           continue;
         }
 
-        // upsertBlock + in-sync/drift comparison lands in T3.
-        input.stdout(formatStatusLine(target, "in-sync", sessionLabel));
+        const context = buildConnectorContext(target, project, sessions);
+        const upserted = upsertBlock({ existingContent: existing, context });
+        if (upserted === existing) {
+          input.stdout(formatStatusLine(target, "in-sync", sessionLabel));
+          continue;
+        }
+        anyDriftOrError = true;
+        input.stdout(formatStatusLine(target, "drift", sessionLabel));
       } catch (err) {
         anyDriftOrError = true;
         input.stdout(formatStatusLine(target, "error"));
