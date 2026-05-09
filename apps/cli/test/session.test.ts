@@ -226,6 +226,12 @@ describe("sessionCreateCommand", () => {
       expect(desc).toContain(m);
     }
   });
+
+  it("--risk description on create lists every riskLevelSchema member", async () => {
+    const { riskLevelSchema } = await import("@megasaver/shared");
+    const desc = sessionCreateCommand.args?.risk?.description ?? "";
+    for (const m of riskLevelSchema.options) expect(desc).toContain(m);
+  });
 });
 
 describe("sessionUpdateCommand — drift guards", () => {
