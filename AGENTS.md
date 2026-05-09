@@ -114,6 +114,24 @@ Source: [docs/conventions/risk-modes.md](docs/conventions/risk-modes.md)
 
 ---
 
+## Multi-Agent Dogfood
+
+Four agent files are kept in sync via `docs/conventions/`:
+
+- `CLAUDE.md` — full reference. Used by Claude Code.
+- `AGENTS.md` — Codex format. Slim mirror.
+- `.cursor/rules/*.mdc` — modular, auto-loaded by Cursor on globs.
+- `CONVENTIONS.md` — plain markdown, written by
+  `mega connector sync --target aider`. Loaded by Aider via
+  `--read CONVENTIONS.md` or `.aider.conf.yml`.
+
+Do not edit any of these files without also editing
+`docs/conventions/`.
+
+Source: [docs/conventions/multi-agent-dogfood.md](docs/conventions/multi-agent-dogfood.md)
+
+---
+
 ## Anti-Patterns
 
 - No half-implementations.
