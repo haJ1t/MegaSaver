@@ -972,7 +972,6 @@ describe("connectorStatusCommand — --json output", () => {
       ]),
     );
     await writeFile(join(store, "sessions.json"), "[]");
-    await writeFile(join(store, "memories.json"), "[]");
   }
 
   async function seedSession(): Promise<void> {
