@@ -188,8 +188,10 @@ Open backlog (post-DD batch):
   consumption form alignment; JSON-failure policy doc in
   `wiki/entities/cli.md`; dedicated core-level cross-process
   lock test (DD2 used V1 evidence).
-- **FF**: full Windows port (currently graceful no-op on dir
-  fsync; needs broader filesystem semantics review).
+- **FF**: full Windows port deferred to v0.3 (graceful no-op on
+  dir fsync in v0.2; case-insensitive resolution, CRLF
+  normalization, cross-platform CI gate target for v0.3). Spec:
+  [[specs/2026-05-10-windows-port-deferral]].
 
 Total tests on main: 539 → ~575 across the DD batch (+13 cli
 drift-guards + failure-paths from DD1, +1 fsync ordering from
