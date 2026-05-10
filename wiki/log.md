@@ -1045,3 +1045,12 @@ Open: EE cleanup (tuple-ordering pin per AA3, dedicated core-
 level cross-process lock test, JSON-failure policy doc); T6 full-
 symmetry followup (deferred, would break byte-compat); FF full
 Windows port.
+
+## [2026-05-10] decision | FF Windows port deferred to v0.3
+
+v0.2 ships graceful Windows degradation (dir fsync swallows
+EISDIR/EPERM/ENOTSUP; data durable, rename durability reduced to
+process-crash only). Full filesystem semantics audit (case-
+insensitive paths, CRLF normalization, lock file behavior,
+cross-platform CI gate) defers to v0.3 milestone. Spec at
+docs/superpowers/specs/2026-05-10-windows-port-deferral.md.
