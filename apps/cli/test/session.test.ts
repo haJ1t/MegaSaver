@@ -748,4 +748,51 @@ describe("sessionUpdateCommand", () => {
     const arr = await readSessions();
     expect(arr[0]?.title).toBeNull();
   });
+
+  // V4: whitespace-only title must be rejected the same as create
+  it("rejects --title with whitespace-only value (V4)", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: SESSION_ID, title: "   " });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.map((c) => c[0])).toEqual(["error: title must not be empty"]);
+    expect(logSpy).not.toHaveBeenCalled();
+    // session unchanged
+    const arr = await readSessions();
+    expect(arr[0]?.title).toBeNull();
+  });
+
+  // V6: update-then-end durability — updated fields persist on ended session
+  it("persists riskLevel after update-then-end sequence (V6)", async () => {
+    await seedOpenSession();
+
+    // update risk to high
+    await runUpdate({ sessionId: SESSION_ID, risk: "high" });
+    expect(process.exitCode).toBe(0);
+    process.exitCode = 0;
+
+    // end the session
+    await sessionEndCommand.run?.({
+      args: { sessionId: SESSION_ID, store },
+      cmd: sessionEndCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+    expect(process.exitCode).toBe(0);
+
+    // read store and assert riskLevel persists on the ended record
+    const arr = await readSessions();
+    expect(arr[0]?.riskLevel).toBe("high");
+    expect(arr[0]?.endedAt).not.toBeNull();
+  });
+
+  // V7: multi-flag error precedence — bad sessionId is validated first
+  it("surfaces sessionId error first when sessionId, risk, and agent are all invalid (V7)", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: "not-a-uuid", risk: "bogus", agent: "unknown" });
+    expect(process.exitCode).toBe(1);
+    // sessionId validation happens before agent/risk; only the sessionId error fires
+    const messages = errSpy.mock.calls.map((c) => c[0] as string);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatch(/^error: invalid session id/);
+  });
 });
