@@ -6,7 +6,7 @@ sources:
   - docs/superpowers/plans/2026-05-04-shared-package-plan.md
 status: active
 created: 2026-05-04
-updated: 2026-05-04
+updated: 2026-05-10
 ---
 
 # `@megasaver/shared`
@@ -28,6 +28,10 @@ knowledge. v0.1 surface:
 - `ProjectId`, `SessionId`, `MemoryEntryId` — UUID strings branded
   for compile-time discrimination. `ProjectId` is not assignable to
   `SessionId` even though both are `string` at runtime.
+- `titleSchema` / `Title` — Zod schema for session titles (NFC +
+  C0/C1/DEL/U+2028/U+2029 ban). Canonical source; both CLI and the
+  GUI bridge import from here. Added PP (#59), resolving code-reviewer
+  M2 drift risk from PR #57.
 
 ## Authoring style
 
