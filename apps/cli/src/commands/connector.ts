@@ -214,6 +214,7 @@ export type RunConnectorStatusInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  json: boolean;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
@@ -275,6 +276,13 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
     const sessions = registry.listSessions(project.id);
     const memoryEntries = registry.listMemoryEntries(project.id);
     let anyDriftOrError = false;
+    type StatusRecord = {
+      id: string;
+      relativePath: string;
+      status: string;
+      session: string | null;
+    };
+    const records: StatusRecord[] = [];
     for (const target of targets) {
       const session = pickLatestOpenSession(sessions, target.agentId);
       const sessionLabel = session === null ? "none" : session.id;
@@ -283,28 +291,73 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
         const existing = await readTargetFile(absPath);
 
         if (existing === null) {
-          input.stdout(formatStatusLine(target, "missing", sessionLabel));
+          if (input.json) {
+            records.push({
+              id: target.id,
+              relativePath: target.relativePath,
+              status: "missing",
+              session: null,
+            });
+          } else {
+            input.stdout(formatStatusLine(target, "missing", sessionLabel));
+          }
           continue;
         }
 
         const parsed = parseBlock(existing);
         if (parsed.block === null) {
           anyDriftOrError = true;
-          input.stdout(formatStatusLine(target, "no-block", sessionLabel));
+          if (input.json) {
+            records.push({
+              id: target.id,
+              relativePath: target.relativePath,
+              status: "no-block",
+              session: session === null ? null : session.id,
+            });
+          } else {
+            input.stdout(formatStatusLine(target, "no-block", sessionLabel));
+          }
           continue;
         }
 
         const context = buildConnectorContext(target, project, sessions, memoryEntries);
         const upserted = upsertBlock({ existingContent: existing, context });
         if (upserted === existing) {
-          input.stdout(formatStatusLine(target, "in-sync", sessionLabel));
+          if (input.json) {
+            records.push({
+              id: target.id,
+              relativePath: target.relativePath,
+              status: "in-sync",
+              session: session === null ? null : session.id,
+            });
+          } else {
+            input.stdout(formatStatusLine(target, "in-sync", sessionLabel));
+          }
           continue;
         }
         anyDriftOrError = true;
-        input.stdout(formatStatusLine(target, "drift", sessionLabel));
+        if (input.json) {
+          records.push({
+            id: target.id,
+            relativePath: target.relativePath,
+            status: "drift",
+            session: session === null ? null : session.id,
+          });
+        } else {
+          input.stdout(formatStatusLine(target, "drift", sessionLabel));
+        }
       } catch (err) {
         anyDriftOrError = true;
-        input.stdout(formatStatusLine(target, "error", sessionLabel));
+        if (input.json) {
+          records.push({
+            id: target.id,
+            relativePath: target.relativePath,
+            status: "error",
+            session: session === null ? null : session.id,
+          });
+        } else {
+          input.stdout(formatStatusLine(target, "error", sessionLabel));
+        }
         const cli = mapErrorToCliMessage(err, {
           kind: "connector",
           targetId: target.id,
@@ -312,6 +365,9 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
         });
         input.stderr(cli.message);
       }
+    }
+    if (input.json) {
+      input.stdout(JSON.stringify(records));
     }
     return anyDriftOrError ? 1 : 0;
   } catch (err) {
@@ -334,6 +390,7 @@ export const connectorStatusCommand = defineCommand({
       description: `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to filter the report.`,
     },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", description: "Emit machine-readable JSON array." },
   },
   async run({ args }) {
     const code = await runConnectorStatus({
@@ -345,6 +402,7 @@ export const connectorStatusCommand = defineCommand({
       home: process.env["HOME"] ?? "",
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       xdgDataHome: process.env["XDG_DATA_HOME"],
+      json: args.json === true,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
     });
