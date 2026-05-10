@@ -63,13 +63,11 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           status,
           session: sessionId,
         });
-      } else if (status === "error") {
-        // T6 (partial): only error lines gain session=<id|none>. Full symmetry
-        // with `connector status` would break byte-compat for skipped/created/
-        // noop/wrote (every line gains a suffix); deferred per spec §2 trade-off.
-        input.stdout(formatStatusLine(target, status, sessionId ?? "none"));
       } else {
-        input.stdout(formatStatusLine(target, status));
+        // T6 (full): every text-mode line carries session=<id|none>, matching
+        // `connector status` output. Byte-compat break for non-error statuses
+        // (skipped/created/noop/wrote) is intentional and documented.
+        input.stdout(formatStatusLine(target, status, sessionId ?? "none"));
       }
     };
     for (const target of KNOWN_TARGETS) {
