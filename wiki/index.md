@@ -74,6 +74,67 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
+**v0.2 critic-backlog cleanup batch (4 PRs merged 2026-05-10):**
+
+- **PR #34 (`2d97b29`)** — CC1 docs/wiki cleanup (9 items):
+  S9 spec §4 gutter, T7 worked-example annotation, T8 X-series
+  list format, U4 cursor frontmatter contract, U8/W8 README
+  refresh (4 connectors + CLI reference), U10 known-targets
+  cross-package comment, V9 wiki entity test counts, X6 LOC
+  tracker (369 → 419). Critic 1 MAJOR (S9 still wrong, fixed
+  inline `84e8c61`).
+- **PR #35 (`8c6c0a2`)** — CC2 `connector.ts` split + S6:
+  419-LOC `apps/cli/src/commands/connector.ts` split into
+  `connector/{sync(117),status(179),shared(140),index(22)}.ts`
+  mirroring PR #18's `session/` pattern. S3 `resolveProjectAndRoot`
+  prologue extracted. S6 byte-equality regression fixture (4
+  tests, one per known target) inoculates `noop` predicate.
+  Behavior byte-identical: cli 214 → 218. Critic ACCEPT, 3
+  non-blocking minor followups noted.
+- **PR #36 (`4e6c84d`)** — CC4 session/memory test coverage
+  (8 items): V1 concurrent-update via process spawn, V2 partial-
+  write recovery via `vi.mock("node:fs")`, V3 fast-check property
+  test (numRuns: 50), V4 whitespace-title rejection PIN (already
+  correct since PR #23 — test pins contract), V6 update-then-end
+  durability, V7 multi-flag error precedence, V8 `kind:
+  "session_update"` Zod format pin (`startsWith` → `toBe`), W10
+  NODE_ENV save/restore. cli 214 → 218, core 129 → 134. Critic
+  ACCEPT-WITH-RESERVATIONS (V4 framing misleading; PR body
+  corrected pre-merge).
+- **PR #37 (`48cbcac`)** — CC5 defensive + policy (8 items):
+  U7 mkdir failures wrapped as `ConnectorError(file_write_failed)`,
+  U9 `ConnectorTarget.header` registration-time sentinel guard,
+  W4 reject `memory create --scope session` on ended sessions,
+  W5 explicit `memory_entry_already_exists` mapper branch, W6
+  `contentSchema`/`titleSchema` reject U+2028/U+2029 (esbuild
+  fix: `  ` escapes), W9 parse-on-handoff consistency
+  policy doc, X4 filter-then-cap-by-recency for `memoryEntries`
+  (drop `.max(20)` hard-fail; sort+slice 20 most-recent), X5
+  delete dead continuation-indent path. Critic REJECT initial
+  (4 CRITICAL: false GREEN claim, fake W6 session test, `vi.spyOn`
+  frozen ESM, X4 substring false-positive); all fixed in
+  `34d60e2` + `856ab16` (chmod-based U7 EACCES with root-skip,
+  literal U+2028/2029 inserted, word-boundary regex, biome
+  lint:fix + manual template literal). Rebased on CC2 split
+  (manually ported U7 mkdir wrap to `connector/sync.ts` and X4
+  sort+slice to `connector/shared.ts`). User-locked policies:
+  W4 reject, X4 cap-by-recency.
+
+After this batch:
+- ~28 critic-flagged follow-ups closed across 6 series (S, T,
+  U, V, W, X) — was ~44, leaves CC3 (11 items) + 5 deferred
+  (T6 → --json sync, S8 → AA2 orphan, S10 → BB hardening, W7 →
+  v0.1 codepoint accept).
+- `connector.ts` 419 LOC split (S4 closed) — every CLI command
+  file now well under §8 300-line threshold.
+- Schema policy compile-time enforced: W4 ended-session reject
+  on memory create, X4 graceful cap-by-recency replaces hard-fail,
+  W6 unicode separator block on title + content schemas.
+- cli tests: 218 → 226 (+8 from CC4 to CC5 over CC2's 218 base).
+
+CC3 still inflight: T1, T3, T4, T5, S5, S7, S11, U2, U3, U5, U6
+(11 connector test coverage items) on `feat/cc3-connector-tests`.
+
 **v0.2 second-day team batch (7 PRs merged 2026-05-10):**
 
 - **PR #27 (`7ba650b`)** — AA4 wiki/entities/cli.md schema-derived
