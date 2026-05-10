@@ -570,26 +570,32 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
   });
 
   it("wraps mkdir EACCES as file_write_failed when seeding a new target directory", async () => {
+    if (process.getuid && process.getuid() === 0) {
+      // chmod cannot block root; skip on root (CI typically runs non-root).
+      return;
+    }
     await seedSimple();
-    // Mock fs.mkdir to simulate a permission error on the cursor target's directory.
-    const fsp = await import("node:fs/promises");
-    const mkdirSpy = vi.spyOn(fsp, "mkdir").mockRejectedValueOnce(
-      Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" }),
-    );
+    const cursorDir = join(projectRoot, ".cursor");
+    const { chmod } = await import("node:fs/promises");
+    await mkdir(cursorDir);
+    await chmod(cursorDir, 0o000);
 
-    await runSync({ projectName: "demo", target: "cursor" });
+    try {
+      await runSync({ projectName: "demo", target: "cursor" });
 
-    mkdirSpy.mockRestore();
-    expect(process.exitCode).toBe(1);
-    const stdoutLines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(stdoutLines.some((l) => l.includes("cursor") && l.includes("error"))).toBe(true);
-    expect(
-      errSpy.mock.calls.some(
-        (c) =>
-          (c[0] as string).startsWith("error: connector failed to write") &&
-          (c[0] as string).includes("megasaver.mdc"),
-      ),
-    ).toBe(true);
+      expect(process.exitCode).toBe(1);
+      const stdoutLines = logSpy.mock.calls.map((c) => c[0] as string);
+      expect(stdoutLines.some((l) => l.includes("cursor") && l.includes("error"))).toBe(true);
+      expect(
+        errSpy.mock.calls.some(
+          (c) =>
+            (c[0] as string).startsWith("error: connector failed to write") &&
+            (c[0] as string).includes("megasaver.mdc"),
+        ),
+      ).toBe(true);
+    } finally {
+      await chmod(cursorDir, 0o755);
+    }
   });
 
   it("surfaces a ConnectorError(file_write_failed) as per-target error, exit 1", async () => {
@@ -1190,7 +1196,7 @@ describe("connectorSyncCommand — X4 filter-then-cap-by-recency (25 entries →
         createdAt: `2026-05-09T00:00:${pad}.000Z`,
       };
     });
-    const body = entries.map((e) => JSON.stringify(e)).join("\n") + "\n";
+    const body = `${entries.map((e) => JSON.stringify(e)).join("\n")}\n`;
     await writeFile(join(store, "memory", `${PROJECT_ID_X4}.jsonl`), body);
 
     // Seed CLAUDE.md so sync runs (skips if missing without --target claude-code, but
@@ -1207,18 +1213,18 @@ describe("connectorSyncCommand — X4 filter-then-cap-by-recency (25 entries →
     expect(process.exitCode).toBe(0);
     const content = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
 
-    // Must contain the 20 most recent: entries 6-25.
+    // Must contain the 20 most recent: entries 6-25 (word-boundary anchored).
     for (let i = 6; i <= 25; i++) {
-      expect(content).toContain(`entry-${i}`);
+      expect(content).toMatch(new RegExp(`\\bentry-${i}\\b`));
     }
-    // Must NOT contain the 5 oldest: entries 1-5.
+    // Must NOT contain the 5 oldest: entries 1-5 (word-boundary avoids entry-1 ⊂ entry-10).
     for (let i = 1; i <= 5; i++) {
-      expect(content).not.toContain(`entry-${i}`);
+      expect(content).not.toMatch(new RegExp(`\\bentry-${i}\\b`));
     }
 
     // Verify ordering: entry-25 (most recent) appears before entry-6 (least recent of the cap).
-    const entry25Pos = content.indexOf("entry-25");
-    const entry6Pos = content.indexOf("entry-6");
+    const entry25Pos = content.search(/\bentry-25\b/);
+    const entry6Pos = content.search(/\bentry-6\b/);
     expect(entry25Pos).toBeGreaterThanOrEqual(0);
     expect(entry6Pos).toBeGreaterThanOrEqual(0);
     expect(entry25Pos).toBeLessThan(entry6Pos);

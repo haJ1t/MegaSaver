@@ -196,20 +196,20 @@ describe("sessionCreateCommand", () => {
 
   it("rejects a title containing U+2028 LINE SEPARATOR (W6)", async () => {
     await seedProject(root, "demo");
-    await runCreate({ projectName: "demo", title: "first session" });
+    await runCreate({ projectName: "demo", title: "first session" });
     expect(process.exitCode).toBe(1);
-    expect(
-      errSpy.mock.calls.some((c) => (c[0] as string).includes("control characters")),
-    ).toBe(true);
+    expect(errSpy.mock.calls.some((c) => (c[0] as string).includes("control characters"))).toBe(
+      true,
+    );
   });
 
   it("rejects a title containing U+2029 PARAGRAPH SEPARATOR (W6)", async () => {
     await seedProject(root, "demo");
-    await runCreate({ projectName: "demo", title: "first session" });
+    await runCreate({ projectName: "demo", title: "first session" });
     expect(process.exitCode).toBe(1);
-    expect(
-      errSpy.mock.calls.some((c) => (c[0] as string).includes("control characters")),
-    ).toBe(true);
+    expect(errSpy.mock.calls.some((c) => (c[0] as string).includes("control characters"))).toBe(
+      true,
+    );
   });
 
   it("creates a session with --agent cursor", async () => {
