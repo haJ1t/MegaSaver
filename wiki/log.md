@@ -1244,3 +1244,17 @@ formatter issue fixed inline.
 
 Spec: `docs/superpowers/specs/2026-05-10-ii-gui-app-design.md`.
 Plan: `docs/superpowers/plans/2026-05-10-ii-gui-app.md`.
+
+## [2026-05-10] schema | JJ — pnpm conventions:sync automation (v0.3)
+
+Shipped the convention sync script under `scripts/conventions-sync/` and wired it into the root `package.json` as `pnpm conventions:sync` (write mode) and `pnpm conventions:check` (default check mode, plumbed into `pnpm verify`). Implementation runs on Node's built-in `--experimental-strip-types`, so no extra runtime dependency was added beyond `citty` (already shipped for the CLI).
+
+Source-of-truth decision: tagged-block mirroring. `docs/conventions/*.md` remain canonical. Each consumer file (`AGENTS.md` + three `.cursor/rules/*.mdc`) declares one `<!-- conventions:start id="<section>" source="<file>" -->` ... `<!-- conventions:end id="<section>" -->` block per pulled section. Content outside the sentinels is preserved verbatim, so `.mdc` frontmatter and `AGENTS.md` preamble survive a sync. Whole-file derivation was rejected because `AGENTS.md` is deliberately a slim mirror of CLAUDE.md (not byte-identical) and `.cursor/rules/*.mdc` carry per-file YAML.
+
+Sentinel namespace differs from the connector's `MEGA_SAVER_BLOCK_*` pair on purpose — conventions sync manages the agent-config files themselves, while the connector manages memory-entry blocks injected at runtime. Two systems, two namespaces, no overlap.
+
+First-run migration in the same PR: all four consumer files acquired sentinel blocks for the first time and `--write` populated them with the canonical body of each `docs/conventions/<file>.md`. CLAUDE.md is intentionally untouched — it stays as the long-form reference; managed blocks may follow in a later spec.
+
+Closed-enum discipline: `MODES` and `CONSUMERS` are pinned with `.test-d.ts` tuple-ordering, matching the `KNOWN_TARGETS` precedent from `apps/cli/src/known-targets.ts`. The closed unions `Mode` and `ConsumerId` are asserted with `expectTypeOf` in `manifest.test.ts`.
+
+Spec: `docs/superpowers/specs/2026-05-10-jj-conventions-sync-design.md`. Plan: `docs/superpowers/plans/2026-05-10-jj-conventions-sync.md`.
