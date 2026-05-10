@@ -5,6 +5,7 @@ import {
   sessionIdSchema,
 } from "@megasaver/shared";
 import { z } from "zod";
+import { tokenSaverSettingsSchema } from "./token-saver.js";
 
 export const sessionSchema = z
   .object({
@@ -20,6 +21,10 @@ export const sessionSchema = z
       .nullable(),
     startedAt: z.string().datetime({ offset: true }),
     endedAt: z.string().datetime({ offset: true }).nullable(),
+    // AA1 BB1: optional per-session token-saver settings. Absent on
+    // pre-AA sessions (v0.4 fixture); writing this field is opt-in via
+    // `mega session saver enable` (BB2) or the GUI panel (BB10).
+    tokenSaver: tokenSaverSettingsSchema.optional(),
   })
   .strict();
 

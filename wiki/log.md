@@ -1509,3 +1509,35 @@ Closes the silent-drift risk identified in code-reviewer finding M2 on PR #57.
 
 Spec: `docs/superpowers/specs/2026-05-10-pp-titleschema-hoist-design.md`.
 Plan: `docs/superpowers/plans/2026-05-10-pp-titleschema-hoist.md`.
+
+## [2026-05-11] feat | BB1 — Session.tokenSaver schema + TokenSaverMode hoist (AA1 #1/11)
+
+First sub-PR of the AA1 Context Gate epic
+(`docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md`).
+
+`@megasaver/shared` gains a new closed enum `TokenSaverMode`
+(`aggressive`, `balanced`, `safe`; AA3 alphabetic), its Zod
+schema `tokenSaverModeSchema`, and `modeToBudget(mode): number`
+(4_000 / 12_000 / 32_000 bytes). The mode lives in shared per
+AA1 §2e (F-CRIT-1) so neither the GUI bridge nor
+`@megasaver/output-filter` (future BB5) need to depend on
+`@megasaver/core`. Tuple-ordering pinned in
+`packages/shared/test/token-saver-mode.test-d.ts`.
+
+`@megasaver/core` gains `tokenSaverSettingsSchema` +
+`TokenSaverSettings` + `defaultTokenSaverSettings(now)` in a new
+file `packages/core/src/token-saver.ts`. `sessionSchema` is
+extended with an optional `tokenSaver` field. Backward compat is
+hard-guaranteed via a fixture roundtrip
+(`packages/core/test/fixtures/sessions-v0.4.json`, F-MED-5) —
+pre-AA `sessions.json` rows parse cleanly with
+`Session.tokenSaver === undefined`. `CoreRegistry` gains
+`updateTokenSaver(sessionId, settings)` on both the in-memory
+and the JSON-directory implementations (`session_not_found`
+and `session_already_ended` error codes reused).
+
+Risk LOW–MEDIUM. Additive schema delta, no behavior change for
+existing surfaces. Blocks BB2 (`mega session saver`), BB5
+(output-filter), BB6 (retrieval+stats), BB7a/b (orchestrator +
+spawn), BB8 (mcp-bridge), BB10 (GUI panel), BB11 (doctor +
+CONTEXT_GATE block).
