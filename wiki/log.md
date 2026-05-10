@@ -1001,3 +1001,47 @@ DD4 APPROVE first round.
 
 Total tests on main: 539 → ~575 (+13 DD1 + 1 DD2 + 9 DD3 +
 3 net DD4 lint baselines).
+
+## [2026-05-10] feat | --json write-side (PR #45) — v0.2 main feature
+
+`--json` flag on 5 write-mutation commands shipped on
+`feat/json-write-side` (merged at `89a25f9`):
+
+- session create: emit full Session (was: id only)
+- session end: emit ended Session (was: silent → text mode
+  preserves silence; --json adds Session payload)
+- session update: emit updated Session (was: silent)
+- memory create: emit full MemoryEntry (was: id only)
+- connector sync: emit per-target records [{id, relativePath,
+  status, session}, ...] mirror connector status
+
+T6 closure (PARTIAL): sync text `error` lines now carry
+`session=<id|none>`. Non-error statuses (skipped/created/noop/
+wrote) keep byte-compat 3-column format. Full symmetry with
+`connector status` would break byte-compat for non-error lines
+and is deferred per spec §2 trade-off. JSON mode carries
+`session` on every record (full data symmetry).
+
+Critic REVISE round 1 (2 CRITICAL + 3 MAJOR): T6 spec/code drift,
+failure-path tests missing, !!args.json vs args.json === true
+form drift (DD1 regression), §13 anti-pattern (getSession round-
+trip + impossible-case fallback after endSession/updateSession),
+test-count claim fabrication. All closed inline (`173d820`):
+captured registry return values directly, dropped fallback,
+aligned connector status to !!args.json (10/10 commands now
+consistent), added 5 failure-path tests, documented T6 partial-
+symmetry trade-off in spec + sync.ts comment.
+
+cli 281 → 301 (+20: 5 success + 5 failure-path + 10 drift-guard).
+Total repo: ~575 → 587 passed (587), 55 test files.
+
+After PR #45:
+- v0.2 main feature complete: read+write `--json` parity.
+- All 10 `--json` commands consistent on type/default/description/
+  consumption form.
+- Failure-path policy enforced bidirectionally (12 tests).
+
+Open: EE cleanup (tuple-ordering pin per AA3, dedicated core-
+level cross-process lock test, JSON-failure policy doc); T6 full-
+symmetry followup (deferred, would break byte-compat); FF full
+Windows port.

@@ -74,6 +74,52 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
+**v0.2 main feature: `--json` write-side (PR #45 merged 2026-05-10):**
+
+- **PR #45 (`89a25f9`)** — `--json` flag on 5 write-mutation
+  commands + T6 closure. Mirrors read-side pattern (PRs #30/#31/
+  #32, DD1) onto: `session create` (full Session), `session end`
+  (ended Session), `session update` (updated Session), `memory
+  create` (full MemoryEntry), `connector sync` (per-target
+  records `[{id, relativePath, status, session}, ...]`).
+  Default text byte-compat preserved for 4/5 commands; sync
+  text `error` lines now carry `session=<id|none>` (partial T6:
+  non-error statuses keep 3-column format — full symmetry with
+  `connector status` would break byte-compat, deferred per spec
+  §2 trade-off; JSON mode carries `session` on every record).
+  cli 281 → 301 (+20: 5 success + 5 failure-path + 10
+  drift-guard expansion). Drift guards now span all 10 `--json`
+  commands (5 read-side + 5 write-side) × 3 assertions = 30 total.
+  Critic REVISE round 1 (2 CRITICAL: T6 spec drift + missing
+  failure-path tests; 3 MAJOR: form drift, §13 anti-pattern,
+  count fabrication); all closed inline (`173d820`).
+
+After PR #45:
+- All 10 `--json` commands consistent: `type: "boolean"`,
+  `default: false`, `description: "Emit JSON output."`,
+  `json: !!args.json` consumption form (DD1 drift fully closed).
+- Failure-path policy enforced bidirectionally: 12 failure-path
+  tests in `apps/cli/test/json-failure-paths.test.ts` cover
+  every `--json` command (text stderr, no stdout, exit 1).
+- T6 sync error symmetry shipped (with documented partial-scope
+  trade-off for byte-compat preservation).
+- v0.2 main feature complete: read+write `--json` parity.
+
+Open backlog (post-PR #45):
+- **EE cleanup batch** (DD critic minors): tuple-ordering pin
+  on `agentIdSchema.options` (alphabetic), `riskLevelSchema.
+  options` (severity-ascending), `memoryScopeSchema.options`
+  (semantic) per AA3; dedicated core-level cross-process lock
+  test (DD2 used V1 evidence); JSON-failure policy doc in
+  `wiki/entities/cli.md`.
+- **T6 followup** (deferred): full sync text symmetry (every
+  line carries `session=<id|none>`), accepting byte-compat
+  break for non-error statuses.
+- **FF**: full Windows port (currently graceful no-op on dir
+  fsync per DD2; needs broader filesystem semantics review).
+
+Total tests on main: ~575 → **587 passed (587)**, 55 test files.
+
 **v0.2 hardening + cleanup round 2 (DD batch, 4 PRs merged 2026-05-10):**
 
 - **PR #40 (`88d9aa6`)** — DD1 AA cleanup: 5 MINOR followups
