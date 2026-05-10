@@ -122,9 +122,9 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 After this batch:
 - ~28 critic-flagged follow-ups closed across 6 series (S, T,
-  U, V, W, X) — was ~44, leaves CC3 (11 items, in review) + 5
-  deferred (T6 → --json sync, S8 → AA2 orphan, S10 → BB hardening,
-  W7 → v0.1 codepoint accept).
+  U, V, W, X) — was ~44, leaves CC3 (11 items, in review) + 2
+  deferred (T6 → --json write-side, S10 → BB hardening) +
+  2 closed-in-DD4 (S8 by AA2, W7 wont-do v0.1).
 - `connector.ts` 419 LOC split (S4 closed) — every CLI command
   file now well under §8 300-line threshold.
 - Schema policy compile-time enforced: W4 ended-session reject
