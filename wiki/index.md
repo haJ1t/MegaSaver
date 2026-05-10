@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-05-09
+updated: 2026-05-10
 ---
 
 # Wiki Index — Mega Saver
@@ -28,7 +28,7 @@ updated: 2026-05-09
 - [[entities/core]] — `@megasaver/core` agent-agnostic engine foundation (v0.1).
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1).
 
-More subsystem pages land as features get built. Slot reserved for: `mcp-bridge`, `app`, `skill-packs`.
+More subsystem pages land as features get built. v0.3 scaffolds (entity pages still pending): `mcp-bridge`, `skill-packs`, `gui`, `conventions-sync`.
 
 ## Workflows
 
@@ -73,6 +73,82 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 | What does `mega memory` ship?                      | [[entities/cli]]                                |
 
 ## Status
+
+## v0.3 — SHIPPED (2026-05-10)
+
+First v0.3 batch — 4 PRs merged 2026-05-10, all opened in parallel
+worktrees (GG/HH/II/JJ teammates), each carrying its own spec + plan.
+
+- **PR #51 (`e9ae54a`)** — GG: real Windows durability for
+  `atomicWriteFile`. Replaces v0.2's reactive
+  `EISDIR`/`EPERM`/`ENOTSUP` try-catch around the parent-directory
+  fsync with a proactive `IS_WIN32` branch in
+  `packages/core/src/json-directory-store.ts`. POSIX path unchanged
+  (open `parentDir` → `fsyncSync` → `closeSync` after rename); on
+  Windows the dir fsync is skipped entirely (NTFS journals rename
+  metadata; `FlushFileBuffers` on a directory handle is a documented
+  no-op). `IS_WIN32` captured at module load so a unit test pins
+  the contract by stubbing `process.platform`. Real EPERM (sandbox /
+  AV / seccomp) now surfaces as `store_write_failed` instead of
+  silent swallow. Risk HIGH; supersedes FF deferral spec §1 (fsync).
+- **PR #52 (`c8cb6c5`)** — HH: `@megasaver/mcp-bridge` and
+  `@megasaver/skill-packs` placeholder packages. Public surfaces
+  locked from day one with closed-enum tuple-ordering pins:
+  `McpTransport = ["stdio", "sse"]`, `SkillPackKind = ["prompt",
+  "skill", "workflow"]`, `SkillPackCapability = ["network",
+  "read-memory", "write-memory"]`. `createBridge()` and `loadPack()`
+  reject with structured `not_implemented` error codes; manifest
+  type for skill packs (kebab name, SemVer, kind, skills,
+  capabilities). Reserved future codes documented in spec §7 for
+  schema-widening when real loaders land. Workspace 7 → 9 packages.
+- **PR #53 (`d64a256`)** — II: `apps/gui` bootstrap (`@megasaver/gui`).
+  Vite + React SPA + tiny `node:http` bridge importing `@megasaver/core`
+  directly (no subprocess). Two views (Sessions / Memory entries),
+  view switcher pinned with `ViewId = ["memory", "sessions"]` closed
+  enum. `pnpm --filter @megasaver/gui dev` (Vite, port 5173) +
+  `pnpm --filter @megasaver/gui bridge` (port 5174). Tauri / Electron
+  rejected for bootstrap (toolchain / weight). Detail views, write
+  actions, native packaging, single-command dev all deferred to v0.4.
+- **PR #54 (`dff9575`)** — JJ: `pnpm conventions:sync` automation.
+  Tagged-block mirroring: `<!-- conventions:start id="..." source="..." -->`
+  ... `<!-- conventions:end id="..." -->` blocks in `AGENTS.md` and
+  the three `.cursor/rules/*.mdc` are populated from
+  `docs/conventions/*.md`. `pnpm conventions:check` (default mode,
+  exit 1 on drift) folded into `pnpm verify`; `pnpm conventions:sync`
+  writes. `MODES = ["check", "write"]` and `CONSUMERS = [...]`
+  pinned with `.test-d.ts` tuple-ordering. CLAUDE.md intentionally
+  untouched (long-form reference; managed blocks may follow).
+  Built on Node `--experimental-strip-types` (no transpiler runtime
+  dep beyond `citty`).
+
+### v0.3 — what shipped
+
+| Subsystem | Capability |
+|---|---|
+| **Windows durability** | NTFS-aware `atomicWriteFile`: data fsync via libuv `FlushFileBuffers`; dir fsync skipped on win32 (journaled). Real EPERM surfaces; no silent swallow. POSIX path bit-identical. |
+| **`mcp-bridge` package** | Public surface reserved: `createBridge(config)` factory; `McpTransport` closed enum (`stdio` ⇒ `sse`); `not_implemented` error code with reserved widening list (auth_failed, transport_closed, …). |
+| **`skill-packs` package** | Public surface reserved: `loadPack(path)`; `SkillPackKind` (`prompt`/`skill`/`workflow`); `SkillPackCapability` (`network`/`read-memory`/`write-memory`); manifest schema (kebab name + SemVer + skills + capabilities). |
+| **GUI bootstrap** | `apps/gui` (Vite + React SPA + node:http bridge) renders sessions + memory entries from `@megasaver/core`. Bridge proxied via Vite (`/api/*` → 5174). |
+| **Conventions sync** | One canonical source (`docs/conventions/*.md`) → 4 tagged-block consumers (AGENTS.md + 3 `.mdc`). Drift-detect folded into `pnpm verify`. CLAUDE.md preserved as long-form reference. |
+
+### v0.3 — process metrics
+
+- **PRs merged**: 4 v0.3 PRs (PR #51-#54) on top of v0.2's 50 → 54 total since project bootstrap.
+- **Tests on main**: 587 (v0.2 baseline) → 626 passed (62 test files).
+- **Workspace**: 7 packages → 9 + 1 app = 10 buildable units (added `mcp-bridge`, `skill-packs`, `apps/gui`).
+- **Closed-enum surfaces added**: `McpTransport`, `McpBridgeErrorCode`, `SkillPackKind`, `SkillPackCapability`, `SkillPackErrorCode`, `ViewId`, `Mode` (conventions), `ConsumerId` (conventions) — each with `.test-d.ts` tuple-ordering pin per AA3.
+- **Parallel dispatch**: 4 teammates, 4 worktrees, all merged via rebase chain on the same day.
+
+### v0.3 — open backlog (deferred to v0.4)
+
+- **GUI v1**: project picker, session/memory detail views, write actions (create/end/update), single-command `dev` (Vite + bridge under one process), native packaging (Tauri/Electron evaluated).
+- **mcp-bridge real implementation**: stdio transport first, MCP tools (`session.list`, `memory.list`), MCP resources (read-only views over the JSON store).
+- **skill-packs real implementation**: pack discovery, install/uninstall, manifest validation, conflict resolution.
+- **Windows port remainder**: case-insensitive path resolution audit, CRLF normalization in connector outputs, lock file semantics audit, Windows CI runner. Fsync layer now closed (PR #51).
+- **CLAUDE.md tagged blocks**: extend `pnpm conventions:sync` to manage CLAUDE.md sections (currently AGENTS.md + 3 `.mdc` only).
+- **Connector aider sync**: `mega connector sync --target aider` end-to-end (CONVENTIONS.md still hand-written today).
+
+---
 
 ## v0.2 — SHIPPED (2026-05-10)
 
