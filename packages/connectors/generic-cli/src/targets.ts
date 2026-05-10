@@ -1,3 +1,4 @@
+import { MEGA_SAVER_BLOCK_END, MEGA_SAVER_BLOCK_START } from "@megasaver/connectors-shared";
 import type { AgentId } from "@megasaver/shared";
 
 export interface ConnectorTarget {
@@ -5,6 +6,20 @@ export interface ConnectorTarget {
   readonly agentId: AgentId;
   readonly relativePath: string;
   readonly header?: string;
+}
+
+// Guard: a header containing a sentinel string would corrupt every generated
+// file the connector writes. Fail at module load rather than silently at sync time.
+function assertHeaderHasNoSentinels(target: ConnectorTarget): void {
+  if (target.header === undefined) return;
+  if (
+    target.header.includes(MEGA_SAVER_BLOCK_START) ||
+    target.header.includes(MEGA_SAVER_BLOCK_END)
+  ) {
+    throw new Error(
+      `ConnectorTarget "${target.id}" header must not contain Mega Saver sentinel strings.`,
+    );
+  }
 }
 
 export const codexTarget = Object.freeze({
@@ -38,6 +53,16 @@ export const builtinTargets: readonly ConnectorTarget[] = Object.freeze([
   cursorTarget,
   aiderTarget,
 ]);
+
+// Validate all builtin targets at module load (catches external targets too when
+// they call assertHeaderHasNoSentinels directly before registering).
+for (const target of builtinTargets) {
+  assertHeaderHasNoSentinels(target);
+}
+
+export function validateConnectorTarget(target: ConnectorTarget): void {
+  assertHeaderHasNoSentinels(target);
+}
 
 export function findTarget(id: string): ConnectorTarget | null {
   return builtinTargets.find((target) => target.id === id) ?? null;

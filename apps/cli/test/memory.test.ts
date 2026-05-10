@@ -480,6 +480,20 @@ describe("memoryCreateCommand", () => {
     expect(errSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
+  it("rejects --content containing U+2028 LINE SEPARATOR (W6)", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "demo", scope: "project", content: "before after" });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("rejects --content containing U+2029 PARAGRAPH SEPARATOR (W6)", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "demo", scope: "project", content: "before after" });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.length).toBeGreaterThan(0);
+  });
+
   it("rejects --scope bogus with documented enum error", async () => {
     await seedProjectOnly();
     await runCreate({ projectName: "demo", scope: "bogus", content: "x" });
@@ -514,6 +528,48 @@ describe("memoryCreateCommand", () => {
     expect(
       errSpy.mock.calls.some(
         (c) => c[0] === "error: --session is required when --scope is session",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects --scope session with an ended session (W4)", async () => {
+    await mkdir(store, { recursive: true });
+    const ENDED_SESSION_ID = "77777777-7777-4777-8777-777777777777";
+    const ENDED_AT = "2026-05-10T08:00:00.000Z";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "demo", rootPath: "/tmp", createdAt: TS, updatedAt: TS },
+      ]),
+    );
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: ENDED_SESSION_ID,
+          projectId: PROJECT_ID,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: null,
+          startedAt: TS,
+          endedAt: ENDED_AT,
+        },
+      ]),
+    );
+    await mkdir(join(store, "memory"), { recursive: true });
+
+    await runCreate({
+      projectName: "demo",
+      scope: "session",
+      content: "x",
+      session: ENDED_SESSION_ID,
+    });
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some(
+        (c) =>
+          (c[0] as string).includes(`session "${ENDED_SESSION_ID}" already ended at`) &&
+          (c[0] as string).includes(ENDED_AT),
       ),
     ).toBe(true);
   });

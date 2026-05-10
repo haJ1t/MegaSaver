@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
+  ConnectorError,
   readTargetFile,
   renderBlock,
   upsertBlock,
@@ -53,7 +54,14 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
 
         if (existing === null) {
           const newContent = ("header" in target ? target.header : "") + renderBlock(context);
-          await mkdir(dirname(absPath), { recursive: true });
+          try {
+            await mkdir(dirname(absPath), { recursive: true });
+          } catch (mkdirErr) {
+            throw new ConnectorError("file_write_failed", "Failed to create target directory.", {
+              cause: mkdirErr,
+              filePath: absPath,
+            });
+          }
           await writeTargetFile({ absPath, content: newContent });
           input.stdout(formatStatusLine(target, "created"));
           continue;

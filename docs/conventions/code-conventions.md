@@ -53,3 +53,18 @@ extending `tsconfig.base.json`.
 - vars/fns: `camelCase`
 - consts:   `SCREAMING_SNAKE_CASE` only for true constants
             (env keys, magic numbers)
+
+## Parse-on-handoff policy
+
+CLI command handlers re-parse user input at the handoff boundary into Core
+**if and only if** a later consumer (renderer, file writer, block formatter)
+would crash or corrupt output on bad input that Core's schema did not reject.
+Once data has crossed the schema boundary inside Core (i.e., it was accepted by
+`registry.createMemoryEntry`, `registry.createSession`, etc.), trust Core's
+validated result — do not re-parse on the read side.
+
+Examples:
+- `memory create`: re-parses content + session id because the connector block
+  renderer writes it verbatim into agent config files (downstream crash risk).
+- `session create`: trusts Core's internal validation; the renderer only
+  displays structured fields that Core already validated.

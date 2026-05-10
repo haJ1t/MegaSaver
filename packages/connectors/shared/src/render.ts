@@ -27,13 +27,6 @@ function renderMemoryEntries(context: ConnectorContext): string[] {
   if (context.memoryEntries.length === 0) {
     return ["- none"];
   }
-  return context.memoryEntries.map((entry) => {
-    const target = `${entry.scope}:${entry.id}`;
-    const [firstLine = "", ...continuationLines] = entry.content.split("\n");
-    const renderedContinuation = continuationLines.map((line) => `  ${line}`).join("\n");
-    if (renderedContinuation.length === 0) {
-      return `- [${target}] ${firstLine}`;
-    }
-    return `- [${target}] ${firstLine}\n${renderedContinuation}`;
-  });
+  // contentSchema rejects newlines, so entry.content is always single-line here.
+  return context.memoryEntries.map((entry) => `- [${entry.scope}:${entry.id}] ${entry.content}`);
 }

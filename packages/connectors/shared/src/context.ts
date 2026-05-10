@@ -23,7 +23,7 @@ export const ConnectorContextSchema = z
     agentId: agentIdSchema,
     project: projectSchema,
     session: sessionSchema.nullable(),
-    memoryEntries: z.array(memoryEntrySchema).max(20),
+    memoryEntries: z.array(memoryEntrySchema),
   })
   .strict()
   .superRefine((context, ctx) => {
