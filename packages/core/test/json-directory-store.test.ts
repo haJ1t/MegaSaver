@@ -186,3 +186,105 @@ describe("atomicWriteFile — partial-write recovery (V2)", () => {
     expect(tmpFiles).toHaveLength(0);
   });
 });
+
+describe("atomicWriteFile — Windows path (GG)", () => {
+  // NTFS journals metadata operations on rename; FlushFileBuffers on a
+  // directory handle is a documented no-op. We assert the win32 branch
+  // skips the post-rename directory fsync entirely (no openSync on the
+  // parent dir, no second fsyncSync call) while keeping the temp-file
+  // fsync intact. Stub via Object.defineProperty(process, "platform")
+  // + vi.resetModules() + dynamic import so the module-level
+  // IS_WIN32 constant is captured under the stubbed platform.
+  let rootDir: string;
+  const ORIGINAL_PLATFORM = process.platform;
+
+  beforeEach(async () => {
+    rootDir = await mkdtemp(join(tmpdir(), "megasaver-core-store-gg-"));
+    const real = realFs.fns;
+    if (!real) throw new Error("realFs.fns not initialised");
+    vi.mocked(fsMock.renameSync).mockImplementation(real.renameSync);
+    vi.mocked(fsMock.writeFileSync).mockImplementation(real.writeFileSync);
+    vi.mocked(fsMock.rmSync).mockImplementation(real.rmSync);
+    vi.mocked(fsMock.fsyncSync).mockImplementation(real.fsyncSync);
+    vi.mocked(fsMock.openSync).mockImplementation(real.openSync);
+    vi.mocked(fsMock.closeSync).mockImplementation(real.closeSync);
+  });
+
+  afterEach(async () => {
+    Object.defineProperty(process, "platform", { value: ORIGINAL_PLATFORM });
+    vi.resetAllMocks();
+    vi.resetModules();
+    await rm(rootDir, { recursive: true, force: true });
+  });
+
+  it("skips the parent-dir fsync when process.platform === 'win32'", async () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    vi.resetModules();
+
+    const callOrder: string[] = [];
+    const real = realFs.fns;
+    if (!real) throw new Error("realFs.fns not initialised");
+    const realOpen = real.openSync;
+    const realFsync = real.fsyncSync;
+    const realRename = real.renameSync;
+    const realClose = real.closeSync;
+
+    const fdToPath = new Map<number, string>();
+    vi.mocked(fsMock.openSync).mockImplementation(((
+      path: Parameters<typeof realOpen>[0],
+      ...rest: unknown[]
+    ) => {
+      const fd = (realOpen as (...a: unknown[]) => number)(path, ...rest);
+      fdToPath.set(fd, String(path));
+      callOrder.push(`open:${String(path)}`);
+      return fd;
+    }) as typeof realOpen);
+    vi.mocked(fsMock.fsyncSync).mockImplementation(((fd: number) => {
+      callOrder.push(`fsync:${fdToPath.get(fd) ?? "?"}`);
+      return realFsync(fd);
+    }) as typeof realFsync);
+    vi.mocked(fsMock.renameSync).mockImplementation(((
+      src: Parameters<typeof realRename>[0],
+      dst: Parameters<typeof realRename>[1],
+    ) => {
+      callOrder.push(`rename:${String(src)}->${String(dst)}`);
+      return realRename(src, dst);
+    }) as typeof realRename);
+    vi.mocked(fsMock.closeSync).mockImplementation(((fd: number) => {
+      callOrder.push(`close:${fdToPath.get(fd) ?? "?"}`);
+      return realClose(fd);
+    }) as typeof realClose);
+
+    // Re-import under the stubbed platform so the module's IS_WIN32
+    // constant is captured as true.
+    const { writeSessions: writeSessionsWin32 } = await import(
+      "../src/json-directory-store.js"
+    );
+
+    const sessionsPath = join(rootDir, "sessions.json");
+    const paths = {
+      rootDir,
+      projectsPath: join(rootDir, "projects.json"),
+      sessionsPath,
+      memoryDir: join(rootDir, "memory"),
+    };
+
+    writeSessionsWin32(paths, [VALID_SESSION]);
+
+    const tempOpens = callOrder.filter((e) => e.startsWith("open:") && e.includes(".tmp"));
+    const tempFsyncs = callOrder.filter((e) => e.startsWith("fsync:") && e.includes(".tmp"));
+    const dirOpens = callOrder.filter((e) => e === `open:${rootDir}`);
+    const dirFsyncs = callOrder.filter((e) => e === `fsync:${rootDir}`);
+    const renames = callOrder.filter((e) => e.startsWith("rename:"));
+
+    expect(tempOpens, `expected temp file open: ${callOrder.join(",")}`).toHaveLength(1);
+    expect(tempFsyncs, `expected temp fsync: ${callOrder.join(",")}`).toHaveLength(1);
+    expect(renames, `expected rename: ${callOrder.join(",")}`).toHaveLength(1);
+    expect(dirOpens, `expected NO parent-dir open on win32: ${callOrder.join(",")}`).toHaveLength(
+      0,
+    );
+    expect(dirFsyncs, `expected NO parent-dir fsync on win32: ${callOrder.join(",")}`).toHaveLength(
+      0,
+    );
+  });
+});

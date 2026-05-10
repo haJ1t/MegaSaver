@@ -1,13 +1,16 @@
 ---
 title: FF — Windows port deferred to v0.3 (deferral spec)
 risk: LOW
-status: decision
+status: partially-superseded
 created: 2026-05-10
 updated: 2026-05-10
+superseded_by:
+  - docs/superpowers/specs/2026-05-10-gg-windows-port-design.md (§1 fsync only)
 related:
   - packages/core/src/json-directory-store.ts
   - docs/superpowers/specs/2026-05-10-dd2-bb-hardening-design.md
   - docs/superpowers/specs/2026-05-06-cli-project-crud-design.md
+  - docs/superpowers/specs/2026-05-10-gg-windows-port-design.md
 ---
 
 # FF — Windows port deferred to v0.3 (deferral spec)
@@ -31,7 +34,14 @@ the v0.3 scope.
 - All Mega Saver code is platform-agnostic: no `process.platform`
   checks, no platform-specific imports, no native bindings.
 
-### fsync durability (graceful degradation)
+### fsync durability — [SUPERSEDED by GG v0.3]
+
+> **Status update (2026-05-10):** the v0.2 "graceful degradation"
+> described below was replaced in v0.3 GG with a proactive
+> platform branch. See
+> [`2026-05-10-gg-windows-port-design.md`](2026-05-10-gg-windows-port-design.md)
+> for the live behaviour. v0.2 behaviour below is retained for
+> historical context.
 
 Per DD2 BB hardening spec §1, `atomicWriteFile` in
 `packages/core/src/json-directory-store.ts` calls:
@@ -40,19 +50,25 @@ Per DD2 BB hardening spec §1, `atomicWriteFile` in
 2. `renameSync(tempPath, filePath)` (atomic rename).
 3. Parent dir open → `fsync(dirFd)` (rename durability).
 
-**Windows behaviour**: step 3's dir fsync may throw `EISDIR`
+**v0.2 Windows behaviour**: step 3's dir fsync may throw `EISDIR`
 (not a valid file descriptor), `EPERM` (permission denied on
 some filesystems), or `ENOTSUP` (operation not supported).
+v0.2 caught and swallowed these three error codes on the dir
+fsync only.
 
-**v0.2 degradation**: catch and swallow these three error codes
-on the dir fsync only. The temp file's data is already durable
-from step 1; skipping step 3 reduces only the rename's
-durability against bare-metal power-loss. For process crash,
-data is fully recoverable (rename landed, temp file is gone,
-final file content is intact).
+**v0.3 GG Windows behaviour**: step 3 is skipped entirely on
+`process.platform === "win32"`. NTFS journals rename metadata
+on transaction commit, so the rename is durable without a
+caller-side flush; `FlushFileBuffers` on a directory handle is
+a documented no-op (SQLite VFS, Microsoft Win32 docs). Removing
+the try/catch means any future genuine `EPERM` (sandbox, AV,
+seccomp) propagates as `store_write_failed` instead of being
+silently swallowed. POSIX (macOS / Linux) behaviour is
+unchanged.
 
 **Impact**: low for Mega Saver's threat model (process crash, not
-bare-metal power-loss). Windows users are fully functional in v0.2.
+bare-metal power-loss). Windows users are fully functional with
+**stricter error surfacing** in v0.3 vs. v0.2.
 
 ### Path resolution
 
@@ -140,20 +156,25 @@ build Windows-specific tests and validation.
 
 v0.3 is the full Windows port. Work items:
 
-1. **Case-insensitive resolution audit** — all project/session
+1. ~~**fsync durability**~~ — **IMPLEMENTED in GG**. See
+   [`2026-05-10-gg-windows-port-design.md`](2026-05-10-gg-windows-port-design.md).
+   Proactive `process.platform === "win32"` branch replaces the
+   v0.2 reactive error-swallow.
+2. **Case-insensitive resolution audit** — all project/session
    ID filename construction; add Windows test matrix in CI.
-2. **CRLF normalization** — connector output enforcement; add
+3. **CRLF normalization** — connector output enforcement; add
    Windows CI gate.
-3. **Lock file semantics** — contention test on Windows;
+4. **Lock file semantics** — contention test on Windows;
    document or fix timeout policy.
-4. **Full filesystem semantics audit** — coverage of all
-   `fs.*Sync` calls; document platform quirks.
-5. **Windows CI gate** — add GitHub Actions Windows runner;
+5. **Full filesystem semantics audit** — coverage of all
+   `fs.*Sync` calls; document platform quirks (fsync covered).
+6. **Windows CI gate** — add GitHub Actions Windows runner;
    gate full test suite on all platforms.
 
-Estimated effort: HIGH. Deferred to v0.3 because v0.2 ships
-working and the gaps are filesystem-specific, not core-engine
-specific.
+Estimated effort: HIGH for remaining items 2-6. Deferred to v0.3
+because v0.2 shipped working and the gaps are filesystem-specific,
+not core-engine specific. Item 1 (fsync) closed in v0.3 GG ahead
+of the rest of the bundle.
 
 ## §5 References
 
