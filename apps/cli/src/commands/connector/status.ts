@@ -170,7 +170,7 @@ export const connectorStatusCommand = defineCommand({
       home: process.env["HOME"] ?? "",
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       xdgDataHome: process.env["XDG_DATA_HOME"],
-      json: args.json === true,
+      json: !!args.json,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
     });

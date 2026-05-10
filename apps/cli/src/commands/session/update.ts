@@ -19,7 +19,9 @@ export type RunSessionUpdateInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  stdout: (line: string) => void;
   stderr: (line: string) => void;
+  json?: boolean;
 };
 
 export async function runSessionUpdate(input: RunSessionUpdateInput): Promise<0 | 1> {
@@ -105,7 +107,8 @@ export async function runSessionUpdate(input: RunSessionUpdateInput): Promise<0 
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
-    registry.updateSession(parsedSessionId, patch);
+    const updated = registry.updateSession(parsedSessionId, patch);
+    if (input.json) input.stdout(JSON.stringify(updated));
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "session_update", id: parsedSessionId });
@@ -132,6 +135,7 @@ export const sessionUpdateCommand = defineCommand({
       description: `New agent id (${agentIdSchema.options.join(" | ")}).`,
     },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const code = await runSessionUpdate({
@@ -145,7 +149,9 @@ export const sessionUpdateCommand = defineCommand({
       home: process.env["HOME"] ?? "",
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       xdgDataHome: process.env["XDG_DATA_HOME"],
+      stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
+      json: !!args.json,
     });
     if (code !== 0) process.exitCode = code;
   },

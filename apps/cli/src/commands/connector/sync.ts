@@ -1,5 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
 import {
   ConnectorError,
   readTargetFile,
@@ -10,7 +11,12 @@ import {
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { KNOWN_TARGETS, KNOWN_TARGET_IDS } from "../../known-targets.js";
-import { buildConnectorContext, formatStatusLine, resolveProjectAndRoot } from "./shared.js";
+import {
+  buildConnectorContext,
+  formatStatusLine,
+  pickLatestOpenSession,
+  resolveProjectAndRoot,
+} from "./shared.js";
 
 export type RunConnectorSyncInput = {
   projectName: string;
@@ -21,6 +27,14 @@ export type RunConnectorSyncInput = {
   xdgDataHome: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+  json?: boolean;
+};
+
+type SyncRecord = {
+  id: string;
+  relativePath: string;
+  status: string;
+  session: string | null;
 };
 
 export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 | 1> {
@@ -40,13 +54,33 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
     const sessions = registry.listSessions(project.id);
     const memoryEntries = registry.listMemoryEntries(project.id);
     let anyFailed = false;
+    const records: SyncRecord[] = [];
+    const emit = (target: ConnectorTarget, status: string, sessionId: string | null) => {
+      if (input.json) {
+        records.push({
+          id: target.id,
+          relativePath: target.relativePath,
+          status,
+          session: sessionId,
+        });
+      } else if (status === "error") {
+        // T6 (partial): only error lines gain session=<id|none>. Full symmetry
+        // with `connector status` would break byte-compat for skipped/created/
+        // noop/wrote (every line gains a suffix); deferred per spec §2 trade-off.
+        input.stdout(formatStatusLine(target, status, sessionId ?? "none"));
+      } else {
+        input.stdout(formatStatusLine(target, status));
+      }
+    };
     for (const target of KNOWN_TARGETS) {
+      const session = pickLatestOpenSession(sessions, target.agentId);
+      const sessionId = session?.id ?? null;
       try {
         const absPath = join(project.rootPath, target.relativePath);
         const existing = await readTargetFile(absPath);
 
         if (existing === null && input.targetFlag !== target.id) {
-          input.stdout(formatStatusLine(target, "skipped"));
+          emit(target, "skipped", sessionId);
           continue;
         }
 
@@ -63,20 +97,20 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
             });
           }
           await writeTargetFile({ absPath, content: newContent });
-          input.stdout(formatStatusLine(target, "created"));
+          emit(target, "created", sessionId);
           continue;
         }
 
         const newContent = upsertBlock({ existingContent: existing, context });
         if (newContent === existing) {
-          input.stdout(formatStatusLine(target, "noop"));
+          emit(target, "noop", sessionId);
           continue;
         }
         await writeTargetFile({ absPath, content: newContent });
-        input.stdout(formatStatusLine(target, "wrote"));
+        emit(target, "wrote", sessionId);
       } catch (err) {
         anyFailed = true;
-        input.stdout(formatStatusLine(target, "error"));
+        emit(target, "error", sessionId);
         const cli = mapErrorToCliMessage(err, {
           kind: "connector",
           targetId: target.id,
@@ -84,6 +118,9 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
         });
         input.stderr(cli.message);
       }
+    }
+    if (input.json) {
+      input.stdout(JSON.stringify(records));
     }
     return anyFailed ? 1 : 0;
   } catch (err) {
@@ -106,6 +143,7 @@ export const connectorSyncCommand = defineCommand({
       description: `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to seed when its file does not exist.`,
     },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const code = await runConnectorSync({
@@ -119,6 +157,7 @@ export const connectorSyncCommand = defineCommand({
       xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
+      json: !!args.json,
     });
     if (code !== 0) process.exitCode = code;
   },

@@ -17,6 +17,7 @@ export type RunSessionEndInput = {
   xdgDataHome: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+  json?: boolean;
   /** Override for tests; defaults to () => new Date().toISOString(). */
   now?: () => string;
 };
@@ -64,8 +65,9 @@ export async function runSessionEnd(input: RunSessionEndInput): Promise<0 | 1> {
     // Same inline default as runSessionCreate; if a third call site lands,
     // extract a shared readNow() helper instead of duplicating again.
     const endedAt = (input.now ?? (() => new Date().toISOString()))();
+    let ended;
     try {
-      registry.endSession(id, { endedAt });
+      ended = registry.endSession(id, { endedAt });
     } catch (err) {
       if (err instanceof CoreRegistryError && err.code === "session_already_ended") {
         // Race with concurrent process: refresh and format the rich message.
@@ -84,7 +86,7 @@ export async function runSessionEnd(input: RunSessionEndInput): Promise<0 | 1> {
       }
       throw err;
     }
-    input.stdout(id);
+    input.stdout(input.json ? JSON.stringify(ended) : id);
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "session", id });
@@ -102,6 +104,7 @@ export const sessionEndCommand = defineCommand({
       description: "Session id (UUID).",
     },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const nowEnv = readTestEnv("MEGA_TEST_NOW");
@@ -115,6 +118,7 @@ export const sessionEndCommand = defineCommand({
       xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
+      json: !!args.json,
       ...(nowEnv !== undefined ? { now: () => nowEnv } : {}),
     });
     if (code !== 0) process.exitCode = code;
