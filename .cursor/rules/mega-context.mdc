@@ -7,6 +7,8 @@ alwaysApply: true
 
 # Mega Saver — Context
 
+Managed by `pnpm conventions:sync`. Edit `docs/conventions/<file>.md`.
+
 Source-of-truth references:
 - `docs/conventions/mission.md`
 - `docs/conventions/repo-layout.md`
@@ -15,44 +17,112 @@ Source-of-truth references:
 
 ## Mission
 
+<!-- conventions:start id="mission" source="mission.md" -->
 Mega Saver is the ContextOps platform for frontier coding agents.
-Core is agent-agnostic; connectors are thin adapters. Tagline:
+It connects to Claude Code, Codex, Cursor, Aider, and any CLI agent.
+It manages context, memory, sessions, and token efficiency from one
+control panel.
+
+## Tagline
+
 "Less tokens. More signal. Same or better agent performance."
 
-Mega Saver is NOT a model proxy, NOT an LLM-blinder, NOT a team
-chatops tool.
+## Non-negotiable principle
+
+Mega Saver Core is agent-agnostic. Agents connect to Mega Saver,
+never the reverse. Every connector is a thin adapter. Never let
+agent-specific logic bleed into Core.
+
+## What we are NOT
+
+- Not a model proxy.
+- Not an LLM-blinder. We preserve evidence; we never strip what
+  the model needs to decide.
+- Not a team chatops tool. Single-developer first.
+<!-- conventions:end id="mission" -->
 
 ## Repo Layout
 
-Monorepo. pnpm workspaces. Turborepo orchestration.
+<!-- conventions:start id="repo-layout" source="repo-layout.md" -->
+Monorepo. pnpm workspaces. Turborepo for orchestration.
 
 ```
-apps/cli                          # `mega` CLI
-packages/core                     # Core Engine
-packages/mcp-bridge               # MCP server (v0.2)
-packages/connectors/claude-code   # First connector
-packages/connectors/generic-cli   # CLI wrapper
-packages/skill-packs              # Skill pack templates (v0.2)
-packages/shared                   # Types, schemas, util
-docs/conventions                  # Single source of truth
-docs/superpowers/{specs,plans}    # Brainstorm + implementation
+MegaSaver/
+├─ apps/
+│  └─ cli/                    # `mega` command — entrypoint
+├─ packages/
+│  ├─ core/                   # Core Engine
+│  ├─ mcp-bridge/             # MCP server (deferred; v0.2)
+│  ├─ connectors/
+│  │  ├─ claude-code/         # First connector (v0.1)
+│  │  └─ generic-cli/         # CLI wrapper (v0.1)
+│  ├─ skill-packs/            # Skill pack templates (v0.2)
+│  └─ shared/                 # Types, schemas, utilities
+├─ docs/
+│  ├─ conventions/            # Single source of truth
+│  └─ superpowers/
+│     ├─ specs/
+│     └─ plans/
+├─ .changeset/
+├─ .github/
+├─ CLAUDE.md
+├─ AGENTS.md
+└─ .cursor/
+   └─ rules/
 ```
 
+`mcp-bridge` and `skill-packs` directories are placeholders deferred
+to v0.2; do not add to the workspace until their own spec lands.
+<!-- conventions:end id="repo-layout" -->
+
+## Stack & Commands
+
+<!-- conventions:start id="stack-and-commands" source="stack-and-commands.md" -->
 ## Stack
 
-Node 22 LTS · TypeScript strict ESM · pnpm · Turborepo · tsup ·
-Vitest · Biome · Citty · Changesets.
+- Runtime:    Node 22 LTS (`.nvmrc` pinned)
+- Language:   TypeScript strict, ESM only
+- Package:    pnpm (workspace protocol for internal deps)
+- Build:      tsup per-package + Turborepo orchestration
+- Test:       Vitest (unit + integration)
+- Lint+fmt:   Biome
+- Type-check: tsc --noEmit (project references)
+- CLI fwk:    Citty (UnJS — modern, ESM-native, typed args)
+- Versioning: Changesets
 
-## Commands
+## Commands (from repo root)
 
 ```bash
-pnpm dev / build / test / lint / typecheck / verify
+pnpm install
+pnpm dev              # turbo dev — watch all
+pnpm build            # turbo build — emit dist/
+pnpm test             # vitest run (CI mode)
+pnpm test:watch
+pnpm lint             # biome check
+pnpm lint:fix         # biome check --write
+pnpm typecheck        # tsc -b --noEmit
+pnpm verify           # lint + typecheck + test (DoD gate)
+```
+
+## Per-package
+
+```bash
 pnpm --filter @megasaver/<pkg> <cmd>
 ```
 
-## Agent File Scopes
+Note: pnpm/Turborepo/Biome configuration files are introduced by the
+`project-skeleton` spec, not this bootstrap. Until then, the commands
+above are aspirational and will activate when the skeleton lands.
+<!-- conventions:end id="stack-and-commands" -->
 
-Four agent files are kept in sync via `docs/conventions/`:
+## Multi-Agent Dogfood
+
+<!-- conventions:start id="multi-agent-dogfood" source="multi-agent-dogfood.md" -->
+Mega Saver's product premise: connectors generate per-agent config.
+We dogfood by writing all four agent files from day one and keeping
+them in sync via a single source of truth.
+
+## File scopes
 
 - `CLAUDE.md` — full reference. Used by Claude Code.
 - `AGENTS.md` — Codex format. Slim mirror.
@@ -61,4 +131,30 @@ Four agent files are kept in sync via `docs/conventions/`:
   `mega connector sync --target aider`. Loaded by Aider via
   `--read CONVENTIONS.md` or `.aider.conf.yml`.
 
-Source: `docs/conventions/multi-agent-dogfood.md`
+## Drift prevention
+
+1. Edit `docs/conventions/<file>.md` (single source).
+2. Regenerate agent files via `pnpm conventions:sync` (deferred
+   to v0.2; manual sync until then).
+3. Commit convention + regenerated mirrors in same commit.
+4. CI check (deferred): agent files must not contain content not
+   present in `docs/conventions/`.
+
+Until the sync script ships:
+
+- `CLAUDE.md` is canonical.
+- `AGENTS.md`, `.cursor/rules`, and `CONVENTIONS.md` updated MANUALLY
+  when `CLAUDE.md` changes, in the same commit.
+- PR diff review catches drift.
+
+## Cursor connector frontmatter contract
+
+The cursor target writes `.cursor/rules/megasaver.mdc`. The
+`ConnectorTarget.header` field contains YAML frontmatter that is
+prepended exactly once — on the first seed of a non-existing file.
+On every subsequent `mega connector sync`, only the content
+**inside** the `MEGA_SAVER_BLOCK_START` / `MEGA_SAVER_BLOCK_END`
+sentinel pair is touched. Any user edits to the frontmatter,
+headings, or body text that live **outside** the sentinel block are
+preserved across sync runs.
+<!-- conventions:end id="multi-agent-dogfood" -->
