@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
 import {
+  closeSync,
   existsSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -238,7 +241,37 @@ function atomicWriteFile(filePath: string, content: string): void {
 
     mkdirSync(parentDir, { recursive: true });
     writeFileSync(tempPath, content);
+    // Durability: fsync the temp file before rename so its bytes are on disk,
+    // then fsync the parent dir after rename so the link is durable. POSIX
+    // best-practice for atomic-update semantics. macOS + Linux supported in v0.1.
+    const tempFd = openSync(tempPath, "r");
+    try {
+      fsyncSync(tempFd);
+    } finally {
+      closeSync(tempFd);
+    }
     renameSync(tempPath, filePath);
+    // Windows-friendly degradation: fsync on a directory fd may throw
+    // EISDIR/EPERM/ENOTSUP on some filesystems. Swallow only those known
+    // codes on the *directory* fsync; data fsync errors propagate.
+    let dirFd: number | undefined;
+    try {
+      dirFd = openSync(parentDir, "r");
+      fsyncSync(dirFd);
+    } catch (dirErr) {
+      const code = (dirErr as NodeJS.ErrnoException).code;
+      if (code !== "EISDIR" && code !== "EPERM" && code !== "ENOTSUP") {
+        throw dirErr;
+      }
+    } finally {
+      if (dirFd !== undefined) {
+        try {
+          closeSync(dirFd);
+        } catch {
+          // Ignore close errors; the data is already on disk.
+        }
+      }
+    }
   } catch (error) {
     try {
       rmSync(tempPath, { force: true });

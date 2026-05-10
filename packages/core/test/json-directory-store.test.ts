@@ -5,14 +5,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // We must hoist vi.mock before any imports that use the mocked module.
 // Vitest hoists vi.mock calls to the top of the file automatically.
+// Hold real (un-mocked) fs functions so test impls can call them
+// without recursing back through the mock proxy. vi.hoisted because
+// vi.mock factory is hoisted above local module-level declarations.
+const realFs = vi.hoisted(
+  () => ({}) as { fns?: typeof import("node:fs") },
+);
+
 vi.mock("node:fs", async (importOriginal) => {
   const original = await importOriginal<typeof import("node:fs")>();
+  realFs.fns = original;
   return {
     ...original,
     // Re-export everything mutable so spies can override individual functions.
     renameSync: vi.fn(original.renameSync),
     writeFileSync: vi.fn(original.writeFileSync),
     rmSync: vi.fn(original.rmSync),
+    fsyncSync: vi.fn(original.fsyncSync),
+    openSync: vi.fn(original.openSync),
+    closeSync: vi.fn(original.closeSync),
   };
 });
 
@@ -39,10 +50,15 @@ describe("atomicWriteFile — partial-write recovery (V2)", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "megasaver-core-store-v2-"));
-    // Reset all mocked functions to their real implementations before each test.
-    vi.mocked(fsMock.renameSync).mockImplementation(fsMock.renameSync);
-    vi.mocked(fsMock.writeFileSync).mockImplementation(fsMock.writeFileSync);
-    vi.mocked(fsMock.rmSync).mockImplementation(fsMock.rmSync);
+    // Reset all mocked functions to the real (un-mocked) implementations.
+    const real = realFs.fns;
+    if (!real) throw new Error("realFs.fns not initialised");
+    vi.mocked(fsMock.renameSync).mockImplementation(real.renameSync);
+    vi.mocked(fsMock.writeFileSync).mockImplementation(real.writeFileSync);
+    vi.mocked(fsMock.rmSync).mockImplementation(real.rmSync);
+    vi.mocked(fsMock.fsyncSync).mockImplementation(real.fsyncSync);
+    vi.mocked(fsMock.openSync).mockImplementation(real.openSync);
+    vi.mocked(fsMock.closeSync).mockImplementation(real.closeSync);
   });
 
   afterEach(async () => {
@@ -80,6 +96,69 @@ describe("atomicWriteFile — partial-write recovery (V2)", () => {
     const files = fsMock.readdirSync(rootDir) as string[];
     const tmpFiles = files.filter((f) => f.endsWith(".tmp"));
     expect(tmpFiles).toHaveLength(0);
+  });
+
+  it("fsyncs the temp file before rename and the parent dir after rename", async () => {
+    const sessionsPath = join(rootDir, "sessions.json");
+    await writeFile(sessionsPath, "[]");
+
+    const callOrder: string[] = [];
+    const real = realFs.fns;
+    if (!real) throw new Error("realFs.fns not initialised");
+    const realOpen = real.openSync;
+    const realFsync = real.fsyncSync;
+    const realRename = real.renameSync;
+    const realClose = real.closeSync;
+
+    // Track every (call, path) pair so we can assert the temp-fsync,
+    // rename, dir-fsync ordering required by POSIX best practice.
+    const fdToPath = new Map<number, string>();
+    vi.mocked(fsMock.openSync).mockImplementation(
+      ((path: Parameters<typeof realOpen>[0], ...rest: unknown[]) => {
+        const fd = (realOpen as (...a: unknown[]) => number)(path, ...rest);
+        fdToPath.set(fd, String(path));
+        callOrder.push(`open:${String(path)}`);
+        return fd;
+      }) as typeof realOpen,
+    );
+    vi.mocked(fsMock.fsyncSync).mockImplementation(((fd: number) => {
+      callOrder.push(`fsync:${fdToPath.get(fd) ?? "?"}`);
+      return realFsync(fd);
+    }) as typeof realFsync);
+    vi.mocked(fsMock.renameSync).mockImplementation(((src: Parameters<typeof realRename>[0], dst: Parameters<typeof realRename>[1]) => {
+      callOrder.push(`rename:${String(src)}->${String(dst)}`);
+      return realRename(src, dst);
+    }) as typeof realRename);
+    vi.mocked(fsMock.closeSync).mockImplementation(((fd: number) => {
+      callOrder.push(`close:${fdToPath.get(fd) ?? "?"}`);
+      return realClose(fd);
+    }) as typeof realClose);
+
+    const paths = {
+      rootDir,
+      projectsPath: join(rootDir, "projects.json"),
+      sessionsPath,
+      memoryDir: join(rootDir, "memory"),
+    };
+
+    writeSessions(paths, [VALID_SESSION]);
+
+    // Find indices of the key events.
+    const tempOpen = callOrder.findIndex((e) => e.startsWith("open:") && e.includes(".tmp"));
+    const tempFsync = callOrder.findIndex((e) => e.startsWith("fsync:") && e.includes(".tmp"));
+    const renameIdx = callOrder.findIndex((e) => e.startsWith("rename:"));
+    const dirOpen = callOrder.findIndex(
+      (e, i) => i > renameIdx && e === `open:${rootDir}`,
+    );
+    const dirFsync = callOrder.findIndex(
+      (e, i) => i > renameIdx && e === `fsync:${rootDir}`,
+    );
+
+    expect(tempOpen, `expected temp file open: ${callOrder.join(",")}`).toBeGreaterThanOrEqual(0);
+    expect(tempFsync, `expected temp fsync: ${callOrder.join(",")}`).toBeGreaterThan(tempOpen);
+    expect(renameIdx, `expected rename: ${callOrder.join(",")}`).toBeGreaterThan(tempFsync);
+    expect(dirOpen, `expected dir open after rename: ${callOrder.join(",")}`).toBeGreaterThan(renameIdx);
+    expect(dirFsync, `expected dir fsync after rename: ${callOrder.join(",")}`).toBeGreaterThan(dirOpen);
   });
 
   it("does not leave a .tmp file when writeFileSync fails before rename", async () => {

@@ -195,6 +195,13 @@ does not apply to status). `no-block` is exit `1` because if the file
 exists, an empty (no Mega Saver content) state is treated as drift —
 a `sync` run would now insert a fresh block.
 
+When `mega connector sync` runs concurrently with `status`, the exit
+code is computed from the per-target snapshot at read time and may
+include transient `drift` lines for targets sync hasn't finished
+writing yet — see §11. CI gates needing an authoritative read should
+ensure sync is not concurrent (e.g., serialize sync→status in the
+same job).
+
 ## §7 Code organisation
 
 Single file extension. New code lives in
@@ -300,3 +307,38 @@ no destructive ops).
   module. Co-location is fine while there are exactly two consumers.
 - Detecting orphaned sentinel pairs spread across a malformed file
   beyond what `parseBlock` already reports.
+
+## §11 Concurrency with `mega connector sync` (S10)
+
+`mega connector status` is a read-only inspection. It does NOT acquire
+the registry's `.projects.lock` (which is held by `mega connector
+sync`). A status invocation racing a concurrent sync may report
+transient `drift` for one or more targets:
+
+- Sync's `writeFileSync(temp, ...)` followed by `renameSync(temp,
+  target)` is atomic at the filesystem level: either status sees the
+  pre-sync content (file = old block; status = `drift` if the rendered
+  context advanced) or the post-sync content (file = new block; status
+  = `in-sync`).
+- Status reads each target's file independently with no cross-target
+  ordering guarantee. A 4-target status running while sync is mid-loop
+  may see two targets in their post-sync state and two in their
+  pre-sync state, producing a mixed `in-sync` / `drift` report.
+
+**Policy:** status is best-effort. For an authoritative read, run
+`mega connector sync` first, then `mega connector status`.
+
+**Worked example.** Project has 4 targets, sync is mid-loop having
+just renamed `CLAUDE.md` and `AGENTS.md` but not yet `.cursor/rules/
+megasaver.mdc` and `CONVENTIONS.md`. Status invoked at this moment
+reads:
+
+```text
+claude-code  CLAUDE.md  in-sync  session=01HXY...
+codex        AGENTS.md  in-sync  session=none
+cursor       .cursor/rules/megasaver.mdc  drift  session=none
+aider        CONVENTIONS.md  drift  session=none
+```
+
+Exit code is `1` (any `drift` line). A re-run after sync completes
+emits four `in-sync` rows with exit 0.
