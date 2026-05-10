@@ -74,7 +74,65 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
-**Parallel team batch (3 PRs merged 2026-05-10) via `megasaver-v02-parallel` team:**
+**v0.2 second-day team batch (7 PRs merged 2026-05-10):**
+
+- **PR #27 (`7ba650b`)** — AA4 wiki/entities/cli.md schema-derived
+  surface table. New section maps 4 closed-sets to derived CLI
+  surfaces with PR refs (#22, #23, #25). Critic flagged
+  CRITICAL (memoryScopeSchema package wrong) + 2 MAJOR
+  (drift-guard pattern overgeneralization, KNOWN_TARGETS
+  source/surface conflation); all closed inline (`c395ac6`).
+- **PR #28 (`e8cd129`)** — project test gap fixes (3 OBSERVATION
+  gaps from PR #26 critic): `--root foo/bar`, `/nonexistent`,
+  `""`. Pure test additions, zero production change.
+- **PR #29 (`07aedfa`)** — Y5 aider sync coverage: noop test +
+  stale-block-replace test in `connector.test.ts`. Closes PR
+  #21's coverage gap; tests document existing correct behavior.
+- **PR #30 (`68971ae`)** — `--json` flag for `mega project list`
+  + `mega project create`. Default byte-identical; `--json`
+  emits compact JSON of all `Project` fields. Empty-store
+  divergence (text empty stdout vs JSON `[]`) documented +
+  pinned. 4 new tests.
+- **PR #31 (`e7207ff`)** — `--json` flag for `mega memory list`
+  + `mega memory show`. JSON shape: flat per-entry, all 6
+  `MemoryEntry` fields, `null` for sessionId on project scope,
+  full content (not truncated). 3 new tests.
+- **PR #32 (`9711675`)** — `--json` flag for `mega connector
+  status`. Per-target collect-then-emit pattern; 4 records as
+  `{id, relativePath, status, session}`. Pre-loop failures
+  preserve text/stderr + exit 1. 3 new tests.
+- **PR #33 (`debfa93`)** — AA3 schema member-ordering convention
+  docs + drift-guard tests. WHY comments on
+  `agentIdSchema` (alphabetic), `riskLevelSchema`
+  (severity-ascending), `memoryScopeSchema` (semantic).
+  3 drift-guards via `.toEqual([...])` exact-match — future
+  reorder fails CI. Closes PR #23 critic AA1.
+
+After this batch:
+- v0.1 connector matrix complete (4 targets) ✓
+- Closed-enum tripwire bug class structurally closed across
+  ALL surfaces (errors.ts + citty descriptions + connector
+  --target) ✓
+- Schema-derived surfaces documented in wiki as canonical
+  reference ✓
+- Read-side `--json` complete (project list/create + memory
+  list/show + connector status) — 5 commands.
+- Schema member-ordering convention compile-time enforced ✓
+
+Open backlog (post-batch):
+- **--json write-side**: session create/end/update, memory
+  create, connector sync (5 commands)
+- **AA cleanup batch** (consolidates MINOR backlog from PR
+  #28-#33 critics): default:false consistency, citty-wrapper
+  tests, --json failure-path tests, init-notice stderr pinning
+- **BB hardening**: atomicWriteFile + fsync, cross-process
+  lock test (HIGH risk)
+- **Z2** vitest typecheck mode wire
+- **Z3** .test-d.ts regression suite for KnownTargetId
+
+Total CLI tests landed today: 196 → 207 (+11 across 7 PRs).
+
+**v0.2 first-day team batch (3 PRs merged 2026-05-10) via `megasaver-v02-parallel` team:**
 
 - **PR #24 (`f0135f7`)** — Y3 docs drift fix: `CLAUDE.md §7` /
   `AGENTS.md` / `.cursor/rules/mega-context.mdc` / new

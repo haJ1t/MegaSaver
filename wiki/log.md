@@ -513,6 +513,194 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   AA3 document schema member-ordering convention; AA4
   promote Z4 wiki documentation to higher priority.
 
+## [2026-05-10] schema | second-day team batch (7 PRs)
+
+- Same `megasaver-v02-parallel` team, second batch of work
+  assigned after first batch's 3 PRs landed. Each teammate
+  received a new slot brief via SendMessage; team-lead
+  coordinated Q1 brainstorm answers in parallel; PRs landed
+  sequentially with critic adversarial review.
+- 7 PRs merged in this batch (chronological by merge):
+  - **PR #27** (`7ba650b`) AA4 wiki schema-derived surfaces
+  - **PR #28** (`e8cd129`) project test gap fixes
+  - **PR #29** (`07aedfa`) Y5 aider sync coverage
+  - **PR #30** (`68971ae`) `--json` for project commands
+  - **PR #31** (`e7207ff`) `--json` for memory list/show
+  - **PR #32** (`9711675`) `--json` for connector status
+  - **PR #33** (`debfa93`) AA3 schema ordering convention
+- Pattern proven: 4-teammate parallel team can sustain
+  multiple sequential slot batches. Mid-batch reassignment
+  via SendMessage works cleanly. Each PR went through full
+  spec → plan → execute → critic → merge cycle.
+
+## [2026-05-10] schema | AA4 wiki schema-derived surfaces (PR #27)
+
+- Spec: `docs/superpowers/specs/2026-05-10-aa4-wiki-cli-surfaces-design.md`
+- Plan: `docs/superpowers/plans/2026-05-10-aa4-wiki-cli-surfaces-plan.md`
+- Branch: `feat/aa4-wiki-cli-surfaces` (deleted post-merge)
+- Result: `wiki/entities/cli.md` gains a new "Closed-set
+  surface derivation" section mapping 4 closed-sets
+  (`agentIdSchema`, `riskLevelSchema`, `memoryScopeSchema`,
+  `KNOWN_TARGETS` registry) to their derived CLI surfaces
+  with PR references (#22 errors.ts, #23 citty descriptions,
+  #25 AA2 connector --target). Documents the two-layer
+  drift-guard test pattern: `toBe` for description surfaces
+  (PR #23 + #25), `toContain` for error-message surfaces
+  (PR #22). Critic re-pass returned ACCEPT-WITH-RESERVATIONS.
+  CRITICAL #1 closed inline (`c395ac6`):
+  `memoryScopeSchema` source attribution corrected from
+  `@megasaver/shared` to `@megasaver/core` in both wiki and
+  spec. MAJOR #2 (`toBe` overgeneralization) + MAJOR #3
+  (KNOWN_TARGETS row source/surface conflation) also closed
+  inline. PR
+  <https://github.com/haJ1t/MegaSaver/pull/27> merged into
+  `main` (merge commit `7ba650b`).
+
+## [2026-05-10] schema | project test gap fixes (PR #28)
+
+- Spec: `docs/superpowers/specs/2026-05-10-project-root-test-gaps-design.md`
+- Plan: `docs/superpowers/plans/2026-05-10-project-root-test-gaps-plan.md`
+- Branch: `feat/project-root-test-gaps` (deleted post-merge)
+- Result: Closes 3 OBSERVATION-grade gaps from PR #26
+  (project create --root flag) critic: `--root foo/bar`
+  (relative without `./` prefix) → asserts
+  `rootPath = join(cwd, "foo/bar")`; `--root /nonexistent`
+  → asserts stored as-is + exit 0 (Option B contract);
+  `--root ""` → asserts `rootPath = process.cwd()`
+  (benign-but-pinned). All 3 tests use `.toBe()` exact
+  equality. Zero production code change. Critic ACCEPT
+  (THOROUGH mode, zero CRITICAL / HIGH / MAJOR), 2 MINOR
+  (logSpy.toHaveBeenCalledTimes asymmetry, plan/spec date
+  drift) — backlog. PR
+  <https://github.com/haJ1t/MegaSaver/pull/28> merged into
+  `main` (merge commit `e8cd129`).
+
+## [2026-05-10] schema | Y5 aider sync coverage (PR #29)
+
+- Spec: `docs/superpowers/specs/2026-05-10-y5-aider-sync-coverage-design.md`
+- Plan: `docs/superpowers/plans/2026-05-10-y5-aider-sync-coverage-plan.md`
+- Branch: `feat/y5-aider-sync-coverage` (deleted post-merge)
+- Result: Closes Y5 backlog from PR #21 critic. Two new
+  tests in `apps/cli/test/connector.test.ts` covering aider
+  sync paths previously uncovered: **noop** (sync `--target
+  aider` twice in a row, second emits `aider CONVENTIONS.md
+  noop`, file byte-identical) and **stale-block-replace**
+  (pre-seed `CONVENTIONS.md` with stale Mega Saver block via
+  `MEGA_BLOCK_PLACEHOLDER`, sync replaces block in-place,
+  new project id present, stale id `not.toContain`). Tests
+  use regex-anchored status assertions
+  (`/^aider\s+CONVENTIONS\.md\s+(noop|wrote)$/`) — stricter
+  than `toContain` precedent. Mirrors codex/claude-code
+  precedents at `connector.test.ts` lines 298 + 347. Zero
+  production code change — production already implements
+  these paths correctly. Critic ACCEPT (THOROUGH mode, no
+  CRITICAL / HIGH / MAJOR), 4 MINOR (preserve user content
+  byte-check, stale-block session pin, SESS_CURSOR misnaming
+  pre-existing, plan post-PR step) — backlog. PR
+  <https://github.com/haJ1t/MegaSaver/pull/29> merged into
+  `main` (merge commit `07aedfa`).
+
+## [2026-05-10] schema | --json for project commands (PR #30)
+
+- Spec: `docs/superpowers/specs/2026-05-10-json-project-design.md`
+- Plan: `docs/superpowers/plans/2026-05-10-json-project-plan.md`
+- Branch: `feat/json-project` (deleted post-merge)
+- Result: First slice of v0.2 `--json` flag pass. Adds
+  optional `--json` flag to `mega project list` and
+  `mega project create`. Default behavior byte-identical
+  (existing `<id>  <name>` lines). With `--json`: compact
+  1-line JSON (no pretty-print). `project list --json` emits
+  `JSON.stringify(projects)` array; `project create demo
+  --json` emits single JSON object. All 5 `Project` fields
+  (id, name, rootPath, createdAt, updatedAt) — no curation.
+  Empty-store divergence pinned in spec D4 + test: text
+  mode → empty stdout, JSON mode → `[]`. 4 new tests (TDD
+  RED→GREEN). cli 199 → 203. Critic ACCEPT-WITH-RESERVATIONS.
+  4 MINOR backlog: stderr pinning gaps, --root + --json
+  relative test, --json error-path tests. PR
+  <https://github.com/haJ1t/MegaSaver/pull/30> merged into
+  `main` (merge commit `68971ae`).
+
+## [2026-05-10] schema | --json for memory list + show (PR #31)
+
+- Spec: `docs/superpowers/specs/2026-05-10-json-memory-design.md`
+- Plan: `docs/superpowers/plans/2026-05-10-json-memory-plan.md`
+- Branch: `feat/json-memory` (deleted post-merge)
+- Result: Second slice of v0.2 `--json` flag pass (parallel
+  with PR #30). Adds optional `--json` flag to
+  `mega memory list` and `mega memory show`. Default text
+  behavior byte-identical (no `formatMemoryListLine` /
+  `formatMemoryShowLines` change). With `--json`: flat
+  per-entry shape (id, projectId, scope, sessionId, content,
+  createdAt) matching `MemoryEntry` schema; `null` for
+  `sessionId` when scope=project (NOT `"-"`, NOT
+  `"none"`); FULL content (not truncated to 60 chars like
+  text mode `list`). Empty memory list `[]` divergence
+  pinned. 3 new tests. cli 203 → 206. Critic ACCEPT
+  (THOROUGH), 3 MINOR backlog: arg shape inconsistency
+  with PR #30 (`!!args.json` vs `=== true`), explicit
+  init-notice stderr pinning, --json failure-path smoke. PR
+  <https://github.com/haJ1t/MegaSaver/pull/31> merged into
+  `main` (merge commit `e7207ff`).
+
+## [2026-05-10] schema | --json for connector status (PR #32)
+
+- Spec: `docs/superpowers/specs/2026-05-10-json-connector-status-design.md`
+- Plan: `docs/superpowers/plans/2026-05-10-json-connector-status-plan.md`
+- Branch: `feat/json-connector-status` (deleted post-merge)
+- Result: Third slice of v0.2 `--json` flag pass. Adds
+  optional `--json` flag to `mega connector status` (NOT
+  `connector sync` — write-side defers). Per-target
+  collect-then-emit pattern: when `json: true`, accumulate
+  records into array, emit `JSON.stringify(records)` after
+  loop. Each record: `{id, relativePath, status, session}`
+  where status ∈ `{in-sync | drift | no-block | missing |
+  error}` and `session` is session id string or `null`
+  (NOT `"none"`). Pre-loop failures (project not found,
+  unknown target, rootPath missing) preserve existing
+  text/stderr + exit 1 contract — no JSON emit on usage
+  errors. Per-target errors (`status: "error"`) still
+  emitted in JSON array with stderr text mirroring. cli
+  204 → 207. Critic ACCEPT-WITH-RESERVATIONS, 4 MINOR
+  backlog: missing `default: false` (inconsistency with PR
+  #30/#31), no citty-wrapper test (only direct
+  `runConnectorStatus` invocation), dead `memories.json`
+  fixture, --json + pre-loop-failure regression test.
+  Branch was forked from `7ba650b` (pre-PR #30/#31), no
+  merge conflict because slots touched different files.
+  PR <https://github.com/haJ1t/MegaSaver/pull/32> merged
+  into `main` (merge commit `9711675`).
+
+## [2026-05-10] schema | AA3 schema ordering convention (PR #33)
+
+- Spec: `docs/superpowers/specs/2026-05-09-aa3-schema-ordering-design.md`
+- Plan: `docs/superpowers/plans/2026-05-09-aa3-schema-ordering.md`
+- Branch: `feat/aa3-schema-ordering` (deleted post-merge)
+- Result: Closes PR #23 critic AA1 backlog. Adds WHY
+  comments to 3 schema declarations explaining canonical
+  ordering convention:
+  - `packages/shared/src/agent-id.ts`: alphabetic
+    (schema-canonical for derived CLI strings)
+  - `packages/shared/src/risk-level.ts`: severity-ascending
+    (low → critical, semantic UX progression — do NOT
+    alphabetize)
+  - `packages/core/src/memory-entry.ts:4`: semantic
+    project→session (containment hierarchy: sessions
+    belong to projects)
+  Plus 3 drift-guard tests in the existing schema test
+  files using `.toEqual([...])` exact-match. Future "tidy"
+  PR that reorders any of the 3 enums fails CI immediately.
+  All test names cite "AA3 convention" for grep-anchor.
+  shared 25 → 27 + core 128 → 129 = 156 total in the two
+  packages. Critic ACCEPT (THOROUGH mode, zero
+  CRITICAL/MAJOR), 2 MINOR (rebase wording cosmetic,
+  squash candidate). The original AA3 slot was the
+  longest-running of the 4 first-batch teammates due to
+  rebase + Biome multi-line array format requirement, but
+  delivered cleanly. PR
+  <https://github.com/haJ1t/MegaSaver/pull/33> merged into
+  `main` (merge commit `debfa93`).
+
 ## [2026-05-10] schema | parallel team batch (Y3 + AA2 + project-root)
 
 - Team: `megasaver-v02-parallel` (config:
