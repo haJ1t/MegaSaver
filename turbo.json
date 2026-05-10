@@ -12,11 +12,11 @@
       "outputs": ["*.tsbuildinfo"]
     },
     "test": {
-      "dependsOn": ["build"],
+      "dependsOn": ["^build", "build"],
       "outputs": ["coverage/**"]
     },
     "test:watch": {
-      "dependsOn": ["build"],
+      "dependsOn": ["^build", "build"],
       "cache": false,
       "persistent": true
     },

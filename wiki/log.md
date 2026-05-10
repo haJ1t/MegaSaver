@@ -1383,3 +1383,35 @@ What landed across four lanes (each in a fresh context per
 "GUI v1" item closed.
 
 Spec: `docs/superpowers/specs/2026-05-10-ll-gui-v1-design.md`.
+
+## [2026-05-10] chore | MM — turbo ^build dep for vitest typecheck (#60)
+
+Root cause of intermittent `pnpm exec turbo run test --force` failure
+in `@megasaver/cli` vitest typecheck (`known-targets.test-d.ts:22`,
+"Unused `@ts-expect-error`"): two compounding issues.
+
+**A — `turbo.json` missing `^build`:** `test.dependsOn` was
+`["build"]` (own-package build only). Turbo could schedule
+`@megasaver/cli:test` before sibling connector builds completed,
+leaving `dist/index.d.ts` absent for vitest typecheck.
+
+**B — connector test scripts embedded `pnpm build &&`:** Three
+connector packages (`connector-generic-cli`, `connector-claude-code`,
+`connectors-shared`) had `"test": "pnpm build && vitest run"`. The
+inline build called `tsup` with `clean: true`, wiping `dist/` inside
+the test task and creating a ~1.5 s DTS-rebuild window that raced
+with `cli:test` even after Part A ordering was satisfied.
+
+**Fix (config-only):**
+- `turbo.json`: `test.dependsOn` and `test:watch.dependsOn` →
+  `["^build", "build"]`. Ensures all workspace deps' `dist/` is
+  populated before any test task starts.
+- 3 connector `package.json` scripts: `"test": "pnpm build &&
+  vitest run"` → `"test": "vitest run"`. Removes redundant inline
+  rebuild that was the actual race window.
+
+**Evidence:** 3× `pnpm exec turbo run test --force` cold runs all
+pass (18 successful, 18 total, exit 0). `pnpm verify` exit 0.
+
+Spec: `docs/superpowers/specs/2026-05-10-mm-turbo-race-design.md`.
+Plan: `docs/superpowers/plans/2026-05-10-mm-turbo-race.md`.
