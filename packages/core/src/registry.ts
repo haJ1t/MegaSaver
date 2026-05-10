@@ -8,6 +8,7 @@ import {
   sessionSchema,
   sessionUpdatePatchSchema,
 } from "./session.js";
+import { type TokenSaverSettings, tokenSaverSettingsSchema } from "./token-saver.js";
 
 export interface CoreRegistry {
   createProject(project: Project): Project;
@@ -18,6 +19,10 @@ export interface CoreRegistry {
   listSessions(projectId: ProjectId): Session[];
   endSession(id: SessionId, opts: { endedAt: string }): Session;
   updateSession(id: SessionId, patch: SessionUpdatePatch): Session;
+  // AA1 BB1: write the entire TokenSaverSettings blob onto a session.
+  // The CLI / GUI compute the blob (mode, budget, timestamps) and hand
+  // it over atomically — this method does not merge per-field patches.
+  updateTokenSaver(id: SessionId, settings: TokenSaverSettings): Session;
   createMemoryEntry(entry: MemoryEntry): MemoryEntry;
   getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
   listMemoryEntries(projectId: ProjectId): MemoryEntry[];
@@ -108,6 +113,20 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
         throw new CoreRegistryError("session_already_ended", `Session already ended: ${id}`);
       }
       const updated = sessionSchema.parse({ ...existing, ...parsedPatch });
+      sessions.set(id, updated);
+      return updated;
+    },
+
+    updateTokenSaver(id, settings) {
+      const parsedSettings = tokenSaverSettingsSchema.parse(settings);
+      const existing = sessions.get(id);
+      if (!existing) {
+        throw new CoreRegistryError("session_not_found", `Session does not exist: ${id}`);
+      }
+      if (existing.endedAt !== null) {
+        throw new CoreRegistryError("session_already_ended", `Session already ended: ${id}`);
+      }
+      const updated = sessionSchema.parse({ ...existing, tokenSaver: parsedSettings });
       sessions.set(id, updated);
       return updated;
     },

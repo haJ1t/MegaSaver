@@ -6,7 +6,7 @@ sources:
   - docs/superpowers/plans/2026-05-04-shared-package-plan.md
 status: active
 created: 2026-05-04
-updated: 2026-05-10
+updated: 2026-05-11
 ---
 
 # `@megasaver/shared`
@@ -32,6 +32,13 @@ knowledge. v0.1 surface:
   C0/C1/DEL/U+2028/U+2029 ban). Canonical source; both CLI and the
   GUI bridge import from here. Added PP (#59), resolving code-reviewer
   M2 drift risk from PR #57.
+- `tokenSaverModeSchema` / `TokenSaverMode` / `modeToBudget(mode)` —
+  closed enum (`aggressive`, `balanced`, `safe`; AA3 alphabetic) +
+  byte-budget map (4_000 / 12_000 / 32_000). Added BB1 of the AA1
+  Context Gate epic. Hoisted here per AA1 §2e (F-CRIT-1) so neither
+  the GUI bridge nor `@megasaver/output-filter` (BB5) need to import
+  `@megasaver/core` for the mode enum. Pinned in
+  `packages/shared/test/token-saver-mode.test-d.ts`.
 
 ## Authoring style
 

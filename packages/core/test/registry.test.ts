@@ -380,3 +380,74 @@ describe("updateSession (in-memory)", () => {
     expect(() => reg.updateSession(session.id, { title: "x" })).toThrow(/already ended/);
   });
 });
+
+describe("updateTokenSaver (in-memory)", () => {
+  function buildRegistry() {
+    const reg = createInMemoryCoreRegistry();
+    const project = projectSchema.parse({
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "demo",
+      rootPath: "/tmp",
+      createdAt: "2026-05-09T00:00:00.000Z",
+      updatedAt: "2026-05-09T00:00:00.000Z",
+    });
+    reg.createProject(project);
+    const session = sessionSchema.parse({
+      id: "22222222-2222-4222-8222-222222222222",
+      projectId: project.id,
+      agentId: "claude-code",
+      riskLevel: "medium",
+      title: null,
+      startedAt: "2026-05-09T00:00:00.000Z",
+      endedAt: null,
+    });
+    reg.createSession(session);
+    return { reg, project, session };
+  }
+
+  const settings = {
+    enabled: true,
+    mode: "balanced" as const,
+    maxReturnedBytes: 12_000,
+    storeRawOutput: true,
+    redactSecrets: true,
+    autoRepair: true,
+    createdAt: "2026-05-10T10:00:00.000Z",
+    updatedAt: "2026-05-10T10:00:00.000Z",
+  };
+
+  it("writes the entire settings blob and returns the updated session", () => {
+    const { reg, session } = buildRegistry();
+    const updated = reg.updateTokenSaver(session.id, settings);
+    expect(updated.tokenSaver).toEqual(settings);
+    expect(updated.id).toBe(session.id);
+  });
+
+  it("getSession returns the persisted tokenSaver after update", () => {
+    const { reg, session } = buildRegistry();
+    reg.updateTokenSaver(session.id, settings);
+    const fetched = reg.getSession(session.id);
+    expect(fetched?.tokenSaver).toEqual(settings);
+  });
+
+  it("overwrites an existing tokenSaver on second call", () => {
+    const { reg, session } = buildRegistry();
+    reg.updateTokenSaver(session.id, settings);
+    const next = { ...settings, mode: "safe" as const, maxReturnedBytes: 32_000 };
+    const updated = reg.updateTokenSaver(session.id, next);
+    expect(updated.tokenSaver).toEqual(next);
+  });
+
+  it("throws session_not_found for unknown id", () => {
+    const { reg } = buildRegistry();
+    expect(() => reg.updateTokenSaver("99999999-9999-4999-8999-999999999999", settings)).toThrow(
+      CoreRegistryError,
+    );
+  });
+
+  it("throws session_already_ended for ended session", () => {
+    const { reg, session } = buildRegistry();
+    reg.endSession(session.id, { endedAt: "2026-05-09T01:00:00.000Z" });
+    expect(() => reg.updateTokenSaver(session.id, settings)).toThrow(/already ended/);
+  });
+});
