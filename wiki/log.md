@@ -800,3 +800,44 @@ PR <https://github.com/haJ1t/MegaSaver/pull/13> merged into `main` (merge commit
   OBSERVATION-grade follow-ups). PR
   <https://github.com/haJ1t/MegaSaver/pull/26> merged into `main`
   (merge commit `b20c9b6`).
+
+## [2026-05-10] schema | v0.2 critic-backlog cleanup batch (4 PRs)
+
+Round 1 of follow-up backlog closure. 4 parallel teammates dispatched
+on `c6c3288` HEAD, all merged 2026-05-10:
+
+- PR #34 (`2d97b29`) — CC1 docs/wiki cleanup (9 items: S9/T7/T8/U4/
+  U8/U10/V9/W8/X6). Critic 1 MAJOR (S9 example gutter still wrong
+  for `error` line + §4 template) closed inline `84e8c61`.
+- PR #35 (`8c6c0a2`) — CC2 `connector.ts` 419-LOC split into
+  `connector/{sync,status,shared,index}.ts` mirroring PR #18
+  pattern; +S3 prologue extract, +S6 byte-equality regression
+  fixture (4 tests, 1 per known target). Critic ACCEPT.
+- PR #36 (`4e6c84d`) — CC4 session/memory test coverage (V1-V8 +
+  W10, 8 items). cli 214→218, core 129→134. V1 process-spawn
+  concurrent-update, V2 `vi.mock("node:fs")` partial-write recovery,
+  V3 fast-check property test. Critic ACCEPT-WITH-RESERVATIONS
+  (V4 framing PIN-not-fix; PR body corrected pre-merge).
+- PR #37 (`48cbcac`) — CC5 defensive + policy (8 items: U7/U9/W4/
+  W5/W6/W9/X4/X5). Critic REJECT initial (4 CRITICAL: false GREEN
+  claim, fake W6 session test using ASCII space, `vi.spyOn` frozen
+  ESM module, X4 `entry-1` substring matched `entry-10`); all
+  fixed in `34d60e2` + `856ab16`. Rebased onto CC2 split (manual
+  port: U7 mkdir wrap → `connector/sync.ts`, X4 sort+slice →
+  `connector/shared.ts`). User-locked policies: W4 reject ended-
+  session memory create, X4 graceful filter-then-cap-by-recency
+  (drops `.max(20)` hard-fail, sorts by `createdAt` desc, slices
+  20 most-recent).
+
+Closed ~28 critic-flagged follow-ups across 6 series (S/T/U/V/W/X).
+Remaining: CC3 (T1/T3/T4/T5/S5/S7/S11/U2/U3/U5/U6 — 11 items)
+inflight on `feat/cc3-connector-tests`, plus 5 deferred (T6 →
+--json sync, S8 → AA2 orphan check, S10 → BB hardening, W7 v0.1
+codepoint accept).
+
+Method note: parallel 4-teammate dispatch from single `c6c3288`
+HEAD, no team coordination needed (CC1/CC4/CC5 fully independent;
+CC3 holds for CC2 merge; CC5 manually rebased onto CC2's split).
+2/4 teammates landed mid-task (CC1 + CC5) — both required main-
+thread completion. CC2 + CC4 finished autonomously.
+
