@@ -20,6 +20,10 @@ import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
 import { type Project, projectSchema } from "./project.js";
 import { type Session, sessionSchema } from "./session.js";
 
+// Captured at module load: process.platform is immutable for the
+// life of a process, so we read it once instead of per-write.
+const IS_WIN32 = process.platform === "win32";
+
 export type StorePaths = {
   rootDir: string;
   projectsPath: string;
@@ -251,25 +255,20 @@ function atomicWriteFile(filePath: string, content: string): void {
       closeSync(tempFd);
     }
     renameSync(tempPath, filePath);
-    // Windows-friendly degradation: fsync on a directory fd may throw
-    // EISDIR/EPERM/ENOTSUP on some filesystems. Swallow only those known
-    // codes on the *directory* fsync; data fsync errors propagate.
-    let dirFd: number | undefined;
-    try {
-      dirFd = openSync(parentDir, "r");
-      fsyncSync(dirFd);
-    } catch (dirErr) {
-      const code = (dirErr as NodeJS.ErrnoException).code;
-      if (code !== "EISDIR" && code !== "EPERM" && code !== "ENOTSUP") {
-        throw dirErr;
-      }
-    } finally {
-      if (dirFd !== undefined) {
-        try {
-          closeSync(dirFd);
-        } catch {
-          // Ignore close errors; the data is already on disk.
-        }
+    // POSIX directory fsync: required on ext4/xfs/APFS so the rename
+    // metadata is durable against kernel-panic / power-loss. On
+    // Windows (NTFS) the rename's metadata is journaled and durable
+    // without a caller-side flush; FlushFileBuffers on a directory
+    // handle is a documented no-op, and openSync(dir, "r") itself
+    // fails with EISDIR. We branch on platform rather than try/catch
+    // so a real EPERM (sandbox, antivirus, seccomp) surfaces as a
+    // durability failure instead of being silently swallowed.
+    if (!IS_WIN32) {
+      const dirFd = openSync(parentDir, "r");
+      try {
+        fsyncSync(dirFd);
+      } finally {
+        closeSync(dirFd);
       }
     }
   } catch (error) {

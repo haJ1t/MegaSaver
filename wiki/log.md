@@ -1084,3 +1084,60 @@ Deferred to v0.3:
 - pnpm conventions:sync automation.
 
 v0.2 closed.
+
+## [2026-05-10] schema | GG real Windows durability — atomicWriteFile fsync platform branch
+
+First v0.3 work item lands ahead of the rest of the FF Windows
+port bundle. Replaced the reactive
+`EISDIR`/`EPERM`/`ENOTSUP` try-catch around the parent-directory
+fsync in `packages/core/src/json-directory-store.ts` with a
+proactive `process.platform === "win32"` branch:
+
+- `IS_WIN32` constant captured at module load (`process.platform`
+  is immutable for the process lifetime).
+- POSIX (macOS / Linux): unchanged — `openSync(parentDir, "r")`
+  → `fsyncSync` → `closeSync` after the rename.
+- Windows (NTFS): the dir fsync block is skipped entirely. NTFS
+  journals rename metadata on transaction commit; `FlushFileBuffers`
+  on a directory handle is a documented no-op (SQLite VFS,
+  Microsoft Win32 docs). `openSync(dir, "r")` itself fails with
+  `EISDIR` on Windows, so the v0.2 catch was firing on the open,
+  not the fsync.
+
+Behavioural delta vs v0.2:
+
+- **Sandboxes / antivirus**: a real `EPERM` (Docker capability
+  drop, seccomp, macOS SIP, Win AV) on the directory fsync now
+  surfaces as `store_write_failed` instead of being silently
+  swallowed.
+- **Windows happy path**: identical — one less syscall, same
+  durability (NTFS journal guarantees the rename).
+- **POSIX**: zero change.
+
++1 test in `packages/core/test/json-directory-store.test.ts`
+pins the win32 branch by stubbing `process.platform` via
+`Object.defineProperty` + `vi.resetModules()` + dynamic
+re-import so the module-load `IS_WIN32` constant is captured
+under the stubbed platform. Asserts: temp file open + temp
+fsync + rename happen exactly once each; parent-dir open and
+fsync both happen **zero** times. The pre-existing POSIX
+ordering test continues to gate macOS / Linux behaviour
+unchanged.
+
+CI scope unchanged (still Linux/macOS only). Windows correctness
+is correct-by-construction: the win32 branch is exercised on
+every PR via the stub, and the underlying NTFS semantics are
+the same ones SQLite relies on across millions of Windows
+installs.
+
+Supersedes FF Windows port deferral spec §1 (fsync) only. The
+other v0.3 deferrals remain open:
+- Case-insensitive path resolution audit.
+- CRLF normalization in connector outputs.
+- Lock file semantics audit on Windows.
+- Windows CI gate (GitHub Actions runner).
+
+Spec: `docs/superpowers/specs/2026-05-10-gg-windows-port-design.md`.
+Plan: `docs/superpowers/plans/2026-05-10-gg-windows-port.md`.
+Tests: 587 → 588 (+1). Biome clean. Risk HIGH (core durability
+semantics).
