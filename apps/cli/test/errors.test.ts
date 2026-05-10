@@ -416,6 +416,17 @@ describe("errors — memory", () => {
     });
   });
 
+  it("mapErrorToCliMessage routes memory_entry_already_exists to a stable message (W5)", () => {
+    const err = new CoreRegistryError(
+      "memory_entry_already_exists",
+      "Memory entry already exists: abc",
+    );
+    expect(mapErrorToCliMessage(err)).toEqual({
+      message: "error: memory entry already exists",
+      exitCode: 1,
+    });
+  });
+
   it("mapErrorToCliMessage routes a Zod issue under kind: memory_create", () => {
     const result = z.string().min(5).safeParse("ab");
     expect(result.success).toBe(false);

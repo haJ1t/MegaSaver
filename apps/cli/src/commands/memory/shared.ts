@@ -9,8 +9,10 @@ export const contentSchema = z
   .trim()
   .min(1)
   // C0/C1 control chars and DEL break the line-oriented output protocol.
+  // U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR) are also blocked:
+  // they are treated as line terminators by JS engines and break downstream rendering.
   // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional
-  .regex(/^[^\x00-\x1f\x7f-\x9f]+$/, NAME_CONTROL_CHARS_MESSAGE)
+  .regex(/^[^\x00-\x1f\x7f-\x9f\u2028\u2029]+$/, NAME_CONTROL_CHARS_MESSAGE)
   .transform((value) => value.normalize("NFC"));
 
 export { memoryEntryIdSchema };

@@ -94,6 +94,8 @@ export async function runSessionCreate(input: RunSessionCreateInput): Promise<0 
     }
     const sessionId = sessionIdSchema.parse((input.newId ?? randomUUID)());
     const startedAt = (input.now ?? (() => new Date().toISOString()))();
+    // Trust-boundary: Core validates the session object internally; no re-parse
+    // needed here because session fields are only displayed (not written to agent files).
     const created = registry.createSession({
       id: sessionId,
       projectId: project.id,

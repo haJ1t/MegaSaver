@@ -49,7 +49,11 @@ export function buildConnectorContext(
   allMemoryEntries: readonly MemoryEntry[],
 ): ConnectorContext {
   const session = pickLatestOpenSession(allSessions, target.agentId);
-  const memoryEntries = filterMemoryEntriesForSession(allMemoryEntries, session);
+  const filtered = filterMemoryEntriesForSession(allMemoryEntries, session);
+  // connector block caps at 20 most-recent entries; older entries remain queryable via 'mega memory list'
+  const memoryEntries = [...filtered]
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 20);
   return {
     agentId: target.agentId,
     project,

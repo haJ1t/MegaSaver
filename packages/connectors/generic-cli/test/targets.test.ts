@@ -5,6 +5,7 @@ import {
   codexTarget,
   cursorTarget,
   findTarget,
+  validateConnectorTarget,
 } from "../src/targets.js";
 
 describe("ConnectorTarget registry", () => {
@@ -71,5 +72,52 @@ describe("ConnectorTarget registry", () => {
 
   it("findTarget returns the aider target by id", () => {
     expect(findTarget("aider")).toBe(aiderTarget);
+  });
+});
+
+describe("validateConnectorTarget — U9 sentinel guard", () => {
+  it("accepts a target with no header", () => {
+    expect(() =>
+      validateConnectorTarget({ id: "t", agentId: "codex", relativePath: "FILE.md" }),
+    ).not.toThrow();
+  });
+
+  it("accepts a target whose header contains no sentinel strings", () => {
+    expect(() =>
+      validateConnectorTarget({
+        id: "t",
+        agentId: "cursor",
+        relativePath: "file.mdc",
+        header: "---\nalwaysApply: true\n---\n\n",
+      }),
+    ).not.toThrow();
+  });
+
+  it("throws when header contains MEGA_SAVER_BLOCK_START", () => {
+    expect(() =>
+      validateConnectorTarget({
+        id: "bad",
+        agentId: "codex",
+        relativePath: "FILE.md",
+        header: "<!-- MEGA SAVER:BEGIN -->",
+      }),
+    ).toThrow(/sentinel/);
+  });
+
+  it("throws when header contains MEGA_SAVER_BLOCK_END", () => {
+    expect(() =>
+      validateConnectorTarget({
+        id: "bad",
+        agentId: "codex",
+        relativePath: "FILE.md",
+        header: "<!-- MEGA SAVER:END -->",
+      }),
+    ).toThrow(/sentinel/);
+  });
+
+  it("all builtin targets pass sentinel validation (module-load guard holds)", () => {
+    for (const target of builtinTargets) {
+      expect(() => validateConnectorTarget(target)).not.toThrow();
+    }
   });
 });

@@ -5,6 +5,7 @@ export {
   type ConnectorTarget,
   cursorTarget,
   findTarget,
+  validateConnectorTarget,
 } from "./targets.js";
 
 export {

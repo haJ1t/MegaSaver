@@ -7,6 +7,7 @@ import {
   projectNotFoundMessage,
   scopeProjectWithSessionMessage,
   scopeSessionWithoutSessionMessage,
+  sessionAlreadyEndedMessage,
   sessionNotFoundMessage,
 } from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
@@ -114,6 +115,12 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
         input.stderr(cli.message);
         return cli.exitCode;
       }
+      // Re-parse boundary: session.endedAt is trusted from Core's schema.
+      if (session.endedAt !== null) {
+        const cli = sessionAlreadyEndedMessage(parsedSessionId, session.endedAt);
+        input.stderr(cli.message);
+        return cli.exitCode;
+      }
     }
 
     const newId = input.newId ?? (() => crypto.randomUUID());
@@ -121,6 +128,8 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
     const id = readTestEnv("MEGA_TEST_MEMORY_ENTRY_ID") ?? newId();
     const createdAt = readTestEnv("MEGA_TEST_NOW") ?? now();
 
+    // Parse-on-handoff boundary: re-parse here because the connector block
+    // renderer writes entry.content verbatim into agent config files.
     const entry: MemoryEntry = memoryEntrySchema.parse({
       id,
       projectId: project.id,
