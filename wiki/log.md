@@ -1054,3 +1054,33 @@ process-crash only). Full filesystem semantics audit (case-
 insensitive paths, CRLF normalization, lock file behavior,
 cross-platform CI gate) defers to v0.3 milestone. Spec at
 docs/superpowers/specs/2026-05-10-windows-port-deferral.md.
+
+## [2026-05-10] release | v0.2 SHIPPED
+
+Final close-out batch (3 PRs, 2026-05-10):
+
+- PR #47 (`9fa2414`) — FF Windows port deferral spec to v0.3.
+- PR #48 (`c1c0389`) — T6 full sync text symmetry; byte-compat
+  break: every connector sync line carries session=<id|none>.
+- PR #49 (`460a66e`) — EE cleanup: tuple-ordering pins per AA3
+  (3 schemas), RunConnectorSyncInput.json required, JSON output
+  policy doc in wiki/entities/cli.md, pre-existing lint fixes.
+
+v0.2 final state on main HEAD `460a66e`:
+
+- 49 PRs merged from bootstrap (#1) to close-out (#49).
+- 587 tests on 55 files; ~196 → 587 across v0.1 → v0.2.
+- 4 connector targets, 11 CLI subcommands, 10 with --json (full
+  read+write parity), 4 closed-enum literal types compile-time
+  enforced, atomicWriteFile POSIX-durable, status concurrency
+  policy documented.
+- ~40+ critic follow-ups closed across S/T/U/V/W/X/Y/Z/AA/CC/
+  DD/EE/FF/T6 series.
+
+Deferred to v0.3:
+- FF full Windows port (current: graceful no-op).
+- mcp-bridge + skill-packs packages (scaffolded placeholders).
+- GUI app (CLI-first per v0.1 decision).
+- pnpm conventions:sync automation.
+
+v0.2 closed.
