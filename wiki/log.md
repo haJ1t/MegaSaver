@@ -925,3 +925,33 @@ full sync text-output format in tandem with its JSON representation;
 out of scope for this docs-only DD4 batch.
 
 **Status: STILL DEFERRED** (owned by future --json write-side batch)
+
+## [2026-05-10] feat | DD2 BB hardening (PR #42)
+
+`atomicWriteFile` durability + S10 spec stanza on
+`feat/dd2-bb-hardening`:
+
+- **Temp fsync BEFORE rename**: open temp fd (read), `fsyncSync`,
+  close. POSIX best-practice — temp data is on disk before rename
+  links it in. Crash here either preserves the original target
+  (rename hadn't happened) or surfaces the new content (rename
+  + previous fsync survived).
+- **Dir fsync AFTER rename** with Windows-friendly degradation:
+  open parent dir fd (read), `fsyncSync`, close. Catch swallows
+  `EISDIR`/`EPERM`/`ENOTSUP` (Windows fs platforms where dir
+  fsync isn't supported); other errors propagate.
+- **S10 spec stanza** (`docs/superpowers/specs/2026-05-09-mega-
+  connector-status-design.md` §11): policy doc — status is
+  best-effort; concurrent sync may produce mixed in-sync/drift.
+  §6 exit-code stanza now cross-references §11 to remove the
+  silent contradiction.
+- **Cross-process lock evidence**: V1 (CC4 PR #36) at `apps/cli/
+  test/session/update-concurrency.test.ts` already exercises
+  the lock primitive via spawn against `dist/cli.js`. Spec/plan
+  cross-process-test step deferred (V1 sufficient for v0.1
+  durability change; lock primitive unchanged in this slot).
+
+`pnpm exec vitest run` worktree-wide: 540/540 passing (52 test
+files). Critic round 1: REVISE for fabricated 552 count (actual
+540), Windows guard divergence, §6/§11 silent contradiction —
+all closed inline (`36bf561`).
