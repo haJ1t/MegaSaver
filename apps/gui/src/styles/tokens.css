@@ -1,0 +1,215 @@
+/*
+ * Mega Saver GUI v1 — Design Tokens
+ * Editorial Terminal aesthetic: zinc base, DM Mono, amber accent.
+ * CSS variables are the single source of truth for all color/radius/shadow.
+ * Tailwind utilities reference these via tailwind.config.js.
+ *
+ * Token surface is a closed set per spec §6a. Adding a new color role
+ * requires a spec amendment — do NOT add inline hex literals in components.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Light mode (default) ── */
+:root {
+  /* Backgrounds */
+  --color-background: #f5f4f2;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #f0ede8;
+
+  /* Text */
+  --color-text-primary: #141519;
+  --color-text-secondary: #545968;
+  --color-text-muted: #9ea3ad;
+
+  /* Borders */
+  --color-border: #d4d1cb;
+
+  /* Accent — desaturated amber, warm against cool zinc */
+  --color-accent: #c4681a;
+  --color-accent-fg: #ffffff;
+
+  /* Danger — destructive actions (End session) */
+  --color-danger: #b83232;
+  --color-danger-fg: #fff0f0;
+
+  /* Warn — medium risk, caution states */
+  --color-warn: #b85e15;
+  --color-warn-fg: #fff3e6;
+
+  /* Ok — open status, success */
+  --color-ok: #2c7348;
+  --color-ok-fg: #ebf5ef;
+
+  /* Focus ring — accessibility, uses accent in both modes */
+  --color-focus-ring: #c4681a;
+
+  /* Badge backgrounds and foregrounds for risk levels */
+  --badge-risk-low-bg: #ededec;
+  --badge-risk-low-fg: #545968;
+  --badge-risk-medium-bg: #fef3e2;
+  --badge-risk-medium-fg: #92450d;
+  --badge-risk-high-bg: #fde8df;
+  --badge-risk-high-fg: #8f2d1a;
+  --badge-risk-critical-bg: #fde0e0;
+  --badge-risk-critical-fg: #821818;
+
+  /* Badge backgrounds for session status */
+  --badge-status-open-bg: #e6f4ee;
+  --badge-status-open-fg: #1f5c38;
+  --badge-status-ended-bg: #ededec;
+  --badge-status-ended-fg: #72788a;
+
+  /* Badge backgrounds for memory scope */
+  --badge-scope-project-bg: #e8eaf6;
+  --badge-scope-project-fg: #3a4498;
+  --badge-scope-session-bg: #f0e8f6;
+  --badge-scope-session-fg: #6b3a98;
+}
+
+/* ── Dark mode (auto via OS preference) ── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Backgrounds — near-black zinc, OLED-safe */
+    --color-background: #0c0d0f;
+    --color-surface: #141519;
+    --color-surface-elevated: #1c1d23;
+
+    /* Text */
+    --color-text-primary: #f0f1f3;
+    --color-text-secondary: #9ea3ad;
+    --color-text-muted: #565b66;
+
+    /* Borders */
+    --color-border: #2a2d35;
+
+    /* Accent — desaturated amber, warm against zinc */
+    --color-accent: #e8973a;
+    --color-accent-fg: #0c0d0f;
+
+    /* Danger */
+    --color-danger: #dc4f4f;
+    --color-danger-fg: #fff0f0;
+
+    /* Warn */
+    --color-warn: #d97b2a;
+    --color-warn-fg: #fff7ed;
+
+    /* Ok */
+    --color-ok: #3b8c5a;
+    --color-ok-fg: #e8f5ee;
+
+    /* Focus ring */
+    --color-focus-ring: #e8973a;
+
+    /* Badge: risk levels */
+    --badge-risk-low-bg: #20222a;
+    --badge-risk-low-fg: #9ea3ad;
+    --badge-risk-medium-bg: #2a2010;
+    --badge-risk-medium-fg: #e8973a;
+    --badge-risk-high-bg: #2a1510;
+    --badge-risk-high-fg: #e8714a;
+    --badge-risk-critical-bg: #2a1010;
+    --badge-risk-critical-fg: #e85555;
+
+    /* Badge: session status */
+    --badge-status-open-bg: #0e2018;
+    --badge-status-open-fg: #5ec98a;
+    --badge-status-ended-bg: #1c1d23;
+    --badge-status-ended-fg: #565b66;
+
+    /* Badge: memory scope */
+    --badge-scope-project-bg: #141830;
+    --badge-scope-project-fg: #8b9fe0;
+    --badge-scope-session-bg: #1c1428;
+    --badge-scope-session-fg: #b88fe0;
+  }
+}
+
+/* ── Base layer overrides ── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: "DM Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 14px; /* base = 14px on desktop, dense console */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Visible focus ring using the token — never suppress outline without replacement */
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* Respect reduced motion for all transitions and animations */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}
+
+/* ── Utility classes for badge variants (not Tailwind-generatable from CSS vars) ── */
+@layer utilities {
+  .badge-risk-low {
+    background-color: var(--badge-risk-low-bg);
+    color: var(--badge-risk-low-fg);
+  }
+  .badge-risk-medium {
+    background-color: var(--badge-risk-medium-bg);
+    color: var(--badge-risk-medium-fg);
+  }
+  .badge-risk-high {
+    background-color: var(--badge-risk-high-bg);
+    color: var(--badge-risk-high-fg);
+  }
+  .badge-risk-critical {
+    background-color: var(--badge-risk-critical-bg);
+    color: var(--badge-risk-critical-fg);
+  }
+  .badge-status-open {
+    background-color: var(--badge-status-open-bg);
+    color: var(--badge-status-open-fg);
+  }
+  .badge-status-ended {
+    background-color: var(--badge-status-ended-bg);
+    color: var(--badge-status-ended-fg);
+  }
+  .badge-scope-project {
+    background-color: var(--badge-scope-project-bg);
+    color: var(--badge-scope-project-fg);
+  }
+  .badge-scope-session {
+    background-color: var(--badge-scope-session-bg);
+    color: var(--badge-scope-session-fg);
+  }
+
+  /* Row animation: stagger-fade on list mount */
+  .row-enter {
+    opacity: 0;
+  }
+  .row-enter-done {
+    opacity: 1;
+    transition: opacity 120ms ease-out;
+  }
+}

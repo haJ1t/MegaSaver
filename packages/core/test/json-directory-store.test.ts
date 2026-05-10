@@ -257,9 +257,7 @@ describe("atomicWriteFile — Windows path (GG)", () => {
 
     // Re-import under the stubbed platform so the module's IS_WIN32
     // constant is captured as true.
-    const { writeSessions: writeSessionsWin32 } = await import(
-      "../src/json-directory-store.js"
-    );
+    const { writeSessions: writeSessionsWin32 } = await import("../src/json-directory-store.js");
 
     const sessionsPath = join(rootDir, "sessions.json");
     const paths = {

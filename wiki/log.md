@@ -1327,3 +1327,59 @@ locks, Windows CI runner), CLAUDE.md tagged-block management,
 aider connector sync end-to-end.
 
 v0.3 closed.
+
+## [2026-05-10] feat | LL — GUI v1 (picker, detail views, write actions, design pass)
+
+First multi-agent ship of the v0.4 line. v0.3 GUI bootstrap (II / PR
+#53) shipped two read-only tables; v1 turns it into a single-developer
+console with a project picker, master-detail views for sessions and
+memory entries, and three write flows (create session, end session,
+update session, create memory entry). Risk MEDIUM.
+
+What landed across four lanes (each in a fresh context per
+`CLAUDE.md` §9 item 6):
+
+- **Architect** — `docs/superpowers/specs/2026-05-10-ll-gui-v1-design.md`.
+  Locked: bridge API contract (8 endpoints), error envelope (10
+  closed-enum codes), CORS posture (loopback only), Tailwind v3.4
+  for the design system, `concurrently` for single-command dev,
+  master-detail without a router, `localStorage` persistence with
+  `megasaver:gui:v1:` namespace prefix.
+- **Designer** — 14 components + Tailwind v3.4 token system.
+  Direction: "Editorial Terminal" — DM Mono throughout, zinc / amber
+  palette, light + dark via `prefers-color-scheme`. Tokens are CSS
+  variables under `apps/gui/src/styles/tokens.css`; component
+  styling lives in JSX class strings driven by
+  `apps/gui/tailwind.config.js`.
+- **Test-engineer** — 152 new tests across component, view,
+  integration, bridge, and smoke layers. The bridge contract is
+  pinned by 8 spec files in `apps/gui/test/bridge/` (handler,
+  validation, CORS, conflicts, not-found, internal, error
+  envelope) plus an in-process smoke test. Closed-enum surfaces
+  (`WriteAction`, `BridgeErrorCode`) get `.test-d.ts` AA3
+  assertions.
+- **Executor** — `apps/gui/bridge/handler.ts` extracts the request
+  router into `createBridgeHandler({ registry, ... })`; the
+  production `server.ts` becomes a thin port-binding shim with
+  graceful SIGINT/SIGTERM shutdown. 5 new bridge endpoints
+  (`/api/projects`, POST/PATCH on sessions, POST/end, POST memory).
+  Frontend write paths wired in `apps/gui/src/lib/api-client.ts`.
+  `concurrently@^9.1` added to `apps/gui` devDeps so
+  `pnpm --filter @megasaver/gui dev` boots Vite (5173) + bridge
+  (5174) under one command with `--kill-others-on-fail`. Stale
+  `apps/gui/test/app.test.tsx` (v0.3-shape) deleted; new
+  integration tests cover its scope.
+
+**Closed-enum surfaces** added (both AA3-pinned):
+
+- `WriteAction = ["create-memory", "create-session", "end-session", "update-session"]`
+- `BridgeErrorCode = ["internal_error", "method_not_allowed", "origin_forbidden", "project_not_found", "route_not_found", "session_already_ended", "session_not_found", "session_project_mismatch", "store_write_failed", "validation_failed"]`
+
+**Test counts:** 626 (v0.3 baseline, 62 files) → 790 (164 in
+`@megasaver/gui` alone, 26 files). Full GUI suite green via
+`pnpm --filter @megasaver/gui test`.
+
+**Risk** MEDIUM. v0.3 GUI bootstrap superseded; v0.3 deferred-list
+"GUI v1" item closed.
+
+Spec: `docs/superpowers/specs/2026-05-10-ll-gui-v1-design.md`.
