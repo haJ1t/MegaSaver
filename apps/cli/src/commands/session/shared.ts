@@ -1,17 +1,4 @@
-import { z } from "zod";
-import { NAME_CONTROL_CHARS_MESSAGE } from "../../errors.js";
-
-// Shared title schema — reused by create.ts and update.ts.
-// C0/C1 control chars and DEL break the line-oriented output protocol.
-// U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR) are also blocked:
-// they are treated as line terminators by JS engines and break downstream rendering.
-export const titleSchema = z
-  .string()
-  .trim()
-  .min(1)
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional
-  .regex(/^[^\x00-\x1f\x7f-\x9f\u2028\u2029]+$/, NAME_CONTROL_CHARS_MESSAGE)
-  .transform((value) => value.normalize("NFC"));
+export { titleSchema } from "@megasaver/shared";
 
 /**
  * Read a deterministic test-injection env var. Returns the raw string

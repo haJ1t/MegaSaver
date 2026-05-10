@@ -1498,3 +1498,14 @@ JSX moved there).
 
 Spec: `docs/superpowers/specs/2026-05-10-oo-file-split-design.md`.
 Plan: `docs/superpowers/plans/2026-05-10-oo-file-split.md`.
+
+## [2026-05-10] refactor | PP — hoist titleSchema to @megasaver/shared (#59)
+
+Extracted the shared session title Zod schema from
+`apps/cli/src/commands/session/shared.ts` into a new canonical module
+`packages/shared/src/title.ts`. Both consumers (`@megasaver/cli` and
+`apps/gui/bridge/zod-schemas.ts`) now import from `@megasaver/shared`.
+Closes the silent-drift risk identified in code-reviewer finding M2 on PR #57.
+
+Spec: `docs/superpowers/specs/2026-05-10-pp-titleschema-hoist-design.md`.
+Plan: `docs/superpowers/plans/2026-05-10-pp-titleschema-hoist.md`.

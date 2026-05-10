@@ -1,21 +1,12 @@
 import { memoryScopeSchema } from "@megasaver/core";
 import {
+  titleSchema as TITLE_SCHEMA,
   agentIdSchema,
   projectIdSchema,
   riskLevelSchema,
   sessionIdSchema,
 } from "@megasaver/shared";
 import { z } from "zod";
-
-// Title schema mirrors apps/cli/src/commands/session/shared.ts (NFC + control-char
-// ban). Held local here so the bridge does not depend on `@megasaver/cli`.
-export const TITLE_SCHEMA = z
-  .string()
-  .trim()
-  .min(1)
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional
-  .regex(/^[^\x00-\x1f\x7f-\x9f\u2028\u2029]+$/)
-  .transform((value) => value.normalize("NFC"));
 
 export const CREATE_SESSION_BODY = z
   .object({
