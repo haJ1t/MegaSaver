@@ -6,14 +6,6 @@ import {
   isKnownTargetId,
 } from "../src/known-targets.js";
 
-// NOTE on KnownTargetId type width:
-// When vitest typecheck resolves imports via the compiled dist packages,
-// KnownTargetId widens to `string` because codexTarget/cursorTarget/aiderTarget
-// in @megasaver/connector-generic-cli/dist declare id as `string`, not a literal.
-// The @ts-expect-error guards for non-member literals are NOT applicable here;
-// they ARE caught by `tsc -p tsconfig.test-d.json` which resolves from source.
-// Both tsc (source) and vitest (dist) paths are verified by this suite.
-
 describe("KnownTargetId type regression", () => {
   it("each v0.1 member is a valid KnownTargetId", () => {
     const _a: KnownTargetId = "claude-code";
@@ -24,6 +16,12 @@ describe("KnownTargetId type regression", () => {
     void _b;
     void _c;
     void _d;
+  });
+
+  it("non-member literal is not assignable to KnownTargetId", () => {
+    // @ts-expect-error non-member literal is rejected by the closed union
+    const _bad: KnownTargetId = "non-member-id";
+    void _bad;
   });
 
   it("isKnownTargetId return type is a type predicate", () => {
