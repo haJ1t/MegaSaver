@@ -17,7 +17,7 @@ source code changes.
 |---|-----|-------------|----------|
 | 1 | S9 | `docs/superpowers/specs/2026-05-09-mega-connector-status-design.md` §4 | Fix 3-space gutter in worked example to 2-space (match impl + tests). |
 | 2 | T7 | Same file §4 worked example | Add annotation clarifying the 3 status lines are from separate runs (one per outcome), not a single run. |
-| 3 | T8 | `wiki/index.md` Status section | Restructure "v0.2 second-day team batch (7 PRs)" from paragraph to bulleted list mirroring first-day batch format. |
+| 3 | T8 | `wiki/index.md` Status section X-series paragraph | Restructure the PR #20 followups (X-series) paragraph into a bulleted list. T8's intent: whichever followups paragraph is touched next gets list format. |
 | 4 | U4 | `docs/conventions/multi-agent-dogfood.md` | Add paragraph documenting cursor connector user-edit frontmatter contract: `header` written once on first seed; subsequent syncs only modify content inside `MEGA_SAVER_BLOCK_START`/`MEGA_SAVER_BLOCK_END`; user edits to frontmatter/headings/text outside the block are preserved. |
 | 5 | U8+W8 | `README.md` | Refresh stale README: add "Connectors" section (4 built-in targets) and "CLI Reference" section (all current subcommands). |
 | 6 | U10 | `apps/cli/src/known-targets.ts` | Add one-line comment explaining cross-package aggregation of `KNOWN_TARGETS`. |

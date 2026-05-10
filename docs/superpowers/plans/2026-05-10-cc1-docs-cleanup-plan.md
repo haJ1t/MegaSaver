@@ -21,10 +21,10 @@ One-to-one mapping from spec items to file edits.
    worked-example code block clarifying the 3 lines are from 3 separate
    runs (one per outcome), not a single command invocation.
 
-3. **T8** — Edit `wiki/index.md`: replace "v0.2 second-day team batch
-   (7 PRs)" prose paragraph in the Status section with a bulleted list
-   mirroring the first-day batch format (one bullet per PR with bold
-   PR ref, commit hash, and summary).
+3. **T8** — Edit `wiki/index.md`: replace the PR #20 followups
+   (X-series) prose paragraph in the Status section with a bulleted
+   list (one bullet per item: X1+X2 closed, X4, X5, X6 with cross-refs
+   to scheduled CC slots).
 
 4. **U4** — Edit `docs/conventions/multi-agent-dogfood.md`: append a
    "Cursor connector frontmatter contract" section documenting that
