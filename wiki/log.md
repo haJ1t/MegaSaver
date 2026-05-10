@@ -1415,3 +1415,38 @@ pass (18 successful, 18 total, exit 0). `pnpm verify` exit 0.
 
 Spec: `docs/superpowers/specs/2026-05-10-mm-turbo-race-design.md`.
 Plan: `docs/superpowers/plans/2026-05-10-mm-turbo-race.md`.
+
+## [2026-05-10] chore | NN — GUI v1.1 polish bundle (#61)
+
+Five MIN/NIT fixes from the code-reviewer pass on PR #57 (`LL — GUI v1`),
+bundled because each is small and shipping them individually is overhead.
+Risk LOW.
+
+- **a11y** — `<p className="...uppercase tracking-widest">New session</p>`
+  in session-forms.tsx and memory-forms.tsx now `<h3>` (three call
+  sites). Screen readers announce them as section starts; visual
+  treatment preserved via `font-normal`.
+- **dx** — `pnpm --filter @megasaver/gui dev` no longer spews the
+  six `npm warn Unknown env config "..."` lines. Root cause was
+  `concurrently`'s `npm:<script>` invoker syntax; swapped to
+  `pnpm dev:vite` / `pnpm dev:bridge` so the workspace's actual
+  package manager runs them.
+- **cleanup** — `shortId()` hoisted from two views (`sessions-view.tsx`,
+  `memory-view.tsx`) and one inline (`memory-forms.tsx`) into
+  `apps/gui/src/lib/short-id.ts`. Single source.
+- **diag** — `bridge/server.ts:39` forced-shutdown branch now writes
+  `[bridge] forced shutdown after 1s grace period` to stderr before
+  `process.exit(0)`. Silent hung-socket case becomes diagnosable.
+- **security** — `apps/gui/bridge/handler.ts` `sendJson` adds
+  `content-security-policy: default-src 'self'` to every JSON response.
+  Loopback-only posture reinforced; one-line bridge test added in
+  `apps/gui/test/bridge/handler.test.ts`.
+
+**Test counts:** 854 (PR #57 baseline) → 855 (+1 CSP-header assertion).
+Total tests 855 across 18/18 turbo tasks.
+
+**Verify:** `pnpm verify` exit 0. Smoke: `curl -sI /api/health` shows
+the CSP header; `grep -c "npm warn"` of the dev log is 0.
+
+Spec: `docs/superpowers/specs/2026-05-10-nn-polish-bundle-design.md`.
+Plan: `docs/superpowers/plans/2026-05-10-nn-polish-bundle.md`.

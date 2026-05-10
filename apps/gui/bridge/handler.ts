@@ -116,6 +116,9 @@ function sendJson(res: ServerResponse, status: number, body: unknown, origin?: s
   const headers: { [key: string]: string; vary: string } = {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
+    // Defence-in-depth: bridge serves JSON only, but lock cross-origin
+    // resources down in case a future endpoint ever emits HTML.
+    "content-security-policy": "default-src 'self'",
     vary: "origin",
   };
   if (origin) {

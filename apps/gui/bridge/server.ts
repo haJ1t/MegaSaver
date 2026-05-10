@@ -36,7 +36,10 @@ async function main(): Promise<void> {
       process.exit(0);
     });
     // Hard fallback if the server never closes (e.g. hung connection).
-    setTimeout(() => process.exit(0), 1000).unref();
+    setTimeout(() => {
+      process.stderr.write("[bridge] forced shutdown after 1s grace period\n");
+      process.exit(0);
+    }, 1000).unref();
   };
 
   process.on("SIGINT", () => shutdown("SIGINT"));
