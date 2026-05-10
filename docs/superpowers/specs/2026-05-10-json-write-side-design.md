@@ -35,14 +35,14 @@ symmetry) bundled.
 | `memory create` | `<id>` | `{...entry}` (full MemoryEntry) |
 | `connector sync` | per-line `<id>  <relPath>  <status>` | `[{id, relativePath, status, session}, ...]` |
 
-T6 (partial): `connector sync` text-mode error lines now carry
-`session=<id|none>`. Non-error statuses (skipped/created/noop/wrote)
-keep the byte-compat 3-column format `<id>  <relPath>  <status>` —
-full symmetry with `connector status` (which always emits
-`<id>  <relPath>  <status>  session=<id|none>`) would break the
-byte-compat contract for non-error sync lines and is intentionally
-deferred. JSON mode carries `session: <id|null>` on every record
-(full data symmetry).
+T6 (full): every `connector sync` text-mode line carries
+`session=<id|none>`, matching `connector status` output exactly.
+This is a byte-compat break for non-error statuses
+(skipped/created/noop/wrote) vs the T6-partial baseline (PR #45).
+The break is intentional: full symmetry between sync and status
+text output is more valuable than preserving the old 3-column
+format. JSON mode carries `session: <id|null>` on every record
+(unchanged from T6-partial).
 
 ### Failure paths
 

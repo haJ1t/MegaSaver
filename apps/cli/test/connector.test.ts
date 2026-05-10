@@ -171,10 +171,10 @@ describe("connectorSyncCommand — skipped + created", () => {
     await runSync({ projectName: "demo" });
     expect(process.exitCode).toBe(0);
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
-      "claude-code  CLAUDE.md  skipped",
-      "codex        AGENTS.md  skipped",
-      "cursor       .cursor/rules/megasaver.mdc  skipped",
-      "aider        CONVENTIONS.md  skipped",
+      `claude-code  CLAUDE.md  skipped  session=${SESSION_ID}`,
+      "codex        AGENTS.md  skipped  session=none",
+      "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
+      "aider        CONVENTIONS.md  skipped  session=none",
     ]);
   });
 
@@ -183,10 +183,10 @@ describe("connectorSyncCommand — skipped + created", () => {
     await runSync({ projectName: "demo", target: "codex" });
     expect(process.exitCode).toBe(0);
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
-      "claude-code  CLAUDE.md  skipped",
-      "codex        AGENTS.md  created",
-      "cursor       .cursor/rules/megasaver.mdc  skipped",
-      "aider        CONVENTIONS.md  skipped",
+      `claude-code  CLAUDE.md  skipped  session=${SESSION_ID}`,
+      "codex        AGENTS.md  created  session=none",
+      "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
+      "aider        CONVENTIONS.md  skipped  session=none",
     ]);
     const written = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
     expect(written).toMatch(/<!-- MEGA SAVER:BEGIN -->/);
@@ -199,10 +199,10 @@ describe("connectorSyncCommand — skipped + created", () => {
     await runSync({ projectName: "demo", target: "claude-code" });
     expect(process.exitCode).toBe(0);
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
-      "claude-code  CLAUDE.md  created",
-      "codex        AGENTS.md  skipped",
-      "cursor       .cursor/rules/megasaver.mdc  skipped",
-      "aider        CONVENTIONS.md  skipped",
+      `claude-code  CLAUDE.md  created  session=${SESSION_ID}`,
+      "codex        AGENTS.md  skipped  session=none",
+      "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
+      "aider        CONVENTIONS.md  skipped  session=none",
     ]);
     const written = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     expect(written).toContain("Agent: claude-code");
@@ -328,10 +328,10 @@ describe("connectorSyncCommand — wrote + noop", () => {
 
     expect(process.exitCode).toBe(0);
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
-      "claude-code  CLAUDE.md  wrote",
-      "codex        AGENTS.md  wrote",
-      "cursor       .cursor/rules/megasaver.mdc  skipped",
-      "aider        CONVENTIONS.md  skipped",
+      `claude-code  CLAUDE.md  wrote  session=${SESSION_ID}`,
+      "codex        AGENTS.md  wrote  session=33333333-3333-4333-8333-333333333333",
+      "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
+      "aider        CONVENTIONS.md  skipped  session=none",
     ]);
     const claudeMd = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     const agentsMd = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
@@ -367,10 +367,10 @@ describe("connectorSyncCommand — wrote + noop", () => {
 
     expect(process.exitCode).toBe(0);
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
-      "claude-code  CLAUDE.md  noop",
-      "codex        AGENTS.md  skipped",
-      "cursor       .cursor/rules/megasaver.mdc  skipped",
-      "aider        CONVENTIONS.md  skipped",
+      `claude-code  CLAUDE.md  noop  session=${SESSION_ID}`,
+      "codex        AGENTS.md  skipped  session=none",
+      "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
+      "aider        CONVENTIONS.md  skipped  session=none",
     ]);
   });
 
@@ -412,10 +412,10 @@ describe("connectorSyncCommand — wrote + noop", () => {
 
     expect(process.exitCode).toBe(0);
     expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
-      "claude-code  CLAUDE.md  wrote",
-      "codex        AGENTS.md  noop",
-      "cursor       .cursor/rules/megasaver.mdc  skipped",
-      "aider        CONVENTIONS.md  skipped",
+      `claude-code  CLAUDE.md  wrote  session=${SESSION_ID}`,
+      "codex        AGENTS.md  noop  session=none",
+      "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
+      "aider        CONVENTIONS.md  skipped  session=none",
     ]);
   });
 
@@ -555,10 +555,10 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
     expect(process.exitCode).toBe(1);
     const stdoutLines = logSpy.mock.calls.map((c) => c[0]);
     expect(stdoutLines).toEqual([
-      "claude-code  CLAUDE.md  wrote",
+      `claude-code  CLAUDE.md  wrote  session=${SESSION_ID}`,
       "codex        AGENTS.md  error  session=none",
-      "cursor       .cursor/rules/megasaver.mdc  skipped",
-      "aider        CONVENTIONS.md  skipped",
+      "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
+      "aider        CONVENTIONS.md  skipped  session=none",
     ]);
     expect(
       errSpy.mock.calls.some(
@@ -786,7 +786,7 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(content).toContain("<!-- MEGA SAVER:END -->");
 
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(lines).toContain("cursor       .cursor/rules/megasaver.mdc  created");
+    expect(lines).toContain(`cursor       .cursor/rules/megasaver.mdc  created  session=${SESS_CURSOR}`);
   });
 
   it("preserves the seeded frontmatter on subsequent syncs (block-only update)", async () => {
@@ -807,7 +807,7 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(updatedFrontmatter).toBe(seededFrontmatter);
 
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(lines).toContain("cursor       .cursor/rules/megasaver.mdc  wrote");
+    expect(lines).toContain("cursor       .cursor/rules/megasaver.mdc  wrote  session=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
   });
 
   it("default sync (no --target) silently skips a missing cursor file", async () => {
@@ -815,7 +815,7 @@ describe("connectorSyncCommand — cursor target", () => {
     await runSync({ projectName: "demo" });
 
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(lines).toContain("cursor       .cursor/rules/megasaver.mdc  skipped");
+    expect(lines).toContain("cursor       .cursor/rules/megasaver.mdc  skipped  session=none");
     await expect(
       readFile(join(projectRoot, ".cursor/rules/megasaver.mdc"), "utf8"),
     ).rejects.toThrow();
@@ -832,7 +832,7 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(written).toContain("Agent: aider");
     expect(written).toContain("<!-- MEGA SAVER:END -->");
     expect(
-      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+created$/.test(c[0] as string)),
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+created\s+session=none$/.test(c[0] as string)),
     ).toBe(true);
   });
 
@@ -855,7 +855,7 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(written.endsWith("<!-- MEGA SAVER:END -->\n")).toBe(true);
     // Status word is "wrote" because file existed (not "created").
     expect(
-      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+wrote$/.test(c[0] as string)),
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+wrote\s+session=none$/.test(c[0] as string)),
     ).toBe(true);
   });
 
@@ -864,7 +864,7 @@ describe("connectorSyncCommand — cursor target", () => {
     await runSync({ projectName: "demo" });
     expect(process.exitCode).toBe(0);
     expect(
-      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+skipped$/.test(c[0] as string)),
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+skipped\s+session=none$/.test(c[0] as string)),
     ).toBe(true);
     await expect(readFile(join(projectRoot, "CONVENTIONS.md"), "utf8")).rejects.toThrow();
   });
@@ -881,7 +881,7 @@ describe("connectorSyncCommand — cursor target", () => {
 
     expect(process.exitCode).toBe(0);
     expect(
-      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+noop$/.test(c[0] as string)),
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+noop\s+session=/.test(c[0] as string)),
     ).toBe(true);
   });
 
@@ -900,7 +900,7 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(written).toContain(`Project: demo (${PROJECT_ID_CURSOR})`);
     expect(written).not.toContain("old-aider-id");
     expect(
-      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+wrote$/.test(c[0] as string)),
+      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+wrote\s+session=/.test(c[0] as string)),
     ).toBe(true);
   });
 });
@@ -1349,7 +1349,7 @@ describe("U3 — cursor sync appends managed block to pre-existing user content"
     // Status word is "wrote" (file existed, not "created").
     expect(
       logSpy.mock.calls.some((c) =>
-        /^cursor\s+\.cursor\/rules\/megasaver\.mdc\s+wrote$/.test(c[0] as string),
+        /^cursor\s+\.cursor\/rules\/megasaver\.mdc\s+wrote\s+session=/.test(c[0] as string),
       ),
     ).toBe(true);
   });
