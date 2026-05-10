@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "allowImportingTsExtensions": true,
+    "noPropertyAccessFromIndexSignature": false
+  },
+  "include": ["src/**/*", "test/**/*.test-d.ts"],
+  "exclude": ["node_modules", ".turbo"]
+}
