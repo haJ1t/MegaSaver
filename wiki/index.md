@@ -26,9 +26,10 @@ updated: 2026-05-10
 - [[entities/connectors-generic-cli]] — `@megasaver/connector-generic-cli` manifest-driven connector (v0.1 = Codex `AGENTS.md`).
 - [[entities/connectors-shared]] — `@megasaver/connectors-shared` block helpers + context schema.
 - [[entities/core]] — `@megasaver/core` agent-agnostic engine foundation (v0.1).
+- [[entities/gui]] — `@megasaver/gui` localhost web shell — picker + master-detail + write actions, "Editorial Terminal" design (v1, LL).
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1).
 
-More subsystem pages land as features get built. v0.3 scaffolds (entity pages still pending): `mcp-bridge`, `skill-packs`, `gui`, `conventions-sync`.
+More subsystem pages land as features get built. v0.3 scaffolds (entity pages still pending): `mcp-bridge`, `skill-packs`, `conventions-sync`.
 
 ## Workflows
 
@@ -141,7 +142,7 @@ worktrees (GG/HH/II/JJ teammates), each carrying its own spec + plan.
 
 ### v0.3 — open backlog (deferred to v0.4)
 
-- **GUI v1**: project picker, session/memory detail views, write actions (create/end/update), single-command `dev` (Vite + bridge under one process), native packaging (Tauri/Electron evaluated).
+- ~~**GUI v1**: project picker, session/memory detail views, write actions (create/end/update), single-command `dev` (Vite + bridge under one process)~~ — **SHIPPED 2026-05-10 (LL).** See [[entities/gui]] and `wiki/log.md`. Native packaging (Tauri/Electron) deferred to v1.1+.
 - **mcp-bridge real implementation**: stdio transport first, MCP tools (`session.list`, `memory.list`), MCP resources (read-only views over the JSON store).
 - **skill-packs real implementation**: pack discovery, install/uninstall, manifest validation, conflict resolution.
 - **Windows port remainder**: case-insensitive path resolution audit, CRLF normalization in connector outputs, lock file semantics audit, Windows CI runner. Fsync layer now closed (PR #51).

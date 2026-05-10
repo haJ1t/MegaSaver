@@ -1,26 +1,113 @@
 import type { MemoryEntry, Session } from "@megasaver/core";
+import type { Project } from "@megasaver/core";
+import type { BridgeError } from "../components/states.js";
 
 export type HealthResponse = {
   ok: true;
   store: string;
 };
 
+// ── Response handling ─────────────────────────────────────────────────────────
+
+async function handleResponse<T>(response: Response): Promise<T> {
+  if (response.ok) {
+    return (await response.json()) as T;
+  }
+  // Bridge returns structured error envelope per spec §4b.
+  let body: BridgeError;
+  try {
+    body = (await response.json()) as BridgeError;
+  } catch {
+    body = {
+      error: `Bridge request failed with status ${response.status}`,
+      code: "internal_error",
+    };
+  }
+  throw body;
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path);
-  if (!response.ok) {
-    throw new Error(`bridge ${path} failed: ${response.status}`);
-  }
-  return (await response.json()) as T;
+  return handleResponse<T>(response);
 }
+
+async function postJson<T>(path: string, body?: unknown): Promise<T> {
+  const init: RequestInit = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  };
+  if (body !== undefined) {
+    init.body = JSON.stringify(body);
+  }
+  const response = await fetch(path, init);
+  return handleResponse<T>(response);
+}
+
+async function patchJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return handleResponse<T>(response);
+}
+
+// ── Read endpoints ────────────────────────────────────────────────────────────
 
 export function fetchHealth(): Promise<HealthResponse> {
   return getJson<HealthResponse>("/api/health");
 }
 
-export function fetchSessions(): Promise<Session[]> {
-  return getJson<Session[]>("/api/sessions");
+export function fetchProjects(): Promise<Project[]> {
+  return getJson<Project[]>("/api/projects");
 }
 
-export function fetchMemory(): Promise<MemoryEntry[]> {
-  return getJson<MemoryEntry[]>("/api/memory");
+export function fetchSessions(projectId: string): Promise<Session[]> {
+  return getJson<Session[]>(`/api/sessions?projectId=${encodeURIComponent(projectId)}`);
+}
+
+export function fetchMemory(projectId: string): Promise<MemoryEntry[]> {
+  return getJson<MemoryEntry[]>(`/api/memory?projectId=${encodeURIComponent(projectId)}`);
+}
+
+// ── Write endpoints ───────────────────────────────────────────────────────────
+
+export type CreateSessionBody = {
+  projectId: string;
+  agentId: string;
+  title?: string;
+  riskLevel?: string;
+};
+
+export function createSession(body: CreateSessionBody): Promise<Session> {
+  return postJson<Session>("/api/sessions", body);
+}
+
+export type EndSessionBody = {
+  endedAt?: string;
+};
+
+export function endSession(sessionId: string, body?: EndSessionBody): Promise<Session> {
+  return postJson<Session>(`/api/sessions/${encodeURIComponent(sessionId)}/end`, body ?? {});
+}
+
+export type UpdateSessionBody = {
+  title?: string | null;
+  riskLevel?: string;
+  agentId?: string;
+};
+
+export function updateSession(sessionId: string, body: UpdateSessionBody): Promise<Session> {
+  return patchJson<Session>(`/api/sessions/${encodeURIComponent(sessionId)}`, body);
+}
+
+export type CreateMemoryBody = {
+  projectId: string;
+  content: string;
+  scope: string;
+  sessionId?: string;
+};
+
+export function createMemoryEntry(body: CreateMemoryBody): Promise<MemoryEntry> {
+  return postJson<MemoryEntry>("/api/memory", body);
 }

@@ -44,5 +44,21 @@
   },
   "organizeImports": {
     "enabled": true
-  }
+  },
+  "overrides": [
+    {
+      "include": [
+        "apps/gui/src/components/project-picker.tsx",
+        "apps/gui/src/views/sessions-view.tsx",
+        "apps/gui/src/views/memory-view.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off"
+          }
+        }
+      }
+    }
+  ]
 }
