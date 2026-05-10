@@ -57,6 +57,7 @@ export function formatMemoryListLine(entry: {
 }
 
 function truncate(value: string, max: number): string {
+  // W7: codepoint-only truncation accepted for v0.1; grapheme-aware via Intl.Segmenter deferred (low real-world impact, edge case for emoji content)
   if ([...value].length <= max) return value;
   return `${[...value].slice(0, max - 1).join("")}…`;
 }

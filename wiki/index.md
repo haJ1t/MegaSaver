@@ -122,9 +122,9 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 After this batch:
 - ~28 critic-flagged follow-ups closed across 6 series (S, T,
-  U, V, W, X) — was ~44, leaves CC3 (11 items, in review) + 5
-  deferred (T6 → --json sync, S8 → AA2 orphan, S10 → BB hardening,
-  W7 → v0.1 codepoint accept).
+  U, V, W, X) — was ~44, leaves CC3 (11 items, in review) + 2
+  deferred (T6 → --json write-side, S10 → BB hardening) +
+  2 closed-in-DD4 (S8 by AA2, W7 wont-do v0.1).
 - `connector.ts` 419 LOC split (S4 closed) — every CLI command
   file now well under §8 300-line threshold.
 - Schema policy compile-time enforced: W4 ended-session reject
@@ -415,7 +415,7 @@ symlink semantics (`readTargetFile` lstat-first or
 `upsertBlock(existing, ctx) === existing` for seeded files
 inoculates byte-equality predicate; S7 multi-open-session
 tie-break test; S8 `--target` help-text divergence (filter ≠
-seed); S9 spec §4 example uses 3-space gutter, impl + tests use
+seed) — **CLOSED by AA2 / PR #25 (`a8fb044`)**; S9 spec §4 example uses 3-space gutter, impl + tests use
 2; S10 spec §11 concurrency stanza for status vs concurrent
 sync; S11 `targets.length > 0` invariant after filter.
 Critic v0.2 followups for PR #16 (S1+S2 followups slot): T2
@@ -425,7 +425,7 @@ PR #16 (`aaa4607`). Still open: T1 direct unit test on
 helper); T3 same-instant tie-break test (parallels S7); T4
 DST-transition ranking test; T5 millisecond-precision test;
 T6 sync error line carries `session=<id|none>` for
-cross-command symmetry (bundle with `--json` flag landing);
+cross-command symmetry — **STILL DEFERRED, owned by --json write-side batch**;
 T7 §4 worked-example annotation in
 `2026-05-09-mega-connector-status-design.md` clarifying the
 three lines are from multiple runs; T8 restructure
@@ -487,7 +487,7 @@ explicit `memory_entry_already_exists` mapper branch (defensive
 parallel to `memory_entry_not_found`); W6 widen `contentSchema`
 regex to block U+2028 / U+2029 (also affects `titleSchema`); W7
 switch list `truncate` to `Intl.Segmenter` for grapheme-aware
-splitting (or accept codepoint-only as v0.1); W8 README refresh —
+splitting — **CLOSED as WONT-DO (v0.1 codepoint-only accepted; WHY comment in `memory/shared.ts`)**; W8 README refresh —
 list all v0.1 subcommands (chronic drift since PR #11); W9
 parse-on-handoff consistency policy between `memory create` (re-
 parses) and `session create` (trusts registry); W10 restore
