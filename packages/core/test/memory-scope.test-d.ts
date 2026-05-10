@@ -26,4 +26,9 @@ describe("MemoryScope type regression", () => {
     const arr: MemoryScope[] = [...memoryScopeSchema.options];
     void arr;
   });
+
+  it("memoryScopeSchema.options preserves semantic order", () => {
+    const _t: readonly ["project", "session"] = memoryScopeSchema.options;
+    void _t;
+  });
 });

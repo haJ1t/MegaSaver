@@ -223,6 +223,7 @@ describe("connectorStatusCommand — in-sync + drift", () => {
       xdgDataHome: undefined,
       stdout: () => {},
       stderr: () => {},
+      json: false,
     });
   }
 
@@ -376,6 +377,7 @@ describe("connectorStatusCommand — error + cross-target", () => {
       xdgDataHome: undefined,
       stdout: () => {},
       stderr: () => {},
+      json: false,
     });
   }
 
@@ -532,6 +534,7 @@ describe("connectorStatusCommand — cursor target", () => {
       xdgDataHome: undefined,
       stdout: () => {},
       stderr: () => {},
+      json: false,
     });
   }
 
@@ -728,6 +731,7 @@ describe("connectorStatusCommand — aider target", () => {
       xdgDataHome: undefined,
       stdout: () => {},
       stderr: () => {},
+      json: false,
     });
   }
 
@@ -838,6 +842,7 @@ describe("connectorStatusCommand — memoryEntries drift", () => {
       xdgDataHome: undefined,
       stdout: () => {},
       stderr: () => {},
+      json: false,
     });
   }
 
@@ -1044,6 +1049,7 @@ describe("connectorStatusCommand — --json output", () => {
       xdgDataHome: undefined,
       stdout: () => {},
       stderr: () => {},
+      json: false,
     });
     const { out, code } = await runStatus({ target: "claude-code", json: true });
     expect(code).toBe(0);

@@ -71,6 +71,7 @@ describe("upsertBlock — byte-equality regression fixture (S6)", () => {
         xdgDataHome: undefined,
         stdout: () => {},
         stderr: () => {},
+        json: false,
       });
       expect(code).toBe(0);
 

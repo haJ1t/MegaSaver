@@ -30,4 +30,9 @@ describe("RiskLevel type regression", () => {
     const arr: RiskLevel[] = [...riskLevelSchema.options];
     void arr;
   });
+
+  it("riskLevelSchema.options preserves severity-ascending order", () => {
+    const _t: readonly ["low", "medium", "high", "critical"] = riskLevelSchema.options;
+    void _t;
+  });
 });

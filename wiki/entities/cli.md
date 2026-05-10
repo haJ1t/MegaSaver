@@ -220,6 +220,56 @@ Y3 docs drift fix (4 agent files): PR <https://github.com/haJ1t/MegaSaver/pull/2
 AA2 connector --target description derive: PR <https://github.com/haJ1t/MegaSaver/pull/25> (`a8fb044`).
 Project create --root flag: PR <https://github.com/haJ1t/MegaSaver/pull/26> (`b20c9b6`).
 
+## JSON output policy
+
+All 10 `--json` commands share a single consistent contract.
+
+### Citty arg declaration
+
+Every command declares the flag identically:
+
+```ts
+json: { type: "boolean", default: false, description: "Emit JSON output." }
+```
+
+### Consumption form
+
+Inside every `run({ args })` handler the value is forwarded as:
+
+```ts
+json: !!args.json
+```
+
+### Commands covered
+
+`project list`, `project create`, `session create`, `session end`,
+`session update`, `memory create`, `memory list`, `memory show`,
+`connector status`, `connector sync`.
+
+### Success path
+
+On success, one JSON value is emitted to stdout (an object or array
+depending on the command). No text is written to stdout.
+
+### Failure-path policy
+
+On any failure path (pre-loop error, validation failure, store error):
+
+- Text error message → **stderr only** (plain text, not a JSON envelope).
+- **Nothing** → stdout.
+- Exit code → **1**.
+
+This means callers can always distinguish success (`stdout` has JSON,
+exit 0) from failure (`stderr` has text, exit 1) without parsing stderr.
+
+### Test enforcement
+
+- **12 failure-path tests** in `apps/cli/test/json-failure-paths.test.ts`
+  assert text-only stderr + empty stdout + exit 1 for each command.
+- **Drift guards** in `apps/cli/test/project/list.test.ts`
+  `describe.each` pin all 10 commands: `type: "boolean"`, `default: false`,
+  `description: "Emit JSON output."`.
+
 ## Related
 
 - [[concepts/agent-agnostic-core]]

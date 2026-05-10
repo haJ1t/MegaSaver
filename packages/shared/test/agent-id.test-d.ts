@@ -32,4 +32,10 @@ describe("AgentId type regression", () => {
     const arr: AgentId[] = [...agentIdSchema.options];
     void arr;
   });
+
+  it("agentIdSchema.options preserves alphabetic order", () => {
+    const _t: readonly ["aider", "claude-code", "codex", "cursor", "generic-cli"] =
+      agentIdSchema.options;
+    void _t;
+  });
 });

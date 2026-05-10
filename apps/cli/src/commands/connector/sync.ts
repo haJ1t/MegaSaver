@@ -27,7 +27,7 @@ export type RunConnectorSyncInput = {
   xdgDataHome: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
-  json?: boolean;
+  json: boolean;
 };
 
 type SyncRecord = {
