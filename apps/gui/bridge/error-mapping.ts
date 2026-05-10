@@ -1,0 +1,58 @@
+import type { ServerResponse } from "node:http";
+import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
+import type { BridgeErrorCode } from "../src/bridge-error-code.js";
+import type { SendError } from "./cors.js";
+
+// Map a CoreRegistryError code to a BridgeErrorCode + status. The Core enum
+// includes codes that bridge does not surface (project_already_exists,
+// session_already_exists, memory_entry_already_exists, memory_entry_not_found):
+// these never originate from the bridge's request handlers because the bridge
+// generates ids and never re-creates known entities. They fall through to
+// internal_error if encountered.
+export function mapCoreRegistryError(err: CoreRegistryError): {
+  status: number;
+  code: BridgeErrorCode;
+} | null {
+  switch (err.code) {
+    case "project_not_found":
+      return { status: 404, code: "project_not_found" };
+    case "session_not_found":
+      return { status: 404, code: "session_not_found" };
+    case "session_already_ended":
+      return { status: 409, code: "session_already_ended" };
+    case "session_project_mismatch":
+      return { status: 409, code: "session_project_mismatch" };
+    default:
+      return null;
+  }
+}
+
+export function handleCaughtError(
+  res: ServerResponse,
+  origin: string | undefined,
+  err: unknown,
+  sendError: SendError,
+): void {
+  if (err instanceof CoreRegistryError) {
+    const mapped = mapCoreRegistryError(err);
+    if (mapped) {
+      sendError(res, mapped.status, mapped.code, err.message, origin);
+      return;
+    }
+  }
+  if (err instanceof CorePersistenceError) {
+    sendError(res, 500, "store_write_failed", err.message, origin);
+    return;
+  }
+  // Heuristic: mirror the Node fs ErrnoException shape (EPERM / ENOENT / etc.)
+  // as store_write_failed since the handler only reaches this branch on writes.
+  if (err instanceof Error && typeof (err as NodeJS.ErrnoException).code === "string") {
+    const errno = (err as NodeJS.ErrnoException).code as string;
+    if (errno.startsWith("E")) {
+      sendError(res, 500, "store_write_failed", err.message, origin);
+      return;
+    }
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  sendError(res, 500, "internal_error", message, origin);
+}

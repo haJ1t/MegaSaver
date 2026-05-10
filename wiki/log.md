@@ -1450,3 +1450,51 @@ the CSP header; `grep -c "npm warn"` of the dev log is 0.
 
 Spec: `docs/superpowers/specs/2026-05-10-nn-polish-bundle-design.md`.
 Plan: `docs/superpowers/plans/2026-05-10-nn-polish-bundle.md`.
+
+## [2026-05-10] refactor | OO — split handler.ts + sessions-view.tsx per §8 file cap (#58)
+
+Pure structural refactor. Two GUI files that breached CLAUDE.md §8
+(file cap 300 LOC, one responsibility per file) are now decomposed:
+
+**Bridge — `apps/gui/bridge/` shape:**
+
+- `handler.ts` (178 LOC) — `createBridgeHandler({ registry, … })`
+  entry + dispatch table + response helpers (`sendJson`, `sendError`,
+  `parseUrl`). The `content-security-policy: default-src 'self'`
+  header from #61 lives here on `sendJson` (preserved bit-for-bit).
+- `cors.ts` (54 LOC) — `applyCorsPolicy(req, res, sendError)` returns
+  `{ allowed: false } | { allowed: true; origin }`; `handleOptionsPreflight`.
+- `error-mapping.ts` (58 LOC) — `mapCoreRegistryError`,
+  `handleCaughtError` (Core error → Bridge `{status, code}`).
+- `zod-schemas.ts` (76 LOC) — `TITLE_SCHEMA`, `CREATE_SESSION_BODY`,
+  `END_SESSION_BODY`, `PATCH_SESSION_BODY`, `CREATE_MEMORY_BODY`,
+  `zodErrorMessage`.
+- `route-context.ts` (33 LOC) — `RouteContext`, `SendJson`, `SendError`.
+- `routes/health.ts` (5), `routes/projects.ts` (14),
+  `routes/sessions.ts` (177), `routes/memory.ts` (130),
+  `routes/_body.ts` (24).
+
+**View — `apps/gui/src/views/` shape:**
+
+- `sessions-view.tsx` (187 LOC) — master shell + state + data
+  loading + write-form orchestration. Composes `<SessionsList />`
+  and `<SessionsDetail />`.
+- `sessions-list.tsx` (83 LOC) — list pane: `role="listbox"` +
+  rows, keyboard handler taken as a prop.
+- `sessions-detail.tsx` (134 LOC) — detail pane: header, metadata
+  grid (`<Field />`), end-action buttons, inline `<UpdateSessionForm>`.
+
+**Behaviour preservation:** zero functional change. Same JSX, same
+DOM events, same HTTP responses, same CSP header. All 165 GUI tests
+green (165/165), 855/855 across 18/18 turbo tasks. Smoke:
+`curl /api/health` returns 200 with CSP; `curl /api/projects` →
+200; evil-origin → 403 `origin_forbidden`; OPTIONS preflight → 204.
+
+**Lint posture:** `biome.json` `useSemanticElements` override extended
+to include `apps/gui/src/views/sessions-list.tsx` (the `role="listbox"`
+JSX moved there).
+
+**No new deps. No changeset (private package).**
+
+Spec: `docs/superpowers/specs/2026-05-10-oo-file-split-design.md`.
+Plan: `docs/superpowers/plans/2026-05-10-oo-file-split.md`.

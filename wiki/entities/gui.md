@@ -33,22 +33,50 @@ accent, light/dark via `prefers-color-scheme`).
 with `--kill-others-on-fail`. Escape hatches: `dev:vite`,
 `dev:bridge` (preserved for isolated debugging).
 
-## Bridge endpoints (`apps/gui/bridge/handler.ts`)
+## Bridge endpoints (`apps/gui/bridge/`)
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/api/health` | `{ ok: true, store }` |
-| GET | `/api/projects` | sorted createdAt asc |
-| GET | `/api/sessions[?projectId]` | sorted startedAt desc |
-| GET | `/api/memory[?projectId]` | sorted createdAt desc |
-| POST | `/api/sessions` | 201 with created Session |
-| POST | `/api/sessions/:id/end` | 200; 409 if already ended |
-| PATCH | `/api/sessions/:id` | 200; 409 if ended; 400 empty patch |
-| POST | `/api/memory` | 201; cross-field guard on scope/sessionId |
+| Method | Path | Handler | Notes |
+|---|---|---|---|
+| GET | `/api/health` | `routes/health.ts` | `{ ok: true, store }` |
+| GET | `/api/projects` | `routes/projects.ts` | sorted createdAt asc |
+| GET | `/api/sessions[?projectId]` | `routes/sessions.ts` | sorted startedAt desc |
+| GET | `/api/memory[?projectId]` | `routes/memory.ts` | sorted createdAt desc |
+| POST | `/api/sessions` | `routes/sessions.ts` | 201 with created Session |
+| POST | `/api/sessions/:id/end` | `routes/sessions.ts` | 200; 409 if already ended |
+| PATCH | `/api/sessions/:id` | `routes/sessions.ts` | 200; 409 if ended; 400 empty patch |
+| POST | `/api/memory` | `routes/memory.ts` | 201; cross-field guard on scope/sessionId |
 
 Errors carry the closed envelope `{ error, code, details? }` per
 spec §4b. CORS posture: loopback only — Origin must be missing or
 match `localhost|127.0.0.1:5173` (spec §4c).
+
+### Bridge file shape (#58)
+
+Split per CLAUDE.md §8 (file cap 300 LOC, one responsibility per file):
+
+- `bridge/handler.ts` — `createBridgeHandler({ registry, … })`
+  entry, request dispatch, response helpers (`sendJson` carries the
+  CSP `default-src 'self'` header from #61).
+- `bridge/cors.ts` — `applyCorsPolicy`, `handleOptionsPreflight`.
+- `bridge/error-mapping.ts` — `mapCoreRegistryError`,
+  `handleCaughtError` (Core errors → Bridge envelope).
+- `bridge/zod-schemas.ts` — shared input schemas (`TITLE_SCHEMA`,
+  the four body schemas, `zodErrorMessage`).
+- `bridge/route-context.ts` — `RouteContext` type wired per request.
+- `bridge/routes/{health,projects,sessions,memory}.ts` — endpoint
+  groups; each handler `(ctx, …) => void | Promise<void>`.
+- `bridge/routes/_body.ts` — shared `readJsonBody` helper.
+
+### View file shape (#58)
+
+The `SessionsView` master-detail was split into three:
+
+- `views/sessions-view.tsx` — shell + state + data loading +
+  write-form orchestration. Composes the two below.
+- `views/sessions-list.tsx` — list pane (`role="listbox"` rows,
+  keyboard handler taken as a prop).
+- `views/sessions-detail.tsx` — detail pane (header, metadata grid,
+  end-action buttons, inline `<UpdateSessionForm />`).
 
 ## Closed-enum surfaces
 
@@ -84,17 +112,18 @@ in fresh contexts.
 
 ## Lint posture
 
-`biome.json` disables `useSemanticElements` for three component files:
+`biome.json` disables `useSemanticElements` for four files:
 `apps/gui/src/components/project-picker.tsx`,
-`apps/gui/src/components/sessions-view.tsx`, and
-`apps/gui/src/components/memory-view.tsx`.
+`apps/gui/src/views/sessions-view.tsx`,
+`apps/gui/src/views/sessions-list.tsx`, and
+`apps/gui/src/views/memory-view.tsx`.
 
 These components use `<div role="...">` patterns (e.g. `role="list"`,
-`role="listitem"`) rather than native `<ul>`/`<li>` because the design
-system's token-driven hover and selection states require a flat element
-hierarchy; wrapping in semantic list elements breaks the CSS custom-
-property cascade. The override is intentional and scoped to the three
-affected files only.
+`role="listitem"`, `role="listbox"`/`role="option"`) rather than native
+`<ul>`/`<li>`/`<select>` because the design system's token-driven hover
+and selection states require a flat element hierarchy; wrapping in
+semantic list elements breaks the CSS custom-property cascade. The
+override is intentional and scoped to the four affected files only.
 
 ## Related
 
