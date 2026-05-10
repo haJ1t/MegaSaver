@@ -158,7 +158,7 @@ export const connectorStatusCommand = defineCommand({
       description: `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to filter the report.`,
     },
     store: { type: "string", description: "Override store directory." },
-    json: { type: "boolean", default: false, description: "Emit machine-readable JSON array." },
+    json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const code = await runConnectorStatus({

@@ -78,7 +78,7 @@ export const memoryListCommand = defineCommand({
     json: {
       type: "boolean",
       default: false,
-      description: "Emit JSON instead of formatted text.",
+      description: "Emit JSON output.",
     },
   },
   async run({ args }) {

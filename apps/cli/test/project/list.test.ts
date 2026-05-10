@@ -1,30 +1,26 @@
 import { describe, expect, it } from "vitest";
+import { connectorStatusCommand } from "../../src/commands/connector/index.js";
+import { memoryListCommand, memoryShowCommand } from "../../src/commands/memory/index.js";
 import { projectCreateCommand, projectListCommand } from "../../src/commands/project.js";
 
-describe("projectListCommand — citty wrapper shape", () => {
+const JSON_DESCRIPTION = "Emit JSON output.";
+
+describe.each([
+  ["projectListCommand", projectListCommand],
+  ["projectCreateCommand", projectCreateCommand],
+  ["memoryListCommand", memoryListCommand],
+  ["memoryShowCommand", memoryShowCommand],
+  ["connectorStatusCommand", connectorStatusCommand],
+] as const)("%s — citty wrapper drift guard for --json", (_name, command) => {
   it("json arg has type boolean", () => {
-    expect(projectListCommand.args?.json?.type).toBe("boolean");
+    expect(command.args?.json?.type).toBe("boolean");
   });
 
   it("json arg default is false", () => {
-    expect(projectListCommand.args?.json?.default).toBe(false);
+    expect(command.args?.json?.default).toBe(false);
   });
 
-  it("json arg description matches documented string", () => {
-    expect(projectListCommand.args?.json?.description).toBe("Emit JSON output.");
-  });
-});
-
-describe("projectCreateCommand — citty wrapper shape", () => {
-  it("json arg has type boolean", () => {
-    expect(projectCreateCommand.args?.json?.type).toBe("boolean");
-  });
-
-  it("json arg default is false", () => {
-    expect(projectCreateCommand.args?.json?.default).toBe(false);
-  });
-
-  it("json arg description matches documented string", () => {
-    expect(projectCreateCommand.args?.json?.description).toBe("Emit JSON output.");
+  it("json arg description matches canonical string", () => {
+    expect(command.args?.json?.description).toBe(JSON_DESCRIPTION);
   });
 });
