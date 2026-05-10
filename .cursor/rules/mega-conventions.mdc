@@ -10,71 +10,205 @@ alwaysApply: false
 
 # Mega Saver — Code & Git Conventions
 
+Managed by `pnpm conventions:sync`. Edit `docs/conventions/<file>.md`.
+
 Source-of-truth references:
 - `docs/conventions/code-conventions.md`
+- `docs/conventions/language.md`
 - `docs/conventions/git-and-commits.md`
 - `docs/conventions/anti-patterns.md`
-- `docs/conventions/language.md`
 
-## Code
+## Code Conventions
 
-TypeScript strict + ESM + NodeNext. `noUncheckedIndexedAccess`,
-`exactOptionalPropertyTypes`, `isolatedModules`, target `ES2023`.
-Project references for monorepo.
+<!-- conventions:start id="code-conventions" source="code-conventions.md" -->
+## TypeScript
 
-Files ≤ 300 LOC, single responsibility. One package = one bounded
-context. Cross-package import only via public `exports`. No
-circular imports.
+- `strict: true` (all strict flags on)
+- `moduleResolution: NodeNext`
+- `module: NodeNext` (ESM only)
+- `noUncheckedIndexedAccess: true`
+- `exactOptionalPropertyTypes: true`
+- `isolatedModules: true`
+- `skipLibCheck: true`
+- `target: ES2023`
 
-Validate at boundaries with Zod. Trust internals.
+Project references for monorepo. Each package its own `tsconfig.json`
+extending `tsconfig.base.json`.
 
-Default no comments. Exception: WHY non-obvious only.
+## File organization
 
-3 similar lines > premature abstraction. No half-implementations.
-No impossible-case fallbacks. No pre-1.0 backward-compat shims.
+- One responsibility per file. Split when file exceeds 300 LOC OR
+  serves more than one concern.
+- One package = one bounded context. Cross-package import only
+  through public entry (`package.json` `exports`).
+- No circular imports. Depcheck in CI.
+- `index.ts` re-exports only the public surface.
 
-Naming: packages `@megasaver/<name>`, files `kebab-case.ts`,
-types `PascalCase`, vars/fns `camelCase`, true consts only as
-`SCREAMING_SNAKE_CASE`.
+## Boundaries
 
-## Language
+- Validate input at system boundaries (CLI args, file reads,
+  external API responses, MCP messages).
+- Trust internal code. No defensive checks for impossible cases.
+- Use Zod schemas for all external boundaries. Generated types,
+  not hand-written.
 
-Code, docs, comments, commits: English. Conversation may vary;
-output always English. Product user-facing strings v0.1 English
-only; v0.2+ adds `tr` via `packages/shared/i18n`. Never hardcode
-Turkish in code.
+## Comments
+
+- Default: no comments. Names carry meaning.
+- Exception: WHY non-obvious (constraint, invariant, workaround,
+  surprising behavior).
+- Never: "what" comments, "added for X flow", "used by Y".
+
+## Abstraction
+
+- 3 similar lines > premature abstraction.
+- No half-implementations.
+- No fallbacks for impossible cases.
+- No backward-compat shims while pre-1.0.
+
+## Naming
+
+- packages: `@megasaver/<name>` (kebab-case)
+- files:    `kebab-case.ts`
+- types:    `PascalCase`
+- vars/fns: `camelCase`
+- consts:   `SCREAMING_SNAKE_CASE` only for true constants
+            (env keys, magic numbers)
+
+## Parse-on-handoff policy
+
+CLI command handlers re-parse user input at the handoff boundary into Core
+**if and only if** a later consumer (renderer, file writer, block formatter)
+would crash or corrupt output on bad input that Core's schema did not reject.
+Once data has crossed the schema boundary inside Core (i.e., it was accepted by
+`registry.createMemoryEntry`, `registry.createSession`, etc.), trust Core's
+validated result — do not re-parse on the read side.
+
+Examples:
+- `memory create`: re-parses content + session id because the connector block
+  renderer writes it verbatim into agent config files (downstream crash risk).
+- `session create`: trusts Core's internal validation; the renderer only
+  displays structured fields that Core already validated.
+<!-- conventions:end id="code-conventions" -->
+
+## Language & i18n
+
+<!-- conventions:start id="language" source="language.md" -->
+## Source language
+
+- Code, identifiers, comments, docs, commit messages: English.
+- Spec / plan files: English.
+- Agent files (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules`): English.
+- Conversation language may vary; the OUTPUT (code, docs, commits)
+  is always English.
+
+## Product user-facing strings (deferred)
+
+- v0.1 CLI: English only. Hardcoded strings.
+- v0.2+: i18n via `packages/shared/i18n`. Default `en`, then add
+  `tr` second.
+- Never hardcode Turkish in code. Route through the i18n layer
+  (when it exists).
+<!-- conventions:end id="language" -->
 
 ## Git & Commits
 
-Trunk-based with feature worktrees. Branch names:
-`feat/<scope>-<slug>`, `fix/<scope>-<slug>`, `chore/<slug>`,
-`docs/<slug>`.
+<!-- conventions:start id="git-and-commits" source="git-and-commits.md" -->
+## Branching
 
-Conventional Commits + `caveman-commit` style. Subject ≤ 50 chars,
-imperative. Body explains WHY only when non-obvious. One logical
-change per commit. No "wip" pollution on `main`.
+- Trunk-based. `main` always green and shippable.
+- Every feature in its own worktree
+  (`superpowers:using-git-worktrees`).
+- Branch name:
+  - `feat/<scope>-<slug>`
+  - `fix/<scope>-<slug>`
+  - `chore/<slug>`
+  - `docs/<slug>`
+- Short-lived. Merge or kill within days, not weeks.
 
-Pre-merge: rebase on `main`, `pnpm verify` green, reviewer agent
-pass, PR template filled.
+## Commits — Conventional Commits + `caveman-commit` style
 
-No `--no-verify`, no force-push to `main`, no `git reset --hard`
-without confirmation.
+Invoke `caveman-commit` skill when generating messages.
+
+Format:
+
+```
+<type>(<scope>): <subject>
+
+<body — only when "why" non-obvious>
+```
+
+Types: `feat | fix | refactor | perf | test | docs | chore | build | ci`
+
+## Rules
+
+- Subject ≤ 50 chars, imperative ("add", not "added").
+- Body explains WHY, not WHAT (diff shows what).
+- One logical change per commit. Atomic.
+- No "wip" / "fix typo" pollution on `main` — squash before merge.
+
+## Examples
+
+```
+feat(core): token audit reports waste sources
+fix(cli): mega run propagates exit code
+refactor(core): extract risk detector from session engine
+```
+
+## Pre-merge
+
+- Rebase on `main` (not merge).
+- `pnpm verify` green.
+- Reviewer agent pass (per `definition-of-done.md`).
+- PR template filled (`.github/pull_request_template.md`).
+
+## Branch protection (when GitHub repo created)
+
+- `main`: no force push, require PR, require status checks.
+- Linear history.
+- Delete branch after merge.
+
+## Destructive ops
+
+- No `--no-verify`.
+- No `--force-push` to `main`.
+- No `git reset --hard` without confirmation.
+- Investigate unfamiliar files / branches before deleting.
+<!-- conventions:end id="git-and-commits" -->
 
 ## Anti-Patterns
 
-- No half-implementations. No impossible-case fallbacks.
-- No pre-1.0 backward-compat shims.
-- No premature abstraction. 3 lines > 1 fragile abstraction.
-- No comments without WHY.
-- No "wip" / "fix typo" commits on `main`.
-- No hook bypass unless asked.
-- No silent retries on error.
-- No raw tool output / test logs into context.
-- No agent-specific logic in `@megasaver/core`.
-- No memory writes without metadata.
-- No destructive ops without explicit confirmation.
-- No "too small for a spec."
-- No `author == reviewer`.
-- No editing this file without also editing
-  `docs/conventions/`.
-- No "done" claim before all DoD items pass.
+<!-- conventions:start id="anti-patterns" source="anti-patterns.md" -->
+Hard "don't" list. Not preferences. Violating any fails review.
+
+- No half-implementations. If you can't finish in this PR, scope
+  smaller — don't merge stub functions.
+- No fallbacks for cases that cannot happen. Trust internals.
+  Validate only at system boundaries.
+- No backward-compat shims pre-1.0. Break things; bump version.
+- No premature abstraction. 3 similar lines > 1 fragile abstraction.
+- No comments without a WHY. No "what" comments. No "added for
+  feature X" rot.
+- No "wip" / "fix typo" / "address feedback" commits on `main`.
+  Squash before merge.
+- No `--no-verify`, `--no-gpg-sign`, hook bypasses unless user
+  asked explicitly.
+- No silent retries on error. Diagnose the root cause.
+- No raw tool output / test log / build log into context. Mega
+  Saver's whole purpose is to compress these. Use the Tool Output
+  Compressor (when shipped) or its manual equivalent — root cause
+  + first failure + exit code.
+- No agent-specific logic in `@megasaver/core`. Connectors isolate.
+- No memory writes without metadata. Every memory item must carry:
+  source, timestamp, confidence, scope, expires (or null).
+- No destructive ops (`rm -rf`, force push, branch delete, history
+  rewrite) without explicit user confirmation in same conversation.
+- No "this feature is too small for a spec." See
+  `process-discipline.md` hard rule.
+- No `author == reviewer`. The reviewer agent runs in a fresh
+  context with no memory of authoring.
+- No editing `CLAUDE.md` / `AGENTS.md` / `.cursor/rules` without
+  also editing `docs/conventions/` source of truth.
+- No claiming "done" / "fixed" / "passing" before
+  `definition-of-done.md` met.
+<!-- conventions:end id="anti-patterns" -->

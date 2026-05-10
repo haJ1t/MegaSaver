@@ -9,55 +9,231 @@ alwaysApply: true
 
 # Mega Saver — Discipline
 
+Managed by `pnpm conventions:sync`. Edit `docs/conventions/<file>.md`.
+
 Source-of-truth references:
 - `docs/conventions/process-discipline.md`
 - `docs/conventions/definition-of-done.md`
-- `docs/conventions/skill-routing.md`
 - `docs/conventions/risk-modes.md`
+- `docs/conventions/skill-routing.md`
 
-## Process — every feature
+## Process Discipline
 
-In order, no exceptions:
+<!-- conventions:start id="process-discipline" source="process-discipline.md" -->
+Every feature follows the strict superpowers chain. No exceptions.
+No "this is too small to need a spec."
 
-1. Spec at `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`.
-2. Plan at `docs/superpowers/plans/YYYY-MM-DD-<topic>-plan.md`.
-3. TDD — failing test before production code.
-4. Verification — `pnpm verify` plus smoke evidence.
-5. External review — fresh-context reviewer agent.
+## Mandatory chain (in order)
 
-Hard gates: no impl without spec; no merge without `pnpm verify`
-green and external review pass; no "done" without evidence.
+1. `superpowers:brainstorming` — idea → spec.
+   Output: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`.
+2. `superpowers:writing-plans` — spec → step plan.
+   Output: `docs/superpowers/plans/YYYY-MM-DD-<topic>-plan.md`.
+3. `superpowers:test-driven-development` — test before code.
+   Red → green → refactor. No production code without a failing
+   test first.
+4. `superpowers:verification-before-completion` — evidence required.
+   Run `pnpm verify` plus feature-specific evidence (CLI smoke run,
+   schema check, integration scenario). No "done" without evidence.
+5. `superpowers:requesting-code-review` — pre-merge external review.
+   Use `code-reviewer` or `critic` agent. Author and reviewer
+   NEVER the same active context.
+
+## Conditional skills
+
+- `superpowers:systematic-debugging` — bug, test fail, unexpected
+  behavior.
+- `superpowers:using-git-worktrees` — every feature default; start
+  in isolated worktree.
+- `superpowers:dispatching-parallel-agents` — 2+ independent tasks,
+  no shared state.
+- `superpowers:subagent-driven-development` — plan has independent
+  tasks executable in this session.
+- `superpowers:receiving-code-review` — review feedback received.
+- `superpowers:finishing-a-development-branch` — implementation
+  complete, deciding merge/PR/cleanup.
+
+## Hard gates (no exceptions)
+
+- No implementation without an approved spec.
+- No merge without passing `pnpm verify`.
+- No merge without external reviewer agent pass.
+- No "done" claim without verifier evidence.
+- Author and reviewer NEVER same active context.
+<!-- conventions:end id="process-discipline" -->
 
 ## Definition of Done
 
-ALL must hold: spec ✓ plan ✓ TDD ✓ `pnpm verify` green ✓
-smoke evidence ✓ reviewer pass ✓ verifier pass ✓ zero pending
-todos ✓ changeset (if public API) ✓ agent files in sync (if
-conventions changed) ✓.
+<!-- conventions:start id="definition-of-done" source="definition-of-done.md" -->
+A feature is "done" only when ALL of these hold. No partial credit.
 
-Do NOT claim "complete" / "fixed" / "passing" / "shipped" before
-items 4–7 met.
+1. Spec exists in `docs/superpowers/specs/`.
+2. Plan exists in `docs/superpowers/plans/`.
+3. Tests written first (TDD).
+4. `pnpm verify` green:
+   - `biome check`     (lint + format)
+   - `tsc --noEmit`    (type-check, project refs)
+   - `vitest run`      (all tests pass)
+5. Feature smoke evidence:
+   - CLI feature → captured terminal session showing it work.
+   - Library API → integration test exercising public surface.
+   - Connector  → real agent run captured.
+6. External reviewer agent pass (`code-reviewer` or `critic`).
+   Author and reviewer NEVER same active context.
+7. Verifier agent pass (`omc:verify`) — evidence-based check.
+8. Zero pending TodoWrite items for the feature.
+9. Changeset added (`.changeset/<descriptor>.md`) if package
+   public API changed.
+10. `CLAUDE.md` / `AGENTS.md` / `.cursor/rules` updated if
+    conventions changed (drift check per `process-discipline.md`).
 
-## Risk modes
+If any item fails: not done. Iterate.
 
-| Level    | Examples                                | Required                                                      |
-|----------|-----------------------------------------|---------------------------------------------------------------|
-| LOW      | docs, copy, log message                 | brainstorm + lite verify                                      |
-| MEDIUM   | normal feature, refactor, non-critical fix | full chain + reviewer                                      |
-| HIGH     | Core, connector core, public surface, user files at scale | full chain + architect + critic + worktree |
-| CRITICAL | crypto, data delete, permissions, incident | HIGH + tracer + security-reviewer + manual confirmation. NO autopilot/ralph |
+## Hard rule
 
-## Skill routing (Cursor-relevant subset)
+Do NOT claim "complete", "fixed", "passing", "shipped" before
+items 4–7 pass. Verification before assertion.
+<!-- conventions:end id="definition-of-done" -->
 
-> This is a curated subset for Cursor. The full canonical list lives
-> in `docs/conventions/skill-routing.md`. When in doubt, consult it.
+## Risk Modes
 
-GUI phase (v0.3+): `huashu-design` (concept) → `taste-skill` /
-`gpt-tasteskill` (impl) → `impeccable` (audit/polish).
-Accessibility: `design:accessibility-review`. Critique:
-`design:design-critique`. Style packs: `ui-ux-pro-max`,
-`minimalist`, `soft`, `brutalist`.
+<!-- conventions:start id="risk-modes" source="risk-modes.md" -->
+Mega Saver's product has a Risk Detector. We dogfood it on
+ourselves: every feature has an implicit risk level that
+determines which skills are mandatory and which compression
+intensity is allowed.
 
-OMC: `omc:plan`, `omc:ultrawork`, `omc:ralph`, `omc:team`,
-`omc:debug`, `omc:trace`, `omc:verify`, `omc:deepinit`, `omc:wiki`.
-Avoid `omc:autopilot` until v0.2.
+## Risk levels
+
+### LOW
+
+- Examples: README edit, comment polish, CLI help-text tweak,
+  internal log message, dev-only logging.
+- Mandatory: brainstorming + verification (lite).
+- Optional: full superpowers chain.
+- OK to skip: TDD when no logic.
+- Skill mode: aggressive compression allowed in research.
+
+### MEDIUM
+
+- Examples: normal feature add, refactor, bug fix in non-critical
+  module, dev tooling, build script.
+- Mandatory: full superpowers chain (`process-discipline.md`).
+- Required reviewer: `code-reviewer`.
+- Skill mode: balanced compression.
+
+### HIGH
+
+- Examples: token audit logic, context packer, evidence-preserving
+  compression, memory schema change, session storage format,
+  connector core path, public CLI flags, anything touching user
+  files at scale.
+- Mandatory: full chain + `omc:architect` for design
+  + `omc:critic` adversarial review + worktree (no `main` edits).
+- Required reviewer: `code-reviewer` AND `critic` (separate
+  passes).
+- Skill mode: evidence-preserving only. No aggressive compression.
+
+### CRITICAL
+
+- Examples: cryptographic ops, anything that deletes user data,
+  anything that mutates user repos beyond known ignore patterns,
+  license / permission code, production incident response.
+- Mandatory: HIGH chain + `omc:tracer` evidence loop
+  + `omc:security-reviewer` + verifier with reproduction evidence
+  + manual user confirmation in spec.
+- Forbidden: `autopilot`, `ralph`, or any unsupervised loop.
+- Skill mode: debug + evidence only. No log compression.
+
+## Risk assignment
+
+- Spec author assigns risk in spec frontmatter.
+- Reviewer may upgrade. Never silently downgrade.
+- If unclear, default MEDIUM.
+
+## Anti-cheat
+
+- Risk level cannot be lowered to skip a skill.
+- Wanting to lower the risk is a signal to keep the skill.
+<!-- conventions:end id="risk-modes" -->
+
+## Skill Routing
+
+<!-- conventions:start id="skill-routing" source="skill-routing.md" -->
+How Claude Code adapts to context. The rules below are non-negotiable.
+
+## superpowers — every feature
+
+See `process-discipline.md`. Mandatory chain on every feature.
+Conditional set as listed.
+
+## Design skills (GUI phase, v0.3+)
+
+Mega Saver MVP is headless. Design skills activate when GUI work begins.
+
+| Trigger / Phase                          | Skill                          |
+|------------------------------------------|--------------------------------|
+| New screen/component CONCEPT exploration | `huashu-design`                |
+|   (no code yet, exploring variants)      |   (HTML hi-fi + critique)      |
+| Concept locked → real frontend impl      | `taste-skill` OR `gpt-tasteskill` |
+| Existing UI audit / polish / redesign    | `impeccable`                   |
+| Style direction (theme/palette/typo)     | `ui-ux-pro-max` OR style packs |
+|                                          |   (`minimalist`/`soft`/`brutalist`) |
+| Accessibility pass                       | `design:accessibility-review`  |
+| Pre-merge design critique                | `design:design-critique`       |
+| Design system docs                       | `design:design-system`         |
+| UX copy (microcopy/error/empty)          | `design:ux-copy`               |
+| Visual reference generation              | `imagegen-frontend-web`        |
+
+`taste-skill` vs `gpt-tasteskill`:
+
+- engineering-heavy / metric-driven   → `taste-skill`
+- editorial / motion / hero pages     → `gpt-tasteskill`
+- if unsure                           → `taste-skill` default
+
+## OMC — agent delegation
+
+Skills:
+
+- `omc:plan` — strategic planning, optional interview.
+- `omc:ultrawork` — parallel high-throughput.
+- `omc:ralph` — self-referential loop until complete.
+- `omc:team` — N agents on shared list.
+- `omc:debug` — session/repo state diagnose.
+- `omc:trace` — evidence-driven causal tracing.
+- `omc:verify` — verifier pass (process-discipline step 4).
+- `omc:deepinit` — codebase docs (one-time after first feature).
+- `omc:wiki` — persistent knowledge wiki.
+- `omc:autopilot` — full autonomous (avoid until v0.2).
+
+Agents (via Agent tool):
+
+- `executor` — implementation.
+- `planner` / `architect` — design, trade-offs (Opus).
+- `explore` — codebase search.
+- `code-reviewer` — pre-merge review.
+- `critic` — adversarial review.
+- `debugger` — root cause.
+- `verifier` — completion check.
+- `writer` — docs/comments.
+- `document-specialist` — external SDK/API docs.
+- `security-reviewer` — OWASP/secrets pass.
+- `test-engineer` — test strategy, integration/e2e, flaky-test hardening.
+- `tracer` — evidence-driven causal tracing with competing hypotheses.
+- `designer` — UI/UX implementation work (GUI phase).
+
+## claude-api skill
+
+If Mega Saver Core calls the Anthropic API directly (e.g., native
+LLM-powered compression or summarization), the `claude-api` skill
+auto-triggers. It enforces:
+
+- Prompt caching always on.
+- Latest model defaults
+  (`claude-opus-4-7` / `claude-sonnet-4-6` / `claude-haiku-4-5`).
+- Streaming where applicable.
+
+Mega Saver does NOT proxy or relay user prompts to LLMs by default.
+Direct API use is opt-in per feature and must be flagged in the
+feature spec along with cost and privacy notes.
+<!-- conventions:end id="skill-routing" -->
