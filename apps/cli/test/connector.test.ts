@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConnectorError } from "@megasaver/connectors-shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { connectorStatusCommand, connectorSyncCommand } from "../src/commands/connector.js";
+import { connectorStatusCommand, connectorSyncCommand } from "../src/commands/connector/index.js";
 import { KNOWN_TARGET_IDS } from "../src/known-targets.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";

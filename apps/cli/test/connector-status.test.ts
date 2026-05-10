@@ -6,7 +6,7 @@ import {
   connectorStatusCommand,
   runConnectorStatus,
   runConnectorSync,
-} from "../src/commands/connector.js";
+} from "../src/commands/connector/index.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 
