@@ -64,7 +64,9 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           session: sessionId,
         });
       } else if (status === "error") {
-        // T6: error lines carry session=<id|none> for symmetry with `connector status`.
+        // T6 (partial): only error lines gain session=<id|none>. Full symmetry
+        // with `connector status` would break byte-compat for skipped/created/
+        // noop/wrote (every line gains a suffix); deferred per spec §2 trade-off.
         input.stdout(formatStatusLine(target, status, sessionId ?? "none"));
       } else {
         input.stdout(formatStatusLine(target, status));

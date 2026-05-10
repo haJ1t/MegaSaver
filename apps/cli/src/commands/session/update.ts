@@ -107,11 +107,8 @@ export async function runSessionUpdate(input: RunSessionUpdateInput): Promise<0 
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
-    registry.updateSession(parsedSessionId, patch);
-    if (input.json) {
-      const updated = registry.getSession(parsedSessionId);
-      if (updated) input.stdout(JSON.stringify(updated));
-    }
+    const updated = registry.updateSession(parsedSessionId, patch);
+    if (input.json) input.stdout(JSON.stringify(updated));
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "session_update", id: parsedSessionId });

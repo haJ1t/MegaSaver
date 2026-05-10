@@ -65,8 +65,9 @@ export async function runSessionEnd(input: RunSessionEndInput): Promise<0 | 1> {
     // Same inline default as runSessionCreate; if a third call site lands,
     // extract a shared readNow() helper instead of duplicating again.
     const endedAt = (input.now ?? (() => new Date().toISOString()))();
+    let ended;
     try {
-      registry.endSession(id, { endedAt });
+      ended = registry.endSession(id, { endedAt });
     } catch (err) {
       if (err instanceof CoreRegistryError && err.code === "session_already_ended") {
         // Race with concurrent process: refresh and format the rich message.
@@ -85,12 +86,7 @@ export async function runSessionEnd(input: RunSessionEndInput): Promise<0 | 1> {
       }
       throw err;
     }
-    if (input.json) {
-      const ended = registry.getSession(id);
-      input.stdout(JSON.stringify(ended ?? { id, endedAt }));
-    } else {
-      input.stdout(id);
-    }
+    input.stdout(input.json ? JSON.stringify(ended) : id);
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "session", id });
