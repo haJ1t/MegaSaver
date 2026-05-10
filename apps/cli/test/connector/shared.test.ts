@@ -114,10 +114,7 @@ describe("pickLatestOpenSession — T4: DST-transition ranking", () => {
       "2026-03-13T09:00:00Z",
     );
     expect(
-      pickLatestOpenSession(
-        [lexLaterButEarlierInstant, lexEarlierButLaterInstant],
-        "claude-code",
-      ),
+      pickLatestOpenSession([lexLaterButEarlierInstant, lexEarlierButLaterInstant], "claude-code"),
     ).toBe(lexEarlierButLaterInstant);
   });
 });

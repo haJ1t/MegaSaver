@@ -881,3 +881,47 @@ CC5 yan-etki corrections (turbo cache masked at CC5 merge):
 Critic REVISE round 1 closed inline (`c69423d`): T4 timestamps fix
 + U6 chmod 0o500 path + wiki update. cli 218 → 230 (10 new connector
 + U6); total 540 → 539 (-3 from CC5 cleanup, +2 from T4 + U6).
+
+## [2026-05-10] schema | DD4 S8 closure — --target help-text divergence
+
+**Backlog item:** S8 (from PR #15 critic, connector status slot).
+
+**Finding:** Post-AA2 (PR #25, `a8fb044`), both `connectorSyncCommand`
+and `connectorStatusCommand` `--target` descriptions correctly derive
+their enum list from `KNOWN_TARGET_IDS.join(" | ")` and use distinct
+accurate action phrases:
+- `sync`: "to seed when its file does not exist." — precise: the
+  sync loop iterates ALL `KNOWN_TARGETS`; `targetFlag` only suppresses
+  the skip-when-missing guard for the named target.
+- `status`: "to filter the report." — precise: status loop filters
+  `KNOWN_TARGETS.filter((t) => t.id === input.targetFlag)`.
+
+S8 divergence was fully resolved by AA2. No code change required.
+**Status: CLOSED** (closed by AA2 / PR #25).
+
+## [2026-05-10] schema | DD4 W7 closure — grapheme-aware truncation wontfix
+
+**Backlog item:** W7 (from PR #19 critic, memory CLI slot).
+
+**Decision (locked by user):** codepoint-only truncation in
+`apps/cli/src/commands/memory/shared.ts::truncate()` accepted for
+v0.1. `Intl.Segmenter` grapheme-aware splitting deferred; real-world
+impact is low (edge case: emoji clusters or combining diacritics in
+memory entry content). A one-line WHY comment added to the `truncate`
+function explaining the codepoint policy.
+
+**File touched:** `apps/cli/src/commands/memory/shared.ts`
+**Status: CLOSED as WONT-DO (v0.1)**
+
+## [2026-05-10] schema | DD4 T6 deferral note — sync error session suffix
+
+**Backlog item:** T6 (from PR #16 critic, connector status S1+S2 followups slot).
+
+**Decision:** T6 (sync error line carries `session=<id|none>` suffix
+for cross-command symmetry with `connector status`) remains deferred.
+Bundled with the `--json` write-side batch (session create/end/update,
+memory create, connector sync). Adding the suffix requires locking the
+full sync text-output format in tandem with its JSON representation;
+out of scope for this docs-only DD4 batch.
+
+**Status: STILL DEFERRED** (owned by future --json write-side batch)

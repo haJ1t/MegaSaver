@@ -7,7 +7,7 @@ import {
   runConnectorStatus,
   runConnectorSync,
 } from "../src/commands/connector/index.js";
-import { KNOWN_TARGET_IDS, KNOWN_TARGETS } from "../src/known-targets.js";
+import { KNOWN_TARGETS, KNOWN_TARGET_IDS } from "../src/known-targets.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -623,7 +623,9 @@ describe("U2 — cursor-specific no-block status test", () => {
     const ts = "2026-05-09T00:00:00.000Z";
     await writeFile(
       join(store, "projects.json"),
-      JSON.stringify([{ id: PROJECT_ID_U2, name: "demo", rootPath: projectRoot, createdAt: ts, updatedAt: ts }]),
+      JSON.stringify([
+        { id: PROJECT_ID_U2, name: "demo", rootPath: projectRoot, createdAt: ts, updatedAt: ts },
+      ]),
     );
     await writeFile(
       join(store, "sessions.json"),
