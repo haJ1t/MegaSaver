@@ -42,12 +42,8 @@ describe("renderBlock", () => {
     expect(block).toContain(`- [project:${MEMORY_ID}] first`);
   });
 
-  it("renders multi-line memory entries with continuation indent", () => {
-    const block = renderBlock(
-      buildContext({
-        memoryEntries: [{ id: MEMORY_ID, scope: "project", content: "line1\nline2" }],
-      }),
-    );
-    expect(block).toContain(`- [project:${MEMORY_ID}] line1\n  line2`);
-  });
+  // X5 (PR #37): continuation-indent path removed. contentSchema rejects newlines
+  // at the CLI boundary, so multi-line content is unreachable through the public
+  // surface. Test deleted because it asserted defensive behavior on out-of-policy
+  // input that the renderer no longer handles.
 });

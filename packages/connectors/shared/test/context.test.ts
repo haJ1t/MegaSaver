@@ -23,13 +23,13 @@ describe("ConnectorContextSchema", () => {
     expect(() => ConnectorContextSchema.parse(ctx)).toThrow();
   });
 
-  it("rejects more than 20 memory entries", () => {
+  it("accepts more than 20 memory entries (X4: cap is policy in builder, not schema)", () => {
     const memoryEntries = Array.from({ length: 21 }, (_, i) => ({
       id: MEMORY_ID,
       scope: "project" as const,
       content: `m${i}`,
     }));
-    expect(() => ConnectorContextSchema.parse(buildContext({ memoryEntries }))).toThrow();
+    expect(() => ConnectorContextSchema.parse(buildContext({ memoryEntries }))).not.toThrow();
   });
 
   it("rejects session-scoped memory without session", () => {

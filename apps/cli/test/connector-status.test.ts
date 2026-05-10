@@ -7,6 +7,7 @@ import {
   runConnectorStatus,
   runConnectorSync,
 } from "../src/commands/connector/index.js";
+import { KNOWN_TARGET_IDS, KNOWN_TARGETS } from "../src/known-targets.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -571,6 +572,98 @@ describe("connectorStatusCommand — cursor target", () => {
     expect(lines).toEqual([
       `cursor       .cursor/rules/megasaver.mdc  in-sync  session=${SESS_CURSOR_S}`,
     ]);
+  });
+});
+
+describe("S11 — targets filter invariant: each known target id resolves to exactly one entry", () => {
+  // When --target X is a valid known target id, KNOWN_TARGETS.filter(t => t.id === X)
+  // must yield exactly one entry (no duplicates, no misses).
+  // This pins the invariant the status loop relies on: after the pre-loop guard
+  // accepts the target, the filtered array always has length === 1.
+  it("each KNOWN_TARGET_IDS value resolves to exactly one entry in KNOWN_TARGETS", () => {
+    for (const targetId of KNOWN_TARGET_IDS) {
+      const filtered = KNOWN_TARGETS.filter((t) => t.id === targetId);
+      expect(filtered).toHaveLength(1);
+    }
+  });
+
+  it("KNOWN_TARGET_IDS has no duplicates", () => {
+    const unique = new Set(KNOWN_TARGET_IDS);
+    expect(unique.size).toBe(KNOWN_TARGET_IDS.length);
+  });
+});
+
+describe("U2 — cursor-specific no-block status test", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  const PROJECT_ID_U2 = "ffff0000-0000-4000-8000-000000000002";
+  const SESS_U2 = "ffff0001-0001-4001-8001-000000000002";
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-u2-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-u2-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function seedProject(): Promise<void> {
+    await mkdir(store, { recursive: true });
+    const ts = "2026-05-09T00:00:00.000Z";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([{ id: PROJECT_ID_U2, name: "demo", rootPath: projectRoot, createdAt: ts, updatedAt: ts }]),
+    );
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESS_U2,
+          projectId: PROJECT_ID_U2,
+          agentId: "cursor",
+          riskLevel: "medium",
+          title: null,
+          startedAt: "2026-05-09T10:00:00.000Z",
+          endedAt: null,
+        },
+      ]),
+    );
+  }
+
+  it("reports cursor no-block when .cursor/rules/megasaver.mdc exists without sentinels", async () => {
+    await seedProject();
+    // Seed the cursor file with user content but NO Mega Saver sentinels.
+    const cursorDir = join(projectRoot, ".cursor", "rules");
+    await mkdir(cursorDir, { recursive: true });
+    await writeFile(
+      join(cursorDir, "megasaver.mdc"),
+      "---\nalwaysApply: true\n---\n\n# My rules\n\nSome existing cursor rules.\n",
+    );
+
+    await connectorStatusCommand.run?.({
+      args: { projectName: "demo", store, target: "cursor" },
+      cmd: connectorStatusCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(1);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    // Must contain the cursor no-block line with the open session id.
+    expect(lines).toContain(
+      `cursor       .cursor/rules/megasaver.mdc  no-block  session=${SESS_U2}`,
+    );
   });
 });
 

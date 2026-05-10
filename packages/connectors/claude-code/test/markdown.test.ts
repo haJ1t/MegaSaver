@@ -79,26 +79,9 @@ ${MEGA_SAVER_BLOCK_END}
     ).toContain("Session: none\nRisk: none\n\n## Memory\n\n- none\n");
   });
 
-  test("indents multiline memory continuation lines", () => {
-    expect(
-      renderClaudeCodeContext({
-        agentId: "claude-code" as const,
-        project,
-        session,
-        memoryEntries: [
-          {
-            ...projectMemory,
-            content: "first line\nsecond line\nthird line",
-          },
-        ],
-      }),
-    ).toContain(
-      `- [project:${projectMemory.id}] first line
-  second line
-  third line
-`,
-    );
-  });
+  // X5 (PR #37): continuation-indent path removed in shared/render.ts.
+  // contentSchema rejects newlines at the CLI boundary so multi-line content
+  // is unreachable through the public surface. Test deleted with the source path.
 });
 
 describe("parseClaudeMd", () => {

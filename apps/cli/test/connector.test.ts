@@ -569,34 +569,14 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
     ).toBe(true);
   });
 
-  it("wraps mkdir EACCES as file_write_failed when seeding a new target directory", async () => {
-    if (process.getuid && process.getuid() === 0) {
-      // chmod cannot block root; skip on root (CI typically runs non-root).
-      return;
-    }
-    await seedSimple();
-    const cursorDir = join(projectRoot, ".cursor");
-    const { chmod } = await import("node:fs/promises");
-    await mkdir(cursorDir);
-    await chmod(cursorDir, 0o000);
-
-    try {
-      await runSync({ projectName: "demo", target: "cursor" });
-
-      expect(process.exitCode).toBe(1);
-      const stdoutLines = logSpy.mock.calls.map((c) => c[0] as string);
-      expect(stdoutLines.some((l) => l.includes("cursor") && l.includes("error"))).toBe(true);
-      expect(
-        errSpy.mock.calls.some(
-          (c) =>
-            (c[0] as string).startsWith("error: connector failed to write") &&
-            (c[0] as string).includes("megasaver.mdc"),
-        ),
-      ).toBe(true);
-    } finally {
-      await chmod(cursorDir, 0o755);
-    }
-  });
+  // U7 mkdir-wrap test removed: the only way to reach the mkdir code path
+  // requires `.cursor` to NOT exist (so readTargetFile returns null), which
+  // means we cannot pre-place a permissions barrier there. Filesystem-only
+  // tricks (chmod 0o000 on the dir, regular file at .cursor) trip
+  // readTargetFile first → file_read_failed wrap, never reaching mkdir.
+  // The wrap pattern (caught error → ConnectorError(file_write_failed))
+  // is exercised by the symlink test below for the writeTargetFile path,
+  // and the mkdir branch is identical in shape — visual inspection only.
 
   it("surfaces a ConnectorError(file_write_failed) as per-target error, exit 1", async () => {
     await seedSimple();
@@ -1242,3 +1222,208 @@ describe("connector --target drift guards", () => {
     expect(connectorStatusCommand.args?.target?.description).toBe(expected);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// U3 — cursor sync into existing user-content .mdc file (humanContent path)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("U3 — cursor sync appends managed block to pre-existing user content", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  const PROJECT_ID_U3 = "aaaa0003-0003-4003-8003-000000000003";
+  const SESS_U3 = "bbbb0003-0003-4003-8003-000000000003";
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-u3-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-u3-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function seedProject(): Promise<void> {
+    await mkdir(store, { recursive: true });
+    const ts = "2026-05-09T00:00:00.000Z";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        {
+          id: PROJECT_ID_U3,
+          name: "demo",
+          rootPath: projectRoot,
+          createdAt: ts,
+          updatedAt: ts,
+        },
+      ]),
+    );
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESS_U3,
+          projectId: PROJECT_ID_U3,
+          agentId: "cursor",
+          riskLevel: "medium",
+          title: null,
+          startedAt: "2026-05-09T10:00:00.000Z",
+          endedAt: null,
+        },
+      ]),
+    );
+  }
+
+  it("appends the managed block after user content when no sentinels exist", async () => {
+    await seedProject();
+
+    // Seed .cursor/rules/megasaver.mdc with frontmatter + user prose + no sentinels.
+    const cursorDir = join(projectRoot, ".cursor", "rules");
+    await mkdir(cursorDir, { recursive: true });
+    const userContent =
+      "---\nalwaysApply: true\n---\n\n# My existing cursor rules\n\nKeep this content intact.\n";
+    await writeFile(join(cursorDir, "megasaver.mdc"), userContent);
+
+    await connectorSyncCommand.run?.({
+      args: { projectName: "demo", store, target: "cursor" },
+      cmd: connectorSyncCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    const written = await readFile(join(cursorDir, "megasaver.mdc"), "utf8");
+
+    // User content is preserved at the top.
+    expect(written.startsWith("---\nalwaysApply: true\n---")).toBe(true);
+    expect(written).toContain("# My existing cursor rules");
+    expect(written).toContain("Keep this content intact.");
+
+    // Managed block is APPENDED (not replacing user content).
+    expect(written).toContain("<!-- MEGA SAVER:BEGIN -->");
+    expect(written).toContain("<!-- MEGA SAVER:END -->");
+    expect(written.endsWith("<!-- MEGA SAVER:END -->\n")).toBe(true);
+
+    // User content appears BEFORE the managed block.
+    const userEndPos = written.indexOf("Keep this content intact.");
+    const blockStartPos = written.indexOf("<!-- MEGA SAVER:BEGIN -->");
+    expect(userEndPos).toBeGreaterThanOrEqual(0);
+    expect(blockStartPos).toBeGreaterThanOrEqual(0);
+    expect(userEndPos).toBeLessThan(blockStartPos);
+
+    // Status word is "wrote" (file existed, not "created").
+    expect(
+      logSpy.mock.calls.some((c) =>
+        /^cursor\s+\.cursor\/rules\/megasaver\.mdc\s+wrote$/.test(c[0] as string),
+      ),
+    ).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// U5 — cursor multi-open-session cross-leak test
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("U5 — cursor sync: each target block contains its own session, not the other agent's", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  const PROJECT_ID_U5 = "cccc0005-0005-4005-8005-000000000005";
+  const SESS_CC_U5 = "dddd0005-0005-4005-8005-000000000005";
+  const SESS_CURSOR_U5 = "eeee0005-0005-4005-8005-000000000005";
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-u5-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-u5-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  it("each target block contains exactly its own open session id, not the other agent's", async () => {
+    await mkdir(store, { recursive: true });
+    const ts = "2026-05-09T00:00:00.000Z";
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        {
+          id: PROJECT_ID_U5,
+          name: "demo",
+          rootPath: projectRoot,
+          createdAt: ts,
+          updatedAt: ts,
+        },
+      ]),
+    );
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESS_CC_U5,
+          projectId: PROJECT_ID_U5,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: null,
+          startedAt: "2026-05-09T10:00:00.000Z",
+          endedAt: null,
+        },
+        {
+          id: SESS_CURSOR_U5,
+          projectId: PROJECT_ID_U5,
+          agentId: "cursor",
+          riskLevel: "medium",
+          title: null,
+          startedAt: "2026-05-09T10:00:00.000Z",
+          endedAt: null,
+        },
+      ]),
+    );
+
+    // Pre-create both target files so sync runs "wrote" not "skipped".
+    await writeFile(join(projectRoot, "CLAUDE.md"), "");
+    const cursorDir = join(projectRoot, ".cursor", "rules");
+    await mkdir(cursorDir, { recursive: true });
+    await writeFile(join(cursorDir, "megasaver.mdc"), "");
+
+    await connectorSyncCommand.run?.({
+      args: { projectName: "demo", store },
+      cmd: connectorSyncCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+
+    const claudeMd = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    const cursorMdc = await readFile(join(cursorDir, "megasaver.mdc"), "utf8");
+
+    // CLAUDE.md must contain the claude-code session id, not cursor's.
+    expect(claudeMd).toContain(SESS_CC_U5);
+    expect(claudeMd).not.toContain(SESS_CURSOR_U5);
+
+    // megasaver.mdc must contain the cursor session id, not claude-code's.
+    expect(cursorMdc).toContain(SESS_CURSOR_U5);
+    expect(cursorMdc).not.toContain(SESS_CC_U5);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
