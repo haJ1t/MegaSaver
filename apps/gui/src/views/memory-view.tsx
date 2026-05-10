@@ -5,6 +5,7 @@ import { CreateMemoryForm } from "../components/memory-forms.js";
 import { EmptyState, ErrorState, LoadingState, NoSelectionState } from "../components/states.js";
 import type { BridgeError } from "../components/states.js";
 import { createMemoryEntry, fetchMemory, fetchSessions } from "../lib/api-client.js";
+import { shortId } from "../lib/short-id.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -16,10 +17,6 @@ function formatDate(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function shortId(id: string): string {
-  return id.slice(0, 8);
 }
 
 const PREVIEW_MAX = 80;

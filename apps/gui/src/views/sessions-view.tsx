@@ -5,6 +5,7 @@ import { CreateSessionForm, UpdateSessionForm } from "../components/session-form
 import { EmptyState, ErrorState, LoadingState, NoSelectionState } from "../components/states.js";
 import type { BridgeError } from "../components/states.js";
 import { createSession, endSession, fetchSessions, updateSession } from "../lib/api-client.js";
+import { shortId } from "../lib/short-id.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -17,10 +18,6 @@ function formatDate(iso: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function shortId(id: string): string {
-  return id.slice(0, 8);
 }
 
 type SessionDetailFieldProps = { label: string; children: React.ReactNode };

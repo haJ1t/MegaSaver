@@ -27,6 +27,11 @@ describe("createBridgeHandler — happy paths", () => {
       const body = (await res.json()) as { ok: boolean };
       expect(body.ok).toBe(true);
     });
+
+    it("emits a strict Content-Security-Policy on JSON responses", async () => {
+      const res = await fetch(`${server.baseUrl}/api/health`);
+      expect(res.headers.get("content-security-policy")).toBe("default-src 'self'");
+    });
   });
 
   describe("GET /api/projects", () => {

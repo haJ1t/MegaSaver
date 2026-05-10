@@ -1,5 +1,6 @@
 import type { MemoryEntry, Session } from "@megasaver/core";
 import { useState } from "react";
+import { shortId } from "../lib/short-id.js";
 import type { BridgeError } from "./states.js";
 import { ErrorState } from "./states.js";
 
@@ -92,7 +93,9 @@ export function CreateMemoryForm({
       className="flex flex-col gap-3 p-4 border-b border-border bg-surface"
       aria-label="Create memory entry"
     >
-      <p className="text-xs text-text-muted uppercase tracking-widest">New memory entry</p>
+      <h3 className="text-xs text-text-muted uppercase tracking-widest font-normal">
+        New memory entry
+      </h3>
       {error && <ErrorState error={error} />}
 
       <div>
@@ -141,7 +144,7 @@ export function CreateMemoryForm({
             <option value="">— Select a session —</option>
             {openSessions.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.title ?? s.id.slice(0, 8)} ({s.agentId})
+                {s.title ?? shortId(s.id)} ({s.agentId})
               </option>
             ))}
           </select>

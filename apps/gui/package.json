@@ -7,7 +7,7 @@
   "files": ["dist"],
   "sideEffects": false,
   "scripts": {
-    "dev": "concurrently --kill-others-on-fail --names vite,bridge -c blue,magenta \"npm:dev:vite\" \"npm:dev:bridge\"",
+    "dev": "concurrently --kill-others-on-fail --names vite,bridge -c blue,magenta \"pnpm dev:vite\" \"pnpm dev:bridge\"",
     "dev:vite": "vite",
     "dev:bridge": "node --import tsx bridge/server.ts",
     "bridge": "node --import tsx bridge/server.ts",

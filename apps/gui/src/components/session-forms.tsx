@@ -129,7 +129,7 @@ export function CreateSessionForm({
       className="flex flex-col gap-3 p-4 border-b border-border bg-surface"
       aria-label="Create session"
     >
-      <p className="text-xs text-text-muted uppercase tracking-widest">New session</p>
+      <h3 className="text-xs text-text-muted uppercase tracking-widest font-normal">New session</h3>
       {error && <ErrorState error={error} />}
 
       <div>
@@ -229,7 +229,9 @@ export function UpdateSessionForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 pt-4" aria-label="Update session">
-      <p className="text-xs text-text-muted uppercase tracking-widest">Edit session</p>
+      <h3 className="text-xs text-text-muted uppercase tracking-widest font-normal">
+        Edit session
+      </h3>
       {error && <ErrorState error={error} />}
 
       <div>
