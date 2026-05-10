@@ -841,3 +841,43 @@ CC3 holds for CC2 merge; CC5 manually rebased onto CC2's split).
 2/4 teammates landed mid-task (CC1 + CC5) — both required main-
 thread completion. CC2 + CC4 finished autonomously.
 
+
+## [2026-05-10] schema | CC3 connector test coverage (PR #39 in review)
+
+CC3 amendment to the cleanup batch. All 11 critic-flagged connector
+test coverage items closed on `feat/cc3-connector-tests`:
+
+- T1: `pickLatestOpenSession` unit tests (5 cases: empty, 1 open,
+  ended-skip, 2 open ranking, agentId filter).
+- T3: same-instant tie-break — pinned "first encountered wins".
+- T4: numeric UTC vs lex divergence — original timestamps shared
+  `2026-03-13T` prefix so lex and numeric agreed; replaced with
+  `10:00+02:00` (UTC 08:00) vs `09:00Z` (UTC 09:00) where lex and
+  numeric disagree.
+- T5: 1ms-precision test.
+- S5: read-path symlink semantics documented in
+  `packages/connectors/shared/test/filesystem.test.ts` (current
+  behavior follows symlinks; security backlog tracked separately).
+- S7: 3-session ordering test.
+- S11: `targets.length>0` invariant after `--target` filter.
+- U2: cursor-specific `no-block` status test.
+- U3: cursor sync into existing user-content (`joinWithManagedBlock`).
+- U5: cursor + claude-code multi-open-session no cross-leak.
+- U6: chmod 0o500 on `.cursor` (r+x, no -w) reaches mkdir EACCES
+  path. Initially deferred (incorrect "filesystem-only impossible"
+  claim); reviewer's repro showed `0o500` is traversable so
+  `readTargetFile` returns null on absent file, then mkdir fails
+  with EACCES → U7 wrap → `file_write_failed`. Test restored.
+
+CC5 yan-etki corrections (turbo cache masked at CC5 merge):
+- `packages/connectors/shared/test/context.test.ts:26` — `.max(20)`
+  rejection inverted (X4 dropped schema cap; cap is now policy in
+  builder, not schema).
+- `packages/connectors/shared/test/render.test.ts` + `packages/
+  connectors/claude-code/test/markdown.test.ts` — continuation-indent
+  tests deleted (X5 removed source path; multi-line content
+  unreachable via `contentSchema`).
+
+Critic REVISE round 1 closed inline (`c69423d`): T4 timestamps fix
++ U6 chmod 0o500 path + wiki update. cli 218 → 230 (10 new connector
++ U6); total 540 → 539 (-3 from CC5 cleanup, +2 from T4 + U6).

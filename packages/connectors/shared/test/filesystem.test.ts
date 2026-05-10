@@ -90,4 +90,34 @@ describe("filesystem helpers", () => {
   it("assertProjectRoot accepts an existing absolute directory", async () => {
     await expect(assertProjectRoot(root)).resolves.toBeUndefined();
   });
+
+  // S5: read-path symlink semantics.
+  // readTargetFile uses readFile which follows symlinks (no lstat-first check).
+  // Current behavior: reads through symlinks, even ones pointing outside the
+  // project root. This is documented here so any future lstat-first guard that
+  // would break this test is noticed explicitly.
+  //
+  // SECURITY NOTE: The write path (writeTargetFile) already guards against
+  // symlinks with an lstat check + isSymbolicLink() rejection. The read path
+  // does NOT guard — it reads through. This asymmetry is acceptable for v0.1
+  // (read-only risk is lower than write risk), but a future hardening pass
+  // should consider adding lstat-first to readTargetFile as well.
+  it("S5: readTargetFile reads through a symlink pointing outside the project root", async () => {
+    // Create a file "outside" the project root (in a sibling temp dir).
+    const outsideRoot = await mkdtemp(join(tmpdir(), "megasaver-outside-"));
+    try {
+      const outsideFile = join(outsideRoot, "external.md");
+      await writeTargetFile({ absPath: outsideFile, content: "external content\n" });
+
+      // Create a symlink inside root that points to the outside file.
+      const symlinkInRoot = join(root, "CLAUDE.md");
+      await symlink(outsideFile, symlinkInRoot);
+
+      // readTargetFile follows the symlink and returns the external content.
+      const result = await readTargetFile(symlinkInRoot);
+      expect(result).toBe("external content\n");
+    } finally {
+      await rm(outsideRoot, { recursive: true, force: true });
+    }
+  });
 });

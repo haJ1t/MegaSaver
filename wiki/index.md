@@ -122,9 +122,9 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 After this batch:
 - ~28 critic-flagged follow-ups closed across 6 series (S, T,
-  U, V, W, X) — was ~44, leaves CC3 (11 items) + 5 deferred
-  (T6 → --json sync, S8 → AA2 orphan, S10 → BB hardening, W7 →
-  v0.1 codepoint accept).
+  U, V, W, X) — was ~44, leaves CC3 (11 items, in review) + 5
+  deferred (T6 → --json sync, S8 → AA2 orphan, S10 → BB hardening,
+  W7 → v0.1 codepoint accept).
 - `connector.ts` 419 LOC split (S4 closed) — every CLI command
   file now well under §8 300-line threshold.
 - Schema policy compile-time enforced: W4 ended-session reject
@@ -132,8 +132,24 @@ After this batch:
   W6 unicode separator block on title + content schemas.
 - cli tests: 218 → 226 (+8 from CC4 to CC5 over CC2's 218 base).
 
-CC3 still inflight: T1, T3, T4, T5, S5, S7, S11, U2, U3, U5, U6
-(11 connector test coverage items) on `feat/cc3-connector-tests`.
+**CC3 in review (PR #39, branch `feat/cc3-connector-tests`):** all
+11 connector test coverage items closed — T1 (`pickLatestOpenSession`
+unit tests), T3 (same-instant tie-break "first wins"), T4 (numeric
+UTC vs lex divergence via `+02:00` offset on shared date prefix),
+T5 (1ms-precision picks later), S5 (read-path symlink semantics
+documented in `packages/connectors/shared/test/filesystem.test.ts`),
+S7 (3-session ordering), S11 (`targets.length>0` invariant after
+`--target` filter), U2 (cursor-specific `no-block` test), U3
+(cursor sync into existing user-content via `joinWithManagedBlock`),
+U5 (cursor multi-open-session no cross-leak), U6 (chmod 0o500 on
+`.cursor` reaches mkdir EACCES path, U7 wrap verified). Critic
+REVISE round 1: U6 false-impossibility claim (reviewer's chmod
+0o500 repro showed reachability) + T4 timestamps shared date prefix
+(lex test would pass even buggy) + wiki not updated; all closed
+inline (`c69423d`). +3 yan-etki test corrections to
+`packages/connectors/{shared,claude-code}/test/*.test.ts` for X4
+schema relaxation + X5 dead-path deletion (turbo cache masked at
+CC5 merge).
 
 **v0.2 second-day team batch (7 PRs merged 2026-05-10):**
 
