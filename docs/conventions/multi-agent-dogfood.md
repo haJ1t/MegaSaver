@@ -28,3 +28,14 @@ Until the sync script ships:
 - `AGENTS.md`, `.cursor/rules`, and `CONVENTIONS.md` updated MANUALLY
   when `CLAUDE.md` changes, in the same commit.
 - PR diff review catches drift.
+
+## Cursor connector frontmatter contract
+
+The cursor target writes `.cursor/rules/megasaver.mdc`. The
+`ConnectorTarget.header` field contains YAML frontmatter that is
+prepended exactly once — on the first seed of a non-existing file.
+On every subsequent `mega connector sync`, only the content
+**inside** the `MEGA_SAVER_BLOCK_START` / `MEGA_SAVER_BLOCK_END`
+sentinel pair is touched. Any user edits to the frontmatter,
+headings, or body text that live **outside** the sentinel block are
+preserved across sync runs.

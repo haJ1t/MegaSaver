@@ -8,6 +8,7 @@ export const CLAUDE_CODE_TARGET = {
   relativePath: "CLAUDE.md",
 } as const;
 
+// claude-code lives in @megasaver/connector-claude-code; codex/cursor/aider live in @megasaver/connector-generic-cli; this aggregates across packages.
 export const KNOWN_TARGETS = [
   CLAUDE_CODE_TARGET,
   codexTarget,

@@ -23,10 +23,13 @@ Current packages:
   `Project`, `Session`, and `MemoryEntry`; in-memory registry; JSON
   directory persistence; `initStore`; typed registry/persistence
   errors.
-- `@megasaver/cli` — `mega` command with `doctor`, `project create`,
-  and `project list`.
+- `@megasaver/cli` — the `mega` command (see CLI Reference below).
 - `@megasaver/connector-claude-code` — thin Claude Code adapter that
   manages a Mega Saver block in root `CLAUDE.md`.
+- `@megasaver/connector-generic-cli` — manifest-driven connector for
+  Codex, Cursor, and Aider targets.
+- `@megasaver/connectors-shared` — agent-agnostic block helpers shared
+  by all connectors.
 
 Current repository infrastructure:
 
@@ -37,102 +40,42 @@ Current repository infrastructure:
 - Wiki-first project memory under `wiki/`, used to reduce repeated
   repo reads and keep agent handoffs compact.
 
-## Implemented slices
+## Connectors
 
-### Bootstrap and skeleton
+v0.1 ships four built-in connector targets:
 
-The foundation is in place: monorepo layout, package conventions,
-process governance, build/test/lint/typecheck scripts, and Changesets
-release plumbing.
+| Target | Agent file | Package |
+|--------|-----------|---------|
+| `claude-code` | `CLAUDE.md` (project root) | `@megasaver/connector-claude-code` |
+| `codex` | `AGENTS.md` (project root) | `@megasaver/connector-generic-cli` |
+| `cursor` | `.cursor/rules/megasaver.mdc` | `@megasaver/connector-generic-cli` |
+| `aider` | `CONVENTIONS.md` (load via `aider --read CONVENTIONS.md`) | `@megasaver/connector-generic-cli` |
 
-### Shared contracts
-
-`@megasaver/shared` owns cross-package primitives:
-
-- branded UUID IDs for projects, sessions, and memory entries
-- `AgentId`
-- `RiskLevel`
-
-### Core engine
-
-`@megasaver/core` is intentionally agent-agnostic. Connectors and the
-CLI import Core; Core never imports connector or CLI code.
-
-The current Core surface includes:
-
-- `Project`, `Session`, and `MemoryEntry` schemas/types
-- `createInMemoryCoreRegistry()`
-- `createJsonDirectoryCoreRegistry({ rootDir })`
-- `initStore(rootDir)`
-- `CoreRegistryError`
-- `CorePersistenceError`
-
-The JSON directory store uses:
-
-- `projects.json`
-- `sessions.json`
-- `memory/<projectId>.jsonl`
-
-### CLI
-
-The `mega` command currently supports:
+## CLI Reference
 
 ```bash
 mega doctor
-mega project create <name> --store <dir>
-mega project list --store <dir>
+
+mega project create <name> [--root <dir>] [--json]
+mega project list [--json]
+
+mega session create <projectName> --agent <id> [--risk medium] [--title "..."]
+mega session list <projectName>
+mega session show <sessionId>
+mega session end <sessionId>
+mega session update <sessionId> [--title "..."] [--risk <level>] [--agent <id>]
+
+mega memory create <projectName> --scope <project|session> --content "..." [--session <uuid>]
+mega memory list <projectName> [--json]
+mega memory show <memoryEntryId> [--json]
+
+mega connector sync <projectName> [--target <id>]
+mega connector status <projectName> [--target <id>] [--json]
 ```
 
-Default project storage is `$XDG_DATA_HOME/megasaver`, falling back to
-`~/.local/share/megasaver`. On first use, the CLI initializes the
-store with `initStore` and prints a one-line notice to stderr.
-
-During local development, invoke the built CLI directly:
-
-```bash
-pnpm --filter @megasaver/cli build
-node apps/cli/dist/cli.js doctor
-node apps/cli/dist/cli.js project create demo --store /tmp/megasaver-demo
-node apps/cli/dist/cli.js project list --store /tmp/megasaver-demo
-```
-
-### Claude Code connector
-
-`@megasaver/connector-claude-code` is the first connector slice. It
-manages a single Mega Saver block inside root `CLAUDE.md`:
-
-```md
-<!-- MEGA SAVER:BEGIN -->
-# Mega Saver Context
-
-Agent: claude-code
-Project: <name> (<id>)
-Session: <title/id/none>
-Risk: <risk/none>
-
-## Memory
-
-- [project:<entry-id>] <content>
-- [session:<entry-id>] <content>
-<!-- MEGA SAVER:END -->
-```
-
-The connector exposes validation, render/parse/upsert/remove helpers,
-and filesystem helpers for root `CLAUDE.md` read/write/sync. It does
-not launch Claude Code, touch `.claude/CLAUDE.md`, or perform memory
-retrieval/compression yet.
-
-## Not built yet
-
-Planned v0.1 follow-up slices include:
-
-- session CRUD in the CLI
-- memory CRUD in the CLI
-- generic CLI connector
-- MCP bridge
-- desktop/app control panel
-- token audit and compression workflows
-- package publishing
+All subcommands accept `--store <dir>` to override the default store
+location (`$XDG_DATA_HOME/megasaver`, falling back to
+`~/.local/share/megasaver`).
 
 ## Develop
 

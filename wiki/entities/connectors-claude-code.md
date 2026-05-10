@@ -97,7 +97,7 @@ Risk: <risk/none>
 
 ## Implementation evidence
 
-Implemented on `codex/connectors-claude-code`. Connector tests: 44
+Implemented on `codex/connectors-claude-code`. Connector tests: 45
 tests across 5 files, including a built-package public export smoke.
 Full `pnpm verify` passes with 4 packages and 206 total tests.
 Built-package smoke imported `dist/index.js`, `syncClaudeMdContext`

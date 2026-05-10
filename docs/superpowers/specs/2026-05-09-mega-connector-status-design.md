@@ -101,7 +101,7 @@ established by `mega connector sync`.
 One line per evaluated target on stdout:
 
 ```text
-<id>      <relPath>   <status>   session=<id|none>
+<id>  <relPath>  <status>  session=<id|none>
 ```
 
 Format details:
@@ -127,10 +127,16 @@ Worked example (claude-code in sync, codex with no block, project has
 one open claude-code session `01HXY...`):
 
 ```text
-claude-code  CLAUDE.md   in-sync   session=01HXY...
-codex        AGENTS.md   no-block  session=none
-codex        AGENTS.md   error     session=none
+claude-code  CLAUDE.md  in-sync  session=01HXY...
+codex        AGENTS.md  no-block  session=none
+codex        AGENTS.md  error  session=none
 ```
+
+> Note: the three lines above are from three separate invocations of
+> `mega connector status`, each illustrating one possible outcome. A
+> single real invocation emits one line per target (two lines for the
+> default two-target set), not three.
+
 
 Stderr is reserved for:
 - the optional store-init notice,
