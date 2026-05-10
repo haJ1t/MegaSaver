@@ -122,6 +122,12 @@ importers:
         specifier: ^3.23.2
         version: 3.23.2
 
+  packages/mcp-bridge:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+
   packages/shared:
     dependencies:
       zod:
@@ -131,6 +137,12 @@ importers:
       fast-check:
         specifier: ^3.23.2
         version: 3.23.2
+
+  packages/skill-packs:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
 
 packages:
 

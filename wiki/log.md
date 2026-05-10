@@ -1141,3 +1141,54 @@ Spec: `docs/superpowers/specs/2026-05-10-gg-windows-port-design.md`.
 Plan: `docs/superpowers/plans/2026-05-10-gg-windows-port.md`.
 Tests: 587 → 588 (+1). Biome clean. Risk HIGH (core durability
 semantics).
+## [2026-05-10] schema | HH mcp-bridge + skill-packs scaffolded
+
+First v0.3 work: reserved the two `packages/*` slots called out
+in `CLAUDE.md §2` but absent from the workspace until now.
+
+- **`@megasaver/mcp-bridge`** — placeholder for the Model
+  Context Protocol bridge. Public surface locked:
+  `createBridge(config)` factory returning
+  `{ transport, start(), stop() }`. Both `start()` and `stop()`
+  reject with `McpBridgeError("not_implemented", ...)`. Closed
+  enums: `McpTransport` = `["stdio", "sse"]` (launch order),
+  `McpBridgeErrorCode` = `["not_implemented"]` (alphabetic).
+  Tuple-ordering pins in `.test-d.ts` from day one (AA3
+  convention). 24 tests (4 runtime + 5×4 type regressions +
+  bridge smoke).
+- **`@megasaver/skill-packs`** — placeholder for installable
+  Mega-Saver-native skill bundles. Public surface locked:
+  `loadPack(path)` factory rejecting with
+  `SkillPackError("not_implemented", ...)`; manifest type +
+  schema (`SkillPackManifest`, `SkillRef`,
+  `skillPackManifestSchema`) parses a kebab name, SemVer
+  version, kind, skills array, capabilities array, nullable
+  description. Closed enums: `SkillPackKind` =
+  `["prompt", "skill", "workflow"]`, `SkillPackCapability` =
+  `["network", "read-memory", "write-memory"]`,
+  `SkillPackErrorCode` = `["not_implemented"]` (all
+  alphabetic). 38 tests (8 runtime + 5×3 type regressions +
+  manifest validation).
+
+Specs: `docs/superpowers/specs/2026-05-10-hh-mcp-bridge-design.md`,
+`docs/superpowers/specs/2026-05-10-hh-skill-packs-design.md`.
+Plan: `docs/superpowers/plans/2026-05-10-hh-mcp-skillpacks.md`.
+
+Workspace now at 9 projects (was 7). Total tests on main:
+587 → 599 (+12 runtime; type-regression `.test-d.ts` tests
+run via vitest typecheck mode per-package and do not affect
+the runtime total).
+
+Drive-by: pre-existing biome line-width violations in
+`apps/cli/test/connector.test.ts` (introduced by PR #48) were
+auto-formatted (no behavior change) to unblock `pnpm verify`
+in this PR.
+
+Reserved future closed-enum surfaces (NOT in v0.3 schema,
+documented in specs §7): mcp-bridge — `auth_failed`,
+`resource_not_found`, `tool_invocation_failed`,
+`tool_not_found`, `transport_closed`, `transport_failed`;
+skill-packs — `manifest_invalid`, `manifest_missing`,
+`pack_already_installed`, `pack_not_found`, `pack_path_escape`,
+`pack_unreadable`, `skill_id_conflict`. Schemas widen +
+tuple-ordering pins update when the real loaders land.
