@@ -1,4 +1,4 @@
-import { CoreRegistryError } from "@megasaver/core";
+import { CoreRegistryError, type Session } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import {
@@ -65,7 +65,7 @@ export async function runSessionEnd(input: RunSessionEndInput): Promise<0 | 1> {
     // Same inline default as runSessionCreate; if a third call site lands,
     // extract a shared readNow() helper instead of duplicating again.
     const endedAt = (input.now ?? (() => new Date().toISOString()))();
-    let ended;
+    let ended: Session;
     try {
       ended = registry.endSession(id, { endedAt });
     } catch (err) {
