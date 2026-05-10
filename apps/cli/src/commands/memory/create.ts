@@ -26,6 +26,7 @@ export type RunMemoryCreateInput = {
   xdgDataHome: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+  json?: boolean;
   newId?: () => string;
   now?: () => string;
 };
@@ -140,7 +141,7 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
     });
 
     registry.createMemoryEntry(entry);
-    input.stdout(entry.id);
+    input.stdout(input.json ? JSON.stringify(entry) : entry.id);
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "memory_create" });
@@ -172,6 +173,7 @@ export const memoryCreateCommand = defineCommand({
       description: "Session id (UUID); required when --scope session.",
     },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const code = await runMemoryCreate({
@@ -187,6 +189,7 @@ export const memoryCreateCommand = defineCommand({
       xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
+      json: !!args.json,
     });
     if (code !== 0) process.exitCode = code;
   },

@@ -17,6 +17,7 @@ export type RunSessionEndInput = {
   xdgDataHome: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+  json?: boolean;
   /** Override for tests; defaults to () => new Date().toISOString(). */
   now?: () => string;
 };
@@ -84,7 +85,12 @@ export async function runSessionEnd(input: RunSessionEndInput): Promise<0 | 1> {
       }
       throw err;
     }
-    input.stdout(id);
+    if (input.json) {
+      const ended = registry.getSession(id);
+      input.stdout(JSON.stringify(ended ?? { id, endedAt }));
+    } else {
+      input.stdout(id);
+    }
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "session", id });
@@ -102,6 +108,7 @@ export const sessionEndCommand = defineCommand({
       description: "Session id (UUID).",
     },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const nowEnv = readTestEnv("MEGA_TEST_NOW");
@@ -115,6 +122,7 @@ export const sessionEndCommand = defineCommand({
       xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
+      json: !!args.json,
       ...(nowEnv !== undefined ? { now: () => nowEnv } : {}),
     });
     if (code !== 0) process.exitCode = code;

@@ -22,6 +22,7 @@ export type RunSessionCreateInput = {
   xdgDataHome: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+  json?: boolean;
   /** Override for tests; defaults to crypto.randomUUID. */
   newId?: () => string;
   /** Override for tests; defaults to () => new Date().toISOString(). */
@@ -105,7 +106,7 @@ export async function runSessionCreate(input: RunSessionCreateInput): Promise<0 
       startedAt,
       endedAt: null,
     });
-    input.stdout(created.id);
+    input.stdout(input.json ? JSON.stringify(created) : created.id);
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err);
@@ -133,6 +134,7 @@ export const sessionCreateCommand = defineCommand({
     },
     title: { type: "string", description: "Optional session title." },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const newIdEnv = readTestEnv("MEGA_TEST_SESSION_ID");
@@ -150,6 +152,7 @@ export const sessionCreateCommand = defineCommand({
       xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
+      json: !!args.json,
       ...(newIdEnv !== undefined ? { newId: () => newIdEnv } : {}),
       ...(nowEnv !== undefined ? { now: () => nowEnv } : {}),
     });

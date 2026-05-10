@@ -556,7 +556,7 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
     const stdoutLines = logSpy.mock.calls.map((c) => c[0]);
     expect(stdoutLines).toEqual([
       "claude-code  CLAUDE.md  wrote",
-      "codex        AGENTS.md  error",
+      "codex        AGENTS.md  error  session=none",
       "cursor       .cursor/rules/megasaver.mdc  skipped",
       "aider        CONVENTIONS.md  skipped",
     ]);
@@ -616,7 +616,9 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
     await runSync({ projectName: "demo" });
 
     expect(process.exitCode).toBe(1);
-    expect(logSpy.mock.calls.map((c) => c[0])[0]).toBe("claude-code  CLAUDE.md  error");
+    expect(logSpy.mock.calls.map((c) => c[0])[0]).toBe(
+      `claude-code  CLAUDE.md  error  session=${SESSION_ID}`,
+    );
     expect(
       errSpy.mock.calls.some((c) =>
         (c[0] as string).startsWith("error: connector failed to write CLAUDE.md:"),
