@@ -1258,3 +1258,72 @@ First-run migration in the same PR: all four consumer files acquired sentinel bl
 Closed-enum discipline: `MODES` and `CONSUMERS` are pinned with `.test-d.ts` tuple-ordering, matching the `KNOWN_TARGETS` precedent from `apps/cli/src/known-targets.ts`. The closed unions `Mode` and `ConsumerId` are asserted with `expectTypeOf` in `manifest.test.ts`.
 
 Spec: `docs/superpowers/specs/2026-05-10-jj-conventions-sync-design.md`. Plan: `docs/superpowers/plans/2026-05-10-jj-conventions-sync.md`.
+
+## [2026-05-10] release | v0.3 SHIPPED
+
+First v0.3 batch closed in a single day. 4 PRs (#51 GG, #52 HH,
+#53 II, #54 JJ) opened in parallel worktrees by 4 executor
+teammates and merged sequentially via rebase chain (each follower
+rebased through its predecessors' wiki/log.md conflicts).
+
+Final main HEAD: `dff9575`. Tests on main: 587 (v0.2 baseline) →
+626 passed (62 test files). Workspace 7 packages → 9 + 1 app =
+10 buildable units.
+
+What landed:
+
+- **GG (PR #51, `e9ae54a`)** — `atomicWriteFile` real Windows
+  durability. Replaces v0.2's reactive try-catch with a proactive
+  `IS_WIN32` branch in `packages/core/src/json-directory-store.ts`.
+  POSIX behavior bit-identical; on Windows the dir fsync is skipped
+  (NTFS journals rename metadata; `FlushFileBuffers` on a directory
+  handle is a documented no-op). `IS_WIN32` captured at module
+  load — unit test pins the branch by stubbing `process.platform`.
+  Real `EPERM` (sandbox / AV / seccomp) now surfaces as
+  `store_write_failed` instead of being silently swallowed. Risk
+  HIGH; supersedes FF deferral spec §1 (fsync only).
+- **HH (PR #52, `c8cb6c5`)** — `@megasaver/mcp-bridge` and
+  `@megasaver/skill-packs` placeholder packages. Public surfaces
+  locked: `createBridge()` and `loadPack()` reject with structured
+  `not_implemented` errors; `McpTransport`, `SkillPackKind`,
+  `SkillPackCapability` closed enums pinned with `.test-d.ts`
+  tuple-ordering from day one. Reserved future error codes
+  documented in spec §7 for schema-widening when real loaders
+  land. Workspace 7 → 9 packages.
+- **II (PR #53, `d64a256`)** — `apps/gui` bootstrap (`@megasaver/gui`).
+  Vite + React SPA + tiny `node:http` bridge importing
+  `@megasaver/core` directly. Two views (Sessions / Memory entries),
+  `ViewId = ["memory", "sessions"]` pinned. `pnpm --filter
+  @megasaver/gui dev` (Vite, port 5173) + `pnpm --filter
+  @megasaver/gui bridge` (port 5174). Tauri / Electron rejected for
+  bootstrap.
+- **JJ (PR #54, `dff9575`)** — `pnpm conventions:sync` automation.
+  Tagged-block mirroring from `docs/conventions/*.md` into
+  `AGENTS.md` + 3 `.cursor/rules/*.mdc`. `pnpm conventions:check`
+  folded into `pnpm verify`; `MODES` and `CONSUMERS` closed enums
+  pinned with `.test-d.ts`. CLAUDE.md preserved as long-form
+  reference. Built on Node `--experimental-strip-types`.
+
+Process notes:
+
+- 4 parallel executor teammates dispatched in a single message; all
+  ran on opus model. Each carried full superpowers chain (spec →
+  plan → TDD → verify → push → PR) end-to-end without orchestrator
+  intervention except for merge-time rebase resolution.
+- Rebase chain: GG merged first (no conflict). HH/II/JJ each picked
+  up a wiki/log.md conflict from the prior merge — resolution was
+  mechanical (keep both blocks). JJ also had a duplicate biome-fix
+  patch dropped during rebase (the same `connector.test.ts` format
+  fix appeared in both HH and JJ commits; git auto-dropped the
+  later one).
+- Closed-enum tuple-ordering pin (AA3) discipline was upheld for
+  every new enum surface introduced by all 4 PRs.
+
+Deferred to v0.4: GUI v1 (project picker, detail views, write
+actions, single-command dev, native packaging), `mcp-bridge` real
+implementation (stdio, MCP tools/resources), `skill-packs` real
+loader, Windows port remainder (case-insensitive paths, CRLF,
+locks, Windows CI runner), CLAUDE.md tagged-block management,
+aider connector sync end-to-end.
+
+v0.3 closed.
