@@ -569,14 +569,38 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
     ).toBe(true);
   });
 
-  // U7 mkdir-wrap test removed: the only way to reach the mkdir code path
-  // requires `.cursor` to NOT exist (so readTargetFile returns null), which
-  // means we cannot pre-place a permissions barrier there. Filesystem-only
-  // tricks (chmod 0o000 on the dir, regular file at .cursor) trip
-  // readTargetFile first → file_read_failed wrap, never reaching mkdir.
-  // The wrap pattern (caught error → ConnectorError(file_write_failed))
-  // is exercised by the symlink test below for the writeTargetFile path,
-  // and the mkdir branch is identical in shape — visual inspection only.
+  // U6/U7: chmod 0o500 on .cursor (read+execute, NO write). readTargetFile
+  // traverses .cursor → finds rules/megasaver.mdc absent → returns null. Then
+  // mkdir(.cursor/rules, recursive) fails with EACCES (no +w on parent). The
+  // U7 try/catch wraps this as ConnectorError("file_write_failed").
+  it("wraps mkdir EACCES as file_write_failed when target dir parent has no write permission", async () => {
+    if (process.getuid && process.getuid() === 0) {
+      // chmod cannot block root; CI typically runs non-root.
+      return;
+    }
+    await seedSimple();
+    const cursorDir = join(projectRoot, ".cursor");
+    const { chmod } = await import("node:fs/promises");
+    await mkdir(cursorDir);
+    await chmod(cursorDir, 0o500);
+
+    try {
+      await runSync({ projectName: "demo", target: "cursor" });
+
+      expect(process.exitCode).toBe(1);
+      const stdoutLines = logSpy.mock.calls.map((c) => c[0] as string);
+      expect(stdoutLines.some((l) => l.includes("cursor") && l.includes("error"))).toBe(true);
+      expect(
+        errSpy.mock.calls.some(
+          (c) =>
+            (c[0] as string).startsWith("error: connector failed to write") &&
+            (c[0] as string).includes("megasaver.mdc"),
+        ),
+      ).toBe(true);
+    } finally {
+      await chmod(cursorDir, 0o755);
+    }
+  });
 
   it("surfaces a ConnectorError(file_write_failed) as per-target error, exit 1", async () => {
     await seedSimple();

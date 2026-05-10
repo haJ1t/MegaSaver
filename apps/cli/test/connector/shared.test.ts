@@ -97,22 +97,28 @@ describe("pickLatestOpenSession — T3: same-instant tie-break", () => {
 describe("pickLatestOpenSession — T4: DST-transition ranking", () => {
   // US spring-forward 2026: clocks skip from 02:00 to 03:00 on 2026-03-13.
   // Session A: 2026-03-13T01:30:00.000Z (UTC, before the transition, earlier instant)
-  // Session B: 2026-03-13T03:30:00.000Z (UTC, after the transition, later instant)
-  // Numeric Date.parse correctly identifies B as more recent.
+  // T4 must use timestamps where lex and numeric ordering DISAGREE so a
+  // buggy lex-comparison would pick the WRONG session. Date prefix shared, but
+  // timezone offsets diverge: A=10:00+02:00 (UTC 08:00), B=09:00Z (UTC 09:00).
+  // Lex order: A > B (because "T10..." > "T09..."). Numeric order: B > A
+  // (because UTC 09:00 > UTC 08:00). pickLatestOpenSession MUST return B.
   it("ranks by numeric UTC instant, not by lexicographic string order", () => {
-    const sessionBefore = makeSession(
+    const lexLaterButEarlierInstant = makeSession(
       "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       "claude-code",
-      "2026-03-13T01:30:00.000Z",
+      "2026-03-13T10:00:00+02:00",
     );
-    const sessionAfter = makeSession(
+    const lexEarlierButLaterInstant = makeSession(
       "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
       "claude-code",
-      "2026-03-13T03:30:00.000Z",
+      "2026-03-13T09:00:00Z",
     );
-    // Lexicographically "03:30" < "01:30" would be wrong here since both share
-    // the same date prefix. But this confirms that Date.parse ordering is used.
-    expect(pickLatestOpenSession([sessionBefore, sessionAfter], "claude-code")).toBe(sessionAfter);
+    expect(
+      pickLatestOpenSession(
+        [lexLaterButEarlierInstant, lexEarlierButLaterInstant],
+        "claude-code",
+      ),
+    ).toBe(lexEarlierButLaterInstant);
   });
 });
 
