@@ -251,11 +251,26 @@ function atomicWriteFile(filePath: string, content: string): void {
       closeSync(tempFd);
     }
     renameSync(tempPath, filePath);
-    const dirFd = openSync(parentDir, "r");
+    // Windows-friendly degradation: fsync on a directory fd may throw
+    // EISDIR/EPERM/ENOTSUP on some filesystems. Swallow only those known
+    // codes on the *directory* fsync; data fsync errors propagate.
+    let dirFd: number | undefined;
     try {
+      dirFd = openSync(parentDir, "r");
       fsyncSync(dirFd);
+    } catch (dirErr) {
+      const code = (dirErr as NodeJS.ErrnoException).code;
+      if (code !== "EISDIR" && code !== "EPERM" && code !== "ENOTSUP") {
+        throw dirErr;
+      }
     } finally {
-      closeSync(dirFd);
+      if (dirFd !== undefined) {
+        try {
+          closeSync(dirFd);
+        } catch {
+          // Ignore close errors; the data is already on disk.
+        }
+      }
     }
   } catch (error) {
     try {

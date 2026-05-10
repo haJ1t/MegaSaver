@@ -195,6 +195,13 @@ does not apply to status). `no-block` is exit `1` because if the file
 exists, an empty (no Mega Saver content) state is treated as drift —
 a `sync` run would now insert a fresh block.
 
+When `mega connector sync` runs concurrently with `status`, the exit
+code is computed from the per-target snapshot at read time and may
+include transient `drift` lines for targets sync hasn't finished
+writing yet — see §11. CI gates needing an authoritative read should
+ensure sync is not concurrent (e.g., serialize sync→status in the
+same job).
+
 ## §7 Code organisation
 
 Single file extension. New code lives in
