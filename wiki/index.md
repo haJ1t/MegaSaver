@@ -74,6 +74,61 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
+## v0.2 — SHIPPED (2026-05-10)
+
+Final close-out batch (3 PRs merged 2026-05-10):
+
+- **PR #47 (`9fa2414`)** — FF Windows port deferral spec.
+  Documents v0.2's graceful Windows degradation (dir fsync
+  swallows EISDIR/EPERM/ENOTSUP) and v0.3 scope (case-insensitive
+  paths, CRLF normalization, lock semantics, Windows CI gate).
+  Spec at `docs/superpowers/specs/2026-05-10-windows-port-deferral.md`.
+- **PR #48 (`c1c0389`)** — T6 full sync text symmetry.
+  Promotes T6 from PARTIAL (PR #45 — error-only) to FULL: every
+  `mega connector sync` text-mode line now carries
+  `session=<id|none>` matching `mega connector status` format.
+  Byte-compat break for skipped/created/noop/wrote (intentional,
+  documented). ~10 test sites updated.
+- **PR #49 (`460a66e`)** — EE cleanup batch (3 sub-items): tuple-
+  ordering pin assertions on `agentIdSchema.options` (alphabetic),
+  `riskLevelSchema.options` (severity-ascending),
+  `memoryScopeSchema.options` (semantic) per AA3 — 3 new
+  `.test-d.ts` regression assertions; `RunConnectorSyncInput.json`
+  optional → required (parity with sibling Run inputs); JSON
+  output policy doc appended to `wiki/entities/cli.md`. +
+  inline pre-existing biome lint fix (session/end.ts type +
+  json-store format).
+
+### v0.2 — what shipped
+
+| Subsystem | Capability |
+|---|---|
+| **Connectors** | 4 built-in targets: `claude-code` (CLAUDE.md), `codex` (AGENTS.md), `cursor` (.cursor/rules/megasaver.mdc), `aider` (CONVENTIONS.md). One file per target; sentinel-bounded blocks; user content outside block preserved. |
+| **CLI** | 11 subcommands: `mega doctor`, `project create/list`, `session create/list/show/end/update`, `memory create/list/show`, `connector sync/status`. All read+write commands support `--json` (10/10 — full read/write parity). |
+| **`--json` flag** | Type=boolean, default=false, description="Emit JSON output." across 10 commands. Failure path: text stderr, exit 1, no stdout (12 enforcement tests). Drift guards via `describe.each` (30 assertions). |
+| **Schema discipline** | Closed-enum bug class compile-time enforced via vitest typecheck mode + 4 `.test-d.ts` regression suites for `KnownTargetId` (4), `AgentId` (5), `RiskLevel` (4 severity-asc), `MemoryScope` (2 semantic). Tuple-ordering pinned per AA3. |
+| **Durability** | `atomicWriteFile` POSIX-durable: temp fsync BEFORE rename, parent dir fsync AFTER rename, Windows graceful no-op (EISDIR/EPERM/ENOTSUP swallow). |
+| **Connector status** | `mega connector status` reports `in-sync`/`drift`/`no-block`/`missing`/`error` per target; symmetric format with sync (every line `session=<id|none>`); concurrent-sync race policy documented (best-effort, §11). |
+| **Multi-agent dogfood** | All 4 agent files (CLAUDE.md, AGENTS.md, .cursor/rules/, CONVENTIONS.md) auto-derivable from `docs/conventions/*.md`; PR diff drift catch (sync script deferred to v0.2.x). |
+| **Closed-set surfaces** | Schema-derived: errors.ts messages + 5 citty `--help` description strings + 2 connector `--target` descriptions; auto-update on member addition. |
+
+### v0.2 — process metrics
+
+- **PRs merged**: 49 PRs total (PR #1-#49) from project bootstrap.
+- **Tests on main**: 587 passed (587), 55 test files. From v0.1 baseline ~196 → v0.2 587.
+- **Critic-flagged follow-ups closed across this development cycle**: ~40+ items spanning S/T/U/V/W/X/Y/Z/AA/CC/DD/EE/FF/T6 series.
+- **Risk discipline**: every PR ≥ MEDIUM gated through full superpowers chain (spec → plan → TDD → verify → code-review → critic → merge); HIGH PRs (DD2 BB hardening) added architect consultation.
+
+### v0.2 — open backlog (deferred to v0.3)
+
+- **FF Windows port** (full): case-insensitive resolution, CRLF normalization in connector outputs, lock file semantics audit, Windows CI gate. Currently graceful no-op per DD2/PR #47. Spec: `docs/superpowers/specs/2026-05-10-windows-port-deferral.md`.
+- **mcp-bridge** package: scaffolded placeholder; no spec yet.
+- **skill-packs** package: scaffolded placeholder; no spec yet.
+- **GUI app**: deferred (CLI-first per v0.1 decision; design skills available when phase begins).
+- **`pnpm conventions:sync`** script: manual sync today; full automation deferred.
+
+---
+
 **v0.2 main feature: `--json` write-side (PR #45 merged 2026-05-10):**
 
 - **PR #45 (`89a25f9`)** — `--json` flag on 5 write-mutation
