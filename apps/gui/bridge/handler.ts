@@ -67,7 +67,7 @@ const PATCH_SESSION_BODY = z
   })
   .strict()
   .refine((p) => Object.keys(p).length > 0, {
-    message: "patch must contain at least one field",
+    message: "PATCH body must contain at least one of title, riskLevel, agentId.",
   });
 
 const CREATE_MEMORY_BODY = z

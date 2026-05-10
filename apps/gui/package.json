@@ -18,6 +18,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@fontsource/dm-mono": "^5.0.0",
     "@megasaver/core": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "react": "^18.3.1",

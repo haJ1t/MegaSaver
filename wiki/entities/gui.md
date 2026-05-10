@@ -82,6 +82,20 @@ designer skill chain → test-engineer (152 tests) → executor
 (handler + integration + concurrently) → code-reviewer + verifier
 in fresh contexts.
 
+## Lint posture
+
+`biome.json` disables `useSemanticElements` for three component files:
+`apps/gui/src/components/project-picker.tsx`,
+`apps/gui/src/components/sessions-view.tsx`, and
+`apps/gui/src/components/memory-view.tsx`.
+
+These components use `<div role="...">` patterns (e.g. `role="list"`,
+`role="listitem"`) rather than native `<ul>`/`<li>` because the design
+system's token-driven hover and selection states require a flat element
+hierarchy; wrapping in semantic list elements breaks the CSS custom-
+property cascade. The override is intentional and scoped to the three
+affected files only.
+
 ## Related
 
 - [[entities/core]]

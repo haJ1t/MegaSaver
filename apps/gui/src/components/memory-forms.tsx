@@ -156,7 +156,9 @@ export function CreateMemoryForm({
       <div className="flex gap-2 pt-2">
         <button
           type="submit"
-          disabled={submitting || (scope === "session" && !sessionId)}
+          disabled={
+            submitting || (scope === "session" && !sessionId) || content.trim().length === 0
+          }
           className={[
             "px-4 py-1.5 text-sm rounded-md",
             "bg-accent text-accent-fg font-medium",

@@ -8,8 +8,6 @@
  * requires a spec amendment — do NOT add inline hex literals in components.
  */
 
-@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -62,7 +60,7 @@
   --badge-status-open-bg: #e6f4ee;
   --badge-status-open-fg: #1f5c38;
   --badge-status-ended-bg: #ededec;
-  --badge-status-ended-fg: #72788a;
+  --badge-status-ended-fg: #545968;
 
   /* Badge backgrounds for memory scope */
   --badge-scope-project-bg: #e8eaf6;
@@ -120,7 +118,7 @@
     --badge-status-open-bg: #0e2018;
     --badge-status-open-fg: #5ec98a;
     --badge-status-ended-bg: #1c1d23;
-    --badge-status-ended-fg: #565b66;
+    --badge-status-ended-fg: #9ea3ad;
 
     /* Badge: memory scope */
     --badge-scope-project-bg: #141830;

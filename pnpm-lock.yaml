@@ -57,6 +57,9 @@ importers:
 
   apps/gui:
     dependencies:
+      '@fontsource/dm-mono':
+        specifier: ^5.0.0
+        version: 5.2.7
       '@megasaver/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -733,6 +736,9 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@fontsource/dm-mono@5.2.7':
+    resolution: {integrity: sha512-Ma1az2atTVgQWuOWwjuxx26p/6A6CU9HBNKq1CFV6YKpKhpswnf9ry9Ql4+T6bTZzkdtSfS6tjJvqZOljVzIFQ==}
 
   '@inquirer/external-editor@1.0.3':
     resolution: {integrity: sha512-RWbSrDiYmO4LbejWY7ttpxczuwQyZLBUyygsA9Nsv95hpzUWwnNTVQmAq3xuh7vNwCp07UTmE5i11XAEExx4RA==}
@@ -2690,6 +2696,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.27.7':
     optional: true
+
+  '@fontsource/dm-mono@5.2.7': {}
 
   '@inquirer/external-editor@1.0.3(@types/node@22.19.17)':
     dependencies:

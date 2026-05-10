@@ -241,6 +241,7 @@ export function UpdateSessionForm({
           onChange={(e) => setTitle(e.target.value)}
           placeholder="(clear to remove title)"
           className={INPUT_BASE}
+          aria-describedby="us-title-hint"
         />
         <p className="mt-1 text-xs text-text-muted" id="us-title-hint">
           Leave blank to clear the title.
