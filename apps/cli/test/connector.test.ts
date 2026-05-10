@@ -786,7 +786,9 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(content).toContain("<!-- MEGA SAVER:END -->");
 
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(lines).toContain(`cursor       .cursor/rules/megasaver.mdc  created  session=${SESS_CURSOR}`);
+    expect(lines).toContain(
+      `cursor       .cursor/rules/megasaver.mdc  created  session=${SESS_CURSOR}`,
+    );
   });
 
   it("preserves the seeded frontmatter on subsequent syncs (block-only update)", async () => {
@@ -807,7 +809,9 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(updatedFrontmatter).toBe(seededFrontmatter);
 
     const lines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(lines).toContain("cursor       .cursor/rules/megasaver.mdc  wrote  session=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    expect(lines).toContain(
+      "cursor       .cursor/rules/megasaver.mdc  wrote  session=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    );
   });
 
   it("default sync (no --target) silently skips a missing cursor file", async () => {
@@ -832,7 +836,9 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(written).toContain("Agent: aider");
     expect(written).toContain("<!-- MEGA SAVER:END -->");
     expect(
-      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+created\s+session=none$/.test(c[0] as string)),
+      logSpy.mock.calls.some((c) =>
+        /^aider\s+CONVENTIONS\.md\s+created\s+session=none$/.test(c[0] as string),
+      ),
     ).toBe(true);
   });
 
@@ -855,7 +861,9 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(written.endsWith("<!-- MEGA SAVER:END -->\n")).toBe(true);
     // Status word is "wrote" because file existed (not "created").
     expect(
-      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+wrote\s+session=none$/.test(c[0] as string)),
+      logSpy.mock.calls.some((c) =>
+        /^aider\s+CONVENTIONS\.md\s+wrote\s+session=none$/.test(c[0] as string),
+      ),
     ).toBe(true);
   });
 
@@ -864,7 +872,9 @@ describe("connectorSyncCommand — cursor target", () => {
     await runSync({ projectName: "demo" });
     expect(process.exitCode).toBe(0);
     expect(
-      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+skipped\s+session=none$/.test(c[0] as string)),
+      logSpy.mock.calls.some((c) =>
+        /^aider\s+CONVENTIONS\.md\s+skipped\s+session=none$/.test(c[0] as string),
+      ),
     ).toBe(true);
     await expect(readFile(join(projectRoot, "CONVENTIONS.md"), "utf8")).rejects.toThrow();
   });
@@ -881,7 +891,9 @@ describe("connectorSyncCommand — cursor target", () => {
 
     expect(process.exitCode).toBe(0);
     expect(
-      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+noop\s+session=/.test(c[0] as string)),
+      logSpy.mock.calls.some((c) =>
+        /^aider\s+CONVENTIONS\.md\s+noop\s+session=/.test(c[0] as string),
+      ),
     ).toBe(true);
   });
 
@@ -900,7 +912,9 @@ describe("connectorSyncCommand — cursor target", () => {
     expect(written).toContain(`Project: demo (${PROJECT_ID_CURSOR})`);
     expect(written).not.toContain("old-aider-id");
     expect(
-      logSpy.mock.calls.some((c) => /^aider\s+CONVENTIONS\.md\s+wrote\s+session=/.test(c[0] as string)),
+      logSpy.mock.calls.some((c) =>
+        /^aider\s+CONVENTIONS\.md\s+wrote\s+session=/.test(c[0] as string),
+      ),
     ).toBe(true);
   });
 });
