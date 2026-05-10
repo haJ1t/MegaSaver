@@ -8,9 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Hold real (un-mocked) fs functions so test impls can call them
 // without recursing back through the mock proxy. vi.hoisted because
 // vi.mock factory is hoisted above local module-level declarations.
-const realFs = vi.hoisted(
-  () => ({}) as { fns?: typeof import("node:fs") },
-);
+const realFs = vi.hoisted(() => ({}) as { fns?: typeof import("node:fs") });
 
 vi.mock("node:fs", async (importOriginal) => {
   const original = await importOriginal<typeof import("node:fs")>();
@@ -113,19 +111,23 @@ describe("atomicWriteFile — partial-write recovery (V2)", () => {
     // Track every (call, path) pair so we can assert the temp-fsync,
     // rename, dir-fsync ordering required by POSIX best practice.
     const fdToPath = new Map<number, string>();
-    vi.mocked(fsMock.openSync).mockImplementation(
-      ((path: Parameters<typeof realOpen>[0], ...rest: unknown[]) => {
-        const fd = (realOpen as (...a: unknown[]) => number)(path, ...rest);
-        fdToPath.set(fd, String(path));
-        callOrder.push(`open:${String(path)}`);
-        return fd;
-      }) as typeof realOpen,
-    );
+    vi.mocked(fsMock.openSync).mockImplementation(((
+      path: Parameters<typeof realOpen>[0],
+      ...rest: unknown[]
+    ) => {
+      const fd = (realOpen as (...a: unknown[]) => number)(path, ...rest);
+      fdToPath.set(fd, String(path));
+      callOrder.push(`open:${String(path)}`);
+      return fd;
+    }) as typeof realOpen);
     vi.mocked(fsMock.fsyncSync).mockImplementation(((fd: number) => {
       callOrder.push(`fsync:${fdToPath.get(fd) ?? "?"}`);
       return realFsync(fd);
     }) as typeof realFsync);
-    vi.mocked(fsMock.renameSync).mockImplementation(((src: Parameters<typeof realRename>[0], dst: Parameters<typeof realRename>[1]) => {
+    vi.mocked(fsMock.renameSync).mockImplementation(((
+      src: Parameters<typeof realRename>[0],
+      dst: Parameters<typeof realRename>[1],
+    ) => {
       callOrder.push(`rename:${String(src)}->${String(dst)}`);
       return realRename(src, dst);
     }) as typeof realRename);
@@ -147,18 +149,18 @@ describe("atomicWriteFile — partial-write recovery (V2)", () => {
     const tempOpen = callOrder.findIndex((e) => e.startsWith("open:") && e.includes(".tmp"));
     const tempFsync = callOrder.findIndex((e) => e.startsWith("fsync:") && e.includes(".tmp"));
     const renameIdx = callOrder.findIndex((e) => e.startsWith("rename:"));
-    const dirOpen = callOrder.findIndex(
-      (e, i) => i > renameIdx && e === `open:${rootDir}`,
-    );
-    const dirFsync = callOrder.findIndex(
-      (e, i) => i > renameIdx && e === `fsync:${rootDir}`,
-    );
+    const dirOpen = callOrder.findIndex((e, i) => i > renameIdx && e === `open:${rootDir}`);
+    const dirFsync = callOrder.findIndex((e, i) => i > renameIdx && e === `fsync:${rootDir}`);
 
     expect(tempOpen, `expected temp file open: ${callOrder.join(",")}`).toBeGreaterThanOrEqual(0);
     expect(tempFsync, `expected temp fsync: ${callOrder.join(",")}`).toBeGreaterThan(tempOpen);
     expect(renameIdx, `expected rename: ${callOrder.join(",")}`).toBeGreaterThan(tempFsync);
-    expect(dirOpen, `expected dir open after rename: ${callOrder.join(",")}`).toBeGreaterThan(renameIdx);
-    expect(dirFsync, `expected dir fsync after rename: ${callOrder.join(",")}`).toBeGreaterThan(dirOpen);
+    expect(dirOpen, `expected dir open after rename: ${callOrder.join(",")}`).toBeGreaterThan(
+      renameIdx,
+    );
+    expect(dirFsync, `expected dir fsync after rename: ${callOrder.join(",")}`).toBeGreaterThan(
+      dirOpen,
+    );
   });
 
   it("does not leave a .tmp file when writeFileSync fails before rename", async () => {
