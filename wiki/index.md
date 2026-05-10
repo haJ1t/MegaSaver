@@ -74,6 +74,81 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
+**v0.2 hardening + cleanup round 2 (DD batch, 4 PRs merged 2026-05-10):**
+
+- **PR #40 (`88d9aa6`)** — DD1 AA cleanup: 5 MINOR followups
+  consolidated from PR #28-#33 critics. Explicit `default: false`
+  on 3 boolean `--json` flags, citty-wrapper drift guards on 5
+  commands (15 assertions via `describe.each`), `--json`
+  failure-path tests (7 across 5 commands), init-notice stderr
+  pinning (`startsWith` → `toBe`), dead `memories.json` fixture
+  removed. All 5 `--json` descriptions aligned to canonical
+  "Emit JSON output." Critic ACCEPT-WITH-RESERVATIONS; 2 MAJOR
+  (drift-guard scope mismatch + description drift) closed inline
+  (`2066979`).
+- **PR #41 (`bf582ae`)** — DD4 deferred items resolution: S8
+  closed as already-accurate post-AA2 (PR #25); W7 closed
+  wontfix-v0.1 (codepoint-only truncation; one-line WHY comment
+  in `apps/cli/src/commands/memory/shared.ts` `truncate()`); T6
+  still deferred with explicit ownership note (bundled with
+  `--json` write-side batch). Bonus: 3 pre-existing biome errors
+  fixed in `connector-status.test.ts` + `connector/shared.test.ts`.
+- **PR #42 (`82e6c7f`)** — DD2 BB hardening (HIGH risk):
+  `atomicWriteFile` durability — temp file fsynced BEFORE rename
+  (data on disk before link), parent dir fsynced AFTER rename
+  (link metadata durable). Windows-friendly degradation: dir
+  fsync swallows `EISDIR`/`EPERM`/`ENOTSUP` only; data fsync
+  errors propagate. macOS + Linux for v0.1; Windows graceful
+  no-op. S10 closed: spec §11 added documenting status best-
+  effort policy under concurrent sync; §6 cross-references §11.
+  Cross-process lock evidence: V1 (CC4 PR #36) at `apps/cli/
+  test/session/update-concurrency.test.ts` already exercises
+  the lock primitive. Critic REVISE round 1 (4 findings:
+  fabricated 552 vs actual 540 count, missing Windows guard,
+  §6/§11 silent contradiction, missing wiki entry); all closed
+  inline (`36bf561` + `72dea63`).
+- **PR #43 (`0578ae1`)** — DD3 Z2/Z3 type-safety: vitest
+  typecheck mode wired in 6 packages (per-package
+  `tsconfig.test-d.json` + `typecheck: { enabled: true }`). 4
+  `.test-d.ts` regression suites: `KnownTargetId` (4 members +
+  `@ts-expect-error` non-member guard), `AgentId` (5 members),
+  `RiskLevel` (4 members severity-ascending), `MemoryScope`
+  (2 members semantic). Type-error proof: deliberate
+  `expectTypeOf<string>().toEqualTypeOf<number>()` confirmed
+  vitest catches it (TypeCheckError, exit 1). Critic
+  REQUEST-CHANGES (1 CRITICAL stale base + 3 HIGH false
+  deferral / unwired typecheck / missing proof); rebased + false
+  deferral note replaced with working `@ts-expect-error` guard
+  (`d0c7a04`).
+
+After this batch:
+- Closed-enum bug class structurally enforced at compile time
+  (vitest typecheck + `.test-d.ts` regression suite for 4 enums).
+- `atomicWriteFile` POSIX-durable across crash boundaries
+  (fsync before rename for data + fsync parent dir for metadata;
+  Windows graceful).
+- Read-side `--json` consistency: 5 commands × {type, default,
+  description} pinned via drift guards.
+- 3 deferred items resolved (S8 closed post-AA2, W7 wontfix-v0.1,
+  T6 ownership reassigned to `--json` write-side batch).
+
+Open backlog (post-DD batch):
+- **`--json` write-side**: session create/end/update, memory
+  create, connector sync (5 commands; T6 bundled — sync error
+  line carries `session=<id|none>` for symmetry with status).
+- **EE cleanup batch** (DD critic minors): `riskLevelSchema.options`
+  / `agentIdSchema.options` / `memoryScopeSchema.options` tuple-
+  ordering pin per AA3; `args.json === true` vs `!!args.json`
+  consumption form alignment; JSON-failure policy doc in
+  `wiki/entities/cli.md`; dedicated core-level cross-process
+  lock test (DD2 used V1 evidence).
+- **FF**: full Windows port (currently graceful no-op on dir
+  fsync; needs broader filesystem semantics review).
+
+Total tests on main: 539 → ~575 across the DD batch (+13 cli
+drift-guards + failure-paths from DD1, +1 fsync ordering from
+DD2, +9 type-safety regressions from DD3).
+
 **v0.2 critic-backlog cleanup batch (4 PRs merged 2026-05-10):**
 
 - **PR #34 (`2d97b29`)** — CC1 docs/wiki cleanup (9 items):
