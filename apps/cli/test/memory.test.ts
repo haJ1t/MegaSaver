@@ -327,6 +327,8 @@ describe("memoryCreateCommand", () => {
   let store: string;
   let logSpy: ReturnType<typeof vi.spyOn>;
   let errSpy: ReturnType<typeof vi.spyOn>;
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const originalNodeEnv = process.env["NODE_ENV"];
 
   beforeEach(async () => {
     store = await mkdtemp(join(tmpdir(), "megasaver-cli-memcreate-"));
@@ -343,6 +345,11 @@ describe("memoryCreateCommand", () => {
     delete process.env.MEGA_TEST_MEMORY_ENTRY_ID;
     // biome-ignore lint/performance/noDelete: process.env clear semantics require delete
     delete process.env.MEGA_TEST_NOW;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    // biome-ignore lint/performance/noDelete: restoring env to absent state requires delete
+    if (originalNodeEnv === undefined) delete process.env["NODE_ENV"];
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    else process.env["NODE_ENV"] = originalNodeEnv;
     await rm(store, { recursive: true, force: true });
   });
 
