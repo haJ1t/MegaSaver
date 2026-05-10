@@ -71,6 +71,7 @@ export const memoryShowCommand = defineCommand({
     store: { type: "string", description: "Override store directory." },
     json: {
       type: "boolean",
+      default: false,
       description: "Emit JSON instead of formatted text.",
     },
   },

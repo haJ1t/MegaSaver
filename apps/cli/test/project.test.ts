@@ -60,7 +60,7 @@ describe("projectListCommand", () => {
     await runList();
     expect(logSpy).not.toHaveBeenCalled();
     expect(errSpy).toHaveBeenCalledTimes(1);
-    expect(errSpy.mock.calls[0]?.[0] as string).toMatch(/^note: initialized store at /);
+    expect(errSpy.mock.calls[0]?.[0] as string).toBe(`note: initialized store at ${root}`);
     expect(process.exitCode).toBe(0);
   });
 
@@ -197,7 +197,7 @@ describe("projectCreateCommand", () => {
     await runCreate("demo");
 
     expect(errSpy).toHaveBeenCalledTimes(1);
-    expect(errSpy.mock.calls[0]?.[0] as string).toMatch(/^note: initialized store at /);
+    expect(errSpy.mock.calls[0]?.[0] as string).toBe(`note: initialized store at ${root}`);
   });
 
   it("rejects an empty name with `error: name must be non-empty` and exit 1, without touching the store", async () => {
