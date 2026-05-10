@@ -380,9 +380,14 @@ describe("errors — session update", () => {
     const result = sessionUpdatePatchSchema.safeParse({});
     expect(result.success).toBe(false);
     if (!result.success) {
-      const cli = mapErrorToCliMessage(result.error, { kind: "session_update" });
+      const cli = mapErrorToCliMessage(result.error, {
+        kind: "session_update",
+        id: "22222222-2222-4222-8222-222222222222",
+      });
       expect(cli.exitCode).toBe(1);
-      expect(cli.message.startsWith("error:")).toBe(true);
+      expect(cli.message).toBe(
+        "error: invalid session update: <unknown>: patch must contain at least one field",
+      );
     }
   });
 });
