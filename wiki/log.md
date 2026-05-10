@@ -1192,3 +1192,55 @@ skill-packs — `manifest_invalid`, `manifest_missing`,
 `pack_already_installed`, `pack_not_found`, `pack_path_escape`,
 `pack_unreadable`, `skill_id_conflict`. Schemas widen +
 tuple-ordering pins update when the real loaders land.
+
+## [2026-05-10] feat | II — GUI app bootstrap (apps/gui)
+
+Opened v0.3 II series. Bootstrapped `apps/gui` as a new workspace
+package (`@megasaver/gui`, ESM, private).
+
+**Framework decision:** Vite + React SPA + tiny `node:http` bridge.
+Tauri (Rust toolchain dep) and Electron (heavy) rejected for
+bootstrap. Bridge imports `@megasaver/core` directly — no subprocess
+parsing, no CLI surface extension needed.
+
+**What shipped:**
+- `apps/gui/src/` — React SPA with two views: Sessions, Memory
+  entries. View switcher via `ViewId` closed enum (alphabetic AA3
+  convention). `VIEW_IDS = ["memory", "sessions"] as const`.
+- `apps/gui/bridge/` — `node:http` server (port 5174) exposing
+  `GET /api/health`, `GET /api/sessions`, `GET /api/memory`.
+  Imports `createJsonDirectoryCoreRegistry` + `initStore` from
+  `@megasaver/core`; iterates all projects via `listProjects()` and
+  flatMaps per-project session/memory lists.
+- `apps/gui/src/lib/api-client.ts` — typed `fetch` wrappers.
+- `apps/gui/vitest.config.ts` — jsdom environment, typecheck mode.
+- `apps/gui/vite.config.ts` — React plugin, proxy `/api` → port 5174.
+- `apps/gui/index.html` — Vite entry.
+- `apps/gui/test/app.test.tsx` — smoke test (4 assertions): both
+  view buttons render, default view correct, click switches view,
+  empty-state copy renders. `# @vitest-environment jsdom` header for
+  repo-root vitest run.
+- `apps/gui/test/view-id.test-d.ts` — tuple-ordering pin (2 type
+  assertions).
+
+**Scripts:**
+- `pnpm --filter @megasaver/gui dev` — Vite dev server (port 5173)
+- `pnpm --filter @megasaver/gui bridge` — Node bridge (port 5174)
+- Run both for full local dev; one-command dev deferred to v0.4.
+
+**Test counts:** 587 → 591 (+4 smoke assertions). 56 test files.
+Biome: 177 files checked, 0 errors. Pre-existing `connector.test.ts`
+formatter issue fixed inline.
+
+**Closed:** wiki v0.3 GUI bootstrap slot (deferred from v0.2 close-out).
+
+**Deferred to v0.4:**
+- Project picker / filtering UI.
+- Session and memory detail views.
+- Write actions (create/end/update).
+- Native window packaging (Tauri/Electron).
+- Single-command `dev` (Vite + bridge under one process).
+- `--store` flag at bridge CLI layer.
+
+Spec: `docs/superpowers/specs/2026-05-10-ii-gui-app-design.md`.
+Plan: `docs/superpowers/plans/2026-05-10-ii-gui-app.md`.

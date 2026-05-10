@@ -1,0 +1,35 @@
+{
+  "name": "@megasaver/gui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Mega Saver GUI app - localhost web shell over the core registry.",
+  "type": "module",
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "dev": "vite",
+    "bridge": "node --import tsx bridge/server.ts",
+    "build": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@megasaver/core": "workspace:*",
+    "@megasaver/shared": "workspace:*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
+    "tsx": "^4.19.2",
+    "vite": "^5.4.11"
+  }
+}
