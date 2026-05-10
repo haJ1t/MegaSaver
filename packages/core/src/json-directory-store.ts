@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
 import {
+  closeSync,
   existsSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -238,7 +241,22 @@ function atomicWriteFile(filePath: string, content: string): void {
 
     mkdirSync(parentDir, { recursive: true });
     writeFileSync(tempPath, content);
+    // Durability: fsync the temp file before rename so its bytes are on disk,
+    // then fsync the parent dir after rename so the link is durable. POSIX
+    // best-practice for atomic-update semantics. macOS + Linux supported in v0.1.
+    const tempFd = openSync(tempPath, "r");
+    try {
+      fsyncSync(tempFd);
+    } finally {
+      closeSync(tempFd);
+    }
     renameSync(tempPath, filePath);
+    const dirFd = openSync(parentDir, "r");
+    try {
+      fsyncSync(dirFd);
+    } finally {
+      closeSync(dirFd);
+    }
   } catch (error) {
     try {
       rmSync(tempPath, { force: true });
