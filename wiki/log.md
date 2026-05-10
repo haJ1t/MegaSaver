@@ -955,3 +955,49 @@ out of scope for this docs-only DD4 batch.
 files). Critic round 1: REVISE for fabricated 552 count (actual
 540), Windows guard divergence, §6/§11 silent contradiction —
 all closed inline (`36bf561`).
+
+## [2026-05-10] feat | DD1-DD4 hardening + cleanup round 2 (4 PRs)
+
+Round 2 of follow-up backlog closure. 4 parallel teammates
+dispatched on `188f1e0` HEAD (post-CC1-CC5+wiki batch); all
+landed 2026-05-10:
+
+- PR #40 (`88d9aa6`) — DD1 AA cleanup: explicit `default: false`
+  on 3 boolean `--json` flags + citty-wrapper drift guards on 5
+  commands + `--json` failure-path tests + init-notice exact-pin
+  + dead memories.json fixture removed. All 5 `--json`
+  descriptions aligned to "Emit JSON output." Critic ACCEPT-WITH-
+  RESERVATIONS, 2 MAJOR closed inline (`2066979`).
+- PR #41 (`bf582ae`) — DD4 deferred items: S8 closed (post-AA2
+  help-text accurate); W7 wontfix-v0.1 (codepoint truncation
+  comment in `memory/shared.ts`); T6 deferred to `--json` write-
+  side batch with ownership note. Bonus: 3 pre-existing biome
+  lint errors fixed.
+- PR #42 (`82e6c7f`) — DD2 BB hardening (HIGH risk): atomicWriteFile
+  + fsync (temp BEFORE rename, dir AFTER rename, Windows-friendly
+  degradation). S10 spec §11 stanza on status concurrency.
+  V1 (CC4 PR #36) cited as cross-process lock evidence. Critic
+  REVISE round 1 (4 findings: fabricated 552 vs 540, Windows
+  guard, §6/§11 contradiction, wiki entry); all closed inline
+  (`36bf561` + `72dea63`).
+- PR #43 (`0578ae1`) — DD3 Z2/Z3: vitest typecheck mode in 6
+  packages + 4 `.test-d.ts` regression suites for closed enums.
+  Critic REQUEST-CHANGES (CRITICAL stale base + HIGH false
+  deferral note + HIGH typecheck wiring); rebased + deferral
+  replaced with `@ts-expect-error` non-member guard (`d0c7a04`).
+
+Closed: ~13 follow-up items (DD1: 5 MINORs, DD4: 3 deferreds,
+DD2: 3 hardening, DD3: 2 type-safety). Schema-derived surfaces
++ closed-enum literal types now compile-time enforced via
+`.test-d.ts` + vitest typecheck mode. atomicWriteFile durable
+under POSIX crash semantics.
+
+Method note: parallel 4-teammate dispatch from `188f1e0` HEAD
+(separate worktrees, no team coordination). 2/4 teammates landed
+mid-task (DD2 fsync TDD red, DD3 false deferral) — main-thread
+completion. Critic round needed amendments on 3/4 PRs (DD1
+ACCEPT-WITH-RESERVATIONS, DD2 REVISE, DD3 REQUEST-CHANGES);
+DD4 APPROVE first round.
+
+Total tests on main: 539 → ~575 (+13 DD1 + 1 DD2 + 9 DD3 +
+3 net DD4 lint baselines).
