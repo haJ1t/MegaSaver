@@ -226,6 +226,46 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
   return { message: "error: unexpected failure", exitCode: 1 };
 }
 
+export function intentRequiredMessage(): CliMessage {
+  return { message: "error: intent_required: --intent is required", exitCode: 1 };
+}
+
+export function fileRequiredMessage(): CliMessage {
+  return { message: "error: file_required: --file is required", exitCode: 1 };
+}
+
+export function pathDeniedMessage(reason: string): CliMessage {
+  return { message: `error: path_denied: ${reason}`, exitCode: 1 };
+}
+
+export function pathUnsafeMessage(detail: string): CliMessage {
+  return { message: `error: path_unsafe: ${detail}`, exitCode: 1 };
+}
+
+export function fileReadFailedMessage(detail: string): CliMessage {
+  return { message: `error: file_read_failed: ${detail}`, exitCode: 1 };
+}
+
+export function invalidChunkSetIdMessage(): CliMessage {
+  return { message: "error: invalid_chunk_set_id", exitCode: 1 };
+}
+
+export function invalidChunkIdMessage(): CliMessage {
+  return { message: "error: invalid_chunk_id", exitCode: 1 };
+}
+
+export function chunkSetNotFoundMessage(): CliMessage {
+  return { message: "error: chunk_set_not_found", exitCode: 1 };
+}
+
+export function chunkNotFoundMessage(): CliMessage {
+  return { message: "error: chunk_not_found", exitCode: 1 };
+}
+
+export function storeCorruptMessage(detail: string): CliMessage {
+  return { message: `error: store_corrupt: ${detail}`, exitCode: 1 };
+}
+
 export function memoryEntryNotFoundMessage(id: string): CliMessage {
   return { message: `error: memory entry "${id}" not found`, exitCode: 1 };
 }
