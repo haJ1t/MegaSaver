@@ -170,6 +170,25 @@ importers:
         specifier: ^22.0.0
         version: 22.19.17
 
+  packages/content-store:
+    dependencies:
+      '@megasaver/output-filter':
+        specifier: workspace:*
+        version: link:../output-filter
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+      fast-check:
+        specifier: ^3.23.2
+        version: 3.23.2
+
   packages/core:
     dependencies:
       '@megasaver/shared':
