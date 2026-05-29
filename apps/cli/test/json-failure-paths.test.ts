@@ -277,6 +277,9 @@ describe("runConnectorStatus --json failure path", () => {
 
 import { runConnectorSync } from "../src/commands/connector/sync.js";
 import { runMemoryCreate } from "../src/commands/memory/create.js";
+import { runOutputChunk } from "../src/commands/output/chunk.js";
+import { runOutputFile } from "../src/commands/output/file.js";
+import { runOutputFilter } from "../src/commands/output/filter.js";
 import { runSessionCreate } from "../src/commands/session/create.js";
 import { runSessionEnd } from "../src/commands/session/end.js";
 import {
@@ -467,6 +470,10 @@ describe("runConnectorSync --json failure path", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// session saver enable/disable --json failure paths (BB2)
+// ---------------------------------------------------------------------------
+
 const SESS_SAVER = "22222222-2222-4222-8222-222222222222";
 
 async function seedSaverSession(store: string): Promise<void> {
@@ -552,6 +559,127 @@ describe("runSessionSaverDisable --json failure path", () => {
     const code = await runSessionSaverDisable({
       sessionId: "99999999-9999-4999-8999-999999999999",
       modeFlag: undefined,
+      storeFlag: store,
+      cwd: "/tmp",
+      home: "/tmp",
+      xdgDataHome: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// output file / filter / chunk --json failure paths (BB7a §4)
+// ---------------------------------------------------------------------------
+
+const SESSION_ID_W = "22222222-2222-4222-8222-222222222222";
+
+async function seedSession(store: string, projectRoot: string): Promise<void> {
+  await seedProject(store, projectRoot);
+  await writeFile(
+    join(store, "sessions.json"),
+    JSON.stringify([
+      {
+        id: SESSION_ID_W,
+        projectId: PROJECT_ID_W,
+        agentId: "claude-code",
+        riskLevel: "medium",
+        title: "demo session",
+        startedAt: TS_W,
+        endedAt: null,
+      },
+    ]),
+  );
+}
+
+describe("runOutputFile --json failure path", () => {
+  let store: string;
+  let projectRoot: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-json-fail-of-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-json-fail-of-root-"));
+    await seedSession(store, projectRoot);
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  it("missing --intent → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runOutputFile({
+      sessionId: SESSION_ID_W,
+      intentFlag: undefined,
+      path: join(projectRoot, "log.txt"),
+      storeFlag: store,
+      cwd: projectRoot,
+      home: projectRoot,
+      xdgDataHome: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+});
+
+describe("runOutputFilter --json failure path", () => {
+  let store: string;
+  let projectRoot: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-json-fail-ofl-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-json-fail-ofl-root-"));
+    await seedSession(store, projectRoot);
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  it("missing --file → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runOutputFilter({
+      sessionId: SESSION_ID_W,
+      intentFlag: "find it",
+      fileFlag: undefined,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: projectRoot,
+      xdgDataHome: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+});
+
+describe("runOutputChunk --json failure path", () => {
+  let store: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-json-fail-oc-"));
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+  });
+
+  it("unknown chunk-set id → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runOutputChunk({
+      chunkSetId: "does-not-exist",
+      chunkId: "0",
       storeFlag: store,
       cwd: "/tmp",
       home: "/tmp",

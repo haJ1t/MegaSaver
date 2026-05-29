@@ -20,7 +20,10 @@
   "dependencies": {
     "@megasaver/connector-generic-cli": "workspace:*",
     "@megasaver/connectors-shared": "workspace:*",
+    "@megasaver/content-store": "workspace:*",
     "@megasaver/core": "workspace:*",
+    "@megasaver/output-filter": "workspace:*",
+    "@megasaver/policy": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "citty": "^0.1.6",
     "zod": "^3.24.1"

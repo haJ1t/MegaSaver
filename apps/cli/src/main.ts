@@ -3,6 +3,7 @@ import { defineCommand } from "citty";
 import { connectorCommand } from "./commands/connector/index.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { memoryCommand } from "./commands/memory/index.js";
+import { outputCommand } from "./commands/output/index.js";
 import { projectCommand } from "./commands/project.js";
 import { sessionCommand } from "./commands/session/index.js";
 
@@ -21,5 +22,6 @@ export const mainCommand = defineCommand({
     session: sessionCommand,
     connector: connectorCommand,
     memory: memoryCommand,
+    output: outputCommand,
   },
 });
