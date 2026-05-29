@@ -69,12 +69,18 @@ importers:
       '@fontsource/dm-mono':
         specifier: ^5.0.0
         version: 5.2.7
+      '@megasaver/content-store':
+        specifier: workspace:*
+        version: link:../../packages/content-store
       '@megasaver/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@megasaver/stats':
+        specifier: workspace:*
+        version: link:../../packages/stats
       react:
         specifier: ^18.3.1
         version: 18.3.1

@@ -49,6 +49,7 @@
     {
       "include": [
         "apps/gui/src/components/project-picker.tsx",
+        "apps/gui/src/components/token-saver-modal.tsx",
         "apps/gui/src/views/sessions-view.tsx",
         "apps/gui/src/views/sessions-list.tsx",
         "apps/gui/src/views/memory-view.tsx"

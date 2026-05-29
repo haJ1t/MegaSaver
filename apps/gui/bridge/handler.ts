@@ -4,7 +4,7 @@ import type { CoreRegistry } from "@megasaver/core";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
 import { applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
 import { handleCaughtError } from "./error-mapping.js";
-import type { RouteContext, SendError, SendJson } from "./route-context.js";
+import type { RouteContext, SendError, SendJson, SendText } from "./route-context.js";
 import { handleGetHealth } from "./routes/health.js";
 import { handleGetMemory, handlePostMemory } from "./routes/memory.js";
 import { handleGetProjects } from "./routes/projects.js";
@@ -14,6 +14,7 @@ import {
   handlePatchSession,
   handlePostSession,
 } from "./routes/sessions.js";
+import { dispatchTokenSaver } from "./routes/token-saver.js";
 
 export interface BridgeHandlerOptions {
   registry: CoreRegistry;
@@ -56,6 +57,21 @@ const sendJson: SendJson = (res, status, body, origin) => {
   }
   res.writeHead(status, headers);
   res.end(JSON.stringify(body));
+};
+
+const sendText: SendText = (res, status, body, origin) => {
+  const headers: { [key: string]: string; vary: string } = {
+    "content-type": "text/plain; charset=utf-8",
+    "content-disposition": "inline",
+    "cache-control": "no-store",
+    "content-security-policy": "default-src 'self'",
+    vary: "origin",
+  };
+  if (origin) {
+    headers["access-control-allow-origin"] = origin;
+  }
+  res.writeHead(status, headers);
+  res.end(body);
 };
 
 const sendError: SendError = (res, status, code, message, origin, details) => {
@@ -111,10 +127,12 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       registry,
       origin,
       query,
+      storeRoot: storePath,
       newId,
       now,
       sendJson,
       sendError,
+      sendText,
     };
 
     if (path === "/api/health") {
@@ -157,6 +175,13 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       return methodNotAllowed(res, method, origin);
     }
 
+    if (path.startsWith("/api/sessions/") && path.includes("/token-saver")) {
+      const dispatched = await dispatchTokenSaver(ctx, method, path, () =>
+        methodNotAllowed(res, method, origin),
+      );
+      if (dispatched) return;
+    }
+
     if (path === "/api/memory") {
       if (method === "GET") {
         handleGetMemory(ctx);
@@ -172,7 +197,6 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     sendError(res, 404, "route_not_found", `Route not found: ${method} ${path}`, origin);
   }
 }
-
-// Re-export so production server (server.ts) and tests get a single source of truth.
+// Re-export so production server (server.ts) and tests share one source of truth.
 export { BRIDGE_ERROR_CODES };
 export type { BridgeErrorCode };
