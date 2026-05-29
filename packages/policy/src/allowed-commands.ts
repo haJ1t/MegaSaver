@@ -1,0 +1,31 @@
+// epic §9b — LOCKED, alphabetic. git is intentionally absent: BB6
+// diff-aware ranking uses a separate in-process path. Membership is
+// an exact-string check (no path normalisation, no basename strip).
+export const ALLOWED_COMMANDS: readonly string[] = [
+  "bun",
+  "bunx",
+  "cargo",
+  "cat",
+  "deno",
+  "find",
+  "go",
+  "grep",
+  "jest",
+  "ls",
+  "make",
+  "node",
+  "npm",
+  "npx",
+  "pnpm",
+  "pnpx",
+  "pwd",
+  "pytest",
+  "tail",
+  "ts-node",
+  "tsc",
+  "tsx",
+  "vitest",
+  "wc",
+  "whoami",
+  "yarn",
+];
