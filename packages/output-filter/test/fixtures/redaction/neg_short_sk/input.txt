@@ -1,0 +1,2 @@
+the variable sk-short was assigned here
+ skipping sk-abc because it is too small

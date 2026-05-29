@@ -1,0 +1,3 @@
+aws configure list
+access_key AKIAIOSFODNN7EXAMPLE shown
+region us-east-1

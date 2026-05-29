@@ -1,0 +1,6 @@
+key material follows
+-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEAabcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN
+OPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQR
+-----END RSA PRIVATE KEY-----
+trailing line

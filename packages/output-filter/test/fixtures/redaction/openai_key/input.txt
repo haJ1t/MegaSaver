@@ -1,0 +1,3 @@
+starting run
+OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz0123
+done
