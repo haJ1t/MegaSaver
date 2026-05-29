@@ -5,9 +5,10 @@ sources:
   - docs/superpowers/specs/2026-05-04-core-package-design.md
   - docs/superpowers/specs/2026-05-05-core-persistence-design.md
   - docs/superpowers/specs/2026-05-06-cli-project-crud-design.md
+  - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
 status: persistence-merged
 created: 2026-05-04
-updated: 2026-05-08
+updated: 2026-05-11
 ---
 
 # `@megasaver/core`
@@ -33,6 +34,24 @@ Agent-agnostic Core Engine. CLI and connectors build on this neutral package; ne
 - `title: string | null`
 - `startedAt: string` (RFC 3339)
 - `endedAt: string | null` (RFC 3339)
+- `tokenSaver?: TokenSaverSettings` — optional; added BB1 (AA1). Absent
+  on pre-AA sessions (`undefined`); `.strict()` rejects unknown keys
+  but not missing optional ones, so old `sessions.json` rows parse
+  unchanged. Migration is a no-op (no script, no version bump).
+
+`TokenSaverSettings` — `packages/core/src/token-saver.ts` (BB1):
+
+- `enabled: boolean`, `mode: TokenSaverMode`,
+  `maxReturnedBytes: number` (int, positive), `storeRawOutput: boolean`,
+  `redactSecrets: boolean`, `autoRepair: boolean`,
+  `createdAt` / `updatedAt` (RFC 3339).
+- `defaultTokenSaverSettings(now: () => string)` — `enabled: false`,
+  `mode: "balanced"`, `maxReturnedBytes: 12_000`, the rest `true`.
+  `now` is mandatory (no module-level `Date.now()`).
+- The `TokenSaverMode` enum itself + `modeToBudget` live in
+  `@megasaver/shared`, NOT core (AA1 §2e cycle fix); core's
+  `token-saver.ts` imports `tokenSaverModeSchema` from shared. See
+  [[entities/shared]].
 
 `MemoryEntry` — `packages/core/src/memory-entry.ts:4`:
 
@@ -61,6 +80,7 @@ interface CoreRegistry {
   createMemoryEntry(entry: MemoryEntry): MemoryEntry;
   getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
   listMemoryEntries(projectId: ProjectId): MemoryEntry[];
+  updateTokenSaver(id: SessionId, settings: TokenSaverSettings): Session;
 }
 ```
 
@@ -69,11 +89,18 @@ Throws `session_not_found` (unknown id) or `session_already_ended`
 (closed session). Patch validated by `sessionUpdatePatchSchema`
 (Zod, strict + ≥1 key required).
 
+`updateTokenSaver(id, settings)` — added BB1 (AA1). Full-replacement
+(not a partial `Pick<>`) — enable/disable/status all write the whole
+settings object. On both in-memory and JSON-directory implementations.
+Reuses `session_not_found` / `session_already_ended` error codes.
+
 CLI must construct **full** entities — registry parses with strict Zod and rejects partials with `CorePersistenceError("store_entity_invalid", ...)`.
 
 ## Public surface
 
-- Schemas above + their inferred types, including `sessionUpdatePatchSchema`.
+- Schemas above + their inferred types, including `sessionUpdatePatchSchema`,
+  `tokenSaverSettingsSchema` / `TokenSaverSettings`, and
+  `defaultTokenSaverSettings(now)` (BB1).
 - `createInMemoryCoreRegistry()` — deterministic, no I/O.
 - `createJsonDirectoryCoreRegistry({ rootDir }): CoreRegistry` — durable: `projects.json`, `sessions.json`, `memory/<projectId>.jsonl`. Temp-file + rename writes.
 - `initStore(rootDir): Promise<void>` — async, idempotent. Creates rootDir + empty `projects.json` + empty `sessions.json` if missing. Used by CLI auto-init.
@@ -90,7 +117,14 @@ CLI must construct **full** entities — registry parses with strict Zod and rej
 
 ## Implementation status
 
-Foundation + JSON persistence: PR <https://github.com/haJ1t/MegaSaver/pull/4> (`0656114`). `initStore` + cli project CRUD consumer: PR <https://github.com/haJ1t/MegaSaver/pull/5> (`9003968`). M1 lock + M2 failure-mode tests: PR <https://github.com/haJ1t/MegaSaver/pull/9> (`0dc2e29`). M3 stale-lock detection + M4 NFC normalization: PR <https://github.com/haJ1t/MegaSaver/pull/10> (`ac27142`). Session CRUD: `endSession` mutation + `session_already_ended` code: PR <https://github.com/haJ1t/MegaSaver/pull/11> (`9c5a388`). All on `origin/main`. 129 tests across 15 files.
+Foundation + JSON persistence: PR <https://github.com/haJ1t/MegaSaver/pull/4> (`0656114`). `initStore` + cli project CRUD consumer: PR <https://github.com/haJ1t/MegaSaver/pull/5> (`9003968`). M1 lock + M2 failure-mode tests: PR <https://github.com/haJ1t/MegaSaver/pull/9> (`0dc2e29`). M3 stale-lock detection + M4 NFC normalization: PR <https://github.com/haJ1t/MegaSaver/pull/10> (`ac27142`). Session CRUD: `endSession` mutation + `session_already_ended` code: PR <https://github.com/haJ1t/MegaSaver/pull/11> (`9c5a388`). BB1 (AA1): `Session.tokenSaver` field + `token-saver.ts` settings + `updateTokenSaver` registry method: PR <https://github.com/haJ1t/MegaSaver/pull/67> (`acebb6c`); the `TokenSaverMode` enum was hoisted to `@megasaver/shared` (AA1 §2e). All on `origin/main`.
+
+**AA1 boundary note:** AA1 §2a proposed a `packages/core/src/context-gate/`
+orchestrator shared by CLI + MCP. As of BB7a (PR #73) that directory does
+NOT exist — the pipeline is composed CLI-side in
+`apps/cli/src/commands/output/shared.ts`, and core gained no new package
+deps (still `@megasaver/shared` + `zod`). The orchestrator extraction is
+deferred. See [[entities/cli]] and [[concepts/context-gate-pipeline]].
 
 ## Risk
 

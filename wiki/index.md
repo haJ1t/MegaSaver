@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-05-11
+updated: 2026-05-12
 ---
 
 # Wiki Index — Mega Saver
@@ -10,6 +10,8 @@ updated: 2026-05-11
 ## Decisions (locked-in choices)
 
 - [[decisions/bootstrap-matrix]] — the 10 foundation decisions (path, repo, stack, MVP, language, git…)
+- [[decisions/policy-is-bb3]] — `@megasaver/policy` ships at BB3 (v0.5), not the v0.9 roadmap.
+- [[decisions/content-store-no-core-edge]] — AA1 §3c: the 5 leaf packages must not import core.
 
 ## Concepts (cross-cutting ideas)
 
@@ -18,6 +20,7 @@ updated: 2026-05-11
 - [[concepts/risk-aware-development]] — LOW / MEDIUM / HIGH / CRITICAL gating skills.
 - [[concepts/superpowers-discipline]] — mandatory chain on every feature.
 - [[concepts/wiki-first-token-discipline]] — wiki is the only sanctioned project memory; question → entry mapping; hard rules to avoid raw spec/code reads.
+- [[concepts/context-gate-pipeline]] — Mega Saver Mode: redact → chunk → rank → fit → summarize; redaction flow; AA1 package roles + cycle direction.
 
 ## Entities
 
@@ -25,9 +28,17 @@ updated: 2026-05-11
 - [[entities/connectors-claude-code]] — `@megasaver/connector-claude-code` root `CLAUDE.md` adapter (merged).
 - [[entities/connectors-generic-cli]] — `@megasaver/connector-generic-cli` manifest-driven connector (v0.1 = Codex `AGENTS.md`).
 - [[entities/connectors-shared]] — `@megasaver/connectors-shared` block helpers + context schema.
-- [[entities/core]] — `@megasaver/core` agent-agnostic engine foundation (v0.1).
+- [[entities/core]] — `@megasaver/core` agent-agnostic engine foundation (v0.1; BB1 adds `Session.tokenSaver` + `updateTokenSaver`).
 - [[entities/gui]] — `@megasaver/gui` localhost web shell — picker + master-detail + write actions, "Editorial Terminal" design (v1, LL).
-- [[entities/shared]] — `@megasaver/shared` contracts package (v0.1).
+- [[entities/shared]] — `@megasaver/shared` contracts package (v0.1; BB1 adds `TokenSaverMode` + `modeToBudget`).
+
+### AA1 Context Gate packages (v0.5)
+
+- [[entities/policy]] — `@megasaver/policy` command/path gates + redact + `PolicyDenyCode` (BB3).
+- [[entities/output-filter]] — `@megasaver/output-filter` `filterOutput` pipeline, `resolveSafeReadPath`, `RankFeatureName`, `OutputSourceKind` (BB5).
+- [[entities/content-store]] — `@megasaver/content-store` ChunkSet persistence, `ContentStoreErrorCode` (BB4; no core edge).
+- [[entities/retrieval]] — `@megasaver/retrieval` BM25 + `DerivedIntent` (BB6).
+- [[entities/stats]] — `@megasaver/stats` `SessionTokenSaverStats` + `TokenSaverEvent` (BB6).
 
 More subsystem pages land as features get built. v0.3 scaffolds (entity pages still pending): `mcp-bridge`, `skill-packs`, `conventions-sync`.
 
@@ -72,8 +83,51 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 | Where's the bootstrap spec/plan?                  | [[sources/spec-bootstrap]] / [[sources/plan-bootstrap]] |
 | What does `mega connector status` report?         | [[entities/cli]]                                |
 | What does `mega memory` ship?                      | [[entities/cli]]                                |
+| What is Mega Saver Mode / the Context Gate?        | [[concepts/context-gate-pipeline]]              |
+| How does redaction work / where does it run?       | [[concepts/context-gate-pipeline]] / [[entities/policy]] |
+| What does `mega session saver` do?                 | [[entities/cli]]                                |
+| What does `mega output {file,filter,chunk}` do?    | [[entities/cli]]                                |
+| What does the output-filter pipeline ship?         | [[entities/output-filter]]                      |
+| Where are chunk sets persisted?                    | [[entities/content-store]]                      |
+| Why is policy a v0.5 package?                       | [[decisions/policy-is-bb3]]                      |
+| Why can't content-store import core?               | [[decisions/content-store-no-core-edge]]        |
 
 ## Status
+
+## AA1 Context Gate — BB1–BB7a SHIPPED (2026-05-11)
+
+First batch of the AA1 Context Gate / Mega Saver Mode epic (11 sub-PRs
+BB1…BB11; spec `docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md`).
+Seven sub-PRs landed; BB8–BB11 (mcp-bridge, GUI panel, doctor +
+CONTEXT_GATE connector block) remain.
+
+- **BB1 (#67, `acebb6c`)** — `Session.tokenSaver` schema +
+  `TokenSaverMode` hoisted to `@megasaver/shared`. See [[entities/shared]],
+  [[entities/core]].
+- **BB2 (#68, `4660d37`)** — `mega session saver {enable,disable,status,stats}`
+  CLI over `updateTokenSaver`. See [[entities/cli]].
+- **BB3 (#69, `61efb28`)** — `@megasaver/policy`: `evaluateCommand`,
+  `evaluatePathRead`, `redact`, `PolicyDenyCode`. See [[entities/policy]],
+  [[decisions/policy-is-bb3]].
+- **BB5 (#70, `ae41534`)** — `@megasaver/output-filter`: `filterOutput`
+  pipeline, `resolveSafeReadPath`, `RankFeatureName`, `OutputSourceKind`
+  (imports `policy.redact`). See [[entities/output-filter]].
+- **BB6 (#71, `6078dc9`)** — `@megasaver/retrieval` (BM25, `DerivedIntent`)
+  + `@megasaver/stats` (`SessionTokenSaverStats`, `TokenSaverEvent`). See
+  [[entities/retrieval]], [[entities/stats]].
+- **BB4 (#72, `a8b6531`)** — `@megasaver/content-store` ChunkSet
+  persistence; merged after BB5/BB6 (depends on `OutputSourceKind`).
+  Cycle-fix: no core dep (§3c). See [[entities/content-store]],
+  [[decisions/content-store-no-core-edge]].
+- **BB7a (#73, `67d66dc`)** — `mega output {file,filter,chunk}` CLI.
+  Shipped-vs-spec: pipeline composed CLI-side in
+  `apps/cli/src/commands/output/shared.ts`, NOT the proposed
+  `packages/core/src/context-gate/` orchestrator; no stats wiring yet.
+  See [[concepts/context-gate-pipeline]].
+
+Workspace 10 → 15 buildable units (added `policy`, `output-filter`,
+`content-store`, `retrieval`, `stats`). All §3c cycle guardrails hold;
+each new package ships a `dependency-graph.test.ts`.
 
 ## v0.3 — SHIPPED (2026-05-10)
 

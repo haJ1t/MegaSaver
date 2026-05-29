@@ -1541,3 +1541,240 @@ existing surfaces. Blocks BB2 (`mega session saver`), BB5
 (output-filter), BB6 (retrieval+stats), BB7a/b (orchestrator +
 spawn), BB8 (mcp-bridge), BB10 (GUI panel), BB11 (doctor +
 CONTEXT_GATE block).
+
+## [2026-05-11] feat | BB2 — mega session saver CLI (AA1 #2/11)
+
+Second sub-PR of the AA1 Context Gate epic. PR
+<https://github.com/haJ1t/MegaSaver/pull/68> merged into `main`
+(merge commit `4660d37`).
+
+`mega session saver {enable,disable,status,stats}` ships under
+`apps/cli/src/commands/session/saver/{enable,disable,status,stats,index}.ts`,
+registered as the `saver` parent on the existing `session`
+subcommand tree. All four take a positional `<session-id>`
+parsed through `sessionIdSchema` at the CLI boundary; all four
+carry `--store <dir>` + `--json` parity per §5a.
+
+- `enable <id> --mode safe|balanced|aggressive` — calls
+  `defaultTokenSaverSettings(now)` then overrides `enabled: true`,
+  `mode`, `maxReturnedBytes: modeToBudget(mode)`, and persists via
+  `CoreRegistry.updateTokenSaver` (BB1). `--mode` REQUIRED; invalid
+  → `invalidModeMessage()` (new sibling of `invalidRiskMessage` in
+  `apps/cli/src/errors.ts`, derived from
+  `tokenSaverModeSchema.options`). Text line:
+  `Mega Saver Mode enabled for <id> (<mode>; <bytes> B)`.
+- `disable <id>` — rewrites the settings blob with `enabled: false`
+  (BB7a's `disableContextGate` orchestrator was not yet available,
+  so disable mutates the settings directly via `updateTokenSaver`).
+- `status <id>` — reports current `tokenSaver` state (or
+  not-enabled CTA when `session.tokenSaver === undefined`).
+- `stats <id>` — reports the session token-saver stats. BB6 stats
+  package not yet merged at BB2, so stats reads only what BB1
+  persisted.
+
+`--json` failure paths extended in
+`apps/cli/test/json-failure-paths.test.ts` (invalid-mode,
+missing-mode, not-found). Exit codes: 0 success, 1 expected error.
+Risk MEDIUM. Depends on BB1; blocks BB10 (GUI consistency).
+
+## [2026-05-11] feat | BB3 — @megasaver/policy package (AA1 #3/11)
+
+Third sub-PR of the AA1 epic. PR
+<https://github.com/haJ1t/MegaSaver/pull/69> merged into `main`
+(merge commit `61efb28`).
+
+New `packages/policy/` package — the security gate, promoted to
+its own v0.5 package per AA1 §2b (NOT the v0.9 Advanced roadmap;
+see [[decisions/policy-is-bb3]]). Two downstream consumers
+(`output-filter` BB5 → `redact`, `mega output exec`/`mega_run_command`
+→ `evaluateCommand`) need a single Zod-validated source of truth, so
+hard-coding or deferred-TODO copies were rejected per `CLAUDE.md`
+§13. Public surface (`packages/policy/src/index.ts`):
+
+- `evaluateCommand(input): EvaluateCommandResult` — ALLOWED_COMMANDS
+  allow-list + DANGEROUS_PATTERNS deny-list, matched against the
+  full rendered command-line (`[command, ...args].join(" ")`). Carries
+  the `MEGASAVER_ORIGIN_PID` env-marker re-entry guard (F-CRIT-3):
+  an inherited marker that differs from `String(process.pid)` denies
+  with `recursive_megasaver`.
+- `evaluatePathRead(input): EvaluatePathReadResult` — default-deny
+  secret-path denylist (`.env`, `.ssh/**`, `.aws/credentials`,
+  `*.pem`, `*.key`, `id_rsa`, …). Added in Revision 2 (F-CRIT-2).
+- `redact(text): RedactResult` — `{ redacted, count }` over the
+  REDACTION_PATTERNS set (the actual regex corpus lives in BB5
+  output-filter; policy owns the command/path gates and the redact
+  entry-point).
+- `policyDenyCodeSchema` / `PolicyDenyCode` — closed enum, 6 members
+  alphabetic (AA3): `command_not_allowed`, `dangerous_pattern`,
+  `intent_missing`, `path_denied`, `recursive_megasaver`,
+  `secret_path_read`.
+
+`loadProjectPermissions` / `ProjectPermissions` deliberately NOT
+exported (F-MED-4 — no v0.5 consumer; the v0.9 permissions-file spec
+adds them). Dependency: `@megasaver/shared` only (`ProjectId`);
+dep-graph test enforces no core/output-filter import (§3c). Risk
+HIGH — deny-list IS the contract; `architect` + `critic` mandatory.
+
+## [2026-05-11] feat | BB5 — @megasaver/output-filter pipeline (AA1 #5/11)
+
+Fifth sub-PR of the AA1 epic (merged before BB4 by PR number;
+BB4 rebased on top — see BB4 entry). PR
+<https://github.com/haJ1t/MegaSaver/pull/70> merged into `main`
+(merge commit `ae41534`).
+
+New `packages/output-filter/` package — the redaction-bearing
+filter pipeline. `filterOutput(input): FilterOutputResult` is
+**pure** (no IO): redact → normalize (strip ANSI, collapse CRLF) →
+collapse repeated lines → chunk (`chunkByLines(40)` + specialised
+test-output / ts-diagnostic / stacktrace parsers under
+`src/parsers/`) → rank (`scoreChunk`) → dedupe (SimHash /
+Hamming-distance, `src/simhash.ts`) → fit byte budget → summarize
+(mode-dependent, deterministic, no LLM) → compose
+(`bytesSaved`, `savingRatio`). Redact runs FIRST so secrets never
+reach a persistence call (§11b critical ordering).
+
+Public surface (`packages/output-filter/src/index.ts`):
+
+- `filterOutput` + `filterOutputInputSchema` + `FilterOutputInput` /
+  `FilterOutputResult` / `OutputExcerpt`. Input `mode` imports
+  `tokenSaverModeSchema` from `@megasaver/shared` (the §2e cycle
+  fix); `modeToBudget` is the single mode→cap source.
+- `resolveSafeReadPath(input): ResolvedPath` — the structural
+  sandbox gate (F-CRIT-2). Rejects symlink escapes, `..`-traversal,
+  and absolute paths outside the project root; throws
+  `OutputFilterError("path_unsafe")`. This is the only IO-touching
+  export; callers compose it with `filterOutput`.
+- `rankFeatureNameSchema` / `RankFeatureName` — 9-member closed enum
+  alphabetic (AA3): `diagnosticScore`, `duplicatePenalty`,
+  `errorScore`, `filePathScore`, `keywordScore`, `noisePenalty`,
+  `recentFileScore`, `stackTraceScore`, `testFailureScore`.
+- `outputSourceKindSchema` / `OutputSourceKind` — 4-member closed
+  enum alphabetic: `command`, `fetch`, `file`, `grep`. The shared
+  source discriminator consumed by `content-store` (BB4) and `stats`
+  (BB6) — single source of truth, no local duplication.
+- `OutputFilterError` + `outputFilterErrorCodeSchema`
+  (`path_unsafe`, `validation_failed`) + `RankFeatures` / `RankedChunk`.
+
+Imports `policy.redact` (BB3). Dependencies: `@megasaver/shared` +
+`@megasaver/policy` — explicitly NOT `@megasaver/core` (§2e/§3c
+cycle guard; dep-graph test enforces). Redaction tested by both a
+fast-check property test and a fixture corpus (F-MED-1). Risk HIGH —
+secret-leakage failure mode; `security-reviewer` audit mandatory.
+
+## [2026-05-11] feat | BB6 — @megasaver/retrieval + @megasaver/stats (AA1 #6/11)
+
+Sixth sub-PR of the AA1 epic — two packages in one PR. PR
+<https://github.com/haJ1t/MegaSaver/pull/71> merged into `main`
+(merge commit `6078dc9`).
+
+**`packages/retrieval/`** — standalone, local-only retrieval (no
+embedding API, no remote vector store per `CLAUDE.md` §1).
+
+- `rankBm25(input): Bm25Result` — in-memory BM25 over chunked text;
+  index built per-call (no persistent inverted index at v0.5,
+  chunk counts < 1000). Inputs `Bm25Document` / `Bm25RankInput`.
+- `deriveIntent(input): DerivedIntent` — `{ query, keywords, source }`
+  with `derivedIntentSourceSchema` / `DerivedIntentSource` closed
+  enum, 6 members alphabetic (AA3): `auto`, `command`, `explicit`,
+  `file-path`, `recent-memory`, `session-title`. Precedence walk
+  per §12c (explicit → session-title → recent-memory → command →
+  file-path → auto).
+- `RetrievalError` + `retrievalErrorCodeSchema` (`invalid_input`).
+- Dependency: `@megasaver/shared` only (NOT policy, NOT core; §3c).
+
+**`packages/stats/`** — token-saver event ledger + session summary.
+
+- `appendEvent(input)` — append-only event written to
+  `<store>/stats/<projectId>/<sessionId>.events.jsonl`.
+- `readSummary(...)` / session summary at
+  `<store>/stats/<projectId>/<sessionId>.json` (atomic write,
+  own `src/atomic-write.ts` — no core import).
+- `resetOnDisable(...)` — §13c reset semantics: keep events JSONL
+  (audit trail), zero the session-summary totals.
+- `tokenSaverEventSchema` / `TokenSaverEvent` and
+  `sessionTokenSaverStatsSchema` / `SessionTokenSaverStats`. Event
+  `sourceKind` type-imports `OutputSourceKind` from
+  `@megasaver/output-filter` (F-MAJ-4; no local enum). `mode` imports
+  `tokenSaverModeSchema` from `@megasaver/shared`.
+- `StatsError` + `statsErrorCodeSchema` (`schema_invalid`,
+  `store_corrupt`, `write_failed`).
+- Dependencies: `@megasaver/shared` + `@megasaver/output-filter`
+  (NOT policy, NOT core; §3c).
+
+Risk MEDIUM. Both ship `dependency-graph.test.ts` per §3c.
+
+## [2026-05-11] feat | BB4 — @megasaver/content-store (AA1 #4/11)
+
+Fourth sub-PR of the AA1 epic. Merged AFTER BB5/BB6 by PR number
+(it depends on BB5's `OutputSourceKind`, so it rebased on top). PR
+<https://github.com/haJ1t/MegaSaver/pull/72> merged into `main`
+(merge commit `a8b6531`).
+
+New `packages/content-store/` package — ChunkSet persistence under
+`<store>/content/<projectId>/<sessionId>/<chunkSetId>.json`. Public
+surface (`packages/content-store/src/index.ts`):
+
+- `saveChunkSet`, `loadChunkSet` (throws `ContentStoreError("not_found")`
+  on miss), `listChunkSets`, `deleteChunkSet`, `pruneOlderThan` —
+  callers pass the resolved `storeRoot` and an explicit clock for
+  prune (no `Date.now()` at module level).
+- `chunkSchema` / `Chunk`, `chunkSetSchema` / `ChunkSet`,
+  `ChunkSetSummary`. The `ChunkSet.source` discriminated union uses
+  `OutputSourceKind` imported from `@megasaver/output-filter` (§10d).
+  The `redacted` boolean invariant: a chunkSet from a session with
+  `redactSecrets === true` must be `true` (F-MAJ-3).
+- `ContentStoreError` + `contentStoreErrorCodeSchema` — 4 members
+  alphabetic (AA3): `not_found`, `schema_invalid`, `store_corrupt`,
+  `write_failed`.
+
+**Cycle fix (locked, §3c):** content-store does NOT import
+`@megasaver/core`. Its atomic write is implemented in-package
+(`src/atomic-write.ts`, ≈ 50 LOC mirroring `json-directory-store.ts`
+semantics — POSIX dir-fsync, win32-aware) rather than reusing core's,
+specifically so the `content-store → core` edge never closes. The
+resolved `storeRoot` is passed in by the caller; content-store never
+calls `resolveStorePaths` itself. See [[decisions/content-store-no-core-edge]].
+Dependencies: `@megasaver/shared` + `@megasaver/output-filter`
+(OutputSourceKind type). Risk MEDIUM; dep-graph test enforces the
+no-core rule.
+
+## [2026-05-11] feat | BB7a — mega output {file,filter,chunk} CLI (AA1 #7a/11)
+
+Seventh sub-PR of the AA1 epic (BB7 was split into BB7a HIGH /
+no-spawn and BB7b CRITICAL / spawn per Revision 2). PR
+<https://github.com/haJ1t/MegaSaver/pull/73> merged into `main`
+(merge commit `67d66dc`).
+
+`mega output {file,filter,chunk}` ships under
+`apps/cli/src/commands/output/{file,filter,chunk,index,shared,locate-chunk-set}.ts`,
+registered as a new top-level `output` parent. `exec` (the only
+spawning subcommand) is held for BB7b.
+
+- `output file <id> --intent <s> <path>` — runs the two-gate read
+  safety check then filters: `policy.evaluatePathRead` (denylist) →
+  `outputFilter.resolveSafeReadPath` (sandbox) → `fs.readFile` →
+  `filterOutput` → `contentStore.saveChunkSet`. Path-denial exits 1
+  with `path_denied: <reason>`; sandbox throw exits 1 with
+  `path_unsafe: <message>`.
+- `output filter <id> --intent <s> --file <log-path>` — no-spawn
+  variant over an existing log file (pipe `pnpm test > log.txt`).
+- `output chunk <chunk-set-id> <chunk-id>` — returns a single stored
+  chunk; no `--intent` (chunk-set ids are globally unique;
+  `locate-chunk-set.ts` resolves ownership via the embedded
+  project/session path).
+- `--intent` REQUIRED for `file` / `filter` → `intent_required`
+  otherwise. `--store` + `--json` parity; JSON failure paths
+  extended in `apps/cli/test/json-failure-paths.test.ts`.
+
+**Shipped-vs-spec deviation (noted):** AA1 §2a/§8d proposed a
+`packages/core/src/context-gate/` orchestrator (`run.ts` etc.) shared
+by CLI and MCP. As shipped, BB7a composes the pipeline CLI-side in
+`apps/cli/src/commands/output/shared.ts` (`resolveEffectiveSettings`,
+`runTwoGates`, `readAndFilter`, `persistChunkSet`) — there is no
+`context-gate/` directory in core yet, and core gained no new package
+deps (still `@megasaver/shared` + `zod` only). No `@megasaver/stats`
+wiring in BB7a either (file/filter persist chunkSets but do not yet
+append stats events). The shared-orchestrator extraction and stats
+wiring are deferred to BB7b / BB8. Pre-AA sessions (no `tokenSaver`)
+get read-only defaults (mode `balanced`) rather than a written record.
+Risk HIGH.
