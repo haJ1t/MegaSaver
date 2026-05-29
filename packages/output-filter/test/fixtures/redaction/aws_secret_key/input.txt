@@ -1,0 +1,3 @@
+credentials file contents
+aws_secret_access_key = wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEYabc
+profile default

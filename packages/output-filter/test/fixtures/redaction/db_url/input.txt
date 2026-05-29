@@ -1,0 +1,3 @@
+connecting to database
+DATABASE_URL=postgres://dbuser:s3cr3tpw@db.example.com:5432/app
+connection established
