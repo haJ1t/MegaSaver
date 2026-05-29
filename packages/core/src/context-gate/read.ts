@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { type ChunkSet, saveChunkSet } from "@megasaver/content-store";
-import type { CoreRegistry } from "@megasaver/core";
 import {
   type FilterOutputResult,
   filterOutput,
@@ -9,21 +8,8 @@ import {
 } from "@megasaver/output-filter";
 import { evaluatePathRead } from "@megasaver/policy";
 import type { ProjectId, SessionId, TokenSaverMode } from "@megasaver/shared";
-
-export type EffectiveSettings = {
-  projectId: ProjectId;
-  projectRoot: string;
-  mode: TokenSaverMode;
-  maxReturnedBytes: number | undefined;
-  storeRawOutput: boolean;
-};
-
-export type PipelineEnv = {
-  registry: CoreRegistry;
-  storeRoot: string;
-  now: () => string;
-  newId: () => string;
-};
+import type { CoreRegistry } from "../registry.js";
+import type { EffectiveSettings, GateResult } from "./types.js";
 
 export function defaultNow(): string {
   return new Date().toISOString();
@@ -53,11 +39,6 @@ export function resolveEffectiveSettings(
     storeRawOutput: tokenSaver?.storeRawOutput ?? true,
   };
 }
-
-export type GateResult =
-  | { ok: true; absolute: string }
-  | { ok: false; code: "path_denied"; reason: string }
-  | { ok: false; code: "path_unsafe"; message: string };
 
 // Two-gate read safety (§8): policy denylist, then sandbox resolver. Both
 // run before any fs.readFile so a denied path is never read.

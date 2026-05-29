@@ -200,6 +200,15 @@ importers:
 
   packages/core:
     dependencies:
+      '@megasaver/content-store':
+        specifier: workspace:*
+        version: link:../content-store
+      '@megasaver/output-filter':
+        specifier: workspace:*
+        version: link:../output-filter
+      '@megasaver/policy':
+        specifier: workspace:*
+        version: link:../policy
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../shared
