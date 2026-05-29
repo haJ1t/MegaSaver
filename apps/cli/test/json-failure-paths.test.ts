@@ -279,6 +279,10 @@ import { runConnectorSync } from "../src/commands/connector/sync.js";
 import { runMemoryCreate } from "../src/commands/memory/create.js";
 import { runSessionCreate } from "../src/commands/session/create.js";
 import { runSessionEnd } from "../src/commands/session/end.js";
+import {
+  runSessionSaverDisable,
+  runSessionSaverEnable,
+} from "../src/commands/session/saver/index.js";
 import { runSessionUpdate } from "../src/commands/session/update.js";
 
 const PROJECT_ID_W = "11111111-1111-4111-8111-111111111111";
@@ -451,6 +455,105 @@ describe("runConnectorSync --json failure path", () => {
       targetFlag: "bogus",
       storeFlag: store,
       cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+});
+
+const SESS_SAVER = "22222222-2222-4222-8222-222222222222";
+
+async function seedSaverSession(store: string): Promise<void> {
+  await writeFile(
+    join(store, "sessions.json"),
+    JSON.stringify([
+      {
+        id: SESS_SAVER,
+        projectId: PROJECT_ID_W,
+        agentId: "claude-code",
+        riskLevel: "medium",
+        title: null,
+        startedAt: TS_W,
+        endedAt: null,
+      },
+    ]),
+  );
+}
+
+describe("runSessionSaverEnable --json failure path", () => {
+  let store: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-json-fail-saver-en-"));
+    await seedProject(store, "/tmp");
+    await seedSaverSession(store);
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+  });
+
+  it("invalid --mode → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runSessionSaverEnable({
+      sessionId: SESS_SAVER,
+      modeFlag: "turbo",
+      storeFlag: store,
+      cwd: "/tmp",
+      home: "/tmp",
+      xdgDataHome: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+
+  it("missing --mode → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runSessionSaverEnable({
+      sessionId: SESS_SAVER,
+      modeFlag: undefined,
+      storeFlag: store,
+      cwd: "/tmp",
+      home: "/tmp",
+      xdgDataHome: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+});
+
+describe("runSessionSaverDisable --json failure path", () => {
+  let store: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-json-fail-saver-dis-"));
+    await seedProject(store, "/tmp");
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+  });
+
+  it("nonexistent session → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runSessionSaverDisable({
+      sessionId: "99999999-9999-4999-8999-999999999999",
+      modeFlag: undefined,
+      storeFlag: store,
+      cwd: "/tmp",
       home: "/tmp",
       xdgDataHome: undefined,
       stdout: (line) => out.push(line),

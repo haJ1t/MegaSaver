@@ -1,6 +1,6 @@
 import { ConnectorError } from "@megasaver/connectors-shared";
 import { CorePersistenceError, CoreRegistryError, memoryScopeSchema } from "@megasaver/core";
-import { agentIdSchema, riskLevelSchema } from "@megasaver/shared";
+import { agentIdSchema, riskLevelSchema, tokenSaverModeSchema } from "@megasaver/shared";
 import { ZodError } from "zod";
 import { KNOWN_TARGET_IDS } from "./known-targets.js";
 
@@ -24,6 +24,7 @@ export const TITLE_CONTROL_CHARS_MESSAGE = "title must not contain control chara
 export const AGENT_INVALID_MESSAGE_PREFIX = "error: invalid agent";
 export const RISK_INVALID_MESSAGE_PREFIX = "error: invalid risk";
 export const SESSION_ID_INVALID_PREFIX = "error: invalid session id";
+export const MODE_INVALID_MESSAGE_PREFIX = "error: invalid mode";
 
 export function duplicateNameMessage(name: string): CliMessage {
   return {
@@ -65,6 +66,21 @@ export function invalidRiskMessage(value: string): CliMessage {
     message: `${RISK_INVALID_MESSAGE_PREFIX} "${value}", expected: ${riskLevelSchema.options.join(" | ")}`,
     exitCode: 1,
   };
+}
+
+export function invalidModeMessage(value: string): CliMessage {
+  return {
+    message: `${MODE_INVALID_MESSAGE_PREFIX} "${value}", expected: ${tokenSaverModeSchema.options.join(" | ")}`,
+    exitCode: 1,
+  };
+}
+
+export function missingModeMessage(): CliMessage {
+  return { message: "error: --mode is required for enable", exitCode: 1 };
+}
+
+export function unexpectedModeMessage(): CliMessage {
+  return { message: "error: --mode is only valid for enable", exitCode: 1 };
 }
 
 export function invalidSessionIdMessage(value: string): CliMessage {
