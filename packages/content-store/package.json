@@ -1,0 +1,35 @@
+{
+  "name": "@megasaver/content-store",
+  "version": "0.0.0",
+  "private": true,
+  "description": "ChunkSet persistence store for the Mega Saver context-gate pipeline.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@megasaver/output-filter": "workspace:*",
+    "@megasaver/shared": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@megasaver/core": "workspace:*",
+    "@types/node": "^22.19.17",
+    "fast-check": "^3.23.2"
+  }
+}
