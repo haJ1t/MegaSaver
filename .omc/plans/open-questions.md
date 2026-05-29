@@ -16,3 +16,6 @@
 - [ ] OQ-2: listChunkSets ordering is unspecified by contract. If BB7a/BB8 need a guaranteed order, add it in that PR; do not speculatively add now. — Matters: avoids premature abstraction while leaving the door open for consumers.
 - [ ] Risk reconciliation: epic §14 classes BB4 as MEDIUM, but the BB4 directive + child spec frontmatter set risk:HIGH (redaction-flag + durability). Confirm HIGH stands; reviewer may upgrade, never silently downgrade (CLAUDE.md §12). — Matters: HIGH triggers architect design + critic review in the chain.
 - [ ] Output-filter is already landed in this worktree, so BB4 imports OutputSourceKind directly (no §14-bis local placeholder/dedupe). Confirm this matches the intended landing order on the integration branch. — Matters: if BB4 is rebased onto a base WITHOUT output-filter, the §14-bis placeholder path must be reinstated.
+## BB7a output CLI - 2026-05-29
+- [ ] Promote `locateChunkSet` into `@megasaver/content-store` as `findChunkSetById`? — Needed if BB7b exec or MCP mega_fetch_chunk wants id-only lookup; deferred to avoid premature abstraction (spec §9).
+- [ ] Add a `log` member to `OutputSourceKind` for piped-log input vs real files? — Affects stats attribution; owner is BB5, out of BB7a scope (spec §9).
