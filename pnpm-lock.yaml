@@ -182,9 +182,6 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
-      '@megasaver/core':
-        specifier: workspace:*
-        version: link:../core
       '@types/node':
         specifier: ^22.19.17
         version: 22.19.17

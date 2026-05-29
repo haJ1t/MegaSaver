@@ -28,7 +28,6 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@megasaver/core": "workspace:*",
     "@types/node": "^22.19.17",
     "fast-check": "^3.23.2"
   }
