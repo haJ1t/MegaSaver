@@ -12,6 +12,7 @@ import { readTestEnv } from "./shared.js";
 export type RunSessionEndInput = {
   sessionId: string;
   storeFlag: string | undefined;
+  json?: boolean;
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
@@ -64,8 +65,9 @@ export async function runSessionEnd(input: RunSessionEndInput): Promise<0 | 1> {
     // Same inline default as runSessionCreate; if a third call site lands,
     // extract a shared readNow() helper instead of duplicating again.
     const endedAt = (input.now ?? (() => new Date().toISOString()))();
+    let ended: ReturnType<typeof registry.endSession>;
     try {
-      registry.endSession(id, { endedAt });
+      ended = registry.endSession(id, { endedAt });
     } catch (err) {
       if (err instanceof CoreRegistryError && err.code === "session_already_ended") {
         // Race with concurrent process: refresh and format the rich message.
@@ -84,7 +86,7 @@ export async function runSessionEnd(input: RunSessionEndInput): Promise<0 | 1> {
       }
       throw err;
     }
-    input.stdout(id);
+    input.stdout(input.json ? JSON.stringify(ended) : id);
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "session", id });
@@ -102,12 +104,14 @@ export const sessionEndCommand = defineCommand({
       description: "Session id (UUID).",
     },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", description: "Emit JSON instead of formatted text." },
   },
   async run({ args }) {
     const nowEnv = readTestEnv("MEGA_TEST_NOW");
     const code = await runSessionEnd({
       sessionId: typeof args.sessionId === "string" ? args.sessionId : "",
       storeFlag: typeof args.store === "string" ? args.store : undefined,
+      json: args.json === true,
       cwd: process.cwd(),
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       home: process.env["HOME"] ?? "",

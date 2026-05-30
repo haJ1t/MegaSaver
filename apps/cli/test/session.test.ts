@@ -73,8 +73,9 @@ describe("sessionCreateCommand", () => {
     agent?: string;
     risk?: string;
     title?: string;
+    json?: boolean;
   }): Promise<void> {
-    const cliArgs: Record<string, string> = {
+    const cliArgs: Record<string, string | boolean> = {
       projectName: args.projectName,
       store: root,
       agent: args.agent ?? "claude-code",
@@ -83,6 +84,8 @@ describe("sessionCreateCommand", () => {
     if (args.risk !== undefined) cliArgs["risk"] = args.risk;
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     if (args.title !== undefined) cliArgs["title"] = args.title;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.json !== undefined) cliArgs["json"] = args.json;
     await sessionCreateCommand.run?.({
       args: cliArgs,
       cmd: sessionCreateCommand,
@@ -119,6 +122,33 @@ describe("sessionCreateCommand", () => {
       startedAt: NOW,
       endedAt: null,
     });
+  });
+
+  it("with --json emits the full session entity as compact JSON on stdout and exits 0", async () => {
+    await seedProject(root, "demo");
+
+    await runCreate({ projectName: "demo", json: true });
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(logSpy.mock.calls[0]?.[0]).toBe(
+      JSON.stringify({
+        id: SESSION_ID,
+        projectId: PROJECT_ID,
+        agentId: "claude-code",
+        riskLevel: "medium",
+        title: null,
+        startedAt: NOW,
+        endedAt: null,
+      }),
+    );
+  });
+
+  it("with --json an unknown project still emits plain-text error on stderr, no JSON, exit 1", async () => {
+    await runCreate({ projectName: "missing", json: true });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.some((c) => c[0] === 'error: project "missing" not found')).toBe(true);
+    expect(logSpy).not.toHaveBeenCalled();
   });
 
   it("defaults riskLevel to 'medium' when --risk is omitted", async () => {
@@ -486,9 +516,12 @@ describe("sessionEndCommand", () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  async function runEnd(id: string): Promise<void> {
+  async function runEnd(id: string, json?: boolean): Promise<void> {
+    const args: Record<string, string | boolean> = { sessionId: id, store: root };
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (json !== undefined) args["json"] = json;
     await sessionEndCommand.run?.({
-      args: { sessionId: id, store: root },
+      args,
       cmd: sessionEndCommand,
       rawArgs: [id, "--store", root],
       data: undefined,
@@ -529,6 +562,36 @@ describe("sessionEndCommand", () => {
       endedAt: string | null;
     }>;
     expect(persisted[0]?.endedAt).toBe("2026-05-08T13:00:00.000Z");
+  });
+
+  it("with --json emits the full ended session entity with populated endedAt as compact JSON, exit 0", async () => {
+    await seedSession(null);
+    await runEnd(SESSION_ID, true);
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(logSpy.mock.calls[0]?.[0]).toBe(
+      JSON.stringify({
+        id: SESSION_ID,
+        projectId: PROJECT_ID,
+        agentId: "claude-code",
+        riskLevel: "medium",
+        title: null,
+        startedAt: "2026-05-08T12:00:00.000Z",
+        endedAt: "2026-05-08T13:00:00.000Z",
+      }),
+    );
+  });
+
+  it("with --json an already-ended session still emits plain-text error on stderr, no JSON, exit 1", async () => {
+    await seedSession("2026-05-08T13:00:00.000Z");
+    await runEnd(SESSION_ID, true);
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some(
+        (c) => c[0] === `error: session "${SESSION_ID}" already ended at 2026-05-08T13:00:00.000Z`,
+      ),
+    ).toBe(true);
+    expect(logSpy).not.toHaveBeenCalled();
   });
 
   it("rejects an already-ended session with the documented message including the original endedAt", async () => {
@@ -620,7 +683,7 @@ describe("sessionUpdateCommand", () => {
     );
   }
 
-  async function runUpdate(args: Record<string, string>): Promise<void> {
+  async function runUpdate(args: Record<string, string | boolean>): Promise<void> {
     await sessionUpdateCommand.run?.({
       args: { ...args, store },
       cmd: sessionUpdateCommand,
@@ -640,6 +703,51 @@ describe("sessionUpdateCommand", () => {
     expect(logSpy).not.toHaveBeenCalled();
     const arr = await readSessions();
     expect(arr[0]?.title).toBe("foo");
+  });
+
+  it("with --json emits the full merged session entity as compact JSON on stdout, exit 0", async () => {
+    await seedOpenSession();
+    await runUpdate({
+      sessionId: SESSION_ID,
+      title: "foo",
+      risk: "high",
+      agent: "cursor",
+      json: true,
+    });
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(logSpy.mock.calls[0]?.[0]).toBe(
+      JSON.stringify({
+        id: SESSION_ID,
+        projectId: PROJECT_ID,
+        agentId: "cursor",
+        riskLevel: "high",
+        title: "foo",
+        startedAt: "2026-05-09T00:00:00.000Z",
+        endedAt: null,
+      }),
+    );
+  });
+
+  it("without --json stays silent on stdout (byte-identical to today)", async () => {
+    await seedOpenSession();
+    await runUpdate({ sessionId: SESSION_ID, title: "foo" });
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it("with --json an unknown session id still emits plain-text error on stderr, no JSON, exit 1", async () => {
+    await seedOpenSession();
+    await runUpdate({
+      sessionId: "99999999-9999-4999-8999-999999999999",
+      title: "x",
+      json: true,
+    });
+    expect(process.exitCode).toBe(1);
+    expect(
+      errSpy.mock.calls.some((c) => /^error: session ".*" not found/.test(c[0] as string)),
+    ).toBe(true);
+    expect(logSpy).not.toHaveBeenCalled();
   });
 
   it("clears title with --title ''", async () => {

@@ -73,6 +73,7 @@ export type RunConnectorSyncInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  json: boolean;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
@@ -130,13 +131,21 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
     const sessions = registry.listSessions(project.id);
     const memoryEntries = registry.listMemoryEntries(project.id);
     let anyFailed = false;
+    const records: { id: string; relativePath: string; status: string }[] = [];
+    const emit = (target: ConnectorTarget, status: string): void => {
+      if (input.json) {
+        records.push({ id: target.id, relativePath: target.relativePath, status });
+      } else {
+        input.stdout(formatStatusLine(target, status));
+      }
+    };
     for (const target of KNOWN_TARGETS) {
       try {
         const absPath = join(project.rootPath, target.relativePath);
         const existing = await readTargetFile(absPath);
 
         if (existing === null && input.targetFlag !== target.id) {
-          input.stdout(formatStatusLine(target, "skipped"));
+          emit(target, "skipped");
           continue;
         }
 
@@ -146,20 +155,20 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           const newContent = ("header" in target ? target.header : "") + renderBlock(context);
           await mkdir(dirname(absPath), { recursive: true });
           await writeTargetFile({ absPath, content: newContent });
-          input.stdout(formatStatusLine(target, "created"));
+          emit(target, "created");
           continue;
         }
 
         const newContent = upsertBlock({ existingContent: existing, context });
         if (newContent === existing) {
-          input.stdout(formatStatusLine(target, "noop"));
+          emit(target, "noop");
           continue;
         }
         await writeTargetFile({ absPath, content: newContent });
-        input.stdout(formatStatusLine(target, "wrote"));
+        emit(target, "wrote");
       } catch (err) {
         anyFailed = true;
-        input.stdout(formatStatusLine(target, "error"));
+        emit(target, "error");
         const cli = mapErrorToCliMessage(err, {
           kind: "connector",
           targetId: target.id,
@@ -167,6 +176,9 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
         });
         input.stderr(cli.message);
       }
+    }
+    if (input.json) {
+      input.stdout(JSON.stringify(records));
     }
     return anyFailed ? 1 : 0;
   } catch (err) {
@@ -189,6 +201,7 @@ export const connectorSyncCommand = defineCommand({
       description: `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to seed when its file does not exist.`,
     },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", description: "Emit machine-readable JSON array." },
   },
   async run({ args }) {
     const code = await runConnectorSync({
@@ -200,6 +213,7 @@ export const connectorSyncCommand = defineCommand({
       home: process.env["HOME"] ?? "",
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       xdgDataHome: process.env["XDG_DATA_HOME"],
+      json: args.json === true,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
     });

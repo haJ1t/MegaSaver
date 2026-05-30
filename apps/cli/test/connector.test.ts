@@ -1111,6 +1111,179 @@ describe("connectorSyncCommand — memoryEntries wiring", () => {
   });
 });
 
+describe("connectorSyncCommand — --json output", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-connector-json-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-connector-json-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function seedSimple(): Promise<void> {
+    await mkdir(store, { recursive: true });
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        {
+          id: PROJECT_ID,
+          name: "demo",
+          rootPath: projectRoot,
+          createdAt: STARTED_AT,
+          updatedAt: STARTED_AT,
+        },
+      ]),
+    );
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESSION_ID,
+          projectId: PROJECT_ID,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: "smoke",
+          startedAt: STARTED_AT,
+          endedAt: null,
+        },
+      ]),
+    );
+  }
+
+  async function runSync(args: {
+    projectName: string;
+    target?: string;
+    json?: boolean;
+  }): Promise<void> {
+    const cliArgs: Record<string, string | boolean> = { projectName: args.projectName, store };
+    if (args.target !== undefined) cliArgs.target = args.target;
+    if (args.json !== undefined) cliArgs.json = args.json;
+    await connectorSyncCommand.run?.({
+      args: cliArgs,
+      cmd: connectorSyncCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  it("emits a compact JSON array of {id, relativePath, status} once on stdout, exit 0", async () => {
+    await seedSimple();
+    await runSync({ projectName: "demo", target: "codex", json: true });
+
+    expect(process.exitCode).toBe(0);
+    // Exactly one stdout call carrying the whole array.
+    expect(logSpy.mock.calls.length).toBe(1);
+    expect(logSpy.mock.calls[0]?.[0]).toBe(
+      JSON.stringify([
+        { id: "claude-code", relativePath: "CLAUDE.md", status: "skipped" },
+        { id: "codex", relativePath: "AGENTS.md", status: "created" },
+        { id: "cursor", relativePath: ".cursor/rules/megasaver.mdc", status: "skipped" },
+        { id: "aider", relativePath: "CONVENTIONS.md", status: "skipped" },
+      ]),
+    );
+  });
+
+  it("carries the wrote/created/noop/skipped status words in records", async () => {
+    await seedSimple();
+    // Seed CLAUDE.md with a stale block so it gets rewritten -> wrote.
+    await writeFile(
+      join(projectRoot, "CLAUDE.md"),
+      MEGA_BLOCK_PLACEHOLDER("demo", "old-id", "claude-code"),
+    );
+    await runSync({ projectName: "demo", json: true });
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls.length).toBe(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string);
+    expect(parsed).toEqual([
+      { id: "claude-code", relativePath: "CLAUDE.md", status: "wrote" },
+      { id: "codex", relativePath: "AGENTS.md", status: "skipped" },
+      { id: "cursor", relativePath: ".cursor/rules/megasaver.mdc", status: "skipped" },
+      { id: "aider", relativePath: "CONVENTIONS.md", status: "skipped" },
+    ]);
+  });
+
+  it("default (no --json) output is byte-identical to today's per-line text", async () => {
+    await seedSimple();
+    await runSync({ projectName: "demo" });
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls.map((c) => c[0])).toEqual([
+      "claude-code  CLAUDE.md  skipped",
+      "codex        AGENTS.md  skipped",
+      "cursor       .cursor/rules/megasaver.mdc  skipped",
+      "aider        CONVENTIONS.md  skipped",
+    ]);
+  });
+
+  it("per-target failure becomes a status:error record AND rich stderr, exit 1", async () => {
+    await seedSimple();
+    // CLAUDE.md is writable cleanly -> wrote.
+    await writeFile(join(projectRoot, "CLAUDE.md"), "# Notes\n");
+    // AGENTS.md has two BEGIN sentinels -> parseBlock throws block_conflict.
+    await writeFile(
+      join(projectRoot, "AGENTS.md"),
+      [
+        "<!-- MEGA SAVER:BEGIN -->",
+        "first block",
+        "<!-- MEGA SAVER:END -->",
+        "",
+        "<!-- MEGA SAVER:BEGIN -->",
+        "second block",
+        "<!-- MEGA SAVER:END -->",
+        "",
+      ].join("\n"),
+    );
+
+    await runSync({ projectName: "demo", json: true });
+
+    expect(process.exitCode).toBe(1);
+    // The JSON array is the sole stdout payload — error included as a record.
+    expect(logSpy.mock.calls.length).toBe(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string);
+    expect(parsed).toEqual([
+      { id: "claude-code", relativePath: "CLAUDE.md", status: "wrote" },
+      { id: "codex", relativePath: "AGENTS.md", status: "error" },
+      { id: "cursor", relativePath: ".cursor/rules/megasaver.mdc", status: "skipped" },
+      { id: "aider", relativePath: "CONVENTIONS.md", status: "skipped" },
+    ]);
+    // Rich error still on stderr in --json mode, never as JSON.
+    expect(
+      errSpy.mock.calls.some(
+        (c) =>
+          (c[0] as string).startsWith("error: connector block conflict in AGENTS.md:") &&
+          (c[0] as string).includes("begin sentinel"),
+      ),
+    ).toBe(true);
+  });
+
+  it("pre-target error stays plain text on stderr with NO JSON, exit 1", async () => {
+    await seedSimple();
+    await runSync({ projectName: "missing", json: true });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.some((c) => c[0] === 'error: project "missing" not found')).toBe(true);
+    // No JSON (and nothing) on stdout for a pre-loop failure.
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it("declares the --json arg with the connector-status-style description", () => {
+    expect(connectorSyncCommand.args?.json?.type).toBe("boolean");
+    expect(connectorSyncCommand.args?.json?.description).toBe("Emit machine-readable JSON array.");
+  });
+});
+
 describe("connector --target drift guards", () => {
   it("--target description on connectorSyncCommand derives from KNOWN_TARGET_IDS", () => {
     const expected = `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to seed when its file does not exist.`;

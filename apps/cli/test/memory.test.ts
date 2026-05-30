@@ -511,6 +511,108 @@ describe("memoryCreateCommand", () => {
     ).toBe(true);
   });
 
+  it("prints only the new entry id on success (no --json, byte-identical)", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "demo", scope: "project", content: "user prefers TS" });
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls.map((c) => c[0])).toEqual([MEMORY_ID_PROJECT]);
+  });
+
+  it("emits compact JSON object of the full entry when --json is set (project scope)", async () => {
+    await seedProjectOnly();
+    process.env.NODE_ENV = "test";
+    process.env.MEGA_TEST_MEMORY_ENTRY_ID = MEMORY_ID_PROJECT;
+    process.env.MEGA_TEST_NOW = TS;
+    await memoryCreateCommand.run?.({
+      args: {
+        projectName: "demo",
+        scope: "project",
+        content: "user prefers TS",
+        store,
+        json: true,
+      },
+      cmd: memoryCreateCommand,
+      rawArgs: [
+        "demo",
+        "--scope",
+        "project",
+        "--content",
+        "user prefers TS",
+        "--store",
+        store,
+        "--json",
+      ],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as {
+      id: string;
+      projectId: string;
+      sessionId: string | null;
+      scope: string;
+      content: string;
+      createdAt: string;
+    };
+    expect(parsed.id).toBe(MEMORY_ID_PROJECT);
+    expect(parsed.projectId).toBe(PROJECT_ID);
+    expect(parsed.sessionId).toBeNull();
+    expect(parsed.scope).toBe("project");
+    expect(parsed.content).toBe("user prefers TS");
+    expect(parsed.createdAt).toBe(TS);
+  });
+
+  it("emits compact JSON object with session UUID when --json + --scope session", async () => {
+    await seedSessionToo();
+    process.env.NODE_ENV = "test";
+    process.env.MEGA_TEST_MEMORY_ENTRY_ID = MEMORY_ID_PROJECT;
+    process.env.MEGA_TEST_NOW = TS;
+    await memoryCreateCommand.run?.({
+      args: {
+        projectName: "demo",
+        scope: "session",
+        content: "checked CSRF token expiry",
+        session: SESSION_ID,
+        store,
+        json: true,
+      },
+      cmd: memoryCreateCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as {
+      scope: string;
+      sessionId: string | null;
+    };
+    expect(parsed.scope).toBe("session");
+    expect(parsed.sessionId).toBe(SESSION_ID);
+  });
+
+  it("keeps error path plain-text on stderr with no JSON even with --json", async () => {
+    await seedProjectOnly();
+    process.env.NODE_ENV = "test";
+    process.env.MEGA_TEST_MEMORY_ENTRY_ID = MEMORY_ID_PROJECT;
+    process.env.MEGA_TEST_NOW = TS;
+    await memoryCreateCommand.run?.({
+      args: { projectName: "nope", scope: "project", content: "x", store, json: true },
+      cmd: memoryCreateCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+
+    expect(process.exitCode).toBe(1);
+    // No JSON emitted to stdout.
+    expect(logSpy).not.toHaveBeenCalled();
+    // Plain-text error to stderr.
+    expect(errSpy.mock.calls.some((c) => /project "nope" not found/.test(c[0] as string))).toBe(
+      true,
+    );
+  });
+
   it("rejects --session belonging to a different project", async () => {
     // Seed two projects, one session belonging to project B.
     await mkdir(store, { recursive: true });

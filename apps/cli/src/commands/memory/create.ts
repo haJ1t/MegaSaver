@@ -20,6 +20,7 @@ export type RunMemoryCreateInput = {
   contentFlag: string;
   sessionFlag: string | undefined;
   storeFlag: string | undefined;
+  json?: boolean;
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
@@ -131,7 +132,7 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
     });
 
     registry.createMemoryEntry(entry);
-    input.stdout(entry.id);
+    input.stdout(input.json ? JSON.stringify(entry) : entry.id);
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "memory_create" });
@@ -163,6 +164,10 @@ export const memoryCreateCommand = defineCommand({
       description: "Session id (UUID); required when --scope session.",
     },
     store: { type: "string", description: "Override store directory." },
+    json: {
+      type: "boolean",
+      description: "Emit JSON instead of formatted text.",
+    },
   },
   async run({ args }) {
     const code = await runMemoryCreate({
@@ -171,6 +176,7 @@ export const memoryCreateCommand = defineCommand({
       contentFlag: typeof args.content === "string" ? args.content : "",
       sessionFlag: typeof args.session === "string" ? args.session : undefined,
       storeFlag: typeof args.store === "string" ? args.store : undefined,
+      json: args.json === true,
       cwd: process.cwd(),
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       home: process.env["HOME"] ?? "",

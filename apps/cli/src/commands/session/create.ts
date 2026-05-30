@@ -17,6 +17,7 @@ export type RunSessionCreateInput = {
   risk: string;
   title: string | undefined;
   storeFlag: string | undefined;
+  json?: boolean;
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
@@ -103,7 +104,7 @@ export async function runSessionCreate(input: RunSessionCreateInput): Promise<0 
       startedAt,
       endedAt: null,
     });
-    input.stdout(created.id);
+    input.stdout(input.json ? JSON.stringify(created) : created.id);
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err);
@@ -131,6 +132,7 @@ export const sessionCreateCommand = defineCommand({
     },
     title: { type: "string", description: "Optional session title." },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", description: "Emit JSON instead of formatted text." },
   },
   async run({ args }) {
     const newIdEnv = readTestEnv("MEGA_TEST_SESSION_ID");
@@ -141,6 +143,7 @@ export const sessionCreateCommand = defineCommand({
       risk: typeof args.risk === "string" ? args.risk : "medium",
       title: typeof args.title === "string" ? args.title : undefined,
       storeFlag: typeof args.store === "string" ? args.store : undefined,
+      json: args.json === true,
       cwd: process.cwd(),
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       home: process.env["HOME"] ?? "",

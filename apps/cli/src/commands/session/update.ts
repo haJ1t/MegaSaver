@@ -16,9 +16,11 @@ export type RunSessionUpdateInput = {
   riskFlag: string | undefined;
   agentFlag: string | undefined;
   storeFlag: string | undefined;
+  json?: boolean;
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
 
@@ -105,7 +107,8 @@ export async function runSessionUpdate(input: RunSessionUpdateInput): Promise<0 
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
-    registry.updateSession(parsedSessionId, patch);
+    const updated = registry.updateSession(parsedSessionId, patch);
+    if (input.json) input.stdout(JSON.stringify(updated));
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "session_update", id: parsedSessionId });
@@ -132,6 +135,7 @@ export const sessionUpdateCommand = defineCommand({
       description: `New agent id (${agentIdSchema.options.join(" | ")}).`,
     },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", description: "Emit JSON instead of formatted text." },
   },
   async run({ args }) {
     const code = await runSessionUpdate({
@@ -140,11 +144,13 @@ export const sessionUpdateCommand = defineCommand({
       riskFlag: typeof args.risk === "string" ? args.risk : undefined,
       agentFlag: typeof args.agent === "string" ? args.agent : undefined,
       storeFlag: typeof args.store === "string" ? args.store : undefined,
+      json: args.json === true,
       cwd: process.cwd(),
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       home: process.env["HOME"] ?? "",
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       xdgDataHome: process.env["XDG_DATA_HOME"],
+      stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
     });
     if (code !== 0) process.exitCode = code;
