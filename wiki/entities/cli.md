@@ -7,9 +7,10 @@ sources:
   - docs/superpowers/specs/2026-05-06-cli-project-crud-design.md
   - docs/superpowers/plans/2026-05-06-cli-project-crud-plan.md
   - docs/superpowers/specs/2026-05-10-aa4-wiki-cli-surfaces-design.md
+  - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
 status: published
 created: 2026-05-05
-updated: 2026-05-10
+updated: 2026-05-11
 ---
 
 # `@megasaver/cli`
@@ -74,6 +75,31 @@ with `error: nothing to update`. `--title ""` clears the title to
 sessions are rejected with `session_already_ended`. Silent stdout
 on success, exit 0.
 
+### `mega session saver {enable,disable,status,stats} <sessionId>` (BB2, AA1)
+
+The Mega Saver Mode control surface over `Session.tokenSaver` (BB1).
+Registered as the `saver` parent on the `session` subcommand tree.
+All four take a positional `<session-id>` parsed through
+`sessionIdSchema` and carry `--store <dir>` + `--json` parity.
+
+- `enable <id> --mode safe|balanced|aggressive` — builds settings
+  from `defaultTokenSaverSettings(now)` with `enabled: true`, the
+  chosen `mode`, and `maxReturnedBytes: modeToBudget(mode)`, then
+  persists via `CoreRegistry.updateTokenSaver`. `--mode` REQUIRED;
+  invalid → `invalidModeMessage()` (derived from
+  `tokenSaverModeSchema.options`, sibling of `invalidRiskMessage`).
+  Text: `Mega Saver Mode enabled for <id> (<mode>; <bytes> B)`.
+- `disable <id>` — rewrites the settings blob with `enabled: false`
+  via `updateTokenSaver` (BB7a's `disableContextGate` orchestrator
+  was not yet available, so disable mutates settings directly).
+- `status <id>` — reports current `tokenSaver` state; renders an
+  "enable" CTA when `session.tokenSaver === undefined` (pre-AA).
+- `stats <id>` — reports the session token-saver stats (BB6 stats
+  package not wired at BB2; reads only what BB1 persisted).
+
+`--json` failure paths extended in
+`apps/cli/test/json-failure-paths.test.ts`. Exit 0 success, 1 error.
+
 ### `mega memory create <projectName> --scope <project|session> --content "..." [--session <uuid>]`
 
 Append a memory entry under a project. `--scope` is required and
@@ -135,6 +161,39 @@ Status words on stdout: `in-sync`, `drift`, `no-block`, `missing`,
 (project not found, unknown target, project root missing)
 short-circuit before any line is emitted.
 
+### `mega output {file,filter,chunk}` (BB7a, AA1)
+
+The Context Gate output surface. Routes raw tool output through the
+redact → chunk → rank → fit → summarize pipeline and persists the raw
+chunk set locally. New top-level `output` parent. `exec` (the only
+spawning subcommand) is held for BB7b. `--store` + `--json` parity.
+
+- `output file <id> --intent <s> <path>` — two-gate read safety then
+  filter: `policy.evaluatePathRead` (secret-path denylist) →
+  `outputFilter.resolveSafeReadPath` (sandbox) → `fs.readFile` →
+  `outputFilter.filterOutput` → `contentStore.saveChunkSet`.
+  Path-denial exits 1 with `path_denied: <reason>` (PolicyDenyCode);
+  sandbox throw exits 1 with `path_unsafe: <message>` (output-filter
+  error, structural not policy). Prints the filtered summary +
+  savings %.
+- `output filter <id> --intent <s> --file <log-path>` — no-spawn
+  variant over an existing log file (`pnpm test > log.txt && mega
+  output filter ...`).
+- `output chunk <chunk-set-id> <chunk-id>` — returns one stored chunk.
+  No `--intent`; `locate-chunk-set.ts` resolves ownership via the
+  embedded project/session path.
+- `--intent` REQUIRED for `file` / `filter` → `intent_required`.
+
+**Where the pipeline lives:** AA1 §2a/§8d proposed a shared
+`packages/core/src/context-gate/` orchestrator. As shipped, BB7a
+composes the pipeline CLI-side in
+`apps/cli/src/commands/output/shared.ts` (`resolveEffectiveSettings`,
+`runTwoGates`, `readAndFilter`, `persistChunkSet`) — no `context-gate/`
+in core, no new core deps. Pre-AA sessions (no `tokenSaver`) get
+read-only defaults (mode `balanced`). No `@megasaver/stats` wiring yet
+(chunkSets persisted, but events not appended) — deferred to BB7b/BB8.
+See [[concepts/context-gate-pipeline]].
+
 ### Store resolution
 
 Default store: `$XDG_DATA_HOME/megasaver` (fallback
@@ -186,6 +245,7 @@ without manual mirroring.
 | `riskLevelSchema` | `@megasaver/shared` | `invalidRiskMessage` error text (PR #22); `--risk` description on `session create` / `session update` (PR #23) |
 | `memoryScopeSchema` | `@megasaver/core` | `invalidScopeMessage` error text (PR #22); `--scope` description on `memory create` (PR #23) |
 | `KNOWN_TARGETS` (registry) | `apps/cli/src/known-targets.ts` | `invalidTargetMessage` error text (PR #22); `--target` description on `connector sync` / `connector status` (PR #25) |
+| `tokenSaverModeSchema` | `@megasaver/shared` | `invalidModeMessage` error text; `--mode` description on `session saver enable` (BB2, PR #68) |
 
 The "Keep in sync with X in Y" comments that previously annotated
 these sites were removed across PRs #22, #23, and #25.
@@ -219,6 +279,8 @@ Citty description derive (Z1): PR <https://github.com/haJ1t/MegaSaver/pull/23> (
 Y3 docs drift fix (4 agent files): PR <https://github.com/haJ1t/MegaSaver/pull/24> (`f0135f7`).
 AA2 connector --target description derive: PR <https://github.com/haJ1t/MegaSaver/pull/25> (`a8fb044`).
 Project create --root flag: PR <https://github.com/haJ1t/MegaSaver/pull/26> (`b20c9b6`).
+BB2 `mega session saver` (AA1): PR <https://github.com/haJ1t/MegaSaver/pull/68> (`4660d37`).
+BB7a `mega output {file,filter,chunk}` (AA1): PR <https://github.com/haJ1t/MegaSaver/pull/73> (`67d66dc`).
 
 ## JSON output policy
 
