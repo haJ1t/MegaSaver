@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { runOutputExec } from "../../src/commands/output/exec.js";
+import { execCommandFromPositionals, runOutputExec } from "../../src/commands/output/exec.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const SESSION_ID = "22222222-2222-4222-8222-222222222222";
@@ -391,5 +391,35 @@ describe("runOutputExec", () => {
 
     expect(code).toBe(2);
     expect(err.some((e) => e.includes("unexpected failure"))).toBe(true);
+  });
+});
+
+// citty merges the consumed sessionId positional and the post-`--` tokens into
+// args._ as [sessionId, command, ...commandArgs]. These lock that the command
+// is read from index 1, not 0 — reading 0 fed the session UUID to the policy
+// gate and denied every real `mega output exec` as command_not_allowed.
+describe("execCommandFromPositionals", () => {
+  it("reads the command from index 1 (sessionId is index 0)", () => {
+    const { command, commandArgs } = execCommandFromPositionals([SESSION_ID, "ls", "-la"]);
+    expect(command).toBe("ls");
+    expect(commandArgs).toEqual(["-la"]);
+  });
+
+  it("command with no extra args", () => {
+    const { command, commandArgs } = execCommandFromPositionals([SESSION_ID, "pnpm"]);
+    expect(command).toBe("pnpm");
+    expect(commandArgs).toEqual([]);
+  });
+
+  it("missing command (only sessionId) yields empty command", () => {
+    const { command, commandArgs } = execCommandFromPositionals([SESSION_ID]);
+    expect(command).toBe("");
+    expect(commandArgs).toEqual([]);
+  });
+
+  it("empty positionals yield empty command", () => {
+    const { command, commandArgs } = execCommandFromPositionals([]);
+    expect(command).toBe("");
+    expect(commandArgs).toEqual([]);
   });
 });

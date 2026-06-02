@@ -15,6 +15,21 @@ import { ensureStoreReady, resolveStorePath } from "../../store.js";
 const DEFAULT_TIMEOUT_SEC = 300;
 const DEFAULT_MAX_BYTES = 20_000_000;
 
+// citty keeps the consumed named positional (sessionId) IN args._ and appends
+// every token after `--`, in order: [sessionId, command, ...commandArgs]. So
+// the command to run is args._[1] — args._[0] is the sessionId. Reading [0]
+// (the prior bug) fed the session UUID to the policy gate, denying every real
+// run as command_not_allowed. Exported as a pure unit so the index contract is
+// covered without spawning a child process; the existing tests call
+// runOutputExec directly and so never exercised this citty-merge extraction.
+export function execCommandFromPositionals(positionals: readonly unknown[]): {
+  command: string;
+  commandArgs: string[];
+} {
+  const rest = positionals.map(String);
+  return { command: rest[1] ?? "", commandArgs: rest.slice(2) };
+}
+
 export type RunOutputExecInput = {
   sessionId: string;
   intentFlag: string | undefined;
@@ -164,12 +179,9 @@ export const outputExecCommand = defineCommand({
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
-    // Everything after `--` lands in the positional rest: the command then its
-    // args (spec §2). An empty command falls through to the policy gate, which
-    // is the single arbiter of command validity (command_not_allowed).
-    const rest = (args._ ?? []).map(String);
-    const command = rest[0] ?? "";
-    const commandArgs = rest.slice(1);
+    // Post-`--` command extraction (see execCommandFromPositionals). An empty
+    // command falls through to the policy gate (command_not_allowed).
+    const { command, commandArgs } = execCommandFromPositionals(args._ ?? []);
 
     // §3.3 env-marker: inherit the parent's marker, else this process is root.
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
