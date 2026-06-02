@@ -1,3 +1,4 @@
+import { runOutputPipeline } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import {
@@ -9,14 +10,6 @@ import {
   sessionNotFoundMessage,
 } from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
-import {
-  defaultNewId,
-  defaultNow,
-  persistChunkSet,
-  readAndFilter,
-  resolveEffectiveSettings,
-  runTwoGates,
-} from "./shared.js";
 
 export type RunOutputFileInput = {
   sessionId: string;
@@ -65,55 +58,34 @@ export async function runOutputFile(input: RunOutputFileInput): Promise<0 | 1> {
   const intent = input.intentFlag;
 
   const { registry } = await ensureStoreReady(rootDir);
-  const settings = resolveEffectiveSettings(registry, sessionId);
-  if (settings === null) {
-    const cli = sessionNotFoundMessage(input.sessionId);
-    input.stderr(cli.message);
-    return cli.exitCode;
-  }
-
-  const gate = runTwoGates({
-    path: input.path,
-    projectId: settings.projectId,
-    projectRoot: settings.projectRoot,
-  });
-  if (!gate.ok) {
-    const cli =
-      gate.code === "path_denied"
-        ? pathDeniedMessage(gate.reason)
-        : pathUnsafeMessage(gate.message);
-    input.stderr(cli.message);
-    return cli.exitCode;
-  }
-
-  const filtered = await readAndFilter({
-    absolute: gate.absolute,
+  const outcome = await runOutputPipeline({
+    registry,
+    storeRoot: rootDir,
+    sessionId,
     path: input.path,
     intent,
-    mode: settings.mode,
-    maxReturnedBytes: settings.maxReturnedBytes,
+    ...(input.now !== undefined ? { now: input.now } : {}),
+    ...(input.newId !== undefined ? { newId: input.newId } : {}),
   });
-  if (!filtered.ok) {
-    const cli = fileReadFailedMessage(filtered.message);
+
+  if (!outcome.ok) {
+    const cli = (() => {
+      switch (outcome.reason) {
+        case "session_not_found":
+          return sessionNotFoundMessage(input.sessionId);
+        case "path_denied":
+          return pathDeniedMessage(outcome.detail);
+        case "path_unsafe":
+          return pathUnsafeMessage(outcome.detail);
+        case "file_read_failed":
+          return fileReadFailedMessage(outcome.detail);
+      }
+    })();
     input.stderr(cli.message);
     return cli.exitCode;
   }
 
-  const result = { ...filtered.result };
-  if (settings.storeRawOutput) {
-    const chunkSetId = (input.newId ?? defaultNewId)();
-    await persistChunkSet({
-      storeRoot: rootDir,
-      chunkSetId,
-      sessionId,
-      projectId: settings.projectId,
-      createdAt: (input.now ?? defaultNow)(),
-      path: input.path,
-      result: filtered.result,
-    });
-    result.chunkSetId = chunkSetId;
-  }
-
+  const { result } = outcome;
   if (input.json) {
     input.stdout(JSON.stringify({ sessionId: input.sessionId, result }));
   } else {

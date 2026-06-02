@@ -1,4 +1,4 @@
-import { ContentStoreError, loadChunkSet } from "@megasaver/content-store";
+import { type FetchChunkResult, fetchChunk } from "@megasaver/core";
 import { defineCommand } from "citty";
 import {
   chunkNotFoundMessage,
@@ -9,7 +9,6 @@ import {
   storeCorruptMessage,
 } from "../../errors.js";
 import { resolveStorePath } from "../../store.js";
-import { locateChunkSet } from "./locate-chunk-set.js";
 
 export type RunOutputChunkInput = {
   chunkSetId: string;
@@ -53,44 +52,35 @@ export async function runOutputChunk(input: RunOutputChunkInput): Promise<0 | 1>
     return cli.exitCode;
   }
 
-  const located = locateChunkSet({ storeRoot: rootDir, chunkSetId: input.chunkSetId });
-  if (located === null) {
-    const cli = chunkSetNotFoundMessage();
-    input.stderr(cli.message);
-    return cli.exitCode;
-  }
-
-  let chunkSet: Awaited<ReturnType<typeof loadChunkSet>>;
+  let outcome: FetchChunkResult;
   try {
-    chunkSet = await loadChunkSet({
+    outcome = await fetchChunk({
       storeRoot: rootDir,
-      projectId: located.projectId,
-      sessionId: located.sessionId,
       chunkSetId: input.chunkSetId,
+      chunkId: input.chunkId,
     });
   } catch (err) {
-    if (err instanceof ContentStoreError) {
-      if (err.code === "not_found") {
-        const cli = chunkSetNotFoundMessage();
-        input.stderr(cli.message);
-        return cli.exitCode;
-      }
-      const cli = storeCorruptMessage(err.message);
-      input.stderr(cli.message);
-      return cli.exitCode;
-    }
     const cli = mapErrorToCliMessage(err);
     input.stderr(cli.message);
     return cli.exitCode;
   }
 
-  const chunk = chunkSet.chunks.find((c) => c.id === input.chunkId);
-  if (chunk === undefined) {
-    const cli = chunkNotFoundMessage();
+  if (!outcome.ok) {
+    const cli = (() => {
+      switch (outcome.reason) {
+        case "chunk_set_not_found":
+          return chunkSetNotFoundMessage();
+        case "chunk_not_found":
+          return chunkNotFoundMessage();
+        case "store_corrupt":
+          return storeCorruptMessage(outcome.detail);
+      }
+    })();
     input.stderr(cli.message);
     return cli.exitCode;
   }
 
+  const { chunk } = outcome;
   if (input.json) {
     input.stdout(JSON.stringify({ chunkSetId: input.chunkSetId, chunkId: input.chunkId, chunk }));
   } else {
