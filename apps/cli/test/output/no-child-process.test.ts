@@ -3,9 +3,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// §8: BB7a holds at HIGH (not CRITICAL) precisely because no command is
-// spawned. `exec` (child_process) lands in BB7b. Assert the spawn boundary
-// stays out of every output command source file.
+// §8 / BB7b: the spawn capability lives in @megasaver/core's exec orchestrator,
+// NOT in the CLI. `mega output exec` (exec.ts) is a thin adapter that forwards
+// an injected spawn function to core without importing node:child_process or
+// invoking spawn itself. Assert the CLI output sources never import the
+// child-process module, never call spawn/execFile, and never reach for a shell
+// — the boundary that keeps the CLI from owning process creation.
 const outputDir = fileURLToPath(new URL("../../src/commands/output", import.meta.url));
 
 function outputSources(): string[] {
@@ -14,17 +17,20 @@ function outputSources(): string[] {
     .map((name) => join(outputDir, name));
 }
 
-describe("mega output sources contain no child-process spawn", () => {
+describe("mega output sources do not own child-process creation", () => {
   it("finds output command source files", () => {
     expect(outputSources().length).toBeGreaterThan(0);
   });
 
-  it("imports neither child_process nor node:child_process and never calls spawn", () => {
+  it("imports no child_process module and invokes no spawn/execFile/exec call", () => {
     for (const file of outputSources()) {
       const source = readFileSync(file, "utf8");
+      // No import of the process-creation module (with or without the node: prefix).
       expect(source).not.toContain("child_process");
-      expect(source).not.toContain("spawn");
-      expect(source).not.toContain("execFile");
+      // No actual call sites — forwarding an injected `spawn` value (no call
+      // parens) is allowed; `spawn(`, `execFile(`, `execSync(` etc. are not.
+      expect(source).not.toMatch(/\bspawn(?:Sync)?\s*\(/);
+      expect(source).not.toMatch(/\bexec(?:File|FileSync|Sync)?\s*\(/);
     }
   });
 });

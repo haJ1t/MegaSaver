@@ -1,5 +1,6 @@
 import { defineCommand } from "citty";
 import { outputChunkCommand } from "./chunk.js";
+import { outputExecCommand } from "./exec.js";
 import { outputFileCommand } from "./file.js";
 import { outputFilterCommand } from "./filter.js";
 
@@ -18,6 +19,11 @@ export {
   runOutputChunk,
   outputChunkCommand,
 } from "./chunk.js";
+export {
+  type RunOutputExecInput,
+  runOutputExec,
+  outputExecCommand,
+} from "./exec.js";
 
 export const outputCommand = defineCommand({
   meta: { name: "output", description: "Filter and chunk tool output." },
@@ -25,5 +31,6 @@ export const outputCommand = defineCommand({
     file: outputFileCommand,
     filter: outputFilterCommand,
     chunk: outputChunkCommand,
+    exec: outputExecCommand,
   },
 });
