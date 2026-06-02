@@ -278,6 +278,7 @@ describe("runConnectorStatus --json failure path", () => {
 import { runConnectorSync } from "../src/commands/connector/sync.js";
 import { runMemoryCreate } from "../src/commands/memory/create.js";
 import { runOutputChunk } from "../src/commands/output/chunk.js";
+import { runOutputExec } from "../src/commands/output/exec.js";
 import { runOutputFile } from "../src/commands/output/file.js";
 import { runOutputFilter } from "../src/commands/output/filter.js";
 import { runSessionCreate } from "../src/commands/session/create.js";
@@ -687,6 +688,101 @@ describe("runOutputChunk --json failure path", () => {
       stdout: (line) => out.push(line),
       stderr: (line) => err.push(line),
       json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// output exec --json failure paths (BB7b) — each must write nothing to stdout
+// and a plain-text stderr line; spawn must NEVER be reached on these branches.
+// ---------------------------------------------------------------------------
+
+function throwOnSpawn(): never {
+  throw new Error("spawn must never run on a failure path");
+}
+// biome-ignore lint/suspicious/noExplicitAny: spawn test double for the orchestrator slot
+const neverSpawn = throwOnSpawn as any;
+
+describe("runOutputExec --json failure path", () => {
+  let store: string;
+  let projectRoot: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-json-fail-oe-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-json-fail-oe-root-"));
+    await seedSession(store, projectRoot);
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  it("missing --intent → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runOutputExec({
+      sessionId: SESSION_ID_W,
+      intentFlag: undefined,
+      command: "pnpm",
+      args: ["test"],
+      storeFlag: store,
+      cwd: projectRoot,
+      home: projectRoot,
+      xdgDataHome: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+      originPid: String(process.pid),
+      spawn: neverSpawn,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    nonJsonStderr(err);
+  });
+
+  it("command denied (non-allowlisted) → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runOutputExec({
+      sessionId: SESSION_ID_W,
+      intentFlag: "anything",
+      command: "rmtree",
+      args: [],
+      storeFlag: store,
+      cwd: projectRoot,
+      home: projectRoot,
+      xdgDataHome: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+      originPid: String(process.pid),
+      spawn: neverSpawn,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    expect(err.some((e) => e.includes("command_denied"))).toBe(true);
+    nonJsonStderr(err);
+  });
+
+  it("session not found → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runOutputExec({
+      sessionId: "99999999-9999-4999-8999-999999999999",
+      intentFlag: "anything",
+      command: "pnpm",
+      args: ["test"],
+      storeFlag: store,
+      cwd: projectRoot,
+      home: projectRoot,
+      xdgDataHome: undefined,
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+      originPid: String(process.pid),
+      spawn: neverSpawn,
     });
     expect(code).toBe(1);
     expect(out).toHaveLength(0);

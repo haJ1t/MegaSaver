@@ -246,6 +246,22 @@ export function fileReadFailedMessage(detail: string): CliMessage {
   return { message: `error: file_read_failed: ${detail}`, exitCode: 1 };
 }
 
+// BB7b `mega output exec` boundary builders. `<reason>` is a PolicyDenyCode
+// string so the same value is observable from the CLI and (post-BB8) the MCP
+// envelope. No redactionFailedMessage: redaction is internal to filterOutput,
+// not a separate orchestrator step (spec §3.6).
+export function commandDeniedMessage(reason: string): CliMessage {
+  return { message: `error: command_denied: ${reason}`, exitCode: 1 };
+}
+
+export function commandFailedMessage(detail: string): CliMessage {
+  return { message: `error: command_failed: ${detail}`, exitCode: 1 };
+}
+
+export function storeWriteFailedMessage(detail: string): CliMessage {
+  return { message: `error: store_write_failed: ${detail}`, exitCode: 1 };
+}
+
 export function invalidChunkSetIdMessage(): CliMessage {
   return { message: "error: invalid_chunk_set_id", exitCode: 1 };
 }

@@ -2,11 +2,16 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+// @megasaver/stats joins the allow-list in BB7b: the exec orchestrator
+// (run-command.ts) appends a TokenSaverEvent via stats.appendEvent. This stays
+// acyclic — stats depends only on output-filter + shared and never imports
+// @megasaver/core — so core → stats introduces no cycle.
 const ALLOWED_DEPENDENCIES = [
   "@megasaver/content-store",
   "@megasaver/output-filter",
   "@megasaver/policy",
   "@megasaver/shared",
+  "@megasaver/stats",
   "zod",
 ];
 
