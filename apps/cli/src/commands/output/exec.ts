@@ -111,6 +111,16 @@ export async function runOutputExec(input: RunOutputExecInput): Promise<number> 
     }
 
     const { result } = outcome;
+
+    // Forced termination (timeout / max-bytes) is a MegaSaver-side failure path:
+    // core still persisted the partial chunkSet to the store, but the run is
+    // exit 1 and emits NO success envelope on stdout — machine consumers must
+    // never see a success line/JSON for a failed run (spec §6/§7).
+    if (result.terminated !== undefined) {
+      input.stderr(`error: command_failed: terminated: ${result.terminated}`);
+      return 1;
+    }
+
     if (input.json) {
       input.stdout(JSON.stringify({ sessionId: input.sessionId, result }));
     } else {
@@ -121,10 +131,7 @@ export async function runOutputExec(input: RunOutputExecInput): Promise<number> 
       if (result.summary.length > 0) input.stdout(result.summary);
     }
 
-    // Forced termination (timeout / max-bytes) is a MegaSaver-side failure: the
-    // partial output was still written, but the run is exit 1 (spec §6).
-    if (result.terminated !== undefined) return 1;
-    // Otherwise mirror the child's exit code so CI/scripts see the real result.
+    // Mirror the child's exit code so CI/scripts see the real result.
     // A non-zero child also gets a one-line note on stderr while the success
     // stdout/JSON is STILL written (this is NOT a MegaSaver failure path).
     const childCode = result.childExitCode ?? 0;

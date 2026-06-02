@@ -337,9 +337,9 @@ describe("runOutputExec", () => {
 
   // ---- forced termination is exit 1 ------------------------------------
 
-  it("max-bytes termination → exit 1, partial stored", async () => {
+  it("max-bytes termination + --json → exit 1, NO success JSON on stdout", async () => {
     await seed(store, projectRoot, { storeRawOutput: true });
-    const { input } = scriptedInput(
+    const { input, out, err } = scriptedInput(
       { stdout: ["0123456789abcdef"], close: null }, // 16 bytes breaches 8
       { maxBytes: 8, json: true },
     );
@@ -347,6 +347,26 @@ describe("runOutputExec", () => {
     const code = await runOutputExec(input);
 
     expect(code).toBe(1);
+    // A failed run must NOT emit a success envelope. stdout stays empty even in
+    // --json mode; machine consumers see only the non-zero exit + stderr line.
+    expect(out).toHaveLength(0);
+    expect(err.some((e) => e.includes("command_failed: terminated: max_bytes"))).toBe(true);
+    // No stderr line is parseable JSON (proves no envelope leaked to stderr).
+    for (const line of err) expect(() => JSON.parse(line)).toThrow();
+  });
+
+  it("max-bytes termination + text mode → exit 1, nothing on stdout", async () => {
+    await seed(store, projectRoot, { storeRawOutput: true });
+    const { input, out, err } = scriptedInput(
+      { stdout: ["0123456789abcdef"], close: null },
+      { maxBytes: 8 },
+    );
+
+    const code = await runOutputExec(input);
+
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    expect(err.some((e) => e.includes("command_failed: terminated: max_bytes"))).toBe(true);
   });
 
   // ---- unexpected throw → exit 2 ---------------------------------------
