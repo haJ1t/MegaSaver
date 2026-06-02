@@ -1,5 +1,9 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { type Server, createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import type { ChunkSet } from "@megasaver/content-store";
 import {
   type CoreRegistry,
   type MemoryEntry,
@@ -7,18 +11,48 @@ import {
   type Session,
   createInMemoryCoreRegistry,
 } from "@megasaver/core";
+import type { SessionTokenSaverStats, TokenSaverEvent } from "@megasaver/stats";
 import { createBridgeHandler } from "../../bridge/handler.js";
 
 export type TestServer = {
   baseUrl: string;
   registry: CoreRegistry;
+  storePath: string;
   close(): Promise<void>;
 };
+
+export type StoreSeed = {
+  summaries?: { projectId: string; sessionId: string; summary: SessionTokenSaverStats }[];
+  events?: { projectId: string; sessionId: string; lines: (TokenSaverEvent | string)[] }[];
+  chunkSets?: { projectId: string; sessionId: string; chunkSet: ChunkSet }[];
+};
+
+function seedStore(root: string, seed: StoreSeed): void {
+  for (const s of seed.summaries ?? []) {
+    const p = join(root, "stats", s.projectId, `${s.sessionId}.json`);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, JSON.stringify(s.summary));
+  }
+  for (const e of seed.events ?? []) {
+    const p = join(root, "stats", e.projectId, `${e.sessionId}.events.jsonl`);
+    mkdirSync(dirname(p), { recursive: true });
+    const body = e.lines
+      .map((line) => (typeof line === "string" ? line : JSON.stringify(line)))
+      .join("\n");
+    writeFileSync(p, `${body}\n`);
+  }
+  for (const c of seed.chunkSets ?? []) {
+    const p = join(root, "content", c.projectId, c.sessionId, `${c.chunkSet.chunkSetId}.json`);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, JSON.stringify(c.chunkSet));
+  }
+}
 
 export async function startTestBridge(seed?: {
   projects?: Project[];
   sessions?: Session[];
   memoryEntries?: MemoryEntry[];
+  store?: StoreSeed;
 }): Promise<TestServer> {
   const registry = createInMemoryCoreRegistry();
   for (const project of seed?.projects ?? []) {
@@ -31,14 +65,26 @@ export async function startTestBridge(seed?: {
     registry.createMemoryEntry(entry);
   }
 
-  const handler = createBridgeHandler({ registry });
+  const storePath = mkdtempSync(join(tmpdir(), "megasaver-gui-store-"));
+  if (seed?.store) {
+    seedStore(storePath, seed.store);
+  }
+
+  const handler = createBridgeHandler({ registry, storePath });
   const server: Server = createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
   return {
     baseUrl: `http://127.0.0.1:${port}`,
     registry,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    storePath,
+    close: () =>
+      new Promise<void>((resolve) =>
+        server.close(() => {
+          rmSync(storePath, { recursive: true, force: true });
+          resolve();
+        }),
+      ),
   };
 }
 

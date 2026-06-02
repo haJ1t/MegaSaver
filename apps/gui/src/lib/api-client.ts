@@ -1,5 +1,6 @@
-import type { MemoryEntry, Session } from "@megasaver/core";
+import type { MemoryEntry, Session, TokenSaverSettings } from "@megasaver/core";
 import type { Project } from "@megasaver/core";
+import type { SessionTokenSaverStats, TokenSaverEvent } from "@megasaver/stats";
 import type { BridgeError } from "../components/states.js";
 
 export type HealthResponse = {
@@ -110,4 +111,51 @@ export type CreateMemoryBody = {
 
 export function createMemoryEntry(body: CreateMemoryBody): Promise<MemoryEntry> {
   return postJson<MemoryEntry>("/api/memory", body);
+}
+
+// ── Token-saver endpoints (BB10) ────────────────────────────────────────────
+
+export type TokenSaverStatusResponse = {
+  enabled: boolean;
+  settings: TokenSaverSettings | null;
+};
+
+export type EnableTokenSaverBody = {
+  mode?: string;
+  maxReturnedBytes?: number;
+  storeRawOutput?: boolean;
+  redactSecrets?: boolean;
+  autoRepair?: boolean;
+};
+
+function tokenSaverBase(sessionId: string): string {
+  return `/api/sessions/${encodeURIComponent(sessionId)}/token-saver`;
+}
+
+export function enableTokenSaver(sessionId: string, body?: EnableTokenSaverBody): Promise<Session> {
+  return postJson<Session>(`${tokenSaverBase(sessionId)}/enable`, body ?? {});
+}
+
+export function disableTokenSaver(sessionId: string): Promise<Session> {
+  return postJson<Session>(`${tokenSaverBase(sessionId)}/disable`, {});
+}
+
+export function fetchTokenSaverStatus(sessionId: string): Promise<TokenSaverStatusResponse> {
+  return getJson<TokenSaverStatusResponse>(`${tokenSaverBase(sessionId)}/status`);
+}
+
+export function fetchTokenSaverStats(sessionId: string): Promise<SessionTokenSaverStats | null> {
+  return getJson<SessionTokenSaverStats | null>(`${tokenSaverBase(sessionId)}/stats`);
+}
+
+export function fetchTokenSaverEvents(sessionId: string): Promise<TokenSaverEvent[]> {
+  return getJson<TokenSaverEvent[]>(`${tokenSaverBase(sessionId)}/events`);
+}
+
+export function tokenSaverEventRawUrl(sessionId: string, eventId: string): string {
+  return `${tokenSaverBase(sessionId)}/events/${encodeURIComponent(eventId)}/raw`;
+}
+
+export function tokenSaverEventSentUrl(sessionId: string, eventId: string): string {
+  return `${tokenSaverBase(sessionId)}/events/${encodeURIComponent(eventId)}/sent`;
 }

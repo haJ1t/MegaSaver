@@ -2,6 +2,7 @@
 // New codes require this list to grow + a fresh .test-d.ts assertion update.
 // Mirrored in apps/gui/bridge/server.ts (bridge side).
 export const BRIDGE_ERROR_CODES = [
+  "event_not_found",
   "internal_error",
   "method_not_allowed",
   "origin_forbidden",
@@ -18,6 +19,7 @@ export type BridgeErrorCode = (typeof BRIDGE_ERROR_CODES)[number];
 // Human-readable copy map used by ErrorState component.
 // Falls back to the bridge's `error` string field for unknown codes.
 export const BRIDGE_ERROR_COPY: Record<BridgeErrorCode, string> = {
+  event_not_found: "Event not found, or it has no stored output.",
   internal_error: "Something went wrong. Try again.",
   method_not_allowed: "Request method not allowed.",
   origin_forbidden: "Request blocked by the bridge origin policy.",

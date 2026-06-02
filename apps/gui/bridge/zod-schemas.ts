@@ -5,8 +5,21 @@ import {
   projectIdSchema,
   riskLevelSchema,
   sessionIdSchema,
+  tokenSaverModeSchema,
 } from "@megasaver/shared";
 import { z } from "zod";
+
+export const ENABLE_TOKEN_SAVER_BODY = z
+  .object({
+    mode: tokenSaverModeSchema.optional(),
+    maxReturnedBytes: z.number().int().positive().optional(),
+    storeRawOutput: z.boolean().optional(),
+    redactSecrets: z.boolean().optional(),
+    autoRepair: z.boolean().optional(),
+  })
+  .strict();
+
+export const DISABLE_TOKEN_SAVER_BODY = z.object({}).strict();
 
 export const CREATE_SESSION_BODY = z
   .object({

@@ -1,6 +1,7 @@
 import type { Session } from "@megasaver/core";
 import type { RefObject } from "react";
 import { AgentBadge, RiskBadge, StatusBadge } from "../components/badges.js";
+import { SavingsBadge } from "../components/savings-badge.js";
 import { shortId } from "../lib/short-id.js";
 
 function formatDate(iso: string | null): string {
@@ -71,6 +72,7 @@ export function SessionsList({
             <div className="flex items-center gap-2">
               <AgentBadge agentId={session.agentId} />
               <RiskBadge level={session.riskLevel} />
+              <SavingsBadge tokenSaver={session.tokenSaver} />
               <span className="text-xs text-text-muted ml-auto">
                 {formatDate(session.startedAt)}
               </span>

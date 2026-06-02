@@ -20,14 +20,18 @@ export type SendError = (
 
 // Per-request context handed to every route handler. Routes are plain async
 // fns so they stay testable in isolation and keep `handler.ts` thin.
+export type SendText = (res: ServerResponse, status: number, body: string, origin?: string) => void;
+
 export type RouteContext = {
   req: IncomingMessage;
   res: ServerResponse;
   registry: CoreRegistry;
   origin: string | undefined;
   query: URLSearchParams;
+  storeRoot: string;
   newId: () => string;
   now: () => string;
   sendJson: SendJson;
   sendError: SendError;
+  sendText: SendText;
 };

@@ -4,6 +4,7 @@ import { AgentBadge, RiskBadge, StatusBadge } from "../components/badges.js";
 import { UpdateSessionForm } from "../components/session-forms.js";
 import { ErrorState } from "../components/states.js";
 import type { BridgeError } from "../components/states.js";
+import { TokenSaverPanel } from "../components/token-saver-panel.js";
 import { updateSession } from "../lib/api-client.js";
 import { shortId } from "../lib/short-id.js";
 
@@ -128,6 +129,10 @@ export function SessionsDetail({
           onCancel={onHideUpdateForm}
           onUpdate={updateSession}
         />
+      )}
+
+      {!showUpdateForm && selected.endedAt === null && (
+        <TokenSaverPanel session={selected} onSettingsChanged={onUpdated} />
       )}
     </>
   );
