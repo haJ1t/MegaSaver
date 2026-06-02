@@ -50,10 +50,11 @@ describe("runOutputExec — recursive_megasaver guard", () => {
     await seed(store, projectRoot);
     const out: string[] = [];
     const err: string[] = [];
-    // biome-ignore lint/suspicious/noExplicitAny: spawn test double
-    const spawn = vi.fn(() => {
+    const spawnSpy = vi.fn(() => {
       throw new Error("spawn must never be called when the policy gate denies");
-    }) as any;
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: cast the spy into the orchestrator spawn slot
+    const spawn = spawnSpy as any;
 
     const code = await runOutputExec({
       sessionId: SESSION_ID,
@@ -78,6 +79,6 @@ describe("runOutputExec — recursive_megasaver guard", () => {
     expect(code).toBe(1);
     expect(out).toHaveLength(0);
     expect(err.some((e) => e.includes("command_denied: recursive_megasaver"))).toBe(true);
-    expect(spawn).not.toHaveBeenCalled();
+    expect(spawnSpy).not.toHaveBeenCalled();
   });
 });

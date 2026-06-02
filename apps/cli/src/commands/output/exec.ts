@@ -189,7 +189,9 @@ export const outputExecCommand = defineCommand({
       json: !!args.json,
       originPid,
       ...(timeoutSec !== undefined && Number.isFinite(timeoutSec) ? { timeoutSec } : {}),
-      ...(maxBytesArg !== undefined && Number.isFinite(maxBytesArg) ? { maxBytes: maxBytesArg } : {}),
+      ...(maxBytesArg !== undefined && Number.isFinite(maxBytesArg)
+        ? { maxBytes: maxBytesArg }
+        : {}),
     });
     if (code !== 0) process.exitCode = code;
   },

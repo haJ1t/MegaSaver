@@ -700,10 +700,11 @@ describe("runOutputChunk --json failure path", () => {
 // and a plain-text stderr line; spawn must NEVER be reached on these branches.
 // ---------------------------------------------------------------------------
 
-// biome-ignore lint/suspicious/noExplicitAny: spawn test double that must never run
-const neverSpawn = (() => {
+function throwOnSpawn(): never {
   throw new Error("spawn must never run on a failure path");
-}) as any;
+}
+// biome-ignore lint/suspicious/noExplicitAny: spawn test double for the orchestrator slot
+const neverSpawn = throwOnSpawn as any;
 
 describe("runOutputExec --json failure path", () => {
   let store: string;
