@@ -5,7 +5,12 @@ import { type FilterOutputResult, filterOutput } from "@megasaver/output-filter"
 import { type PolicyDenyCode, evaluateCommand } from "@megasaver/policy";
 import { type SessionId, modeToBudget } from "@megasaver/shared";
 import { type TokenSaverEvent, appendEvent } from "@megasaver/stats";
-import { defaultNewId, defaultNow, resolveEffectiveSettings } from "./read.js";
+import {
+  type LoadProjectPermissions,
+  defaultNewId,
+  defaultNow,
+  resolveEffectiveSettings,
+} from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
 
 // Injectable spawn so unit tests never start a real process (CRITICAL §12).
@@ -26,6 +31,9 @@ export type RunOutputExecInput = {
   spawn?: RunCommandSpawn;
   now?: () => string;
   newId?: () => string;
+  // Injectable project-permissions loader (default = real fs+yaml loader) so
+  // tests drive absent/valid/throwing without a real file (permissions-yaml §5.2).
+  loadPermissions?: LoadProjectPermissions;
 };
 
 export type ExecResult = FilterOutputResult & {
@@ -36,6 +44,7 @@ export type ExecResult = FilterOutputResult & {
 export type RunOutputExecResult =
   | { ok: true; result: ExecResult }
   | { ok: false; reason: "session_not_found" }
+  | { ok: false; reason: "policy_load_failed"; detail: string }
   | { ok: false; reason: "command_denied"; code: PolicyDenyCode }
   | { ok: false; reason: "command_failed"; detail: string }
   | { ok: false; reason: "store_write_failed"; detail: string };
@@ -153,16 +162,25 @@ function messageOf(err: unknown): string {
 export async function runOutputExecCommand(
   input: RunOutputExecInput,
 ): Promise<RunOutputExecResult> {
-  const settings = resolveEffectiveSettings(input.registry, input.sessionId);
-  if (settings === null) return { ok: false, reason: "session_not_found" };
+  const resolved = resolveEffectiveSettings(input.registry, input.sessionId, input.loadPermissions);
+  // Fail-closed (I3): a present-but-malformed permissions.yaml denies the run
+  // here, before any spawn — the gate is shut before IO.
+  if (!resolved.ok) {
+    return resolved.reason === "policy_load_failed"
+      ? { ok: false, reason: "policy_load_failed", detail: resolved.detail }
+      : { ok: false, reason: "session_not_found" };
+  }
+  const { settings } = resolved;
 
   // Policy gate. The recursive_megasaver conjunct is enforced here via the
   // injected originPid (evaluateCommand compares it against String(process.pid)).
+  // The loaded project permissions are the additional tighten-only deny gate (§4.2).
   const verdict = evaluateCommand({
     command: input.command,
     args: input.args,
     project: settings.projectId,
     env: { MEGASAVER_ORIGIN_PID: input.originPid },
+    ...(settings.permissions !== null ? { permissions: settings.permissions } : {}),
   });
   if (!verdict.allowed) return { ok: false, reason: "command_denied", code: verdict.reason };
 

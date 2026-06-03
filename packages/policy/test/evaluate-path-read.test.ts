@@ -1,11 +1,19 @@
 import { projectIdSchema } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { type EvaluatePathReadResult, evaluatePathRead } from "../src/evaluate-path-read.js";
+import {
+  type ProjectPermissions,
+  parseProjectPermissions,
+} from "../src/parse-project-permissions.js";
 
 const PROJECT = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 
 function evalPath(path: string): EvaluatePathReadResult {
   return evaluatePathRead({ path, project: PROJECT });
+}
+
+function evalPathWith(path: string, permissions: ProjectPermissions): EvaluatePathReadResult {
+  return evaluatePathRead({ path, project: PROJECT, permissions });
 }
 
 describe("evaluatePathRead — secret-path denylist (spec §4a)", () => {
@@ -83,5 +91,57 @@ describe("evaluatePathRead — allow + reason policy (spec §4, §4b)", () => {
         expect(result.reason).not.toBe("path_denied");
       }
     }
+  });
+});
+
+describe("evaluatePathRead — project deny.read globs (permissions-yaml §4.2/§4 I4)", () => {
+  const permissions = parseProjectPermissions({ deny: { read: ["creds/**"] } });
+
+  // The project glob is ADDITIVE to SECRET_PATH_PATTERNS and compiled by the
+  // same compileGlob over normalizePath-lowered, `/`-unified input — so case
+  // and backslash cannot defeat it any more than they defeat the baseline (I4).
+  const denied: ReadonlyArray<readonly [string, string]> = [
+    ["plain", "creds/x.txt"],
+    ["case", "CREDS/X.TXT"],
+    ["backslash", "creds\\x.txt"],
+  ];
+
+  for (const [label, path] of denied) {
+    it(`denies a deny.read match (${label}): ${path}`, () => {
+      expect(evalPathWith(path, permissions)).toEqual({
+        allowed: false,
+        reason: "secret_path_read",
+      });
+    });
+  }
+
+  it("allows a path matching neither the baseline nor deny.read (I2: deny-only)", () => {
+    expect(evalPathWith("src/index.ts", permissions)).toEqual({ allowed: true });
+  });
+
+  it("absent permissions ⇒ baseline only (project gate is opt-in)", () => {
+    expect(evalPath("creds/x.txt")).toEqual({ allowed: true });
+  });
+});
+
+// I1 — tighten-only. deny.read only ADDS secret-path globs; there is no field
+// to un-deny a baseline SECRET_PATH_PATTERNS entry, and the baseline loop runs
+// first (I2), so a baseline secret path stays denied regardless of any
+// permissions value.
+describe("evaluatePathRead — tighten-only (permissions-yaml I1, §7 step 2)", () => {
+  it("cannot un-deny a baseline secret path (**/.env still secret_path_read)", () => {
+    const permissions = parseProjectPermissions({ deny: { read: ["creds/**"] } });
+    expect(evalPathWith("project/.env", permissions)).toEqual({
+      allowed: false,
+      reason: "secret_path_read",
+    });
+  });
+
+  it("an empty deny never un-denies a baseline secret path", () => {
+    const permissions = parseProjectPermissions({});
+    expect(evalPathWith("home/.ssh/id_rsa", permissions)).toEqual({
+      allowed: false,
+      reason: "secret_path_read",
+    });
   });
 });

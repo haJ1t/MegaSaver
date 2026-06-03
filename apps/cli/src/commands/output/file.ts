@@ -7,6 +7,7 @@ import {
   mapErrorToCliMessage,
   pathDeniedMessage,
   pathUnsafeMessage,
+  policyLoadFailedMessage,
   sessionNotFoundMessage,
 } from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
@@ -73,6 +74,10 @@ export async function runOutputFile(input: RunOutputFileInput): Promise<0 | 1> {
       switch (outcome.reason) {
         case "session_not_found":
           return sessionNotFoundMessage(input.sessionId);
+        case "policy_load_failed":
+          // A present-but-malformed permissions.yaml; the file was never read
+          // (fail-closed, I3).
+          return policyLoadFailedMessage(outcome.detail);
         case "path_denied":
           return pathDeniedMessage(outcome.detail);
         case "path_unsafe":

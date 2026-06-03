@@ -20,7 +20,10 @@ const DENYLIST_GLOBS: readonly string[] = [
   "**/service-account*.json",
 ];
 
-function compileGlob(glob: string): RegExp {
+// Exported for parse-project-permissions.ts so project deny.read/write
+// globs reuse the SAME matcher as SECRET_PATH_PATTERNS — no second glob
+// engine, identical `..`/backslash/case semantics (permissions-yaml §4.1, I4).
+export function compileGlob(glob: string): RegExp {
   let body = "";
   for (let i = 0; i < glob.length; i += 1) {
     const char = glob[i];

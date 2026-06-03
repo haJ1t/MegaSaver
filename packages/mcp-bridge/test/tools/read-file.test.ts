@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
@@ -88,6 +88,20 @@ describe("handleReadFile", () => {
         { path: envPath, intent: "peek", sessionId: SESSION_ID },
       ),
     ).rejects.toMatchObject({ code: "path_denied" });
+  });
+
+  it("throws policy_load_failed for a present-but-malformed permissions.yaml (fail-closed, I3)", async () => {
+    const registry = seededRegistry(projectRoot);
+    const logPath = join(projectRoot, "log.txt");
+    await writeFile(logPath, "line one\n");
+    await mkdir(join(projectRoot, ".megasaver"), { recursive: true });
+    await writeFile(join(projectRoot, ".megasaver", "permissions.yaml"), "deny:\n  read: [oops");
+    await expect(
+      handleReadFile(
+        { registry, storeRoot: store, now: () => TS, newId: () => "x" },
+        { path: logPath, intent: "find the error", sessionId: SESSION_ID },
+      ),
+    ).rejects.toMatchObject({ code: "policy_load_failed" });
   });
 
   it("throws max_bytes_exceeded above the 64000 ceiling", async () => {

@@ -113,6 +113,11 @@ export async function runOutputExec(input: RunOutputExecInput): Promise<number> 
         switch (outcome.reason) {
           case "session_not_found":
             return sessionNotFoundMessage(input.sessionId);
+          case "policy_load_failed":
+            // policy_load_failed IS a PolicyDenyCode; surface it on the same
+            // command_denied line so the CLI and MCP observe the same code. The
+            // command was never spawned (fail-closed, I3).
+            return commandDeniedMessage("policy_load_failed");
           case "command_denied":
             return commandDeniedMessage(outcome.code);
           case "command_failed":

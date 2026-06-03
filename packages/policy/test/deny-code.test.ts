@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { policyDenyCodeSchema } from "../src/deny-code.js";
 
 describe("policyDenyCodeSchema", () => {
-  it("parses each of the 6 locked members", () => {
+  it("parses each of the 7 locked members", () => {
     for (const member of [
       "command_not_allowed",
       "dangerous_pattern",
       "intent_missing",
       "path_denied",
+      "policy_load_failed",
       "recursive_megasaver",
       "secret_path_read",
     ]) {
@@ -33,6 +34,7 @@ describe("policyDenyCodeSchema", () => {
       "dangerous_pattern",
       "intent_missing",
       "path_denied",
+      "policy_load_failed",
       "recursive_megasaver",
       "secret_path_read",
     ]);

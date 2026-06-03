@@ -75,6 +75,12 @@ export async function handleRunCommand(
   switch (outcome.reason) {
     case "session_not_found":
       throw new McpBridgeError("session_not_found", `session not found: ${sessionId}`);
+    case "policy_load_failed":
+      // A present-but-malformed .megasaver/permissions.yaml. The command was
+      // NEVER spawned — the gate shut before IO (fail-closed, I3).
+      throw new McpBridgeError("policy_load_failed", `policy load failed: ${outcome.detail}`, {
+        details: { reason: outcome.detail },
+      });
     case "command_denied":
       throw new McpBridgeError("command_denied", `command denied: ${outcome.code}`, {
         details: { reason: outcome.code },
