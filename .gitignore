@@ -11,6 +11,10 @@ build/
 .worktrees/
 *.tsbuildinfo
 
+# Transient pack backup: apps/cli prepack strips the published manifest and
+# postpack restores it from this file. Never committed; gone after a clean pack.
+package.json.bak
+
 # Test artifacts
 coverage/
 .vitest-cache/
