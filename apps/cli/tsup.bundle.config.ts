@@ -1,8 +1,8 @@
 import { createRequire } from "node:module";
 import { defineConfig } from "tsup";
 
-// Read the CLI's own version at build time. main.ts reads this via
-// process.env.MEGA_CLI_VERSION (injected below), because a single-file bundle
+// Read the CLI's own version at build time. main.ts reads it from the
+// __MEGA_CLI_VERSION__ define (injected below), because a single-file bundle
 // has no sibling package.json to require at runtime.
 const { version } = createRequire(import.meta.url)("./package.json") as { version: string };
 
@@ -30,9 +30,11 @@ export default defineConfig({
   banner: { js: "#!/usr/bin/env node" },
   splitting: false,
   treeshake: true,
-  // Inline the version so main.ts's `process.env.MEGA_CLI_VERSION ?? require(...)`
-  // collapses to the literal and esbuild eliminates the createRequire branch.
-  env: { MEGA_CLI_VERSION: version },
+  // Define the version as a string literal that exists ONLY in this bundle, so
+  // main.ts's `typeof __MEGA_CLI_VERSION__ !== "undefined"` collapses to the
+  // literal and esbuild eliminates the createRequire branch. The unbundled
+  // dist/cli.js has no such define, so it falls back to reading package.json.
+  define: { __MEGA_CLI_VERSION__: JSON.stringify(version) },
   // Inline everything resolvable. esbuild keeps Node builtins (fs, path,
   // node:os, …) external automatically under platform:"node", so this safely
   // bundles all workspace + npm deps without trying to inline the runtime.
