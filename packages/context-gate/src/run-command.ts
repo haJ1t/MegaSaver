@@ -162,11 +162,7 @@ function messageOf(err: unknown): string {
 export async function runOutputExecCommand(
   input: RunOutputExecInput,
 ): Promise<RunOutputExecResult> {
-  const resolved = resolveEffectiveSettings(
-    input.registry,
-    input.sessionId,
-    input.loadPermissions,
-  );
+  const resolved = resolveEffectiveSettings(input.registry, input.sessionId, input.loadPermissions);
   // Fail-closed (I3): a present-but-malformed permissions.yaml denies the run
   // here, before any spawn — the gate is shut before IO.
   if (!resolved.ok) {

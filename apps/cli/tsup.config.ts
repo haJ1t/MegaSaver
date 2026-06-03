@@ -8,7 +8,18 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   dts: false,
-  banner: { js: "#!/usr/bin/env node" },
+  // A bundled CJS dep that `require()`s a bare Node builtin — e.g. yaml's
+  // `require("process")`, pulled in transitively via context-gate's
+  // loadProjectPermissions — otherwise hits esbuild's `__require` shim in the
+  // ESM output and throws "Dynamic require of process is not supported" at
+  // runtime. Re-point that shim at a real createRequire so builtin requires work.
+  banner: {
+    js: [
+      "#!/usr/bin/env node",
+      'import { createRequire as __cr } from "node:module";',
+      "const require = __cr(import.meta.url);",
+    ].join("\n"),
+  },
   splitting: false,
   treeshake: true,
 });

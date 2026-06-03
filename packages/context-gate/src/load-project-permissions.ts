@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PolicyLoadError, type ProjectPermissions, parseProjectPermissions } from "@megasaver/policy";
+import {
+  PolicyLoadError,
+  type ProjectPermissions,
+  parseProjectPermissions,
+} from "@megasaver/policy";
 import { parse as parseYaml } from "yaml";
 
 // IO half of the .megasaver/permissions.yaml feature (permissions-yaml §4.1).

@@ -1,7 +1,10 @@
 import { projectIdSchema } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { type EvaluatePathReadResult, evaluatePathRead } from "../src/evaluate-path-read.js";
-import { type ProjectPermissions, parseProjectPermissions } from "../src/parse-project-permissions.js";
+import {
+  type ProjectPermissions,
+  parseProjectPermissions,
+} from "../src/parse-project-permissions.js";
 
 const PROJECT = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 

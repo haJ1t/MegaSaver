@@ -89,7 +89,10 @@ describe("handleRunCommand", () => {
     // absent the malformed file this would run — the denial is purely the
     // fail-closed permissions load.
     await mkdir(join(projectRoot, ".megasaver"), { recursive: true });
-    await writeFile(join(projectRoot, ".megasaver", "permissions.yaml"), "deny:\n  commands: [oops");
+    await writeFile(
+      join(projectRoot, ".megasaver", "permissions.yaml"),
+      "deny:\n  commands: [oops",
+    );
     await expect(
       handleRunCommand(
         {

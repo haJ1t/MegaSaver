@@ -1,8 +1,8 @@
 import { PolicyLoadError, parseProjectPermissions } from "@megasaver/policy";
 import type { ProjectId, SessionId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
-import type { OrchestratorRegistry } from "../src/registry-port.js";
 import { resolveEffectiveSettings } from "../src/read.js";
+import type { OrchestratorRegistry } from "../src/registry-port.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
@@ -10,8 +10,7 @@ const PROJECT_ROOT = "/tmp/demo-root";
 
 function registryWithSession(): OrchestratorRegistry {
   return {
-    getSession: (id) =>
-      id === SESSION_ID ? { projectId: PROJECT_ID } : null,
+    getSession: (id) => (id === SESSION_ID ? { projectId: PROJECT_ID } : null),
     getProject: (id) => (id === PROJECT_ID ? { rootPath: PROJECT_ROOT } : null),
   };
 }
@@ -38,11 +37,7 @@ describe("resolveEffectiveSettings — discriminated result (permissions-yaml §
 
   it("ok with the loaded permissions injected into settings", () => {
     const permissions = parseProjectPermissions({ deny: { commands: ["make"] } });
-    const result = resolveEffectiveSettings(
-      registryWithSession(),
-      SESSION_ID,
-      () => permissions,
-    );
+    const result = resolveEffectiveSettings(registryWithSession(), SESSION_ID, () => permissions);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.settings.permissions).toBe(permissions);

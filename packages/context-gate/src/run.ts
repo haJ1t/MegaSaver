@@ -33,11 +33,7 @@ export type RunOutputResult =
   | { ok: false; reason: "file_read_failed"; detail: string };
 
 export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutputResult> {
-  const resolved = resolveEffectiveSettings(
-    input.registry,
-    input.sessionId,
-    input.loadPermissions,
-  );
+  const resolved = resolveEffectiveSettings(input.registry, input.sessionId, input.loadPermissions);
   // Fail-closed (I3): a present-but-malformed permissions.yaml denies the read
   // here, before runTwoGates / fs.readFile — the gate is shut before IO.
   if (!resolved.ok) {

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  PolicyLoadError,
-  parseProjectPermissions,
-} from "../src/parse-project-permissions.js";
+import { PolicyLoadError, parseProjectPermissions } from "../src/parse-project-permissions.js";
 
 describe("parseProjectPermissions — valid shapes (§7 1a)", () => {
   it("compiles deny.read/write globs and keeps deny.commands verbatim", () => {
@@ -35,9 +32,7 @@ describe("parseProjectPermissions — valid shapes (§7 1a)", () => {
 
 describe("parseProjectPermissions — fail-closed on bad shape (§7 1a, I1/I3)", () => {
   it("unknown top-level key ⇒ PolicyLoadError (.strict)", () => {
-    expect(() => parseProjectPermissions({ allow: { commands: ["rm"] } })).toThrow(
-      PolicyLoadError,
-    );
+    expect(() => parseProjectPermissions({ allow: { commands: ["rm"] } })).toThrow(PolicyLoadError);
   });
 
   it("a stray allow: alongside a valid deny: ⇒ PolicyLoadError (no escalation key, §3.1)", () => {
