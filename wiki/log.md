@@ -1810,3 +1810,11 @@ v1.0 done-list end-to-end and prepares the `v1.0.0` tag.
 - **§2a** — orchestrator extraction outcome recorded in
   `wiki/decisions/context-gate-extraction.md` (553 LOC > 500 →
   extraction queued as BB12).
+
+## [2026-05-13] decision | Context Gate extraction (AA1 §2a) recorded
+
+`wc -l packages/core/src/context-gate/*.ts` = 553 LOC (> 500) →
+EXTRACT, queued as BB12 (deferred to its own PR; spec/plan landed in
+PR #82). Recorded in `wiki/decisions/context-gate-extraction.md`.
+PR #75 (extraction evaluation): MERGED — created the folded
+`packages/core/src/context-gate/` directory.
