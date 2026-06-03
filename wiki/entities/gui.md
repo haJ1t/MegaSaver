@@ -144,3 +144,30 @@ override is intentional and scoped to the four affected files only.
 - [[entities/cli]]
 - [[entities/mcp-bridge]]
 - [[concepts/agent-agnostic-core]]
+
+## v1.1 / post-v1.0 (2026-06-03/2026-06-04)
+
+**PR #84 — AgentSetupDoctor + CONTEXT_GATE connector block (BB11):**
+
+Already captured in the `## AA1 / Mega Saver Mode` section above.
+Summarised for navigation: `agent-setup-doctor` view (setup/repair
+without a terminal); bridge `/api/mcp/{status,install,repair,uninstall}`
+routes; each agent row carries a `restartHint`. The `connectors-shared`
+`CONTEXT_GATE` block coexists with the legacy block.
+
+**PRs #85, #87 — WCAG AA contrast:**
+
+- `#85`: accent colour `#c4681a` → `#a25616`; muted text channel
+  retuned. All body text ≥4.5:1.
+- `#87`: active nav-item and chip text switched from accent colour to
+  `text-primary`. Resolves the remaining failing contrast pairs.
+
+**PR #97 — Token-savings observability (gui@1.1.0):**
+
+- Token-savings inline-SVG chart added to `TokenSaverPanel`; renders
+  the savings ratio history for the current session.
+- Raw-output retention controls: `GET /api/sessions/:id/raw-output/summary`
+  returns aggregate size; destructive clear requires two-step user
+  confirmation (session-scoped, irreversible).
+- `<output>` element gains `aria-live="polite"` for screen-reader
+  announcements on savings updates.

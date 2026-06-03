@@ -58,3 +58,12 @@ side-effect (AA1 §2c DI).
 - [[entities/cli]] — `mega mcp` surface.
 - [[entities/gui]] — AgentSetupDoctor + `/api/mcp/*` bridge routes.
 - [[concepts/context-gate-pipeline]] — the filter pipeline each tool runs.
+
+## v1.1 / post-v1.0 (2026-06-03)
+
+The page above reflects the v1.0.0 / BB8 state. No additional public surface
+changes in v1.1.0. mcp-bridge@1.0.2 (patch-level bump alongside the
+standalone-bundle distribution work, PRs #91, #94). The `mega mcp serve`
+subcommand (BB8) allows the bridge to be started manually for debugging;
+`mega mcp install` wires it into the agent's MCP config via
+`buildMcpSetupOps`.

@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-05-12
+updated: 2026-06-04
 ---
 
 # Wiki Index — Mega Saver
@@ -25,22 +25,23 @@ updated: 2026-05-12
 
 ## Entities
 
-- [[entities/cli]] — `@megasaver/cli` `mega` command scaffold (v0.1).
+- [[entities/cli]] — `@megasaver/cli` `mega` command; `mega output exec`, `mega mcp {install,repair,status,uninstall,serve}`; standalone bundle `dist-bundle/mega.mjs` (zero runtime deps) shipped to GitHub Releases on `v*` tag via `release.yml` (#91, #94).
 - [[entities/connectors-claude-code]] — `@megasaver/connector-claude-code` root `CLAUDE.md` adapter (merged).
 - [[entities/connectors-generic-cli]] — `@megasaver/connector-generic-cli` manifest-driven connector (v0.1 = Codex `AGENTS.md`).
-- [[entities/connectors-shared]] — `@megasaver/connectors-shared` block helpers + context schema.
-- [[entities/core]] — `@megasaver/core` agent-agnostic engine foundation (v0.1; BB1 adds `Session.tokenSaver` + `updateTokenSaver`).
-- [[entities/gui]] — `@megasaver/gui` localhost web shell — picker + master-detail + write actions, "Editorial Terminal" design (v1, LL).
+- [[entities/connectors-shared]] — `@megasaver/connectors-shared` block helpers + context schema; additive `MEGA SAVER:CONTEXT_GATE` block (BB11, #84).
+- [[entities/core]] — `@megasaver/core` agent-agnostic engine; BB1 adds `Session.tokenSaver` + `updateTokenSaver`; BB12 (#88) moved the orchestrator OUT to `@megasaver/context-gate` (core re-exports it).
+- [[entities/gui]] — `@megasaver/gui` localhost web shell; AgentSetupDoctor + `/api/mcp/*` routes (BB11, #84); WCAG AA contrast pass (#85, #87); token-savings inline-SVG chart + raw-output retention controls (#97, gui@1.1.0).
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1; BB1 adds `TokenSaverMode` + `modeToBudget`).
 
-### AA1 Context Gate packages (v0.5)
+### AA1 Context Gate packages (v0.5 → v1.1)
 
-- [[entities/policy]] — `@megasaver/policy` command/path gates + redact + `PolicyDenyCode` (BB3).
-- [[entities/output-filter]] — `@megasaver/output-filter` `filterOutput` pipeline, `resolveSafeReadPath`, `RankFeatureName`, `OutputSourceKind` (BB5).
+- [[entities/policy]] — `@megasaver/policy` command/path gates + redact + `PolicyDenyCode` (BB3); `parseProjectPermissions` + `permissions.yaml` tighten-only rules + `policy_load_failed` (#96, v1.1.0).
+- [[entities/output-filter]] — `@megasaver/output-filter` `filterOutput` pipeline, `resolveSafeReadPath`, `RankFeatureName`, `OutputSourceKind` (BB5); +pytest/go/cargo/eslint parsers (#92); CamelCase `*Error` + `panicked` ranker (#95) — output-filter@1.1.0.
 - [[entities/content-store]] — `@megasaver/content-store` ChunkSet persistence, `ContentStoreErrorCode` (BB4; no core edge).
 - [[entities/retrieval]] — `@megasaver/retrieval` BM25 + `DerivedIntent` (BB6).
 - [[entities/stats]] — `@megasaver/stats` `SessionTokenSaverStats` + `TokenSaverEvent` (BB6).
-- [[entities/mcp-bridge]] — `@megasaver/mcp-bridge` real MCP stdio server, 4 tools (BB8; AA1 §8).
+- [[entities/mcp-bridge]] — `@megasaver/mcp-bridge` real MCP stdio server over `stdio`, 4 tools, `mega mcp serve`, `buildMcpSetupOps` facade, 16-member `McpBridgeErrorCode` (BB8; AA1 §8).
+- [[entities/context-gate]] — `@megasaver/context-gate@0.2.0` extracted from core (BB12, #88); orchestrator functions (`runOutputPipeline`, `runOutputExecCommand`, `fetchChunk`, `loadProjectPermissions`); `OrchestratorRegistry` structural port; core re-exports surface (consumers unchanged).
 
 More subsystem pages land as features get built. Entity pages still pending: `skill-packs`, `conventions-sync`.
 
@@ -88,13 +89,41 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 | What is Mega Saver Mode / the Context Gate?        | [[concepts/context-gate-pipeline]]              |
 | How does redaction work / where does it run?       | [[concepts/context-gate-pipeline]] / [[entities/policy]] |
 | What does `mega session saver` do?                 | [[entities/cli]]                                |
-| What does `mega output {file,filter,chunk}` do?    | [[entities/cli]]                                |
+| What does `mega output {file,filter,chunk,exec}` do? | [[entities/cli]]                              |
+| What does `mega mcp` do?                           | [[entities/cli]]                                |
 | What does the output-filter pipeline ship?         | [[entities/output-filter]]                      |
+| What is `@megasaver/context-gate`?                 | [[entities/context-gate]]                       |
+| Was BB12 executed? Where is the orchestrator?      | [[decisions/context-gate-extraction]] / [[entities/context-gate]] |
+| How does the standalone CLI bundle work?           | [[entities/cli]]                                |
+| What is in permissions.yaml?                       | [[entities/policy]]                             |
 | Where are chunk sets persisted?                    | [[entities/content-store]]                      |
 | Why is policy a v0.5 package?                       | [[decisions/policy-is-bb3]]                      |
 | Why can't content-store import core?               | [[decisions/content-store-no-core-edge]]        |
 
 ## Status
+
+## v1.1.0 — SHIPPED (2026-06-04)
+
+Advanced-roadmap release. Package versions: cli 1.0.2, core 1.0.2,
+context-gate 0.2.0 (NEW), mcp-bridge 1.0.2, output-filter 1.1.0,
+policy 1.1.0, gui 1.1.0, stats 1.0.1, retrieval 1.0.0,
+content-store 1.0.1, shared 1.0.0. main @ `729f8e8`.
+
+**Post-v1.0 arc (PRs #80–#100):**
+
+- BB12 extracted `@megasaver/context-gate` from core (PR #88).
+- CI pipeline added (`ci.yml` + `release.yml`) — verify on PR/push,
+  standalone `mega.mjs` bundle uploaded to GitHub Releases on `v*` tag,
+  npm publish gated on `NPM_TOKEN` (PRs #90, #91, #93, #94).
+- `output-filter` gained 4 language parsers (pytest/go/cargo/eslint)
+  and CamelCase/`panicked` ranker fixes (PRs #92, #95).
+- `policy` permissions.yaml + `parseProjectPermissions` + `policy_load_failed`
+  deny-code (PR #96, adversarial security review).
+- GUI token-savings chart + raw-output retention controls + `aria-live`
+  (PR #97).
+
+**Releases:** `v1.0.0` (2026-05-13) → `v1.0.1` (a11y + BB12, 2026-06-03)
+→ `v1.1.0` (advanced roadmap, 2026-06-04).
 
 ## v1.0 — SHIPPED (2026-05-13)
 
