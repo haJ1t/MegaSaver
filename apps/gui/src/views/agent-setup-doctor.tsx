@@ -21,6 +21,9 @@ export function AgentSetupDoctor({ activeProjectId }: AgentSetupDoctorProps): JS
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<BridgeError | null>(null);
   const [busyAgent, setBusyAgent] = useState<string | null>(null);
+  // WCAG 4.1.3: action outcomes (the primary success path) must reach AT. The
+  // row re-renders silently on load(), so a polite live region announces them.
+  const [announcement, setAnnouncement] = useState("");
   const errorRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -50,11 +53,17 @@ export function AgentSetupDoctor({ activeProjectId }: AgentSetupDoctorProps): JS
     if ((action === "install" || action === "repair") && activeProjectId === null) return;
     setBusyAgent(agentId);
     setError(null);
+    setAnnouncement("");
     try {
       if (action === "install") await installMcp(agentId, activeProjectId as string);
       else if (action === "repair") await repairMcp(agentId, activeProjectId as string);
       else await uninstallMcp(agentId);
       await load();
+      setAnnouncement(
+        action === "uninstall"
+          ? `Mega Saver MCP removed for ${agentId}.`
+          : `Mega Saver MCP ${action === "install" ? "set up" : "repaired"} for ${agentId}. Restart ${agentId} to load it.`,
+      );
     } catch (err) {
       setError(err as BridgeError);
     } finally {
@@ -70,6 +79,12 @@ export function AgentSetupDoctor({ activeProjectId }: AgentSetupDoctorProps): JS
           Install and repair the Mega Saver MCP server for each connected agent.
         </p>
       </header>
+
+      {/* <output> carries an implicit role=status (aria-live=polite); biome
+          a11y/useSemanticElements prefers it over <p role="status">. */}
+      <output aria-live="polite" className="sr-only">
+        {announcement}
+      </output>
 
       {loadState === "loading" && <LoadingState label="Checking agent setup…" />}
 

@@ -63,6 +63,23 @@ describe("AgentSetupDoctor", () => {
     });
   });
 
+  it("announces the action outcome to assistive tech via a polite live region", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => NOT_INSTALLED })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => REPAIRED })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => REPAIRED });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AgentSetupDoctor activeProjectId="demo" />);
+    await waitFor(() => screen.getByRole("button", { name: /Repair/i }));
+    // role=status carries implicit aria-live=polite (WCAG 4.1.3).
+    const status = screen.getByRole("status");
+    expect(status.textContent).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: /Repair/i }));
+    await waitFor(() => expect(status.textContent).toMatch(/repaired for claude-code/i));
+  });
+
   it("disables Repair when no project is selected", async () => {
     vi.stubGlobal(
       "fetch",

@@ -32,7 +32,7 @@ describe("AgentSetupRow", () => {
     expect(screen.getByRole("button", { name: /Repair/i })).toBeDefined();
   });
 
-  it("surfaces the restart hint when restartRequired", () => {
+  it("ready agent (live backend sets restartRequired=true) keeps Uninstall reachable + shows the restart hint", () => {
     render(
       <AgentSetupRow
         agent={{ ...base, mcpInstalled: true, connectorSynced: true, restartRequired: true }}
@@ -41,6 +41,11 @@ describe("AgentSetupRow", () => {
         onAction={() => {}}
       />,
     );
+    // Regression guard: the backend sets restartRequired = mcpInstalled, so every
+    // ready agent has restartRequired:true. It must surface as an ADDITIVE notice,
+    // never an action-suppressing dead state — Ready + Uninstall stay reachable.
+    expect(screen.getByText("Ready")).toBeDefined();
+    expect(screen.getByRole("button", { name: /Uninstall/i })).toBeDefined();
     expect(screen.getByText(/Restart Claude Code/i)).toBeDefined();
   });
 

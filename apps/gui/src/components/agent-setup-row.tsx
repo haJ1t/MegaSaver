@@ -26,9 +26,10 @@ function deriveState(agent: McpAgentStatus): RowState {
   if (!agent.connectorSynced) {
     return { label: "Config missing", tone: "warn", action: "repair", actionLabel: "Repair" };
   }
-  if (agent.restartRequired) {
-    return { label: "Restart required", tone: "warn", action: null, actionLabel: "" };
-  }
+  // Installed + synced = Ready, with Uninstall always reachable. restartRequired
+  // is NOT a lifecycle state (the backend sets it = mcpInstalled, so it is true
+  // for every ready agent); it surfaces as the additive restart-hint notice
+  // below, never as an action-suppressing branch.
   return { label: "Ready", tone: "ok", action: "uninstall", actionLabel: "Uninstall" };
 }
 
