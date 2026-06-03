@@ -27,8 +27,10 @@ export type RouteContext = {
   req: IncomingMessage;
   res: ServerResponse;
   registry: CoreRegistry;
-  // F3: BB8-built production facade; BB11's mcp-setup routes read it.
-  mcpOps?: McpSetupOps;
+  // F3: BB8-built production facade; BB11's mcp-setup routes read it. Always
+  // resolved by createBridgeHandler (production = buildMcpSetupOps; tests may
+  // inject a fake or fall back to an empty-status ops object).
+  mcpOps: McpSetupOps;
   origin: string | undefined;
   query: URLSearchParams;
   storeRoot: string;
