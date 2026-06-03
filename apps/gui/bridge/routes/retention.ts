@@ -3,7 +3,7 @@ import type { Session } from "@megasaver/core";
 import { type ProjectId, type SessionId, sessionIdSchema } from "@megasaver/shared";
 import { handleCaughtError } from "../error-mapping.js";
 import type { RouteContext } from "../route-context.js";
-import { CLEAR_RETENTION_BODY, PRUNE_RETENTION_BODY, zodErrorMessage } from "../zod-schemas.js";
+import { CLEAR_RETENTION_BODY, zodErrorMessage } from "../zod-schemas.js";
 import { readJsonBody } from "./_body.js";
 
 type RetentionSummary = {
@@ -93,54 +93,7 @@ export async function handleRetentionClear(ctx: RouteContext, idRaw: string): Pr
   }
 }
 
-export async function handleRetentionPrune(ctx: RouteContext, idRaw: string): Promise<void> {
-  const session = resolveSession(ctx, idRaw);
-  if (!session) return;
-  let body: unknown;
-  try {
-    body = await readJsonBody(ctx.req);
-  } catch {
-    ctx.sendError(ctx.res, 400, "validation_failed", "Invalid JSON body.", ctx.origin);
-    return;
-  }
-  const parsed = PRUNE_RETENTION_BODY.safeParse(body);
-  if (!parsed.success) {
-    ctx.sendError(
-      ctx.res,
-      400,
-      "validation_failed",
-      zodErrorMessage(parsed.error),
-      ctx.origin,
-      parsed.error.issues,
-    );
-    return;
-  }
-  try {
-    const { projectId, id: sessionId } = session;
-    // Session-scoped prune: content-store.pruneOlderThan walks the whole store,
-    // so we filter THIS session's sets ourselves to honour the never-wider rule.
-    const cutoff = new Date(Date.parse(ctx.now()) - parsed.data.days * 86_400_000);
-    const sets = await listChunkSets({ storeRoot: ctx.storeRoot, projectId, sessionId });
-    let removed = 0;
-    for (const set of sets) {
-      if (new Date(set.createdAt) < cutoff) {
-        await deleteChunkSet({
-          storeRoot: ctx.storeRoot,
-          projectId,
-          sessionId,
-          chunkSetId: set.chunkSetId,
-        });
-        removed += 1;
-      }
-    }
-    const summary = await summarise(ctx, projectId, sessionId);
-    ctx.sendJson(ctx.res, 200, { removed, ...summary }, ctx.origin);
-  } catch (err) {
-    handleCaughtError(ctx.res, ctx.origin, err, ctx.sendError);
-  }
-}
-
-const RETENTION_PATH = /^\/api\/sessions\/([^/]+)\/retention(?:\/(clear|prune))?$/;
+const RETENTION_PATH = /^\/api\/sessions\/([^/]+)\/retention(?:\/(clear))?$/;
 
 export async function dispatchRetention(
   ctx: RouteContext,
@@ -165,10 +118,6 @@ export async function dispatchRetention(
   }
   if (segment === "clear") {
     if (guard("POST")) await handleRetentionClear(ctx, idRaw);
-    return true;
-  }
-  if (segment === "prune") {
-    if (guard("POST")) await handleRetentionPrune(ctx, idRaw);
     return true;
   }
   return false;
