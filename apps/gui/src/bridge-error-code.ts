@@ -4,6 +4,7 @@
 export const BRIDGE_ERROR_CODES = [
   "event_not_found",
   "internal_error",
+  "mcp_setup_failed",
   "method_not_allowed",
   "origin_forbidden",
   "project_not_found",
@@ -21,6 +22,7 @@ export type BridgeErrorCode = (typeof BRIDGE_ERROR_CODES)[number];
 export const BRIDGE_ERROR_COPY: Record<BridgeErrorCode, string> = {
   event_not_found: "Event not found, or it has no stored output.",
   internal_error: "Something went wrong. Try again.",
+  mcp_setup_failed: "Agent setup failed. Check permissions and try again.",
   method_not_allowed: "Request method not allowed.",
   origin_forbidden: "Request blocked by the bridge origin policy.",
   project_not_found: "Project not found. It may have been removed.",

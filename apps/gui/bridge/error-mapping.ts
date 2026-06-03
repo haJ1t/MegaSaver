@@ -3,6 +3,16 @@ import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
 import type { BridgeErrorCode } from "../src/bridge-error-code.js";
 import type { SendError } from "./cors.js";
 
+// Sentinel for BB8 setup-op failures (install/repair/uninstall IO). The
+// mcp-setup routes wrap any op throw in this so handleCaughtError can map it
+// to mcp_setup_failed instead of the generic fs-ErrnoException heuristic.
+export class McpSetupError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "McpSetupError";
+  }
+}
+
 // Map a CoreRegistryError code to a BridgeErrorCode + status. The Core enum
 // includes codes that bridge does not surface (project_already_exists,
 // session_already_exists, memory_entry_already_exists, memory_entry_not_found):
@@ -39,6 +49,10 @@ export function handleCaughtError(
       sendError(res, mapped.status, mapped.code, err.message, origin);
       return;
     }
+  }
+  if (err instanceof McpSetupError) {
+    sendError(res, 500, "mcp_setup_failed", err.message, origin);
+    return;
   }
   if (err instanceof CorePersistenceError) {
     sendError(res, 500, "store_write_failed", err.message, origin);

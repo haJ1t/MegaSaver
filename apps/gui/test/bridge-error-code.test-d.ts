@@ -7,6 +7,7 @@ describe("BridgeErrorCode tuple ordering", () => {
       readonly [
         "event_not_found",
         "internal_error",
+        "mcp_setup_failed",
         "method_not_allowed",
         "origin_forbidden",
         "project_not_found",
@@ -24,6 +25,7 @@ describe("BridgeErrorCode tuple ordering", () => {
     expectTypeOf<BridgeErrorCode>().toEqualTypeOf<
       | "event_not_found"
       | "internal_error"
+      | "mcp_setup_failed"
       | "method_not_allowed"
       | "origin_forbidden"
       | "project_not_found"
