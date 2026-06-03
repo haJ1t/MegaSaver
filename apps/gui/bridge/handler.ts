@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { CoreRegistry } from "@megasaver/core";
+import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
 import { applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
 import { handleCaughtError } from "./error-mapping.js";
 import type { RouteContext, SendError, SendJson, SendText } from "./route-context.js";
 import { handleGetHealth } from "./routes/health.js";
+import { dispatchMcpSetup } from "./routes/mcp-setup.js";
 import { handleGetMemory, handlePostMemory } from "./routes/memory.js";
 import { handleGetProjects } from "./routes/projects.js";
 import {
@@ -24,8 +26,10 @@ export interface BridgeHandlerOptions {
   now?: () => string;
   /** Resolved store directory; surfaced on `GET /api/health`. */
   storePath?: string;
-  /** F3: production McpSetupOps; BB11 routes consume it via RouteContext. */
-  mcpOps?: import("@megasaver/mcp-bridge").McpSetupOps;
+  /** F3: production McpSetupOps; BB11 routes consume it via RouteContext.
+   *  Production server.ts passes buildMcpSetupOps(...); omitted only in tests
+   *  that exercise non-mcp routes (then an empty-status fallback is used). */
+  mcpOps?: McpSetupOps;
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -97,6 +101,18 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
   const now = opts.now ?? (() => new Date().toISOString());
   const storePath = opts.storePath ?? "";
 
+  // Test-only fallback when no ops injected; production server.ts (BB8)
+  // always passes buildMcpSetupOps(...). Reports an empty agent list so
+  // non-mcp route tests that omit mcpOps still construct a valid handler.
+  const mcpOps: McpSetupOps =
+    opts.mcpOps ??
+    ({
+      status: async () => ({ agents: [] }),
+      install: async () => ({ agents: [] }),
+      repair: async () => ({ agents: [] }),
+      uninstall: async () => ({ agents: [] }),
+    } satisfies McpSetupOps);
+
   return (req, res) => {
     void handleRequest(req, res).catch((err: unknown) => {
       // Last-ditch safety net so a thrown handler never leaves a hanging socket.
@@ -127,7 +143,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       req,
       res,
       registry,
-      ...(opts.mcpOps !== undefined ? { mcpOps: opts.mcpOps } : {}),
+      mcpOps,
       origin,
       query,
       storeRoot: storePath,
@@ -180,6 +196,13 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
 
     if (path.startsWith("/api/sessions/") && path.includes("/token-saver")) {
       const dispatched = await dispatchTokenSaver(ctx, method, path, () =>
+        methodNotAllowed(res, method, origin),
+      );
+      if (dispatched) return;
+    }
+
+    if (path.startsWith("/api/mcp/")) {
+      const dispatched = await dispatchMcpSetup(ctx, method, path, () =>
         methodNotAllowed(res, method, origin),
       );
       if (dispatched) return;
