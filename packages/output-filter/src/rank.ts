@@ -23,7 +23,15 @@ export type Chunk = {
   endLine: number;
 };
 
-const ERROR = /\berror\b|\bfailed\b|\bfailure\b|\bexception\b|\bpanic\b/i;
+// Lowercase failure words, case-insensitive so FAILED/Failure/ERROR all hit.
+// `panic(ked)?` also catches Rust's "panicked at ...", which a bare \bpanic\b
+// missed (no word boundary before "ked").
+const ERROR = /\berror\b|\bfailed\b|\bfailure\b|\bexception\b|\bpanic(ked)?\b/i;
+// CamelCase exception names (ZeroDivisionError, AssertionError, TypeError, …).
+// Case-SENSITIVE on purpose: requiring a leading [A-Z] and the literal `Error`
+// suffix targets real exception identifiers without re-matching the substring
+// "error" inside benign lowercase prose (that stays the job of \berror\b above).
+const EXCEPTION_NAME = /[A-Z][A-Za-z]*Error\b/;
 const DIAGNOSTIC = /\(\d+,\d+\):\s+error\s+TS\d+:/;
 const STACKTRACE = /^\s+at\s+.+:\d+:\d+/m;
 const TEST_FAILURE = /^(?:FAIL|\s*[✗×])\s|\b\d+\s+failed\b/im;
@@ -62,7 +70,7 @@ export function scoreChunk(
   const features: RankFeatures = {
     diagnosticScore: DIAGNOSTIC.test(text) ? 5 : 0,
     duplicatePenalty: 0,
-    errorScore: ERROR.test(text) ? 4 : 0,
+    errorScore: ERROR.test(text) || EXCEPTION_NAME.test(text) ? 4 : 0,
     filePathScore: FILE_PATH.test(text) ? 1 : 0,
     keywordScore: keywordScore(intent, text),
     noisePenalty: NOISE.test(text) ? 2 : 0,
