@@ -126,7 +126,7 @@ export function TokenSaverPanel({ session, onSettingsChanged }: TokenSaverPanelP
             </button>
           </div>
 
-          <TokenSaverStats stats={stats} />
+          <TokenSaverStats stats={stats} events={events} />
 
           {events.length > 0 && (
             <ul className="flex flex-col gap-2">
