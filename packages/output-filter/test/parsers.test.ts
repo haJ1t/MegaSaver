@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { detectCargoTest, parseCargoTest } from "../src/parsers/cargo-test.js";
 import { detectGoTest, parseGoTest } from "../src/parsers/go-test.js";
 import { chunkByFormat } from "../src/parsers/index.js";
 import { detectPytest, parsePytest } from "../src/parsers/pytest.js";
@@ -64,6 +65,31 @@ const GO_TEST = [
   "FAIL",
   "exit status 1",
   "FAIL\texample.com/math\t0.012s",
+].join("\n");
+
+const CARGO_TEST = [
+  "running 3 tests",
+  "test tests::test_add ... ok",
+  "test tests::test_divide ... FAILED",
+  "test tests::test_parse ... FAILED",
+  "",
+  "failures:",
+  "",
+  "---- tests::test_divide stdout ----",
+  "thread 'tests::test_divide' panicked at src/lib.rs:20:9:",
+  "assertion `left == right` failed",
+  "  left: 0",
+  "  right: 1",
+  "",
+  "---- tests::test_parse stdout ----",
+  "thread 'tests::test_parse' panicked at src/lib.rs:28:9:",
+  "called `Result::unwrap()` on an `Err` value: ParseError",
+  "",
+  "failures:",
+  "    tests::test_divide",
+  "    tests::test_parse",
+  "",
+  "test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
 ].join("\n");
 
 const PLAIN = ["just some prose", "with no special structure", "at all"].join("\n");
@@ -138,6 +164,24 @@ describe("go test parser", () => {
   });
 });
 
+describe("cargo test parser", () => {
+  it("detects cargo test output and rejects unrelated text", () => {
+    expect(detectCargoTest(CARGO_TEST)).toBe(true);
+    expect(detectCargoTest(PLAIN)).toBe(false);
+    expect(detectCargoTest(GO_TEST)).toBe(false);
+  });
+
+  it("produces one chunk per failing test stdout block", () => {
+    const chunks = parseCargoTest(CARGO_TEST);
+    const failures = chunks.filter((c) => c.text.includes("stdout ----"));
+    expect(failures).toHaveLength(2);
+    expect(failures[0]?.text).toContain("tests::test_divide");
+    expect(failures[0]?.text).toContain("assertion `left == right` failed");
+    expect(failures[1]?.text).toContain("tests::test_parse");
+    expect(failures[1]?.text).toContain("ParseError");
+  });
+});
+
 describe("chunkByFormat dispatch (spec §6 stage 4 precedence)", () => {
   it("routes test output to the test-output parser", () => {
     expect(chunkByFormat(TEST_OUTPUT).length).toBeGreaterThan(0);
@@ -165,5 +209,12 @@ describe("chunkByFormat routes each fixture to the right parser", () => {
     // Generic test-output would split the FAIL detail onto its own line;
     // go-test keeps the failure message with its --- FAIL: marker.
     expect(block?.text).toContain("Divide(1, 0) = 0; want error");
+  });
+
+  it("routes cargo test output to the cargo-test parser", () => {
+    const chunks = chunkByFormat(CARGO_TEST);
+    const block = chunks.find((c) => c.text.includes("tests::test_divide stdout ----"));
+    // cargo keeps the panic message with its stdout block, not line-split.
+    expect(block?.text).toContain("assertion `left == right` failed");
   });
 });
