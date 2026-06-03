@@ -44,6 +44,16 @@ agents — `agentId` is data carried through `ConnectorContext`.
 - Does not start agents, write CLI configs, or know agent identifiers
   except as data on `ConnectorContext.agentId`.
 
+## AA1 / Mega Saver Mode
+
+- `context-gate-block.ts` renders an additive
+  `<!-- MEGA SAVER:CONTEXT_GATE BEGIN/END -->` block (telling the
+  agent to prefer `mega_run_command` etc.), emitted ONLY when the
+  session's `tokenSaver.enabled === true` (source: AA1 §7; BB11).
+- `parseBlock` is parameterised by the sentinel pair, so the legacy
+  `MEGA SAVER:BEGIN/END` block and the CONTEXT_GATE block coexist in
+  one agent file without clobbering each other.
+
 ## Related
 
 - [[entities/connectors-claude-code]]

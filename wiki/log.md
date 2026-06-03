@@ -1778,3 +1778,43 @@ append stats events). The shared-orchestrator extraction and stats
 wiring are deferred to BB7b / BB8. Pre-AA sessions (no `tokenSaver`)
 get read-only defaults (mode `balanced`) rather than a written record.
 Risk HIGH.
+
+## [2026-05-13] feat | CC — v1.0 closeout: e2e + docs + release tag (AA1 capstone)
+
+Capstone PR for the AA1 epic. No feature code — proves the AA1 §1
+v1.0 done-list end-to-end and prepares the `v1.0.0` tag.
+
+- **e2e** — `apps/cli/test/e2e/v1-closeout-flow.test.ts` walks plan
+  L1672–L1702: project+session → `session saver enable --mode balanced`
+  → `output exec -- node …` (savingRatio present, chunkSet + stats
+  written) → `mcp repair` + `connector sync` (CONTEXT_GATE block
+  coexists with legacy block) → in-process GUI bridge serves
+  `/token-saver/{status,stats}` and the AgentSetupDoctor `/api/mcp/*`
+  leg. Shells the real built `apps/cli/dist/cli.js`. Live-adjusted
+  (test-only) to merged behavior: literal `node` command (exact-string
+  allow-list), positional `projectName` on connector sync/status,
+  `{ enabled, settings }` status shape, `agentId`-keyed mcp-status
+  array, connectorSynced via the agent's open session.
+- **enum audit** — `apps/cli/test/enum-pin-audit.test.ts` asserts all
+  8 AA1 §17 pin files present + non-empty (9 assertions).
+- **docs** — README "Mega Saver Mode" section (modes, savings,
+  raw/sent viewer, doctor, MCP tools); `mcp-bridge` folded out of
+  Future packages. New `mcp-bridge` wiki entity page; AA1 subsections
+  appended to `core`/`gui`/`cli`/`connectors-shared` (the stale
+  core.md "as of BB7a" boundary note marked superseded by PR #75).
+- **release** — coordinated `major` changeset
+  (`.changeset/cc-v1-release.md`); `pnpm version-packages` →
+  1.0.0 across 14 packages + per-package CHANGELOGs; `pnpm verify`
+  green. Annotated tag `v1.0.0` is a user-gated step (parent runs it);
+  publish deferred to CI (packages `private`, no registry auth).
+- **§2a** — orchestrator extraction outcome recorded in
+  `wiki/decisions/context-gate-extraction.md` (553 LOC > 500 →
+  extraction queued as BB12).
+
+## [2026-05-13] decision | Context Gate extraction (AA1 §2a) recorded
+
+`wc -l packages/core/src/context-gate/*.ts` = 553 LOC (> 500) →
+EXTRACT, queued as BB12 (deferred to its own PR; spec/plan landed in
+PR #82). Recorded in `wiki/decisions/context-gate-extraction.md`.
+PR #75 (extraction evaluation): MERGED — created the folded
+`packages/core/src/context-gate/` directory.

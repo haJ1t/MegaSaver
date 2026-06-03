@@ -12,6 +12,7 @@ updated: 2026-05-12
 - [[decisions/bootstrap-matrix]] — the 10 foundation decisions (path, repo, stack, MVP, language, git…)
 - [[decisions/policy-is-bb3]] — `@megasaver/policy` ships at BB3 (v0.5), not the v0.9 roadmap.
 - [[decisions/content-store-no-core-edge]] — AA1 §3c: the 5 leaf packages must not import core.
+- [[decisions/context-gate-extraction]] — AA1 §2a folded-vs-extracted outcome (post-BB7b LOC audit).
 
 ## Concepts (cross-cutting ideas)
 
@@ -39,8 +40,9 @@ updated: 2026-05-12
 - [[entities/content-store]] — `@megasaver/content-store` ChunkSet persistence, `ContentStoreErrorCode` (BB4; no core edge).
 - [[entities/retrieval]] — `@megasaver/retrieval` BM25 + `DerivedIntent` (BB6).
 - [[entities/stats]] — `@megasaver/stats` `SessionTokenSaverStats` + `TokenSaverEvent` (BB6).
+- [[entities/mcp-bridge]] — `@megasaver/mcp-bridge` real MCP stdio server, 4 tools (BB8; AA1 §8).
 
-More subsystem pages land as features get built. v0.3 scaffolds (entity pages still pending): `mcp-bridge`, `skill-packs`, `conventions-sync`.
+More subsystem pages land as features get built. Entity pages still pending: `skill-packs`, `conventions-sync`.
 
 ## Workflows
 
@@ -93,6 +95,18 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 | Why can't content-store import core?               | [[decisions/content-store-no-core-edge]]        |
 
 ## Status
+
+## v1.0 — SHIPPED (2026-05-13)
+
+Context Gate / Mega Saver Mode epic (AA1) complete: BB1–BB11 merged,
+v1.0 closeout (CC) tagged `v1.0.0`. Session-scoped, GUI-controlled,
+MCP-backed output compression — "Open GUI → Click Enable → Done"
+(plan L1672–L1702). Five new packages (`policy`, `content-store`,
+`output-filter`, `retrieval`, `stats`); real `@megasaver/mcp-bridge`
+over stdio; GUI `TokenSaverPanel` + AgentSetupDoctor; additive
+`MEGA SAVER:CONTEXT_GATE` connector block. End-to-end acceptance test
+at `apps/cli/test/e2e/v1-closeout-flow.test.ts`; all 8 AA1 §17 enum
+pins audited. `pnpm verify` green; all 14 packages bumped to 1.0.0.
 
 ## AA1 Context Gate — BB1–BB7a SHIPPED (2026-05-11)
 

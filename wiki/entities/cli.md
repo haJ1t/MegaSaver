@@ -332,6 +332,22 @@ exit 0) from failure (`stderr` has text, exit 1) without parsing stderr.
   `describe.each` pin all 10 commands: `type: "boolean"`, `default: false`,
   `description: "Emit JSON output."`.
 
+## AA1 / Mega Saver Mode
+
+New CLI surfaces shipped by the AA1 epic (source: AA1 §1):
+
+- `mega session saver {enable,disable,status,stats}` over
+  `updateTokenSaver` (BB2). `enable` takes a positional `sessionId` +
+  `--mode`; `--json` returns `{ sessionId, tokenSaver }`.
+- `mega output {file,filter,chunk,exec}` (BB7a/BB7b). `exec` spawns a
+  policy-gated child (`-- <cmd>`); the command is matched against the
+  allow-list by EXACT string. `--json` returns
+  `{ sessionId, result: { …, savingRatio, chunkSetId } }`.
+- `mega mcp {install,repair,status,uninstall}` (BB8). `mcp status
+  --json` is an `agentId`-keyed array; the CLI reports the install bit
+  (connectorSynced resolves only on the GUI doctor path). `mcp repair`
+  requires `--target` + `--project` (install + connector sync, §5c).
+
 ## Related
 
 - [[concepts/agent-agnostic-core]]

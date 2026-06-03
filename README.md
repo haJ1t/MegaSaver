@@ -24,6 +24,7 @@ across minor versions until 1.0. Not yet published to npm.
 - [The `mega` CLI](#the-mega-cli)
 - [Connectors](#connectors)
 - [GUI app](#gui-app)
+- [Mega Saver Mode](#mega-saver-mode)
 - [Future packages](#future-packages)
 - [Development](#development)
 - [Repository layout](#repository-layout)
@@ -349,22 +350,102 @@ What's deferred to v0.4:
 
 ---
 
+## Mega Saver Mode
+
+Mega Saver Mode is session-scoped, GUI-controlled, MCP-backed output
+compression. Turn it on for a session and the agent stops drowning in
+raw tool output: every large file read, command run, or build/test log
+is routed through a deterministic redact → chunk → rank → fit →
+summarize pipeline, and only the most relevant excerpts reach the
+model. The raw evidence stays on your disk; the agent sees the signal.
+
+**Less tokens. More signal. Same or better agent performance.**
+
+### One click
+
+In the GUI, open **Sessions**, pick a session, and click **Enable Mega
+Saver Mode**. Choose a mode. Mega Saver then, in one step:
+
+- writes the session's `tokenSaver` settings,
+- syncs the connector instruction block into the agent's config file,
+- installs or repairs the MCP bridge for the agent,
+- initializes per-session stats,
+- verifies the content store.
+
+The Sessions detail pane shows **Mega Saver Mode: ON**, whether the
+agent is ready, and whether a restart is needed. No terminal required.
+
+The same flow is available from the CLI:
+
+```bash
+mega session saver enable <session-id> --mode balanced
+mega mcp repair --target claude-code --project <name>
+mega connector sync <name> --target claude-code
+```
+
+### Modes
+
+Each mode caps the bytes returned to the agent per call. The cap is the
+single source of truth in `modeToBudget()` and is shared by the CLI,
+the MCP bridge, and the GUI.
+
+| Mode | Returned-byte budget | Use when |
+|------|----------------------|----------|
+| `safe` | 32 000 | You want more context retained; exploratory work. |
+| `balanced` | 12 000 | Default. Strong savings, ample signal. |
+| `aggressive` | 4 000 | Maximum savings; tight, focused tasks. |
+
+### Measurable savings
+
+Every routed call records `rawBytes`, `returnedBytes`, `bytesSaved`,
+and a `savingRatio`. The Sessions panel shows the running total — e.g.
+**Raw 380 KB · Sent 24 KB · Saved 93.7%** — and a feed of recent
+events. Read the live numbers anytime:
+
+```bash
+mega session saver stats <session-id>
+```
+
+### Raw / sent viewer
+
+Compression never deletes evidence. For any event you can open the
+**raw** captured output and the **sent** filtered excerpts side by
+side in the GUI (they stream straight from the local content store).
+Ask for the raw bytes only when the filtered result is genuinely
+insufficient.
+
+### Doctor & repair
+
+The **Agent Setup Doctor** view (and `mega mcp status` / `mega mcp
+repair`) reports, per agent, whether the MCP bridge is installed, the
+connector block is in sync, and a restart is required — and fixes any
+of them with one action. `mega doctor` folds these checks into the
+overall environment report.
+
+### MCP tools
+
+When Mega Saver Mode is on, the connector block tells the agent to
+prefer the Mega Saver MCP tools over native ones:
+
+- `mega_read_file(path, intent, …)` instead of reading a whole file,
+- `mega_run_command(command, args, intent, …)` instead of a raw shell,
+- `mega_fetch_chunk(chunkSetId, chunkId)` to drill into a stored
+  excerpt,
+- `mega_recall(sessionId, intent)` to reload session memory and recent
+  tool calls without re-reading every file.
+
+The bridge speaks MCP over `stdio`, gates every command through the
+policy allow/deny list, and runs the redaction pipeline before any
+output is stored or returned. Command execution never escapes the
+allow-list, and secrets are redacted before persistence.
+
+---
+
 ## Future packages
 
-Two workspace slots are reserved with locked public API and
-`not_implemented` runtime errors. Both ship from v0.3 with closed-enum
+One workspace slot is reserved with locked public API and
+`not_implemented` runtime errors. It ships from v0.3 with closed-enum
 tuple-ordering pins so the surface widens deliberately.
-
-### `@megasaver/mcp-bridge`
-
-A future Model Context Protocol bridge so Mega Saver can serve
-sessions and memory entries to MCP-aware clients. The factory
-`createBridge(config)` returns `{ transport, start(), stop() }`.
-The closed enum `McpTransport = ["stdio", "sse"]` reserves the
-launch order. Reserved future error codes
-(`auth_failed`, `transport_closed`, `tool_not_found`, …) are
-documented in
-[`docs/superpowers/specs/2026-05-10-hh-mcp-bridge-design.md`](docs/superpowers/specs/2026-05-10-hh-mcp-bridge-design.md).
 
 ### `@megasaver/skill-packs`
 
@@ -470,7 +551,7 @@ MegaSaver/
 ├─ packages/
 │  ├─ core/                      # Engine: schemas, registry, JSON store
 │  ├─ shared/                    # Cross-package contracts (IDs, enums)
-│  ├─ mcp-bridge/                # Placeholder; locked public API
+│  ├─ mcp-bridge/                # Real MCP stdio server (4 tools)
 │  ├─ skill-packs/               # Placeholder; locked public API
 │  └─ connectors/
 │     ├─ shared/                 # Block helpers + context schema
@@ -546,8 +627,6 @@ Authoritative governance:
 
 - **GUI v1:** project picker, detail views, write actions,
   single-command dev, native packaging revisit.
-- **`mcp-bridge` real implementation:** stdio transport,
-  `session.list` / `memory.list` MCP tools, read-only resources.
 - **`skill-packs` real loader:** discovery, install / uninstall,
   manifest validation, conflict resolution.
 - **Windows port remainder:** case-insensitive path resolution
