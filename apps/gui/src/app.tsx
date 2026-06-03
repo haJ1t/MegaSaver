@@ -5,6 +5,7 @@ import { ErrorState, LoadingState, NoProjectState } from "./components/states.js
 import type { BridgeError } from "./components/states.js";
 import { fetchProjects } from "./lib/api-client.js";
 import { VIEW_IDS, VIEW_LABELS, type ViewId } from "./view-id.js";
+import { AgentSetupDoctor } from "./views/agent-setup-doctor.js";
 import { MemoryView } from "./views/memory-view.js";
 import { SessionsView } from "./views/sessions-view.js";
 
@@ -124,29 +125,40 @@ export function App(): JSX.Element {
 
       {/* Main content */}
       <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
-        {showProjectsLoading && <LoadingState label="Connecting to bridge…" />}
-
-        {showProjectsError && projectsError && (
-          <ErrorState error={projectsError} onRetry={retryProjects} />
-        )}
-
-        {showNoProjects && <NoProjectState />}
-
-        {showNoSelection && (
-          <div className="px-4 py-8 text-sm text-text-muted">Pick a project to begin.</div>
-        )}
-
-        {showContent && (
+        {view === "agent-setup" ? (
+          // Agent setup loads status regardless of project; install/repair
+          // actions gate themselves on a selected project (spec §7).
+          <AgentSetupDoctor activeProjectId={activeProjectId} />
+        ) : (
           <>
-            {view === "sessions" && (
-              <SessionsView
-                projectId={activeProjectId as string}
-                initialSelectedId={pendingSessionId}
-                onClearInitialId={() => setPendingSessionId(null)}
-              />
+            {showProjectsLoading && <LoadingState label="Connecting to bridge…" />}
+
+            {showProjectsError && projectsError && (
+              <ErrorState error={projectsError} onRetry={retryProjects} />
             )}
-            {view === "memory" && (
-              <MemoryView projectId={activeProjectId as string} onViewSession={handleViewSession} />
+
+            {showNoProjects && <NoProjectState />}
+
+            {showNoSelection && (
+              <div className="px-4 py-8 text-sm text-text-muted">Pick a project to begin.</div>
+            )}
+
+            {showContent && (
+              <>
+                {view === "sessions" && (
+                  <SessionsView
+                    projectId={activeProjectId as string}
+                    initialSelectedId={pendingSessionId}
+                    onClearInitialId={() => setPendingSessionId(null)}
+                  />
+                )}
+                {view === "memory" && (
+                  <MemoryView
+                    projectId={activeProjectId as string}
+                    onViewSession={handleViewSession}
+                  />
+                )}
+              </>
             )}
           </>
         )}
