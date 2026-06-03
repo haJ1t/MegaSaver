@@ -22,13 +22,13 @@
   /* Text */
   --color-text-primary: #141519;
   --color-text-secondary: #545968;
-  --color-text-muted: #9ea3ad;
+  --color-text-muted: #646b77;
 
   /* Borders */
   --color-border: #d4d1cb;
 
   /* Accent — desaturated amber, warm against cool zinc */
-  --color-accent: #c4681a;
+  --color-accent: #a25616;
   --color-accent-fg: #ffffff;
 
   /* Danger — destructive actions (End session) */
@@ -80,7 +80,7 @@
     /* Text */
     --color-text-primary: #f0f1f3;
     --color-text-secondary: #9ea3ad;
-    --color-text-muted: #565b66;
+    --color-text-muted: #8b909d;
 
     /* Borders */
     --color-border: #2a2d35;
