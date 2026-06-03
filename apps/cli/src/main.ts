@@ -14,7 +14,8 @@ import { sessionCommand } from "./commands/session/index.js";
 // and esbuild's dead-code elimination drops the createRequire branch entirely —
 // keeping the displayed version identical without a runtime file read.
 const version =
-  process.env.MEGA_CLI_VERSION ??
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  process.env["MEGA_CLI_VERSION"] ??
   (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 
 export const mainCommand = defineCommand({

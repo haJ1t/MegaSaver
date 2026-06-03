@@ -23,10 +23,19 @@ const FORBIDDEN_DEPENDENCIES = ["@megasaver/retrieval", "@megasaver/stats"];
 const packageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url));
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
 };
 
+// The CLI ships as a self-contained bundle (every workspace dep is inlined),
+// so its @megasaver/* deps are declared as devDependencies — they are build-time
+// inputs to the bundle, not runtime deps. The cycle guard cares about the import
+// graph, not the dependency-type label, so it reads both maps.
+function declaredDeps(): string[] {
+  return Object.keys({ ...packageJson.dependencies, ...packageJson.devDependencies });
+}
+
 function megaDeps(): string[] {
-  return Object.keys(packageJson.dependencies ?? {}).filter((d) => d.startsWith("@megasaver/"));
+  return declaredDeps().filter((d) => d.startsWith("@megasaver/"));
 }
 
 describe("@megasaver/cli dependency graph (cycle guard)", () => {
@@ -44,7 +53,7 @@ describe("@megasaver/cli dependency graph (cycle guard)", () => {
   });
 
   it("does not depend on retrieval or stats", () => {
-    const deps = Object.keys(packageJson.dependencies ?? {});
+    const deps = declaredDeps();
     for (const forbidden of FORBIDDEN_DEPENDENCIES) {
       expect(deps).not.toContain(forbidden);
     }
