@@ -11,6 +11,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsup",
+    "bundle": "tsup --config tsup.bundle.config.ts",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
