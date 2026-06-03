@@ -4,7 +4,6 @@ import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
 import {
   ConnectorError,
   readTargetFile,
-  renderBlock,
   upsertBlock,
   writeTargetFile,
 } from "@megasaver/connectors-shared";
@@ -85,7 +84,13 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
         const context = buildConnectorContext(target, project, sessions, memoryEntries);
 
         if (existing === null) {
-          const newContent = ("header" in target ? target.header : "") + renderBlock(context);
+          // Seed via upsertBlock (not renderBlock) so a brand-new file also
+          // gets the CONTEXT_GATE block when the session has Mega Saver Mode
+          // on. With the header as the only existing content, upsertBlock
+          // reproduces the prior `header + renderBlock` output byte-for-byte
+          // for tokenSaver-off sessions, and appends the CG block when on.
+          const header = "header" in target ? (target.header ?? "") : "";
+          const newContent = upsertBlock({ existingContent: header, context });
           try {
             await mkdir(dirname(absPath), { recursive: true });
           } catch (mkdirErr) {
