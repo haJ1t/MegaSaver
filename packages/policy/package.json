@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/policy",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Command, path-read, and redaction policy gate for Mega Saver.",
   "type": "module",
@@ -12,7 +12,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",

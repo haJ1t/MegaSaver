@@ -1,13 +1,15 @@
 {
   "name": "@megasaver/cli",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Mega Saver CLI - the `mega` command.",
   "type": "module",
   "bin": {
     "mega": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",

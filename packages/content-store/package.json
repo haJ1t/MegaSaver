@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/content-store",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "ChunkSet persistence store for the Mega Saver context-gate pipeline.",
   "type": "module",
@@ -12,7 +12,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",
