@@ -8,15 +8,17 @@ import { outputCommand } from "./commands/output/index.js";
 import { projectCommand } from "./commands/project.js";
 import { sessionCommand } from "./commands/session/index.js";
 
-// Version source. Unbundled (dist/cli.js), this reads the package.json next to
-// the build via createRequire. The standalone single-file bundle has no sibling
-// package.json, so tsup.bundle.config.ts injects MEGA_CLI_VERSION at build time
-// and esbuild's dead-code elimination drops the createRequire branch entirely —
-// keeping the displayed version identical without a runtime file read.
+// Version source. The standalone single-file bundle has no sibling package.json
+// to require at runtime, so tsup.bundle.config.ts defines __MEGA_CLI_VERSION__ as
+// a build-time string literal; esbuild inlines it and dead-code-eliminates the
+// createRequire branch. The unbundled dist/cli.js has no such define, so the
+// literal is `undefined` and the version is read from the sibling package.json.
+// No environment variable is consulted in either build.
+declare const __MEGA_CLI_VERSION__: string | undefined;
 const version =
-  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-  process.env["MEGA_CLI_VERSION"] ??
-  (createRequire(import.meta.url)("../package.json") as { version: string }).version;
+  typeof __MEGA_CLI_VERSION__ !== "undefined"
+    ? __MEGA_CLI_VERSION__
+    : (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 
 export const mainCommand = defineCommand({
   meta: {
