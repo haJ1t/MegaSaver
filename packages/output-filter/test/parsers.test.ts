@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { detectGoTest, parseGoTest } from "../src/parsers/go-test.js";
 import { chunkByFormat } from "../src/parsers/index.js";
 import { detectPytest, parsePytest } from "../src/parsers/pytest.js";
 import { detectStacktrace, parseStacktrace } from "../src/parsers/stacktrace.js";
@@ -49,6 +50,20 @@ const PYTEST = [
   "FAILED tests/test_math.py::test_division - ZeroDivisionError: division by zero",
   "FAILED tests/test_math.py::test_parse - assert 0 == 1",
   "========================= 2 failed, 1 passed in 0.05s ==========================",
+].join("\n");
+
+const GO_TEST = [
+  "=== RUN   TestAdd",
+  "--- PASS: TestAdd (0.00s)",
+  "=== RUN   TestDivide",
+  "    math_test.go:15: Divide(1, 0) = 0; want error",
+  "--- FAIL: TestDivide (0.00s)",
+  "=== RUN   TestParse",
+  '    parse_test.go:22: parse("x") = 0; want 1',
+  "--- FAIL: TestParse (0.00s)",
+  "FAIL",
+  "exit status 1",
+  "FAIL\texample.com/math\t0.012s",
 ].join("\n");
 
 const PLAIN = ["just some prose", "with no special structure", "at all"].join("\n");
@@ -104,6 +119,25 @@ describe("pytest parser", () => {
   });
 });
 
+describe("go test parser", () => {
+  it("detects go test output and rejects unrelated text", () => {
+    expect(detectGoTest(GO_TEST)).toBe(true);
+    expect(detectGoTest(PLAIN)).toBe(false);
+    expect(detectGoTest(PYTEST)).toBe(false);
+  });
+
+  it("produces one chunk per failing test, collapsing passes", () => {
+    const chunks = parseGoTest(GO_TEST);
+    const failures = chunks.filter((c) => c.text.includes("--- FAIL:"));
+    expect(failures).toHaveLength(2);
+    expect(failures[0]?.text).toContain("TestDivide");
+    expect(failures[0]?.text).toContain("Divide(1, 0) = 0; want error");
+    expect(failures[1]?.text).toContain("TestParse");
+    // The passing TestAdd must not appear in any failure chunk.
+    expect(failures.some((c) => c.text.includes("TestAdd"))).toBe(false);
+  });
+});
+
 describe("chunkByFormat dispatch (spec §6 stage 4 precedence)", () => {
   it("routes test output to the test-output parser", () => {
     expect(chunkByFormat(TEST_OUTPUT).length).toBeGreaterThan(0);
@@ -123,5 +157,13 @@ describe("chunkByFormat routes each fixture to the right parser", () => {
     // The generic test-output parser splits every line; pytest keeps the
     // traceback + assertion together in one chunk.
     expect(block?.text).toContain("ZeroDivisionError: division by zero");
+  });
+
+  it("routes go test output to the go-test parser, not generic test-output", () => {
+    const chunks = chunkByFormat(GO_TEST);
+    const block = chunks.find((c) => c.text.includes("--- FAIL: TestDivide"));
+    // Generic test-output would split the FAIL detail onto its own line;
+    // go-test keeps the failure message with its --- FAIL: marker.
+    expect(block?.text).toContain("Divide(1, 0) = 0; want error");
   });
 });

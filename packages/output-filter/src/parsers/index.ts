@@ -1,5 +1,6 @@
 import { chunkByLines } from "../chunk.js";
 import type { Chunk } from "../rank.js";
+import { detectGoTest, parseGoTest } from "./go-test.js";
 import { detectPytest, parsePytest } from "./pytest.js";
 import { detectStacktrace, parseStacktrace } from "./stacktrace.js";
 import { detectTestOutput, parseTestOutput } from "./test-output.js";
@@ -9,6 +10,7 @@ const DEFAULT_LINES_PER_CHUNK = 40;
 
 export function chunkByFormat(text: string): Chunk[] {
   if (detectPytest(text)) return parsePytest(text);
+  if (detectGoTest(text)) return parseGoTest(text);
   if (detectTestOutput(text)) return parseTestOutput(text);
   if (detectTsDiagnostic(text)) return parseTsDiagnostic(text);
   if (detectStacktrace(text)) return parseStacktrace(text);
