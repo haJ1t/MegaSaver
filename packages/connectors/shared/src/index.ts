@@ -1,4 +1,10 @@
-export { MEGA_SAVER_BLOCK_END, MEGA_SAVER_BLOCK_START } from "./constants.js";
+export {
+  MEGA_SAVER_BLOCK_END,
+  MEGA_SAVER_BLOCK_START,
+  MEGA_SAVER_CG_BLOCK_END,
+  MEGA_SAVER_CG_BLOCK_START,
+} from "./constants.js";
+export { renderContextGateBlock } from "./context-gate-block.js";
 export {
   type ConnectorContext,
   ConnectorContextSchema,

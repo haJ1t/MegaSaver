@@ -1,2 +1,4 @@
 export const MEGA_SAVER_BLOCK_START = "<!-- MEGA SAVER:BEGIN -->";
 export const MEGA_SAVER_BLOCK_END = "<!-- MEGA SAVER:END -->";
+export const MEGA_SAVER_CG_BLOCK_START = "<!-- MEGA SAVER:CONTEXT_GATE BEGIN -->";
+export const MEGA_SAVER_CG_BLOCK_END = "<!-- MEGA SAVER:CONTEXT_GATE END -->";
