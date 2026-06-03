@@ -1,8 +1,8 @@
 {
-  "name": "@megasaver/core",
-  "version": "1.0.0",
+  "name": "@megasaver/context-gate",
+  "version": "0.0.0",
   "private": true,
-  "description": "Agent-agnostic ContextOps engine for Mega Saver.",
+  "description": "Context-gate orchestrator for Mega Saver — file/exec output pipeline + chunk fetch, composed over policy, output-filter, content-store, and stats.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -24,7 +24,6 @@
   },
   "dependencies": {
     "@megasaver/content-store": "workspace:*",
-    "@megasaver/context-gate": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",
     "@megasaver/shared": "workspace:*",

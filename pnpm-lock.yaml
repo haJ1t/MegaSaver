@@ -216,11 +216,42 @@ importers:
         specifier: ^3.23.2
         version: 3.23.2
 
+  packages/context-gate:
+    dependencies:
+      '@megasaver/content-store':
+        specifier: workspace:*
+        version: link:../content-store
+      '@megasaver/output-filter':
+        specifier: workspace:*
+        version: link:../output-filter
+      '@megasaver/policy':
+        specifier: workspace:*
+        version: link:../policy
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@megasaver/stats':
+        specifier: workspace:*
+        version: link:../stats
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+      fast-check:
+        specifier: ^3.23.2
+        version: 3.23.2
+
   packages/core:
     dependencies:
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../content-store
+      '@megasaver/context-gate':
+        specifier: workspace:*
+        version: link:../context-gate
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter

@@ -5,14 +5,14 @@ import { type FilterOutputResult, filterOutput } from "@megasaver/output-filter"
 import { type PolicyDenyCode, evaluateCommand } from "@megasaver/policy";
 import { type SessionId, modeToBudget } from "@megasaver/shared";
 import { type TokenSaverEvent, appendEvent } from "@megasaver/stats";
-import type { CoreRegistry } from "../registry.js";
 import { defaultNewId, defaultNow, resolveEffectiveSettings } from "./read.js";
+import type { OrchestratorRegistry } from "./registry-port.js";
 
 // Injectable spawn so unit tests never start a real process (CRITICAL §12).
 export type RunCommandSpawn = typeof nodeSpawn;
 
 export type RunOutputExecInput = {
-  registry: CoreRegistry;
+  registry: OrchestratorRegistry;
   storeRoot: string;
   sessionId: SessionId;
   command: string;
