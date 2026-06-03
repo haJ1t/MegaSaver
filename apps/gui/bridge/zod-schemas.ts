@@ -22,6 +22,16 @@ export const ENABLE_TOKEN_SAVER_BODY = z
 
 export const DISABLE_TOKEN_SAVER_BODY = z.object({}).strict();
 
+// Retention (epic 3d). Clear takes no body; prune scopes deletion to chunk
+// sets older than {days} for the target session (never wider — see retention.ts).
+export const CLEAR_RETENTION_BODY = z.object({}).strict();
+
+export const PRUNE_RETENTION_BODY = z
+  .object({
+    days: z.number().int().positive(),
+  })
+  .strict();
+
 // MCP setup bodies (epic §6c). target is a KnownAgentId (PARENT AMENDMENT):
 // validate with knownAgentIdSchema from @megasaver/mcp-bridge, NOT agentIdSchema
 // — the MCP install surface is the four MCP-capable agents only. install/repair

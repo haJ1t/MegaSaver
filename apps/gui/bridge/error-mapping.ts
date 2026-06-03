@@ -1,4 +1,5 @@
 import type { ServerResponse } from "node:http";
+import { ContentStoreError } from "@megasaver/content-store";
 import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
 import type { BridgeErrorCode } from "../src/bridge-error-code.js";
 import type { SendError } from "./cors.js";
@@ -55,6 +56,13 @@ export function handleCaughtError(
     return;
   }
   if (err instanceof CorePersistenceError) {
+    sendError(res, 500, "store_write_failed", err.message, origin);
+    return;
+  }
+  // Retention ops (epic 3d) go through @megasaver/content-store. Its failure
+  // modes (write_failed / store_corrupt / schema_invalid) are all store IO
+  // problems → surface as store_write_failed, mirroring CorePersistenceError.
+  if (err instanceof ContentStoreError) {
     sendError(res, 500, "store_write_failed", err.message, origin);
     return;
   }
