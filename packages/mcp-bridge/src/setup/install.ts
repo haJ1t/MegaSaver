@@ -34,18 +34,34 @@ async function writeAtomic(configPath: string, config: McpConfig): Promise<void>
   }
 }
 
+function sameArgs(a: string[] | undefined, b: string[] | undefined): boolean {
+  const x = a ?? [];
+  const y = b ?? [];
+  return x.length === y.length && x.every((v, i) => v === y[i]);
+}
+
 export async function installMcp(input: {
   agentId: KnownAgentId;
   home: string;
   command: string;
+  args?: string[];
 }): Promise<InstallResult> {
   const detected = detectAgent({ agentId: input.agentId, home: input.home });
   const config = await readConfig(detected.configPath);
   const existing = config.mcpServers[detected.serverKey];
-  if (existing !== undefined && existing.command === input.command) {
+  // Idempotency compares BOTH command and args: a launch command is
+  // unrunnable if either drifts, so a re-install with the same pair
+  // is a no-op but any change is re-written.
+  if (
+    existing !== undefined &&
+    existing.command === input.command &&
+    sameArgs(existing.args, input.args)
+  ) {
     return { configPath: detected.configPath, changed: false };
   }
-  config.mcpServers[detected.serverKey] = { command: input.command };
+  const entry: { command: string; args?: string[] } = { command: input.command };
+  if (input.args !== undefined) entry.args = input.args;
+  config.mcpServers[detected.serverKey] = entry;
   await writeAtomic(detected.configPath, config);
   return { configPath: detected.configPath, changed: true };
 }

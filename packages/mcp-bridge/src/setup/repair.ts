@@ -13,6 +13,7 @@ export async function repairMcp(input: {
   agentId: KnownAgentId;
   home: string;
   command: string;
+  args?: string[];
 }): Promise<RepairResult> {
   const install = await installMcp(input);
   return { install, connectorSyncRequested: true };
