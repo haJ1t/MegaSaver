@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type RunCommandSpawn, runOutputExecCommand } from "../../src/context-gate/run-command.js";
+import { type RunCommandSpawn, runOutputExecCommand } from "@megasaver/context-gate";
 import { createJsonDirectoryCoreRegistry } from "../../src/index.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
