@@ -8,13 +8,15 @@ import { describe, expect, it } from "vitest";
 // import @megasaver/core (the make-or-break inversion; the orchestrator reads a
 // structural OrchestratorRegistry port, not core's CoreRegistry), nor mcp-bridge,
 // nor any app. core -> context-gate (re-export) stays acyclic because the reverse
-// edge does not exist.
+// edge does not exist. `yaml` (permissions-yaml §6) is the IO-layer YAML parser
+// for loadProjectPermissions — it lives HERE, not in pure policy.
 const ALLOWED_DEPENDENCIES = [
   "@megasaver/content-store",
   "@megasaver/output-filter",
   "@megasaver/policy",
   "@megasaver/shared",
   "@megasaver/stats",
+  "yaml",
   "zod",
 ];
 
