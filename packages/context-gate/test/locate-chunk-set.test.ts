@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { locateChunkSet } from "@megasaver/core";
+import { locateChunkSet } from "../src/index.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
