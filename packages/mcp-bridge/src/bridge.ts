@@ -21,16 +21,16 @@ export function createBridge(config: McpBridgeConfig): McpBridge {
     start() {
       return Promise.reject(
         new McpBridgeError(
-          "not_implemented",
-          "mcp-bridge.start: real MCP server is deferred to v0.3+; v0.3 ships scaffold only.",
+          "transport_failed",
+          "mcp-bridge.start: real MCP server lands in BB8 Task 6 (server wiring).",
         ),
       );
     },
     stop() {
       return Promise.reject(
         new McpBridgeError(
-          "not_implemented",
-          "mcp-bridge.stop: real MCP server is deferred to v0.3+; v0.3 ships scaffold only.",
+          "transport_failed",
+          "mcp-bridge.stop: real MCP server lands in BB8 Task 6 (server wiring).",
         ),
       );
     },

@@ -12,11 +12,11 @@ describe("createBridge — v0.3 placeholder surface", () => {
     expect(() => createBridge({ transport: "websocket" as unknown as "stdio" })).toThrow();
   });
 
-  it("start() rejects with McpBridgeError(not_implemented)", async () => {
+  it("start() rejects with McpBridgeError(transport_failed)", async () => {
     const bridge = createBridge({ transport: "stdio" });
     await expect(bridge.start()).rejects.toMatchObject({
       name: "McpBridgeError",
-      code: "not_implemented",
+      code: "transport_failed",
     });
   });
 
