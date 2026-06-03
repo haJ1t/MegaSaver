@@ -1,11 +1,7 @@
 import { join } from "node:path";
 import { parseBlock, readTargetFile, syncTargetBlock } from "@megasaver/connectors-shared";
 import type { CoreRegistry } from "@megasaver/core";
-import {
-  buildMcpSetupOps,
-  type KnownAgentId,
-  type McpSetupOps,
-} from "@megasaver/mcp-bridge";
+import { type KnownAgentId, type McpSetupOps, buildMcpSetupOps } from "@megasaver/mcp-bridge";
 import { buildBridgeConnectorContext } from "./connector-context.js";
 import { KNOWN_TARGETS } from "./known-targets.js";
 
@@ -21,8 +17,7 @@ export type CreateMcpOpsDeps = {
 // mcp-bridge imports the CLI (AA1 §3 arrow). Mirrors the CLI's
 // resolver semantics so CLI and GUI agree.
 export function createMcpOps(deps: CreateMcpOpsDeps): McpSetupOps {
-  const targetFor = (agentId: KnownAgentId) =>
-    KNOWN_TARGETS.find((t) => t.id === agentId) ?? null;
+  const targetFor = (agentId: KnownAgentId) => KNOWN_TARGETS.find((t) => t.id === agentId) ?? null;
 
   return buildMcpSetupOps({
     home: deps.home,
@@ -52,10 +47,7 @@ export function createMcpOps(deps: CreateMcpOpsDeps): McpSetupOps {
 }
 
 // Latest project owning an open session for this agent; null if none.
-function resolveProjectRoot(
-  registry: CoreRegistry,
-  agentId: string,
-): { rootPath: string } | null {
+function resolveProjectRoot(registry: CoreRegistry, agentId: string): { rootPath: string } | null {
   for (const project of registry.listProjects()) {
     const hasAgentSession = registry.listSessions(project.id).some((s) => s.agentId === agentId);
     if (hasAgentSession) return { rootPath: project.rootPath };

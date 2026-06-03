@@ -42,9 +42,9 @@ describe("createMcpOps (GUI production facade — F3)", () => {
   it("install() writes the agent config (real primitive, not a stub)", async () => {
     const ops = createMcpOps({ registry: registryWithProject(), home, command: "mega-mcp" });
     await ops.install("claude-code", "demo");
-    const raw = JSON.parse(
-      await readFile(join(home, ".config", "claude", "mcp.json"), "utf8"),
-    ) as { mcpServers: Record<string, unknown> };
+    const raw = JSON.parse(await readFile(join(home, ".config", "claude", "mcp.json"), "utf8")) as {
+      mcpServers: Record<string, unknown>;
+    };
     expect(raw.mcpServers.megasaver).toBeDefined();
   });
 });

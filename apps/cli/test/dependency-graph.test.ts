@@ -2,24 +2,23 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// §3c allow-list (BB7a): apps/cli may import exactly these @megasaver/*
-// packages after BB7a. The non-Mega deps (citty, zod) are ignored by the
-// @megasaver/ filter below.
+// §3c allow-list: apps/cli may import exactly these @megasaver/*
+// packages. BB8 adds @megasaver/mcp-bridge (the `mega mcp` CLI drives
+// the bridge's install/status facade); the arrow stays acyclic —
+// mcp-bridge depends only on leaf packages, never on the CLI (AA1 §3).
+// The non-Mega deps (citty, zod) are ignored by the @megasaver/ filter.
 const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/connector-generic-cli",
   "@megasaver/connectors-shared",
   "@megasaver/content-store",
   "@megasaver/core",
+  "@megasaver/mcp-bridge",
   "@megasaver/output-filter",
   "@megasaver/policy",
   "@megasaver/shared",
 ];
 
-const FORBIDDEN_DEPENDENCIES = [
-  "@megasaver/mcp-bridge",
-  "@megasaver/retrieval",
-  "@megasaver/stats",
-];
+const FORBIDDEN_DEPENDENCIES = ["@megasaver/retrieval", "@megasaver/stats"];
 
 const packageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url));
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
@@ -44,7 +43,7 @@ describe("@megasaver/cli dependency graph (cycle guard)", () => {
     expect(deps).toContain("@megasaver/content-store");
   });
 
-  it("does not depend on mcp-bridge, retrieval, or stats", () => {
+  it("does not depend on retrieval or stats", () => {
     const deps = Object.keys(packageJson.dependencies ?? {});
     for (const forbidden of FORBIDDEN_DEPENDENCIES) {
       expect(deps).not.toContain(forbidden);

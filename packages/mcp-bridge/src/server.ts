@@ -2,10 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { CoreRegistry } from "@megasaver/core";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { McpBridgeError } from "./errors.js";
 import { mcpToolNameSchema } from "./tool-name.js";
 import { handleFetchChunk } from "./tools/fetch-chunk.js";
@@ -37,9 +34,7 @@ const TOOL_DEFS = [
 // command_denied, …), so the wire message is prefixed with the code.
 // The code/details/name fields are preserved for in-process callers.
 function wireError(err: McpBridgeError): McpBridgeError {
-  const prefixed = err.message.startsWith(err.code)
-    ? err.message
-    : `${err.code}: ${err.message}`;
+  const prefixed = err.message.startsWith(err.code) ? err.message : `${err.code}: ${err.message}`;
   return new McpBridgeError(err.code, prefixed, {
     ...(err.cause !== undefined ? { cause: err.cause } : {}),
     ...(err.details !== undefined ? { details: err.details } : {}),

@@ -45,9 +45,9 @@ describe("buildMcpSetupOps — facade (F2/F4/F6)", () => {
     const claude = result.agents.find((a) => a.agentId === "claude-code");
     expect(claude).toMatchObject({ mcpInstalled: true, restartRequired: true });
     // the config file was actually written by the underlying primitive
-    const raw = JSON.parse(
-      await readFile(join(home, ".config", "claude", "mcp.json"), "utf8"),
-    ) as { mcpServers: Record<string, unknown> };
+    const raw = JSON.parse(await readFile(join(home, ".config", "claude", "mcp.json"), "utf8")) as {
+      mcpServers: Record<string, unknown>;
+    };
     expect(raw.mcpServers.megasaver).toBeDefined();
   });
 

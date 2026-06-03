@@ -1,9 +1,9 @@
 import type { KnownAgentId } from "./agent-ids.js";
 import { installMcp, uninstallMcp } from "./install.js";
 import {
-  aggregateMcpStatus,
   type ConnectorSyncedResolver,
   type McpStatusResult,
+  aggregateMcpStatus,
 } from "./status.js";
 
 // F2 (critic-locked): the high-level facade BB11 consumes. Every
