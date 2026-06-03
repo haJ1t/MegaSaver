@@ -653,17 +653,21 @@ precedent). There is no permanent BB11 stub — once BB8 + BB11 land, the GUI
 AgentSetupDoctor works end-to-end. The locked facade (cite verbatim):
 
 ```ts
-// Owned + exported by BB8 (@megasaver/mcp-bridge). target is an AgentId;
+// Owned + exported by BB8 (@megasaver/mcp-bridge). target is a KnownAgentId
+// (PARENT AMENDMENT, post-BB8 review): the four MCP-capable agents —
+// claude-code/codex/cursor/aider. generic-cli has no MCP config slot, so
+// AgentId would be a half-implementation (§13). Import KnownAgentId +
+// knownAgentIdSchema from @megasaver/mcp-bridge alongside the facade.
 // install/repair take a project, uninstall does not; status takes no args.
 export interface McpSetupOps {
   status(): Promise<McpStatusResult>;
-  install(target: AgentId, project: string): Promise<McpStatusResult>;
-  repair(target: AgentId, project: string): Promise<McpStatusResult>;
-  uninstall(target: AgentId): Promise<McpStatusResult>;
+  install(target: KnownAgentId, project: string): Promise<McpStatusResult>;
+  repair(target: KnownAgentId, project: string): Promise<McpStatusResult>;
+  uninstall(target: KnownAgentId): Promise<McpStatusResult>;
 }
 export interface McpStatusResult {
   agents: Array<{
-    agentId: AgentId;
+    agentId: KnownAgentId;
     mcpInstalled: boolean;
     connectorSynced: boolean;
     restartRequired: boolean;
@@ -828,18 +832,20 @@ schemas (install/repair carry a `project`; uninstall does not — matching the
 locked facade `install(target, project)` / `uninstall(target)`):
 
 ```ts
-// MCP setup bodies (epic §6c). target is an AgentId; install/repair need the
-// project whose agent files receive the connector block (epic §7).
+// MCP setup bodies (epic §6c). target is a KnownAgentId (PARENT AMENDMENT):
+// validate with knownAgentIdSchema from @megasaver/mcp-bridge, NOT agentIdSchema
+// — the MCP install surface is the four MCP-capable agents only. install/repair
+// need the project whose agent files receive the connector block (epic §7).
 export const MEGA_MCP_TARGET_BODY = z
   .object({
-    target: agentIdSchema,
+    target: knownAgentIdSchema,
     project: z.string().min(1),
   })
   .strict();
 
 export const MEGA_MCP_UNINSTALL_BODY = z
   .object({
-    target: agentIdSchema,
+    target: knownAgentIdSchema,
   })
   .strict();
 ```

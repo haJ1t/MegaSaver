@@ -31,13 +31,20 @@ describe("buildMcpSetupOps — facade (F2/F4/F6)", () => {
     expect(result.agents).toHaveLength(4);
     const claude = result.agents.find((a) => a.agentId === "claude-code");
     expect(claude).toMatchObject({
-      target: "claude-code",
       agentId: "claude-code",
       mcpInstalled: false,
       connectorSynced: false,
       restartRequired: false,
       restartHint: expect.stringContaining("Claude Code"),
     });
+    // The 5-field contract BB11 pins — no redundant `target` key (it duplicated agentId).
+    expect(claude && Object.keys(claude).sort()).toEqual([
+      "agentId",
+      "connectorSynced",
+      "mcpInstalled",
+      "restartHint",
+      "restartRequired",
+    ]);
   });
 
   it("install() flips mcpInstalled + restartRequired true in the returned snapshot", async () => {

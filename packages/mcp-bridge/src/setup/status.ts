@@ -1,15 +1,13 @@
-import type { AgentId } from "@megasaver/shared";
 import { type KnownAgentId, knownAgentIdSchema } from "./agent-ids.js";
 import { isMcpInstalled } from "./install.js";
 import { restartHint } from "./restart-hint.js";
 
-// F4: per-agent snapshot. `target` and `agentId` are the same four
-// strings in this codebase (apps/cli/src/known-targets.ts: every
-// KnownTarget has id === agentId), but both are surfaced so BB11's
-// McpAgentStatus serialises directly without a second lookup.
+// F4: per-agent snapshot consumed by the CLI `mega mcp status` and the GUI
+// AgentSetupDoctor (BB11) — exactly the five fields BB11's row pins. agentId
+// is a KnownAgentId: MCP install targets the four agents with a config slot
+// (generic-cli has none), so the whole status surface is KnownAgentId-typed.
 export type McpAgentStatus = {
-  target: KnownAgentId;
-  agentId: AgentId;
+  agentId: KnownAgentId;
   mcpInstalled: boolean;
   connectorSynced: boolean;
   restartRequired: boolean;
@@ -34,7 +32,6 @@ export async function aggregateMcpStatus(input: {
     const mcpInstalled = await isMcpInstalled({ agentId, home: input.home });
     const connectorSynced = await input.connectorSyncedResolver(agentId);
     agents.push({
-      target: agentId,
       agentId,
       mcpInstalled,
       connectorSynced,
