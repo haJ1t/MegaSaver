@@ -4,9 +4,7 @@
   "private": true,
   "description": "Mega Saver GUI app - localhost web shell over the core registry.",
   "type": "module",
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "sideEffects": false,
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names vite,bridge -c blue,magenta \"pnpm dev:vite\" \"pnpm dev:bridge\"",
