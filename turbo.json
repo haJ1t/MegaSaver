@@ -8,7 +8,7 @@
       "outputs": ["dist/**"]
     },
     "typecheck": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "build"],
       "outputs": ["*.tsbuildinfo"]
     },
     "test": {
