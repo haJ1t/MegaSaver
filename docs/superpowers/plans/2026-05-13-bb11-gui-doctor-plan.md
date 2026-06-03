@@ -650,7 +650,25 @@ default `mcpOps`. BB11 is the consumer: `mcp-setup.ts` **imports** the facade
 type (does NOT redefine it) and the routes accept it via the injected
 `RouteContext` slot so they are unit-testable with a fake (epic §2c DI
 precedent). There is no permanent BB11 stub — once BB8 + BB11 land, the GUI
-AgentSetupDoctor works end-to-end. The locked facade (cite verbatim):
+AgentSetupDoctor works end-to-end.
+
+**BB11 ACTION ITEM (LOW residual carried from the BB8 §16 review — close it
+when wiring the GUI mcp routes).** BB8 fixed the CLI launch command to the
+runnable `{command:"mega", args:["mcp","serve"]}`, but the GUI production path
+still writes the dangling `mega-mcp`: `apps/gui/bridge/server.ts` calls
+`createMcpOps({ ..., command: "mega-mcp" })`, and `createMcpOps` →
+`buildMcpSetupOps` → `installMcp` does NOT thread `args`. This is DORMANT in
+BB8 (no `/api/mcp/install|repair` routes ship until BB11), but a GUI-initiated
+install would otherwise write an unrunnable config. When BB11 activates those
+routes it MUST: (1) thread an optional `args?: string[]` through
+`createMcpOps` → `buildMcpSetupOps` → `installMcp`/`repairMcp` (the CLI's
+`installMcp` already writes command+args), and (2) set `server.ts` to
+`command:"mega", args:["mcp","serve"]` (reuse the CLI's `DEFAULT_MCP_COMMAND` /
+`DEFAULT_MCP_ARGS` by hoisting them to `@megasaver/mcp-bridge`, NOT importing
+apps/cli from apps/gui). Add a route test asserting the written config is the
+runnable command+args.
+
+The locked facade (cite verbatim):
 
 ```ts
 // Owned + exported by BB8 (@megasaver/mcp-bridge). target is a KnownAgentId
