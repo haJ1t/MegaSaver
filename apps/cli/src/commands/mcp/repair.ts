@@ -3,6 +3,7 @@ import { defineCommand } from "citty";
 import { unknownTargetMessage } from "../../errors.js";
 import { isKnownTargetId } from "../../known-targets.js";
 import { runConnectorSync } from "../connector/sync.js";
+import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "./install.js";
 
 export type RunMcpRepairInput = {
   targetFlag: string;
@@ -12,6 +13,7 @@ export type RunMcpRepairInput = {
   home: string;
   xdgDataHome: string | undefined;
   command?: string;
+  args?: string[];
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json: boolean;
@@ -23,8 +25,9 @@ export async function runMcpRepair(input: RunMcpRepairInput): Promise<0 | 1> {
     input.stderr(cli.message);
     return cli.exitCode;
   }
-  const command = input.command ?? "mega-mcp";
-  const repaired = await repairMcp({ agentId: input.targetFlag, home: input.home, command });
+  const command = input.command ?? DEFAULT_MCP_COMMAND;
+  const args = input.args ?? [...DEFAULT_MCP_ARGS];
+  const repaired = await repairMcp({ agentId: input.targetFlag, home: input.home, command, args });
 
   // AA1 §5c: repair = install + connector sync for the same agent.
   const syncCode = await runConnectorSync({

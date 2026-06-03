@@ -36,6 +36,22 @@ describe("runMcpInstall", () => {
     expect(out.join("\n")).toMatch(/already|no-op|unchanged/i);
   });
 
+  it("writes a runnable launch entry: mega + [mcp, serve]", async () => {
+    const result = await runMcpInstall({
+      targetFlag: "claude-code",
+      home,
+      stdout: () => undefined,
+      stderr: () => undefined,
+      json: true,
+    });
+    expect(result).toBe(0);
+    const configPath = join(home, ".config", "claude", "mcp.json");
+    const raw = JSON.parse(await readFile(configPath, "utf8")) as {
+      mcpServers: Record<string, { command: string; args?: string[] }>;
+    };
+    expect(raw.mcpServers.megasaver).toEqual({ command: "mega", args: ["mcp", "serve"] });
+  });
+
   it("emits JSON with changed flag", async () => {
     const out: string[] = [];
     const code = await runMcpInstall({

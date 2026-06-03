@@ -3,10 +3,18 @@ import { defineCommand } from "citty";
 import { unknownTargetMessage } from "../../errors.js";
 import { isKnownTargetId } from "../../known-targets.js";
 
+// Default launch entry: the real `mega` bin + the `mcp serve`
+// subcommand, so the written config is actually runnable. (The old
+// "mega-mcp" default named a binary that does not exist.) Overridable
+// via the command/args fields.
+export const DEFAULT_MCP_COMMAND = "mega";
+export const DEFAULT_MCP_ARGS: readonly string[] = ["mcp", "serve"];
+
 export type RunMcpInstallInput = {
   targetFlag: string;
   home: string;
   command?: string;
+  args?: string[];
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json: boolean;
@@ -18,8 +26,9 @@ export async function runMcpInstall(input: RunMcpInstallInput): Promise<0 | 1> {
     input.stderr(cli.message);
     return cli.exitCode;
   }
-  const command = input.command ?? "mega-mcp";
-  const result = await installMcp({ agentId: input.targetFlag, home: input.home, command });
+  const command = input.command ?? DEFAULT_MCP_COMMAND;
+  const args = input.args ?? [...DEFAULT_MCP_ARGS];
+  const result = await installMcp({ agentId: input.targetFlag, home: input.home, command, args });
   if (input.json) {
     input.stdout(
       JSON.stringify({
