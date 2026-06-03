@@ -1,5 +1,12 @@
 # @megasaver/mcp-bridge
 
+## 1.0.1
+
+### Patch Changes
+
+- Updated dependencies [a2526d3]
+  - @megasaver/core@1.0.1
+
 ## 1.0.0
 
 ### Major Changes
