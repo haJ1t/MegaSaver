@@ -8,12 +8,17 @@ const { version } = createRequire(import.meta.url)("./package.json") as { versio
 
 // Standalone distribution build for the `mega` CLI.
 //
-// Unlike tsup.config.ts (which externalizes deps so dist/cli.js needs
-// node_modules), this config INLINES every dependency — all @megasaver/*
-// workspace packages plus npm deps (citty, zod, @modelcontextprotocol/sdk) —
-// into a single self-contained ESM file. Only Node builtins stay external.
-// The output runs with bare `node mega.mjs` from any directory, with no
-// node_modules present. It is the artifact shipped to GitHub Releases and
+// Both this and tsup.config.ts inline the full workspace dependency graph:
+// tsup leaves external only what package.json lists under `dependencies`/
+// `peerDependencies`, and the CLI keeps all @megasaver/* workspace packages
+// plus their transitive npm deps (citty, zod, @modelcontextprotocol/sdk, yaml)
+// in `devDependencies` — so both builds bundle them rather than externalize.
+// The difference: this config forces `noExternal: [/.*/]` (inline EVERYTHING
+// resolvable, regardless of dependency classification), injects the version
+// literal, emits an explicit `.mjs`, and adds the createRequire banner —
+// yielding a single self-contained ESM file that runs with bare
+// `node mega.mjs` from any directory, no node_modules present. Only Node
+// builtins stay external. It is the artifact shipped to GitHub Releases and
 // (optionally) published to npm.
 export default defineConfig({
   entry: { mega: "src/cli.ts" },
