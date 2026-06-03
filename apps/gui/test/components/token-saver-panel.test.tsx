@@ -17,7 +17,7 @@ const SESSION: Session = {
   endedAt: null,
 };
 
-function stubStatusAndStats(status: unknown, stats: unknown): void {
+function stubStatusAndStats(status: unknown, stats: unknown, retention?: unknown): void {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
@@ -29,6 +29,9 @@ function stubStatusAndStats(status: unknown, stats: unknown): void {
       }
       if (url.includes("/token-saver/events")) {
         return { ok: true, status: 200, json: async () => [] };
+      }
+      if (url.endsWith("/retention")) {
+        return { ok: true, status: 200, json: async () => retention ?? null };
       }
       return { ok: true, status: 200, json: async () => null };
     }),
@@ -90,5 +93,15 @@ describe("TokenSaverPanel — enabled", () => {
       <TokenSaverPanel session={SESSION} onSettingsChanged={() => {}} />,
     );
     await waitFor(() => expect(container.textContent).toContain("balanced"));
+  });
+
+  it("renders the retention controls section when enabled", async () => {
+    stubStatusAndStats(enabledStatus, null, {
+      chunkSets: 2,
+      totalBytes: 2048,
+      oldestAt: "2026-05-10T12:00:00.000Z",
+    });
+    render(<TokenSaverPanel session={SESSION} onSettingsChanged={() => {}} />);
+    await waitFor(() => expect(screen.getByLabelText("Raw output retention")).toBeDefined());
   });
 });

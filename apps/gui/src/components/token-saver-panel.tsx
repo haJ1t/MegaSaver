@@ -11,6 +11,7 @@ import {
   tokenSaverEventRawUrl,
   tokenSaverEventSentUrl,
 } from "../lib/api-client.js";
+import { RetentionControls } from "./retention-controls.js";
 import { ErrorState, LoadingState } from "./states.js";
 import type { BridgeError } from "./states.js";
 import { TokenSaverModal } from "./token-saver-modal.js";
@@ -154,6 +155,8 @@ export function TokenSaverPanel({ session, onSettingsChanged }: TokenSaverPanelP
               ))}
             </ul>
           )}
+
+          <RetentionControls sessionId={session.id} />
         </div>
       )}
 
