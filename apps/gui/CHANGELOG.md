@@ -1,5 +1,39 @@
 # @megasaver/gui
 
+## 1.0.1
+
+### Patch Changes
+
+- 55d54fb: Fix WCAG 2.1 AA color-contrast (SC 1.4.3) on two GUI active/selected states in
+  light mode.
+
+  The active nav item (`bg-accent/15`, `aria-current="page"`) and the active
+  segmented "+ New …" chip (`bg-accent/20 border border-accent/30`) labelled
+  their text with `text-accent`. Composited over the page background, the amber
+  label cleared only 4.03:1 (nav) and 3.75:1 (chip) — below the 4.5:1 normal-text
+  threshold. The label colour is now `text-text-primary`, which composites to
+  13.6:1 (nav) and 12.6:1 (chip) in light and 13.8:1 / 12.4:1 in dark; every
+  state now passes AA in both themes. The accent tint fill, accent border, and
+  `font-medium` remain as the selected-state signal (SC 1.4.1 was already met by
+  fill + border + weight), so the visual language is unchanged. Component class
+  strings only; no token values changed.
+
+- 3e6ad88: Fix WCAG 2.1 AA color-contrast failures in two GUI design tokens.
+
+  `--color-accent` (light) darkened `#c4681a` → `#a25616` so `text-accent`
+  (status labels, links, Retry) clears 4.5:1 on every surface and the
+  primary button label (white on accent) clears 4.5:1. `--color-text-muted`
+  darkened in light `#9ea3ad` → `#646b77` and lightened in dark
+  `#565b66` → `#8b909d` so secondary/instruction text clears 4.5:1 in both
+  themes. Hue and saturation preserved (warm amber / neutral grey); the dark
+  accent already passed AA and is unchanged. CSS token values only.
+
+- Updated dependencies [a2526d3]
+  - @megasaver/core@1.0.1
+  - @megasaver/connector-generic-cli@1.0.1
+  - @megasaver/connectors-shared@1.0.1
+  - @megasaver/mcp-bridge@1.0.1
+
 ## 1.0.0
 
 ### Major Changes
