@@ -1,5 +1,31 @@
 # @megasaver/cli
 
+## 1.0.2
+
+### Patch Changes
+
+- 7936a25: Packaging polish for `@megasaver/cli` ahead of npm publish.
+
+  - The displayed version now comes from a build-time `__MEGA_CLI_VERSION__`
+    define in the standalone bundle and from `package.json` in the unbundled
+    build. No environment variable is consulted, so a stray `MEGA_CLI_VERSION`
+    no longer overrides the reported version.
+  - The published tarball no longer carries the build-only `devDependencies`
+    (the 8 private `@megasaver/*` workspace packages plus citty and zod). A
+    `prepack`/`postpack` step strips them from the packed manifest while leaving
+    the source `package.json` untouched, so the self-contained bundle ships with
+    zero dependencies and SCA tooling sees no references to unpublished packages.
+
+- 3b499c5: Make `@megasaver/cli` publishable as a self-contained package.
+
+  The `mega` CLI is now distributed two ways: a standalone `mega.mjs` bundle
+  attached to GitHub Releases, and (when a maintainer supplies `NPM_TOKEN`) the
+  `@megasaver/cli` npm package. The published package ships only the inlined
+  bundle — every `@megasaver/*` workspace dependency and npm dependency (citty,
+  zod, the MCP SDK) is bundled in, so the package has no runtime dependencies and
+  the 13 internal `@megasaver/*` packages stay private. `bin.mega` points at the
+  bundle and `publishConfig.access` is `public`.
+
 ## 1.0.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/context-gate",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Context-gate orchestrator for Mega Saver — file/exec output pipeline + chunk fetch, composed over policy, output-filter, content-store, and stats.",
   "type": "module",
