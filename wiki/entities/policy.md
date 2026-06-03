@@ -58,3 +58,27 @@ is the only slot reserved for that day.
 - [[concepts/context-gate-pipeline]] — where the gates fire in the flow.
 - [[entities/output-filter]] — consumes `redact`; owns the regex corpus.
 - [[entities/cli]] — `mega output` composes the two read gates.
+
+## v1.1 / post-v1.0 (2026-06-03)
+
+**PR #96 — Project permissions (HIGH/security):**
+
+`.megasaver/permissions.yaml` support shipped. Four invariants enforced
+by `parseProjectPermissions` (pure, Zod-validated):
+
+1. **Tighten-only** — project rules may only deny, never allow beyond
+   the base policy.
+2. **Deny-precedence** — a project deny overrides any allow.
+3. **Fail-closed** — parse failure is a deny (not a pass-through).
+4. **Path-glob** — path rules are glob-matched against resolved paths.
+
+New public exports (in `packages/policy/src/index.ts`):
+- `parseProjectPermissions(raw: unknown): ProjectPermissions` — pure
+  Zod parse of the YAML-deserialized object; throws on invalid shape.
+- `ProjectPermissions` type + `projectPermissionsSchema`.
+- `policy_load_failed` added to `PolicyDenyCode` (closes the reserved
+  slot documented in v0.5; `policyDenyCodeSchema` now 7 members).
+
+I/O is the caller's responsibility: `context-gate.loadProjectPermissions`
+reads the YAML file and calls `parseProjectPermissions` (yaml@^2).
+Adversarially security-reviewed before merge. policy@1.1.0.

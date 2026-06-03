@@ -150,3 +150,21 @@ Risk HIGH. Full superpowers chain; code-reviewer + critic both required.
 - [[entities/shared]] — branded id types, `RiskLevel`, `AgentId`.
 - [[entities/cli]] — first consumer of the persistent registry.
 - [[workflows/cli-test-pattern]] — how CLI handlers consume this surface in tests.
+
+## v1.1 / post-v1.0 (2026-06-03)
+
+**PR #88 — BB12: context-gate extracted OUT of core:**
+
+The `packages/core/src/context-gate/` directory (553 LOC, measured
+post-BB7b) was moved to the new `@megasaver/context-gate` package.
+Core now **re-exports** the full context-gate surface from
+`packages/context-gate/src/index.ts` — all existing callers that
+`import … from "@megasaver/core"` continue to work without change.
+
+The `CoreRegistry` interface is unchanged; `context-gate` uses its own
+structural `OrchestratorRegistry` duck-type to avoid importing core.
+
+**Implementation status update:** core@1.0.2 (patch bump; no public
+surface change beyond the re-export wiring). See
+[[entities/context-gate]] for the new package details and
+[[decisions/context-gate-extraction]] for the BB12 disposition record.

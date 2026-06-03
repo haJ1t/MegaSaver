@@ -5,7 +5,7 @@ sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
 status: active
 created: 2026-05-13
-updated: 2026-05-13
+updated: 2026-06-03
 ---
 
 # Context Gate — folded vs extracted
@@ -44,3 +44,22 @@ Orchestrator-extraction evaluation: **MERGED** — it created
 `packages/core/src/context-gate/` (the folded orchestrator). The >500
 LOC reading then queues the standalone-package promotion as BB12.
 <https://github.com/haJ1t/MegaSaver/pull/75>
+
+## BB12 — EXECUTED (PR #88, 2026-06-03)
+
+The extraction queued above was performed in PR #88 as a standalone
+commit. Outcome:
+
+- `packages/core/src/context-gate/` (605 LOC at extraction time)
+  moved to `packages/context-gate/src/`.
+- New package: `@megasaver/context-gate@0.2.0`.
+- `OrchestratorRegistry` structural port: `context-gate` declares its
+  own read-only registry interface so it imports **zero** `@megasaver/core`
+  symbols (cycle-free by construction).
+- `@megasaver/core` re-exports the full `context-gate` public surface.
+  Consumers that `import … from "@megasaver/core"` are unchanged.
+- `dependency-graph.test.ts` relocated to `packages/context-gate/`.
+
+The folded orchestrator no longer lives in core. The disposition
+recorded at v1.0 closeout ("extraction queued as BB12") is now fully
+resolved. See [[entities/context-gate]].

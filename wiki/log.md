@@ -1818,3 +1818,140 @@ EXTRACT, queued as BB12 (deferred to its own PR; spec/plan landed in
 PR #82). Recorded in `wiki/decisions/context-gate-extraction.md`.
 PR #75 (extraction evaluation): MERGED — created the folded
 `packages/core/src/context-gate/` directory.
+
+---
+
+## [2026-05-13] feat | BB7b + BB8 + BB11 epic ships (PRs #80, #83, #84) — critical path to v1.0.0
+
+The three CRITICAL building blocks that complete the AA1 "Mega Saver
+Mode" shipping arc (spec `docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md`):
+
+- **PR #80 — BB7b** (`mega output exec`): child-process spawn orchestrator
+  (`runOutputExecCommand`) lands as the `exec` subcommand of the existing
+  `output` tree. Env-marker `MEGASAVER_ORIGIN_PID` inserted into the
+  spawned process's env to prevent recursive invocations (deny-before-spawn
+  guard). Policy `evaluateCommand` fires BEFORE spawn; redact fires BEFORE
+  store. Same `runOutputPipeline` used by `mega_run_command` (AA1 §8d
+  "one orchestrator, two entry points").
+- **PR #83 — BB8**: real `@megasaver/mcp-bridge` over `stdio`. Replaced the
+  v0.3 `not_implemented` placeholder with a four-tool server:
+  `mega_fetch_chunk`, `mega_read_file`, `mega_recall`, `mega_run_command`.
+  CLI gains `mega mcp {install,repair,status,uninstall,serve}`.
+  `buildMcpSetupOps` facade drives the setup surface. 16-member
+  `McpBridgeErrorCode` replaces the single `not_implemented`. `McpToolName`
+  (4-member) pinned in `.test-d.ts`.
+- **PR #84 — BB11**: GUI `AgentSetupDoctor` view + additive
+  `MEGA SAVER:CONTEXT_GATE` connector block. Bridge gains `/api/mcp/*`
+  routes (`install`, `repair`, `status`, `uninstall`). Each agent row
+  carries a `restartHint` string. `connectors-shared` renders the
+  CONTEXT_GATE block coexisting with (not replacing) the legacy block.
+
+## [2026-05-13] fix | WCAG AA contrast fixes — a11y (PRs #85, #87)
+
+Two-PR accessibility sweep to bring all GUI text to ≥4.5:1 contrast ratio:
+
+- **PR #85**: accent colour `#c4681a` → `#a25616`; muted text retuned.
+- **PR #87**: active nav-item and chip text switched from accent to
+  `text-primary`.
+
+## [2026-05-13] release | v1.0.0 tagged (PR #86)
+
+v1.0 closeout merge PR. Annotated tag `v1.0.0` created. End-to-end
+acceptance tests [A1]–[A8] (AA1 §17). All 14 packages at 1.0.0.
+`pnpm verify` green.
+
+## [2026-06-03] feat | BB12 executed — @megasaver/context-gate extracted (PR #88)
+
+BB12 performed the extraction queued by the v1.0 closeout decision.
+The 605-LOC orchestrator directory moved from `packages/core/src/context-gate/`
+to the new standalone `packages/context-gate/` package
+(`@megasaver/context-gate@0.2.0`):
+
+- `runOutputPipeline`, `runOutputExecCommand`, `fetchChunk`,
+  `loadProjectPermissions` are the exported orchestration functions.
+- `OrchestratorRegistry` is a structural port of the original
+  `CoreRegistry` interface; `context-gate` never imports `@megasaver/core`
+  (zero core dep — breaks the cycle AA1 §3c warned against).
+- `@megasaver/core` re-exports the entire `context-gate` surface so
+  all existing callers (`mega output exec`, `mega_run_command`, …) import
+  via core unchanged.
+- Dependency-direction guard (`dependency-graph.test.ts`) relocated to
+  the new package.
+- `context-gate` deps: `content-store`, `output-filter`, `policy`,
+  `shared`, `stats`, `yaml`.
+
+Source: [[decisions/context-gate-extraction]], [[entities/context-gate]].
+
+## [2026-06-03] release | v1.0.1 tagged (PR #89)
+
+Patch release bundling the a11y changesets (#85, #87) and the BB12
+extraction changeset (#88). Annotated tag `v1.0.1` created.
+
+## [2026-06-03] feat | CI pipeline + standalone bundle (PRs #90, #91, #93, #94)
+
+Two interrelated infra tracks that close the distribution story:
+
+**CI (PRs #90, #93):**
+
+- **PR #90**: `.github/workflows/ci.yml` added — `pnpm verify` runs on
+  every PR and push; Node 22; Turborepo cache. Closes MM#62 by wiring
+  `turbo typecheck dependsOn ["^build"]` so cold `pnpm verify` is
+  self-sufficient.
+- **PR #93**: adds `build` to `typecheck dependsOn` (the `^build`
+  covers deps, the naked `build` covers the package itself). Completes
+  the MM#62/CC#90 family.
+
+**Standalone bundle (PRs #91, #94):**
+
+- **PR #91**: `apps/cli/dist-bundle/mega.mjs` built via a second tsup
+  config (`tsup.bundle.config.ts`, `noExternal: [/.*/]`, `version-define`,
+  `createRequire` banner). `.github/workflows/release.yml` uploads it to
+  GitHub Releases on every `v*` tag. npm publish gated on `NPM_TOKEN`
+  (maintainer secret). Strategy: published `@megasaver/cli` carries zero
+  runtime deps; workspace internals stay private.
+- **PR #94**: hardened version source (env→define, removed stray
+  `MEGA_CLI_VERSION`); `prepack`/`postpack` strips workspace devDeps from
+  the published manifest.
+
+## [2026-06-03] feat | Advanced roadmap: parsers + ranker + permissions (PRs #92, #95, #96)
+
+- **PR #92** (`output-filter` parsers): pytest/go/cargo/eslint format
+  detection and parsing added under `src/parsers/`. These are ordered
+  BEFORE the generic `test-output` parser in the `chunkByFormat` cascade,
+  so language-specific structured output is parsed with higher fidelity.
+- **PR #95** (`output-filter` ranker): `rank.ts` ERROR-signal matcher
+  extended to recognise CamelCase `*Error` suffixes and the Rust/Go
+  `panicked` signal. Failure chunks now score non-zero in the ranker.
+- **PR #96** (`policy` permissions): `.megasaver/permissions.yaml`
+  tighten-only project permission rules. `policy.parseProjectPermissions`
+  (pure, Zod-validated) + `context-gate.loadProjectPermissions` (yaml@^2
+  I/O). `policy_load_failed` deny-code added. Four invariants enforced:
+  tighten-only, deny-precedence, fail-closed, path-glob. Adversarially
+  security-reviewed (HIGH risk).
+
+## [2026-06-04] feat | GUI observability (PR #97)
+
+- Token-savings inline-SVG chart added to the `TokenSaverPanel`.
+- Raw-output retention controls: `GET /api/sessions/:id/raw-output/summary`
+  + two-click destructive clear (session-scoped). `<output>` element
+  carries `aria-live` for screen-reader announcements.
+
+## [2026-06-04] fix | CI hotfix (PR #98)
+
+- Biome format fix for retention test code introduced in PR #97.
+- `NPM_TOKEN` gate moved to a `gate` job at the job level (previously
+  the step-level condition was evaluated too early). Restores main green.
+
+## [2026-06-04] release | v1.1.0 tagged (PR #99)
+
+Advanced-roadmap release. Bundles: parsers (#92), ranker (#95),
+permissions (#96), GUI observability (#97). Annotated tag `v1.1.0`
+created. Package versions: cli 1.0.2, core 1.0.2, context-gate 0.2.0,
+mcp-bridge 1.0.2, output-filter 1.1.0, policy 1.1.0, gui 1.1.0,
+stats 1.0.1, retrieval 1.0.0, content-store 1.0.1, shared 1.0.0.
+
+## [2026-06-04] chore | tsup bundle config header fix (PR #100)
+
+Corrected `tsup.bundle.config.ts` header comment — both
+`tsup.config.ts` and `tsup.bundle.config.ts` inline the entire
+workspace graph via `noExternal`. Docs-only; no behaviour change.

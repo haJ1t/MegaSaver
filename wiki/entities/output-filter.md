@@ -78,3 +78,23 @@ secret-shaped negatives (F-MED-1).
 - [[concepts/context-gate-pipeline]] — the redact → chunk → rank →
   fit → summarize flow in full.
 - [[entities/shared]] — `TokenSaverMode` / `modeToBudget`.
+
+## v1.1 / post-v1.0 (2026-06-03)
+
+**PR #92 — Language-specific parsers:**
+
+Four new format-detect-and-parse modules added under `src/parsers/`:
+`pytest`, `go` (test), `cargo` (test), `eslint`. Each is registered in
+`chunkByFormat` BEFORE the generic `test-output` parser so structured
+output is always preferred. The step-4 "chunk" description above remains
+accurate; the new parsers are plugged in as earlier dispatch candidates.
+
+**PR #95 — Ranker improvements:**
+
+`scoreChunk` in `src/rank.ts` extended to match:
+- CamelCase `*Error` suffixes (e.g. `TypeError`, `NetworkError`).
+- The Rust/Go `panicked` signal.
+
+Previously only lowercase `error` patterns scored in the `errorScore`
+feature. Failure chunks now receive a non-zero score and are correctly
+prioritised by the fit step. output-filter@1.1.0.
