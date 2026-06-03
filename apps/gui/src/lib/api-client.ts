@@ -160,6 +160,26 @@ export function tokenSaverEventSentUrl(sessionId: string, eventId: string): stri
   return `${tokenSaverBase(sessionId)}/events/${encodeURIComponent(eventId)}/sent`;
 }
 
+// ── Retention endpoints (epic 3d) ───────────────────────────────────────────
+
+export type RetentionSummary = {
+  chunkSets: number;
+  totalBytes: number;
+  oldestAt: string | null;
+};
+
+function retentionBase(sessionId: string): string {
+  return `/api/sessions/${encodeURIComponent(sessionId)}/retention`;
+}
+
+export function fetchRetention(sessionId: string): Promise<RetentionSummary> {
+  return getJson<RetentionSummary>(retentionBase(sessionId));
+}
+
+export function clearRetention(sessionId: string): Promise<RetentionSummary> {
+  return postJson<RetentionSummary>(`${retentionBase(sessionId)}/clear`, {});
+}
+
 // ── MCP setup endpoints (BB11) ──────────────────────────────────────────────
 // Shapes mirror BB8's McpStatusResult (agentId only — no separate `target`
 // field). install/repair carry the active project (epic §7 — the connector

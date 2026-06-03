@@ -10,6 +10,7 @@ import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
 import { handleGetMemory, handlePostMemory } from "./routes/memory.js";
 import { handleGetProjects } from "./routes/projects.js";
+import { dispatchRetention } from "./routes/retention.js";
 import {
   handleEndSession,
   handleGetSessions,
@@ -196,6 +197,13 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
 
     if (path.startsWith("/api/sessions/") && path.includes("/token-saver")) {
       const dispatched = await dispatchTokenSaver(ctx, method, path, () =>
+        methodNotAllowed(res, method, origin),
+      );
+      if (dispatched) return;
+    }
+
+    if (path.startsWith("/api/sessions/") && path.includes("/retention")) {
+      const dispatched = await dispatchRetention(ctx, method, path, () =>
         methodNotAllowed(res, method, origin),
       );
       if (dispatched) return;
