@@ -111,7 +111,7 @@ export function App(): JSX.Element {
                     "px-3 py-1 text-xs rounded-md transition-colors duration-150 cursor-pointer",
                     "focus-visible:outline-2 focus-visible:outline-offset-2",
                     view === id
-                      ? "bg-accent/15 text-accent font-medium"
+                      ? "bg-accent/15 text-text-primary font-medium"
                       : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated",
                   ].join(" ")}
                 >
