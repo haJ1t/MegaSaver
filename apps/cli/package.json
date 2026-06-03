@@ -22,6 +22,7 @@
     "@megasaver/connectors-shared": "workspace:*",
     "@megasaver/content-store": "workspace:*",
     "@megasaver/core": "workspace:*",
+    "@megasaver/mcp-bridge": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",
     "@megasaver/shared": "workspace:*",

@@ -650,20 +650,42 @@ default `mcpOps`. BB11 is the consumer: `mcp-setup.ts` **imports** the facade
 type (does NOT redefine it) and the routes accept it via the injected
 `RouteContext` slot so they are unit-testable with a fake (epic §2c DI
 precedent). There is no permanent BB11 stub — once BB8 + BB11 land, the GUI
-AgentSetupDoctor works end-to-end. The locked facade (cite verbatim):
+AgentSetupDoctor works end-to-end.
+
+**BB11 ACTION ITEM (LOW residual carried from the BB8 §16 review — close it
+when wiring the GUI mcp routes).** BB8 fixed the CLI launch command to the
+runnable `{command:"mega", args:["mcp","serve"]}`, but the GUI production path
+still writes the dangling `mega-mcp`: `apps/gui/bridge/server.ts` calls
+`createMcpOps({ ..., command: "mega-mcp" })`, and `createMcpOps` →
+`buildMcpSetupOps` → `installMcp` does NOT thread `args`. This is DORMANT in
+BB8 (no `/api/mcp/install|repair` routes ship until BB11), but a GUI-initiated
+install would otherwise write an unrunnable config. When BB11 activates those
+routes it MUST: (1) thread an optional `args?: string[]` through
+`createMcpOps` → `buildMcpSetupOps` → `installMcp`/`repairMcp` (the CLI's
+`installMcp` already writes command+args), and (2) set `server.ts` to
+`command:"mega", args:["mcp","serve"]` (reuse the CLI's `DEFAULT_MCP_COMMAND` /
+`DEFAULT_MCP_ARGS` by hoisting them to `@megasaver/mcp-bridge`, NOT importing
+apps/cli from apps/gui). Add a route test asserting the written config is the
+runnable command+args.
+
+The locked facade (cite verbatim):
 
 ```ts
-// Owned + exported by BB8 (@megasaver/mcp-bridge). target is an AgentId;
+// Owned + exported by BB8 (@megasaver/mcp-bridge). target is a KnownAgentId
+// (PARENT AMENDMENT, post-BB8 review): the four MCP-capable agents —
+// claude-code/codex/cursor/aider. generic-cli has no MCP config slot, so
+// AgentId would be a half-implementation (§13). Import KnownAgentId +
+// knownAgentIdSchema from @megasaver/mcp-bridge alongside the facade.
 // install/repair take a project, uninstall does not; status takes no args.
 export interface McpSetupOps {
   status(): Promise<McpStatusResult>;
-  install(target: AgentId, project: string): Promise<McpStatusResult>;
-  repair(target: AgentId, project: string): Promise<McpStatusResult>;
-  uninstall(target: AgentId): Promise<McpStatusResult>;
+  install(target: KnownAgentId, project: string): Promise<McpStatusResult>;
+  repair(target: KnownAgentId, project: string): Promise<McpStatusResult>;
+  uninstall(target: KnownAgentId): Promise<McpStatusResult>;
 }
 export interface McpStatusResult {
   agents: Array<{
-    agentId: AgentId;
+    agentId: KnownAgentId;
     mcpInstalled: boolean;
     connectorSynced: boolean;
     restartRequired: boolean;
@@ -828,18 +850,20 @@ schemas (install/repair carry a `project`; uninstall does not — matching the
 locked facade `install(target, project)` / `uninstall(target)`):
 
 ```ts
-// MCP setup bodies (epic §6c). target is an AgentId; install/repair need the
-// project whose agent files receive the connector block (epic §7).
+// MCP setup bodies (epic §6c). target is a KnownAgentId (PARENT AMENDMENT):
+// validate with knownAgentIdSchema from @megasaver/mcp-bridge, NOT agentIdSchema
+// — the MCP install surface is the four MCP-capable agents only. install/repair
+// need the project whose agent files receive the connector block (epic §7).
 export const MEGA_MCP_TARGET_BODY = z
   .object({
-    target: agentIdSchema,
+    target: knownAgentIdSchema,
     project: z.string().min(1),
   })
   .strict();
 
 export const MEGA_MCP_UNINSTALL_BODY = z
   .object({
-    target: agentIdSchema,
+    target: knownAgentIdSchema,
   })
   .strict();
 ```

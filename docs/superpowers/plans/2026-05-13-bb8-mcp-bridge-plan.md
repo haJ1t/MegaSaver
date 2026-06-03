@@ -3064,3 +3064,57 @@ Do NOT claim "done"/"passing" before all hold (AA1 §16, `CLAUDE.md` §9):
 - **F3 (critic-locked):** Task 8b wires `buildMcpSetupOps(...)` into `apps/gui/bridge/server.ts` as the default `mcpOps`, replacing BB11's stub so the GUI AgentSetupDoctor works end-to-end (AA1 §1 F-MAJ-10).
 
 **Dependency note (escalate if unmet):** BB7b's `run-command.ts` (`runOutputExecCommand`) must be merged before BB8 starts (Preconditions). The adapter binds to the exact authoritative union; if BB7b lands a divergent shape, the import + the single `switch` in `run-command.ts` are the only edits.
+
+---
+
+## Amendment — `mega mcp serve` launch entry (post-§16 smoke, 2026-06-03)
+
+**Gap (found by the AA1 §16 live smoke).** `mega mcp install` wrote an
+agent MCP config whose launch `command` defaulted to the literal
+`"mega-mcp"`, but no such binary exists (the `apps/cli` `bin` is only
+`mega`; there was no `serve` subcommand; `createBridge` is a library with
+no process entry). So the configured server was unlaunchable and the AA1
+§1 [A5] / §8 acceptance ("agent → stdio → bridge → `mega_run_command`")
+could not run end-to-end. This amendment closes that gap.
+
+**Shipped:**
+
+- **`apps/cli/src/commands/mcp/serve.ts` — new `mega mcp serve` subcommand.**
+  Resolves the store root + builds a `JsonDirectoryCoreRegistry` exactly
+  as `mega output exec` does (`resolveStorePath` + `ensureStoreReady` from
+  `apps/cli/src/store.ts`), then `createBridge({ transport: "stdio",
+  storeRoot, registry })`, `await bridge.start()`, blocks until stdin
+  closes / SIGINT / SIGTERM, `await bridge.stop()`, exits 0. Flag: `--store`
+  (no `--json` — it is a long-running server, not a one-shot). A testable
+  `runMcpServe(deps)` seam injects `createBridge` + a store/registry
+  resolver + a `waitForShutdown` thunk, so the unit test starts/stops the
+  bridge and asserts `transport:"stdio"` + the resolved `storeRoot`/
+  `registry` WITHOUT attaching to real stdin (no hang). Registered in
+  `apps/cli/src/commands/mcp/index.ts`.
+
+- **Install/repair launch command rewired to be runnable.** `installMcp`
+  (`packages/mcp-bridge/src/setup/install.ts`) now accepts optional
+  `args?: string[]`, writes `{ command, args }` into
+  `mcpServers[serverKey]`, and its idempotency check compares BOTH command
+  AND args (re-install with the same pair is still a no-op; any drift is
+  re-written). `repairMcp` threads `args` through. The CLI
+  `install.ts`/`repair.ts` stop defaulting to `"mega-mcp"` and instead
+  write `command: "mega"`, `args: ["mcp", "serve"]` (the real `mega` bin +
+  the new subcommand), exported as `DEFAULT_MCP_COMMAND` /
+  `DEFAULT_MCP_ARGS`; both remain overridable.
+
+**Verification (this amendment).** TDD per change (failing test first);
+unit tests cover the args-aware idempotency, the `runMcpServe` seam, and
+the runnable-config shape. Live stdio smoke: `mega mcp serve` answered
+`initialize` + `tools/list` (all four tools) and exited 0 on stdin EOF;
+`mega_run_command ls -a` returned a filtered envelope with a real
+`chunkSetId`; `rm -rf /` surfaced `command_denied: dangerous_pattern` —
+i.e. the AA1 §1 [A5] / §8 acceptance now works end-to-end. `pnpm verify`
+exits 0 (mcp-bridge 59, cli 400).
+
+**Locked contracts preserved (unchanged by this amendment):**
+`McpStatusResult` is still exactly 5 fields, the facade is still
+`KnownAgentId`, the 16-member `McpBridgeErrorCode` enum + 4-member
+`McpToolName` pins are untouched, and the `createBridge` config API
+(transport / storeRoot / registry / now? / newId? / transportFactory?) is
+unchanged — `serve` only *consumes* it.

@@ -2,7 +2,7 @@
   "name": "@megasaver/mcp-bridge",
   "version": "0.0.0",
   "private": true,
-  "description": "Placeholder for the Mega Saver MCP server bridge (v0.3 scaffold).",
+  "description": "Mega Saver MCP server bridge — stdio transport, four context-gate tools.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -23,6 +23,12 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@megasaver/content-store": "workspace:*",
+    "@megasaver/core": "workspace:*",
+    "@megasaver/output-filter": "workspace:*",
+    "@megasaver/policy": "workspace:*",
+    "@megasaver/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "zod": "^3.24.1"
   }
 }

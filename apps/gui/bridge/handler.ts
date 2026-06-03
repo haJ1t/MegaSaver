@@ -24,6 +24,8 @@ export interface BridgeHandlerOptions {
   now?: () => string;
   /** Resolved store directory; surfaced on `GET /api/health`. */
   storePath?: string;
+  /** F3: production McpSetupOps; BB11 routes consume it via RouteContext. */
+  mcpOps?: import("@megasaver/mcp-bridge").McpSetupOps;
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -125,6 +127,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       req,
       res,
       registry,
+      ...(opts.mcpOps !== undefined ? { mcpOps: opts.mcpOps } : {}),
       origin,
       query,
       storeRoot: storePath,

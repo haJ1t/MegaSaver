@@ -160,17 +160,20 @@ facade type from `@megasaver/mcp-bridge`:
 
 ```ts
 // Owned + exported by BB8 (@megasaver/mcp-bridge). Cited verbatim — do not
-// redefine in BB11. `target` is an AgentId; install/repair take a project,
-// uninstall does not; status takes no args.
+// redefine in BB11. `target` is a KnownAgentId (PARENT AMENDMENT, post-BB8
+// review): the four MCP-capable agents — claude-code/codex/cursor/aider.
+// generic-cli has no MCP config slot, so AgentId would be a half-impl (§13).
+// Import KnownAgentId + knownAgentIdSchema from @megasaver/mcp-bridge.
+// install/repair take a project, uninstall does not; status takes no args.
 export interface McpSetupOps {
   status(): Promise<McpStatusResult>;
-  install(target: AgentId, project: string): Promise<McpStatusResult>;
-  repair(target: AgentId, project: string): Promise<McpStatusResult>;
-  uninstall(target: AgentId): Promise<McpStatusResult>;
+  install(target: KnownAgentId, project: string): Promise<McpStatusResult>;
+  repair(target: KnownAgentId, project: string): Promise<McpStatusResult>;
+  uninstall(target: KnownAgentId): Promise<McpStatusResult>;
 }
 export interface McpStatusResult {
   agents: Array<{
-    agentId: AgentId;
+    agentId: KnownAgentId;
     mcpInstalled: boolean;
     connectorSynced: boolean;
     restartRequired: boolean;
@@ -185,13 +188,13 @@ the route from the GUI's active project; uninstall + status carry no project):
 | Method | Path                  | Request body (zod)                      | Facade call (200 → `McpStatusResult`) |
 |--------|-----------------------|-----------------------------------------|----------------------------------------|
 | GET    | `/api/mcp/status`     | — (none)                                | `status()` |
-| POST   | `/api/mcp/install`    | `{ target: AgentId, project: string }`  | `install(target, project)` |
-| POST   | `/api/mcp/repair`     | `{ target: AgentId, project: string }`  | `repair(target, project)` (post-op snapshot) |
-| POST   | `/api/mcp/uninstall`  | `{ target: AgentId }`                   | `uninstall(target)` (post-op snapshot) |
+| POST   | `/api/mcp/install`    | `{ target: KnownAgentId, project: string }`  | `install(target, project)` |
+| POST   | `/api/mcp/repair`     | `{ target: KnownAgentId, project: string }`  | `repair(target, project)` (post-op snapshot) |
+| POST   | `/api/mcp/uninstall`  | `{ target: KnownAgentId }`                   | `uninstall(target)` (post-op snapshot) |
 
-`MEGA_MCP_TARGET_BODY = z.object({ target: agentIdSchema, project: z.string().min(1) }).strict()`
-for install/repair; `MEGA_MCP_UNINSTALL_BODY = z.object({ target: agentIdSchema }).strict()`
-for uninstall (reuses `agentIdSchema` from `@megasaver/shared`; invalid →
+`MEGA_MCP_TARGET_BODY = z.object({ target: knownAgentIdSchema, project: z.string().min(1) }).strict()`
+for install/repair; `MEGA_MCP_UNINSTALL_BODY = z.object({ target: knownAgentIdSchema }).strict()`
+for uninstall (reuses `knownAgentIdSchema` from `@megasaver/mcp-bridge`; invalid →
 `validation_failed`, mirroring BB10).
 
 The route handlers are thin wrappers over the facade; BB8 owns the

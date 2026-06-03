@@ -1,27 +1,44 @@
+import { createInMemoryCoreRegistry } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
 import { createBridge } from "../src/bridge.js";
-import { McpBridgeError } from "../src/errors.js";
 
-describe("createBridge — v0.3 placeholder surface", () => {
-  it("exposes the parsed transport", () => {
-    const bridge = createBridge({ transport: "stdio" });
+function bridgeConfig(transport: "stdio" | "sse") {
+  return {
+    transport,
+    storeRoot: "/tmp/megasaver-bridge-test",
+    registry: createInMemoryCoreRegistry(),
+  };
+}
+
+describe("createBridge — real surface (BB8)", () => {
+  it("exposes the parsed transport (API preserved, AA1 §2c)", () => {
+    const bridge = createBridge(bridgeConfig("stdio"));
     expect(bridge.transport).toBe("stdio");
   });
 
-  it("rejects unknown transport at the boundary", () => {
-    expect(() => createBridge({ transport: "websocket" as unknown as "stdio" })).toThrow();
+  it("rejects an unknown transport at the boundary", () => {
+    expect(() =>
+      createBridge({
+        transport: "websocket" as unknown as "stdio",
+        storeRoot: "/tmp/x",
+        registry: createInMemoryCoreRegistry(),
+      }),
+    ).toThrow();
   });
 
-  it("start() rejects with McpBridgeError(not_implemented)", async () => {
-    const bridge = createBridge({ transport: "stdio" });
+  it("start()/stop() are idempotent and resolve void for stdio", async () => {
+    const bridge = createBridge(bridgeConfig("stdio"));
+    await expect(bridge.start()).resolves.toBeUndefined();
+    await expect(bridge.start()).resolves.toBeUndefined(); // idempotent (HH §6)
+    await expect(bridge.stop()).resolves.toBeUndefined();
+    await expect(bridge.stop()).resolves.toBeUndefined(); // idempotent
+  });
+
+  it("start() rejects transport_failed for sse (AA1 §8c)", async () => {
+    const bridge = createBridge(bridgeConfig("sse"));
     await expect(bridge.start()).rejects.toMatchObject({
       name: "McpBridgeError",
-      code: "not_implemented",
+      code: "transport_failed",
     });
-  });
-
-  it("stop() rejects with McpBridgeError(not_implemented)", async () => {
-    const bridge = createBridge({ transport: "sse" });
-    await expect(bridge.stop()).rejects.toBeInstanceOf(McpBridgeError);
   });
 });

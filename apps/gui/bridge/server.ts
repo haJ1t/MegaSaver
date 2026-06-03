@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
 import { createBridgeHandler } from "./handler.js";
+import { createMcpOps } from "./mcp-ops.js";
 import { resolveBridgeStorePath } from "./store-path.js";
 
 const DEFAULT_PORT = 5174;
@@ -20,7 +21,12 @@ async function main(): Promise<void> {
   await initStore(storeDir);
   const registry = createJsonDirectoryCoreRegistry({ rootDir: storeDir });
 
-  const handler = createBridgeHandler({ registry, storePath: storeDir });
+  const mcpOps = createMcpOps({
+    registry,
+    home: readEnv("HOME") ?? "",
+    command: "mega-mcp",
+  });
+  const handler = createBridgeHandler({ registry, storePath: storeDir, mcpOps });
   const server = createServer(handler);
 
   const portRaw = readEnv("MEGASAVER_GUI_BRIDGE_PORT");

@@ -789,3 +789,46 @@ describe("runOutputExec --json failure path", () => {
     nonJsonStderr(err);
   });
 });
+
+// ---------------------------------------------------------------------------
+// mega mcp install / uninstall --json — invalid-target failure paths (BB8)
+// ---------------------------------------------------------------------------
+
+import { runMcpInstall } from "../src/commands/mcp/install.js";
+import { runMcpUninstall } from "../src/commands/mcp/uninstall.js";
+
+describe("runMcpInstall --json failure path", () => {
+  it("unknown --target with --json → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runMcpInstall({
+      targetFlag: "notanagent",
+      home: "/tmp",
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    expect(err.some((e) => e.includes("unknown_target"))).toBe(true);
+    nonJsonStderr(err);
+  });
+});
+
+describe("runMcpUninstall --json failure path", () => {
+  it("unknown --target with --json → text stderr, no stdout, exit 1", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runMcpUninstall({
+      targetFlag: "notanagent",
+      home: "/tmp",
+      stdout: (line) => out.push(line),
+      stderr: (line) => err.push(line),
+      json: true,
+    });
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    expect(err.some((e) => e.includes("unknown_target"))).toBe(true);
+    nonJsonStderr(err);
+  });
+});
