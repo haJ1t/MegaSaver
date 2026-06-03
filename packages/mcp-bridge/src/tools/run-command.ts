@@ -1,8 +1,4 @@
-import {
-  type CoreRegistry,
-  type ExecResult,
-  runOutputExecCommand,
-} from "@megasaver/core";
+import { type CoreRegistry, type ExecResult, runOutputExecCommand } from "@megasaver/core";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 

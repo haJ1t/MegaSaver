@@ -65,7 +65,13 @@ describe("handleRunCommand", () => {
     const registry = seededRegistry(projectRoot);
     await expect(
       handleRunCommand(
-        { registry, storeRoot: store, now: () => TS, newId: () => "x", originPid: String(process.pid) },
+        {
+          registry,
+          storeRoot: store,
+          now: () => TS,
+          newId: () => "x",
+          originPid: String(process.pid),
+        },
         { command: "rm", args: ["-rf", "/"], intent: "x", sessionId: SESSION_ID },
       ),
     ).rejects.toMatchObject({
@@ -80,7 +86,13 @@ describe("handleRunCommand", () => {
     const registry = seededRegistry(projectRoot);
     await expect(
       handleRunCommand(
-        { registry, storeRoot: store, now: () => TS, newId: () => "x", originPid: String(process.pid) },
+        {
+          registry,
+          storeRoot: store,
+          now: () => TS,
+          newId: () => "x",
+          originPid: String(process.pid),
+        },
         { command: "ls", args: [], intent: "", sessionId: SESSION_ID },
       ),
     ).rejects.toMatchObject({ code: "intent_required" });

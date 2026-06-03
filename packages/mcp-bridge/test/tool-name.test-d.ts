@@ -25,12 +25,8 @@ describe("McpToolName type regression", () => {
   });
 
   it("schema.options preserves the 4-member alphabetic order (AA1 §8a)", () => {
-    const _t: readonly [
-      "mega_fetch_chunk",
-      "mega_read_file",
-      "mega_recall",
-      "mega_run_command",
-    ] = mcpToolNameSchema.options;
+    const _t: readonly ["mega_fetch_chunk", "mega_read_file", "mega_recall", "mega_run_command"] =
+      mcpToolNameSchema.options;
     void _t;
   });
 });
