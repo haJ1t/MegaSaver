@@ -31,7 +31,7 @@ importers:
         version: 2.1.9(@types/node@22.19.17)(jsdom@25.0.1)
 
   apps/cli:
-    dependencies:
+    devDependencies:
       '@megasaver/connector-generic-cli':
         specifier: workspace:*
         version: link:../../packages/connectors/generic-cli
@@ -56,16 +56,15 @@ importers:
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
       citty:
         specifier: ^0.1.6
         version: 0.1.6
       zod:
         specifier: ^3.24.1
         version: 3.25.76
-    devDependencies:
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.17
 
   apps/gui:
     dependencies:
