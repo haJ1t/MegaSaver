@@ -1,5 +1,17 @@
 # @megasaver/mcp-bridge
 
+## 1.0.2
+
+### Patch Changes
+
+- Updated dependencies [7b978d3]
+- Updated dependencies [bb3d179]
+- Updated dependencies [19def67]
+  - @megasaver/output-filter@1.1.0
+  - @megasaver/policy@1.1.0
+  - @megasaver/content-store@1.0.1
+  - @megasaver/core@1.0.2
+
 ## 1.0.1
 
 ### Patch Changes

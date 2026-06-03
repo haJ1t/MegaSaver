@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/stats",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Session token-saver stats and event schemas with atomic on-disk persistence for Mega Saver.",
   "type": "module",
