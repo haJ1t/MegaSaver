@@ -34,6 +34,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Derives whether NPM_TOKEN is set into a job output. The `secrets` context is
+  # NOT available in a job-level `if:`, so npm-publish cannot gate on it directly
+  # (doing so is a workflow-file error). It can only be read via `env`, so we map
+  # it in a step and expose a boolean that npm-publish's `if:` can consume.
+  gate:
+    name: Gate (detect NPM_TOKEN)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has-token: ${{ steps.detect.outputs.has-token }}
+    steps:
+      - id: detect
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "has-token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-token=false" >> "$GITHUB_OUTPUT"
+          fi
+
   github-release:
     name: GitHub Release (standalone bundle)
     runs-on: ubuntu-latest
@@ -86,9 +107,10 @@ jobs:
     name: npm publish (gated on NPM_TOKEN)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # No-op when NPM_TOKEN is absent: the whole job is skipped, the workflow
-    # still succeeds. Tokenless forks/clones get the GitHub Release only.
-    if: ${{ secrets.NPM_TOKEN != '' }}
+    # No-op when NPM_TOKEN is absent: the gate output skips this whole job, the
+    # workflow still succeeds. Tokenless forks/clones get the GitHub Release only.
+    needs: gate
+    if: ${{ needs.gate.outputs.has-token == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
