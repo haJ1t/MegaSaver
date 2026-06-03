@@ -5,6 +5,12 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execCommandFromPositionals, runOutputExec } from "../../src/commands/output/exec.js";
 
+async function writeMalformedPermissions(projectRoot: string): Promise<void> {
+  await mkdir(join(projectRoot, ".megasaver"), { recursive: true });
+  // Unclosed flow sequence ⇒ a YAML syntax error ⇒ fail-closed.
+  await writeFile(join(projectRoot, ".megasaver", "permissions.yaml"), "deny:\n  commands: [oops");
+}
+
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const SESSION_ID = "22222222-2222-4222-8222-222222222222";
 const TS = "2026-05-10T00:00:00.000Z";
@@ -237,6 +243,23 @@ describe("runOutputExec", () => {
 
     expect(code).toBe(1);
     expect(err.some((e) => e.includes("command_denied: dangerous_pattern"))).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
+  // ---- command_denied: policy_load_failed (fail-closed) ----------------
+
+  it("malformed permissions.yaml → command_denied: policy_load_failed, exit 1, no spawn (I3)", async () => {
+    await seed(store, projectRoot);
+    await writeMalformedPermissions(projectRoot);
+    // An allow-listed command that WOULD run absent the malformed file; the
+    // denial is purely the fail-closed permissions load.
+    const { input, calls, out, err } = baseInput({ command: "ls", args: ["-la"] });
+
+    const code = await runOutputExec(input);
+
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    expect(err.some((e) => e.includes("command_denied: policy_load_failed"))).toBe(true);
     expect(calls).toHaveLength(0);
   });
 

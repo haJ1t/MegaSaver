@@ -19,7 +19,8 @@ export {
   persistChunkSet,
   defaultNow,
   defaultNewId,
+  type LoadProjectPermissions,
 } from "./read.js";
 export { loadProjectPermissions } from "./load-project-permissions.js";
-export type { EffectiveSettings, GateResult, PipelineEnv } from "./types.js";
+export type { EffectiveSettings, GateResult, PipelineEnv, ResolveResult } from "./types.js";
 export type { OrchestratorRegistry, SessionView, ProjectView } from "./registry-port.js";

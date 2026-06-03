@@ -55,6 +55,12 @@ export async function handleReadFile(
   switch (outcome.reason) {
     case "session_not_found":
       throw new McpBridgeError("session_not_found", `session not found: ${sessionId}`);
+    case "policy_load_failed":
+      // A present-but-malformed .megasaver/permissions.yaml. The file was
+      // NEVER read — the gate shut before IO (fail-closed, I3).
+      throw new McpBridgeError("policy_load_failed", `policy load failed: ${outcome.detail}`, {
+        details: { reason: outcome.detail },
+      });
     case "path_denied":
       throw new McpBridgeError("path_denied", outcome.detail, {
         details: { reason: outcome.detail },

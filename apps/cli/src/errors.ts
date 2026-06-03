@@ -253,6 +253,12 @@ export function fileReadFailedMessage(detail: string): CliMessage {
   return { message: `error: file_read_failed: ${detail}`, exitCode: 1 };
 }
 
+// A present-but-malformed .megasaver/permissions.yaml denies the operation
+// fail-closed (permissions-yaml §5.3); the command/file is NEVER run/read.
+export function policyLoadFailedMessage(detail: string): CliMessage {
+  return { message: `error: policy_load_failed: ${detail}`, exitCode: 1 };
+}
+
 // BB7b `mega output exec` boundary builders. `<reason>` is a PolicyDenyCode
 // string so the same value is observable from the CLI and (post-BB8) the MCP
 // envelope. No redactionFailedMessage: redaction is internal to filterOutput,

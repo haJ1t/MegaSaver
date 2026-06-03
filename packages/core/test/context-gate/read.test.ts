@@ -65,33 +65,40 @@ describe("resolveEffectiveSettings", () => {
     await seed(store, projectRoot, { withTokenSaver: false });
     const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
 
-    const settings = resolveEffectiveSettings(registry, SESSION_ID as SessionId);
-    expect(settings).not.toBeNull();
-    expect(settings?.mode).toBe("balanced");
-    expect(settings?.maxReturnedBytes).toBeUndefined();
-    expect(settings?.storeRawOutput).toBe(true);
-    expect(settings?.projectRoot).toBe(projectRoot);
+    const result = resolveEffectiveSettings(registry, SESSION_ID as SessionId);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.settings.mode).toBe("balanced");
+      expect(result.settings.maxReturnedBytes).toBeUndefined();
+      expect(result.settings.storeRawOutput).toBe(true);
+      expect(result.settings.projectRoot).toBe(projectRoot);
+      // No .megasaver/permissions.yaml under the temp root ⇒ absent ⇒ null.
+      expect(result.settings.permissions).toBeNull();
+    }
   });
 
   it("reflects the stored tokenSaver settings when present", async () => {
     await seed(store, projectRoot);
     const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
 
-    const settings = resolveEffectiveSettings(registry, SESSION_ID as SessionId);
-    expect(settings?.mode).toBe("aggressive");
-    expect(settings?.maxReturnedBytes).toBe(4_000);
-    expect(settings?.storeRawOutput).toBe(false);
+    const result = resolveEffectiveSettings(registry, SESSION_ID as SessionId);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.settings.mode).toBe("aggressive");
+      expect(result.settings.maxReturnedBytes).toBe(4_000);
+      expect(result.settings.storeRawOutput).toBe(false);
+    }
   });
 
-  it("returns null for a missing session", async () => {
+  it("session_not_found for a missing session", async () => {
     await seed(store, projectRoot);
     const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
 
-    const settings = resolveEffectiveSettings(
+    const result = resolveEffectiveSettings(
       registry,
       "99999999-9999-4999-8999-999999999999" as SessionId,
     );
-    expect(settings).toBeNull();
+    expect(result).toEqual({ ok: false, reason: "session_not_found" });
   });
 });
 
@@ -111,6 +118,7 @@ describe("runTwoGates", () => {
       path: join(projectRoot, ".env"),
       projectId: PROJECT_ID as never,
       projectRoot,
+      permissions: null,
     });
     expect(gate.ok).toBe(false);
     if (!gate.ok) {
@@ -124,6 +132,7 @@ describe("runTwoGates", () => {
       path: "../../../../../../etc/hosts",
       projectId: PROJECT_ID as never,
       projectRoot,
+      permissions: null,
     });
     expect(gate.ok).toBe(false);
     if (!gate.ok) expect(gate.code).toBe("path_unsafe");
@@ -134,6 +143,7 @@ describe("runTwoGates", () => {
       path: join(projectRoot, "log.txt"),
       projectId: PROJECT_ID as never,
       projectRoot,
+      permissions: null,
     });
     expect(gate.ok).toBe(true);
     if (gate.ok) expect(gate.absolute).toBe(join(projectRoot, "log.txt"));

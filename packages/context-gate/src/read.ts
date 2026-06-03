@@ -6,10 +6,11 @@ import {
   filterOutput,
   resolveSafeReadPath,
 } from "@megasaver/output-filter";
-import { evaluatePathRead } from "@megasaver/policy";
+import { type ProjectPermissions, evaluatePathRead } from "@megasaver/policy";
 import type { ProjectId, SessionId, TokenSaverMode } from "@megasaver/shared";
+import { loadProjectPermissions } from "./load-project-permissions.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
-import type { EffectiveSettings, GateResult } from "./types.js";
+import type { GateResult, ResolveResult } from "./types.js";
 
 export function defaultNow(): string {
   return new Date().toISOString();
@@ -19,35 +20,66 @@ export function defaultNewId(): string {
   return randomUUID();
 }
 
+// Injectable so orchestrator tests drive absent/valid/throwing without a real
+// filesystem — same convention as spawn/now/newId (permissions-yaml §5.2).
+export type LoadProjectPermissions = (projectRoot: string) => ProjectPermissions | null;
+
 // Pre-AA sessions (§4c) carry no tokenSaver blob; derive read-only defaults
-// rather than writing the session record.
+// rather than writing the session record. The project permissions file loads
+// HERE, once per resolve, at the same boundary as projectRoot (§5.1). The
+// loader can throw a PolicyLoadError on a present-but-malformed file; that
+// becomes the typed policy_load_failed result rather than propagating, so the
+// entry points can shut the gate before any spawn / fs.readFile (I3).
 export function resolveEffectiveSettings(
   registry: OrchestratorRegistry,
   sessionId: SessionId,
-): EffectiveSettings | null {
+  loadPermissions: LoadProjectPermissions = loadProjectPermissions,
+): ResolveResult {
   const session = registry.getSession(sessionId);
-  if (session === null) return null;
+  if (session === null) return { ok: false, reason: "session_not_found" };
   const project = registry.getProject(session.projectId);
-  if (project === null) return null;
+  if (project === null) return { ok: false, reason: "session_not_found" };
+
+  let permissions: ProjectPermissions | null;
+  try {
+    permissions = loadPermissions(project.rootPath);
+  } catch (err) {
+    return {
+      ok: false,
+      reason: "policy_load_failed",
+      detail: err instanceof Error ? err.message : String(err),
+    };
+  }
 
   const tokenSaver = session.tokenSaver;
   return {
-    projectId: session.projectId,
-    projectRoot: project.rootPath,
-    mode: tokenSaver?.mode ?? "balanced",
-    maxReturnedBytes: tokenSaver?.maxReturnedBytes,
-    storeRawOutput: tokenSaver?.storeRawOutput ?? true,
+    ok: true,
+    settings: {
+      projectId: session.projectId,
+      projectRoot: project.rootPath,
+      mode: tokenSaver?.mode ?? "balanced",
+      maxReturnedBytes: tokenSaver?.maxReturnedBytes,
+      storeRawOutput: tokenSaver?.storeRawOutput ?? true,
+      permissions,
+    },
   };
 }
 
 // Two-gate read safety (§8): policy denylist, then sandbox resolver. Both
-// run before any fs.readFile so a denied path is never read.
+// run before any fs.readFile so a denied path is never read. The project
+// permissions (deny.read globs) widen gate 1 only — gate 2 (the symlink/..
+// resolver) is untouched (permissions-yaml §4 I4).
 export function runTwoGates(input: {
   path: string;
   projectId: ProjectId;
   projectRoot: string;
+  permissions: ProjectPermissions | null;
 }): GateResult {
-  const policy = evaluatePathRead({ path: input.path, project: input.projectId });
+  const policy = evaluatePathRead({
+    path: input.path,
+    project: input.projectId,
+    ...(input.permissions !== null ? { permissions: input.permissions } : {}),
+  });
   if (!policy.allowed) return { ok: false, code: "path_denied", reason: policy.reason };
 
   let absolute: string;

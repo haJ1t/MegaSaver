@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
@@ -80,6 +80,28 @@ describe("handleRunCommand", () => {
       // it to `details.reason`. rm -rf / → dangerous_pattern (§9c).
       details: { reason: "dangerous_pattern" },
     });
+  });
+
+  it("throws policy_load_failed for a present-but-malformed permissions.yaml (fail-closed, I3)", async () => {
+    const registry = seededRegistry(projectRoot);
+    // Unclosed flow sequence ⇒ a YAML syntax error ⇒ the loader throws ⇒ the
+    // orchestrator denies the run BEFORE any spawn. ls is allow-listed, so
+    // absent the malformed file this would run — the denial is purely the
+    // fail-closed permissions load.
+    await mkdir(join(projectRoot, ".megasaver"), { recursive: true });
+    await writeFile(join(projectRoot, ".megasaver", "permissions.yaml"), "deny:\n  commands: [oops");
+    await expect(
+      handleRunCommand(
+        {
+          registry,
+          storeRoot: store,
+          now: () => TS,
+          newId: () => "x",
+          originPid: String(process.pid),
+        },
+        { command: "ls", args: [], intent: "see output", sessionId: SESSION_ID },
+      ),
+    ).rejects.toMatchObject({ code: "policy_load_failed" });
   });
 
   it("throws intent_required when intent is empty", async () => {

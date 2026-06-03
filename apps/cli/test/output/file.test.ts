@@ -228,6 +228,35 @@ describe("runOutputFile", () => {
     await expect(readdir(join(store, "content", PROJECT_ID, SESSION_ID))).rejects.toThrow();
   });
 
+  it("malformed permissions.yaml → policy_load_failed, exit 1, no read (fail-closed, I3)", async () => {
+    await seed(store, projectRoot, { storeRawOutput: true });
+    const logPath = join(projectRoot, "log.txt");
+    await writeFile(logPath, "line one\n");
+    await mkdir(join(projectRoot, ".megasaver"), { recursive: true });
+    await writeFile(join(projectRoot, ".megasaver", "permissions.yaml"), "deny:\n  read: [oops");
+
+    const { out, err } = capture();
+    const code = await runOutputFile({
+      sessionId: SESSION_ID,
+      intentFlag: "anything",
+      path: logPath,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: projectRoot,
+      xdgDataHome: undefined,
+      stdout: (l) => out.push(l),
+      stderr: (l) => err.push(l),
+      now: () => NOW,
+      newId: () => NEW_ID,
+    });
+
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    expect(err.some((e) => e.includes("policy_load_failed"))).toBe(true);
+    // The file was never read ⇒ no chunk-set persisted.
+    await expect(readdir(join(store, "content", PROJECT_ID, SESSION_ID))).rejects.toThrow();
+  });
+
   it("gate B sandbox escape (../) → path_unsafe, exit 1, no read", async () => {
     await seed(store, projectRoot, { storeRawOutput: true });
 
