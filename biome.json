@@ -14,6 +14,8 @@
       "**/node_modules",
       "**/coverage",
       "**/.vitest-cache",
+      "**/tsconfig.vitest-temp.json",
+      "**/tsconfig.tmp.json",
       "wiki/raw"
     ]
   },
