@@ -98,6 +98,13 @@ export function invalidTargetMessage(value: string): CliMessage {
   };
 }
 
+export function unknownTargetMessage(value: string): CliMessage {
+  return {
+    message: `error: unknown_target "${value}", expected: ${KNOWN_TARGET_IDS.join(" | ")}`,
+    exitCode: 1,
+  };
+}
+
 export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage {
   if (err instanceof ZodError) {
     if (ctx?.kind === "store") {

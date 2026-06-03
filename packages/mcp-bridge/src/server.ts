@@ -31,6 +31,21 @@ const TOOL_DEFS = [
   { name: "mega_run_command", description: "Run a policy-gated command and filter its output." },
 ] as const;
 
+// The MCP SDK serialises only `error.message` into the JSON-RPC
+// error envelope a client receives. AA1 §14 BB8 acceptance requires
+// the client to observe the McpBridgeErrorCode (tool_not_found,
+// command_denied, …), so the wire message is prefixed with the code.
+// The code/details/name fields are preserved for in-process callers.
+function wireError(err: McpBridgeError): McpBridgeError {
+  const prefixed = err.message.startsWith(err.code)
+    ? err.message
+    : `${err.code}: ${err.message}`;
+  return new McpBridgeError(err.code, prefixed, {
+    ...(err.cause !== undefined ? { cause: err.cause } : {}),
+    ...(err.details !== undefined ? { details: err.details } : {}),
+  });
+}
+
 function resolveOriginPid(): string {
   // AA1 §8d step 3: inherit MEGASAVER_ORIGIN_PID if present (this
   // bridge is downstream of MegaSaver); otherwise this process is
@@ -67,17 +82,19 @@ export function buildServer(deps: ServerDeps): {
     const args = req.params.arguments ?? {};
     const parsedName = mcpToolNameSchema.safeParse(name);
     if (!parsedName.success) {
-      throw new McpBridgeError("tool_not_found", `unknown tool: ${name}`);
+      throw wireError(new McpBridgeError("tool_not_found", `unknown tool: ${name}`));
     }
     try {
       const payload = await dispatch(parsedName.data, args);
       return { content: [{ type: "text", text: JSON.stringify(payload) }] };
     } catch (err) {
-      if (err instanceof McpBridgeError) throw err;
-      throw new McpBridgeError(
-        "tool_invocation_failed",
-        err instanceof Error ? err.message : "tool failed",
-        { cause: err },
+      if (err instanceof McpBridgeError) throw wireError(err);
+      throw wireError(
+        new McpBridgeError(
+          "tool_invocation_failed",
+          err instanceof Error ? err.message : "tool failed",
+          { cause: err },
+        ),
       );
     }
   });
