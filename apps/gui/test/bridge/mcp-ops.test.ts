@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
+import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "@megasaver/mcp-bridge";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMcpOps } from "../../bridge/mcp-ops.js";
 
@@ -46,5 +47,36 @@ describe("createMcpOps (GUI production facade — F3)", () => {
       mcpServers: Record<string, unknown>;
     };
     expect(raw.mcpServers.megasaver).toBeDefined();
+  });
+
+  it("install() writes the runnable command + args when given the defaults", async () => {
+    // server.ts passes the hoisted DEFAULT_MCP_COMMAND/DEFAULT_MCP_ARGS so the
+    // GUI-initiated install writes a launchable config (`mega mcp serve`), not
+    // the old dangling `mega-mcp` binary.
+    const ops = createMcpOps({
+      registry: registryWithProject(),
+      home,
+      command: DEFAULT_MCP_COMMAND,
+      args: [...DEFAULT_MCP_ARGS],
+    });
+    await ops.install("claude-code", "demo");
+    const raw = JSON.parse(await readFile(join(home, ".config", "claude", "mcp.json"), "utf8")) as {
+      mcpServers: Record<string, { command: string; args?: string[] }>;
+    };
+    expect(raw.mcpServers.megasaver).toEqual({ command: "mega", args: ["mcp", "serve"] });
+  });
+
+  it("repair() also writes the runnable command + args", async () => {
+    const ops = createMcpOps({
+      registry: registryWithProject(),
+      home,
+      command: DEFAULT_MCP_COMMAND,
+      args: [...DEFAULT_MCP_ARGS],
+    });
+    await ops.repair("claude-code", "demo");
+    const raw = JSON.parse(await readFile(join(home, ".config", "claude", "mcp.json"), "utf8")) as {
+      mcpServers: Record<string, { command: string; args?: string[] }>;
+    };
+    expect(raw.mcpServers.megasaver).toEqual({ command: "mega", args: ["mcp", "serve"] });
   });
 });

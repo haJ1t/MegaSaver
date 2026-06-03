@@ -9,6 +9,9 @@ export type CreateMcpOpsDeps = {
   registry: CoreRegistry;
   home: string;
   command: string;
+  // Launch args written with command so the GUI-initiated install
+  // produces a runnable config (e.g. ["mcp", "serve"]).
+  args?: string[];
 };
 
 // F3: build the production McpSetupOps for the GUI bridge. The
@@ -22,6 +25,7 @@ export function createMcpOps(deps: CreateMcpOpsDeps): McpSetupOps {
   return buildMcpSetupOps({
     home: deps.home,
     command: deps.command,
+    ...(deps.args !== undefined ? { args: deps.args } : {}),
     connectorSyncedResolver: async (agentId) => {
       const target = targetFor(agentId);
       if (target === null) return false;

@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
+import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "@megasaver/mcp-bridge";
 import { createBridgeHandler } from "./handler.js";
 import { createMcpOps } from "./mcp-ops.js";
 import { resolveBridgeStorePath } from "./store-path.js";
@@ -24,7 +25,11 @@ async function main(): Promise<void> {
   const mcpOps = createMcpOps({
     registry,
     home: readEnv("HOME") ?? "",
-    command: "mega-mcp",
+    // Runnable launch entry so a GUI-initiated install writes a config the
+    // agent can actually spawn (`mega mcp serve`), reusing the CLI defaults
+    // hoisted to @megasaver/mcp-bridge (no apps/gui → apps/cli import).
+    command: DEFAULT_MCP_COMMAND,
+    args: [...DEFAULT_MCP_ARGS],
   });
   const handler = createBridgeHandler({ registry, storePath: storeDir, mcpOps });
   const server = createServer(handler);

@@ -1,14 +1,12 @@
-import { installMcp } from "@megasaver/mcp-bridge";
+import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND, installMcp } from "@megasaver/mcp-bridge";
 import { defineCommand } from "citty";
 import { unknownTargetMessage } from "../../errors.js";
 import { isKnownTargetId } from "../../known-targets.js";
 
-// Default launch entry: the real `mega` bin + the `mcp serve`
-// subcommand, so the written config is actually runnable. (The old
-// "mega-mcp" default named a binary that does not exist.) Overridable
-// via the command/args fields.
-export const DEFAULT_MCP_COMMAND = "mega";
-export const DEFAULT_MCP_ARGS: readonly string[] = ["mcp", "serve"];
+// Default launch entry now lives in @megasaver/mcp-bridge so the CLI and the
+// GUI bridge share one source of truth; re-exported here to keep existing
+// import sites (repair.ts, tests) stable.
+export { DEFAULT_MCP_COMMAND, DEFAULT_MCP_ARGS };
 
 export type RunMcpInstallInput = {
   targetFlag: string;
