@@ -2,19 +2,21 @@ import { describe, it } from "vitest";
 import { type PolicyDenyCode, policyDenyCodeSchema } from "../src/deny-code.js";
 
 describe("PolicyDenyCode type regression", () => {
-  it("each of the 6 members is a valid PolicyDenyCode", () => {
+  it("each of the 7 members is a valid PolicyDenyCode", () => {
     const _a: PolicyDenyCode = "command_not_allowed";
     const _b: PolicyDenyCode = "dangerous_pattern";
     const _c: PolicyDenyCode = "intent_missing";
     const _d: PolicyDenyCode = "path_denied";
-    const _e: PolicyDenyCode = "recursive_megasaver";
-    const _f: PolicyDenyCode = "secret_path_read";
+    const _e: PolicyDenyCode = "policy_load_failed";
+    const _f: PolicyDenyCode = "recursive_megasaver";
+    const _g: PolicyDenyCode = "secret_path_read";
     void _a;
     void _b;
     void _c;
     void _d;
     void _e;
     void _f;
+    void _g;
   });
 
   it("non-member string literal is not assignable to PolicyDenyCode", () => {
@@ -40,6 +42,7 @@ describe("PolicyDenyCode type regression", () => {
       "dangerous_pattern",
       "intent_missing",
       "path_denied",
+      "policy_load_failed",
       "recursive_megasaver",
       "secret_path_read",
     ] = policyDenyCodeSchema.options;
