@@ -8,7 +8,7 @@ import {
 } from "@megasaver/output-filter";
 import { evaluatePathRead } from "@megasaver/policy";
 import type { ProjectId, SessionId, TokenSaverMode } from "@megasaver/shared";
-import type { CoreRegistry } from "../registry.js";
+import type { OrchestratorRegistry } from "./registry-port.js";
 import type { EffectiveSettings, GateResult } from "./types.js";
 
 export function defaultNow(): string {
@@ -22,7 +22,7 @@ export function defaultNewId(): string {
 // Pre-AA sessions (§4c) carry no tokenSaver blob; derive read-only defaults
 // rather than writing the session record.
 export function resolveEffectiveSettings(
-  registry: CoreRegistry,
+  registry: OrchestratorRegistry,
   sessionId: SessionId,
 ): EffectiveSettings | null {
   const session = registry.getSession(sessionId);

@@ -1,6 +1,6 @@
 import type { FilterOutputResult } from "@megasaver/output-filter";
 import type { SessionId } from "@megasaver/shared";
-import type { CoreRegistry } from "../registry.js";
+import type { OrchestratorRegistry } from "./registry-port.js";
 import {
   defaultNewId,
   defaultNow,
@@ -11,7 +11,7 @@ import {
 } from "./read.js";
 
 export type RunOutputInput = {
-  registry: CoreRegistry;
+  registry: OrchestratorRegistry;
   storeRoot: string;
   sessionId: SessionId;
   path: string;

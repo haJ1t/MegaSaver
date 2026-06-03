@@ -1,5 +1,5 @@
 import type { ProjectId, TokenSaverMode } from "@megasaver/shared";
-import type { CoreRegistry } from "../registry.js";
+import type { OrchestratorRegistry } from "./registry-port.js";
 
 export type EffectiveSettings = {
   projectId: ProjectId;
@@ -10,7 +10,7 @@ export type EffectiveSettings = {
 };
 
 export type PipelineEnv = {
-  registry: CoreRegistry;
+  registry: OrchestratorRegistry;
   storeRoot: string;
   now: () => string;
   newId: () => string;
