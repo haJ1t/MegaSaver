@@ -116,7 +116,7 @@ export function MemoryView({ projectId, onViewSession }: MemoryViewProps): JSX.E
             className={[
               "px-3 py-1 text-xs rounded-md",
               showCreateForm
-                ? "bg-accent/20 text-accent border border-accent/30"
+                ? "bg-accent/20 text-text-primary border border-accent/30"
                 : "bg-accent text-accent-fg",
               "cursor-pointer hover:opacity-90 transition-opacity duration-150",
               "focus-visible:outline-2 focus-visible:outline-offset-2",
