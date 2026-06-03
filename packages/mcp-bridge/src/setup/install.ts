@@ -4,6 +4,13 @@ import { dirname, join } from "node:path";
 import type { KnownAgentId } from "./agent-ids.js";
 import { detectAgent } from "./detect-agent.js";
 
+// Default launch entry: the real `mega` bin + the `mcp serve` subcommand, so
+// every written config is actually runnable. (The old "mega-mcp" default named
+// a binary that does not exist.) Owned here so both the CLI and the GUI bridge
+// reuse one source of truth without apps/gui importing apps/cli.
+export const DEFAULT_MCP_COMMAND = "mega";
+export const DEFAULT_MCP_ARGS: readonly string[] = ["mcp", "serve"];
+
 export type InstallResult = { configPath: string; changed: boolean };
 
 type McpConfig = { mcpServers: Record<string, { command: string; args?: string[] }> };

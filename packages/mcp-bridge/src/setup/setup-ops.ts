@@ -19,6 +19,9 @@ export interface McpSetupOps {
 export type BuildMcpSetupOpsDeps = {
   home: string;
   command: string;
+  // Launch args written alongside command so the config is runnable
+  // (e.g. ["mcp", "serve"]). Defaults to the CLI default when omitted.
+  args?: string[];
   connectorSyncedResolver: ConnectorSyncedResolver;
   // AA1 §5c: repair = install + connector sync for that agent. The
   // sync needs KNOWN_TARGETS + the registry (CLI/GUI), so it is
@@ -30,16 +33,24 @@ export function buildMcpSetupOps(deps: BuildMcpSetupOpsDeps): McpSetupOps {
   const snapshot = (): Promise<McpStatusResult> =>
     aggregateMcpStatus({ home: deps.home, connectorSyncedResolver: deps.connectorSyncedResolver });
 
+  const install = (target: KnownAgentId): Promise<unknown> =>
+    installMcp({
+      agentId: target,
+      home: deps.home,
+      command: deps.command,
+      ...(deps.args !== undefined ? { args: deps.args } : {}),
+    });
+
   return {
     status() {
       return snapshot();
     },
     async install(target, _project) {
-      await installMcp({ agentId: target, home: deps.home, command: deps.command });
+      await install(target);
       return snapshot();
     },
     async repair(target, project) {
-      await installMcp({ agentId: target, home: deps.home, command: deps.command });
+      await install(target);
       await deps.connectorSync(target, project); // AA1 §5c second effect
       return snapshot();
     },

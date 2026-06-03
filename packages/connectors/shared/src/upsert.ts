@@ -1,5 +1,7 @@
+import { MEGA_SAVER_CG_BLOCK_END, MEGA_SAVER_CG_BLOCK_START } from "./constants.js";
+import { renderContextGateBlock } from "./context-gate-block.js";
 import type { ConnectorContext } from "./context.js";
-import { type IndexedLine, parseBlock, splitIndexedLines } from "./parse.js";
+import { type IndexedLine, type SentinelPair, parseBlock, splitIndexedLines } from "./parse.js";
 import { renderBlock } from "./render.js";
 
 interface UpsertBlockInput {
@@ -7,26 +9,53 @@ interface UpsertBlockInput {
   context: ConnectorContext;
 }
 
+const CG_SENTINELS: SentinelPair = {
+  start: MEGA_SAVER_CG_BLOCK_START,
+  end: MEGA_SAVER_CG_BLOCK_END,
+};
+
 export function upsertBlock(input: UpsertBlockInput): string {
   const eol = detectDominantEol(input.existingContent);
   const normalized = input.existingContent.replace(/\r\n/g, "\n");
 
-  const block = renderBlock(input.context);
-  const parsed = parseBlock(normalized);
+  // 1) Legacy block (default sentinels) — unchanged semantics.
+  const legacyBlock = renderBlock(input.context);
+  const afterLegacy = applyManagedBlock(normalized, legacyBlock);
 
-  let result: string;
-  if (parsed.block !== null) {
-    result = joinWithManagedBlock(parsed.before, parsed.after, block);
-  } else {
-    const humanContent = trimTrailingBoundaryForJoin(parsed.before);
-    if (humanContent.length === 0) {
-      result = block;
-    } else {
-      result = `${humanContent}\n\n${block}`;
-    }
-  }
+  // 2) CONTEXT_GATE block — independent pair. Empty render ⇒ remove if present.
+  const cgBlock = renderContextGateBlock(input.context);
+  const result = applyOptionalBlock(afterLegacy, cgBlock, CG_SENTINELS);
 
   return eol === "\r\n" ? result.replace(/\n/g, "\r\n") : result;
+}
+
+// Insert-or-replace the legacy managed block (default sentinels).
+function applyManagedBlock(normalized: string, block: string): string {
+  const parsed = parseBlock(normalized);
+  if (parsed.block !== null) {
+    return joinWithManagedBlock(parsed.before, parsed.after, block);
+  }
+  const humanContent = trimTrailingBoundaryForJoin(parsed.before);
+  if (humanContent.length === 0) {
+    return block;
+  }
+  return `${humanContent}\n\n${block}`;
+}
+
+// Insert-or-replace-or-remove a block under an explicit sentinel pair.
+function applyOptionalBlock(normalized: string, block: string, sentinels: SentinelPair): string {
+  const parsed = parseBlock(normalized, sentinels);
+  if (block.length === 0) {
+    if (parsed.block === null) return ensureTrailingNewline(normalized);
+    const remaining = joinHumanContent(parsed.before, parsed.after);
+    return remaining.trim().length === 0 ? "" : ensureTrailingNewline(remaining);
+  }
+  if (parsed.block !== null) {
+    return joinWithManagedBlock(parsed.before, parsed.after, block);
+  }
+  const head = trimTrailingBoundaryForJoin(parsed.before);
+  if (head.length === 0) return ensureTrailingNewline(block);
+  return ensureTrailingNewline(`${head}\n\n${block}`);
 }
 
 export function removeBlock(content: string): string {

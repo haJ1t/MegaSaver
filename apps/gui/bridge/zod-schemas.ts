@@ -1,4 +1,5 @@
 import { memoryScopeSchema } from "@megasaver/core";
+import { knownAgentIdSchema } from "@megasaver/mcp-bridge";
 import {
   titleSchema as TITLE_SCHEMA,
   agentIdSchema,
@@ -20,6 +21,23 @@ export const ENABLE_TOKEN_SAVER_BODY = z
   .strict();
 
 export const DISABLE_TOKEN_SAVER_BODY = z.object({}).strict();
+
+// MCP setup bodies (epic §6c). target is a KnownAgentId (PARENT AMENDMENT):
+// validate with knownAgentIdSchema from @megasaver/mcp-bridge, NOT agentIdSchema
+// — the MCP install surface is the four MCP-capable agents only. install/repair
+// need the project whose agent files receive the connector block (epic §7).
+export const MEGA_MCP_TARGET_BODY = z
+  .object({
+    target: knownAgentIdSchema,
+    project: z.string().min(1),
+  })
+  .strict();
+
+export const MEGA_MCP_UNINSTALL_BODY = z
+  .object({
+    target: knownAgentIdSchema,
+  })
+  .strict();
 
 export const CREATE_SESSION_BODY = z
   .object({
