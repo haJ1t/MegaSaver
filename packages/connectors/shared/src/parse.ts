@@ -7,15 +7,28 @@ export interface ParsedBlock {
   after: string;
 }
 
+export interface SentinelPair {
+  start: string;
+  end: string;
+}
+
+const DEFAULT_SENTINELS: SentinelPair = {
+  start: MEGA_SAVER_BLOCK_START,
+  end: MEGA_SAVER_BLOCK_END,
+};
+
 interface IndexedLine {
   text: string;
   raw: string;
 }
 
-export function parseBlock(content: string): ParsedBlock {
+export function parseBlock(
+  content: string,
+  sentinels: SentinelPair = DEFAULT_SENTINELS,
+): ParsedBlock {
   const lines = splitIndexedLines(content);
-  const starts = sentinelIndexes(lines, MEGA_SAVER_BLOCK_START);
-  const ends = sentinelIndexes(lines, MEGA_SAVER_BLOCK_END);
+  const starts = sentinelIndexes(lines, sentinels.start);
+  const ends = sentinelIndexes(lines, sentinels.end);
 
   if (starts.length === 0 && ends.length === 0) {
     return { before: content, block: null, after: "" };

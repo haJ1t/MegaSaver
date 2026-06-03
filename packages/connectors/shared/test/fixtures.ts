@@ -1,3 +1,4 @@
+import type { TokenSaverSettings } from "@megasaver/core";
 import { memoryEntryIdSchema, projectIdSchema, sessionIdSchema } from "@megasaver/shared";
 import type { AgentId, MemoryEntryId } from "@megasaver/shared";
 
@@ -10,6 +11,7 @@ export function buildContext(overrides?: {
   agentId?: AgentId;
   projectName?: string;
   withSession?: boolean;
+  tokenSaver?: TokenSaverSettings;
   memoryEntries?: Array<{
     id: MemoryEntryId;
     scope: "project" | "session";
@@ -36,6 +38,7 @@ export function buildContext(overrides?: {
           title: "smoke session",
           startedAt: NOW,
           endedAt: null,
+          ...(overrides?.tokenSaver ? { tokenSaver: overrides.tokenSaver } : {}),
         }
       : null,
     memoryEntries: (overrides?.memoryEntries ?? []).map((entry) => ({

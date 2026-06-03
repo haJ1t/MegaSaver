@@ -113,4 +113,35 @@ describe("parseBlock", () => {
     expect((err as ConnectorError).message).toContain("line 1");
     expect((err as ConnectorError).message).toContain("line 2");
   });
+
+  it("default sentinels still parse the legacy pair (no behaviour change)", () => {
+    const content = "intro\n<!-- MEGA SAVER:BEGIN -->\nbody\n<!-- MEGA SAVER:END -->\nafter\n";
+    const parsed = parseBlock(content);
+    expect(parsed.before).toBe("intro\n");
+    expect(parsed.block).toContain("MEGA SAVER:BEGIN");
+    expect(parsed.after).toBe("after\n");
+  });
+
+  it("parses a custom sentinel pair when provided", () => {
+    const content =
+      "x\n<!-- MEGA SAVER:CONTEXT_GATE BEGIN -->\ncg\n<!-- MEGA SAVER:CONTEXT_GATE END -->\ny\n";
+    const parsed = parseBlock(content, {
+      start: "<!-- MEGA SAVER:CONTEXT_GATE BEGIN -->",
+      end: "<!-- MEGA SAVER:CONTEXT_GATE END -->",
+    });
+    expect(parsed.before).toBe("x\n");
+    expect(parsed.block).toContain("CONTEXT_GATE BEGIN");
+    expect(parsed.after).toBe("y\n");
+  });
+
+  it("custom pair ignores the legacy pair entirely", () => {
+    const content =
+      "<!-- MEGA SAVER:BEGIN -->\nlegacy\n<!-- MEGA SAVER:END -->\n<!-- MEGA SAVER:CONTEXT_GATE BEGIN -->\ncg\n<!-- MEGA SAVER:CONTEXT_GATE END -->\n";
+    const parsed = parseBlock(content, {
+      start: "<!-- MEGA SAVER:CONTEXT_GATE BEGIN -->",
+      end: "<!-- MEGA SAVER:CONTEXT_GATE END -->",
+    });
+    expect(parsed.before).toBe("<!-- MEGA SAVER:BEGIN -->\nlegacy\n<!-- MEGA SAVER:END -->\n");
+    expect(parsed.block).toContain("CONTEXT_GATE BEGIN");
+  });
 });
