@@ -13,6 +13,11 @@ build/
 # Test artifacts
 coverage/
 .vitest-cache/
+# Vitest typecheck writes these transient configs at package roots and
+# normally deletes them on clean exit; an interrupted/concurrent run can
+# leave one behind. Ignore so it never trips biome lint or gets committed.
+**/tsconfig.vitest-temp.json
+**/tsconfig.tmp.json
 
 # Local env
 .env
