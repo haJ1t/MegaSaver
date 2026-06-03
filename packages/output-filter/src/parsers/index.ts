@@ -1,6 +1,7 @@
 import { chunkByLines } from "../chunk.js";
 import type { Chunk } from "../rank.js";
 import { detectCargoTest, parseCargoTest } from "./cargo-test.js";
+import { detectEslint, parseEslint } from "./eslint.js";
 import { detectGoTest, parseGoTest } from "./go-test.js";
 import { detectPytest, parsePytest } from "./pytest.js";
 import { detectStacktrace, parseStacktrace } from "./stacktrace.js";
@@ -13,6 +14,7 @@ export function chunkByFormat(text: string): Chunk[] {
   if (detectPytest(text)) return parsePytest(text);
   if (detectCargoTest(text)) return parseCargoTest(text);
   if (detectGoTest(text)) return parseGoTest(text);
+  if (detectEslint(text)) return parseEslint(text);
   if (detectTestOutput(text)) return parseTestOutput(text);
   if (detectTsDiagnostic(text)) return parseTsDiagnostic(text);
   if (detectStacktrace(text)) return parseStacktrace(text);

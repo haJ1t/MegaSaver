@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { detectCargoTest, parseCargoTest } from "../src/parsers/cargo-test.js";
+import { detectEslint, parseEslint } from "../src/parsers/eslint.js";
 import { detectGoTest, parseGoTest } from "../src/parsers/go-test.js";
 import { chunkByFormat } from "../src/parsers/index.js";
 import { detectPytest, parsePytest } from "../src/parsers/pytest.js";
@@ -92,6 +93,18 @@ const CARGO_TEST = [
   "test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
 ].join("\n");
 
+const ESLINT = [
+  "/app/src/foo.ts",
+  "  3:7   error    'x' is assigned a value but never used  no-unused-vars",
+  "  10:1  warning  Unexpected console statement             no-console",
+  "",
+  "/app/src/bar.ts",
+  "  1:1   error    Strings must use singlequote             quotes",
+  "",
+  "✖ 3 problems (2 errors, 1 warning)",
+  "  1 warning potentially fixable with the `--fix` option.",
+].join("\n");
+
 const PLAIN = ["just some prose", "with no special structure", "at all"].join("\n");
 
 describe("test-output parser", () => {
@@ -182,6 +195,25 @@ describe("cargo test parser", () => {
   });
 });
 
+describe("eslint parser", () => {
+  it("detects eslint stylish output and rejects unrelated text", () => {
+    expect(detectEslint(ESLINT)).toBe(true);
+    expect(detectEslint(PLAIN)).toBe(false);
+    expect(detectEslint(TEST_OUTPUT)).toBe(false);
+  });
+
+  it("produces one chunk per file problem group, keeping rules and locations", () => {
+    const chunks = parseEslint(ESLINT);
+    const groups = chunks.filter((c) => /^\/app\/src\//m.test(c.text));
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.text).toContain("/app/src/foo.ts");
+    expect(groups[0]?.text).toContain("no-unused-vars");
+    expect(groups[0]?.text).toContain("3:7");
+    expect(groups[1]?.text).toContain("/app/src/bar.ts");
+    expect(groups[1]?.text).toContain("quotes");
+  });
+});
+
 describe("chunkByFormat dispatch (spec §6 stage 4 precedence)", () => {
   it("routes test output to the test-output parser", () => {
     expect(chunkByFormat(TEST_OUTPUT).length).toBeGreaterThan(0);
@@ -216,5 +248,12 @@ describe("chunkByFormat routes each fixture to the right parser", () => {
     const block = chunks.find((c) => c.text.includes("tests::test_divide stdout ----"));
     // cargo keeps the panic message with its stdout block, not line-split.
     expect(block?.text).toContain("assertion `left == right` failed");
+  });
+
+  it("routes eslint output to the eslint parser (file group stays whole)", () => {
+    const chunks = chunkByFormat(ESLINT);
+    const group = chunks.find((c) => c.text.includes("/app/src/foo.ts"));
+    // The file header and its rule rows stay in one chunk.
+    expect(group?.text).toContain("no-unused-vars");
   });
 });
