@@ -11,7 +11,10 @@ Every connector is a thin adapter. Core stays agent-agnostic.
 
 **Status:** v0.3 shipped (2026-05-10). 626 tests across 62 files,
 55 PRs merged since project bootstrap. Pre-1.0; APIs may break
-across minor versions until 1.0. Not yet published to npm.
+across minor versions until 1.0. Distributed as a standalone
+`mega.mjs` bundle on GitHub Releases; the npm publish path is wired
+and enabled by a maintainer-supplied `NPM_TOKEN` (see
+[Distribution](#distribution)).
 
 ---
 
@@ -19,6 +22,7 @@ across minor versions until 1.0. Not yet published to npm.
 
 - [Why Mega Saver](#why-mega-saver)
 - [Quickstart](#quickstart)
+- [Distribution](#distribution)
 - [Architecture](#architecture)
 - [Storage layout](#storage-layout)
 - [The `mega` CLI](#the-mega-cli)
@@ -145,6 +149,79 @@ pnpm --filter @megasaver/gui dev
 Open <http://localhost:5173>. Two views ship in v0.3: **Sessions**
 and **Memory entries**, both rendered straight from
 `@megasaver/core`.
+
+---
+
+## Distribution
+
+The `mega` CLI ships two ways. Both deliver the same artifact: a
+single self-contained ESM file with every dependency — the
+`@megasaver/*` packages, `citty`, `zod`, and the MCP SDK — inlined.
+Only Node builtins stay external, so it runs from anywhere with no
+`node_modules`.
+
+### Standalone bundle (GitHub Releases)
+
+Every `v*` tag attaches `mega.mjs` (and a version-stamped
+`mega-<version>.mjs`) to a GitHub Release. No registry account
+needed.
+
+```bash
+# Download the latest bundle and run it (Node 22+ required).
+curl -fsSL -o mega.mjs \
+  https://github.com/haJ1t/MegaSaver/releases/latest/download/mega.mjs
+node mega.mjs doctor
+
+# Or put it on PATH as `mega`:
+chmod +x mega.mjs
+mv mega.mjs ~/.local/bin/mega   # any dir on your PATH
+mega doctor
+```
+
+The file carries a `#!/usr/bin/env node` shebang, so once it is
+executable and on your PATH it runs as `mega`.
+
+### npm
+
+When published, the self-contained package installs globally:
+
+```bash
+npm i -g @megasaver/cli
+mega doctor
+```
+
+`@megasaver/cli` bundles its dependencies into the published
+artifact, so it has **no runtime dependencies** and the internal
+`@megasaver/*` packages stay private.
+
+> npm publishing is wired but **gated on a maintainer-supplied
+> token** (the package is not on npm until a maintainer enables it).
+> To enable it: own the `@megasaver` scope on npmjs.com, create an
+> automation token with publish rights, and add it as the
+> `NPM_TOKEN` repository secret (Settings → Secrets and variables →
+> Actions). The next `v*` tag then also publishes to npm. Until
+> then, every tag still ships the GitHub Release bundle.
+
+### From source
+
+See [Run the CLI from the workspace](#run-the-cli-from-the-workspace)
+for the dev path (`pnpm --filter @megasaver/cli build`), or build the
+bundle yourself:
+
+```bash
+pnpm --filter @megasaver/cli bundle   # → apps/cli/dist-bundle/mega.mjs
+```
+
+### How a release is cut
+
+Tag a release commit and push the tag; the
+[`release.yml`](.github/workflows/release.yml) workflow does the
+rest:
+
+```bash
+git tag v1.0.1            # match the @megasaver/cli version
+git push origin v1.0.1
+```
 
 ---
 

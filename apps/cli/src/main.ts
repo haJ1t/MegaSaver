@@ -8,13 +8,20 @@ import { outputCommand } from "./commands/output/index.js";
 import { projectCommand } from "./commands/project.js";
 import { sessionCommand } from "./commands/session/index.js";
 
-const require = createRequire(import.meta.url);
-const pkg = require("../package.json") as { version: string };
+// Version source. Unbundled (dist/cli.js), this reads the package.json next to
+// the build via createRequire. The standalone single-file bundle has no sibling
+// package.json, so tsup.bundle.config.ts injects MEGA_CLI_VERSION at build time
+// and esbuild's dead-code elimination drops the createRequire branch entirely —
+// keeping the displayed version identical without a runtime file read.
+const version =
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  process.env["MEGA_CLI_VERSION"] ??
+  (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 
 export const mainCommand = defineCommand({
   meta: {
     name: "mega",
-    version: pkg.version,
+    version,
     description: "Mega Saver - ContextOps platform CLI.",
   },
   subCommands: {

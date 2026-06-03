@@ -1,0 +1,116 @@
+name: Release
+
+# Tag-triggered distribution. Tag a release commit `vX.Y.Z` (matching the
+# @megasaver/cli version) and push the tag:
+#
+#   git tag v1.0.1 && git push origin v1.0.1
+#
+# Two jobs run:
+#   1. github-release — ALWAYS runs. Builds the standalone `mega.mjs` bundle and
+#      attaches it to a GitHub Release. Uses the built-in GITHUB_TOKEN, so it
+#      needs no extra secrets and ships on every tag.
+#   2. npm-publish — runs ONLY if the NPM_TOKEN repo secret is set. Publishes the
+#      self-contained @megasaver/cli package to npm. Without the token it is
+#      skipped (the workflow never fails for lack of npm auth).
+#
+# To enable npm publishing (maintainer, one-time):
+#   - Own/claim the `@megasaver` scope on npmjs.com.
+#   - Create an automation access token with publish rights.
+#   - Add it as the repo secret NPM_TOKEN
+#     (Settings → Secrets and variables → Actions → New repository secret).
+# The next `v*` tag then also publishes to npm. See README "Distribution".
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Allow the github-release job to create releases and upload assets.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  github-release:
+    name: GitHub Release (standalone bundle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Build the workspace first so the bundle can inline the @megasaver/*
+      # packages' compiled dist/, then produce the single-file bundle.
+      - name: Build
+        run: pnpm build
+
+      - name: Bundle CLI
+        run: pnpm --filter @megasaver/cli bundle
+
+      # Ship both a stable name (mega.mjs) and a version-stamped copy
+      # (mega-<version>.mjs) derived from the tag (v1.2.3 -> 1.2.3).
+      - name: Stage release assets
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p release
+          cp apps/cli/dist-bundle/mega.mjs "release/mega.mjs"
+          cp apps/cli/dist-bundle/mega.mjs "release/mega-${version}.mjs"
+          ls -l release
+
+      - name: Create GitHub Release and upload bundle
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "${GITHUB_REF_NAME}" \
+            release/mega.mjs \
+            "release/mega-${GITHUB_REF_NAME#v}.mjs" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --verify-tag
+
+  npm-publish:
+    name: npm publish (gated on NPM_TOKEN)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # No-op when NPM_TOKEN is absent: the whole job is skipped, the workflow
+    # still succeeds. Tokenless forks/clones get the GitHub Release only.
+    if: ${{ secrets.NPM_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # Publish only the self-contained CLI. Its `prepack` rebuilds the bundle,
+      # and `publishConfig.access: public` + the bundled deps mean no private
+      # @megasaver/* package is published. --no-git-checks: the tag is detached.
+      - name: Publish @megasaver/cli
+        working-directory: apps/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm publish --no-git-checks --access public
