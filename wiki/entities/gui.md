@@ -125,8 +125,22 @@ and selection states require a flat element hierarchy; wrapping in
 semantic list elements breaks the CSS custom-property cascade. The
 override is intentional and scoped to the four affected files only.
 
+## AA1 / Mega Saver Mode
+
+- Sessions detail pane gains a `TokenSaverPanel` (mode picker,
+  enable/disable, savings ratio, recent events, raw/sent viewer) plus
+  `token-saver-{modal,stats}` and `savings-badge` (BB10).
+- `agent-setup-doctor` view + `agent-setup-row` drive setup/repair
+  with no terminal (BB11).
+- Bridge routes: `/api/sessions/:id/token-saver/{status,stats,events,
+  enable,disable}` (BB10) and `/api/mcp/{status,install,repair,
+  uninstall}` (BB11). The doctor routes run real `McpSetupOps` via
+  `createMcpOps` → `buildMcpSetupOps`; status is `{ agents: [...] }`
+  keyed by `agentId` (source: AA1 §6c).
+
 ## Related
 
 - [[entities/core]]
 - [[entities/cli]]
+- [[entities/mcp-bridge]]
 - [[concepts/agent-agnostic-core]]

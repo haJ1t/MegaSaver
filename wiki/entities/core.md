@@ -120,15 +120,29 @@ CLI must construct **full** entities — registry parses with strict Zod and rej
 Foundation + JSON persistence: PR <https://github.com/haJ1t/MegaSaver/pull/4> (`0656114`). `initStore` + cli project CRUD consumer: PR <https://github.com/haJ1t/MegaSaver/pull/5> (`9003968`). M1 lock + M2 failure-mode tests: PR <https://github.com/haJ1t/MegaSaver/pull/9> (`0dc2e29`). M3 stale-lock detection + M4 NFC normalization: PR <https://github.com/haJ1t/MegaSaver/pull/10> (`ac27142`). Session CRUD: `endSession` mutation + `session_already_ended` code: PR <https://github.com/haJ1t/MegaSaver/pull/11> (`9c5a388`). BB1 (AA1): `Session.tokenSaver` field + `token-saver.ts` settings + `updateTokenSaver` registry method: PR <https://github.com/haJ1t/MegaSaver/pull/67> (`acebb6c`); the `TokenSaverMode` enum was hoisted to `@megasaver/shared` (AA1 §2e). All on `origin/main`.
 
 **AA1 boundary note:** AA1 §2a proposed a `packages/core/src/context-gate/`
-orchestrator shared by CLI + MCP. As of BB7a (PR #73) that directory does
-NOT exist — the pipeline is composed CLI-side in
-`apps/cli/src/commands/output/shared.ts`, and core gained no new package
-deps (still `@megasaver/shared` + `zod`). The orchestrator extraction is
-deferred. See [[entities/cli]] and [[concepts/context-gate-pipeline]].
+orchestrator shared by CLI + MCP. As of BB7a (PR #73) that directory did
+NOT exist — the pipeline was composed CLI-side in
+`apps/cli/src/commands/output/shared.ts`. **Superseded post-BB7b:** PR #75
+extracted the orchestrator into `packages/core/src/context-gate/` (it now
+exists); see the AA1 subsection below. See [[entities/cli]] and
+[[concepts/context-gate-pipeline]].
 
 ## Risk
 
 Risk HIGH. Full superpowers chain; code-reviewer + critic both required.
+
+## AA1 / Mega Saver Mode
+
+- `Session.tokenSaver?` schema field + `updateTokenSaver` registry
+  method on both registries (source: AA1 §4; BB1, PR #67).
+- Context Gate orchestrator folded into core at
+  `packages/core/src/context-gate/` (`run.ts`, `run-command.ts`,
+  `read.ts`, `fetch-chunk.ts`, …) — the shared `mega output exec` /
+  `mega_run_command` engine (source: AA1 §2a, §8d; PR #75).
+- Post-BB7b the directory measured 553 LOC (> 500), firing AA1 §2a's
+  extraction trigger: a standalone `@megasaver/context-gate` is queued
+  as BB12 (deferred to its own PR). See
+  [[decisions/context-gate-extraction]].
 
 ## Related
 
