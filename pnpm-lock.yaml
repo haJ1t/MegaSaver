@@ -72,12 +72,21 @@ importers:
       '@fontsource/dm-mono':
         specifier: ^5.0.0
         version: 5.2.7
+      '@megasaver/connector-generic-cli':
+        specifier: workspace:*
+        version: link:../../packages/connectors/generic-cli
+      '@megasaver/connectors-shared':
+        specifier: workspace:*
+        version: link:../../packages/connectors/shared
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../../packages/content-store
       '@megasaver/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@megasaver/mcp-bridge':
+        specifier: workspace:*
+        version: link:../../packages/mcp-bridge
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../../packages/shared

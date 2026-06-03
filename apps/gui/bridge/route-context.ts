@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { CoreRegistry } from "@megasaver/core";
+import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import type { BridgeErrorCode } from "../src/bridge-error-code.js";
 
 export type SendJson = (
@@ -26,6 +27,8 @@ export type RouteContext = {
   req: IncomingMessage;
   res: ServerResponse;
   registry: CoreRegistry;
+  // F3: BB8-built production facade; BB11's mcp-setup routes read it.
+  mcpOps?: McpSetupOps;
   origin: string | undefined;
   query: URLSearchParams;
   storeRoot: string;
