@@ -1,6 +1,5 @@
 import type { FilterOutputResult } from "@megasaver/output-filter";
 import type { SessionId } from "@megasaver/shared";
-import type { OrchestratorRegistry } from "./registry-port.js";
 import {
   defaultNewId,
   defaultNow,
@@ -9,6 +8,7 @@ import {
   resolveEffectiveSettings,
   runTwoGates,
 } from "./read.js";
+import type { OrchestratorRegistry } from "./registry-port.js";
 
 export type RunOutputInput = {
   registry: OrchestratorRegistry;
