@@ -10,6 +10,7 @@ import {
   pathUnsafeMessage,
   policyLoadFailedMessage,
   sessionNotFoundMessage,
+  storeWriteFailedMessage,
 } from "../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../store.js";
 
@@ -92,6 +93,8 @@ export async function runOutputFilter(input: RunOutputFilterInput): Promise<0 | 
           return pathUnsafeMessage(outcome.detail);
         case "file_read_failed":
           return fileReadFailedMessage(outcome.detail);
+        case "store_write_failed":
+          return storeWriteFailedMessage(outcome.detail);
       }
     })();
     input.stderr(cli.message);

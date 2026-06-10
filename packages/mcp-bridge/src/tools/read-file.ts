@@ -71,5 +71,9 @@ export async function handleReadFile(
       throw new McpBridgeError("tool_invocation_failed", outcome.detail, {
         cause: new Error(outcome.detail),
       });
+    case "store_write_failed":
+      throw new McpBridgeError("store_write_failed", outcome.detail, {
+        cause: new Error(outcome.detail),
+      });
   }
 }
