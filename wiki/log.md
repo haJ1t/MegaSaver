@@ -1956,7 +1956,7 @@ Corrected `tsup.bundle.config.ts` header comment — both
 `tsup.config.ts` and `tsup.bundle.config.ts` inline the entire
 workspace graph via `noExternal`. Docs-only; no behaviour change.
 
-## [2026-06-10] feat | stats wiring completion (branch feat/stats-wiring-completion)
+## [2026-06-10] feat | stats wiring completion (PR #102)
 
 Gap A: runOutputPipeline now appends a sourceKind:"file" TokenSaverEvent
 (mirrors exec path); RunOutputResult widened with store_write_failed
