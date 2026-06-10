@@ -15,8 +15,10 @@ function readEnv(key: string): string | undefined {
 async function main(): Promise<void> {
   const storeDir = resolveBridgeStorePath({
     storeOverride: readEnv("MEGASAVER_GUI_STORE"),
-    home: readEnv("HOME"),
+    home: readEnv("HOME") ?? readEnv("USERPROFILE"),
     xdgDataHome: readEnv("XDG_DATA_HOME"),
+    platform: process.platform,
+    localAppData: readEnv("LOCALAPPDATA"),
   });
 
   await initStore(storeDir);
@@ -24,7 +26,7 @@ async function main(): Promise<void> {
 
   const mcpOps = createMcpOps({
     registry,
-    home: readEnv("HOME") ?? "",
+    home: readEnv("HOME") ?? readEnv("USERPROFILE") ?? "",
     // Runnable launch entry so a GUI-initiated install writes a config the
     // agent can actually spawn (`mega mcp serve`), reusing the CLI defaults
     // hoisted to @megasaver/mcp-bridge (no apps/gui → apps/cli import).
