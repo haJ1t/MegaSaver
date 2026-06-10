@@ -2,7 +2,7 @@ import { type TokenSaverSettings, defaultTokenSaverSettings } from "@megasaver/c
 import { modeToBudget, sessionIdSchema, tokenSaverModeSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { invalidModeMessage, mapErrorToCliMessage, missingModeMessage } from "../../../errors.js";
-import { ensureStoreReady, resolveStorePath } from "../../../store.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../../store.js";
 
 export type RunSessionSaverEnableInput = {
   sessionId: string;
@@ -11,6 +11,8 @@ export type RunSessionSaverEnableInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json?: boolean;
@@ -27,6 +29,8 @@ export async function runSessionSaverEnable(input: RunSessionSaverEnableInput): 
       cwd: input.cwd,
       home: input.home,
       xdgDataHome: input.xdgDataHome,
+      platform: input.platform,
+      localAppData: input.localAppData,
     });
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
@@ -104,12 +108,7 @@ export const sessionSaverEnableCommand = defineCommand({
     const code = await runSessionSaverEnable({
       sessionId: typeof args.sessionId === "string" ? args.sessionId : "",
       modeFlag: typeof args.mode === "string" ? args.mode : undefined,
-      storeFlag: typeof args.store === "string" ? args.store : undefined,
-      cwd: process.cwd(),
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      home: process.env["HOME"] ?? "",
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      xdgDataHome: process.env["XDG_DATA_HOME"],
+      ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

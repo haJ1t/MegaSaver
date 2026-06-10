@@ -1,7 +1,7 @@
 import type { CoreRegistry } from "@megasaver/core";
 import { type McpBridge, type McpBridgeConfig, createBridge } from "@megasaver/mcp-bridge";
 import { defineCommand } from "citty";
-import { ensureStoreReady, resolveStorePath } from "../../store.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 
 export type RunMcpServeDeps = {
   // Resolves the store root + a CoreRegistry. Injected so the unit
@@ -73,14 +73,9 @@ export const mcpServeCommand = defineCommand({
   async run({ args }) {
     const code = await runMcpServe({
       resolveStore: async () => {
-        const storeRoot = resolveStorePath({
-          storeFlag: typeof args.store === "string" ? args.store : undefined,
-          cwd: process.cwd(),
-          // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-          home: process.env["HOME"] ?? "",
-          // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-          xdgDataHome: process.env["XDG_DATA_HOME"],
-        });
+        const storeRoot = resolveStorePath(
+          readStoreEnv(typeof args.store === "string" ? args.store : undefined),
+        );
         const { registry } = await ensureStoreReady(storeRoot);
         return { storeRoot, registry };
       },

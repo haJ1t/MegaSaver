@@ -10,7 +10,7 @@ import {
   sessionAlreadyEndedMessage,
   sessionNotFoundMessage,
 } from "../../errors.js";
-import { ensureStoreReady, resolveStorePath } from "../../store.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { readTestEnv } from "../session/shared.js";
 import { projectNameSchema } from "../shared/schemas.js";
 import { contentSchema } from "./shared.js";
@@ -24,6 +24,8 @@ export type RunMemoryCreateInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json?: boolean;
@@ -39,6 +41,8 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
       cwd: input.cwd,
       home: input.home,
       xdgDataHome: input.xdgDataHome,
+      platform: input.platform,
+      localAppData: input.localAppData,
     });
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
@@ -181,12 +185,7 @@ export const memoryCreateCommand = defineCommand({
       scopeFlag: typeof args.scope === "string" ? args.scope : "",
       contentFlag: typeof args.content === "string" ? args.content : "",
       sessionFlag: typeof args.session === "string" ? args.session : undefined,
-      storeFlag: typeof args.store === "string" ? args.store : undefined,
-      cwd: process.cwd(),
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      home: process.env["HOME"] ?? "",
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      xdgDataHome: process.env["XDG_DATA_HOME"],
+      ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

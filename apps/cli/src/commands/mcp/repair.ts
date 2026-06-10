@@ -2,6 +2,7 @@ import { repairMcp } from "@megasaver/mcp-bridge";
 import { defineCommand } from "citty";
 import { unknownTargetMessage } from "../../errors.js";
 import { isKnownTargetId } from "../../known-targets.js";
+import { readStoreEnv } from "../../store.js";
 import { runConnectorSync } from "../connector/sync.js";
 import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "./install.js";
 
@@ -12,6 +13,8 @@ export type RunMcpRepairInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   command?: string;
   args?: string[];
   stdout: (line: string) => void;
@@ -37,6 +40,8 @@ export async function runMcpRepair(input: RunMcpRepairInput): Promise<0 | 1> {
     cwd: input.cwd,
     home: input.home,
     xdgDataHome: input.xdgDataHome,
+    platform: input.platform,
+    localAppData: input.localAppData,
     stdout: input.stdout,
     stderr: input.stderr,
     json: input.json,
@@ -70,12 +75,7 @@ export const mcpRepairCommand = defineCommand({
     const code = await runMcpRepair({
       targetFlag: typeof args.target === "string" ? args.target : "",
       projectName: typeof args.project === "string" ? args.project : "",
-      storeFlag: typeof args.store === "string" ? args.store : undefined,
-      cwd: process.cwd(),
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      home: process.env["HOME"] ?? "",
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      xdgDataHome: process.env["XDG_DATA_HOME"],
+      ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

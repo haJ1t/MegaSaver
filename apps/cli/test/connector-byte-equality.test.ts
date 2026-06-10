@@ -124,6 +124,8 @@ describe("upsertBlock — byte-equality regression fixture (S6)", () => {
           cwd: projectRoot,
           home: "/tmp",
           xdgDataHome: undefined,
+          platform: "linux",
+          localAppData: undefined,
           stdout: () => {},
           stderr: () => {},
           json: false,

@@ -9,7 +9,7 @@ import {
   sessionNotFoundMessage,
   storeWriteFailedMessage,
 } from "../../errors.js";
-import { ensureStoreReady, resolveStorePath } from "../../store.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 
 // Defaults locked in spec §2; the flags override them.
 const DEFAULT_TIMEOUT_SEC = 300;
@@ -39,6 +39,8 @@ export type RunOutputExecInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json?: boolean;
@@ -69,6 +71,8 @@ export async function runOutputExec(input: RunOutputExecInput): Promise<number> 
         cwd: input.cwd,
         home: input.home,
         xdgDataHome: input.xdgDataHome,
+        platform: input.platform,
+        localAppData: input.localAppData,
       });
     } catch (err) {
       const cli = mapErrorToCliMessage(err, { kind: "store" });
@@ -202,12 +206,7 @@ export const outputExecCommand = defineCommand({
       intentFlag: typeof args.intent === "string" ? args.intent : undefined,
       command,
       args: commandArgs,
-      storeFlag: typeof args.store === "string" ? args.store : undefined,
-      cwd: process.cwd(),
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      home: process.env["HOME"] ?? "",
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      xdgDataHome: process.env["XDG_DATA_HOME"],
+      ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

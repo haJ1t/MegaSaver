@@ -8,6 +8,7 @@ import {
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { KNOWN_TARGETS, KNOWN_TARGET_IDS } from "../../known-targets.js";
+import { readStoreEnv } from "../../store.js";
 import {
   buildConnectorContext,
   formatStatusLine,
@@ -22,6 +23,8 @@ export type RunConnectorStatusInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   json: boolean;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
@@ -35,6 +38,8 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
     cwd: input.cwd,
     home: input.home,
     xdgDataHome: input.xdgDataHome,
+    platform: input.platform,
+    localAppData: input.localAppData,
     stderr: input.stderr,
   });
   if (!resolved.ok) return resolved.exitCode;
@@ -169,12 +174,7 @@ export const connectorStatusCommand = defineCommand({
     const code = await runConnectorStatus({
       projectName: typeof args.projectName === "string" ? args.projectName : "",
       targetFlag: typeof args.target === "string" ? args.target : undefined,
-      storeFlag: typeof args.store === "string" ? args.store : undefined,
-      cwd: process.cwd(),
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      home: process.env["HOME"] ?? "",
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      xdgDataHome: process.env["XDG_DATA_HOME"],
+      ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       json: !!args.json,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
