@@ -14,7 +14,7 @@ State as of 2026-06-10: v1.1.0 shipped (2026-06-04, main @ `1644065`), no open P
 ## Remaining, by priority
 
 1. **Verify npm publish** — AUDITED 2026-06-10: `@megasaver/cli` was NEVER published (registry E404). The v1.1.0 release run succeeded but the npm-publish job was skipped — `NPM_TOKEN` repo secret is unset (`gh secret list` empty). Needs maintainer: create an npm automation token for the `@megasaver` scope, `gh secret set NPM_TOKEN`, re-run the release workflow for the tag.
-2. **skill-packs real implementation** — last placeholder subsystem of the original six. `loadPack()` still rejects `not_implemented`; needs pack discovery, install/uninstall, manifest validation, conflict resolution (source: index.md v0.3 backlog; spec `2026-05-10-hh-skill-packs-design.md` exists).
+2. ~~**skill-packs real implementation**~~ — RESOLVED 2026-06-10 (branch `feat/skill-packs-real`): real loader, discovery, atomic installer, `mega pack` CLI. See [[entities/skill-packs]].
 3. ~~**Stats wiring verification**~~ — RESOLVED 2026-06-10 (branch `feat/stats-wiring-completion`): exec path had shipped in BB7b; the two real gaps (no event on `runOutputPipeline`, stale `mega session saver stats` stub) are implemented and tested. See [[entities/stats]].
 4. **Windows port remainder** — case-insensitive path audit, CRLF normalization in connector outputs, lock-file semantics audit, Windows CI runner. Fsync layer closed by PR #51 (source: index.md v0.3 backlog).
 5. **conventions:sync → CLAUDE.md tagged blocks** — sync manages AGENTS.md + 3 `.mdc` only; CLAUDE.md still manual (source: index.md v0.3 backlog).
