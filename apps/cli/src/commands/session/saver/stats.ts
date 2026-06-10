@@ -1,5 +1,5 @@
+import { type SessionTokenSaverStats, readSummary } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
-import { type SessionTokenSaverStats, readSummary } from "@megasaver/stats";
 import { defineCommand } from "citty";
 import {
   mapErrorToCliMessage,

@@ -56,9 +56,6 @@ importers:
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@megasaver/stats':
-        specifier: workspace:*
-        version: link:../../packages/stats
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17

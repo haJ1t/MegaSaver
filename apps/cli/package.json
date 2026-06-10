@@ -31,7 +31,6 @@
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",
     "@megasaver/shared": "workspace:*",
-    "@megasaver/stats": "workspace:*",
     "@types/node": "^22.0.0",
     "citty": "^0.1.6",
     "zod": "^3.24.1"
