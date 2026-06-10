@@ -7,6 +7,7 @@ import {
   runConnectorStatus,
   runConnectorSync,
 } from "../src/commands/connector/index.js";
+import { MEGA_SAVER_BLOCK_START } from "@megasaver/connectors-shared";
 import { KNOWN_TARGETS, KNOWN_TARGET_IDS } from "../src/known-targets.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
@@ -237,6 +238,34 @@ describe("connectorStatusCommand — in-sync + drift", () => {
       data: undefined,
     } as never);
   }
+
+  it("reports in-sync for a mixed-EOL file (prose CRLF, block LF)", async () => {
+    await seedProject("demo", projectRoot);
+    await seedSession(
+      "33333333-3333-4333-8333-333333333333",
+      "claude-code",
+      "2026-05-09T00:00:00.000Z",
+    );
+    // Seed prose so the synced file has a non-block region to make CRLF.
+    await writeFile(join(projectRoot, "CLAUDE.md"), "# My Project\n\nNotes.\n");
+    await runSync({ projectName: "demo" });
+
+    // Build a mixed file: prose region → CRLF, managed block → LF.
+    const synced = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    const markerIdx = synced.indexOf(MEGA_SAVER_BLOCK_START);
+    expect(markerIdx).toBeGreaterThan(0);
+    const proseCrlf = synced.slice(0, markerIdx).replace(/\n/g, "\r\n");
+    await writeFile(join(projectRoot, "CLAUDE.md"), proseCrlf + synced.slice(markerIdx));
+
+    logSpy.mockClear();
+    errSpy.mockClear();
+    await runStatus({ projectName: "demo" });
+    expect(process.exitCode).toBe(0);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    expect(lines).toContain(
+      "claude-code  CLAUDE.md  in-sync  session=33333333-3333-4333-8333-333333333333",
+    );
+  });
 
   it("reports in-sync immediately after sync writes the block", async () => {
     await seedProject("demo", projectRoot);

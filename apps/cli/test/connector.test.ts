@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConnectorError } from "@megasaver/connectors-shared";
+import { ConnectorError, MEGA_SAVER_BLOCK_START } from "@megasaver/connectors-shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectorStatusCommand, connectorSyncCommand } from "../src/commands/connector/index.js";
 import { KNOWN_TARGET_IDS } from "../src/known-targets.js";
@@ -372,6 +372,39 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
       "aider        CONVENTIONS.md  skipped  session=none",
     ]);
+  });
+
+  it("emits noop on a mixed-EOL rerun (prose CRLF, block LF)", async () => {
+    await seedProjectAndSessions({
+      name: "demo",
+      sessions: [
+        {
+          id: SESSION_ID,
+          agentId: "claude-code",
+          title: "current",
+          startedAt: STARTED_AT,
+          endedAt: null,
+        },
+      ],
+    });
+    await writeFile(join(projectRoot, "CLAUDE.md"), "# My Project\n\nNotes.\n");
+    await runSync({ projectName: "demo", target: "claude-code" });
+
+    // Mixed file: prose region → CRLF, managed block stays LF.
+    const synced = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    const markerIdx = synced.indexOf(MEGA_SAVER_BLOCK_START);
+    expect(markerIdx).toBeGreaterThan(0);
+    const proseCrlf = synced.slice(0, markerIdx).replace(/\n/g, "\r\n");
+    await writeFile(join(projectRoot, "CLAUDE.md"), proseCrlf + synced.slice(markerIdx));
+
+    logSpy.mockClear();
+    errSpy.mockClear();
+    await runSync({ projectName: "demo", target: "claude-code" });
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls.map((c) => c[0])).toContain(
+      `claude-code  CLAUDE.md  noop  session=${SESSION_ID}`,
+    );
   });
 
   it("emits mixed statuses when only one target's content changed", async () => {
