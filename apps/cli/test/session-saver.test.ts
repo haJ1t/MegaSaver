@@ -10,7 +10,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { modeToBudget } from "@megasaver/shared";
+import { type ProjectId, type SessionId, modeToBudget } from "@megasaver/shared";
+import { appendEvent } from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   runSessionSaverDisable,
@@ -497,7 +498,7 @@ describe("session saver commands", () => {
       expect(payload.eventStats).toBeNull();
     });
 
-    it("configured session text → settings line + literal BB6 sentence", async () => {
+    it("configured session, no events → settings line + 'No events recorded yet.'", async () => {
       await seed();
       await enable({ mode: "balanced" });
       const { out, code } = await stats();
@@ -505,7 +506,64 @@ describe("session saver commands", () => {
       const joined = out.join("\n");
       expect(joined).toContain("balanced");
       expect(joined).toContain("12000");
-      expect(joined).toContain("Event stats (bytes saved per call) arrive with BB6.");
+      expect(joined).toContain("No events recorded yet.");
+      expect(joined).not.toContain("arrive with BB6");
+    });
+
+    function recordEvent(): void {
+      appendEvent({
+        store: { root: store },
+        event: {
+          id: "evt-1",
+          sessionId: SESSION_ID as SessionId,
+          projectId: PROJECT_ID as ProjectId,
+          createdAt: NOW_TS,
+          sourceKind: "file",
+          label: "/tmp/log.txt",
+          rawBytes: 1000,
+          returnedBytes: 200,
+          bytesSaved: 800,
+          savingRatio: 0.8,
+          summary: "demo",
+          mode: "balanced",
+        },
+        secretsRedacted: 1,
+        chunksStored: 3,
+      });
+    }
+
+    it("with recorded events → text totals from the summary", async () => {
+      await seed();
+      await enable({ mode: "balanced" });
+      recordEvent();
+      const { out, code } = await stats();
+      expect(code).toBe(0);
+      const joined = out.join("\n");
+      expect(joined).toContain("events: 1");
+      expect(joined).toContain("raw: 1000 B");
+      expect(joined).toContain("returned: 200 B");
+      expect(joined).toContain("saved: 800 B (80.0%)");
+      expect(joined).toContain("secrets redacted: 1");
+      expect(joined).toContain("chunks stored: 3");
+    });
+
+    it("with recorded events → --json carries the full summary", async () => {
+      await seed();
+      await enable({ mode: "balanced" });
+      recordEvent();
+      const { out, code } = await stats({ json: true });
+      expect(code).toBe(0);
+      const payload = JSON.parse(out[0] as string);
+      expect(payload.eventStats).toMatchObject({
+        sessionId: SESSION_ID,
+        eventsTotal: 1,
+        rawBytesTotal: 1000,
+        returnedBytesTotal: 200,
+        bytesSavedTotal: 800,
+        savingRatio: 0.8,
+        secretsRedactedTotal: 1,
+        chunksStoredTotal: 3,
+      });
     });
 
     it("pre-AA session → not-configured CTA, no invented counters", async () => {
