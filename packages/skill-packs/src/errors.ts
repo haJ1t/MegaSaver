@@ -1,11 +1,17 @@
 import { z } from "zod";
 
-// Order: alphabetic. v0.3 ships a single member; future codes
-// (manifest_invalid, manifest_missing, pack_already_installed,
-// pack_not_found, pack_path_escape, pack_unreadable,
-// skill_id_conflict) are reserved per spec §7 and append in
-// alphabetic order.
-export const skillPackErrorCodeSchema = z.enum(["not_implemented"]);
+// Order: alphabetic (AA3). Widened from the v0.3 placeholder when the
+// real loader landed; not_implemented retired (no external consumer,
+// pre-1.0 — CLAUDE.md §13 no backward-compat shims).
+export const skillPackErrorCodeSchema = z.enum([
+  "manifest_invalid",
+  "manifest_missing",
+  "pack_already_installed",
+  "pack_not_found",
+  "pack_path_escape",
+  "pack_unreadable",
+  "skill_id_conflict",
+]);
 
 export type SkillPackErrorCode = z.infer<typeof skillPackErrorCodeSchema>;
 

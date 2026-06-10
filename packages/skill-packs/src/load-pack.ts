@@ -8,8 +8,8 @@ export function loadPack(path: string): Promise<SkillPackManifest> {
   const parsed = pathSchema.parse(path);
   return Promise.reject(
     new SkillPackError(
-      "not_implemented",
-      "skill-packs.loadPack: real loader is deferred to v0.3+; v0.3 ships scaffold only.",
+      "manifest_missing",
+      "loadPack: real loader lands in the next commit.",
       { packPath: parsed },
     ),
   );
