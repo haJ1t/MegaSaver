@@ -1968,7 +1968,7 @@ apps/cli keeps its dependency-graph pin. Spec/plan:
 docs/superpowers/{specs,plans}/2026-06-10-stats-wiring-completion-*.md.
 pnpm verify green; smoke: output file → saver stats shows events: 1.
 
-## [2026-06-10] feat | skill-packs real implementation (PR #TBD)
+## [2026-06-10] feat | skill-packs real implementation (PR #103)
 
 Last placeholder subsystem made real (risk HIGH; architect pass
 GO-WITH-CHANGES folded into spec). loadPack with containment +
