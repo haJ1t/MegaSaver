@@ -21,6 +21,21 @@ describe.each([
     expect(schema.parse(SAMPLE_UUID)).toBe(SAMPLE_UUID);
   });
 
+  it("accepts a lowercase UUID", () => {
+    expect(schema.safeParse(SAMPLE_UUID).success).toBe(true);
+  });
+
+  it("rejects an UPPERCASE UUID", () => {
+    // hex letters required so toUpperCase actually differs from lowercase
+    expect(schema.safeParse("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee".toUpperCase()).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects a MixedCase UUID", () => {
+    expect(schema.safeParse("11111111-1111-4111-8111-11111111111A").success).toBe(false);
+  });
+
   it("rejects a non-UUID string", () => {
     const result = schema.safeParse("not-a-uuid");
     expect(result.success).toBe(false);
