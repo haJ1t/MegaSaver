@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { OutputFilterError } from "../src/errors.js";
 import { resolveSafeReadPath } from "../src/resolve-safe-read-path.js";
+import { describeUnlessWindows } from "./_platform.js";
 
 let projectRoot: string;
 let outsideDir: string;
@@ -17,11 +18,6 @@ beforeAll(() => {
   writeFileSync(join(projectRoot, "sub", "nested.txt"), "ok");
 
   writeFileSync(join(outsideDir, "secret.txt"), "leak");
-
-  // symlink inside the root that points OUTSIDE the sandbox
-  symlinkSync(join(outsideDir, "secret.txt"), join(projectRoot, "escape-link"));
-  // symlink inside the root that points INSIDE the sandbox
-  symlinkSync(join(projectRoot, "inside.txt"), join(projectRoot, "inside-link"));
 });
 
 afterAll(() => {
@@ -56,19 +52,31 @@ describe("resolveSafeReadPath (spec §5.2 / §8a)", () => {
     }
   });
 
-  it("rejects a symlink whose realpath escapes the sandbox", () => {
-    expect(() => resolveSafeReadPath({ path: "escape-link", projectRoot })).toThrow(
-      OutputFilterError,
-    );
-  });
-
-  it("accepts a symlink that stays inside the sandbox", () => {
-    expect(() => resolveSafeReadPath({ path: "inside-link", projectRoot })).not.toThrow();
-  });
-
   it("accepts a non-existent in-sandbox target via nearest existing ancestor", () => {
     expect(() =>
       resolveSafeReadPath({ path: join(projectRoot, "sub", "does-not-exist.txt"), projectRoot }),
     ).not.toThrow();
+  });
+
+  // Symlink creation needs elevation on Windows (EPERM); the symlink fixtures
+  // live in their own beforeAll so the EPERM cannot fail the whole file —
+  // only this block skips on Windows, the 5 tests above still run there.
+  describeUnlessWindows("symlink realpath checks (POSIX-only)", () => {
+    beforeAll(() => {
+      // symlink inside the root that points OUTSIDE the sandbox
+      symlinkSync(join(outsideDir, "secret.txt"), join(projectRoot, "escape-link"));
+      // symlink inside the root that points INSIDE the sandbox
+      symlinkSync(join(projectRoot, "inside.txt"), join(projectRoot, "inside-link"));
+    });
+
+    it("rejects a symlink whose realpath escapes the sandbox", () => {
+      expect(() => resolveSafeReadPath({ path: "escape-link", projectRoot })).toThrow(
+        OutputFilterError,
+      );
+    });
+
+    it("accepts a symlink that stays inside the sandbox", () => {
+      expect(() => resolveSafeReadPath({ path: "inside-link", projectRoot })).not.toThrow();
+    });
   });
 });
