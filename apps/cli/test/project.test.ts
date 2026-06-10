@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   formatProjectLine,
@@ -291,7 +291,7 @@ describe("projectCreateCommand", () => {
     const persisted = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
       rootPath: string;
     }>;
-    expect(persisted[0]?.rootPath).toBe("/tmp/abs-root-test");
+    expect(persisted[0]?.rootPath).toBe(resolve("/tmp/abs-root-test"));
   });
 
   it("resolves a relative --root to an absolute path", async () => {
@@ -307,7 +307,7 @@ describe("projectCreateCommand", () => {
       rootPath: string;
     }>;
     expect(persisted[0]?.rootPath).toBe(resolve("."));
-    expect(persisted[0]?.rootPath.startsWith("/")).toBe(true);
+    expect(isAbsolute(persisted[0]?.rootPath ?? "")).toBe(true);
   });
 
   it("stores process.cwd() as rootPath when --root is omitted (regression)", async () => {
@@ -348,7 +348,7 @@ describe("projectCreateCommand", () => {
     const persisted2 = JSON.parse(await readFile(join(root, "projects.json"), "utf8")) as Array<{
       rootPath: string;
     }>;
-    expect(persisted2[0]?.rootPath).toBe("/nonexistent-path-gap4");
+    expect(persisted2[0]?.rootPath).toBe(resolve("/nonexistent-path-gap4"));
   });
 
   it("treats --root '' (empty string) as process.cwd() via path.resolve semantics", async () => {
@@ -395,6 +395,6 @@ describe("projectCreateCommand", () => {
     expect(process.exitCode).toBe(0);
     expect(logSpy).toHaveBeenCalledTimes(1);
     const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as Record<string, unknown>;
-    expect(parsed.rootPath).toBe("/tmp/json-root-test");
+    expect(parsed.rootPath).toBe(resolve("/tmp/json-root-test"));
   });
 });
