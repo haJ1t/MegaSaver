@@ -1,4 +1,4 @@
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 
 export type ResolveBridgeStorePathInput = {
   storeOverride: string | undefined;
@@ -16,18 +16,17 @@ export function resolveBridgeStorePath(input: ResolveBridgeStorePathInput): stri
     return resolve(storeOverride);
   }
   if (xdgDataHome && xdgDataHome.length > 0) {
-    return join(xdgDataHome, "megasaver");
+    return resolve(xdgDataHome, "megasaver");
   }
   if (platform === "win32") {
-    const base = localAppData && localAppData.length > 0 ? localAppData : home;
-    if (!base || base.length === 0) {
-      throw new Error(
-        "LOCALAPPDATA/USERPROFILE unset and no XDG_DATA_HOME or MEGASAVER_GUI_STORE provided",
-      );
+    if (localAppData && localAppData.length > 0) {
+      return resolve(localAppData, "megasaver");
     }
-    return join(
-      localAppData && localAppData.length > 0 ? localAppData : join(base, "AppData", "Local"),
-      "megasaver",
+    if (home && home.length > 0) {
+      return resolve(home, "AppData", "Local", "megasaver");
+    }
+    throw new Error(
+      "LOCALAPPDATA/USERPROFILE unset and no XDG_DATA_HOME or MEGASAVER_GUI_STORE provided",
     );
   }
   if (!home || home.length === 0) {

@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ensureStoreReady, resolveStorePath } from "../src/store.js";
 
@@ -55,43 +55,62 @@ describe("resolveStorePath", () => {
     ).toBe(join("/home/user", ".local", "share", "megasaver"));
   });
 
-  it("win32 default uses localAppData", () => {
-    expect(
-      resolveStorePath({
-        storeFlag: undefined,
-        cwd: "C:\\repo",
-        home: "C:\\Users\\u",
-        xdgDataHome: undefined,
-        platform: "win32",
-        localAppData: "C:\\Users\\u\\AppData\\Local",
-      }),
-    ).toBe(join("C:\\Users\\u\\AppData\\Local", "megasaver"));
+  // NOTE: on a POSIX test host `node:path` uses posix separators even with
+  // platform: "win32", so these assert BRANCH SELECTION (which base wins),
+  // not the win32 separator — the real backslash output is proven by the
+  // windows-latest CI leg (PR4). Both sides call the same `resolve`, and each
+  // case asserts it differs from the other branches, so they are not tautological.
+  it("win32 uses localAppData (not the home fallback, not posix)", () => {
+    const out = resolveStorePath({
+      storeFlag: undefined,
+      cwd: "/repo",
+      home: "C:\\Users\\u",
+      xdgDataHome: undefined,
+      platform: "win32",
+      localAppData: "C:\\Users\\u\\AppData\\Local",
+    });
+    expect(out).toBe(resolve("C:\\Users\\u\\AppData\\Local", "megasaver"));
+    expect(out).not.toBe(resolve("C:\\Users\\u", "AppData", "Local", "megasaver"));
+    expect(out).not.toBe(resolve("C:\\Users\\u", ".local", "share", "megasaver"));
   });
 
-  it("win32 default falls back to home/AppData/Local when localAppData unset", () => {
-    expect(
+  it("win32 falls back to home/AppData/Local when localAppData unset", () => {
+    const out = resolveStorePath({
+      storeFlag: undefined,
+      cwd: "/repo",
+      home: "C:\\Users\\u",
+      xdgDataHome: undefined,
+      platform: "win32",
+      localAppData: undefined,
+    });
+    expect(out).toBe(resolve("C:\\Users\\u", "AppData", "Local", "megasaver"));
+    expect(out).not.toBe(resolve("C:\\Users\\u", ".local", "share", "megasaver"));
+  });
+
+  it("win32 throws when localAppData and home are both empty (no relative-path footgun)", () => {
+    expect(() =>
       resolveStorePath({
         storeFlag: undefined,
-        cwd: "C:\\repo",
-        home: "C:\\Users\\u",
+        cwd: "/repo",
+        home: "",
         xdgDataHome: undefined,
         platform: "win32",
         localAppData: undefined,
       }),
-    ).toBe(join("C:\\Users\\u", "AppData", "Local", "megasaver"));
+    ).toThrow();
   });
 
   it("win32 still honors an explicit XDG_DATA_HOME (documented opt-in)", () => {
-    expect(
-      resolveStorePath({
-        storeFlag: undefined,
-        cwd: "C:\\repo",
-        home: "C:\\Users\\u",
-        xdgDataHome: "D:\\xdg",
-        platform: "win32",
-        localAppData: "C:\\Users\\u\\AppData\\Local",
-      }),
-    ).toBe(join("D:\\xdg", "megasaver"));
+    const out = resolveStorePath({
+      storeFlag: undefined,
+      cwd: "/repo",
+      home: "C:\\Users\\u",
+      xdgDataHome: "/xdg",
+      platform: "win32",
+      localAppData: "C:\\Users\\u\\AppData\\Local",
+    });
+    expect(out).toBe(resolve("/xdg", "megasaver"));
+    expect(out).not.toBe(resolve("C:\\Users\\u\\AppData\\Local", "megasaver"));
   });
 });
 

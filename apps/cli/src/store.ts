@@ -1,5 +1,5 @@
 import { access } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { type CoreRegistry, createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
 import { z } from "zod";
 
@@ -21,12 +21,20 @@ export function resolveStorePath(input: ResolveStorePathInput): string {
     return isAbsolute(trimmed) ? trimmed : resolve(cwd, trimmed);
   }
   if (xdgDataHome && xdgDataHome.length > 0) {
-    return join(xdgDataHome, "megasaver");
+    return resolve(xdgDataHome, "megasaver");
   }
   if (platform === "win32") {
-    const base =
-      localAppData && localAppData.length > 0 ? localAppData : join(home, "AppData", "Local");
-    return join(base, "megasaver");
+    if (localAppData && localAppData.length > 0) {
+      return resolve(localAppData, "megasaver");
+    }
+    if (home.length > 0) {
+      return resolve(home, "AppData", "Local", "megasaver");
+    }
+    // Fail loud rather than resolve a relative "AppData/Local/megasaver" under
+    // cwd (spec §A.1 footgun). Mirrors resolveBridgeStorePath's throw.
+    throw new Error(
+      "cannot resolve the default Windows store path: LOCALAPPDATA, USERPROFILE, and HOME are all unset",
+    );
   }
   return resolve(home, ".local", "share", "megasaver");
 }
