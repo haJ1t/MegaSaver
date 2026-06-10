@@ -54,6 +54,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 ## Syntheses (cross-page answers)
 
 - [[syntheses/mega-saver-product]] — what the product is, six subsystems, v0.1 slice.
+- [[syntheses/post-v1.1-roadmap]] — remaining work after v1.1.0, priority-ordered (npm publish gap, skill-packs, Windows, i18n, fikri §16 backlog).
 
 ## Sources (pointers to raw + project artifacts)
 

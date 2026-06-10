@@ -1,9 +1,10 @@
-import { type SessionTokenSaverStats, readSummary } from "@megasaver/core";
+import { type SessionTokenSaverStats, StatsError, readSummary } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import {
   mapErrorToCliMessage,
   sessionNotFoundMessage,
+  storeCorruptMessage,
   unexpectedModeMessage,
 } from "../../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../../store.js";
@@ -94,7 +95,10 @@ export async function runSessionSaverStats(input: RunSessionSaverStatsInput): Pr
     );
     return 0;
   } catch (err) {
-    const cli = mapErrorToCliMessage(err, { kind: "session", id: parsedSessionId });
+    const cli =
+      err instanceof StatsError
+        ? storeCorruptMessage(err.message)
+        : mapErrorToCliMessage(err, { kind: "session", id: parsedSessionId });
     input.stderr(cli.message);
     return cli.exitCode;
   }

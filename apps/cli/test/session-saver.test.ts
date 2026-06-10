@@ -547,6 +547,17 @@ describe("session saver commands", () => {
       expect(joined).toContain("chunks stored: 3");
     });
 
+    it("corrupt summary file → error: store_corrupt, exit 1, no stdout", async () => {
+      await seed();
+      await enable({ mode: "balanced" });
+      await mkdir(join(store, "stats", PROJECT_ID), { recursive: true });
+      await writeFile(join(store, "stats", PROJECT_ID, `${SESSION_ID}.json`), "{not json");
+      const { out, err, code } = await stats({ json: true });
+      expect(code).toBe(1);
+      expect(out).toHaveLength(0);
+      expect(err.join("\n")).toContain("error: store_corrupt:");
+    });
+
     it("with recorded events → --json carries the full summary", async () => {
       await seed();
       await enable({ mode: "balanced" });

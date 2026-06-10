@@ -30,8 +30,10 @@ export {
 export {
   appendEvent,
   readSummary,
+  StatsError,
   type AppendEventInput,
   type SessionTokenSaverStats,
+  type StatsErrorCode,
   type StatsStore,
   type TokenSaverEvent,
 } from "@megasaver/stats";

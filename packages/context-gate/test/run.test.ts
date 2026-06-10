@@ -98,6 +98,14 @@ describe("runOutputPipeline — stats event wiring", () => {
     expect(readSummary({ root: store }, PROJECT_ID, SESSION_ID)?.eventsTotal).toBe(1);
   });
 
+  it("redacted secrets increment secretsRedactedTotal on the file path", async () => {
+    await writeFile(logPath, "key=sk-ant-0123456789012345678901234567\nline two\n");
+    const outcome = await run(registry(projectRoot));
+    expect(outcome.ok).toBe(true);
+    const summary = readSummary({ root: store }, PROJECT_ID, SESSION_ID);
+    expect(summary?.secretsRedactedTotal).toBeGreaterThanOrEqual(1);
+  });
+
   it("stats write failure → store_write_failed (not a throw)", async () => {
     // Plant a FILE at <store>/stats so appendEvent's mkdirSync(recursive) throws.
     await writeFile(join(store, "stats"), "not a directory");
