@@ -18,6 +18,7 @@ export {
 export { renderBlock } from "./render.js";
 export { parseBlock, type ParsedBlock } from "./parse.js";
 export { removeBlock, upsertBlock } from "./upsert.js";
+export { normalizeEol } from "./eol.js";
 export {
   assertProjectRoot,
   readTargetFile,

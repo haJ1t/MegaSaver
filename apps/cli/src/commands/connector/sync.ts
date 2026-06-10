@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
 import {
   ConnectorError,
+  normalizeEol,
   readTargetFile,
   upsertBlock,
   writeTargetFile,
@@ -105,7 +106,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
         }
 
         const newContent = upsertBlock({ existingContent: existing, context });
-        if (newContent === existing) {
+        if (normalizeEol(newContent) === normalizeEol(existing)) {
           emit(target, "noop", sessionId);
           continue;
         }
