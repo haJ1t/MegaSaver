@@ -11,6 +11,8 @@ export async function runPackInstall(input: RunPackInstallInput): Promise<0 | 1>
       workspaceRoot: resolveWorkspaceRoot(input),
       home: input.home,
       xdgDataHome: input.xdgDataHome,
+      platform: input.platform,
+      localAppData: input.localAppData,
       force: input.force,
     });
     if (input.json) {
@@ -43,9 +45,12 @@ export const packInstallCommand = defineCommand({
       rootFlag: typeof args.root === "string" ? args.root : undefined,
       cwd: process.cwd(),
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      home: process.env["HOME"] ?? "",
+      home: process.env["HOME"] ?? process.env["USERPROFILE"] ?? "",
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       xdgDataHome: process.env["XDG_DATA_HOME"],
+      platform: process.platform,
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      localAppData: process.env["LOCALAPPDATA"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
     });

@@ -8,6 +8,8 @@ export type DiscoverInput = {
   workspaceRoot: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
 };
 
 export type DiscoveredPack = {
@@ -25,10 +27,21 @@ export function workspacePacksRoot(workspaceRoot: string): string {
   return join(resolve(workspaceRoot), ".megasaver", "packs");
 }
 
-export function globalPacksRoot(home: string, xdgDataHome: string | undefined): string {
-  const base =
-    xdgDataHome && xdgDataHome.length > 0 ? resolve(xdgDataHome) : resolve(home, ".local", "share");
-  return join(base, "megasaver", "packs");
+export function globalPacksRoot(
+  home: string,
+  xdgDataHome: string | undefined,
+  platform: NodeJS.Platform,
+  localAppData: string | undefined,
+): string {
+  if (xdgDataHome && xdgDataHome.length > 0) {
+    return join(resolve(xdgDataHome), "megasaver", "packs");
+  }
+  if (platform === "win32") {
+    const base =
+      localAppData && localAppData.length > 0 ? localAppData : join(home, "AppData", "Local");
+    return join(resolve(base), "megasaver", "packs");
+  }
+  return join(resolve(home, ".local", "share"), "megasaver", "packs");
 }
 
 function listCandidateDirs(root: string): string[] {
@@ -46,7 +59,10 @@ function listCandidateDirs(root: string): string[] {
 export async function discoverPacks(input: DiscoverInput): Promise<DiscoveryResult> {
   const roots: Array<{ dir: string; source: "workspace" | "global" }> = [
     { dir: workspacePacksRoot(input.workspaceRoot), source: "workspace" },
-    { dir: globalPacksRoot(input.home, input.xdgDataHome), source: "global" },
+    {
+      dir: globalPacksRoot(input.home, input.xdgDataHome, input.platform, input.localAppData),
+      source: "global",
+    },
   ];
 
   const packs: DiscoveredPack[] = [];

@@ -45,6 +45,8 @@ describe("mega pack commands", () => {
     cwd: workspace,
     home: "/nonexistent-home",
     xdgDataHome: undefined,
+    platform: "linux" as const,
+    localAppData: undefined,
     stdout: (l: string) => s.out.push(l),
     stderr: (l: string) => s.err.push(l),
   });
