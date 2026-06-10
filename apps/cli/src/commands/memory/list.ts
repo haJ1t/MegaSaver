@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
-import { ensureStoreReady, resolveStorePath } from "../../store.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { projectNameSchema } from "../shared/schemas.js";
 import { formatMemoryListLine } from "./shared.js";
 
@@ -11,6 +11,8 @@ export type RunMemoryListInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
@@ -23,6 +25,8 @@ export async function runMemoryList(input: RunMemoryListInput): Promise<0 | 1> {
       cwd: input.cwd,
       home: input.home,
       xdgDataHome: input.xdgDataHome,
+      platform: input.platform,
+      localAppData: input.localAppData,
     });
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
@@ -83,14 +87,9 @@ export const memoryListCommand = defineCommand({
   },
   async run({ args }) {
     const code = await runMemoryList({
+      ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       projectName: typeof args.projectName === "string" ? args.projectName : "",
-      storeFlag: typeof args.store === "string" ? args.store : undefined,
       jsonFlag: args.json === true,
-      cwd: process.cwd(),
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      home: process.env["HOME"] ?? "",
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
     });

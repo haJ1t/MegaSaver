@@ -65,6 +65,8 @@ describe("runOutputExec — recursive_megasaver guard", () => {
       cwd: projectRoot,
       home: projectRoot,
       xdgDataHome: undefined,
+      platform: "linux",
+      localAppData: undefined,
       stdout: (l) => out.push(l),
       stderr: (l) => err.push(l),
       json: false,

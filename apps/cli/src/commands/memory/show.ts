@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, memoryEntryNotFoundMessage } from "../../errors.js";
-import { ensureStoreReady, resolveStorePath } from "../../store.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { formatMemoryShowLines, memoryEntryIdSchema } from "./shared.js";
 
 export type RunMemoryShowInput = {
@@ -10,6 +10,8 @@ export type RunMemoryShowInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
@@ -22,6 +24,8 @@ export async function runMemoryShow(input: RunMemoryShowInput): Promise<0 | 1> {
       cwd: input.cwd,
       home: input.home,
       xdgDataHome: input.xdgDataHome,
+      platform: input.platform,
+      localAppData: input.localAppData,
     });
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
@@ -77,14 +81,9 @@ export const memoryShowCommand = defineCommand({
   },
   async run({ args }) {
     const code = await runMemoryShow({
+      ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       memoryEntryId: typeof args.memoryEntryId === "string" ? args.memoryEntryId : "",
-      storeFlag: typeof args.store === "string" ? args.store : undefined,
       jsonFlag: args.json === true,
-      cwd: process.cwd(),
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      home: process.env["HOME"] ?? "",
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
     });

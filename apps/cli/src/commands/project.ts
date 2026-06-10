@@ -9,7 +9,7 @@ import {
   duplicateNameMessage,
   mapErrorToCliMessage,
 } from "../errors.js";
-import { ensureStoreReady, resolveStorePath } from "../store.js";
+import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../store.js";
 
 export function formatProjectLine(project: Pick<Project, "id" | "name">): string {
   return `${project.id}  ${project.name}`;
@@ -20,6 +20,8 @@ export type RunProjectListInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json?: boolean;
@@ -33,6 +35,8 @@ export async function runProjectList(input: RunProjectListInput): Promise<0 | 1>
       cwd: input.cwd,
       home: input.home,
       xdgDataHome: input.xdgDataHome,
+      platform: input.platform,
+      localAppData: input.localAppData,
     });
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
@@ -69,12 +73,7 @@ export const projectListCommand = defineCommand({
   },
   async run({ args }) {
     const code = await runProjectList({
-      storeFlag: typeof args.store === "string" ? args.store : undefined,
-      cwd: process.cwd(),
-      // biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket access for process.env
-      home: process.env["HOME"] ?? "",
-      // biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket access for process.env
-      xdgDataHome: process.env["XDG_DATA_HOME"],
+      ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,
@@ -99,6 +98,8 @@ export type RunProjectCreateInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json?: boolean;
@@ -116,6 +117,8 @@ export async function runProjectCreate(input: RunProjectCreateInput): Promise<0 
       cwd: input.cwd,
       home: input.home,
       xdgDataHome: input.xdgDataHome,
+      platform: input.platform,
+      localAppData: input.localAppData,
     });
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
@@ -178,14 +181,9 @@ export const projectCreateCommand = defineCommand({
   },
   async run({ args }) {
     const code = await runProjectCreate({
+      ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       name: typeof args.name === "string" ? args.name : "",
-      storeFlag: typeof args.store === "string" ? args.store : undefined,
       rootFlag: typeof args.root === "string" ? args.root : undefined,
-      cwd: process.cwd(),
-      // biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket access for process.env
-      home: process.env["HOME"] ?? "",
-      // biome-ignore lint/complexity/useLiteralKeys: TS noPropertyAccessFromIndexSignature requires bracket access for process.env
-      xdgDataHome: process.env["XDG_DATA_HOME"],
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

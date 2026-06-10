@@ -37,6 +37,8 @@ describe("installPack / removePack", () => {
       workspaceRoot: workspace,
       home: "/nonexistent-home",
       xdgDataHome: undefined,
+      platform: "linux",
+      localAppData: undefined,
       force: opts.force ?? false,
     });
   }
@@ -78,6 +80,8 @@ describe("installPack / removePack", () => {
           workspaceRoot: workspace,
           home: "/nonexistent-home",
           xdgDataHome: undefined,
+          platform: "linux",
+          localAppData: undefined,
           force: false,
         }),
       ).rejects.toMatchObject({ code: "skill_id_conflict" });

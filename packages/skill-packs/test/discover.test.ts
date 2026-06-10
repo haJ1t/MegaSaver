@@ -38,7 +38,13 @@ describe("discoverPacks", () => {
   const globalPacks = () => join(xdg, "megasaver", "packs");
 
   function discover() {
-    return discoverPacks({ workspaceRoot: workspace, home: "/nonexistent-home", xdgDataHome: xdg });
+    return discoverPacks({
+      workspaceRoot: workspace,
+      home: "/nonexistent-home",
+      xdgDataHome: xdg,
+      platform: "linux",
+      localAppData: undefined,
+    });
   }
 
   it("finds workspace and global packs with source labels", async () => {
@@ -90,10 +96,29 @@ describe("discoverPacks", () => {
         workspaceRoot: workspace,
         home,
         xdgDataHome: undefined,
+        platform: "linux",
+        localAppData: undefined,
       });
       expect(result.packs.map((p) => p.manifest.name)).toEqual(["home-pack"]);
     } finally {
       await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("win32 global root uses localAppData", async () => {
+    const localAppData = await mkdtemp(join(tmpdir(), "sp-lad-"));
+    try {
+      await seedPack(join(localAppData, "megasaver", "packs"), "win-pack");
+      const result = await discoverPacks({
+        workspaceRoot: workspace,
+        home: "C:\\Users\\u",
+        xdgDataHome: undefined,
+        platform: "win32",
+        localAppData,
+      });
+      expect(result.packs.map((p) => p.manifest.name)).toEqual(["win-pack"]);
+    } finally {
+      await rm(localAppData, { recursive: true, force: true });
     }
   });
 });

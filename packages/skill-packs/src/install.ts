@@ -11,6 +11,8 @@ export type InstallPackInput = {
   workspaceRoot: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   force: boolean;
 };
 
@@ -43,6 +45,8 @@ export async function installPack(input: InstallPackInput): Promise<InstalledPac
     workspaceRoot: input.workspaceRoot,
     home: input.home,
     xdgDataHome: input.xdgDataHome,
+    platform: input.platform,
+    localAppData: input.localAppData,
   });
   const effective = discovered.packs.filter((p) => p.manifest.name !== manifest.name);
   const conflicts = scanSkillIdConflicts([

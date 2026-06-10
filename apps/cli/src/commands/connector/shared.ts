@@ -69,6 +69,8 @@ export type ResolveProjectAndRootInput = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   stderr: (line: string) => void;
 };
 
@@ -93,6 +95,8 @@ export async function resolveProjectAndRoot(
       cwd: input.cwd,
       home: input.home,
       xdgDataHome: input.xdgDataHome,
+      platform: input.platform,
+      localAppData: input.localAppData,
     });
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });

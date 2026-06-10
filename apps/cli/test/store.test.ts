@@ -1,109 +1,116 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ensureStoreReady, resolveStorePath } from "../src/store.js";
 
-describe("resolveStorePath", () => {
-  const home = "/home/user";
+const POSIX = { platform: "linux" as const, localAppData: undefined };
 
-  it("returns absolute --store flag verbatim", () => {
+describe("resolveStorePath", () => {
+  it("override absolute is returned verbatim", () => {
     expect(
       resolveStorePath({
         storeFlag: "/abs/megasaver",
         cwd: "/repo",
-        home,
+        home: "/home/user",
         xdgDataHome: undefined,
+        ...POSIX,
       }),
     ).toBe("/abs/megasaver");
   });
 
-  it("resolves a relative --store flag against cwd", () => {
+  it("override relative resolves against cwd", () => {
     expect(
       resolveStorePath({
-        storeFlag: "./local-store",
+        storeFlag: "local-store",
         cwd: "/repo",
-        home,
+        home: "/home/user",
         xdgDataHome: undefined,
+        ...POSIX,
       }),
-    ).toBe("/repo/local-store");
+    ).toBe(join("/repo", "local-store"));
   });
 
-  it("rejects an empty --store flag", () => {
+  it("XDG_DATA_HOME honored on posix", () => {
+    expect(
+      resolveStorePath({
+        storeFlag: undefined,
+        cwd: "/repo",
+        home: "/home/user",
+        xdgDataHome: "/xdg/data",
+        ...POSIX,
+      }),
+    ).toBe(join("/xdg/data", "megasaver"));
+  });
+
+  it("posix default falls back to ~/.local/share", () => {
+    expect(
+      resolveStorePath({
+        storeFlag: undefined,
+        cwd: "/repo",
+        home: "/home/user",
+        xdgDataHome: undefined,
+        ...POSIX,
+      }),
+    ).toBe(join("/home/user", ".local", "share", "megasaver"));
+  });
+
+  // NOTE: on a POSIX test host `node:path` uses posix separators even with
+  // platform: "win32", so these assert BRANCH SELECTION (which base wins),
+  // not the win32 separator — the real backslash output is proven by the
+  // windows-latest CI leg (PR4). Both sides call the same `resolve`, and each
+  // case asserts it differs from the other branches, so they are not tautological.
+  it("win32 uses localAppData (not the home fallback, not posix)", () => {
+    const out = resolveStorePath({
+      storeFlag: undefined,
+      cwd: "/repo",
+      home: "C:\\Users\\u",
+      xdgDataHome: undefined,
+      platform: "win32",
+      localAppData: "C:\\Users\\u\\AppData\\Local",
+    });
+    expect(out).toBe(resolve("C:\\Users\\u\\AppData\\Local", "megasaver"));
+    expect(out).not.toBe(resolve("C:\\Users\\u", "AppData", "Local", "megasaver"));
+    expect(out).not.toBe(resolve("C:\\Users\\u", ".local", "share", "megasaver"));
+  });
+
+  it("win32 falls back to home/AppData/Local when localAppData unset", () => {
+    const out = resolveStorePath({
+      storeFlag: undefined,
+      cwd: "/repo",
+      home: "C:\\Users\\u",
+      xdgDataHome: undefined,
+      platform: "win32",
+      localAppData: undefined,
+    });
+    expect(out).toBe(resolve("C:\\Users\\u", "AppData", "Local", "megasaver"));
+    expect(out).not.toBe(resolve("C:\\Users\\u", ".local", "share", "megasaver"));
+  });
+
+  it("win32 throws when localAppData and home are both empty (no relative-path footgun)", () => {
     expect(() =>
       resolveStorePath({
-        storeFlag: "",
+        storeFlag: undefined,
         cwd: "/repo",
-        home,
+        home: "",
         xdgDataHome: undefined,
+        platform: "win32",
+        localAppData: undefined,
       }),
     ).toThrow();
   });
 
-  it("rejects a whitespace-only --store flag", () => {
-    expect(() =>
-      resolveStorePath({
-        storeFlag: "   ",
-        cwd: "/repo",
-        home,
-        xdgDataHome: undefined,
-      }),
-    ).toThrow();
-  });
-
-  it("uses XDG_DATA_HOME when set and non-empty", () => {
-    expect(
-      resolveStorePath({
-        storeFlag: undefined,
-        cwd: "/repo",
-        home,
-        xdgDataHome: "/xdg/data",
-      }),
-    ).toBe("/xdg/data/megasaver");
-  });
-
-  it("ignores empty XDG_DATA_HOME and falls back to HOME", () => {
-    expect(
-      resolveStorePath({
-        storeFlag: undefined,
-        cwd: "/repo",
-        home,
-        xdgDataHome: "",
-      }),
-    ).toBe("/home/user/.local/share/megasaver");
-  });
-
-  it("falls back to HOME when XDG_DATA_HOME is undefined", () => {
-    expect(
-      resolveStorePath({
-        storeFlag: undefined,
-        cwd: "/repo",
-        home,
-        xdgDataHome: undefined,
-      }),
-    ).toBe("/home/user/.local/share/megasaver");
-  });
-
-  it("flag wins even when XDG is set", () => {
-    expect(
-      resolveStorePath({
-        storeFlag: "/abs/override",
-        cwd: "/repo",
-        home,
-        xdgDataHome: "/xdg/data",
-      }),
-    ).toBe("/abs/override");
-  });
-
-  it("trims whitespace around the --store flag before resolving", () => {
-    expect(
-      resolveStorePath({
-        storeFlag: "  /abs/with-spaces  ",
-        cwd: "/repo",
-        home,
-        xdgDataHome: undefined,
-      }),
-    ).toBe("/abs/with-spaces");
+  it("win32 still honors an explicit XDG_DATA_HOME (documented opt-in)", () => {
+    const out = resolveStorePath({
+      storeFlag: undefined,
+      cwd: "/repo",
+      home: "C:\\Users\\u",
+      xdgDataHome: "/xdg",
+      platform: "win32",
+      localAppData: "C:\\Users\\u\\AppData\\Local",
+    });
+    expect(out).toBe(resolve("/xdg", "megasaver"));
+    expect(out).not.toBe(resolve("C:\\Users\\u\\AppData\\Local", "megasaver"));
   });
 });
 

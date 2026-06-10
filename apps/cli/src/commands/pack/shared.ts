@@ -7,6 +7,8 @@ export type PackEnv = {
   cwd: string;
   home: string;
   xdgDataHome: string | undefined;
+  platform: NodeJS.Platform;
+  localAppData: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
