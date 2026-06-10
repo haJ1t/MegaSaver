@@ -4,8 +4,11 @@ import { describe, expect, it } from "vitest";
 
 // §3c allow-list: apps/cli may import exactly these @megasaver/*
 // packages. BB8 adds @megasaver/mcp-bridge (the `mega mcp` CLI drives
-// the bridge's install/status facade); the arrow stays acyclic —
-// mcp-bridge depends only on leaf packages, never on the CLI (AA1 §3).
+// the bridge's install/status facade); skill-packs-real adds
+// @megasaver/skill-packs (the `mega pack` CLI drives the loader and
+// installer directly — core does not depend on skill-packs, so a core
+// re-export is not available). The arrow stays acyclic — skill-packs
+// depends only on zod, never on the CLI.
 // The non-Mega deps (citty, zod) are ignored by the @megasaver/ filter.
 const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/connector-generic-cli",
@@ -16,6 +19,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/output-filter",
   "@megasaver/policy",
   "@megasaver/shared",
+  "@megasaver/skill-packs",
 ];
 
 const FORBIDDEN_DEPENDENCIES = ["@megasaver/retrieval", "@megasaver/stats"];

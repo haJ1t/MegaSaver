@@ -56,6 +56,9 @@ importers:
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@megasaver/skill-packs':
+        specifier: workspace:*
+        version: link:../../packages/skill-packs
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
