@@ -86,6 +86,27 @@ describe("loadPack — real loader", () => {
     await expect(loadPack(root)).rejects.toMatchObject({ code: "pack_unreadable" });
   });
 
+  it("pack_unreadable when an entry resolves to a directory", async () => {
+    await seedPack(root, {
+      ...MANIFEST,
+      skills: [{ id: "hello", entry: "skills" }],
+    });
+    await expect(loadPack(root)).rejects.toMatchObject({ code: "pack_unreadable" });
+  });
+
+  it("pack_path_escape when the manifest itself is a symlink", async () => {
+    await seedPack(root);
+    const outside = join(root, "..", `manifest-${process.pid}.json`);
+    await writeFile(outside, JSON.stringify(MANIFEST));
+    await rm(join(root, "megasaver-pack.json"));
+    await symlink(outside, join(root, "megasaver-pack.json"));
+    try {
+      await expect(loadPack(root)).rejects.toMatchObject({ code: "pack_path_escape" });
+    } finally {
+      await rm(outside, { force: true });
+    }
+  });
+
   it("rejects an empty path at the boundary", async () => {
     await expect(loadPack("")).rejects.toThrow();
   });

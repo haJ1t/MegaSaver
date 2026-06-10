@@ -4,6 +4,12 @@ import { skillPackKindSchema } from "./kind.js";
 
 const kebabRegex = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
+// Pack names are kebab-case identifiers. Exported so consumers that
+// take a name from outside a validated manifest (e.g. `mega pack
+// remove <name>`) can reject path-traversal before it reaches a
+// filesystem join — a bare name flows into rmSync there.
+export const packNameSchema = z.string().regex(kebabRegex, "pack name must be kebab-case");
+
 // SemVer 2.0.0 surface — placeholder regex. Locks the manifest
 // version contract without pulling in a runtime semver dependency
 // at the scaffold tier. Loader spec will tighten this.

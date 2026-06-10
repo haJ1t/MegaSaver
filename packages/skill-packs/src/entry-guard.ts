@@ -32,5 +32,10 @@ export function assertEntryWithinPack(packRoot: string, entry: string): string {
       packPath: packRoot,
     });
   }
+  if (!stat.isFile()) {
+    throw new SkillPackError("pack_unreadable", `entry is not a regular file: ${entry}`, {
+      packPath: packRoot,
+    });
+  }
   return absolute;
 }

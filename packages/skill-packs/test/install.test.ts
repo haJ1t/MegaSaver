@@ -112,6 +112,18 @@ describe("installPack / removePack", () => {
     expect(entries.filter((e) => e.startsWith(".tmp-"))).toEqual([]);
   });
 
+  it("removePack rejects a traversal name before touching the filesystem", async () => {
+    // Plant a victim OUTSIDE the packs root; a buggy join+rmSync would delete it.
+    const victim = join(workspace, "victim.txt");
+    await writeFile(victim, "do not delete\n");
+    for (const name of ["../../victim", "..", "", "a/b"]) {
+      await expect(removePack({ name, workspaceRoot: workspace })).rejects.toMatchObject({
+        code: expect.stringMatching(/pack_not_found|manifest_invalid/),
+      });
+    }
+    await expect(readdir(workspace)).resolves.toContain("victim.txt");
+  });
+
   it("removePack removes an installed pack; pack_not_found for unknown", async () => {
     await seedSource(source);
     await install();

@@ -4,6 +4,7 @@ import { scanSkillIdConflicts } from "./conflicts.js";
 import { type DiscoveredPack, discoverPacks, workspacePacksRoot } from "./discover.js";
 import { SkillPackError } from "./errors.js";
 import { loadPack } from "./load-pack.js";
+import { packNameSchema } from "./manifest.js";
 
 export type InstallPackInput = {
   sourceDir: string;
@@ -87,6 +88,11 @@ export async function installPack(input: InstallPackInput): Promise<InstalledPac
 export type RemovePackInput = { name: string; workspaceRoot: string };
 
 export async function removePack(input: RemovePackInput): Promise<void> {
+  // Validate the name BEFORE the join — a bare "../.." would otherwise
+  // escape the packs root and rmSync(recursive,force) outside it.
+  if (!packNameSchema.safeParse(input.name).success) {
+    throw new SkillPackError("pack_not_found", `invalid pack name: ${input.name}`);
+  }
   const target = join(workspacePacksRoot(input.workspaceRoot), input.name);
   if (!existsSync(target)) {
     throw new SkillPackError("pack_not_found", `no installed pack named: ${input.name}`, {

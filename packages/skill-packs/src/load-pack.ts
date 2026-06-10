@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { assertEntryWithinPack } from "./entry-guard.js";
@@ -12,6 +12,25 @@ export const MANIFEST_FILENAME = "megasaver-pack.json";
 export async function loadPack(path: string): Promise<SkillPackManifest> {
   const packRoot = pathSchema.parse(path);
   const manifestPath = join(packRoot, MANIFEST_FILENAME);
+
+  // A symlinked manifest would let discovery (read-only list/info) read
+  // through a link pointing outside the pack — reject before any read,
+  // matching the entry-guard stance.
+  try {
+    if (lstatSync(manifestPath).isSymbolicLink()) {
+      throw new SkillPackError("pack_path_escape", `symlinked ${MANIFEST_FILENAME} rejected`, {
+        packPath: packRoot,
+      });
+    }
+  } catch (err) {
+    if (err instanceof SkillPackError) throw err;
+    const code =
+      (err as NodeJS.ErrnoException).code === "ENOENT" ? "manifest_missing" : "pack_unreadable";
+    throw new SkillPackError(code, `cannot stat ${MANIFEST_FILENAME}: ${String(err)}`, {
+      packPath: packRoot,
+      cause: err,
+    });
+  }
 
   let raw: string;
   try {

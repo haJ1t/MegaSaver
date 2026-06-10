@@ -147,6 +147,16 @@ describe("mega pack commands", () => {
     expect(code).toBe(1);
   });
 
+  it("remove: rejects a path-traversal name, victim outside packs root survives", async () => {
+    const victim = join(workspace, "victim.txt");
+    await writeFile(victim, "keep me\n");
+    const code = await runPackRemove({ ...env(), name: "../../victim", json: false });
+    expect(code).toBe(1);
+    expect(s.err.join("\n")).toContain("error:");
+    const { readdir } = await import("node:fs/promises");
+    await expect(readdir(workspace)).resolves.toContain("victim.txt");
+  });
+
   describe("--json flag drift guards", () => {
     const commands = [
       ["install", packInstallCommand],
