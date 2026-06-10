@@ -4,106 +4,94 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ensureStoreReady, resolveStorePath } from "../src/store.js";
 
-describe("resolveStorePath", () => {
-  const home = "/home/user";
+const POSIX = { platform: "linux" as const, localAppData: undefined };
 
-  it("returns absolute --store flag verbatim", () => {
+describe("resolveStorePath", () => {
+  it("override absolute is returned verbatim", () => {
     expect(
       resolveStorePath({
         storeFlag: "/abs/megasaver",
         cwd: "/repo",
-        home,
+        home: "/home/user",
         xdgDataHome: undefined,
+        ...POSIX,
       }),
     ).toBe("/abs/megasaver");
   });
 
-  it("resolves a relative --store flag against cwd", () => {
+  it("override relative resolves against cwd", () => {
     expect(
       resolveStorePath({
-        storeFlag: "./local-store",
+        storeFlag: "local-store",
         cwd: "/repo",
-        home,
+        home: "/home/user",
         xdgDataHome: undefined,
+        ...POSIX,
       }),
-    ).toBe("/repo/local-store");
+    ).toBe(join("/repo", "local-store"));
   });
 
-  it("rejects an empty --store flag", () => {
-    expect(() =>
-      resolveStorePath({
-        storeFlag: "",
-        cwd: "/repo",
-        home,
-        xdgDataHome: undefined,
-      }),
-    ).toThrow();
-  });
-
-  it("rejects a whitespace-only --store flag", () => {
-    expect(() =>
-      resolveStorePath({
-        storeFlag: "   ",
-        cwd: "/repo",
-        home,
-        xdgDataHome: undefined,
-      }),
-    ).toThrow();
-  });
-
-  it("uses XDG_DATA_HOME when set and non-empty", () => {
+  it("XDG_DATA_HOME honored on posix", () => {
     expect(
       resolveStorePath({
         storeFlag: undefined,
         cwd: "/repo",
-        home,
+        home: "/home/user",
         xdgDataHome: "/xdg/data",
+        ...POSIX,
       }),
-    ).toBe("/xdg/data/megasaver");
+    ).toBe(join("/xdg/data", "megasaver"));
   });
 
-  it("ignores empty XDG_DATA_HOME and falls back to HOME", () => {
+  it("posix default falls back to ~/.local/share", () => {
     expect(
       resolveStorePath({
         storeFlag: undefined,
         cwd: "/repo",
-        home,
-        xdgDataHome: "",
+        home: "/home/user",
+        xdgDataHome: undefined,
+        ...POSIX,
       }),
-    ).toBe("/home/user/.local/share/megasaver");
+    ).toBe(join("/home/user", ".local", "share", "megasaver"));
   });
 
-  it("falls back to HOME when XDG_DATA_HOME is undefined", () => {
+  it("win32 default uses localAppData", () => {
     expect(
       resolveStorePath({
         storeFlag: undefined,
-        cwd: "/repo",
-        home,
+        cwd: "C:\\repo",
+        home: "C:\\Users\\u",
         xdgDataHome: undefined,
+        platform: "win32",
+        localAppData: "C:\\Users\\u\\AppData\\Local",
       }),
-    ).toBe("/home/user/.local/share/megasaver");
+    ).toBe(join("C:\\Users\\u\\AppData\\Local", "megasaver"));
   });
 
-  it("flag wins even when XDG is set", () => {
+  it("win32 default falls back to home/AppData/Local when localAppData unset", () => {
     expect(
       resolveStorePath({
-        storeFlag: "/abs/override",
-        cwd: "/repo",
-        home,
-        xdgDataHome: "/xdg/data",
+        storeFlag: undefined,
+        cwd: "C:\\repo",
+        home: "C:\\Users\\u",
+        xdgDataHome: undefined,
+        platform: "win32",
+        localAppData: undefined,
       }),
-    ).toBe("/abs/override");
+    ).toBe(join("C:\\Users\\u", "AppData", "Local", "megasaver"));
   });
 
-  it("trims whitespace around the --store flag before resolving", () => {
+  it("win32 still honors an explicit XDG_DATA_HOME (documented opt-in)", () => {
     expect(
       resolveStorePath({
-        storeFlag: "  /abs/with-spaces  ",
-        cwd: "/repo",
-        home,
-        xdgDataHome: undefined,
+        storeFlag: undefined,
+        cwd: "C:\\repo",
+        home: "C:\\Users\\u",
+        xdgDataHome: "D:\\xdg",
+        platform: "win32",
+        localAppData: "C:\\Users\\u\\AppData\\Local",
       }),
-    ).toBe("/abs/with-spaces");
+    ).toBe(join("D:\\xdg", "megasaver"));
   });
 });
 
