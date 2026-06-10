@@ -1,5 +1,10 @@
 import { join } from "node:path";
-import { normalizeEol, parseBlock, readTargetFile, upsertBlock } from "@megasaver/connectors-shared";
+import {
+  normalizeEol,
+  parseBlock,
+  readTargetFile,
+  upsertBlock,
+} from "@megasaver/connectors-shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { KNOWN_TARGETS, KNOWN_TARGET_IDS } from "../../known-targets.js";

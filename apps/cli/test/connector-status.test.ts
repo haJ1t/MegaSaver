@@ -1,13 +1,13 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { MEGA_SAVER_BLOCK_START } from "@megasaver/connectors-shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   connectorStatusCommand,
   runConnectorStatus,
   runConnectorSync,
 } from "../src/commands/connector/index.js";
-import { MEGA_SAVER_BLOCK_START } from "@megasaver/connectors-shared";
 import { KNOWN_TARGETS, KNOWN_TARGET_IDS } from "../src/known-targets.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
