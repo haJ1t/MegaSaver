@@ -159,7 +159,9 @@ describe("atomicWriteFile — partial-write recovery (V2)", () => {
     // (NTFS journals rename metadata; the dedicated win32-skip test below pins
     // that). So assert its presence on POSIX and its ABSENCE on Windows.
     if (process.platform === "win32") {
-      expect(dirOpen, `expected NO dir open after rename on win32: ${callOrder.join(",")}`).toBe(-1);
+      expect(dirOpen, `expected NO dir open after rename on win32: ${callOrder.join(",")}`).toBe(
+        -1,
+      );
     } else {
       expect(dirOpen, `expected dir open after rename: ${callOrder.join(",")}`).toBeGreaterThan(
         renameIdx,
