@@ -185,4 +185,31 @@ describe("runOutputFilter", () => {
     expect(out).toHaveLength(0);
     expect(err.some((e) => e.includes("path_unsafe"))).toBe(true);
   });
+
+  it("stats write failure → error: store_write_failed, exit 1", async () => {
+    await seed(store, projectRoot);
+    const logPath = join(projectRoot, "log.txt");
+    await writeFile(logPath, "hello\n");
+    await writeFile(join(store, "stats"), "not a directory");
+
+    const { out, err } = capture();
+    const code = await runOutputFilter({
+      sessionId: SESSION_ID,
+      intentFlag: "summary",
+      fileFlag: logPath,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: projectRoot,
+      xdgDataHome: undefined,
+      stdout: (l) => out.push(l),
+      stderr: (l) => err.push(l),
+      json: true,
+      now: () => NOW,
+      newId: () => NEW_ID,
+    });
+
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    expect(err.join("\n")).toContain("error: store_write_failed:");
+  });
 });
