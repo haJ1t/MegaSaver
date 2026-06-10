@@ -5,7 +5,7 @@ sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
 status: active
 created: 2026-05-11
-updated: 2026-05-11
+updated: 2026-06-10
 ---
 
 # Context Gate pipeline & redaction flow
@@ -34,8 +34,9 @@ For a read / command / grep / fetch, the flow is:
 4. **persist** — `contentStore.saveChunkSet` writes the raw chunk set
    to `<store>/content/<projectId>/<sessionId>/<chunkSetId>.json`.
 5. **stats** — `stats.appendEvent` + session summary at
-   `<store>/stats/<projectId>/<sessionId>.json` (spec target; NOT yet
-   wired as of BB7a — see below).
+   `<store>/stats/<projectId>/<sessionId>.json`. Wired on BOTH paths:
+   exec (`run-command.ts`, BB7b) and file-read (`run.ts`,
+   stats-wiring-completion 2026-06-10) — see [[entities/stats]].
 
 ## Redaction flow (security-critical)
 
@@ -48,16 +49,14 @@ pipeline before a secret file is even opened.
 
 ## Where the orchestrator lives (shipped vs spec)
 
-AA1 §2a/§8d proposed a single `packages/core/src/context-gate/`
-orchestrator (`run.ts`, `enable.ts`, `disable.ts`) shared by the CLI
-and the future MCP bridge — "one orchestrator, two entry points". As
-of BB7a (PR #73) that directory does **not** exist. BB7a composes the
-pipeline CLI-side in `apps/cli/src/commands/output/shared.ts`
-(`resolveEffectiveSettings`, `runTwoGates`, `readAndFilter`,
-`persistChunkSet`), and `@megasaver/core` gained no new package deps.
-Stats events are not appended yet (chunkSets persist; events don't).
-The shared-orchestrator extraction + stats wiring are deferred to
-BB7b (the spawning `mega output exec`) / BB8 (the MCP bridge).
+AA1 §2a/§8d proposed a single shared orchestrator — "one
+orchestrator, two entry points". Shipped: BB7b/BB8 built it inside
+core, BB12 (PR #88) extracted it to `@megasaver/context-gate`
+(`runOutputPipeline`, `runOutputExecCommand`, `fetchChunk`; core
+re-exports the surface — see [[entities/context-gate]],
+[[decisions/context-gate-extraction]]). Stats wiring is complete on
+both paths as of stats-wiring-completion (2026-06-10); see
+[[entities/stats]].
 
 ## Package roles
 

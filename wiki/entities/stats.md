@@ -5,7 +5,7 @@ sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
 status: active
 created: 2026-05-11
-updated: 2026-05-11
+updated: 2026-06-10
 ---
 
 # `@megasaver/stats`
@@ -52,11 +52,23 @@ partial last line).
 - MUST NOT depend on: `@megasaver/policy`, `@megasaver/core`.
   Dep-graph test enforces.
 
-## Wiring status
+## Wiring status (completed 2026-06-10)
 
-BB6 ships the package surface. As of BB7a the `mega output`
-commands persist chunkSets but do NOT yet `appendEvent` — stats
-wiring is deferred to BB7b / BB8.
+Both orchestrator paths record events:
+
+- **Exec path** (BB7b): `runOutputExecCommand` →
+  `appendEvent` (`packages/context-gate/src/run-command.ts`).
+- **File-read path** (stats-wiring-completion, 2026-06-10):
+  `runOutputPipeline` builds a `sourceKind: "file"` event and calls
+  `appendEvent` (`packages/context-gate/src/run.ts`); failures map to
+  the new `RunOutputResult` member `store_write_failed` in all three
+  consumers (`mega output file`/`filter`, MCP `mega_read_file`).
+- **CLI readout**: `mega session saver stats` reads `readSummary` via
+  the core re-export (BB6 stub retired). GUI bridge reads summary +
+  events directly.
+
+Core re-exports `appendEvent`/`readSummary`/types so apps/cli honors
+its dependency-graph pin (no direct stats dep).
 
 ## Related
 
