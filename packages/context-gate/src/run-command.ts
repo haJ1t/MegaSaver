@@ -12,6 +12,7 @@ import {
   resolveEffectiveSettings,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
+import { messageOf, redactedCount } from "./stats-helpers.js";
 
 // Injectable spawn so unit tests never start a real process (CRITICAL §12).
 export type RunCommandSpawn = typeof nodeSpawn;
@@ -152,10 +153,6 @@ function runChild(input: {
   });
 }
 
-function messageOf(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 // Steps 3b–10 of §3: policy gate BEFORE spawn, redact (inside filterOutput)
 // BEFORE store, store BEFORE stats. This order is load-bearing and asserted by
 // the orchestrator tests (spawn-never-called on every denial branch).
@@ -285,14 +282,4 @@ export async function runOutputExecCommand(
   }
 
   return { ok: true, result };
-}
-
-// The filter warning shape is "redacted N secret(s) before processing"; pull N
-// back out for the stats event's secretsRedacted total.
-function redactedCount(warnings: readonly string[]): number {
-  for (const w of warnings) {
-    const m = /^redacted (\d+) secret/.exec(w);
-    if (m?.[1] !== undefined) return Number(m[1]);
-  }
-  return 0;
 }

@@ -1,13 +1,13 @@
+import { type SessionTokenSaverStats, StatsError, readSummary } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import {
   mapErrorToCliMessage,
   sessionNotFoundMessage,
+  storeCorruptMessage,
   unexpectedModeMessage,
 } from "../../../errors.js";
 import { ensureStoreReady, resolveStorePath } from "../../../store.js";
-
-const BB6_NOTICE = "Event stats (bytes saved per call) arrive with BB6.";
 
 export type RunSessionSaverStatsInput = {
   sessionId: string;
@@ -62,9 +62,14 @@ export async function runSessionSaverStats(input: RunSessionSaverStatsInput): Pr
       return cli.exitCode;
     }
     const ts = session.tokenSaver;
+    const eventStats: SessionTokenSaverStats | null = readSummary(
+      { root: rootDir },
+      session.projectId,
+      parsedSessionId,
+    );
     if (input.json) {
       input.stdout(
-        JSON.stringify({ sessionId: parsedSessionId, tokenSaver: ts ?? null, eventStats: null }),
+        JSON.stringify({ sessionId: parsedSessionId, tokenSaver: ts ?? null, eventStats }),
       );
       return 0;
     }
@@ -77,10 +82,23 @@ export async function runSessionSaverStats(input: RunSessionSaverStatsInput): Pr
     input.stdout(
       `Mega Saver Mode ${ts.enabled ? "enabled" : "disabled"} for ${parsedSessionId} (${ts.mode}; ${ts.maxReturnedBytes} B)`,
     );
-    input.stdout(BB6_NOTICE);
+    if (!eventStats) {
+      input.stdout("No events recorded yet.");
+      return 0;
+    }
+    const pct = (eventStats.savingRatio * 100).toFixed(1);
+    input.stdout(
+      `events: ${eventStats.eventsTotal} | raw: ${eventStats.rawBytesTotal} B | returned: ${eventStats.returnedBytesTotal} B | saved: ${eventStats.bytesSavedTotal} B (${pct}%)`,
+    );
+    input.stdout(
+      `secrets redacted: ${eventStats.secretsRedactedTotal} | chunks stored: ${eventStats.chunksStoredTotal} | updated: ${eventStats.updatedAt}`,
+    );
     return 0;
   } catch (err) {
-    const cli = mapErrorToCliMessage(err, { kind: "session", id: parsedSessionId });
+    const cli =
+      err instanceof StatsError
+        ? storeCorruptMessage(err.message)
+        : mapErrorToCliMessage(err, { kind: "session", id: parsedSessionId });
     input.stderr(cli.message);
     return cli.exitCode;
   }

@@ -1955,3 +1955,15 @@ stats 1.0.1, retrieval 1.0.0, content-store 1.0.1, shared 1.0.0.
 Corrected `tsup.bundle.config.ts` header comment — both
 `tsup.config.ts` and `tsup.bundle.config.ts` inline the entire
 workspace graph via `noExternal`. Docs-only; no behaviour change.
+
+## [2026-06-10] feat | stats wiring completion (PR #102)
+
+Gap A: runOutputPipeline now appends a sourceKind:"file" TokenSaverEvent
+(mirrors exec path); RunOutputResult widened with store_write_failed
+(also wraps the previously-unwrapped persistChunkSet throw); mapped in
+mega output file/filter + MCP mega_read_file. Gap B: mega session saver
+stats reads readSummary via core re-export (BB6 stub retired; text
+totals + eventStats in --json). Core re-exports stats surface so
+apps/cli keeps its dependency-graph pin. Spec/plan:
+docs/superpowers/{specs,plans}/2026-06-10-stats-wiring-completion-*.md.
+pnpm verify green; smoke: output file → saver stats shows events: 1.

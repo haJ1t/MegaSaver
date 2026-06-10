@@ -94,8 +94,13 @@ All four take a positional `<session-id>` parsed through
   was not yet available, so disable mutates settings directly).
 - `status <id>` — reports current `tokenSaver` state; renders an
   "enable" CTA when `session.tokenSaver === undefined` (pre-AA).
-- `stats <id>` — reports the session token-saver stats (BB6 stats
-  package not wired at BB2; reads only what BB1 persisted).
+- `stats <id>` — settings line + real event totals from the stats
+  store via core's `readSummary` re-export (stats-wiring-completion,
+  2026-06-10). Text: `events: N | raw: … | returned: … | saved: … (P%)`
+  + redaction/chunk counters; `No events recorded yet.` when empty.
+  `--json` fills `eventStats` with `SessionTokenSaverStats | null`
+  (BB6 stub retired; old "arrive with BB6" notice removed —
+  intentional byte-compat break).
 
 `--json` failure paths extended in
 `apps/cli/test/json-failure-paths.test.ts`. Exit 0 success, 1 error.

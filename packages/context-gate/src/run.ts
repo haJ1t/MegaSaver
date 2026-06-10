@@ -1,5 +1,6 @@
 import type { FilterOutputResult } from "@megasaver/output-filter";
 import type { SessionId } from "@megasaver/shared";
+import { type TokenSaverEvent, appendEvent } from "@megasaver/stats";
 import {
   type LoadProjectPermissions,
   defaultNewId,
@@ -10,6 +11,7 @@ import {
   runTwoGates,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
+import { messageOf, redactedCount } from "./stats-helpers.js";
 
 export type RunOutputInput = {
   registry: OrchestratorRegistry;
@@ -30,7 +32,8 @@ export type RunOutputResult =
   | { ok: false; reason: "policy_load_failed"; detail: string }
   | { ok: false; reason: "path_denied"; detail: string }
   | { ok: false; reason: "path_unsafe"; detail: string }
-  | { ok: false; reason: "file_read_failed"; detail: string };
+  | { ok: false; reason: "file_read_failed"; detail: string }
+  | { ok: false; reason: "store_write_failed"; detail: string };
 
 export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutputResult> {
   const resolved = resolveEffectiveSettings(input.registry, input.sessionId, input.loadPermissions);
@@ -64,19 +67,52 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
   });
   if (!filtered.ok) return { ok: false, reason: "file_read_failed", detail: filtered.message };
 
+  const now = input.now ?? defaultNow;
+  const newId = input.newId ?? defaultNewId;
+
   const result = { ...filtered.result };
   if (settings.storeRawOutput) {
-    const chunkSetId = (input.newId ?? defaultNewId)();
-    await persistChunkSet({
-      storeRoot: input.storeRoot,
-      chunkSetId,
-      sessionId: input.sessionId,
-      projectId: settings.projectId,
-      createdAt: (input.now ?? defaultNow)(),
-      path: input.path,
-      result: filtered.result,
-    });
+    const chunkSetId = newId();
+    try {
+      await persistChunkSet({
+        storeRoot: input.storeRoot,
+        chunkSetId,
+        sessionId: input.sessionId,
+        projectId: settings.projectId,
+        createdAt: now(),
+        path: input.path,
+        result: filtered.result,
+      });
+    } catch (err) {
+      return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
+    }
     result.chunkSetId = chunkSetId;
+  }
+
+  const event: TokenSaverEvent = {
+    id: newId(),
+    sessionId: input.sessionId,
+    projectId: settings.projectId,
+    createdAt: now(),
+    sourceKind: "file",
+    label: input.path,
+    rawBytes: filtered.result.rawBytes,
+    returnedBytes: filtered.result.returnedBytes,
+    bytesSaved: filtered.result.bytesSaved,
+    savingRatio: filtered.result.savingRatio,
+    ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
+    summary: filtered.result.summary,
+    mode: settings.mode,
+  };
+  try {
+    appendEvent({
+      store: { root: input.storeRoot },
+      event,
+      secretsRedacted: redactedCount(filtered.result.warnings ?? []),
+      chunksStored: filtered.result.excerpts.length,
+    });
+  } catch (err) {
+    return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
   }
 
   return { ok: true, result };

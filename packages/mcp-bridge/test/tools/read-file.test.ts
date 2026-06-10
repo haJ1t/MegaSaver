@@ -113,4 +113,17 @@ describe("handleReadFile", () => {
       ),
     ).rejects.toMatchObject({ code: "max_bytes_exceeded" });
   });
+
+  it("throws store_write_failed when the stats dir is unwritable", async () => {
+    const registry = seededRegistry(projectRoot);
+    const logPath = join(projectRoot, "log.txt");
+    await writeFile(logPath, "line one\n");
+    await writeFile(join(store, "stats"), "not a directory");
+    await expect(
+      handleReadFile(
+        { registry, storeRoot: store, now: () => TS, newId: () => "x" },
+        { path: logPath, intent: "read it", sessionId: SESSION_ID },
+      ),
+    ).rejects.toMatchObject({ code: "store_write_failed" });
+  });
 });
