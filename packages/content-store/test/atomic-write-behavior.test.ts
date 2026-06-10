@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { atomicWriteFile } from "../src/atomic-write.js";
+import { describeUnlessWindows } from "./_platform.js";
 
 // A single hoisted mock intercepts rename(2) so a test can inject a fault at
 // the exact rename boundary (scenario 2) without touching the production
@@ -87,13 +88,15 @@ describe("atomicWriteFile behaviour", () => {
     expect(leftoverTempFiles(dir)).toEqual([]);
   });
 
-  it("scenario 4 — dir-symlink-attack: refuses to write through a symlinked parent", () => {
-    const realDir = join(workdir, "real");
-    mkdirSync(realDir, { recursive: true });
-    const linkDir = join(workdir, "link");
-    symlinkSync(realDir, linkDir, "dir");
+  describeUnlessWindows("symlinked-parent guard (POSIX symlink semantics)", () => {
+    it("scenario 4 — dir-symlink-attack: refuses to write through a symlinked parent", () => {
+      const realDir = join(workdir, "real");
+      mkdirSync(realDir, { recursive: true });
+      const linkDir = join(workdir, "link");
+      symlinkSync(realDir, linkDir, "dir");
 
-    expect(() => atomicWriteFile(join(linkDir, "out.json"), "x")).toThrow();
+      expect(() => atomicWriteFile(join(linkDir, "out.json"), "x")).toThrow();
+    });
   });
 
   it("scenario 5 — parent doesn't exist: creates it recursively then writes", () => {

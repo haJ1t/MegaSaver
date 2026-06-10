@@ -9,6 +9,7 @@ import {
   syncTargetBlock,
   writeTargetFile,
 } from "../src/filesystem.js";
+import { describeUnlessWindows } from "./_platform.js";
 import { buildContext } from "./fixtures.js";
 
 describe("filesystem helpers", () => {
@@ -54,23 +55,25 @@ describe("filesystem helpers", () => {
     );
   });
 
-  it("writeTargetFile refuses to replace a symlink", async () => {
-    const real = join(root, "real.md");
-    const link = join(root, "AGENTS.md");
-    await writeTargetFile({ absPath: real, content: "real\n" });
-    await symlink(real, link);
-    const err = await writeTargetFile({ absPath: link, content: "x" }).catch((e) => e);
-    expect(err).toBeInstanceOf(ConnectorError);
-    expect(err.code).toBe("file_write_failed");
-  });
+  describeUnlessWindows("symlink + POSIX mode semantics", () => {
+    it("writeTargetFile refuses to replace a symlink", async () => {
+      const real = join(root, "real.md");
+      const link = join(root, "AGENTS.md");
+      await writeTargetFile({ absPath: real, content: "real\n" });
+      await symlink(real, link);
+      const err = await writeTargetFile({ absPath: link, content: "x" }).catch((e) => e);
+      expect(err).toBeInstanceOf(ConnectorError);
+      expect(err.code).toBe("file_write_failed");
+    });
 
-  it("writeTargetFile preserves existing file mode", async () => {
-    const path = join(root, "AGENTS.md");
-    await writeTargetFile({ absPath: path, content: "v1\n" });
-    await chmod(path, 0o600);
-    await writeTargetFile({ absPath: path, content: "v2\n" });
-    const s = await stat(path);
-    expect(s.mode & 0o777).toBe(0o600);
+    it("writeTargetFile preserves existing file mode", async () => {
+      const path = join(root, "AGENTS.md");
+      await writeTargetFile({ absPath: path, content: "v1\n" });
+      await chmod(path, 0o600);
+      await writeTargetFile({ absPath: path, content: "v2\n" });
+      const s = await stat(path);
+      expect(s.mode & 0o777).toBe(0o600);
+    });
   });
 
   it("assertProjectRoot rejects relative paths with target_path_invalid", async () => {
@@ -102,22 +105,24 @@ describe("filesystem helpers", () => {
   // does NOT guard — it reads through. This asymmetry is acceptable for v0.1
   // (read-only risk is lower than write risk), but a future hardening pass
   // should consider adding lstat-first to readTargetFile as well.
-  it("S5: readTargetFile reads through a symlink pointing outside the project root", async () => {
-    // Create a file "outside" the project root (in a sibling temp dir).
-    const outsideRoot = await mkdtemp(join(tmpdir(), "megasaver-outside-"));
-    try {
-      const outsideFile = join(outsideRoot, "external.md");
-      await writeTargetFile({ absPath: outsideFile, content: "external content\n" });
+  describeUnlessWindows("read-path symlink semantics", () => {
+    it("S5: readTargetFile reads through a symlink pointing outside the project root", async () => {
+      // Create a file "outside" the project root (in a sibling temp dir).
+      const outsideRoot = await mkdtemp(join(tmpdir(), "megasaver-outside-"));
+      try {
+        const outsideFile = join(outsideRoot, "external.md");
+        await writeTargetFile({ absPath: outsideFile, content: "external content\n" });
 
-      // Create a symlink inside root that points to the outside file.
-      const symlinkInRoot = join(root, "CLAUDE.md");
-      await symlink(outsideFile, symlinkInRoot);
+        // Create a symlink inside root that points to the outside file.
+        const symlinkInRoot = join(root, "CLAUDE.md");
+        await symlink(outsideFile, symlinkInRoot);
 
-      // readTargetFile follows the symlink and returns the external content.
-      const result = await readTargetFile(symlinkInRoot);
-      expect(result).toBe("external content\n");
-    } finally {
-      await rm(outsideRoot, { recursive: true, force: true });
-    }
+        // readTargetFile follows the symlink and returns the external content.
+        const result = await readTargetFile(symlinkInRoot);
+        expect(result).toBe("external content\n");
+      } finally {
+        await rm(outsideRoot, { recursive: true, force: true });
+      }
+    });
   });
 });

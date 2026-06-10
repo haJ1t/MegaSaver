@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadPack } from "../src/load-pack.js";
+import { describeUnlessWindows } from "./_platform.js";
 
 const MANIFEST = {
   name: "demo-pack",
@@ -65,17 +66,19 @@ describe("loadPack — real loader", () => {
     await expect(loadPack(root)).rejects.toMatchObject({ code: "pack_path_escape" });
   });
 
-  it("pack_path_escape on symlinked entry", async () => {
-    await seedPack(root);
-    const outside = join(root, "..", `outside-${process.pid}.md`);
-    await writeFile(outside, "outside\n");
-    await rm(join(root, "skills", "hello.md"));
-    await symlink(outside, join(root, "skills", "hello.md"));
-    try {
-      await expect(loadPack(root)).rejects.toMatchObject({ code: "pack_path_escape" });
-    } finally {
-      await rm(outside, { force: true });
-    }
+  describeUnlessWindows("symlink entry rejection (POSIX symlink semantics)", () => {
+    it("pack_path_escape on symlinked entry", async () => {
+      await seedPack(root);
+      const outside = join(root, "..", `outside-${process.pid}.md`);
+      await writeFile(outside, "outside\n");
+      await rm(join(root, "skills", "hello.md"));
+      await symlink(outside, join(root, "skills", "hello.md"));
+      try {
+        await expect(loadPack(root)).rejects.toMatchObject({ code: "pack_path_escape" });
+      } finally {
+        await rm(outside, { force: true });
+      }
+    });
   });
 
   it("pack_unreadable when an entry file is missing", async () => {
@@ -94,17 +97,19 @@ describe("loadPack — real loader", () => {
     await expect(loadPack(root)).rejects.toMatchObject({ code: "pack_unreadable" });
   });
 
-  it("pack_path_escape when the manifest itself is a symlink", async () => {
-    await seedPack(root);
-    const outside = join(root, "..", `manifest-${process.pid}.json`);
-    await writeFile(outside, JSON.stringify(MANIFEST));
-    await rm(join(root, "megasaver-pack.json"));
-    await symlink(outside, join(root, "megasaver-pack.json"));
-    try {
-      await expect(loadPack(root)).rejects.toMatchObject({ code: "pack_path_escape" });
-    } finally {
-      await rm(outside, { force: true });
-    }
+  describeUnlessWindows("symlinked manifest rejection (POSIX symlink semantics)", () => {
+    it("pack_path_escape when the manifest itself is a symlink", async () => {
+      await seedPack(root);
+      const outside = join(root, "..", `manifest-${process.pid}.json`);
+      await writeFile(outside, JSON.stringify(MANIFEST));
+      await rm(join(root, "megasaver-pack.json"));
+      await symlink(outside, join(root, "megasaver-pack.json"));
+      try {
+        await expect(loadPack(root)).rejects.toMatchObject({ code: "pack_path_escape" });
+      } finally {
+        await rm(outside, { force: true });
+      }
+    });
   });
 
   it("rejects an empty path at the boundary", async () => {
