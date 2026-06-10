@@ -40,10 +40,11 @@ updated: 2026-06-04
 - [[entities/content-store]] — `@megasaver/content-store` ChunkSet persistence, `ContentStoreErrorCode` (BB4; no core edge).
 - [[entities/retrieval]] — `@megasaver/retrieval` BM25 + `DerivedIntent` (BB6).
 - [[entities/stats]] — `@megasaver/stats` `SessionTokenSaverStats` + `TokenSaverEvent` (BB6).
+- [[entities/skill-packs]] — `@megasaver/skill-packs` real loader/discovery/installer (2026-06-10); 7-member error enum; `mega pack` CLI; symlink + path-escape guards.
 - [[entities/mcp-bridge]] — `@megasaver/mcp-bridge` real MCP stdio server over `stdio`, 4 tools, `mega mcp serve`, `buildMcpSetupOps` facade, 16-member `McpBridgeErrorCode` (BB8; AA1 §8).
 - [[entities/context-gate]] — `@megasaver/context-gate@0.2.0` extracted from core (BB12, #88); orchestrator functions (`runOutputPipeline`, `runOutputExecCommand`, `fetchChunk`, `loadProjectPermissions`); `OrchestratorRegistry` structural port; core re-exports surface (consumers unchanged).
 
-More subsystem pages land as features get built. Entity pages still pending: `skill-packs`, `conventions-sync`.
+More subsystem pages land as features get built. Entity pages still pending: `conventions-sync`.
 
 ## Workflows
 
@@ -94,6 +95,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 | What does `mega mcp` do?                           | [[entities/cli]]                                |
 | What does the output-filter pipeline ship?         | [[entities/output-filter]]                      |
 | What is `@megasaver/context-gate`?                 | [[entities/context-gate]]                       |
+| What does `mega pack` do / where do packs install? | [[entities/skill-packs]] / [[entities/cli]]     |
 | Was BB12 executed? Where is the orchestrator?      | [[decisions/context-gate-extraction]] / [[entities/context-gate]] |
 | How does the standalone CLI bundle work?           | [[entities/cli]]                                |
 | What is in permissions.yaml?                       | [[entities/policy]]                             |

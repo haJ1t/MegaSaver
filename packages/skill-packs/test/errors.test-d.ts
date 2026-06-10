@@ -2,14 +2,22 @@ import { describe, it } from "vitest";
 import { type SkillPackErrorCode, skillPackErrorCodeSchema } from "../src/errors.js";
 
 describe("SkillPackErrorCode type regression", () => {
-  it("each v0.3 member is a valid SkillPackErrorCode", () => {
-    const _a: SkillPackErrorCode = "not_implemented";
-    void _a;
+  it("each member is a valid SkillPackErrorCode", () => {
+    const _all: SkillPackErrorCode[] = [
+      "manifest_invalid",
+      "manifest_missing",
+      "pack_already_installed",
+      "pack_not_found",
+      "pack_path_escape",
+      "pack_unreadable",
+      "skill_id_conflict",
+    ];
+    void _all;
   });
 
-  it("non-member string literal is not assignable to SkillPackErrorCode", () => {
-    // @ts-expect-error non-member literal is not SkillPackErrorCode
-    const _bad: SkillPackErrorCode = "manifest_invalid";
+  it("retired placeholder code is no longer assignable", () => {
+    // @ts-expect-error not_implemented was removed with the real loader
+    const _bad: SkillPackErrorCode = "not_implemented";
     void _bad;
   });
 
@@ -25,7 +33,15 @@ describe("SkillPackErrorCode type regression", () => {
   });
 
   it("skillPackErrorCodeSchema.options preserves alphabetic order", () => {
-    const _t: readonly ["not_implemented"] = skillPackErrorCodeSchema.options;
+    const _t: readonly [
+      "manifest_invalid",
+      "manifest_missing",
+      "pack_already_installed",
+      "pack_not_found",
+      "pack_path_escape",
+      "pack_unreadable",
+      "skill_id_conflict",
+    ] = skillPackErrorCodeSchema.options;
     void _t;
   });
 });

@@ -195,9 +195,29 @@ composes the pipeline CLI-side in
 `apps/cli/src/commands/output/shared.ts` (`resolveEffectiveSettings`,
 `runTwoGates`, `readAndFilter`, `persistChunkSet`) — no `context-gate/`
 in core, no new core deps. Pre-AA sessions (no `tokenSaver`) get
-read-only defaults (mode `balanced`). No `@megasaver/stats` wiring yet
-(chunkSets persisted, but events not appended) — deferred to BB7b/BB8.
+read-only defaults (mode `balanced`). (Historical BB7a note: stats
+events were not appended then; wiring completed on both paths
+2026-06-10 — see [[entities/stats]].)
 See [[concepts/context-gate-pipeline]].
+
+### `mega pack {install,list,remove,info}` (skill-packs-real, 2026-06-10)
+
+Skill-pack management over [[entities/skill-packs]]. All four take
+`--root <dir>` (workspace root, default cwd — future skill runtime
+keys off the registered `project.rootPath`) and `--json` (canonical
+flag shape; failure = text stderr, exit 1, no stdout).
+
+- `install <path> [--force]` — validate-before-copy, full-tree symlink
+  rejection, shadow-aware skill-id conflict scan, atomic `.tmp-<name>`
+  staging. Text: `Installed <name>@<version> (<kind>, N skills)`.
+- `list` — discovery over workspace + global roots; per-pack line
+  `name@version kind source`; discovery warnings → stderr (`--json`
+  carries `{ packs, warnings }`).
+- `remove <name>` — workspace-only; `pack_not_found` if absent.
+- `info <name>` — workspace-beats-global resolution; renders manifest.
+
+Errors surface as `error: <SkillPackErrorCode>: <detail>` via
+`skillPackErrorMessage` (closed 7-member enum, [[entities/skill-packs]]).
 
 ### Store resolution
 

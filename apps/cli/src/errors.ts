@@ -287,6 +287,12 @@ export function chunkSetNotFoundMessage(): CliMessage {
   return { message: "error: chunk_set_not_found", exitCode: 1 };
 }
 
+// `mega pack` boundary: SkillPackError codes surface verbatim so the
+// CLI and library observe the same closed enum.
+export function skillPackErrorMessage(code: string, detail: string): CliMessage {
+  return { message: `error: ${code}: ${detail}`, exitCode: 1 };
+}
+
 export function chunkNotFoundMessage(): CliMessage {
   return { message: "error: chunk_not_found", exitCode: 1 };
 }

@@ -1967,3 +1967,15 @@ totals + eventStats in --json). Core re-exports stats surface so
 apps/cli keeps its dependency-graph pin. Spec/plan:
 docs/superpowers/{specs,plans}/2026-06-10-stats-wiring-completion-*.md.
 pnpm verify green; smoke: output file → saver stats shows events: 1.
+
+## [2026-06-10] feat | skill-packs real implementation (PR #103)
+
+Last placeholder subsystem made real (risk HIGH; architect pass
+GO-WITH-CHANGES folded into spec). loadPack with containment +
+symlink guards; discoverPacks (workspace beats global, skip+warn);
+shadow-aware scanSkillIdConflicts; atomic installPack (.tmp staging);
+removePack; `mega pack {install,list,remove,info}` CLI with --root +
+--json parity. Error enum widened to 7 members (not_implemented
+retired). apps/cli dependency allow-list admits skill-packs. 74 new
+tests across library + CLI; pnpm verify green; e2e smoke round-trip
+captured. Spec/plan: docs/superpowers/{specs,plans}/2026-06-10-skill-packs-real-*.md.

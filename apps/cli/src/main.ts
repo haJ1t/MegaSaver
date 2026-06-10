@@ -5,6 +5,7 @@ import { doctorCommand } from "./commands/doctor.js";
 import { mcpCommand } from "./commands/mcp/index.js";
 import { memoryCommand } from "./commands/memory/index.js";
 import { outputCommand } from "./commands/output/index.js";
+import { packCommand } from "./commands/pack/index.js";
 import { projectCommand } from "./commands/project.js";
 import { sessionCommand } from "./commands/session/index.js";
 
@@ -34,5 +35,6 @@ export const mainCommand = defineCommand({
     memory: memoryCommand,
     output: outputCommand,
     mcp: mcpCommand,
+    pack: packCommand,
   },
 });

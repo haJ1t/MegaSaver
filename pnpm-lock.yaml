@@ -56,6 +56,9 @@ importers:
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@megasaver/skill-packs':
+        specifier: workspace:*
+        version: link:../../packages/skill-packs
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
@@ -371,6 +374,10 @@ importers:
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
 
   packages/stats:
     dependencies:
