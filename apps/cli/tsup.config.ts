@@ -8,6 +8,11 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   dts: false,
+  // The TypeScript compiler (pulled in via @megasaver/indexer for AST block
+  // extraction) is a large CJS module that references __filename at load and
+  // cannot be inlined into an ESM bundle. Keep it external — resolved from
+  // node_modules at runtime (declared in package.json `dependencies`).
+  external: ["typescript"],
   // A bundled CJS dep that `require()`s a bare Node builtin — e.g. yaml's
   // `require("process")`, pulled in transitively via context-gate's
   // loadProjectPermissions — otherwise hits esbuild's `__require` shim in the

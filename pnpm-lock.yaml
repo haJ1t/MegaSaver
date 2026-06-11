@@ -31,6 +31,10 @@ importers:
         version: 2.1.9(@types/node@22.19.17)(jsdom@25.0.1)
 
   apps/cli:
+    dependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
     devDependencies:
       '@megasaver/connector-generic-cli':
         specifier: workspace:*
@@ -44,6 +48,9 @@ importers:
       '@megasaver/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@megasaver/indexer':
+        specifier: workspace:*
+        version: link:../../packages/indexer
       '@megasaver/mcp-bridge':
         specifier: workspace:*
         version: link:../../packages/mcp-bridge

@@ -45,7 +45,7 @@ export function extractJson(filePath: string, source: string): ExtractedBlock[] 
   }
 
   if (basename(filePath) === "package.json") {
-    const scripts = obj["scripts"];
+    const scripts = (obj as { scripts?: unknown }).scripts;
     if (scripts !== null && typeof scripts === "object" && !Array.isArray(scripts)) {
       for (const [name, command] of Object.entries(scripts as Record<string, unknown>)) {
         add(`script:${name}`, lineOf(name), String(command));
