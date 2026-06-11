@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { upsertBlock } from "@megasaver/connectors-shared";
 import type { Session, TokenSaverSettings } from "@megasaver/core";
+import type { ProjectId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildConnectorContext } from "../src/commands/connector/shared.js";
 import { runConnectorSync } from "../src/commands/connector/sync.js";
@@ -142,7 +143,7 @@ describe("upsertBlock — byte-equality regression fixture (S6)", () => {
         }
 
         const project = {
-          id: PROJECT_ID,
+          id: PROJECT_ID as ProjectId,
           name: "demo",
           rootPath: projectRoot,
           createdAt: TS,

@@ -167,9 +167,12 @@ describe("mega pack commands", () => {
       ["info", packInfoCommand],
     ] as const;
     it.each(commands)("%s: json flag shape is pinned", (_name, command) => {
-      const arg = (
-        command.args as Record<string, { type: string; default?: boolean; description?: string }>
-      ).json;
+      const args = command.args as {
+        json?: { type?: string; default?: boolean; description?: string };
+      };
+      const arg = args.json;
+      expect(arg).toBeDefined();
+      if (arg === undefined) return;
       expect(arg.type).toBe("boolean");
       expect(arg.default).toBe(false);
       expect(arg.description).toBe("Emit JSON output.");

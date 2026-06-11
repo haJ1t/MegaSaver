@@ -45,7 +45,7 @@ describe("--json write-side success shape", () => {
       cwd: projectRoot,
       home: "/tmp",
       xdgDataHome: undefined,
-      platform: "linux",
+      platform: "linux" as NodeJS.Platform,
       localAppData: undefined,
       stdout: (line: string) => stdoutLines.push(line),
       stderr: (line: string) => stderrLines.push(line),

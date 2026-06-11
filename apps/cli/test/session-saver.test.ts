@@ -269,7 +269,8 @@ describe("session saver commands", () => {
       await seed();
       await enable({ mode: "aggressive" });
       const session = await readSession(SESSION_ID);
-      expect(session?.tokenSaver).toMatchObject({
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      expect(session?.["tokenSaver"]).toMatchObject({
         enabled: true,
         mode: "aggressive",
         maxReturnedBytes: modeToBudget("aggressive"),
@@ -350,7 +351,8 @@ describe("session saver commands", () => {
       const { code } = await enable({ mode: "balanced" });
       expect(code).toBe(0);
       const session = await readSession(SESSION_ID);
-      expect(session?.tokenSaver).toBeDefined();
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      expect(session?.["tokenSaver"]).toBeDefined();
     });
   });
 
@@ -475,7 +477,8 @@ describe("session saver commands", () => {
       await status();
       const after = await readSession(SESSION_ID);
       expect(after).toEqual(before);
-      expect(after?.tokenSaver).toBeUndefined();
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      expect(after?.["tokenSaver"]).toBeUndefined();
     });
 
     it("rejects --mode → exit 1, non-JSON stderr, no stdout", async () => {

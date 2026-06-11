@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
+import type { ProjectId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   formatProjectLine,
@@ -12,7 +13,7 @@ describe("formatProjectLine", () => {
   it("renders id and name separated by exactly two spaces", () => {
     expect(
       formatProjectLine({
-        id: "01HXYZ-aaaa-bbbb-cccc-dddddddddddd",
+        id: "01HXYZ-aaaa-bbbb-cccc-dddddddddddd" as ProjectId,
         name: "demo",
       }),
     ).toBe("01HXYZ-aaaa-bbbb-cccc-dddddddddddd  demo");
@@ -21,7 +22,7 @@ describe("formatProjectLine", () => {
   it("preserves whitespace inside name without quoting", () => {
     expect(
       formatProjectLine({
-        id: "id1",
+        id: "id1" as ProjectId,
         name: "two words",
       }),
     ).toBe("id1  two words");
@@ -377,11 +378,16 @@ describe("projectCreateCommand", () => {
     expect(process.exitCode).toBe(0);
     expect(logSpy).toHaveBeenCalledTimes(1);
     const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as Record<string, unknown>;
-    expect(parsed.name).toBe("demo");
-    expect(typeof parsed.id).toBe("string");
-    expect(parsed.rootPath).toBe(process.cwd());
-    expect(typeof parsed.createdAt).toBe("string");
-    expect(typeof parsed.updatedAt).toBe("string");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(parsed["name"]).toBe("demo");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(typeof parsed["id"]).toBe("string");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(parsed["rootPath"]).toBe(process.cwd());
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(typeof parsed["createdAt"]).toBe("string");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(typeof parsed["updatedAt"]).toBe("string");
   });
 
   it("--json + --root emits JSON with resolved rootPath", async () => {
@@ -395,6 +401,7 @@ describe("projectCreateCommand", () => {
     expect(process.exitCode).toBe(0);
     expect(logSpy).toHaveBeenCalledTimes(1);
     const parsed = JSON.parse(logSpy.mock.calls[0]?.[0] as string) as Record<string, unknown>;
-    expect(parsed.rootPath).toBe(resolve("/tmp/json-root-test"));
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(parsed["rootPath"]).toBe(resolve("/tmp/json-root-test"));
   });
 });
