@@ -99,6 +99,14 @@ describe("scoreBlocks", () => {
     expect(find(scored, "clean")?.score).toBeGreaterThan(find(scored, "staleDoc")?.score ?? 99);
   });
 
+  it("yields zero semantic relevance when nothing matches the task", () => {
+    const scored = scoreBlocks({
+      task: "zzqqxx nonsense",
+      blocks: [block({ name: "a", filePath: "src/a.ts", keywords: ["auth"] })],
+    });
+    expect(scored.every((s) => s.factors.semanticRelevance === 0)).toBe(true);
+  });
+
   it("exposes weights as named constants", () => {
     expect(WEIGHTS.userMention).toBeGreaterThan(WEIGHTS.semantic);
     expect(WEIGHTS.testFailure).toBeGreaterThan(WEIGHTS.recentEdit);

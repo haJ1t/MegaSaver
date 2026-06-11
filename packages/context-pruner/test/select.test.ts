@@ -2,7 +2,7 @@ import type { CodeBlock } from "@megasaver/indexer";
 import type { ProjectId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { scoreBlocks } from "../src/score.js";
-import { selectPack } from "../src/select.js";
+import { estimateBlockTokens, selectPack } from "../src/select.js";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000001" as ProjectId;
 let n = 0;
@@ -50,6 +50,30 @@ describe("selectPack", () => {
     const helper = sel.included.find((c) => c.block.name === "helper");
     expect(helper).toBeDefined();
     expect(helper?.factors.dependencyRelevance).toBe(1);
+  });
+
+  it("pulls transitive dependencies (A→B→C) into the pack", () => {
+    const blocks = [
+      block({ name: "a", filePath: "src/a.ts", keywords: ["auth"], calls: ["b"] }),
+      block({ name: "b", filePath: "src/b.ts", keywords: ["zzz"], calls: ["c"] }),
+      block({ name: "c", filePath: "src/c.ts", keywords: ["zzz"] }),
+    ];
+    const sel = selectPack(scoreBlocks({ task: "auth", blocks }), { limit: 8 });
+    expect(sel.included.map((s) => s.block.name).sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("labels a relevant block cut by token budget as budget, not irrelevant", () => {
+    const alpha = block({
+      name: "alpha",
+      filePath: "src/alpha.ts",
+      keywords: ["auth"],
+      endLine: 6,
+    });
+    const beta = block({ name: "beta", filePath: "src/beta.ts", keywords: ["auth"], endLine: 6 });
+    const candidates = scoreBlocks({ task: "auth", blocks: [alpha, beta] });
+    const sel = selectPack(candidates, { maxTokens: estimateBlockTokens(alpha) });
+    expect(sel.included.length).toBe(1);
+    expect(sel.excluded[0]?.reason).toBe("budget");
   });
 
   it("never drops a named block, even under a tiny token budget", () => {

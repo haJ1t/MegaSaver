@@ -70,18 +70,31 @@ export function selectPack(
     }
   }
 
-  // Dependency closure: a `calls` target resolved to another block's name/export
-  // is pulled in (even at low relevance) so the pack is self-contained.
+  // Resolve a name/export to a block. First writer wins — candidates are
+  // score-sorted, so a collision resolves to the highest-scoring same-named
+  // block (deterministic; names can legitimately collide across files).
   const byName = new Map<string, ScoredCandidate>();
   for (const candidate of candidates) {
-    if (candidate.block.name) byName.set(candidate.block.name, candidate);
-    for (const exported of candidate.block.exports) byName.set(exported, candidate);
+    if (candidate.block.name && !byName.has(candidate.block.name)) {
+      byName.set(candidate.block.name, candidate);
+    }
+    for (const exported of candidate.block.exports) {
+      if (!byName.has(exported)) byName.set(exported, candidate);
+    }
   }
-  for (const candidate of [...included]) {
-    for (const call of candidate.block.calls) {
+
+  // Transitive dependency closure (BFS over `calls`): A→B→C all land in the
+  // pack so it is self-contained. The visited/includedIds guard bounds the
+  // walk; budget/limit still apply via add(), so closure stops at the budget.
+  const queue: ScoredCandidate[] = [...included];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+    for (const call of current.block.calls) {
       const target = byName.get(call);
       if (target && !includedIds.has(target.block.id) && add(target, false)) {
         target.factors.dependencyRelevance = 1;
+        queue.push(target);
       }
     }
   }

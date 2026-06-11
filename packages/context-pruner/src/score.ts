@@ -16,6 +16,8 @@ export type ScoredCandidate = { block: CodeBlock; factors: ScoreFactors; score: 
 
 const NOISE_PATH_RE =
   /(^|\/)(dist|build|vendor|node_modules|coverage)\/|\.min\.|(^|[.\-/])lock\b|\.lock$/i;
+// A block spanning >400 lines is almost always generated / a bundle / a giant
+// data literal, not a unit an agent reasons about — penalize it as noise.
 const HUGE_SPAN_LINES = 400;
 
 function escapeRegExp(value: string): string {
