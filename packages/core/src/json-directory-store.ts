@@ -135,11 +135,16 @@ export function writeMemoryEntriesForProject(
   projectId: ProjectId,
   entries: readonly MemoryEntry[],
 ): void {
+  const filePath = join(paths.memoryDir, `${projectId}.jsonl`);
+  // An empty set removes the file rather than leaving a zero-byte JSONL:
+  // readJsonLines treats an empty existing file as corrupt, so deleting the
+  // last entry must clear the file, not blank it.
+  if (entries.length === 0) {
+    rmSync(filePath, { force: true });
+    return;
+  }
   const content = entries.map((entry) => JSON.stringify(entry)).join("\n");
-  atomicWriteFile(
-    join(paths.memoryDir, `${projectId}.jsonl`),
-    content.length === 0 ? "" : `${content}\n`,
-  );
+  atomicWriteFile(filePath, `${content}\n`);
 }
 
 function readJsonArray(filePath: string): unknown[] {

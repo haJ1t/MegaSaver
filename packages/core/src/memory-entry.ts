@@ -100,6 +100,32 @@ export const memoryEntrySchema = z
 
 export type MemoryEntry = z.infer<typeof memoryEntrySchema>;
 
+// Partial update over the MUTABLE fields only. id/projectId/createdAt/scope/
+// sessionId are immutable after create; `.strict()` rejects them so a bad
+// caller fails loudly. `updatedAt` is required — the caller (CLI/MCP) owns the
+// clock, mirroring the create path where timestamps are passed in, not minted
+// inside the registry.
+export const memoryEntryUpdatePatchSchema = z
+  .object({
+    type: memoryTypeSchema.optional(),
+    title: titleSchema.optional(),
+    content: z.string().trim().min(1).optional(),
+    keywords: keywordsSchema.optional(),
+    confidence: memoryConfidenceSchema.optional(),
+    source: memorySourceSchema.optional(),
+    reason: z.string().trim().min(1).optional(),
+    goal: z.string().trim().min(1).optional(),
+    evidence: z.array(z.string()).optional(),
+    relatedFiles: z.array(z.string()).optional(),
+    relatedSymbols: z.array(z.string()).optional(),
+    stale: z.boolean().optional(),
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    updatedAt: z.string().datetime({ offset: true }),
+  })
+  .strict();
+
+export type MemoryEntryUpdatePatch = z.infer<typeof memoryEntryUpdatePatchSchema>;
+
 const LEGACY_TITLE_MAX = 59;
 
 // v0.1 memory rows predate the typed DIMMEM schema. Backfill them to neutral

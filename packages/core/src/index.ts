@@ -3,6 +3,7 @@ export * from "./errors.js";
 export * from "./init-store.js";
 export * from "./json-directory-registry.js";
 export * from "./memory-entry.js";
+export * from "./memory-search.js";
 export * from "./project.js";
 export * from "./registry.js";
 export * from "./session.js";

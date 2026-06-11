@@ -1,6 +1,12 @@
 import type { MemoryEntryId, ProjectId, SessionId } from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
-import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
+import {
+  type MemoryEntry,
+  type MemoryEntryUpdatePatch,
+  memoryEntrySchema,
+  memoryEntryUpdatePatchSchema,
+} from "./memory-entry.js";
+import { type MemorySearchQuery, searchMemoryEntries as searchEntries } from "./memory-search.js";
 import { type Project, projectSchema } from "./project.js";
 import {
   type Session,
@@ -26,6 +32,9 @@ export interface CoreRegistry {
   createMemoryEntry(entry: MemoryEntry): MemoryEntry;
   getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
   listMemoryEntries(projectId: ProjectId): MemoryEntry[];
+  updateMemoryEntry(id: MemoryEntryId, patch: MemoryEntryUpdatePatch): MemoryEntry;
+  deleteMemoryEntry(id: MemoryEntryId): void;
+  searchMemoryEntries(projectId: ProjectId, query: MemorySearchQuery): MemoryEntry[];
 }
 
 export function createInMemoryCoreRegistry(): CoreRegistry {
@@ -173,6 +182,32 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       return Array.from(memoryEntries.values())
         .filter((entry) => entry.projectId === projectId)
         .map((entry) => memoryEntrySchema.parse(entry));
+    },
+
+    updateMemoryEntry(id, patch) {
+      const parsedPatch = memoryEntryUpdatePatchSchema.parse(patch);
+      const existing = memoryEntries.get(id);
+      if (!existing) {
+        throw new CoreRegistryError("memory_entry_not_found", `Memory entry does not exist: ${id}`);
+      }
+      const updated = memoryEntrySchema.parse({ ...existing, ...parsedPatch });
+      memoryEntries.set(id, updated);
+      return updated;
+    },
+
+    deleteMemoryEntry(id) {
+      if (!memoryEntries.has(id)) {
+        throw new CoreRegistryError("memory_entry_not_found", `Memory entry does not exist: ${id}`);
+      }
+      memoryEntries.delete(id);
+    },
+
+    searchMemoryEntries(projectId, query) {
+      requireProject(projectId);
+      const entries = Array.from(memoryEntries.values())
+        .filter((entry) => entry.projectId === projectId)
+        .map((entry) => memoryEntrySchema.parse(entry));
+      return searchEntries(entries, query);
     },
   };
 }

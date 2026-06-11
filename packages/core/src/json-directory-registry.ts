@@ -12,7 +12,8 @@ import {
   writeProjects,
   writeSessions,
 } from "./json-directory-store.js";
-import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
+import { memoryEntrySchema, memoryEntryUpdatePatchSchema } from "./memory-entry.js";
+import { searchMemoryEntries as searchEntries } from "./memory-search.js";
 import { type Project, projectSchema } from "./project.js";
 import type { CoreRegistry } from "./registry.js";
 import { type Session, sessionSchema, sessionUpdatePatchSchema } from "./session.js";
@@ -271,6 +272,49 @@ export function createJsonDirectoryCoreRegistry(
       return readMemoryEntriesForProject(paths, projectId).map((entry) =>
         memoryEntrySchema.parse(entry),
       );
+    },
+
+    updateMemoryEntry(id, patch) {
+      const parsedPatch = memoryEntryUpdatePatchSchema.parse(patch);
+      return withDirLock(options.rootDir, () => {
+        const existing = readAllMemoryEntries(paths).find((candidate) => candidate.id === id);
+        if (!existing) {
+          throw new CoreRegistryError(
+            "memory_entry_not_found",
+            `Memory entry does not exist: ${id}`,
+          );
+        }
+        const updated = memoryEntrySchema.parse({ ...existing, ...parsedPatch });
+        const next = readMemoryEntriesForProject(paths, existing.projectId).map((entry) =>
+          entry.id === id ? updated : entry,
+        );
+        writeMemoryEntriesForProject(paths, existing.projectId, next);
+        return updated;
+      });
+    },
+
+    deleteMemoryEntry(id) {
+      withDirLock(options.rootDir, () => {
+        const existing = readAllMemoryEntries(paths).find((candidate) => candidate.id === id);
+        if (!existing) {
+          throw new CoreRegistryError(
+            "memory_entry_not_found",
+            `Memory entry does not exist: ${id}`,
+          );
+        }
+        const next = readMemoryEntriesForProject(paths, existing.projectId).filter(
+          (entry) => entry.id !== id,
+        );
+        writeMemoryEntriesForProject(paths, existing.projectId, next);
+      });
+    },
+
+    searchMemoryEntries(projectId, query) {
+      requireProject(projectId);
+      const entries = readMemoryEntriesForProject(paths, projectId).map((entry) =>
+        memoryEntrySchema.parse(entry),
+      );
+      return searchEntries(entries, query);
     },
   };
 }
