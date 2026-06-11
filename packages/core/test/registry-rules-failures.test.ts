@@ -14,6 +14,7 @@ import { type CoreRegistry, createInMemoryCoreRegistry } from "../src/registry.j
 
 const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const SECOND_PROJECT_ID = projectIdSchema.parse("33333333-3333-4333-8333-333333333333");
+const MISSING_PROJECT_ID = projectIdSchema.parse("44444444-4444-4444-8444-444444444444");
 const RULE_ID = projectRuleIdSchema.parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 const FA_ID = failedAttemptIdSchema.parse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
 const SESSION_ID = sessionIdSchema.parse("22222222-2222-4222-8222-222222222222");
@@ -121,6 +122,24 @@ function suite(name: string, make: () => CoreRegistry) {
       r.createFailedAttempt(failure);
       expect(() =>
         r.createFailedAttempt({ ...failure, projectId: SECOND_PROJECT_ID }),
+      ).toThrowError(expect.objectContaining({ code: "failed_attempt_already_exists" }));
+    });
+
+    it("prefers rule dup-id over missing-project when both fail", () => {
+      const r = make();
+      r.createProject(project);
+      r.createProjectRule(rule);
+      expect(() => r.createProjectRule({ ...rule, projectId: MISSING_PROJECT_ID })).toThrowError(
+        expect.objectContaining({ code: "project_rule_already_exists" }),
+      );
+    });
+
+    it("prefers failed-attempt dup-id over missing-project when both fail", () => {
+      const r = make();
+      r.createProject(project);
+      r.createFailedAttempt(failure);
+      expect(() =>
+        r.createFailedAttempt({ ...failure, projectId: MISSING_PROJECT_ID }),
       ).toThrowError(expect.objectContaining({ code: "failed_attempt_already_exists" }));
     });
   });

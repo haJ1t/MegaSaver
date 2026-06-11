@@ -328,13 +328,13 @@ export function createJsonDirectoryCoreRegistry(
     createProjectRule(rule) {
       return withDirLock(options.rootDir, () => {
         const parsed = projectRuleSchema.parse(rule);
-        requireProject(parsed.projectId);
         if (readAllProjectRules(paths).some((r) => r.id === parsed.id)) {
           throw new CoreRegistryError(
             "project_rule_already_exists",
             `Project rule already exists: ${parsed.id}`,
           );
         }
+        requireProject(parsed.projectId);
         const existing = readProjectRulesForProject(paths, parsed.projectId);
         writeProjectRulesForProject(paths, parsed.projectId, [...existing, parsed]);
         return projectRuleSchema.parse(parsed);
@@ -354,6 +354,12 @@ export function createJsonDirectoryCoreRegistry(
     createFailedAttempt(attempt) {
       return withDirLock(options.rootDir, () => {
         const parsed = failedAttemptSchema.parse(attempt);
+        if (readAllFailedAttempts(paths).some((fa) => fa.id === parsed.id)) {
+          throw new CoreRegistryError(
+            "failed_attempt_already_exists",
+            `Failed attempt already exists: ${parsed.id}`,
+          );
+        }
         requireProject(parsed.projectId);
         if (parsed.sessionId !== null) {
           const session = readSessions(paths).find((s) => s.id === parsed.sessionId);
@@ -369,12 +375,6 @@ export function createJsonDirectoryCoreRegistry(
               `Session ${parsed.sessionId} does not belong to project ${parsed.projectId}`,
             );
           }
-        }
-        if (readAllFailedAttempts(paths).some((fa) => fa.id === parsed.id)) {
-          throw new CoreRegistryError(
-            "failed_attempt_already_exists",
-            `Failed attempt already exists: ${parsed.id}`,
-          );
         }
         const existing = readFailedAttemptsForProject(paths, parsed.projectId);
         writeFailedAttemptsForProject(paths, parsed.projectId, [...existing, parsed]);
