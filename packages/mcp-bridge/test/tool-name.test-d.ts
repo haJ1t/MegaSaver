@@ -6,6 +6,8 @@ describe("McpToolName type regression", () => {
     const members: McpToolName[] = [
       "explain_context_selection",
       "get_context_budget_report",
+      "get_project_context",
+      "get_project_rules",
       "get_relevant_code_blocks",
       "get_relevant_context",
       "get_relevant_memories",
@@ -13,7 +15,9 @@ describe("McpToolName type regression", () => {
       "mega_read_file",
       "mega_recall",
       "mega_run_command",
+      "record_failed_attempt",
       "save_memory",
+      "save_project_rule",
       "search_memory",
     ];
     void members;
@@ -30,10 +34,12 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 11-member alphabetic order (AA1 §8a + Phase 1 + Phase 3)", () => {
+  it("schema.options preserves the 15-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4)", () => {
     const _t: readonly [
       "explain_context_selection",
       "get_context_budget_report",
+      "get_project_context",
+      "get_project_rules",
       "get_relevant_code_blocks",
       "get_relevant_context",
       "get_relevant_memories",
@@ -41,7 +47,9 @@ describe("McpToolName type regression", () => {
       "mega_read_file",
       "mega_recall",
       "mega_run_command",
+      "record_failed_attempt",
       "save_memory",
+      "save_project_rule",
       "search_memory",
     ] = mcpToolNameSchema.options;
     void _t;
