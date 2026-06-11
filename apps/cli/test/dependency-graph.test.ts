@@ -14,6 +14,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/connector-generic-cli",
   "@megasaver/connectors-shared",
   "@megasaver/content-store",
+  "@megasaver/context-pruner",
   "@megasaver/core",
   "@megasaver/indexer",
   "@megasaver/mcp-bridge",
