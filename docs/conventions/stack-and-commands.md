@@ -32,6 +32,7 @@ pnpm verify           # lint + typecheck + test (DoD gate)
 pnpm --filter @megasaver/<pkg> <cmd>
 ```
 
-Note: pnpm/Turborepo/Biome configuration files are introduced by the
+Note: configuration files (`tsconfig.base.json`, `biome.json`,
+`turbo.json`, `pnpm-workspace.yaml`) are introduced by the
 `project-skeleton` spec, not this bootstrap. Until then, the commands
 above are aspirational and will activate when the skeleton lands.
