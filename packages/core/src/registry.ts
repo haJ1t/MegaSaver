@@ -1,11 +1,13 @@
-import type { MemoryEntryId, ProjectId, SessionId } from "@megasaver/shared";
+import type { FailedAttemptId, MemoryEntryId, ProjectId, ProjectRuleId, SessionId } from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
+import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
 import {
   type MemoryEntry,
   type MemoryEntryUpdatePatch,
   memoryEntrySchema,
   memoryEntryUpdatePatchSchema,
 } from "./memory-entry.js";
+import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { type MemorySearchQuery, searchMemoryEntries as searchEntries } from "./memory-search.js";
 import { type Project, projectSchema } from "./project.js";
 import {
@@ -38,12 +40,20 @@ export interface CoreRegistry {
   // to render a not-found error before deleting).
   deleteMemoryEntry(id: MemoryEntryId): void;
   searchMemoryEntries(projectId: ProjectId, query: MemorySearchQuery): MemoryEntry[];
+  createProjectRule(rule: ProjectRule): ProjectRule;
+  getProjectRule(id: ProjectRuleId): ProjectRule | null;
+  listProjectRules(projectId: ProjectId): ProjectRule[];
+  createFailedAttempt(attempt: FailedAttempt): FailedAttempt;
+  getFailedAttempt(id: FailedAttemptId): FailedAttempt | null;
+  listFailedAttempts(projectId: ProjectId): FailedAttempt[];
 }
 
 export function createInMemoryCoreRegistry(): CoreRegistry {
   const projects = new Map<ProjectId, Project>();
   const sessions = new Map<SessionId, Session>();
   const memoryEntries = new Map<MemoryEntryId, MemoryEntry>();
+  const projectRules = new Map<ProjectRuleId, ProjectRule>();
+  const failedAttempts = new Map<FailedAttemptId, FailedAttempt>();
 
   const requireProject = (projectId: ProjectId): void => {
     if (!projects.has(projectId)) {
@@ -211,6 +221,71 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
         .filter((entry) => entry.projectId === projectId)
         .map((entry) => memoryEntrySchema.parse(entry));
       return searchEntries(entries, query);
+    },
+
+    createProjectRule(rule) {
+      const parsed = projectRuleSchema.parse(rule);
+      if (projectRules.has(parsed.id)) {
+        throw new CoreRegistryError(
+          "project_rule_already_exists",
+          `Project rule already exists: ${parsed.id}`,
+        );
+      }
+      requireProject(parsed.projectId);
+      projectRules.set(parsed.id, parsed);
+      return projectRuleSchema.parse(parsed);
+    },
+
+    getProjectRule(id) {
+      const rule = projectRules.get(id);
+      return rule ? projectRuleSchema.parse(rule) : null;
+    },
+
+    listProjectRules(projectId) {
+      requireProject(projectId);
+      return Array.from(projectRules.values())
+        .filter((rule) => rule.projectId === projectId)
+        .map((rule) => projectRuleSchema.parse(rule));
+    },
+
+    createFailedAttempt(attempt) {
+      const parsed = failedAttemptSchema.parse(attempt);
+      if (failedAttempts.has(parsed.id)) {
+        throw new CoreRegistryError(
+          "failed_attempt_already_exists",
+          `Failed attempt already exists: ${parsed.id}`,
+        );
+      }
+      requireProject(parsed.projectId);
+      if (parsed.sessionId !== null) {
+        const session = sessions.get(parsed.sessionId);
+        if (!session) {
+          throw new CoreRegistryError(
+            "session_not_found",
+            `Session does not exist: ${parsed.sessionId}`,
+          );
+        }
+        if (session.projectId !== parsed.projectId) {
+          throw new CoreRegistryError(
+            "session_project_mismatch",
+            `Session ${parsed.sessionId} does not belong to project ${parsed.projectId}`,
+          );
+        }
+      }
+      failedAttempts.set(parsed.id, parsed);
+      return failedAttemptSchema.parse(parsed);
+    },
+
+    getFailedAttempt(id) {
+      const attempt = failedAttempts.get(id);
+      return attempt ? failedAttemptSchema.parse(attempt) : null;
+    },
+
+    listFailedAttempts(projectId) {
+      requireProject(projectId);
+      return Array.from(failedAttempts.values())
+        .filter((attempt) => attempt.projectId === projectId)
+        .map((attempt) => failedAttemptSchema.parse(attempt));
     },
   };
 }

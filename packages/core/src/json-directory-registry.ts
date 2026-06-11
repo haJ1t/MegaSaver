@@ -2,17 +2,23 @@ import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from 
 import path from "node:path";
 import type { ProjectId } from "@megasaver/shared";
 import { CorePersistenceError, CoreRegistryError } from "./errors.js";
+import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
 import {
   readAllMemoryEntries,
+  readFailedAttemptsForProject,
   readMemoryEntriesForProject,
+  readProjectRulesForProject,
   readProjects,
   readSessions,
   resolveStorePaths,
+  writeFailedAttemptsForProject,
   writeMemoryEntriesForProject,
+  writeProjectRulesForProject,
   writeProjects,
   writeSessions,
 } from "./json-directory-store.js";
 import { memoryEntrySchema, memoryEntryUpdatePatchSchema } from "./memory-entry.js";
+import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { searchMemoryEntries as searchEntries } from "./memory-search.js";
 import { type Project, projectSchema } from "./project.js";
 import type { CoreRegistry } from "./registry.js";
@@ -315,6 +321,81 @@ export function createJsonDirectoryCoreRegistry(
         memoryEntrySchema.parse(entry),
       );
       return searchEntries(entries, query);
+    },
+
+    createProjectRule(rule) {
+      return withDirLock(options.rootDir, () => {
+        const parsed = projectRuleSchema.parse(rule);
+        requireProject(parsed.projectId);
+        const existing = readProjectRulesForProject(paths, parsed.projectId);
+        if (existing.some((r) => r.id === parsed.id)) {
+          throw new CoreRegistryError(
+            "project_rule_already_exists",
+            `Project rule already exists: ${parsed.id}`,
+          );
+        }
+        writeProjectRulesForProject(paths, parsed.projectId, [...existing, parsed]);
+        return projectRuleSchema.parse(parsed);
+      });
+    },
+
+    getProjectRule(id) {
+      for (const project of readProjects(paths)) {
+        const rule = readProjectRulesForProject(paths, project.id).find((r) => r.id === id);
+        if (rule) return projectRuleSchema.parse(rule);
+      }
+      return null;
+    },
+
+    listProjectRules(projectId) {
+      requireProject(projectId);
+      return readProjectRulesForProject(paths, projectId).map((r) => projectRuleSchema.parse(r));
+    },
+
+    createFailedAttempt(attempt) {
+      return withDirLock(options.rootDir, () => {
+        const parsed = failedAttemptSchema.parse(attempt);
+        requireProject(parsed.projectId);
+        if (parsed.sessionId !== null) {
+          const session = readSessions(paths).find((s) => s.id === parsed.sessionId);
+          if (!session) {
+            throw new CoreRegistryError(
+              "session_not_found",
+              `Session does not exist: ${parsed.sessionId}`,
+            );
+          }
+          if (session.projectId !== parsed.projectId) {
+            throw new CoreRegistryError(
+              "session_project_mismatch",
+              `Session ${parsed.sessionId} does not belong to project ${parsed.projectId}`,
+            );
+          }
+        }
+        const existing = readFailedAttemptsForProject(paths, parsed.projectId);
+        if (existing.some((fa) => fa.id === parsed.id)) {
+          throw new CoreRegistryError(
+            "failed_attempt_already_exists",
+            `Failed attempt already exists: ${parsed.id}`,
+          );
+        }
+        writeFailedAttemptsForProject(paths, parsed.projectId, [...existing, parsed]);
+        return failedAttemptSchema.parse(parsed);
+      });
+    },
+
+    getFailedAttempt(id) {
+      for (const project of readProjects(paths)) {
+        const fa = readFailedAttemptsForProject(paths, project.id).find((f) => f.id === id);
+        if (fa) return failedAttemptSchema.parse(fa);
+      }
+      return null;
+    },
+
+    listFailedAttempts(projectId) {
+      requireProject(projectId);
+      return readFailedAttemptsForProject(paths, projectId).map((fa) =>
+        failedAttemptSchema.parse(fa),
+      );
     },
   };
 }

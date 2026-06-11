@@ -13,6 +13,7 @@ export type RuleCreatedFrom = z.infer<typeof ruleCreatedFromSchema>;
 
 // Confidence reuses the memory-entry enum (low|medium|high) — same trust ladder.
 export const ruleConfidenceSchema = memoryConfidenceSchema;
+export type RuleConfidence = z.infer<typeof ruleConfidenceSchema>;
 
 export const projectRuleSchema = z
   .object({
