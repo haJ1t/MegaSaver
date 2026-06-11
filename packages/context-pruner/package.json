@@ -1,8 +1,8 @@
 {
-  "name": "@megasaver/mcp-bridge",
-  "version": "1.0.2",
+  "name": "@megasaver/context-pruner",
+  "version": "0.1.0",
   "private": true,
-  "description": "Mega Saver MCP server bridge — stdio transport, four context-gate tools.",
+  "description": "Task-aware context pruning (LAMR) for Mega Saver — multi-factor block scoring into a context pack.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,18 +19,13 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b --noEmit",
+    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@megasaver/content-store": "workspace:*",
-    "@megasaver/context-pruner": "workspace:*",
-    "@megasaver/core": "workspace:*",
     "@megasaver/indexer": "workspace:*",
-    "@megasaver/output-filter": "workspace:*",
-    "@megasaver/policy": "workspace:*",
+    "@megasaver/retrieval": "workspace:*",
     "@megasaver/shared": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.0.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

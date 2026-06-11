@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { defineCommand } from "citty";
 import { connectorCommand } from "./commands/connector/index.js";
+import { contextCommand } from "./commands/context/index.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { indexCommand } from "./commands/index/index.js";
 import { mcpCommand } from "./commands/mcp/index.js";
@@ -40,5 +41,6 @@ export const mainCommand = defineCommand({
     pack: packCommand,
     scan: scanCommand,
     index: indexCommand,
+    context: contextCommand,
   },
 });

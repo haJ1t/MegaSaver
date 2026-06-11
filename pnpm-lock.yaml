@@ -45,6 +45,9 @@ importers:
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../../packages/content-store
+      '@megasaver/context-pruner':
+        specifier: workspace:*
+        version: link:../../packages/context-pruner
       '@megasaver/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -256,6 +259,25 @@ importers:
         specifier: ^3.23.2
         version: 3.23.2
 
+  packages/context-pruner:
+    dependencies:
+      '@megasaver/indexer':
+        specifier: workspace:*
+        version: link:../indexer
+      '@megasaver/retrieval':
+        specifier: workspace:*
+        version: link:../retrieval
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+
   packages/core:
     dependencies:
       '@megasaver/content-store':
@@ -320,9 +342,15 @@ importers:
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../content-store
+      '@megasaver/context-pruner':
+        specifier: workspace:*
+        version: link:../context-pruner
       '@megasaver/core':
         specifier: workspace:*
         version: link:../core
+      '@megasaver/indexer':
+        specifier: workspace:*
+        version: link:../indexer
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter
