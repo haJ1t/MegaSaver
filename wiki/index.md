@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-06-04
+updated: 2026-06-11
 ---
 
 # Wiki Index — Mega Saver
@@ -45,7 +45,9 @@ updated: 2026-06-04
 - [[entities/mcp-bridge]] — `@megasaver/mcp-bridge` real MCP stdio server over `stdio`, 4 tools, `mega mcp serve`, `buildMcpSetupOps` facade, 16-member `McpBridgeErrorCode` (BB8; AA1 §8).
 - [[entities/context-gate]] — `@megasaver/context-gate@0.2.0` extracted from core (BB12, #88); orchestrator functions (`runOutputPipeline`, `runOutputExecCommand`, `fetchChunk`, `loadProjectPermissions`); `OrchestratorRegistry` structural port; core re-exports surface (consumers unchanged).
 
-More subsystem pages land as features get built. Entity pages still pending: `conventions-sync`.
+- [[entities/conventions-sync]] — repo dogfood drift tooling (`scripts/conventions-sync/`); syncs `AGENTS.md` + 3 `.cursor/rules/*.mdc` from `docs/conventions/`; `CLAUDE.md` not yet managed (roadmap #2).
+
+More subsystem pages land as features get built.
 
 ## Workflows
 
@@ -244,11 +246,11 @@ worktrees (GG/HH/II/JJ teammates), each carrying its own spec + plan.
 ### v0.3 — open backlog (deferred to v0.4)
 
 - ~~**GUI v1**: project picker, session/memory detail views, write actions (create/end/update), single-command `dev` (Vite + bridge under one process)~~ — **SHIPPED 2026-05-10 (LL).** See [[entities/gui]] and `wiki/log.md`. Native packaging (Tauri/Electron) deferred to v1.1+.
-- **mcp-bridge real implementation**: stdio transport first, MCP tools (`session.list`, `memory.list`), MCP resources (read-only views over the JSON store).
-- **skill-packs real implementation**: pack discovery, install/uninstall, manifest validation, conflict resolution.
-- **Windows port remainder**: case-insensitive path resolution audit, CRLF normalization in connector outputs, lock file semantics audit, Windows CI runner. Fsync layer now closed (PR #51).
-- **CLAUDE.md tagged blocks**: extend `pnpm conventions:sync` to manage CLAUDE.md sections (currently AGENTS.md + 3 `.mdc` only).
-- **Connector aider sync**: `mega connector sync --target aider` end-to-end (CONVENTIONS.md still hand-written today).
+- ~~**mcp-bridge real implementation**: stdio transport, MCP tools/resources~~ — **SHIPPED** PR #83 (BB8, `0e9be7a`). See [[entities/mcp-bridge]].
+- ~~**skill-packs real implementation**: pack discovery, install/uninstall, manifest validation~~ — **SHIPPED** PR #103. See [[entities/skill-packs]].
+- ~~**Windows port remainder**: case-insensitive path audit, CRLF normalization, lock semantics, Windows CI runner~~ — **SHIPPED** PRs #104–#108 + follow-ups #109/#110. See [[concepts/windows-support]].
+- ~~**CLAUDE.md tagged blocks**: extend `pnpm conventions:sync` to manage CLAUDE.md sections~~ — **SHIPPED** PR #112 (merged `c2ee52a`, roadmap #2). CLAUDE.md is now a managed consumer (§0–§13); HIGH-risk content reconciliation, not the billed "small" change. See [[entities/conventions-sync]].
+- ~~**Connector aider sync**: `mega connector sync --target aider` end-to-end~~ — **SHIPPED** PR #21 (`184b13d`) + #29 coverage. Product feature emits `CONVENTIONS.md` for *user* projects; distinct from repo dogfood (no root `CONVENTIONS.md`). See [[entities/conventions-sync]].
 
 ---
 

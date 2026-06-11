@@ -2025,3 +2025,47 @@ Post-v1.1 arc summarized (PRs #102–#110 resolved). Remaining roadmap re-ranked
 (1) npm publish [needs maintainer NPM_TOKEN], (2) conventions:sync→CLAUDE.md,
 (3) GUI native packaging, (4) i18n tr, (5) fikri §16 backlog. Deferred
 follow-ups tracked (2-process lock test, e2e typecheck gap).
+
+## [2026-06-11] housekeeping | roadmap remaining-items pass (wiki side)
+
+User: "complete remaining roadmap items in order." Wiki-completable items done:
+(1) wrote pending entity page entities/conventions-sync.md — scripts/conventions-sync/
+CONSUMERS (AGENTS.md + 3 .cursor/rules/*.mdc), docs/conventions/ source-of-truth,
+CLAUDE.md gap (#2), distinct from `mega connector sync --target aider` product
+feature. (2) Fixed syntheses/mega-saver-product.md stale "plan execution pending"
+→ v1.1-shipped reality. (3) Struck stale v0.3 "connector aider sync" (shipped PR
+#21 184b13d + #29). Updated index.md (entities list + cleared pending note + date)
+and roadmap housekeeping section. Code items #1–#5 NOT done here: #1 npm publish
+BLOCKED on maintainer NPM_TOKEN; #2–#5 need superpowers chain (multi-session).
+
+## [2026-06-11] lint | index.md v0.3 "open backlog" 4/5 stale → struck
+
+Lint of index.md:244 "v0.3 — open backlog (deferred to v0.4)": mcp-bridge real
+impl (shipped PR #83 0e9be7a BB8), skill-packs real impl (PR #103), Windows port
+remainder (PRs #104–#108 + #109/#110), connector aider sync (PR #21+#29) all
+struck with citations. Only "CLAUDE.md tagged blocks" (roadmap #2) remains open.
+No contradictions introduced; all new [[links]] resolve; conventions-sync not an
+orphan (inbound from index.md + roadmap).
+
+## [2026-06-11] feature | roadmap #2 conventions:sync → CLAUDE.md (PR #112)
+
+Made CLAUDE.md a managed conventions:sync consumer (§0 wiki-first + §1–§13,
+placed first). Full superpowers chain: spec→plan→TDD→reconcile→verify→critic→PR.
+KEY DISCOVERY: billed "small/cosmetic" but a normalized scan then a 13-agent
+adversarial audit showed CLAUDE.md had drifted from docs/conventions/*.md;
+sources were already a content SUPERSET for 11/13 sections (sim 0.35–1.00).
+Real work = HIGH-risk per-section reconciliation. Enriched 2 sources
+(stack-and-commands config filenames; multi-agent-dogfood source-of-truth +
+synced-reality, dropping the now-false "CLAUDE.md canonical/manual" block).
+Promoted hand-added §0 to agent-neutral wiki-first.md → regenerated into
+CLAUDE.md + AGENTS.md. Engine fact: sync REPLACES existing sentinel blocks,
+never inserts → one-time hand-bootstrap of 14 sentinel pairs then --write.
+Evidence: conventions:test 53/53; pnpm verify green (30 turbo tasks +
+conventions:check 5/5 ok); critic verdict ship (no content loss, no
+agent-specific leak). Branch feat/conventions-sync-claude-md, 8 commits.
+
+## [2026-06-11] merge | PR #112 conventions:sync → CLAUDE.md (main @ c2ee52a)
+
+Roadmap #2 merged. CLAUDE.md is now a managed conventions:sync consumer; dogfood
+drift fully closed (all agent files regenerate from docs/conventions/). Wiki
+updated open→shipped: entities/conventions-sync, post-v1.1-roadmap, index.

@@ -9,10 +9,12 @@ updated: 2026-06-11
 
 # Post-v1.1 Roadmap — Remaining Work
 
-State as of 2026-06-11: v1.1.0 shipped (2026-06-04); since then PRs #102–#110
-merged (main @ `e5ee21c`), CI green on **both** `ubuntu-latest` and
+State as of 2026-06-11: v1.1.0 shipped (2026-06-04); since then PRs #102–#112
+merged (main @ `c2ee52a`), CI green on **both** `ubuntu-latest` and
 `windows-latest`. The v0.1 headless MVP and the v1.0 Context Gate epic are
 complete; full Windows support is now shipped (source: [[concepts/windows-support]]).
+Dogfood drift fully closed: `CLAUDE.md` is now a managed `conventions:sync`
+consumer (#112) — all agent files regenerate from `docs/conventions/`.
 
 ## Resolved (post-v1.1 arc, 2026-06-10/11)
 
@@ -42,10 +44,13 @@ complete; full Windows support is now shipped (source: [[concepts/windows-suppor
    here): create an npm automation token for the `@megasaver` scope,
    `gh secret set NPM_TOKEN`, then re-tag / re-run `release.yml`. This is the
    one real MVP→installable-product gap.
-2. **conventions:sync → CLAUDE.md tagged blocks** — `pnpm conventions:sync`
-   manages `AGENTS.md` + 3 `.mdc` only; `CLAUDE.md` is still hand-maintained.
-   Extend the tagged-block sync to CLAUDE.md sections. Small, self-contained,
-   high dogfood value. (source: index.md v0.3 backlog)
+2. ~~**conventions:sync → CLAUDE.md tagged blocks**~~ — **SHIPPED, PR #112**
+   (merged `c2ee52a`). `CLAUDE.md` is now a managed
+   consumer (§0 wiki-first + §1–§13). Billed "small/cosmetic" but the audit
+   found CLAUDE.md had drifted from the sources → real work was a HIGH-risk
+   per-section content reconciliation (sources verified ⊇ CLAUDE for 11/13;
+   2 enriched; §0 promoted to `wiki-first.md`). `conventions:check` now
+   guards CLAUDE.md. See [[entities/conventions-sync]].
 3. **GUI native packaging** — Tauri/Electron, deferred to v1.1+. Design phase
    (skill-routing §5b). (source: index.md v0.3 backlog note)
 4. **i18n `tr`** — product strings English-only since v0.1; add `tr` via
@@ -67,8 +72,13 @@ complete; full Windows support is now shipped (source: [[concepts/windows-suppor
 
 ## Wiki/housekeeping
 
-- Pending entity page: `conventions-sync` (skill-packs page now exists).
-- syntheses/mega-saver-product.md status line still says "plan execution
-  pending" — stale, predates v1.0 ship.
-- v0.3 backlog item "connector aider sync end-to-end" appears stale (aider
-  target shipped PR #21) — verify, then strike.
+- ~~Pending entity page: `conventions-sync`~~ — **done 2026-06-11**, page
+  written ([[entities/conventions-sync]]).
+- ~~syntheses/mega-saver-product.md status line "plan execution pending"~~
+  — **done**, bootstrap-status section now reflects v1.1-shipped reality.
+- ~~v0.3 backlog item "connector aider sync end-to-end" stale~~ — **done**,
+  verified shipped (PR #21 `184b13d` + #29) and struck in index.md.
+- **Bonus lint (2026-06-11):** index.md "v0.3 — open backlog" block was
+  4/5 stale — also struck mcp-bridge (PR #83), skill-packs (#103), Windows
+  port remainder (#104–#108). Only "CLAUDE.md tagged blocks" (#2) remains
+  open there.
