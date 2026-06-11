@@ -294,6 +294,9 @@ importers:
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../shared
+      ignore:
+        specifier: ^5.3.2
+        version: 5.3.2
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
