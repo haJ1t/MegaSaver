@@ -9,6 +9,14 @@ updated: 2026-06-11
 
 # Post-v1.1 Roadmap — Remaining Work
 
+> **Scope note (2026-06-11):** this page tracks the **v1.1 cleanup
+> backlog** (npm publish, GUI packaging, i18n, fikri §16 features). The
+> **strategic product direction** — the Phase 0–10 DIMMEM/LAMR/FORGE
+> arc, reconciled against shipped code — now lives at
+> [[syntheses/contextops-roadmap]]. The fikri §16 items below map onto
+> that roadmap: Repo Scanner → Phase 2, Memory Vault → Phase 1, Token
+> Audit → Phase 8.
+
 State as of 2026-06-11: v1.1.0 shipped (2026-06-04); since then PRs #102–#112
 merged (main @ `c2ee52a`), CI green on **both** `ubuntu-latest` and
 `windows-latest`. The v0.1 headless MVP and the v1.0 Context Gate epic are
