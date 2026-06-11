@@ -23,6 +23,9 @@ updated: 2026-06-11
 - [[concepts/wiki-first-token-discipline]] — wiki is the only sanctioned project memory; question → entry mapping; hard rules to avoid raw spec/code reads.
 - [[concepts/context-gate-pipeline]] — Mega Saver Mode: redact → chunk → rank → fit → summarize; redaction flow; AA1 package roles + cycle direction.
 - [[concepts/windows-support]] — full Windows support (PRs #104–#108): win32 store path, CRLF drift fix, lowercase ids, atomic-write `r+` fsync, `windows-latest` CI matrix.
+- [[concepts/structured-memory-engine]] — DIMMEM, roadmap Phase 1: typed engineering memory (10 MemoryTypes + metadata); reconciles the v0.1 MemoryEntry primitive.
+- [[concepts/semantic-repo-index]] — roadmap Phase 2: parse repo into typed CodeBlocks (AST) so retrieval works on blocks, not files.
+- [[concepts/context-pruning-engine]] — LAMR, roadmap Phase 3: task-aware multi-factor scoring → 6–8-block context pack; repo-side cousin of context-gate-pipeline.
 
 ## Entities
 
@@ -59,12 +62,14 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 - [[syntheses/mega-saver-product]] — what the product is, six subsystems, v0.1 slice.
 - [[syntheses/post-v1.1-roadmap]] — post-v1.1 arc (PRs #102–#110 resolved: stats, skill-packs, Windows port + follow-ups) + remaining work, priority-ordered (npm publish gap, conventions:sync, GUI packaging, i18n, fikri §16 backlog).
+- [[syntheses/contextops-roadmap]] — **strategic Phase 0–10 roadmap** (DIMMEM/LAMR/FORGE), reconciled done/partial/gap vs shipped v1.1 via a 22-agent code audit; full spec+plan written for Phases 1–3.
 
 ## Sources (pointers to raw + project artifacts)
 
 - [[sources/fikri-original]] — original 1421-line product idea (`raw/mega-saver-platform-fikri.txt`) with section index. Read this instead of the raw file.
 - [[sources/spec-bootstrap]] — pointer to `docs/superpowers/specs/2026-05-03-mega-saver-bootstrap-design.md`.
 - [[sources/plan-bootstrap]] — pointer to `docs/superpowers/plans/2026-05-03-mega-saver-bootstrap-plan.md`.
+- [[sources/roadmap-phases-v2]] — summary of `~/Desktop/MegaSaver_Roadmap.txt` (Phase 0–10 strategic roadmap, 2026-06-11). Synthesized into [[syntheses/contextops-roadmap]].
 
 ## Raw
 

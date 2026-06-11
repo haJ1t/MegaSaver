@@ -2069,3 +2069,22 @@ agent-specific leak). Branch feat/conventions-sync-claude-md, 8 commits.
 Roadmap #2 merged. CLAUDE.md is now a managed conventions:sync consumer; dogfood
 drift fully closed (all agent files regenerate from docs/conventions/). Wiki
 updated open→shipped: entities/conventions-sync, post-v1.1-roadmap, index.
+
+## [2026-06-11] ingest+synth | Phase 0–10 strategic roadmap (DIMMEM/LAMR/FORGE)
+
+Ingested ~/Desktop/MegaSaver_Roadmap.txt (Phase 0–10 product roadmap) and
+produced planning artifacts (docs + wiki only, no code). Reconciled every phase
+against shipped v1.1 via a 22-agent workflow (11 map + 11 adversarial verify).
+RESULT done/partial/gap: P0 partial, P1 partial (DIMMEM enrichment net-new), P2
+gap, P3 partial (LAMR task-aware net-new), P4 partial (4 tools locked by AA1;
+wider surface rides on P1/2/5), P5 gap, P6 gap, P7 gap, P8 partial (token-byte
+stats only), P9 partial, P10 gap. Verifier nuance captured: P1/P4 "done vs
+locked v0.1/v1.0 spec" but "partial vs roadmap vision" — both framings
+documented. Wrote: syntheses/contextops-roadmap (master), sources/roadmap-
+phases-v2, concepts/{structured-memory-engine,semantic-repo-index,context-
+pruning-engine}; full spec+plan for the 3 near-term gap phases (1 DIMMEM,
+2 repo-index, 3 LAMR) under docs/superpowers/{specs,plans}/2026-06-11-phase{1,2,3}-*.
+Phases 4–10 stay roadmap-level. index.md + post-v1.1-roadmap cross-linked.
+Branch docs/contextops-roadmap-phases. Process: brainstorming (scope locked via
+AskUserQuestion: docs-only / master+near-term / reconcile) → authored solo for
+cross-doc coherence after the parallel code audit.
