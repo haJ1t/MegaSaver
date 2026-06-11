@@ -18,8 +18,12 @@ export type Selection = {
 };
 export type SelectOptions = { limit?: number; maxTokens?: number };
 
+export function estimateSpanTokens(startLine: number, endLine: number): number {
+  return Math.max(1, (endLine - startLine + 1) * TOKENS_PER_LINE);
+}
+
 export function estimateBlockTokens(block: CodeBlock): number {
-  return Math.max(1, (block.endLine - block.startLine + 1) * TOKENS_PER_LINE);
+  return estimateSpanTokens(block.startLine, block.endLine);
 }
 
 // A block the pack MUST contain: an explicitly named symbol/file or a
