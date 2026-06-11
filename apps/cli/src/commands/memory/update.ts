@@ -186,7 +186,7 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
     input.stdout(input.jsonFlag ? JSON.stringify(updated) : updated.id);
     return 0;
   } catch (err) {
-    const cli = mapErrorToCliMessage(err, { kind: "memory_create" });
+    const cli = mapErrorToCliMessage(err, { kind: "memory_update" });
     input.stderr(cli.message);
     return cli.exitCode;
   }

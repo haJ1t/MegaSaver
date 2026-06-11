@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
@@ -155,5 +155,42 @@ describe("json-directory v0.1 memory migration", () => {
     // Idempotent: re-reading yields the same upgraded shape.
     const second = registry.listMemoryEntries(PROJECT_ID);
     expect(second).toEqual(first);
+  });
+
+  it("removes the JSONL file when the last entry is deleted (no zero-byte file)", () => {
+    const root = mkdtempSync(join(tmpdir(), "mega-del-"));
+    tmpDirs.push(root);
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: root });
+    registry.createProject({
+      id: PROJECT_ID,
+      name: "alpha",
+      rootPath: "/tmp/alpha",
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    registry.createMemoryEntry(
+      memoryEntrySchema.parse({
+        id: ID_A,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        type: "decision",
+        title: "only",
+        content: "only",
+        keywords: [],
+        confidence: "medium",
+        source: "manual",
+        stale: false,
+        createdAt: NOW,
+        updatedAt: NOW,
+      }),
+    );
+    const filePath = join(root, "memory", `${PROJECT_ID}.jsonl`);
+    expect(existsSync(filePath)).toBe(true);
+
+    registry.deleteMemoryEntry(ID_A);
+    // The file is removed, not blanked — a zero-byte file reads back as corrupt.
+    expect(existsSync(filePath)).toBe(false);
+    expect(registry.listMemoryEntries(PROJECT_ID)).toEqual([]);
   });
 });

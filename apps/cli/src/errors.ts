@@ -20,6 +20,7 @@ export type ZodContext =
   | { kind: "sessionId" }
   | { kind: "memoryEntryId" }
   | { kind: "memory_create" }
+  | { kind: "memory_update" }
   | { kind: "project"; name: string }
   | { kind: "session"; id: string }
   | { kind: "session_update"; id: string }

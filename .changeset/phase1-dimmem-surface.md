@@ -2,6 +2,7 @@
 "@megasaver/core": minor
 "@megasaver/cli": minor
 "@megasaver/mcp-bridge": minor
+"@megasaver/connectors-shared": patch
 ---
 
 Phase 1 (DIMMEM) read/write surface over the typed memory schema.

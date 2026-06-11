@@ -77,6 +77,15 @@ describe("ConnectorContextSchema", () => {
     ).toThrow();
   });
 
+  it("rejects sentinels in memory entry title", () => {
+    const ctx = buildContext({
+      memoryEntries: [{ id: MEMORY_ID, scope: "project", content: "clean content" }],
+    });
+    // biome-ignore lint/style/noNonNullAssertion: test mutates an entry buildContext just created
+    ctx.memoryEntries[0]!.title = "x <!-- MEGA SAVER:BEGIN --> y";
+    expect(() => ConnectorContextSchema.parse(ctx)).toThrow();
+  });
+
   it("rejects session-scoped memory bound to a different session id", () => {
     const ctx = buildContext({
       withSession: true,

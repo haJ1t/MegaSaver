@@ -76,6 +76,11 @@ describe("searchMemoryEntries", () => {
     ]);
   });
 
+  it("returns an empty array for an empty corpus (with and without text)", () => {
+    expect(searchMemoryEntries([], { text: "anything" })).toEqual([]);
+    expect(searchMemoryEntries([], {})).toEqual([]);
+  });
+
   it("with no text returns newest-first and honors limit", () => {
     const older = entry({
       id: "00000000-0000-4000-8000-0000000000d1",
