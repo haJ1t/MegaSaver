@@ -1,6 +1,6 @@
 # CLAUDE.md — Mega Saver
 
-Source of truth for Claude Code working in this repo.
+Operational reference for Claude Code, generated from `docs/conventions/`.
 
 > **Generated file — do not hand-edit the managed blocks.** Every
 > `<!-- conventions:* -->` block below is regenerated from
