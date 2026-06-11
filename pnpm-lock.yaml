@@ -342,9 +342,15 @@ importers:
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../content-store
+      '@megasaver/context-pruner':
+        specifier: workspace:*
+        version: link:../context-pruner
       '@megasaver/core':
         specifier: workspace:*
         version: link:../core
+      '@megasaver/indexer':
+        specifier: workspace:*
+        version: link:../indexer
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter

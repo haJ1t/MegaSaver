@@ -24,7 +24,9 @@
   },
   "dependencies": {
     "@megasaver/content-store": "workspace:*",
+    "@megasaver/context-pruner": "workspace:*",
     "@megasaver/core": "workspace:*",
+    "@megasaver/indexer": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",
     "@megasaver/shared": "workspace:*",

@@ -5,6 +5,12 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { McpBridgeError } from "./errors.js";
 import { mcpToolNameSchema } from "./tool-name.js";
+import {
+  handleExplainContextSelection,
+  handleGetContextBudgetReport,
+  handleGetRelevantCodeBlocks,
+  handleGetRelevantContext,
+} from "./tools/context-pruning.js";
 import { handleFetchChunk } from "./tools/fetch-chunk.js";
 import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
 import { handleReadFile } from "./tools/read-file.js";
@@ -25,6 +31,22 @@ export type ServerDeps = {
 };
 
 const TOOL_DEFS = [
+  {
+    name: "explain_context_selection",
+    description: "Per-factor scoring for each included context block.",
+  },
+  {
+    name: "get_context_budget_report",
+    description: "Token-savings audit for a task's context pack.",
+  },
+  {
+    name: "get_relevant_code_blocks",
+    description: "The included blocks of a task's context pack.",
+  },
+  {
+    name: "get_relevant_context",
+    description: "Build a task-aware context pack from the project index.",
+  },
   { name: "get_relevant_memories", description: "Rank project memories by relevance to a task." },
   { name: "mega_fetch_chunk", description: "Fetch one stored chunk from a chunk set." },
   { name: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
@@ -122,6 +144,26 @@ export function buildServer(deps: ServerDeps): {
         return handleSearchMemory({ registry: deps.registry }, args);
       case "get_relevant_memories":
         return handleGetRelevantMemories({ registry: deps.registry }, args);
+      case "get_relevant_context":
+        return handleGetRelevantContext(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        );
+      case "get_relevant_code_blocks":
+        return handleGetRelevantCodeBlocks(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        );
+      case "explain_context_selection":
+        return handleExplainContextSelection(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        );
+      case "get_context_budget_report":
+        return handleGetContextBudgetReport(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        );
     }
   }
 
