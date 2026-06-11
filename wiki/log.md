@@ -2135,3 +2135,24 @@ blocks; search "extract typescript ast" ranked extractJson/Md/Ts first;
 rebuild unchanged=21. Review: code-reviewer + critic fix-first
 (self-heal, key-anchored lineOf, ENOENT-only ignore swallow) →
 confirming pass + security-reviewer.
+
+## [2026-06-11] feat | Phase 3 Context Pruning / LAMR (@megasaver/context-pruner)
+
+Roadmap Phase 3 on branch feat/phase3-context-pruning. New leaf package
+@megasaver/context-pruner + CLI + MCP, 6 TDD slices, pnpm verify green
+(34 tasks). See [[entities/context-pruner]], [[concepts/context-pruning-engine]]
+(status partial→shipped).
+- score.ts: 8-factor model (semantic normalized-BM25, userMention
+  near-decisive, testFailure/recentEdit/memory from passed-in file sets,
+  stale/noise penalties) + named WEIGHTS; memory relevance is DATA in
+  (no core edge, §3c).
+- select.ts: force-include named/failing (safety invariant — never
+  silently dropped; budget overflow reported via usedTokens), fill to
+  limit under token budget (line-span estimate; blocks carry no text so
+  spec's chars/4 N/A), dependency closure over `calls`.
+- pack.ts buildContextPack + reasons; audit.ts savings (feeds Phase 8).
+- CLI mega context build/explain/audit/export; MCP get_relevant_context
+  /get_relevant_code_blocks/explain_context_selection/
+  get_context_budget_report (closed enum 7→11).
+Smoke ("fix the login bug"): login ranked #1 (named in task + cited by
+memory + semantic), 5 blocks → 2 included, tokens 120→48, saved 60%.
