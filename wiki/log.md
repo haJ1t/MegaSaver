@@ -1996,3 +1996,32 @@ guard, per-OS symlink/chmod test skips, host-independent path
 assertions. HIGH risk; architect + critic (REVISE→ACCEPT on A). Both
 CI legs green. Deferred follow-ups: 2-process lock test, tsconfig
 test-typecheck, mcp HOME fallback. See concepts/windows-support.md.
+
+## [2026-06-11] feat | mcp HOME→USERPROFILE fallback (PR #109)
+
+`mega mcp {status,install,uninstall}` read `process.env.HOME ?? ""` with no
+USERPROFILE fallback → empty/relative agent-config paths on Windows. Extracted
+`resolveHomeDir(env)` into apps/cli/src/store.ts (HOME→USERPROFILE→""), reused
+in readStoreEnv (DRY) + the 3 mcp boundaries. detect-agent.ts config paths are
+uniform join(home, …) so no platform branch needed. Unit-tested; verify green
+both CI legs.
+
+## [2026-06-11] fix | test-typecheck no-op + 113 pre-existing errors (PR #110)
+
+apps/cli + apps/gui tsconfig.test.json extended a base whose exclude:["test"]
+was inherited (TS does not merge exclude across extends), so `tsc -p
+tsconfig.test.json` checked ZERO test files — a silent no-op. Added
+exclude:["dist","node_modules",".turbo"] (cli also "test/e2e/**") so include
+wins. Surfaced 109 (cli) + 4 (gui) pre-existing type errors — all fixed in test
+files (bracket access, branded `as`, narrow citty-arg casts, ambient .d.mts for
+a .mjs script); no src changes, no any/@ts-ignore. e2e excluded (cross-package
+source import via ../../../../apps/gui; still run by vitest). Now 33 cli + 38
+gui test files actually type-checked. code-reviewer ready-to-merge; both CI
+legs green.
+
+## [2026-06-11] query | "update wiki incl. remaining roadmap" → updated post-v1.1-roadmap.md
+
+Post-v1.1 arc summarized (PRs #102–#110 resolved). Remaining roadmap re-ranked:
+(1) npm publish [needs maintainer NPM_TOKEN], (2) conventions:sync→CLAUDE.md,
+(3) GUI native packaging, (4) i18n tr, (5) fikri §16 backlog. Deferred
+follow-ups tracked (2-process lock test, e2e typecheck gap).
