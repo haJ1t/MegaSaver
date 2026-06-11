@@ -1,130 +1,149 @@
 ---
-title: conventions:sync → CLAUDE.md tagged blocks
+title: conventions:sync → CLAUDE.md (full reconciliation)
 status: design
-risk: medium
+risk: high
 date: 2026-06-11
 author: halit
 supersedes-gap: post-v1.1-roadmap #2
 parent-spec: docs/superpowers/specs/2026-05-10-jj-conventions-sync-design.md
 ---
 
-# conventions:sync → CLAUDE.md tagged blocks
+# conventions:sync → CLAUDE.md (full reconciliation)
 
 ## Mission
 
-Close roadmap #2. Today `pnpm conventions:sync` manages `AGENTS.md` +
-3 `.cursor/rules/*.mdc` only; **`CLAUDE.md` is hand-maintained**, so it
-drifts. The live proof: a `§0 Wiki-First Memory` block was just hand-
-pasted into both `CLAUDE.md` and `AGENTS.md` with no canonical source —
-exactly the drift the sync system exists to kill.
+Close roadmap #2. `pnpm conventions:sync` manages `AGENTS.md` + 3
+`.cursor/rules/*.mdc` only; **`CLAUDE.md` is hand-maintained and has
+drifted from `docs/conventions/*.md`**. Make `CLAUDE.md` a managed
+consumer so `conventions:check` (already in `pnpm verify`) guards it.
 
-Make `CLAUDE.md` a managed consumer so `conventions:check` (already
-folded into `pnpm verify`) guards it in CI forever after.
+## Why this is HIGH risk, not "cosmetic" (discovery 2026-06-11)
 
-## Design decisions (user-approved 2026-06-11)
+A first design assumed CLAUDE.md sections were a cosmetic reformat of
+the sources. **Measurement disproved it.** Per-section semantic
+similarity (markers stripped, whitespace collapsed) of CLAUDE.md §N vs
+`docs/conventions/<src>.md`:
 
-1. **Mechanism: reuse the existing verbatim-block model. No new
-   renderer.** `render.ts` copies a `docs/conventions/<src>.md` body
-   verbatim between `<!-- conventions:start id=… source=… -->` /
-   `<!-- conventions:end id=… -->` sentinels. The human `## §N Title`
-   heading and trailing `Source:` link stay OUTSIDE the block (hand-
-   maintained, preserved across syncs) — identical to how `AGENTS.md`
-   works today.
-2. **Scope: all of CLAUDE.md §0–§13 managed.** §1–§13 map to the 13
-   existing `docs/conventions/*.md`; §0 maps to a NEW
-   `docs/conventions/wiki-first.md` (decision B1).
-3. **§0 Wiki-First → promoted to source (B1).** The hand-added §0
-   content becomes `docs/conventions/wiki-first.md` (canonical), then
-   regenerates as a sentinel block in BOTH `CLAUDE.md` and `AGENTS.md`.
-   The manual edit is absorbed, not discarded.
-4. **One-time cosmetic reformat of CLAUDE.md accepted.** The verbatim
-   model emits the source's `## Tagline` H2 sub-headings rather than
-   CLAUDE.md's current `**Tagline:**` inline-bold. Content is identical;
-   only sub-heading style changes, matching `AGENTS.md`. No custom
-   renderer = no byte-drift risk.
+| § | sim | who leads |
+|---|-----|-----------|
+| §2 repo-layout | 1.00 | equal |
+| §1 mission | 0.96 | equal (cosmetic) |
+| §3 stack | 0.87 | source (has "aspirational" note) |
+| §7 dogfood | 0.75 | source (cursor-frontmatter contract) |
+| §4 process | 0.72 | source (TDD/spec-path detail) |
+| §9 DoD | 0.66 | source (evidence rules) |
+| §6 agent-routing | 0.64 | mixed |
+| §13 anti-patterns | 0.52 | mixed |
+| §5 skill-routing | 0.52 | CLAUDE (§5a–d, OMC, design tables) |
+| §11 language | 0.50 | mixed |
+| §10 git | 0.46 | source (commit-format detail) |
+| §8 code-conv | 0.38 | source (full tsconfig flags) |
+| §12 risk-modes | 0.35 | source (examples) |
 
-## Block mapping (`claude-md` consumer)
+Divergence is **bidirectional** — neither side uniformly leads — and
+`AGENTS.md` (already synced from sources) therefore disagrees with
+`CLAUDE.md` today. Closing #2 = a content reconciliation across the 13
+shared governance sources, which also rewrites the `AGENTS.md`/`.mdc`
+outputs. Touches every agent's governance file → `risk: high`
+(per §12: public surface / user files at scale).
 
-`CLAUDE.md` declares 14 blocks, in document order:
+## Reconciliation method — 3-way classification per section
 
-| § | id | source |
-|---|----|--------|
-| §0 | `wiki-first` | `wiki-first.md` *(new)* |
-| §1 | `mission` | `mission.md` |
-| §2 | `repo-layout` | `repo-layout.md` |
-| §3 | `stack-and-commands` | `stack-and-commands.md` |
-| §4 | `process-discipline` | `process-discipline.md` |
-| §5 | `skill-routing` | `skill-routing.md` |
-| §6 | `agent-routing` | `agent-routing.md` |
-| §7 | `multi-agent-dogfood` | `multi-agent-dogfood.md` |
-| §8 | `code-conventions` | `code-conventions.md` |
-| §9 | `definition-of-done` | `definition-of-done.md` |
-| §10 | `git-and-commits` | `git-and-commits.md` |
-| §11 | `language` | `language.md` |
-| §12 | `risk-modes` | `risk-modes.md` |
-| §13 | `anti-patterns` | `anti-patterns.md` |
+For each section, every normative claim from CLAUDE.md §N AND from
+`docs/conventions/<src>.md` is sorted into exactly one bucket:
 
-(Block ids reuse the parent spec's vocabulary; same ids already exist
-in `AGENTS.md`/`.mdc` consumers — ids are per-consumer, so reuse is
-fine.)
+1. **Shared (agent-neutral):** belongs to all agents → goes into the
+   canonical `docs/conventions/<src>.md` (superset of both sides,
+   deduped, agent-neutral phrasing: `## H2` sub-headings, no "this
+   file", no Claude-only tool names). Propagates to every consumer.
+2. **Agent-specific:** meaningful only to one agent (e.g. CLAUDE
+   §5c OMC skills/agent roster, §5a–d numbering, §6 specific agent
+   names, "Right pane: Claude Code"). **Stays in that agent file's
+   hand-zone OUTSIDE the sentinel block.** MUST NOT enter a shared
+   source, or Codex/Cursor would inherit Claude-only rules.
+3. **Conflict (not mergeable):** the two sides state different rules
+   for the same thing. Flagged in the plan for human decision; never
+   silently picked.
+
+The canonical source, after merge, is the verbatim body of the block
+in every consumer. The `## §N Title` heading and trailing `Source:`
+link stay outside the block (hand-kept, preserved by the engine).
+
+## §0 Wiki-First (decision B1)
+
+`§0` has no source. Create `docs/conventions/wiki-first.md` from the
+current §0 body, **rephrased agent-neutral** (drop "right pane: Claude
+Code"; the side-by-side tmux/MCP-bridge specifics are Claude-specific →
+they stay in the CLAUDE.md/AGENTS.md hand-zone, not the source). Add a
+`wiki-first` block to `CLAUDE.md` and `AGENTS.md`.
+
+## Engine facts that shape the work (verified)
+
+- `sync` **replaces existing sentinel blocks only — it does not insert
+  missing ones** (`syncOne` errors `block-malformed` if a declared
+  block is absent). So CLAUDE.md must be hand-bootstrapped with all 14
+  sentinel pairs present; `--write` then fills them from source.
+- `render.ts`/`parse.ts`/`diff.ts`/`sync.ts`/`cli.ts` are unchanged —
+  the new consumer is pure manifest data; the engine already loops N
+  consumers.
+- The feature worktree has **no `node_modules`** — `pnpm install` in
+  the worktree before running `conventions:*`.
+
+## Block mapping (`claude-md` consumer, document order)
+
+`wiki-first`(§0)→`wiki-first.md`; then §1–§13 →
+`mission, repo-layout, stack-and-commands, process-discipline,
+skill-routing, agent-routing, multi-agent-dogfood, code-conventions,
+definition-of-done, git-and-commits, language, risk-modes,
+anti-patterns` (14 blocks).
 
 ## Components touched
 
-- `scripts/conventions-sync/src/manifest.ts` — add the `claude-md`
-  `ConsumerSpec` to `CONSUMERS` (document-order block list above).
-  `manifest.test-d.ts` order/pin assertions updated.
-- `docs/conventions/wiki-first.md` — NEW canonical source, authored
-  from the current §0 body (strip CLAUDE-specific phrasing that names
-  "this file"; keep agent-neutral, as the other sources are).
-- `CLAUDE.md` — convert §0–§13 bodies to sentinel-wrapped verbatim
-  blocks; keep `## §N` headings + `Source:` links outside blocks.
-- `AGENTS.md` — add the `wiki-first` block (it already carries the
-  other shared blocks). Its existing manual §0 is replaced by the
-  generated block.
+- `docs/conventions/wiki-first.md` — NEW canonical source.
+- `docs/conventions/*.md` (13) — enriched to the reconciled superset
+  where CLAUDE led (§5, §6, §11, §13 …). Where source already led, no
+  change.
+- `scripts/conventions-sync/src/manifest.ts` — add `claude-md`
+  consumer; `manifest.test-d.ts` pins updated.
+- `CLAUDE.md` — bootstrap sentinels around §0–§13; agent-specific
+  content kept outside blocks; `## §N` headings + `Source:` links kept.
+- `AGENTS.md`, `.cursor/rules/*.mdc` — re-`--write` so their blocks
+  reflect the enriched sources (their content changes follow from the
+  shared merge; this is expected and desired — it closes the existing
+  AGENTS↔CLAUDE disagreement).
 
-No change to `parse.ts`, `render.ts`, `diff.ts`, `sync.ts`, `cli.ts` —
-the consumer is pure data; the engine already handles N consumers.
+## Testing
 
-## Pre-existing content reconciliation
+Mechanism (TDD, in `scripts/conventions-sync/test/`):
+- `manifest.test.ts` — `claude-md` consumer present, 14 blocks, correct
+  source + document order.
+- `sync.test.ts` — round-trip: after `--write`, `--check` clean on
+  `CLAUDE.md`; mutating one block body → `--check` non-zero with a diff
+  naming the block; missing block → `block-malformed` error.
+- `parse.test.ts` — content outside blocks (`## §N`, `Source:`,
+  agent-specific hand-zone) preserved verbatim.
 
-`CLAUDE.md` §1–§13 must, after first `--write`, be byte-equal to the
-rendered source. Where the current hand-text diverges from
-`docs/conventions/*.md` beyond sub-heading style (e.g. extra sentences
-in CLAUDE that are absent from the source), the spec rule is: **the
-canonical source wins**; if a CLAUDE-only sentence is worth keeping, it
-is added to the `docs/conventions/` source first (so all consumers get
-it), never left as a CLAUDE-only island. The plan phase enumerates each
-section's diff and routes every divergence to one of: (a) already
-equal, (b) cosmetic (sub-heading) — absorbed, (c) CLAUDE-only content —
-lift into source. No silent drops.
+Content-preservation gate (per-section, during reconciliation): a
+verifier confirms **no normative claim from either input was dropped or
+silently altered** — only re-bucketed (shared→source, agent-specific→
+hand-zone). This is the HIGH-risk guard; it is adversarial, not a unit
+test.
 
-## Testing (TDD)
+Acceptance: `pnpm conventions:test` green; `pnpm conventions:check`
+green after one `--write`; `pnpm verify` green.
 
-New cases in `scripts/conventions-sync/test/`:
+## Rollout
 
-- `manifest.test.ts` — `claude-md` consumer present; 14 blocks; correct
-  source per block; document order.
-- `sync.test.ts` — round-trip: `--write` then `--check` on `CLAUDE.md`
-  is clean; mutating one block body → `--check` exits non-zero with a
-  diff naming the block.
-- `parse.test.ts` — §0 `wiki-first` block parses; content outside
-  blocks (`## §N` headings, `Source:` links) preserved verbatim.
-- A `wiki-first.md` source-exists + non-empty assertion.
-
-`pnpm conventions:test` green; `pnpm conventions:check` green after the
-one-time `--write`; `pnpm verify` green (check is already folded in).
-
-## Risk & rollout
-
-`risk: medium`. Mechanical + fully verifiable (content-identical,
-diff-guarded). Worktree-isolated (`feat/conventions-sync-claude-md`).
-The dirty-tree `§0` manual edit on `main` is superseded by the sourced
-version on merge; `.cursorrules`/`.claude/`/`.dfmt/` are out of scope
-and untouched.
+`risk: high`. Worktree-isolated (`feat/conventions-sync-claude-md`).
+Architect design pass + critic review (per §12). The dirty-tree §0 on
+`main` is superseded by the sourced version on merge;
+`.cursorrules`/`.claude/`/`.dfmt/` out of scope.
 
 ## Out of scope
 
-- No whole-file derivation (parent spec rejected it; AGENTS.md stays a
-  slim mirror via its own subset).
-- No `CONVENTIONS.md` (aider dogfood) — repo generates none; separate.
-- No changes to the sync engine internals.
+- No sync-engine internals change (insert-missing-block is a possible
+  future ergonomic, not needed: bootstrap is one-time).
+- No whole-file derivation (AGENTS.md stays a slim-subset mirror).
+- No `CONVENTIONS.md` (aider dogfood); repo generates none.
+- Conflict-bucket items, if any, are resolved by the user before
+  `--write`, not invented here.
