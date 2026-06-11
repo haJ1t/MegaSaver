@@ -22,6 +22,7 @@ updated: 2026-06-04
 - [[concepts/superpowers-discipline]] — mandatory chain on every feature.
 - [[concepts/wiki-first-token-discipline]] — wiki is the only sanctioned project memory; question → entry mapping; hard rules to avoid raw spec/code reads.
 - [[concepts/context-gate-pipeline]] — Mega Saver Mode: redact → chunk → rank → fit → summarize; redaction flow; AA1 package roles + cycle direction.
+- [[concepts/windows-support]] — full Windows support (PRs #104–#108): win32 store path, CRLF drift fix, lowercase ids, atomic-write `r+` fsync, `windows-latest` CI matrix.
 
 ## Entities
 
