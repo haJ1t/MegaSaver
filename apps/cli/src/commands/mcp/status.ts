@@ -1,5 +1,6 @@
 import { aggregateMcpStatus } from "@megasaver/mcp-bridge";
 import { defineCommand } from "citty";
+import { resolveHomeDir } from "../../store.js";
 import { makeConnectorSyncedResolver } from "./connector-synced.js";
 
 export type RunMcpStatusInput = {
@@ -47,8 +48,7 @@ export const mcpStatusCommand = defineCommand({
     // connectorSynced reflects the real block. `--project`/`--store`
     // are accepted for forward use by the resolver.
     const code = await runMcpStatus({
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      home: process.env["HOME"] ?? "",
+      home: resolveHomeDir(),
       projectRoot: undefined,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),

@@ -39,14 +39,21 @@ export function resolveStorePath(input: ResolveStorePathInput): string {
   return resolve(home, ".local", "share", "megasaver");
 }
 
+// Windows has no HOME → fall back to USERPROFILE. Shared by readStoreEnv and
+// the `mega mcp` command boundary, whose agent-config paths (~/.config/claude,
+// ~/.cursor, …) resolve against the same home dir on every platform.
+export function resolveHomeDir(env: NodeJS.ProcessEnv = process.env): string {
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  return env["HOME"] ?? env["USERPROFILE"] ?? "";
+}
+
 // Boundary: read every env input in ONE place so the 19 CLI handlers stay
 // one-liners. Windows has no HOME → fall back to USERPROFILE (spec §A.1).
 export function readStoreEnv(storeFlag: string | undefined): ResolveStorePathInput {
   return {
     storeFlag,
     cwd: process.cwd(),
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    home: process.env["HOME"] ?? process.env["USERPROFILE"] ?? "",
+    home: resolveHomeDir(),
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     xdgDataHome: process.env["XDG_DATA_HOME"],
     platform: process.platform,
