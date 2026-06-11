@@ -13,6 +13,7 @@ import { createJsonDirectoryCoreRegistry } from "../src/json-directory-registry.
 import { type CoreRegistry, createInMemoryCoreRegistry } from "../src/registry.js";
 
 const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
+const SECOND_PROJECT_ID = projectIdSchema.parse("33333333-3333-4333-8333-333333333333");
 const RULE_ID = projectRuleIdSchema.parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 const FA_ID = failedAttemptIdSchema.parse("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
 const SESSION_ID = sessionIdSchema.parse("22222222-2222-4222-8222-222222222222");
@@ -22,6 +23,14 @@ const project = {
   id: PROJECT_ID,
   name: "demo",
   rootPath: "/tmp/demo",
+  createdAt: TS,
+  updatedAt: TS,
+} as const;
+
+const secondProject = {
+  id: SECOND_PROJECT_ID,
+  name: "demo2",
+  rootPath: "/tmp/demo2",
   createdAt: TS,
   updatedAt: TS,
 } as const;
@@ -93,6 +102,26 @@ function suite(name: string, make: () => CoreRegistry) {
       expect(() => r.createFailedAttempt({ ...failure, sessionId: SESSION_ID })).toThrowError(
         /session_not_found|does not exist/,
       );
+    });
+
+    it("rejects a rule whose id collides across projects", () => {
+      const r = make();
+      r.createProject(project);
+      r.createProject(secondProject);
+      r.createProjectRule(rule);
+      expect(() => r.createProjectRule({ ...rule, projectId: SECOND_PROJECT_ID })).toThrowError(
+        expect.objectContaining({ code: "project_rule_already_exists" }),
+      );
+    });
+
+    it("rejects a failed attempt whose id collides across projects", () => {
+      const r = make();
+      r.createProject(project);
+      r.createProject(secondProject);
+      r.createFailedAttempt(failure);
+      expect(() =>
+        r.createFailedAttempt({ ...failure, projectId: SECOND_PROJECT_ID }),
+      ).toThrowError(expect.objectContaining({ code: "failed_attempt_already_exists" }));
     });
   });
 }

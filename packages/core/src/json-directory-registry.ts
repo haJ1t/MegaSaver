@@ -4,7 +4,9 @@ import type { ProjectId } from "@megasaver/shared";
 import { CorePersistenceError, CoreRegistryError } from "./errors.js";
 import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
 import {
+  readAllFailedAttempts,
   readAllMemoryEntries,
+  readAllProjectRules,
   readFailedAttemptsForProject,
   readMemoryEntriesForProject,
   readProjectRulesForProject,
@@ -18,8 +20,8 @@ import {
   writeSessions,
 } from "./json-directory-store.js";
 import { memoryEntrySchema, memoryEntryUpdatePatchSchema } from "./memory-entry.js";
-import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { searchMemoryEntries as searchEntries } from "./memory-search.js";
+import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import type { CoreRegistry } from "./registry.js";
 import { type Session, sessionSchema, sessionUpdatePatchSchema } from "./session.js";
@@ -327,24 +329,21 @@ export function createJsonDirectoryCoreRegistry(
       return withDirLock(options.rootDir, () => {
         const parsed = projectRuleSchema.parse(rule);
         requireProject(parsed.projectId);
-        const existing = readProjectRulesForProject(paths, parsed.projectId);
-        if (existing.some((r) => r.id === parsed.id)) {
+        if (readAllProjectRules(paths).some((r) => r.id === parsed.id)) {
           throw new CoreRegistryError(
             "project_rule_already_exists",
             `Project rule already exists: ${parsed.id}`,
           );
         }
+        const existing = readProjectRulesForProject(paths, parsed.projectId);
         writeProjectRulesForProject(paths, parsed.projectId, [...existing, parsed]);
         return projectRuleSchema.parse(parsed);
       });
     },
 
     getProjectRule(id) {
-      for (const project of readProjects(paths)) {
-        const rule = readProjectRulesForProject(paths, project.id).find((r) => r.id === id);
-        if (rule) return projectRuleSchema.parse(rule);
-      }
-      return null;
+      const rule = readAllProjectRules(paths).find((r) => r.id === id);
+      return rule ? projectRuleSchema.parse(rule) : null;
     },
 
     listProjectRules(projectId) {
@@ -371,24 +370,21 @@ export function createJsonDirectoryCoreRegistry(
             );
           }
         }
-        const existing = readFailedAttemptsForProject(paths, parsed.projectId);
-        if (existing.some((fa) => fa.id === parsed.id)) {
+        if (readAllFailedAttempts(paths).some((fa) => fa.id === parsed.id)) {
           throw new CoreRegistryError(
             "failed_attempt_already_exists",
             `Failed attempt already exists: ${parsed.id}`,
           );
         }
+        const existing = readFailedAttemptsForProject(paths, parsed.projectId);
         writeFailedAttemptsForProject(paths, parsed.projectId, [...existing, parsed]);
         return failedAttemptSchema.parse(parsed);
       });
     },
 
     getFailedAttempt(id) {
-      for (const project of readProjects(paths)) {
-        const fa = readFailedAttemptsForProject(paths, project.id).find((f) => f.id === id);
-        if (fa) return failedAttemptSchema.parse(fa);
-      }
-      return null;
+      const fa = readAllFailedAttempts(paths).find((f) => f.id === id);
+      return fa ? failedAttemptSchema.parse(fa) : null;
     },
 
     listFailedAttempts(projectId) {

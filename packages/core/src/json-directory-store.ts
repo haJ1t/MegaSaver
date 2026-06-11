@@ -166,12 +166,34 @@ export function writeMemoryEntriesForProject(
   atomicWriteFile(filePath, `${content}\n`);
 }
 
-export function readProjectRulesForProject(
-  paths: StorePaths,
-  projectId: ProjectId,
-): ProjectRule[] {
+export function readProjectRulesForProject(paths: StorePaths, projectId: ProjectId): ProjectRule[] {
   const filePath = join(paths.projectRulesDir, `${projectId}.jsonl`);
   return readJsonLines(filePath).map((entry) => parseEntity(projectRuleSchema, entry, filePath));
+}
+
+export function readAllProjectRules(paths: StorePaths): ProjectRule[] {
+  let fileNames: string[];
+  try {
+    fileNames = readdirSync(paths.projectRulesDir);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath: paths.projectRulesDir,
+      cause: error,
+    });
+  }
+
+  return fileNames
+    .filter((fileName) => fileName.endsWith(".jsonl"))
+    .flatMap((fileName) => {
+      const filePath = join(paths.projectRulesDir, fileName);
+      return readJsonLines(filePath).map((entry) =>
+        parseEntity(projectRuleSchema, entry, filePath),
+      );
+    });
 }
 
 export function writeProjectRulesForProject(
@@ -192,9 +214,32 @@ export function readFailedAttemptsForProject(
   projectId: ProjectId,
 ): FailedAttempt[] {
   const filePath = join(paths.failedAttemptsDir, `${projectId}.jsonl`);
-  return readJsonLines(filePath).map((entry) =>
-    parseEntity(failedAttemptSchema, entry, filePath),
-  );
+  return readJsonLines(filePath).map((entry) => parseEntity(failedAttemptSchema, entry, filePath));
+}
+
+export function readAllFailedAttempts(paths: StorePaths): FailedAttempt[] {
+  let fileNames: string[];
+  try {
+    fileNames = readdirSync(paths.failedAttemptsDir);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath: paths.failedAttemptsDir,
+      cause: error,
+    });
+  }
+
+  return fileNames
+    .filter((fileName) => fileName.endsWith(".jsonl"))
+    .flatMap((fileName) => {
+      const filePath = join(paths.failedAttemptsDir, fileName);
+      return readJsonLines(filePath).map((entry) =>
+        parseEntity(failedAttemptSchema, entry, filePath),
+      );
+    });
 }
 
 export function writeFailedAttemptsForProject(

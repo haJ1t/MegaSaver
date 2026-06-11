@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projectIdSchema } from "@megasaver/shared";
@@ -60,5 +60,25 @@ describe("rule + failed-attempt store helpers", () => {
     expect(readFailedAttemptsForProject(paths, PROJECT_ID)).toEqual([]);
     writeFailedAttemptsForProject(paths, PROJECT_ID, [failure]);
     expect(readFailedAttemptsForProject(paths, PROJECT_ID)).toEqual([failure]);
+  });
+
+  it("deletes the project-rules file when written empty", () => {
+    const paths = resolveStorePaths(root);
+    const filePath = join(paths.projectRulesDir, `${PROJECT_ID}.jsonl`);
+    writeProjectRulesForProject(paths, PROJECT_ID, [rule]);
+    expect(existsSync(filePath)).toBe(true);
+    writeProjectRulesForProject(paths, PROJECT_ID, []);
+    expect(existsSync(filePath)).toBe(false);
+    expect(readProjectRulesForProject(paths, PROJECT_ID)).toEqual([]);
+  });
+
+  it("deletes the failed-attempts file when written empty", () => {
+    const paths = resolveStorePaths(root);
+    const filePath = join(paths.failedAttemptsDir, `${PROJECT_ID}.jsonl`);
+    writeFailedAttemptsForProject(paths, PROJECT_ID, [failure]);
+    expect(existsSync(filePath)).toBe(true);
+    writeFailedAttemptsForProject(paths, PROJECT_ID, []);
+    expect(existsSync(filePath)).toBe(false);
+    expect(readFailedAttemptsForProject(paths, PROJECT_ID)).toEqual([]);
   });
 });
