@@ -1,8 +1,18 @@
+import type { MemoryEntry } from "@megasaver/core";
 import { memoryEntryIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { NAME_CONTROL_CHARS_MESSAGE } from "../../errors.js";
 
 const SHOW_KEY_WIDTH = 12;
+const EXPLAIN_KEY_WIDTH = 16;
+
+// Citty yields a bare string for a single repeated flag and string[] for
+// multiple; normalize both (and absent) to a string[] at the boundary.
+export function toStringArray(value: unknown): string[] {
+  if (value === undefined) return [];
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
+  return typeof value === "string" ? [value] : [];
+}
 
 export const contentSchema = z
   .string()
@@ -60,4 +70,49 @@ function truncate(value: string, max: number): string {
   // W7: codepoint-only truncation accepted for v0.1; grapheme-aware via Intl.Segmenter deferred (low real-world impact, edge case for emoji content)
   if ([...value].length <= max) return value;
   return `${[...value].slice(0, max - 1).join("")}…`;
+}
+
+const TYPE_COLUMN_WIDTH = 15;
+const CONFIDENCE_COLUMN_WIDTH = 6;
+const TITLE_TRUNCATE_AT = 60;
+
+export function formatMemorySearchLine(entry: {
+  id: string;
+  type: string;
+  confidence: string;
+  title: string;
+}): string {
+  const type = entry.type.padEnd(TYPE_COLUMN_WIDTH, " ");
+  const confidence = entry.confidence.padEnd(CONFIDENCE_COLUMN_WIDTH, " ");
+  const title = truncate(entry.title, TITLE_TRUNCATE_AT);
+  return `${entry.id}  ${type}  ${confidence}  ${title}`;
+}
+
+export function formatMemoryExplainLines(entry: MemoryEntry): string[] {
+  const list = (values: readonly string[] | undefined): string =>
+    values && values.length > 0 ? values.join(", ") : "-";
+  return [
+    `${padExplain("id")}${entry.id}`,
+    `${padExplain("type")}${entry.type}`,
+    `${padExplain("title")}${entry.title}`,
+    `${padExplain("scope")}${entry.scope}`,
+    `${padExplain("session")}${entry.sessionId ?? "-"}`,
+    `${padExplain("confidence")}${entry.confidence}`,
+    `${padExplain("source")}${entry.source}`,
+    `${padExplain("stale")}${entry.stale}`,
+    `${padExplain("keywords")}${list(entry.keywords)}`,
+    `${padExplain("content")}${entry.content}`,
+    `${padExplain("reason")}${entry.reason ?? "-"}`,
+    `${padExplain("goal")}${entry.goal ?? "-"}`,
+    `${padExplain("evidence")}${list(entry.evidence)}`,
+    `${padExplain("relatedFiles")}${list(entry.relatedFiles)}`,
+    `${padExplain("relatedSymbols")}${list(entry.relatedSymbols)}`,
+    `${padExplain("createdAt")}${entry.createdAt}`,
+    `${padExplain("updatedAt")}${entry.updatedAt}`,
+    `${padExplain("expiresAt")}${entry.expiresAt ?? "-"}`,
+  ];
+}
+
+function padExplain(key: string): string {
+  return key.padEnd(EXPLAIN_KEY_WIDTH, " ");
 }

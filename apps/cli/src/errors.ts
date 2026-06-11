@@ -1,5 +1,12 @@
 import { ConnectorError } from "@megasaver/connectors-shared";
-import { CorePersistenceError, CoreRegistryError, memoryScopeSchema } from "@megasaver/core";
+import {
+  CorePersistenceError,
+  CoreRegistryError,
+  memoryConfidenceSchema,
+  memoryScopeSchema,
+  memorySourceSchema,
+  memoryTypeSchema,
+} from "@megasaver/core";
 import { agentIdSchema, riskLevelSchema, tokenSaverModeSchema } from "@megasaver/shared";
 import { ZodError } from "zod";
 import { KNOWN_TARGET_IDS } from "./known-targets.js";
@@ -324,4 +331,29 @@ export function scopeSessionWithoutSessionMessage(): CliMessage {
     message: "error: --session is required when --scope is session",
     exitCode: 1,
   };
+}
+
+export function invalidTypeMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid type "${value}", expected: ${memoryTypeSchema.options.join(" | ")}`,
+    exitCode: 1,
+  };
+}
+
+export function invalidConfidenceMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid confidence "${value}", expected: ${memoryConfidenceSchema.options.join(" | ")}`,
+    exitCode: 1,
+  };
+}
+
+export function invalidSourceMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid source "${value}", expected: ${memorySourceSchema.options.join(" | ")}`,
+    exitCode: 1,
+  };
+}
+
+export function deleteRequiresConfirmMessage(): CliMessage {
+  return { message: "error: refusing to delete without --yes", exitCode: 1 };
 }
