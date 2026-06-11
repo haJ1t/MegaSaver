@@ -38,11 +38,13 @@ later Python, Go.
 
 ## Reconciliation with shipped code
 
-`@megasaver/retrieval` (BM25 + `deriveIntent`) and
-`@megasaver/content-store` (ChunkSet persistence) are usable
-primitives, but operate on text chunks, **not** parsed code structure.
-No `CodeBlock` schema, no AST extraction, no `mega scan` / `mega index`
-exists. Status: **gap**. Spec:
+Status: **shipped** (Phase 2, PR pending) — the `@megasaver/indexer`
+package implements `CodeBlock` + AST/structural extractors +
+ignore-aware `scanRepo` + incremental `buildIndex` + BM25 `searchBlocks`,
+exposed as `mega scan` and `mega index build/status/search/show`. See
+[[entities/indexer]]. Built on `@megasaver/retrieval` (BM25) for ranking;
+`@megasaver/content-store` (ChunkSet) stays the separate output-pipeline
+store. Spec:
 `docs/superpowers/specs/2026-06-11-phase2-semantic-repo-index-design.md`.
 
 ## Why it matters
@@ -54,5 +56,6 @@ index incrementally rebuildable — only changed blocks re-parse.
 ## Related
 
 - [[syntheses/contextops-roadmap]]
+- [[entities/indexer]]
 - [[concepts/context-pruning-engine]]
 - [[entities/retrieval]], [[entities/content-store]]

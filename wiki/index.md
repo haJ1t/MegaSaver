@@ -44,6 +44,7 @@ updated: 2026-06-11
 - [[entities/content-store]] — `@megasaver/content-store` ChunkSet persistence, `ContentStoreErrorCode` (BB4; no core edge).
 - [[entities/retrieval]] — `@megasaver/retrieval` BM25 + `DerivedIntent` (BB6).
 - [[entities/stats]] — `@megasaver/stats` `SessionTokenSaverStats` + `TokenSaverEvent` (BB6).
+- [[entities/indexer]] — `@megasaver/indexer` (Phase 2) typed `CodeBlock` AST/structural extraction, ignore-aware scan, incremental build, BM25 `searchBlocks`; `mega scan` + `mega index *` (no core edge).
 - [[entities/skill-packs]] — `@megasaver/skill-packs` real loader/discovery/installer (2026-06-10); 7-member error enum; `mega pack` CLI; symlink + path-escape guards.
 - [[entities/mcp-bridge]] — `@megasaver/mcp-bridge` real MCP stdio server over `stdio`, 4 tools, `mega mcp serve`, `buildMcpSetupOps` facade, 16-member `McpBridgeErrorCode` (BB8; AA1 §8).
 - [[entities/context-gate]] — `@megasaver/context-gate@0.2.0` extracted from core (BB12, #88); orchestrator functions (`runOutputPipeline`, `runOutputExecCommand`, `fetchChunk`, `loadProjectPermissions`); `OrchestratorRegistry` structural port; core re-exports surface (consumers unchanged).

@@ -2108,3 +2108,30 @@ Smoke: real `mega` run of create→search→explain→update(stale)→delete loo
 captured (stale excluded from default search; delete refuses without --yes).
 Review: code-reviewer + critic both ship (fresh contexts); first pass fix-first
 (boundary validation, backfill guard, rm-error) → confirming pass clean.
+
+## [2026-06-11] feat | Phase 2 Semantic Repo Index (@megasaver/indexer)
+
+Roadmap Phase 2 on branch feat/phase2-semantic-index. New leaf package
+@megasaver/indexer + CLI surface, 6 TDD slices + 2 review passes, pnpm
+verify green (32 tasks; indexer 33 tests). See [[entities/indexer]],
+[[concepts/semantic-repo-index]] (status gap→shipped).
+- CodeBlock schema (8 types) + CodeBlockId in shared.
+- extractTs (TypeScript compiler API): fn/class/interface→schema/arrow;
+  PascalCase+tsx→component; *.test→test. extractMd (ATX sections +
+  (intro)), extractJson (top-level keys + package.json script:<name>,
+  key-anchored lineOf).
+- scanRepo: traversal-safe, never follows symlinks; always-ignore +
+  .gitignore + .megaignore (ignore lib); skips secret/binary/oversized.
+- buildIndex: atomic store (blocks.jsonl + manifest.json), contentHash
+  incremental, self-heals corrupt/torn index by re-extracting.
+- searchBlocks BM25 (in the package, NOT the CLI — §3c forbids a
+  CLI→retrieval edge; dependency-graph guard updated to allow indexer).
+- CLI mega scan + mega index build/status/search/show. typescript is a
+  CLI runtime dep, externalized from the bundle (it uses __filename at
+  load, cannot inline into ESM) — single-file bundle no longer strictly
+  zero-dep for the index feature.
+Smoke: dogfood on the indexer package itself — build added 21 files/71
+blocks; search "extract typescript ast" ranked extractJson/Md/Ts first;
+rebuild unchanged=21. Review: code-reviewer + critic fix-first
+(self-heal, key-anchored lineOf, ENOENT-only ignore swallow) →
+confirming pass + security-reviewer.
