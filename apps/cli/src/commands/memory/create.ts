@@ -135,13 +135,22 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
 
     // Parse-on-handoff boundary: re-parse here because the connector block
     // renderer writes entry.content verbatim into agent config files.
+    // Phase 1 (DIMMEM) enriched the schema with required typed fields. Until
+    // `mega memory create` grows --type/--title flags (follow-up), default to
+    // a neutral typed shape so the create path produces valid typed memories.
     const entry: MemoryEntry = memoryEntrySchema.parse({
       id,
       projectId: project.id,
       sessionId: parsedSessionId,
       scope,
+      type: "todo",
+      title: content,
       content,
+      keywords: [],
+      confidence: "medium",
+      source: "manual",
       createdAt,
+      updatedAt: createdAt,
     });
 
     registry.createMemoryEntry(entry);

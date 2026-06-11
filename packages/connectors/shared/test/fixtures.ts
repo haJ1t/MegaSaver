@@ -46,8 +46,15 @@ export function buildContext(overrides?: {
       projectId: PROJECT_ID,
       sessionId: entry.scope === "session" ? SESSION_ID : null,
       scope: entry.scope,
+      type: "decision" as const,
+      title: entry.content.slice(0, 59) || "untitled",
       content: entry.content,
+      keywords: [],
+      confidence: "medium" as const,
+      source: "manual" as const,
+      stale: false,
       createdAt: NOW,
+      updatedAt: NOW,
     })),
   };
 }

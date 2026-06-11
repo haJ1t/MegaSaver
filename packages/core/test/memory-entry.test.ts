@@ -1,10 +1,17 @@
 import * as fc from "fast-check";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
+  type MemoryConfidence,
   type MemoryEntry,
   type MemoryScope,
+  type MemorySource,
+  type MemoryType,
+  backfillMemoryEntry,
+  memoryConfidenceSchema,
   memoryEntrySchema,
   memoryScopeSchema,
+  memorySourceSchema,
+  memoryTypeSchema,
 } from "../src/memory-entry.js";
 
 const MEMORY_ENTRY_ID = "33333333-3333-4333-8333-333333333333";
@@ -17,8 +24,15 @@ const validProjectMemory = {
   projectId: PROJECT_ID,
   sessionId: null,
   scope: "project",
+  type: "decision",
+  title: "Use JWT middleware for protected routes",
   content: "Repo uses strict ESM.",
+  keywords: ["auth", "jwt"],
+  confidence: "high",
+  source: "manual",
+  stale: false,
   createdAt: CREATED_AT,
+  updatedAt: CREATED_AT,
 };
 
 const validSessionMemory = {
@@ -26,6 +40,70 @@ const validSessionMemory = {
   sessionId: SESSION_ID,
   scope: "session",
 };
+
+describe("memoryTypeSchema", () => {
+  it("accepts all ten engineering memory types", () => {
+    for (const type of [
+      "decision",
+      "bug",
+      "architecture",
+      "todo",
+      "user_preference",
+      "failed_attempt",
+      "code_pattern",
+      "project_rule",
+      "dependency",
+      "test_behavior",
+    ]) {
+      expect(memoryTypeSchema.parse(type)).toBe(type);
+    }
+  });
+
+  it("rejects unknown types", () => {
+    expect(memoryTypeSchema.safeParse("idea").success).toBe(false);
+  });
+
+  it("preserves the roadmap declaration order", () => {
+    expect(memoryTypeSchema.options).toEqual([
+      "decision",
+      "bug",
+      "architecture",
+      "todo",
+      "user_preference",
+      "failed_attempt",
+      "code_pattern",
+      "project_rule",
+      "dependency",
+      "test_behavior",
+    ]);
+  });
+});
+
+describe("memoryConfidenceSchema", () => {
+  it("parses low/medium/high in ascending order", () => {
+    expect(memoryConfidenceSchema.options).toEqual(["low", "medium", "high"]);
+  });
+
+  it("rejects unknown confidence", () => {
+    expect(memoryConfidenceSchema.safeParse("certain").success).toBe(false);
+  });
+});
+
+describe("memorySourceSchema", () => {
+  it("parses the five provenance sources in roadmap order", () => {
+    expect(memorySourceSchema.options).toEqual([
+      "manual",
+      "agent",
+      "test_failure",
+      "git_diff",
+      "session_summary",
+    ]);
+  });
+
+  it("rejects unknown source", () => {
+    expect(memorySourceSchema.safeParse("import").success).toBe(false);
+  });
+});
 
 describe("memoryScopeSchema", () => {
   it("parses project and session scopes", () => {
@@ -43,11 +121,11 @@ describe("memoryScopeSchema", () => {
 });
 
 describe("memoryEntrySchema", () => {
-  it("parses project-scoped memory", () => {
+  it("parses a typed project-scoped memory", () => {
     expect(memoryEntrySchema.parse(validProjectMemory)).toEqual(validProjectMemory);
   });
 
-  it("parses session-scoped memory", () => {
+  it("parses a typed session-scoped memory", () => {
     expect(memoryEntrySchema.parse(validSessionMemory)).toEqual(validSessionMemory);
   });
 
@@ -69,6 +147,61 @@ describe("memoryEntrySchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0]?.path).toEqual(["content"]);
+    }
+  });
+
+  it("requires the new typed fields", () => {
+    const { type, title, keywords, confidence, source, updatedAt, ...withoutTyped } =
+      validProjectMemory;
+    const result = memoryEntrySchema.safeParse(withoutTyped);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const missing = new Set(result.error.issues.map((issue) => issue.path.join(".")));
+      expect(missing).toEqual(
+        new Set(["type", "title", "keywords", "confidence", "source", "updatedAt"]),
+      );
+    }
+  });
+
+  it("normalizes keywords: lowercase, trim, dedupe, drop empties", () => {
+    expect(
+      memoryEntrySchema.parse({
+        ...validProjectMemory,
+        keywords: ["Auth", " JWT ", "auth", "", "JWT"],
+      }).keywords,
+    ).toEqual(["auth", "jwt"]);
+  });
+
+  it("defaults stale to false when omitted", () => {
+    const { stale, ...withoutStale } = validProjectMemory;
+    expect(memoryEntrySchema.parse(withoutStale).stale).toBe(false);
+  });
+
+  it("accepts optional metadata", () => {
+    const enriched = {
+      ...validProjectMemory,
+      reason: "Tenant isolation requires per-request validation.",
+      goal: "Secure protected routes.",
+      evidence: ["src/middleware/auth.ts:42"],
+      relatedFiles: ["src/middleware/auth.ts", "src/lib/jwt.ts"],
+      relatedSymbols: ["verifyJwt"],
+      expiresAt: "2026-12-31T00:00:00.000Z",
+    };
+    expect(memoryEntrySchema.parse(enriched)).toEqual(enriched);
+  });
+
+  it("accepts a null expiresAt", () => {
+    expect(
+      memoryEntrySchema.parse({ ...validProjectMemory, expiresAt: null }).expiresAt,
+    ).toBeNull();
+  });
+
+  it("rejects an invalid title", () => {
+    const result = memoryEntrySchema.safeParse({ ...validProjectMemory, title: "bad\ntitle" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.path).toEqual(["title"]);
     }
   });
 
@@ -110,11 +243,8 @@ describe("memoryEntrySchema", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues.map((issue) => issue.path.join("."))).toEqual([
-        "id",
-        "projectId",
-        "createdAt",
-      ]);
+      const paths = new Set(result.error.issues.map((issue) => issue.path.join(".")));
+      expect(paths).toEqual(new Set(["id", "projectId", "createdAt"]));
     }
   });
 
@@ -143,15 +273,63 @@ describe("memoryEntrySchema", () => {
     );
   });
 
-  it("exports inferred MemoryEntry and MemoryScope types", () => {
+  it("backfills a v0.1-shaped row to the typed schema", () => {
+    const legacy = {
+      id: MEMORY_ENTRY_ID,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      content: "Repo uses strict ESM.",
+      createdAt: CREATED_AT,
+    };
+    const upgraded = memoryEntrySchema.parse(backfillMemoryEntry(legacy));
+    expect(upgraded).toMatchObject({
+      type: "todo",
+      title: "Repo uses strict ESM.",
+      keywords: [],
+      confidence: "low",
+      source: "manual",
+      stale: false,
+      updatedAt: CREATED_AT,
+    });
+  });
+
+  it("backfill is idempotent — already-typed rows pass through unchanged", () => {
+    expect(backfillMemoryEntry(validProjectMemory)).toEqual(validProjectMemory);
+  });
+
+  it("exports inferred types", () => {
     expectTypeOf<MemoryScope>().toEqualTypeOf<"project" | "session">();
+    expectTypeOf<MemoryType>().toEqualTypeOf<
+      | "decision"
+      | "bug"
+      | "architecture"
+      | "todo"
+      | "user_preference"
+      | "failed_attempt"
+      | "code_pattern"
+      | "project_rule"
+      | "dependency"
+      | "test_behavior"
+    >();
+    expectTypeOf<MemoryConfidence>().toEqualTypeOf<"low" | "medium" | "high">();
+    expectTypeOf<MemorySource>().toEqualTypeOf<
+      "manual" | "agent" | "test_failure" | "git_diff" | "session_summary"
+    >();
     expectTypeOf<MemoryEntry>().toMatchTypeOf<{
       id: string;
       projectId: string;
       sessionId: string | null;
       scope: "project" | "session";
+      type: MemoryType;
+      title: string;
       content: string;
+      keywords: string[];
+      confidence: MemoryConfidence;
+      source: MemorySource;
+      stale: boolean;
       createdAt: string;
+      updatedAt: string;
     }>();
   });
 });

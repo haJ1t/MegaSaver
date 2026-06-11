@@ -34,8 +34,15 @@ const MEMORY_ENTRY: MemoryEntry = {
   projectId: PROJECT_ID as MemoryEntry["projectId"],
   sessionId: null,
   scope: "project",
+  type: "decision",
+  title: "memo content",
   content: "memo content",
+  keywords: [],
+  confidence: "medium",
+  source: "manual",
+  stale: false,
   createdAt: ISO,
+  updatedAt: ISO,
 };
 
 afterEach(() => {

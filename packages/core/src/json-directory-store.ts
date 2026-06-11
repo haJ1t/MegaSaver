@@ -16,7 +16,7 @@ import { dirname, join, resolve } from "node:path";
 import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { CorePersistenceError } from "./errors.js";
-import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
+import { type MemoryEntry, backfillMemoryEntry, memoryEntrySchema } from "./memory-entry.js";
 import { type Project, projectSchema } from "./project.js";
 import { type Session, sessionSchema } from "./session.js";
 
@@ -97,7 +97,11 @@ export function readMemoryEntriesForProject(
   projectId: ProjectId,
 ): MemoryEntry[] {
   return readJsonLines(join(paths.memoryDir, `${projectId}.jsonl`)).map((entry) =>
-    parseEntity(memoryEntrySchema, entry, join(paths.memoryDir, `${projectId}.jsonl`)),
+    parseEntity(
+      memoryEntrySchema,
+      backfillMemoryEntry(entry),
+      join(paths.memoryDir, `${projectId}.jsonl`),
+    ),
   );
 }
 
@@ -121,7 +125,7 @@ export function readAllMemoryEntries(paths: StorePaths): MemoryEntry[] {
     .flatMap((fileName) => {
       const filePath = join(paths.memoryDir, fileName);
       return readJsonLines(filePath).map((entry) =>
-        parseEntity(memoryEntrySchema, entry, filePath),
+        parseEntity(memoryEntrySchema, backfillMemoryEntry(entry), filePath),
       );
     });
 }
