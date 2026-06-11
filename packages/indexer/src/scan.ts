@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { closeSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import ignoreFactory from "ignore";
 
@@ -21,7 +21,7 @@ const DEFAULT_MAX_FILE_SIZE = 1_000_000;
 const ALWAYS_IGNORE = ["node_modules/", "dist/", ".git/", ".turbo/"];
 // Never inventory secret-bearing files. Filename-based: content lives only in
 // blocks (Task 5 redacts there); a secret FILE should not even be listed.
-const SECRET_RE = /(^|\/)(\.env(\..+)?|.+\.pem|.+\.key|id_rsa)$/;
+const SECRET_RE = /(^|\/)(\.env(\..+)?|.+\.pem|.+\.key|id_rsa)$/i;
 const BINARY_SNIFF_BYTES = 8000;
 
 const LANGUAGE_BY_EXT: Record<string, string> = {
@@ -48,9 +48,18 @@ function languageOf(path: string): string {
   return LANGUAGE_BY_EXT[ext.toLowerCase()] ?? "other";
 }
 
-function isBinary(buffer: Buffer): boolean {
-  const limit = Math.min(buffer.length, BINARY_SNIFF_BYTES);
-  for (let i = 0; i < limit; i += 1) {
+// Sniff only the first BINARY_SNIFF_BYTES (a NUL byte ⇒ binary) rather than
+// reading the whole file — bounded memory regardless of file size.
+function isBinaryFile(absPath: string): boolean {
+  const buffer = Buffer.alloc(BINARY_SNIFF_BYTES);
+  const fd = openSync(absPath, "r");
+  let read: number;
+  try {
+    read = readSync(fd, buffer, 0, BINARY_SNIFF_BYTES, 0);
+  } finally {
+    closeSync(fd);
+  }
+  for (let i = 0; i < read; i += 1) {
     if (buffer[i] === 0) return true;
   }
   return false;
@@ -108,7 +117,7 @@ export function scanRepo(options: ScanOptions): ScanResult {
         skipped.push({ path: rel, reason: "too-large" });
         continue;
       }
-      if (isBinary(readFileSync(abs))) {
+      if (isBinaryFile(abs)) {
         skipped.push({ path: rel, reason: "binary" });
         continue;
       }

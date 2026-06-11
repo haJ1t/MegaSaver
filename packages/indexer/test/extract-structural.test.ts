@@ -59,4 +59,10 @@ describe("extractJson", () => {
     const x = extractJson("c.json", json).find((b) => b.name === "x");
     expect(x?.startLine).toBe(2);
   });
+
+  it("ignores a key-like pattern that appears inside a string value", () => {
+    const json = '{\n  "desc": "see x: here",\n  "x": 2\n}\n';
+    const x = extractJson("c.json", json).find((b) => b.name === "x");
+    expect(x?.startLine).toBe(3);
+  });
 });

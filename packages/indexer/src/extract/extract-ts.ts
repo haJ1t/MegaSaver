@@ -29,6 +29,17 @@ function isComponentName(name: string, scriptKind: ts.ScriptKind): boolean {
   );
 }
 
+// Route heuristic (best-effort, spec §4): a function-like declaration in a file
+// under a `routes/` or `api/` directory. Decorator / `app.<verb>(` detection is
+// deferred; non-matches fall back to function.
+const ROUTE_PATH_RE = /(^|\/)(routes|api)\//;
+
+function functionLikeType(name: string, scriptKind: ts.ScriptKind, isRoute: boolean): BlockType {
+  if (isComponentName(name, scriptKind)) return "component";
+  if (isRoute) return "route";
+  return "function";
+}
+
 function tokenize(name: string): string[] {
   return [
     ...new Set(
@@ -76,6 +87,7 @@ export function extractTs(filePath: string, source: string): ExtractedBlock[] {
   );
   const fileImports = collectImports(sourceFile);
   const isTest = TEST_FILE_RE.test(filePath);
+  const isRoute = ROUTE_PATH_RE.test(filePath);
   const blocks: ExtractedBlock[] = [];
 
   const add = (
@@ -107,12 +119,7 @@ export function extractTs(filePath: string, source: string): ExtractedBlock[] {
   for (const statement of sourceFile.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name) {
       const name = statement.name.text;
-      add(
-        statement,
-        name,
-        isComponentName(name, scriptKind) ? "component" : "function",
-        isExported(statement),
-      );
+      add(statement, name, functionLikeType(name, scriptKind, isRoute), isExported(statement));
     } else if (ts.isClassDeclaration(statement) && statement.name) {
       add(statement, statement.name.text, "class", isExported(statement));
     } else if (ts.isInterfaceDeclaration(statement)) {
@@ -129,12 +136,7 @@ export function extractTs(filePath: string, source: string): ExtractedBlock[] {
           (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
         ) {
           const name = declaration.name.text;
-          add(
-            declaration,
-            name,
-            isComponentName(name, scriptKind) ? "component" : "function",
-            exported,
-          );
+          add(declaration, name, functionLikeType(name, scriptKind, isRoute), exported);
         }
       }
     }

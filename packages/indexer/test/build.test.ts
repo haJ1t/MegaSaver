@@ -74,6 +74,18 @@ describe("buildIndex", () => {
     expect(second.added).toBe(0);
   });
 
+  it("derives calledBy across the indexed set (second pass)", () => {
+    writeFileSync(
+      join(repo, "src", "c.ts"),
+      "export function caller() {\n  return target();\n}\nexport function target() {\n  return 1;\n}\n",
+    );
+    buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+    const target = readBlocks(resolveIndexPaths(store, PROJECT_ID)).find(
+      (b) => b.name === "target",
+    );
+    expect(target?.calledBy).toContain("caller");
+  });
+
   it("self-heals a corrupt blocks.jsonl by re-extracting on rebuild", () => {
     buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
     const paths = resolveIndexPaths(store, PROJECT_ID);

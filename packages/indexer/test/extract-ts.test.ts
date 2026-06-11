@@ -60,6 +60,19 @@ describe("extractTs", () => {
     expect(byName(tsx, "Button")?.blockType).toBe("component");
   });
 
+  it("classifies functions under routes/ or api/ as route", () => {
+    expect(
+      byName(
+        extractTs("src/routes/users.ts", "export function getUser() { return 1; }\n"),
+        "getUser",
+      )?.blockType,
+    ).toBe("route");
+    expect(
+      byName(extractTs("src/api/posts.ts", "export const listPosts = () => [];\n"), "listPosts")
+        ?.blockType,
+    ).toBe("route");
+  });
+
   it("classifies every block in a *.test.ts file as test", () => {
     const t = extractTs("src/auth.test.ts", "function helpsTest() { return 1; }\n");
     expect(t.every((b) => b.blockType === "test")).toBe(true);

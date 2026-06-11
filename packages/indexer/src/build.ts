@@ -108,6 +108,24 @@ export function buildIndex(options: BuildOptions): BuildResult {
     if (!scannedPaths.has(path)) removed += 1;
   }
 
-  writeIndex(paths, nextBlocks, nextManifest);
+  // Second pass (spec §11.2): derive calledBy within the indexed set —
+  // calledBy[X] = the names of blocks whose `calls` include X's name. Recomputed
+  // from scratch each build (kept blocks included) so it never goes stale; this
+  // does not affect contentHash (hash is over source text, not calledBy).
+  const callersByCallee = new Map<string, Set<string>>();
+  for (const block of nextBlocks) {
+    if (block.name === undefined) continue;
+    for (const callee of block.calls) {
+      const callers = callersByCallee.get(callee) ?? new Set<string>();
+      callers.add(block.name);
+      callersByCallee.set(callee, callers);
+    }
+  }
+  const finalBlocks = nextBlocks.map((block) => ({
+    ...block,
+    calledBy: block.name !== undefined ? [...(callersByCallee.get(block.name) ?? [])].sort() : [],
+  }));
+
+  writeIndex(paths, finalBlocks, nextManifest);
   return { added, updated, removed, unchanged, blockCount: nextBlocks.length };
 }
