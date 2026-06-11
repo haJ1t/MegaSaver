@@ -16,6 +16,9 @@ import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
 import { handleReadFile } from "./tools/read-file.js";
 import { handleRecall } from "./tools/recall.js";
 import { handleRunCommand } from "./tools/run-command.js";
+import { handleRecordFailedAttempt } from "./tools/failed-attempts.js";
+import { handleGetProjectContext } from "./tools/project-context.js";
+import { handleGetProjectRules, handleSaveProjectRule } from "./tools/project-rules.js";
 import { handleSaveMemory } from "./tools/save-memory.js";
 import { handleSearchMemory } from "./tools/search-memory.js";
 
@@ -40,6 +43,14 @@ const TOOL_DEFS = [
     description: "Token-savings audit for a task's context pack.",
   },
   {
+    name: "get_project_context",
+    description: "Project briefing: meta, rules, key memories, index summary, open failures.",
+  },
+  {
+    name: "get_project_rules",
+    description: "Reusable project rules, optionally filtered by task or files.",
+  },
+  {
     name: "get_relevant_code_blocks",
     description: "The included blocks of a task's context pack.",
   },
@@ -52,7 +63,9 @@ const TOOL_DEFS = [
   { name: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
   { name: "mega_recall", description: "Recall session memory and stored chunk sets." },
   { name: "mega_run_command", description: "Run a policy-gated command and filter its output." },
+  { name: "record_failed_attempt", description: "Record a failed task attempt for a project." },
   { name: "save_memory", description: "Write a typed memory entry to a project." },
+  { name: "save_project_rule", description: "Write a reusable project rule." },
   { name: "search_memory", description: "Search project memories by text and filters." },
 ] as const;
 
@@ -164,6 +177,17 @@ export function buildServer(deps: ServerDeps): {
           { registry: deps.registry, storeRoot: deps.storeRoot },
           args,
         );
+      case "get_project_context":
+        return handleGetProjectContext(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        );
+      case "get_project_rules":
+        return handleGetProjectRules({ registry: deps.registry }, args);
+      case "record_failed_attempt":
+        return handleRecordFailedAttempt({ registry: deps.registry, now, newId }, args);
+      case "save_project_rule":
+        return handleSaveProjectRule({ registry: deps.registry, now, newId }, args);
     }
   }
 
