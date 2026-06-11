@@ -28,7 +28,10 @@ export function atomicWriteFile(filePath: string, content: string): void {
     writeFileSync(tempPath, content);
     // Durability: fsync the temp file before rename so its bytes are on disk,
     // then fsync the parent dir after rename so the link is durable.
-    const tempFd = openSync(tempPath, "r");
+    // Open read-WRITE for the fsync: on Windows FlushFileBuffers requires a
+    // write-capable handle (a read-only handle fails with EPERM/ACCESS_DENIED);
+    // "r+" works on POSIX too. The temp file already exists (just written).
+    const tempFd = openSync(tempPath, "r+");
     try {
       fsyncSync(tempFd);
     } finally {

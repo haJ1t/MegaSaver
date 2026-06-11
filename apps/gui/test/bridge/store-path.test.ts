@@ -1,4 +1,4 @@
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveBridgeStorePath } from "../../bridge/store-path.js";
 
@@ -12,7 +12,7 @@ describe("resolveBridgeStorePath", () => {
         platform: "linux",
         localAppData: undefined,
       }),
-    ).toBe("/abs/x");
+    ).toBe(resolve("/abs/x"));
   });
   it("posix default", () => {
     expect(
@@ -23,11 +23,11 @@ describe("resolveBridgeStorePath", () => {
         platform: "linux",
         localAppData: undefined,
       }),
-    ).toBe(join("/home/u", ".local", "share", "megasaver"));
+    ).toBe(resolve("/home/u", ".local", "share", "megasaver"));
   });
-  // win32 cases assert BRANCH SELECTION on a posix test host (node:path uses
-  // posix separators); the real backslash output is proven by windows-latest CI.
-  it("win32 uses localAppData, not the home fallback or posix default", () => {
+  // win32 cases assert BRANCH SELECTION via the same node:path resolve the impl
+  // uses (host-independent); the real backslash output is proven by windows-latest CI.
+  it("win32 uses localAppData, not the posix default", () => {
     const out = resolveBridgeStorePath({
       storeOverride: undefined,
       home: "C:\\Users\\u",
@@ -36,7 +36,9 @@ describe("resolveBridgeStorePath", () => {
       localAppData: "C:\\Users\\u\\AppData\\Local",
     });
     expect(out).toBe(resolve("C:\\Users\\u\\AppData\\Local", "megasaver"));
-    expect(out).not.toBe(resolve("C:\\Users\\u", "AppData", "Local", "megasaver"));
+    // NOT compared to the home-AppData fallback — on a real win32 host those two
+    // resolve to the SAME canonical path, so that would be a false assertion.
+    expect(out).not.toBe(resolve("C:\\Users\\u", ".local", "share", "megasaver"));
   });
   it("win32 falls back to home/AppData/Local when localAppData unset", () => {
     const out = resolveBridgeStorePath({

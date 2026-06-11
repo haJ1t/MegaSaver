@@ -155,12 +155,21 @@ describe("atomicWriteFile — partial-write recovery (V2)", () => {
     expect(tempOpen, `expected temp file open: ${callOrder.join(",")}`).toBeGreaterThanOrEqual(0);
     expect(tempFsync, `expected temp fsync: ${callOrder.join(",")}`).toBeGreaterThan(tempOpen);
     expect(renameIdx, `expected rename: ${callOrder.join(",")}`).toBeGreaterThan(tempFsync);
-    expect(dirOpen, `expected dir open after rename: ${callOrder.join(",")}`).toBeGreaterThan(
-      renameIdx,
-    );
-    expect(dirFsync, `expected dir fsync after rename: ${callOrder.join(",")}`).toBeGreaterThan(
-      dirOpen,
-    );
+    // The parent-dir fsync is POSIX-only — on win32 it is skipped by design
+    // (NTFS journals rename metadata; the dedicated win32-skip test below pins
+    // that). So assert its presence on POSIX and its ABSENCE on Windows.
+    if (process.platform === "win32") {
+      expect(dirOpen, `expected NO dir open after rename on win32: ${callOrder.join(",")}`).toBe(
+        -1,
+      );
+    } else {
+      expect(dirOpen, `expected dir open after rename: ${callOrder.join(",")}`).toBeGreaterThan(
+        renameIdx,
+      );
+      expect(dirFsync, `expected dir fsync after rename: ${callOrder.join(",")}`).toBeGreaterThan(
+        dirOpen,
+      );
+    }
   });
 
   it("does not leave a .tmp file when writeFileSync fails before rename", async () => {

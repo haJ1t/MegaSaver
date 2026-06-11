@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { installPack, removePack } from "../src/install.js";
+import { describeUnlessWindows } from "./_platform.js";
 
 const MANIFEST = {
   name: "demo-pack",
@@ -96,16 +97,18 @@ describe("installPack / removePack", () => {
     await expect(install({ force: true })).resolves.toBeTruthy();
   });
 
-  it("rejects a symlink anywhere in the source tree", async () => {
-    await seedSource(source);
-    const outside = join(source, "..", `sp-outside-${process.pid}`);
-    await writeFile(outside, "outside\n");
-    try {
-      await symlink(outside, join(source, "skills", "evil-link"));
-      await expect(install()).rejects.toMatchObject({ code: "pack_path_escape" });
-    } finally {
-      await rm(outside, { force: true });
-    }
+  describeUnlessWindows("symlink rejection in source tree (POSIX symlink semantics)", () => {
+    it("rejects a symlink anywhere in the source tree", async () => {
+      await seedSource(source);
+      const outside = join(source, "..", `sp-outside-${process.pid}`);
+      await writeFile(outside, "outside\n");
+      try {
+        await symlink(outside, join(source, "skills", "evil-link"));
+        await expect(install()).rejects.toMatchObject({ code: "pack_path_escape" });
+      } finally {
+        await rm(outside, { force: true });
+      }
+    });
   });
 
   it("no .tmp-* residue after a failed install", async () => {

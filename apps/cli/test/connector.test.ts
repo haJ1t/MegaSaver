@@ -5,6 +5,7 @@ import { ConnectorError, MEGA_SAVER_BLOCK_START } from "@megasaver/connectors-sh
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectorStatusCommand, connectorSyncCommand } from "../src/commands/connector/index.js";
 import { KNOWN_TARGET_IDS } from "../src/known-targets.js";
+import { describeUnlessWindows } from "./_platform.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -602,62 +603,64 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
     ).toBe(true);
   });
 
-  // U6/U7: chmod 0o500 on .cursor (read+execute, NO write). readTargetFile
-  // traverses .cursor → finds rules/megasaver.mdc absent → returns null. Then
-  // mkdir(.cursor/rules, recursive) fails with EACCES (no +w on parent). The
-  // U7 try/catch wraps this as ConnectorError("file_write_failed").
-  it("wraps mkdir EACCES as file_write_failed when target dir parent has no write permission", async () => {
-    if (process.getuid && process.getuid() === 0) {
-      // chmod cannot block root; CI typically runs non-root.
-      return;
-    }
-    await seedSimple();
-    const cursorDir = join(projectRoot, ".cursor");
-    const { chmod } = await import("node:fs/promises");
-    await mkdir(cursorDir);
-    await chmod(cursorDir, 0o500);
+  describeUnlessWindows("POSIX permission + symlink semantics", () => {
+    // U6/U7: chmod 0o500 on .cursor (read+execute, NO write). readTargetFile
+    // traverses .cursor → finds rules/megasaver.mdc absent → returns null. Then
+    // mkdir(.cursor/rules, recursive) fails with EACCES (no +w on parent). The
+    // U7 try/catch wraps this as ConnectorError("file_write_failed").
+    it("wraps mkdir EACCES as file_write_failed when target dir parent has no write permission", async () => {
+      if (process.getuid && process.getuid() === 0) {
+        // chmod cannot block root; CI typically runs non-root.
+        return;
+      }
+      await seedSimple();
+      const cursorDir = join(projectRoot, ".cursor");
+      const { chmod } = await import("node:fs/promises");
+      await mkdir(cursorDir);
+      await chmod(cursorDir, 0o500);
 
-    try {
-      await runSync({ projectName: "demo", target: "cursor" });
+      try {
+        await runSync({ projectName: "demo", target: "cursor" });
+
+        expect(process.exitCode).toBe(1);
+        const stdoutLines = logSpy.mock.calls.map((c) => c[0] as string);
+        expect(stdoutLines.some((l) => l.includes("cursor") && l.includes("error"))).toBe(true);
+        expect(
+          errSpy.mock.calls.some(
+            (c) =>
+              (c[0] as string).startsWith("error: connector failed to write") &&
+              (c[0] as string).includes("megasaver.mdc"),
+          ),
+        ).toBe(true);
+      } finally {
+        await chmod(cursorDir, 0o755);
+      }
+    });
+
+    it("surfaces a ConnectorError(file_write_failed) as per-target error, exit 1", async () => {
+      await seedSimple();
+      // Seed CLAUDE.md as a SYMLINK — connectors-shared writeTargetFile refuses to replace it.
+      const { symlink } = await import("node:fs/promises");
+      const tempTarget = join(
+        tmpdir(),
+        `megasaver-symlink-target-${Math.random().toString(36).slice(2)}`,
+      );
+      await writeFile(tempTarget, "not the real target\n");
+      await symlink(tempTarget, join(projectRoot, "CLAUDE.md"));
+
+      await runSync({ projectName: "demo" });
 
       expect(process.exitCode).toBe(1);
-      const stdoutLines = logSpy.mock.calls.map((c) => c[0] as string);
-      expect(stdoutLines.some((l) => l.includes("cursor") && l.includes("error"))).toBe(true);
+      expect(logSpy.mock.calls.map((c) => c[0])[0]).toBe(
+        `claude-code  CLAUDE.md  error  session=${SESSION_ID}`,
+      );
       expect(
-        errSpy.mock.calls.some(
-          (c) =>
-            (c[0] as string).startsWith("error: connector failed to write") &&
-            (c[0] as string).includes("megasaver.mdc"),
+        errSpy.mock.calls.some((c) =>
+          (c[0] as string).startsWith("error: connector failed to write CLAUDE.md:"),
         ),
       ).toBe(true);
-    } finally {
-      await chmod(cursorDir, 0o755);
-    }
-  });
-
-  it("surfaces a ConnectorError(file_write_failed) as per-target error, exit 1", async () => {
-    await seedSimple();
-    // Seed CLAUDE.md as a SYMLINK — connectors-shared writeTargetFile refuses to replace it.
-    const { symlink } = await import("node:fs/promises");
-    const tempTarget = join(
-      tmpdir(),
-      `megasaver-symlink-target-${Math.random().toString(36).slice(2)}`,
-    );
-    await writeFile(tempTarget, "not the real target\n");
-    await symlink(tempTarget, join(projectRoot, "CLAUDE.md"));
-
-    await runSync({ projectName: "demo" });
-
-    expect(process.exitCode).toBe(1);
-    expect(logSpy.mock.calls.map((c) => c[0])[0]).toBe(
-      `claude-code  CLAUDE.md  error  session=${SESSION_ID}`,
-    );
-    expect(
-      errSpy.mock.calls.some((c) =>
-        (c[0] as string).startsWith("error: connector failed to write CLAUDE.md:"),
-      ),
-    ).toBe(true);
-    await rm(tempTarget, { force: true });
+      await rm(tempTarget, { force: true });
+    });
   });
 });
 

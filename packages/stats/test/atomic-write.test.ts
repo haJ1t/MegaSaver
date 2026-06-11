@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { atomicWriteFile } from "../src/atomic-write.js";
 import { StatsError } from "../src/errors.js";
+import { describeUnlessWindows } from "./_platform.js";
 
 let root: string;
 
@@ -35,17 +36,19 @@ describe("atomicWriteFile", () => {
     expect(leftovers).toHaveLength(0);
   });
 
-  it("rejects a symlinked parent directory with write_failed", () => {
-    const realDir = join(root, "real");
-    atomicWriteFile(join(realDir, "seed.json"), "x");
-    const linkDir = join(root, "link");
-    symlinkSync(realDir, linkDir);
-    try {
-      atomicWriteFile(join(linkDir, "file.json"), "y");
-      expect.unreachable();
-    } catch (err) {
-      expect(err).toBeInstanceOf(StatsError);
-      expect((err as StatsError).code).toBe("write_failed");
-    }
+  describeUnlessWindows("symlinked-parent guard (POSIX symlink semantics)", () => {
+    it("rejects a symlinked parent directory with write_failed", () => {
+      const realDir = join(root, "real");
+      atomicWriteFile(join(realDir, "seed.json"), "x");
+      const linkDir = join(root, "link");
+      symlinkSync(realDir, linkDir);
+      try {
+        atomicWriteFile(join(linkDir, "file.json"), "y");
+        expect.unreachable();
+      } catch (err) {
+        expect(err).toBeInstanceOf(StatsError);
+        expect((err as StatsError).code).toBe("write_failed");
+      }
+    });
   });
 });

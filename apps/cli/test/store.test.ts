@@ -28,7 +28,7 @@ describe("resolveStorePath", () => {
         xdgDataHome: undefined,
         ...POSIX,
       }),
-    ).toBe(join("/repo", "local-store"));
+    ).toBe(resolve("/repo", "local-store"));
   });
 
   it("XDG_DATA_HOME honored on posix", () => {
@@ -40,7 +40,7 @@ describe("resolveStorePath", () => {
         xdgDataHome: "/xdg/data",
         ...POSIX,
       }),
-    ).toBe(join("/xdg/data", "megasaver"));
+    ).toBe(resolve("/xdg/data", "megasaver"));
   });
 
   it("posix default falls back to ~/.local/share", () => {
@@ -52,7 +52,7 @@ describe("resolveStorePath", () => {
         xdgDataHome: undefined,
         ...POSIX,
       }),
-    ).toBe(join("/home/user", ".local", "share", "megasaver"));
+    ).toBe(resolve("/home/user", ".local", "share", "megasaver"));
   });
 
   // NOTE: on a POSIX test host `node:path` uses posix separators even with
@@ -70,7 +70,9 @@ describe("resolveStorePath", () => {
       localAppData: "C:\\Users\\u\\AppData\\Local",
     });
     expect(out).toBe(resolve("C:\\Users\\u\\AppData\\Local", "megasaver"));
-    expect(out).not.toBe(resolve("C:\\Users\\u", "AppData", "Local", "megasaver"));
+    // distinct from the posix-default branch (AppData\Local vs .local\share);
+    // NOT compared to the home-AppData fallback — on a real win32 host those
+    // two resolve to the SAME canonical path, so that would be a false assertion.
     expect(out).not.toBe(resolve("C:\\Users\\u", ".local", "share", "megasaver"));
   });
 

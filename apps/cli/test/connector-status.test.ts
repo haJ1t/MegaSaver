@@ -9,6 +9,7 @@ import {
   runConnectorSync,
 } from "../src/commands/connector/index.js";
 import { KNOWN_TARGETS, KNOWN_TARGET_IDS } from "../src/known-targets.js";
+import { describeUnlessWindows } from "./_platform.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -446,15 +447,17 @@ describe("connectorStatusCommand — error + cross-target", () => {
     expect(errors).toContain("CLAUDE.md");
   });
 
-  it("reports error when CLAUDE.md is unreadable, then continues to codex", async () => {
-    await seedProject("demo", projectRoot);
-    await writeFile(join(projectRoot, "CLAUDE.md"), "anything\n");
-    await chmod(join(projectRoot, "CLAUDE.md"), 0o000);
-    await runStatus({ projectName: "demo" });
-    expect(process.exitCode).toBe(1);
-    const lines = logSpy.mock.calls.map((c) => c[0] as string);
-    expect(lines[0]).toBe("claude-code  CLAUDE.md  error  session=none");
-    expect(lines[1]).toBe("codex        AGENTS.md  missing  session=none");
+  describeUnlessWindows("unreadable-file error path (POSIX chmod mode bits)", () => {
+    it("reports error when CLAUDE.md is unreadable, then continues to codex", async () => {
+      await seedProject("demo", projectRoot);
+      await writeFile(join(projectRoot, "CLAUDE.md"), "anything\n");
+      await chmod(join(projectRoot, "CLAUDE.md"), 0o000);
+      await runStatus({ projectName: "demo" });
+      expect(process.exitCode).toBe(1);
+      const lines = logSpy.mock.calls.map((c) => c[0] as string);
+      expect(lines[0]).toBe("claude-code  CLAUDE.md  error  session=none");
+      expect(lines[1]).toBe("codex        AGENTS.md  missing  session=none");
+    });
   });
 
   it("emits both lines in declaration order when claude-code in-sync and codex drift", async () => {

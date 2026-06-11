@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { projectIdSchema } from "@megasaver/shared";
 import { afterEach, describe, expect, it } from "vitest";
 import { CorePersistenceError, createJsonDirectoryCoreRegistry } from "../src/index.js";
+import { describeUnlessWindows } from "./_platform.js";
 
 const roots: string[] = [];
 
@@ -63,43 +64,45 @@ describe("createJsonDirectoryCoreRegistry — failure modes", () => {
     expectPersistenceError(() => registry.listProjects(), "store_entity_invalid");
   });
 
-  (isRoot ? it.skip : it)(
-    "listProjects surfaces unreadable projects.json as store_read_failed",
-    () => {
-      const rootDir = makeRoot();
-      const filePath = join(rootDir, "projects.json");
-      writeFileSync(filePath, "[]", "utf8");
-      chmodSync(filePath, 0o000);
-      try {
-        const registry = createJsonDirectoryCoreRegistry({ rootDir });
-        expectPersistenceError(() => registry.listProjects(), "store_read_failed");
-      } finally {
-        chmodSync(filePath, 0o600);
-      }
-    },
-  );
+  describeUnlessWindows("POSIX permission failures (chmod mode bits)", () => {
+    (isRoot ? it.skip : it)(
+      "listProjects surfaces unreadable projects.json as store_read_failed",
+      () => {
+        const rootDir = makeRoot();
+        const filePath = join(rootDir, "projects.json");
+        writeFileSync(filePath, "[]", "utf8");
+        chmodSync(filePath, 0o000);
+        try {
+          const registry = createJsonDirectoryCoreRegistry({ rootDir });
+          expectPersistenceError(() => registry.listProjects(), "store_read_failed");
+        } finally {
+          chmodSync(filePath, 0o600);
+        }
+      },
+    );
 
-  (isRoot ? it.skip : it)(
-    "createProject surfaces unwritable directory as store_write_failed",
-    () => {
-      const rootDir = makeRoot();
-      // Seed an existing projects.json so the registry can read it on write.
-      writeFileSync(join(rootDir, "projects.json"), "[]", "utf8");
-      // Make the directory itself unwritable so atomicWriteFile cannot rename.
-      chmodSync(rootDir, 0o500);
-      try {
-        const registry = createJsonDirectoryCoreRegistry({ rootDir });
-        const project = {
-          id: projectIdSchema.parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
-          name: "Fail Project",
-          rootPath: "/tmp/fail-project",
-          createdAt: "2026-05-07T10:00:00.000Z",
-          updatedAt: "2026-05-07T10:00:00.000Z",
-        };
-        expectPersistenceError(() => registry.createProject(project), "store_write_failed");
-      } finally {
-        chmodSync(rootDir, 0o700);
-      }
-    },
-  );
+    (isRoot ? it.skip : it)(
+      "createProject surfaces unwritable directory as store_write_failed",
+      () => {
+        const rootDir = makeRoot();
+        // Seed an existing projects.json so the registry can read it on write.
+        writeFileSync(join(rootDir, "projects.json"), "[]", "utf8");
+        // Make the directory itself unwritable so atomicWriteFile cannot rename.
+        chmodSync(rootDir, 0o500);
+        try {
+          const registry = createJsonDirectoryCoreRegistry({ rootDir });
+          const project = {
+            id: projectIdSchema.parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+            name: "Fail Project",
+            rootPath: "/tmp/fail-project",
+            createdAt: "2026-05-07T10:00:00.000Z",
+            updatedAt: "2026-05-07T10:00:00.000Z",
+          };
+          expectPersistenceError(() => registry.createProject(project), "store_write_failed");
+        } finally {
+          chmodSync(rootDir, 0o700);
+        }
+      },
+    );
+  });
 });

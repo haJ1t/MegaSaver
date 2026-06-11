@@ -13,9 +13,13 @@ concurrency:
 
 jobs:
   verify:
-    name: verify (lint + typecheck + test + conventions)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    name: verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 

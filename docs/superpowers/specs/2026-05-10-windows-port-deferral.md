@@ -1,11 +1,12 @@
 ---
 title: FF — Windows port deferred to v0.3 (deferral spec)
 risk: LOW
-status: partially-superseded
+status: superseded
 created: 2026-05-10
-updated: 2026-05-10
+updated: 2026-06-11
 superseded_by:
   - docs/superpowers/specs/2026-05-10-gg-windows-port-design.md (§1 fsync only)
+  - docs/superpowers/specs/2026-06-11-windows-port-design.md (store path, CRLF, id case, Windows CI — full Windows support, PRs #104–#108)
 related:
   - packages/core/src/json-directory-store.ts
   - docs/superpowers/specs/2026-05-10-dd2-bb-hardening-design.md

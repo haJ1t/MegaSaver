@@ -3,9 +3,10 @@ import { mkdirSync, readdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memoryEntryIdSchema, projectIdSchema } from "@megasaver/shared";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, expect, it } from "vitest";
 import { CorePersistenceError } from "../src/errors.js";
 import { createJsonDirectoryCoreRegistry } from "../src/json-directory-registry.js";
+import { describeUnlessWindows } from "./_platform.js";
 
 const PROJECT_ID_A = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const MEMORY_ENTRY_ID_A = memoryEntryIdSchema.parse("33333333-3333-4333-8333-333333333333");
@@ -50,7 +51,7 @@ function expectPersistenceError(action: () => unknown, code: string): void {
   expect((thrown as CorePersistenceError).code).toBe(code);
 }
 
-describe("createJsonDirectoryCoreRegistry store path handling", () => {
+describeUnlessWindows("createJsonDirectoryCoreRegistry store path handling", () => {
   it("rejects an existing symlink root directory", () => {
     const outsideTarget = makePath();
     const rootSymlink = makePath();

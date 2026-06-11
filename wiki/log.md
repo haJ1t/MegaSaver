@@ -1979,3 +1979,20 @@ removePack; `mega pack {install,list,remove,info}` CLI with --root +
 retired). apps/cli dependency allow-list admits skill-packs. 74 new
 tests across library + CLI; pnpm verify green; e2e smoke round-trip
 captured. Spec/plan: docs/superpowers/{specs,plans}/2026-06-10-skill-packs-real-*.md.
+
+## [2026-06-11] feat | Windows port remainder COMPLETE (PRs #104–#108)
+
+Full Windows support; deferral spec 2026-05-10-windows-port-deferral.md
+superseded. Sub-PRs: #104 docs (spec+plan); #105 (B) CRLF mixed-EOL
+drift fix (normalizeEol); #106 (C) lowercase id contract; #107 (A)
+win32 store path (%LOCALAPPDATA%, HOME→USERPROFILE, readStoreEnv
+boundary, ~19 call sites, GUI bridge + skill-packs resolvers); #108 (D)
+windows-latest CI matrix. Audit found deferral-spec claims largely
+stale (case-collision theoretical — lowercase UUIDs). The windows-latest
+leg surfaced + fixed real Windows bugs only a real runner shows:
+.gitattributes LF (biome/autocrlf), atomic-write open temp `r+` for
+FlushFileBuffers (core/stats/content-store), POSIX-only dir-fsync test
+guard, per-OS symlink/chmod test skips, host-independent path
+assertions. HIGH risk; architect + critic (REVISE→ACCEPT on A). Both
+CI legs green. Deferred follow-ups: 2-process lock test, tsconfig
+test-typecheck, mcp HOME fallback. See concepts/windows-support.md.
