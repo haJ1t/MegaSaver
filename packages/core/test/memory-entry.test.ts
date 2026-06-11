@@ -298,6 +298,21 @@ describe("memoryEntrySchema", () => {
     expect(backfillMemoryEntry(validProjectMemory)).toEqual(validProjectMemory);
   });
 
+  it("leaves a createdAt-less row untouched so the schema rejects it loudly", () => {
+    // A real v0.1 row always carried createdAt; a row without it is corrupt, not
+    // legacy. Backfill must NOT fabricate a timestamp (§13), so the row is
+    // returned unchanged and fails schema validation.
+    const corrupt = {
+      id: MEMORY_ENTRY_ID,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      content: "no timestamp",
+    };
+    expect(backfillMemoryEntry(corrupt)).toEqual(corrupt);
+    expect(() => memoryEntrySchema.parse(backfillMemoryEntry(corrupt))).toThrow();
+  });
+
   it("exports inferred types", () => {
     expectTypeOf<MemoryScope>().toEqualTypeOf<"project" | "session">();
     expectTypeOf<MemoryType>().toEqualTypeOf<

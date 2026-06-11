@@ -31,7 +31,7 @@ const saveMemoryInputSchema = z
     reason: z.string().min(1).optional(),
     goal: z.string().min(1).optional(),
     relatedFiles: z.array(z.string()).optional(),
-    expiresAt: z.string().optional(),
+    expiresAt: z.string().datetime({ offset: true }).optional(),
   })
   .strict();
 

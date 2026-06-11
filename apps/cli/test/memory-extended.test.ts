@@ -92,6 +92,39 @@ describe("mega memory — Phase 1 surface", () => {
     );
   });
 
+  it("create rejects an invalid --expires and an empty --reason at the boundary", async () => {
+    clear();
+    await run(memoryCreateCommand, {
+      projectName: "demo",
+      scope: "project",
+      content: "x",
+      expires: "tomorrow",
+    });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.map((c) => c[0] as string).join("\n")).toContain("invalid expires");
+
+    process.exitCode = 0;
+    clear();
+    await run(memoryCreateCommand, {
+      projectName: "demo",
+      scope: "project",
+      content: "x",
+      reason: "   ",
+    });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.map((c) => c[0] as string).join("\n")).toContain(
+      "reason must not be empty",
+    );
+  });
+
+  it("update rejects an invalid --expires at the boundary", async () => {
+    const id = await createOne({ content: "x" });
+    clear();
+    await run(memoryUpdateCommand, { memoryEntryId: id, expires: "2026-13-99" });
+    expect(process.exitCode).toBe(1);
+    expect(errSpy.mock.calls.map((c) => c[0] as string).join("\n")).toContain("invalid expires");
+  });
+
   it("search ranks by query and filters by type", async () => {
     const authId = await createOne({
       content: "JWT auth middleware validates tokens",

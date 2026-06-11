@@ -138,9 +138,20 @@ export function writeMemoryEntriesForProject(
   const filePath = join(paths.memoryDir, `${projectId}.jsonl`);
   // An empty set removes the file rather than leaving a zero-byte JSONL:
   // readJsonLines treats an empty existing file as corrupt, so deleting the
-  // last entry must clear the file, not blank it.
+  // last entry must clear the file, not blank it. An already-absent file
+  // (ENOENT) is fine; any other failure (e.g. EPERM) must surface, not be
+  // swallowed (§13: no silent error suppression).
   if (entries.length === 0) {
-    rmSync(filePath, { force: true });
+    try {
+      rmSync(filePath);
+    } catch (error) {
+      if (!(isNodeError(error) && error.code === "ENOENT")) {
+        throw new CorePersistenceError("store_write_failed", "Store write failed.", {
+          filePath,
+          cause: error,
+        });
+      }
+    }
     return;
   }
   const content = entries.map((entry) => JSON.stringify(entry)).join("\n");

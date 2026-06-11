@@ -69,6 +69,10 @@ export function searchMemoryEntries(
   }));
   const ranked = rankBm25({ query: text, documents, topN: q.limit });
   const byId = new Map(filtered.map((entry) => [entry.id, entry]));
+  // score > 0 is intentional: BM25 returns every document up to topN even when
+  // a doc shares no term with the query (score 0). A text search should return
+  // only actual matches, so zero-overlap docs are dropped here. (A text-less
+  // query takes the newest-first branch above and is not affected.)
   return ranked
     .filter((hit) => hit.score > 0)
     .map((hit) => byId.get(hit.id as MemoryEntryId))

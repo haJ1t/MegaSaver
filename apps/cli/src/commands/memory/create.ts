@@ -8,8 +8,11 @@ import {
 } from "@megasaver/core";
 import { sessionIdSchema, titleSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
+import { z } from "zod";
 import {
+  emptyFieldMessage,
   invalidConfidenceMessage,
+  invalidExpiresMessage,
   invalidScopeMessage,
   invalidSourceMessage,
   invalidTypeMessage,
@@ -156,6 +159,28 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
 
   const keywords = toStringArray(input.keywordFlags);
   const relatedFiles = toStringArray(input.fileFlags);
+
+  // Boundary validation of optional metadata: Core's schema requires reason/
+  // goal non-empty and expiresAt ISO-8601, so reject bad input here with a
+  // clear message instead of a generic schema error from deep in Core.
+  if (input.reasonFlag !== undefined && input.reasonFlag.trim().length === 0) {
+    const cli = emptyFieldMessage("reason");
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+  if (input.goalFlag !== undefined && input.goalFlag.trim().length === 0) {
+    const cli = emptyFieldMessage("goal");
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+  if (
+    input.expiresFlag !== undefined &&
+    !z.string().datetime({ offset: true }).safeParse(input.expiresFlag).success
+  ) {
+    const cli = invalidExpiresMessage(input.expiresFlag);
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
 
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);

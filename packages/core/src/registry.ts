@@ -33,6 +33,9 @@ export interface CoreRegistry {
   getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
   listMemoryEntries(projectId: ProjectId): MemoryEntry[];
   updateMemoryEntry(id: MemoryEntryId, patch: MemoryEntryUpdatePatch): MemoryEntry;
+  // Write-only by design: a hard delete returns nothing. A caller that needs
+  // the pre-delete state reads it via getMemoryEntry first (the CLI does this
+  // to render a not-found error before deleting).
   deleteMemoryEntry(id: MemoryEntryId): void;
   searchMemoryEntries(projectId: ProjectId, query: MemorySearchQuery): MemoryEntry[];
 }

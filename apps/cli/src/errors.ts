@@ -357,3 +357,14 @@ export function invalidSourceMessage(value: string): CliMessage {
 export function deleteRequiresConfirmMessage(): CliMessage {
   return { message: "error: refusing to delete without --yes", exitCode: 1 };
 }
+
+export function emptyFieldMessage(field: string): CliMessage {
+  return { message: `error: ${field} must not be empty`, exitCode: 1 };
+}
+
+export function invalidExpiresMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid expires "${value}", expected ISO-8601 datetime`,
+    exitCode: 1,
+  };
+}

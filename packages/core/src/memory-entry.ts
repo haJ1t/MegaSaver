@@ -137,8 +137,14 @@ export function backfillMemoryEntry(raw: unknown): unknown {
     return raw;
   }
   const entry = raw as { content?: unknown; createdAt?: unknown };
+  // A real v0.1 row always carried `createdAt`. A row without it is corrupt,
+  // not legacy — leave it untouched so the schema rejects it loudly on parse.
+  // We do NOT fabricate a timestamp (§13: no fallbacks for impossible cases),
+  // and this guarantees `updatedAt` is always set when we do backfill.
+  if (typeof entry.createdAt !== "string") {
+    return raw;
+  }
   const content = typeof entry.content === "string" ? entry.content : "";
-  const createdAt = typeof entry.createdAt === "string" ? entry.createdAt : undefined;
   const title = content.trim().slice(0, LEGACY_TITLE_MAX) || "untitled";
   return {
     ...(raw as Record<string, unknown>),
@@ -148,6 +154,6 @@ export function backfillMemoryEntry(raw: unknown): unknown {
     confidence: "low",
     source: "manual",
     stale: false,
-    ...(createdAt === undefined ? {} : { updatedAt: createdAt }),
+    updatedAt: entry.createdAt,
   };
 }

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
@@ -114,3 +114,46 @@ describe.each(makeRegistriesLabels())("%s memory mutation", (label) => {
 function makeRegistriesLabels(): string[] {
   return ["in-memory", "json-directory"];
 }
+
+describe("json-directory v0.1 memory migration", () => {
+  it("backfills on-disk v0.1 rows on read and is idempotent across re-reads", () => {
+    const root = mkdtempSync(join(tmpdir(), "mega-mig-"));
+    tmpDirs.push(root);
+    writeFileSync(
+      join(root, "projects.json"),
+      JSON.stringify([
+        { id: PROJECT_ID, name: "alpha", rootPath: "/tmp/alpha", createdAt: NOW, updatedAt: NOW },
+      ]),
+    );
+    writeFileSync(join(root, "sessions.json"), "[]");
+    mkdirSync(join(root, "memory"), { recursive: true });
+    // A v0.1-shaped row: id/projectId/sessionId/scope/content/createdAt only.
+    const legacy = {
+      id: ID_A,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      content: "Repo uses strict ESM.",
+      createdAt: NOW,
+    };
+    writeFileSync(join(root, "memory", `${PROJECT_ID}.jsonl`), `${JSON.stringify(legacy)}\n`);
+
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: root });
+    const first = registry.listMemoryEntries(PROJECT_ID);
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({
+      id: ID_A,
+      type: "todo",
+      title: "Repo uses strict ESM.",
+      keywords: [],
+      confidence: "low",
+      source: "manual",
+      stale: false,
+      updatedAt: NOW,
+    });
+
+    // Idempotent: re-reading yields the same upgraded shape.
+    const second = registry.listMemoryEntries(PROJECT_ID);
+    expect(second).toEqual(first);
+  });
+});

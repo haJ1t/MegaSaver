@@ -6,8 +6,11 @@ import {
 } from "@megasaver/core";
 import { titleSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
+import { z } from "zod";
 import {
+  emptyFieldMessage,
   invalidConfidenceMessage,
+  invalidExpiresMessage,
   invalidSourceMessage,
   invalidTypeMessage,
   mapErrorToCliMessage,
@@ -125,10 +128,20 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
     touched = true;
   }
   if (input.reasonFlag !== undefined) {
+    if (input.reasonFlag.trim().length === 0) {
+      const cli = emptyFieldMessage("reason");
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
     patch.reason = input.reasonFlag;
     touched = true;
   }
   if (input.goalFlag !== undefined) {
+    if (input.goalFlag.trim().length === 0) {
+      const cli = emptyFieldMessage("goal");
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
     patch.goal = input.goalFlag;
     touched = true;
   }
@@ -145,6 +158,11 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
     touched = true;
   }
   if (input.expiresFlag !== undefined) {
+    if (!z.string().datetime({ offset: true }).safeParse(input.expiresFlag).success) {
+      const cli = invalidExpiresMessage(input.expiresFlag);
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
     patch.expiresAt = input.expiresFlag;
     touched = true;
   }

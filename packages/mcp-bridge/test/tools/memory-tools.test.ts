@@ -73,6 +73,16 @@ describe("memory MCP tools", () => {
     ).rejects.toMatchObject({ code: "validation_failed" });
   });
 
+  it("save_memory rejects an invalid expiresAt at the input boundary", async () => {
+    const registry = seededRegistry();
+    await expect(
+      handleSaveMemory(
+        { registry, now: () => TS, newId: idFactory() },
+        { projectId: PROJECT_ID, scope: "project", content: "x", expiresAt: "tomorrow" },
+      ),
+    ).rejects.toMatchObject({ code: "validation_failed" });
+  });
+
   it("search_memory ranks by text and get_relevant_memories returns hits", async () => {
     const registry = seededRegistry();
     const newId = idFactory();
