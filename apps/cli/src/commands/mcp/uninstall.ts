@@ -2,6 +2,7 @@ import { uninstallMcp } from "@megasaver/mcp-bridge";
 import { defineCommand } from "citty";
 import { unknownTargetMessage } from "../../errors.js";
 import { isKnownTargetId } from "../../known-targets.js";
+import { resolveHomeDir } from "../../store.js";
 
 export type RunMcpUninstallInput = {
   targetFlag: string;
@@ -42,8 +43,7 @@ export const mcpUninstallCommand = defineCommand({
   async run({ args }) {
     const code = await runMcpUninstall({
       targetFlag: typeof args.target === "string" ? args.target : "",
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      home: process.env["HOME"] ?? "",
+      home: resolveHomeDir(),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

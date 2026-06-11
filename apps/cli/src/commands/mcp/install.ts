@@ -2,6 +2,7 @@ import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND, installMcp } from "@megasaver/mc
 import { defineCommand } from "citty";
 import { unknownTargetMessage } from "../../errors.js";
 import { isKnownTargetId } from "../../known-targets.js";
+import { resolveHomeDir } from "../../store.js";
 
 // Default launch entry now lives in @megasaver/mcp-bridge so the CLI and the
 // GUI bridge share one source of truth; re-exported here to keep existing
@@ -54,8 +55,7 @@ export const mcpInstallCommand = defineCommand({
   async run({ args }) {
     const code = await runMcpInstall({
       targetFlag: typeof args.target === "string" ? args.target : "",
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      home: process.env["HOME"] ?? "",
+      home: resolveHomeDir(),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,
