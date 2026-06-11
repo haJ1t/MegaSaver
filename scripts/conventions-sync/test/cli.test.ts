@@ -33,6 +33,8 @@ async function seedRepoLikeRoot(root: string): Promise<void> {
     "language.md",
     "definition-of-done.md",
     "skill-routing.md",
+    "agent-routing.md",
+    "wiki-first.md",
   ]) {
     await writeFile(join(root, "docs/conventions", file), `# ${file}\n\nbody of ${file}\n`);
   }
@@ -85,6 +87,7 @@ describe("runOnce CLI", () => {
     await seedRepoLikeRoot(root);
     // Seed every consumer with a freshly rendered block tree so check passes.
     // We exploit --write to do the seeding, then re-run --check.
+    await writeNested(root, "CLAUDE.md", claudeTemplate());
     await writeNested(root, "AGENTS.md", agentsTemplate());
     await writeNested(root, ".cursor/rules/mega-context.mdc", cursorContextTemplate());
     await writeNested(root, ".cursor/rules/mega-conventions.mdc", cursorConventionsTemplate());
@@ -118,6 +121,7 @@ describe("runOnce CLI", () => {
 
   it("--check exits 1 when drift exists and prints diff identifying the file", async () => {
     await seedRepoLikeRoot(root);
+    await writeNested(root, "CLAUDE.md", claudeTemplate());
     await writeNested(root, "AGENTS.md", agentsTemplate());
     await writeNested(root, ".cursor/rules/mega-context.mdc", cursorContextTemplate());
     await writeNested(root, ".cursor/rules/mega-conventions.mdc", cursorConventionsTemplate());
@@ -160,6 +164,42 @@ function blockSentinel(id: string, source: string): string {
     `<!-- conventions:start id="${id}" source="${source}" -->`,
     "PLACEHOLDER",
     `<!-- conventions:end id="${id}" -->`,
+  ].join("\n");
+}
+
+function claudeTemplate(): string {
+  return [
+    "# CLAUDE.md (test)",
+    "",
+    "## §0 Wiki-First",
+    blockSentinel("wiki-first", "wiki-first.md"),
+    "## §1 Mission",
+    blockSentinel("mission", "mission.md"),
+    "## §2 Repo Layout",
+    blockSentinel("repo-layout", "repo-layout.md"),
+    "## §3 Stack",
+    blockSentinel("stack-and-commands", "stack-and-commands.md"),
+    "## §4 Process",
+    blockSentinel("process-discipline", "process-discipline.md"),
+    "## §5 Skill Routing",
+    blockSentinel("skill-routing", "skill-routing.md"),
+    "## §6 Agent Routing",
+    blockSentinel("agent-routing", "agent-routing.md"),
+    "## §7 Dogfood",
+    blockSentinel("multi-agent-dogfood", "multi-agent-dogfood.md"),
+    "## §8 Code",
+    blockSentinel("code-conventions", "code-conventions.md"),
+    "## §9 DoD",
+    blockSentinel("definition-of-done", "definition-of-done.md"),
+    "## §10 Git",
+    blockSentinel("git-and-commits", "git-and-commits.md"),
+    "## §11 Language",
+    blockSentinel("language", "language.md"),
+    "## §12 Risk",
+    blockSentinel("risk-modes", "risk-modes.md"),
+    "## §13 Anti",
+    blockSentinel("anti-patterns", "anti-patterns.md"),
+    "",
   ].join("\n");
 }
 
