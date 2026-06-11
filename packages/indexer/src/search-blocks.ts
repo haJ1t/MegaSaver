@@ -21,8 +21,13 @@ export function searchBlocks(
     text: `${block.name ?? ""} ${block.keywords.join(" ")} ${block.filePath}`,
   }));
   const byId = new Map(filtered.map((block) => [block.id, block]));
-  return rankBm25({ query: query.text, documents, topN: query.limit ?? DEFAULT_LIMIT })
-    .filter((hit) => hit.score > 0)
-    .map((hit) => ({ block: byId.get(hit.id as CodeBlock["id"]), score: hit.score }))
-    .filter((hit): hit is BlockSearchHit => hit.block !== undefined);
+  return (
+    rankBm25({ query: query.text, documents, topN: query.limit ?? DEFAULT_LIMIT })
+      .filter((hit) => hit.score > 0)
+      .map((hit) => ({ block: byId.get(hit.id as CodeBlock["id"]), score: hit.score }))
+      // byId is built from the exact documents handed to rankBm25, so every
+      // ranked id resolves; this filter only narrows the type, it never drops a
+      // real hit.
+      .filter((hit): hit is BlockSearchHit => hit.block !== undefined)
+  );
 }

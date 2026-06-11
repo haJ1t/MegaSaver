@@ -48,7 +48,14 @@ export function buildIndex(options: BuildOptions): BuildResult {
   });
 
   const prevManifest = readManifest(paths);
-  const prevById = new Map(readBlocks(paths).map((block) => [block.id, block]));
+  let prevById: Map<CodeBlock["id"], CodeBlock>;
+  try {
+    prevById = new Map(readBlocks(paths).map((block) => [block.id, block]));
+  } catch {
+    // A corrupt/torn blocks.jsonl is recoverable: treat the prior index as
+    // empty so every file re-extracts from source (self-heal, not hard fail).
+    prevById = new Map();
+  }
 
   const nextManifest: Manifest = { files: {} };
   const nextBlocks: CodeBlock[] = [];
@@ -67,13 +74,17 @@ export function buildIndex(options: BuildOptions): BuildResult {
     const prev = prevManifest.files[file.path];
 
     if (prev && prev.fileHash === fileHash) {
-      for (const id of prev.blockIds) {
-        const kept = prevById.get(id as CodeBlock["id"]);
-        if (kept) nextBlocks.push(kept);
+      const kept = prev.blockIds.map((id) => prevById.get(id as CodeBlock["id"]));
+      // Reuse only when every referenced block is actually present. A missing
+      // block means the manifest drifted from blocks.jsonl (torn write /
+      // corruption) — fall through and re-extract this file instead of
+      // persisting a manifest that points at blocks we no longer have.
+      if (kept.every((block): block is CodeBlock => block !== undefined)) {
+        nextBlocks.push(...kept);
+        nextManifest.files[file.path] = { fileHash, blockIds: prev.blockIds };
+        unchanged += 1;
+        continue;
       }
-      nextManifest.files[file.path] = { fileHash, blockIds: prev.blockIds };
-      unchanged += 1;
-      continue;
     }
 
     const ids: string[] = [];

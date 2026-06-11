@@ -75,6 +75,11 @@ export function writeIndex(
   blocks: readonly CodeBlock[],
   manifest: Manifest,
 ): void {
+  // Each file write is atomic, but the PAIR is not jointly atomic. Write
+  // blocks first and the manifest (the "commit pointer") last: if the second
+  // write fails, the manifest still references the previous block set, and the
+  // next buildIndex self-heals any drift by re-extracting affected files
+  // (build.ts verifies every referenced block exists before reuse).
   const body = blocks.map((block) => JSON.stringify(block)).join("\n");
   atomicWrite(paths.blocksPath, body.length === 0 ? "" : `${body}\n`);
   atomicWrite(paths.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);

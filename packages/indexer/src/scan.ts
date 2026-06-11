@@ -67,8 +67,13 @@ export function scanRepo(options: ScanOptions): ScanResult {
   for (const ignoreFile of [".gitignore", ".megaignore"]) {
     try {
       ig.add(readFileSync(join(rootDir, ignoreFile), "utf8"));
-    } catch {
-      // absent ignore file — nothing to add
+    } catch (error) {
+      // A missing ignore file is expected. Any OTHER read failure (permission,
+      // I/O) must surface, not be swallowed — silently skipping its rules could
+      // index files the user meant to exclude (§13: no silent error suppression).
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+        throw error;
+      }
     }
   }
 

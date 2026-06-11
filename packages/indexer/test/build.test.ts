@@ -65,4 +65,21 @@ describe("buildIndex", () => {
       "src/a.ts",
     ]);
   });
+
+  it("tracks a zero-block file and reports it unchanged on rebuild", () => {
+    writeFileSync(join(repo, "plain.md"), "just prose, no headings\n");
+    buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+    const second = buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+    expect(second.unchanged).toBe(3);
+    expect(second.added).toBe(0);
+  });
+
+  it("self-heals a corrupt blocks.jsonl by re-extracting on rebuild", () => {
+    buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+    const paths = resolveIndexPaths(store, PROJECT_ID);
+    writeFileSync(paths.blocksPath, "{ not valid json\n");
+    const result = buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+    expect(result.blockCount).toBe(2);
+    expect(readBlocks(paths)).toHaveLength(2);
+  });
 });

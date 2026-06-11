@@ -53,4 +53,10 @@ describe("extractJson", () => {
   it("returns no blocks for invalid JSON", () => {
     expect(extractJson("bad.json", "{ not valid")).toEqual([]);
   });
+
+  it("locates a top-level key at its own line, not a nested/value occurrence", () => {
+    const json = '{\n  "x": 1,\n  "nested": {\n    "x": 2\n  }\n}\n';
+    const x = extractJson("c.json", json).find((b) => b.name === "x");
+    expect(x?.startLine).toBe(2);
+  });
 });
