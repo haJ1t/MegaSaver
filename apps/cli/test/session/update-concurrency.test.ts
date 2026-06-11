@@ -89,10 +89,14 @@ describe("concurrent session update — race safety (V1)", () => {
     expect(sessions).toHaveLength(1);
     const session = sessions[0];
     // The title must be exactly one of the two submitted values (not a merge / partial write).
-    expect(["title-A", "title-B"]).toContain(session?.title);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(["title-A", "title-B"]).toContain(session?.["title"]);
     // All required fields must still be present and coherent.
-    expect(session?.id).toBe(SESSION_ID);
-    expect(session?.agentId).toBe("claude-code");
-    expect(session?.endedAt).toBeNull();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(session?.["id"]).toBe(SESSION_ID);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(session?.["agentId"]).toBe("claude-code");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(session?.["endedAt"]).toBeNull();
   }, 30_000);
 });

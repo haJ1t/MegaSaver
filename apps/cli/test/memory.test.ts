@@ -342,9 +342,11 @@ describe("memoryCreateCommand", () => {
     errSpy.mockRestore();
     process.exitCode = 0;
     // biome-ignore lint/performance/noDelete: process.env clear semantics require delete
-    delete process.env.MEGA_TEST_MEMORY_ENTRY_ID;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    delete process.env["MEGA_TEST_MEMORY_ENTRY_ID"];
     // biome-ignore lint/performance/noDelete: process.env clear semantics require delete
-    delete process.env.MEGA_TEST_NOW;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    delete process.env["MEGA_TEST_NOW"];
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     // biome-ignore lint/performance/noDelete: restoring env to absent state requires delete
     if (originalNodeEnv === undefined) delete process.env["NODE_ENV"];
@@ -393,9 +395,12 @@ describe("memoryCreateCommand", () => {
   }
 
   async function runCreate(args: Record<string, string>): Promise<void> {
-    process.env.NODE_ENV = "test";
-    process.env.MEGA_TEST_MEMORY_ENTRY_ID = MEMORY_ID_PROJECT;
-    process.env.MEGA_TEST_NOW = TS;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    process.env["NODE_ENV"] = "test";
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    process.env["MEGA_TEST_MEMORY_ENTRY_ID"] = MEMORY_ID_PROJECT;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    process.env["MEGA_TEST_NOW"] = TS;
     await memoryCreateCommand.run?.({
       args: { ...args, store },
       cmd: memoryCreateCommand,
@@ -410,9 +415,12 @@ describe("memoryCreateCommand", () => {
     expect(process.exitCode).toBe(0);
     const arr = await readMemoryJsonl();
     expect(arr).toHaveLength(1);
-    expect(arr[0]?.scope).toBe("project");
-    expect(arr[0]?.sessionId).toBeNull();
-    expect(arr[0]?.content).toBe("user prefers TS");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["scope"]).toBe("project");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["sessionId"]).toBeNull();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["content"]).toBe("user prefers TS");
   });
 
   it("creates a session-scoped entry with --session", async () => {
@@ -425,22 +433,26 @@ describe("memoryCreateCommand", () => {
     });
     expect(process.exitCode).toBe(0);
     const arr = await readMemoryJsonl();
-    expect(arr[0]?.scope).toBe("session");
-    expect(arr[0]?.sessionId).toBe(SESSION_ID);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["scope"]).toBe("session");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["sessionId"]).toBe(SESSION_ID);
   });
 
   it("stamps id from MEGA_TEST_MEMORY_ENTRY_ID under NODE_ENV=test", async () => {
     await seedProjectOnly();
     await runCreate({ projectName: "demo", scope: "project", content: "x" });
     const arr = await readMemoryJsonl();
-    expect(arr[0]?.id).toBe(MEMORY_ID_PROJECT);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["id"]).toBe(MEMORY_ID_PROJECT);
   });
 
   it("stamps createdAt from MEGA_TEST_NOW under NODE_ENV=test", async () => {
     await seedProjectOnly();
     await runCreate({ projectName: "demo", scope: "project", content: "x" });
     const arr = await readMemoryJsonl();
-    expect(arr[0]?.createdAt).toBe(TS);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["createdAt"]).toBe(TS);
   });
 
   it("rejects missing project with project_not_found", async () => {
@@ -621,6 +633,7 @@ describe("memoryCreateCommand — drift guards", () => {
   it("--scope description on memory create derives from memoryScopeSchema.options", async () => {
     const { memoryScopeSchema } = await import("@megasaver/core");
     const expected = `Memory scope (${memoryScopeSchema.options.join(" | ")}).`;
-    expect(memoryCreateCommand.args?.scope?.description).toBe(expected);
+    const args = memoryCreateCommand.args as { scope?: { description?: string } };
+    expect(args.scope?.description).toBe(expected);
   });
 });

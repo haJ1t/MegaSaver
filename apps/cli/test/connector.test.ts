@@ -46,7 +46,8 @@ describe("connectorSyncCommand — pre-target gates", () => {
       projectName: args.projectName,
       store,
     };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorSyncCommand.run?.({
       args: cliArgs,
       cmd: connectorSyncCommand,
@@ -158,7 +159,8 @@ describe("connectorSyncCommand — skipped + created", () => {
 
   async function runSync(args: { projectName: string; target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: args.projectName, store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorSyncCommand.run?.({
       args: cliArgs,
       cmd: connectorSyncCommand,
@@ -287,7 +289,8 @@ describe("connectorSyncCommand — wrote + noop", () => {
 
   async function runSync(args: { projectName: string; target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: args.projectName, store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorSyncCommand.run?.({
       args: cliArgs,
       cmd: connectorSyncCommand,
@@ -556,7 +559,8 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
 
   async function runSync(args: { projectName: string; target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: args.projectName, store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorSyncCommand.run?.({
       args: cliArgs,
       cmd: connectorSyncCommand,
@@ -799,7 +803,8 @@ describe("connectorSyncCommand — cursor target", () => {
 
   async function runSync(args: { projectName: string; target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: args.projectName, store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorSyncCommand.run?.({
       args: cliArgs,
       cmd: connectorSyncCommand,
@@ -1012,7 +1017,8 @@ describe("connectorSyncCommand — memoryEntries wiring", () => {
 
   async function runSync(args: { target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: "demo", store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorSyncCommand.run?.({
       args: cliArgs,
       cmd: connectorSyncCommand,
@@ -1290,12 +1296,14 @@ describe("connectorSyncCommand — X4 filter-then-cap-by-recency (25 entries →
 describe("connector --target drift guards", () => {
   it("--target description on connectorSyncCommand derives from KNOWN_TARGET_IDS", () => {
     const expected = `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to seed when its file does not exist.`;
-    expect(connectorSyncCommand.args?.target?.description).toBe(expected);
+    const args = connectorSyncCommand.args as { target?: { description?: string } };
+    expect(args.target?.description).toBe(expected);
   });
 
   it("--target description on connectorStatusCommand derives from KNOWN_TARGET_IDS", () => {
     const expected = `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to filter the report.`;
-    expect(connectorStatusCommand.args?.target?.description).toBe(expected);
+    const args = connectorStatusCommand.args as { target?: { description?: string } };
+    expect(args.target?.description).toBe(expected);
   });
 });
 

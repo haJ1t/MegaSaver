@@ -47,7 +47,8 @@ describe("connectorStatusCommand — pre-target gates", () => {
 
   async function runStatus(args: { projectName: string; target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: args.projectName, store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorStatusCommand.run?.({
       args: cliArgs,
       cmd: connectorStatusCommand,
@@ -121,7 +122,8 @@ describe("connectorStatusCommand — missing + no-block", () => {
 
   async function runStatus(args: { projectName: string; target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: args.projectName, store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorStatusCommand.run?.({
       args: cliArgs,
       cmd: connectorStatusCommand,
@@ -233,7 +235,8 @@ describe("connectorStatusCommand — in-sync + drift", () => {
 
   async function runStatus(args: { projectName: string; target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: args.projectName, store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorStatusCommand.run?.({
       args: cliArgs,
       cmd: connectorStatusCommand,
@@ -417,7 +420,8 @@ describe("connectorStatusCommand — error + cross-target", () => {
 
   async function runStatus(args: { projectName: string; target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: args.projectName, store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorStatusCommand.run?.({
       args: cliArgs,
       cmd: connectorStatusCommand,
@@ -578,7 +582,8 @@ describe("connectorStatusCommand — cursor target", () => {
 
   async function runStatus(args: { projectName: string; target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: args.projectName, store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorStatusCommand.run?.({
       args: cliArgs,
       cmd: connectorStatusCommand,
@@ -777,7 +782,8 @@ describe("connectorStatusCommand — aider target", () => {
 
   async function runStatus(args: { projectName: string; target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: args.projectName, store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorStatusCommand.run?.({
       args: cliArgs,
       cmd: connectorStatusCommand,
@@ -890,7 +896,8 @@ describe("connectorStatusCommand — memoryEntries drift", () => {
 
   async function runStatus(args: { target?: string }): Promise<void> {
     const cliArgs: Record<string, string> = { projectName: "demo", store };
-    if (args.target !== undefined) cliArgs.target = args.target;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (args.target !== undefined) cliArgs["target"] = args.target;
     await connectorStatusCommand.run?.({
       args: cliArgs,
       cmd: connectorStatusCommand,

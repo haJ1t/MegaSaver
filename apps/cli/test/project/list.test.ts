@@ -30,14 +30,23 @@ describe.each([
   ["connectorSyncCommand", connectorSyncCommand],
 ] as const)("%s — citty wrapper drift guard for --json", (_name, command) => {
   it("json arg has type boolean", () => {
-    expect(command.args?.json?.type).toBe("boolean");
+    const args = command.args as {
+      json?: { type?: string; default?: boolean; description?: string };
+    };
+    expect(args.json?.type).toBe("boolean");
   });
 
   it("json arg default is false", () => {
-    expect(command.args?.json?.default).toBe(false);
+    const args = command.args as {
+      json?: { type?: string; default?: boolean; description?: string };
+    };
+    expect(args.json?.default).toBe(false);
   });
 
   it("json arg description matches canonical string", () => {
-    expect(command.args?.json?.description).toBe(JSON_DESCRIPTION);
+    const args = command.args as {
+      json?: { type?: string; default?: boolean; description?: string };
+    };
+    expect(args.json?.description).toBe(JSON_DESCRIPTION);
   });
 });

@@ -10,8 +10,8 @@ function makeSession(
   endedAt: string | null = null,
 ): Session {
   return {
-    id,
-    projectId: "00000000-0000-4000-8000-000000000001",
+    id: id as Session["id"],
+    projectId: "00000000-0000-4000-8000-000000000001" as Session["projectId"],
     agentId: agentId as Session["agentId"],
     riskLevel: "medium",
     title: null,

@@ -49,7 +49,8 @@ describe("runMcpInstall", () => {
     const raw = JSON.parse(await readFile(configPath, "utf8")) as {
       mcpServers: Record<string, { command: string; args?: string[] }>;
     };
-    expect(raw.mcpServers.megasaver).toEqual({ command: "mega", args: ["mcp", "serve"] });
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(raw.mcpServers["megasaver"]).toEqual({ command: "mega", args: ["mcp", "serve"] });
   });
 
   it("emits JSON with changed flag", async () => {

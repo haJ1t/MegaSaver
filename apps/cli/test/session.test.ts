@@ -239,13 +239,15 @@ describe("sessionCreateCommand", () => {
   it("--agent description on create derives from agentIdSchema.options", async () => {
     const { agentIdSchema } = await import("@megasaver/shared");
     const expected = `Agent id (${agentIdSchema.options.join(" | ")}).`;
-    expect(sessionCreateCommand.args?.agent?.description).toBe(expected);
+    const args = sessionCreateCommand.args as { agent?: { description?: string } };
+    expect(args.agent?.description).toBe(expected);
   });
 
   it("--risk description on create derives from riskLevelSchema.options", async () => {
     const { riskLevelSchema } = await import("@megasaver/shared");
     const expected = `Risk level (${riskLevelSchema.options.join(" | ")}). Default: medium.`;
-    expect(sessionCreateCommand.args?.risk?.description).toBe(expected);
+    const args = sessionCreateCommand.args as { risk?: { description?: string } };
+    expect(args.risk?.description).toBe(expected);
   });
 });
 
@@ -253,13 +255,15 @@ describe("sessionUpdateCommand — drift guards", () => {
   it("--agent description on update derives from agentIdSchema.options", async () => {
     const { agentIdSchema } = await import("@megasaver/shared");
     const expected = `New agent id (${agentIdSchema.options.join(" | ")}).`;
-    expect(sessionUpdateCommand.args?.agent?.description).toBe(expected);
+    const args = sessionUpdateCommand.args as { agent?: { description?: string } };
+    expect(args.agent?.description).toBe(expected);
   });
 
   it("--risk description on update derives from riskLevelSchema.options", async () => {
     const { riskLevelSchema } = await import("@megasaver/shared");
     const expected = `New risk level (${riskLevelSchema.options.join(" | ")}).`;
-    expect(sessionUpdateCommand.args?.risk?.description).toBe(expected);
+    const args = sessionUpdateCommand.args as { risk?: { description?: string } };
+    expect(args.risk?.description).toBe(expected);
   });
 });
 
@@ -657,7 +661,8 @@ describe("sessionUpdateCommand", () => {
     expect(process.exitCode).toBe(0);
     expect(logSpy).not.toHaveBeenCalled();
     const arr = await readSessions();
-    expect(arr[0]?.title).toBe("foo");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["title"]).toBe("foo");
   });
 
   it("clears title with --title ''", async () => {
@@ -665,21 +670,24 @@ describe("sessionUpdateCommand", () => {
     await runUpdate({ sessionId: SESSION_ID, title: "" });
     expect(process.exitCode).toBe(0);
     const arr = await readSessions();
-    expect(arr[0]?.title).toBeNull();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["title"]).toBeNull();
   });
 
   it("sets riskLevel with --risk high", async () => {
     await seedOpenSession();
     await runUpdate({ sessionId: SESSION_ID, risk: "high" });
     const arr = await readSessions();
-    expect(arr[0]?.riskLevel).toBe("high");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["riskLevel"]).toBe("high");
   });
 
   it("sets agentId with --agent cursor", async () => {
     await seedOpenSession();
     await runUpdate({ sessionId: SESSION_ID, agent: "cursor" });
     const arr = await readSessions();
-    expect(arr[0]?.agentId).toBe("cursor");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["agentId"]).toBe("cursor");
   });
 
   it("rejects empty update (no flags) with 'nothing to update'", async () => {
@@ -688,7 +696,8 @@ describe("sessionUpdateCommand", () => {
     expect(process.exitCode).toBe(1);
     expect(errSpy.mock.calls.some((c) => c[0] === "error: nothing to update")).toBe(true);
     const arr = await readSessions();
-    expect(arr[0]?.title).toBeNull();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["title"]).toBeNull();
   });
 
   it("applies multi-field patch atomically", async () => {
@@ -700,9 +709,12 @@ describe("sessionUpdateCommand", () => {
       agent: "cursor",
     });
     const arr = await readSessions();
-    expect(arr[0]?.title).toBe("x");
-    expect(arr[0]?.riskLevel).toBe("high");
-    expect(arr[0]?.agentId).toBe("cursor");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["title"]).toBe("x");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["riskLevel"]).toBe("high");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["agentId"]).toBe("cursor");
   });
 
   it("rejects invalid session id with non-zero exit", async () => {
@@ -764,7 +776,8 @@ describe("sessionUpdateCommand", () => {
     expect(errSpy.mock.calls.length).toBeGreaterThan(0);
     // session unchanged
     const arr = await readSessions();
-    expect(arr[0]?.title).toBeNull();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["title"]).toBeNull();
   });
 
   // V4: whitespace-only title must be rejected the same as create
@@ -776,7 +789,8 @@ describe("sessionUpdateCommand", () => {
     expect(logSpy).not.toHaveBeenCalled();
     // session unchanged
     const arr = await readSessions();
-    expect(arr[0]?.title).toBeNull();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["title"]).toBeNull();
   });
 
   // V6: update-then-end durability — updated fields persist on ended session
@@ -799,8 +813,10 @@ describe("sessionUpdateCommand", () => {
 
     // read store and assert riskLevel persists on the ended record
     const arr = await readSessions();
-    expect(arr[0]?.riskLevel).toBe("high");
-    expect(arr[0]?.endedAt).not.toBeNull();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["riskLevel"]).toBe("high");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["endedAt"]).not.toBeNull();
   });
 
   // V7: multi-flag error precedence — bad sessionId is validated first

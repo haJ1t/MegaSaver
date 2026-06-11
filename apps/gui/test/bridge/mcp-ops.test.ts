@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
 import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "@megasaver/mcp-bridge";
+import type { ProjectId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMcpOps } from "../../bridge/mcp-ops.js";
 
@@ -24,7 +25,7 @@ describe("createMcpOps (GUI production facade — F3)", () => {
   function registryWithProject() {
     const registry = createInMemoryCoreRegistry();
     registry.createProject({
-      id: PROJECT_ID,
+      id: PROJECT_ID as ProjectId,
       name: "demo",
       rootPath: projectRoot,
       createdAt: TS,
@@ -46,7 +47,8 @@ describe("createMcpOps (GUI production facade — F3)", () => {
     const raw = JSON.parse(await readFile(join(home, ".config", "claude", "mcp.json"), "utf8")) as {
       mcpServers: Record<string, unknown>;
     };
-    expect(raw.mcpServers.megasaver).toBeDefined();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(raw.mcpServers["megasaver"]).toBeDefined();
   });
 
   it("install() writes the runnable command + args when given the defaults", async () => {
@@ -63,7 +65,8 @@ describe("createMcpOps (GUI production facade — F3)", () => {
     const raw = JSON.parse(await readFile(join(home, ".config", "claude", "mcp.json"), "utf8")) as {
       mcpServers: Record<string, { command: string; args?: string[] }>;
     };
-    expect(raw.mcpServers.megasaver).toEqual({ command: "mega", args: ["mcp", "serve"] });
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(raw.mcpServers["megasaver"]).toEqual({ command: "mega", args: ["mcp", "serve"] });
   });
 
   it("repair() also writes the runnable command + args", async () => {
@@ -77,6 +80,7 @@ describe("createMcpOps (GUI production facade — F3)", () => {
     const raw = JSON.parse(await readFile(join(home, ".config", "claude", "mcp.json"), "utf8")) as {
       mcpServers: Record<string, { command: string; args?: string[] }>;
     };
-    expect(raw.mcpServers.megasaver).toEqual({ command: "mega", args: ["mcp", "serve"] });
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(raw.mcpServers["megasaver"]).toEqual({ command: "mega", args: ["mcp", "serve"] });
   });
 });

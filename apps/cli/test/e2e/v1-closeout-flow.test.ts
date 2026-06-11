@@ -1,3 +1,6 @@
+// Excluded from per-package typecheck (apps/cli/tsconfig.test.json) because this
+// e2e deliberately imports another package's SOURCE (../../../../apps/gui/bridge/*),
+// which falls outside the CLI's rootDir. vitest still runs it at runtime.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { type Server, createServer } from "node:http";
