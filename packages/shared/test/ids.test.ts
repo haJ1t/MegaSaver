@@ -1,9 +1,11 @@
 import * as fc from "fast-check";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
+  type CodeBlockId,
   type MemoryEntryId,
   type ProjectId,
   type SessionId,
+  codeBlockIdSchema,
   memoryEntryIdSchema,
   projectIdSchema,
   sessionIdSchema,
@@ -16,6 +18,7 @@ describe.each([
   ["projectIdSchema", projectIdSchema],
   ["sessionIdSchema", sessionIdSchema],
   ["memoryEntryIdSchema", memoryEntryIdSchema],
+  ["codeBlockIdSchema", codeBlockIdSchema],
 ] as const)("%s", (_label, schema) => {
   it("parses a known-valid UUID", () => {
     expect(schema.parse(SAMPLE_UUID)).toBe(SAMPLE_UUID);
@@ -72,5 +75,6 @@ describe("brand discrimination (compile-time)", () => {
     expectTypeOf<ProjectId>().not.toEqualTypeOf<string>();
     expectTypeOf<SessionId>().not.toEqualTypeOf<string>();
     expectTypeOf<MemoryEntryId>().not.toEqualTypeOf<string>();
+    expectTypeOf<CodeBlockId>().not.toEqualTypeOf<string>();
   });
 });
