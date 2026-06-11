@@ -49,6 +49,7 @@ export const CONSUMERS = [
     id: "agents-md",
     path: "AGENTS.md",
     blocks: [
+      { id: "wiki-first", source: "wiki-first.md" },
       { id: "mission", source: "mission.md" },
       { id: "stack-and-commands", source: "stack-and-commands.md" },
       { id: "process-discipline", source: "process-discipline.md" },

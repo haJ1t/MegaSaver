@@ -207,6 +207,8 @@ function agentsTemplate(): string {
   return [
     "# AGENTS.md (test)",
     "",
+    "## Wiki-First",
+    blockSentinel("wiki-first", "wiki-first.md"),
     "## Mission",
     blockSentinel("mission", "mission.md"),
     "## Stack",

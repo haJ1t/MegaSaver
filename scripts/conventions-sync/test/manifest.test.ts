@@ -89,6 +89,11 @@ describe("manifest CONSUMERS", () => {
     ]);
   });
 
+  it("agents-md leads with the wiki-first block", () => {
+    const agents = CONSUMERS.find((c) => c.id === "agents-md");
+    expect(agents?.blocks[0]).toEqual({ id: "wiki-first", source: "wiki-first.md" });
+  });
+
   it("every block references a non-empty source path", () => {
     for (const c of CONSUMERS) {
       for (const b of c.blocks) {
