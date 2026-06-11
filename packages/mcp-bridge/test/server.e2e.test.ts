@@ -45,6 +45,80 @@ async function connect(projectRoot: string, store: string) {
   return { client, server };
 }
 
+describe("phase 4 tools over the bridge", () => {
+  let store: string;
+  let projectRoot: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "mcp-e2e-p4-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "mcp-e2e-p4-root-"));
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function connectP4() {
+    const { server } = buildServer({
+      registry: seededRegistry(projectRoot),
+      storeRoot: store,
+      now: () => TS,
+      newId: () => "e0000000-0000-4000-8000-000000000001",
+    });
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test", version: "0" }, { capabilities: {} });
+    await Promise.all([server.connect(serverT), client.connect(clientT)]);
+    return { client, server };
+  }
+
+  it("lists 15 tools", async () => {
+    const { client, server } = await connect(projectRoot, store);
+    const { tools } = (await client.listTools()) as { tools: { name: string }[] };
+    expect(tools).toHaveLength(15);
+    expect(tools.map((t) => t.name)).toContain("get_project_context");
+    await server.close();
+  });
+
+  it("save_project_rule then get_project_rules round-trips", async () => {
+    const { client, server } = await connectP4();
+    await client.callTool({
+      name: "save_project_rule",
+      arguments: {
+        projectId: PROJECT_ID,
+        title: "Migrate first",
+        rule: "Create a migration before regenerating.",
+        severity: "warning",
+        appliesTo: ["prisma/schema.prisma"],
+      },
+    });
+    const res = (await client.callTool({
+      name: "get_project_rules",
+      arguments: { projectId: PROJECT_ID },
+    })) as { content: { text: string }[] };
+    const payload = JSON.parse(res.content[0]?.text ?? "{}") as { rules: { title: string }[] };
+    expect(payload.rules.map((r) => r.title)).toEqual(["Migrate first"]);
+    await server.close();
+  });
+
+  it("record_failed_attempt surfaces in get_project_context openFailures", async () => {
+    const { client, server } = await connectP4();
+    await client.callTool({
+      name: "record_failed_attempt",
+      arguments: { projectId: PROJECT_ID, task: "schema change", failedStep: "regen client" },
+    });
+    const res = (await client.callTool({
+      name: "get_project_context",
+      arguments: { projectId: PROJECT_ID },
+    })) as { content: { text: string }[] };
+    const payload = JSON.parse(res.content[0]?.text ?? "{}") as {
+      openFailures: unknown[];
+      indexSummary: { totalBlocks: number };
+    };
+    expect(payload.openFailures).toHaveLength(1);
+    expect(payload.indexSummary.totalBlocks).toBe(0);
+    await server.close();
+  });
+});
+
 describe("bridge stdio round-trip (AA1 §14 BB8 acceptance)", () => {
   let store: string;
   let projectRoot: string;
