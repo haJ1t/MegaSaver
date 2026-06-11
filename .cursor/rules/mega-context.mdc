@@ -110,7 +110,8 @@ pnpm verify           # lint + typecheck + test (DoD gate)
 pnpm --filter @megasaver/<pkg> <cmd>
 ```
 
-Note: pnpm/Turborepo/Biome configuration files are introduced by the
+Note: configuration files (`tsconfig.base.json`, `biome.json`,
+`turbo.json`, `pnpm-workspace.yaml`) are introduced by the
 `project-skeleton` spec, not this bootstrap. Until then, the commands
 above are aspirational and will activate when the skeleton lands.
 <!-- conventions:end id="stack-and-commands" -->
@@ -121,6 +122,11 @@ above are aspirational and will activate when the skeleton lands.
 Mega Saver's product premise: connectors generate per-agent config.
 We dogfood by writing all four agent files from day one and keeping
 them in sync via a single source of truth.
+
+**Source of truth:** `docs/conventions/*.md` — fourteen canonical
+files: `wiki-first.md` (§0) plus one per `CLAUDE.md` section §1–§13.
+Every managed agent file mirrors named sections from them; nothing in
+a managed block is hand-edited.
 
 ## File scopes
 
@@ -134,18 +140,18 @@ them in sync via a single source of truth.
 ## Drift prevention
 
 1. Edit `docs/conventions/<file>.md` (single source).
-2. Regenerate agent files via `pnpm conventions:sync` (deferred
-   to v0.2; manual sync until then).
+2. Regenerate agent files via `pnpm conventions:sync`.
 3. Commit convention + regenerated mirrors in same commit.
-4. CI check (deferred): agent files must not contain content not
-   present in `docs/conventions/`.
+4. `pnpm conventions:check` (folded into `pnpm verify`) fails CI if any
+   managed file drifts from `docs/conventions/`.
 
-Until the sync script ships:
-
-- `CLAUDE.md` is canonical.
-- `AGENTS.md`, `.cursor/rules`, and `CONVENTIONS.md` updated MANUALLY
-  when `CLAUDE.md` changes, in the same commit.
-- PR diff review catches drift.
+`CLAUDE.md`, `AGENTS.md`, and `.cursor/rules/*.mdc` are all managed
+consumers: their sentinel-bounded blocks are regenerated from
+`docs/conventions/`. Content **outside** the sentinel blocks (section
+headings, `Source:` links, agent-specific notes) is hand-kept and
+preserved across syncs. `CONVENTIONS.md` (Aider) is not a sync
+consumer — the repo generates none; it is the product feature
+`mega connector sync --target aider`.
 
 ## Cursor connector frontmatter contract
 

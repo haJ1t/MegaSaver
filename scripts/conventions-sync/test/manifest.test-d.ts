@@ -29,10 +29,12 @@ describe("ConsumerId type regression", () => {
     const b: ConsumerId = "cursor-context";
     const c: ConsumerId = "cursor-conventions";
     const d: ConsumerId = "cursor-discipline";
+    const e: ConsumerId = "claude-md";
     void a;
     void b;
     void c;
     void d;
+    void e;
   });
 
   it("non-member is rejected", () => {

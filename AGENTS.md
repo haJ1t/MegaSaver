@@ -14,6 +14,55 @@ Slim governance for Codex working in this repo. Mirrors
 
 ---
 
+## Wiki-First
+
+<!-- conventions:start id="wiki-first" source="wiki-first.md" -->
+The wiki (`wiki/`) is the persistent, shared memory for this project.
+Before any other work, read `wiki/index.md` to learn what exists. All
+agents share this wiki — what one agent writes, another inherits.
+
+## Startup routine (MANDATORY)
+
+1. Read `wiki/index.md` — catalog of all wiki pages.
+2. Read 1–3 targeted pages relevant to the current task.
+3. Do NOT read the raw 1421-line `fikri.txt` — use
+   `wiki/sources/fikri-original.md`.
+4. Do NOT skip the wiki and dive into raw spec/plan files for
+   orientation.
+
+## Wiki governance
+
+- The wiki schema lives at `wiki/CLAUDE.md` — it defines folder
+  structure, page format, ingestion rules, and hard rules.
+- `wiki/raw/` is immutable. Never write there.
+- Every non-trivial claim cites a source.
+- Pages are not deleted — moved to `wiki/archive/`.
+- After completing work, update relevant wiki pages and append a
+  timestamped entry to `wiki/log.md`.
+
+## Cross-agent communication
+
+Multiple agents (e.g. Claude Code and Codex) may run side-by-side.
+They share two channels:
+
+1. **Wiki** (`wiki/`) — shared persistent memory. Write findings to
+   wiki pages so the other agent picks them up.
+2. **Shared channel** — `wiki/agent-channel.md` is a scratchpad for
+   inter-agent messages. Read it on session start; write status
+   updates, handoff notes, or requests there.
+
+Agents may also delegate to one another through configured MCP
+bridges where available.
+
+## Wiki-first hard rule
+
+The wiki is the ONLY memory channel for project knowledge across
+sessions and across agents. If the wiki lacks a needed page, write it
+during the work; do not bypass the wiki.
+<!-- conventions:end id="wiki-first" -->
+
+---
+
 ## Mission
 
 <!-- conventions:start id="mission" source="mission.md" -->
@@ -79,7 +128,8 @@ pnpm verify           # lint + typecheck + test (DoD gate)
 pnpm --filter @megasaver/<pkg> <cmd>
 ```
 
-Note: pnpm/Turborepo/Biome configuration files are introduced by the
+Note: configuration files (`tsconfig.base.json`, `biome.json`,
+`turbo.json`, `pnpm-workspace.yaml`) are introduced by the
 `project-skeleton` spec, not this bootstrap. Until then, the commands
 above are aspirational and will activate when the skeleton lands.
 <!-- conventions:end id="stack-and-commands" -->
@@ -356,6 +406,11 @@ Mega Saver's product premise: connectors generate per-agent config.
 We dogfood by writing all four agent files from day one and keeping
 them in sync via a single source of truth.
 
+**Source of truth:** `docs/conventions/*.md` — fourteen canonical
+files: `wiki-first.md` (§0) plus one per `CLAUDE.md` section §1–§13.
+Every managed agent file mirrors named sections from them; nothing in
+a managed block is hand-edited.
+
 ## File scopes
 
 - `CLAUDE.md` — full reference. Used by Claude Code.
@@ -368,18 +423,18 @@ them in sync via a single source of truth.
 ## Drift prevention
 
 1. Edit `docs/conventions/<file>.md` (single source).
-2. Regenerate agent files via `pnpm conventions:sync` (deferred
-   to v0.2; manual sync until then).
+2. Regenerate agent files via `pnpm conventions:sync`.
 3. Commit convention + regenerated mirrors in same commit.
-4. CI check (deferred): agent files must not contain content not
-   present in `docs/conventions/`.
+4. `pnpm conventions:check` (folded into `pnpm verify`) fails CI if any
+   managed file drifts from `docs/conventions/`.
 
-Until the sync script ships:
-
-- `CLAUDE.md` is canonical.
-- `AGENTS.md`, `.cursor/rules`, and `CONVENTIONS.md` updated MANUALLY
-  when `CLAUDE.md` changes, in the same commit.
-- PR diff review catches drift.
+`CLAUDE.md`, `AGENTS.md`, and `.cursor/rules/*.mdc` are all managed
+consumers: their sentinel-bounded blocks are regenerated from
+`docs/conventions/`. Content **outside** the sentinel blocks (section
+headings, `Source:` links, agent-specific notes) is hand-kept and
+preserved across syncs. `CONVENTIONS.md` (Aider) is not a sync
+consumer — the repo generates none; it is the product feature
+`mega connector sync --target aider`.
 
 ## Cursor connector frontmatter contract
 

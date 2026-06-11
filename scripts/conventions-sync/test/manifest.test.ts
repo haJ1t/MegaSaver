@@ -34,6 +34,7 @@ describe("manifest CONSUMERS", () => {
 
   it("CONSUMERS launch-order is frozen", () => {
     expect(CONSUMERS.map((c) => c.id)).toEqual([
+      "claude-md",
       "agents-md",
       "cursor-context",
       "cursor-conventions",
@@ -41,13 +42,56 @@ describe("manifest CONSUMERS", () => {
     ]);
   });
 
-  it("CONSUMERS paths map to the four real consumer files", () => {
+  it("CONSUMERS paths map to the five real consumer files", () => {
     expect(CONSUMERS.map((c) => c.path)).toEqual([
+      "CLAUDE.md",
       "AGENTS.md",
       ".cursor/rules/mega-context.mdc",
       ".cursor/rules/mega-conventions.mdc",
       ".cursor/rules/mega-discipline.mdc",
     ]);
+  });
+
+  it("claude-md consumer declares the 14 §0–§13 blocks in document order", () => {
+    const claude = CONSUMERS.find((c) => c.id === "claude-md");
+    expect(claude?.path).toBe("CLAUDE.md");
+    expect(claude?.blocks.map((b) => b.id)).toEqual([
+      "wiki-first",
+      "mission",
+      "repo-layout",
+      "stack-and-commands",
+      "process-discipline",
+      "skill-routing",
+      "agent-routing",
+      "multi-agent-dogfood",
+      "code-conventions",
+      "definition-of-done",
+      "git-and-commits",
+      "language",
+      "risk-modes",
+      "anti-patterns",
+    ]);
+    expect(claude?.blocks.map((b) => b.source)).toEqual([
+      "wiki-first.md",
+      "mission.md",
+      "repo-layout.md",
+      "stack-and-commands.md",
+      "process-discipline.md",
+      "skill-routing.md",
+      "agent-routing.md",
+      "multi-agent-dogfood.md",
+      "code-conventions.md",
+      "definition-of-done.md",
+      "git-and-commits.md",
+      "language.md",
+      "risk-modes.md",
+      "anti-patterns.md",
+    ]);
+  });
+
+  it("agents-md leads with the wiki-first block", () => {
+    const agents = CONSUMERS.find((c) => c.id === "agents-md");
+    expect(agents?.blocks[0]).toEqual({ id: "wiki-first", source: "wiki-first.md" });
   });
 
   it("every block references a non-empty source path", () => {
@@ -67,7 +111,7 @@ describe("manifest CONSUMERS", () => {
 
   it("ConsumerId resolves to the closed union", () => {
     expectTypeOf<ConsumerId>().toEqualTypeOf<
-      "agents-md" | "cursor-context" | "cursor-conventions" | "cursor-discipline"
+      "claude-md" | "agents-md" | "cursor-context" | "cursor-conventions" | "cursor-discipline"
     >();
   });
 });
