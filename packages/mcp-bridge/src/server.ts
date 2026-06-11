@@ -6,9 +6,12 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { McpBridgeError } from "./errors.js";
 import { mcpToolNameSchema } from "./tool-name.js";
 import { handleFetchChunk } from "./tools/fetch-chunk.js";
+import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
 import { handleReadFile } from "./tools/read-file.js";
 import { handleRecall } from "./tools/recall.js";
 import { handleRunCommand } from "./tools/run-command.js";
+import { handleSaveMemory } from "./tools/save-memory.js";
+import { handleSearchMemory } from "./tools/search-memory.js";
 
 export type ServerDeps = {
   registry: CoreRegistry;
@@ -22,10 +25,13 @@ export type ServerDeps = {
 };
 
 const TOOL_DEFS = [
+  { name: "get_relevant_memories", description: "Rank project memories by relevance to a task." },
   { name: "mega_fetch_chunk", description: "Fetch one stored chunk from a chunk set." },
   { name: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
   { name: "mega_recall", description: "Recall session memory and stored chunk sets." },
   { name: "mega_run_command", description: "Run a policy-gated command and filter its output." },
+  { name: "save_memory", description: "Write a typed memory entry to a project." },
+  { name: "search_memory", description: "Search project memories by text and filters." },
 ] as const;
 
 // The MCP SDK serialises only `error.message` into the JSON-RPC
@@ -110,6 +116,12 @@ export function buildServer(deps: ServerDeps): {
           { registry: deps.registry, storeRoot: deps.storeRoot, now, newId, originPid },
           args,
         );
+      case "save_memory":
+        return handleSaveMemory({ registry: deps.registry, now, newId }, args);
+      case "search_memory":
+        return handleSearchMemory({ registry: deps.registry }, args);
+      case "get_relevant_memories":
+        return handleGetRelevantMemories({ registry: deps.registry }, args);
     }
   }
 

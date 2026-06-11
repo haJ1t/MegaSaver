@@ -2069,3 +2069,21 @@ agent-specific leak). Branch feat/conventions-sync-claude-md, 8 commits.
 Roadmap #2 merged. CLAUDE.md is now a managed conventions:sync consumer; dogfood
 drift fully closed (all agent files regenerate from docs/conventions/). Wiki
 updated open→shipped: entities/conventions-sync, post-v1.1-roadmap, index.
+
+## [2026-06-11] feat | Phase 1 DIMMEM memory engine (registry + CLI + MCP)
+
+Roadmap Phase 1 read/write surface over the typed memory schema, on branch
+feat/phase1-structured-memory. THREE TDD slices, all green via pnpm verify
+(30/30 tasks; core 226, cli 467, mcp-bridge 67, gui 252).
+- Core: CoreRegistry.updateMemoryEntry/deleteMemoryEntry/searchMemoryEntries
+  (mutable-in-place; BM25 via @megasaver/retrieval over title+content+keywords;
+  stale excluded by default). memory-search.ts + memoryEntryUpdatePatchSchema.
+  Bug found+fixed by TDD: delete-all wrote a zero-byte JSONL that readJsonLines
+  rejected → writeMemoryEntriesForProject now removes the file on empty.
+- CLI: mega memory create typed flags (--type/--title/--keyword/--confidence/
+  --source/--reason/--goal/--file/--expires, optional w/ neutral defaults) +
+  new search/update/delete(--yes)/explain subcommands.
+- MCP: save_memory, search_memory, get_relevant_memories (closed enum 4→7).
+Smoke: real `mega` run of create→search→explain→update(stale)→delete loop
+captured (stale excluded from default search; delete refuses without --yes).
+Pending before merge (HIGH risk): critic + code-reviewer passes.
