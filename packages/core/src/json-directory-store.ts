@@ -16,7 +16,9 @@ import { dirname, join, resolve } from "node:path";
 import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { CorePersistenceError } from "./errors.js";
+import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
 import { type MemoryEntry, backfillMemoryEntry, memoryEntrySchema } from "./memory-entry.js";
+import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import { type Session, sessionSchema } from "./session.js";
 
@@ -29,6 +31,8 @@ export type StorePaths = {
   projectsPath: string;
   sessionsPath: string;
   memoryDir: string;
+  projectRulesDir: string;
+  failedAttemptsDir: string;
 };
 
 export function resolveStorePaths(rootDir: string): StorePaths {
@@ -51,6 +55,8 @@ export function resolveStorePaths(rootDir: string): StorePaths {
         projectsPath: join(resolvedRootDir, "projects.json"),
         sessionsPath: join(resolvedRootDir, "sessions.json"),
         memoryDir: join(resolvedRootDir, "memory"),
+        projectRulesDir: join(resolvedRootDir, "project-rules"),
+        failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
       };
     }
 
@@ -69,6 +75,8 @@ export function resolveStorePaths(rootDir: string): StorePaths {
     projectsPath: join(resolvedRootDir, "projects.json"),
     sessionsPath: join(resolvedRootDir, "sessions.json"),
     memoryDir: join(resolvedRootDir, "memory"),
+    projectRulesDir: join(resolvedRootDir, "project-rules"),
+    failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
   };
 }
 
@@ -156,6 +164,65 @@ export function writeMemoryEntriesForProject(
   }
   const content = entries.map((entry) => JSON.stringify(entry)).join("\n");
   atomicWriteFile(filePath, `${content}\n`);
+}
+
+export function readProjectRulesForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+): ProjectRule[] {
+  const filePath = join(paths.projectRulesDir, `${projectId}.jsonl`);
+  return readJsonLines(filePath).map((entry) => parseEntity(projectRuleSchema, entry, filePath));
+}
+
+export function writeProjectRulesForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+  rules: readonly ProjectRule[],
+): void {
+  const filePath = join(paths.projectRulesDir, `${projectId}.jsonl`);
+  if (rules.length === 0) {
+    removeIfExists(filePath);
+    return;
+  }
+  atomicWriteFile(filePath, `${rules.map((rule) => JSON.stringify(rule)).join("\n")}\n`);
+}
+
+export function readFailedAttemptsForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+): FailedAttempt[] {
+  const filePath = join(paths.failedAttemptsDir, `${projectId}.jsonl`);
+  return readJsonLines(filePath).map((entry) =>
+    parseEntity(failedAttemptSchema, entry, filePath),
+  );
+}
+
+export function writeFailedAttemptsForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+  attempts: readonly FailedAttempt[],
+): void {
+  const filePath = join(paths.failedAttemptsDir, `${projectId}.jsonl`);
+  if (attempts.length === 0) {
+    removeIfExists(filePath);
+    return;
+  }
+  atomicWriteFile(filePath, `${attempts.map((fa) => JSON.stringify(fa)).join("\n")}\n`);
+}
+
+// Mirrors the empty-set branch of writeMemoryEntriesForProject: an empty entity
+// set must delete the file (readJsonLines treats a zero-byte file as corrupt).
+function removeIfExists(filePath: string): void {
+  try {
+    rmSync(filePath);
+  } catch (error) {
+    if (!(isNodeError(error) && error.code === "ENOENT")) {
+      throw new CorePersistenceError("store_write_failed", "Store write failed.", {
+        filePath,
+        cause: error,
+      });
+    }
+  }
 }
 
 function readJsonArray(filePath: string): unknown[] {
