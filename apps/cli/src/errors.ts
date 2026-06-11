@@ -1,5 +1,12 @@
 import { ConnectorError } from "@megasaver/connectors-shared";
-import { CorePersistenceError, CoreRegistryError, memoryScopeSchema } from "@megasaver/core";
+import {
+  CorePersistenceError,
+  CoreRegistryError,
+  memoryConfidenceSchema,
+  memoryScopeSchema,
+  memorySourceSchema,
+  memoryTypeSchema,
+} from "@megasaver/core";
 import { agentIdSchema, riskLevelSchema, tokenSaverModeSchema } from "@megasaver/shared";
 import { ZodError } from "zod";
 import { KNOWN_TARGET_IDS } from "./known-targets.js";
@@ -13,6 +20,7 @@ export type ZodContext =
   | { kind: "sessionId" }
   | { kind: "memoryEntryId" }
   | { kind: "memory_create" }
+  | { kind: "memory_update" }
   | { kind: "project"; name: string }
   | { kind: "session"; id: string }
   | { kind: "session_update"; id: string }
@@ -322,6 +330,42 @@ export function scopeProjectWithSessionMessage(): CliMessage {
 export function scopeSessionWithoutSessionMessage(): CliMessage {
   return {
     message: "error: --session is required when --scope is session",
+    exitCode: 1,
+  };
+}
+
+export function invalidTypeMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid type "${value}", expected: ${memoryTypeSchema.options.join(" | ")}`,
+    exitCode: 1,
+  };
+}
+
+export function invalidConfidenceMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid confidence "${value}", expected: ${memoryConfidenceSchema.options.join(" | ")}`,
+    exitCode: 1,
+  };
+}
+
+export function invalidSourceMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid source "${value}", expected: ${memorySourceSchema.options.join(" | ")}`,
+    exitCode: 1,
+  };
+}
+
+export function deleteRequiresConfirmMessage(): CliMessage {
+  return { message: "error: refusing to delete without --yes", exitCode: 1 };
+}
+
+export function emptyFieldMessage(field: string): CliMessage {
+  return { message: `error: ${field} must not be empty`, exitCode: 1 };
+}
+
+export function invalidExpiresMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid expires "${value}", expected ISO-8601 datetime`,
     exitCode: 1,
   };
 }

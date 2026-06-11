@@ -16,7 +16,7 @@ import { dirname, join, resolve } from "node:path";
 import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { CorePersistenceError } from "./errors.js";
-import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
+import { type MemoryEntry, backfillMemoryEntry, memoryEntrySchema } from "./memory-entry.js";
 import { type Project, projectSchema } from "./project.js";
 import { type Session, sessionSchema } from "./session.js";
 
@@ -97,7 +97,11 @@ export function readMemoryEntriesForProject(
   projectId: ProjectId,
 ): MemoryEntry[] {
   return readJsonLines(join(paths.memoryDir, `${projectId}.jsonl`)).map((entry) =>
-    parseEntity(memoryEntrySchema, entry, join(paths.memoryDir, `${projectId}.jsonl`)),
+    parseEntity(
+      memoryEntrySchema,
+      backfillMemoryEntry(entry),
+      join(paths.memoryDir, `${projectId}.jsonl`),
+    ),
   );
 }
 
@@ -121,7 +125,7 @@ export function readAllMemoryEntries(paths: StorePaths): MemoryEntry[] {
     .flatMap((fileName) => {
       const filePath = join(paths.memoryDir, fileName);
       return readJsonLines(filePath).map((entry) =>
-        parseEntity(memoryEntrySchema, entry, filePath),
+        parseEntity(memoryEntrySchema, backfillMemoryEntry(entry), filePath),
       );
     });
 }
@@ -131,11 +135,27 @@ export function writeMemoryEntriesForProject(
   projectId: ProjectId,
   entries: readonly MemoryEntry[],
 ): void {
+  const filePath = join(paths.memoryDir, `${projectId}.jsonl`);
+  // An empty set removes the file rather than leaving a zero-byte JSONL:
+  // readJsonLines treats an empty existing file as corrupt, so deleting the
+  // last entry must clear the file, not blank it. An already-absent file
+  // (ENOENT) is fine; any other failure (e.g. EPERM) must surface, not be
+  // swallowed (§13: no silent error suppression).
+  if (entries.length === 0) {
+    try {
+      rmSync(filePath);
+    } catch (error) {
+      if (!(isNodeError(error) && error.code === "ENOENT")) {
+        throw new CorePersistenceError("store_write_failed", "Store write failed.", {
+          filePath,
+          cause: error,
+        });
+      }
+    }
+    return;
+  }
   const content = entries.map((entry) => JSON.stringify(entry)).join("\n");
-  atomicWriteFile(
-    join(paths.memoryDir, `${projectId}.jsonl`),
-    content.length === 0 ? "" : `${content}\n`,
-  );
+  atomicWriteFile(filePath, `${content}\n`);
 }
 
 function readJsonArray(filePath: string): unknown[] {

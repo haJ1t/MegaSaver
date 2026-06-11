@@ -27,6 +27,7 @@
     "@megasaver/context-gate": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",
+    "@megasaver/retrieval": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "@megasaver/stats": "workspace:*",
     "zod": "^3.24.1"

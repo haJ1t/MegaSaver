@@ -129,6 +129,13 @@ export const MEMORY_PROJECT_ENTRY: MemoryEntry = {
   projectId: PROJECT_A.id,
   sessionId: null,
   scope: "project",
+  type: "decision",
+  title: "project memory in alpha",
   content: "project memory in alpha",
+  keywords: [],
+  confidence: "medium",
+  source: "manual",
+  stale: false,
   createdAt: "2026-05-10T11:15:00.000Z",
+  updatedAt: "2026-05-10T11:15:00.000Z",
 };

@@ -1,7 +1,11 @@
 import { defineCommand } from "citty";
 import { memoryCreateCommand } from "./create.js";
+import { memoryDeleteCommand } from "./delete.js";
+import { memoryExplainCommand } from "./explain.js";
 import { memoryListCommand } from "./list.js";
+import { memorySearchCommand } from "./search.js";
 import { memoryShowCommand } from "./show.js";
+import { memoryUpdateCommand } from "./update.js";
 
 export {
   type RunMemoryCreateInput,
@@ -18,6 +22,26 @@ export {
   runMemoryShow,
   memoryShowCommand,
 } from "./show.js";
+export {
+  type RunMemorySearchInput,
+  runMemorySearch,
+  memorySearchCommand,
+} from "./search.js";
+export {
+  type RunMemoryUpdateInput,
+  runMemoryUpdate,
+  memoryUpdateCommand,
+} from "./update.js";
+export {
+  type RunMemoryDeleteInput,
+  runMemoryDelete,
+  memoryDeleteCommand,
+} from "./delete.js";
+export {
+  type RunMemoryExplainInput,
+  runMemoryExplain,
+  memoryExplainCommand,
+} from "./explain.js";
 
 export const memoryCommand = defineCommand({
   meta: { name: "memory", description: "Manage Mega Saver memory entries." },
@@ -25,5 +49,9 @@ export const memoryCommand = defineCommand({
     create: memoryCreateCommand,
     list: memoryListCommand,
     show: memoryShowCommand,
+    search: memorySearchCommand,
+    update: memoryUpdateCommand,
+    delete: memoryDeleteCommand,
+    explain: memoryExplainCommand,
   },
 });

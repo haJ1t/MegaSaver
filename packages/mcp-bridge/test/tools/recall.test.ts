@@ -34,7 +34,13 @@ function seededRegistry() {
     sessionId: SESSION_ID,
     scope: "session",
     content: "use pnpm not npm",
+    type: "user_preference",
+    title: "use pnpm not npm",
+    keywords: [],
+    confidence: "medium",
+    source: "manual",
     createdAt: TS,
+    updatedAt: TS,
   });
   return registry;
 }

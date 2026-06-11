@@ -2085,6 +2085,26 @@ phases-v2, concepts/{structured-memory-engine,semantic-repo-index,context-
 pruning-engine}; full spec+plan for the 3 near-term gap phases (1 DIMMEM,
 2 repo-index, 3 LAMR) under docs/superpowers/{specs,plans}/2026-06-11-phase{1,2,3}-*.
 Phases 4–10 stay roadmap-level. index.md + post-v1.1-roadmap cross-linked.
-Branch docs/contextops-roadmap-phases. Process: brainstorming (scope locked via
-AskUserQuestion: docs-only / master+near-term / reconcile) → authored solo for
-cross-doc coherence after the parallel code audit.
+Branch docs/contextops-roadmap-phases (PR #113). Process: brainstorming (scope
+locked via AskUserQuestion: docs-only / master+near-term / reconcile) → authored
+solo for cross-doc coherence after the parallel code audit.
+
+## [2026-06-11] feat | Phase 1 DIMMEM memory engine (registry + CLI + MCP)
+
+Roadmap Phase 1 read/write surface over the typed memory schema, on branch
+feat/phase1-structured-memory (PR #114). THREE TDD slices + two review passes,
+all green via pnpm verify (30/30 tasks; core 230, cli 469, mcp-bridge 68,
+connectors-shared 74, gui 252).
+- Core: CoreRegistry.updateMemoryEntry/deleteMemoryEntry/searchMemoryEntries
+  (mutable-in-place; BM25 via @megasaver/retrieval over title+content+keywords;
+  stale excluded by default). memory-search.ts + memoryEntryUpdatePatchSchema.
+  Bug found+fixed by TDD: delete-all wrote a zero-byte JSONL that readJsonLines
+  rejected → writeMemoryEntriesForProject now removes the file on empty.
+- CLI: mega memory create typed flags (--type/--title/--keyword/--confidence/
+  --source/--reason/--goal/--file/--expires, optional w/ neutral defaults) +
+  new search/update/delete(--yes)/explain subcommands.
+- MCP: save_memory, search_memory, get_relevant_memories (closed enum 4→7).
+Smoke: real `mega` run of create→search→explain→update(stale)→delete loop
+captured (stale excluded from default search; delete refuses without --yes).
+Review: code-reviewer + critic both ship (fresh contexts); first pass fix-first
+(boundary validation, backfill guard, rm-error) → confirming pass clean.
