@@ -2,11 +2,13 @@ import { createRequire } from "node:module";
 import { defineCommand } from "citty";
 import { connectorCommand } from "./commands/connector/index.js";
 import { doctorCommand } from "./commands/doctor.js";
+import { indexCommand } from "./commands/index/index.js";
 import { mcpCommand } from "./commands/mcp/index.js";
 import { memoryCommand } from "./commands/memory/index.js";
 import { outputCommand } from "./commands/output/index.js";
 import { packCommand } from "./commands/pack/index.js";
 import { projectCommand } from "./commands/project.js";
+import { scanCommand } from "./commands/scan.js";
 import { sessionCommand } from "./commands/session/index.js";
 
 // Version source. The standalone single-file bundle has no sibling package.json
@@ -36,5 +38,7 @@ export const mainCommand = defineCommand({
     output: outputCommand,
     mcp: mcpCommand,
     pack: packCommand,
+    scan: scanCommand,
+    index: indexCommand,
   },
 });

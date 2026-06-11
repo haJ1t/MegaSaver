@@ -19,3 +19,6 @@ export type SessionId = z.infer<typeof sessionIdSchema>;
 
 export const memoryEntryIdSchema = lowercaseUuid.brand<"MemoryEntryId">();
 export type MemoryEntryId = z.infer<typeof memoryEntryIdSchema>;
+
+export const codeBlockIdSchema = lowercaseUuid.brand<"CodeBlockId">();
+export type CodeBlockId = z.infer<typeof codeBlockIdSchema>;
