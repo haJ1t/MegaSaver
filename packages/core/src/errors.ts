@@ -9,6 +9,10 @@ export const coreRegistryErrorCodeSchema = z.enum([
   "session_project_mismatch",
   "memory_entry_already_exists",
   "memory_entry_not_found",
+  "project_rule_already_exists",
+  "project_rule_not_found",
+  "failed_attempt_already_exists",
+  "failed_attempt_not_found",
 ]);
 
 export type CoreRegistryErrorCode = z.infer<typeof coreRegistryErrorCodeSchema>;

@@ -22,3 +22,9 @@ export type MemoryEntryId = z.infer<typeof memoryEntryIdSchema>;
 
 export const codeBlockIdSchema = lowercaseUuid.brand<"CodeBlockId">();
 export type CodeBlockId = z.infer<typeof codeBlockIdSchema>;
+
+export const projectRuleIdSchema = lowercaseUuid.brand<"ProjectRuleId">();
+export type ProjectRuleId = z.infer<typeof projectRuleIdSchema>;
+
+export const failedAttemptIdSchema = lowercaseUuid.brand<"FailedAttemptId">();
+export type FailedAttemptId = z.infer<typeof failedAttemptIdSchema>;
