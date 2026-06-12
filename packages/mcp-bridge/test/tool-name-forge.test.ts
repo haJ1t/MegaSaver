@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { mcpToolNameSchema } from "../src/tool-name.js";
 
-describe("tool-name enum (phase 5)", () => {
-  it("is a closed set of 18 alphabetically-ordered names", () => {
-    expect(mcpToolNameSchema.options).toEqual([
+describe("tool-name enum (phase 5 tools still present)", () => {
+  it("includes all 18 Phase 5 tools (now part of the 22-tool set)", () => {
+    const names = mcpToolNameSchema.options;
+    for (const name of [
       "convert_failure_to_rule",
       "explain_context_selection",
       "find_similar_failures",
@@ -22,6 +23,8 @@ describe("tool-name enum (phase 5)", () => {
       "save_memory",
       "save_project_rule",
       "search_memory",
-    ]);
+    ] as const) {
+      expect(names).toContain(name);
+    }
   });
 });
