@@ -8,7 +8,14 @@ import { OutputFilterError } from "./errors.js";
 import { effectiveBudget, fitBudget } from "./fit.js";
 import { collapseRepeatedLines, normalize } from "./normalize.js";
 import { chunkByFormat } from "./parsers/index.js";
-import { type RankFeatures, type RankedChunk, scoreChunk } from "./rank.js";
+import {
+  type EngineScore,
+  type RankFeatures,
+  type RankedChunk,
+  applyEngineRanking,
+  engineRankingFromEnv,
+  scoreChunk,
+} from "./rank.js";
 import { summarize } from "./summarize.js";
 import {
   type FilterDecision,
@@ -31,9 +38,11 @@ export const filterOutputInputSchema = z
         recentFiles: z.array(z.string()).readonly().optional(),
         recentMemory: z.array(z.string()).readonly().optional(),
         projectConventions: z.array(z.string()).readonly().optional(),
+        recentFailures: z.array(z.string()).readonly().optional(),
         risk: riskLevelSchema.optional(),
       })
       .optional(),
+    engineRanking: z.boolean().optional(),
     source: z
       .discriminatedUnion("kind", [
         z.object({ kind: z.literal("file"), path: z.string() }),
@@ -57,6 +66,7 @@ export type OutputExcerpt = {
   endLine: number;
   score: number;
   features: RankFeatures;
+  engine?: EngineScore;
 };
 
 export type FilterOutputResult = {
@@ -76,13 +86,14 @@ export type FilterOutputResult = {
 };
 
 function excerptOf(chunk: RankedChunk): OutputExcerpt {
-  return {
+  const base = {
     text: chunk.text,
     startLine: chunk.startLine,
     endLine: chunk.endLine,
     score: chunk.score,
     features: chunk.features,
   };
+  return chunk.engine !== undefined ? { ...base, engine: chunk.engine } : base;
 }
 
 export function filterOutput(input: FilterOutputInput): FilterOutputResult {
@@ -129,7 +140,11 @@ export function filterOutput(input: FilterOutputInput): FilterOutputResult {
   }
 
   const chunks = chunkByFormat(textForChunks);
-  const ranked = chunks.map((c) => scoreChunk(intent, c, sessionHints));
+  const scored = chunks.map((c) => scoreChunk(intent, c, sessionHints));
+  // §8: engine-aware re-ranking is behind a flag and reuses the base
+  // relevance — no second scorer. Off by default.
+  const engineEnabled = parsed.data.engineRanking ?? engineRankingFromEnv();
+  const ranked = engineEnabled ? applyEngineRanking(scored, sessionHints) : scored;
   const deduped = dedupe(ranked);
 
   const ordered = [...deduped].sort((a, b) => b.score - a.score);

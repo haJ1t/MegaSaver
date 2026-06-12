@@ -37,4 +37,12 @@ export {
   type OutputFilterErrorCode,
 } from "./errors.js";
 
-export type { RankFeatures, RankedChunk } from "./rank.js";
+export {
+  applyEngineRanking,
+  engineRankingFromEnv,
+  resolveEngineRanking,
+  type EngineScore,
+  type RankFeatures,
+  type RankedChunk,
+  type SessionHints,
+} from "./rank.js";

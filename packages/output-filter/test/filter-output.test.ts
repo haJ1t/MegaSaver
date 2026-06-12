@@ -84,6 +84,29 @@ describe("filterOutput passthrough thresholds (Proxy Mode v1.2 §11)", () => {
   });
 });
 
+describe("filterOutput engine-aware ranking (Proxy Mode v1.2 §8)", () => {
+  const raw = `${Array.from({ length: 600 }, (_, i) => `plain log line ${i}`).join("\n")}\ncall useAuthToken now\n`;
+
+  it("is off by default: no engine explanation on excerpts", () => {
+    const result = filterOutput(base(raw, { sessionHints: { recentMemory: ["useAuthToken"] } }));
+    expect(result.excerpts.every((e) => e.engine === undefined)).toBe(true);
+  });
+
+  it("when enabled, attaches a normalized engine explanation", () => {
+    const result = filterOutput(
+      base(raw, { engineRanking: true, sessionHints: { recentMemory: ["useAuthToken"] } }),
+    );
+    expect(result.excerpts.some((e) => e.engine !== undefined)).toBe(true);
+    const memHit = result.excerpts.find((e) => e.text.includes("useAuthToken"));
+    expect(memHit?.engine?.memoryBoost ?? 0).toBeGreaterThan(0);
+    for (const e of result.excerpts) {
+      if (e.engine === undefined) continue;
+      expect(e.engine.finalScore).toBeGreaterThanOrEqual(0);
+      expect(e.engine.finalScore).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
 describe("filterOutput pipeline (spec §6 / §11)", () => {
   it("shrinks a large multi-KB blob (savingRatio > 0, within budget)", () => {
     const raw = Array.from({ length: 4000 }, (_, i) => `noise line ${i} lorem ipsum dolor`).join(

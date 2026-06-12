@@ -2,12 +2,24 @@ import type { RankFeatureName } from "./rank-features.js";
 
 export type RankFeatures = Record<RankFeatureName, number>;
 
+// Engine-aware ranking explanation (Proxy Mode v1.2 §8). All fields are
+// normalized to [0,1]; finalScore is the weighted combination. Present only
+// when engine ranking is enabled — it is the ranking explanation and the data
+// the v1.4 replay trace records.
+export type EngineScore = {
+  baseRelevance: number;
+  memoryBoost: number;
+  failureHistoryBoost: number;
+  finalScore: number;
+};
+
 export type RankedChunk = {
   text: string;
   startLine: number;
   endLine: number;
   score: number;
   features: RankFeatures;
+  engine?: EngineScore;
 };
 
 export type SessionHints = {
@@ -15,6 +27,9 @@ export type SessionHints = {
   recentFiles?: readonly string[] | undefined;
   recentMemory?: readonly string[] | undefined;
   projectConventions?: readonly string[] | undefined;
+  // Signatures of prior failures (test names, error codes, …) for the
+  // failure-history boost. Plumbed by the caller; the scorer only consumes it.
+  recentFailures?: readonly string[] | undefined;
 };
 
 export type Chunk = {
@@ -91,4 +106,58 @@ export function scoreChunk(
     features.noisePenalty;
 
   return { text, startLine: chunk.startLine, endLine: chunk.endLine, score, features };
+}
+
+// §8.3 v1.2 weighting — base relevance dominates; memory and failure history
+// are narrow boosts. LOCKED to three signals for v1.2 (repo index, dependency,
+// recent-edit signals move to v1.3).
+const BASE_WEIGHT = 0.7;
+const MEMORY_WEIGHT = 0.15;
+const FAILURE_WEIGHT = 0.15;
+const ENGINE_RANKING_ENV_KEY = "MEGASAVER_ENGINE_RANKING";
+
+// Only the literal "true" (trimmed, case-insensitive) enables engine-aware
+// ranking; everything else (unset, "false", "1", garbage) leaves it off.
+export function resolveEngineRanking(raw: string | undefined): boolean {
+  return (raw ?? "").trim().toLowerCase() === "true";
+}
+
+export function engineRankingFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return resolveEngineRanking(env[ENGINE_RANKING_ENV_KEY]);
+}
+
+// Fraction of hint items referenced by the chunk text, clamped to [0,1].
+function fractionMatched(text: string, items: readonly string[] | undefined): number {
+  if (items === undefined || items.length === 0) return 0;
+  let hits = 0;
+  for (const item of items) if (item.length > 0 && text.includes(item)) hits += 1;
+  return Math.min(1, hits / items.length);
+}
+
+// Re-weight already-scored chunks using the shared base relevance plus the
+// memory and failure-history boosts. This is NOT a second scorer: it consumes
+// scoreChunk's output as base_output_relevance and only normalizes + combines.
+// Caller gates this on the MEGASAVER_ENGINE_RANKING flag.
+export function applyEngineRanking(
+  chunks: readonly RankedChunk[],
+  hints: SessionHints | undefined,
+): RankedChunk[] {
+  let maxBase = 0;
+  for (const c of chunks) if (c.score > maxBase) maxBase = c.score;
+  const memoryItems = [...(hints?.recentMemory ?? []), ...(hints?.projectConventions ?? [])];
+
+  return chunks.map((c) => {
+    const baseRelevance = maxBase > 0 ? Math.min(1, Math.max(0, c.score / maxBase)) : 0;
+    const memoryBoost = fractionMatched(c.text, memoryItems);
+    const failureHistoryBoost = fractionMatched(c.text, hints?.recentFailures);
+    const finalScore =
+      BASE_WEIGHT * baseRelevance +
+      MEMORY_WEIGHT * memoryBoost +
+      FAILURE_WEIGHT * failureHistoryBoost;
+    return {
+      ...c,
+      score: finalScore,
+      engine: { baseRelevance, memoryBoost, failureHistoryBoost, finalScore },
+    };
+  });
 }
