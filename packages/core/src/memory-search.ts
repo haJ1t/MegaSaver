@@ -20,6 +20,7 @@ export const memorySearchQuerySchema = z
     confidence: memoryConfidenceSchema.optional(),
     scope: memoryScopeSchema.optional(),
     includeStale: z.boolean().default(false),
+    includeUnapproved: z.boolean().default(false),
     limit: z.number().int().positive().default(DEFAULT_LIMIT),
   })
   .strict();
@@ -31,6 +32,7 @@ export type MemorySearchQuery = {
   confidence?: MemoryConfidence;
   scope?: MemoryScope;
   includeStale?: boolean;
+  includeUnapproved?: boolean;
   limit?: number;
 };
 
@@ -49,7 +51,8 @@ export function searchMemoryEntries(
       (q.type === undefined || entry.type === q.type) &&
       (q.confidence === undefined || entry.confidence === q.confidence) &&
       (q.scope === undefined || entry.scope === q.scope) &&
-      (q.includeStale || !entry.stale),
+      (q.includeStale || !entry.stale) &&
+      (q.includeUnapproved || entry.approval === "approved"),
   );
 
   const text = q.text?.trim();
