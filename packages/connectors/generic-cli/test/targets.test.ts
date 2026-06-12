@@ -3,9 +3,12 @@ import {
   aiderTarget,
   builtinTargets,
   codexTarget,
+  continueTarget,
   cursorTarget,
   findTarget,
+  geminiTarget,
   validateConnectorTarget,
+  windsurfTarget,
 } from "../src/targets.js";
 
 describe("ConnectorTarget registry", () => {
@@ -50,7 +53,6 @@ describe("ConnectorTarget registry", () => {
   });
 
   it("builtinTargets contains codex, cursor, and aider", () => {
-    expect(builtinTargets).toHaveLength(3);
     expect(builtinTargets).toContain(codexTarget);
     expect(builtinTargets).toContain(cursorTarget);
     expect(builtinTargets).toContain(aiderTarget);
@@ -72,6 +74,56 @@ describe("ConnectorTarget registry", () => {
 
   it("findTarget returns the aider target by id", () => {
     expect(findTarget("aider")).toBe(aiderTarget);
+  });
+
+  it("ships the gemini target", () => {
+    expect(geminiTarget).toEqual({
+      id: "gemini",
+      agentId: "gemini",
+      relativePath: "GEMINI.md",
+    });
+  });
+
+  it("ships the windsurf target", () => {
+    expect(windsurfTarget).toEqual({
+      id: "windsurf",
+      agentId: "windsurf",
+      relativePath: ".windsurfrules",
+    });
+  });
+
+  it("ships the continue target", () => {
+    expect(continueTarget).toEqual({
+      id: "continue",
+      agentId: "continue",
+      relativePath: ".continue/rules/megasaver.md",
+    });
+  });
+
+  it("new flat-file targets carry no header", () => {
+    expect("header" in geminiTarget).toBe(false);
+    expect("header" in windsurfTarget).toBe(false);
+    expect("header" in continueTarget).toBe(false);
+  });
+
+  it("findTarget returns each new target by id", () => {
+    expect(findTarget("gemini")).toBe(geminiTarget);
+    expect(findTarget("windsurf")).toBe(windsurfTarget);
+    expect(findTarget("continue")).toBe(continueTarget);
+  });
+
+  it("builtinTargets contains codex, cursor, aider, gemini, windsurf, continue", () => {
+    expect(builtinTargets).toHaveLength(6);
+    for (const t of [
+      codexTarget,
+      cursorTarget,
+      aiderTarget,
+      geminiTarget,
+      windsurfTarget,
+      continueTarget,
+    ]) {
+      expect(builtinTargets).toContain(t);
+    }
   });
 });
 

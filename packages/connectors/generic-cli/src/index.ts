@@ -3,9 +3,12 @@ export {
   builtinTargets,
   codexTarget,
   type ConnectorTarget,
+  continueTarget,
   cursorTarget,
   findTarget,
+  geminiTarget,
   validateConnectorTarget,
+  windsurfTarget,
 } from "./targets.js";
 
 export {
