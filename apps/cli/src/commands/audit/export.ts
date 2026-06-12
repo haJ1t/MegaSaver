@@ -6,9 +6,12 @@ import {
 } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
+import { z } from "zod";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { projectNameSchema } from "../shared/schemas.js";
+
+const exportFormatSchema = z.enum(["json"]);
 
 export type RunAuditExportInput = {
   projectName: string;
@@ -27,9 +30,9 @@ export type RunAuditExportInput = {
 };
 
 export async function runAuditExport(input: RunAuditExportInput): Promise<0 | 1> {
-  const format = input.formatFlag ?? "json";
-  if (format !== "json") {
-    input.stderr(`error: invalid format "${format}" (json)`);
+  const parsedFormat = exportFormatSchema.safeParse(input.formatFlag ?? "json");
+  if (!parsedFormat.success) {
+    input.stderr(`error: invalid format "${input.formatFlag ?? "json"}" (json)`);
     return 1;
   }
 
