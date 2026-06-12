@@ -43,7 +43,8 @@ export type GetProjectRulesResult = { rules: readonly ProjectRule[] };
 
 function mapCoreError(err: unknown): McpBridgeError {
   if (err instanceof CoreRegistryError) {
-    if (err.code === "project_not_found") return new McpBridgeError("resource_not_found", err.message);
+    if (err.code === "project_not_found")
+      return new McpBridgeError("resource_not_found", err.message);
     return new McpBridgeError("validation_failed", err.message);
   }
   if (err instanceof Error) return new McpBridgeError("validation_failed", err.message);
@@ -94,7 +95,11 @@ export async function handleSaveProjectRule(
 // entry is a prefix of a requested file (or vice-versa), or when a task term
 // appears in its title/rule text. No filter → all rules. A scored rank lands
 // with Phase 5 `rules apply --task`.
-function ruleMatches(rule: ProjectRule, task: string | undefined, files: readonly string[]): boolean {
+function ruleMatches(
+  rule: ProjectRule,
+  task: string | undefined,
+  files: readonly string[],
+): boolean {
   if (task === undefined && files.length === 0) return true;
   for (const file of files) {
     for (const glob of rule.appliesTo) {
@@ -103,7 +108,12 @@ function ruleMatches(rule: ProjectRule, task: string | undefined, files: readonl
   }
   if (task !== undefined) {
     const haystack = `${rule.title} ${rule.rule}`.toLowerCase();
-    if (task.toLowerCase().split(/\s+/).some((term) => term.length > 2 && haystack.includes(term))) {
+    if (
+      task
+        .toLowerCase()
+        .split(/\s+/)
+        .some((term) => term.length > 2 && haystack.includes(term))
+    ) {
       return true;
     }
   }

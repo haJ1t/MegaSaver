@@ -29,8 +29,10 @@ const inputSchema = z
 // CoreRegistry failures carry a closed code; surface it as the matching wire code.
 function mapCoreError(err: unknown): McpBridgeError {
   if (err instanceof CoreRegistryError) {
-    if (err.code === "session_not_found") return new McpBridgeError("session_not_found", err.message);
-    if (err.code === "project_not_found") return new McpBridgeError("resource_not_found", err.message);
+    if (err.code === "session_not_found")
+      return new McpBridgeError("session_not_found", err.message);
+    if (err.code === "project_not_found")
+      return new McpBridgeError("resource_not_found", err.message);
     return new McpBridgeError("validation_failed", err.message);
   }
   if (err instanceof Error) return new McpBridgeError("validation_failed", err.message);

@@ -1,4 +1,10 @@
-import type { FailedAttemptId, MemoryEntryId, ProjectId, ProjectRuleId, SessionId } from "@megasaver/shared";
+import type {
+  FailedAttemptId,
+  MemoryEntryId,
+  ProjectId,
+  ProjectRuleId,
+  SessionId,
+} from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
 import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
 import {
@@ -7,8 +13,8 @@ import {
   memoryEntrySchema,
   memoryEntryUpdatePatchSchema,
 } from "./memory-entry.js";
-import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { type MemorySearchQuery, searchMemoryEntries as searchEntries } from "./memory-search.js";
+import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import {
   type Session,

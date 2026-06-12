@@ -110,10 +110,7 @@ describe("save_project_rule + get_project_rules", () => {
   it("rejects an unknown project as resource_not_found", async () => {
     const registry = seededRegistry();
     await expect(
-      handleGetProjectRules(
-        { registry },
-        { projectId: "99999999-9999-4999-8999-999999999999" },
-      ),
+      handleGetProjectRules({ registry }, { projectId: "99999999-9999-4999-8999-999999999999" }),
     ).rejects.toMatchObject({ code: "resource_not_found" });
   });
 });
