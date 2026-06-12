@@ -9,26 +9,32 @@ Codex, Cursor, Aider, and any CLI agent. The non-negotiable
 principle: **agents connect to Mega Saver, never the reverse.**
 Every connector is a thin adapter. Core stays agent-agnostic.
 
-**Status:** v1.1 shipped (2026-06-04); current `main` carries the
-post-v1.1 arc through PR #112. The v0.1 headless MVP, the v1.0
-**Context Gate** epic (Mega Saver Mode), and **full Windows support**
-are complete; CI is green on both `ubuntu-latest` and `windows-latest`.
-Published package versions: `@megasaver/cli` 1.0.2, `@megasaver/gui`
-1.1.0, `@megasaver/core` 1.0.2. The CLI is distributed as a standalone
-`mega.mjs` bundle on GitHub Releases; the npm publish path is wired and
-unlocks the moment a maintainer supplies `NPM_TOKEN` (see
-[Distribution](#distribution)).
+**Status:** the **10-phase ContextOps roadmap is complete on `main`**
+(Phases 1–10, PRs #114–#123, 2026-06-12). On top of the v1.1 base —
+the headless MVP, the v1.0 **Context Gate** epic (Mega Saver Mode), and
+**full Windows support** — Mega Saver now ships structured memory
+(DIMMEM), a semantic repo index, task-aware context pruning (LAMR), a
+full MCP server (**25 tools**), failed-run learning (FORGE), a task
+engine, a tool router, a token-savings audit dashboard, seven agent
+connectors, and a memory-approval workflow. CI is green on both
+`ubuntu-latest` and `windows-latest`. Package versions: `@megasaver/cli`
+1.0.2, `@megasaver/gui` 1.1.0, `@megasaver/core` 1.0.2. The CLI is
+distributed as a standalone `mega.mjs` bundle on GitHub Releases; the
+npm publish path is wired and unlocks the moment a maintainer supplies
+`NPM_TOKEN` (see [Distribution](#distribution)).
 
 ---
 
 ## Table of contents
 
 - [Why Mega Saver](#why-mega-saver)
+- [The ContextOps layer](#the-contextops-layer)
 - [Quickstart](#quickstart)
 - [Distribution](#distribution)
 - [Architecture](#architecture)
 - [Storage layout](#storage-layout)
 - [The `mega` CLI](#the-mega-cli)
+- [MCP tools](#mcp-tools)
 - [Connectors](#connectors)
 - [GUI app](#gui-app)
 - [Mega Saver Mode](#mega-saver-mode)
@@ -54,6 +60,16 @@ Mega Saver solves this with a small, opinionated layer:
 
 - **One persistent store** for projects, sessions and memory entries
   that any agent can read or write through a connector.
+- **A full ContextOps engine set** — structured memory (DIMMEM), a
+  semantic repo index, task-aware context pruning (LAMR), failed-run
+  learning (FORGE), a task engine, and a tool router — that remembers
+  decisions, indexes the repo, gives an agent only the code and tools a
+  task needs, and turns failures into reusable rules. See
+  [The ContextOps layer](#the-contextops-layer).
+- **A real MCP server** (`@megasaver/mcp-bridge`) exposing **25 tools**
+  over `stdio`, so an agent reaches memory, context packs, rules,
+  tasks, tool routing, and the audit dashboard natively. See
+  [MCP tools](#mcp-tools).
 - **Mega Saver Mode** — session-scoped, MCP-backed output compression
   that routes large tool output through a deterministic redact → chunk
   → rank → fit → summarize pipeline, so only the signal reaches the
@@ -80,6 +96,33 @@ What Mega Saver is **not**:
 - Not a team chatops tool. Single-developer first.
 - Not yet on npm. The CLI ships today as a standalone bundle on
   GitHub Releases; the npm path is one maintainer secret away.
+
+---
+
+## The ContextOps layer
+
+The 10-phase ContextOps roadmap (Phases 1–10, all merged on `main`)
+turns Mega Saver from an output compressor into a self-improving
+context layer for AI coding agents. Each engine is deterministic — **no
+LLM, no embeddings** inside Core; ranking is BM25 + path overlap, and
+the calling agent supplies any intelligence. The agent stays the
+executor; Mega Saver remembers, indexes, scores, and advises.
+
+| Phase | Engine | What it does | Package · CLI |
+|-------|--------|--------------|----------------|
+| 1 | **Structured memory (DIMMEM)** | Typed engineering memory (10 `MemoryType`s + confidence/source/keywords/relatedFiles/freshness) — atomic facts an agent never has to re-derive. | `@megasaver/core` · `mega memory` |
+| 2 | **Semantic repo index** | Parses the repo into typed `CodeBlock`s (AST for TS/JS/Markdown/JSON) so retrieval works on blocks, not whole files. | `@megasaver/indexer` · `mega scan` / `mega index` |
+| 3 | **Context pruning (LAMR)** | Task-aware 8-factor scoring → a 6–8-block context pack with per-block reasons and a dependency closure; named/failing blocks are never silently dropped. | `@megasaver/context-pruner` · `mega context` |
+| 4 | **MCP server** | Exposes the engines as MCP tools over `stdio` (the surface grew 4 → 25 across phases). | `@megasaver/mcp-bridge` · `mega mcp` |
+| 5 | **Failed-run learning (FORGE)** | Records failed attempts, finds similar past failures, converts a failure into a reusable project rule, and ranks rules applicable to a task. | `@megasaver/core` · `mega fail` / `mega rules` / `mega learn` |
+| 6 | **Task engine** | A deterministic plan state machine — typed, dependency-aware `TaskStep`s with **selective retry** (re-run only the failed step and its dependents, never completed work). | `@megasaver/core` · `mega task` |
+| 7 | **Tool router** | Given a task, returns a small, relevance-ranked allow-list of safe tools (fewer tool schemas in context) and blocks dangerous/deploy/database tools unconditionally. | `@megasaver/core` · `mega tools` |
+| 8 | **Audit dashboard** | One windowed, persisted token-savings summary — files/blocks considered vs included, rules applied, retries saved — answering "this task would've been 70k, was 23k, 67% saved." | `@megasaver/stats` · `mega audit` |
+| 9 | **Multi-agent connectors** | Seven flat-file connector targets sharing one project memory; a decision recorded in one agent's session is recalled in another's config file. | `@megasaver/connector-generic-cli` · `mega connector` |
+| 10 | **Memory approval** | Agent-suggests → human-approves: `MemoryEntry.approval` gate so only `approved` memory reaches agents and teammates; a team is a shared `--store` plus the gate. | `@megasaver/core` · `mega memory approve` / `mega github pr-comment` |
+
+The full, source-cited phase detail lives in
+[`wiki/syntheses/contextops-roadmap.md`](wiki/syntheses/contextops-roadmap.md).
 
 ---
 
@@ -245,16 +288,18 @@ git push origin v1.0.2
          ▼                       ▼
 ┌──────────────────────────────────────────┐
 │      Connectors      ·      MCP bridge   │
-│  claude-code · codex · cursor · aider    │
-│  (thin adapters)     (stdio MCP server)  │
+│  claude-code · codex · cursor · aider …  │
+│  (7 thin adapters)  (stdio · 25 tools)   │
 └──────────────┬───────────────────────────┘
                │ public API only
                ▼
 ┌──────────────────────────────────────────┐
-│   @megasaver/core  +  Context Gate       │
+│   @megasaver/core  +  ContextOps engines │
 │  Schemas (Zod) · Registry · JSON store   │
-│  policy · output-filter · content-store  │
-│  retrieval (BM25) · stats                │
+│  memory · failed-attempt · rule · task   │
+│  tool-router · indexer · context-pruner  │
+│  Context Gate: policy · output-filter ·  │
+│  content-store · retrieval (BM25) · stats│
 └──────────────┬───────────────────────────┘
                │ on-disk
                ▼
@@ -264,11 +309,13 @@ git push origin v1.0.2
         └─ memory/<projectId>.jsonl
 ```
 
-**Hard rule:** Core never imports connector or CLI code. The five
-Context Gate leaf packages (`policy`, `output-filter`, `content-store`,
-`retrieval`, `stats`) must not import core. Connectors import Core. The
-CLI imports Core, connectors, and the Context Gate. The GUI imports
-Core directly through a tiny localhost bridge.
+**Hard rule:** Core never imports connector or CLI code. The leaf
+packages — the five Context Gate ones (`policy`, `output-filter`,
+`content-store`, `retrieval`, `stats`) plus the ContextOps `indexer`
+and `context-pruner` — must not import core. The DIMMEM / FORGE / task /
+tool-router schemas and registry methods live **inside** `@megasaver/core`.
+Connectors import Core. The CLI imports Core, connectors, and the
+engines. The GUI imports Core directly through a tiny localhost bridge.
 
 ---
 
@@ -332,12 +379,83 @@ mega session update <session-id> [--title <s>] [--risk <level>] [--agent <id>]
 mega session end    <session-id> [--json]
 ```
 
-### Memory
+### Memory (DIMMEM + approval)
 
 ```bash
-mega memory create <project> --scope project|session --content <s> [--session <id>]
-mega memory list   <project> [--json]
-mega memory show   <entry-id> [--json]
+mega memory create  <project> --scope project|session --content <s> [--session <id>]
+mega memory list    <project> [--json]                 # includes the approval column
+mega memory show    <entry-id> [--json]
+mega memory search  <project> --query <s> [--all] [--json]  # --all surfaces unapproved
+mega memory update  <entry-id> [--content <s>] [--approval <state>] [--json]
+mega memory approve <entry-id> [--json]                # promote a suggested entry
+mega memory reject  <entry-id> [--json]
+mega memory delete  <entry-id> [--json]
+mega memory explain <entry-id> [--json]                # why an entry would be retrieved
+```
+
+A human `mega memory create` defaults to `approved`; an agent writing
+through `save_memory` defaults to `suggested`. Only `approved` memory
+reaches agents and connector files (Phase 10).
+
+### Semantic index (Phase 2)
+
+```bash
+mega scan         <project> [--json]                   # list indexable files
+mega index build  <project> [--json]                   # parse repo into CodeBlocks
+mega index status <project> [--json]
+mega index search <project> --query <s> [--json]
+mega index show   <block-id> [--json]
+```
+
+### Context packs (LAMR, Phase 3)
+
+```bash
+mega context build   <project> --task <s> [--failing-test <id>] [--changed-file <p>] [--json]
+mega context explain <project> --task <s> [--json]     # per-block, per-factor scores
+mega context audit   <project> --task <s> [--json]     # token-savings for the pack
+mega context export  <project> --task <s> [--json]
+```
+
+### Failed-run learning (FORGE, Phase 5)
+
+```bash
+mega fail record <project> --task <s> --error <s> [--related-file <p>] [--json]
+mega fail list   <project> [--json]
+mega fail show   <attempt-id> [--json]
+
+mega rules list  <project> [--task <s>] [--json]
+mega rules add   <project> --title <s> --rule <s> --severity <level> [--json]
+mega rules apply <project> --task <s> [--json]         # rank rules for a task
+
+mega learn from-failure <attempt-id> --title <s> --rule <s> --severity <level> [--json]
+```
+
+### Task engine (Phase 6)
+
+```bash
+mega task plan    <project> --goal <s> [--json]        # author a typed, dependency-aware plan
+mega task status  <plan-id> [--json]
+mega task step    <plan-id> --step <id> --state running|completed|failed [--json]
+mega task retry   <plan-id> --step <id> [--json]       # resets only that step + dependents
+mega task explain <plan-id> [--json]
+```
+
+### Tool router (Phase 7)
+
+```bash
+mega tools add     <project> --name <s> --category <c> --risk <level> [--json]
+mega tools list    <project> [--json]
+mega tools route   <project> --task <s> [--json]       # {allowedTools, blockedTools, reason}
+mega tools explain <project> --task <s> [--json]
+```
+
+### Audit dashboard (Phase 8)
+
+```bash
+mega audit report  <project> [--window session|week|all] [--json]
+mega audit last    <project> [--json]
+mega audit session <session-id> [--json]
+mega audit export  <project> [--format json]
 ```
 
 ### Connectors
@@ -345,6 +463,14 @@ mega memory show   <entry-id> [--json]
 ```bash
 mega connector sync   <project> [--target <id>] [--json]
 mega connector status <project> [--target <id>] [--json]
+mega connector list   [--json]                         # known targets, present/absent
+mega connector doctor <project> [--target <id>] [--json]  # exists/writable/in-sync
+```
+
+### GitHub
+
+```bash
+mega github pr-comment <project> [--json]              # render approved memory as a PR comment
 ```
 
 ### Mega Saver Mode (Context Gate)
@@ -380,12 +506,75 @@ format so adding a member can't silently skew a surface.
 
 ---
 
+## MCP tools
+
+`@megasaver/mcp-bridge` is a real MCP server over `stdio` (start it
+with `mega mcp serve`). It exposes **25 tools** — a closed enum pinned
+by `mcpToolNameSchema` and tuple-ordering `.test-d.ts` tests. The
+descriptions below come straight from the bridge's `TOOL_DEFS`.
+
+**Memory (DIMMEM + approval)**
+
+| Tool | Description |
+|------|-------------|
+| `save_memory` | Write a typed memory entry to a project. |
+| `search_memory` | Search project memories by text and filters. |
+| `get_relevant_memories` | Rank project memories by relevance to a task. |
+| `approve_memory` | Approve or reject a suggested memory entry (human-in-the-loop decision; cannot move a memory back to suggested). |
+
+**Context & retrieval**
+
+| Tool | Description |
+|------|-------------|
+| `get_project_context` | Project briefing: meta, rules, key memories, index summary, open failures. |
+| `get_relevant_context` | Build a task-aware context pack from the project index. |
+| `get_relevant_code_blocks` | The included blocks of a task's context pack. |
+| `explain_context_selection` | Per-factor scoring for each included context block. |
+| `get_context_budget_report` | Token-savings audit for a task's context pack. |
+| `mega_read_file` | Read a file through the redact/filter pipeline. |
+| `mega_run_command` | Run a policy-gated command and filter its output. |
+| `mega_recall` | Recall session memory and stored chunk sets. |
+| `mega_fetch_chunk` | Fetch one stored chunk from a chunk set. |
+
+**Rules & failures (FORGE)**
+
+| Tool | Description |
+|------|-------------|
+| `record_failed_attempt` | Record a failed task attempt for a project. |
+| `find_similar_failures` | Rank past failed attempts similar to a task. |
+| `convert_failure_to_rule` | Convert a failed attempt into a reusable project rule. |
+| `save_project_rule` | Write a reusable project rule. |
+| `get_project_rules` | Reusable project rules, optionally filtered by task or files. |
+| `get_applicable_rules` | Score project rules applicable to a task or files. |
+
+**Tasks**
+
+| Tool | Description |
+|------|-------------|
+| `build_task_plan` | Create an ordered, dependency-aware task plan. |
+| `record_task_step` | Report a step running/completed/failed; rolls up plan status. |
+| `get_task_status` | Plan status, per-step state, and ready steps. |
+| `retry_failed_step` | Reset a failed step (and its dependents) to pending. |
+
+**Tool routing & audit**
+
+| Tool | Description |
+|------|-------------|
+| `route_tools_for_task` | Recommend task-relevant tools; block dangerous/deploy/database. |
+| `audit_token_usage` | Summarize recorded token/context savings for a project or session. |
+
+The four `mega_*` tools are the original Context Gate surface; the
+other 21 ride on the Phase 1–10 engines.
+
+---
+
 ## Connectors
 
-Mega Saver ships four built-in connector targets. Each target reads
-the same Core registry and writes to **one** file per target,
-inside a sentinel-bounded block. User content outside the block
-is preserved verbatim across syncs.
+Mega Saver ships **seven** built-in connector targets (Phase 9 added
+`gemini`, `windsurf`, and `continue`). Each target reads the same Core
+registry and writes to **one** file per target, inside a
+sentinel-bounded block. User content outside the block is preserved
+verbatim across syncs, and only `approved` memory is rendered.
 
 | Target | File written | Format |
 |--------|--------------|--------|
@@ -393,18 +582,28 @@ is preserved verbatim across syncs.
 | `codex` | `AGENTS.md` (project root) | Markdown block |
 | `cursor` | `.cursor/rules/megasaver.mdc` | Cursor rule with frontmatter |
 | `aider` | `CONVENTIONS.md` | Plain markdown (read by Aider via `--read`) |
+| `gemini` | `GEMINI.md` (project root) | Markdown block |
+| `windsurf` | `.windsurfrules` | Flat-file block |
+| `continue` | `.continue/rules/megasaver.md` | Markdown block |
+
+A decision recorded in one agent's session lands byte-identically in
+every other agent's file — that is the cross-agent shared-memory proof
+of Phase 9. `vscode` / `jetbrains` native IDE plugins and a `mega
+connect` alias are deliberately deferred.
 
 `mega connector status` reports one of `in-sync`, `drift`,
 `no-block`, `missing`, `error` per target, with byte-symmetric
 output across `sync` and `status` (every line carries
-`session=<id|none>`).
+`session=<id|none>`). `mega connector list` enumerates the known
+targets and whether each file is present; `mega connector doctor`
+reports per-target exists / writable / in-sync diagnostics.
 
 Connector packages:
 
 - [`@megasaver/connector-claude-code`](packages/connectors/claude-code)
 - [`@megasaver/connector-generic-cli`](packages/connectors/generic-cli)
-  — manifest-driven adapter that powers `codex`, `cursor`, and
-  `aider` targets.
+  — manifest-driven adapter that powers the `codex`, `cursor`, `aider`,
+  `gemini`, `windsurf`, and `continue` targets.
 - [`@megasaver/connectors-shared`](packages/connectors/shared) —
   shared block helpers, the additive `CONTEXT_GATE` context block,
   and renderer utilities.
@@ -512,8 +711,9 @@ insufficient.
 ### MCP tools
 
 When Mega Saver Mode is on, the connector block tells the agent to
-prefer the Mega Saver MCP tools over native ones — `mega_read_file`,
-`mega_run_command`, `mega_fetch_chunk`, and `mega_recall`. The bridge
+prefer the four Context Gate MCP tools over native ones —
+`mega_read_file`, `mega_run_command`, `mega_fetch_chunk`, and
+`mega_recall` (four of the bridge's [25 tools](#mcp-tools)). The bridge
 (`@megasaver/mcp-bridge`, a real MCP server over `stdio`) gates every
 command through the policy allow/deny list and runs the redaction
 pipeline before any output is stored or returned. Command execution
@@ -634,20 +834,23 @@ MegaSaver/
 │  ├─ cli/                       # `mega` command (Citty + Zod)
 │  └─ gui/                       # Vite + React + node:http bridge
 ├─ packages/
-│  ├─ core/                      # Engine: schemas, registry, JSON store
+│  ├─ core/                      # Engine: schemas, registry, JSON store;
+│  │                            #   memory · failed-attempt · rule · task · tool-router
+│  ├─ indexer/                   # Semantic repo index — typed CodeBlocks (Phase 2)
+│  ├─ context-pruner/           # LAMR task-aware context packs (Phase 3)
 │  ├─ context-gate/             # Mega Saver Mode orchestrator (extracted from core)
 │  ├─ policy/                    # Command/path gates + redaction
 │  ├─ output-filter/            # redact → chunk → rank → fit → summarize
 │  ├─ content-store/            # ChunkSet persistence
 │  ├─ retrieval/                # BM25 ranking
-│  ├─ stats/                     # Per-session token-saver stats
+│  ├─ stats/                     # Per-session token-saver + audit stats
 │  ├─ shared/                    # Cross-package contracts (IDs, enums)
-│  ├─ mcp-bridge/                # Real MCP stdio server (4 tools)
+│  ├─ mcp-bridge/                # Real MCP stdio server (25 tools)
 │  ├─ skill-packs/               # Real pack loader / installer (`mega pack`)
 │  └─ connectors/
 │     ├─ shared/                 # Block helpers + context schema
 │     ├─ claude-code/            # Claude Code connector
-│     └─ generic-cli/            # Manifest-driven (codex/cursor/aider)
+│     └─ generic-cli/            # Manifest-driven (codex/cursor/aider/gemini/windsurf/continue)
 ├─ scripts/
 │  └─ conventions-sync/          # `pnpm conventions:sync` (manages CLAUDE.md too)
 ├─ docs/
@@ -683,7 +886,8 @@ when resuming work.
   (ContextOps, agent-agnostic core, the Context Gate pipeline,
   Windows support, superpowers discipline).
 - [`wiki/syntheses/`](wiki/syntheses) — big-picture answers,
-  including [`post-v1.1-roadmap.md`](wiki/syntheses/post-v1.1-roadmap.md).
+  including the [`contextops-roadmap.md`](wiki/syntheses/contextops-roadmap.md)
+  (all 10 phases) and [`post-v1.1-roadmap.md`](wiki/syntheses/post-v1.1-roadmap.md).
 
 Authoritative governance: [`CLAUDE.md`](CLAUDE.md) and the other
 agent files are all regenerated from
@@ -715,6 +919,14 @@ agent files are all regenerated from
   with a `windows-latest` CI matrix (#104–#108), `mcp` HOME→USERPROFILE
   fix (#109), test-file type-checking fix (#110), and **`CLAUDE.md`
   brought under `conventions:sync`** (#112).
+- **ContextOps roadmap — all 10 phases (PRs #114–#123, 2026-06-12)** —
+  Phase 1 DIMMEM structured memory (#114), Phase 2 semantic repo index
+  (#115), Phase 3 context pruning / LAMR (#116), Phase 4 MCP server
+  full surface (#117), Phase 5 FORGE failed-run learning (#118), Phase 6
+  task engine (#119), Phase 7 tool router (#120), Phase 8 audit
+  dashboard (#121), Phase 9 multi-agent connectors (#122), and Phase 10
+  team / memory-approval (#123). MCP tool surface grew 4 → **25**. See
+  [The ContextOps layer](#the-contextops-layer).
 
 ### Remaining
 
@@ -724,11 +936,18 @@ agent files are all regenerated from
 2. **GUI native packaging** — revisit Tauri / Electron.
 3. **i18n** — product strings are English-only; add `tr` via
    `packages/shared/i18n`.
-4. **Feature backlog (fikri §16)** — Token Audit, Repo Scanner,
-   Ignore Generator, Instruction Optimizer, Context Packer,
-   Conversation Compactor, Memory Vault.
+4. **Deferred cloud-SaaS slice (Phase 10)** — the local memory-approval
+   workflow shipped; genuine team/cloud features are deliberately
+   deferred and require infra outside `mega`'s local-first, single-binary
+   design: hosted sync, an auth service, private deployment, org-level
+   rules, a hosted audit service, a web approval UI, and a memory
+   `visibility` field.
+5. **Deferred connector targets** — native IDE plugins (`vscode`,
+   `jetbrains`) and a `mega connect` alias.
 
-Full, source-cited detail in
+Full, source-cited phase detail in
+[`wiki/syntheses/contextops-roadmap.md`](wiki/syntheses/contextops-roadmap.md);
+the v1.1 cleanup arc lives in
 [`wiki/syntheses/post-v1.1-roadmap.md`](wiki/syntheses/post-v1.1-roadmap.md).
 
 ---
