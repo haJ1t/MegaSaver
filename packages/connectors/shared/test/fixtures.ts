@@ -52,6 +52,7 @@ export function buildContext(overrides?: {
       keywords: [],
       confidence: "medium" as const,
       source: "manual" as const,
+      approval: "approved" as const,
       stale: false,
       createdAt: NOW,
       updatedAt: NOW,
