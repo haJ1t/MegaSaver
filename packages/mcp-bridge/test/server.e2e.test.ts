@@ -70,10 +70,10 @@ describe("phase 4 tools over the bridge", () => {
     return { client, server };
   }
 
-  it("lists 15 tools", async () => {
+  it("lists 18 tools (updated from 15 when Phase 5 FORGE tools were wired)", async () => {
     const { client, server } = await connect(projectRoot, store);
     const { tools } = (await client.listTools()) as { tools: { name: string }[] };
-    expect(tools).toHaveLength(15);
+    expect(tools).toHaveLength(18);
     expect(tools.map((t) => t.name)).toContain("get_project_context");
     await server.close();
   });
@@ -115,6 +115,66 @@ describe("phase 4 tools over the bridge", () => {
     };
     expect(payload.openFailures).toHaveLength(1);
     expect(payload.indexSummary.totalBlocks).toBe(0);
+    await server.close();
+  });
+});
+
+describe("phase 5 FORGE tools over the bridge", () => {
+  let store: string;
+  let projectRoot: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "mcp-e2e-p5-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "mcp-e2e-p5-root-"));
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function connectP5() {
+    const { server } = buildServer({
+      registry: seededRegistry(projectRoot),
+      storeRoot: store,
+      now: () => TS,
+      newId: () => "e0000000-0000-4000-8000-000000000001",
+    });
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test", version: "0" }, { capabilities: {} });
+    await Promise.all([server.connect(serverT), client.connect(clientT)]);
+    return { client, server };
+  }
+
+  it("lists 18 tools", async () => {
+    const { client, server } = await connect(projectRoot, store);
+    const { tools } = (await client.listTools()) as { tools: { name: string }[] };
+    expect(tools).toHaveLength(18);
+    expect(tools.map((t) => t.name)).toContain("convert_failure_to_rule");
+    await server.close();
+  });
+
+  it("record -> find_similar -> convert -> get_applicable round-trips", async () => {
+    const { client, server } = await connectP5();
+    await client.callTool({
+      name: "record_failed_attempt",
+      arguments: { projectId: PROJECT_ID, task: "fix login auth bug", failedStep: "run auth tests", relatedFiles: ["src/auth.ts"] },
+    });
+    const sim = (await client.callTool({
+      name: "find_similar_failures",
+      arguments: { projectId: PROJECT_ID, task: "login auth" },
+    })) as { content: { text: string }[] };
+    const simPayload = JSON.parse(sim.content[0]?.text ?? "{}") as { failures: { id: string }[] };
+    expect(simPayload.failures).toHaveLength(1);
+
+    await client.callTool({
+      name: "convert_failure_to_rule",
+      arguments: { failureId: "e0000000-0000-4000-8000-000000000001", title: "Guard auth", rule: "check expiry with <=", severity: "warning" },
+    });
+    const applic = (await client.callTool({
+      name: "get_applicable_rules",
+      arguments: { projectId: PROJECT_ID, files: ["src/auth.ts"] },
+    })) as { content: { text: string }[] };
+    const applicPayload = JSON.parse(applic.content[0]?.text ?? "{}") as { rules: unknown[] };
+    expect(applicPayload.rules).toHaveLength(1);
     await server.close();
   });
 });
