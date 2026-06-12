@@ -1,4 +1,4 @@
-import { ruleSeveritySchema } from "@megasaver/core";
+import { ruleConfidenceSchema, ruleSeveritySchema } from "@megasaver/core";
 import { failedAttemptIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../errors.js";
@@ -46,6 +46,15 @@ export async function runLearnFromFailure(input: RunLearnFromFailureInput): Prom
     input.stderr(`error: invalid severity "${input.severityFlag}"`);
     return 1;
   }
+  let confidence: ReturnType<typeof ruleConfidenceSchema.parse> | undefined;
+  if (input.confidenceFlag !== undefined) {
+    const c = ruleConfidenceSchema.safeParse(input.confidenceFlag);
+    if (!c.success) {
+      input.stderr(`error: invalid confidence "${input.confidenceFlag}"`);
+      return 1;
+    }
+    confidence = c.data;
+  }
   try {
     const { registry } = await ensureStoreReady(rootDir);
     const newId = input.newId ?? (() => crypto.randomUUID());
@@ -57,9 +66,9 @@ export async function runLearnFromFailure(input: RunLearnFromFailureInput): Prom
         title: input.titleFlag,
         rule: input.ruleFlag,
         severity: severity.data,
-        ...(input.confidenceFlag !== undefined ? { confidence: input.confidenceFlag } : {}),
+        ...(confidence !== undefined ? { confidence } : {}),
         ...(appliesTo.length > 0 ? { appliesTo } : {}),
-      } as Parameters<typeof registry.convertFailureToRule>[1],
+      },
       { now, newId },
     );
     input.stdout(

@@ -87,4 +87,28 @@ describe("mega learn from-failure", () => {
     expect(code).toBe(1);
     expect(err.join("\n").toLowerCase()).toContain("already converted");
   });
+
+  it("rejects an invalid confidence with a clear message", async () => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runLearnFromFailure({
+      idFlag: FA_ID,
+      titleFlag: "t",
+      ruleFlag: "r",
+      severityFlag: "info",
+      confidenceFlag: "very-high",
+      storeFlag: root,
+      cwd: root,
+      home: root,
+      xdgDataHome: undefined,
+      platform: process.platform,
+      localAppData: undefined,
+      stdout: (l) => out.push(l),
+      stderr: (l) => err.push(l),
+      now: () => TS,
+      newId: () => "c0000000-0000-4000-8000-000000000001",
+    });
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("invalid confidence");
+  });
 });
