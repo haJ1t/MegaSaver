@@ -39,9 +39,7 @@ export function routeToolsForTask(
   tools: readonly ToolDefinition[],
   query: string | undefined,
 ): ToolRouteResult {
-  const blockedTools = tools
-    .filter(isBlockedTool)
-    .sort((a, b) => a.id.localeCompare(b.id));
+  const blockedTools = tools.filter(isBlockedTool).sort((a, b) => a.id.localeCompare(b.id));
   const candidates = tools.filter((tool) => !isBlockedTool(tool));
 
   const text = query?.trim();
@@ -70,8 +68,7 @@ export function routeToolsForTask(
   const allowedTools = candidates
     .filter((tool) => scoreById.has(tool.id))
     .sort(
-      (a, b) =>
-        (scoreById.get(b.id) ?? 0) - (scoreById.get(a.id) ?? 0) || a.id.localeCompare(b.id),
+      (a, b) => (scoreById.get(b.id) ?? 0) - (scoreById.get(a.id) ?? 0) || a.id.localeCompare(b.id),
     );
 
   const notRelevant = candidates.length - allowedTools.length;

@@ -42,12 +42,12 @@ import {
   buildTaskPlanFromInput,
   buildToolDefinitionFromInput,
 } from "./registry.js";
-import { routeToolsForTask as routeTools } from "./tool-router.js";
-import { toolDefinitionSchema } from "./tool-definition.js";
 import { type Session, sessionSchema, sessionUpdatePatchSchema } from "./session.js";
 import type { StepOutcome } from "./task-plan-transitions.js";
 import { type TaskPlanInput, taskPlanSchema } from "./task-plan.js";
 import { tokenSaverSettingsSchema } from "./token-saver.js";
+import { toolDefinitionSchema } from "./tool-definition.js";
+import { routeToolsForTask as routeTools } from "./tool-router.js";
 
 export type JsonDirectoryCoreRegistryOptions = {
   rootDir: string;

@@ -309,9 +309,7 @@ export function readToolDefinitionsForProject(
   projectId: ProjectId,
 ): ToolDefinition[] {
   const filePath = join(paths.toolDefinitionsDir, `${projectId}.jsonl`);
-  return readJsonLines(filePath).map((entry) =>
-    parseEntity(toolDefinitionSchema, entry, filePath),
-  );
+  return readJsonLines(filePath).map((entry) => parseEntity(toolDefinitionSchema, entry, filePath));
 }
 
 export function readAllToolDefinitions(paths: StorePaths): ToolDefinition[] {

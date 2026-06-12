@@ -55,13 +55,13 @@ import {
   taskStepSchema,
 } from "./task-plan.js";
 import { type TokenSaverSettings, tokenSaverSettingsSchema } from "./token-saver.js";
-import { type ToolRouteResult, routeToolsForTask as routeTools } from "./tool-router.js";
 import {
   type ToolDefinition,
   type ToolDefinitionInput,
   toolDefinitionInputSchema,
   toolDefinitionSchema,
 } from "./tool-definition.js";
+import { type ToolRouteResult, routeToolsForTask as routeTools } from "./tool-router.js";
 
 export interface CoreRegistry {
   createProject(project: Project): Project;

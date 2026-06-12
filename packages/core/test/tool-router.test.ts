@@ -50,7 +50,11 @@ describe("routeToolsForTask", () => {
   });
 
   it("with a task, allows only score>0 non-blocked tools by descending score", () => {
-    const grep = tool({ name: "grep", description: "search files for a pattern", keywords: ["search"] });
+    const grep = tool({
+      name: "grep",
+      description: "search files for a pattern",
+      keywords: ["search"],
+    });
     const fmt = tool({ name: "prettier", description: "format code", category: "package" });
     const res = routeToolsForTask([grep, fmt], "search files for the login pattern");
     expect(res.allowedTools.map((t) => t.id)).toEqual([grep.id]);
@@ -78,8 +82,18 @@ describe("routeToolsForTask", () => {
   });
 
   it("breaks score ties by id and is stable", () => {
-    const a = tool({ id: "e0000000-0000-4000-8000-0000000000a1" as ToolDefinition["id"], name: "alpha", description: "same words here", keywords: [] });
-    const b = tool({ id: "e0000000-0000-4000-8000-0000000000b2" as ToolDefinition["id"], name: "beta", description: "same words here", keywords: [] });
+    const a = tool({
+      id: "e0000000-0000-4000-8000-0000000000a1" as ToolDefinition["id"],
+      name: "alpha",
+      description: "same words here",
+      keywords: [],
+    });
+    const b = tool({
+      id: "e0000000-0000-4000-8000-0000000000b2" as ToolDefinition["id"],
+      name: "beta",
+      description: "same words here",
+      keywords: [],
+    });
     const res = routeToolsForTask([b, a], "same words here");
     expect(res.allowedTools.map((t) => t.id)).toEqual([a.id, b.id]);
   });
