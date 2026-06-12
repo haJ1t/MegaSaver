@@ -10,7 +10,13 @@ const TS = "2026-06-12T00:00:00.000Z";
 
 function seeded(): CoreRegistry {
   const r = createInMemoryCoreRegistry();
-  r.createProject({ id: PROJECT_ID, name: "demo", rootPath: "/tmp/demo", createdAt: TS, updatedAt: TS });
+  r.createProject({
+    id: PROJECT_ID,
+    name: "demo",
+    rootPath: "/tmp/demo",
+    createdAt: TS,
+    updatedAt: TS,
+  });
   return r;
 }
 function ids(list: string[]) {
@@ -98,11 +104,19 @@ describe("record_task_step", () => {
     );
     return r;
   }
-  const env = (r: CoreRegistry) => ({ registry: r, now: () => TS, newId: () => "f0000000-0000-4000-8000-000000000001" });
+  const env = (r: CoreRegistry) => ({
+    registry: r,
+    now: () => TS,
+    newId: () => "f0000000-0000-4000-8000-000000000001",
+  });
 
   it("advances a step and rolls up status", async () => {
     const r = await withPlan();
-    const res = await handleRecordTaskStep(env(r), { planId: PLAN_ID, stepId: STEP_A, status: "running" });
+    const res = await handleRecordTaskStep(env(r), {
+      planId: PLAN_ID,
+      stepId: STEP_A,
+      status: "running",
+    });
     expect(res.plan.status).toBe("running");
   });
   it("records a FailedAttempt when recordFailure is set on a failed step", async () => {
@@ -134,7 +148,11 @@ describe("record_task_step", () => {
 describe("retry_failed_step", () => {
   async function failedPlan() {
     const r = seeded();
-    const stepEnv = { registry: r, now: () => TS, newId: () => "f0000000-0000-4000-8000-000000000001" };
+    const stepEnv = {
+      registry: r,
+      now: () => TS,
+      newId: () => "f0000000-0000-4000-8000-000000000001",
+    };
     await handleBuildTaskPlan(
       { registry: r, ...ids([PLAN_ID, STEP_A, STEP_B]) },
       {
@@ -146,7 +164,12 @@ describe("retry_failed_step", () => {
         ],
       },
     );
-    await handleRecordTaskStep(stepEnv, { planId: PLAN_ID, stepId: STEP_A, status: "failed", error: "x" });
+    await handleRecordTaskStep(stepEnv, {
+      planId: PLAN_ID,
+      stepId: STEP_A,
+      status: "failed",
+      error: "x",
+    });
     return r;
   }
   it("resets the failed step + dependent and returns the plan", async () => {

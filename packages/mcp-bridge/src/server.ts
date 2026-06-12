@@ -5,13 +5,13 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { McpBridgeError } from "./errors.js";
 import { mcpToolNameSchema } from "./tool-name.js";
+import { handleBuildTaskPlan } from "./tools/build-task-plan.js";
 import {
   handleExplainContextSelection,
   handleGetContextBudgetReport,
   handleGetRelevantCodeBlocks,
   handleGetRelevantContext,
 } from "./tools/context-pruning.js";
-import { handleBuildTaskPlan } from "./tools/build-task-plan.js";
 import { handleConvertFailureToRule } from "./tools/convert-failure-to-rule.js";
 import { handleRecordFailedAttempt } from "./tools/failed-attempts.js";
 import { handleFetchChunk } from "./tools/fetch-chunk.js";
@@ -82,8 +82,14 @@ const TOOL_DEFS = [
   { name: "mega_recall", description: "Recall session memory and stored chunk sets." },
   { name: "mega_run_command", description: "Run a policy-gated command and filter its output." },
   { name: "record_failed_attempt", description: "Record a failed task attempt for a project." },
-  { name: "record_task_step", description: "Report a step running/completed/failed; rolls up plan status." },
-  { name: "retry_failed_step", description: "Reset a failed step (and its dependents) to pending." },
+  {
+    name: "record_task_step",
+    description: "Report a step running/completed/failed; rolls up plan status.",
+  },
+  {
+    name: "retry_failed_step",
+    description: "Reset a failed step (and its dependents) to pending.",
+  },
   { name: "save_memory", description: "Write a typed memory entry to a project." },
   { name: "save_project_rule", description: "Write a reusable project rule." },
   { name: "search_memory", description: "Search project memories by text and filters." },

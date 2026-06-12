@@ -23,7 +23,10 @@ export async function handleGetTaskStatus(
   }
   const plan = env.registry.getTaskPlan(planId.data);
   if (!plan) {
-    throw new McpBridgeError("resource_not_found", `Task plan does not exist: ${parsed.data.planId}`);
+    throw new McpBridgeError(
+      "resource_not_found",
+      `Task plan does not exist: ${parsed.data.planId}`,
+    );
   }
   return { plan, ready: readySteps(plan.steps) };
 }
