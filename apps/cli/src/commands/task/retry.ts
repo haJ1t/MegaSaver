@@ -41,7 +41,10 @@ export async function runTaskRetry(input: RunTaskRetryInput): Promise<0 | 1> {
     const plan = registry.retryTaskStep(planId, stepId);
     // Report which steps changed to pending (the reset set).
     const reset = plan.steps
-      .filter((s) => s.status === "pending" && before?.steps.find((b) => b.id === s.id)?.status !== "pending")
+      .filter(
+        (s) =>
+          s.status === "pending" && before?.steps.find((b) => b.id === s.id)?.status !== "pending",
+      )
       .map((s) => s.id);
     if (input.json) {
       input.stdout(JSON.stringify({ planStatus: plan.status, reset }));

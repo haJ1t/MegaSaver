@@ -69,7 +69,10 @@ export async function runTaskExplain(input: RunTaskExplainInput): Promise<0 | 1>
 }
 
 export const taskExplainCommand = defineCommand({
-  meta: { name: "explain", description: "Explain a task plan: per-step state and blocked reasons." },
+  meta: {
+    name: "explain",
+    description: "Explain a task plan: per-step state and blocked reasons.",
+  },
   args: {
     planId: { type: "positional", required: true, description: "Task plan id (UUID)." },
     store: { type: "string", description: "Override store directory." },

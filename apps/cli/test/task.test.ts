@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
 import { projectIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { runTaskExplain } from "../src/commands/task/explain.js";
 import { runTaskPlan } from "../src/commands/task/plan.js";
 import { runTaskRetry } from "../src/commands/task/retry.js";
 import { runTaskStatus } from "../src/commands/task/status.js";
 import { runTaskStep } from "../src/commands/task/step.js";
-import { runTaskExplain } from "../src/commands/task/explain.js";
 
 const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const TS = "2026-06-12T00:00:00.000Z";
@@ -36,22 +36,32 @@ describe("mega task step + retry", () => {
     root = mkdtempSync(join(tmpdir(), "cli-task2-"));
     await initStore(root);
     const r = createJsonDirectoryCoreRegistry({ rootDir: root });
-    r.createProject({ id: PROJECT_ID, name: "demo", rootPath: "/tmp/demo", createdAt: TS, updatedAt: TS });
+    r.createProject({
+      id: PROJECT_ID,
+      name: "demo",
+      rootPath: "/tmp/demo",
+      createdAt: TS,
+      updatedAt: TS,
+    });
     let i = 0;
-    const ids = [PLAN_ID, "d0000000-0000-4000-8000-00000000000a", "d0000000-0000-4000-8000-00000000000b"];
+    const ids = [
+      PLAN_ID,
+      "d0000000-0000-4000-8000-00000000000a",
+      "d0000000-0000-4000-8000-00000000000b",
+    ];
     const plan = r.createTaskPlan(
       PROJECT_ID,
       {
         task: "fix login",
         sessionId: null,
         steps: [
-          { type: "edit", title: "edit", key: "a" },
+          { type: "edit", title: "edit", key: "a", dependsOnKeys: [] },
           { type: "debug", title: "debug", key: "b", dependsOnKeys: ["a"] },
         ],
       },
       { now: () => TS, newId: () => ids[i++] ?? `x${i}` },
     );
-    stepA = plan.steps[0]!.id;
+    stepA = plan.steps[0]?.id ?? "";
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -67,7 +77,9 @@ describe("mega task step + retry", () => {
       recordFailure: true,
     });
     expect(stepCode).toBe(0);
-    expect(createJsonDirectoryCoreRegistry({ rootDir: root }).listFailedAttempts(PROJECT_ID)).toHaveLength(1);
+    expect(
+      createJsonDirectoryCoreRegistry({ rootDir: root }).listFailedAttempts(PROJECT_ID),
+    ).toHaveLength(1);
 
     const retryOut: string[] = [];
     const retryErr: string[] = [];
@@ -111,7 +123,11 @@ describe("mega task plan", () => {
     const out: string[] = [];
     const err: string[] = [];
     let i = 0;
-    const ids = [PLAN_ID, "d0000000-0000-4000-8000-00000000000a", "d0000000-0000-4000-8000-00000000000b"];
+    const ids = [
+      PLAN_ID,
+      "d0000000-0000-4000-8000-00000000000a",
+      "d0000000-0000-4000-8000-00000000000b",
+    ];
     const code = await runTaskPlan({
       ...base(root, out, err),
       taskFlag: "fix login",
@@ -129,16 +145,26 @@ describe("mega task status + explain", () => {
     root = mkdtempSync(join(tmpdir(), "cli-task3-"));
     await initStore(root);
     const r = createJsonDirectoryCoreRegistry({ rootDir: root });
-    r.createProject({ id: PROJECT_ID, name: "demo", rootPath: "/tmp/demo", createdAt: TS, updatedAt: TS });
+    r.createProject({
+      id: PROJECT_ID,
+      name: "demo",
+      rootPath: "/tmp/demo",
+      createdAt: TS,
+      updatedAt: TS,
+    });
     let i = 0;
-    const ids = [PLAN_ID, "d0000000-0000-4000-8000-00000000000a", "d0000000-0000-4000-8000-00000000000b"];
+    const ids = [
+      PLAN_ID,
+      "d0000000-0000-4000-8000-00000000000a",
+      "d0000000-0000-4000-8000-00000000000b",
+    ];
     r.createTaskPlan(
       PROJECT_ID,
       {
         task: "fix login",
         sessionId: null,
         steps: [
-          { type: "edit", title: "edit", key: "a" },
+          { type: "edit", title: "edit", key: "a", dependsOnKeys: [] },
           { type: "test", title: "test", key: "b", dependsOnKeys: ["a"] },
         ],
       },

@@ -101,7 +101,8 @@ export const taskStatusCommand = defineCommand({
   async run({ args }) {
     const code = await runTaskStatus({
       planIdFlag: typeof args.planId === "string" ? args.planId : "",
-      saveSummaryFlag: typeof args["save-summary"] === "string" ? (args["save-summary"] as string) : undefined,
+      saveSummaryFlag:
+        typeof args["save-summary"] === "string" ? (args["save-summary"] as string) : undefined,
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),

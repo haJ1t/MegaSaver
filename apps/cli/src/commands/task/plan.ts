@@ -1,4 +1,4 @@
-import { type TaskPlanInput, taskPlanInputSchema } from "@megasaver/core";
+import { taskPlanInputSchema } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
@@ -51,7 +51,7 @@ export async function runTaskPlan(input: RunTaskPlanInput): Promise<0 | 1> {
     task: input.taskFlag,
     sessionId: null,
     steps,
-  } satisfies Partial<TaskPlanInput> as TaskPlanInput);
+  });
   if (!planInput.success) {
     input.stderr(`error: invalid plan input: ${planInput.error.message}`);
     return 1;

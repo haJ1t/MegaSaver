@@ -1,8 +1,4 @@
-import {
-  type FailedAttempt,
-  type StepOutcome,
-  failedAttemptSchema,
-} from "@megasaver/core";
+import { type FailedAttempt, type StepOutcome, failedAttemptSchema } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
@@ -47,7 +43,11 @@ export async function runTaskStep(input: RunTaskStepInput): Promise<0 | 1> {
     input.stderr("error: invalid plan or step id");
     return 1;
   }
-  if (input.statusFlag !== "running" && input.statusFlag !== "completed" && input.statusFlag !== "failed") {
+  if (
+    input.statusFlag !== "running" &&
+    input.statusFlag !== "completed" &&
+    input.statusFlag !== "failed"
+  ) {
     input.stderr(`error: invalid status "${input.statusFlag}" (running | completed | failed)`);
     return 1;
   }
@@ -56,8 +56,14 @@ export async function runTaskStep(input: RunTaskStepInput): Promise<0 | 1> {
     status === "running"
       ? { status: "running" }
       : status === "completed"
-        ? { status: "completed", ...(input.outputFlag !== undefined ? { output: input.outputFlag } : {}) }
-        : { status: "failed", ...(input.errorFlag !== undefined ? { error: input.errorFlag } : {}) };
+        ? {
+            status: "completed",
+            ...(input.outputFlag !== undefined ? { output: input.outputFlag } : {}),
+          }
+        : {
+            status: "failed",
+            ...(input.errorFlag !== undefined ? { error: input.errorFlag } : {}),
+          };
 
   try {
     const { registry } = await ensureStoreReady(rootDir);
@@ -82,7 +88,9 @@ export async function runTaskStep(input: RunTaskStepInput): Promise<0 | 1> {
       registry.createFailedAttempt(attempt);
     }
 
-    input.stdout(input.json ? JSON.stringify(plan) : `plan ${plan.status}; step ${stepId} ${status}`);
+    input.stdout(
+      input.json ? JSON.stringify(plan) : `plan ${plan.status}; step ${stepId} ${status}`,
+    );
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "memory_create" });
