@@ -32,3 +32,18 @@ export const projectRuleSchema = z
   .strict();
 
 export type ProjectRule = z.infer<typeof projectRuleSchema>;
+
+// Caller-supplied insight for convertFailureToRule: the rule fields the agent
+// writes. id/projectId/createdFrom/createdAt/updatedAt are engine-owned.
+export const failureToRuleInputSchema = z
+  .object({
+    title: titleSchema,
+    rule: z.string().trim().min(1),
+    severity: ruleSeveritySchema,
+    confidence: ruleConfidenceSchema.optional(),
+    appliesTo: z.array(z.string()).optional(),
+    evidence: z.array(z.string()).optional(),
+  })
+  .strict();
+
+export type FailureToRuleInput = z.infer<typeof failureToRuleInputSchema>;
