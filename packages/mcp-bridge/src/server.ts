@@ -4,7 +4,13 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { McpBridgeError } from "./errors.js";
-import { mcpToolNameSchema } from "./tool-name.js";
+import type { McpToolName } from "./tool-name.js";
+import {
+  type NamingMode,
+  exposedToolName,
+  internalIdFromExposed,
+  namingModeFromEnv,
+} from "./tool-naming.js";
 import { handleFetchChunk } from "./tools/fetch-chunk.js";
 import { handleReadFile } from "./tools/read-file.js";
 import { handleRecall } from "./tools/recall.js";
@@ -15,18 +21,24 @@ export type ServerDeps = {
   storeRoot: string;
   now?: () => string;
   newId?: () => string;
+  // Public tool naming mode (Proxy Mode v1.2 §5). Injectable for
+  // tests; production resolves from MEGASAVER_TOOL_NAMING once at
+  // startup, defaulting to proxy.
+  toolNaming?: NamingMode;
   // Injectable so the bridge lifecycle test never attaches a real
   // readline to process.stdin under Vitest (CRITICAL §12). Production
   // defaults to a real StdioServerTransport.
   transportFactory?: () => StdioServerTransport;
 };
 
-const TOOL_DEFS = [
-  { name: "mega_fetch_chunk", description: "Fetch one stored chunk from a chunk set." },
-  { name: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
-  { name: "mega_recall", description: "Recall session memory and stored chunk sets." },
-  { name: "mega_run_command", description: "Run a policy-gated command and filter its output." },
-] as const;
+// Internal dispatch id (== legacy wire name) + description. The
+// exposed name is derived per naming mode at list/dispatch time.
+const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
+  { id: "mega_fetch_chunk", description: "Fetch one stored chunk from a chunk set." },
+  { id: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
+  { id: "mega_recall", description: "Recall session memory and stored chunk sets." },
+  { id: "mega_run_command", description: "Run a policy-gated command and filter its output." },
+];
 
 // The MCP SDK serialises only `error.message` into the JSON-RPC
 // error envelope a client receives. AA1 §14 BB8 acceptance requires
@@ -56,6 +68,7 @@ export function buildServer(deps: ServerDeps): {
 } {
   const now = deps.now ?? (() => new Date().toISOString());
   const newId = deps.newId ?? (() => randomUUID());
+  const naming = deps.toolNaming ?? namingModeFromEnv();
   const originPid = resolveOriginPid();
   const server = new Server(
     { name: "megasaver", version: "0.5.0" },
@@ -65,7 +78,7 @@ export function buildServer(deps: ServerDeps): {
   server.setRequestHandler(ListToolsRequestSchema, () =>
     Promise.resolve({
       tools: TOOL_DEFS.map((t) => ({
-        name: t.name,
+        name: exposedToolName(t.id, naming),
         description: t.description,
         inputSchema: { type: "object" as const },
       })),
@@ -75,12 +88,12 @@ export function buildServer(deps: ServerDeps): {
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const name = req.params.name;
     const args = req.params.arguments ?? {};
-    const parsedName = mcpToolNameSchema.safeParse(name);
-    if (!parsedName.success) {
+    const internalId = internalIdFromExposed(name, naming);
+    if (internalId === undefined) {
       throw wireError(new McpBridgeError("tool_not_found", `unknown tool: ${name}`));
     }
     try {
-      const payload = await dispatch(parsedName.data, args);
+      const payload = await dispatch(internalId, args);
       return { content: [{ type: "text", text: JSON.stringify(payload) }] };
     } catch (err) {
       if (err instanceof McpBridgeError) throw wireError(err);
@@ -94,7 +107,7 @@ export function buildServer(deps: ServerDeps): {
     }
   });
 
-  function dispatch(toolName: ReturnType<typeof mcpToolNameSchema.parse>, args: unknown) {
+  function dispatch(toolName: McpToolName, args: unknown) {
     switch (toolName) {
       case "mega_fetch_chunk":
         return handleFetchChunk({ storeRoot: deps.storeRoot }, args);

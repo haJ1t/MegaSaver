@@ -50,9 +50,14 @@ describe("renderContextGateBlock", () => {
     expect(block).toContain("Max returned bytes: 12000");
   });
 
-  it("mentions the four MCP tools and the intent rule", () => {
+  it("mentions the four MCP tools (proxy default naming) and the intent rule", () => {
     const block = renderContextGateBlock(ctxWithTokenSaver(enabledTokenSaver));
-    for (const tool of ["mega_read_file", "mega_run_command", "mega_fetch_chunk", "mega_recall"]) {
+    for (const tool of [
+      "proxy_read_file",
+      "proxy_run_command",
+      "proxy_expand_chunk",
+      "mega_recall",
+    ]) {
       expect(block).toContain(tool);
     }
     expect(block).toContain("Always pass `intent`");
