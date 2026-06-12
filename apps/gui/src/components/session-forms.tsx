@@ -4,7 +4,16 @@ import type { BridgeError } from "./states.js";
 import { ErrorState } from "./states.js";
 
 // Closed enums from @megasaver/shared — imported directly.
-const AGENT_IDS = ["aider", "claude-code", "codex", "cursor", "generic-cli"] as const;
+const AGENT_IDS = [
+  "aider",
+  "claude-code",
+  "codex",
+  "continue",
+  "cursor",
+  "gemini",
+  "generic-cli",
+  "windsurf",
+] as const;
 const RISK_LEVELS = ["low", "medium", "high", "critical"] as const;
 
 // ── Shared form primitives ────────────────────────────────────────────────────

@@ -94,4 +94,19 @@ describe("AgentBadge", () => {
     const { container } = render(<AgentBadge agentId="aider" />);
     expect(container.querySelector("span")?.getAttribute("aria-label")).toBe("Agent: aider");
   });
+
+  it("renders the label for agentId=gemini", () => {
+    const { container } = render(<AgentBadge agentId="gemini" />);
+    expect(container.textContent).toBe("gemini");
+  });
+
+  it("renders the label for agentId=windsurf", () => {
+    const { container } = render(<AgentBadge agentId="windsurf" />);
+    expect(container.textContent).toBe("windsurf");
+  });
+
+  it("renders the label for agentId=continue", () => {
+    const { container } = render(<AgentBadge agentId="continue" />);
+    expect(container.textContent).toBe("continue");
+  });
 });
