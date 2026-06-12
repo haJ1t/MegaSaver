@@ -1,5 +1,12 @@
 import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
-import { aiderTarget, codexTarget, cursorTarget } from "@megasaver/connector-generic-cli";
+import {
+  aiderTarget,
+  codexTarget,
+  continueTarget,
+  cursorTarget,
+  geminiTarget,
+  windsurfTarget,
+} from "@megasaver/connector-generic-cli";
 import type { AgentId } from "@megasaver/shared";
 
 // GUI-local mirror of apps/cli/src/known-targets.ts so the bridge can
@@ -16,4 +23,7 @@ export const KNOWN_TARGETS = [
   codexTarget,
   cursorTarget,
   aiderTarget,
+  geminiTarget,
+  windsurfTarget,
+  continueTarget,
 ] as const satisfies readonly ConnectorTarget[];

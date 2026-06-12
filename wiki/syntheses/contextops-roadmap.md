@@ -55,7 +55,7 @@ extended with three borrowed patterns:
 | 6 | Task Decomposition | gap | TaskPlan/TaskStep + `mega task` |
 | 7 | Tool Router | gap | ToolDefinition + `route_tools_for_task` |
 | 8 | Audit Dashboard | partial | file/block/rule/memory/retry metrics + `mega audit` |
-| 9 | Multi-Agent Connectors | partial | gemini/windsurf/continue + `mega connect` |
+| 9 | Multi-Agent Connectors | done (vscode/jetbrains deferred) | `mega connect` alias deferred |
 | 10 | Team/Cloud | gap | everything (team, approval, sync, PR comments) |
 
 ## Phase detail
@@ -163,15 +163,22 @@ dashboard view. This is the "prove the savings" surface — depends on
 Phases 1/2/3/5/7 emitting their counts. See [[entities/stats]],
 [[entities/gui]].
 
-### Phase 9 — Multi-Agent Connectors · partial
-Done: claude-code + generic-cli (codex/cursor/aider) connectors,
-`mega connector sync/status`, `ConnectorContext` with project +
-session + scoped memory, project-vs-session memory split. Net-new:
-gemini/windsurf/continue targets, a `mega connect <agent>` ergonomic
-command, connector diagnostics in `mega doctor`, and tests proving
-**cross-agent shared memory** (a decision made in Cursor is recalled
-in Claude Code). The cross-agent story is the real differentiator.
-See [[entities/connectors-generic-cli]], [[entities/connectors-claude-code]].
+### Phase 9 — Multi-Agent Connectors · done (vscode/jetbrains deferred)
+Done (Phase 9, branch `feat/phase9-connectors`, 2026-06-12): three new
+flat-file targets `geminiTarget` (`GEMINI.md`), `windsurfTarget`
+(`.windsurfrules`), `continueTarget` (`.continue/rules/megasaver.md`)
+shipped in `@megasaver/connector-generic-cli` (`builtinTargets` 3→6);
+`agentIdSchema` widened 5→8; CLI `KNOWN_TARGETS` now 7 entries;
+`mega connector list` (known targets + present/absent, exit 0) and
+`mega connector doctor` (exists/writable/in-sync diagnostic, 6 status
+words, exit 1 on stale/not-writable/error) added. Cross-agent shared
+memory proven by integration test (project memory lands byte-identically
+in CLAUDE.md + GEMINI.md). GUI bridge/badges/session-forms updated.
+Deferred: `vscode`/`jetbrains` (native IDE plugins), `mega connect`
+alias. The four shipped targets (`claude-code`/`codex`/`cursor`/`aider`)
+are byte-identical.
+See [[entities/connectors-generic-cli]], [[entities/connectors-claude-code]],
+[[entities/cli]].
 
 ### Phase 10 — Team/Cloud · gap
 Nothing exists; single-developer, single-project today. Net-new: team

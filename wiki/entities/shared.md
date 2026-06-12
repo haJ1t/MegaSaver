@@ -1,12 +1,13 @@
 ---
 title: '@megasaver/shared'
-tags: [entity, package, contracts, v0.1]
+tags: [entity, package, contracts, v0.1, phase9]
 sources:
   - docs/superpowers/specs/2026-05-04-shared-package-design.md
   - docs/superpowers/plans/2026-05-04-shared-package-plan.md
+  - docs/superpowers/specs/2026-06-12-phase9-connectors-design.md
 status: active
 created: 2026-05-04
-updated: 2026-05-11
+updated: 2026-06-12
 ---
 
 # `@megasaver/shared`
@@ -22,9 +23,11 @@ knowledge. v0.1 surface:
 
 - `RiskLevel` — `"low" | "medium" | "high" | "critical"` enum
   (source: `docs/conventions/risk-modes.md`).
-- `AgentId` — closed enum of agents that ship a v0.1 connector
-  (`claude-code`, `codex`, `cursor`, `generic-cli`; 4 members).
-  New agents are added by their own connector spec.
+- `AgentId` — closed enum of agents that ship a connector (8 members,
+  alphabetical): `aider`, `claude-code`, `codex`, `continue`, `cursor`,
+  `gemini`, `generic-cli`, `windsurf`. Phase 9 (2026-06-12) widened from
+  5 → 8 by adding `continue`, `gemini`, `windsurf`. New agents are added
+  by their own connector spec.
 - `ProjectId`, `SessionId`, `MemoryEntryId` — UUID strings branded
   for compile-time discrimination. `ProjectId` is not assignable to
   `SessionId` even though both are `string` at runtime.

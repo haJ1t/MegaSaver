@@ -48,10 +48,31 @@ export const aiderTarget = Object.freeze({
   relativePath: "CONVENTIONS.md",
 });
 
+export const geminiTarget = Object.freeze({
+  id: "gemini",
+  agentId: "gemini" satisfies AgentId,
+  relativePath: "GEMINI.md",
+});
+
+export const windsurfTarget = Object.freeze({
+  id: "windsurf",
+  agentId: "windsurf" satisfies AgentId,
+  relativePath: ".windsurfrules",
+});
+
+export const continueTarget = Object.freeze({
+  id: "continue",
+  agentId: "continue" satisfies AgentId,
+  relativePath: ".continue/rules/megasaver.md",
+});
+
 export const builtinTargets: readonly ConnectorTarget[] = Object.freeze([
   codexTarget,
   cursorTarget,
   aiderTarget,
+  geminiTarget,
+  windsurfTarget,
+  continueTarget,
 ]);
 
 // Validate all builtin targets at module load (catches external targets too when

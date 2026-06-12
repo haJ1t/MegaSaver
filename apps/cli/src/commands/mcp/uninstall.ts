@@ -1,4 +1,4 @@
-import { uninstallMcp } from "@megasaver/mcp-bridge";
+import { knownAgentIdSchema, uninstallMcp } from "@megasaver/mcp-bridge";
 import { defineCommand } from "citty";
 import { unknownTargetMessage } from "../../errors.js";
 import { isKnownTargetId } from "../../known-targets.js";
@@ -18,7 +18,13 @@ export async function runMcpUninstall(input: RunMcpUninstallInput): Promise<0 | 
     input.stderr(cli.message);
     return cli.exitCode;
   }
-  const result = await uninstallMcp({ agentId: input.targetFlag, home: input.home });
+  // MCP uninstall is only available for agents with native MCP config support.
+  const mcpAgentResult = knownAgentIdSchema.safeParse(input.targetFlag);
+  if (!mcpAgentResult.success) {
+    input.stderr(`error: MCP uninstall is not supported for agent "${input.targetFlag}"`);
+    return 1;
+  }
+  const result = await uninstallMcp({ agentId: mcpAgentResult.data, home: input.home });
   if (input.json) {
     input.stdout(JSON.stringify({ target: input.targetFlag, changed: result.changed }));
   } else {

@@ -115,6 +115,18 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
+## Phase 9 — Multi-Agent Connectors — SHIPPED (2026-06-12)
+
+Branch `feat/phase9-connectors`. `agentIdSchema` 5→8 members (adds
+`continue`, `gemini`, `windsurf`). Three new flat-file targets in
+`@megasaver/connector-generic-cli` (`builtinTargets` 3→6). CLI
+`KNOWN_TARGETS` 4→7. New commands: `mega connector list` (exit 0) +
+`mega connector doctor` (exit 1 on stale/not-writable/error).
+Cross-agent proof: project memory lands byte-identically in
+`CLAUDE.md` and `GEMINI.md`. GUI badges/session-forms updated.
+cli tests: 541 (46 test files). `pnpm verify` green.
+Deferred: vscode/jetbrains plugins, `mega connect` alias.
+
 ## v1.1.0 — SHIPPED (2026-06-04)
 
 Advanced-roadmap release. Package versions: cli 1.0.2, core 1.0.2,

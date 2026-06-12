@@ -76,7 +76,16 @@ describe("CreateSessionForm — submit", () => {
     );
     const select = screen.getByLabelText("Agent") as HTMLSelectElement;
     const options = Array.from(select.options).map((o) => o.value);
-    expect(options).toEqual(["aider", "claude-code", "codex", "cursor", "generic-cli"]);
+    expect(options).toEqual([
+      "aider",
+      "claude-code",
+      "codex",
+      "continue",
+      "cursor",
+      "gemini",
+      "generic-cli",
+      "windsurf",
+    ]);
   });
 
   it("renders a Risk <select> with every RiskLevel option", () => {

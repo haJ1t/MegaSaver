@@ -13,7 +13,15 @@ describe("known-targets", () => {
   });
 
   it("KNOWN_TARGETS includes claude-code, codex, cursor, aider in launch order", () => {
-    expect(KNOWN_TARGETS.map((t) => t.id)).toEqual(["claude-code", "codex", "cursor", "aider"]);
+    expect(KNOWN_TARGETS.map((t) => t.id)).toEqual([
+      "claude-code",
+      "codex",
+      "cursor",
+      "aider",
+      "gemini",
+      "windsurf",
+      "continue",
+    ]);
   });
 
   it("CLAUDE_CODE_TARGET shape matches the inline definition contract", () => {
@@ -27,6 +35,9 @@ describe("known-targets", () => {
     expect(isKnownTargetId("codex")).toBe(true);
     expect(isKnownTargetId("cursor")).toBe(true);
     expect(isKnownTargetId("aider")).toBe(true);
+    expect(isKnownTargetId("gemini")).toBe(true);
+    expect(isKnownTargetId("windsurf")).toBe(true);
+    expect(isKnownTargetId("continue")).toBe(true);
     expect(isKnownTargetId("totally-fake")).toBe(false);
     expect(isKnownTargetId("")).toBe(false);
   });
@@ -36,6 +47,8 @@ describe("known-targets", () => {
   // without `typecheck: true` mode treats expectTypeOf as a runtime no-op.
   // pnpm verify runs both, so the type assertion holds end-to-end.
   it("KnownTargetId resolves to the closed literal union", () => {
-    expectTypeOf<KnownTargetId>().toEqualTypeOf<"claude-code" | "codex" | "cursor" | "aider">();
+    expectTypeOf<KnownTargetId>().toEqualTypeOf<
+      "claude-code" | "codex" | "cursor" | "aider" | "gemini" | "windsurf" | "continue"
+    >();
   });
 });

@@ -1,11 +1,12 @@
 ---
 title: '@megasaver/connector-generic-cli'
-tags: [entity, connector, generic-cli, v0.1]
+tags: [entity, connector, generic-cli, v0.1, phase9]
 sources:
   - docs/superpowers/specs/2026-05-07-generic-cli-connector-design.md
+  - docs/superpowers/specs/2026-06-12-phase9-connectors-design.md
 status: shipped
 created: 2026-05-07
-updated: 2026-05-08
+updated: 2026-06-12
 ---
 
 # `@megasaver/connector-generic-cli`
@@ -13,19 +14,21 @@ updated: 2026-05-08
 Manifest-driven connector. v0.1 ships two targets: `codexTarget`
 (writes `AGENTS.md` at project root, agent id `"codex"`) and
 `cursorTarget` (writes `.cursor/rules/megasaver.mdc`, agent id
-`"cursor"`).
+`"cursor"`). Phase 9 adds three flat-file targets:
+- `geminiTarget` — writes `GEMINI.md`, agent id `"gemini"`, no header.
+- `windsurfTarget` — writes `.windsurfrules`, agent id `"windsurf"`, no header.
+- `continueTarget` — writes `.continue/rules/megasaver.md`, agent id `"continue"`, no header.
 
-The package now exports `cursorTarget` alongside `codexTarget`.
-`cursorTarget` writes `.cursor/rules/megasaver.mdc` and carries an
-optional `header` field on the `ConnectorTarget` interface that
-CLI consumers prepend exactly once when seeding a non-existing
-file. Empty header on `codexTarget` keeps existing AGENTS.md
-writes byte-identical.
+All three are frozen `ConnectorTarget` objects reusing the existing
+`runConnectorSync` / `runConnectorStatus` path verbatim (no new sync
+code). `builtinTargets` grows from 3 → 6 members.
 
 ## Public surface
 
 - `ConnectorTarget` (interface): `{ id, agentId, relativePath, header? }`
-- `codexTarget`, `cursorTarget`, `builtinTargets`, `findTarget(id)`
+- `codexTarget`, `cursorTarget`, `aiderTarget`, `geminiTarget`,
+  `windsurfTarget`, `continueTarget`, `builtinTargets` (6),
+  `findTarget(id)`
 - `GenericCliContextSchema`, `assertGenericCliContext(input, target)`
 - `syncGenericCliTarget({ projectRoot, target, context })` →
   `Promise<string>`
