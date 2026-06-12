@@ -34,3 +34,6 @@ export type TaskPlanId = z.infer<typeof taskPlanIdSchema>;
 
 export const taskStepIdSchema = lowercaseUuid.brand<"TaskStepId">();
 export type TaskStepId = z.infer<typeof taskStepIdSchema>;
+
+export const toolDefinitionIdSchema = lowercaseUuid.brand<"ToolDefinitionId">();
+export type ToolDefinitionId = z.infer<typeof toolDefinitionIdSchema>;
