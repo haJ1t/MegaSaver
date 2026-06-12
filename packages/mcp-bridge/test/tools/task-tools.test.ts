@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { handleBuildTaskPlan } from "../../src/tools/build-task-plan.js";
 import { handleGetTaskStatus } from "../../src/tools/get-task-status.js";
 import { handleRecordTaskStep } from "../../src/tools/record-task-step.js";
+import { handleRetryFailedStep } from "../../src/tools/retry-failed-step.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const TS = "2026-06-12T00:00:00.000Z";
@@ -126,6 +127,47 @@ describe("record_task_step", () => {
     const r = seeded();
     await expect(
       handleRecordTaskStep(env(r), { planId: PLAN_ID, stepId: STEP_A, status: "running" }),
+    ).rejects.toMatchObject({ code: "resource_not_found" });
+  });
+});
+
+describe("retry_failed_step", () => {
+  async function failedPlan() {
+    const r = seeded();
+    const stepEnv = { registry: r, now: () => TS, newId: () => "f0000000-0000-4000-8000-000000000001" };
+    await handleBuildTaskPlan(
+      { registry: r, ...ids([PLAN_ID, STEP_A, STEP_B]) },
+      {
+        projectId: PROJECT_ID,
+        task: "fix login",
+        steps: [
+          { type: "edit", title: "edit", key: "a" },
+          { type: "debug", title: "debug", key: "b", dependsOnKeys: ["a"] },
+        ],
+      },
+    );
+    await handleRecordTaskStep(stepEnv, { planId: PLAN_ID, stepId: STEP_A, status: "failed", error: "x" });
+    return r;
+  }
+  it("resets the failed step + dependent and returns the plan", async () => {
+    const r = await failedPlan();
+    const res = await handleRetryFailedStep({ registry: r }, { planId: PLAN_ID, stepId: STEP_A });
+    expect(res.plan.steps[0]?.status).toBe("pending");
+    expect(res.plan.steps[1]?.status).toBe("pending");
+    expect(res.plan.status).toBe("planned");
+  });
+  it("rejects a non-failed step as validation_failed", async () => {
+    const r = await failedPlan();
+    await handleRetryFailedStep({ registry: r }, { planId: PLAN_ID, stepId: STEP_A });
+    // STEP_A is now pending, not failed
+    await expect(
+      handleRetryFailedStep({ registry: r }, { planId: PLAN_ID, stepId: STEP_A }),
+    ).rejects.toMatchObject({ code: "validation_failed" });
+  });
+  it("rejects an unknown plan as resource_not_found", async () => {
+    const r = seeded();
+    await expect(
+      handleRetryFailedStep({ registry: r }, { planId: PLAN_ID, stepId: STEP_A }),
     ).rejects.toMatchObject({ code: "resource_not_found" });
   });
 });
