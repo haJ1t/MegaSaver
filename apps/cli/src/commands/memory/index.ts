@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { memoryApproveCommand, memoryRejectCommand } from "./approve.js";
 import { memoryCreateCommand } from "./create.js";
 import { memoryDeleteCommand } from "./delete.js";
 import { memoryExplainCommand } from "./explain.js";
@@ -7,6 +8,12 @@ import { memorySearchCommand } from "./search.js";
 import { memoryShowCommand } from "./show.js";
 import { memoryUpdateCommand } from "./update.js";
 
+export {
+  type RunMemoryApproveInput,
+  runMemoryApprove,
+  memoryApproveCommand,
+  memoryRejectCommand,
+} from "./approve.js";
 export {
   type RunMemoryCreateInput,
   runMemoryCreate,
@@ -51,6 +58,8 @@ export const memoryCommand = defineCommand({
     show: memoryShowCommand,
     search: memorySearchCommand,
     update: memoryUpdateCommand,
+    approve: memoryApproveCommand,
+    reject: memoryRejectCommand,
     delete: memoryDeleteCommand,
     explain: memoryExplainCommand,
   },
