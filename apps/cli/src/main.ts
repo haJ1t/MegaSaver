@@ -14,6 +14,7 @@ import { projectCommand } from "./commands/project.js";
 import { rulesCommand } from "./commands/rules/index.js";
 import { scanCommand } from "./commands/scan.js";
 import { sessionCommand } from "./commands/session/index.js";
+import { taskCommand } from "./commands/task/index.js";
 
 // Version source. The standalone single-file bundle has no sibling package.json
 // to require at runtime, so tsup.bundle.config.ts defines __MEGA_CLI_VERSION__ as
@@ -48,5 +49,6 @@ export const mainCommand = defineCommand({
     scan: scanCommand,
     index: indexCommand,
     context: contextCommand,
+    task: taskCommand,
   },
 });
