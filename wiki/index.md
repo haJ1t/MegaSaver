@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-06-11
+updated: 2026-06-12
 ---
 
 # Wiki Index — Mega Saver
@@ -26,6 +26,11 @@ updated: 2026-06-11
 - [[concepts/structured-memory-engine]] — DIMMEM, roadmap Phase 1: typed engineering memory (10 MemoryTypes + metadata); reconciles the v0.1 MemoryEntry primitive.
 - [[concepts/semantic-repo-index]] — roadmap Phase 2: parse repo into typed CodeBlocks (AST) so retrieval works on blocks, not files.
 - [[concepts/context-pruning-engine]] — LAMR, roadmap Phase 3: task-aware multi-factor scoring → 6–8-block context pack; repo-side cousin of context-gate-pipeline.
+- [[concepts/failed-run-learning]] — FORGE, roadmap Phase 5: find similar failures, convert a failure to a rule, rank applicable rules; deterministic (BM25 + path overlap).
+- [[concepts/task-engine]] — roadmap Phase 6: deterministic TaskPlan state machine (typed steps + dependsOn) with selective retry; state tracker, not executor.
+- [[concepts/tool-router]] — roadmap Phase 7: task-scoped tool allow/block (fewer schemas + dangerous tools blocked); advisor, not enforcer.
+- [[concepts/audit-dashboard]] — roadmap Phase 8: one windowed, persisted token-savings summary; extends @megasaver/stats with an AuditEvent family.
+- [[concepts/memory-approval]] — roadmap Phase 10: agent-suggests → human-approves memory gate; team = shared store + gate; cloud SaaS deferred.
 
 ## Entities
 
@@ -64,7 +69,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 - [[syntheses/mega-saver-product]] — what the product is, six subsystems, v0.1 slice.
 - [[syntheses/post-v1.1-roadmap]] — post-v1.1 arc (PRs #102–#110 resolved: stats, skill-packs, Windows port + follow-ups) + remaining work, priority-ordered (npm publish gap, conventions:sync, GUI packaging, i18n, fikri §16 backlog).
-- [[syntheses/contextops-roadmap]] — **strategic Phase 0–10 roadmap** (DIMMEM/LAMR/FORGE), reconciled done/partial/gap vs shipped v1.1 via a 22-agent code audit; full spec+plan written for Phases 1–3.
+- [[syntheses/contextops-roadmap]] — **strategic Phase 0–10 roadmap** (DIMMEM/LAMR/FORGE), **all 10 phases shipped** on `main` (PRs #114–#123, 2026-06-12); MCP surface 4 → 25 tools. Keeps the original 22-agent-audit done/partial/gap framing for the historical record.
 
 ## Sources (pointers to raw + project artifacts)
 
@@ -112,6 +117,13 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 | Where are chunk sets persisted?                    | [[entities/content-store]]                      |
 | Why is policy a v0.5 package?                       | [[decisions/policy-is-bb3]]                      |
 | Why can't content-store import core?               | [[decisions/content-store-no-core-edge]]        |
+| What are all 10 ContextOps phases / their status?  | [[syntheses/contextops-roadmap]]                |
+| How does failed-run learning / FORGE work?         | [[concepts/failed-run-learning]]                |
+| What is the task engine / selective retry?         | [[concepts/task-engine]]                         |
+| How does the tool router decide allow/block?       | [[concepts/tool-router]]                         |
+| How is the token-savings audit computed?           | [[concepts/audit-dashboard]]                     |
+| How does memory approval / the team gate work?     | [[concepts/memory-approval]]                     |
+| What are the 25 MCP tools?                          | [[entities/mcp-bridge]]                          |
 
 ## Status
 

@@ -2199,3 +2199,45 @@ buildPrMemoryComment), `entities/mcp-bridge` (25 tools, approve_memory,
 gated tools), `entities/cli` (approve/reject, --all, github pr-comment,
 connector gate), `syntheses/contextops-roadmap` (Phase 10 done, roadmap
 complete, deferred-cloud items recorded), `index.md` (Phase 10 status block).
+
+## [2026-06-12] docs | README + wiki refresh for completed 10-phase ContextOps roadmap
+
+Documentation-only pass on branch `docs/readme-wiki-roadmap-complete`
+(off main `f1fe1d3`, all 10 phases merged). No code changes.
+
+README.md:
+- Status line → all 10 ContextOps phases complete on `main` (PRs
+  #114–#123); kept package versions (cli 1.0.2, gui 1.1.0, core 1.0.2).
+- New "The ContextOps layer" section (per-phase engine table) + TOC entry.
+- New "MCP tools" section listing all **25** tools grouped (memory /
+  context / rules-failures / tasks / routing-audit), descriptions copied
+  verbatim from `packages/mcp-bridge/src/server.ts` `TOOL_DEFS`.
+- CLI reference: added memory (approve/reject/search --all/update/delete/
+  explain), scan, index, context, fail, rules, learn, task, tools, audit,
+  connector list/doctor, github pr-comment — all from `apps/cli` source.
+- Connectors: 4 → **7** targets (added gemini/windsurf/continue);
+  vscode/jetbrains + `mega connect` noted deferred.
+- Architecture diagram + repo-layout + Mega Saver Mode MCP note updated
+  (indexer, context-pruner, 25 tools). Roadmap section: all 10 phases
+  shipped + deferred cloud-SaaS slice listed.
+
+Wiki:
+- `syntheses/contextops-roadmap.md`: reconciliation table now shows all
+  10 phases `done` + PR refs + concept links (kept the original audit
+  done/partial/gap framing as a second column); phase-detail headings
+  4–8 → "done (was …)" with shipped notes; planning-artifacts now lists
+  all 10 specs; build-order section reframed past-tense.
+- New concept pages (matching existing style): `failed-run-learning`
+  (FORGE), `task-engine`, `tool-router`, `audit-dashboard`,
+  `memory-approval`. Cross-linked into index + roadmap synthesis.
+- Entity consistency fixes — the phase batches had updated entities for
+  Phases 9–10 only: added Phase 1/5/6/7 entity summary to
+  `entities/core.md`, Phase 2/3/5–8 command groups to `entities/cli.md`,
+  Phase 8 audit section to `entities/stats.md`. Confirmed
+  `entities/{mcp-bridge,shared,connectors-generic-cli}` already accurate
+  (25 tools / 8 agent ids / 6 generic-cli targets).
+- `index.md`: 5 new concept links, quick-links rows, synthesis blurb,
+  date bump.
+
+Verify: `pnpm conventions:check` green (README + wiki are not
+conventions-managed; ran to confirm CLAUDE.md/AGENTS.md/.cursor untouched).
