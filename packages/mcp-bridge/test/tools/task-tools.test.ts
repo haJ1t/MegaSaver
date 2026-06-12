@@ -2,6 +2,7 @@ import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
 import { handleBuildTaskPlan } from "../../src/tools/build-task-plan.js";
 import { handleGetTaskStatus } from "../../src/tools/get-task-status.js";
+import { handleRecordTaskStep } from "../../src/tools/record-task-step.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const TS = "2026-06-12T00:00:00.000Z";
@@ -77,5 +78,54 @@ describe("get_task_status", () => {
     await expect(handleGetTaskStatus({ registry: r }, { planId: PLAN_ID })).rejects.toMatchObject({
       code: "resource_not_found",
     });
+  });
+});
+
+describe("record_task_step", () => {
+  async function withPlan() {
+    const r = seeded();
+    await handleBuildTaskPlan(
+      { registry: r, ...ids([PLAN_ID, STEP_A, STEP_B]) },
+      {
+        projectId: PROJECT_ID,
+        task: "fix login",
+        steps: [
+          { type: "edit", title: "edit", key: "a" },
+          { type: "debug", title: "debug", key: "b", dependsOnKeys: ["a"] },
+        ],
+      },
+    );
+    return r;
+  }
+  const env = (r: CoreRegistry) => ({ registry: r, now: () => TS, newId: () => "f0000000-0000-4000-8000-000000000001" });
+
+  it("advances a step and rolls up status", async () => {
+    const r = await withPlan();
+    const res = await handleRecordTaskStep(env(r), { planId: PLAN_ID, stepId: STEP_A, status: "running" });
+    expect(res.plan.status).toBe("running");
+  });
+  it("records a FailedAttempt when recordFailure is set on a failed step", async () => {
+    const r = await withPlan();
+    await handleRecordTaskStep(env(r), {
+      planId: PLAN_ID,
+      stepId: STEP_A,
+      status: "failed",
+      error: "401",
+      recordFailure: true,
+    });
+    expect(r.listFailedAttempts(PROJECT_ID as never)).toHaveLength(1);
+  });
+  it("rejects an illegal transition as validation_failed", async () => {
+    const r = await withPlan();
+    await handleRecordTaskStep(env(r), { planId: PLAN_ID, stepId: STEP_A, status: "completed" });
+    await expect(
+      handleRecordTaskStep(env(r), { planId: PLAN_ID, stepId: STEP_A, status: "running" }),
+    ).rejects.toMatchObject({ code: "validation_failed" });
+  });
+  it("rejects an unknown plan as resource_not_found", async () => {
+    const r = seeded();
+    await expect(
+      handleRecordTaskStep(env(r), { planId: PLAN_ID, stepId: STEP_A, status: "running" }),
+    ).rejects.toMatchObject({ code: "resource_not_found" });
   });
 });
