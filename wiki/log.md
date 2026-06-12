@@ -2156,3 +2156,29 @@ Roadmap Phase 3 on branch feat/phase3-context-pruning. New leaf package
   get_context_budget_report (closed enum 7→11).
 Smoke ("fix the login bug"): login ranked #1 (named in task + cited by
 memory + semantic), 5 blocks → 2 included, tokens 120→48, saved 60%.
+
+## [2026-06-12] schema | Phase 9 multi-agent connectors
+
+Branch `feat/phase9-connectors`. Spec:
+`docs/superpowers/specs/2026-06-12-phase9-connectors-design.md`.
+Plan: `docs/superpowers/plans/2026-06-12-phase9-connectors.md`.
+
+Result: `pnpm verify` green (lint 704 files, typecheck all 17 packages,
+541 cli tests / 46 test files, conventions:check ok). Task 8 required
+no `main.ts` edit — `connector: connectorCommand` was already registered
+and `list`/`doctor` were already wired in `connector/index.ts`.
+
+Changes:
+- `@megasaver/shared`: `agentIdSchema` 5→8 members (continue, gemini,
+  windsurf; alphabetical). Both drift-guard test files updated.
+- `@megasaver/connector-generic-cli`: `geminiTarget`, `windsurfTarget`,
+  `continueTarget` frozen objects; `builtinTargets` 3→6.
+- `@megasaver/cli`: `KNOWN_TARGETS` 4→7; `mega connector list` +
+  `mega connector doctor` commands; cross-agent integration test proves
+  project memory lands byte-identically in two agent files.
+- `@megasaver/gui`: `AGENT_LABEL` record + `AGENT_IDS` tuple + bridge
+  mirror updated for three new agents.
+
+Wiki pages updated: `entities/connectors-generic-cli`,
+`entities/shared`, `entities/cli`, `syntheses/contextops-roadmap`
+(Phase 9 partial→done), `index.md` (Phase 9 status block).

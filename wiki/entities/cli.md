@@ -8,9 +8,10 @@ sources:
   - docs/superpowers/plans/2026-05-06-cli-project-crud-plan.md
   - docs/superpowers/specs/2026-05-10-aa4-wiki-cli-surfaces-design.md
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
+  - docs/superpowers/specs/2026-06-12-phase9-connectors-design.md
 status: published
 created: 2026-05-05
-updated: 2026-05-11
+updated: 2026-06-12
 ---
 
 # `@megasaver/cli`
@@ -131,11 +132,14 @@ two-space gutter): `id`, `project`, `session`, `scope`, `content`,
 ### `mega connector sync <projectName> [--target <id>]`
 
 Writes the Mega Saver context block into each known agent file
-under the project's `rootPath`. v0.1 known targets:
+under the project's `rootPath`. Known targets (7, Phase 9):
 - `claude-code` → `CLAUDE.md`
 - `codex` → `AGENTS.md`
 - `cursor` → `.cursor/rules/megasaver.mdc` (frontmatter prepended on first seed)
 - `aider` → `CONVENTIONS.md` (plain markdown, no frontmatter; user wires `aider --read CONVENTIONS.md`)
+- `gemini` → `GEMINI.md` (Phase 9; flat-file, no header)
+- `windsurf` → `.windsurfrules` (Phase 9; flat-file, no header)
+- `continue` → `.continue/rules/megasaver.md` (Phase 9; flat-file, no header)
 
 For each target the command reads the existing file, runs
 `upsertBlock`, diff-checks against the existing content, and writes
@@ -165,6 +169,24 @@ Status words on stdout: `in-sync`, `drift`, `no-block`, `missing`,
 `1` if any line is `drift`, `no-block`, or `error`. Pre-loop failures
 (project not found, unknown target, project root missing)
 short-circuit before any line is emitted.
+
+### `mega connector list <projectName> [--json]` (Phase 9)
+
+Static enumeration of all known targets with present/absent for the
+project's `rootPath`. For each target: reads whether the file exists
+(no block parse). Always exits 0. Text line: padded id + agentId +
+relativePath + `present`/`absent`. `--json` emits
+`[{id, agent, relativePath, present}]`.
+
+### `mega connector doctor <projectName> [--target <id>] [--json]` (Phase 9)
+
+Per-target diagnostic. For each target reports one of six status words:
+`ok` (file exists, block present, in-sync), `stale` (block out of date),
+`no-block` (file exists but no sentinel block), `missing` (file absent,
+benign), `not-writable` (no write permission; file or parent dir probed
+with `access(W_OK)` — no write performed), `error`. Exit 1 on any
+`stale`, `not-writable`, or `error`; exit 0 otherwise. `--json` emits
+`[{id, relativePath, status, writable, session}]`.
 
 ### `mega output {file,filter,chunk}` (BB7a, AA1)
 
