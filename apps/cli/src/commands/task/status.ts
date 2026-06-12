@@ -61,7 +61,7 @@ export async function runTaskStatus(input: RunTaskStatusInput): Promise<0 | 1> {
         sessionId: null,
         scope: "project",
         type: "decision",
-        title: `Completed task: ${plan.task}`.slice(0, 59),
+        title: `Completed task: ${plan.task}`,
         content: input.saveSummaryFlag,
         keywords: [],
         confidence: "medium",

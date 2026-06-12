@@ -1,4 +1,9 @@
-import { type FailedAttempt, type StepOutcome, failedAttemptSchema } from "@megasaver/core";
+import {
+  type FailedAttempt,
+  type StepOutcome,
+  failedAttemptSchema,
+  taskStepStatusSchema,
+} from "@megasaver/core";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
@@ -43,15 +48,15 @@ export async function runTaskStep(input: RunTaskStepInput): Promise<0 | 1> {
     input.stderr("error: invalid plan or step id");
     return 1;
   }
-  if (
-    input.statusFlag !== "running" &&
-    input.statusFlag !== "completed" &&
-    input.statusFlag !== "failed"
-  ) {
+  // `task step` only accepts agent-reportable outcomes; a caller cannot move a
+  // step back to `pending` via step (that is what `task retry` does), so reject
+  // the `pending` enum member even though the schema accepts it.
+  const statusResult = taskStepStatusSchema.safeParse(input.statusFlag);
+  if (!statusResult.success || statusResult.data === "pending") {
     input.stderr(`error: invalid status "${input.statusFlag}" (running | completed | failed)`);
     return 1;
   }
-  const status = input.statusFlag;
+  const status = statusResult.data;
   const outcome: StepOutcome =
     status === "running"
       ? { status: "running" }

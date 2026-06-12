@@ -193,6 +193,32 @@ describe("mega task status + explain", () => {
     expect(err.join("\n").toLowerCase()).toContain("not completed");
   });
 
+  it("status --save-summary writes a memory once the plan is completed", async () => {
+    const stepA = "d0000000-0000-4000-8000-00000000000a";
+    const stepB = "d0000000-0000-4000-8000-00000000000b";
+    for (const stepId of [stepA, stepB]) {
+      const code = await runTaskStep({
+        ...base(root, [], []),
+        planIdFlag: PLAN_ID,
+        stepIdFlag: stepId,
+        statusFlag: "completed",
+      });
+      expect(code).toBe(0);
+    }
+
+    const out: string[] = [];
+    const code = await runTaskStatus({
+      ...base(root, out, []),
+      planIdFlag: PLAN_ID,
+      saveSummaryFlag: "all done",
+      newId: () => "d0000000-0000-4000-8000-0000000000c1",
+    });
+    expect(code).toBe(0);
+    expect(
+      createJsonDirectoryCoreRegistry({ rootDir: root }).listMemoryEntries(PROJECT_ID),
+    ).toHaveLength(1);
+  });
+
   it("explain renders a blocked-reason line for a dependent step", async () => {
     const out: string[] = [];
     const code = await runTaskExplain({ ...base(root, out, []), planIdFlag: PLAN_ID });
