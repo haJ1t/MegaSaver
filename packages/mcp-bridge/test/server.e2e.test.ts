@@ -136,10 +136,10 @@ describe("phase 5 FORGE tools over the bridge", () => {
     return { client, server };
   }
 
-  it("lists 18 tools", async () => {
+  it("lists 22 tools (18 Phase 5 + 4 Phase 6)", async () => {
     const { client, server } = await connect(projectRoot, store);
     const { tools } = (await client.listTools()) as { tools: { name: string }[] };
-    expect(tools).toHaveLength(18);
+    expect(tools).toHaveLength(22);
     expect(tools.map((t) => t.name)).toContain("convert_failure_to_rule");
     await server.close();
   });
@@ -220,6 +220,89 @@ describe("bridge stdio round-trip (AA1 §14 BB8 acceptance)", () => {
     await expect(
       client.callTool({ name: "mega_delete_everything", arguments: {} }),
     ).rejects.toThrow(/tool_not_found/);
+    await server.close();
+  });
+});
+
+describe("phase 6 task tools over the bridge", () => {
+  let store: string;
+  let projectRoot: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "mcp-e2e-p6-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "mcp-e2e-p6-root-"));
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  // Deterministic id sequence: plan, stepA, stepB, then any later mint.
+  function connectP6() {
+    let i = 0;
+    const ids = [
+      "d0000000-0000-4000-8000-000000000001",
+      "d0000000-0000-4000-8000-00000000000a",
+      "d0000000-0000-4000-8000-00000000000b",
+    ];
+    const { server } = buildServer({
+      registry: seededRegistry(projectRoot),
+      storeRoot: store,
+      now: () => TS,
+      newId: () => ids[i++] ?? `e${i}`,
+    });
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test", version: "0" }, { capabilities: {} });
+    return Promise.all([server.connect(serverT), client.connect(clientT)]).then(() => ({
+      client,
+      server,
+    }));
+  }
+
+  it("lists 22 tools", async () => {
+    const { client, server } = await connect(projectRoot, store);
+    const { tools } = (await client.listTools()) as { tools: { name: string }[] };
+    expect(tools).toHaveLength(22);
+    expect(tools.map((t) => t.name)).toContain("build_task_plan");
+    await server.close();
+  });
+
+  it("build -> record(failed) -> retry -> record(completed) -> status round-trips", async () => {
+    const { client, server } = await connectP6();
+    const PLAN = "d0000000-0000-4000-8000-000000000001";
+    const A = "d0000000-0000-4000-8000-00000000000a";
+    const B = "d0000000-0000-4000-8000-00000000000b";
+
+    await client.callTool({
+      name: "build_task_plan",
+      arguments: {
+        projectId: PROJECT_ID,
+        task: "fix login",
+        steps: [
+          { type: "edit", title: "edit auth", key: "a" },
+          { type: "debug", title: "debug auth", key: "b", dependsOnKeys: ["a"] },
+        ],
+      },
+    });
+    await client.callTool({
+      name: "record_task_step",
+      arguments: { planId: PLAN, stepId: A, status: "failed", error: "401" },
+    });
+    await client.callTool({ name: "retry_failed_step", arguments: { planId: PLAN, stepId: A } });
+    await client.callTool({
+      name: "record_task_step",
+      arguments: { planId: PLAN, stepId: A, status: "completed", output: "fixed" },
+    });
+    const statusRes = (await client.callTool({
+      name: "get_task_status",
+      arguments: { planId: PLAN },
+    })) as { content: { text: string }[] };
+    const payload = JSON.parse(statusRes.content[0]?.text ?? "{}") as {
+      plan: { status: string; steps: { id: string; status: string }[] };
+      ready: string[];
+    };
+    // a completed, b pending with deps met -> plan "planned", b is ready
+    expect(payload.plan.steps.find((s) => s.id === A)?.status).toBe("completed");
+    expect(payload.ready).toEqual([B]);
     await server.close();
   });
 });
