@@ -30,7 +30,11 @@ describe("mega fail record", () => {
     root = mkdtempSync(join(tmpdir(), "cli-fail-"));
     await initStore(root);
     createJsonDirectoryCoreRegistry({ rootDir: root }).createProject({
-      id: PROJECT_ID, name: "demo", rootPath: "/tmp/demo", createdAt: TS, updatedAt: TS,
+      id: PROJECT_ID,
+      name: "demo",
+      rootPath: "/tmp/demo",
+      createdAt: TS,
+      updatedAt: TS,
     });
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
@@ -38,7 +42,12 @@ describe("mega fail record", () => {
   it("records a failure and prints its id", async () => {
     const out: string[] = [];
     const err: string[] = [];
-    const code = await runFailRecord({ ...baseInput(root, out, err), taskFlag: "fix login", failedStepFlag: "auth test", newId: () => "a0000000-0000-4000-8000-000000000001" });
+    const code = await runFailRecord({
+      ...baseInput(root, out, err),
+      taskFlag: "fix login",
+      failedStepFlag: "auth test",
+      newId: () => "a0000000-0000-4000-8000-000000000001",
+    });
     expect(code).toBe(0);
     expect(out[0]).toBe("a0000000-0000-4000-8000-000000000001");
   });
@@ -46,8 +55,18 @@ describe("mega fail record", () => {
   it("warns when a similar prior failure exists", async () => {
     const out: string[] = [];
     const err: string[] = [];
-    await runFailRecord({ ...baseInput(root, out, err), taskFlag: "fix login auth", failedStepFlag: "auth test", newId: () => "a0000000-0000-4000-8000-000000000001" });
-    await runFailRecord({ ...baseInput(root, out, err), taskFlag: "fix login auth again", failedStepFlag: "auth test", newId: () => "a0000000-0000-4000-8000-000000000002" });
+    await runFailRecord({
+      ...baseInput(root, out, err),
+      taskFlag: "fix login auth",
+      failedStepFlag: "auth test",
+      newId: () => "a0000000-0000-4000-8000-000000000001",
+    });
+    await runFailRecord({
+      ...baseInput(root, out, err),
+      taskFlag: "fix login auth again",
+      failedStepFlag: "auth test",
+      newId: () => "a0000000-0000-4000-8000-000000000002",
+    });
     expect(err.some((l) => l.toLowerCase().includes("similar"))).toBe(true);
   });
 });

@@ -62,7 +62,11 @@ export async function runLearnFromFailure(input: RunLearnFromFailureInput): Prom
       } as Parameters<typeof registry.convertFailureToRule>[1],
       { now, newId },
     );
-    input.stdout(input.json ? JSON.stringify({ ruleId: rule.id, failureId: failure.id }) : `rule ${rule.id} (from failure ${failure.id})`);
+    input.stdout(
+      input.json
+        ? JSON.stringify({ ruleId: rule.id, failureId: failure.id })
+        : `rule ${rule.id} (from failure ${failure.id})`,
+    );
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "memory_create" });
@@ -82,22 +86,40 @@ export const learnCommand = defineCommand({
         rule: { type: "string", required: true, description: "Rule body." },
         severity: { type: "string", required: true, description: "info | warning | critical." },
         confidence: { type: "string", description: "low | medium | high." },
-        "applies-to": { type: "string", description: "Path/glob (repeatable); defaults to the failure's related files." },
+        "applies-to": {
+          type: "string",
+          description: "Path/glob (repeatable); defaults to the failure's related files.",
+        },
         store: { type: "string", description: "Override store directory." },
         json: { type: "boolean", default: false, description: "Emit JSON output." },
       },
       async run({ args }) {
+        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+        const id = args["id"];
+        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+        const title = args["title"];
+        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+        const rule = args["rule"];
+        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+        const severity = args["severity"];
+        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+        const confidence = args["confidence"];
+        const appliesTo = args["applies-to"];
+        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+        const store = args["store"];
+        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+        const json = args["json"];
         const code = await runLearnFromFailure({
-          idFlag: typeof args.id === "string" ? args.id : "",
-          titleFlag: typeof args.title === "string" ? args.title : "",
-          ruleFlag: typeof args.rule === "string" ? args.rule : "",
-          severityFlag: typeof args.severity === "string" ? args.severity : "",
-          confidenceFlag: typeof args.confidence === "string" ? args.confidence : undefined,
-          appliesToFlags: args["applies-to"],
-          ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
+          idFlag: typeof id === "string" ? id : "",
+          titleFlag: typeof title === "string" ? title : "",
+          ruleFlag: typeof rule === "string" ? rule : "",
+          severityFlag: typeof severity === "string" ? severity : "",
+          confidenceFlag: typeof confidence === "string" ? confidence : undefined,
+          appliesToFlags: appliesTo,
+          ...readStoreEnv(typeof store === "string" ? store : undefined),
           stdout: (line) => console.log(line),
           stderr: (line) => console.error(line),
-          json: !!args.json,
+          json: !!json,
         });
         if (code !== 0) process.exitCode = code;
       },

@@ -53,7 +53,10 @@ export async function runRulesApply(input: RunRulesApplyInput): Promise<0 | 1> {
     });
     // Surface similar past failures as warnings when a task is given.
     if (input.taskFlag !== undefined) {
-      for (const s of registry.searchFailedAttempts(project.id, { text: input.taskFlag, limit: 3 })) {
+      for (const s of registry.searchFailedAttempts(project.id, {
+        text: input.taskFlag,
+        limit: 3,
+      })) {
         input.stderr(`warning: similar previous failure ${s.id}: ${s.failedStep}`);
       }
     }

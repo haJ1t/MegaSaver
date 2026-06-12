@@ -9,7 +9,9 @@ export function toStringArray(value: unknown): string[] {
   return typeof value === "string" ? [value] : [];
 }
 
-export function formatFailureLine(f: Pick<FailedAttempt, "id" | "task" | "convertedToRule">): string {
+export function formatFailureLine(
+  f: Pick<FailedAttempt, "id" | "task" | "convertedToRule">,
+): string {
   return `${f.id}  ${f.convertedToRule ? "[converted]" : "[open]     "}  ${f.task}`;
 }
 

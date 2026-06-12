@@ -1,4 +1,9 @@
-import { type ProjectRule, projectRuleSchema, ruleConfidenceSchema, ruleSeveritySchema } from "@megasaver/core";
+import {
+  type ProjectRule,
+  projectRuleSchema,
+  ruleConfidenceSchema,
+  ruleSeveritySchema,
+} from "@megasaver/core";
 import { titleSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";

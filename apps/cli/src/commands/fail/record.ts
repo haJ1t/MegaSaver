@@ -121,7 +121,8 @@ export const failRecordCommand = defineCommand({
     const code = await runFailRecord({
       projectName: typeof args.projectName === "string" ? args.projectName : "",
       taskFlag: typeof args.task === "string" ? args.task : "",
-      failedStepFlag: typeof args["failed-step"] === "string" ? (args["failed-step"] as string) : "",
+      failedStepFlag:
+        typeof args["failed-step"] === "string" ? (args["failed-step"] as string) : "",
       sessionFlag: typeof args.session === "string" ? args.session : undefined,
       errorFlag: typeof args.error === "string" ? args.error : undefined,
       causeFlag: typeof args.cause === "string" ? args.cause : undefined,

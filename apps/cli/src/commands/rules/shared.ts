@@ -13,6 +13,10 @@ export function formatRuleLine(r: Pick<ProjectRule, "id" | "severity" | "title">
   return `${r.id}  ${r.severity.padEnd(8, " ")}  ${r.title}`;
 }
 
-export function formatRankedRuleLine(ranked: { rule: Pick<ProjectRule, "id" | "severity" | "title">; score: number; reason: string }): string {
+export function formatRankedRuleLine(ranked: {
+  rule: Pick<ProjectRule, "id" | "severity" | "title">;
+  score: number;
+  reason: string;
+}): string {
   return `${ranked.rule.id}  ${ranked.rule.severity.padEnd(8, " ")}  score=${ranked.score}  ${ranked.rule.title}  (${ranked.reason})`;
 }
