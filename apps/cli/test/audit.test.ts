@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -114,5 +114,25 @@ describe("mega audit report", () => {
     });
     expect(code).toBe(1);
     expect(lines.join("\n")).toContain("invalid window");
+  });
+
+  it("maps a corrupt audit log to a clean store_corrupt message", async () => {
+    await seedProject();
+    const auditDir = join(root, "stats", PROJECT_ID);
+    mkdirSync(auditDir, { recursive: true });
+    writeFileSync(join(auditDir, `${SESSION_ID}.audit.jsonl`), "{not json}\n");
+    const code = await runAuditReport({
+      projectName: "demo",
+      windowFlag: undefined,
+      sessionFlag: undefined,
+      ...env(),
+      stdout,
+      stderr,
+      json: false,
+      now: () => TS,
+    });
+    expect(code).toBe(1);
+    expect(lines.join("\n")).toContain("store_corrupt");
+    expect(lines.join("\n")).not.toContain("unexpected failure");
   });
 });

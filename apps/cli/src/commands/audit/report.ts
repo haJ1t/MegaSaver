@@ -1,4 +1,5 @@
 import {
+  StatsError,
   auditWindowSchema,
   readAuditEvents,
   resolveAuditWindow,
@@ -6,7 +7,7 @@ import {
 } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
-import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
+import { mapErrorToCliMessage, projectNotFoundMessage, storeCorruptMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { projectNameSchema } from "../shared/schemas.js";
 import { formatAuditCards } from "./shared.js";
@@ -87,6 +88,11 @@ export async function runAuditReport(input: RunAuditReportInput): Promise<0 | 1>
     }
     return 0;
   } catch (err) {
+    if (err instanceof StatsError) {
+      const cli = storeCorruptMessage(err.message);
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
     const cli = mapErrorToCliMessage(err, { kind: "store" });
     input.stderr(cli.message);
     return cli.exitCode;

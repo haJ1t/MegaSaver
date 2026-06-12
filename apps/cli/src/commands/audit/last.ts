@@ -1,6 +1,6 @@
-import { readAuditEvents, summarizeAudit } from "@megasaver/core";
+import { StatsError, readAuditEvents, summarizeAudit } from "@megasaver/core";
 import { defineCommand } from "citty";
-import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
+import { mapErrorToCliMessage, projectNotFoundMessage, storeCorruptMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { projectNameSchema } from "../shared/schemas.js";
 import { formatAuditCards } from "./shared.js";
@@ -63,6 +63,11 @@ export async function runAuditLast(input: RunAuditLastInput): Promise<0 | 1> {
     else for (const line of formatAuditCards(summary)) input.stdout(line);
     return 0;
   } catch (err) {
+    if (err instanceof StatsError) {
+      const cli = storeCorruptMessage(err.message);
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
     const cli = mapErrorToCliMessage(err, { kind: "store" });
     input.stderr(cli.message);
     return cli.exitCode;
