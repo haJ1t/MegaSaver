@@ -23,6 +23,7 @@ describe("McpToolName type regression", () => {
       "record_failed_attempt",
       "record_task_step",
       "retry_failed_step",
+      "route_tools_for_task",
       "save_memory",
       "save_project_rule",
       "search_memory",
@@ -41,7 +42,7 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 22-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine)", () => {
+  it("schema.options preserves the 23-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router)", () => {
     const _t: readonly [
       "build_task_plan",
       "convert_failure_to_rule",
@@ -62,6 +63,7 @@ describe("McpToolName type regression", () => {
       "record_failed_attempt",
       "record_task_step",
       "retry_failed_step",
+      "route_tools_for_task",
       "save_memory",
       "save_project_rule",
       "search_memory",

@@ -25,6 +25,7 @@ import { handleReadFile } from "./tools/read-file.js";
 import { handleRecall } from "./tools/recall.js";
 import { handleRecordTaskStep } from "./tools/record-task-step.js";
 import { handleRetryFailedStep } from "./tools/retry-failed-step.js";
+import { handleRouteToolsForTask } from "./tools/route-tools-for-task.js";
 import { handleRunCommand } from "./tools/run-command.js";
 import { handleSaveMemory } from "./tools/save-memory.js";
 import { handleSearchMemory } from "./tools/search-memory.js";
@@ -89,6 +90,10 @@ const TOOL_DEFS = [
   {
     name: "retry_failed_step",
     description: "Reset a failed step (and its dependents) to pending.",
+  },
+  {
+    name: "route_tools_for_task",
+    description: "Recommend task-relevant tools; block dangerous/deploy/database.",
   },
   { name: "save_memory", description: "Write a typed memory entry to a project." },
   { name: "save_project_rule", description: "Write a reusable project rule." },
@@ -220,6 +225,8 @@ export function buildServer(deps: ServerDeps): {
         return handleRecordTaskStep({ registry: deps.registry, now, newId }, args);
       case "retry_failed_step":
         return handleRetryFailedStep({ registry: deps.registry }, args);
+      case "route_tools_for_task":
+        return handleRouteToolsForTask({ registry: deps.registry }, args);
       case "save_project_rule":
         return handleSaveProjectRule({ registry: deps.registry, now, newId }, args);
       case "convert_failure_to_rule":

@@ -5,8 +5,9 @@ import { z } from "zod";
 // (DIMMEM) memory tools, the Phase 3 (LAMR) context tools, the Phase 4
 // project tools (get_project_context, get_project_rules, record_failed_attempt,
 // save_project_rule), the Phase 5 FORGE tools (convert_failure_to_rule,
-// find_similar_failures, get_applicable_rules), and the Phase 6 Task Engine
-// tools (build_task_plan, get_task_status, record_task_step, retry_failed_step).
+// find_similar_failures, get_applicable_rules), the Phase 6 Task Engine
+// tools (build_task_plan, get_task_status, record_task_step, retry_failed_step),
+// and the Phase 7 Tool Router tool (route_tools_for_task).
 export const mcpToolNameSchema = z.enum([
   "build_task_plan",
   "convert_failure_to_rule",
@@ -27,6 +28,7 @@ export const mcpToolNameSchema = z.enum([
   "record_failed_attempt",
   "record_task_step",
   "retry_failed_step",
+  "route_tools_for_task",
   "save_memory",
   "save_project_rule",
   "search_memory",
