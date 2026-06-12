@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
@@ -106,7 +106,13 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
     const { client, server } = await connect(projectRoot, store, "proxy");
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(names).toEqual(
-      ["mega_recall", "proxy_expand_chunk", "proxy_read_file", "proxy_run_command"].sort(),
+      [
+        "mega_recall",
+        "proxy_expand_chunk",
+        "proxy_read_file",
+        "proxy_run_command",
+        "proxy_search_code",
+      ].sort(),
     );
     expect(names).not.toContain("mega_read_file");
     expect(names).not.toContain("mega_run_command");
@@ -118,9 +124,19 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
     const { client, server } = await connect(projectRoot, store, "legacy");
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(names).toEqual(
-      ["mega_fetch_chunk", "mega_read_file", "mega_recall", "mega_run_command"].sort(),
+      [
+        "mega_fetch_chunk",
+        "mega_read_file",
+        "mega_recall",
+        "mega_run_command",
+        "proxy_search_code",
+      ].sort(),
     );
-    expect(names.some((n) => n.startsWith("proxy_"))).toBe(false);
+    // proxy_search_code is a NEW v1.2 tool with no mega_* twin; it keeps its
+    // proxy_* name in legacy mode too (the renamed mega_* tools do not appear).
+    expect(names).not.toContain("proxy_read_file");
+    expect(names).not.toContain("proxy_run_command");
+    expect(names).not.toContain("proxy_expand_chunk");
     await server.close();
   });
 
@@ -143,6 +159,52 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
     })) as { content: { type: string; text: string }[] };
     const payload = JSON.parse(res.content[0]?.text ?? "{}") as { chunkSetId?: string };
     expect(payload.chunkSetId).toBeDefined();
+    await server.close();
+  });
+
+  it("proxy_search_code is listed once in both modes (new tool, no mega_* twin)", async () => {
+    const proxy = await connect(projectRoot, store, "proxy");
+    const proxyNames = (await proxy.client.listTools()).tools.map((t) => t.name);
+    expect(proxyNames.filter((n) => n === "proxy_search_code")).toHaveLength(1);
+    await proxy.server.close();
+
+    const legacy = await connect(projectRoot, store, "legacy");
+    const legacyNames = (await legacy.client.listTools()).tools.map((t) => t.name);
+    expect(legacyNames.filter((n) => n === "proxy_search_code")).toHaveLength(1);
+    await legacy.server.close();
+  });
+});
+
+describe("proxy_search_code end-to-end (spec §9.5)", () => {
+  let store: string;
+  let projectRoot: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "mcp-search-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "mcp-search-root-"));
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  it("groups matches by file and returns chunkSetId + index_enrichment", async () => {
+    await writeFile(join(projectRoot, "a.ts"), "const needle = 1;\nconst other = 2;\n");
+    await writeFile(join(projectRoot, "b.ts"), "import { needle } from './a';\n");
+    const { client, server } = await connect(projectRoot, store, "proxy");
+    const res = (await client.callTool({
+      name: "proxy_search_code",
+      arguments: { query: "needle", sessionId: SESSION_ID, path_scope: "." },
+    })) as { content: { type: string; text: string }[] };
+    const payload = JSON.parse(res.content[0]?.text ?? "{}") as {
+      chunkSetId?: string;
+      index_enrichment?: string;
+      files?: { path: string; matches: unknown[] }[];
+    };
+    expect(payload.chunkSetId).toBeDefined();
+    expect(payload.index_enrichment).toBeDefined();
+    const paths = (payload.files ?? []).map((f) => f.path).sort();
+    expect(paths).toContain("./a.ts");
+    expect(paths).toContain("./b.ts");
     await server.close();
   });
 });

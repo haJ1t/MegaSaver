@@ -38,6 +38,10 @@ describe("exposedToolName (P0 §5.3 mapping)", () => {
     expect(exposedToolName("mega_recall", "proxy")).toBe("mega_recall");
     expect(exposedToolName("mega_recall", "legacy")).toBe("mega_recall");
   });
+  it("new unmapped proxy_search_code keeps its name in both modes", () => {
+    expect(exposedToolName("proxy_search_code", "proxy")).toBe("proxy_search_code");
+    expect(exposedToolName("proxy_search_code", "legacy")).toBe("proxy_search_code");
+  });
 });
 
 describe("internalIdFromExposed (reverse dispatch resolution)", () => {
@@ -53,6 +57,10 @@ describe("internalIdFromExposed (reverse dispatch resolution)", () => {
   });
   it("proxy mode still accepts unmapped mega_recall", () => {
     expect(internalIdFromExposed("mega_recall", "proxy")).toBe("mega_recall");
+  });
+  it("resolves proxy_search_code in both modes (new tool, no mega_* twin)", () => {
+    expect(internalIdFromExposed("proxy_search_code", "proxy")).toBe("proxy_search_code");
+    expect(internalIdFromExposed("proxy_search_code", "legacy")).toBe("proxy_search_code");
   });
   it("legacy mode resolves mega_* names", () => {
     expect(internalIdFromExposed("mega_run_command", "legacy")).toBe("mega_run_command");

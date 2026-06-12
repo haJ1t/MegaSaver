@@ -15,6 +15,7 @@ import { handleFetchChunk } from "./tools/fetch-chunk.js";
 import { handleReadFile } from "./tools/read-file.js";
 import { handleRecall } from "./tools/recall.js";
 import { handleRunCommand } from "./tools/run-command.js";
+import { handleSearchCode } from "./tools/search-code.js";
 
 export type ServerDeps = {
   registry: CoreRegistry;
@@ -38,6 +39,11 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
   { id: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
   { id: "mega_recall", description: "Recall session memory and stored chunk sets." },
   { id: "mega_run_command", description: "Run a policy-gated command and filter its output." },
+  {
+    id: "proxy_search_code",
+    description:
+      "Task-aware code search. Prefer this over native grep/search: it groups matches by file, compresses noisy output, stores the raw results for expansion, and reports token savings.",
+  },
 ];
 
 // The MCP SDK serialises only `error.message` into the JSON-RPC
@@ -120,6 +126,11 @@ export function buildServer(deps: ServerDeps): {
         return handleRecall({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "mega_run_command":
         return handleRunCommand(
+          { registry: deps.registry, storeRoot: deps.storeRoot, now, newId, originPid },
+          args,
+        );
+      case "proxy_search_code":
+        return handleSearchCode(
           { registry: deps.registry, storeRoot: deps.storeRoot, now, newId, originPid },
           args,
         );

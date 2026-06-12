@@ -7,10 +7,12 @@ describe("McpToolName type regression", () => {
     const _b: McpToolName = "mega_read_file";
     const _c: McpToolName = "mega_recall";
     const _d: McpToolName = "mega_run_command";
+    const _e: McpToolName = "proxy_search_code";
     void _a;
     void _b;
     void _c;
     void _d;
+    void _e;
   });
 
   it("non-member string is not assignable to McpToolName", () => {
@@ -24,9 +26,14 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 4-member alphabetic order (AA1 §8a)", () => {
-    const _t: readonly ["mega_fetch_chunk", "mega_read_file", "mega_recall", "mega_run_command"] =
-      mcpToolNameSchema.options;
+  it("schema.options preserves the alphabetic order (AA1 §8a)", () => {
+    const _t: readonly [
+      "mega_fetch_chunk",
+      "mega_read_file",
+      "mega_recall",
+      "mega_run_command",
+      "proxy_search_code",
+    ] = mcpToolNameSchema.options;
     void _t;
   });
 });

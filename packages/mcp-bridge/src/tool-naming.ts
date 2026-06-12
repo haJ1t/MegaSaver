@@ -20,8 +20,9 @@ export function namingModeFromEnv(env: NodeJS.ProcessEnv = process.env): NamingM
 
 // §5.3 mapping: internal dispatch id (== legacy wire name) -> proxy
 // wire name. Only these three tools are renamed by v1.2. mega_recall
-// has no proxy twin in the spec mapping and keeps its name in both
-// modes (confirm in repo before extending the map).
+// and proxy_search_code have no proxy/legacy twin and keep their name
+// in both modes (proxy_search_code is a new v1.2 tool, already a
+// proxy_* name — confirm in repo before extending the map).
 const NAME_PAIRS: ReadonlyArray<readonly [McpToolName, string]> = [
   ["mega_read_file", "proxy_read_file"],
   ["mega_run_command", "proxy_run_command"],
