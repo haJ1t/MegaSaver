@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { defineCommand } from "citty";
 import { connectorCommand } from "./commands/connector/index.js";
 import { failCommand } from "./commands/fail/index.js";
+import { rulesCommand } from "./commands/rules/index.js";
 import { contextCommand } from "./commands/context/index.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { indexCommand } from "./commands/index/index.js";
@@ -35,6 +36,7 @@ export const mainCommand = defineCommand({
     doctor: doctorCommand,
     fail: failCommand,
     project: projectCommand,
+    rules: rulesCommand,
     session: sessionCommand,
     connector: connectorCommand,
     memory: memoryCommand,
