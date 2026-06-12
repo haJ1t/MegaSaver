@@ -1,4 +1,4 @@
-import { type MemoryEntryUpdatePatch, memoryApprovalSchema } from "@megasaver/core";
+import type { MemoryEntryUpdatePatch } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, memoryEntryNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
@@ -47,17 +47,23 @@ export async function runMemoryApprove(input: RunMemoryApproveInput): Promise<0 
   }
 
   const now = input.now ?? (() => new Date().toISOString());
-  const updatedAt = readTestEnv("MEGA_TEST_NOW") ?? now();
-  const patch: MemoryEntryUpdatePatch = { approval: input.approval, updatedAt };
 
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
-    if (registry.getMemoryEntry(parsedId) === null) {
+    const existing = registry.getMemoryEntry(parsedId);
+    if (existing === null) {
       const cli = memoryEntryNotFoundMessage(parsedId);
       input.stderr(cli.message);
       return cli.exitCode;
     }
+    // True no-op: re-approving an already-approved memory must not churn updatedAt.
+    if (existing.approval === input.approval) {
+      input.stdout(input.jsonFlag ? JSON.stringify(existing) : existing.id);
+      return 0;
+    }
+    const updatedAt = readTestEnv("MEGA_TEST_NOW") ?? now();
+    const patch: MemoryEntryUpdatePatch = { approval: input.approval, updatedAt };
     const updated = registry.updateMemoryEntry(parsedId, patch);
     input.stdout(input.jsonFlag ? JSON.stringify(updated) : updated.id);
     return 0;
@@ -92,6 +98,3 @@ function defineApprovalCommand(name: "approve" | "reject", approval: "approved" 
 
 export const memoryApproveCommand = defineApprovalCommand("approve", "approved");
 export const memoryRejectCommand = defineApprovalCommand("reject", "rejected");
-
-// memoryApprovalSchema imported for documentation; inlined values used above.
-void memoryApprovalSchema;

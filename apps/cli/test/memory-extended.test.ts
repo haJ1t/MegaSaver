@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { memoryEntrySchema } from "@megasaver/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { memoryCreateCommand } from "../src/commands/memory/create.js";
 import { memoryDeleteCommand } from "../src/commands/memory/delete.js";
@@ -309,22 +310,22 @@ describe("Task 7 — --all review and approval column", () => {
   });
 
   it("formatMemoryExplainLines includes approval row", () => {
-    const entry = {
+    const entry = memoryEntrySchema.parse({
       id: MEM_ID_APPROVED,
       projectId: PROJ_ID,
-      sessionId: null as null,
-      scope: "project" as const,
-      type: "decision" as const,
+      sessionId: null,
+      scope: "project",
+      type: "decision",
       title: "T",
       content: "C",
-      keywords: [] as string[],
-      confidence: "high" as const,
-      source: "manual" as const,
+      keywords: [],
+      confidence: "high",
+      source: "manual",
       stale: false,
-      approval: "approved" as const,
+      approval: "approved",
       createdAt: T,
       updatedAt: T,
-    };
+    });
     const lines = formatMemoryExplainLines(entry);
     expect(lines.some((l) => l.startsWith("approval") && l.includes("approved"))).toBe(true);
   });

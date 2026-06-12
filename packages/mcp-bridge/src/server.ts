@@ -46,7 +46,8 @@ export type ServerDeps = {
 const TOOL_DEFS = [
   {
     name: "approve_memory",
-    description: "Approve or reject a suggested memory entry.",
+    description:
+      "Approve or reject a suggested memory entry (human-in-the-loop decision; cannot move a memory back to suggested).",
   },
   {
     name: "audit_token_usage",

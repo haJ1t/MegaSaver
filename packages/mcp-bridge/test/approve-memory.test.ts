@@ -84,14 +84,22 @@ describe("handleApproveMemory", () => {
     ).rejects.toMatchObject({ code: "validation_failed" });
   });
 
-  it("is idempotent — approving already-approved returns same result", async () => {
+  it("is idempotent — re-approving does not churn updatedAt", async () => {
     const registry = seededRegistry();
-    await handleApproveMemory({ registry, now: () => TS }, { memoryEntryId: MEMORY_ID });
+    const FIRST = "2026-06-12T01:00:00.000Z";
+    await handleApproveMemory({ registry, now: () => FIRST }, { memoryEntryId: MEMORY_ID });
+    const afterFirst = registry.getMemoryEntry(MEMORY_ID as never);
+    expect(afterFirst?.approval).toBe("approved");
+    expect(afterFirst?.updatedAt).toBe(FIRST);
+
+    // No-op re-approve with a LATER clock must not advance updatedAt.
+    const LATER = "2026-06-12T02:00:00.000Z";
     const result = await handleApproveMemory(
-      { registry, now: () => TS },
+      { registry, now: () => LATER },
       { memoryEntryId: MEMORY_ID },
     );
     expect(result.approval).toBe("approved");
+    expect(registry.getMemoryEntry(MEMORY_ID as never)?.updatedAt).toBe(FIRST);
   });
 
   it("throws validation_failed for unknown approval value", async () => {
@@ -100,6 +108,16 @@ describe("handleApproveMemory", () => {
       handleApproveMemory(
         { registry, now: () => TS },
         { memoryEntryId: MEMORY_ID, approval: "maybe" },
+      ),
+    ).rejects.toMatchObject({ code: "validation_failed" });
+  });
+
+  it("rejects approval: suggested — cannot reverse a memory out of the gate", async () => {
+    const registry = seededRegistry();
+    await expect(
+      handleApproveMemory(
+        { registry, now: () => TS },
+        { memoryEntryId: MEMORY_ID, approval: "suggested" },
       ),
     ).rejects.toMatchObject({ code: "validation_failed" });
   });

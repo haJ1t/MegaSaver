@@ -20,11 +20,11 @@ describe("runMemoryApprove", () => {
   ): Parameters<typeof runMemoryApprove>[0] {
     return {
       memoryEntryId: MEMORY_ID,
-      approval: opts.approval,
       storeFlag: store,
       jsonFlag: opts.jsonFlag ?? false,
       cwd: process.cwd(),
-      home: process.env.HOME ?? "",
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      home: process.env["HOME"] ?? "",
       xdgDataHome: undefined,
       platform: process.platform,
       localAppData: undefined,
@@ -64,14 +64,19 @@ describe("runMemoryApprove", () => {
     await writeFile(join(store, "memory", `${PROJECT_ID}.jsonl`), `${entry}\n`);
   }
 
-  async function readStoredApproval(): Promise<string | undefined> {
+  async function readStoredEntry(): Promise<Record<string, unknown> | undefined> {
     const path = join(store, "memory", `${PROJECT_ID}.jsonl`);
     const raw = await readFile(path, "utf8").catch(() => "");
     const entries = raw
       .split("\n")
       .filter((l) => l.length > 0)
       .map((l) => JSON.parse(l) as Record<string, unknown>);
-    return entries[0]?.approval as string | undefined;
+    return entries[0];
+  }
+
+  async function readStoredApproval(): Promise<string | undefined> {
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    return (await readStoredEntry())?.["approval"] as string | undefined;
   }
 
   beforeEach(async () => {
@@ -92,13 +97,21 @@ describe("runMemoryApprove", () => {
     expect(lines[0]).toBe(MEMORY_ID);
   });
 
-  it("is idempotent — approving an already-approved entry returns 0", async () => {
+  it("is idempotent — re-approving returns 0 and does not churn updatedAt", async () => {
     await seedStore();
-    await runMemoryApprove(makeInput({ approval: "approved" }));
+    const FIRST = "2026-06-12T01:00:00.000Z";
+    await runMemoryApprove(makeInput({ approval: "approved", now: () => FIRST }));
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect((await readStoredEntry())?.["updatedAt"]).toBe(FIRST);
+
     lines.length = 0;
-    const code = await runMemoryApprove(makeInput({ approval: "approved" }));
+    // No-op re-approve with a LATER clock must not advance updatedAt.
+    const LATER = "2026-06-12T02:00:00.000Z";
+    const code = await runMemoryApprove(makeInput({ approval: "approved", now: () => LATER }));
     expect(code).toBe(0);
     expect(await readStoredApproval()).toBe("approved");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect((await readStoredEntry())?.["updatedAt"]).toBe(FIRST);
   });
 
   it("sets suggested memory to rejected", async () => {
