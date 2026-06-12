@@ -9,6 +9,13 @@ export {
   type ClassifyInput,
   type OutputCategory,
 } from "./classify.js";
+export { compressByCategory, type CompressorName } from "./compress/index.js";
+export {
+  estimateTokens,
+  HARD_WRAP_THRESHOLD_TOKENS,
+  PASSTHROUGH_THRESHOLD_TOKENS,
+  type FilterDecision,
+} from "./tokens.js";
 
 export {
   filterOutput,

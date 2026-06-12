@@ -41,6 +41,49 @@ describe("filterOutput classification (Proxy Mode v1.2 §10)", () => {
   });
 });
 
+describe("filterOutput passthrough thresholds (Proxy Mode v1.2 §11)", () => {
+  it("small output passes through without fake savings", () => {
+    const result = filterOutput(base("small output line\n"));
+    expect(result.decision).toBe("passthrough");
+    expect(result.compressor).toBe("generic");
+    expect(result.savingRatio).toBeGreaterThanOrEqual(0);
+    expect(result.summary).toContain("passthrough");
+  });
+
+  it("mid-size output returns a light summary, not full compression", () => {
+    const raw = `${"x".repeat(6_000)}\n`; // ~1500 tokens, between thresholds
+    const result = filterOutput(base(raw));
+    expect(result.decision).toBe("light");
+  });
+
+  it("large vitest output is fully compressed with the vitest compressor", () => {
+    const failing = [
+      " ❯ src/b.test.ts > adds numbers",
+      "   × adds numbers",
+      "     AssertionError: expected 3 to be 4",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed (1)",
+      "   Duration  1.20s",
+    ].join("\n");
+    const passing = Array.from(
+      { length: 1500 },
+      (_, i) => ` ✓ src/a.test.ts > passes ${i} (1ms)`,
+    ).join("\n");
+    const raw = `${passing}\n${failing}\n`;
+    const result = filterOutput(
+      base(raw, {
+        mode: "balanced",
+        source: { kind: "command", command: "vitest", args: ["run"] },
+      }),
+    );
+    expect(result.decision).toBe("compressed");
+    expect(result.compressor).toBe("vitest");
+    expect(result.classification.category).toBe("vitest");
+    expect(result.savingRatio).toBeGreaterThan(0);
+    expect(result.rawTokens).toBeGreaterThan(result.returnedTokens);
+  });
+});
+
 describe("filterOutput pipeline (spec §6 / §11)", () => {
   it("shrinks a large multi-KB blob (savingRatio > 0, within budget)", () => {
     const raw = Array.from({ length: 4000 }, (_, i) => `noise line ${i} lorem ipsum dolor`).join(
