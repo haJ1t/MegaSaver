@@ -1,4 +1,6 @@
 export * from "./context-gate.js";
+export * from "./failed-attempt-search.js";
+export * from "./project-rule-ranking.js";
 export * from "./errors.js";
 export * from "./failed-attempt.js";
 export * from "./init-store.js";

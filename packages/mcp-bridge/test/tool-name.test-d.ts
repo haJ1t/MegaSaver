@@ -4,7 +4,10 @@ import { type McpToolName, mcpToolNameSchema } from "../src/tool-name.js";
 describe("McpToolName type regression", () => {
   it("each member is a valid McpToolName", () => {
     const members: McpToolName[] = [
+      "convert_failure_to_rule",
       "explain_context_selection",
+      "find_similar_failures",
+      "get_applicable_rules",
       "get_context_budget_report",
       "get_project_context",
       "get_project_rules",
@@ -34,9 +37,12 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 15-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4)", () => {
+  it("schema.options preserves the 18-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE)", () => {
     const _t: readonly [
+      "convert_failure_to_rule",
       "explain_context_selection",
+      "find_similar_failures",
+      "get_applicable_rules",
       "get_context_budget_report",
       "get_project_context",
       "get_project_rules",

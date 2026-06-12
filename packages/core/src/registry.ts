@@ -6,7 +6,17 @@ import type {
   SessionId,
 } from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
-import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
+import {
+  type FailedAttemptSearchQuery,
+  searchFailedAttempts as searchFailures,
+} from "./failed-attempt-search.js";
+import {
+  type FailedAttempt,
+  type FailedAttemptPatch,
+  failedAttemptPatchSchema,
+  failedAttemptSchema,
+  seedFailureEvidence,
+} from "./failed-attempt.js";
 import {
   type MemoryEntry,
   type MemoryEntryUpdatePatch,
@@ -14,7 +24,12 @@ import {
   memoryEntryUpdatePatchSchema,
 } from "./memory-entry.js";
 import { type MemorySearchQuery, searchMemoryEntries as searchEntries } from "./memory-search.js";
-import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
+import {
+  type FailureToRuleInput,
+  type ProjectRule,
+  failureToRuleInputSchema,
+  projectRuleSchema,
+} from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import {
   type Session,
@@ -52,7 +67,16 @@ export interface CoreRegistry {
   createFailedAttempt(attempt: FailedAttempt): FailedAttempt;
   getFailedAttempt(id: FailedAttemptId): FailedAttempt | null;
   listFailedAttempts(projectId: ProjectId): FailedAttempt[];
+  updateFailedAttempt(id: FailedAttemptId, patch: FailedAttemptPatch): FailedAttempt;
+  searchFailedAttempts(projectId: ProjectId, query: FailedAttemptSearchQuery): FailedAttempt[];
+  convertFailureToRule(
+    failureId: FailedAttemptId,
+    input: FailureToRuleInput,
+    clock: { now: () => string; newId: () => string },
+  ): ConvertFailureResult;
 }
+
+export type ConvertFailureResult = { rule: ProjectRule; failure: FailedAttempt };
 
 export function createInMemoryCoreRegistry(): CoreRegistry {
   const projects = new Map<ProjectId, Project>();
@@ -292,6 +316,68 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       return Array.from(failedAttempts.values())
         .filter((attempt) => attempt.projectId === projectId)
         .map((attempt) => failedAttemptSchema.parse(attempt));
+    },
+
+    updateFailedAttempt(id, patch) {
+      const parsedPatch = failedAttemptPatchSchema.parse(patch);
+      const existing = failedAttempts.get(id);
+      if (!existing) {
+        throw new CoreRegistryError(
+          "failed_attempt_not_found",
+          `Failed attempt does not exist: ${id}`,
+        );
+      }
+      const updated = failedAttemptSchema.parse({ ...existing, ...parsedPatch });
+      failedAttempts.set(id, updated);
+      return updated;
+    },
+
+    searchFailedAttempts(projectId, query) {
+      requireProject(projectId);
+      const attempts = Array.from(failedAttempts.values())
+        .filter((a) => a.projectId === projectId)
+        .map((a) => failedAttemptSchema.parse(a));
+      return searchFailures(attempts, query);
+    },
+
+    convertFailureToRule(failureId, input, clock) {
+      const parsedInput = failureToRuleInputSchema.parse(input);
+      const failure = failedAttempts.get(failureId);
+      if (!failure) {
+        throw new CoreRegistryError(
+          "failed_attempt_not_found",
+          `Failed attempt does not exist: ${failureId}`,
+        );
+      }
+      if (failure.convertedToRule) {
+        throw new CoreRegistryError(
+          "failed_attempt_already_converted",
+          `Failed attempt already converted: ${failureId}`,
+        );
+      }
+      const rule = projectRuleSchema.parse({
+        id: clock.newId(),
+        projectId: failure.projectId,
+        title: parsedInput.title,
+        rule: parsedInput.rule,
+        appliesTo: parsedInput.appliesTo ?? failure.relatedFiles,
+        evidence: [...(parsedInput.evidence ?? []), seedFailureEvidence(failure)],
+        severity: parsedInput.severity,
+        confidence: parsedInput.confidence ?? "medium",
+        createdFrom: "failed_attempt",
+        createdAt: clock.now(),
+        updatedAt: clock.now(),
+      });
+      if (projectRules.has(rule.id)) {
+        throw new CoreRegistryError(
+          "project_rule_already_exists",
+          `Project rule already exists: ${rule.id}`,
+        );
+      }
+      projectRules.set(rule.id, rule);
+      const updatedFailure = failedAttemptSchema.parse({ ...failure, convertedToRule: true });
+      failedAttempts.set(failureId, updatedFailure);
+      return { rule, failure: updatedFailure };
     },
   };
 }

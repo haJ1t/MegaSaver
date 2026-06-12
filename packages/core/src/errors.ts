@@ -13,6 +13,7 @@ export const coreRegistryErrorCodeSchema = z.enum([
   "project_rule_not_found",
   "failed_attempt_already_exists",
   "failed_attempt_not_found",
+  "failed_attempt_already_converted",
 ]);
 
 export type CoreRegistryErrorCode = z.infer<typeof coreRegistryErrorCodeSchema>;

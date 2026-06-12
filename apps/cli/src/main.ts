@@ -3,12 +3,15 @@ import { defineCommand } from "citty";
 import { connectorCommand } from "./commands/connector/index.js";
 import { contextCommand } from "./commands/context/index.js";
 import { doctorCommand } from "./commands/doctor.js";
+import { failCommand } from "./commands/fail/index.js";
 import { indexCommand } from "./commands/index/index.js";
+import { learnCommand } from "./commands/learn.js";
 import { mcpCommand } from "./commands/mcp/index.js";
 import { memoryCommand } from "./commands/memory/index.js";
 import { outputCommand } from "./commands/output/index.js";
 import { packCommand } from "./commands/pack/index.js";
 import { projectCommand } from "./commands/project.js";
+import { rulesCommand } from "./commands/rules/index.js";
 import { scanCommand } from "./commands/scan.js";
 import { sessionCommand } from "./commands/session/index.js";
 
@@ -32,7 +35,10 @@ export const mainCommand = defineCommand({
   },
   subCommands: {
     doctor: doctorCommand,
+    fail: failCommand,
+    learn: learnCommand,
     project: projectCommand,
+    rules: rulesCommand,
     session: sessionCommand,
     connector: connectorCommand,
     memory: memoryCommand,

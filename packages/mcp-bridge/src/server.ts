@@ -11,8 +11,11 @@ import {
   handleGetRelevantCodeBlocks,
   handleGetRelevantContext,
 } from "./tools/context-pruning.js";
+import { handleConvertFailureToRule } from "./tools/convert-failure-to-rule.js";
 import { handleRecordFailedAttempt } from "./tools/failed-attempts.js";
 import { handleFetchChunk } from "./tools/fetch-chunk.js";
+import { handleFindSimilarFailures } from "./tools/find-similar-failures.js";
+import { handleGetApplicableRules } from "./tools/get-applicable-rules.js";
 import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
 import { handleGetProjectContext } from "./tools/project-context.js";
 import { handleGetProjectRules, handleSaveProjectRule } from "./tools/project-rules.js";
@@ -35,8 +38,17 @@ export type ServerDeps = {
 
 const TOOL_DEFS = [
   {
+    name: "convert_failure_to_rule",
+    description: "Convert a failed attempt into a reusable project rule.",
+  },
+  {
     name: "explain_context_selection",
     description: "Per-factor scoring for each included context block.",
+  },
+  { name: "find_similar_failures", description: "Rank past failed attempts similar to a task." },
+  {
+    name: "get_applicable_rules",
+    description: "Score project rules applicable to a task or files.",
   },
   {
     name: "get_context_budget_report",
@@ -188,6 +200,12 @@ export function buildServer(deps: ServerDeps): {
         return handleRecordFailedAttempt({ registry: deps.registry, now, newId }, args);
       case "save_project_rule":
         return handleSaveProjectRule({ registry: deps.registry, now, newId }, args);
+      case "convert_failure_to_rule":
+        return handleConvertFailureToRule({ registry: deps.registry, now, newId }, args);
+      case "find_similar_failures":
+        return handleFindSimilarFailures({ registry: deps.registry }, args);
+      case "get_applicable_rules":
+        return handleGetApplicableRules({ registry: deps.registry }, args);
     }
   }
 
