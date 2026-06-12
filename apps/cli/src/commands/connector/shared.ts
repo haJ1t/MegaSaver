@@ -37,6 +37,7 @@ export function filterMemoryEntriesForSession(
   session: Session | null,
 ): MemoryEntry[] {
   return entries.filter((entry) => {
+    if (entry.approval !== "approved") return false;
     if (entry.scope === "project") return true;
     return session !== null && entry.sessionId === session.id;
   });

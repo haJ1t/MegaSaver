@@ -7,7 +7,7 @@ import {
   createInMemoryCoreRegistry,
   createJsonDirectoryCoreRegistry,
 } from "@megasaver/core";
-import type { ProjectId } from "@megasaver/shared";
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { afterEach, describe, expect, it } from "vitest";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
@@ -122,5 +122,78 @@ describe.each(backends())("$name registry — tool definitions", ({ make }) => {
     expect(() => registry.routeToolsForTask(PROJECT_ID, "x")).toThrow(
       /project_not_found|does not exist/,
     );
+  });
+});
+
+// Approval parity guard: both impls must round-trip a non-default `approval`
+// value identically. If either impl silently drops the field (e.g. on read-
+// back from disk), this test catches it immediately.
+const MEMORY_ID = "33333333-3333-4333-8333-333333333333" as MemoryEntryId;
+const TS = "2026-06-12T00:00:00.000Z";
+
+describe.each(backends())("$name registry — memory approval parity", ({ make }) => {
+  it("round-trips a suggested memory entry with approval: suggested", () => {
+    const registry = make();
+    seedProject(registry);
+    const entry = registry.createMemoryEntry({
+      id: MEMORY_ID,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      type: "decision",
+      title: "Suggested entry",
+      content: "This is a suggested memory for parity.",
+      keywords: [],
+      confidence: "medium",
+      source: "agent",
+      approval: "suggested",
+      stale: false,
+      createdAt: TS,
+      updatedAt: TS,
+    });
+    expect(entry.approval).toBe("suggested");
+    const readBack = registry.getMemoryEntry(MEMORY_ID);
+    expect(readBack?.approval).toBe("suggested");
+  });
+
+  it("round-trips approval: approved and approval: rejected", () => {
+    const registry = make();
+    seedProject(registry);
+    const approvedId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" as MemoryEntryId;
+    const rejectedId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" as MemoryEntryId;
+    registry.createMemoryEntry({
+      id: approvedId,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      type: "architecture",
+      title: "Approved entry",
+      content: "This entry is approved.",
+      keywords: [],
+      confidence: "high",
+      source: "manual",
+      approval: "approved",
+      stale: false,
+      createdAt: TS,
+      updatedAt: TS,
+    });
+    registry.createMemoryEntry({
+      id: rejectedId,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      type: "bug",
+      title: "Rejected entry",
+      content: "This entry was rejected.",
+      keywords: [],
+      confidence: "low",
+      source: "agent",
+      approval: "rejected",
+      stale: false,
+      createdAt: TS,
+      updatedAt: TS,
+    });
+    expect(registry.getMemoryEntry(approvedId)?.approval).toBe("approved");
+    expect(registry.getMemoryEntry(rejectedId)?.approval).toBe("rejected");
   });
 });

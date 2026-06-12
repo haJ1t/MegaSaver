@@ -60,7 +60,13 @@ export async function handleGetProjectContext(
 
   const keyMemories = env.registry
     .listMemoryEntries(projectId.data)
-    .filter((m) => !m.stale && m.confidence !== "low" && KEY_MEMORY_TYPES.has(m.type));
+    .filter(
+      (m) =>
+        m.approval === "approved" &&
+        !m.stale &&
+        m.confidence !== "low" &&
+        KEY_MEMORY_TYPES.has(m.type),
+    );
 
   const openFailures = env.registry
     .listFailedAttempts(projectId.data)

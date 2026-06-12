@@ -1,6 +1,7 @@
 import {
   type CoreRegistry,
   type MemoryEntry,
+  memoryApprovalSchema,
   memoryConfidenceSchema,
   memoryEntrySchema,
   memoryScopeSchema,
@@ -27,6 +28,7 @@ const saveMemoryInputSchema = z
     keywords: z.array(z.string()).optional(),
     confidence: memoryConfidenceSchema.optional(),
     source: memorySourceSchema.optional(),
+    approval: memoryApprovalSchema.optional(),
     sessionId: z.string().min(1).optional(),
     reason: z.string().min(1).optional(),
     goal: z.string().min(1).optional(),
@@ -74,6 +76,7 @@ export async function handleSaveMemory(
       keywords: d.keywords ?? [],
       confidence: d.confidence ?? "medium",
       source: d.source ?? "agent",
+      approval: d.approval ?? "suggested",
       ...(d.reason !== undefined ? { reason: d.reason } : {}),
       ...(d.goal !== undefined ? { goal: d.goal } : {}),
       ...(d.relatedFiles !== undefined ? { relatedFiles: d.relatedFiles } : {}),

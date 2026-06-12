@@ -40,6 +40,7 @@ const MEMORY_ENTRY: MemoryEntry = {
   keywords: [],
   confidence: "medium",
   source: "manual",
+  approval: "approved",
   stale: false,
   createdAt: ISO,
   updatedAt: ISO,

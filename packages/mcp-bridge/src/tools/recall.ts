@@ -39,7 +39,9 @@ export async function handleRecall(
   }
 
   const allMemory = env.registry.listMemoryEntries(session.projectId);
-  const memory = allMemory.filter((m) => m.sessionId === session.id || m.scope === "project");
+  const memory = allMemory.filter(
+    (m) => m.approval === "approved" && (m.sessionId === session.id || m.scope === "project"),
+  );
   const chunkSets = await listChunkSets({
     storeRoot: env.storeRoot,
     projectId: session.projectId,

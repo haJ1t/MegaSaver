@@ -24,7 +24,11 @@ export function buildBridgeConnectorContext(
 
   const memoryEntries = registry
     .listMemoryEntries(project.id)
-    .filter((e) => e.scope === "project" || (session !== null && e.sessionId === session.id))
+    .filter(
+      (e) =>
+        e.approval === "approved" &&
+        (e.scope === "project" || (session !== null && e.sessionId === session.id)),
+    )
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
     .slice(0, 20);
 

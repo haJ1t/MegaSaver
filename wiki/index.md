@@ -115,6 +115,22 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 ## Status
 
+## Phase 10 — Team/Cloud (local approval slice) — SHIPPED (2026-06-12)
+
+Branch `feat/phase10-team-cloud`. `MemoryEntry.approval` (`suggested|approved|rejected`,
+default `approved`). `backfillMemoryEntry` independent approval-defaulting branch (all
+pre-Phase-10 rows → `approved`, zero migration). Agent `save_memory` → `suggested`;
+human `mega memory create` → `approved`. Approval gate: `searchMemoryEntries`
+`includeUnapproved` (gate point 1, transitive) + four explicit `approved` filters on
+`buildConnectorContext` (CLI+GUI mirror) + `get_project_context` + `mega_recall` (gate
+point 2). CLI: `mega memory approve/reject` + `--all` review flag + `approval` column.
+`approve_memory` MCP tool (24 → **25** tools). `buildPrMemoryComment` pure builder +
+`mega github pr-comment`. Team = shared `--store` + gate. Cloud SaaS (hosted
+sync/auth/private-deploy/org-rules/audit-service/web-UI/visibility) **explicitly
+deferred**. **Roadmap complete through all 10 phases.**
+core: 50 test files / 407 tests. mcp-bridge: 27 / 136. cli: 49 / 562.
+gui: 39 / 255. connector-generic-cli: 5 / 40. `pnpm verify` green.
+
 ## Phase 9 — Multi-Agent Connectors — SHIPPED (2026-06-12)
 
 Branch `feat/phase9-connectors`. `agentIdSchema` 5→8 members (adds

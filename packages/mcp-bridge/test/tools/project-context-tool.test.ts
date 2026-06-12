@@ -25,6 +25,23 @@ function seeded(): CoreRegistry {
     keywords: ["auth"],
     confidence: "high",
     source: "manual",
+    approval: "approved",
+    stale: false,
+    createdAt: TS,
+    updatedAt: TS,
+  });
+  registry.createMemoryEntry({
+    id: "a0000000-0000-4000-8000-000000000002",
+    projectId: PROJECT_ID,
+    sessionId: null,
+    scope: "project",
+    type: "decision",
+    title: "Pending suggestion",
+    content: "Agent suggested this, not yet approved.",
+    keywords: [],
+    confidence: "high",
+    source: "agent",
+    approval: "suggested",
     stale: false,
     createdAt: TS,
     updatedAt: TS,
@@ -68,6 +85,16 @@ describe("get_project_context", () => {
     expect(res.openFailures).toHaveLength(1);
     // No index on disk → empty summary, no throw.
     expect(res.indexSummary).toEqual({ totalBlocks: 0, fileCount: 0, byType: {} });
+  });
+
+  it("excludes suggested key memories — only approved appear in keyMemories", async () => {
+    const res = await handleGetProjectContext(
+      { registry: seeded(), storeRoot: "/tmp/does-not-exist-store" },
+      { projectId: PROJECT_ID },
+    );
+    const titles = res.keyMemories.map((m) => m.title);
+    expect(titles).toContain("Auth uses JWT");
+    expect(titles).not.toContain("Pending suggestion");
   });
 
   it("rejects an unknown project as resource_not_found", async () => {

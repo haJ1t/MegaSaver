@@ -395,6 +395,44 @@ New CLI surfaces shipped by the AA1 epic (source: AA1 §1):
   (connectorSynced resolves only on the GUI doctor path). `mcp repair`
   requires `--target` + `--project` (install + connector sync, §5c).
 
+## Phase 10 — Team/Cloud (local slice, 2026-06-12)
+
+### `mega memory approve <memoryEntryId> [--json] [--store <dir>]`
+### `mega memory reject <memoryEntryId> [--json] [--store <dir>]`
+
+Set `approval` on a memory entry. Idempotent (re-approving an already-approved
+entry exits 0). Missing id → `memoryEntryNotFoundMessage` + exit 1. `--json`
+emits the full updated `MemoryEntry`.
+
+### `mega memory search … [--all]` (extended, Phase 10)
+
+New `--all` flag passes `includeUnapproved: true` to `searchMemoryEntries` so
+humans can review pending suggestions. Without `--all`, only `approved` entries
+are returned (gate point 1).
+
+### `mega memory list` / `mega memory explain` (extended, Phase 10)
+
+`formatMemoryListLine` gains an `approval` column (9-char padded, after
+`session`). `formatMemoryExplainLines` gains an `approval: <value>` row after
+`source`.
+
+### `mega github pr-comment <projectName> [--task <s>] [--post <n>] [--json]` (Phase 10)
+
+Print a PR comment built from **approved** project memory relevant to `--task`.
+Uses gate point 1 (`searchMemoryEntries`, scope=project, `includeUnapproved`
+default false) — only approved memory surfaces. `--post <n>` spawns
+`gh pr comment <n> --body-file -` (off-by-default, untested-by-design `gh`
+wrapper; missing/non-zero `gh` → exit 1). Print-only path is unit-tested.
+
+`mega github` is the new top-level group (`apps/cli/src/commands/github/`).
+
+### connector sync — approval gate (Phase 10)
+
+`filterMemoryEntriesForSession` (in `apps/cli/src/commands/connector/shared.ts`)
+now pre-filters `entry.approval !== "approved"` before scope/session checks.
+Only approved memory flows into agent config files. GUI mirror
+(`apps/gui/bridge/connector-context.ts`) carries the same filter.
+
 ## Related
 
 - [[concepts/agent-agnostic-core]]

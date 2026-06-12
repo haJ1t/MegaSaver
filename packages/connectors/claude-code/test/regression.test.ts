@@ -46,6 +46,7 @@ describe("claude-code render — pre-refactor parity", () => {
           keywords: [],
           confidence: "medium" as const,
           source: "manual" as const,
+          approval: "approved" as const,
           stale: false,
           createdAt: NOW,
           updatedAt: NOW,

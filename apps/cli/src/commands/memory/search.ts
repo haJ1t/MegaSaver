@@ -23,6 +23,7 @@ export type RunMemorySearchInput = {
   confidenceFlag: string | undefined;
   scopeFlag: string | undefined;
   includeStale: boolean;
+  allFlag?: boolean;
   limitFlag: number | undefined;
   storeFlag: string | undefined;
   jsonFlag: boolean;
@@ -61,7 +62,10 @@ export async function runMemorySearch(input: RunMemorySearchInput): Promise<0 | 
     return cli.exitCode;
   }
 
-  const query: MemorySearchQuery = { includeStale: input.includeStale };
+  const query: MemorySearchQuery = {
+    includeStale: input.includeStale,
+    ...(input.allFlag ? { includeUnapproved: true } : {}),
+  };
   if (input.queryFlag !== undefined) query.text = input.queryFlag;
   if (input.limitFlag !== undefined) query.limit = input.limitFlag;
   if (input.typeFlag !== undefined) {
@@ -139,6 +143,11 @@ export const memorySearchCommand = defineCommand({
       description: `Filter by scope (${memoryScopeSchema.options.join(" | ")}).`,
     },
     "include-stale": { type: "boolean", default: false, description: "Include stale entries." },
+    all: {
+      type: "boolean",
+      default: false,
+      description: "Include unapproved (suggested/rejected) entries.",
+    },
     limit: { type: "string", description: "Max results (default 20)." },
     store: { type: "string", description: "Override store directory." },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
@@ -153,6 +162,7 @@ export const memorySearchCommand = defineCommand({
       confidenceFlag: typeof args.confidence === "string" ? args.confidence : undefined,
       scopeFlag: typeof args.scope === "string" ? args.scope : undefined,
       includeStale: args["include-stale"] === true,
+      allFlag: args.all === true,
       limitFlag: limitRaw !== undefined && Number.isFinite(limitRaw) ? limitRaw : undefined,
       jsonFlag: args.json === true,
       stdout: (line) => console.log(line),

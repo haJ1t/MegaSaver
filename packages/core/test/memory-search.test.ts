@@ -17,6 +17,7 @@ function entry(over: Partial<MemoryEntry> & { id: string; content: string }): Me
     keywords: over.keywords ?? [],
     confidence: over.confidence ?? "medium",
     source: over.source ?? "manual",
+    approval: over.approval ?? "approved",
     stale: over.stale ?? false,
     createdAt: over.createdAt ?? "2026-06-11T00:00:00.000Z",
     updatedAt: over.updatedAt ?? "2026-06-11T00:00:00.000Z",
@@ -99,5 +100,52 @@ describe("searchMemoryEntries", () => {
     expect(searchMemoryEntries([older, newer], { limit: 1 }).map((e) => e.id)).toEqual([
       "00000000-0000-4000-8000-0000000000d2",
     ]);
+  });
+
+  it("excludes suggested and rejected by default", () => {
+    const entries = [
+      entry({ id: "00000000-0000-4000-8000-0000000000e1", approval: "approved", content: "alpha" }),
+      entry({
+        id: "00000000-0000-4000-8000-0000000000e2",
+        approval: "suggested",
+        content: "alpha",
+      }),
+      entry({ id: "00000000-0000-4000-8000-0000000000e3", approval: "rejected", content: "alpha" }),
+    ];
+    const ids = searchMemoryEntries(entries, { text: "alpha" }).map((e) => e.id);
+    expect(ids).toEqual(["00000000-0000-4000-8000-0000000000e1"]);
+  });
+
+  it("includes unapproved when includeUnapproved is set", () => {
+    const entries = [
+      entry({ id: "00000000-0000-4000-8000-0000000000f1", approval: "approved", content: "alpha" }),
+      entry({
+        id: "00000000-0000-4000-8000-0000000000f2",
+        approval: "suggested",
+        content: "alpha",
+      }),
+    ];
+    const ids = searchMemoryEntries(entries, { text: "alpha", includeUnapproved: true })
+      .map((e) => e.id)
+      .sort();
+    expect(ids).toEqual([
+      "00000000-0000-4000-8000-0000000000f1",
+      "00000000-0000-4000-8000-0000000000f2",
+    ]);
+  });
+
+  it("approval and stale gates are independent", () => {
+    const entries = [
+      entry({
+        id: "00000000-0000-4000-8000-000000000071",
+        approval: "suggested",
+        stale: true,
+        content: "alpha",
+      }),
+    ];
+    expect(searchMemoryEntries(entries, { text: "alpha", includeStale: true })).toHaveLength(0);
+    expect(
+      searchMemoryEntries(entries, { text: "alpha", includeStale: true, includeUnapproved: true }),
+    ).toHaveLength(1);
   });
 });

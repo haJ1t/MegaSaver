@@ -38,6 +38,7 @@ const ENTRY: MemoryEntry = {
   keywords: [],
   confidence: "medium",
   source: "manual",
+  approval: "approved",
   stale: false,
   createdAt: "2026-05-10T12:30:00.000Z",
   updatedAt: "2026-05-10T12:30:00.000Z",
