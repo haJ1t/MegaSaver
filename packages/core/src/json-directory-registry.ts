@@ -1,6 +1,6 @@
 import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from "node:fs";
 import path from "node:path";
-import type { ProjectId, TaskPlanId, TaskStepId } from "@megasaver/shared";
+import type { ProjectId, TaskPlanId, TaskStepId, ToolDefinitionId } from "@megasaver/shared";
 import { CorePersistenceError, CoreRegistryError } from "./errors.js";
 import { searchFailedAttempts as searchFailures } from "./failed-attempt-search.js";
 import {
@@ -14,12 +14,14 @@ import {
   readAllMemoryEntries,
   readAllProjectRules,
   readAllTaskPlans,
+  readAllToolDefinitions,
   readFailedAttemptsForProject,
   readMemoryEntriesForProject,
   readProjectRulesForProject,
   readProjects,
   readSessions,
   readTaskPlansForProject,
+  readToolDefinitionsForProject,
   resolveStorePaths,
   writeFailedAttemptsForProject,
   writeMemoryEntriesForProject,
@@ -27,6 +29,7 @@ import {
   writeProjects,
   writeSessions,
   writeTaskPlansForProject,
+  writeToolDefinitionsForProject,
 } from "./json-directory-store.js";
 import { memoryEntrySchema, memoryEntryUpdatePatchSchema } from "./memory-entry.js";
 import { searchMemoryEntries as searchEntries } from "./memory-search.js";
@@ -37,7 +40,10 @@ import {
   applyTaskStepRecord,
   applyTaskStepRetry,
   buildTaskPlanFromInput,
+  buildToolDefinitionFromInput,
 } from "./registry.js";
+import { routeToolsForTask as routeTools } from "./tool-router.js";
+import { toolDefinitionSchema } from "./tool-definition.js";
 import { type Session, sessionSchema, sessionUpdatePatchSchema } from "./session.js";
 import type { StepOutcome } from "./task-plan-transitions.js";
 import { type TaskPlanInput, taskPlanSchema } from "./task-plan.js";
@@ -556,6 +562,44 @@ export function createJsonDirectoryCoreRegistry(
         writeTaskPlansForProject(paths, existing.projectId, next);
         return updated;
       });
+    },
+
+    createToolDefinition(projectId, input, clock) {
+      return withDirLock(options.rootDir, () => {
+        requireProject(projectId);
+        const tool = buildToolDefinitionFromInput(projectId, input, clock);
+        if (readAllToolDefinitions(paths).some((t) => t.id === tool.id)) {
+          throw new CoreRegistryError(
+            "tool_definition_already_exists",
+            `Tool definition already exists: ${tool.id}`,
+          );
+        }
+        writeToolDefinitionsForProject(paths, projectId, [
+          ...readToolDefinitionsForProject(paths, projectId),
+          tool,
+        ]);
+        return toolDefinitionSchema.parse(tool);
+      });
+    },
+
+    getToolDefinition(id) {
+      const tool = readAllToolDefinitions(paths).find((t) => t.id === id);
+      return tool ? toolDefinitionSchema.parse(tool) : null;
+    },
+
+    listToolDefinitions(projectId) {
+      requireProject(projectId);
+      return readToolDefinitionsForProject(paths, projectId).map((t) =>
+        toolDefinitionSchema.parse(t),
+      );
+    },
+
+    routeToolsForTask(projectId, query) {
+      requireProject(projectId);
+      const tools = readToolDefinitionsForProject(paths, projectId).map((t) =>
+        toolDefinitionSchema.parse(t),
+      );
+      return routeTools(tools, query);
     },
   };
 }

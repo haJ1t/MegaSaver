@@ -6,6 +6,7 @@ import type {
   SessionId,
   TaskPlanId,
   TaskStepId,
+  ToolDefinitionId,
 } from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
 import {
@@ -54,6 +55,13 @@ import {
   taskStepSchema,
 } from "./task-plan.js";
 import { type TokenSaverSettings, tokenSaverSettingsSchema } from "./token-saver.js";
+import { type ToolRouteResult, routeToolsForTask as routeTools } from "./tool-router.js";
+import {
+  type ToolDefinition,
+  type ToolDefinitionInput,
+  toolDefinitionInputSchema,
+  toolDefinitionSchema,
+} from "./tool-definition.js";
 
 export interface CoreRegistry {
   createProject(project: Project): Project;
@@ -104,6 +112,14 @@ export interface CoreRegistry {
     clock: { now: () => string },
   ): TaskPlan;
   retryTaskStep(planId: TaskPlanId, stepId: TaskStepId): TaskPlan;
+  createToolDefinition(
+    projectId: ProjectId,
+    input: ToolDefinitionInput,
+    clock: { now: () => string; newId: () => string },
+  ): ToolDefinition;
+  getToolDefinition(id: ToolDefinitionId): ToolDefinition | null;
+  listToolDefinitions(projectId: ProjectId): ToolDefinition[];
+  routeToolsForTask(projectId: ProjectId, query: string | undefined): ToolRouteResult;
 }
 
 export type ConvertFailureResult = { rule: ProjectRule; failure: FailedAttempt };
@@ -147,6 +163,30 @@ export function buildTaskPlanFromInput(
   });
 }
 
+// Resolve a caller-authored ToolDefinitionInput into a fully-formed
+// ToolDefinition: mint the id, stamp createdAt, default opaque I/O schemas to
+// null. Shared verbatim by both registry impls so they stay behaviourally
+// identical.
+export function buildToolDefinitionFromInput(
+  projectId: ProjectId,
+  input: ToolDefinitionInput,
+  clock: { now: () => string; newId: () => string },
+): ToolDefinition {
+  const parsed = toolDefinitionInputSchema.parse(input);
+  return toolDefinitionSchema.parse({
+    id: clock.newId(),
+    projectId,
+    name: parsed.name,
+    description: parsed.description,
+    category: parsed.category,
+    risk: parsed.risk,
+    keywords: parsed.keywords,
+    inputSchema: parsed.inputSchema ?? null,
+    outputSchema: parsed.outputSchema ?? null,
+    createdAt: clock.now(),
+  });
+}
+
 export function applyTaskStepRecord(
   plan: TaskPlan,
   stepId: TaskStepId,
@@ -186,6 +226,7 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
   const projectRules = new Map<ProjectRuleId, ProjectRule>();
   const failedAttempts = new Map<FailedAttemptId, FailedAttempt>();
   const taskPlans = new Map<TaskPlanId, TaskPlan>();
+  const toolDefinitions = new Map<ToolDefinitionId, ToolDefinition>();
 
   const requireProject = (projectId: ProjectId): void => {
     if (!projects.has(projectId)) {
@@ -540,6 +581,39 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       const updated = applyTaskStepRetry(existing, stepId);
       taskPlans.set(planId, updated);
       return updated;
+    },
+
+    createToolDefinition(projectId, input, clock) {
+      requireProject(projectId);
+      const tool = buildToolDefinitionFromInput(projectId, input, clock);
+      if (toolDefinitions.has(tool.id)) {
+        throw new CoreRegistryError(
+          "tool_definition_already_exists",
+          `Tool definition already exists: ${tool.id}`,
+        );
+      }
+      toolDefinitions.set(tool.id, tool);
+      return toolDefinitionSchema.parse(tool);
+    },
+
+    getToolDefinition(id) {
+      const tool = toolDefinitions.get(id);
+      return tool ? toolDefinitionSchema.parse(tool) : null;
+    },
+
+    listToolDefinitions(projectId) {
+      requireProject(projectId);
+      return Array.from(toolDefinitions.values())
+        .filter((t) => t.projectId === projectId)
+        .map((t) => toolDefinitionSchema.parse(t));
+    },
+
+    routeToolsForTask(projectId, query) {
+      requireProject(projectId);
+      const tools = Array.from(toolDefinitions.values())
+        .filter((t) => t.projectId === projectId)
+        .map((t) => toolDefinitionSchema.parse(t));
+      return routeTools(tools, query);
     },
   };
 }
