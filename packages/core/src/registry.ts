@@ -4,8 +4,24 @@ import type {
   ProjectId,
   ProjectRuleId,
   SessionId,
+  TaskPlanId,
+  TaskStepId,
 } from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
+import {
+  TaskTransitionError,
+  type StepOutcome,
+  applyStepOutcome,
+  resetFailedStep,
+  rollUpPlanStatus,
+} from "./task-plan-transitions.js";
+import {
+  type TaskPlan,
+  type TaskPlanInput,
+  taskPlanInputSchema,
+  taskPlanSchema,
+  taskStepSchema,
+} from "./task-plan.js";
 import {
   type FailedAttemptSearchQuery,
   searchFailedAttempts as searchFailures,
@@ -74,9 +90,94 @@ export interface CoreRegistry {
     input: FailureToRuleInput,
     clock: { now: () => string; newId: () => string },
   ): ConvertFailureResult;
+  createTaskPlan(
+    projectId: ProjectId,
+    input: TaskPlanInput,
+    clock: { now: () => string; newId: () => string },
+  ): TaskPlan;
+  getTaskPlan(id: TaskPlanId): TaskPlan | null;
+  listTaskPlans(projectId: ProjectId): TaskPlan[];
+  recordTaskStep(
+    planId: TaskPlanId,
+    stepId: TaskStepId,
+    outcome: StepOutcome,
+    clock: { now: () => string },
+  ): TaskPlan;
+  retryTaskStep(planId: TaskPlanId, stepId: TaskStepId): TaskPlan;
 }
 
 export type ConvertFailureResult = { rule: ProjectRule; failure: FailedAttempt };
+
+// Resolve a caller-authored TaskPlanInput into a fully-formed TaskPlan: mint the
+// plan id + one TaskStepId per local key, rewrite dependsOnKeys -> dependsOn,
+// seed pending/planned. Shared verbatim by both registry impls so they stay
+// behaviourally identical.
+export function buildTaskPlanFromInput(
+  projectId: ProjectId,
+  input: TaskPlanInput,
+  clock: { now: () => string; newId: () => string },
+): TaskPlan {
+  const parsedInput = taskPlanInputSchema.parse(input);
+  const planId = clock.newId();
+  const keyToId = new Map<string, string>();
+  for (const step of parsedInput.steps) {
+    keyToId.set(step.key, clock.newId());
+  }
+  const steps = parsedInput.steps.map((step) =>
+    taskStepSchema.parse({
+      id: keyToId.get(step.key),
+      type: step.type,
+      title: step.title,
+      dependsOn: step.dependsOnKeys.map((k) => keyToId.get(k)),
+      status: "pending",
+      startedAt: null,
+      completedAt: null,
+      ...(step.description !== undefined ? { description: step.description } : {}),
+    }),
+  );
+  return taskPlanSchema.parse({
+    id: planId,
+    projectId,
+    sessionId: parsedInput.sessionId,
+    task: parsedInput.task,
+    status: "planned",
+    steps,
+    createdAt: clock.now(),
+    updatedAt: clock.now(),
+  });
+}
+
+export function applyTaskStepRecord(
+  plan: TaskPlan,
+  stepId: TaskStepId,
+  outcome: StepOutcome,
+  now: string,
+): TaskPlan {
+  let steps;
+  try {
+    steps = applyStepOutcome(plan.steps, stepId, outcome, now);
+  } catch (err) {
+    if (err instanceof TaskTransitionError) throw new CoreRegistryError(err.code, err.message);
+    throw err;
+  }
+  return taskPlanSchema.parse({
+    ...plan,
+    steps,
+    status: rollUpPlanStatus(steps),
+    updatedAt: now,
+  });
+}
+
+export function applyTaskStepRetry(plan: TaskPlan, stepId: TaskStepId): TaskPlan {
+  let steps;
+  try {
+    steps = resetFailedStep(plan.steps, stepId);
+  } catch (err) {
+    if (err instanceof TaskTransitionError) throw new CoreRegistryError(err.code, err.message);
+    throw err;
+  }
+  return taskPlanSchema.parse({ ...plan, steps, status: rollUpPlanStatus(steps) });
+}
 
 export function createInMemoryCoreRegistry(): CoreRegistry {
   const projects = new Map<ProjectId, Project>();
@@ -84,6 +185,7 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
   const memoryEntries = new Map<MemoryEntryId, MemoryEntry>();
   const projectRules = new Map<ProjectRuleId, ProjectRule>();
   const failedAttempts = new Map<FailedAttemptId, FailedAttempt>();
+  const taskPlans = new Map<TaskPlanId, TaskPlan>();
 
   const requireProject = (projectId: ProjectId): void => {
     if (!projects.has(projectId)) {
@@ -378,6 +480,63 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       const updatedFailure = failedAttemptSchema.parse({ ...failure, convertedToRule: true });
       failedAttempts.set(failureId, updatedFailure);
       return { rule, failure: updatedFailure };
+    },
+
+    createTaskPlan(projectId, input, clock) {
+      requireProject(projectId);
+      const plan = buildTaskPlanFromInput(projectId, input, clock);
+      if (plan.sessionId !== null) {
+        const session = sessions.get(plan.sessionId);
+        if (!session) {
+          throw new CoreRegistryError(
+            "session_not_found",
+            `Session does not exist: ${plan.sessionId}`,
+          );
+        }
+        if (session.projectId !== projectId) {
+          throw new CoreRegistryError(
+            "session_project_mismatch",
+            `Session ${plan.sessionId} does not belong to project ${projectId}`,
+          );
+        }
+      }
+      if (taskPlans.has(plan.id)) {
+        throw new CoreRegistryError("task_plan_already_exists", `Task plan already exists: ${plan.id}`);
+      }
+      taskPlans.set(plan.id, plan);
+      return taskPlanSchema.parse(plan);
+    },
+
+    getTaskPlan(id) {
+      const plan = taskPlans.get(id);
+      return plan ? taskPlanSchema.parse(plan) : null;
+    },
+
+    listTaskPlans(projectId) {
+      requireProject(projectId);
+      return Array.from(taskPlans.values())
+        .filter((p) => p.projectId === projectId)
+        .map((p) => taskPlanSchema.parse(p));
+    },
+
+    recordTaskStep(planId, stepId, outcome, clock) {
+      const existing = taskPlans.get(planId);
+      if (!existing) {
+        throw new CoreRegistryError("task_plan_not_found", `Task plan does not exist: ${planId}`);
+      }
+      const updated = applyTaskStepRecord(existing, stepId, outcome, clock.now());
+      taskPlans.set(planId, updated);
+      return updated;
+    },
+
+    retryTaskStep(planId, stepId) {
+      const existing = taskPlans.get(planId);
+      if (!existing) {
+        throw new CoreRegistryError("task_plan_not_found", `Task plan does not exist: ${planId}`);
+      }
+      const updated = applyTaskStepRetry(existing, stepId);
+      taskPlans.set(planId, updated);
+      return updated;
     },
   };
 }
