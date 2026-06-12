@@ -1,4 +1,6 @@
 export * from "./context-gate.js";
+export * from "./task-plan.js";
+export * from "./task-plan-transitions.js";
 export * from "./failed-attempt-search.js";
 export * from "./project-rule-ranking.js";
 export * from "./errors.js";
