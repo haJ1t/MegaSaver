@@ -16,6 +16,7 @@ import {
   engineRankingFromEnv,
   scoreChunk,
 } from "./rank.js";
+import { type RankingTrace, buildRankingTrace } from "./replay-trace.js";
 import { summarize } from "./summarize.js";
 import {
   type FilterDecision,
@@ -43,6 +44,7 @@ export const filterOutputInputSchema = z
       })
       .optional(),
     engineRanking: z.boolean().optional(),
+    recordTrace: z.boolean().optional(),
     source: z
       .discriminatedUnion("kind", [
         z.object({ kind: z.literal("file"), path: z.string() }),
@@ -81,6 +83,7 @@ export type FilterOutputResult = {
   returnedTokens: number;
   bytesSaved: number;
   savingRatio: number;
+  trace?: RankingTrace;
   chunkSetId?: string;
   warnings?: readonly string[];
 };
@@ -150,6 +153,7 @@ export function filterOutput(input: FilterOutputInput): FilterOutputResult {
   const ordered = [...deduped].sort((a, b) => b.score - a.score);
   const budget = effectiveBudget(maxReturnedBytes, modeToBudget(mode));
   const kept = decision === "compressed" ? fitBudget(deduped, budget) : ordered;
+  const omitted = deduped.filter((c) => !kept.includes(c));
   const droppedCount = deduped.length - kept.length;
   const summary =
     decision === "passthrough"
@@ -166,6 +170,19 @@ export function filterOutput(input: FilterOutputInput): FilterOutputResult {
   const bytesSaved = Math.max(0, rawBytes - returnedBytes);
   const savingRatio = rawBytes === 0 ? 0 : bytesSaved / rawBytes;
 
+  const trace: RankingTrace | undefined = parsed.data.recordTrace
+    ? buildRankingTrace({
+        classification,
+        decision,
+        compressor,
+        engineRanking: engineEnabled,
+        rawTokens,
+        returnedTokens,
+        selected: kept,
+        omitted,
+      })
+    : undefined;
+
   const result: FilterOutputResult = {
     summary,
     excerpts,
@@ -178,6 +195,7 @@ export function filterOutput(input: FilterOutputInput): FilterOutputResult {
     returnedTokens,
     bytesSaved,
     savingRatio,
+    ...(trace !== undefined ? { trace } : {}),
   };
   if (warnings.length > 0) return { ...result, warnings };
   return result;

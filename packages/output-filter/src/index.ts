@@ -11,6 +11,16 @@ export {
 } from "./classify.js";
 export { compressByCategory, type CompressorName } from "./compress/index.js";
 export {
+  buildRankingTrace,
+  finalizeReplayTrace,
+  replayTraceSchema,
+  writeReplayTrace,
+  type ChunkRef,
+  type RankingTrace,
+  type ReplayTrace,
+  type ReplayTraceMeta,
+} from "./replay-trace.js";
+export {
   estimateTokens,
   HARD_WRAP_THRESHOLD_TOKENS,
   PASSTHROUGH_THRESHOLD_TOKENS,
