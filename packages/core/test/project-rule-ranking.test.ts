@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ProjectRule } from "../src/project-rule.js";
 import { rankApplicableRules } from "../src/project-rule-ranking.js";
+import type { ProjectRule } from "../src/project-rule.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 function rule(over: Partial<ProjectRule> & { id: string }): ProjectRule {
@@ -21,16 +21,34 @@ function rule(over: Partial<ProjectRule> & { id: string }): ProjectRule {
 
 describe("rankApplicableRules", () => {
   it("ranks a path-matching rule above a pure text match", () => {
-    const db = rule({ id: "b0000000-0000-4000-8000-000000000001", title: "migrate", appliesTo: ["src/db/"] });
-    const txt = rule({ id: "b0000000-0000-4000-8000-000000000002", title: "migrate prisma schema", rule: "regenerate client" });
-    const out = rankApplicableRules([db, txt], { task: "migrate prisma", files: ["src/db/schema.ts"] });
+    const db = rule({
+      id: "b0000000-0000-4000-8000-000000000001",
+      title: "migrate",
+      appliesTo: ["src/db/"],
+    });
+    const txt = rule({
+      id: "b0000000-0000-4000-8000-000000000002",
+      title: "migrate prisma schema",
+      rule: "regenerate client",
+    });
+    const out = rankApplicableRules([db, txt], {
+      task: "migrate prisma",
+      files: ["src/db/schema.ts"],
+    });
     expect(out[0]?.rule.id).toBe(db.id);
     expect(out[0]?.reason).toContain("applies to src/db/schema.ts");
   });
 
   it("drops zero-score rules when a filter is present", () => {
-    const r = rule({ id: "b0000000-0000-4000-8000-000000000001", title: "navbar", rule: "ui only", appliesTo: ["src/ui/"] });
-    expect(rankApplicableRules([r], { task: "database migration", files: ["src/db/x.ts"] })).toEqual([]);
+    const r = rule({
+      id: "b0000000-0000-4000-8000-000000000001",
+      title: "navbar",
+      rule: "ui only",
+      appliesTo: ["src/ui/"],
+    });
+    expect(
+      rankApplicableRules([r], { task: "database migration", files: ["src/db/x.ts"] }),
+    ).toEqual([]);
   });
 
   it("with no filter returns all sorted by severity then id", () => {
@@ -42,6 +60,8 @@ describe("rankApplicableRules", () => {
   });
 
   it("rejects an empty-string file", () => {
-    expect(() => rankApplicableRules([rule({ id: "b0000000-0000-4000-8000-000000000001" })], { files: [""] })).toThrow();
+    expect(() =>
+      rankApplicableRules([rule({ id: "b0000000-0000-4000-8000-000000000001" })], { files: [""] }),
+    ).toThrow();
   });
 });

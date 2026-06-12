@@ -2,13 +2,13 @@ import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from 
 import path from "node:path";
 import type { ProjectId } from "@megasaver/shared";
 import { CorePersistenceError, CoreRegistryError } from "./errors.js";
+import { searchFailedAttempts as searchFailures } from "./failed-attempt-search.js";
 import {
   type FailedAttempt,
   failedAttemptPatchSchema,
   failedAttemptSchema,
   seedFailureEvidence,
 } from "./failed-attempt.js";
-import { searchFailedAttempts as searchFailures } from "./failed-attempt-search.js";
 import {
   readAllFailedAttempts,
   readAllMemoryEntries,
@@ -27,7 +27,7 @@ import {
 } from "./json-directory-store.js";
 import { memoryEntrySchema, memoryEntryUpdatePatchSchema } from "./memory-entry.js";
 import { searchMemoryEntries as searchEntries } from "./memory-search.js";
-import { failureToRuleInputSchema, type ProjectRule, projectRuleSchema } from "./project-rule.js";
+import { type ProjectRule, failureToRuleInputSchema, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import type { CoreRegistry } from "./registry.js";
 import { type Session, sessionSchema, sessionUpdatePatchSchema } from "./session.js";
@@ -405,7 +405,10 @@ export function createJsonDirectoryCoreRegistry(
       return withDirLock(options.rootDir, () => {
         const existing = readAllFailedAttempts(paths).find((f) => f.id === id);
         if (!existing) {
-          throw new CoreRegistryError("failed_attempt_not_found", `Failed attempt does not exist: ${id}`);
+          throw new CoreRegistryError(
+            "failed_attempt_not_found",
+            `Failed attempt does not exist: ${id}`,
+          );
         }
         const updated = failedAttemptSchema.parse({ ...existing, ...parsedPatch });
         const next = readFailedAttemptsForProject(paths, existing.projectId).map((f) =>
@@ -429,10 +432,16 @@ export function createJsonDirectoryCoreRegistry(
       return withDirLock(options.rootDir, () => {
         const failure = readAllFailedAttempts(paths).find((f) => f.id === failureId);
         if (!failure) {
-          throw new CoreRegistryError("failed_attempt_not_found", `Failed attempt does not exist: ${failureId}`);
+          throw new CoreRegistryError(
+            "failed_attempt_not_found",
+            `Failed attempt does not exist: ${failureId}`,
+          );
         }
         if (failure.convertedToRule) {
-          throw new CoreRegistryError("failed_attempt_already_converted", `Failed attempt already converted: ${failureId}`);
+          throw new CoreRegistryError(
+            "failed_attempt_already_converted",
+            `Failed attempt already converted: ${failureId}`,
+          );
         }
         const rule = projectRuleSchema.parse({
           id: clock.newId(),
@@ -448,7 +457,10 @@ export function createJsonDirectoryCoreRegistry(
           updatedAt: clock.now(),
         });
         if (readAllProjectRules(paths).some((r) => r.id === rule.id)) {
-          throw new CoreRegistryError("project_rule_already_exists", `Project rule already exists: ${rule.id}`);
+          throw new CoreRegistryError(
+            "project_rule_already_exists",
+            `Project rule already exists: ${rule.id}`,
+          );
         }
         writeProjectRulesForProject(paths, rule.projectId, [
           ...readProjectRulesForProject(paths, rule.projectId),

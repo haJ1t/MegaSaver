@@ -12,7 +12,13 @@ const FA_ID = failedAttemptIdSchema.parse("a0000000-0000-4000-8000-000000000001"
 const TS = "2026-06-12T00:00:00.000Z";
 const RULE_ID = "c0000000-0000-4000-8000-000000000001";
 
-const project = { id: PROJECT_ID, name: "demo", rootPath: "/tmp/demo", createdAt: TS, updatedAt: TS } as const;
+const project = {
+  id: PROJECT_ID,
+  name: "demo",
+  rootPath: "/tmp/demo",
+  createdAt: TS,
+  updatedAt: TS,
+} as const;
 const failure = {
   id: FA_ID,
   projectId: PROJECT_ID,
@@ -38,14 +44,18 @@ function suite(name: string, make: () => CoreRegistry) {
 
     it("updateFailedAttempt throws on missing", () => {
       const r = make();
-      expect(() => r.updateFailedAttempt(FA_ID, { resolution: "x" })).toThrowError(/failed_attempt_not_found|does not exist/);
+      expect(() => r.updateFailedAttempt(FA_ID, { resolution: "x" })).toThrowError(
+        /failed_attempt_not_found|does not exist/,
+      );
     });
 
     it("searchFailedAttempts scopes to project and ranks by text", () => {
       const r = make();
       r.createProject(project);
       r.createFailedAttempt(failure);
-      expect(r.searchFailedAttempts(PROJECT_ID, { text: "login auth" }).map((f) => f.id)).toEqual([FA_ID]);
+      expect(r.searchFailedAttempts(PROJECT_ID, { text: "login auth" }).map((f) => f.id)).toEqual([
+        FA_ID,
+      ]);
     });
 
     it("convertFailureToRule creates a seeded rule and flips the failure (atomic)", () => {
@@ -71,14 +81,20 @@ function suite(name: string, make: () => CoreRegistry) {
       r.createFailedAttempt(failure);
       r.convertFailureToRule(FA_ID, { title: "t", rule: "r", severity: "info" }, clock);
       expect(() =>
-        r.convertFailureToRule(FA_ID, { title: "t", rule: "r", severity: "info" }, { now: () => TS, newId: () => "c0000000-0000-4000-8000-000000000002" }),
+        r.convertFailureToRule(
+          FA_ID,
+          { title: "t", rule: "r", severity: "info" },
+          { now: () => TS, newId: () => "c0000000-0000-4000-8000-000000000002" },
+        ),
       ).toThrowError(/failed_attempt_already_converted|already converted/);
     });
 
     it("convertFailureToRule throws on missing failure", () => {
       const r = make();
       r.createProject(project);
-      expect(() => r.convertFailureToRule(FA_ID, { title: "t", rule: "r", severity: "info" }, clock)).toThrowError(/failed_attempt_not_found|does not exist/);
+      expect(() =>
+        r.convertFailureToRule(FA_ID, { title: "t", rule: "r", severity: "info" }, clock),
+      ).toThrowError(/failed_attempt_not_found|does not exist/);
     });
   });
 }
@@ -87,7 +103,11 @@ suite("in-memory", () => createInMemoryCoreRegistry());
 
 describe("json-directory", () => {
   let root: string;
-  beforeEach(() => { root = mkdtempSync(join(tmpdir(), "reg-p5-")); });
-  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "reg-p5-"));
+  });
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
   suite("json", () => createJsonDirectoryCoreRegistry({ rootDir: root }));
 });

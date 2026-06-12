@@ -7,13 +7,16 @@ import type {
 } from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
 import {
+  type FailedAttemptSearchQuery,
+  searchFailedAttempts as searchFailures,
+} from "./failed-attempt-search.js";
+import {
   type FailedAttempt,
   type FailedAttemptPatch,
   failedAttemptPatchSchema,
   failedAttemptSchema,
   seedFailureEvidence,
 } from "./failed-attempt.js";
-import { type FailedAttemptSearchQuery, searchFailedAttempts as searchFailures } from "./failed-attempt-search.js";
 import {
   type MemoryEntry,
   type MemoryEntryUpdatePatch,
@@ -319,7 +322,10 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       const parsedPatch = failedAttemptPatchSchema.parse(patch);
       const existing = failedAttempts.get(id);
       if (!existing) {
-        throw new CoreRegistryError("failed_attempt_not_found", `Failed attempt does not exist: ${id}`);
+        throw new CoreRegistryError(
+          "failed_attempt_not_found",
+          `Failed attempt does not exist: ${id}`,
+        );
       }
       const updated = failedAttemptSchema.parse({ ...existing, ...parsedPatch });
       failedAttempts.set(id, updated);
@@ -338,10 +344,16 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       const parsedInput = failureToRuleInputSchema.parse(input);
       const failure = failedAttempts.get(failureId);
       if (!failure) {
-        throw new CoreRegistryError("failed_attempt_not_found", `Failed attempt does not exist: ${failureId}`);
+        throw new CoreRegistryError(
+          "failed_attempt_not_found",
+          `Failed attempt does not exist: ${failureId}`,
+        );
       }
       if (failure.convertedToRule) {
-        throw new CoreRegistryError("failed_attempt_already_converted", `Failed attempt already converted: ${failureId}`);
+        throw new CoreRegistryError(
+          "failed_attempt_already_converted",
+          `Failed attempt already converted: ${failureId}`,
+        );
       }
       const rule = projectRuleSchema.parse({
         id: clock.newId(),
@@ -357,7 +369,10 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
         updatedAt: clock.now(),
       });
       if (projectRules.has(rule.id)) {
-        throw new CoreRegistryError("project_rule_already_exists", `Project rule already exists: ${rule.id}`);
+        throw new CoreRegistryError(
+          "project_rule_already_exists",
+          `Project rule already exists: ${rule.id}`,
+        );
       }
       projectRules.set(rule.id, rule);
       const updatedFailure = failedAttemptSchema.parse({ ...failure, convertedToRule: true });

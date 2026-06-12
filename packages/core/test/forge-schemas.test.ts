@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { type FailedAttempt, failedAttemptPatchSchema, seedFailureEvidence } from "../src/failed-attempt.js";
+import {
+  type FailedAttempt,
+  failedAttemptPatchSchema,
+  seedFailureEvidence,
+} from "../src/failed-attempt.js";
 import { failureToRuleInputSchema } from "../src/project-rule.js";
 
 describe("failedAttemptPatchSchema", () => {
@@ -18,7 +22,9 @@ describe("failureToRuleInputSchema", () => {
     expect(parsed.severity).toBe("warning");
   });
   it("rejects an unknown key and a missing severity", () => {
-    expect(() => failureToRuleInputSchema.parse({ title: "t", rule: "r", severity: "warning", id: "x" })).toThrow();
+    expect(() =>
+      failureToRuleInputSchema.parse({ title: "t", rule: "r", severity: "warning", id: "x" }),
+    ).toThrow();
     expect(() => failureToRuleInputSchema.parse({ title: "t", rule: "r" })).toThrow();
   });
 });
