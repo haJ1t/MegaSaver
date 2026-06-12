@@ -6,7 +6,9 @@
  * of all agent config files, then exposes it once a human approves it.
  *
  * Flow:
- *   1. Agent writes memory via handleSaveMemory (no approval → "suggested").
+ *   1. Seed a "suggested" project memory in the shared store via
+ *      registry.createMemoryEntry (the agent default of save_memory →
+ *      "suggested" is proven separately in the mcp-bridge save-memory test).
  *   2. Sync to claude-code + cursor: both files MUST NOT contain the content.
  *   3. Human approves via runMemoryApprove.
  *   4. Re-sync both: both files MUST contain the content — same approved
@@ -84,7 +86,7 @@ describe("team-shared memory — approval gate exit proof", () => {
   }
 
   it("suggested memory is excluded from synced files; approved memory appears in both", async () => {
-    // Step 1: Agent writes a suggested memory directly to the shared store.
+    // Step 1: Seed a suggested memory directly in the shared store.
     const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
     await mkdir(join(store, "memory"), { recursive: true });
     registry.createMemoryEntry({

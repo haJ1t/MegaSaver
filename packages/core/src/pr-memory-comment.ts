@@ -8,18 +8,30 @@ export type PrMemoryCommentOptions = {
 
 const DEFAULT_HEADING = "Mega Saver — relevant project memory";
 
-// Markdown-escape a single-line field so a memory's content cannot break the
-// rendered comment (backticks open code spans; pipes break tables; the renderer
-// boundary is a real corruption risk — escape defensively here).
+// Neutralize a memory field so it cannot break the rendered comment or inject
+// markup. This is a teammate-facing surface posted into GitHub/Slack/email/CI
+// scrapers, so escape defensively:
+//   1. Collapse ALL line breaks to a single space — a newline followed by
+//      `## ` would inject a real heading and shatter the list structure.
+//   2. HTML-encode `& < >` (`&` FIRST) so content can't smuggle `<script>` or
+//      raw HTML into renderers that don't sanitize. In markdown these entities
+//      still display as the literal characters (`a < b` reads correctly).
+//   3. Backslash-escape `\ ` `` ` `` `|` — backticks open code spans, pipes
+//      break tables, backslash is the markdown escape char itself.
 function escapeField(value: string): string {
-  return value.replace(/[\\`|]/g, (ch) => `\\${ch}`);
+  return value
+    .replace(/[\r\n]+/g, " ")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/[\\`|]/g, (ch) => `\\${ch}`);
 }
 
 export function buildPrMemoryComment(
   memories: readonly MemoryEntry[],
   opts: PrMemoryCommentOptions,
 ): string {
-  const lines: string[] = [`## ${opts.heading ?? DEFAULT_HEADING}`, ""];
+  const lines: string[] = [`## ${escapeField(opts.heading ?? DEFAULT_HEADING)}`, ""];
   lines.push(`Project: \`${escapeField(opts.projectName)}\``);
   if (opts.task !== undefined && opts.task.trim().length > 0) {
     lines.push(`Task: ${escapeField(opts.task)}`);

@@ -72,6 +72,56 @@ describe("buildPrMemoryComment", () => {
     expect(result).toContain("Content with \\`backtick\\` and \\|pipe\\|.");
   });
 
+  it("collapses newlines so a field cannot inject a heading or list line", () => {
+    const entry = makeEntry({
+      id: MEMORY_ENTRY_ID_1,
+      title: "Innocent",
+      content: "line one\n## Injected\nline two",
+    });
+    const result = buildPrMemoryComment([entry], { projectName: "Proj" });
+    // The injected text survives as inline content, never as its own line.
+    expect(result).not.toContain("\n## Injected");
+    expect(result).toContain("line one ## Injected line two");
+    // Only the real heading line begins with `## `.
+    const headingLines = result.split("\n").filter((l) => l.startsWith("## "));
+    expect(headingLines).toEqual(["## Mega Saver — relevant project memory"]);
+  });
+
+  it("HTML-encodes script tags so raw HTML cannot be injected", () => {
+    const entry = makeEntry({
+      id: MEMORY_ENTRY_ID_1,
+      title: "XSS attempt",
+      content: "<script>alert(1)</script>",
+    });
+    const result = buildPrMemoryComment([entry], { projectName: "Proj" });
+    expect(result).not.toContain("<script>");
+    expect(result).not.toContain("</script>");
+    expect(result).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+  });
+
+  it("HTML-encodes ampersand and angle brackets, encoding & first", () => {
+    const entry = makeEntry({
+      id: MEMORY_ENTRY_ID_1,
+      title: "Comparison",
+      content: "a < b && c > d",
+    });
+    const result = buildPrMemoryComment([entry], { projectName: "Proj" });
+    expect(result).toContain("a &lt; b &amp;&amp; c &gt; d");
+    // No double-encoding: encoding & first must not turn &lt; into &amp;lt;.
+    expect(result).not.toContain("&amp;lt;");
+    expect(result).not.toContain("&amp;gt;");
+  });
+
+  it("sanitizes a heading override against structure injection", () => {
+    const result = buildPrMemoryComment([], {
+      projectName: "P",
+      heading: "Pwned\n## Real Heading",
+    });
+    expect(result).not.toContain("\n## Real Heading");
+    const headingLines = result.split("\n").filter((l) => l.startsWith("## "));
+    expect(headingLines).toEqual(["## Pwned ## Real Heading"]);
+  });
+
   it("includes task line when task is provided", () => {
     const result = buildPrMemoryComment([], { projectName: "P", task: "auth refactor" });
     expect(result).toContain("Task: auth refactor");

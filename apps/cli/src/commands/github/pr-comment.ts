@@ -2,13 +2,11 @@ import { buildPrMemoryComment } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { readStoreEnv } from "../../store.js";
-import { toStringArray } from "../context/shared.js";
 import { type StoreEnv, loadProjectContext } from "../index/shared.js";
 
 export type RunGithubPrCommentInput = StoreEnv & {
   projectName: string;
   task: string;
-  files: string[];
   limitFlag: number | undefined;
   postFlag: string | undefined;
   stdout: (line: string) => void;
@@ -65,7 +63,6 @@ export const githubPrCommentCommand = defineCommand({
   args: {
     projectName: { type: "positional", required: true, description: "Project name." },
     task: { type: "string", description: "Task text to rank relevant memory by." },
-    files: { type: "string", description: "Related file path (repeatable)." },
     limit: { type: "string", description: "Max memories to include." },
     post: { type: "string", description: "PR number to post to via gh (best-effort)." },
     store: { type: "string", description: "Override store directory." },
@@ -76,7 +73,6 @@ export const githubPrCommentCommand = defineCommand({
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       projectName: typeof args.projectName === "string" ? args.projectName : "",
       task: typeof args.task === "string" ? args.task : "",
-      files: toStringArray(args.files),
       limitFlag: limitRaw !== undefined && Number.isFinite(limitRaw) ? limitRaw : undefined,
       postFlag: typeof args.post === "string" ? args.post : undefined,
       stdout: (line) => console.log(line),

@@ -79,7 +79,6 @@ describe("runGithubPrComment", () => {
     return {
       projectName: "demo",
       task: "auth",
-      files: [],
       limitFlag: undefined,
       postFlag: undefined,
       storeFlag: store,
