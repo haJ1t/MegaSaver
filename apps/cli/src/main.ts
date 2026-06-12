@@ -5,6 +5,7 @@ import { connectorCommand } from "./commands/connector/index.js";
 import { contextCommand } from "./commands/context/index.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { failCommand } from "./commands/fail/index.js";
+import { githubCommand } from "./commands/github/index.js";
 import { indexCommand } from "./commands/index/index.js";
 import { learnCommand } from "./commands/learn.js";
 import { mcpCommand } from "./commands/mcp/index.js";
@@ -39,6 +40,7 @@ export const mainCommand = defineCommand({
   subCommands: {
     audit: auditCommand,
     doctor: doctorCommand,
+    github: githubCommand,
     fail: failCommand,
     learn: learnCommand,
     project: projectCommand,
