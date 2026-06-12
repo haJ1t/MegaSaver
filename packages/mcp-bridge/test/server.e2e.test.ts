@@ -314,15 +314,32 @@ describe("phase 7 tool router over the bridge", () => {
     const clock = (id: string) => ({ now: () => TS7, newId: () => id });
     registry.createToolDefinition(
       PROJECT_ID,
-      { name: "grep", description: "search files", category: "search", risk: "safe", keywords: ["search"] } as never,
+      {
+        name: "grep",
+        description: "search files",
+        category: "search",
+        risk: "safe",
+        keywords: ["search"],
+      } as never,
       clock("e0000000-0000-4000-8000-000000000001"),
     );
     registry.createToolDefinition(
       PROJECT_ID,
-      { name: "ship", description: "deploy to production", category: "deploy", risk: "dangerous", keywords: ["deploy"] } as never,
+      {
+        name: "ship",
+        description: "deploy to production",
+        category: "deploy",
+        risk: "dangerous",
+        keywords: ["deploy"],
+      } as never,
       clock("e0000000-0000-4000-8000-000000000002"),
     );
-    const { server } = buildServer({ registry, storeRoot: "/tmp", now: () => TS7, newId: () => "x" });
+    const { server } = buildServer({
+      registry,
+      storeRoot: "/tmp",
+      now: () => TS7,
+      newId: () => "x",
+    });
     const [clientT, serverT] = InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "test", version: "0" }, { capabilities: {} });
     await Promise.all([server.connect(serverT), client.connect(clientT)]);
