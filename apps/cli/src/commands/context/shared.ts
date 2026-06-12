@@ -1,5 +1,6 @@
 import { type ContextPack, buildContextPack } from "@megasaver/context-pruner";
 import { readBlocks, resolveIndexPaths } from "@megasaver/indexer";
+import type { ProjectId } from "@megasaver/shared";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { type StoreEnv, loadProjectContext } from "../index/shared.js";
 
@@ -13,7 +14,12 @@ export type ContextRequest = StoreEnv & {
   stderr: (line: string) => void;
 };
 
-export type LoadedPack = { pack: ContextPack; rootPath: string };
+export type LoadedPack = {
+  pack: ContextPack;
+  rootPath: string;
+  projectId: ProjectId;
+  rootDir: string;
+};
 
 export function taskRequiredMessage(): string {
   return "error: --task is required";
@@ -43,7 +49,12 @@ export async function loadPack(input: ContextRequest): Promise<LoadedPack | null
       ...(input.limitFlag !== undefined ? { limit: input.limitFlag } : {}),
       ...(input.maxTokensFlag !== undefined ? { maxTokens: input.maxTokensFlag } : {}),
     });
-    return { pack, rootPath: ctx.project.rootPath };
+    return {
+      pack,
+      rootPath: ctx.project.rootPath,
+      projectId: ctx.project.id,
+      rootDir: ctx.rootDir,
+    };
   } catch (err) {
     input.stderr(mapErrorToCliMessage(err).message);
     return null;

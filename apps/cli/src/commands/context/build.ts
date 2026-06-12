@@ -1,4 +1,7 @@
+import { auditPack } from "@megasaver/context-pruner";
 import type { ScoredBlock } from "@megasaver/context-pruner";
+import { appendAuditEvent } from "@megasaver/core";
+import type { SessionId } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { readStoreEnv } from "../../store.js";
 import { type ContextRequest, loadPack, toStringArray } from "./shared.js";
@@ -14,12 +17,47 @@ function line(index: number, block: ScoredBlock): string[] {
 export type RunContextBuildInput = ContextRequest & {
   jsonFlag: boolean;
   stdout: (line: string) => void;
+  // Optional audit injection — when present, a context_pack_built event is
+  // appended best-effort (failure never breaks the build path).
+  sessionId?: SessionId;
+  now?: () => string;
+  newId?: () => string;
 };
 
 export async function runContextBuild(input: RunContextBuildInput): Promise<0 | 1> {
   const loaded = await loadPack(input);
   if (!loaded) return 1;
-  const { pack } = loaded;
+  const { pack, projectId, rootDir } = loaded;
+
+  // Emit a context_pack_built audit event best-effort (spec §6d / Task 11).
+  if (input.sessionId !== undefined) {
+    try {
+      const a = auditPack(pack);
+      const now = input.now ?? (() => new Date().toISOString());
+      const newId = input.newId ?? (() => crypto.randomUUID().toLowerCase());
+      appendAuditEvent({
+        store: { root: rootDir },
+        event: {
+          id: newId(),
+          sessionId: input.sessionId,
+          projectId,
+          createdAt: now(),
+          kind: "context_pack_built",
+          filesConsidered: a.filesConsidered,
+          filesIncluded: a.filesIncluded,
+          filesExcluded: a.filesExcluded,
+          blocksConsidered: a.blocksConsidered,
+          blocksIncluded: a.blocksIncluded,
+          blocksExcluded: a.blocksExcluded,
+          tokensBefore: a.tokensBefore,
+          tokensAfter: a.tokensAfter,
+        },
+      });
+    } catch {
+      // Best-effort: emission failure must not break the build path.
+    }
+  }
+
   if (input.jsonFlag) {
     input.stdout(JSON.stringify(pack));
     return 0;
