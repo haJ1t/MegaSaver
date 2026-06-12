@@ -9,20 +9,6 @@ import type {
 } from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
 import {
-  TaskTransitionError,
-  type StepOutcome,
-  applyStepOutcome,
-  resetFailedStep,
-  rollUpPlanStatus,
-} from "./task-plan-transitions.js";
-import {
-  type TaskPlan,
-  type TaskPlanInput,
-  taskPlanInputSchema,
-  taskPlanSchema,
-  taskStepSchema,
-} from "./task-plan.js";
-import {
   type FailedAttemptSearchQuery,
   searchFailedAttempts as searchFailures,
 } from "./failed-attempt-search.js";
@@ -53,6 +39,20 @@ import {
   sessionSchema,
   sessionUpdatePatchSchema,
 } from "./session.js";
+import {
+  type StepOutcome,
+  TaskTransitionError,
+  applyStepOutcome,
+  resetFailedStep,
+  rollUpPlanStatus,
+} from "./task-plan-transitions.js";
+import {
+  type TaskPlan,
+  type TaskPlanInput,
+  taskPlanInputSchema,
+  taskPlanSchema,
+  taskStepSchema,
+} from "./task-plan.js";
 import { type TokenSaverSettings, tokenSaverSettingsSchema } from "./token-saver.js";
 
 export interface CoreRegistry {
@@ -153,7 +153,7 @@ export function applyTaskStepRecord(
   outcome: StepOutcome,
   now: string,
 ): TaskPlan {
-  let steps;
+  let steps: TaskPlan["steps"];
   try {
     steps = applyStepOutcome(plan.steps, stepId, outcome, now);
   } catch (err) {
@@ -169,7 +169,7 @@ export function applyTaskStepRecord(
 }
 
 export function applyTaskStepRetry(plan: TaskPlan, stepId: TaskStepId): TaskPlan {
-  let steps;
+  let steps: TaskPlan["steps"];
   try {
     steps = resetFailedStep(plan.steps, stepId);
   } catch (err) {
@@ -501,7 +501,10 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
         }
       }
       if (taskPlans.has(plan.id)) {
-        throw new CoreRegistryError("task_plan_already_exists", `Task plan already exists: ${plan.id}`);
+        throw new CoreRegistryError(
+          "task_plan_already_exists",
+          `Task plan already exists: ${plan.id}`,
+        );
       }
       taskPlans.set(plan.id, plan);
       return taskPlanSchema.parse(plan);

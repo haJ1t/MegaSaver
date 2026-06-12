@@ -3,13 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projectIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { TaskPlan } from "../src/task-plan.js";
 import {
   readAllTaskPlans,
   readTaskPlansForProject,
   resolveStorePaths,
   writeTaskPlansForProject,
 } from "../src/json-directory-store.js";
+import type { TaskPlan } from "../src/task-plan.js";
 
 const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const TS = "2026-06-12T00:00:00.000Z";

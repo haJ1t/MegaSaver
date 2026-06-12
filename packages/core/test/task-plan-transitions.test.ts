@@ -1,6 +1,5 @@
 import type { TaskStepId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
-import type { TaskStep } from "../src/task-plan.js";
 import {
   TaskTransitionError,
   applyStepOutcome,
@@ -8,6 +7,7 @@ import {
   resetFailedStep,
   rollUpPlanStatus,
 } from "../src/task-plan-transitions.js";
+import type { TaskStep } from "../src/task-plan.js";
 
 const A = "d0000000-0000-4000-8000-00000000000a" as TaskStepId;
 const B = "d0000000-0000-4000-8000-00000000000b" as TaskStepId;
@@ -122,10 +122,7 @@ describe("resetFailedStep", () => {
     expect(out.map((x) => x.status)).toEqual(["pending", "pending", "pending"]);
   });
   it("leaves a completed sibling that does not depend on the target untouched", () => {
-    const steps = [
-      s(A, { status: "failed", error: "x" }),
-      s(B, { status: "completed" }),
-    ];
+    const steps = [s(A, { status: "failed", error: "x" }), s(B, { status: "completed" })];
     const out = resetFailedStep(steps, A);
     expect(out.find((x) => x.id === B)?.status).toBe("completed");
   });

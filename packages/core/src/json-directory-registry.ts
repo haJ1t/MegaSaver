@@ -38,9 +38,9 @@ import {
   applyTaskStepRetry,
   buildTaskPlanFromInput,
 } from "./registry.js";
-import { type TaskPlanInput, taskPlanSchema } from "./task-plan.js";
-import type { StepOutcome } from "./task-plan-transitions.js";
 import { type Session, sessionSchema, sessionUpdatePatchSchema } from "./session.js";
+import type { StepOutcome } from "./task-plan-transitions.js";
+import { type TaskPlanInput, taskPlanSchema } from "./task-plan.js";
 import { tokenSaverSettingsSchema } from "./token-saver.js";
 
 export type JsonDirectoryCoreRegistryOptions = {

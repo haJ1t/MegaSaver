@@ -49,9 +49,9 @@ function suite(name: string, make: () => CoreRegistry) {
 
     it("createTaskPlan throws on unknown project", () => {
       const r = make();
-      expect(() => r.createTaskPlan(PROJECT_ID, input, clockFrom([PLAN_ID, STEP_A, STEP_B]))).toThrowError(
-        /project_not_found|does not exist/,
-      );
+      expect(() =>
+        r.createTaskPlan(PROJECT_ID, input, clockFrom([PLAN_ID, STEP_A, STEP_B])),
+      ).toThrowError(/project_not_found|does not exist/);
     });
 
     it("getTaskPlan / listTaskPlans are project-scoped", () => {
@@ -67,9 +67,19 @@ function suite(name: string, make: () => CoreRegistry) {
       r.createProject(project);
       r.createTaskPlan(PROJECT_ID, input, clockFrom([PLAN_ID, STEP_A, STEP_B]));
       const planId = taskPlanIdSchema.parse(PLAN_ID);
-      const running = r.recordTaskStep(planId, STEP_A as never, { status: "running" }, { now: () => TS });
+      const running = r.recordTaskStep(
+        planId,
+        STEP_A as never,
+        { status: "running" },
+        { now: () => TS },
+      );
       expect(running.status).toBe("running");
-      const failed = r.recordTaskStep(planId, STEP_A as never, { status: "failed", error: "401" }, { now: () => TS });
+      const failed = r.recordTaskStep(
+        planId,
+        STEP_A as never,
+        { status: "failed", error: "401" },
+        { now: () => TS },
+      );
       expect(failed.status).toBe("failed");
       expect(failed.steps[0]?.error).toBe("401");
     });
@@ -78,7 +88,12 @@ function suite(name: string, make: () => CoreRegistry) {
       const r = make();
       r.createProject(project);
       expect(() =>
-        r.recordTaskStep(taskPlanIdSchema.parse(PLAN_ID), STEP_A as never, { status: "running" }, { now: () => TS }),
+        r.recordTaskStep(
+          taskPlanIdSchema.parse(PLAN_ID),
+          STEP_A as never,
+          { status: "running" },
+          { now: () => TS },
+        ),
       ).toThrowError(/task_plan_not_found|does not exist/);
     });
 
@@ -87,7 +102,12 @@ function suite(name: string, make: () => CoreRegistry) {
       r.createProject(project);
       r.createTaskPlan(PROJECT_ID, input, clockFrom([PLAN_ID, STEP_A, STEP_B]));
       const planId = taskPlanIdSchema.parse(PLAN_ID);
-      r.recordTaskStep(planId, STEP_A as never, { status: "failed", error: "x" }, { now: () => TS });
+      r.recordTaskStep(
+        planId,
+        STEP_A as never,
+        { status: "failed", error: "x" },
+        { now: () => TS },
+      );
       const retried = r.retryTaskStep(planId, STEP_A as never);
       expect(retried.steps[0]?.status).toBe("pending");
       expect(retried.steps[1]?.status).toBe("pending");

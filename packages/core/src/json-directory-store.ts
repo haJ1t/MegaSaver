@@ -17,11 +17,11 @@ import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { CorePersistenceError } from "./errors.js";
 import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
-import { type TaskPlan, taskPlanSchema } from "./task-plan.js";
 import { type MemoryEntry, backfillMemoryEntry, memoryEntrySchema } from "./memory-entry.js";
 import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import { type Session, sessionSchema } from "./session.js";
+import { type TaskPlan, taskPlanSchema } from "./task-plan.js";
 
 // Captured at module load: process.platform is immutable for the
 // life of a process, so we read it once instead of per-write.
