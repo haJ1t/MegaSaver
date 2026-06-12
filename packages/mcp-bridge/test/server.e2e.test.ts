@@ -1,7 +1,11 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type ToolDefinitionInput, createInMemoryCoreRegistry } from "@megasaver/core";
+import {
+  type ToolDefinitionInput,
+  appendAuditEvent,
+  createInMemoryCoreRegistry,
+} from "@megasaver/core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -293,6 +297,15 @@ describe("phase 6 task tools over the bridge", () => {
 
 describe("phase 7 tool router over the bridge", () => {
   const TS7 = "2026-06-12T00:00:00.000Z";
+  const AUDIT_SESSION_ID = "11111111-1111-4111-8111-111111111111";
+  let storeRoot: string;
+
+  beforeEach(async () => {
+    storeRoot = await mkdtemp(join(tmpdir(), "mcp-e2e-p7-store-"));
+  });
+  afterEach(async () => {
+    await rm(storeRoot, { recursive: true, force: true });
+  });
 
   async function connectWithTools() {
     const registry = createInMemoryCoreRegistry();
@@ -328,7 +341,7 @@ describe("phase 7 tool router over the bridge", () => {
     );
     const { server } = buildServer({
       registry,
-      storeRoot: "/tmp",
+      storeRoot,
       now: () => TS7,
       newId: () => "x",
     });
@@ -338,11 +351,46 @@ describe("phase 7 tool router over the bridge", () => {
     return { client, server };
   }
 
-  it("lists 23 tools", async () => {
+  it("lists 24 tools", async () => {
     const { client, server } = await connectWithTools();
     const { tools } = (await client.listTools()) as { tools: { name: string }[] };
-    expect(tools).toHaveLength(23);
-    expect(tools.map((t) => t.name)).toContain("route_tools_for_task");
+    expect(tools).toHaveLength(24);
+    expect(tools.map((t) => t.name)).toContain("audit_token_usage");
+    await server.close();
+  });
+
+  it("audit_token_usage summarizes recorded savings", async () => {
+    const { client, server } = await connectWithTools();
+    appendAuditEvent({
+      store: { root: storeRoot },
+      event: {
+        id: "a1",
+        sessionId: AUDIT_SESSION_ID,
+        projectId: PROJECT_ID,
+        createdAt: "2026-06-12T12:00:00.000Z",
+        kind: "context_pack_built",
+        filesConsidered: 5,
+        filesIncluded: 2,
+        filesExcluded: 3,
+        blocksConsidered: 8,
+        blocksIncluded: 3,
+        blocksExcluded: 5,
+        tokensBefore: 7000,
+        tokensAfter: 2300,
+      },
+    });
+    const res = (await client.callTool({
+      name: "audit_token_usage",
+      arguments: { projectId: PROJECT_ID, sessionId: AUDIT_SESSION_ID, window: "session" },
+    })) as { content: { text: string }[] };
+    const payload = JSON.parse(res.content[0]?.text ?? "{}") as {
+      tokensBefore: number;
+      tokensAfter: number;
+      percentageSaved: number;
+    };
+    expect(payload.tokensBefore).toBe(7000);
+    expect(payload.tokensAfter).toBe(2300);
+    expect(payload.percentageSaved).toBe(67);
     await server.close();
   });
 

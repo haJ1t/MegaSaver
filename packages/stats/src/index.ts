@@ -11,3 +11,29 @@ export {
 } from "./store.js";
 
 export { StatsError, statsErrorCodeSchema, type StatsErrorCode } from "./errors.js";
+
+export {
+  auditEventSchema,
+  type AuditEvent,
+  contextPackBuiltEventSchema,
+  ruleAppliedEventSchema,
+  failureAvoidedEventSchema,
+  memoryRetrievedEventSchema,
+  toolRouteEventSchema,
+} from "./audit-event.js";
+
+export {
+  auditSummarySchema,
+  type AuditSummary,
+  auditWindowSchema,
+  type AuditWindow,
+  resolveAuditWindow,
+  summarizeAudit,
+  type SummarizeAuditOptions,
+} from "./audit-summary.js";
+
+export {
+  appendAuditEvent,
+  type AppendAuditEventInput,
+  readAuditEvents,
+} from "./audit-store.js";

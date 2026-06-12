@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { defineCommand } from "citty";
+import { auditCommand } from "./commands/audit/index.js";
 import { connectorCommand } from "./commands/connector/index.js";
 import { contextCommand } from "./commands/context/index.js";
 import { doctorCommand } from "./commands/doctor.js";
@@ -36,6 +37,7 @@ export const mainCommand = defineCommand({
     description: "Mega Saver - ContextOps platform CLI.",
   },
   subCommands: {
+    audit: auditCommand,
     doctor: doctorCommand,
     fail: failCommand,
     learn: learnCommand,
