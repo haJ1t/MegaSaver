@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { defineCommand } from "citty";
 import { connectorCommand } from "./commands/connector/index.js";
 import { doctorCommand } from "./commands/doctor.js";
+import { hooksCommand } from "./commands/hooks/index.js";
 import { mcpCommand } from "./commands/mcp/index.js";
 import { memoryCommand } from "./commands/memory/index.js";
 import { outputCommand } from "./commands/output/index.js";
@@ -36,5 +37,6 @@ export const mainCommand = defineCommand({
     output: outputCommand,
     mcp: mcpCommand,
     pack: packCommand,
+    hooks: hooksCommand,
   },
 });

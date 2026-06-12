@@ -34,6 +34,12 @@ export function renderContextGateBlock(input: ConnectorContext): string {
     "locally; ask for it only when the filtered result is genuinely",
     "insufficient.",
     "",
+    // Proxy Mode v1.2 §6 / §14-D8 canonical instruction block.
+    "Prefer proxy tools for reading files, searching code, running tests,",
+    "running typecheck, inspecting build logs, and reviewing diffs.",
+    "Use native tools only when explicitly required.",
+    "Expand chunks before assuming omitted content is irrelevant.",
+    "",
     `Session: ${context.session?.id}`,
     `Project: ${context.project.id}`,
     `Mode: ${tokenSaver.mode}`,

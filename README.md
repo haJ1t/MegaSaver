@@ -58,6 +58,16 @@ Mega Saver solves this with a small, opinionated layer:
   that routes large tool output through a deterministic redact → chunk
   → rank → fit → summarize pipeline, so only the signal reaches the
   model and the raw evidence stays on disk.
+- **Proxy Mode** — the public, opt-in face of that pipeline. Agents
+  call the `proxy_*` MCP tools (`proxy_read_file`, `proxy_run_command`,
+  `proxy_search_code`, `proxy_expand_chunk`) instead of native
+  Read/Bash/grep; MegaSaver returns task-aware summaries, relevant
+  excerpts, expandable chunks, and savings metrics. Generic output
+  filters prune text. MegaSaver prunes with project memory:
+  **Others prune output. MegaSaver prunes with your project’s memory.**
+  Proxy Mode is opt-in — nothing is intercepted unless the agent uses
+  the proxy tools, and adoption is measured honestly (`mega hooks
+  status`).
 - **Closed-set surfaces** for every public type — agent IDs,
   risk levels, memory scopes, error codes — pinned at compile time
   with `.test-d.ts` tuple-ordering tests so adding a member is

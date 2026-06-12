@@ -95,6 +95,35 @@ export function readSummary(
   return loadSummary(summaryPath(store, projectId, sessionId));
 }
 
+// Read the per-call audit trail (one TokenSaverEvent per line). Missing file
+// -> []. Malformed lines are skipped (a crashed append can leave a partial
+// last line) so adoption metrics never crash on a corrupt log.
+export function readEvents(
+  store: StatsStore,
+  projectId: ProjectId,
+  sessionId: SessionId,
+): TokenSaverEvent[] {
+  const path = eventsPath(store, projectId, sessionId);
+  if (!existsSync(path)) {
+    return [];
+  }
+  const events: TokenSaverEvent[] = [];
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    if (line.trim() === "") continue;
+    let raw: unknown;
+    try {
+      raw = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const parsed = tokenSaverEventSchema.safeParse(raw);
+    if (parsed.success) {
+      events.push(parsed.data);
+    }
+  }
+  return events;
+}
+
 export function resetOnDisable(
   store: StatsStore,
   projectId: ProjectId,

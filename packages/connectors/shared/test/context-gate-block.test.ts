@@ -62,6 +62,13 @@ describe("renderContextGateBlock", () => {
     }
     expect(block).toContain("Always pass `intent`");
   });
+
+  it("biases to proxy tools for tests/typecheck/build/diffs and the expand rule (D8)", () => {
+    const block = renderContextGateBlock(ctxWithTokenSaver(enabledTokenSaver));
+    expect(block).toContain("Prefer proxy tools for reading files, searching code, running tests,");
+    expect(block).toContain("Use native tools only when explicitly required.");
+    expect(block).toContain("Expand chunks before assuming omitted content is irrelevant.");
+  });
 });
 
 describe("upsertBlock — CONTEXT_GATE block management", () => {
