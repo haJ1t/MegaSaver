@@ -17,14 +17,16 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-const env = {
-  storeFlag: root,
-  cwd: root,
-  home: root,
-  xdgDataHome: undefined,
-  platform: process.platform,
-  localAppData: undefined,
-};
+function env() {
+  return {
+    storeFlag: root,
+    cwd: root,
+    home: root,
+    xdgDataHome: undefined as string | undefined,
+    platform: process.platform as NodeJS.Platform,
+    localAppData: undefined as string | undefined,
+  };
+}
 
 describe("mega audit export", () => {
   it("rejects a non-json --format with exit 1", async () => {
@@ -33,7 +35,7 @@ describe("mega audit export", () => {
       formatFlag: "csv",
       windowFlag: undefined,
       sessionFlag: undefined,
-      ...env,
+      ...env(),
       stdout,
       stderr,
       now: () => "2026-06-12T12:00:00.000Z",
@@ -49,7 +51,7 @@ describe("mega audit report", () => {
       projectName: "demo",
       windowFlag: "year",
       sessionFlag: undefined,
-      ...env,
+      ...env(),
       stdout,
       stderr,
       json: false,
