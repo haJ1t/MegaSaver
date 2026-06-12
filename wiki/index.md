@@ -473,7 +473,7 @@ Open backlog (post-DD batch):
 - **FF**: full Windows port deferred to v0.3 (graceful no-op on
   dir fsync in v0.2; case-insensitive resolution, CRLF
   normalization, cross-platform CI gate target for v0.3). Spec:
-  [[specs/2026-05-10-windows-port-deferral]].
+  `docs/superpowers/specs/2026-05-10-windows-port-deferral.md`.
 
 Total tests on main: 539 → ~575 across the DD batch (+13 cli
 drift-guards + failure-paths from DD1, +1 fsync ordering from

@@ -2044,7 +2044,7 @@ Lint of index.md:244 "v0.3 — open backlog (deferred to v0.4)": mcp-bridge real
 impl (shipped PR #83 0e9be7a BB8), skill-packs real impl (PR #103), Windows port
 remainder (PRs #104–#108 + #109/#110), connector aider sync (PR #21+#29) all
 struck with citations. Only "CLAUDE.md tagged blocks" (roadmap #2) remains open.
-No contradictions introduced; all new [[links]] resolve; conventions-sync not an
+No contradictions introduced; all new `[[links]]` resolve; conventions-sync not an
 orphan (inbound from index.md + roadmap).
 
 ## [2026-06-11] feature | roadmap #2 conventions:sync → CLAUDE.md (PR #112)
@@ -2241,3 +2241,15 @@ Wiki:
 
 Verify: `pnpm conventions:check` green (README + wiki are not
 conventions-managed; ran to confirm CLAUDE.md/AGENTS.md/.cursor untouched).
+
+## [2026-06-12] lint | dead wiki-link sweep
+
+Scanned all 425 `[[wiki-links]]` across `wiki/`. One genuine broken
+target: `index.md` linked `[[specs/2026-05-10-windows-port-deferral]]`
+(no `wiki/specs/` folder — the doc lives at
+`docs/superpowers/specs/2026-05-10-windows-port-deferral.md`). Fixed to
+the backtick path, matching the same doc's two other references in
+`index.md` (lines 312, 351). The other two `[[...]]` matches are false
+positives that render as code, not links: the prose word `[[links]]`
+in an older log line and the syntax example `[[wiki-link]]` in
+`wiki/CLAUDE.md` §page-format. All real wiki-links now resolve.
