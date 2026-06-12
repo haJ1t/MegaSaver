@@ -1,6 +1,6 @@
 import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from "node:fs";
 import path from "node:path";
-import type { ProjectId } from "@megasaver/shared";
+import type { ProjectId, TaskPlanId, TaskStepId } from "@megasaver/shared";
 import { CorePersistenceError, CoreRegistryError } from "./errors.js";
 import { searchFailedAttempts as searchFailures } from "./failed-attempt-search.js";
 import {
@@ -13,24 +13,34 @@ import {
   readAllFailedAttempts,
   readAllMemoryEntries,
   readAllProjectRules,
+  readAllTaskPlans,
   readFailedAttemptsForProject,
   readMemoryEntriesForProject,
   readProjectRulesForProject,
   readProjects,
   readSessions,
+  readTaskPlansForProject,
   resolveStorePaths,
   writeFailedAttemptsForProject,
   writeMemoryEntriesForProject,
   writeProjectRulesForProject,
   writeProjects,
   writeSessions,
+  writeTaskPlansForProject,
 } from "./json-directory-store.js";
 import { memoryEntrySchema, memoryEntryUpdatePatchSchema } from "./memory-entry.js";
 import { searchMemoryEntries as searchEntries } from "./memory-search.js";
 import { type ProjectRule, failureToRuleInputSchema, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
-import type { CoreRegistry } from "./registry.js";
+import {
+  type CoreRegistry,
+  applyTaskStepRecord,
+  applyTaskStepRetry,
+  buildTaskPlanFromInput,
+} from "./registry.js";
 import { type Session, sessionSchema, sessionUpdatePatchSchema } from "./session.js";
+import type { StepOutcome } from "./task-plan-transitions.js";
+import { type TaskPlanInput, taskPlanSchema } from "./task-plan.js";
 import { tokenSaverSettingsSchema } from "./token-saver.js";
 
 export type JsonDirectoryCoreRegistryOptions = {
@@ -472,6 +482,79 @@ export function createJsonDirectoryCoreRegistry(
         );
         writeFailedAttemptsForProject(paths, failure.projectId, nextFailures);
         return { rule, failure: updatedFailure };
+      });
+    },
+
+    createTaskPlan(projectId, input, clock) {
+      return withDirLock(options.rootDir, () => {
+        requireProject(projectId);
+        const plan = buildTaskPlanFromInput(projectId, input, clock);
+        if (plan.sessionId !== null) {
+          const session = readSessions(paths).find((s) => s.id === plan.sessionId);
+          if (!session) {
+            throw new CoreRegistryError(
+              "session_not_found",
+              `Session does not exist: ${plan.sessionId}`,
+            );
+          }
+          if (session.projectId !== projectId) {
+            throw new CoreRegistryError(
+              "session_project_mismatch",
+              `Session ${plan.sessionId} does not belong to project ${projectId}`,
+            );
+          }
+        }
+        if (readAllTaskPlans(paths).some((p) => p.id === plan.id)) {
+          throw new CoreRegistryError(
+            "task_plan_already_exists",
+            `Task plan already exists: ${plan.id}`,
+          );
+        }
+        writeTaskPlansForProject(paths, projectId, [
+          ...readTaskPlansForProject(paths, projectId),
+          plan,
+        ]);
+        return taskPlanSchema.parse(plan);
+      });
+    },
+
+    getTaskPlan(id) {
+      const plan = readAllTaskPlans(paths).find((p) => p.id === id);
+      return plan ? taskPlanSchema.parse(plan) : null;
+    },
+
+    listTaskPlans(projectId) {
+      requireProject(projectId);
+      return readTaskPlansForProject(paths, projectId).map((p) => taskPlanSchema.parse(p));
+    },
+
+    recordTaskStep(planId, stepId, outcome, clock) {
+      return withDirLock(options.rootDir, () => {
+        const existing = readAllTaskPlans(paths).find((p) => p.id === planId);
+        if (!existing) {
+          throw new CoreRegistryError("task_plan_not_found", `Task plan does not exist: ${planId}`);
+        }
+        const updated = applyTaskStepRecord(existing, stepId, outcome, clock.now());
+        const next = readTaskPlansForProject(paths, existing.projectId).map((p) =>
+          p.id === planId ? updated : p,
+        );
+        writeTaskPlansForProject(paths, existing.projectId, next);
+        return updated;
+      });
+    },
+
+    retryTaskStep(planId, stepId) {
+      return withDirLock(options.rootDir, () => {
+        const existing = readAllTaskPlans(paths).find((p) => p.id === planId);
+        if (!existing) {
+          throw new CoreRegistryError("task_plan_not_found", `Task plan does not exist: ${planId}`);
+        }
+        const updated = applyTaskStepRetry(existing, stepId);
+        const next = readTaskPlansForProject(paths, existing.projectId).map((p) =>
+          p.id === planId ? updated : p,
+        );
+        writeTaskPlansForProject(paths, existing.projectId, next);
+        return updated;
       });
     },
   };
