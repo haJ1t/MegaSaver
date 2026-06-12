@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createInMemoryCoreRegistry } from "@megasaver/core";
+import { type ToolDefinitionInput, createInMemoryCoreRegistry } from "@megasaver/core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -250,14 +250,6 @@ describe("phase 6 task tools over the bridge", () => {
     }));
   }
 
-  it("lists 23 tools", async () => {
-    const { client, server } = await connect(projectRoot, store);
-    const { tools } = (await client.listTools()) as { tools: { name: string }[] };
-    expect(tools).toHaveLength(23);
-    expect(tools.map((t) => t.name)).toContain("build_task_plan");
-    await server.close();
-  });
-
   it("build -> record(failed) -> retry -> record(completed) -> status round-trips", async () => {
     const { client, server } = await connectP6();
     const PLAN = "d0000000-0000-4000-8000-000000000001";
@@ -320,7 +312,7 @@ describe("phase 7 tool router over the bridge", () => {
         category: "search",
         risk: "safe",
         keywords: ["search"],
-      } as never,
+      } as ToolDefinitionInput,
       clock("e0000000-0000-4000-8000-000000000001"),
     );
     registry.createToolDefinition(
@@ -331,7 +323,7 @@ describe("phase 7 tool router over the bridge", () => {
         category: "deploy",
         risk: "dangerous",
         keywords: ["deploy"],
-      } as never,
+      } as ToolDefinitionInput,
       clock("e0000000-0000-4000-8000-000000000002"),
     );
     const { server } = buildServer({
@@ -345,6 +337,14 @@ describe("phase 7 tool router over the bridge", () => {
     await Promise.all([server.connect(serverT), client.connect(clientT)]);
     return { client, server };
   }
+
+  it("lists 23 tools", async () => {
+    const { client, server } = await connectWithTools();
+    const { tools } = (await client.listTools()) as { tools: { name: string }[] };
+    expect(tools).toHaveLength(23);
+    expect(tools.map((t) => t.name)).toContain("route_tools_for_task");
+    await server.close();
+  });
 
   it("route_tools_for_task blocks a dangerous deploy tool", async () => {
     const { client, server } = await connectWithTools();
