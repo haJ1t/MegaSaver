@@ -27,6 +27,7 @@ export {
   type AuditSummary,
   auditWindowSchema,
   type AuditWindow,
+  resolveAuditWindow,
   summarizeAudit,
   type SummarizeAuditOptions,
 } from "./audit-summary.js";

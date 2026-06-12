@@ -4,6 +4,13 @@ import type { AuditEvent } from "./audit-event.js";
 export const auditWindowSchema = z.enum(["session", "week", "all"]);
 export type AuditWindow = z.infer<typeof auditWindowSchema>;
 
+export function resolveAuditWindow(
+  window: AuditWindow | undefined,
+  hasSession: boolean,
+): AuditWindow {
+  return window ?? (hasSession ? "session" : "all");
+}
+
 export const auditSummarySchema = z
   .object({
     window: auditWindowSchema,

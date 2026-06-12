@@ -50,4 +50,5 @@ export {
   type AuditSummary,
   auditWindowSchema,
   type AuditWindow,
+  resolveAuditWindow,
 } from "@megasaver/stats";

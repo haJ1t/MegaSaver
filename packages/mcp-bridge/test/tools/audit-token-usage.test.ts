@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type AuditEvent, appendAuditEvent } from "@megasaver/core";
@@ -78,6 +78,23 @@ describe("handleAuditTokenUsage", () => {
     } catch (err) {
       expect(err).toBeInstanceOf(McpBridgeError);
       expect((err as McpBridgeError).code).toBe("resource_not_found");
+    }
+  });
+
+  it("flags a corrupt audit store distinctly in the message", async () => {
+    appendAuditEvent({ store: { root }, event: packEvent() });
+    const auditFile = join(root, "stats", PROJECT_ID, `${SESSION_ID}.audit.jsonl`);
+    writeFileSync(auditFile, `${readFileSync(auditFile, "utf8")}{not json}\n`, { flag: "w" });
+    try {
+      await handleAuditTokenUsage(
+        { registry, storeRoot: root, now: () => "2026-06-12T12:00:00.000Z" },
+        { projectId: PROJECT_ID, sessionId: SESSION_ID, window: "session" },
+      );
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(McpBridgeError);
+      expect((err as McpBridgeError).code).toBe("validation_failed");
+      expect((err as McpBridgeError).message).toContain("audit store corrupt");
     }
   });
 });

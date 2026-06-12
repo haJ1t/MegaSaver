@@ -1,8 +1,10 @@
 import {
   type AuditSummary,
   type CoreRegistry,
+  StatsError,
   auditWindowSchema,
   readAuditEvents,
+  resolveAuditWindow,
   summarizeAudit,
 } from "@megasaver/core";
 import type { ProjectId, SessionId } from "@megasaver/shared";
@@ -33,15 +35,19 @@ export async function handleAuditTokenUsage(
   }
   const { projectId, sessionId } = parsed.data;
 
-  const window = parsed.data.window ?? (sessionId !== undefined ? "session" : "all");
-  const parsedWindow = auditWindowSchema.safeParse(window);
-  if (!parsedWindow.success) {
-    throw new McpBridgeError(
-      "validation_failed",
-      `invalid window "${window}" (session | week | all)`,
-    );
+  let requestedWindow: ReturnType<typeof auditWindowSchema.parse> | undefined;
+  if (parsed.data.window !== undefined) {
+    const parsedWindow = auditWindowSchema.safeParse(parsed.data.window);
+    if (!parsedWindow.success) {
+      throw new McpBridgeError(
+        "validation_failed",
+        `invalid window "${parsed.data.window}" (session | week | all)`,
+      );
+    }
+    requestedWindow = parsedWindow.data;
   }
-  if (parsedWindow.data === "session" && sessionId === undefined) {
+  const window = resolveAuditWindow(requestedWindow, sessionId !== undefined);
+  if (window === "session" && sessionId === undefined) {
     throw new McpBridgeError("validation_failed", 'window "session" requires a sessionId');
   }
 
@@ -54,10 +60,13 @@ export async function handleAuditTokenUsage(
     const events = readAuditEvents(
       { root: env.storeRoot },
       projectId as ProjectId,
-      parsedWindow.data === "session" ? (sessionId as SessionId) : undefined,
+      window === "session" ? (sessionId as SessionId) : undefined,
     );
-    return summarizeAudit(events, { window: parsedWindow.data, now: env.now });
+    return summarizeAudit(events, { window, now: env.now });
   } catch (err) {
+    if (err instanceof StatsError && err.code === "store_corrupt") {
+      throw new McpBridgeError("validation_failed", `audit store corrupt: ${err.message}`);
+    }
     throw new McpBridgeError(
       "validation_failed",
       err instanceof Error ? err.message : "audit failed",
