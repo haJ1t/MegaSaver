@@ -7,9 +7,10 @@ import { z } from "zod";
 // save_project_rule), the Phase 5 FORGE tools (convert_failure_to_rule,
 // find_similar_failures, get_applicable_rules), the Phase 6 Task Engine
 // tools (build_task_plan, get_task_status, record_task_step, retry_failed_step),
-// the Phase 7 Tool Router tool (route_tools_for_task), and the Phase 8 Audit
-// tool (audit_token_usage).
+// the Phase 7 Tool Router tool (route_tools_for_task), the Phase 8 Audit
+// tool (audit_token_usage), and the Phase 10 approval tool (approve_memory).
 export const mcpToolNameSchema = z.enum([
+  "approve_memory",
   "audit_token_usage",
   "build_task_plan",
   "convert_failure_to_rule",

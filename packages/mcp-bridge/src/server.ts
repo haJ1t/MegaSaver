@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { McpBridgeError } from "./errors.js";
 import { mcpToolNameSchema } from "./tool-name.js";
+import { handleApproveMemory } from "./tools/approve-memory.js";
 import { handleAuditTokenUsage } from "./tools/audit-token-usage.js";
 import { handleBuildTaskPlan } from "./tools/build-task-plan.js";
 import {
@@ -43,6 +44,10 @@ export type ServerDeps = {
 };
 
 const TOOL_DEFS = [
+  {
+    name: "approve_memory",
+    description: "Approve or reject a suggested memory entry.",
+  },
   {
     name: "audit_token_usage",
     description: "Summarize recorded token/context savings for a project or session.",
@@ -173,6 +178,8 @@ export function buildServer(deps: ServerDeps): {
 
   function dispatch(toolName: ReturnType<typeof mcpToolNameSchema.parse>, args: unknown) {
     switch (toolName) {
+      case "approve_memory":
+        return handleApproveMemory({ registry: deps.registry, now }, args);
       case "audit_token_usage":
         return handleAuditTokenUsage(
           { registry: deps.registry, storeRoot: deps.storeRoot, now },
