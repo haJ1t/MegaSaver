@@ -11,16 +11,20 @@ import {
   handleGetRelevantCodeBlocks,
   handleGetRelevantContext,
 } from "./tools/context-pruning.js";
+import { handleBuildTaskPlan } from "./tools/build-task-plan.js";
 import { handleConvertFailureToRule } from "./tools/convert-failure-to-rule.js";
 import { handleRecordFailedAttempt } from "./tools/failed-attempts.js";
 import { handleFetchChunk } from "./tools/fetch-chunk.js";
 import { handleFindSimilarFailures } from "./tools/find-similar-failures.js";
 import { handleGetApplicableRules } from "./tools/get-applicable-rules.js";
 import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
+import { handleGetTaskStatus } from "./tools/get-task-status.js";
 import { handleGetProjectContext } from "./tools/project-context.js";
 import { handleGetProjectRules, handleSaveProjectRule } from "./tools/project-rules.js";
 import { handleReadFile } from "./tools/read-file.js";
 import { handleRecall } from "./tools/recall.js";
+import { handleRecordTaskStep } from "./tools/record-task-step.js";
+import { handleRetryFailedStep } from "./tools/retry-failed-step.js";
 import { handleRunCommand } from "./tools/run-command.js";
 import { handleSaveMemory } from "./tools/save-memory.js";
 import { handleSearchMemory } from "./tools/search-memory.js";
@@ -37,6 +41,7 @@ export type ServerDeps = {
 };
 
 const TOOL_DEFS = [
+  { name: "build_task_plan", description: "Create an ordered, dependency-aware task plan." },
   {
     name: "convert_failure_to_rule",
     description: "Convert a failed attempt into a reusable project rule.",
@@ -71,11 +76,14 @@ const TOOL_DEFS = [
     description: "Build a task-aware context pack from the project index.",
   },
   { name: "get_relevant_memories", description: "Rank project memories by relevance to a task." },
+  { name: "get_task_status", description: "Plan status, per-step state, and ready steps." },
   { name: "mega_fetch_chunk", description: "Fetch one stored chunk from a chunk set." },
   { name: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
   { name: "mega_recall", description: "Recall session memory and stored chunk sets." },
   { name: "mega_run_command", description: "Run a policy-gated command and filter its output." },
   { name: "record_failed_attempt", description: "Record a failed task attempt for a project." },
+  { name: "record_task_step", description: "Report a step running/completed/failed; rolls up plan status." },
+  { name: "retry_failed_step", description: "Reset a failed step (and its dependents) to pending." },
   { name: "save_memory", description: "Write a typed memory entry to a project." },
   { name: "save_project_rule", description: "Write a reusable project rule." },
   { name: "search_memory", description: "Search project memories by text and filters." },
@@ -149,6 +157,8 @@ export function buildServer(deps: ServerDeps): {
 
   function dispatch(toolName: ReturnType<typeof mcpToolNameSchema.parse>, args: unknown) {
     switch (toolName) {
+      case "build_task_plan":
+        return handleBuildTaskPlan({ registry: deps.registry, now, newId }, args);
       case "mega_fetch_chunk":
         return handleFetchChunk({ storeRoot: deps.storeRoot }, args);
       case "mega_read_file":
@@ -169,6 +179,8 @@ export function buildServer(deps: ServerDeps): {
         return handleSearchMemory({ registry: deps.registry }, args);
       case "get_relevant_memories":
         return handleGetRelevantMemories({ registry: deps.registry }, args);
+      case "get_task_status":
+        return handleGetTaskStatus({ registry: deps.registry }, args);
       case "get_relevant_context":
         return handleGetRelevantContext(
           { registry: deps.registry, storeRoot: deps.storeRoot },
@@ -198,6 +210,10 @@ export function buildServer(deps: ServerDeps): {
         return handleGetProjectRules({ registry: deps.registry }, args);
       case "record_failed_attempt":
         return handleRecordFailedAttempt({ registry: deps.registry, now, newId }, args);
+      case "record_task_step":
+        return handleRecordTaskStep({ registry: deps.registry, now, newId }, args);
+      case "retry_failed_step":
+        return handleRetryFailedStep({ registry: deps.registry }, args);
       case "save_project_rule":
         return handleSaveProjectRule({ registry: deps.registry, now, newId }, args);
       case "convert_failure_to_rule":
