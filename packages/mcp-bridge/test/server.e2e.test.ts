@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createInMemoryCoreRegistry } from "@megasaver/core";
+import { type ToolDefinitionInput, createInMemoryCoreRegistry } from "@megasaver/core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -250,14 +250,6 @@ describe("phase 6 task tools over the bridge", () => {
     }));
   }
 
-  it("lists 22 tools", async () => {
-    const { client, server } = await connect(projectRoot, store);
-    const { tools } = (await client.listTools()) as { tools: { name: string }[] };
-    expect(tools).toHaveLength(22);
-    expect(tools.map((t) => t.name)).toContain("build_task_plan");
-    await server.close();
-  });
-
   it("build -> record(failed) -> retry -> record(completed) -> status round-trips", async () => {
     const { client, server } = await connectP6();
     const PLAN = "d0000000-0000-4000-8000-000000000001";
@@ -295,6 +287,77 @@ describe("phase 6 task tools over the bridge", () => {
     // a completed, b pending with deps met -> plan "planned", b is ready
     expect(payload.plan.steps.find((s) => s.id === A)?.status).toBe("completed");
     expect(payload.ready).toEqual([B]);
+    await server.close();
+  });
+});
+
+describe("phase 7 tool router over the bridge", () => {
+  const TS7 = "2026-06-12T00:00:00.000Z";
+
+  async function connectWithTools() {
+    const registry = createInMemoryCoreRegistry();
+    registry.createProject({
+      id: PROJECT_ID,
+      name: "demo",
+      rootPath: "/tmp/demo",
+      createdAt: TS7,
+      updatedAt: TS7,
+    });
+    const clock = (id: string) => ({ now: () => TS7, newId: () => id });
+    registry.createToolDefinition(
+      PROJECT_ID,
+      {
+        name: "grep",
+        description: "search files",
+        category: "search",
+        risk: "safe",
+        keywords: ["search"],
+      } as ToolDefinitionInput,
+      clock("e0000000-0000-4000-8000-000000000001"),
+    );
+    registry.createToolDefinition(
+      PROJECT_ID,
+      {
+        name: "ship",
+        description: "deploy to production",
+        category: "deploy",
+        risk: "dangerous",
+        keywords: ["deploy"],
+      } as ToolDefinitionInput,
+      clock("e0000000-0000-4000-8000-000000000002"),
+    );
+    const { server } = buildServer({
+      registry,
+      storeRoot: "/tmp",
+      now: () => TS7,
+      newId: () => "x",
+    });
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test", version: "0" }, { capabilities: {} });
+    await Promise.all([server.connect(serverT), client.connect(clientT)]);
+    return { client, server };
+  }
+
+  it("lists 23 tools", async () => {
+    const { client, server } = await connectWithTools();
+    const { tools } = (await client.listTools()) as { tools: { name: string }[] };
+    expect(tools).toHaveLength(23);
+    expect(tools.map((t) => t.name)).toContain("route_tools_for_task");
+    await server.close();
+  });
+
+  it("route_tools_for_task blocks a dangerous deploy tool", async () => {
+    const { client, server } = await connectWithTools();
+    const res = (await client.callTool({
+      name: "route_tools_for_task",
+      arguments: { projectId: PROJECT_ID, task: "search files" },
+    })) as { content: { text: string }[] };
+    const payload = JSON.parse(res.content[0]?.text ?? "{}") as {
+      allowedTools: { name: string }[];
+      blockedTools: { name: string }[];
+    };
+    expect(payload.allowedTools.map((t) => t.name)).toEqual(["grep"]);
+    expect(payload.blockedTools.map((t) => t.name)).toEqual(["ship"]);
     await server.close();
   });
 });

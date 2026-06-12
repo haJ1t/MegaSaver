@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mcpToolNameSchema } from "../src/tool-name.js";
 
 describe("tool-name enum (phase 6)", () => {
-  it("is a closed set of 22 alphabetically-ordered names", () => {
+  it("is a closed set of 23 alphabetically-ordered names", () => {
     expect(mcpToolNameSchema.options).toEqual([
       "build_task_plan",
       "convert_failure_to_rule",
@@ -23,6 +23,7 @@ describe("tool-name enum (phase 6)", () => {
       "record_failed_attempt",
       "record_task_step",
       "retry_failed_step",
+      "route_tools_for_task",
       "save_memory",
       "save_project_rule",
       "search_memory",
