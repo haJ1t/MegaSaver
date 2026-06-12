@@ -81,13 +81,13 @@ describe("applyStepOutcome", () => {
       TaskTransitionError,
     );
     expect(() => applyStepOutcome(steps, B, { status: "running" }, TS)).toThrowError(
-      /task_step_dependency_unmet/,
+      /task_step_dependency_unmet|cannot run before its dependencies/,
     );
   });
   it("rejects completed -> running", () => {
     expect(() =>
       applyStepOutcome([s(A, { status: "completed" })], A, { status: "running" }, TS),
-    ).toThrowError(/task_step_transition_invalid/);
+    ).toThrowError(/task_step_transition_invalid|Illegal task step transition/);
   });
   it("is an idempotent no-op for same terminal status", () => {
     const steps = [s(A, { status: "completed", completedAt: TS })];
@@ -97,7 +97,7 @@ describe("applyStepOutcome", () => {
   });
   it("throws task_step_not_found for an unknown step", () => {
     expect(() => applyStepOutcome([s(A)], B, { status: "running" }, TS)).toThrowError(
-      /task_step_not_found/,
+      /task_step_not_found|does not exist/,
     );
   });
 });
@@ -128,12 +128,12 @@ describe("resetFailedStep", () => {
   });
   it("throws task_step_not_failed when the step is not failed", () => {
     expect(() => resetFailedStep([s(A, { status: "completed" })], A)).toThrowError(
-      /task_step_not_failed/,
+      /task_step_not_failed|not failed/,
     );
   });
   it("throws task_step_not_found for an unknown step", () => {
     expect(() => resetFailedStep([s(A, { status: "failed" })], B)).toThrowError(
-      /task_step_not_found/,
+      /task_step_not_found|does not exist/,
     );
   });
 });

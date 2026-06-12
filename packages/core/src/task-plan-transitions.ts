@@ -29,10 +29,7 @@ export function rollUpPlanStatus(steps: readonly TaskStep[]): TaskPlanStatus {
 function requireStep(steps: readonly TaskStep[], stepId: TaskStepId): TaskStep {
   const step = steps.find((s) => s.id === stepId);
   if (!step) {
-    throw new TaskTransitionError(
-      "task_step_not_found",
-      `task_step_not_found: Task step does not exist: ${stepId}`,
-    );
+    throw new TaskTransitionError("task_step_not_found", `Task step does not exist: ${stepId}`);
   }
   return step;
 }
@@ -58,7 +55,7 @@ export function applyStepOutcome(
   if (!legal) {
     throw new TaskTransitionError(
       "task_step_transition_invalid",
-      `task_step_transition_invalid: Illegal task step transition ${from} -> ${to} for ${stepId}.`,
+      `Illegal task step transition: ${from} -> ${to} for ${stepId}.`,
     );
   }
 
@@ -69,7 +66,7 @@ export function applyStepOutcome(
     if (!depsMet) {
       throw new TaskTransitionError(
         "task_step_dependency_unmet",
-        `task_step_dependency_unmet: Task step ${stepId} cannot run before its dependencies complete.`,
+        `Task step ${stepId} cannot run before its dependencies complete.`,
       );
     }
   }
@@ -109,7 +106,7 @@ export function resetFailedStep(steps: readonly TaskStep[], stepId: TaskStepId):
   if (target.status !== "failed") {
     throw new TaskTransitionError(
       "task_step_not_failed",
-      `task_step_not_failed: Task step is not failed (cannot retry): ${stepId}`,
+      `Task step is not failed (cannot retry): ${stepId}`,
     );
   }
 
