@@ -1222,6 +1222,52 @@ describe("connectorSyncCommand — memoryEntries wiring", () => {
     expect(agents).toContain(MEM_CODEX);
     expect(agents).not.toContain(MEM_CC_CURRENT);
   });
+
+  it("gates suggested memory out of connector sync — only approved appears in CLAUDE.md", async () => {
+    await seedProject();
+    const MEM_APPROVED = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const MEM_SUGGESTED = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    await seedMemory([
+      {
+        id: MEM_APPROVED,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        type: "decision",
+        title: "approved memory",
+        content: "approved content here",
+        keywords: [],
+        confidence: "medium",
+        source: "manual",
+        approval: "approved",
+        stale: false,
+        createdAt: TS,
+        updatedAt: TS,
+      },
+      {
+        id: MEM_SUGGESTED,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        type: "decision",
+        title: "suggested memory",
+        content: "suggested content here",
+        keywords: [],
+        confidence: "medium",
+        source: "agent",
+        approval: "suggested",
+        stale: false,
+        createdAt: TS,
+        updatedAt: TS,
+      },
+    ]);
+    await writeFile(join(projectRoot, "CLAUDE.md"), "");
+    await runSync({ target: "claude-code" });
+
+    const claude = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    expect(claude).toContain("approved content here");
+    expect(claude).not.toContain("suggested content here");
+  });
 });
 
 describe("connectorSyncCommand — X4 filter-then-cap-by-recency (25 entries → 20 most recent)", () => {
