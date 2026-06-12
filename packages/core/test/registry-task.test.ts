@@ -54,6 +54,18 @@ function suite(name: string, make: () => CoreRegistry) {
       ).toThrowError(/project_not_found|does not exist/);
     });
 
+    it("createTaskPlan throws when sessionId does not exist", () => {
+      const r = make();
+      r.createProject(project);
+      const withSession = {
+        ...input,
+        sessionId: "22222222-2222-4222-8222-222222222222",
+      };
+      expect(() =>
+        r.createTaskPlan(PROJECT_ID, withSession, clockFrom([PLAN_ID, STEP_A, STEP_B])),
+      ).toThrowError(/session_not_found|does not exist/);
+    });
+
     it("getTaskPlan / listTaskPlans are project-scoped", () => {
       const r = make();
       r.createProject(project);

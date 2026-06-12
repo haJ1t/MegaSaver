@@ -369,11 +369,14 @@ so step 2 already resets it. No bespoke "debug pairing" field is needed;
 authors express the pairing with `dependsOn`. This is documented so
 authors know to wire `debug` → the step it debugs.
 
-Cycle safety: `resetFailedStep` and `readySteps` walk `dependsOn`; the
-create-time `superRefine` rejects self-loops and dangling refs, and the
-transitive walk is guarded against cycles (visited-set) so a
-hand-constructed cyclic plan cannot infinite-loop — a detected cycle
-throws `task_step_transition_invalid` rather than hanging.
+Cycle safety: selective retry is cycle-safe — the transitive-dependent
+reset is a terminating fixpoint (visited-set) over `dependsOn`, so a
+hand-constructed cyclic plan cannot infinite-loop. It does **not** throw
+on a cycle; it simply resets every reachable dependent. Cycles cannot
+arise through `createTaskPlan` anyway: the create-time `superRefine`
+rejects self-loops and dangling refs (deeper multi-node cycles are
+unreachable because each `dependsOn` must reference an already-declared
+step id).
 
 ## §5 Registry methods (`CoreRegistry` + both impls)
 
@@ -455,8 +458,7 @@ task_step_dependency_unmet
   plan / step.
 - `task_step_not_failed` — retry guard: only a `failed` step is
   retryable.
-- `task_step_transition_invalid` — an illegal lifecycle move (§4a ❌) or
-  a detected dependency cycle.
+- `task_step_transition_invalid` — an illegal lifecycle move (§4a ❌).
 - `task_step_dependency_unmet` — `running` requested before all
   `dependsOn` are `completed`.
 
