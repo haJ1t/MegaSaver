@@ -1,6 +1,7 @@
 import { redact } from "@megasaver/policy";
 import { modeToBudget, riskLevelSchema, tokenSaverModeSchema } from "@megasaver/shared";
 import { z } from "zod";
+import { type Classification, classifyOutput } from "./classify.js";
 import { dedupe } from "./dedupe.js";
 import { OutputFilterError } from "./errors.js";
 import { effectiveBudget, fitBudget } from "./fit.js";
@@ -52,6 +53,7 @@ export type OutputExcerpt = {
 export type FilterOutputResult = {
   summary: string;
   excerpts: readonly OutputExcerpt[];
+  classification: Classification;
   rawBytes: number;
   returnedBytes: number;
   bytesSaved: number;
@@ -75,7 +77,7 @@ export function filterOutput(input: FilterOutputInput): FilterOutputResult {
   if (!parsed.success) {
     throw new OutputFilterError("validation_failed", parsed.error.message);
   }
-  const { raw, intent, mode, maxReturnedBytes, sessionHints } = parsed.data;
+  const { raw, intent, mode, maxReturnedBytes, sessionHints, source } = parsed.data;
 
   const warnings: string[] = [];
 
@@ -83,6 +85,10 @@ export function filterOutput(input: FilterOutputInput): FilterOutputResult {
   if (count > 0) warnings.push(`redacted ${count} secret(s) before processing`);
 
   const normalized = collapseRepeatedLines(normalize(redacted));
+  // Classify after ANSI strip, before compressor dispatch (§10.2).
+  const command =
+    source?.kind === "command" ? `${source.command} ${source.args.join(" ")}`.trim() : undefined;
+  const classification = classifyOutput({ command, text: normalized });
   const chunks = chunkByFormat(normalized);
   const ranked = chunks.map((c) => scoreChunk(intent, c, sessionHints));
   const deduped = dedupe(ranked);
@@ -104,6 +110,7 @@ export function filterOutput(input: FilterOutputInput): FilterOutputResult {
   const result: FilterOutputResult = {
     summary,
     excerpts,
+    classification,
     rawBytes,
     returnedBytes,
     bytesSaved,

@@ -1,5 +1,14 @@
 export { rankFeatureNameSchema, type RankFeatureName } from "./rank-features.js";
 export { outputSourceKindSchema, type OutputSourceKind } from "./output-source.js";
+export {
+  CLASSIFICATION_CONFIDENCE_FLOOR,
+  classifyOutput,
+  isConfidentClassification,
+  outputCategorySchema,
+  type Classification,
+  type ClassifyInput,
+  type OutputCategory,
+} from "./classify.js";
 
 export {
   filterOutput,

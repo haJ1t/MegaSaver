@@ -25,6 +25,22 @@ describe("filterOutput boundary validation (spec §5.1 / §8)", () => {
   });
 });
 
+describe("filterOutput classification (Proxy Mode v1.2 §10)", () => {
+  it("surfaces a typescript classification from a tsc command source", () => {
+    const raw = "src/foo.ts(12,5): error TS2322: Type 'string' is not assignable to type 'number'.";
+    const result = filterOutput(
+      base(raw, { source: { kind: "command", command: "tsc", args: ["--noEmit"] } }),
+    );
+    expect(result.classification.category).toBe("typescript");
+    expect(result.classification.confidence).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it("falls back to unknown for unrecognised output with no command", () => {
+    const result = filterOutput(base("hello world\njust some log\n"));
+    expect(result.classification.category).toBe("unknown");
+  });
+});
+
 describe("filterOutput pipeline (spec §6 / §11)", () => {
   it("shrinks a large multi-KB blob (savingRatio > 0, within budget)", () => {
     const raw = Array.from({ length: 4000 }, (_, i) => `noise line ${i} lorem ipsum dolor`).join(
