@@ -21,6 +21,9 @@ export const coreRegistryErrorCodeSchema = z.enum([
   "task_step_transition_invalid",
   "task_step_dependency_unmet",
   "tool_definition_already_exists",
+  // Reserved: no thrower yet. ToolDefinition is create-only and
+  // getToolDefinition returns null on miss; this code is for a future
+  // strict getter / `tools show`-style lookup that errors instead.
   "tool_definition_not_found",
 ]);
 

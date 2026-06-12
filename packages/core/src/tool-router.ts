@@ -1,6 +1,5 @@
 import { rankBm25 } from "@megasaver/retrieval";
-import type { ToolCategory } from "./tool-definition.js";
-import type { ToolDefinition } from "./tool-definition.js";
+import type { ToolCategory, ToolDefinition } from "./tool-definition.js";
 
 export type ToolRouteResult = {
   allowedTools: ToolDefinition[];
