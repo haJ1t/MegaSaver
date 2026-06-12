@@ -31,7 +31,7 @@ function mapCoreError(err: unknown): McpBridgeError {
     if (err.code === "failed_attempt_not_found") {
       return new McpBridgeError("resource_not_found", err.message);
     }
-    // already_converted, project_rule_already_exists, project_not_found
+    // already_converted, project_rule_already_exists
     return new McpBridgeError("validation_failed", err.message);
   }
   if (err instanceof Error) return new McpBridgeError("validation_failed", err.message);

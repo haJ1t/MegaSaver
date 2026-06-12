@@ -1,4 +1,9 @@
-import { type CoreRegistry, CoreRegistryError, type RankedRule, rankApplicableRules } from "@megasaver/core";
+import {
+  type CoreRegistry,
+  CoreRegistryError,
+  type RankedRule,
+  rankApplicableRules,
+} from "@megasaver/core";
 import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
