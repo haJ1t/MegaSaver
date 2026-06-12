@@ -1,4 +1,4 @@
-import { isBlockedTool } from "@megasaver/core";
+import { type ToolCategory, isBlockedTool } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
@@ -17,7 +17,12 @@ export type RunToolsExplainInput = {
   json?: boolean;
 };
 
-const BLOCKED_CATEGORIES = new Set(["dangerous", "deploy", "database"]);
+// must match core's blocked categories in tool-router.ts
+const BLOCKED_CATEGORIES: ReadonlySet<ToolCategory> = new Set<ToolCategory>([
+  "dangerous",
+  "deploy",
+  "database",
+]);
 
 export async function runToolsExplain(input: RunToolsExplainInput): Promise<0 | 1> {
   let rootDir: string;

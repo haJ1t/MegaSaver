@@ -21,8 +21,9 @@ beforeEach(() => {
 });
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });
+  // biome-ignore lint/performance/noDelete: process.env clear semantics require delete
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-  process.env["MEGA_TEST_TOOL_DEFINITION_ID"] = undefined;
+  delete process.env["MEGA_TEST_TOOL_DEFINITION_ID"];
 });
 
 function baseEnv() {
