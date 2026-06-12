@@ -20,6 +20,8 @@ export const coreRegistryErrorCodeSchema = z.enum([
   "task_step_not_failed",
   "task_step_transition_invalid",
   "task_step_dependency_unmet",
+  "tool_definition_already_exists",
+  "tool_definition_not_found",
 ]);
 
 export type CoreRegistryErrorCode = z.infer<typeof coreRegistryErrorCodeSchema>;
