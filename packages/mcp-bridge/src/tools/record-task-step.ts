@@ -26,11 +26,15 @@ const inputSchema = z
   })
   .strict();
 
-export type RecordTaskStepResult = { plan: TaskPlan };
+export type RecordTaskStepResult = {
+  plan: TaskPlan;
+  failedAttemptId?: string;
+  failedAttemptError?: string;
+};
 
 function mapCoreError(err: unknown): McpBridgeError {
   if (err instanceof CoreRegistryError) {
-    if (err.code === "task_plan_not_found") {
+    if (err.code === "task_plan_not_found" || err.code === "task_step_not_found") {
       return new McpBridgeError("resource_not_found", err.message);
     }
     return new McpBridgeError("validation_failed", err.message);
@@ -70,20 +74,31 @@ export async function handleRecordTaskStep(
 
   // Opt-in Phase 5 reuse, OUTSIDE any registry lock (the registry call has
   // returned). Mirrors record_failed_attempt: build + createFailedAttempt.
+  // Best-effort: the step record is already committed, so a failure here must
+  // never lose it (and never make the caller retry, which would double-record).
+  // Report the side-effect failure as a result field, not a thrown error.
   if (d.status === "failed" && d.recordFailure === true) {
     const step = plan.steps.find((s) => s.id === stepId.data);
-    const attempt = failedAttemptSchema.parse({
-      id: env.newId(),
-      projectId: plan.projectId,
-      sessionId: plan.sessionId,
-      task: plan.task,
-      failedStep: step?.title ?? "task step",
-      relatedFiles: [],
-      convertedToRule: false,
-      createdAt: env.now(),
-      ...(d.error !== undefined ? { errorOutput: d.error } : {}),
-    });
-    env.registry.createFailedAttempt(attempt);
+    try {
+      const attempt = failedAttemptSchema.parse({
+        id: env.newId(),
+        projectId: plan.projectId,
+        sessionId: plan.sessionId,
+        task: plan.task,
+        failedStep: step?.title ?? "task step",
+        relatedFiles: [],
+        convertedToRule: false,
+        createdAt: env.now(),
+        ...(d.error !== undefined ? { errorOutput: d.error } : {}),
+      });
+      const created = env.registry.createFailedAttempt(attempt);
+      return { plan, failedAttemptId: created.id };
+    } catch (err) {
+      return {
+        plan,
+        failedAttemptError: err instanceof Error ? err.message : "failed attempt write failed",
+      };
+    }
   }
 
   return { plan };

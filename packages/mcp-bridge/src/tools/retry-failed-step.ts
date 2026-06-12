@@ -11,7 +11,7 @@ export type RetryFailedStepResult = { plan: TaskPlan };
 
 function mapCoreError(err: unknown): McpBridgeError {
   if (err instanceof CoreRegistryError) {
-    if (err.code === "task_plan_not_found") {
+    if (err.code === "task_plan_not_found" || err.code === "task_step_not_found") {
       return new McpBridgeError("resource_not_found", err.message);
     }
     return new McpBridgeError("validation_failed", err.message);

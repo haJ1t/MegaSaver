@@ -26,6 +26,8 @@ function ids(list: string[]) {
 const PLAN_ID = "d0000000-0000-4000-8000-000000000001";
 const STEP_A = "d0000000-0000-4000-8000-00000000000a";
 const STEP_B = "d0000000-0000-4000-8000-00000000000b";
+// Valid uuid that is never minted into any plan: a bogus-but-well-formed stepId.
+const BOGUS_STEP = "d0000000-0000-4000-8000-0000000000ff";
 
 describe("build_task_plan", () => {
   it("creates a plan with resolved dependencies", async () => {
@@ -143,6 +145,12 @@ describe("record_task_step", () => {
       handleRecordTaskStep(env(r), { planId: PLAN_ID, stepId: STEP_A, status: "running" }),
     ).rejects.toMatchObject({ code: "resource_not_found" });
   });
+  it("rejects a missing step (valid plan, bogus stepId) as resource_not_found", async () => {
+    const r = await withPlan();
+    await expect(
+      handleRecordTaskStep(env(r), { planId: PLAN_ID, stepId: BOGUS_STEP, status: "running" }),
+    ).rejects.toMatchObject({ code: "resource_not_found" });
+  });
 });
 
 describe("retry_failed_step", () => {
@@ -191,6 +199,12 @@ describe("retry_failed_step", () => {
     const r = seeded();
     await expect(
       handleRetryFailedStep({ registry: r }, { planId: PLAN_ID, stepId: STEP_A }),
+    ).rejects.toMatchObject({ code: "resource_not_found" });
+  });
+  it("rejects a missing step (valid plan, bogus stepId) as resource_not_found", async () => {
+    const r = await failedPlan();
+    await expect(
+      handleRetryFailedStep({ registry: r }, { planId: PLAN_ID, stepId: BOGUS_STEP }),
     ).rejects.toMatchObject({ code: "resource_not_found" });
   });
 });

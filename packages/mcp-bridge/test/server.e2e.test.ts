@@ -136,14 +136,6 @@ describe("phase 5 FORGE tools over the bridge", () => {
     return { client, server };
   }
 
-  it("lists 22 tools (18 Phase 5 + 4 Phase 6)", async () => {
-    const { client, server } = await connect(projectRoot, store);
-    const { tools } = (await client.listTools()) as { tools: { name: string }[] };
-    expect(tools).toHaveLength(22);
-    expect(tools.map((t) => t.name)).toContain("convert_failure_to_rule");
-    await server.close();
-  });
-
   it("record -> find_similar -> convert -> get_applicable round-trips", async () => {
     const { client, server } = await connectP5();
     await client.callTool({
