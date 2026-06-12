@@ -2,7 +2,13 @@ import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from 
 import path from "node:path";
 import type { ProjectId } from "@megasaver/shared";
 import { CorePersistenceError, CoreRegistryError } from "./errors.js";
-import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
+import {
+  type FailedAttempt,
+  failedAttemptPatchSchema,
+  failedAttemptSchema,
+  seedFailureEvidence,
+} from "./failed-attempt.js";
+import { searchFailedAttempts as searchFailures } from "./failed-attempt-search.js";
 import {
   readAllFailedAttempts,
   readAllMemoryEntries,
@@ -21,7 +27,7 @@ import {
 } from "./json-directory-store.js";
 import { memoryEntrySchema, memoryEntryUpdatePatchSchema } from "./memory-entry.js";
 import { searchMemoryEntries as searchEntries } from "./memory-search.js";
-import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
+import { failureToRuleInputSchema, type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import type { CoreRegistry } from "./registry.js";
 import { type Session, sessionSchema, sessionUpdatePatchSchema } from "./session.js";
@@ -392,6 +398,69 @@ export function createJsonDirectoryCoreRegistry(
       return readFailedAttemptsForProject(paths, projectId).map((fa) =>
         failedAttemptSchema.parse(fa),
       );
+    },
+
+    updateFailedAttempt(id, patch) {
+      const parsedPatch = failedAttemptPatchSchema.parse(patch);
+      return withDirLock(options.rootDir, () => {
+        const existing = readAllFailedAttempts(paths).find((f) => f.id === id);
+        if (!existing) {
+          throw new CoreRegistryError("failed_attempt_not_found", `Failed attempt does not exist: ${id}`);
+        }
+        const updated = failedAttemptSchema.parse({ ...existing, ...parsedPatch });
+        const next = readFailedAttemptsForProject(paths, existing.projectId).map((f) =>
+          f.id === id ? updated : f,
+        );
+        writeFailedAttemptsForProject(paths, existing.projectId, next);
+        return updated;
+      });
+    },
+
+    searchFailedAttempts(projectId, query) {
+      requireProject(projectId);
+      const attempts = readFailedAttemptsForProject(paths, projectId).map((a) =>
+        failedAttemptSchema.parse(a),
+      );
+      return searchFailures(attempts, query);
+    },
+
+    convertFailureToRule(failureId, input, clock) {
+      const parsedInput = failureToRuleInputSchema.parse(input);
+      return withDirLock(options.rootDir, () => {
+        const failure = readAllFailedAttempts(paths).find((f) => f.id === failureId);
+        if (!failure) {
+          throw new CoreRegistryError("failed_attempt_not_found", `Failed attempt does not exist: ${failureId}`);
+        }
+        if (failure.convertedToRule) {
+          throw new CoreRegistryError("failed_attempt_already_converted", `Failed attempt already converted: ${failureId}`);
+        }
+        const rule = projectRuleSchema.parse({
+          id: clock.newId(),
+          projectId: failure.projectId,
+          title: parsedInput.title,
+          rule: parsedInput.rule,
+          appliesTo: parsedInput.appliesTo ?? failure.relatedFiles,
+          evidence: [...(parsedInput.evidence ?? []), seedFailureEvidence(failure)],
+          severity: parsedInput.severity,
+          confidence: parsedInput.confidence ?? "medium",
+          createdFrom: "failed_attempt",
+          createdAt: clock.now(),
+          updatedAt: clock.now(),
+        });
+        if (readAllProjectRules(paths).some((r) => r.id === rule.id)) {
+          throw new CoreRegistryError("project_rule_already_exists", `Project rule already exists: ${rule.id}`);
+        }
+        writeProjectRulesForProject(paths, rule.projectId, [
+          ...readProjectRulesForProject(paths, rule.projectId),
+          rule,
+        ]);
+        const updatedFailure = failedAttemptSchema.parse({ ...failure, convertedToRule: true });
+        const nextFailures = readFailedAttemptsForProject(paths, failure.projectId).map((f) =>
+          f.id === failureId ? updatedFailure : f,
+        );
+        writeFailedAttemptsForProject(paths, failure.projectId, nextFailures);
+        return { rule, failure: updatedFailure };
+      });
     },
   };
 }
