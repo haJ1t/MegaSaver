@@ -226,6 +226,7 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
       keywords,
       confidence: confidenceResult.data,
       source: sourceResult.data,
+      approval: "approved",
       ...(input.reasonFlag !== undefined ? { reason: input.reasonFlag } : {}),
       ...(input.goalFlag !== undefined ? { goal: input.goalFlag } : {}),
       ...(relatedFiles.length > 0 ? { relatedFiles } : {}),

@@ -93,11 +93,12 @@ describe("memory MCP tools", () => {
         scope: "project",
         content: "JWT auth middleware",
         keywords: ["auth"],
+        approval: "approved",
       },
     );
     await handleSaveMemory(
       { registry, now: () => TS, newId },
-      { projectId: PROJECT_ID, scope: "project", content: "navbar styling" },
+      { projectId: PROJECT_ID, scope: "project", content: "navbar styling", approval: "approved" },
     );
 
     const search = await handleSearchMemory({ registry }, { projectId: PROJECT_ID, text: "auth" });
@@ -119,5 +120,25 @@ describe("memory MCP tools", () => {
         { projectId: "99999999-9999-4999-8999-999999999999", text: "x" },
       ),
     ).rejects.toMatchObject({ code: "resource_not_found" });
+  });
+
+  it("save_memory without approval defaults to suggested", async () => {
+    const registry = seededRegistry();
+    const result = await handleSaveMemory(
+      { registry, now: () => TS, newId: idFactory() },
+      { projectId: PROJECT_ID, scope: "project", content: "agent observation" },
+    );
+    const stored = registry.getMemoryEntry(result.id as never);
+    expect(stored?.approval).toBe("suggested");
+  });
+
+  it("save_memory with explicit approval honours it", async () => {
+    const registry = seededRegistry();
+    const result = await handleSaveMemory(
+      { registry, now: () => TS, newId: idFactory() },
+      { projectId: PROJECT_ID, scope: "project", content: "human curated", approval: "approved" },
+    );
+    const stored = registry.getMemoryEntry(result.id as never);
+    expect(stored?.approval).toBe("approved");
   });
 });

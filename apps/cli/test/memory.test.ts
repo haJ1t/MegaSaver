@@ -586,6 +586,15 @@ describe("memoryCreateCommand", () => {
     ).toBe(true);
   });
 
+  it("defaults approval to approved for human-created memory", async () => {
+    await seedProjectOnly();
+    await runCreate({ projectName: "demo", scope: "project", content: "human note" });
+    expect(process.exitCode).toBe(0);
+    const arr = await readMemoryJsonl();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(arr[0]?.["approval"]).toBe("approved");
+  });
+
   it("rejects --session belonging to a different project", async () => {
     // Seed two projects, one session belonging to project B.
     await mkdir(store, { recursive: true });
