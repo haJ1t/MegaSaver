@@ -4,6 +4,7 @@ import { type McpToolName, mcpToolNameSchema } from "../src/tool-name.js";
 describe("McpToolName type regression", () => {
   it("each member is a valid McpToolName", () => {
     const members: McpToolName[] = [
+      "audit_token_usage",
       "build_task_plan",
       "convert_failure_to_rule",
       "explain_context_selection",
@@ -42,8 +43,9 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 23-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router)", () => {
+  it("schema.options preserves the 24-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit)", () => {
     const _t: readonly [
+      "audit_token_usage",
       "build_task_plan",
       "convert_failure_to_rule",
       "explain_context_selection",

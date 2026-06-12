@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { McpBridgeError } from "./errors.js";
 import { mcpToolNameSchema } from "./tool-name.js";
+import { handleAuditTokenUsage } from "./tools/audit-token-usage.js";
 import { handleBuildTaskPlan } from "./tools/build-task-plan.js";
 import {
   handleExplainContextSelection,
@@ -42,6 +43,10 @@ export type ServerDeps = {
 };
 
 const TOOL_DEFS = [
+  {
+    name: "audit_token_usage",
+    description: "Summarize recorded token/context savings for a project or session.",
+  },
   { name: "build_task_plan", description: "Create an ordered, dependency-aware task plan." },
   {
     name: "convert_failure_to_rule",
@@ -168,6 +173,11 @@ export function buildServer(deps: ServerDeps): {
 
   function dispatch(toolName: ReturnType<typeof mcpToolNameSchema.parse>, args: unknown) {
     switch (toolName) {
+      case "audit_token_usage":
+        return handleAuditTokenUsage(
+          { registry: deps.registry, storeRoot: deps.storeRoot, now },
+          args,
+        );
       case "build_task_plan":
         return handleBuildTaskPlan({ registry: deps.registry, now, newId }, args);
       case "mega_fetch_chunk":
