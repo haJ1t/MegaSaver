@@ -28,3 +28,9 @@ export type ProjectRuleId = z.infer<typeof projectRuleIdSchema>;
 
 export const failedAttemptIdSchema = lowercaseUuid.brand<"FailedAttemptId">();
 export type FailedAttemptId = z.infer<typeof failedAttemptIdSchema>;
+
+export const taskPlanIdSchema = lowercaseUuid.brand<"TaskPlanId">();
+export type TaskPlanId = z.infer<typeof taskPlanIdSchema>;
+
+export const taskStepIdSchema = lowercaseUuid.brand<"TaskStepId">();
+export type TaskStepId = z.infer<typeof taskStepIdSchema>;
