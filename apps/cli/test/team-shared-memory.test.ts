@@ -16,12 +16,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createJsonDirectoryCoreRegistry } from "@megasaver/core";
+import { memoryEntryIdSchema, projectIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runConnectorSync } from "../src/commands/connector/sync.js";
 import { runMemoryApprove } from "../src/commands/memory/approve.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const MEMORY_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
+const MEMORY_ID = memoryEntryIdSchema.parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 const TS = "2026-06-12T00:00:00.000Z";
 const MEMORY_CONTENT = "Use dependency injection for all service constructors.";
 
