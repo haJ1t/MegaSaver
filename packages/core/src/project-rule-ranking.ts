@@ -10,7 +10,7 @@ const PATH_MATCH_WEIGHT = 2;
 export const applicableRuleQuerySchema = z
   .object({
     task: z.string().optional(),
-    files: z.array(z.string()).default([]),
+    files: z.array(z.string().min(1)).default([]),
     limit: z.number().int().positive().default(DEFAULT_LIMIT),
   })
   .strict();

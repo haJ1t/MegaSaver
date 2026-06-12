@@ -13,8 +13,7 @@ import {
   failedAttemptSchema,
   seedFailureEvidence,
 } from "./failed-attempt.js";
-import { searchFailedAttempts as searchFailures } from "./failed-attempt-search.js";
-import type { FailedAttemptSearchQuery } from "./failed-attempt-search.js";
+import { type FailedAttemptSearchQuery, searchFailedAttempts as searchFailures } from "./failed-attempt-search.js";
 import {
   type MemoryEntry,
   type MemoryEntryUpdatePatch,

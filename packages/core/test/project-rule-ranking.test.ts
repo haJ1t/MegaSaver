@@ -40,4 +40,8 @@ describe("rankApplicableRules", () => {
     expect(out.map((x) => x.rule.id)).toEqual([crit.id, info.id]);
     expect(out[0]?.reason).toBe("no task filter");
   });
+
+  it("rejects an empty-string file", () => {
+    expect(() => rankApplicableRules([rule({ id: "b0000000-0000-4000-8000-000000000001" })], { files: [""] })).toThrow();
+  });
 });
