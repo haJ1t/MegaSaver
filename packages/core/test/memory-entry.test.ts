@@ -9,6 +9,7 @@ import {
   backfillMemoryEntry,
   memoryConfidenceSchema,
   memoryEntrySchema,
+  memoryEntryUpdatePatchSchema,
   memoryScopeSchema,
   memorySourceSchema,
   memoryTypeSchema,
@@ -30,6 +31,7 @@ const validProjectMemory = {
   keywords: ["auth", "jwt"],
   confidence: "high",
   source: "manual",
+  approval: "approved",
   stale: false,
   createdAt: CREATED_AT,
   updatedAt: CREATED_AT,
@@ -290,18 +292,16 @@ describe("memoryEntrySchema", () => {
       confidence: "low",
       source: "manual",
       stale: false,
+      approval: "approved",
       updatedAt: CREATED_AT,
     });
   });
 
-  it("backfill is idempotent — already-typed rows pass through unchanged", () => {
+  it("backfill is idempotent — already-typed approved rows pass through unchanged", () => {
     expect(backfillMemoryEntry(validProjectMemory)).toEqual(validProjectMemory);
   });
 
-  it("leaves a createdAt-less row untouched so the schema rejects it loudly", () => {
-    // A real v0.1 row always carried createdAt; a row without it is corrupt, not
-    // legacy. Backfill must NOT fabricate a timestamp (§13), so the row is
-    // returned unchanged and fails schema validation.
+  it("adds approval to a corrupt row but it still fails schema validation", () => {
     const corrupt = {
       id: MEMORY_ENTRY_ID,
       projectId: PROJECT_ID,
@@ -309,8 +309,17 @@ describe("memoryEntrySchema", () => {
       scope: "project",
       content: "no timestamp",
     };
-    expect(backfillMemoryEntry(corrupt)).toEqual(corrupt);
+    expect(backfillMemoryEntry(corrupt)).toEqual({ ...corrupt, approval: "approved" });
     expect(() => memoryEntrySchema.parse(backfillMemoryEntry(corrupt))).toThrow();
+  });
+
+  it("backfills a typed Phase 1-9 row without approval to approved", () => {
+    // Build a typed row that genuinely lacks the `approval` key (no undefined
+    // property — `"approval" in raw` must return false for the gate to fire).
+    const { approval: _omit, ...typedNoApproval } = validProjectMemory;
+    void _omit;
+    const upgraded = memoryEntrySchema.parse(backfillMemoryEntry(typedNoApproval));
+    expect(upgraded.approval).toBe("approved");
   });
 
   it("exports inferred types", () => {
@@ -346,5 +355,30 @@ describe("memoryEntrySchema", () => {
       createdAt: string;
       updatedAt: string;
     }>();
+  });
+});
+
+describe("memoryApprovalSchema", () => {
+  it("approval defaults to approved when omitted", () => {
+    const parsed = memoryEntrySchema.parse({ ...validProjectMemory, approval: undefined });
+    expect(parsed.approval).toBe("approved");
+  });
+
+  it("approval accepts the three lifecycle members", () => {
+    for (const a of ["suggested", "approved", "rejected"] as const) {
+      expect(memoryEntrySchema.parse({ ...validProjectMemory, approval: a }).approval).toBe(a);
+    }
+  });
+
+  it("approval rejects an unknown value", () => {
+    expect(() => memoryEntrySchema.parse({ ...validProjectMemory, approval: "maybe" })).toThrow();
+  });
+
+  it("update patch accepts approval", () => {
+    const patch = memoryEntryUpdatePatchSchema.parse({
+      approval: "approved",
+      updatedAt: CREATED_AT,
+    });
+    expect(patch.approval).toBe("approved");
   });
 });

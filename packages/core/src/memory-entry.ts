@@ -41,6 +41,14 @@ export const memorySourceSchema = z.enum([
 ]);
 export type MemorySource = z.infer<typeof memorySourceSchema>;
 
+// Order: lifecycle — `suggested` (proposed, usually by an agent), then a human
+// moves it to `approved` (shared with agents/teammates) or `rejected` (kept for
+// audit, never shared). Declaration order is the lifecycle, NOT alphabetic:
+// `approved` is the steady state the gate admits and reads most. AA3 convention:
+// declaration order is a contract — do not reorder.
+export const memoryApprovalSchema = z.enum(["suggested", "approved", "rejected"]);
+export type MemoryApproval = z.infer<typeof memoryApprovalSchema>;
+
 // Keywords are a retrieval surface (BM25 over title+content+keywords), so
 // they are normalized to a stable form: lowercased, trimmed, de-duplicated,
 // empties dropped. Order of first appearance is preserved.
@@ -69,6 +77,7 @@ export const memoryEntrySchema = z
     keywords: keywordsSchema,
     confidence: memoryConfidenceSchema,
     source: memorySourceSchema,
+    approval: memoryApprovalSchema.default("approved"),
     reason: z.string().trim().min(1).optional(),
     goal: z.string().trim().min(1).optional(),
     evidence: z.array(z.string()).optional(),
@@ -113,6 +122,7 @@ export const memoryEntryUpdatePatchSchema = z
     keywords: keywordsSchema.optional(),
     confidence: memoryConfidenceSchema.optional(),
     source: memorySourceSchema.optional(),
+    approval: memoryApprovalSchema.optional(),
     reason: z.string().trim().min(1).optional(),
     goal: z.string().trim().min(1).optional(),
     evidence: z.array(z.string()).optional(),
@@ -129,25 +139,30 @@ export type MemoryEntryUpdatePatch = z.infer<typeof memoryEntryUpdatePatchSchema
 const LEGACY_TITLE_MAX = 59;
 
 // v0.1 memory rows predate the typed DIMMEM schema. Backfill them to neutral
-// defaults at the read boundary so existing on-disk stores keep loading. A row
-// is "legacy" iff it lacks `type`; already-typed rows pass through untouched,
-// so this is idempotent.
+// defaults at the read boundary so existing on-disk stores keep loading.
 export function backfillMemoryEntry(raw: unknown): unknown {
-  if (raw === null || typeof raw !== "object" || "type" in raw) {
+  if (raw === null || typeof raw !== "object") {
     return raw;
   }
-  const entry = raw as { content?: unknown; createdAt?: unknown };
-  // A real v0.1 row always carried `createdAt`. A row without it is corrupt,
-  // not legacy — leave it untouched so the schema rejects it loudly on parse.
-  // We do NOT fabricate a timestamp (§13: no fallbacks for impossible cases),
-  // and this guarantees `updatedAt` is always set when we do backfill.
+  // Phase 10: any row predating the approval field defaults to `approved` so
+  // existing shared memory keeps flowing through the gate. INDEPENDENT of the
+  // legacy-type upgrade below — typed Phase 1–9 rows also lack `approval`.
+  const withApproval =
+    "approval" in raw ? raw : { ...(raw as Record<string, unknown>), approval: "approved" };
+
+  if ("type" in withApproval) {
+    return withApproval;
+  }
+  const entry = withApproval as { content?: unknown; createdAt?: unknown };
+  // A real v0.1 row always carried `createdAt`. A row without it is corrupt, not
+  // legacy — leave it (sans fabricated timestamp) so the schema rejects it loudly.
   if (typeof entry.createdAt !== "string") {
-    return raw;
+    return withApproval;
   }
   const content = typeof entry.content === "string" ? entry.content : "";
   const title = content.trim().slice(0, LEGACY_TITLE_MAX) || "untitled";
   return {
-    ...(raw as Record<string, unknown>),
+    ...(withApproval as Record<string, unknown>),
     type: "todo",
     title,
     keywords: [],
