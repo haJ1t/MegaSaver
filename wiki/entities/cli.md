@@ -395,6 +395,35 @@ New CLI surfaces shipped by the AA1 epic (source: AA1 §1):
   (connectorSynced resolves only on the GUI doctor path). `mcp repair`
   requires `--target` + `--project` (install + connector sync, §5c).
 
+## ContextOps command groups — Phases 2, 3, 5–8 (2026-06-12)
+
+Each group is registered in `apps/cli/src/main.ts` `subCommands` and
+backed by the engine of its phase. All support `--json`.
+
+- **`mega scan <project>`** + **`mega index {build,status,search,show}`**
+  (Phase 2) — list indexable files, parse the repo into typed
+  `CodeBlock`s, and query the index. See [[concepts/semantic-repo-index]],
+  [[entities/indexer]].
+- **`mega context {build,explain,audit,export}`** (Phase 3) — build a
+  task-aware context pack (`--task`, optional `--failing-test` /
+  `--changed-file`), explain per-block / per-factor scores, audit the
+  token savings, export. See [[concepts/context-pruning-engine]],
+  [[entities/context-pruner]].
+- **`mega fail {record,list,show}`**, **`mega rules {list,add,apply}`**,
+  and **`mega learn from-failure`** (Phase 5) — record failed attempts,
+  manage and rank reusable project rules, convert a failure into a rule.
+  See [[concepts/failed-run-learning]].
+- **`mega task {plan,status,step,retry,explain}`** (Phase 6) — author a
+  typed, dependency-aware plan; report a step running/completed/failed;
+  retry resets only the failed step + its dependents. See
+  [[concepts/task-engine]].
+- **`mega tools {add,list,route,explain}`** (Phase 7) — register
+  `ToolDefinition`s and route a task-relevant, danger-gated subset
+  (`{allowedTools, blockedTools, reason}`). See [[concepts/tool-router]].
+- **`mega audit {report,last,session,export}`** (Phase 8) — the
+  token-savings dashboard, windowed `session | week | all`. See
+  [[concepts/audit-dashboard]], [[entities/stats]].
+
 ## Phase 10 — Team/Cloud (local slice, 2026-06-12)
 
 ### `mega memory approve <memoryEntryId> [--json] [--store <dir>]`
