@@ -3,9 +3,10 @@ title: '@megasaver/mcp-bridge'
 tags: [entity, package, mcp, bridge, critical, v1.0, aa1]
 sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
+  - docs/superpowers/specs/2026-06-12-phase10-team-cloud-design.md
 status: active
 created: 2026-05-13
-updated: 2026-05-13
+updated: 2026-06-12
 ---
 
 # `@megasaver/mcp-bridge`
@@ -29,10 +30,25 @@ v0.3 `not_implemented` placeholder without redesigning the
   filter → store + stats. Same orchestrator as `mega output exec`
   (source: AA1 §8d "one orchestrator, two entry points").
 
-## Closed enums (AA1 §17)
+## Tools (Phase 10 additions — approve_memory, gated tools)
 
-- `McpToolName` (4 members), pinned in
-  `packages/mcp-bridge/test/tool-name.test-d.ts`.
+- `approve_memory(memoryEntryId, approval?)` — approve or reject a
+  suggested memory entry. `approval` defaults to `"approved"`.
+  Reuses `updateMemoryEntry`; `resource_not_found` on missing id.
+  **25th tool** (added Phase 10; `approve_memory` is now first in
+  `mcpToolNameSchema` alphabetically).
+
+`get_project_context` and `mega_recall` both gained an
+`approval === "approved"` filter (gate point 2) — unapproved memory
+is excluded from agent-facing context. See [[entities/core]] gate
+point 1 for `searchMemoryEntries` (gates `search_memory` /
+`get_relevant_memories` / context pack).
+
+## Closed enums (AA1 §17 + Phase 10)
+
+- `McpToolName` (**25 members** — Phase 10 added `approve_memory` as first
+  member), pinned in `packages/mcp-bridge/test/tool-name.test-d.ts`
+  and runtime-counted in `test/tool-name-task.test.ts`.
 - `McpBridgeErrorCode` (16 members; replaced the single
   `not_implemented`), pinned in
   `packages/mcp-bridge/test/errors.test-d.ts`.

@@ -2182,3 +2182,20 @@ Changes:
 Wiki pages updated: `entities/connectors-generic-cli`,
 `entities/shared`, `entities/cli`, `syntheses/contextops-roadmap`
 (Phase 9 partial→done), `index.md` (Phase 9 status block).
+
+## [2026-06-12] feat | Phase 10 Team/Cloud (local approval slice)
+
+MemoryEntry.approval (suggested|approved|rejected), backfill→approved.
+Gate: search (incl. relevant/context-pack) + buildConnectorContext (CLI
++GUI) + get_project_context + mega_recall. CLI approve/reject + --all;
+approve_memory MCP tool (24→25); buildPrMemoryComment + mega github
+pr-comment. Team = shared store + gate. Cloud/auth/deploy/org/hosted-
+audit/web-UI/visibility deferred. Spec+plan 2026-06-12-phase10-team-cloud.
+
+Roadmap complete through all 10 phases.
+
+Wiki pages updated: `entities/core` (approval field + gate point 1 +
+buildPrMemoryComment), `entities/mcp-bridge` (25 tools, approve_memory,
+gated tools), `entities/cli` (approve/reject, --all, github pr-comment,
+connector gate), `syntheses/contextops-roadmap` (Phase 10 done, roadmap
+complete, deferred-cloud items recorded), `index.md` (Phase 10 status block).

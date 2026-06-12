@@ -6,9 +6,11 @@ sources:
   - syntheses/post-v1.1-roadmap.md
   - syntheses/mega-saver-product.md
   - decisions/bootstrap-matrix.md
-status: active
+  - docs/superpowers/specs/2026-06-12-phase10-team-cloud-design.md
+  - docs/superpowers/plans/2026-06-12-phase10-team-cloud.md
+status: complete
 created: 2026-06-11
-updated: 2026-06-11
+updated: 2026-06-12
 ---
 
 # ContextOps Roadmap — Phases 0–10 (reconciled)
@@ -56,7 +58,11 @@ extended with three borrowed patterns:
 | 7 | Tool Router | gap | ToolDefinition + `route_tools_for_task` |
 | 8 | Audit Dashboard | partial | file/block/rule/memory/retry metrics + `mega audit` |
 | 9 | Multi-Agent Connectors | done (vscode/jetbrains deferred) | `mega connect` alias deferred |
-| 10 | Team/Cloud | gap | everything (team, approval, sync, PR comments) |
+| 10 | Team/Cloud | **done (local slice; cloud SaaS deferred)** | hosted sync/auth/private-deploy/org-rules/audit-service/web-UI |
+
+**Roadmap complete through all 10 phases** (2026-06-12). Phase 10 shipped the
+local-deterministic slice: memory approval workflow + team-shared store pattern.
+Cloud SaaS items are explicitly deferred (see Phase 10 detail below).
 
 ## Phase detail
 
@@ -180,12 +186,44 @@ are byte-identical.
 See [[entities/connectors-generic-cli]], [[entities/connectors-claude-code]],
 [[entities/cli]].
 
-### Phase 10 — Team/Cloud · gap
-Nothing exists; single-developer, single-project today. Net-new: team
-shared memory, memory permissions, approval flow, cloud sync, org
-rules, audit logs, GitHub PR memory comments. Explicitly future per
-fikri §15.4. The local→SaaS transition; out of scope until Phases 1–9
-prove the local product.
+### Phase 10 — Team/Cloud · done (local slice; cloud SaaS deferred)
+
+**Shipped (branch `feat/phase10-team-cloud`, 2026-06-12):**
+
+`MemoryEntry.approval` — closed enum `suggested | approved | rejected` (default
+`approved`). `backfillMemoryEntry` adds an independent approval-defaulting branch
+(all Phase 1–9 rows → `approved` on first read; backward compat, no migration
+script). Agent `save_memory` defaults to `suggested`; human `mega memory create`
+defaults to `approved`.
+
+**Approval gate (total — no leak points):**
+
+- Gate point 1: `searchMemoryEntries` gains `includeUnapproved: boolean` (default
+  `false`). Single chokepoint for `search_memory` / `get_relevant_memories` /
+  context pack (`loadPack`).
+- Gate point 2 — four explicit `approval === "approved"` filters on list-consumers:
+  `filterMemoryEntriesForSession` (CLI connector sync), GUI mirror
+  `connector-context.ts`, `get_project_context` (`keyMemories`), `mega_recall`.
+
+**New surfaces:**
+- `mega memory approve|reject` (CLI) — idempotent; `updateMemoryEntry` reuse.
+- `mega memory search --all` — `includeUnapproved: true` opt-in for human review.
+- `mega memory list` / `explain` — `approval` column added.
+- `approve_memory` MCP tool — 25th tool (added first; `approval` defaults
+  `"approved"`). `McpToolName` 24 → 25 members, pins updated.
+- `buildPrMemoryComment` — pure Markdown builder in `@megasaver/core`; unit-tested.
+- `mega github pr-comment` — print-only core; optional off-by-default `gh` wrapper.
+
+**Team = shared store + approval gate.** Multiple agents share one
+`--store` path; only approved memory reaches agents' config files.
+
+**Explicitly deferred (cloud SaaS — no infra built):**
+hosted sync, auth service, private deployment, org-level rules, hosted
+audit service, web approval UI, `visibility` field. Spec §8, plan §SCOPE.
+
+Spec: `docs/superpowers/specs/2026-06-12-phase10-team-cloud-design.md`
+Plan: `docs/superpowers/plans/2026-06-12-phase10-team-cloud.md`
+See [[entities/core]], [[entities/mcp-bridge]], [[entities/cli]].
 
 ## Reconciled priority (net-new work)
 

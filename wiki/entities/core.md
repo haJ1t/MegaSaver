@@ -6,9 +6,10 @@ sources:
   - docs/superpowers/specs/2026-05-05-core-persistence-design.md
   - docs/superpowers/specs/2026-05-06-cli-project-crud-design.md
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
+  - docs/superpowers/specs/2026-06-12-phase10-team-cloud-design.md
 status: persistence-merged
 created: 2026-05-04
-updated: 2026-05-11
+updated: 2026-06-12
 ---
 
 # `@megasaver/core`
@@ -143,6 +144,24 @@ Risk HIGH. Full superpowers chain; code-reviewer + critic both required.
   extraction trigger: a standalone `@megasaver/context-gate` is queued
   as BB12 (deferred to its own PR). See
   [[decisions/context-gate-extraction]].
+
+## Phase 10 — Memory Approval (2026-06-12)
+
+`MemoryEntry` gains `approval: "suggested" | "approved" | "rejected"` (default `"approved"`).
+`memoryApprovalSchema` + `MemoryApproval` exported from `packages/core/src/memory-entry.ts`.
+`backfillMemoryEntry` adds an **independent** approval-defaulting branch: any row lacking the
+field gets `approval: "approved"` (backward compat for all Phase 1–9 rows).
+
+**Gate point 1** — `searchMemoryEntries` gains `includeUnapproved: boolean` (default `false`).
+The single chokepoint that transitively gates `search_memory`, `get_relevant_memories`, and
+`loadPack` (context pack). Filter: `q.includeUnapproved || entry.approval === "approved"`.
+
+**`buildPrMemoryComment`** — pure, deterministic Markdown builder (`packages/core/src/pr-memory-comment.ts`).
+Accepts `readonly MemoryEntry[]` + `PrMemoryCommentOptions`. Escape-safe (`\`, `` ` ``, `|`).
+Exported from `packages/core/src/index.ts`.
+
+Registry interface (`CoreRegistry`) is **unchanged** — approve/reject reuse `updateMemoryEntry`.
+No `visibility` field (YAGNI). No server/auth/hosting added.
 
 ## Related
 
