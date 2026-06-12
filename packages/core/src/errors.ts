@@ -14,6 +14,12 @@ export const coreRegistryErrorCodeSchema = z.enum([
   "failed_attempt_already_exists",
   "failed_attempt_not_found",
   "failed_attempt_already_converted",
+  "task_plan_already_exists",
+  "task_plan_not_found",
+  "task_step_not_found",
+  "task_step_not_failed",
+  "task_step_transition_invalid",
+  "task_step_dependency_unmet",
 ]);
 
 export type CoreRegistryErrorCode = z.infer<typeof coreRegistryErrorCodeSchema>;
