@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type AuditEvent, appendAuditEvent } from "@megasaver/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { runAuditExport } from "../src/commands/audit/export.js";
 import { runAuditReport } from "../src/commands/audit/report.js";
 
 let root: string;
@@ -24,6 +25,23 @@ const env = {
   platform: process.platform,
   localAppData: undefined,
 };
+
+describe("mega audit export", () => {
+  it("rejects a non-json --format with exit 1", async () => {
+    const code = await runAuditExport({
+      projectName: "demo",
+      formatFlag: "csv",
+      windowFlag: undefined,
+      sessionFlag: undefined,
+      ...env,
+      stdout,
+      stderr,
+      now: () => "2026-06-12T12:00:00.000Z",
+    });
+    expect(code).toBe(1);
+    expect(lines.join("\n")).toContain("invalid format");
+  });
+});
 
 describe("mega audit report", () => {
   it("rejects a bad --window with exit 1", async () => {
