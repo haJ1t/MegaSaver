@@ -22,6 +22,7 @@ import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import { type Session, sessionSchema } from "./session.js";
 import { type TaskPlan, taskPlanSchema } from "./task-plan.js";
+import { type ToolDefinition, toolDefinitionSchema } from "./tool-definition.js";
 
 // Captured at module load: process.platform is immutable for the
 // life of a process, so we read it once instead of per-write.
@@ -35,6 +36,7 @@ export type StorePaths = {
   projectRulesDir: string;
   failedAttemptsDir: string;
   taskPlansDir: string;
+  toolDefinitionsDir: string;
 };
 
 export function resolveStorePaths(rootDir: string): StorePaths {
@@ -60,6 +62,7 @@ export function resolveStorePaths(rootDir: string): StorePaths {
         projectRulesDir: join(resolvedRootDir, "project-rules"),
         failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
         taskPlansDir: join(resolvedRootDir, "task-plans"),
+        toolDefinitionsDir: join(resolvedRootDir, "tool-definitions"),
       };
     }
 
@@ -81,6 +84,7 @@ export function resolveStorePaths(rootDir: string): StorePaths {
     projectRulesDir: join(resolvedRootDir, "project-rules"),
     failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
     taskPlansDir: join(resolvedRootDir, "task-plans"),
+    toolDefinitionsDir: join(resolvedRootDir, "tool-definitions"),
   };
 }
 
@@ -298,6 +302,54 @@ export function writeTaskPlansForProject(
     return;
   }
   atomicWriteFile(filePath, `${plans.map((p) => JSON.stringify(p)).join("\n")}\n`);
+}
+
+export function readToolDefinitionsForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+): ToolDefinition[] {
+  const filePath = join(paths.toolDefinitionsDir, `${projectId}.jsonl`);
+  return readJsonLines(filePath).map((entry) =>
+    parseEntity(toolDefinitionSchema, entry, filePath),
+  );
+}
+
+export function readAllToolDefinitions(paths: StorePaths): ToolDefinition[] {
+  let fileNames: string[];
+  try {
+    fileNames = readdirSync(paths.toolDefinitionsDir);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath: paths.toolDefinitionsDir,
+      cause: error,
+    });
+  }
+
+  return fileNames
+    .filter((fileName) => fileName.endsWith(".jsonl"))
+    .flatMap((fileName) => {
+      const filePath = join(paths.toolDefinitionsDir, fileName);
+      return readJsonLines(filePath).map((entry) =>
+        parseEntity(toolDefinitionSchema, entry, filePath),
+      );
+    });
+}
+
+export function writeToolDefinitionsForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+  tools: readonly ToolDefinition[],
+): void {
+  const filePath = join(paths.toolDefinitionsDir, `${projectId}.jsonl`);
+  if (tools.length === 0) {
+    removeIfExists(filePath);
+    return;
+  }
+  atomicWriteFile(filePath, `${tools.map((t) => JSON.stringify(t)).join("\n")}\n`);
 }
 
 // Mirrors the empty-set branch of writeMemoryEntriesForProject: an empty entity
