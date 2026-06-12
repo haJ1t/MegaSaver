@@ -1,6 +1,7 @@
 import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
 import { describe, expect, it } from "vitest";
 import { handleBuildTaskPlan } from "../../src/tools/build-task-plan.js";
+import { handleGetTaskStatus } from "../../src/tools/get-task-status.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const TS = "2026-06-12T00:00:00.000Z";
@@ -48,5 +49,33 @@ describe("build_task_plan", () => {
     await expect(
       handleBuildTaskPlan(env, { projectId: PROJECT_ID, task: "t", steps: [] }),
     ).rejects.toMatchObject({ code: "validation_failed" });
+  });
+});
+
+describe("get_task_status", () => {
+  async function withPlan() {
+    const r = seeded();
+    const env = { registry: r, ...ids([PLAN_ID, STEP_A, STEP_B]) };
+    await handleBuildTaskPlan(env, {
+      projectId: PROJECT_ID,
+      task: "fix login",
+      steps: [
+        { type: "edit", title: "edit", key: "a" },
+        { type: "debug", title: "debug", key: "b", dependsOnKeys: ["a"] },
+      ],
+    });
+    return r;
+  }
+  it("returns the plan and the ready step ids", async () => {
+    const r = await withPlan();
+    const res = await handleGetTaskStatus({ registry: r }, { planId: PLAN_ID });
+    expect(res.plan.id).toBe(PLAN_ID);
+    expect(res.ready).toEqual([STEP_A]); // b is blocked on a
+  });
+  it("rejects an unknown plan as resource_not_found", async () => {
+    const r = seeded();
+    await expect(handleGetTaskStatus({ registry: r }, { planId: PLAN_ID })).rejects.toMatchObject({
+      code: "resource_not_found",
+    });
   });
 });
