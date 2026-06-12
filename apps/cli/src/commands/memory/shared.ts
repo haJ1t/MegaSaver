@@ -51,19 +51,22 @@ function pad(key: string): string {
 
 const SCOPE_COLUMN_WIDTH = 7;
 const SESSION_COLUMN_WIDTH = 36;
+const APPROVAL_COLUMN_WIDTH = 9;
 const CONTENT_TRUNCATE_AT = 60;
 
 export function formatMemoryListLine(entry: {
   id: string;
   sessionId: string | null;
   scope: "project" | "session";
+  approval: string;
   content: string;
 }): string {
   const id = entry.id;
   const scope = entry.scope.padEnd(SCOPE_COLUMN_WIDTH, " ");
   const session = (entry.sessionId ?? "-").padEnd(SESSION_COLUMN_WIDTH, " ");
+  const approval = entry.approval.padEnd(APPROVAL_COLUMN_WIDTH, " ");
   const content = truncate(entry.content, CONTENT_TRUNCATE_AT);
-  return `${id}  ${scope}  ${session}  ${content}`;
+  return `${id}  ${scope}  ${session}  ${approval}  ${content}`;
 }
 
 function truncate(value: string, max: number): string {
@@ -99,6 +102,7 @@ export function formatMemoryExplainLines(entry: MemoryEntry): string[] {
     `${padExplain("session")}${entry.sessionId ?? "-"}`,
     `${padExplain("confidence")}${entry.confidence}`,
     `${padExplain("source")}${entry.source}`,
+    `${padExplain("approval")}${entry.approval}`,
     `${padExplain("stale")}${entry.stale}`,
     `${padExplain("keywords")}${list(entry.keywords)}`,
     `${padExplain("content")}${entry.content}`,
