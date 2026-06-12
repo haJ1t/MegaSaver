@@ -16,7 +16,10 @@ describe("core re-exports the Phase 8 audit surface", () => {
     expect(typeof appendAuditEvent).toBe("function");
     expect(typeof readAuditEvents).toBe("function");
     expect(auditWindowSchema.options).toEqual(["session", "week", "all"]);
-    const summary: AuditSummary = summarizeAudit([], { window: "all", now: () => "2026-06-12T00:00:00.000Z" });
+    const summary: AuditSummary = summarizeAudit([], {
+      window: "all",
+      now: () => "2026-06-12T00:00:00.000Z",
+    });
     expect(summary.eventsTotal).toBe(0);
     expect(auditSummarySchema.safeParse(summary).success).toBe(true);
     const event: AuditEvent = auditEventSchema.parse({

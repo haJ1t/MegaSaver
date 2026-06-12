@@ -51,9 +51,9 @@ describe("auditEventSchema", () => {
   });
 
   it("rejects an unknown key (strict)", () => {
-    expect(
-      auditEventSchema.safeParse({ ...base, kind: "rule_applied", extra: 1 }).success,
-    ).toBe(false);
+    expect(auditEventSchema.safeParse({ ...base, kind: "rule_applied", extra: 1 }).success).toBe(
+      false,
+    );
   });
 
   it("rejects a negative pack integer", () => {
