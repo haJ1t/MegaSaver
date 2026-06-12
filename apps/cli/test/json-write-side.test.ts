@@ -169,7 +169,7 @@ describe("--json write-side success shape", () => {
     expect(code).toBe(0);
     expect(stdoutLines).toHaveLength(1);
     const parsed = JSON.parse(stdoutLines[0] ?? "[]") as Array<Record<string, unknown>>;
-    expect(parsed).toHaveLength(4);
+    expect(parsed).toHaveLength(7);
     expect(parsed[0]).toEqual({
       id: "claude-code",
       relativePath: "CLAUDE.md",

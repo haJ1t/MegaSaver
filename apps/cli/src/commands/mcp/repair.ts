@@ -1,4 +1,4 @@
-import { repairMcp } from "@megasaver/mcp-bridge";
+import { knownAgentIdSchema, repairMcp } from "@megasaver/mcp-bridge";
 import { defineCommand } from "citty";
 import { unknownTargetMessage } from "../../errors.js";
 import { isKnownTargetId } from "../../known-targets.js";
@@ -28,9 +28,20 @@ export async function runMcpRepair(input: RunMcpRepairInput): Promise<0 | 1> {
     input.stderr(cli.message);
     return cli.exitCode;
   }
+  // MCP repair is only available for agents with native MCP config support.
+  const mcpAgentResult = knownAgentIdSchema.safeParse(input.targetFlag);
+  if (!mcpAgentResult.success) {
+    input.stderr(`error: MCP repair is not supported for agent "${input.targetFlag}"`);
+    return 1;
+  }
   const command = input.command ?? DEFAULT_MCP_COMMAND;
   const args = input.args ?? [...DEFAULT_MCP_ARGS];
-  const repaired = await repairMcp({ agentId: input.targetFlag, home: input.home, command, args });
+  const repaired = await repairMcp({
+    agentId: mcpAgentResult.data,
+    home: input.home,
+    command,
+    args,
+  });
 
   // AA1 §5c: repair = install + connector sync for the same agent.
   const syncCode = await runConnectorSync({
