@@ -2,7 +2,16 @@ import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { type AgentId, agentIdSchema } from "../src/agent-id.js";
 
-const members: ReadonlyArray<AgentId> = ["aider", "claude-code", "codex", "cursor", "generic-cli"];
+const members: ReadonlyArray<AgentId> = [
+  "aider",
+  "claude-code",
+  "codex",
+  "continue",
+  "cursor",
+  "gemini",
+  "generic-cli",
+  "windsurf",
+];
 
 describe("agentIdSchema", () => {
   it("parses every v0.1 connector id", () => {
@@ -46,8 +55,20 @@ describe("agentIdSchema", () => {
     expect(agentIdSchema.parse("aider")).toBe("aider");
   });
 
-  it("widens to 5 closed-set members", () => {
-    expect(members).toHaveLength(5);
+  it("explicitly accepts 'gemini'", () => {
+    expect(agentIdSchema.parse("gemini")).toBe("gemini");
+  });
+
+  it("explicitly accepts 'windsurf'", () => {
+    expect(agentIdSchema.parse("windsurf")).toBe("windsurf");
+  });
+
+  it("explicitly accepts 'continue'", () => {
+    expect(agentIdSchema.parse("continue")).toBe("continue");
+  });
+
+  it("widens to 8 closed-set members", () => {
+    expect(members).toHaveLength(8);
   });
 
   it("preserves alphabetic order — AA3 convention", () => {
@@ -55,8 +76,11 @@ describe("agentIdSchema", () => {
       "aider",
       "claude-code",
       "codex",
+      "continue",
       "cursor",
+      "gemini",
       "generic-cli",
+      "windsurf",
     ]);
   });
 });

@@ -2,17 +2,23 @@ import { describe, it } from "vitest";
 import { type AgentId, agentIdSchema } from "../src/agent-id.js";
 
 describe("AgentId type regression", () => {
-  it("each v0.1 member is a valid AgentId", () => {
+  it("each member is a valid AgentId", () => {
     const _a: AgentId = "aider";
     const _b: AgentId = "claude-code";
     const _c: AgentId = "codex";
-    const _d: AgentId = "cursor";
-    const _e: AgentId = "generic-cli";
+    const _d: AgentId = "continue";
+    const _e: AgentId = "cursor";
+    const _f: AgentId = "gemini";
+    const _g: AgentId = "generic-cli";
+    const _h: AgentId = "windsurf";
     void _a;
     void _b;
     void _c;
     void _d;
     void _e;
+    void _f;
+    void _g;
+    void _h;
   });
 
   it("non-member string is not assignable to AgentId", () => {
@@ -34,8 +40,16 @@ describe("AgentId type regression", () => {
   });
 
   it("agentIdSchema.options preserves alphabetic order", () => {
-    const _t: readonly ["aider", "claude-code", "codex", "cursor", "generic-cli"] =
-      agentIdSchema.options;
+    const _t: readonly [
+      "aider",
+      "claude-code",
+      "codex",
+      "continue",
+      "cursor",
+      "gemini",
+      "generic-cli",
+      "windsurf",
+    ] = agentIdSchema.options;
     void _t;
   });
 });
