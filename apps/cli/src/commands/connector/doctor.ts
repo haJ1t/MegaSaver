@@ -1,5 +1,5 @@
 import { constants, access } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, parse as parsePath } from "node:path";
 import {
   normalizeEol,
   parseBlock,
@@ -25,8 +25,17 @@ export type RunConnectorDoctorInput = {
   xdgDataHome: string | undefined;
   platform: NodeJS.Platform;
   localAppData: string | undefined;
+  json: boolean;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+};
+
+type DoctorRecord = {
+  id: string;
+  relativePath: string;
+  status: string;
+  writable: boolean;
+  session: string | null;
 };
 
 async function isWritable(path: string): Promise<boolean> {
@@ -35,6 +44,26 @@ async function isWritable(path: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+// For an absent target file, writability is probed on the nearest existing
+// ancestor directory (spec §5b): a sync would create the file there, so a
+// non-writable ancestor is the actionable defect, not the missing file itself.
+async function isAncestorWritable(absPath: string): Promise<boolean> {
+  let dir = dirname(absPath);
+  const { root } = parsePath(dir);
+  while (true) {
+    if (await isWritable(dir)) return true;
+    try {
+      await access(dir, constants.F_OK);
+      // Directory exists but is not writable — that is the defect.
+      return false;
+    } catch {
+      // Directory does not exist yet; walk up to the nearest existing ancestor.
+    }
+    if (dir === root) return false;
+    dir = dirname(dir);
   }
 }
 
@@ -61,41 +90,69 @@ export async function runConnectorDoctor(input: RunConnectorDoctorInput): Promis
   const sessions = registry.listSessions(project.id);
   const memoryEntries = registry.listMemoryEntries(project.id);
   let anyError = false;
+  const records: DoctorRecord[] = [];
+
+  const emit = (
+    target: (typeof targets)[number],
+    status: string,
+    writable: boolean,
+    sessionId: string | null,
+  ) => {
+    if (input.json) {
+      records.push({
+        id: target.id,
+        relativePath: target.relativePath,
+        status,
+        writable,
+        session: sessionId,
+      });
+    } else {
+      input.stdout(formatStatusLine(target, status, sessionId ?? "none"));
+    }
+  };
 
   for (const target of targets) {
     const session = pickLatestOpenSession(sessions, target.agentId);
-    const sessionLabel = session === null ? "none" : session.id;
+    const sessionId = session === null ? null : session.id;
     const absPath = join(project.rootPath, target.relativePath);
     const existing = await readTargetFile(absPath);
 
     if (existing === null) {
-      input.stdout(formatStatusLine(target, "missing", sessionLabel));
+      // Absent file: a sync would create it, so probe the parent directory.
+      const writable = await isAncestorWritable(absPath);
+      if (!writable) {
+        anyError = true;
+        emit(target, "not-writable", false, sessionId);
+        continue;
+      }
+      emit(target, "missing", true, sessionId);
       continue;
     }
 
     const writable = await isWritable(absPath);
     if (!writable) {
       anyError = true;
-      input.stdout(formatStatusLine(target, "not-writable", sessionLabel));
+      emit(target, "not-writable", false, sessionId);
       continue;
     }
 
     const parsed = parseBlock(existing);
     if (parsed.block === null) {
-      input.stdout(formatStatusLine(target, "no-block", sessionLabel));
+      emit(target, "no-block", true, sessionId);
       continue;
     }
 
     const context = buildConnectorContext(target, project, sessions, memoryEntries);
     const upserted = upsertBlock({ existingContent: existing, context });
     if (normalizeEol(upserted) === normalizeEol(existing)) {
-      input.stdout(formatStatusLine(target, "ok", sessionLabel));
+      emit(target, "ok", true, sessionId);
     } else {
       anyError = true;
-      input.stdout(formatStatusLine(target, "stale", sessionLabel));
+      emit(target, "stale", true, sessionId);
     }
   }
 
+  if (input.json) input.stdout(JSON.stringify(records));
   return anyError ? 1 : 0;
 }
 
@@ -112,12 +169,14 @@ export const connectorDoctorCommand = defineCommand({
       description: `Optional target id (${KNOWN_TARGET_IDS.join(" | ")}) to filter the check.`,
     },
     store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const code = await runConnectorDoctor({
       projectName: typeof args.projectName === "string" ? args.projectName : "",
       targetFlag: typeof args.target === "string" ? args.target : undefined,
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
+      json: !!args.json,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
     });

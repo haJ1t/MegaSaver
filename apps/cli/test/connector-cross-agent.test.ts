@@ -61,6 +61,17 @@ describe("cross-agent shared memory (Phase 9 exit criterion)", () => {
     });
   }
 
+  // The rendered block carries one per-agent line — `Agent: <id>` — which is
+  // metadata, not shared memory. Stripping it yields the memory-derived body
+  // that MUST be byte-identical across every agent (spec §7). Everything else
+  // (project header, session, risk, the ## Memory section) is target-agnostic.
+  function memoryBody(block: string): string {
+    return block
+      .split("\n")
+      .filter((line) => !line.startsWith("Agent: "))
+      .join("\n");
+  }
+
   it("syncs the same project memory to claude-code and cursor", async () => {
     await sync("claude-code");
     await sync("cursor");
@@ -77,10 +88,11 @@ describe("cross-agent shared memory (Phase 9 exit criterion)", () => {
     const cursorBlock = parseBlock(cursor).block;
     expect(claudeBlock).not.toBeNull();
     expect(cursorBlock).not.toBeNull();
-    // 3. The memory section (lines after the Agent header) is identical —
-    //    only the per-agent "Agent: <id>" line differs, which is expected.
-    expect(claudeBlock).toContain(DECISION);
-    expect(cursorBlock).toContain(DECISION);
+
+    // 3. The memory-derived block body is BYTE-IDENTICAL across agents
+    //    (cursor's frontmatter lives OUTSIDE the sentinel block). This is the
+    //    Phase 9 exit criterion: same project memory shared across agents.
+    expect(memoryBody(cursorBlock as string)).toBe(memoryBody(claudeBlock as string));
   });
 
   it("a new gemini target participates in the shared-memory guarantee", async () => {
@@ -89,8 +101,11 @@ describe("cross-agent shared memory (Phase 9 exit criterion)", () => {
     const claude = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     const gemini = await readFile(join(projectRoot, "GEMINI.md"), "utf8");
     expect(gemini).toContain(DECISION);
-    expect(parseBlock(gemini).block).not.toBeNull();
-    expect(parseBlock(gemini).block).toContain(DECISION);
-    expect(parseBlock(claude).block).toContain(DECISION);
+
+    const claudeBlock = parseBlock(claude).block;
+    const geminiBlock = parseBlock(gemini).block;
+    expect(claudeBlock).not.toBeNull();
+    expect(geminiBlock).not.toBeNull();
+    expect(memoryBody(geminiBlock as string)).toBe(memoryBody(claudeBlock as string));
   });
 });

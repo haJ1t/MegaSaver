@@ -2,7 +2,11 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { connectorDoctorCommand, runConnectorSync } from "../src/commands/connector/index.js";
+import {
+  connectorDoctorCommand,
+  runConnectorDoctor,
+  runConnectorSync,
+} from "../src/commands/connector/index.js";
 import { describeUnlessWindows } from "./_platform.js";
 
 describe("connectorDoctorCommand", () => {
@@ -110,6 +114,50 @@ describe("connectorDoctorCommand", () => {
     expect(lines.some((l) => l.startsWith("gemini") && l.includes("no-block"))).toBe(true);
   });
 
+  it("emits a JSON array with the documented record shape for a mixed set", async () => {
+    await seed("gemini");
+    const code = await runConnectorDoctor({
+      projectName: "demo",
+      targetFlag: undefined,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      platform: process.platform,
+      localAppData: undefined,
+      json: true,
+      stdout: (line) => console.log(line),
+      stderr: () => {},
+    });
+    expect(code).toBe(0);
+    const lines = logSpy.mock.calls.map((c) => c[0] as string);
+    const parsed = JSON.parse(lines.at(-1) as string) as Array<{
+      id: string;
+      relativePath: string;
+      status: string;
+      writable: boolean;
+      session: string | null;
+    }>;
+    expect(parsed.length).toBe(7);
+    for (const rec of parsed) {
+      expect(rec).toHaveProperty("id");
+      expect(rec).toHaveProperty("relativePath");
+      expect(rec).toHaveProperty("status");
+      expect(typeof rec.writable).toBe("boolean");
+      expect(rec.session).toBeNull();
+    }
+    const gemini = parsed.find((r) => r.id === "gemini");
+    expect(gemini).toMatchObject({
+      id: "gemini",
+      relativePath: "GEMINI.md",
+      status: "ok",
+      writable: true,
+      session: null,
+    });
+    const missing = parsed.find((r) => r.id === "claude-code");
+    expect(missing).toMatchObject({ status: "missing", writable: true });
+  });
+
   describeUnlessWindows("writability (POSIX chmod)", () => {
     it("reports not-writable and exits 1 without modifying the file", async () => {
       await seed("gemini");
@@ -124,6 +172,22 @@ describe("connectorDoctorCommand", () => {
         expect(await readFile(path, "utf8")).toBe(before);
       } finally {
         await chmod(path, 0o644);
+      }
+    });
+
+    it("reports not-writable for an absent file under a read-only parent (exit 1)", async () => {
+      // continue writes to .continue/rules/megasaver.md; make the project root
+      // read-only so the to-be-created ancestor directory is non-writable.
+      await chmod(projectRoot, 0o555);
+      try {
+        await runDoctor("continue");
+        expect(process.exitCode).toBe(1);
+        const lines = logSpy.mock.calls.map((c) => c[0] as string);
+        expect(lines.some((l) => l.startsWith("continue") && l.includes("not-writable"))).toBe(
+          true,
+        );
+      } finally {
+        await chmod(projectRoot, 0o755);
       }
     });
   });
