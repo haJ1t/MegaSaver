@@ -3,9 +3,10 @@ title: '@megasaver/output-filter'
 tags: [entity, package, output-filter, redaction, v0.5, aa1]
 sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
+  - docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design.md
 status: active
 created: 2026-05-11
-updated: 2026-05-11
+updated: 2026-06-14
 ---
 
 # `@megasaver/output-filter`
@@ -98,3 +99,32 @@ accurate; the new parsers are plugged in as earlier dispatch candidates.
 Previously only lowercase `error` patterns scored in the `errorScore`
 feature. Failure chunks now receive a non-zero score and are correctly
 prioritised by the fit step. output-filter@1.1.0.
+
+## v1.2 — Proxy Mode (2026-06-14)
+
+Four of the seven phases land here. See [[concepts/proxy-mode]] for the
+full arc.
+
+- **P1 — Output classifier** (commit `c356e04`). `classifyOutput` →
+  `{ category, confidence }` over `vitest | typescript | generic_shell |
+  unknown`. Command-matching + output-sniffing on ANSI-stripped text;
+  surfaced on `FilterOutputResult.classification`. Low confidence →
+  `generic`.
+- **P2 — Compressors + passthrough decision** (commit `6f65d10`).
+  `compressVitest` (keep failures / assertions / stack / summary, collapse
+  passing) and `compressTsc` (group-by-file, dedupe cascading diagnostics,
+  top-files header). `filterOutput` `decision` band: passthrough
+  (<1200 tok) / light (<2000) / compressed; the specialized compressor is
+  gated on `isConfidentClassification`. Reports `rawTokens` /
+  `returnedTokens` / `decision` / `compressor`; no fake savings on small
+  output.
+- **P4 — Engine-aware ranking** (commit `7a3c85b`). `applyEngineRanking`
+  re-weights the EXISTING `scoreChunk` output (no second scorer):
+  `0.70*base + 0.15*memory + 0.15*failure`, normalized to `[0,1]`, behind
+  `MEGASAVER_ENGINE_RANKING` (off by default). Per-chunk `engine`
+  explanation; `SessionHints.recentFailures` feeds the failure boost.
+- **P6 — Replay trace** (commit `3873ae0`). With `recordTrace`,
+  `filterOutput` emits a `RankingTrace`; `finalizeReplayTrace` +
+  `writeReplayTrace` append JSONL best-effort, referencing the content-store
+  `chunkSetId` and chunk references (scores + signals) — never raw text.
+  Feeds the v1.4 ablation ladder.

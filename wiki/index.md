@@ -30,10 +30,10 @@ updated: 2026-06-14
 
 ## Entities
 
-- [[entities/cli]] — `@megasaver/cli` `mega` command; `mega output exec`, `mega mcp {install,repair,status,uninstall,serve}`; standalone bundle `dist-bundle/mega.mjs` (zero runtime deps) shipped to GitHub Releases on `v*` tag via `release.yml` (#91, #94).
+- [[entities/cli]] — `@megasaver/cli` `mega` command; `mega output exec`, `mega mcp {install,repair,status,uninstall,serve}`, `mega hooks {install,status}` (v1.2 Proxy Mode telemetry); standalone bundle `dist-bundle/mega.mjs` (zero runtime deps) shipped to GitHub Releases on `v*` tag via `release.yml` (#91, #94).
 - [[entities/connectors-claude-code]] — `@megasaver/connector-claude-code` root `CLAUDE.md` adapter (merged).
 - [[entities/connectors-generic-cli]] — `@megasaver/connector-generic-cli` manifest-driven connector (v0.1 = Codex `AGENTS.md`).
-- [[entities/connectors-shared]] — `@megasaver/connectors-shared` block helpers + context schema; additive `MEGA SAVER:CONTEXT_GATE` block (BB11, #84).
+- [[entities/connectors-shared]] — `@megasaver/connectors-shared` block helpers + context schema; additive `MEGA SAVER:CONTEXT_GATE` block (BB11, #84); v1.2 Proxy Mode biases the block to `proxy_*` tool names + "prefer proxy tools / expand before assuming omitted" guidance.
 - [[entities/core]] — `@megasaver/core` agent-agnostic engine; BB1 adds `Session.tokenSaver` + `updateTokenSaver`; BB12 (#88) moved the orchestrator OUT to `@megasaver/context-gate` (core re-exports it).
 - [[entities/gui]] — `@megasaver/gui` localhost web shell; AgentSetupDoctor + `/api/mcp/*` routes (BB11, #84); WCAG AA contrast pass (#85, #87); token-savings inline-SVG chart + raw-output retention controls (#97, gui@1.1.0).
 - [[entities/shared]] — `@megasaver/shared` contracts package (v0.1; BB1 adds `TokenSaverMode` + `modeToBudget`).
@@ -41,12 +41,12 @@ updated: 2026-06-14
 ### AA1 Context Gate packages (v0.5 → v1.1)
 
 - [[entities/policy]] — `@megasaver/policy` command/path gates + redact + `PolicyDenyCode` (BB3); `parseProjectPermissions` + `permissions.yaml` tighten-only rules + `policy_load_failed` (#96, v1.1.0).
-- [[entities/output-filter]] — `@megasaver/output-filter` `filterOutput` pipeline, `resolveSafeReadPath`, `RankFeatureName`, `OutputSourceKind` (BB5); +pytest/go/cargo/eslint parsers (#92); CamelCase `*Error` + `panicked` ranker (#95) — output-filter@1.1.0.
+- [[entities/output-filter]] — `@megasaver/output-filter` `filterOutput` pipeline, `resolveSafeReadPath`, `RankFeatureName`, `OutputSourceKind` (BB5); +pytest/go/cargo/eslint parsers (#92); CamelCase `*Error` + `panicked` ranker (#95) — output-filter@1.1.0; v1.2 Proxy Mode adds `classifyOutput`, vitest/tsc compressors + passthrough decision bands, flagged engine-aware ranking, replay trace.
 - [[entities/content-store]] — `@megasaver/content-store` ChunkSet persistence, `ContentStoreErrorCode` (BB4; no core edge).
 - [[entities/retrieval]] — `@megasaver/retrieval` BM25 + `DerivedIntent` (BB6).
-- [[entities/stats]] — `@megasaver/stats` `SessionTokenSaverStats` + `TokenSaverEvent` (BB6).
+- [[entities/stats]] — `@megasaver/stats` `SessionTokenSaverStats` + `TokenSaverEvent` (BB6); v1.2 Proxy Mode adds proxy-adoption + hook-based-interception metrics (honest-metrics: interception only when hook log exists).
 - [[entities/skill-packs]] — `@megasaver/skill-packs` real loader/discovery/installer (2026-06-10); 7-member error enum; `mega pack` CLI; symlink + path-escape guards.
-- [[entities/mcp-bridge]] — `@megasaver/mcp-bridge` real MCP stdio server over `stdio`, 4 tools, `mega mcp serve`, `buildMcpSetupOps` facade, 16-member `McpBridgeErrorCode` (BB8; AA1 §8).
+- [[entities/mcp-bridge]] — `@megasaver/mcp-bridge` real MCP stdio server over `stdio`, **5 tools** (v1.2 adds `proxy_search_code`), `MEGASAVER_TOOL_NAMING` proxy/legacy naming mode, `mega mcp serve`, `buildMcpSetupOps` facade, 16-member `McpBridgeErrorCode` (BB8; AA1 §8; v1.2 Proxy Mode).
 - [[entities/context-gate]] — `@megasaver/context-gate@0.2.0` extracted from core (BB12, #88); orchestrator functions (`runOutputPipeline`, `runOutputExecCommand`, `fetchChunk`, `loadProjectPermissions`); `OrchestratorRegistry` structural port; core re-exports surface (consumers unchanged).
 
 - [[entities/conventions-sync]] — repo dogfood drift tooling (`scripts/conventions-sync/`); syncs `AGENTS.md` + 3 `.cursor/rules/*.mdc` from `docs/conventions/`; `CLAUDE.md` not yet managed (roadmap #2).
