@@ -3,9 +3,10 @@ title: '@megasaver/stats'
 tags: [entity, package, stats, telemetry, v0.5, aa1]
 sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
+  - docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design.md
 status: active
 created: 2026-05-11
-updated: 2026-06-10
+updated: 2026-06-14
 ---
 
 # `@megasaver/stats`
@@ -70,9 +71,26 @@ Both orchestrator paths record events:
 Core re-exports `appendEvent`/`readSummary`/types so apps/cli honors
 its dependency-graph pin (no direct stats dep).
 
+## v1.2 — Proxy Mode metrics (2026-06-14)
+
+P5 (commit `07040de`) adds two metric families on top of the byte ledger.
+See [[concepts/proxy-mode]].
+
+- **Proxy adoption** — universal: reported whenever proxy tools are the
+  exposed surface, no extra telemetry needed.
+- **Hook-based interception** — reported ONLY when the Claude Code
+  PreToolUse jsonl log exists (written by `mega hooks log`). When it does
+  not, stats degrades to adoption-only plus an install hint
+  (`mega hooks install`) rather than fabricating an interception number.
+
+**Honest-metrics rule:** never overclaim. Interception requires the
+hook-log evidence on disk; absent it, stats shows adoption only. Mirrors
+the no-fake-savings stance in [[entities/output-filter]].
+
 ## Related
 
 - [[entities/output-filter]] — emits the byte metrics; owns
   `OutputSourceKind`.
 - [[entities/retrieval]] — shipped in the same PR (BB6).
+- [[entities/cli]] — `mega hooks {install,status}` writes the hook log.
 - [[concepts/context-gate-pipeline]] — stats sit at the tail of the flow.

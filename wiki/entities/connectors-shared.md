@@ -3,9 +3,10 @@ title: '@megasaver/connectors-shared'
 tags: [entity, connectors, helpers, v0.1]
 sources:
   - docs/superpowers/specs/2026-05-07-generic-cli-connector-design.md
+  - docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design.md
 status: shipped
 created: 2026-05-07
-updated: 2026-05-08
+updated: 2026-06-14
 ---
 
 # `@megasaver/connectors-shared`
@@ -53,6 +54,19 @@ agents — `agentId` is data carried through `ConnectorContext`.
 - `parseBlock` is parameterised by the sentinel pair, so the legacy
   `MEGA SAVER:BEGIN/END` block and the CONTEXT_GATE block coexist in
   one agent file without clobbering each other.
+
+## v1.2 — Proxy Mode (2026-06-14)
+
+P5 (commit `07040de`) reworks the CONTEXT_GATE block text. See
+[[concepts/proxy-mode]].
+
+- The block now biases the agent to the **proxy** tool names
+  (`proxy_run_command` / `proxy_read_file` / `proxy_search_code`) instead
+  of the `mega_*` names, matching the default `MEGASAVER_TOOL_NAMING=proxy`
+  surface.
+- Adds the guidance lines "prefer proxy tools" and "expand before assuming
+  omitted" (i.e. call `proxy_expand_chunk` rather than treating compressed
+  output as truncated) so the agent does not re-fetch full output.
 
 ## Related
 
