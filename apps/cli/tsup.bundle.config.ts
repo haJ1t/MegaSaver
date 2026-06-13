@@ -32,16 +32,25 @@ export default defineConfig({
   clean: true,
   sourcemap: false,
   dts: false,
-  // Re-point esbuild's `__require` shim at a real createRequire so an inlined
-  // CJS dep that `require()`s a bare Node builtin — e.g. yaml's
-  // `require("process")`, pulled in transitively via context-gate's
-  // loadProjectPermissions — works at runtime instead of throwing
-  // "Dynamic require of process is not supported".
+  // Provide the CommonJS module globals that inlined CJS deps expect but ESM
+  // does not define:
+  //   - `require`  — yaml's `require("process")` (via context-gate's
+  //     loadProjectPermissions) would otherwise throw "Dynamic require of
+  //     process is not supported".
+  //   - `__filename` / `__dirname` — the bundled TypeScript compiler (via
+  //     @megasaver/indexer) reads `__filename` at load
+  //     (isFileSystemCaseSensitive) and throws "__filename is not defined in
+  //     ES module scope" without this shim.
+  // All three become module-scoped bindings the concatenated CJS code resolves.
   banner: {
     js: [
       "#!/usr/bin/env node",
       'import { createRequire as __cr } from "node:module";',
+      'import { fileURLToPath as __fileURLToPath } from "node:url";',
+      'import { dirname as __pathDirname } from "node:path";',
       "const require = __cr(import.meta.url);",
+      "const __filename = __fileURLToPath(import.meta.url);",
+      "const __dirname = __pathDirname(__filename);",
     ].join("\n"),
   },
   splitting: false,
@@ -51,13 +60,10 @@ export default defineConfig({
   // literal and esbuild eliminates the createRequire branch. The unbundled
   // dist/cli.js has no such define, so it falls back to reading package.json.
   define: { __MEGA_CLI_VERSION__: JSON.stringify(version) },
-  // Inline everything resolvable. esbuild keeps Node builtins (fs, path,
-  // node:os, …) external automatically under platform:"node", so this safely
-  // bundles all workspace + npm deps without trying to inline the runtime.
+  // Inline everything resolvable, including the TypeScript compiler pulled in
+  // via @megasaver/indexer — the banner's __filename/__dirname shim lets it run
+  // inlined, so the single file stays fully self-contained (no runtime deps for
+  // any command, `mega index` included). esbuild keeps Node builtins (fs, path,
+  // node:os, …) external automatically under platform:"node".
   noExternal: [/.*/],
-  // …except the TypeScript compiler (via @megasaver/indexer): it references
-  // __filename at load and cannot run inlined in an ESM bundle. It stays a
-  // runtime dependency, so `mega index` requires `typescript` to be installed
-  // alongside the bundle (the rest of the CLI remains self-contained).
-  external: ["typescript"],
 });
