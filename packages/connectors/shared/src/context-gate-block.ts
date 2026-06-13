@@ -20,9 +20,12 @@ export function renderContextGateBlock(input: ConnectorContext): string {
     "When reading large files, running commands, or inspecting build /",
     "test output, prefer the Mega Saver MCP tools over native ones:",
     "",
-    "- `mega_read_file(path, intent, ...)` over reading a whole file.",
-    "- `mega_run_command(command, args, intent, ...)` over `Bash`.",
-    "- `mega_fetch_chunk(chunkSetId, chunkId)` to drill into a stored",
+    // Names track the default proxy naming mode (Proxy Mode v1.2 §5).
+    // Installs that set MEGASAVER_TOOL_NAMING=legacy expose the
+    // mega_* equivalents. Mode-aware rendering is Deliverable 8.
+    "- `proxy_read_file(path, intent, ...)` over reading a whole file.",
+    "- `proxy_run_command(command, args, intent, ...)` over `Bash`.",
+    "- `proxy_expand_chunk(chunkSetId, chunkId)` to drill into a stored",
     "  excerpt when the summary is insufficient.",
     "- `mega_recall(sessionId, intent)` to reload session memory and",
     "  recent tool calls without re-reading every file.",
@@ -30,6 +33,12 @@ export function renderContextGateBlock(input: ConnectorContext): string {
     "Always pass `intent` — it drives ranking. Raw output is stored",
     "locally; ask for it only when the filtered result is genuinely",
     "insufficient.",
+    "",
+    // Proxy Mode v1.2 §6 / §14-D8 canonical instruction block.
+    "Prefer proxy tools for reading files, searching code, running tests,",
+    "running typecheck, inspecting build logs, and reviewing diffs.",
+    "Use native tools only when explicitly required.",
+    "Expand chunks before assuming omitted content is irrelevant.",
     "",
     `Session: ${context.session?.id}`,
     `Project: ${context.project.id}`,

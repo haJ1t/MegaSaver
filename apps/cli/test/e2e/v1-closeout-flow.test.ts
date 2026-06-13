@@ -277,7 +277,7 @@ describe("v1.0 closeout end-to-end flow (plan L1672-L1702)", () => {
     const body = readFileSync(join(store, rel), "utf8");
     expect(body).toContain("<!-- MEGA SAVER:BEGIN -->"); // legacy still present
     expect(body).toContain("<!-- MEGA SAVER:CONTEXT_GATE BEGIN -->"); // additive CG block
-    expect(body).toContain("mega_run_command"); // block instructs the agent (AA1 §7)
+    expect(body).toContain("proxy_run_command"); // block instructs the agent, proxy default naming (AA1 §7)
     const cgStart = body.indexOf("<!-- MEGA SAVER:CONTEXT_GATE BEGIN -->");
     const cgEnd = body.indexOf("<!-- MEGA SAVER:CONTEXT_GATE END -->");
     expect(cgEnd - cgStart).toBeGreaterThan(0); // block bytes > 0

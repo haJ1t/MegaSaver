@@ -2088,3 +2088,22 @@ Phases 4–10 stay roadmap-level. index.md + post-v1.1-roadmap cross-linked.
 Branch docs/contextops-roadmap-phases. Process: brainstorming (scope locked via
 AskUserQuestion: docs-only / master+near-term / reconcile) → authored solo for
 cross-doc coherence after the parallel code audit.
+
+## [2026-06-14] feat | Proxy Mode v1.2 — 7 phases shipped
+
+Implemented the full Proxy Mode v1.2 roadmap (spec+plan vendored to
+docs/superpowers/{specs,plans}/2026-06-12-proxy-mode-v1.2-*). Branch
+feat/proxy-mode-v1.2, 7 commits, each TDD → pnpm verify green → external
+review → changeset. Full verify 30/30 tasks, 1828 tests.
+Phases: P0 tool naming mode (49b002e), P1 output classifier (c356e04),
+P2 vitest/tsc compressors + passthrough (6f65d10), P3 proxy_search_code
+(31bd0d7), P4 flagged engine-aware ranking (7a3c85b), P5 hook installer +
+adoption/interception metrics + connector bias (07040de), P6 replay trace
+(3873ae0). Reconciliations (repo vs spec, "confirm in repo" resolved):
+grep not rg (LOCKED allowlist; rg/index-first → v1.3), retrieval = in-memory
+BM25 (no persistent index), no P0 stubs (§13), mega_recall unrenamed,
+MEGASAVER_ENGINE_RANKING default off. P3/P5 implemented via delegated
+executor agents, independently re-verified + reviewed (P3 +path-traversal
+guard, P5 +security review). New page concepts/proxy-mode. CLI smoke
+captured: mega hooks install idempotent into temp settings, logger exit 0,
+unknown target exit 1. NOT pushed — awaiting user go for push/PR.
