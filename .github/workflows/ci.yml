@@ -42,3 +42,12 @@ jobs:
       # errors as their own step.
       - name: Verify
         run: pnpm verify
+
+      # Build the standalone CLI bundle and run it. The TypeScript compiler is
+      # inlined (via @megasaver/indexer) and initializes at module load, so a
+      # broken ESM bundle (e.g. missing __filename/__dirname shim) crashes here
+      # before any command runs. Guards the GitHub Release artifact.
+      - name: Bundle smoke
+        run: |
+          pnpm --filter @megasaver/cli bundle
+          node apps/cli/dist-bundle/mega.mjs doctor
