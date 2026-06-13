@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-06-11
+updated: 2026-06-14
 ---
 
 # Wiki Index — Mega Saver
@@ -26,6 +26,7 @@ updated: 2026-06-11
 - [[concepts/structured-memory-engine]] — DIMMEM, roadmap Phase 1: typed engineering memory (10 MemoryTypes + metadata); reconciles the v0.1 MemoryEntry primitive.
 - [[concepts/semantic-repo-index]] — roadmap Phase 2: parse repo into typed CodeBlocks (AST) so retrieval works on blocks, not files.
 - [[concepts/context-pruning-engine]] — LAMR, roadmap Phase 3: task-aware multi-factor scoring → 6–8-block context pack; repo-side cousin of context-gate-pipeline.
+- [[concepts/proxy-mode]] — Proxy Mode v1.2 (7 phases shipped): public naming mode, output classifier, vitest/tsc compressors + passthrough, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics, replay trace.
 
 ## Entities
 
