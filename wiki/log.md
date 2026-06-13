@@ -2253,3 +2253,33 @@ the backtick path, matching the same doc's two other references in
 positives that render as code, not links: the prose word `[[links]]`
 in an older log line and the syntax example `[[wiki-link]]` in
 `wiki/CLAUDE.md` §page-format. All real wiki-links now resolve.
+
+## [2026-06-14] feat | Proxy Mode v1.2 — 7 phases shipped
+
+Implemented the full Proxy Mode v1.2 roadmap (spec+plan vendored to
+docs/superpowers/{specs,plans}/2026-06-12-proxy-mode-v1.2-*). Branch
+feat/proxy-mode-v1.2, 7 commits, each TDD → pnpm verify green → external
+review → changeset. Full verify 30/30 tasks, 1828 tests.
+Phases: P0 tool naming mode (49b002e), P1 output classifier (c356e04),
+P2 vitest/tsc compressors + passthrough (6f65d10), P3 proxy_search_code
+(31bd0d7), P4 flagged engine-aware ranking (7a3c85b), P5 hook installer +
+adoption/interception metrics + connector bias (07040de), P6 replay trace
+(3873ae0). Reconciliations (repo vs spec, "confirm in repo" resolved):
+grep not rg (LOCKED allowlist; rg/index-first → v1.3), retrieval = in-memory
+BM25 (no persistent index), no P0 stubs (§13), mega_recall unrenamed,
+MEGASAVER_ENGINE_RANKING default off. P3/P5 implemented via delegated
+executor agents, independently re-verified + reviewed (P3 +path-traversal
+guard, P5 +security review). New page concepts/proxy-mode. CLI smoke
+captured: mega hooks install idempotent into temp settings, logger exit 0,
+unknown target exit 1.
+
+## [2026-06-14] merge | Proxy Mode v1.2 ← origin/main Phase 0–10 ContextOps
+
+Merged origin/main (all 10 ContextOps phases, MCP 4→25 tools) into the v1.2
+Proxy Mode branch. UNION resolution — nothing lost from either side. mcp-bridge
+now exposes 26 tools (25 ContextOps + proxy_search_code); McpToolName is a
+26-member enum. tool naming layer (tool-naming.ts) renames only
+mega_read_file/mega_run_command/mega_fetch_chunk → proxy_* and passes every
+other name through in both modes. CLI registers all Phase 0–10 subcommands plus
+the hooks group. stats exports both the v1.2 proxy metrics and the Phase 8
+AuditEvent family. README kept at the v1.2 version.

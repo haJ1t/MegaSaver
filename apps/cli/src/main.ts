@@ -6,6 +6,7 @@ import { contextCommand } from "./commands/context/index.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { failCommand } from "./commands/fail/index.js";
 import { githubCommand } from "./commands/github/index.js";
+import { hooksCommand } from "./commands/hooks/index.js";
 import { indexCommand } from "./commands/index/index.js";
 import { learnCommand } from "./commands/learn.js";
 import { mcpCommand } from "./commands/mcp/index.js";
@@ -51,6 +52,7 @@ export const mainCommand = defineCommand({
     output: outputCommand,
     mcp: mcpCommand,
     pack: packCommand,
+    hooks: hooksCommand,
     scan: scanCommand,
     index: indexCommand,
     context: contextCommand,

@@ -8,7 +8,9 @@ import { z } from "zod";
 // find_similar_failures, get_applicable_rules), the Phase 6 Task Engine
 // tools (build_task_plan, get_task_status, record_task_step, retry_failed_step),
 // the Phase 7 Tool Router tool (route_tools_for_task), the Phase 8 Audit
-// tool (audit_token_usage), and the Phase 10 approval tool (approve_memory).
+// tool (audit_token_usage), the Phase 10 approval tool (approve_memory), and
+// the Proxy Mode v1.2 search tool (proxy_search_code) — a NEW tool with no
+// mega_* twin that is already a proxy_* name and keeps it in both naming modes.
 export const mcpToolNameSchema = z.enum([
   "approve_memory",
   "audit_token_usage",
@@ -28,6 +30,7 @@ export const mcpToolNameSchema = z.enum([
   "mega_read_file",
   "mega_recall",
   "mega_run_command",
+  "proxy_search_code",
   "record_failed_attempt",
   "record_task_step",
   "retry_failed_step",

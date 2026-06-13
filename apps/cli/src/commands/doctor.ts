@@ -1,4 +1,9 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { defineCommand } from "citty";
+import { HOOK_LOG_RELATIVE_PATH } from "../hooks/logger.js";
+import { DEFAULT_HOOK_COMMAND, hasPreToolUseHook } from "./hooks/install.js";
+import { resolveClaudeCodeSettingsPath } from "./hooks/settings-path.js";
 
 export type Check = {
   key: string;
@@ -22,6 +27,47 @@ export function checkPlatform(platform: NodeJS.Platform = process.platform): Che
 
 export function checkCwd(cwd: string = process.cwd()): Check {
   return { key: "cwd", value: cwd, pass: true };
+}
+
+export type HookTelemetryPaths = {
+  settingsPath: string;
+  hookLogPath: string;
+  command?: string;
+};
+
+// Proxy Mode v1.2 §13.7 — detect Claude Code hook telemetry. Installed when
+// EITHER the settings.json carries the PreToolUse entry OR a hook log already
+// exists (telemetry is flowing). SAFETY: paths are injected; the production
+// wiring resolves the real Claude Code locations, but tests pass temp paths so
+// the real ~/.claude is never read. Malformed settings -> treated as missing,
+// never throws.
+export function checkHookTelemetry(paths: HookTelemetryPaths): Check {
+  const command = paths.command ?? DEFAULT_HOOK_COMMAND;
+  const settingsInstalled = ((): boolean => {
+    if (!existsSync(paths.settingsPath)) return false;
+    try {
+      return hasPreToolUseHook(JSON.parse(readFileSync(paths.settingsPath, "utf8")), command);
+    } catch {
+      return false;
+    }
+  })();
+  const logPresent = existsSync(paths.hookLogPath);
+  if (settingsInstalled || logPresent) {
+    return { key: "claude-code-hook-telemetry", value: "installed", pass: true };
+  }
+  return {
+    key: "claude-code-hook-telemetry",
+    value: "missing",
+    pass: false,
+    reason: "run: mega hooks install claude-code",
+  };
+}
+
+function defaultHookTelemetryPaths(): HookTelemetryPaths {
+  return {
+    settingsPath: resolveClaudeCodeSettingsPath(),
+    hookLogPath: join(process.cwd(), HOOK_LOG_RELATIVE_PATH),
+  };
 }
 
 export function runChecks(): Check[] {
@@ -51,7 +97,15 @@ export const doctorCommand = defineCommand({
   args: {},
   run() {
     const checks = runChecks();
-    console.log(renderReport(checks));
+    // Hook telemetry is informational: a "missing" result reports the install
+    // hint but never fails the doctor (it is opt-in, not an environment fault),
+    // so it is rendered below the env summary and excluded from exitCodeFor.
+    const hookCheck = checkHookTelemetry(defaultHookTelemetryPaths());
+    const hookLine =
+      hookCheck.value === "installed"
+        ? "\n\nClaude Code hook telemetry: installed"
+        : `\n\nClaude Code hook telemetry: missing (${hookCheck.reason})`;
+    console.log(`${renderReport(checks)}${hookLine}`);
     const code = exitCodeFor(checks);
     if (code !== 0) {
       process.exitCode = code;

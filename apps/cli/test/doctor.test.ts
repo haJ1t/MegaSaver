@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type Check,
@@ -146,15 +149,23 @@ describe("exitCodeFor", () => {
 
 describe("doctorCommand", () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
+  let tempHome: string;
 
   beforeEach(() => {
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     process.exitCode = 0;
+    // SAFETY: point HOME/USERPROFILE at an empty temp dir so the hook-telemetry
+    // check never stats or reads the developer's real ~/.claude during tests.
+    tempHome = mkdtempSync(join(tmpdir(), "megasaver-doctor-home-"));
+    vi.stubEnv("HOME", tempHome);
+    vi.stubEnv("USERPROFILE", tempHome);
   });
 
   afterEach(() => {
     logSpy.mockRestore();
     process.exitCode = 0;
+    vi.unstubAllEnvs();
+    rmSync(tempHome, { recursive: true, force: true });
   });
 
   it("calls console.log exactly once", async () => {
@@ -186,6 +197,20 @@ describe("doctorCommand", () => {
       rawArgs: [],
       data: undefined,
     } as never);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("reports hook telemetry as missing with the install hint when absent", async () => {
+    await doctorCommand.run?.({
+      args: {},
+      cmd: doctorCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+    const output = logSpy.mock.calls[0]?.[0] as string;
+    expect(output).toContain("Claude Code hook telemetry: missing");
+    expect(output).toContain("mega hooks install claude-code");
+    // Missing telemetry is informational — it must not fail the doctor.
     expect(process.exitCode).toBe(0);
   });
 });

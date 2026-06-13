@@ -25,6 +25,88 @@ describe("filterOutput boundary validation (spec §5.1 / §8)", () => {
   });
 });
 
+describe("filterOutput classification (Proxy Mode v1.2 §10)", () => {
+  it("surfaces a typescript classification from a tsc command source", () => {
+    const raw = "src/foo.ts(12,5): error TS2322: Type 'string' is not assignable to type 'number'.";
+    const result = filterOutput(
+      base(raw, { source: { kind: "command", command: "tsc", args: ["--noEmit"] } }),
+    );
+    expect(result.classification.category).toBe("typescript");
+    expect(result.classification.confidence).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it("falls back to unknown for unrecognised output with no command", () => {
+    const result = filterOutput(base("hello world\njust some log\n"));
+    expect(result.classification.category).toBe("unknown");
+  });
+});
+
+describe("filterOutput passthrough thresholds (Proxy Mode v1.2 §11)", () => {
+  it("small output passes through without fake savings", () => {
+    const result = filterOutput(base("small output line\n"));
+    expect(result.decision).toBe("passthrough");
+    expect(result.compressor).toBe("generic");
+    expect(result.savingRatio).toBeGreaterThanOrEqual(0);
+    expect(result.summary).toContain("passthrough");
+  });
+
+  it("mid-size output returns a light summary, not full compression", () => {
+    const raw = `${"x".repeat(6_000)}\n`; // ~1500 tokens, between thresholds
+    const result = filterOutput(base(raw));
+    expect(result.decision).toBe("light");
+  });
+
+  it("large vitest output is fully compressed with the vitest compressor", () => {
+    const failing = [
+      " ❯ src/b.test.ts > adds numbers",
+      "   × adds numbers",
+      "     AssertionError: expected 3 to be 4",
+      " Test Files  1 failed (1)",
+      "      Tests  1 failed (1)",
+      "   Duration  1.20s",
+    ].join("\n");
+    const passing = Array.from(
+      { length: 1500 },
+      (_, i) => ` ✓ src/a.test.ts > passes ${i} (1ms)`,
+    ).join("\n");
+    const raw = `${passing}\n${failing}\n`;
+    const result = filterOutput(
+      base(raw, {
+        mode: "balanced",
+        source: { kind: "command", command: "vitest", args: ["run"] },
+      }),
+    );
+    expect(result.decision).toBe("compressed");
+    expect(result.compressor).toBe("vitest");
+    expect(result.classification.category).toBe("vitest");
+    expect(result.savingRatio).toBeGreaterThan(0);
+    expect(result.rawTokens).toBeGreaterThan(result.returnedTokens);
+  });
+});
+
+describe("filterOutput engine-aware ranking (Proxy Mode v1.2 §8)", () => {
+  const raw = `${Array.from({ length: 600 }, (_, i) => `plain log line ${i}`).join("\n")}\ncall useAuthToken now\n`;
+
+  it("is off by default: no engine explanation on excerpts", () => {
+    const result = filterOutput(base(raw, { sessionHints: { recentMemory: ["useAuthToken"] } }));
+    expect(result.excerpts.every((e) => e.engine === undefined)).toBe(true);
+  });
+
+  it("when enabled, attaches a normalized engine explanation", () => {
+    const result = filterOutput(
+      base(raw, { engineRanking: true, sessionHints: { recentMemory: ["useAuthToken"] } }),
+    );
+    expect(result.excerpts.some((e) => e.engine !== undefined)).toBe(true);
+    const memHit = result.excerpts.find((e) => e.text.includes("useAuthToken"));
+    expect(memHit?.engine?.memoryBoost ?? 0).toBeGreaterThan(0);
+    for (const e of result.excerpts) {
+      if (e.engine === undefined) continue;
+      expect(e.engine.finalScore).toBeGreaterThanOrEqual(0);
+      expect(e.engine.finalScore).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
 describe("filterOutput pipeline (spec §6 / §11)", () => {
   it("shrinks a large multi-KB blob (savingRatio > 0, within budget)", () => {
     const raw = Array.from({ length: 4000 }, (_, i) => `noise line ${i} lorem ipsum dolor`).join(

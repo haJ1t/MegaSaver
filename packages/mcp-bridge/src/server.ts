@@ -4,7 +4,13 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { McpBridgeError } from "./errors.js";
-import { mcpToolNameSchema } from "./tool-name.js";
+import type { McpToolName } from "./tool-name.js";
+import {
+  type NamingMode,
+  exposedToolName,
+  internalIdFromExposed,
+  namingModeFromEnv,
+} from "./tool-naming.js";
 import { handleApproveMemory } from "./tools/approve-memory.js";
 import { handleAuditTokenUsage } from "./tools/audit-token-usage.js";
 import { handleBuildTaskPlan } from "./tools/build-task-plan.js";
@@ -30,6 +36,7 @@ import { handleRetryFailedStep } from "./tools/retry-failed-step.js";
 import { handleRouteToolsForTask } from "./tools/route-tools-for-task.js";
 import { handleRunCommand } from "./tools/run-command.js";
 import { handleSaveMemory } from "./tools/save-memory.js";
+import { handleSearchCode } from "./tools/search-code.js";
 import { handleSearchMemory } from "./tools/search-memory.js";
 
 export type ServerDeps = {
@@ -37,79 +44,90 @@ export type ServerDeps = {
   storeRoot: string;
   now?: () => string;
   newId?: () => string;
+  // Public tool naming mode (Proxy Mode v1.2 §5). Injectable for
+  // tests; production resolves from MEGASAVER_TOOL_NAMING once at
+  // startup, defaulting to proxy.
+  toolNaming?: NamingMode;
   // Injectable so the bridge lifecycle test never attaches a real
   // readline to process.stdin under Vitest (CRITICAL §12). Production
   // defaults to a real StdioServerTransport.
   transportFactory?: () => StdioServerTransport;
 };
 
-const TOOL_DEFS = [
+// Internal dispatch id (== legacy wire name) + description. The
+// exposed name is derived per naming mode at list/dispatch time.
+const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
   {
-    name: "approve_memory",
+    id: "approve_memory",
     description:
       "Approve or reject a suggested memory entry (human-in-the-loop decision; cannot move a memory back to suggested).",
   },
   {
-    name: "audit_token_usage",
+    id: "audit_token_usage",
     description: "Summarize recorded token/context savings for a project or session.",
   },
-  { name: "build_task_plan", description: "Create an ordered, dependency-aware task plan." },
+  { id: "build_task_plan", description: "Create an ordered, dependency-aware task plan." },
   {
-    name: "convert_failure_to_rule",
+    id: "convert_failure_to_rule",
     description: "Convert a failed attempt into a reusable project rule.",
   },
   {
-    name: "explain_context_selection",
+    id: "explain_context_selection",
     description: "Per-factor scoring for each included context block.",
   },
-  { name: "find_similar_failures", description: "Rank past failed attempts similar to a task." },
+  { id: "find_similar_failures", description: "Rank past failed attempts similar to a task." },
   {
-    name: "get_applicable_rules",
+    id: "get_applicable_rules",
     description: "Score project rules applicable to a task or files.",
   },
   {
-    name: "get_context_budget_report",
+    id: "get_context_budget_report",
     description: "Token-savings audit for a task's context pack.",
   },
   {
-    name: "get_project_context",
+    id: "get_project_context",
     description: "Project briefing: meta, rules, key memories, index summary, open failures.",
   },
   {
-    name: "get_project_rules",
+    id: "get_project_rules",
     description: "Reusable project rules, optionally filtered by task or files.",
   },
   {
-    name: "get_relevant_code_blocks",
+    id: "get_relevant_code_blocks",
     description: "The included blocks of a task's context pack.",
   },
   {
-    name: "get_relevant_context",
+    id: "get_relevant_context",
     description: "Build a task-aware context pack from the project index.",
   },
-  { name: "get_relevant_memories", description: "Rank project memories by relevance to a task." },
-  { name: "get_task_status", description: "Plan status, per-step state, and ready steps." },
-  { name: "mega_fetch_chunk", description: "Fetch one stored chunk from a chunk set." },
-  { name: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
-  { name: "mega_recall", description: "Recall session memory and stored chunk sets." },
-  { name: "mega_run_command", description: "Run a policy-gated command and filter its output." },
-  { name: "record_failed_attempt", description: "Record a failed task attempt for a project." },
+  { id: "get_relevant_memories", description: "Rank project memories by relevance to a task." },
+  { id: "get_task_status", description: "Plan status, per-step state, and ready steps." },
+  { id: "mega_fetch_chunk", description: "Fetch one stored chunk from a chunk set." },
+  { id: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
+  { id: "mega_recall", description: "Recall session memory and stored chunk sets." },
+  { id: "mega_run_command", description: "Run a policy-gated command and filter its output." },
   {
-    name: "record_task_step",
+    id: "proxy_search_code",
+    description:
+      "Task-aware code search. Prefer this over native grep/search: it groups matches by file, compresses noisy output, stores the raw results for expansion, and reports token savings.",
+  },
+  { id: "record_failed_attempt", description: "Record a failed task attempt for a project." },
+  {
+    id: "record_task_step",
     description: "Report a step running/completed/failed; rolls up plan status.",
   },
   {
-    name: "retry_failed_step",
+    id: "retry_failed_step",
     description: "Reset a failed step (and its dependents) to pending.",
   },
   {
-    name: "route_tools_for_task",
+    id: "route_tools_for_task",
     description: "Recommend task-relevant tools; block dangerous/deploy/database.",
   },
-  { name: "save_memory", description: "Write a typed memory entry to a project." },
-  { name: "save_project_rule", description: "Write a reusable project rule." },
-  { name: "search_memory", description: "Search project memories by text and filters." },
-] as const;
+  { id: "save_memory", description: "Write a typed memory entry to a project." },
+  { id: "save_project_rule", description: "Write a reusable project rule." },
+  { id: "search_memory", description: "Search project memories by text and filters." },
+];
 
 // The MCP SDK serialises only `error.message` into the JSON-RPC
 // error envelope a client receives. AA1 §14 BB8 acceptance requires
@@ -139,6 +157,7 @@ export function buildServer(deps: ServerDeps): {
 } {
   const now = deps.now ?? (() => new Date().toISOString());
   const newId = deps.newId ?? (() => randomUUID());
+  const naming = deps.toolNaming ?? namingModeFromEnv();
   const originPid = resolveOriginPid();
   const server = new Server(
     { name: "megasaver", version: "0.5.0" },
@@ -148,7 +167,7 @@ export function buildServer(deps: ServerDeps): {
   server.setRequestHandler(ListToolsRequestSchema, () =>
     Promise.resolve({
       tools: TOOL_DEFS.map((t) => ({
-        name: t.name,
+        name: exposedToolName(t.id, naming),
         description: t.description,
         inputSchema: { type: "object" as const },
       })),
@@ -158,12 +177,12 @@ export function buildServer(deps: ServerDeps): {
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const name = req.params.name;
     const args = req.params.arguments ?? {};
-    const parsedName = mcpToolNameSchema.safeParse(name);
-    if (!parsedName.success) {
+    const internalId = internalIdFromExposed(name, naming);
+    if (internalId === undefined) {
       throw wireError(new McpBridgeError("tool_not_found", `unknown tool: ${name}`));
     }
     try {
-      const payload = await dispatch(parsedName.data, args);
+      const payload = await dispatch(internalId, args);
       return { content: [{ type: "text", text: JSON.stringify(payload) }] };
     } catch (err) {
       if (err instanceof McpBridgeError) throw wireError(err);
@@ -177,7 +196,7 @@ export function buildServer(deps: ServerDeps): {
     }
   });
 
-  function dispatch(toolName: ReturnType<typeof mcpToolNameSchema.parse>, args: unknown) {
+  function dispatch(toolName: McpToolName, args: unknown) {
     switch (toolName) {
       case "approve_memory":
         return handleApproveMemory({ registry: deps.registry, now }, args);
@@ -199,6 +218,11 @@ export function buildServer(deps: ServerDeps): {
         return handleRecall({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "mega_run_command":
         return handleRunCommand(
+          { registry: deps.registry, storeRoot: deps.storeRoot, now, newId, originPid },
+          args,
+        );
+      case "proxy_search_code":
+        return handleSearchCode(
           { registry: deps.registry, storeRoot: deps.storeRoot, now, newId, originPid },
           args,
         );

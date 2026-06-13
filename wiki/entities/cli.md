@@ -9,9 +9,10 @@ sources:
   - docs/superpowers/specs/2026-05-10-aa4-wiki-cli-surfaces-design.md
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
   - docs/superpowers/specs/2026-06-12-phase9-connectors-design.md
+  - docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design.md
 status: published
 created: 2026-05-05
-updated: 2026-06-12
+updated: 2026-06-14
 ---
 
 # `@megasaver/cli`
@@ -240,6 +241,18 @@ flag shape; failure = text stderr, exit 1, no stdout).
 
 Errors surface as `error: <SkillPackErrorCode>: <detail>` via
 `skillPackErrorMessage` (closed 7-member enum, [[entities/skill-packs]]).
+
+### `mega hooks {install,status}` (Proxy Mode v1.2, P5)
+
+Hook telemetry surface for measuring native-tool interception. Shipped
+P5 (commit `07040de`). See [[concepts/proxy-mode]].
+
+- `hooks install claude-code` — idempotent install of a Claude Code
+  PreToolUse hook (matcher `Read|Bash|Grep|Glob|LS`, command
+  `mega hooks log`). Re-running does not duplicate the entry.
+- `hooks status` — reports whether the hook is installed.
+- `hooks log` — the hook target itself: a metadata-only, best-effort
+  logger that always exits 0 (never blocks the agent's tool call).
 
 ### Store resolution
 
