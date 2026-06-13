@@ -19,3 +19,21 @@ export type SessionId = z.infer<typeof sessionIdSchema>;
 
 export const memoryEntryIdSchema = lowercaseUuid.brand<"MemoryEntryId">();
 export type MemoryEntryId = z.infer<typeof memoryEntryIdSchema>;
+
+export const codeBlockIdSchema = lowercaseUuid.brand<"CodeBlockId">();
+export type CodeBlockId = z.infer<typeof codeBlockIdSchema>;
+
+export const projectRuleIdSchema = lowercaseUuid.brand<"ProjectRuleId">();
+export type ProjectRuleId = z.infer<typeof projectRuleIdSchema>;
+
+export const failedAttemptIdSchema = lowercaseUuid.brand<"FailedAttemptId">();
+export type FailedAttemptId = z.infer<typeof failedAttemptIdSchema>;
+
+export const taskPlanIdSchema = lowercaseUuid.brand<"TaskPlanId">();
+export type TaskPlanId = z.infer<typeof taskPlanIdSchema>;
+
+export const taskStepIdSchema = lowercaseUuid.brand<"TaskStepId">();
+export type TaskStepId = z.infer<typeof taskStepIdSchema>;
+
+export const toolDefinitionIdSchema = lowercaseUuid.brand<"ToolDefinitionId">();
+export type ToolDefinitionId = z.infer<typeof toolDefinitionIdSchema>;

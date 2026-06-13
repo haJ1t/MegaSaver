@@ -1,7 +1,19 @@
 import { defineCommand } from "citty";
+import { connectorDoctorCommand } from "./doctor.js";
+import { connectorListCommand } from "./list.js";
 import { connectorStatusCommand } from "./status.js";
 import { connectorSyncCommand } from "./sync.js";
 
+export {
+  type RunConnectorDoctorInput,
+  runConnectorDoctor,
+  connectorDoctorCommand,
+} from "./doctor.js";
+export {
+  type RunConnectorListInput,
+  runConnectorList,
+  connectorListCommand,
+} from "./list.js";
 export {
   type RunConnectorStatusInput,
   runConnectorStatus,
@@ -18,5 +30,7 @@ export const connectorCommand = defineCommand({
   subCommands: {
     sync: connectorSyncCommand,
     status: connectorStatusCommand,
+    list: connectorListCommand,
+    doctor: connectorDoctorCommand,
   },
 });

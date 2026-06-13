@@ -24,8 +24,16 @@ const ENTRY_PROJECT: MemoryEntry = {
   projectId: PROJECT_ID as MemoryEntry["projectId"],
   sessionId: null,
   scope: "project",
+  type: "decision",
+  title: "project-scope content here",
   content: "project-scope content here",
+  keywords: [],
+  confidence: "medium",
+  source: "manual",
+  approval: "approved",
+  stale: false,
   createdAt: "2026-05-10T11:00:00.000Z",
+  updatedAt: "2026-05-10T11:00:00.000Z",
 };
 
 const ENTRY_SESSION: MemoryEntry = {
@@ -33,8 +41,16 @@ const ENTRY_SESSION: MemoryEntry = {
   projectId: PROJECT_ID as MemoryEntry["projectId"],
   sessionId: SESSION_ID as MemoryEntry["sessionId"],
   scope: "session",
+  type: "decision",
+  title: "session-scope content here",
   content: "session-scope content here",
+  keywords: [],
+  confidence: "medium",
+  source: "manual",
+  approval: "approved",
+  stale: false,
   createdAt: "2026-05-10T12:30:00.000Z",
+  updatedAt: "2026-05-10T12:30:00.000Z",
 };
 
 function stubFetch(memory: MemoryEntry[], sessions: Session[]): void {

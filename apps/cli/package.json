@@ -11,6 +11,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "dependencies": {
+    "typescript": "^5.7.3"
+  },
   "scripts": {
     "build": "tsup",
     "bundle": "tsup --config tsup.bundle.config.ts",
@@ -26,7 +29,9 @@
     "@megasaver/connector-generic-cli": "workspace:*",
     "@megasaver/connectors-shared": "workspace:*",
     "@megasaver/content-store": "workspace:*",
+    "@megasaver/context-pruner": "workspace:*",
     "@megasaver/core": "workspace:*",
+    "@megasaver/indexer": "workspace:*",
     "@megasaver/mcp-bridge": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",

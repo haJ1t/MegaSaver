@@ -1,0 +1,36 @@
+{
+  "name": "@megasaver/indexer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Semantic repo indexer for Mega Saver — typed CodeBlock extraction (AST + structural) and incremental build.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@megasaver/policy": "workspace:*",
+    "@megasaver/retrieval": "workspace:*",
+    "@megasaver/shared": "workspace:*",
+    "ignore": "^5.3.2",
+    "typescript": "^5.7.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17"
+  }
+}

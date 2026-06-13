@@ -55,4 +55,9 @@ export default defineConfig({
   // node:os, …) external automatically under platform:"node", so this safely
   // bundles all workspace + npm deps without trying to inline the runtime.
   noExternal: [/.*/],
+  // …except the TypeScript compiler (via @megasaver/indexer): it references
+  // __filename at load and cannot run inlined in an ESM bundle. It stays a
+  // runtime dependency, so `mega index` requires `typescript` to be installed
+  // alongside the bundle (the rest of the CLI remains self-contained).
+  external: ["typescript"],
 });

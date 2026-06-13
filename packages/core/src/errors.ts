@@ -9,6 +9,22 @@ export const coreRegistryErrorCodeSchema = z.enum([
   "session_project_mismatch",
   "memory_entry_already_exists",
   "memory_entry_not_found",
+  "project_rule_already_exists",
+  "project_rule_not_found",
+  "failed_attempt_already_exists",
+  "failed_attempt_not_found",
+  "failed_attempt_already_converted",
+  "task_plan_already_exists",
+  "task_plan_not_found",
+  "task_step_not_found",
+  "task_step_not_failed",
+  "task_step_transition_invalid",
+  "task_step_dependency_unmet",
+  "tool_definition_already_exists",
+  // Reserved: no thrower yet. ToolDefinition is create-only and
+  // getToolDefinition returns null on miss; this code is for a future
+  // strict getter / `tools show`-style lookup that errors instead.
+  "tool_definition_not_found",
 ]);
 
 export type CoreRegistryErrorCode = z.infer<typeof coreRegistryErrorCodeSchema>;

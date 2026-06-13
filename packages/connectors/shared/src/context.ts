@@ -74,6 +74,16 @@ export const ConnectorContextSchema = z
           path: ["memoryEntries", index, "content"],
         });
       }
+      // title crosses the same render boundary as content (and shows in
+      // explain/show); guard it against sentinel injection too, even though
+      // the current renderer emits only content.
+      if (containsSentinel(entry.title)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Memory entry title cannot contain Mega Saver sentinels.",
+          path: ["memoryEntries", index, "title"],
+        });
+      }
       if (entry.scope === "session") {
         if (context.session === null) {
           ctx.addIssue({

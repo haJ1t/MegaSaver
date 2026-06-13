@@ -172,7 +172,7 @@ describe("error helpers — additional coverage", () => {
   it("invalidAgentMessage formats expected list of valid agents", () => {
     expect(invalidAgentMessage("totally-fake")).toEqual({
       message:
-        'error: invalid agent "totally-fake", expected: aider | claude-code | codex | cursor | generic-cli',
+        'error: invalid agent "totally-fake", expected: aider | claude-code | codex | continue | cursor | gemini | generic-cli | windsurf',
       exitCode: 1,
     });
   });
@@ -277,7 +277,8 @@ describe("error helpers — additional coverage", () => {
 describe("connector error mappings", () => {
   it("invalidTargetMessage formats expected list of valid targets", () => {
     expect(invalidTargetMessage("nope")).toEqual({
-      message: 'error: invalid target "nope", expected: claude-code | codex | cursor | aider',
+      message:
+        'error: invalid target "nope", expected: claude-code | codex | cursor | aider | gemini | windsurf | continue',
       exitCode: 1,
     });
   });

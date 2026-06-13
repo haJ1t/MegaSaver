@@ -114,13 +114,22 @@ export async function handlePostMemory(ctx: RouteContext): Promise<void> {
   }
   try {
     const entryId = ctx.newId();
+    const createdAt = ctx.now();
+    // Phase 1 (DIMMEM) typed-schema defaults; the GUI typed-memory surface is
+    // a later phase, so default to a neutral typed shape here.
     const entry = memoryEntrySchema.parse({
       id: entryId,
       projectId: parsed.data.projectId,
       sessionId: resolvedSessionId,
       scope: parsed.data.scope,
+      type: "todo",
+      title: parsed.data.content,
       content: parsed.data.content,
-      createdAt: ctx.now(),
+      keywords: [],
+      confidence: "medium",
+      source: "manual",
+      createdAt,
+      updatedAt: createdAt,
     });
     const created = ctx.registry.createMemoryEntry(entry);
     ctx.sendJson(ctx.res, 201, created, ctx.origin);

@@ -64,8 +64,11 @@ const AGENT_LABEL: Record<AgentId, string> = {
   aider: "aider",
   "claude-code": "claude",
   codex: "codex",
+  continue: "continue",
   cursor: "cursor",
+  gemini: "gemini",
   "generic-cli": "cli",
+  windsurf: "windsurf",
 };
 
 export function AgentBadge({ agentId }: { agentId: AgentId }): JSX.Element {

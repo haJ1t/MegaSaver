@@ -71,7 +71,8 @@ describe("connectorSyncCommand — pre-target gates", () => {
     expect(
       errSpy.mock.calls.some(
         (c) =>
-          c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor | aider',
+          c[0] ===
+          'error: invalid target "nope", expected: claude-code | codex | cursor | aider | gemini | windsurf | continue',
       ),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
@@ -178,6 +179,9 @@ describe("connectorSyncCommand — skipped + created", () => {
       "codex        AGENTS.md  skipped  session=none",
       "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
       "aider        CONVENTIONS.md  skipped  session=none",
+      "gemini       GEMINI.md  skipped  session=none",
+      "windsurf     .windsurfrules  skipped  session=none",
+      "continue     .continue/rules/megasaver.md  skipped  session=none",
     ]);
   });
 
@@ -190,6 +194,9 @@ describe("connectorSyncCommand — skipped + created", () => {
       "codex        AGENTS.md  created  session=none",
       "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
       "aider        CONVENTIONS.md  skipped  session=none",
+      "gemini       GEMINI.md  skipped  session=none",
+      "windsurf     .windsurfrules  skipped  session=none",
+      "continue     .continue/rules/megasaver.md  skipped  session=none",
     ]);
     const written = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
     expect(written).toMatch(/<!-- MEGA SAVER:BEGIN -->/);
@@ -206,6 +213,9 @@ describe("connectorSyncCommand — skipped + created", () => {
       "codex        AGENTS.md  skipped  session=none",
       "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
       "aider        CONVENTIONS.md  skipped  session=none",
+      "gemini       GEMINI.md  skipped  session=none",
+      "windsurf     .windsurfrules  skipped  session=none",
+      "continue     .continue/rules/megasaver.md  skipped  session=none",
     ]);
     const written = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     expect(written).toContain("Agent: claude-code");
@@ -336,6 +346,9 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "codex        AGENTS.md  wrote  session=33333333-3333-4333-8333-333333333333",
       "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
       "aider        CONVENTIONS.md  skipped  session=none",
+      "gemini       GEMINI.md  skipped  session=none",
+      "windsurf     .windsurfrules  skipped  session=none",
+      "continue     .continue/rules/megasaver.md  skipped  session=none",
     ]);
     const claudeMd = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
     const agentsMd = await readFile(join(projectRoot, "AGENTS.md"), "utf8");
@@ -375,6 +388,9 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "codex        AGENTS.md  skipped  session=none",
       "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
       "aider        CONVENTIONS.md  skipped  session=none",
+      "gemini       GEMINI.md  skipped  session=none",
+      "windsurf     .windsurfrules  skipped  session=none",
+      "continue     .continue/rules/megasaver.md  skipped  session=none",
     ]);
   });
 
@@ -453,6 +469,9 @@ describe("connectorSyncCommand — wrote + noop", () => {
       "codex        AGENTS.md  noop  session=none",
       "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
       "aider        CONVENTIONS.md  skipped  session=none",
+      "gemini       GEMINI.md  skipped  session=none",
+      "windsurf     .windsurfrules  skipped  session=none",
+      "continue     .continue/rules/megasaver.md  skipped  session=none",
     ]);
   });
 
@@ -597,6 +616,9 @@ describe("connectorSyncCommand — best-effort partial failure", () => {
       "codex        AGENTS.md  error  session=none",
       "cursor       .cursor/rules/megasaver.mdc  skipped  session=none",
       "aider        CONVENTIONS.md  skipped  session=none",
+      "gemini       GEMINI.md  skipped  session=none",
+      "windsurf     .windsurfrules  skipped  session=none",
+      "continue     .continue/rules/megasaver.md  skipped  session=none",
     ]);
     expect(
       errSpy.mock.calls.some(
@@ -1200,6 +1222,52 @@ describe("connectorSyncCommand — memoryEntries wiring", () => {
     expect(agents).toContain(MEM_CODEX);
     expect(agents).not.toContain(MEM_CC_CURRENT);
   });
+
+  it("gates suggested memory out of connector sync — only approved appears in CLAUDE.md", async () => {
+    await seedProject();
+    const MEM_APPROVED = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const MEM_SUGGESTED = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    await seedMemory([
+      {
+        id: MEM_APPROVED,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        type: "decision",
+        title: "approved memory",
+        content: "approved content here",
+        keywords: [],
+        confidence: "medium",
+        source: "manual",
+        approval: "approved",
+        stale: false,
+        createdAt: TS,
+        updatedAt: TS,
+      },
+      {
+        id: MEM_SUGGESTED,
+        projectId: PROJECT_ID,
+        sessionId: null,
+        scope: "project",
+        type: "decision",
+        title: "suggested memory",
+        content: "suggested content here",
+        keywords: [],
+        confidence: "medium",
+        source: "agent",
+        approval: "suggested",
+        stale: false,
+        createdAt: TS,
+        updatedAt: TS,
+      },
+    ]);
+    await writeFile(join(projectRoot, "CLAUDE.md"), "");
+    await runSync({ target: "claude-code" });
+
+    const claude = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    expect(claude).toContain("approved content here");
+    expect(claude).not.toContain("suggested content here");
+  });
 });
 
 describe("connectorSyncCommand — X4 filter-then-cap-by-recency (25 entries → 20 most recent)", () => {
@@ -1511,3 +1579,79 @@ describe("U5 — cursor sync: each target block contains its own session, not th
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+describe("connectorSyncCommand — phase 9 targets", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  const PID = "77777777-7777-4777-8777-777777777777";
+  const TS = "2026-06-12T00:00:00.000Z";
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-p9-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-p9-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function seedProject(): Promise<void> {
+    await mkdir(store, { recursive: true });
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        { id: PID, name: "demo", rootPath: projectRoot, createdAt: TS, updatedAt: TS },
+      ]),
+    );
+    await writeFile(join(store, "sessions.json"), "[]");
+  }
+
+  async function runSync(target?: string): Promise<void> {
+    const cliArgs: Record<string, string> = { projectName: "demo", store };
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (target !== undefined) cliArgs["target"] = target;
+    await connectorSyncCommand.run?.({
+      args: cliArgs,
+      cmd: connectorSyncCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  const cases = [
+    { id: "gemini", path: "GEMINI.md" },
+    { id: "windsurf", path: ".windsurfrules" },
+    { id: "continue", path: ".continue/rules/megasaver.md" },
+  ] as const;
+
+  for (const c of cases) {
+    it(`seeds ${c.path} with a Mega Saver block on first --target sync`, async () => {
+      await seedProject();
+      await runSync(c.id);
+      const content = await readFile(join(projectRoot, c.path), "utf8");
+      expect(content).toContain(MEGA_SAVER_BLOCK_START);
+      const lines = logSpy.mock.calls.map((cc) => cc[0] as string);
+      expect(
+        lines.some((l) => l.startsWith(c.id) && l.includes(c.path) && l.includes("created")),
+      ).toBe(true);
+    });
+
+    it(`default sync skips a missing ${c.id} file`, async () => {
+      await seedProject();
+      await runSync();
+      const lines = logSpy.mock.calls.map((cc) => cc[0] as string);
+      expect(lines.some((l) => l.startsWith(c.id) && l.includes("skipped"))).toBe(true);
+      await expect(readFile(join(projectRoot, c.path), "utf8")).rejects.toThrow();
+    });
+  }
+});

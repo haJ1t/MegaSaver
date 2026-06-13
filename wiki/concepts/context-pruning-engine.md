@@ -53,9 +53,12 @@ fit→summarize in `@megasaver/output-filter` (9 rank features) +
 `@megasaver/context-gate`. But it is **output-centric** — it
 compresses one tool's stdout, scoring for errors/test-failures/noise.
 LAMR is **task-and-repo-centric** — it scores [[concepts/semantic-repo-index]]
-blocks against a task description. No `mega context build --task`, no
-multi-factor relevance model, no block+reason output exists. Status:
-**partial**. Spec:
+blocks against a task description. Status: **shipped** (Phase 3, PR
+pending) — `@megasaver/context-pruner` implements the 8-factor model,
+selection with dependency closure + token budget (named/failing blocks
+never silently dropped), per-block reasons, and a savings audit, exposed
+as `mega context build/explain/audit/export` + 4 MCP tools. See
+[[entities/context-pruner]]. Spec:
 `docs/superpowers/specs/2026-06-11-phase3-context-pruning-lamr-design.md`.
 
 ## Why it matters
@@ -71,5 +74,6 @@ future tie-in lets Phase 5 `failed_attempt` memories boost a block
 ## Related
 
 - [[syntheses/contextops-roadmap]]
+- [[entities/context-pruner]]
 - [[concepts/context-gate-pipeline]] (the shipped output-side cousin)
 - [[concepts/semantic-repo-index]], [[concepts/structured-memory-engine]]

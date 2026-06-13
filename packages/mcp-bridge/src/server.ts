@@ -11,11 +11,33 @@ import {
   internalIdFromExposed,
   namingModeFromEnv,
 } from "./tool-naming.js";
+import { handleApproveMemory } from "./tools/approve-memory.js";
+import { handleAuditTokenUsage } from "./tools/audit-token-usage.js";
+import { handleBuildTaskPlan } from "./tools/build-task-plan.js";
+import {
+  handleExplainContextSelection,
+  handleGetContextBudgetReport,
+  handleGetRelevantCodeBlocks,
+  handleGetRelevantContext,
+} from "./tools/context-pruning.js";
+import { handleConvertFailureToRule } from "./tools/convert-failure-to-rule.js";
+import { handleRecordFailedAttempt } from "./tools/failed-attempts.js";
 import { handleFetchChunk } from "./tools/fetch-chunk.js";
+import { handleFindSimilarFailures } from "./tools/find-similar-failures.js";
+import { handleGetApplicableRules } from "./tools/get-applicable-rules.js";
+import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
+import { handleGetTaskStatus } from "./tools/get-task-status.js";
+import { handleGetProjectContext } from "./tools/project-context.js";
+import { handleGetProjectRules, handleSaveProjectRule } from "./tools/project-rules.js";
 import { handleReadFile } from "./tools/read-file.js";
 import { handleRecall } from "./tools/recall.js";
+import { handleRecordTaskStep } from "./tools/record-task-step.js";
+import { handleRetryFailedStep } from "./tools/retry-failed-step.js";
+import { handleRouteToolsForTask } from "./tools/route-tools-for-task.js";
 import { handleRunCommand } from "./tools/run-command.js";
+import { handleSaveMemory } from "./tools/save-memory.js";
 import { handleSearchCode } from "./tools/search-code.js";
+import { handleSearchMemory } from "./tools/search-memory.js";
 
 export type ServerDeps = {
   registry: CoreRegistry;
@@ -35,6 +57,51 @@ export type ServerDeps = {
 // Internal dispatch id (== legacy wire name) + description. The
 // exposed name is derived per naming mode at list/dispatch time.
 const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
+  {
+    id: "approve_memory",
+    description:
+      "Approve or reject a suggested memory entry (human-in-the-loop decision; cannot move a memory back to suggested).",
+  },
+  {
+    id: "audit_token_usage",
+    description: "Summarize recorded token/context savings for a project or session.",
+  },
+  { id: "build_task_plan", description: "Create an ordered, dependency-aware task plan." },
+  {
+    id: "convert_failure_to_rule",
+    description: "Convert a failed attempt into a reusable project rule.",
+  },
+  {
+    id: "explain_context_selection",
+    description: "Per-factor scoring for each included context block.",
+  },
+  { id: "find_similar_failures", description: "Rank past failed attempts similar to a task." },
+  {
+    id: "get_applicable_rules",
+    description: "Score project rules applicable to a task or files.",
+  },
+  {
+    id: "get_context_budget_report",
+    description: "Token-savings audit for a task's context pack.",
+  },
+  {
+    id: "get_project_context",
+    description: "Project briefing: meta, rules, key memories, index summary, open failures.",
+  },
+  {
+    id: "get_project_rules",
+    description: "Reusable project rules, optionally filtered by task or files.",
+  },
+  {
+    id: "get_relevant_code_blocks",
+    description: "The included blocks of a task's context pack.",
+  },
+  {
+    id: "get_relevant_context",
+    description: "Build a task-aware context pack from the project index.",
+  },
+  { id: "get_relevant_memories", description: "Rank project memories by relevance to a task." },
+  { id: "get_task_status", description: "Plan status, per-step state, and ready steps." },
   { id: "mega_fetch_chunk", description: "Fetch one stored chunk from a chunk set." },
   { id: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
   { id: "mega_recall", description: "Recall session memory and stored chunk sets." },
@@ -44,6 +111,22 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
     description:
       "Task-aware code search. Prefer this over native grep/search: it groups matches by file, compresses noisy output, stores the raw results for expansion, and reports token savings.",
   },
+  { id: "record_failed_attempt", description: "Record a failed task attempt for a project." },
+  {
+    id: "record_task_step",
+    description: "Report a step running/completed/failed; rolls up plan status.",
+  },
+  {
+    id: "retry_failed_step",
+    description: "Reset a failed step (and its dependents) to pending.",
+  },
+  {
+    id: "route_tools_for_task",
+    description: "Recommend task-relevant tools; block dangerous/deploy/database.",
+  },
+  { id: "save_memory", description: "Write a typed memory entry to a project." },
+  { id: "save_project_rule", description: "Write a reusable project rule." },
+  { id: "search_memory", description: "Search project memories by text and filters." },
 ];
 
 // The MCP SDK serialises only `error.message` into the JSON-RPC
@@ -115,6 +198,15 @@ export function buildServer(deps: ServerDeps): {
 
   function dispatch(toolName: McpToolName, args: unknown) {
     switch (toolName) {
+      case "approve_memory":
+        return handleApproveMemory({ registry: deps.registry, now }, args);
+      case "audit_token_usage":
+        return handleAuditTokenUsage(
+          { registry: deps.registry, storeRoot: deps.storeRoot, now },
+          args,
+        );
+      case "build_task_plan":
+        return handleBuildTaskPlan({ registry: deps.registry, now, newId }, args);
       case "mega_fetch_chunk":
         return handleFetchChunk({ storeRoot: deps.storeRoot }, args);
       case "mega_read_file":
@@ -134,6 +226,57 @@ export function buildServer(deps: ServerDeps): {
           { registry: deps.registry, storeRoot: deps.storeRoot, now, newId, originPid },
           args,
         );
+      case "save_memory":
+        return handleSaveMemory({ registry: deps.registry, now, newId }, args);
+      case "search_memory":
+        return handleSearchMemory({ registry: deps.registry }, args);
+      case "get_relevant_memories":
+        return handleGetRelevantMemories({ registry: deps.registry }, args);
+      case "get_task_status":
+        return handleGetTaskStatus({ registry: deps.registry }, args);
+      case "get_relevant_context":
+        return handleGetRelevantContext(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        );
+      case "get_relevant_code_blocks":
+        return handleGetRelevantCodeBlocks(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        );
+      case "explain_context_selection":
+        return handleExplainContextSelection(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        );
+      case "get_context_budget_report":
+        return handleGetContextBudgetReport(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        );
+      case "get_project_context":
+        return handleGetProjectContext(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        );
+      case "get_project_rules":
+        return handleGetProjectRules({ registry: deps.registry }, args);
+      case "record_failed_attempt":
+        return handleRecordFailedAttempt({ registry: deps.registry, now, newId }, args);
+      case "record_task_step":
+        return handleRecordTaskStep({ registry: deps.registry, now, newId }, args);
+      case "retry_failed_step":
+        return handleRetryFailedStep({ registry: deps.registry }, args);
+      case "route_tools_for_task":
+        return handleRouteToolsForTask({ registry: deps.registry }, args);
+      case "save_project_rule":
+        return handleSaveProjectRule({ registry: deps.registry, now, newId }, args);
+      case "convert_failure_to_rule":
+        return handleConvertFailureToRule({ registry: deps.registry, now, newId }, args);
+      case "find_similar_failures":
+        return handleFindSimilarFailures({ registry: deps.registry }, args);
+      case "get_applicable_rules":
+        return handleGetApplicableRules({ registry: deps.registry }, args);
     }
   }
 

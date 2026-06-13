@@ -36,4 +36,13 @@ describe("@megasaver/stats dependency graph (cycle guard)", () => {
     const deps = Object.keys(packageJson.dependencies ?? {}).sort();
     expect(deps).toEqual([...ALLOWED_DEPENDENCIES].sort());
   });
+
+  it("Phase 8 audit additions do not widen the allow-list", () => {
+    const deps = Object.keys(packageJson.dependencies ?? {});
+    expect(deps).not.toContain("@megasaver/context-pruner");
+    expect(deps).not.toContain("@megasaver/core");
+    for (const dep of deps) {
+      expect(ALLOWED_DEPENDENCIES).toContain(dep);
+    }
+  });
 });

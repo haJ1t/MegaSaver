@@ -12,10 +12,16 @@ describe("KnownTargetId type regression", () => {
     const _b: KnownTargetId = "codex";
     const _c: KnownTargetId = "cursor";
     const _d: KnownTargetId = "aider";
+    const _e: KnownTargetId = "gemini";
+    const _f: KnownTargetId = "windsurf";
+    const _g: KnownTargetId = "continue";
     void _a;
     void _b;
     void _c;
     void _d;
+    void _e;
+    void _f;
+    void _g;
   });
 
   it("non-member literal is not assignable to KnownTargetId", () => {

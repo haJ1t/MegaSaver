@@ -2044,7 +2044,7 @@ Lint of index.md:244 "v0.3 — open backlog (deferred to v0.4)": mcp-bridge real
 impl (shipped PR #83 0e9be7a BB8), skill-packs real impl (PR #103), Windows port
 remainder (PRs #104–#108 + #109/#110), connector aider sync (PR #21+#29) all
 struck with citations. Only "CLAUDE.md tagged blocks" (roadmap #2) remains open.
-No contradictions introduced; all new [[links]] resolve; conventions-sync not an
+No contradictions introduced; all new `[[links]]` resolve; conventions-sync not an
 orphan (inbound from index.md + roadmap).
 
 ## [2026-06-11] feature | roadmap #2 conventions:sync → CLAUDE.md (PR #112)
@@ -2085,9 +2085,174 @@ phases-v2, concepts/{structured-memory-engine,semantic-repo-index,context-
 pruning-engine}; full spec+plan for the 3 near-term gap phases (1 DIMMEM,
 2 repo-index, 3 LAMR) under docs/superpowers/{specs,plans}/2026-06-11-phase{1,2,3}-*.
 Phases 4–10 stay roadmap-level. index.md + post-v1.1-roadmap cross-linked.
-Branch docs/contextops-roadmap-phases. Process: brainstorming (scope locked via
-AskUserQuestion: docs-only / master+near-term / reconcile) → authored solo for
-cross-doc coherence after the parallel code audit.
+Branch docs/contextops-roadmap-phases (PR #113). Process: brainstorming (scope
+locked via AskUserQuestion: docs-only / master+near-term / reconcile) → authored
+solo for cross-doc coherence after the parallel code audit.
+
+## [2026-06-11] feat | Phase 1 DIMMEM memory engine (registry + CLI + MCP)
+
+Roadmap Phase 1 read/write surface over the typed memory schema, on branch
+feat/phase1-structured-memory (PR #114). THREE TDD slices + two review passes,
+all green via pnpm verify (30/30 tasks; core 230, cli 469, mcp-bridge 68,
+connectors-shared 74, gui 252).
+- Core: CoreRegistry.updateMemoryEntry/deleteMemoryEntry/searchMemoryEntries
+  (mutable-in-place; BM25 via @megasaver/retrieval over title+content+keywords;
+  stale excluded by default). memory-search.ts + memoryEntryUpdatePatchSchema.
+  Bug found+fixed by TDD: delete-all wrote a zero-byte JSONL that readJsonLines
+  rejected → writeMemoryEntriesForProject now removes the file on empty.
+- CLI: mega memory create typed flags (--type/--title/--keyword/--confidence/
+  --source/--reason/--goal/--file/--expires, optional w/ neutral defaults) +
+  new search/update/delete(--yes)/explain subcommands.
+- MCP: save_memory, search_memory, get_relevant_memories (closed enum 4→7).
+Smoke: real `mega` run of create→search→explain→update(stale)→delete loop
+captured (stale excluded from default search; delete refuses without --yes).
+Review: code-reviewer + critic both ship (fresh contexts); first pass fix-first
+(boundary validation, backfill guard, rm-error) → confirming pass clean.
+
+## [2026-06-11] feat | Phase 2 Semantic Repo Index (@megasaver/indexer)
+
+Roadmap Phase 2 on branch feat/phase2-semantic-index. New leaf package
+@megasaver/indexer + CLI surface, 6 TDD slices + 2 review passes, pnpm
+verify green (32 tasks; indexer 33 tests). See [[entities/indexer]],
+[[concepts/semantic-repo-index]] (status gap→shipped).
+- CodeBlock schema (8 types) + CodeBlockId in shared.
+- extractTs (TypeScript compiler API): fn/class/interface→schema/arrow;
+  PascalCase+tsx→component; *.test→test. extractMd (ATX sections +
+  (intro)), extractJson (top-level keys + package.json script:<name>,
+  key-anchored lineOf).
+- scanRepo: traversal-safe, never follows symlinks; always-ignore +
+  .gitignore + .megaignore (ignore lib); skips secret/binary/oversized.
+- buildIndex: atomic store (blocks.jsonl + manifest.json), contentHash
+  incremental, self-heals corrupt/torn index by re-extracting.
+- searchBlocks BM25 (in the package, NOT the CLI — §3c forbids a
+  CLI→retrieval edge; dependency-graph guard updated to allow indexer).
+- CLI mega scan + mega index build/status/search/show. typescript is a
+  CLI runtime dep, externalized from the bundle (it uses __filename at
+  load, cannot inline into ESM) — single-file bundle no longer strictly
+  zero-dep for the index feature.
+Smoke: dogfood on the indexer package itself — build added 21 files/71
+blocks; search "extract typescript ast" ranked extractJson/Md/Ts first;
+rebuild unchanged=21. Review: code-reviewer + critic fix-first
+(self-heal, key-anchored lineOf, ENOENT-only ignore swallow) →
+confirming pass + security-reviewer.
+
+## [2026-06-11] feat | Phase 3 Context Pruning / LAMR (@megasaver/context-pruner)
+
+Roadmap Phase 3 on branch feat/phase3-context-pruning. New leaf package
+@megasaver/context-pruner + CLI + MCP, 6 TDD slices, pnpm verify green
+(34 tasks). See [[entities/context-pruner]], [[concepts/context-pruning-engine]]
+(status partial→shipped).
+- score.ts: 8-factor model (semantic normalized-BM25, userMention
+  near-decisive, testFailure/recentEdit/memory from passed-in file sets,
+  stale/noise penalties) + named WEIGHTS; memory relevance is DATA in
+  (no core edge, §3c).
+- select.ts: force-include named/failing (safety invariant — never
+  silently dropped; budget overflow reported via usedTokens), fill to
+  limit under token budget (line-span estimate; blocks carry no text so
+  spec's chars/4 N/A), dependency closure over `calls`.
+- pack.ts buildContextPack + reasons; audit.ts savings (feeds Phase 8).
+- CLI mega context build/explain/audit/export; MCP get_relevant_context
+  /get_relevant_code_blocks/explain_context_selection/
+  get_context_budget_report (closed enum 7→11).
+Smoke ("fix the login bug"): login ranked #1 (named in task + cited by
+memory + semantic), 5 blocks → 2 included, tokens 120→48, saved 60%.
+
+## [2026-06-12] schema | Phase 9 multi-agent connectors
+
+Branch `feat/phase9-connectors`. Spec:
+`docs/superpowers/specs/2026-06-12-phase9-connectors-design.md`.
+Plan: `docs/superpowers/plans/2026-06-12-phase9-connectors.md`.
+
+Result: `pnpm verify` green (lint 704 files, typecheck all 17 packages,
+541 cli tests / 46 test files, conventions:check ok). Task 8 required
+no `main.ts` edit — `connector: connectorCommand` was already registered
+and `list`/`doctor` were already wired in `connector/index.ts`.
+
+Changes:
+- `@megasaver/shared`: `agentIdSchema` 5→8 members (continue, gemini,
+  windsurf; alphabetical). Both drift-guard test files updated.
+- `@megasaver/connector-generic-cli`: `geminiTarget`, `windsurfTarget`,
+  `continueTarget` frozen objects; `builtinTargets` 3→6.
+- `@megasaver/cli`: `KNOWN_TARGETS` 4→7; `mega connector list` +
+  `mega connector doctor` commands; cross-agent integration test proves
+  project memory lands byte-identically in two agent files.
+- `@megasaver/gui`: `AGENT_LABEL` record + `AGENT_IDS` tuple + bridge
+  mirror updated for three new agents.
+
+Wiki pages updated: `entities/connectors-generic-cli`,
+`entities/shared`, `entities/cli`, `syntheses/contextops-roadmap`
+(Phase 9 partial→done), `index.md` (Phase 9 status block).
+
+## [2026-06-12] feat | Phase 10 Team/Cloud (local approval slice)
+
+MemoryEntry.approval (suggested|approved|rejected), backfill→approved.
+Gate: search (incl. relevant/context-pack) + buildConnectorContext (CLI
++GUI) + get_project_context + mega_recall. CLI approve/reject + --all;
+approve_memory MCP tool (24→25); buildPrMemoryComment + mega github
+pr-comment. Team = shared store + gate. Cloud/auth/deploy/org/hosted-
+audit/web-UI/visibility deferred. Spec+plan 2026-06-12-phase10-team-cloud.
+
+Roadmap complete through all 10 phases.
+
+Wiki pages updated: `entities/core` (approval field + gate point 1 +
+buildPrMemoryComment), `entities/mcp-bridge` (25 tools, approve_memory,
+gated tools), `entities/cli` (approve/reject, --all, github pr-comment,
+connector gate), `syntheses/contextops-roadmap` (Phase 10 done, roadmap
+complete, deferred-cloud items recorded), `index.md` (Phase 10 status block).
+
+## [2026-06-12] docs | README + wiki refresh for completed 10-phase ContextOps roadmap
+
+Documentation-only pass on branch `docs/readme-wiki-roadmap-complete`
+(off main `f1fe1d3`, all 10 phases merged). No code changes.
+
+README.md:
+- Status line → all 10 ContextOps phases complete on `main` (PRs
+  #114–#123); kept package versions (cli 1.0.2, gui 1.1.0, core 1.0.2).
+- New "The ContextOps layer" section (per-phase engine table) + TOC entry.
+- New "MCP tools" section listing all **25** tools grouped (memory /
+  context / rules-failures / tasks / routing-audit), descriptions copied
+  verbatim from `packages/mcp-bridge/src/server.ts` `TOOL_DEFS`.
+- CLI reference: added memory (approve/reject/search --all/update/delete/
+  explain), scan, index, context, fail, rules, learn, task, tools, audit,
+  connector list/doctor, github pr-comment — all from `apps/cli` source.
+- Connectors: 4 → **7** targets (added gemini/windsurf/continue);
+  vscode/jetbrains + `mega connect` noted deferred.
+- Architecture diagram + repo-layout + Mega Saver Mode MCP note updated
+  (indexer, context-pruner, 25 tools). Roadmap section: all 10 phases
+  shipped + deferred cloud-SaaS slice listed.
+
+Wiki:
+- `syntheses/contextops-roadmap.md`: reconciliation table now shows all
+  10 phases `done` + PR refs + concept links (kept the original audit
+  done/partial/gap framing as a second column); phase-detail headings
+  4–8 → "done (was …)" with shipped notes; planning-artifacts now lists
+  all 10 specs; build-order section reframed past-tense.
+- New concept pages (matching existing style): `failed-run-learning`
+  (FORGE), `task-engine`, `tool-router`, `audit-dashboard`,
+  `memory-approval`. Cross-linked into index + roadmap synthesis.
+- Entity consistency fixes — the phase batches had updated entities for
+  Phases 9–10 only: added Phase 1/5/6/7 entity summary to
+  `entities/core.md`, Phase 2/3/5–8 command groups to `entities/cli.md`,
+  Phase 8 audit section to `entities/stats.md`. Confirmed
+  `entities/{mcp-bridge,shared,connectors-generic-cli}` already accurate
+  (25 tools / 8 agent ids / 6 generic-cli targets).
+- `index.md`: 5 new concept links, quick-links rows, synthesis blurb,
+  date bump.
+
+Verify: `pnpm conventions:check` green (README + wiki are not
+conventions-managed; ran to confirm CLAUDE.md/AGENTS.md/.cursor untouched).
+
+## [2026-06-12] lint | dead wiki-link sweep
+
+Scanned all 425 `[[wiki-links]]` across `wiki/`. One genuine broken
+target: `index.md` linked `[[specs/2026-05-10-windows-port-deferral]]`
+(no `wiki/specs/` folder — the doc lives at
+`docs/superpowers/specs/2026-05-10-windows-port-deferral.md`). Fixed to
+the backtick path, matching the same doc's two other references in
+`index.md` (lines 312, 351). The other two `[[...]]` matches are false
+positives that render as code, not links: the prose word `[[links]]`
+in an older log line and the syntax example `[[wiki-link]]` in
+`wiki/CLAUDE.md` §page-format. All real wiki-links now resolve.
 
 ## [2026-06-14] feat | Proxy Mode v1.2 — 7 phases shipped
 
@@ -2106,4 +2271,15 @@ MEGASAVER_ENGINE_RANKING default off. P3/P5 implemented via delegated
 executor agents, independently re-verified + reviewed (P3 +path-traversal
 guard, P5 +security review). New page concepts/proxy-mode. CLI smoke
 captured: mega hooks install idempotent into temp settings, logger exit 0,
-unknown target exit 1. NOT pushed — awaiting user go for push/PR.
+unknown target exit 1.
+
+## [2026-06-14] merge | Proxy Mode v1.2 ← origin/main Phase 0–10 ContextOps
+
+Merged origin/main (all 10 ContextOps phases, MCP 4→25 tools) into the v1.2
+Proxy Mode branch. UNION resolution — nothing lost from either side. mcp-bridge
+now exposes 26 tools (25 ContextOps + proxy_search_code); McpToolName is a
+26-member enum. tool naming layer (tool-naming.ts) renames only
+mega_read_file/mega_run_command/mega_fetch_chunk → proxy_* and passes every
+other name through in both modes. CLI registers all Phase 0–10 subcommands plus
+the hooks group. stats exports both the v1.2 proxy metrics and the Phase 8
+AuditEvent family. README kept at the v1.2 version.

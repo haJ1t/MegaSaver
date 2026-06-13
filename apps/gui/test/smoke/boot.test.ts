@@ -32,8 +32,16 @@ const ENTRY: MemoryEntry = {
   projectId: PROJECT.id,
   sessionId: null,
   scope: "project",
+  type: "decision",
+  title: "smoke entry",
   content: "smoke entry",
+  keywords: [],
+  confidence: "medium",
+  source: "manual",
+  approval: "approved",
+  stale: false,
   createdAt: "2026-05-10T12:30:00.000Z",
+  updatedAt: "2026-05-10T12:30:00.000Z",
 };
 
 describe("Bridge in-process smoke test", () => {

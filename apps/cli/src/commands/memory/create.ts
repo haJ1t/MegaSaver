@@ -1,8 +1,21 @@
-import { type MemoryEntry, memoryEntrySchema, memoryScopeSchema } from "@megasaver/core";
-import { sessionIdSchema } from "@megasaver/shared";
-import { defineCommand } from "citty";
 import {
+  type MemoryEntry,
+  memoryConfidenceSchema,
+  memoryEntrySchema,
+  memoryScopeSchema,
+  memorySourceSchema,
+  memoryTypeSchema,
+} from "@megasaver/core";
+import { sessionIdSchema, titleSchema } from "@megasaver/shared";
+import { defineCommand } from "citty";
+import { z } from "zod";
+import {
+  emptyFieldMessage,
+  invalidConfidenceMessage,
+  invalidExpiresMessage,
   invalidScopeMessage,
+  invalidSourceMessage,
+  invalidTypeMessage,
   mapErrorToCliMessage,
   projectNotFoundMessage,
   scopeProjectWithSessionMessage,
@@ -13,13 +26,22 @@ import {
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { readTestEnv } from "../session/shared.js";
 import { projectNameSchema } from "../shared/schemas.js";
-import { contentSchema } from "./shared.js";
+import { contentSchema, toStringArray } from "./shared.js";
 
 export type RunMemoryCreateInput = {
   projectName: string;
   scopeFlag: string;
   contentFlag: string;
   sessionFlag: string | undefined;
+  typeFlag?: string | undefined;
+  titleFlag?: string | undefined;
+  confidenceFlag?: string | undefined;
+  sourceFlag?: string | undefined;
+  reasonFlag?: string | undefined;
+  goalFlag?: string | undefined;
+  keywordFlags?: unknown;
+  fileFlags?: unknown;
+  expiresFlag?: string | undefined;
   storeFlag: string | undefined;
   cwd: string;
   home: string;
@@ -102,6 +124,64 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
     return cli.exitCode;
   }
 
+  // Typed DIMMEM fields. type/confidence/source default to a neutral shape so
+  // the legacy two-flag form (--scope/--content) keeps working; all are
+  // closed enums validated at the boundary.
+  const typeResult = memoryTypeSchema.safeParse(input.typeFlag ?? "todo");
+  if (!typeResult.success) {
+    const cli = invalidTypeMessage(input.typeFlag ?? "");
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+  const confidenceResult = memoryConfidenceSchema.safeParse(input.confidenceFlag ?? "medium");
+  if (!confidenceResult.success) {
+    const cli = invalidConfidenceMessage(input.confidenceFlag ?? "");
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+  const sourceResult = memorySourceSchema.safeParse(input.sourceFlag ?? "manual");
+  if (!sourceResult.success) {
+    const cli = invalidSourceMessage(input.sourceFlag ?? "");
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+
+  // Title defaults to content; when given, it crosses the same connector-render
+  // boundary as content, so re-parse it (parse-on-handoff policy, CLAUDE.md §8).
+  let title: string;
+  try {
+    title = input.titleFlag === undefined ? content : titleSchema.parse(input.titleFlag);
+  } catch (err) {
+    const cli = mapErrorToCliMessage(err, { kind: "title" });
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+
+  const keywords = toStringArray(input.keywordFlags);
+  const relatedFiles = toStringArray(input.fileFlags);
+
+  // Boundary validation of optional metadata: Core's schema requires reason/
+  // goal non-empty and expiresAt ISO-8601, so reject bad input here with a
+  // clear message instead of a generic schema error from deep in Core.
+  if (input.reasonFlag !== undefined && input.reasonFlag.trim().length === 0) {
+    const cli = emptyFieldMessage("reason");
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+  if (input.goalFlag !== undefined && input.goalFlag.trim().length === 0) {
+    const cli = emptyFieldMessage("goal");
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+  if (
+    input.expiresFlag !== undefined &&
+    !z.string().datetime({ offset: true }).safeParse(input.expiresFlag).success
+  ) {
+    const cli = invalidExpiresMessage(input.expiresFlag);
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
@@ -134,14 +214,25 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
     const createdAt = readTestEnv("MEGA_TEST_NOW") ?? now();
 
     // Parse-on-handoff boundary: re-parse here because the connector block
-    // renderer writes entry.content verbatim into agent config files.
+    // renderer writes entry.content/title verbatim into agent config files.
     const entry: MemoryEntry = memoryEntrySchema.parse({
       id,
       projectId: project.id,
       sessionId: parsedSessionId,
       scope,
+      type: typeResult.data,
+      title,
       content,
+      keywords,
+      confidence: confidenceResult.data,
+      source: sourceResult.data,
+      approval: "approved",
+      ...(input.reasonFlag !== undefined ? { reason: input.reasonFlag } : {}),
+      ...(input.goalFlag !== undefined ? { goal: input.goalFlag } : {}),
+      ...(relatedFiles.length > 0 ? { relatedFiles } : {}),
+      ...(input.expiresFlag !== undefined ? { expiresAt: input.expiresFlag } : {}),
       createdAt,
+      updatedAt: createdAt,
     });
 
     registry.createMemoryEntry(entry);
@@ -176,6 +267,24 @@ export const memoryCreateCommand = defineCommand({
       type: "string",
       description: "Session id (UUID); required when --scope session.",
     },
+    type: {
+      type: "string",
+      description: `Memory type (${memoryTypeSchema.options.join(" | ")}); default todo.`,
+    },
+    title: { type: "string", description: "Short title; defaults to content." },
+    keyword: { type: "string", description: "Keyword (repeatable)." },
+    confidence: {
+      type: "string",
+      description: `Confidence (${memoryConfidenceSchema.options.join(" | ")}); default medium.`,
+    },
+    source: {
+      type: "string",
+      description: `Source (${memorySourceSchema.options.join(" | ")}); default manual.`,
+    },
+    reason: { type: "string", description: "Why this memory exists." },
+    goal: { type: "string", description: "Goal this memory serves." },
+    file: { type: "string", description: "Related file path (repeatable)." },
+    expires: { type: "string", description: "Expiry timestamp (ISO-8601)." },
     store: { type: "string", description: "Override store directory." },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
@@ -185,6 +294,15 @@ export const memoryCreateCommand = defineCommand({
       scopeFlag: typeof args.scope === "string" ? args.scope : "",
       contentFlag: typeof args.content === "string" ? args.content : "",
       sessionFlag: typeof args.session === "string" ? args.session : undefined,
+      typeFlag: typeof args.type === "string" ? args.type : undefined,
+      titleFlag: typeof args.title === "string" ? args.title : undefined,
+      confidenceFlag: typeof args.confidence === "string" ? args.confidence : undefined,
+      sourceFlag: typeof args.source === "string" ? args.source : undefined,
+      reasonFlag: typeof args.reason === "string" ? args.reason : undefined,
+      goalFlag: typeof args.goal === "string" ? args.goal : undefined,
+      keywordFlags: args.keyword,
+      fileFlags: args.file,
+      expiresFlag: typeof args.expires === "string" ? args.expires : undefined,
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),

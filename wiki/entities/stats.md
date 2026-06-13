@@ -71,6 +71,26 @@ Both orchestrator paths record events:
 Core re-exports `appendEvent`/`readSummary`/types so apps/cli honors
 its dependency-graph pin (no direct stats dep).
 
+## Phase 8 — Audit dashboard (2026-06-12)
+
+Phase 8 **extends this package** rather than adding a parallel entity in
+core (decision (a)). Additive, the existing `TokenSaverEvent` byte-log
+and `SessionTokenSaverStats` are untouched:
+
+- A second event family **`AuditEvent`** (discriminated union of five
+  scalar-only kinds) written to a sibling log
+  `<store>/stats/<projectId>/<sessionId>.audit.jsonl` via
+  `appendAuditEvent` (mirrors `appendEvent` mechanics).
+- A pure **`summarizeAudit(events, opts)`** — arithmetic + grouping with
+  window filtering (`session | week | all`); unit-testable, no store.
+- A thin **`readAuditEvents(store, projectId, sessionId?)`** reader
+  (rejects a partial tail).
+- Core **re-exports** the four new symbols (apps must not import stats
+  directly — §3c cycle guard). Surfaced by the `audit_token_usage` MCP
+  tool (23 → 24) and the `mega audit report/last/session/export` group.
+
+Concept: [[concepts/audit-dashboard]].
+
 ## v1.2 — Proxy Mode metrics (2026-06-14)
 
 P5 (commit `07040de`) adds two metric families on top of the byte ledger.

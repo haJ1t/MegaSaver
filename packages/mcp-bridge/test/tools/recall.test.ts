@@ -10,6 +10,8 @@ const SESSION_ID = "22222222-2222-4222-8222-222222222222";
 const MEM_ID = "44444444-4444-4444-8444-444444444444";
 const TS = "2026-05-13T00:00:00.000Z";
 
+const MEM_SUGGESTED_ID = "55555555-5555-4555-8555-555555555555";
+
 function seededRegistry() {
   const registry = createInMemoryCoreRegistry();
   registry.createProject({
@@ -34,7 +36,29 @@ function seededRegistry() {
     sessionId: SESSION_ID,
     scope: "session",
     content: "use pnpm not npm",
+    type: "user_preference",
+    title: "use pnpm not npm",
+    keywords: [],
+    confidence: "medium",
+    source: "manual",
+    approval: "approved",
     createdAt: TS,
+    updatedAt: TS,
+  });
+  registry.createMemoryEntry({
+    id: MEM_SUGGESTED_ID,
+    projectId: PROJECT_ID,
+    sessionId: null,
+    scope: "project",
+    content: "agent suggestion not yet approved",
+    type: "todo",
+    title: "agent suggestion not yet approved",
+    keywords: [],
+    confidence: "medium",
+    source: "agent",
+    approval: "suggested",
+    createdAt: TS,
+    updatedAt: TS,
   });
   return registry;
 }
@@ -89,5 +113,16 @@ describe("handleRecall", () => {
     await expect(
       handleRecall({ registry, storeRoot: store }, { sessionId: SESSION_ID, intent: "" }),
     ).rejects.toMatchObject({ code: "intent_required" });
+  });
+
+  it("excludes suggested memory — only approved entries in recall result", async () => {
+    const registry = seededRegistry();
+    const result = await handleRecall(
+      { registry, storeRoot: store },
+      { sessionId: SESSION_ID, intent: "build tooling" },
+    );
+    const contents = result.memory.map((m) => m.content);
+    expect(contents).toContain("use pnpm not npm");
+    expect(contents).not.toContain("agent suggestion not yet approved");
   });
 });

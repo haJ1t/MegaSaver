@@ -8,6 +8,7 @@ sources:
   - docs/superpowers/plans/2026-05-06-cli-project-crud-plan.md
   - docs/superpowers/specs/2026-05-10-aa4-wiki-cli-surfaces-design.md
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
+  - docs/superpowers/specs/2026-06-12-phase9-connectors-design.md
   - docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design.md
 status: published
 created: 2026-05-05
@@ -132,11 +133,14 @@ two-space gutter): `id`, `project`, `session`, `scope`, `content`,
 ### `mega connector sync <projectName> [--target <id>]`
 
 Writes the Mega Saver context block into each known agent file
-under the project's `rootPath`. v0.1 known targets:
+under the project's `rootPath`. Known targets (7, Phase 9):
 - `claude-code` → `CLAUDE.md`
 - `codex` → `AGENTS.md`
 - `cursor` → `.cursor/rules/megasaver.mdc` (frontmatter prepended on first seed)
 - `aider` → `CONVENTIONS.md` (plain markdown, no frontmatter; user wires `aider --read CONVENTIONS.md`)
+- `gemini` → `GEMINI.md` (Phase 9; flat-file, no header)
+- `windsurf` → `.windsurfrules` (Phase 9; flat-file, no header)
+- `continue` → `.continue/rules/megasaver.md` (Phase 9; flat-file, no header)
 
 For each target the command reads the existing file, runs
 `upsertBlock`, diff-checks against the existing content, and writes
@@ -166,6 +170,24 @@ Status words on stdout: `in-sync`, `drift`, `no-block`, `missing`,
 `1` if any line is `drift`, `no-block`, or `error`. Pre-loop failures
 (project not found, unknown target, project root missing)
 short-circuit before any line is emitted.
+
+### `mega connector list <projectName> [--json]` (Phase 9)
+
+Static enumeration of all known targets with present/absent for the
+project's `rootPath`. For each target: reads whether the file exists
+(no block parse). Always exits 0. Text line: padded id + agentId +
+relativePath + `present`/`absent`. `--json` emits
+`[{id, agent, relativePath, present}]`.
+
+### `mega connector doctor <projectName> [--target <id>] [--json]` (Phase 9)
+
+Per-target diagnostic. For each target reports one of six status words:
+`ok` (file exists, block present, in-sync), `stale` (block out of date),
+`no-block` (file exists but no sentinel block), `missing` (file absent,
+benign), `not-writable` (no write permission; file or parent dir probed
+with `access(W_OK)` — no write performed), `error`. Exit 1 on any
+`stale`, `not-writable`, or `error`; exit 0 otherwise. `--json` emits
+`[{id, relativePath, status, writable, session}]`.
 
 ### `mega output {file,filter,chunk}` (BB7a, AA1)
 
@@ -385,6 +407,73 @@ New CLI surfaces shipped by the AA1 epic (source: AA1 §1):
   --json` is an `agentId`-keyed array; the CLI reports the install bit
   (connectorSynced resolves only on the GUI doctor path). `mcp repair`
   requires `--target` + `--project` (install + connector sync, §5c).
+
+## ContextOps command groups — Phases 2, 3, 5–8 (2026-06-12)
+
+Each group is registered in `apps/cli/src/main.ts` `subCommands` and
+backed by the engine of its phase. All support `--json`.
+
+- **`mega scan <project>`** + **`mega index {build,status,search,show}`**
+  (Phase 2) — list indexable files, parse the repo into typed
+  `CodeBlock`s, and query the index. See [[concepts/semantic-repo-index]],
+  [[entities/indexer]].
+- **`mega context {build,explain,audit,export}`** (Phase 3) — build a
+  task-aware context pack (`--task`, optional `--failing-test` /
+  `--changed-file`), explain per-block / per-factor scores, audit the
+  token savings, export. See [[concepts/context-pruning-engine]],
+  [[entities/context-pruner]].
+- **`mega fail {record,list,show}`**, **`mega rules {list,add,apply}`**,
+  and **`mega learn from-failure`** (Phase 5) — record failed attempts,
+  manage and rank reusable project rules, convert a failure into a rule.
+  See [[concepts/failed-run-learning]].
+- **`mega task {plan,status,step,retry,explain}`** (Phase 6) — author a
+  typed, dependency-aware plan; report a step running/completed/failed;
+  retry resets only the failed step + its dependents. See
+  [[concepts/task-engine]].
+- **`mega tools {add,list,route,explain}`** (Phase 7) — register
+  `ToolDefinition`s and route a task-relevant, danger-gated subset
+  (`{allowedTools, blockedTools, reason}`). See [[concepts/tool-router]].
+- **`mega audit {report,last,session,export}`** (Phase 8) — the
+  token-savings dashboard, windowed `session | week | all`. See
+  [[concepts/audit-dashboard]], [[entities/stats]].
+
+## Phase 10 — Team/Cloud (local slice, 2026-06-12)
+
+### `mega memory approve <memoryEntryId> [--json] [--store <dir>]`
+### `mega memory reject <memoryEntryId> [--json] [--store <dir>]`
+
+Set `approval` on a memory entry. Idempotent (re-approving an already-approved
+entry exits 0). Missing id → `memoryEntryNotFoundMessage` + exit 1. `--json`
+emits the full updated `MemoryEntry`.
+
+### `mega memory search … [--all]` (extended, Phase 10)
+
+New `--all` flag passes `includeUnapproved: true` to `searchMemoryEntries` so
+humans can review pending suggestions. Without `--all`, only `approved` entries
+are returned (gate point 1).
+
+### `mega memory list` / `mega memory explain` (extended, Phase 10)
+
+`formatMemoryListLine` gains an `approval` column (9-char padded, after
+`session`). `formatMemoryExplainLines` gains an `approval: <value>` row after
+`source`.
+
+### `mega github pr-comment <projectName> [--task <s>] [--post <n>] [--json]` (Phase 10)
+
+Print a PR comment built from **approved** project memory relevant to `--task`.
+Uses gate point 1 (`searchMemoryEntries`, scope=project, `includeUnapproved`
+default false) — only approved memory surfaces. `--post <n>` spawns
+`gh pr comment <n> --body-file -` (off-by-default, untested-by-design `gh`
+wrapper; missing/non-zero `gh` → exit 1). Print-only path is unit-tested.
+
+`mega github` is the new top-level group (`apps/cli/src/commands/github/`).
+
+### connector sync — approval gate (Phase 10)
+
+`filterMemoryEntriesForSession` (in `apps/cli/src/commands/connector/shared.ts`)
+now pre-filters `entry.approval !== "approved"` before scope/session checks.
+Only approved memory flows into agent config files. GUI mirror
+(`apps/gui/bridge/connector-context.ts`) carries the same filter.
 
 ## Related
 

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import type { Session } from "@megasaver/core";
+import { agentIdSchema } from "@megasaver/shared";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CreateSessionForm, UpdateSessionForm } from "../../src/components/session-forms.js";
@@ -76,7 +77,7 @@ describe("CreateSessionForm — submit", () => {
     );
     const select = screen.getByLabelText("Agent") as HTMLSelectElement;
     const options = Array.from(select.options).map((o) => o.value);
-    expect(options).toEqual(["aider", "claude-code", "codex", "cursor", "generic-cli"]);
+    expect(options).toEqual([...agentIdSchema.options]);
   });
 
   it("renders a Risk <select> with every RiskLevel option", () => {

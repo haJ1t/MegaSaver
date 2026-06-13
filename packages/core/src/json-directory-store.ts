@@ -16,9 +16,13 @@ import { dirname, join, resolve } from "node:path";
 import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { CorePersistenceError } from "./errors.js";
-import { type MemoryEntry, memoryEntrySchema } from "./memory-entry.js";
+import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
+import { type MemoryEntry, backfillMemoryEntry, memoryEntrySchema } from "./memory-entry.js";
+import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import { type Session, sessionSchema } from "./session.js";
+import { type TaskPlan, taskPlanSchema } from "./task-plan.js";
+import { type ToolDefinition, toolDefinitionSchema } from "./tool-definition.js";
 
 // Captured at module load: process.platform is immutable for the
 // life of a process, so we read it once instead of per-write.
@@ -29,6 +33,10 @@ export type StorePaths = {
   projectsPath: string;
   sessionsPath: string;
   memoryDir: string;
+  projectRulesDir: string;
+  failedAttemptsDir: string;
+  taskPlansDir: string;
+  toolDefinitionsDir: string;
 };
 
 export function resolveStorePaths(rootDir: string): StorePaths {
@@ -51,6 +59,10 @@ export function resolveStorePaths(rootDir: string): StorePaths {
         projectsPath: join(resolvedRootDir, "projects.json"),
         sessionsPath: join(resolvedRootDir, "sessions.json"),
         memoryDir: join(resolvedRootDir, "memory"),
+        projectRulesDir: join(resolvedRootDir, "project-rules"),
+        failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
+        taskPlansDir: join(resolvedRootDir, "task-plans"),
+        toolDefinitionsDir: join(resolvedRootDir, "tool-definitions"),
       };
     }
 
@@ -69,6 +81,10 @@ export function resolveStorePaths(rootDir: string): StorePaths {
     projectsPath: join(resolvedRootDir, "projects.json"),
     sessionsPath: join(resolvedRootDir, "sessions.json"),
     memoryDir: join(resolvedRootDir, "memory"),
+    projectRulesDir: join(resolvedRootDir, "project-rules"),
+    failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
+    taskPlansDir: join(resolvedRootDir, "task-plans"),
+    toolDefinitionsDir: join(resolvedRootDir, "tool-definitions"),
   };
 }
 
@@ -97,7 +113,11 @@ export function readMemoryEntriesForProject(
   projectId: ProjectId,
 ): MemoryEntry[] {
   return readJsonLines(join(paths.memoryDir, `${projectId}.jsonl`)).map((entry) =>
-    parseEntity(memoryEntrySchema, entry, join(paths.memoryDir, `${projectId}.jsonl`)),
+    parseEntity(
+      memoryEntrySchema,
+      backfillMemoryEntry(entry),
+      join(paths.memoryDir, `${projectId}.jsonl`),
+    ),
   );
 }
 
@@ -121,7 +141,7 @@ export function readAllMemoryEntries(paths: StorePaths): MemoryEntry[] {
     .flatMap((fileName) => {
       const filePath = join(paths.memoryDir, fileName);
       return readJsonLines(filePath).map((entry) =>
-        parseEntity(memoryEntrySchema, entry, filePath),
+        parseEntity(memoryEntrySchema, backfillMemoryEntry(entry), filePath),
       );
     });
 }
@@ -131,11 +151,218 @@ export function writeMemoryEntriesForProject(
   projectId: ProjectId,
   entries: readonly MemoryEntry[],
 ): void {
+  const filePath = join(paths.memoryDir, `${projectId}.jsonl`);
+  // An empty set removes the file rather than leaving a zero-byte JSONL:
+  // readJsonLines treats an empty existing file as corrupt, so deleting the
+  // last entry must clear the file, not blank it. An already-absent file
+  // (ENOENT) is fine; any other failure (e.g. EPERM) must surface, not be
+  // swallowed (§13: no silent error suppression).
+  if (entries.length === 0) {
+    try {
+      rmSync(filePath);
+    } catch (error) {
+      if (!(isNodeError(error) && error.code === "ENOENT")) {
+        throw new CorePersistenceError("store_write_failed", "Store write failed.", {
+          filePath,
+          cause: error,
+        });
+      }
+    }
+    return;
+  }
   const content = entries.map((entry) => JSON.stringify(entry)).join("\n");
-  atomicWriteFile(
-    join(paths.memoryDir, `${projectId}.jsonl`),
-    content.length === 0 ? "" : `${content}\n`,
-  );
+  atomicWriteFile(filePath, `${content}\n`);
+}
+
+export function readProjectRulesForProject(paths: StorePaths, projectId: ProjectId): ProjectRule[] {
+  const filePath = join(paths.projectRulesDir, `${projectId}.jsonl`);
+  return readJsonLines(filePath).map((entry) => parseEntity(projectRuleSchema, entry, filePath));
+}
+
+export function readAllProjectRules(paths: StorePaths): ProjectRule[] {
+  let fileNames: string[];
+  try {
+    fileNames = readdirSync(paths.projectRulesDir);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath: paths.projectRulesDir,
+      cause: error,
+    });
+  }
+
+  return fileNames
+    .filter((fileName) => fileName.endsWith(".jsonl"))
+    .flatMap((fileName) => {
+      const filePath = join(paths.projectRulesDir, fileName);
+      return readJsonLines(filePath).map((entry) =>
+        parseEntity(projectRuleSchema, entry, filePath),
+      );
+    });
+}
+
+export function writeProjectRulesForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+  rules: readonly ProjectRule[],
+): void {
+  const filePath = join(paths.projectRulesDir, `${projectId}.jsonl`);
+  if (rules.length === 0) {
+    removeIfExists(filePath);
+    return;
+  }
+  atomicWriteFile(filePath, `${rules.map((rule) => JSON.stringify(rule)).join("\n")}\n`);
+}
+
+export function readFailedAttemptsForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+): FailedAttempt[] {
+  const filePath = join(paths.failedAttemptsDir, `${projectId}.jsonl`);
+  return readJsonLines(filePath).map((entry) => parseEntity(failedAttemptSchema, entry, filePath));
+}
+
+export function readAllFailedAttempts(paths: StorePaths): FailedAttempt[] {
+  let fileNames: string[];
+  try {
+    fileNames = readdirSync(paths.failedAttemptsDir);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath: paths.failedAttemptsDir,
+      cause: error,
+    });
+  }
+
+  return fileNames
+    .filter((fileName) => fileName.endsWith(".jsonl"))
+    .flatMap((fileName) => {
+      const filePath = join(paths.failedAttemptsDir, fileName);
+      return readJsonLines(filePath).map((entry) =>
+        parseEntity(failedAttemptSchema, entry, filePath),
+      );
+    });
+}
+
+export function writeFailedAttemptsForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+  attempts: readonly FailedAttempt[],
+): void {
+  const filePath = join(paths.failedAttemptsDir, `${projectId}.jsonl`);
+  if (attempts.length === 0) {
+    removeIfExists(filePath);
+    return;
+  }
+  atomicWriteFile(filePath, `${attempts.map((fa) => JSON.stringify(fa)).join("\n")}\n`);
+}
+
+export function readTaskPlansForProject(paths: StorePaths, projectId: ProjectId): TaskPlan[] {
+  const filePath = join(paths.taskPlansDir, `${projectId}.jsonl`);
+  return readJsonLines(filePath).map((entry) => parseEntity(taskPlanSchema, entry, filePath));
+}
+
+export function readAllTaskPlans(paths: StorePaths): TaskPlan[] {
+  let fileNames: string[];
+  try {
+    fileNames = readdirSync(paths.taskPlansDir);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath: paths.taskPlansDir,
+      cause: error,
+    });
+  }
+
+  return fileNames
+    .filter((fileName) => fileName.endsWith(".jsonl"))
+    .flatMap((fileName) => {
+      const filePath = join(paths.taskPlansDir, fileName);
+      return readJsonLines(filePath).map((entry) => parseEntity(taskPlanSchema, entry, filePath));
+    });
+}
+
+export function writeTaskPlansForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+  plans: readonly TaskPlan[],
+): void {
+  const filePath = join(paths.taskPlansDir, `${projectId}.jsonl`);
+  if (plans.length === 0) {
+    removeIfExists(filePath);
+    return;
+  }
+  atomicWriteFile(filePath, `${plans.map((p) => JSON.stringify(p)).join("\n")}\n`);
+}
+
+export function readToolDefinitionsForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+): ToolDefinition[] {
+  const filePath = join(paths.toolDefinitionsDir, `${projectId}.jsonl`);
+  return readJsonLines(filePath).map((entry) => parseEntity(toolDefinitionSchema, entry, filePath));
+}
+
+export function readAllToolDefinitions(paths: StorePaths): ToolDefinition[] {
+  let fileNames: string[];
+  try {
+    fileNames = readdirSync(paths.toolDefinitionsDir);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath: paths.toolDefinitionsDir,
+      cause: error,
+    });
+  }
+
+  return fileNames
+    .filter((fileName) => fileName.endsWith(".jsonl"))
+    .flatMap((fileName) => {
+      const filePath = join(paths.toolDefinitionsDir, fileName);
+      return readJsonLines(filePath).map((entry) =>
+        parseEntity(toolDefinitionSchema, entry, filePath),
+      );
+    });
+}
+
+export function writeToolDefinitionsForProject(
+  paths: StorePaths,
+  projectId: ProjectId,
+  tools: readonly ToolDefinition[],
+): void {
+  const filePath = join(paths.toolDefinitionsDir, `${projectId}.jsonl`);
+  if (tools.length === 0) {
+    removeIfExists(filePath);
+    return;
+  }
+  atomicWriteFile(filePath, `${tools.map((t) => JSON.stringify(t)).join("\n")}\n`);
+}
+
+// Mirrors the empty-set branch of writeMemoryEntriesForProject: an empty entity
+// set must delete the file (readJsonLines treats a zero-byte file as corrupt).
+function removeIfExists(filePath: string): void {
+  try {
+    rmSync(filePath);
+  } catch (error) {
+    if (!(isNodeError(error) && error.code === "ENOENT")) {
+      throw new CorePersistenceError("store_write_failed", "Store write failed.", {
+        filePath,
+        cause: error,
+      });
+    }
+  }
 }
 
 function readJsonArray(filePath: string): unknown[] {

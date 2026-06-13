@@ -3,16 +3,35 @@ import { type McpToolName, mcpToolNameSchema } from "../src/tool-name.js";
 
 describe("McpToolName type regression", () => {
   it("each member is a valid McpToolName", () => {
-    const _a: McpToolName = "mega_fetch_chunk";
-    const _b: McpToolName = "mega_read_file";
-    const _c: McpToolName = "mega_recall";
-    const _d: McpToolName = "mega_run_command";
-    const _e: McpToolName = "proxy_search_code";
-    void _a;
-    void _b;
-    void _c;
-    void _d;
-    void _e;
+    const members: McpToolName[] = [
+      "approve_memory",
+      "audit_token_usage",
+      "build_task_plan",
+      "convert_failure_to_rule",
+      "explain_context_selection",
+      "find_similar_failures",
+      "get_applicable_rules",
+      "get_context_budget_report",
+      "get_project_context",
+      "get_project_rules",
+      "get_relevant_code_blocks",
+      "get_relevant_context",
+      "get_relevant_memories",
+      "get_task_status",
+      "mega_fetch_chunk",
+      "mega_read_file",
+      "mega_recall",
+      "mega_run_command",
+      "proxy_search_code",
+      "record_failed_attempt",
+      "record_task_step",
+      "retry_failed_step",
+      "route_tools_for_task",
+      "save_memory",
+      "save_project_rule",
+      "search_memory",
+    ];
+    void members;
   });
 
   it("non-member string is not assignable to McpToolName", () => {
@@ -26,13 +45,34 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the alphabetic order (AA1 §8a)", () => {
+  it("schema.options preserves the 26-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search)", () => {
     const _t: readonly [
+      "approve_memory",
+      "audit_token_usage",
+      "build_task_plan",
+      "convert_failure_to_rule",
+      "explain_context_selection",
+      "find_similar_failures",
+      "get_applicable_rules",
+      "get_context_budget_report",
+      "get_project_context",
+      "get_project_rules",
+      "get_relevant_code_blocks",
+      "get_relevant_context",
+      "get_relevant_memories",
+      "get_task_status",
       "mega_fetch_chunk",
       "mega_read_file",
       "mega_recall",
       "mega_run_command",
       "proxy_search_code",
+      "record_failed_attempt",
+      "record_task_step",
+      "retry_failed_step",
+      "route_tools_for_task",
+      "save_memory",
+      "save_project_rule",
+      "search_memory",
     ] = mcpToolNameSchema.options;
     void _t;
   });

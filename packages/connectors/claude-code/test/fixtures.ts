@@ -29,8 +29,16 @@ export const projectMemory: MemoryEntry = {
   projectId,
   sessionId: null,
   scope: "project",
+  type: "decision",
+  title: "Project-level convention",
   content: "Project-level convention for Claude Code.",
+  keywords: [],
+  confidence: "medium",
+  source: "manual",
+  approval: "approved",
+  stale: false,
   createdAt: "2026-05-06T10:02:00.000Z",
+  updatedAt: "2026-05-06T10:02:00.000Z",
 };
 
 export const sessionMemory: MemoryEntry = {
@@ -38,6 +46,14 @@ export const sessionMemory: MemoryEntry = {
   projectId,
   sessionId,
   scope: "session",
+  type: "decision",
+  title: "Session-specific context",
   content: "Session-specific context for Claude Code.",
+  keywords: [],
+  confidence: "medium",
+  source: "manual",
+  approval: "approved",
+  stale: false,
   createdAt: "2026-05-06T10:03:00.000Z",
+  updatedAt: "2026-05-06T10:03:00.000Z",
 };

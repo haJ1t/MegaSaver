@@ -3,6 +3,7 @@ title: '@megasaver/mcp-bridge'
 tags: [entity, package, mcp, bridge, critical, v1.0, aa1]
 sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
+  - docs/superpowers/specs/2026-06-12-phase10-team-cloud-design.md
   - docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design.md
 status: active
 created: 2026-05-13
@@ -30,10 +31,25 @@ v0.3 `not_implemented` placeholder without redesigning the
   filter → store + stats. Same orchestrator as `mega output exec`
   (source: AA1 §8d "one orchestrator, two entry points").
 
-## Closed enums (AA1 §17)
+## Tools (Phase 10 additions — approve_memory, gated tools)
 
-- `McpToolName` (4 members), pinned in
-  `packages/mcp-bridge/test/tool-name.test-d.ts`.
+- `approve_memory(memoryEntryId, approval?)` — approve or reject a
+  suggested memory entry. `approval` defaults to `"approved"`.
+  Reuses `updateMemoryEntry`; `resource_not_found` on missing id.
+  **25th tool** (added Phase 10; `approve_memory` is now first in
+  `mcpToolNameSchema` alphabetically).
+
+`get_project_context` and `mega_recall` both gained an
+`approval === "approved"` filter (gate point 2) — unapproved memory
+is excluded from agent-facing context. See [[entities/core]] gate
+point 1 for `searchMemoryEntries` (gates `search_memory` /
+`get_relevant_memories` / context pack).
+
+## Closed enums (AA1 §17 + Phase 10)
+
+- `McpToolName` (**25 members** — Phase 10 added `approve_memory` as first
+  member), pinned in `packages/mcp-bridge/test/tool-name.test-d.ts`
+  and runtime-counted in `test/tool-name-task.test.ts`.
 - `McpBridgeErrorCode` (16 members; replaced the single
   `not_implemented`), pinned in
   `packages/mcp-bridge/test/errors.test-d.ts`.
@@ -79,10 +95,13 @@ See [[concepts/proxy-mode]] for the full 7-phase arc. Two bridge deltas:
   `proxy_run_command` / `proxy_expand_chunk` in proxy mode, the `mega_*`
   set in legacy — never both (no duplicate schemas). Same dispatch behind
   both names. `mega_recall` is NOT renamed (absent from the rename map).
-- **P3 — `proxy_search_code`** (commit `31bd0d7`). NEW 5th tool:
+- **P3 — `proxy_search_code`** (commit `31bd0d7`). NEW tool:
   policy-gated `grep` through `runOutputExecCommand` (reuses spawn / policy
   / redact / filter / store / stats), group-by-file output, optional
   in-memory BM25 enrichment that only reorders results (`index_enrichment`
   status), `path_scope` traversal guard (rejects absolute / `..`). Adds a
   `@megasaver/retrieval` dependency to mcp-bridge. Exposed in BOTH naming
-  modes. The package now ships **5 tools**.
+  modes. (Introduced on the v1.2 branch as the 5th tool over the four AA1
+  base tools; after the Phase 0–10 merge the bridge ships **26 tools** —
+  the 25 ContextOps tools plus `proxy_search_code` — and `McpToolName` is a
+  **26-member** enum.)

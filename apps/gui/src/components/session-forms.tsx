@@ -1,10 +1,11 @@
 import type { Session } from "@megasaver/core";
+import { agentIdSchema } from "@megasaver/shared";
 import { useState } from "react";
 import type { BridgeError } from "./states.js";
 import { ErrorState } from "./states.js";
 
-// Closed enums from @megasaver/shared — imported directly.
-const AGENT_IDS = ["aider", "claude-code", "codex", "cursor", "generic-cli"] as const;
+// Derived from the schema — single source of truth; no drift possible.
+const AGENT_IDS = agentIdSchema.options;
 const RISK_LEVELS = ["low", "medium", "high", "critical"] as const;
 
 // ── Shared form primitives ────────────────────────────────────────────────────

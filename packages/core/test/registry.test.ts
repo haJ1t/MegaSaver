@@ -58,8 +58,16 @@ const projectMemory = {
   projectId: PROJECT_ID_A,
   sessionId: null,
   scope: "project",
+  type: "decision",
+  title: "Use strict ESM",
   content: "Repo uses strict ESM.",
+  keywords: ["esm"],
+  confidence: "high",
+  source: "manual",
+  approval: "approved",
+  stale: false,
   createdAt: "2026-05-04T12:30:00.000Z",
+  updatedAt: "2026-05-04T12:30:00.000Z",
 } as const;
 
 const sessionMemory = {

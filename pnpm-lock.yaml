@@ -31,6 +31,10 @@ importers:
         version: 2.1.9(@types/node@22.19.17)(jsdom@25.0.1)
 
   apps/cli:
+    dependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
     devDependencies:
       '@megasaver/connector-generic-cli':
         specifier: workspace:*
@@ -41,9 +45,15 @@ importers:
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../../packages/content-store
+      '@megasaver/context-pruner':
+        specifier: workspace:*
+        version: link:../../packages/context-pruner
       '@megasaver/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@megasaver/indexer':
+        specifier: workspace:*
+        version: link:../../packages/indexer
       '@megasaver/mcp-bridge':
         specifier: workspace:*
         version: link:../../packages/mcp-bridge
@@ -249,6 +259,25 @@ importers:
         specifier: ^3.23.2
         version: 3.23.2
 
+  packages/context-pruner:
+    dependencies:
+      '@megasaver/indexer':
+        specifier: workspace:*
+        version: link:../indexer
+      '@megasaver/retrieval':
+        specifier: workspace:*
+        version: link:../retrieval
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+
   packages/core:
     dependencies:
       '@megasaver/content-store':
@@ -263,6 +292,9 @@ importers:
       '@megasaver/policy':
         specifier: workspace:*
         version: link:../policy
+      '@megasaver/retrieval':
+        specifier: workspace:*
+        version: link:../retrieval
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../shared
@@ -280,14 +312,45 @@ importers:
         specifier: ^3.23.2
         version: 3.23.2
 
+  packages/indexer:
+    dependencies:
+      '@megasaver/policy':
+        specifier: workspace:*
+        version: link:../policy
+      '@megasaver/retrieval':
+        specifier: workspace:*
+        version: link:../retrieval
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
+      ignore:
+        specifier: ^5.3.2
+        version: 5.3.2
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+
   packages/mcp-bridge:
     dependencies:
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../content-store
+      '@megasaver/context-pruner':
+        specifier: workspace:*
+        version: link:../context-pruner
       '@megasaver/core':
         specifier: workspace:*
         version: link:../core
+      '@megasaver/indexer':
+        specifier: workspace:*
+        version: link:../indexer
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter

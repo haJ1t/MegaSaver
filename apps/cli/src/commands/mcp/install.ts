@@ -1,4 +1,9 @@
-import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND, installMcp } from "@megasaver/mcp-bridge";
+import {
+  DEFAULT_MCP_ARGS,
+  DEFAULT_MCP_COMMAND,
+  installMcp,
+  knownAgentIdSchema,
+} from "@megasaver/mcp-bridge";
 import { defineCommand } from "citty";
 import { unknownTargetMessage } from "../../errors.js";
 import { isKnownTargetId } from "../../known-targets.js";
@@ -25,9 +30,22 @@ export async function runMcpInstall(input: RunMcpInstallInput): Promise<0 | 1> {
     input.stderr(cli.message);
     return cli.exitCode;
   }
+  // MCP install is only available for agents with native MCP config support
+  // (the narrower knownAgentIdSchema set). Connector-only agents (gemini/windsurf/continue)
+  // do not have an MCP config location — surface an actionable error.
+  const mcpAgentResult = knownAgentIdSchema.safeParse(input.targetFlag);
+  if (!mcpAgentResult.success) {
+    input.stderr(`error: MCP install is not supported for agent "${input.targetFlag}"`);
+    return 1;
+  }
   const command = input.command ?? DEFAULT_MCP_COMMAND;
   const args = input.args ?? [...DEFAULT_MCP_ARGS];
-  const result = await installMcp({ agentId: input.targetFlag, home: input.home, command, args });
+  const result = await installMcp({
+    agentId: mcpAgentResult.data,
+    home: input.home,
+    command,
+    args,
+  });
   if (input.json) {
     input.stdout(
       JSON.stringify({

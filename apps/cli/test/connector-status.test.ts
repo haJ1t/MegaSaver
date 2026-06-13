@@ -72,7 +72,8 @@ describe("connectorStatusCommand — pre-target gates", () => {
     expect(
       errSpy.mock.calls.some(
         (c) =>
-          c[0] === 'error: invalid target "nope", expected: claude-code | codex | cursor | aider',
+          c[0] ===
+          'error: invalid target "nope", expected: claude-code | codex | cursor | aider | gemini | windsurf | continue',
       ),
     ).toBe(true);
     expect(logSpy).not.toHaveBeenCalled();
@@ -142,6 +143,9 @@ describe("connectorStatusCommand — missing + no-block", () => {
       "codex        AGENTS.md  missing  session=none",
       "cursor       .cursor/rules/megasaver.mdc  missing  session=none",
       "aider        CONVENTIONS.md  missing  session=none",
+      "gemini       GEMINI.md  missing  session=none",
+      "windsurf     .windsurfrules  missing  session=none",
+      "continue     .continue/rules/megasaver.md  missing  session=none",
     ]);
   });
 
@@ -602,6 +606,9 @@ describe("connectorStatusCommand — cursor target", () => {
       "codex        AGENTS.md  missing  session=none",
       "cursor       .cursor/rules/megasaver.mdc  missing  session=none",
       "aider        CONVENTIONS.md  missing  session=none",
+      "gemini       GEMINI.md  missing  session=none",
+      "windsurf     .windsurfrules  missing  session=none",
+      "continue     .continue/rules/megasaver.md  missing  session=none",
     ]);
   });
 
@@ -802,6 +809,9 @@ describe("connectorStatusCommand — aider target", () => {
       "codex        AGENTS.md  missing  session=none",
       "cursor       .cursor/rules/megasaver.mdc  missing  session=none",
       "aider        CONVENTIONS.md  missing  session=none",
+      "gemini       GEMINI.md  missing  session=none",
+      "windsurf     .windsurfrules  missing  session=none",
+      "continue     .continue/rules/megasaver.md  missing  session=none",
     ]);
   });
 
@@ -1068,7 +1078,7 @@ describe("connectorStatusCommand — --json output", () => {
     return { out, err, code };
   }
 
-  it("all targets missing → JSON array with 4 missing records, session null", async () => {
+  it("all targets missing → JSON array with 7 missing records, session null", async () => {
     await seedProject();
     const { out, code } = await runStatus({ json: true });
     expect(code).toBe(0);
@@ -1084,6 +1094,14 @@ describe("connectorStatusCommand — --json output", () => {
         session: null,
       },
       { id: "aider", relativePath: "CONVENTIONS.md", status: "missing", session: null },
+      { id: "gemini", relativePath: "GEMINI.md", status: "missing", session: null },
+      { id: "windsurf", relativePath: ".windsurfrules", status: "missing", session: null },
+      {
+        id: "continue",
+        relativePath: ".continue/rules/megasaver.md",
+        status: "missing",
+        session: null,
+      },
     ]);
   });
 
@@ -1121,5 +1139,107 @@ describe("connectorStatusCommand — --json output", () => {
     for (const line of out) {
       expect(() => JSON.parse(line)).toThrow();
     }
+  });
+});
+
+describe("connectorStatusCommand — phase 9 targets", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  const PID = "77777777-7777-4777-8777-777777777777";
+  const TS = "2026-06-12T00:00:00.000Z";
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-p9status-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-p9status-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+    await mkdir(store, { recursive: true });
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        { id: PID, name: "demo", rootPath: projectRoot, createdAt: TS, updatedAt: TS },
+      ]),
+    );
+    await writeFile(join(store, "sessions.json"), "[]");
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function seed(target: string): Promise<void> {
+    await runConnectorSync({
+      projectName: "demo",
+      targetFlag: target,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      platform: process.platform,
+      localAppData: undefined,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+  }
+
+  async function runStatus(target?: string): Promise<void> {
+    const cliArgs: Record<string, string> = { projectName: "demo", store };
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (target !== undefined) cliArgs["target"] = target;
+    await connectorStatusCommand.run?.({
+      args: cliArgs,
+      cmd: connectorStatusCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  const cases = [
+    { id: "gemini", path: "GEMINI.md" },
+    { id: "windsurf", path: ".windsurfrules" },
+    { id: "continue", path: ".continue/rules/megasaver.md" },
+  ] as const;
+
+  for (const c of cases) {
+    it(`reports missing for absent ${c.id} file`, async () => {
+      await runStatus(c.id);
+      expect(process.exitCode).toBe(0);
+      const lines = logSpy.mock.calls.map((cc) => cc[0] as string);
+      expect(
+        lines.some((l) => l.startsWith(c.id) && l.includes(c.path) && l.includes("missing")),
+      ).toBe(true);
+    });
+
+    it(`reports in-sync after seeding ${c.id}`, async () => {
+      await seed(c.id);
+      logSpy.mockClear();
+      errSpy.mockClear();
+      await runStatus(c.id);
+      expect(process.exitCode).toBe(0);
+      const lines = logSpy.mock.calls.map((cc) => cc[0] as string);
+      expect(lines.some((l) => l.startsWith(c.id) && l.includes("in-sync"))).toBe(true);
+      expect(
+        lines.some((l) => l.startsWith(c.id) && l.includes(c.path) && l.includes("in-sync")),
+      ).toBe(true);
+    });
+  }
+
+  it("reports in-sync for gemini with exact formatStatusLine output", async () => {
+    await seed("gemini");
+    logSpy.mockClear();
+    errSpy.mockClear();
+    await runStatus("gemini");
+    expect(process.exitCode).toBe(0);
+    const lines = logSpy.mock.calls.map((cc) => cc[0] as string);
+    expect(lines).toContain("gemini       GEMINI.md  in-sync  session=none");
   });
 });

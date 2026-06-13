@@ -26,6 +26,11 @@ updated: 2026-06-14
 - [[concepts/structured-memory-engine]] — DIMMEM, roadmap Phase 1: typed engineering memory (10 MemoryTypes + metadata); reconciles the v0.1 MemoryEntry primitive.
 - [[concepts/semantic-repo-index]] — roadmap Phase 2: parse repo into typed CodeBlocks (AST) so retrieval works on blocks, not files.
 - [[concepts/context-pruning-engine]] — LAMR, roadmap Phase 3: task-aware multi-factor scoring → 6–8-block context pack; repo-side cousin of context-gate-pipeline.
+- [[concepts/failed-run-learning]] — FORGE, roadmap Phase 5: find similar failures, convert a failure to a rule, rank applicable rules; deterministic (BM25 + path overlap).
+- [[concepts/task-engine]] — roadmap Phase 6: deterministic TaskPlan state machine (typed steps + dependsOn) with selective retry; state tracker, not executor.
+- [[concepts/tool-router]] — roadmap Phase 7: task-scoped tool allow/block (fewer schemas + dangerous tools blocked); advisor, not enforcer.
+- [[concepts/audit-dashboard]] — roadmap Phase 8: one windowed, persisted token-savings summary; extends @megasaver/stats with an AuditEvent family.
+- [[concepts/memory-approval]] — roadmap Phase 10: agent-suggests → human-approves memory gate; team = shared store + gate; cloud SaaS deferred.
 - [[concepts/proxy-mode]] — Proxy Mode v1.2 (7 phases shipped): public naming mode, output classifier, vitest/tsc compressors + passthrough, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics, replay trace.
 
 ## Entities
@@ -44,9 +49,11 @@ updated: 2026-06-14
 - [[entities/output-filter]] — `@megasaver/output-filter` `filterOutput` pipeline, `resolveSafeReadPath`, `RankFeatureName`, `OutputSourceKind` (BB5); +pytest/go/cargo/eslint parsers (#92); CamelCase `*Error` + `panicked` ranker (#95) — output-filter@1.1.0; v1.2 Proxy Mode adds `classifyOutput`, vitest/tsc compressors + passthrough decision bands, flagged engine-aware ranking, replay trace.
 - [[entities/content-store]] — `@megasaver/content-store` ChunkSet persistence, `ContentStoreErrorCode` (BB4; no core edge).
 - [[entities/retrieval]] — `@megasaver/retrieval` BM25 + `DerivedIntent` (BB6).
-- [[entities/stats]] — `@megasaver/stats` `SessionTokenSaverStats` + `TokenSaverEvent` (BB6); v1.2 Proxy Mode adds proxy-adoption + hook-based-interception metrics (honest-metrics: interception only when hook log exists).
+- [[entities/stats]] — `@megasaver/stats` `SessionTokenSaverStats` + `TokenSaverEvent` (BB6); v1.2 Proxy Mode adds proxy-adoption + hook-based-interception metrics (honest-metrics: interception only when hook log exists); Phase 8 adds the `AuditEvent` family + `summarizeAudit`.
+- [[entities/indexer]] — `@megasaver/indexer` (Phase 2) typed `CodeBlock` AST/structural extraction, ignore-aware scan, incremental build, BM25 `searchBlocks`; `mega scan` + `mega index *` (no core edge).
+- [[entities/context-pruner]] — `@megasaver/context-pruner` (Phase 3 / LAMR) 8-factor block scoring → context pack (dependency closure, token budget, never drops named/failing blocks); `mega context *` + 4 MCP tools (no core edge).
 - [[entities/skill-packs]] — `@megasaver/skill-packs` real loader/discovery/installer (2026-06-10); 7-member error enum; `mega pack` CLI; symlink + path-escape guards.
-- [[entities/mcp-bridge]] — `@megasaver/mcp-bridge` real MCP stdio server over `stdio`, **5 tools** (v1.2 adds `proxy_search_code`), `MEGASAVER_TOOL_NAMING` proxy/legacy naming mode, `mega mcp serve`, `buildMcpSetupOps` facade, 16-member `McpBridgeErrorCode` (BB8; AA1 §8; v1.2 Proxy Mode).
+- [[entities/mcp-bridge]] — `@megasaver/mcp-bridge` real MCP stdio server over `stdio`, **26 tools** (25 ContextOps Phase 0–10 tools + v1.2 `proxy_search_code`), `MEGASAVER_TOOL_NAMING` proxy/legacy naming mode, `mega mcp serve`, `buildMcpSetupOps` facade, 16-member `McpBridgeErrorCode` (BB8; AA1 §8; v1.2 Proxy Mode).
 - [[entities/context-gate]] — `@megasaver/context-gate@0.2.0` extracted from core (BB12, #88); orchestrator functions (`runOutputPipeline`, `runOutputExecCommand`, `fetchChunk`, `loadProjectPermissions`); `OrchestratorRegistry` structural port; core re-exports surface (consumers unchanged).
 
 - [[entities/conventions-sync]] — repo dogfood drift tooling (`scripts/conventions-sync/`); syncs `AGENTS.md` + 3 `.cursor/rules/*.mdc` from `docs/conventions/`; `CLAUDE.md` not yet managed (roadmap #2).
@@ -63,7 +70,8 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 - [[syntheses/mega-saver-product]] — what the product is, six subsystems, v0.1 slice.
 - [[syntheses/post-v1.1-roadmap]] — post-v1.1 arc (PRs #102–#110 resolved: stats, skill-packs, Windows port + follow-ups) + remaining work, priority-ordered (npm publish gap, conventions:sync, GUI packaging, i18n, fikri §16 backlog).
-- [[syntheses/contextops-roadmap]] — **strategic Phase 0–10 roadmap** (DIMMEM/LAMR/FORGE), reconciled done/partial/gap vs shipped v1.1 via a 22-agent code audit; full spec+plan written for Phases 1–3.
+- [[syntheses/contextops-roadmap]] — **strategic Phase 0–10 roadmap** (DIMMEM/LAMR/FORGE), **all 10 phases shipped** on `main` (PRs #114–#123, 2026-06-12); MCP surface 4 → 25 tools (26 with the v1.2 `proxy_search_code`). Keeps the original 22-agent-audit done/partial/gap framing for the historical record.
+- [[concepts/proxy-mode]] / Proxy Mode v1.2 — public naming mode, output classifier, vitest/tsc compressors, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics; full spec+plan written and shipped on `docs/contextops-roadmap-phases`.
 
 ## Sources (pointers to raw + project artifacts)
 
@@ -111,8 +119,43 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 | Where are chunk sets persisted?                    | [[entities/content-store]]                      |
 | Why is policy a v0.5 package?                       | [[decisions/policy-is-bb3]]                      |
 | Why can't content-store import core?               | [[decisions/content-store-no-core-edge]]        |
+| What are all 10 ContextOps phases / their status?  | [[syntheses/contextops-roadmap]]                |
+| How does failed-run learning / FORGE work?         | [[concepts/failed-run-learning]]                |
+| What is the task engine / selective retry?         | [[concepts/task-engine]]                         |
+| How does the tool router decide allow/block?       | [[concepts/tool-router]]                         |
+| How is the token-savings audit computed?           | [[concepts/audit-dashboard]]                     |
+| How does memory approval / the team gate work?     | [[concepts/memory-approval]]                     |
+| What are the 25 MCP tools?                          | [[entities/mcp-bridge]]                          |
 
 ## Status
+
+## Phase 10 — Team/Cloud (local approval slice) — SHIPPED (2026-06-12)
+
+Branch `feat/phase10-team-cloud`. `MemoryEntry.approval` (`suggested|approved|rejected`,
+default `approved`). `backfillMemoryEntry` independent approval-defaulting branch (all
+pre-Phase-10 rows → `approved`, zero migration). Agent `save_memory` → `suggested`;
+human `mega memory create` → `approved`. Approval gate: `searchMemoryEntries`
+`includeUnapproved` (gate point 1, transitive) + four explicit `approved` filters on
+`buildConnectorContext` (CLI+GUI mirror) + `get_project_context` + `mega_recall` (gate
+point 2). CLI: `mega memory approve/reject` + `--all` review flag + `approval` column.
+`approve_memory` MCP tool (24 → **25** tools). `buildPrMemoryComment` pure builder +
+`mega github pr-comment`. Team = shared `--store` + gate. Cloud SaaS (hosted
+sync/auth/private-deploy/org-rules/audit-service/web-UI/visibility) **explicitly
+deferred**. **Roadmap complete through all 10 phases.**
+core: 50 test files / 407 tests. mcp-bridge: 27 / 136. cli: 49 / 562.
+gui: 39 / 255. connector-generic-cli: 5 / 40. `pnpm verify` green.
+
+## Phase 9 — Multi-Agent Connectors — SHIPPED (2026-06-12)
+
+Branch `feat/phase9-connectors`. `agentIdSchema` 5→8 members (adds
+`continue`, `gemini`, `windsurf`). Three new flat-file targets in
+`@megasaver/connector-generic-cli` (`builtinTargets` 3→6). CLI
+`KNOWN_TARGETS` 4→7. New commands: `mega connector list` (exit 0) +
+`mega connector doctor` (exit 1 on stale/not-writable/error).
+Cross-agent proof: project memory lands byte-identically in
+`CLAUDE.md` and `GEMINI.md`. GUI badges/session-forms updated.
+cli tests: 541 (46 test files). `pnpm verify` green.
+Deferred: vscode/jetbrains plugins, `mega connect` alias.
 
 ## v1.1.0 — SHIPPED (2026-06-04)
 
@@ -432,7 +475,7 @@ Open backlog (post-DD batch):
 - **FF**: full Windows port deferred to v0.3 (graceful no-op on
   dir fsync in v0.2; case-insensitive resolution, CRLF
   normalization, cross-platform CI gate target for v0.3). Spec:
-  [[specs/2026-05-10-windows-port-deferral]].
+  `docs/superpowers/specs/2026-05-10-windows-port-deferral.md`.
 
 Total tests on main: 539 → ~575 across the DD batch (+13 cli
 drift-guards + failure-paths from DD1, +1 fsync ordering from

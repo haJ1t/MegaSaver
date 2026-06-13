@@ -39,8 +39,15 @@ const mismatchedSessionMemory = {
   projectId: PROJECT_ID_B,
   sessionId: SESSION_ID_A,
   scope: "session",
+  type: "decision",
+  title: "Cross-project memory",
   content: "Session belongs to a different project.",
+  keywords: [],
+  confidence: "medium",
+  source: "manual",
+  stale: false,
   createdAt: "2026-05-04T12:30:00.000Z",
+  updatedAt: "2026-05-04T12:30:00.000Z",
 } as const;
 
 afterEach(() => {

@@ -1,14 +1,24 @@
 import { createRequire } from "node:module";
 import { defineCommand } from "citty";
+import { auditCommand } from "./commands/audit/index.js";
 import { connectorCommand } from "./commands/connector/index.js";
+import { contextCommand } from "./commands/context/index.js";
 import { doctorCommand } from "./commands/doctor.js";
+import { failCommand } from "./commands/fail/index.js";
+import { githubCommand } from "./commands/github/index.js";
 import { hooksCommand } from "./commands/hooks/index.js";
+import { indexCommand } from "./commands/index/index.js";
+import { learnCommand } from "./commands/learn.js";
 import { mcpCommand } from "./commands/mcp/index.js";
 import { memoryCommand } from "./commands/memory/index.js";
 import { outputCommand } from "./commands/output/index.js";
 import { packCommand } from "./commands/pack/index.js";
 import { projectCommand } from "./commands/project.js";
+import { rulesCommand } from "./commands/rules/index.js";
+import { scanCommand } from "./commands/scan.js";
 import { sessionCommand } from "./commands/session/index.js";
+import { taskCommand } from "./commands/task/index.js";
+import { toolsCommand } from "./commands/tools/index.js";
 
 // Version source. The standalone single-file bundle has no sibling package.json
 // to require at runtime, so tsup.bundle.config.ts defines __MEGA_CLI_VERSION__ as
@@ -29,8 +39,13 @@ export const mainCommand = defineCommand({
     description: "Mega Saver - ContextOps platform CLI.",
   },
   subCommands: {
+    audit: auditCommand,
     doctor: doctorCommand,
+    github: githubCommand,
+    fail: failCommand,
+    learn: learnCommand,
     project: projectCommand,
+    rules: rulesCommand,
     session: sessionCommand,
     connector: connectorCommand,
     memory: memoryCommand,
@@ -38,5 +53,10 @@ export const mainCommand = defineCommand({
     mcp: mcpCommand,
     pack: packCommand,
     hooks: hooksCommand,
+    scan: scanCommand,
+    index: indexCommand,
+    context: contextCommand,
+    task: taskCommand,
+    tools: toolsCommand,
   },
 });
