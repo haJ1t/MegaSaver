@@ -1,6 +1,5 @@
 import { type Server, createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { createInMemoryCoreRegistry } from "@megasaver/core";
 import type { McpSetupOps, McpStatusResult } from "@megasaver/mcp-bridge";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBridgeHandler } from "../../bridge/handler.js";
@@ -39,8 +38,7 @@ function makeOps(): McpSetupOps {
 type TestServer = { baseUrl: string; ops: McpSetupOps; close(): Promise<void> };
 
 async function startBridge(ops: McpSetupOps): Promise<TestServer> {
-  const registry = createInMemoryCoreRegistry();
-  const handler = createBridgeHandler({ registry, mcpOps: ops });
+  const handler = createBridgeHandler({ mcpOps: ops });
   const server: Server = createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;

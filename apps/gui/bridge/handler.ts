@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { CoreRegistry } from "@megasaver/core";
 import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
 import { applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
@@ -29,7 +28,6 @@ import { handleListWorkspaces } from "./routes/workspaces.js";
 import { resolveWorkspace } from "./workspace-resolver.js";
 
 export interface BridgeHandlerOptions {
-  registry: CoreRegistry;
   /** Override for tests; defaults to `crypto.randomUUID`. */
   newId?: () => string;
   /** Override for tests; defaults to `() => new Date().toISOString()`. */
@@ -110,7 +108,6 @@ function methodNotAllowed(res: ServerResponse, method: string, origin: string | 
 }
 
 export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
-  const { registry } = opts;
   const newId = opts.newId ?? randomUUID;
   const now = opts.now ?? (() => new Date().toISOString());
   const storePath = opts.storePath ?? "";
@@ -162,7 +159,6 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     const ctx: RouteContext = {
       req,
       res,
-      registry,
       mcpOps,
       origin,
       query,

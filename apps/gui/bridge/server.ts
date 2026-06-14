@@ -33,7 +33,7 @@ async function main(): Promise<void> {
     command: DEFAULT_MCP_COMMAND,
     args: [...DEFAULT_MCP_ARGS],
   });
-  const handler = createBridgeHandler({ registry, storePath: storeDir, mcpOps });
+  const handler = createBridgeHandler({ storePath: storeDir, mcpOps });
   const server = createServer(handler);
 
   const portRaw = readEnv("MEGASAVER_GUI_BRIDGE_PORT");

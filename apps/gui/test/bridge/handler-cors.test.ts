@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { PROJECT_A, type TestServer, startTestBridge } from "./test-helpers.js";
+import { type TestServer, startTestBridge } from "./test-helpers.js";
 
 describe("createBridgeHandler — CORS posture (spec §4c)", () => {
   let server: TestServer;
 
   beforeEach(async () => {
-    server = await startTestBridge({ projects: [PROJECT_A] });
+    server = await startTestBridge();
   });
 
   afterEach(async () => {
