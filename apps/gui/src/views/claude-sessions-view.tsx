@@ -4,6 +4,8 @@ import { ErrorState, LoadingState } from "../components/states.js";
 import {
   type ClaudeSessionMeta,
   type NormalizedMessage,
+  type SessionTelemetry,
+  fetchClaudeSessionTelemetry,
   fetchClaudeSessions,
   openClaudeSessionStream,
 } from "../lib/claude-sessions-client.js";
@@ -22,6 +24,18 @@ function relativeTime(mtimeMs: number, nowMs: number): string {
   return `${Math.round(h / 24)}d ago`;
 }
 
+// Strip the trailing -YYYYMMDD date suffix Claude model ids carry, for a compact badge.
+function shortModel(model: string): string {
+  return model.replace(/-\d{8}$/, "");
+}
+
+function durationLabel(ms: number): string {
+  const total = Math.round(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export function ClaudeSessionsView(): JSX.Element {
   const [sessions, setSessions] = useState<ClaudeSessionMeta[]>([]);
   const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
@@ -30,7 +44,11 @@ export function ClaudeSessionsView(): JSX.Element {
   const [messages, setMessages] = useState<NormalizedMessage[]>([]);
   const [streamError, setStreamError] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [showArchived, setShowArchived] = useState(false);
+  const [telemetry, setTelemetry] = useState<SessionTelemetry | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const visibleSessions = sessions.filter((s) => showArchived || !s.isArchived);
 
   const loadList = useCallback((): void => {
     fetchClaudeSessions(50, 0)
@@ -65,6 +83,25 @@ export function ClaudeSessionsView(): JSX.Element {
     return dispose;
   }, [selected]);
 
+  useEffect(() => {
+    if (!selected) {
+      setTelemetry(null);
+      return;
+    }
+    let live = true;
+    setTelemetry(null);
+    fetchClaudeSessionTelemetry(selected.dir, selected.id)
+      .then((t) => {
+        if (live) setTelemetry(t);
+      })
+      .catch(() => {
+        if (live) setTelemetry(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [selected]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: scrollRef is a stable ref, intentionally omitted from deps; effect re-runs only on messages change to auto-scroll
   useEffect(() => {
     const el = scrollRef.current;
@@ -78,12 +115,20 @@ export function ClaudeSessionsView(): JSX.Element {
   return (
     <div className="flex flex-1 min-h-0">
       <aside className="flex flex-col w-72 shrink-0 border-r border-border overflow-y-auto">
-        {sessions.length === 0 && (
+        <label className="flex items-center gap-2 px-3 py-2 text-[11px] text-text-muted border-b border-border cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => setShowArchived(e.target.checked)}
+          />
+          Show archived
+        </label>
+        {visibleSessions.length === 0 && (
           <p className="px-3 py-4 text-xs text-text-muted">
             No Claude Code sessions found in ~/.claude/projects.
           </p>
         )}
-        {sessions.map((s) => {
+        {visibleSessions.map((s) => {
           const live = nowMs - s.mtimeMs < LIVE_WINDOW_MS;
           const active = selected?.dir === s.dir && selected?.id === s.id;
           return (
@@ -107,7 +152,17 @@ export function ClaudeSessionsView(): JSX.Element {
                 <span className="truncate">{s.projectLabel || s.dir}</span>
               </span>
               <span className="text-xs text-text-primary truncate">{s.title || s.id}</span>
-              <span className="text-[10px] text-text-muted">{relativeTime(s.mtimeMs, nowMs)}</span>
+              <span className="flex items-center gap-1.5 text-[10px] text-text-muted">
+                <span>{relativeTime(s.mtimeMs, nowMs)}</span>
+                {s.model && (
+                  <span className="px-1 rounded bg-surface-elevated text-text-secondary">
+                    {shortModel(s.model)}
+                  </span>
+                )}
+                {s.isArchived && (
+                  <span className="px-1 rounded bg-surface-elevated text-text-muted">archived</span>
+                )}
+              </span>
             </button>
           );
         })}
@@ -124,6 +179,34 @@ export function ClaudeSessionsView(): JSX.Element {
           <p className="text-xs text-danger">
             Live stream interrupted. Reselect the session to retry.
           </p>
+        )}
+        {selected && telemetry && (
+          <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs">
+            <div className="text-[10px] uppercase tracking-widest text-text-muted mb-1.5">
+              Session telemetry (LLM context tokens)
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-text-secondary">
+              <span>{telemetry.turnCount} turns</span>
+              <span>{telemetry.assistantTurns} assistant</span>
+              <span>{telemetry.toolCallCount} tool calls</span>
+              <span>{durationLabel(telemetry.durationMs)} duration</span>
+              <span>{telemetry.totals.inputTokens} in</span>
+              <span>{telemetry.totals.outputTokens} out</span>
+              <span>{telemetry.totals.cacheCreationInputTokens} cache-create</span>
+              <span>{telemetry.totals.cacheReadInputTokens} cache-read</span>
+              {telemetry.gitBranch && <span>branch {telemetry.gitBranch}</span>}
+            </div>
+            {telemetry.models.length > 0 && (
+              <div className="mt-1.5 flex flex-col gap-0.5 text-text-muted">
+                {telemetry.models.map((mu) => (
+                  <span key={mu.model}>
+                    {shortModel(mu.model)} — {mu.turns} turns, {mu.inputTokens} in /{" "}
+                    {mu.outputTokens} out
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         )}
         {selected &&
           messages.map((m, i) => (
