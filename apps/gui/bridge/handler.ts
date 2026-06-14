@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { CoreRegistry } from "@megasaver/core";
 import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
@@ -37,6 +39,8 @@ export interface BridgeHandlerOptions {
    *  Production server.ts passes buildMcpSetupOps(...); omitted only in tests
    *  that exercise non-mcp routes (then an empty-status fallback is used). */
   mcpOps?: McpSetupOps;
+  /** Override for tests; defaults to ~/.claude/projects. */
+  claudeProjectsDir?: string;
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -107,6 +111,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
   const newId = opts.newId ?? randomUUID;
   const now = opts.now ?? (() => new Date().toISOString());
   const storePath = opts.storePath ?? "";
+  const claudeProjectsDir = opts.claudeProjectsDir ?? join(homedir(), ".claude", "projects");
 
   // Test-only fallback when no ops injected; production server.ts (BB8)
   // always passes buildMcpSetupOps(...). Reports an empty agent list so
@@ -154,6 +159,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       origin,
       query,
       storeRoot: storePath,
+      claudeProjectsDir,
       newId,
       now,
       sendJson,

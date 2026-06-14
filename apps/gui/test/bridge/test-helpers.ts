@@ -53,6 +53,7 @@ export async function startTestBridge(seed?: {
   sessions?: Session[];
   memoryEntries?: MemoryEntry[];
   store?: StoreSeed;
+  claudeProjectsDir?: string;
 }): Promise<TestServer> {
   const registry = createInMemoryCoreRegistry();
   for (const project of seed?.projects ?? []) {
@@ -70,7 +71,11 @@ export async function startTestBridge(seed?: {
     seedStore(storePath, seed.store);
   }
 
-  const handler = createBridgeHandler({ registry, storePath });
+  const handler = createBridgeHandler({
+    registry,
+    storePath,
+    ...(seed?.claudeProjectsDir ? { claudeProjectsDir: seed.claudeProjectsDir } : {}),
+  });
   const server: Server = createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
