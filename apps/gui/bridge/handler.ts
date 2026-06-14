@@ -32,6 +32,7 @@ import {
   handlePostSession,
 } from "./routes/sessions.js";
 import { dispatchTokenSaver } from "./routes/token-saver.js";
+import { handleListWorkspaces } from "./routes/workspaces.js";
 
 export interface BridgeHandlerOptions {
   registry: CoreRegistry;
@@ -258,6 +259,12 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     if (path === "/api/claude-sessions") {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       await handleListClaudeSessions(ctx);
+      return;
+    }
+
+    if (path === "/api/workspaces") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleListWorkspaces(ctx);
       return;
     }
 

@@ -11,7 +11,7 @@ import { intParam } from "./_query.js";
 
 // These routes are read-only; a filesystem errno (EACCES/EPERM/etc.) must map to
 // internal_error (500), not handleCaughtError's store_write_failed.
-function sendReadError(ctx: RouteContext, err: unknown): void {
+export function sendReadError(ctx: RouteContext, err: unknown): void {
   if (err instanceof Error && typeof (err as NodeJS.ErrnoException).code === "string") {
     ctx.sendError(ctx.res, 500, "internal_error", err.message, ctx.origin);
     return;
