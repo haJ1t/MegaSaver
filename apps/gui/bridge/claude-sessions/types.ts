@@ -35,6 +35,13 @@ export type ClaudeSessionMeta = {
   lastActivityAt: number;
 };
 
+export type Workspace = {
+  key: string;
+  label: string;
+  sessionCount: number;
+  lastActivityMs: number;
+};
+
 export type ClaudeTranscript = {
   dir: string;
   id: string;
