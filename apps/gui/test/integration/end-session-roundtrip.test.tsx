@@ -47,11 +47,19 @@ describe("End session roundtrip", () => {
       if (url.startsWith("/api/sessions")) {
         return { ok: true, status: 200, json: async () => [OPEN_SESSION] };
       }
+      if (url.includes("/audit")) {
+        return { ok: true, status: 200, json: async () => ({ eventsTotal: 0 }) };
+      }
+      if (url.startsWith("/api/mcp")) {
+        return { ok: true, status: 200, json: async () => ({ agents: [] }) };
+      }
       return { ok: true, status: 200, json: async () => [] };
     });
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
+    // New IA: default landing is Overview; navigate to the Sessions view first.
+    fireEvent.click(await screen.findByRole("button", { name: "Sessions" }));
     await waitFor(() => expect(screen.getByText("to-be-ended")).toBeDefined());
 
     fireEvent.click(screen.getByText("to-be-ended"));

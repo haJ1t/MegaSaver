@@ -93,9 +93,15 @@ importers:
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../../packages/content-store
+      '@megasaver/context-pruner':
+        specifier: workspace:*
+        version: link:../../packages/context-pruner
       '@megasaver/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@megasaver/indexer':
+        specifier: workspace:*
+        version: link:../../packages/indexer
       '@megasaver/mcp-bridge':
         specifier: workspace:*
         version: link:../../packages/mcp-bridge

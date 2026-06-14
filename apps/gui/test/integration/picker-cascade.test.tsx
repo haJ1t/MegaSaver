@@ -65,6 +65,12 @@ describe("Picker cascade — list filters by active project", () => {
         }
         return { ok: true, status: 200, json: async () => [] };
       }
+      if (url.includes("/audit")) {
+        return { ok: true, status: 200, json: async () => ({ eventsTotal: 0 }) };
+      }
+      if (url.startsWith("/api/mcp")) {
+        return { ok: true, status: 200, json: async () => ({ agents: [] }) };
+      }
       return { ok: true, status: 200, json: async () => [] };
     });
     vi.stubGlobal("fetch", fetchSpy);
@@ -77,6 +83,8 @@ describe("Picker cascade — list filters by active project", () => {
     // Open the picker, choose alpha.
     fireEvent.click(screen.getByRole("button", { name: /Active project/ }));
     fireEvent.click(screen.getByText("alpha"));
+    // New IA: default landing is Overview; navigate to the Sessions view.
+    fireEvent.click(await screen.findByRole("button", { name: "Sessions" }));
 
     await waitFor(() => expect(screen.getByText("alpha-session")).toBeDefined());
     // The fetched url for sessions should have alpha's id.
@@ -99,6 +107,12 @@ describe("Picker cascade — list filters by active project", () => {
           return { ok: true, status: 200, json: async () => [SESSION_B] };
         }
       }
+      if (url.includes("/audit")) {
+        return { ok: true, status: 200, json: async () => ({ eventsTotal: 0 }) };
+      }
+      if (url.startsWith("/api/mcp")) {
+        return { ok: true, status: 200, json: async () => ({ agents: [] }) };
+      }
       return { ok: true, status: 200, json: async () => [] };
     });
     vi.stubGlobal("fetch", fetchSpy);
@@ -109,6 +123,7 @@ describe("Picker cascade — list filters by active project", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Active project/ }));
     fireEvent.click(screen.getByText("alpha"));
+    fireEvent.click(await screen.findByRole("button", { name: "Sessions" }));
     await waitFor(() => expect(screen.getByText("alpha-session")).toBeDefined());
 
     // Now switch to beta.

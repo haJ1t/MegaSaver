@@ -16,10 +16,11 @@ export class McpSetupError extends Error {
 
 // Map a CoreRegistryError code to a BridgeErrorCode + status. The Core enum
 // includes codes that bridge does not surface (project_already_exists,
-// session_already_exists, memory_entry_already_exists, memory_entry_not_found):
-// these never originate from the bridge's request handlers because the bridge
-// generates ids and never re-creates known entities. They fall through to
-// internal_error if encountered.
+// session_already_exists, memory_entry_already_exists): these never originate
+// from the bridge's request handlers because the bridge generates ids and never
+// re-creates known entities. memory_entry_not_found DOES originate now — the
+// memory PATCH/DELETE routes target an existing id. Unmapped codes fall through
+// to internal_error.
 export function mapCoreRegistryError(err: CoreRegistryError): {
   status: number;
   code: BridgeErrorCode;
@@ -33,6 +34,8 @@ export function mapCoreRegistryError(err: CoreRegistryError): {
       return { status: 409, code: "session_already_ended" };
     case "session_project_mismatch":
       return { status: 409, code: "session_project_mismatch" };
+    case "memory_entry_not_found":
+      return { status: 404, code: "memory_entry_not_found" };
     default:
       return null;
   }

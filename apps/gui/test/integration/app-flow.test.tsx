@@ -17,8 +17,14 @@ function stubFetchOneProject(): void {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
-      if (url.startsWith("/api/projects")) {
+      if (url.startsWith("/api/projects") && !url.includes("/audit")) {
         return { ok: true, status: 200, json: async () => [PROJECT] };
+      }
+      if (url.includes("/audit")) {
+        return { ok: true, status: 200, json: async () => ({ eventsTotal: 0 }) };
+      }
+      if (url.startsWith("/api/mcp")) {
+        return { ok: true, status: 200, json: async () => ({ agents: [] }) };
       }
       return { ok: true, status: 200, json: async () => [] };
     }),
@@ -40,30 +46,30 @@ afterEach(() => {
 });
 
 describe("App — view switching", () => {
-  it("sets aria-current='page' on the Sessions button by default", async () => {
+  it("sets aria-current='page' on the Overview button by default", async () => {
     stubFetchOneProject();
     render(<App />);
-    const btn = await screen.findByRole("button", { name: "Sessions" });
+    const btn = await screen.findByRole("button", { name: "Overview" });
     expect(btn.getAttribute("aria-current")).toBe("page");
   });
 
   it("switches aria-current to the Memory button when clicked", async () => {
     stubFetchOneProject();
     render(<App />);
-    await screen.findByRole("button", { name: "Memory entries" });
-    fireEvent.click(screen.getByRole("button", { name: "Memory entries" }));
-    expect(
-      screen.getByRole("button", { name: "Memory entries" }).getAttribute("aria-current"),
-    ).toBe("page");
+    await screen.findByRole("button", { name: "Memory" });
+    fireEvent.click(screen.getByRole("button", { name: "Memory" }));
+    expect(screen.getByRole("button", { name: "Memory" }).getAttribute("aria-current")).toBe(
+      "page",
+    );
   });
 
   it("clears aria-current on the previously active button after switching", async () => {
     stubFetchOneProject();
     render(<App />);
-    await screen.findByRole("button", { name: "Memory entries" });
-    fireEvent.click(screen.getByRole("button", { name: "Memory entries" }));
+    await screen.findByRole("button", { name: "Memory" });
+    fireEvent.click(screen.getByRole("button", { name: "Memory" }));
     expect(
-      screen.getByRole("button", { name: "Sessions" }).getAttribute("aria-current"),
+      screen.getByRole("button", { name: "Overview" }).getAttribute("aria-current"),
     ).toBeNull();
   });
 });

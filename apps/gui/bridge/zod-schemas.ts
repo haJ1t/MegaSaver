@@ -1,4 +1,11 @@
-import { memoryScopeSchema } from "@megasaver/core";
+import {
+  memoryConfidenceSchema,
+  memoryEntryUpdatePatchSchema,
+  memoryScopeSchema,
+  memorySourceSchema,
+  memoryTypeSchema,
+  projectSchema,
+} from "@megasaver/core";
 import { knownAgentIdSchema } from "@megasaver/mcp-bridge";
 import {
   titleSchema as TITLE_SCHEMA,
@@ -9,6 +16,17 @@ import {
   tokenSaverModeSchema,
 } from "@megasaver/shared";
 import { z } from "zod";
+
+// Project create (P0). Name reuses Core's exact validation (trim/NFC/control-char
+// rules) at the boundary so a bad name is a clean 400, not a 500 from Core's
+// re-parse. rootPath existence/dir/readable is checked in the route (filesystem),
+// not here.
+export const CREATE_PROJECT_BODY = z
+  .object({
+    name: projectSchema.shape.name,
+    rootPath: z.string().trim().min(1),
+  })
+  .strict();
 
 export const ENABLE_TOKEN_SAVER_BODY = z
   .object({
@@ -71,12 +89,23 @@ export const PATCH_SESSION_BODY = z
     message: "PATCH body must contain at least one of title, riskLevel, agentId.",
   });
 
+// Typed-memory create surface (P1, §3c): the GUI may now set the typed Phase-1
+// fields instead of always defaulting type=todo/confidence=medium/source=manual.
+// All typed fields are optional; the route fills neutral defaults when omitted.
 export const CREATE_MEMORY_BODY = z
   .object({
     projectId: projectIdSchema,
     content: z.string().trim().min(1),
     scope: memoryScopeSchema,
     sessionId: sessionIdSchema.optional(),
+    type: memoryTypeSchema.optional(),
+    title: TITLE_SCHEMA.optional(),
+    confidence: memoryConfidenceSchema.optional(),
+    source: memorySourceSchema.optional(),
+    keywords: z.array(z.string().trim().min(1)).optional(),
+    reason: z.string().trim().min(1).optional(),
+    goal: z.string().trim().min(1).optional(),
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
@@ -94,6 +123,15 @@ export const CREATE_MEMORY_BODY = z
         path: ["sessionId"],
       });
     }
+  });
+
+// Memory PATCH (P0 approve/reject + P1 typed edits). Mirrors Core's update
+// patch minus `updatedAt` (the route stamps it with now()). At least one
+// editable field must be present.
+export const MEMORY_PATCH_BODY = memoryEntryUpdatePatchSchema
+  .omit({ updatedAt: true })
+  .refine((p) => Object.keys(p).length > 0, {
+    message: "PATCH body must contain at least one editable field.",
   });
 
 export function zodErrorMessage(err: z.ZodError): string {
