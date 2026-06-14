@@ -14,6 +14,7 @@ import {
   handlePatchSessionMemory,
   handlePostSessionMemory,
 } from "./routes/claude-session-memory.js";
+import { handleGetSessionTasks } from "./routes/claude-session-tasks.js";
 import {
   handleGetClaudeSession,
   handleGetClaudeSessionTelemetry,
@@ -312,6 +313,15 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         return;
       }
       return methodNotAllowed(res, method, origin);
+    }
+
+    const claudeTasksMatch = path.match(/^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/tasks$/);
+    if (claudeTasksMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      const dir = decodeURIComponent(claudeTasksMatch[1] as string);
+      const id = decodeURIComponent(claudeTasksMatch[2] as string);
+      await handleGetSessionTasks(ctx, dir, id);
+      return;
     }
 
     const claudeMatch = path.match(
