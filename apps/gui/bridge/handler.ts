@@ -8,6 +8,11 @@ import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-co
 import { applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
 import { handleCaughtError } from "./error-mapping.js";
 import type { RouteContext, SendError, SendJson, SendText } from "./route-context.js";
+import {
+  handleGetClaudeSession,
+  handleListClaudeSessions,
+  handleStreamClaudeSession,
+} from "./routes/claude-sessions.js";
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
 import {
@@ -239,6 +244,25 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         methodNotAllowed(res, method, origin),
       );
       if (dispatched) return;
+    }
+
+    if (path === "/api/claude-sessions") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleListClaudeSessions(ctx);
+      return;
+    }
+
+    const claudeMatch = path.match(/^\/api\/claude-sessions\/([^/]+)\/([^/]+?)(\/stream)?$/);
+    if (claudeMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      const dir = decodeURIComponent(claudeMatch[1] as string);
+      const id = decodeURIComponent(claudeMatch[2] as string);
+      if (claudeMatch[3] === "/stream") {
+        await handleStreamClaudeSession(ctx, dir, id);
+      } else {
+        await handleGetClaudeSession(ctx, dir, id);
+      }
+      return;
     }
 
     if (path === "/api/memory") {
