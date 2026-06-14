@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { COCKPIT_PANELS, getPanel } from "../../src/cockpit/panel-registry.js";
 import type { CockpitPanel, CockpitPanelProps } from "../../src/cockpit/panel.js";
 
 afterEach(() => {
@@ -22,5 +23,36 @@ describe("CockpitPanel contract", () => {
     const Body = panel.component;
     render(<Body dir="d" id="i" cwd="/tmp/w" />);
     expect(screen.getByText("d/i//tmp/w")).toBeDefined();
+  });
+});
+
+describe("COCKPIT_PANELS registry", () => {
+  it("exposes transcript then telemetry in order", () => {
+    expect(COCKPIT_PANELS.map((p) => p.id)).toEqual(["transcript", "telemetry"]);
+  });
+
+  it("resolves a registered panel via getPanel", () => {
+    const panel = getPanel("transcript");
+    expect(panel?.id).toBe("transcript");
+    expect(panel?.label).toBe("Transcript");
+    expect(panel?.scope).toBe("session");
+  });
+
+  it("returns undefined for an unknown panel id", () => {
+    expect(getPanel("nope")).toBeUndefined();
+  });
+
+  it("has a unique id for every descriptor", () => {
+    const ids = COCKPIT_PANELS.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("gives every descriptor a stable id/label/scope/component", () => {
+    for (const p of COCKPIT_PANELS) {
+      expect(typeof p.id).toBe("string");
+      expect(typeof p.label).toBe("string");
+      expect(p.scope === "session" || p.scope === "workspace").toBe(true);
+      expect(typeof p.component).toBe("function");
+    }
   });
 });
