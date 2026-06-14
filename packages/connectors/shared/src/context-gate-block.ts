@@ -1,4 +1,4 @@
-import { type TokenSaverMode } from "@megasaver/shared";
+import type { TokenSaverMode } from "@megasaver/shared";
 import { MEGA_SAVER_CG_BLOCK_END, MEGA_SAVER_CG_BLOCK_START } from "./constants.js";
 import { type ConnectorContext, assertConnectorContext } from "./context.js";
 

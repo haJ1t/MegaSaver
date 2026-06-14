@@ -26,6 +26,10 @@ describe("renderContextGateBlockText", () => {
     expect(out).toContain("Session: (workspace-wide)");
     expect(out).toContain("Project: my-app");
   });
+
+  it("ends with a trailing newline", () => {
+    expect(block().endsWith("\n")).toBe(true);
+  });
 });
 
 describe("upsertContextGateBlockText", () => {
@@ -55,6 +59,12 @@ describe("upsertContextGateBlockText", () => {
     const out = upsertContextGateBlockText(legacy, block());
     expect(out).toContain(MEGA_SAVER_BLOCK_START);
     expect(out).toContain("legacy body");
+    expect(out).toContain(MEGA_SAVER_CG_BLOCK_START);
+  });
+
+  it("preserves CRLF line endings (dominant-EOL round-trip)", () => {
+    const out = upsertContextGateBlockText("# My notes\r\n\r\nhello\r\n", block());
+    expect(out).toContain("\r\n");
     expect(out).toContain(MEGA_SAVER_CG_BLOCK_START);
   });
 });
