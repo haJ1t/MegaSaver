@@ -38,6 +38,12 @@ export {
   liveSessionIdSchema,
   workspaceKeySchema,
 } from "./overlay-key.js";
+export {
+  readOverlayMemory,
+  readOverlayTaskPlans,
+  writeOverlayMemory,
+  writeOverlayTaskPlans,
+} from "./overlay-store.js";
 export * from "./project-rule.js";
 export * from "./project.js";
 export * from "./registry.js";

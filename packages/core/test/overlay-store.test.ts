@@ -1,6 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { overlayMemoryEntrySchema } from "../src/memory-entry.js";
-import { overlayTaskPlanSchema } from "../src/task-plan.js";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { type OverlayMemoryEntry, overlayMemoryEntrySchema } from "../src/memory-entry.js";
+import {
+  readOverlayMemory,
+  readOverlayTaskPlans,
+  writeOverlayMemory,
+  writeOverlayTaskPlans,
+} from "../src/overlay-store.js";
+import { type OverlayTaskPlan, overlayTaskPlanSchema } from "../src/task-plan.js";
 
 const BASE_MEMORY = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -148,5 +157,97 @@ describe("overlayTaskPlanSchema", () => {
         projectId: "00000000-0000-4000-8000-000000000099",
       }),
     ).toThrow();
+  });
+});
+
+const WK_A = "0123456789abcdef";
+const WK_B = "fedcba9876543210";
+
+const projRow: OverlayMemoryEntry = overlayMemoryEntrySchema.parse({
+  ...BASE_MEMORY,
+  scope: "project",
+  liveSessionId: null,
+});
+const sessRow: OverlayMemoryEntry = overlayMemoryEntrySchema.parse({
+  ...BASE_MEMORY,
+  id: "00000000-0000-4000-8000-000000000002",
+  scope: "session",
+  liveSessionId: "00000000-0000-4000-8000-0000000000aa",
+});
+
+let root: string;
+
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), "mega-overlay-"));
+});
+
+afterEach(() => {
+  rmSync(root, { recursive: true, force: true });
+});
+
+describe("overlay memory store", () => {
+  it("round-trips both project- and session-scoped rows under memory/<wk>.jsonl", () => {
+    writeOverlayMemory(root, WK_A, [projRow, sessRow]);
+    expect(existsSync(join(root, "memory", `${WK_A}.jsonl`))).toBe(true);
+    const read = readOverlayMemory(root, WK_A);
+    expect(read).toHaveLength(2);
+    expect(read.map((r) => r.scope).sort()).toEqual(["project", "session"]);
+  });
+
+  it("deletes the file when the set becomes empty", () => {
+    writeOverlayMemory(root, WK_A, [projRow]);
+    writeOverlayMemory(root, WK_A, []);
+    expect(existsSync(join(root, "memory", `${WK_A}.jsonl`))).toBe(false);
+    expect(readOverlayMemory(root, WK_A)).toEqual([]);
+  });
+
+  it("isolates rows between two workspaceKeys", () => {
+    writeOverlayMemory(root, WK_A, [projRow]);
+    writeOverlayMemory(root, WK_B, [sessRow]);
+    expect(readOverlayMemory(root, WK_A).map((r) => r.id)).toEqual([projRow.id]);
+    expect(readOverlayMemory(root, WK_B).map((r) => r.id)).toEqual([sessRow.id]);
+  });
+
+  it("returns [] for a missing workspace file", () => {
+    expect(readOverlayMemory(root, WK_A)).toEqual([]);
+  });
+});
+
+const plan: OverlayTaskPlan = overlayTaskPlanSchema.parse(BASE_PLAN);
+const workspacePlan: OverlayTaskPlan = overlayTaskPlanSchema.parse({
+  ...BASE_PLAN,
+  id: "00000000-0000-4000-8000-000000000b02",
+  liveSessionId: null,
+});
+
+const LSID = "00000000-0000-4000-8000-0000000000aa";
+
+describe("overlay task-plan store", () => {
+  it("round-trips plans under tasks/<wk>/<lsid>.jsonl", () => {
+    writeOverlayTaskPlans(root, WK_A, LSID, [plan]);
+    expect(existsSync(join(root, "tasks", WK_A, `${LSID}.jsonl`))).toBe(true);
+    const read = readOverlayTaskPlans(root, WK_A, LSID);
+    expect(read).toHaveLength(1);
+    expect(read[0]?.id).toBe(plan.id);
+  });
+
+  it("stores a workspace-level (null lsid) plan under tasks/<wk>/_workspace.jsonl", () => {
+    writeOverlayTaskPlans(root, WK_A, null, [workspacePlan]);
+    expect(existsSync(join(root, "tasks", WK_A, "_workspace.jsonl"))).toBe(true);
+    const raw = readFileSync(join(root, "tasks", WK_A, "_workspace.jsonl"), "utf8");
+    expect(raw).toContain(workspacePlan.id);
+    expect(readOverlayTaskPlans(root, WK_A, null)).toHaveLength(1);
+  });
+
+  it("deletes the file when the plan set becomes empty", () => {
+    writeOverlayTaskPlans(root, WK_A, LSID, [plan]);
+    writeOverlayTaskPlans(root, WK_A, LSID, []);
+    expect(existsSync(join(root, "tasks", WK_A, `${LSID}.jsonl`))).toBe(false);
+    expect(readOverlayTaskPlans(root, WK_A, LSID)).toEqual([]);
+  });
+
+  it("isolates plans between liveSessionIds in the same workspace", () => {
+    writeOverlayTaskPlans(root, WK_A, LSID, [plan]);
+    expect(readOverlayTaskPlans(root, WK_A, "00000000-0000-4000-8000-0000000000bb")).toEqual([]);
   });
 });
