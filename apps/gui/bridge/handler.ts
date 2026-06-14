@@ -46,6 +46,8 @@ export interface BridgeHandlerOptions {
   mcpOps?: McpSetupOps;
   /** Override for tests; defaults to ~/.claude/projects. */
   claudeProjectsDir?: string;
+  /** Override for tests; defaults to the desktop app's claude-code-sessions dir. */
+  claudeSessionsMetaDir?: string;
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -117,6 +119,11 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
   const now = opts.now ?? (() => new Date().toISOString());
   const storePath = opts.storePath ?? "";
   const claudeProjectsDir = opts.claudeProjectsDir ?? join(homedir(), ".claude", "projects");
+  // macOS desktop app location; tests inject their own dir. Other platforms that
+  // store this elsewhere simply yield no titles (the list then comes back empty).
+  const claudeSessionsMetaDir =
+    opts.claudeSessionsMetaDir ??
+    join(homedir(), "Library", "Application Support", "Claude", "claude-code-sessions");
 
   // Test-only fallback when no ops injected; production server.ts (BB8)
   // always passes buildMcpSetupOps(...). Reports an empty agent list so
@@ -165,6 +172,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       query,
       storeRoot: storePath,
       claudeProjectsDir,
+      claudeSessionsMetaDir,
       newId,
       now,
       sendJson,

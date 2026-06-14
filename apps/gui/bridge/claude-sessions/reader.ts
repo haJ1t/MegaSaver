@@ -58,92 +58,80 @@ function parseLines(text: string): NormalizedMessage[] {
   return messages;
 }
 
-// Slash-command turns arrive as `<command-name>/x</command-name>` +
-// `<command-args>…</command-args>` wrappers; surface them the way Claude Code does
-// (the command plus its args) instead of the raw XML.
-function cleanTitle(text: string): string {
-  const name = text.match(/<command-name>\s*([^<]+?)\s*<\/command-name>/);
-  if (name) {
-    const args = text.match(/<command-args>\s*([^<]*?)\s*<\/command-args>/);
-    return [name[1], args?.[1]].filter(Boolean).join(" ").trim();
+type SessionTitle = { title: string; cwd: string; lastActivityAt: number };
+
+// Claude Code's desktop app stores one metadata file per session it surfaces,
+// nested under <metaDir>/<workspace>/<window>/local_*.json, each carrying the
+// AI-generated `title` keyed by `cliSessionId` (the transcript's session id).
+// This is the authoritative source for the names the app shows — and, because
+// automated sub-sessions (claude-mem observers/summarizers, sub-agent/warmup
+// runs) get no such metadata, joining against it also filters them out.
+async function readSessionTitles(metaDir: string): Promise<Map<string, SessionTitle>> {
+  const titles = new Map<string, SessionTitle>();
+  let entries: string[];
+  try {
+    entries = await readdir(metaDir, { recursive: true });
+  } catch {
+    return titles;
   }
-  return text;
+  await Promise.all(
+    entries.map(async (rel) => {
+      const base = rel.split(sep).pop() ?? "";
+      if (!base.startsWith("local_") || !base.endsWith(".json")) return;
+      try {
+        const obj = JSON.parse(await readFile(join(metaDir, rel), "utf8")) as {
+          cliSessionId?: unknown;
+          title?: unknown;
+          cwd?: unknown;
+          lastActivityAt?: unknown;
+        };
+        if (typeof obj.cliSessionId !== "string" || typeof obj.title !== "string") return;
+        const lastActivityAt = typeof obj.lastActivityAt === "number" ? obj.lastActivityAt : 0;
+        const existing = titles.get(obj.cliSessionId);
+        if (existing && existing.lastActivityAt >= lastActivityAt) return;
+        titles.set(obj.cliSessionId, {
+          title: obj.title,
+          cwd: typeof obj.cwd === "string" ? obj.cwd : "",
+          lastActivityAt,
+        });
+      } catch {
+        // skip unreadable / partially-written metadata file
+      }
+    }),
+  );
+  return titles;
 }
 
-function deriveMeta(chunk: string): { title: string; projectLabel: string; entrypoint: string } {
-  let title = "";
-  let projectLabel = "";
-  let entrypoint = "";
+// First `cwd` seen in a transcript — the session's project path.
+function firstCwd(chunk: string): string {
   for (const line of chunk.split("\n")) {
     if (line.trim().length === 0) continue;
-    let raw: unknown;
     try {
-      raw = JSON.parse(line);
+      const obj = JSON.parse(line) as { cwd?: unknown };
+      if (typeof obj.cwd === "string") return obj.cwd;
     } catch {
-      continue;
+      // partial/non-JSON line — keep scanning
     }
-    if (raw && typeof raw === "object") {
-      const obj = raw as { cwd: unknown; entrypoint: unknown };
-      if (!projectLabel && typeof obj.cwd === "string") projectLabel = obj.cwd;
-      if (!entrypoint && typeof obj.entrypoint === "string") entrypoint = obj.entrypoint;
-      if (!title) {
-        const msg = normalizeLine(raw);
-        if (msg?.role === "user") {
-          title = cleanTitle(msg.blocks.map((b) => b.text).join(" ")).slice(0, 120);
-        }
-      }
-    }
-    if (title && projectLabel && entrypoint) break;
   }
-  return { title, projectLabel, entrypoint };
-}
-
-// Claude Code does not surface SDK / sub-agent sessions in its own picker, so we
-// hide them too. These are identifiable structurally (no file read needed):
-//  - sub-agent + warmup transcripts are named `agent-*.jsonl`
-//  - claude-mem observer sessions live under a synthetic `.claude-mem` project dir
-// (entrypoint "sdk-cli" is a further signal, applied after the head read.)
-function isHiddenAgentSession(dir: string, id: string): boolean {
-  return id.startsWith("agent-") || dir.includes("claude-mem");
-}
-
-// Machine-generated prompt signatures of automated claude-mem / Claude Code
-// sub-sessions (memory observers, conversation summarizers) that Claude Code does
-// not show as user conversations. These markers sit at the very start of the first
-// turn's message content, so a substring scan of the head detects them even when
-// the full line (which can embed an entire observed/summarized session) is far
-// larger than the head read and would otherwise fail to JSON-parse.
-const AGENT_PROMPT_MARKERS = [
-  "Hello memory agent",
-  "This summary will be shown in a list",
-] as const;
-
-function looksLikeAgentPrompt(head: string): boolean {
-  return AGENT_PROMPT_MARKERS.some((marker) => head.includes(marker));
-}
-
-async function readHead(path: string, bytes: number): Promise<string> {
-  const handle = await open(path, "r");
-  try {
-    const buf = Buffer.alloc(bytes);
-    const { bytesRead } = await handle.read(buf, 0, bytes, 0);
-    return buf.subarray(0, bytesRead).toString("utf8");
-  } finally {
-    await handle.close();
-  }
+  return "";
 }
 
 export async function listSessions(
   root: string,
+  metaDir: string,
   opts: { limit: number; offset: number },
 ): Promise<ClaudeSessionMeta[]> {
+  const titles = await readSessionTitles(metaDir);
+  if (titles.size === 0) return [];
+
   let dirs: string[];
   try {
     dirs = await readdir(root);
   } catch {
     return [];
   }
-  const files: { dir: string; id: string; path: string }[] = [];
+  // Index transcripts the desktop app surfaces (those with metadata) by id.
+  const located = new Map<string, { dir: string; path: string }>();
   for (const dir of dirs) {
     let entries: string[];
     try {
@@ -153,50 +141,34 @@ export async function listSessions(
     }
     for (const entry of entries) {
       if (!entry.endsWith(".jsonl")) continue;
-      files.push({ dir, id: entry.slice(0, -".jsonl".length), path: join(root, dir, entry) });
+      const id = entry.slice(0, -".jsonl".length);
+      if (!titles.has(id) || located.has(id)) continue;
+      located.set(id, { dir, path: join(root, dir, entry) });
     }
   }
+
   const stated = await Promise.all(
-    files.map(async (f) => {
+    [...located].map(async ([id, f]) => {
+      const meta = titles.get(id) as SessionTitle;
       try {
         const s = await stat(f.path);
-        return { ...f, mtimeMs: s.mtimeMs, size: s.size };
+        return {
+          dir: f.dir,
+          id,
+          mtimeMs: s.mtimeMs,
+          size: s.size,
+          title: meta.title,
+          projectLabel: meta.cwd,
+        } satisfies ClaudeSessionMeta;
       } catch {
         return null;
       }
     }),
   );
-  const sorted = stated
+  return stated
     .filter((s): s is NonNullable<typeof s> => s !== null)
-    .sort((a, b) => b.mtimeMs - a.mtimeMs);
-
-  // Read heads lazily from most-recent down, skipping SDK/agent sessions
-  // (entrypoint "sdk-cli" — e.g. claude-mem observers) that Claude Code does not
-  // surface as user sessions. Filtering must precede offset/limit, so we walk the
-  // sorted list and read only as many files as needed to fill the page.
-  const result: ClaudeSessionMeta[] = [];
-  let skipped = 0;
-  for (const s of sorted) {
-    if (result.length >= opts.limit) break;
-    if (isHiddenAgentSession(s.dir, s.id)) continue;
-    const head = await readHead(s.path, META_SCAN_BYTES).catch(() => "");
-    if (looksLikeAgentPrompt(head)) continue;
-    const { title, projectLabel, entrypoint } = deriveMeta(head);
-    if (entrypoint === "sdk-cli") continue;
-    if (skipped < opts.offset) {
-      skipped++;
-      continue;
-    }
-    result.push({
-      dir: s.dir,
-      id: s.id,
-      mtimeMs: s.mtimeMs,
-      size: s.size,
-      title,
-      projectLabel,
-    } satisfies ClaudeSessionMeta);
-  }
-  return result;
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+    .slice(opts.offset, opts.offset + opts.limit);
 }
 
 export async function readTranscript(
@@ -213,7 +185,7 @@ export async function readTranscript(
     return null;
   }
   const messages = parseLines(text);
-  const projectLabel = deriveMeta(text.slice(0, META_SCAN_BYTES)).projectLabel;
+  const projectLabel = firstCwd(text.slice(0, META_SCAN_BYTES));
   return {
     dir,
     id,

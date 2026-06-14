@@ -30,9 +30,21 @@ function asstLine(text: string, ts: string): string {
 
 describe("claude-sessions reader", () => {
   let root: string;
+  let metaDir: string;
+
+  // Mirror the desktop app's <metaDir>/<workspace>/<window>/local_*.json layout.
+  function writeMeta(id: string, title: string, cwd = "/Users/me/proj"): void {
+    const dir = join(metaDir, "ws", "win");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `local_${id}.json`),
+      JSON.stringify({ cliSessionId: id, title, cwd, lastActivityAt: 1 }),
+    );
+  }
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "cc-projects-"));
+    metaDir = mkdtempSync(join(tmpdir(), "cc-meta-"));
     mkdirSync(join(root, DIR), { recursive: true });
     const a = join(root, DIR, "aaaa.jsonl");
     const b = join(root, DIR, "bbbb.jsonl");
@@ -44,96 +56,43 @@ describe("claude-sessions reader", () => {
     // Make `bbbb` newer so it sorts first.
     utimesSync(a, new Date("2026-06-14T10:00:00Z"), new Date("2026-06-14T10:00:00Z"));
     utimesSync(b, new Date("2026-06-14T11:00:00Z"), new Date("2026-06-14T11:00:00Z"));
+    writeMeta("aaaa", "Alpha session");
+    writeMeta("bbbb", "Beta session");
   });
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true });
+    rmSync(metaDir, { recursive: true, force: true });
   });
 
-  it("excludes sdk-cli (SDK/agent) sessions even when newer", async () => {
-    const agent = join(root, DIR, "cccc.jsonl");
-    writeFileSync(
-      agent,
-      `${JSON.stringify({
-        type: "user",
-        timestamp: "2026-06-14T12:00:00.000Z",
-        entrypoint: "sdk-cli",
-        cwd: "/Users/me/proj",
-        message: { role: "user", content: "Hello memory agent, you are continuing" },
-      })}\n`,
-    );
-    utimesSync(agent, new Date("2026-06-14T12:00:00Z"), new Date("2026-06-14T12:00:00Z"));
-    const sessions = await listSessions(root, { limit: 50, offset: 0 });
+  it("lists most-recent first using titles from the desktop metadata store", async () => {
+    const sessions = await listSessions(root, metaDir, { limit: 50, offset: 0 });
+    expect(sessions.map((s) => s.id)).toEqual(["bbbb", "aaaa"]);
+    expect(sessions[0]?.title).toBe("Beta session");
+    expect(sessions[0]?.projectLabel).toBe("/Users/me/proj");
+  });
+
+  it("ignores transcripts that have no desktop metadata, even when newer", async () => {
+    const orphan = join(root, DIR, "cccc.jsonl");
+    writeFileSync(orphan, `${userLine("Hello memory agent", "2026-06-14T12:00:00.000Z")}\n`);
+    utimesSync(orphan, new Date("2026-06-14T12:00:00Z"), new Date("2026-06-14T12:00:00Z"));
+    const sessions = await listSessions(root, metaDir, { limit: 50, offset: 0 });
     expect(sessions.map((s) => s.id)).toEqual(["bbbb", "aaaa"]);
     expect(sessions.some((s) => s.id === "cccc")).toBe(false);
   });
 
-  it("surfaces slash-command sessions as command + args, not raw XML", async () => {
-    const cmd = join(root, DIR, "ffff.jsonl");
-    const content =
-      "<command-message>humanizer</command-message>\n<command-name>/humanizer</command-name>\n<command-args>make it natural</command-args>";
-    writeFileSync(
-      cmd,
-      `${JSON.stringify({ type: "user", timestamp: "2026-06-14T12:40:00.000Z", cwd: "/Users/me/proj", message: { role: "user", content } })}\n`,
-    );
-    utimesSync(cmd, new Date("2026-06-14T12:40:00Z"), new Date("2026-06-14T12:40:00Z"));
-    const sessions = await listSessions(root, { limit: 50, offset: 0 });
-    const session = sessions.find((s) => s.id === "ffff");
-    expect(session?.title).toBe("/humanizer make it natural");
-  });
-
-  it("excludes agent-* (sub-agent/warmup) sessions by filename, without reading them", async () => {
-    const warmup = join(root, DIR, "agent-deadbeef.jsonl");
-    writeFileSync(warmup, `${userLine("Warmup", "2026-06-14T12:30:00.000Z")}\n`);
-    utimesSync(warmup, new Date("2026-06-14T12:30:00Z"), new Date("2026-06-14T12:30:00Z"));
-    const sessions = await listSessions(root, { limit: 50, offset: 0 });
-    expect(sessions.some((s) => s.id === "agent-deadbeef")).toBe(false);
-  });
-
-  it("excludes summarizer sessions by content marker even when the line exceeds the head", async () => {
-    const summarizer = join(root, DIR, "eeee.jsonl");
-    const huge = "x".repeat(200_000);
-    writeFileSync(
-      summarizer,
-      `${JSON.stringify({
-        type: "user",
-        timestamp: "2026-06-14T12:45:00.000Z",
-        cwd: "/Users/me/proj",
-        message: {
-          role: "user",
-          content: `Context: This summary will be shown in a list to help users. ${huge}`,
-        },
-      })}\n`,
-    );
-    utimesSync(summarizer, new Date("2026-06-14T12:45:00Z"), new Date("2026-06-14T12:45:00Z"));
-    const sessions = await listSessions(root, { limit: 50, offset: 0 });
-    expect(sessions.some((s) => s.id === "eeee")).toBe(false);
-  });
-
-  it("excludes sessions under a claude-mem observer project dir", async () => {
-    const obsDir = "-Users-me--claude-mem-observer-sessions";
-    mkdirSync(join(root, obsDir), { recursive: true });
-    const obs = join(root, obsDir, "dddd.jsonl");
-    writeFileSync(obs, `${userLine("Hello memory agent", "2026-06-14T13:00:00.000Z")}\n`);
-    utimesSync(obs, new Date("2026-06-14T13:00:00Z"), new Date("2026-06-14T13:00:00Z"));
-    const sessions = await listSessions(root, { limit: 50, offset: 0 });
-    expect(sessions.some((s) => s.dir === obsDir)).toBe(false);
-  });
-
-  it("lists sessions most-recent first with title + projectLabel", async () => {
-    const sessions = await listSessions(root, { limit: 50, offset: 0 });
-    expect(sessions.map((s) => s.id)).toEqual(["bbbb", "aaaa"]);
-    expect(sessions[0]?.title).toBe("second prompt");
-    expect(sessions[0]?.projectLabel).toBe("/Users/me/proj");
-  });
-
   it("paginates with limit + offset", async () => {
-    const page = await listSessions(root, { limit: 1, offset: 1 });
+    const page = await listSessions(root, metaDir, { limit: 1, offset: 1 });
     expect(page.map((s) => s.id)).toEqual(["aaaa"]);
   });
 
-  it("returns [] when the root does not exist", async () => {
-    const missing = await listSessions(join(root, "nope"), { limit: 50, offset: 0 });
+  it("returns [] when the metadata store is missing or empty", async () => {
+    const empty = await listSessions(root, join(metaDir, "nope"), { limit: 50, offset: 0 });
+    expect(empty).toEqual([]);
+  });
+
+  it("returns [] when the projects root does not exist", async () => {
+    const missing = await listSessions(join(root, "nope"), metaDir, { limit: 50, offset: 0 });
     expect(missing).toEqual([]);
   });
 

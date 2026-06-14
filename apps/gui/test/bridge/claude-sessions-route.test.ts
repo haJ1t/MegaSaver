@@ -18,9 +18,20 @@ function userLine(text: string, ts: string): string {
 describe("claude-sessions routes", () => {
   let server: TestServer;
   let ccRoot: string;
+  let metaRoot: string;
+
+  function writeMeta(id: string, title: string): void {
+    const dir = join(metaRoot, "ws", "win");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `local_${id}.json`),
+      JSON.stringify({ cliSessionId: id, title, cwd: "/Users/me/proj", lastActivityAt: 1 }),
+    );
+  }
 
   beforeEach(async () => {
     ccRoot = mkdtempSync(join(tmpdir(), "cc-route-"));
+    metaRoot = mkdtempSync(join(tmpdir(), "cc-route-meta-"));
     mkdirSync(join(ccRoot, DIR), { recursive: true });
     const a = join(ccRoot, DIR, "aaaa.jsonl");
     const b = join(ccRoot, DIR, "bbbb.jsonl");
@@ -28,12 +39,15 @@ describe("claude-sessions routes", () => {
     writeFileSync(b, `${userLine("newer", "2026-06-14T11:00:00.000Z")}\n`);
     utimesSync(a, new Date("2026-06-14T10:00:00Z"), new Date("2026-06-14T10:00:00Z"));
     utimesSync(b, new Date("2026-06-14T11:00:00Z"), new Date("2026-06-14T11:00:00Z"));
-    server = await startTestBridge({ claudeProjectsDir: ccRoot });
+    writeMeta("aaaa", "Older session");
+    writeMeta("bbbb", "Newer session");
+    server = await startTestBridge({ claudeProjectsDir: ccRoot, claudeSessionsMetaDir: metaRoot });
   });
 
   afterEach(async () => {
     if (server) await server.close();
     rmSync(ccRoot, { recursive: true, force: true });
+    rmSync(metaRoot, { recursive: true, force: true });
   });
 
   it("GET /api/claude-sessions lists most-recent first", async () => {

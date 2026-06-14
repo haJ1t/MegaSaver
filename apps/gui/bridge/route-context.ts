@@ -37,6 +37,9 @@ export type RouteContext = {
   // Absolute path to ~/.claude/projects (overridable in tests). Read-only source
   // for the Claude Code live-sessions routes.
   claudeProjectsDir: string;
+  // Absolute path to the desktop app's session-metadata dir (claude-code-sessions),
+  // source of the AI-generated session titles. Overridable in tests.
+  claudeSessionsMetaDir: string;
   newId: () => string;
   now: () => string;
   sendJson: SendJson;

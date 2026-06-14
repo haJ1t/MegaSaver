@@ -22,7 +22,10 @@ export async function handleListClaudeSessions(ctx: RouteContext): Promise<void>
   try {
     const offset = intParam(ctx.query.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER);
     const limit = intParam(ctx.query.get("limit"), 50, 1, 200);
-    const sessions = await listSessions(ctx.claudeProjectsDir, { limit, offset });
+    const sessions = await listSessions(ctx.claudeProjectsDir, ctx.claudeSessionsMetaDir, {
+      limit,
+      offset,
+    });
     ctx.sendJson(ctx.res, 200, sessions, ctx.origin);
   } catch (err) {
     sendReadError(ctx, err);
