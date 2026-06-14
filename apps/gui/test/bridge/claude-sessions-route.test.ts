@@ -15,6 +15,26 @@ function userLine(text: string, ts: string): string {
   });
 }
 
+function asstLine(text: string, ts: string): string {
+  return JSON.stringify({
+    type: "assistant",
+    timestamp: ts,
+    cwd: "/Users/me/proj",
+    gitBranch: "main",
+    message: {
+      role: "assistant",
+      model: "claude-haiku-4-5-20251001",
+      usage: {
+        input_tokens: 3,
+        output_tokens: 2,
+        cache_creation_input_tokens: 17499,
+        cache_read_input_tokens: 15204,
+      },
+      content: [{ type: "text", text }],
+    },
+  });
+}
+
 describe("claude-sessions routes", () => {
   let server: TestServer;
   let ccRoot: string;
@@ -36,7 +56,10 @@ describe("claude-sessions routes", () => {
     const a = join(ccRoot, DIR, "aaaa.jsonl");
     const b = join(ccRoot, DIR, "bbbb.jsonl");
     writeFileSync(a, `${userLine("older", "2026-06-14T10:00:00.000Z")}\n`);
-    writeFileSync(b, `${userLine("newer", "2026-06-14T11:00:00.000Z")}\n`);
+    writeFileSync(
+      b,
+      `${userLine("newer", "2026-06-14T11:00:00.000Z")}\n${asstLine("reply", "2026-06-14T11:00:01.000Z")}\n`,
+    );
     utimesSync(a, new Date("2026-06-14T10:00:00Z"), new Date("2026-06-14T10:00:00Z"));
     utimesSync(b, new Date("2026-06-14T11:00:00Z"), new Date("2026-06-14T11:00:00Z"));
     writeMeta("aaaa", "Older session");
@@ -96,6 +119,41 @@ describe("claude-sessions routes", () => {
 
   it("POST /api/claude-sessions → 405 method_not_allowed", async () => {
     const res = await fetch(`${server.baseUrl}/api/claude-sessions`, { method: "POST" });
+    expect(res.status).toBe(405);
+    expect(((await res.json()) as { code: string }).code).toBe("method_not_allowed");
+  });
+
+  it("GET /:dir/:id/telemetry returns the aggregate", async () => {
+    const res = await fetch(`${server.baseUrl}/api/claude-sessions/${DIR}/bbbb/telemetry`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      turnCount: number;
+      totals: { outputTokens: number };
+      models: { model: string }[];
+    };
+    expect(body.turnCount).toBe(2);
+    expect(body.totals.outputTokens).toBe(2);
+    expect(body.models[0]?.model).toBe("claude-haiku-4-5-20251001");
+  });
+
+  it("GET unknown session telemetry → 404 claude_session_not_found", async () => {
+    const res = await fetch(`${server.baseUrl}/api/claude-sessions/${DIR}/zzzz/telemetry`);
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code: string }).code).toBe("claude_session_not_found");
+  });
+
+  it("GET telemetry with path traversal → 400 validation_failed", async () => {
+    const res = await fetch(
+      `${server.baseUrl}/api/claude-sessions/${encodeURIComponent("../../etc")}/x/telemetry`,
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe("validation_failed");
+  });
+
+  it("POST telemetry → 405 method_not_allowed", async () => {
+    const res = await fetch(`${server.baseUrl}/api/claude-sessions/${DIR}/bbbb/telemetry`, {
+      method: "POST",
+    });
     expect(res.status).toBe(405);
     expect(((await res.json()) as { code: string }).code).toBe("method_not_allowed");
   });

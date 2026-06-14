@@ -10,6 +10,7 @@ import { handleCaughtError } from "./error-mapping.js";
 import type { RouteContext, SendError, SendJson, SendText } from "./route-context.js";
 import {
   handleGetClaudeSession,
+  handleGetClaudeSessionTelemetry,
   handleListClaudeSessions,
   handleStreamClaudeSession,
 } from "./routes/claude-sessions.js";
@@ -260,13 +261,17 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       return;
     }
 
-    const claudeMatch = path.match(/^\/api\/claude-sessions\/([^/]+)\/([^/]+?)(\/stream)?$/);
+    const claudeMatch = path.match(
+      /^\/api\/claude-sessions\/([^/]+)\/([^/]+?)(\/stream|\/telemetry)?$/,
+    );
     if (claudeMatch) {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       const dir = decodeURIComponent(claudeMatch[1] as string);
       const id = decodeURIComponent(claudeMatch[2] as string);
       if (claudeMatch[3] === "/stream") {
         await handleStreamClaudeSession(ctx, dir, id);
+      } else if (claudeMatch[3] === "/telemetry") {
+        await handleGetClaudeSessionTelemetry(ctx, dir, id);
       } else {
         await handleGetClaudeSession(ctx, dir, id);
       }
