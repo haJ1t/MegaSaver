@@ -64,4 +64,44 @@ describe("normalizeLine", () => {
     expect(normalizeLine({ noType: true })).toBeNull();
     expect(normalizeLine({ type: "user" })).toBeNull();
   });
+
+  it("retains per-turn model/usage/gitBranch as meta on an assistant line", () => {
+    const msg = normalizeLine({
+      type: "assistant",
+      timestamp: "2026-06-14T10:00:01.000Z",
+      gitBranch: "main",
+      message: {
+        role: "assistant",
+        model: "claude-haiku-4-5-20251001",
+        usage: {
+          input_tokens: 3,
+          output_tokens: 2,
+          cache_creation_input_tokens: 17499,
+          cache_read_input_tokens: 15204,
+          service_tier: "standard",
+        },
+        content: [{ type: "text", text: "the answer" }],
+      },
+    });
+    expect(msg?.meta).toEqual({
+      model: "claude-haiku-4-5-20251001",
+      usage: {
+        inputTokens: 3,
+        outputTokens: 2,
+        cacheCreationInputTokens: 17499,
+        cacheReadInputTokens: 15204,
+      },
+      gitBranch: "main",
+    });
+  });
+
+  it("omits meta entirely when no model/usage/gitBranch on the line", () => {
+    const msg = normalizeLine({
+      type: "assistant",
+      timestamp: "2026-06-14T10:00:01.000Z",
+      message: { role: "assistant", content: [{ type: "text", text: "plain" }] },
+    });
+    expect(msg).not.toBeNull();
+    expect("meta" in (msg as object)).toBe(false);
+  });
 });
