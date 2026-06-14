@@ -1,11 +1,9 @@
-import { createHash } from "node:crypto";
+// Single source of truth for the cwd→key encoding (browser+node safe). Re-exported
+// here so the workspace-grouping consumers keep their existing import path.
+import { encodeWorkspaceKey } from "@megasaver/shared";
 import type { ClaudeSessionMeta, Workspace } from "./types.js";
 
-const WORKSPACE_KEY_HEX_LEN = 16;
-
-export function encodeWorkspaceKey(cwd: string): string {
-  return createHash("sha256").update(cwd, "utf8").digest("hex").slice(0, WORKSPACE_KEY_HEX_LEN);
-}
+export { encodeWorkspaceKey };
 
 export function groupSessionsByWorkspace(sessions: ClaudeSessionMeta[]): Workspace[] {
   const byCwd = new Map<string, { label: string; count: number; lastActivityMs: number }>();
