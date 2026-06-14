@@ -76,9 +76,7 @@ export async function startTestBridge(seed?: {
     registry,
     storePath,
     ...(seed?.claudeProjectsDir ? { claudeProjectsDir: seed.claudeProjectsDir } : {}),
-    ...(seed?.claudeSessionsMetaDir
-      ? { claudeSessionsMetaDir: seed.claudeSessionsMetaDir }
-      : {}),
+    ...(seed?.claudeSessionsMetaDir ? { claudeSessionsMetaDir: seed.claudeSessionsMetaDir } : {}),
   });
   const server: Server = createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
