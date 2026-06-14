@@ -15,11 +15,11 @@ export function WorkspaceSaverModePanel({
 }: {
   dir: string;
   id: string;
-  cwd: string;
 }): JSX.Element {
   const [status, setStatus] = useState<WorkspaceSaverStatus | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<BridgeError | null>(null);
+  const [actionError, setActionError] = useState<BridgeError | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -41,11 +41,11 @@ export function WorkspaceSaverModePanel({
   const apply = useCallback(
     async (enabled: boolean, mode: WorkspaceSaverStatus["mode"]) => {
       setBusy(true);
+      setActionError(null);
       try {
         setStatus(await setWorkspaceSaver(dir, id, { enabled, mode }));
       } catch (err) {
-        setError(err as BridgeError);
-        setState("error");
+        setActionError(err as BridgeError);
       } finally {
         setBusy(false);
       }
@@ -70,7 +70,6 @@ export function WorkspaceSaverModePanel({
           <label className="flex items-center gap-2 text-sm text-text-primary">
             <input
               type="checkbox"
-              aria-label="Saver Mode"
               checked={status.enabled}
               disabled={busy}
               onChange={(e) => void apply(e.target.checked, status.mode)}
@@ -103,6 +102,9 @@ export function WorkspaceSaverModePanel({
               MCP bridge: {status.mcpInstalled ? "installed" : "not installed"}
             </span>
           </div>
+          {actionError && (
+            <p className="text-xs text-danger">Could not update Saver Mode — try again.</p>
+          )}
           {status.enabled && !status.mcpInstalled && (
             <p className="text-xs text-danger">
               MCP bridge is not installed for Claude Code. Install it from the Agent Setup tab —
