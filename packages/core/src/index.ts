@@ -32,4 +32,5 @@ export * from "./project.js";
 export * from "./registry.js";
 export * from "./session.js";
 export * from "./token-saver.js";
+export * from "./workspace-overlay-store.js";
 export { buildPrMemoryComment, type PrMemoryCommentOptions } from "./pr-memory-comment.js";
