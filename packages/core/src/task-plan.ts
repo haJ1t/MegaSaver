@@ -1,5 +1,4 @@
 import {
-  projectIdSchema,
   sessionIdSchema,
   taskPlanIdSchema,
   taskStepIdSchema,
@@ -50,7 +49,7 @@ export type TaskStep = z.infer<typeof taskStepSchema>;
 export const taskPlanSchema = z
   .object({
     id: taskPlanIdSchema,
-    projectId: projectIdSchema,
+    workspaceKey: z.string().min(1),
     sessionId: sessionIdSchema.nullable(),
     task: z.string().trim().min(1),
     status: taskPlanStatusSchema.default("planned"),

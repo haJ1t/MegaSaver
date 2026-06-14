@@ -1,10 +1,10 @@
-import { failedAttemptIdSchema, projectIdSchema, sessionIdSchema } from "@megasaver/shared";
+import { failedAttemptIdSchema, sessionIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 
 export const failedAttemptSchema = z
   .object({
     id: failedAttemptIdSchema,
-    projectId: projectIdSchema,
+    workspaceKey: z.string().min(1),
     sessionId: sessionIdSchema.nullable(),
     task: z.string().trim().min(1),
     failedStep: z.string().trim().min(1),
@@ -20,7 +20,7 @@ export const failedAttemptSchema = z
 export type FailedAttempt = z.infer<typeof failedAttemptSchema>;
 
 // Partial update over the MUTABLE fields only (mirrors memoryEntryUpdatePatchSchema).
-// id/projectId/sessionId/task/failedStep/relatedFiles/createdAt are immutable
+// id/workspaceKey/sessionId/task/failedStep/relatedFiles/createdAt are immutable
 // after create; `.strict()` rejects them.
 export const failedAttemptPatchSchema = z
   .object({

@@ -19,7 +19,7 @@ describe("tool definition id", () => {
 
 const VALID = {
   id: "e0000000-0000-4000-8000-000000000001",
-  projectId: "11111111-1111-4111-8111-111111111111",
+  workspaceKey: "ws-abc123",
   name: "rg",
   description: "ripgrep search across the repo",
   category: "search",

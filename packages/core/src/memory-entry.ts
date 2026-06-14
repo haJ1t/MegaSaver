@@ -1,9 +1,4 @@
-import {
-  memoryEntryIdSchema,
-  projectIdSchema,
-  sessionIdSchema,
-  titleSchema,
-} from "@megasaver/shared";
+import { memoryEntryIdSchema, sessionIdSchema, titleSchema } from "@megasaver/shared";
 import { z } from "zod";
 
 // Order: semantic — project precedes session because sessions belong to
@@ -68,7 +63,7 @@ const keywordsSchema = z.array(z.string()).transform((raw) => {
 export const memoryEntrySchema = z
   .object({
     id: memoryEntryIdSchema,
-    projectId: projectIdSchema,
+    workspaceKey: z.string().min(1),
     sessionId: sessionIdSchema.nullable(),
     scope: memoryScopeSchema,
     type: memoryTypeSchema,
@@ -159,7 +154,7 @@ export const overlayMemoryEntrySchema = z
 
 export type OverlayMemoryEntry = z.infer<typeof overlayMemoryEntrySchema>;
 
-// Partial update over the MUTABLE fields only. id/projectId/createdAt/scope/
+// Partial update over the MUTABLE fields only. id/workspaceKey/createdAt/scope/
 // sessionId are immutable after create; `.strict()` rejects them so a bad
 // caller fails loudly. `updatedAt` is required — the caller (CLI/MCP) owns the
 // clock, mirroring the create path where timestamps are passed in, not minted

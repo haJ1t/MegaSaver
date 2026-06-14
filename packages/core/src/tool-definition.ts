@@ -1,4 +1,4 @@
-import { projectIdSchema, titleSchema, toolDefinitionIdSchema } from "@megasaver/shared";
+import { titleSchema, toolDefinitionIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 
 // Order: roadmap declaration order (Phase 7). Functional grouping of what a
@@ -40,7 +40,7 @@ const toolKeywordsSchema = z.array(z.string()).transform((raw) => {
 export const toolDefinitionSchema = z
   .object({
     id: toolDefinitionIdSchema,
-    projectId: projectIdSchema,
+    workspaceKey: z.string().min(1),
     name: titleSchema,
     description: z.string().trim().min(1),
     category: toolCategorySchema,
