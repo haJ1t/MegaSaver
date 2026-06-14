@@ -69,4 +69,16 @@ describe("claude-sessions routes", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { code: string }).code).toBe("validation_failed");
   });
+
+  it("GET /:dir/:id/stream opens an SSE stream with a snapshot event", async () => {
+    const res = await fetch(`${server.baseUrl}/api/claude-sessions/${DIR}/bbbb/stream`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+    const reader = res.body?.getReader();
+    expect(reader).toBeDefined();
+    const { value } = await (reader as ReadableStreamDefaultReader<Uint8Array>).read();
+    const text = new TextDecoder().decode(value);
+    expect(text).toContain("event: snapshot");
+    await (reader as ReadableStreamDefaultReader<Uint8Array>).cancel();
+  });
 });
