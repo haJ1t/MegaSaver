@@ -69,18 +69,11 @@ afterEach(() => {
 });
 
 describe("Live-first shell flow", () => {
-  it("defaults to Live mode showing the grouped session home (no project gate)", async () => {
+  it("shows the grouped session home (no project gate)", async () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText("alpha")).toBeDefined());
     expect(screen.getByText("My session")).toBeDefined();
     expect(screen.queryByText("No projects yet.")).toBeNull();
-  });
-
-  it("reveals the legacy project shell when toggled to Legacy", async () => {
-    render(<App />);
-    await screen.findByText("My session");
-    fireEvent.click(screen.getByRole("button", { name: "Legacy" }));
-    await waitFor(() => expect(screen.getByText("No projects yet.")).toBeDefined());
   });
 
   it("opens the cockpit on the transcript panel when a session is selected", async () => {
