@@ -24,22 +24,6 @@ import {
 } from "./routes/claude-sessions.js";
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
-import {
-  handleDeleteMemory,
-  handleGetMemory,
-  handlePatchMemory,
-  handlePostMemory,
-} from "./routes/memory.js";
-import { dispatchProjectScoped } from "./routes/project-scoped.js";
-import { handleGetProjects, handlePostProject } from "./routes/projects.js";
-import { dispatchRetention } from "./routes/retention.js";
-import {
-  handleEndSession,
-  handleGetSessions,
-  handlePatchSession,
-  handlePostSession,
-} from "./routes/sessions.js";
-import { dispatchTokenSaver } from "./routes/token-saver.js";
 import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
 import { resolveWorkspace } from "./workspace-resolver.js";
@@ -199,67 +183,6 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       return;
     }
 
-    if (path === "/api/projects") {
-      if (method === "GET") {
-        handleGetProjects(ctx);
-        return;
-      }
-      if (method === "POST") {
-        await handlePostProject(ctx);
-        return;
-      }
-      return methodNotAllowed(res, method, origin);
-    }
-
-    if (path.startsWith("/api/projects/")) {
-      const dispatched = dispatchProjectScoped(ctx, method, path, () =>
-        methodNotAllowed(res, method, origin),
-      );
-      if (dispatched) return;
-    }
-
-    if (path === "/api/sessions") {
-      if (method === "GET") {
-        handleGetSessions(ctx);
-        return;
-      }
-      if (method === "POST") {
-        await handlePostSession(ctx);
-        return;
-      }
-      return methodNotAllowed(res, method, origin);
-    }
-
-    const sessionMatch = path.match(/^\/api\/sessions\/([^/]+)(\/end)?$/);
-    if (sessionMatch) {
-      const idRaw = sessionMatch[1] as string;
-      const isEnd = sessionMatch[2] === "/end";
-      if (isEnd) {
-        if (method !== "POST") return methodNotAllowed(res, method, origin);
-        await handleEndSession(ctx, idRaw);
-        return;
-      }
-      if (method === "PATCH") {
-        await handlePatchSession(ctx, idRaw);
-        return;
-      }
-      return methodNotAllowed(res, method, origin);
-    }
-
-    if (path.startsWith("/api/sessions/") && path.includes("/token-saver")) {
-      const dispatched = await dispatchTokenSaver(ctx, method, path, () =>
-        methodNotAllowed(res, method, origin),
-      );
-      if (dispatched) return;
-    }
-
-    if (path.startsWith("/api/sessions/") && path.includes("/retention")) {
-      const dispatched = await dispatchRetention(ctx, method, path, () =>
-        methodNotAllowed(res, method, origin),
-      );
-      if (dispatched) return;
-    }
-
     if (path.startsWith("/api/mcp/")) {
       const dispatched = await dispatchMcpSetup(ctx, method, path, () =>
         methodNotAllowed(res, method, origin),
@@ -347,32 +270,6 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         await handleGetClaudeSession(ctx, dir, id);
       }
       return;
-    }
-
-    if (path === "/api/memory") {
-      if (method === "GET") {
-        handleGetMemory(ctx);
-        return;
-      }
-      if (method === "POST") {
-        await handlePostMemory(ctx);
-        return;
-      }
-      return methodNotAllowed(res, method, origin);
-    }
-
-    const memoryMatch = path.match(/^\/api\/memory\/([^/]+)$/);
-    if (memoryMatch) {
-      const idRaw = memoryMatch[1] as string;
-      if (method === "PATCH") {
-        await handlePatchMemory(ctx, idRaw);
-        return;
-      }
-      if (method === "DELETE") {
-        await handleDeleteMemory(ctx, idRaw);
-        return;
-      }
-      return methodNotAllowed(res, method, origin);
     }
 
     sendError(res, 404, "route_not_found", `Route not found: ${method} ${path}`, origin);

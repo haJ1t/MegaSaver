@@ -50,7 +50,7 @@ describe("createBridgeHandler — CORS posture (spec §4c)", () => {
   });
 
   it("handles OPTIONS preflight for POST and responds with the matched origin", async () => {
-    const res = await fetch(`${server.baseUrl}/api/sessions`, {
+    const res = await fetch(`${server.baseUrl}/api/claude-sessions/dir/sess/memory`, {
       method: "OPTIONS",
       headers: {
         origin: "http://localhost:5173",

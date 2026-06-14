@@ -7,7 +7,13 @@ import {
 import type { WorkspaceKey } from "@megasaver/shared";
 import type { RouteContext } from "../route-context.js";
 import { intParam } from "./_query.js";
-import type { IndexStatusResponse } from "./index-routes.js";
+
+type IndexStatusResponse = {
+  indexed: boolean;
+  total: number;
+  indexedFiles: number;
+  byType: Record<string, number>;
+};
 
 // GET /api/workspaces/:key/index — block totals by type, keyed by workspaceKey.
 // Missing index → indexed:false (build CTA); corrupt index → index_unavailable.
