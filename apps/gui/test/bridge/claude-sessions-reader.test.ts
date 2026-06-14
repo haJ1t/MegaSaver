@@ -50,6 +50,76 @@ describe("claude-sessions reader", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  it("excludes sdk-cli (SDK/agent) sessions even when newer", async () => {
+    const agent = join(root, DIR, "cccc.jsonl");
+    writeFileSync(
+      agent,
+      `${JSON.stringify({
+        type: "user",
+        timestamp: "2026-06-14T12:00:00.000Z",
+        entrypoint: "sdk-cli",
+        cwd: "/Users/me/proj",
+        message: { role: "user", content: "Hello memory agent, you are continuing" },
+      })}\n`,
+    );
+    utimesSync(agent, new Date("2026-06-14T12:00:00Z"), new Date("2026-06-14T12:00:00Z"));
+    const sessions = await listSessions(root, { limit: 50, offset: 0 });
+    expect(sessions.map((s) => s.id)).toEqual(["bbbb", "aaaa"]);
+    expect(sessions.some((s) => s.id === "cccc")).toBe(false);
+  });
+
+  it("surfaces slash-command sessions as command + args, not raw XML", async () => {
+    const cmd = join(root, DIR, "ffff.jsonl");
+    const content =
+      "<command-message>humanizer</command-message>\n<command-name>/humanizer</command-name>\n<command-args>make it natural</command-args>";
+    writeFileSync(
+      cmd,
+      `${JSON.stringify({ type: "user", timestamp: "2026-06-14T12:40:00.000Z", cwd: "/Users/me/proj", message: { role: "user", content } })}\n`,
+    );
+    utimesSync(cmd, new Date("2026-06-14T12:40:00Z"), new Date("2026-06-14T12:40:00Z"));
+    const sessions = await listSessions(root, { limit: 50, offset: 0 });
+    const session = sessions.find((s) => s.id === "ffff");
+    expect(session?.title).toBe("/humanizer make it natural");
+  });
+
+  it("excludes agent-* (sub-agent/warmup) sessions by filename, without reading them", async () => {
+    const warmup = join(root, DIR, "agent-deadbeef.jsonl");
+    writeFileSync(warmup, `${userLine("Warmup", "2026-06-14T12:30:00.000Z")}\n`);
+    utimesSync(warmup, new Date("2026-06-14T12:30:00Z"), new Date("2026-06-14T12:30:00Z"));
+    const sessions = await listSessions(root, { limit: 50, offset: 0 });
+    expect(sessions.some((s) => s.id === "agent-deadbeef")).toBe(false);
+  });
+
+  it("excludes summarizer sessions by content marker even when the line exceeds the head", async () => {
+    const summarizer = join(root, DIR, "eeee.jsonl");
+    const huge = "x".repeat(200_000);
+    writeFileSync(
+      summarizer,
+      `${JSON.stringify({
+        type: "user",
+        timestamp: "2026-06-14T12:45:00.000Z",
+        cwd: "/Users/me/proj",
+        message: {
+          role: "user",
+          content: `Context: This summary will be shown in a list to help users. ${huge}`,
+        },
+      })}\n`,
+    );
+    utimesSync(summarizer, new Date("2026-06-14T12:45:00Z"), new Date("2026-06-14T12:45:00Z"));
+    const sessions = await listSessions(root, { limit: 50, offset: 0 });
+    expect(sessions.some((s) => s.id === "eeee")).toBe(false);
+  });
+
+  it("excludes sessions under a claude-mem observer project dir", async () => {
+    const obsDir = "-Users-me--claude-mem-observer-sessions";
+    mkdirSync(join(root, obsDir), { recursive: true });
+    const obs = join(root, obsDir, "dddd.jsonl");
+    writeFileSync(obs, `${userLine("Hello memory agent", "2026-06-14T13:00:00.000Z")}\n`);
+    utimesSync(obs, new Date("2026-06-14T13:00:00Z"), new Date("2026-06-14T13:00:00Z"));
+    const sessions = await listSessions(root, { limit: 50, offset: 0 });
+    expect(sessions.some((s) => s.dir === obsDir)).toBe(false);
+  });
+
   it("lists sessions most-recent first with title + projectLabel", async () => {
     const sessions = await listSessions(root, { limit: 50, offset: 0 });
     expect(sessions.map((s) => s.id)).toEqual(["bbbb", "aaaa"]);
