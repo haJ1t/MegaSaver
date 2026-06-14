@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { type ChunkSet, saveChunkSet } from "@megasaver/content-store";
+import {
+  type ChunkSet,
+  type OverlayChunkSet,
+  saveChunkSet,
+  saveOverlayChunkSet,
+} from "@megasaver/content-store";
 import {
   type FilterOutputResult,
   filterOutput,
@@ -10,7 +15,7 @@ import { type ProjectPermissions, evaluatePathRead } from "@megasaver/policy";
 import type { ProjectId, SessionId, TokenSaverMode } from "@megasaver/shared";
 import { loadProjectPermissions } from "./load-project-permissions.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
-import type { GateResult, ResolveResult } from "./types.js";
+import type { GateResult, OverlayEffectiveSettings, ResolveResult } from "./types.js";
 
 export function defaultNow(): string {
   return new Date().toISOString();
@@ -65,6 +70,26 @@ export function resolveEffectiveSettings(
   };
 }
 
+// F4 live-first overlay resolver. The session model is gone here: the caller
+// (a live bridge route) has already resolved cwd + permissions + the token-saver
+// settings from the workspace overlay, so this is a pure pass-through. No
+// registry, no project FK — settings flow straight from the caller's inputs.
+export function resolveOverlayEffectiveSettings(input: {
+  cwd: string;
+  permissions: ProjectPermissions | null;
+  mode: TokenSaverMode;
+  maxReturnedBytes?: number | undefined;
+  storeRawOutput: boolean;
+}): OverlayEffectiveSettings {
+  return {
+    cwd: input.cwd,
+    mode: input.mode,
+    maxReturnedBytes: input.maxReturnedBytes,
+    storeRawOutput: input.storeRawOutput,
+    permissions: input.permissions,
+  };
+}
+
 // Two-gate read safety (§8): policy denylist, then sandbox resolver. Both
 // run before any fs.readFile so a denied path is never read. The project
 // permissions (deny.read globs) widen gate 1 only — gate 2 (the symlink/..
@@ -85,6 +110,33 @@ export function runTwoGates(input: {
   let absolute: string;
   try {
     absolute = resolveSafeReadPath({ path: input.path, projectRoot: input.projectRoot }).absolute;
+  } catch (err) {
+    return { ok: false, code: "path_unsafe", message: err instanceof Error ? err.message : "" };
+  }
+  return { ok: true, absolute };
+}
+
+// Overlay variant of runTwoGates: same two gates, keyed by cwd instead of a
+// project FK. `evaluatePathRead`'s `project` field is a vestigial label it never
+// reads (only `path`/`permissions` drive the verdict), so a placeholder keeps
+// the baseline secret-path + deny-glob gate identical to the legacy path.
+const OVERLAY_GATE_PROJECT = "overlay" as unknown as ProjectId;
+
+export function runOverlayTwoGates(input: {
+  path: string;
+  cwd: string;
+  permissions: ProjectPermissions | null;
+}): GateResult {
+  const policy = evaluatePathRead({
+    path: input.path,
+    project: OVERLAY_GATE_PROJECT,
+    ...(input.permissions !== null ? { permissions: input.permissions } : {}),
+  });
+  if (!policy.allowed) return { ok: false, code: "path_denied", reason: policy.reason };
+
+  let absolute: string;
+  try {
+    absolute = resolveSafeReadPath({ path: input.path, projectRoot: input.cwd }).absolute;
   } catch (err) {
     return { ok: false, code: "path_unsafe", message: err instanceof Error ? err.message : "" };
   }
@@ -142,4 +194,32 @@ export async function persistChunkSet(input: {
     })),
   };
   await saveChunkSet({ storeRoot: input.storeRoot, chunkSet });
+}
+
+export async function persistOverlayChunkSet(input: {
+  storeRoot: string;
+  chunkSetId: string;
+  workspaceKey: string;
+  liveSessionId: string;
+  createdAt: string;
+  path: string;
+  result: FilterOutputResult;
+}): Promise<void> {
+  const chunkSet: OverlayChunkSet = {
+    chunkSetId: input.chunkSetId,
+    workspaceKey: input.workspaceKey,
+    liveSessionId: input.liveSessionId,
+    createdAt: input.createdAt,
+    source: { kind: "file", path: input.path },
+    rawBytes: input.result.rawBytes,
+    redacted: (input.result.warnings ?? []).some((w) => w.startsWith("redacted")),
+    chunks: input.result.excerpts.map((e, i) => ({
+      id: String(i),
+      startLine: e.startLine,
+      endLine: e.endLine,
+      bytes: Buffer.byteLength(e.text, "utf8"),
+      text: e.text,
+    })),
+  };
+  await saveOverlayChunkSet({ storeRoot: input.storeRoot, chunkSet });
 }

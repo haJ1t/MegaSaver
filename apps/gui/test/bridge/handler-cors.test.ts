@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { PROJECT_A, type TestServer, startTestBridge } from "./test-helpers.js";
+import { type TestServer, startTestBridge } from "./test-helpers.js";
 
 describe("createBridgeHandler — CORS posture (spec §4c)", () => {
   let server: TestServer;
 
   beforeEach(async () => {
-    server = await startTestBridge({ projects: [PROJECT_A] });
+    server = await startTestBridge();
   });
 
   afterEach(async () => {
@@ -50,7 +50,7 @@ describe("createBridgeHandler — CORS posture (spec §4c)", () => {
   });
 
   it("handles OPTIONS preflight for POST and responds with the matched origin", async () => {
-    const res = await fetch(`${server.baseUrl}/api/sessions`, {
+    const res = await fetch(`${server.baseUrl}/api/claude-sessions/dir/sess/memory`, {
       method: "OPTIONS",
       headers: {
         origin: "http://localhost:5173",

@@ -4,13 +4,14 @@ import {
   safeSessionPath,
   tailTranscript,
 } from "../claude-sessions/reader.js";
+import { aggregateTelemetry } from "../claude-sessions/telemetry.js";
 import { handleCaughtError } from "../error-mapping.js";
 import type { RouteContext } from "../route-context.js";
 import { intParam } from "./_query.js";
 
 // These routes are read-only; a filesystem errno (EACCES/EPERM/etc.) must map to
 // internal_error (500), not handleCaughtError's store_write_failed.
-function sendReadError(ctx: RouteContext, err: unknown): void {
+export function sendReadError(ctx: RouteContext, err: unknown): void {
   if (err instanceof Error && typeof (err as NodeJS.ErrnoException).code === "string") {
     ctx.sendError(ctx.res, 500, "internal_error", err.message, ctx.origin);
     return;
@@ -22,7 +23,10 @@ export async function handleListClaudeSessions(ctx: RouteContext): Promise<void>
   try {
     const offset = intParam(ctx.query.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER);
     const limit = intParam(ctx.query.get("limit"), 50, 1, 200);
-    const sessions = await listSessions(ctx.claudeProjectsDir, { limit, offset });
+    const sessions = await listSessions(ctx.claudeProjectsDir, ctx.claudeSessionsMetaDir, {
+      limit,
+      offset,
+    });
     ctx.sendJson(ctx.res, 200, sessions, ctx.origin);
   } catch (err) {
     sendReadError(ctx, err);
@@ -53,6 +57,33 @@ export async function handleGetClaudeSession(
       return;
     }
     ctx.sendJson(ctx.res, 200, transcript, ctx.origin);
+  } catch (err) {
+    sendReadError(ctx, err);
+  }
+}
+
+export async function handleGetClaudeSessionTelemetry(
+  ctx: RouteContext,
+  dir: string,
+  id: string,
+): Promise<void> {
+  if ((await safeSessionPath(ctx.claudeProjectsDir, dir, id)) === null) {
+    ctx.sendError(ctx.res, 400, "validation_failed", "Invalid session path.", ctx.origin);
+    return;
+  }
+  try {
+    const transcript = await readTranscript(ctx.claudeProjectsDir, dir, id);
+    if (!transcript) {
+      ctx.sendError(
+        ctx.res,
+        404,
+        "claude_session_not_found",
+        `Claude Code session not found: ${dir}/${id}`,
+        ctx.origin,
+      );
+      return;
+    }
+    ctx.sendJson(ctx.res, 200, aggregateTelemetry(transcript.messages), ctx.origin);
   } catch (err) {
     sendReadError(ctx, err);
   }

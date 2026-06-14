@@ -85,6 +85,47 @@ export const taskPlanSchema = z
 
 export type TaskPlan = z.infer<typeof taskPlanSchema>;
 
+// F4 live-first variant: (projectId, sessionId) → (workspaceKey, liveSessionId).
+// Same step body and the same duplicate-id / dependsOn-resolution invariants;
+// only the plan key columns change. `.strict()` rejects a leftover projectId.
+export const overlayTaskPlanSchema = z
+  .object({
+    id: taskPlanIdSchema,
+    workspaceKey: z.string().min(1),
+    liveSessionId: z.string().nullable(),
+    task: z.string().trim().min(1),
+    status: taskPlanStatusSchema.default("planned"),
+    steps: z.array(taskStepSchema).min(1),
+    createdAt: z.string().datetime({ offset: true }),
+    updatedAt: z.string().datetime({ offset: true }),
+  })
+  .strict()
+  .superRefine((plan, ctx) => {
+    const ids = new Set(plan.steps.map((s) => s.id));
+    if (ids.size !== plan.steps.length) {
+      ctx.addIssue({ code: "custom", message: "Duplicate step id in plan.", path: ["steps"] });
+    }
+    plan.steps.forEach((step, i) => {
+      for (const dep of step.dependsOn) {
+        if (dep === step.id) {
+          ctx.addIssue({
+            code: "custom",
+            message: `Step ${step.id} cannot depend on itself.`,
+            path: ["steps", i, "dependsOn"],
+          });
+        } else if (!ids.has(dep)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `Step ${step.id} dependsOn unknown step ${dep}.`,
+            path: ["steps", i, "dependsOn"],
+          });
+        }
+      }
+    });
+  });
+
+export type OverlayTaskPlan = z.infer<typeof overlayTaskPlanSchema>;
+
 // Caller-supplied plan: the agent authors step content with local string
 // keys (no engine id exists yet); createTaskPlan resolves keys -> minted
 // TaskStepIds and dependsOnKeys -> dependsOn. Mirrors failureToRuleInputSchema:

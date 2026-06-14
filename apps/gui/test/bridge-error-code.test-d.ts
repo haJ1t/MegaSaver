@@ -13,6 +13,7 @@ describe("BridgeErrorCode tuple ordering", () => {
         "memory_entry_not_found",
         "method_not_allowed",
         "origin_forbidden",
+        "policy_load_failed",
         "project_not_found",
         "rootpath_invalid",
         "route_not_found",
@@ -35,6 +36,7 @@ describe("BridgeErrorCode tuple ordering", () => {
       | "memory_entry_not_found"
       | "method_not_allowed"
       | "origin_forbidden"
+      | "policy_load_failed"
       | "project_not_found"
       | "rootpath_invalid"
       | "route_not_found"

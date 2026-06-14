@@ -2,38 +2,32 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { CoreRegistry } from "@megasaver/core";
 import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
 import { applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
 import { handleCaughtError } from "./error-mapping.js";
 import type { RouteContext, SendError, SendJson, SendText } from "./route-context.js";
 import {
+  handleDeleteSessionMemory,
+  handleGetSessionMemory,
+  handlePatchSessionMemory,
+  handlePostSessionMemory,
+} from "./routes/claude-session-memory.js";
+import { handleGetSessionTasks } from "./routes/claude-session-tasks.js";
+import { dispatchSessionTokenSaver } from "./routes/claude-session-token-saver.js";
+import {
   handleGetClaudeSession,
+  handleGetClaudeSessionTelemetry,
   handleListClaudeSessions,
   handleStreamClaudeSession,
 } from "./routes/claude-sessions.js";
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
-import {
-  handleDeleteMemory,
-  handleGetMemory,
-  handlePatchMemory,
-  handlePostMemory,
-} from "./routes/memory.js";
-import { dispatchProjectScoped } from "./routes/project-scoped.js";
-import { handleGetProjects, handlePostProject } from "./routes/projects.js";
-import { dispatchRetention } from "./routes/retention.js";
-import {
-  handleEndSession,
-  handleGetSessions,
-  handlePatchSession,
-  handlePostSession,
-} from "./routes/sessions.js";
-import { dispatchTokenSaver } from "./routes/token-saver.js";
+import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
+import { handleListWorkspaces } from "./routes/workspaces.js";
+import { resolveWorkspace } from "./workspace-resolver.js";
 
 export interface BridgeHandlerOptions {
-  registry: CoreRegistry;
   /** Override for tests; defaults to `crypto.randomUUID`. */
   newId?: () => string;
   /** Override for tests; defaults to `() => new Date().toISOString()`. */
@@ -46,6 +40,8 @@ export interface BridgeHandlerOptions {
   mcpOps?: McpSetupOps;
   /** Override for tests; defaults to ~/.claude/projects. */
   claudeProjectsDir?: string;
+  /** Override for tests; defaults to the desktop app's claude-code-sessions dir. */
+  claudeSessionsMetaDir?: string;
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -112,11 +108,15 @@ function methodNotAllowed(res: ServerResponse, method: string, origin: string | 
 }
 
 export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
-  const { registry } = opts;
   const newId = opts.newId ?? randomUUID;
   const now = opts.now ?? (() => new Date().toISOString());
   const storePath = opts.storePath ?? "";
   const claudeProjectsDir = opts.claudeProjectsDir ?? join(homedir(), ".claude", "projects");
+  // macOS desktop app location; tests inject their own dir. Other platforms that
+  // store this elsewhere simply yield no titles (the list then comes back empty).
+  const claudeSessionsMetaDir =
+    opts.claudeSessionsMetaDir ??
+    join(homedir(), "Library", "Application Support", "Claude", "claude-code-sessions");
 
   // Test-only fallback when no ops injected; production server.ts (BB8)
   // always passes buildMcpSetupOps(...). Reports an empty agent list so
@@ -159,12 +159,13 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     const ctx: RouteContext = {
       req,
       res,
-      registry,
       mcpOps,
       origin,
       query,
       storeRoot: storePath,
       claudeProjectsDir,
+      claudeSessionsMetaDir,
+      resolveWorkspace,
       newId,
       now,
       sendJson,
@@ -176,67 +177,6 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       handleGetHealth(ctx, storePath);
       return;
-    }
-
-    if (path === "/api/projects") {
-      if (method === "GET") {
-        handleGetProjects(ctx);
-        return;
-      }
-      if (method === "POST") {
-        await handlePostProject(ctx);
-        return;
-      }
-      return methodNotAllowed(res, method, origin);
-    }
-
-    if (path.startsWith("/api/projects/")) {
-      const dispatched = dispatchProjectScoped(ctx, method, path, () =>
-        methodNotAllowed(res, method, origin),
-      );
-      if (dispatched) return;
-    }
-
-    if (path === "/api/sessions") {
-      if (method === "GET") {
-        handleGetSessions(ctx);
-        return;
-      }
-      if (method === "POST") {
-        await handlePostSession(ctx);
-        return;
-      }
-      return methodNotAllowed(res, method, origin);
-    }
-
-    const sessionMatch = path.match(/^\/api\/sessions\/([^/]+)(\/end)?$/);
-    if (sessionMatch) {
-      const idRaw = sessionMatch[1] as string;
-      const isEnd = sessionMatch[2] === "/end";
-      if (isEnd) {
-        if (method !== "POST") return methodNotAllowed(res, method, origin);
-        await handleEndSession(ctx, idRaw);
-        return;
-      }
-      if (method === "PATCH") {
-        await handlePatchSession(ctx, idRaw);
-        return;
-      }
-      return methodNotAllowed(res, method, origin);
-    }
-
-    if (path.startsWith("/api/sessions/") && path.includes("/token-saver")) {
-      const dispatched = await dispatchTokenSaver(ctx, method, path, () =>
-        methodNotAllowed(res, method, origin),
-      );
-      if (dispatched) return;
-    }
-
-    if (path.startsWith("/api/sessions/") && path.includes("/retention")) {
-      const dispatched = await dispatchRetention(ctx, method, path, () =>
-        methodNotAllowed(res, method, origin),
-      );
-      if (dispatched) return;
     }
 
     if (path.startsWith("/api/mcp/")) {
@@ -252,43 +192,80 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       return;
     }
 
-    const claudeMatch = path.match(/^\/api\/claude-sessions\/([^/]+)\/([^/]+?)(\/stream)?$/);
+    if (path === "/api/workspaces") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleListWorkspaces(ctx);
+      return;
+    }
+
+    if (path.startsWith("/api/workspaces/")) {
+      const dispatched = await dispatchWorkspaceScoped(ctx, method, path, () =>
+        methodNotAllowed(res, method, origin),
+      );
+      if (dispatched) return;
+    }
+
+    const claudeMemoryMatch = path.match(
+      /^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/memory(?:\/([^/]+))?$/,
+    );
+    if (claudeMemoryMatch) {
+      const dir = decodeURIComponent(claudeMemoryMatch[1] as string);
+      const id = decodeURIComponent(claudeMemoryMatch[2] as string);
+      const entryId = claudeMemoryMatch[3];
+      if (entryId === undefined) {
+        if (method === "GET") {
+          await handleGetSessionMemory(ctx, dir, id);
+          return;
+        }
+        if (method === "POST") {
+          await handlePostSessionMemory(ctx, dir, id);
+          return;
+        }
+        return methodNotAllowed(res, method, origin);
+      }
+      const decodedEntryId = decodeURIComponent(entryId);
+      if (method === "PATCH") {
+        await handlePatchSessionMemory(ctx, dir, id, decodedEntryId);
+        return;
+      }
+      if (method === "DELETE") {
+        await handleDeleteSessionMemory(ctx, dir, id, decodedEntryId);
+        return;
+      }
+      return methodNotAllowed(res, method, origin);
+    }
+
+    if (path.startsWith("/api/claude-sessions/") && path.includes("/token-saver")) {
+      const dispatched = await dispatchSessionTokenSaver(ctx, method, path, () =>
+        methodNotAllowed(res, method, origin),
+      );
+      if (dispatched) return;
+    }
+
+    const claudeTasksMatch = path.match(/^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/tasks$/);
+    if (claudeTasksMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      const dir = decodeURIComponent(claudeTasksMatch[1] as string);
+      const id = decodeURIComponent(claudeTasksMatch[2] as string);
+      await handleGetSessionTasks(ctx, dir, id);
+      return;
+    }
+
+    const claudeMatch = path.match(
+      /^\/api\/claude-sessions\/([^/]+)\/([^/]+?)(\/stream|\/telemetry)?$/,
+    );
     if (claudeMatch) {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       const dir = decodeURIComponent(claudeMatch[1] as string);
       const id = decodeURIComponent(claudeMatch[2] as string);
       if (claudeMatch[3] === "/stream") {
         await handleStreamClaudeSession(ctx, dir, id);
+      } else if (claudeMatch[3] === "/telemetry") {
+        await handleGetClaudeSessionTelemetry(ctx, dir, id);
       } else {
         await handleGetClaudeSession(ctx, dir, id);
       }
       return;
-    }
-
-    if (path === "/api/memory") {
-      if (method === "GET") {
-        handleGetMemory(ctx);
-        return;
-      }
-      if (method === "POST") {
-        await handlePostMemory(ctx);
-        return;
-      }
-      return methodNotAllowed(res, method, origin);
-    }
-
-    const memoryMatch = path.match(/^\/api\/memory\/([^/]+)$/);
-    if (memoryMatch) {
-      const idRaw = memoryMatch[1] as string;
-      if (method === "PATCH") {
-        await handlePatchMemory(ctx, idRaw);
-        return;
-      }
-      if (method === "DELETE") {
-        await handleDeleteMemory(ctx, idRaw);
-        return;
-      }
-      return methodNotAllowed(res, method, origin);
     }
 
     sendError(res, 404, "route_not_found", `Route not found: ${method} ${path}`, origin);

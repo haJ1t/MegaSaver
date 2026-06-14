@@ -82,30 +82,3 @@ export function EmptyState({ title, description, action }: EmptyStateProps): JSX
     </div>
   );
 }
-
-// ── NoProjectState ────────────────────────────────────────────────────────────
-// Shown when store has no projects at all (spec §3b row 1).
-
-export function NoProjectState(): JSX.Element {
-  return (
-    <div className="flex flex-col gap-3 py-8 px-4">
-      <p className="text-sm text-text-secondary">No projects yet.</p>
-      <p className="text-xs text-text-muted">Create a project from the terminal, then reload.</p>
-      <pre className="mt-1 px-3 py-2 text-xs bg-surface-elevated rounded-md border border-border text-text-secondary leading-relaxed">
-        mega project create &lt;name&gt;
-      </pre>
-    </div>
-  );
-}
-
-// ── NoSelectionState ──────────────────────────────────────────────────────────
-// Shown in the detail pane when no row is selected.
-
-export function NoSelectionState({ entity }: { entity: "session" | "memory entry" }): JSX.Element {
-  return (
-    <div className="flex flex-col gap-2 py-8 px-6 text-text-muted text-sm">
-      <p>No {entity} selected.</p>
-      <p className="text-xs">Pick a row from the list, or create a new one above.</p>
-    </div>
-  );
-}

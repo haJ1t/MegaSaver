@@ -1,18 +1,38 @@
 import type { ChildProcess } from "node:child_process";
 import { spawn as nodeSpawn } from "node:child_process";
-import { type ChunkSet, saveChunkSet } from "@megasaver/content-store";
+import {
+  type ChunkSet,
+  type OverlayChunkSet,
+  saveChunkSet,
+  saveOverlayChunkSet,
+} from "@megasaver/content-store";
 import { type FilterOutputResult, filterOutput } from "@megasaver/output-filter";
-import { type PolicyDenyCode, evaluateCommand } from "@megasaver/policy";
-import { type SessionId, modeToBudget } from "@megasaver/shared";
-import { type TokenSaverEvent, appendEvent } from "@megasaver/stats";
+import { type PolicyDenyCode, type ProjectPermissions, evaluateCommand } from "@megasaver/policy";
+import {
+  type ProjectId,
+  type SessionId,
+  type TokenSaverMode,
+  modeToBudget,
+} from "@megasaver/shared";
+import {
+  type OverlayTokenSaverEvent,
+  type TokenSaverEvent,
+  appendEvent,
+  appendOverlayEvent,
+} from "@megasaver/stats";
 import {
   type LoadProjectPermissions,
   defaultNewId,
   defaultNow,
   resolveEffectiveSettings,
+  resolveOverlayEffectiveSettings,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
 import { messageOf, redactedCount } from "./stats-helpers.js";
+
+// evaluateCommand's `project` field is a vestigial label it never reads — a
+// placeholder keeps the policy gate identical for the projectId-free overlay path.
+const OVERLAY_COMMAND_PROJECT = "overlay" as unknown as ProjectId;
 
 // Injectable spawn so unit tests never start a real process (CRITICAL §12).
 export type RunCommandSpawn = typeof nodeSpawn;
@@ -272,6 +292,145 @@ export async function runOutputExecCommand(
   };
   try {
     appendEvent({
+      store: { root: input.storeRoot },
+      event,
+      secretsRedacted,
+      chunksStored: filtered.excerpts.length,
+    });
+  } catch (err) {
+    return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
+  }
+
+  return { ok: true, result };
+}
+
+// F4 live-first variant of runOutputExecCommand: keyed by (workspaceKey,
+// liveSessionId, cwd) with caller-resolved settings — no registry/session.
+export type RunOverlayOutputExecInput = {
+  storeRoot: string;
+  workspaceKey: string;
+  liveSessionId: string;
+  cwd: string;
+  command: string;
+  args: readonly string[];
+  intent: string;
+  originPid: string;
+  timeoutMs: number;
+  maxBytes: number;
+  mode: TokenSaverMode;
+  maxReturnedBytes?: number | undefined;
+  storeRawOutput: boolean;
+  permissions: ProjectPermissions | null;
+  spawn?: RunCommandSpawn;
+  now?: () => string;
+  newId?: () => string;
+};
+
+export async function runOverlayOutputExecCommand(
+  input: RunOverlayOutputExecInput,
+): Promise<RunOutputExecResult> {
+  const settings = resolveOverlayEffectiveSettings({
+    cwd: input.cwd,
+    permissions: input.permissions,
+    mode: input.mode,
+    maxReturnedBytes: input.maxReturnedBytes,
+    storeRawOutput: input.storeRawOutput,
+  });
+
+  const verdict = evaluateCommand({
+    command: input.command,
+    args: input.args,
+    project: OVERLAY_COMMAND_PROJECT,
+    env: { MEGASAVER_ORIGIN_PID: input.originPid },
+    ...(settings.permissions !== null ? { permissions: settings.permissions } : {}),
+  });
+  if (!verdict.allowed) return { ok: false, reason: "command_denied", code: verdict.reason };
+
+  const spawn = input.spawn ?? nodeSpawn;
+  const outcome = await runChild({
+    spawn,
+    command: input.command,
+    args: input.args,
+    cwd: settings.cwd,
+    originPid: input.originPid,
+    timeoutMs: input.timeoutMs,
+    maxBytes: input.maxBytes,
+  });
+  if (!outcome.ok) return { ok: false, reason: "command_failed", detail: outcome.detail };
+
+  const maxReturnedBytes =
+    settings.maxReturnedBytes !== undefined
+      ? Math.min(settings.maxReturnedBytes, MAX_RETURNED_CEILING)
+      : undefined;
+  const filtered = filterOutput({
+    raw: outcome.capture.raw,
+    intent: input.intent,
+    mode: settings.mode,
+    ...(maxReturnedBytes !== undefined ? { maxReturnedBytes } : {}),
+    source: { kind: "command", command: input.command, args: input.args },
+  });
+
+  const warnings = filtered.warnings ?? [];
+  const redacted = warnings.some((w) => w.startsWith("redacted"));
+  const secretsRedacted = redactedCount(warnings);
+
+  const now = input.now ?? defaultNow;
+  const newId = input.newId ?? defaultNewId;
+
+  const resultWarnings =
+    outcome.capture.terminated !== undefined
+      ? [...warnings, `terminated: ${outcome.capture.terminated}`]
+      : warnings;
+  const result: ExecResult = {
+    ...filtered,
+    ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),
+    childExitCode: outcome.capture.childExitCode,
+    ...(outcome.capture.terminated !== undefined ? { terminated: outcome.capture.terminated } : {}),
+  };
+
+  if (settings.storeRawOutput) {
+    const chunkSetId = newId();
+    const chunkSet: OverlayChunkSet = {
+      chunkSetId,
+      workspaceKey: input.workspaceKey,
+      liveSessionId: input.liveSessionId,
+      createdAt: now(),
+      source: { kind: "command", command: input.command, args: input.args },
+      rawBytes: filtered.rawBytes,
+      redacted,
+      chunks: filtered.excerpts.map((e, i) => ({
+        id: String(i),
+        startLine: e.startLine,
+        endLine: e.endLine,
+        bytes: Buffer.byteLength(e.text, "utf8"),
+        text: e.text,
+      })),
+    };
+    try {
+      await saveOverlayChunkSet({ storeRoot: input.storeRoot, chunkSet });
+    } catch (err) {
+      return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
+    }
+    result.chunkSetId = chunkSetId;
+  }
+
+  const event: OverlayTokenSaverEvent = {
+    id: newId(),
+    workspaceKey: input.workspaceKey,
+    liveSessionId: input.liveSessionId,
+    createdAt: now(),
+    sourceKind: "command",
+    label: [input.command, ...input.args].join(" "),
+    rawBytes: filtered.rawBytes,
+    returnedBytes: filtered.returnedBytes,
+    bytesSaved: filtered.bytesSaved,
+    savingRatio: filtered.savingRatio,
+    ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
+    summary: filtered.summary,
+    mode: settings.mode,
+  };
+  try {
+    appendOverlayEvent({
       store: { root: input.storeRoot },
       event,
       secretsRedacted,

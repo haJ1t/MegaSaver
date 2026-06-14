@@ -17,6 +17,8 @@ export {
   type MemoryScope,
   type MemorySource,
   type MemoryType,
+  type OverlayMemoryEntry,
+  type OverlayMemoryEntryUpdatePatch,
   backfillMemoryEntry,
   memoryApprovalSchema,
   memoryConfidenceSchema,
@@ -25,11 +27,27 @@ export {
   memoryScopeSchema,
   memorySourceSchema,
   memoryTypeSchema,
+  overlayMemoryEntrySchema,
+  overlayMemoryEntryUpdatePatchSchema,
 } from "./memory-entry.js";
 export * from "./memory-search.js";
+export {
+  type LiveSessionId,
+  type WorkspaceKey,
+  isSafeKeySegment,
+  liveSessionIdSchema,
+  workspaceKeySchema,
+} from "./overlay-key.js";
+export {
+  readOverlayMemory,
+  readOverlayTaskPlans,
+  writeOverlayMemory,
+  writeOverlayTaskPlans,
+} from "./overlay-store.js";
 export * from "./project-rule.js";
 export * from "./project.js";
 export * from "./registry.js";
 export * from "./session.js";
 export * from "./token-saver.js";
+export * from "./workspace-overlay-store.js";
 export { buildPrMemoryComment, type PrMemoryCommentOptions } from "./pr-memory-comment.js";

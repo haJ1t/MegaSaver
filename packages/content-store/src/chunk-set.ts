@@ -37,6 +37,23 @@ export const chunkSetSchema = z
 
 export type ChunkSet = z.infer<typeof chunkSetSchema>;
 
+// F4 live-first variant: (projectId, sessionId) → (workspaceKey, liveSessionId)
+// permissive path-safe strings. Same chunk body; only the key columns change.
+export const overlayChunkSetSchema = z
+  .object({
+    chunkSetId: z.string().min(1),
+    liveSessionId: z.string().min(1),
+    workspaceKey: z.string().min(1),
+    createdAt: z.string().datetime({ offset: true }),
+    source: chunkSetSchema.shape.source,
+    rawBytes: z.number().int().nonnegative(),
+    redacted: z.boolean(),
+    chunks: z.array(chunkSchema).readonly(),
+  })
+  .strict();
+
+export type OverlayChunkSet = z.infer<typeof overlayChunkSetSchema>;
+
 export type ChunkSetSummary = {
   chunkSetId: string;
   createdAt: string;

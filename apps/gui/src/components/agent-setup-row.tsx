@@ -5,10 +5,6 @@ export type McpAction = "install" | "repair" | "uninstall";
 type AgentSetupRowProps = {
   agent: McpAgentStatus;
   busy: boolean;
-  /** Whether a project is selected in the app shell. install/repair (which
-   *  write into a project's agent files, epic §7) are gated on this; uninstall
-   *  and status are not. */
-  projectSelected: boolean;
   onAction: (action: McpAction) => void;
 };
 
@@ -39,17 +35,10 @@ const TONE: Record<RowState["tone"], string> = {
   ok: "text-accent",
 };
 
-export function AgentSetupRow({
-  agent,
-  busy,
-  projectSelected,
-  onAction,
-}: AgentSetupRowProps): JSX.Element {
+export function AgentSetupRow({ agent, busy, onAction }: AgentSetupRowProps): JSX.Element {
   const state = deriveState(agent);
   const isDestructive = state.action === "uninstall";
-  const needsProject = state.action === "install" || state.action === "repair";
-  const projectGated = needsProject && !projectSelected;
-  const disabled = busy || projectGated;
+  const disabled = busy;
 
   return (
     <li className="flex flex-col gap-2 rounded-md border border-border px-4 py-3">
@@ -76,9 +65,6 @@ export function AgentSetupRow({
           </button>
         )}
       </div>
-      {projectGated && (
-        <p className="text-xs text-text-muted">Pick a project to install or repair.</p>
-      )}
       {agent.restartRequired && agent.restartHint.length > 0 && (
         <p className="text-xs text-text-muted">{agent.restartHint}</p>
       )}

@@ -7,9 +7,15 @@ import {
   sessionIdSchema,
 } from "@megasaver/shared";
 import { atomicWriteFile } from "./atomic-write.js";
-import { type ChunkSet, type ChunkSetSummary, chunkSetSchema } from "./chunk-set.js";
+import {
+  type ChunkSet,
+  type ChunkSetSummary,
+  type OverlayChunkSet,
+  chunkSetSchema,
+  overlayChunkSetSchema,
+} from "./chunk-set.js";
 import { ContentStoreError } from "./errors.js";
-import { chunkSetPath } from "./paths.js";
+import { chunkSetPath, overlayChunkSetPath } from "./paths.js";
 
 function isErrno(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
@@ -134,6 +140,62 @@ export async function deleteChunkSet(input: {
     rmSync(path, { force: true });
   } catch (error) {
     throw new ContentStoreError("write_failed", `Delete failed: ${input.chunkSetId}`, {
+      cause: error,
+    });
+  }
+}
+
+export async function saveOverlayChunkSet(input: {
+  storeRoot: string;
+  chunkSet: OverlayChunkSet;
+}): Promise<void> {
+  let chunkSet: OverlayChunkSet;
+  try {
+    chunkSet = overlayChunkSetSchema.parse(input.chunkSet);
+  } catch (error) {
+    throw new ContentStoreError("schema_invalid", "ChunkSet is invalid.", { cause: error });
+  }
+
+  const path = overlayChunkSetPath({
+    storeRoot: input.storeRoot,
+    workspaceKey: chunkSet.workspaceKey,
+    liveSessionId: chunkSet.liveSessionId,
+    chunkSetId: chunkSet.chunkSetId,
+  });
+
+  atomicWriteFile(path, `${JSON.stringify(chunkSet, null, 2)}\n`);
+}
+
+export async function loadOverlayChunkSet(input: {
+  storeRoot: string;
+  workspaceKey: string;
+  liveSessionId: string;
+  chunkSetId: string;
+}): Promise<OverlayChunkSet> {
+  const path = overlayChunkSetPath(input);
+
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch (error) {
+    if (isErrno(error) && error.code === "ENOENT") {
+      throw new ContentStoreError("not_found", `ChunkSet not found: ${input.chunkSetId}`);
+    }
+    throw error;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new ContentStoreError("store_corrupt", `Corrupt chunkSet file: ${path}`, {
+      cause: error,
+    });
+  }
+  try {
+    return overlayChunkSetSchema.parse(parsed);
+  } catch (error) {
+    throw new ContentStoreError("store_corrupt", `Corrupt chunkSet file: ${path}`, {
       cause: error,
     });
   }

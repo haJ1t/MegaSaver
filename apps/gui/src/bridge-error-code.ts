@@ -10,6 +10,7 @@ export const BRIDGE_ERROR_CODES = [
   "memory_entry_not_found",
   "method_not_allowed",
   "origin_forbidden",
+  "policy_load_failed",
   "project_not_found",
   "rootpath_invalid",
   "route_not_found",
@@ -33,6 +34,8 @@ export const BRIDGE_ERROR_COPY: Record<BridgeErrorCode, string> = {
   memory_entry_not_found: "Memory entry not found. It may have been removed.",
   method_not_allowed: "Request method not allowed.",
   origin_forbidden: "Request blocked by the bridge origin policy.",
+  policy_load_failed:
+    "Permissions file is malformed. Fix .megasaver/permissions.yaml and try again.",
   project_not_found: "Project not found. It may have been removed.",
   rootpath_invalid: "Root path must be an existing, readable directory.",
   route_not_found: "API route not found.",

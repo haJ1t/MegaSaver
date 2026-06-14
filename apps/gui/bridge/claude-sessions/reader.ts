@@ -58,57 +58,93 @@ function parseLines(text: string): NormalizedMessage[] {
   return messages;
 }
 
-function deriveMeta(chunk: string): { title: string; projectLabel: string } {
-  let title = "";
-  let projectLabel = "";
-  for (const line of chunk.split("\n")) {
-    if (line.trim().length === 0) continue;
-    let raw: unknown;
-    try {
-      raw = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (raw && typeof raw === "object") {
-      const obj = raw as { cwd: unknown };
-      if (!projectLabel && typeof obj.cwd === "string") projectLabel = obj.cwd;
-      if (!title) {
-        const msg = normalizeLine(raw);
-        if (msg?.role === "user") {
-          title = msg.blocks
-            .map((b) => b.text)
-            .join(" ")
-            .slice(0, 120);
-        }
-      }
-    }
-    if (title && projectLabel) break;
+type SessionTitle = {
+  title: string;
+  cwd: string;
+  lastActivityAt: number;
+  isArchived: boolean;
+  model: string;
+  permissionMode: string;
+};
+
+// Claude Code's desktop app stores one metadata file per session it surfaces,
+// nested under <metaDir>/<workspace>/<window>/local_*.json, each carrying the
+// AI-generated `title` keyed by `cliSessionId` (the transcript's session id).
+// This is the authoritative source for the names the app shows — and, because
+// automated sub-sessions (claude-mem observers/summarizers, sub-agent/warmup
+// runs) get no such metadata, joining against it also filters them out.
+async function readSessionTitles(metaDir: string): Promise<Map<string, SessionTitle>> {
+  const titles = new Map<string, SessionTitle>();
+  let entries: string[];
+  try {
+    entries = await readdir(metaDir, { recursive: true });
+  } catch {
+    return titles;
   }
-  return { title, projectLabel };
+  await Promise.all(
+    entries.map(async (rel) => {
+      const base = rel.split(sep).pop() ?? "";
+      if (!base.startsWith("local_") || !base.endsWith(".json")) return;
+      try {
+        const obj = JSON.parse(await readFile(join(metaDir, rel), "utf8")) as {
+          cliSessionId?: unknown;
+          title?: unknown;
+          cwd?: unknown;
+          lastActivityAt?: unknown;
+          isArchived?: unknown;
+          model?: unknown;
+          permissionMode?: unknown;
+        };
+        if (typeof obj.cliSessionId !== "string" || typeof obj.title !== "string") return;
+        const lastActivityAt = typeof obj.lastActivityAt === "number" ? obj.lastActivityAt : 0;
+        const existing = titles.get(obj.cliSessionId);
+        if (existing && existing.lastActivityAt >= lastActivityAt) return;
+        titles.set(obj.cliSessionId, {
+          title: obj.title,
+          cwd: typeof obj.cwd === "string" ? obj.cwd : "",
+          lastActivityAt,
+          isArchived: obj.isArchived === true,
+          model: typeof obj.model === "string" ? obj.model : "",
+          permissionMode: typeof obj.permissionMode === "string" ? obj.permissionMode : "",
+        });
+      } catch {
+        // skip unreadable / partially-written metadata file
+      }
+    }),
+  );
+  return titles;
 }
 
-async function readHead(path: string, bytes: number): Promise<string> {
-  const handle = await open(path, "r");
-  try {
-    const buf = Buffer.alloc(bytes);
-    const { bytesRead } = await handle.read(buf, 0, bytes, 0);
-    return buf.subarray(0, bytesRead).toString("utf8");
-  } finally {
-    await handle.close();
+// First `cwd` seen in a transcript — the session's project path.
+function firstCwd(chunk: string): string {
+  for (const line of chunk.split("\n")) {
+    if (line.trim().length === 0) continue;
+    try {
+      const obj = JSON.parse(line) as { cwd?: unknown };
+      if (typeof obj.cwd === "string") return obj.cwd;
+    } catch {
+      // partial/non-JSON line — keep scanning
+    }
   }
+  return "";
 }
 
 export async function listSessions(
   root: string,
+  metaDir: string,
   opts: { limit: number; offset: number },
 ): Promise<ClaudeSessionMeta[]> {
+  const titles = await readSessionTitles(metaDir);
+  if (titles.size === 0) return [];
+
   let dirs: string[];
   try {
     dirs = await readdir(root);
   } catch {
     return [];
   }
-  const files: { dir: string; id: string; path: string }[] = [];
+  // Index transcripts the desktop app surfaces (those with metadata) by id.
+  const located = new Map<string, { dir: string; path: string }>();
   for (const dir of dirs) {
     let entries: string[];
     try {
@@ -118,38 +154,38 @@ export async function listSessions(
     }
     for (const entry of entries) {
       if (!entry.endsWith(".jsonl")) continue;
-      files.push({ dir, id: entry.slice(0, -".jsonl".length), path: join(root, dir, entry) });
+      const id = entry.slice(0, -".jsonl".length);
+      if (!titles.has(id) || located.has(id)) continue;
+      located.set(id, { dir, path: join(root, dir, entry) });
     }
   }
+
   const stated = await Promise.all(
-    files.map(async (f) => {
+    [...located].map(async ([id, f]) => {
+      const meta = titles.get(id) as SessionTitle;
       try {
         const s = await stat(f.path);
-        return { ...f, mtimeMs: s.mtimeMs, size: s.size };
+        return {
+          dir: f.dir,
+          id,
+          mtimeMs: s.mtimeMs,
+          size: s.size,
+          title: meta.title,
+          projectLabel: meta.cwd,
+          isArchived: meta.isArchived,
+          model: meta.model,
+          permissionMode: meta.permissionMode,
+          lastActivityAt: meta.lastActivityAt,
+        } satisfies ClaudeSessionMeta;
       } catch {
         return null;
       }
     }),
   );
-  const sorted = stated
+  return stated
     .filter((s): s is NonNullable<typeof s> => s !== null)
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
     .slice(opts.offset, opts.offset + opts.limit);
-
-  return Promise.all(
-    sorted.map(async (s) => {
-      const head = await readHead(s.path, META_SCAN_BYTES).catch(() => "");
-      const { title, projectLabel } = deriveMeta(head);
-      return {
-        dir: s.dir,
-        id: s.id,
-        mtimeMs: s.mtimeMs,
-        size: s.size,
-        title,
-        projectLabel,
-      } satisfies ClaudeSessionMeta;
-    }),
-  );
 }
 
 export async function readTranscript(
@@ -166,7 +202,7 @@ export async function readTranscript(
     return null;
   }
   const messages = parseLines(text);
-  const projectLabel = deriveMeta(text.slice(0, META_SCAN_BYTES)).projectLabel;
+  const projectLabel = firstCwd(text.slice(0, META_SCAN_BYTES));
   return {
     dir,
     id,

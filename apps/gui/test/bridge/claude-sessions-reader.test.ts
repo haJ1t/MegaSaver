@@ -30,9 +30,39 @@ function asstLine(text: string, ts: string): string {
 
 describe("claude-sessions reader", () => {
   let root: string;
+  let metaDir: string;
+
+  // Mirror the desktop app's <metaDir>/<workspace>/<window>/local_*.json layout.
+  function writeMeta(
+    id: string,
+    title: string,
+    cwd = "/Users/me/proj",
+    extra?: {
+      isArchived?: boolean;
+      model?: string;
+      permissionMode?: string;
+      lastActivityAt?: number;
+    },
+  ): void {
+    const dir = join(metaDir, "ws", "win");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, `local_${id}.json`),
+      JSON.stringify({
+        cliSessionId: id,
+        title,
+        cwd,
+        lastActivityAt: extra?.lastActivityAt ?? 1,
+        ...(extra?.isArchived !== undefined ? { isArchived: extra.isArchived } : {}),
+        ...(extra?.model !== undefined ? { model: extra.model } : {}),
+        ...(extra?.permissionMode !== undefined ? { permissionMode: extra.permissionMode } : {}),
+      }),
+    );
+  }
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "cc-projects-"));
+    metaDir = mkdtempSync(join(tmpdir(), "cc-meta-"));
     mkdirSync(join(root, DIR), { recursive: true });
     const a = join(root, DIR, "aaaa.jsonl");
     const b = join(root, DIR, "bbbb.jsonl");
@@ -44,26 +74,67 @@ describe("claude-sessions reader", () => {
     // Make `bbbb` newer so it sorts first.
     utimesSync(a, new Date("2026-06-14T10:00:00Z"), new Date("2026-06-14T10:00:00Z"));
     utimesSync(b, new Date("2026-06-14T11:00:00Z"), new Date("2026-06-14T11:00:00Z"));
+    writeMeta("aaaa", "Alpha session");
+    writeMeta("bbbb", "Beta session");
   });
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true });
+    rmSync(metaDir, { recursive: true, force: true });
   });
 
-  it("lists sessions most-recent first with title + projectLabel", async () => {
-    const sessions = await listSessions(root, { limit: 50, offset: 0 });
+  it("lists most-recent first using titles from the desktop metadata store", async () => {
+    const sessions = await listSessions(root, metaDir, { limit: 50, offset: 0 });
     expect(sessions.map((s) => s.id)).toEqual(["bbbb", "aaaa"]);
-    expect(sessions[0]?.title).toBe("second prompt");
+    expect(sessions[0]?.title).toBe("Beta session");
     expect(sessions[0]?.projectLabel).toBe("/Users/me/proj");
   });
 
+  it("surfaces isArchived/model/permissionMode/lastActivityAt from metadata", async () => {
+    writeMeta("bbbb", "Beta session", "/Users/me/proj", {
+      isArchived: true,
+      model: "claude-sonnet-4-6",
+      permissionMode: "plan",
+      lastActivityAt: 42,
+    });
+    const sessions = await listSessions(root, metaDir, { limit: 50, offset: 0 });
+    const beta = sessions.find((s) => s.id === "bbbb");
+    expect(beta?.isArchived).toBe(true);
+    expect(beta?.model).toBe("claude-sonnet-4-6");
+    expect(beta?.permissionMode).toBe("plan");
+    expect(beta?.lastActivityAt).toBe(42);
+  });
+
+  it("defaults metadata fields when the local file omits them", async () => {
+    const sessions = await listSessions(root, metaDir, { limit: 50, offset: 0 });
+    const alpha = sessions.find((s) => s.id === "aaaa");
+    expect(alpha?.isArchived).toBe(false);
+    expect(alpha?.model).toBe("");
+    expect(alpha?.permissionMode).toBe("");
+    expect(alpha?.lastActivityAt).toBe(1);
+  });
+
+  it("ignores transcripts that have no desktop metadata, even when newer", async () => {
+    const orphan = join(root, DIR, "cccc.jsonl");
+    writeFileSync(orphan, `${userLine("Hello memory agent", "2026-06-14T12:00:00.000Z")}\n`);
+    utimesSync(orphan, new Date("2026-06-14T12:00:00Z"), new Date("2026-06-14T12:00:00Z"));
+    const sessions = await listSessions(root, metaDir, { limit: 50, offset: 0 });
+    expect(sessions.map((s) => s.id)).toEqual(["bbbb", "aaaa"]);
+    expect(sessions.some((s) => s.id === "cccc")).toBe(false);
+  });
+
   it("paginates with limit + offset", async () => {
-    const page = await listSessions(root, { limit: 1, offset: 1 });
+    const page = await listSessions(root, metaDir, { limit: 1, offset: 1 });
     expect(page.map((s) => s.id)).toEqual(["aaaa"]);
   });
 
-  it("returns [] when the root does not exist", async () => {
-    const missing = await listSessions(join(root, "nope"), { limit: 50, offset: 0 });
+  it("returns [] when the metadata store is missing or empty", async () => {
+    const empty = await listSessions(root, join(metaDir, "nope"), { limit: 50, offset: 0 });
+    expect(empty).toEqual([]);
+  });
+
+  it("returns [] when the projects root does not exist", async () => {
+    const missing = await listSessions(join(root, "nope"), metaDir, { limit: 50, offset: 0 });
     expect(missing).toEqual([]);
   });
 

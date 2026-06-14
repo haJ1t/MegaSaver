@@ -4,5 +4,6 @@ export * from "./extract/extract-md.js";
 export * from "./extract/extract-json.js";
 export * from "./scan.js";
 export * from "./store.js";
+export * from "./workspace-store.js";
 export * from "./build.js";
 export * from "./search-blocks.js";

@@ -1,4 +1,4 @@
-import type { Block, BlockKind, NormalizedMessage } from "./types.js";
+import type { Block, BlockKind, MessageMeta, MessageUsage, NormalizedMessage } from "./types.js";
 
 const TOOL_INPUT_MAX = 2000;
 
@@ -17,15 +17,40 @@ interface RawLine {
   type: unknown;
   message: unknown;
   timestamp: unknown;
+  gitBranch: unknown;
 }
 
 interface RawMessage {
   role: unknown;
   content: unknown;
+  model: unknown;
+  usage: unknown;
+}
+
+interface RawUsage {
+  input_tokens: unknown;
+  output_tokens: unknown;
+  cache_creation_input_tokens: unknown;
+  cache_read_input_tokens: unknown;
 }
 
 function isObject(value: unknown): value is object {
   return typeof value === "object" && value !== null;
+}
+
+function num(value: unknown): number {
+  return typeof value === "number" ? value : 0;
+}
+
+function usageFrom(value: unknown): MessageUsage | null {
+  if (!isObject(value)) return null;
+  const u = value as RawUsage;
+  return {
+    inputTokens: num(u.input_tokens),
+    outputTokens: num(u.output_tokens),
+    cacheCreationInputTokens: num(u.cache_creation_input_tokens),
+    cacheReadInputTokens: num(u.cache_read_input_tokens),
+  };
 }
 
 function asRawLine(value: unknown): RawLine | null {
@@ -84,7 +109,21 @@ export function normalizeLine(raw: unknown): NormalizedMessage | null {
   if (blocks.length === 0) return null;
   const ts = typeof line.timestamp === "string" ? line.timestamp : "";
   const role: NormalizedMessage["role"] = type;
-  return { role, ts, blocks } satisfies NormalizedMessage;
+  // exactOptionalPropertyTypes forbids assigning `undefined` to optional fields,
+  // so build `meta` incrementally and only spread it in when it has a signal.
+  const meta: MessageMeta = {};
+  if (typeof message.model === "string") meta.model = message.model;
+  const usage = usageFrom(message.usage);
+  if (usage) meta.usage = usage;
+  if (typeof line.gitBranch === "string" && line.gitBranch.length > 0) {
+    meta.gitBranch = line.gitBranch;
+  }
+  return {
+    role,
+    ts,
+    blocks,
+    ...(Object.keys(meta).length > 0 ? { meta } : {}),
+  } satisfies NormalizedMessage;
 }
 
-export type { Block, BlockKind, NormalizedMessage };
+export type { Block, BlockKind, MessageMeta, MessageUsage, NormalizedMessage };

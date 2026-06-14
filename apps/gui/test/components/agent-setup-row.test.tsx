@@ -16,7 +16,7 @@ afterEach(cleanup);
 
 describe("AgentSetupRow", () => {
   it("shows a Set up action when not installed", () => {
-    render(<AgentSetupRow agent={base} busy={false} projectSelected onAction={() => {}} />);
+    render(<AgentSetupRow agent={base} busy={false} onAction={() => {}} />);
     expect(screen.getByRole("button", { name: /Set up/i })).toBeDefined();
   });
 
@@ -25,7 +25,6 @@ describe("AgentSetupRow", () => {
       <AgentSetupRow
         agent={{ ...base, mcpInstalled: true, connectorSynced: false }}
         busy={false}
-        projectSelected
         onAction={() => {}}
       />,
     );
@@ -37,7 +36,6 @@ describe("AgentSetupRow", () => {
       <AgentSetupRow
         agent={{ ...base, mcpInstalled: true, connectorSynced: true, restartRequired: true }}
         busy={false}
-        projectSelected
         onAction={() => {}}
       />,
     );
@@ -51,32 +49,31 @@ describe("AgentSetupRow", () => {
 
   it("fires onAction with the right verb on click", () => {
     const onAction = vi.fn();
-    render(<AgentSetupRow agent={base} busy={false} projectSelected onAction={onAction} />);
+    render(<AgentSetupRow agent={base} busy={false} onAction={onAction} />);
     fireEvent.click(screen.getByRole("button", { name: /Set up/i }));
     expect(onAction).toHaveBeenCalledWith("install");
   });
 
   it("renders the agent id", () => {
-    render(<AgentSetupRow agent={base} busy={false} projectSelected onAction={() => {}} />);
+    render(<AgentSetupRow agent={base} busy={false} onAction={() => {}} />);
     expect(screen.getByText("claude-code")).toBeDefined();
   });
 
-  it("disables install/repair and shows a hint when no project is selected", () => {
-    render(<AgentSetupRow agent={base} busy={false} projectSelected={false} onAction={() => {}} />);
-    expect(screen.getByRole("button", { name: /Set up/i }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByText(/Pick a project/i)).toBeDefined();
+  it("install/repair are enabled with no project notice (project-free shell)", () => {
+    render(<AgentSetupRow agent={base} busy={false} onAction={() => {}} />);
+    expect(screen.getByRole("button", { name: /Set up/i }).hasAttribute("disabled")).toBe(false);
+    expect(screen.queryByText(/Pick a project/i)).toBeNull();
   });
 
-  it("does NOT gate uninstall on project selection", () => {
+  it("uninstall stays enabled", () => {
     render(
       <AgentSetupRow
         agent={{ ...base, mcpInstalled: true, connectorSynced: true, restartRequired: false }}
         busy={false}
-        projectSelected={false}
         onAction={() => {}}
       />,
     );
-    // Ready state → Uninstall, which needs no project.
+    // Ready state → Uninstall.
     expect(screen.getByRole("button", { name: /Uninstall/i }).hasAttribute("disabled")).toBe(false);
   });
 });

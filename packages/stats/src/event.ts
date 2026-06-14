@@ -21,3 +21,26 @@ export const tokenSaverEventSchema = z
   .strict();
 
 export type TokenSaverEvent = z.infer<typeof tokenSaverEventSchema>;
+
+// F4 live-first variant: (projectId, sessionId) → (workspaceKey, liveSessionId).
+// Both keys are permissive path-safe strings (workspaceKey is the F3 cwd hash,
+// liveSessionId the transcript uuid) — never re-branded to the project FK pair.
+export const overlayTokenSaverEventSchema = z
+  .object({
+    id: z.string().min(1),
+    liveSessionId: z.string().min(1),
+    workspaceKey: z.string().min(1),
+    createdAt: z.string().datetime({ offset: true }),
+    sourceKind: outputSourceKindSchema,
+    label: z.string(),
+    rawBytes: z.number().int().nonnegative(),
+    returnedBytes: z.number().int().nonnegative(),
+    bytesSaved: z.number().int().nonnegative(),
+    savingRatio: z.number().min(0).max(1),
+    chunkSetId: z.string().min(1).optional(),
+    summary: z.string(),
+    mode: tokenSaverModeSchema,
+  })
+  .strict();
+
+export type OverlayTokenSaverEvent = z.infer<typeof overlayTokenSaverEventSchema>;
