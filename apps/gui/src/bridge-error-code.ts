@@ -2,6 +2,7 @@
 // New codes require this list to grow + a fresh .test-d.ts assertion update.
 // Mirrored in apps/gui/bridge/server.ts (bridge side).
 export const BRIDGE_ERROR_CODES = [
+  "claude_session_not_found",
   "event_not_found",
   "index_unavailable",
   "internal_error",
@@ -23,6 +24,7 @@ export type BridgeErrorCode = (typeof BRIDGE_ERROR_CODES)[number];
 // Human-readable copy map used by ErrorState component.
 // Falls back to the bridge's `error` string field for unknown codes.
 export const BRIDGE_ERROR_COPY: Record<BridgeErrorCode, string> = {
+  claude_session_not_found: "Claude Code session not found. It may have been removed.",
   event_not_found: "Event not found, or it has no stored output.",
   index_unavailable:
     "The semantic index is missing or corrupt. Rebuild it with `mega index build`.",
