@@ -76,6 +76,17 @@ export function fetchClaudeSessions(limit = 50, offset = 0): Promise<ClaudeSessi
   return getJson<ClaudeSessionMeta[]>(`/api/claude-sessions?limit=${limit}&offset=${offset}`);
 }
 
+export type Workspace = {
+  key: string;
+  label: string;
+  sessionCount: number;
+  lastActivityMs: number;
+};
+
+export function fetchWorkspaces(limit = 50, offset = 0): Promise<Workspace[]> {
+  return getJson<Workspace[]>(`/api/workspaces?limit=${limit}&offset=${offset}`);
+}
+
 export function fetchClaudeSessionTelemetry(dir: string, id: string): Promise<SessionTelemetry> {
   return getJson<SessionTelemetry>(
     `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/telemetry`,
