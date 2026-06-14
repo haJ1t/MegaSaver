@@ -37,6 +37,11 @@ export type ClaudeTranscriptSnapshot = {
   projectLabel: string;
   messages: NormalizedMessage[];
 };
+export type ClaudeWorkspaceGroup = {
+  cwd: string;
+  label: string;
+  sessions: ClaudeSessionMeta[];
+};
 export type ModelUsage = {
   model: string;
   turns: number;
