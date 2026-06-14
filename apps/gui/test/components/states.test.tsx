@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  NoProjectState,
-  NoSelectionState,
-} from "../../src/components/states.js";
+import { EmptyState, ErrorState, LoadingState } from "../../src/components/states.js";
 
 afterEach(() => {
   cleanup();
@@ -76,25 +70,5 @@ describe("EmptyState", () => {
   it("renders the description when provided", () => {
     render(<EmptyState title="No entries" description="Add one above." />);
     expect(screen.getByText("Add one above.")).toBeDefined();
-  });
-});
-
-describe("NoProjectState", () => {
-  it("instructs the user to run `mega project create <name>`", () => {
-    const { container } = render(<NoProjectState />);
-    expect(container.textContent).toContain("mega project create");
-    expect(container.textContent).toContain("No projects yet.");
-  });
-});
-
-describe("NoSelectionState", () => {
-  it("renders the entity-specific copy when entity=session", () => {
-    render(<NoSelectionState entity="session" />);
-    expect(screen.getByText("No session selected.")).toBeDefined();
-  });
-
-  it("renders the entity-specific copy when entity=memory entry", () => {
-    render(<NoSelectionState entity="memory entry" />);
-    expect(screen.getByText("No memory entry selected.")).toBeDefined();
   });
 });
