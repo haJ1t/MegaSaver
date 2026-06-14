@@ -14,6 +14,16 @@ export type EffectiveSettings = {
   permissions: ProjectPermissions | null;
 };
 
+// F4 live-first variant: no projectId FK; cwd replaces projectRoot. Token-saver
+// settings are caller-resolved from the workspace overlay, not a Session record.
+export type OverlayEffectiveSettings = {
+  cwd: string;
+  mode: TokenSaverMode;
+  maxReturnedBytes: number | undefined;
+  storeRawOutput: boolean;
+  permissions: ProjectPermissions | null;
+};
+
 // resolveEffectiveSettings can fail two ways: the session is unknown, or the
 // project permissions file is present-but-malformed (the loader throws). A
 // discriminated result keeps the malformed-file failure typed all the way to
