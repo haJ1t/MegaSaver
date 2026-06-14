@@ -1,5 +1,5 @@
 import { unwatchFile, watchFile } from "node:fs";
-import { open, readFile, readdir, stat } from "node:fs/promises";
+import { open, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { normalizeLine } from "./parse.js";
 import type { ClaudeSessionMeta, ClaudeTranscript, NormalizedMessage } from "./types.js";
@@ -20,12 +20,25 @@ function isSafeSegment(value: string): boolean {
 // Resolve <root>/<dir>/<id>.jsonl, rejecting any traversal. Returns null when
 // `dir`/`id` are unsafe or escape the projects root. Security-critical: both
 // segments arrive from the URL.
-export function safeSessionPath(root: string, dir: string, id: string): string | null {
+export async function safeSessionPath(
+  root: string,
+  dir: string,
+  id: string,
+): Promise<string | null> {
   if (!isSafeSegment(dir) || !isSafeSegment(id)) return null;
   const base = resolve(root);
   const candidate = resolve(base, dir, `${id}.jsonl`);
   if (candidate !== join(base, dir, `${id}.jsonl`)) return null;
   if (!candidate.startsWith(base + sep)) return null;
+  // Defence-in-depth: if the path exists, resolve symlinks on BOTH base and
+  // candidate and re-check containment, so a symlinked dir cannot escape root.
+  // A non-existent path is NOT rejected here (not-found is handled downstream).
+  try {
+    const [realBase, realCandidate] = await Promise.all([realpath(base), realpath(candidate)]);
+    if (!realCandidate.startsWith(realBase + sep)) return null;
+  } catch {
+    // base or candidate doesn't exist yet — lexical checks already passed.
+  }
   return candidate;
 }
 
@@ -144,7 +157,7 @@ export async function readTranscript(
   dir: string,
   id: string,
 ): Promise<ClaudeTranscript | null> {
-  const path = safeSessionPath(root, dir, id);
+  const path = await safeSessionPath(root, dir, id);
   if (!path) return null;
   let text: string;
   try {

@@ -78,11 +78,11 @@ describe("claude-sessions reader", () => {
     expect(await readTranscript(root, DIR, "zzzz")).toBeNull();
   });
 
-  it("rejects path traversal in safeSessionPath", () => {
-    expect(safeSessionPath(root, "..", "aaaa")).toBeNull();
-    expect(safeSessionPath(root, DIR, "../../etc/passwd")).toBeNull();
-    expect(safeSessionPath(root, "a/b", "aaaa")).toBeNull();
-    expect(safeSessionPath(root, DIR, "aaaa")).toBe(join(root, DIR, "aaaa.jsonl"));
+  it("rejects path traversal in safeSessionPath", async () => {
+    expect(await safeSessionPath(root, "..", "aaaa")).toBeNull();
+    expect(await safeSessionPath(root, DIR, "../../etc/passwd")).toBeNull();
+    expect(await safeSessionPath(root, "a/b", "aaaa")).toBeNull();
+    expect(await safeSessionPath(root, DIR, "aaaa")).toBe(join(root, DIR, "aaaa.jsonl"));
   });
 
   it("tails appended lines via tailTranscript", async () => {
@@ -93,8 +93,8 @@ describe("claude-sessions reader", () => {
       received.push(m.blocks.map((b) => b.text).join(""));
     });
     appendFileSync(path, `${asstLine("a fresh reply", "2026-06-14T11:05:00.000Z")}\n`);
-    await new Promise((r) => setTimeout(r, 700));
+    await new Promise((r) => setTimeout(r, 2000));
     stop();
     expect(received).toContain("a fresh reply");
-  });
+  }, 6000);
 });

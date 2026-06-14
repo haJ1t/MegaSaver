@@ -15,7 +15,7 @@ describe("normalizeLine", () => {
     });
   });
 
-  it("normalizes an assistant line with thinking, text and tool_use blocks", () => {
+  it("normalizes an assistant line with thinking, text, tool_use and tool_result blocks", () => {
     const msg = normalizeLine({
       type: "assistant",
       timestamp: "2026-06-14T10:00:01.000Z",
@@ -25,6 +25,7 @@ describe("normalizeLine", () => {
           { type: "thinking", thinking: "let me think", signature: "x" },
           { type: "text", text: "the answer" },
           { type: "tool_use", name: "Bash", input: { command: "ls" } },
+          { type: "tool_result", content: "exit 0" },
         ],
       },
     });
@@ -33,7 +34,21 @@ describe("normalizeLine", () => {
       { kind: "thinking", text: "let me think" },
       { kind: "text", text: "the answer" },
       { kind: "tool_use", text: 'Bash({"command":"ls"})' },
+      { kind: "tool_result", text: "exit 0" },
     ]);
+  });
+
+  it("truncates a long tool_use input", () => {
+    const msg = normalizeLine({
+      type: "assistant",
+      timestamp: "2026-06-14T10:00:02.000Z",
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", name: "Bash", input: { command: "x".repeat(3000) } }],
+      },
+    });
+    expect(msg?.blocks[0]?.kind).toBe("tool_use");
+    expect(msg?.blocks[0]?.text.length ?? 0).toBeLessThanOrEqual(2010);
   });
 
   it("returns null for attachment, queue-operation, last-prompt, system lines", () => {
