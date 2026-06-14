@@ -134,6 +134,24 @@ export const MEMORY_PATCH_BODY = memoryEntryUpdatePatchSchema
     message: "PATCH body must contain at least one editable field.",
   });
 
+// F4 live memory create surface. No projectId/sessionId/workspaceKey — the key
+// is resolved server-side from the (dir,id) URL segments. `scope` alone picks
+// session- vs workspace-scope; liveSessionId is the resolved session id.
+export const CREATE_LIVE_MEMORY_BODY = z
+  .object({
+    content: z.string().trim().min(1),
+    scope: memoryScopeSchema,
+    type: memoryTypeSchema.optional(),
+    title: TITLE_SCHEMA.optional(),
+    confidence: memoryConfidenceSchema.optional(),
+    source: memorySourceSchema.optional(),
+    keywords: z.array(z.string().trim().min(1)).optional(),
+    reason: z.string().trim().min(1).optional(),
+    goal: z.string().trim().min(1).optional(),
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+  })
+  .strict();
+
 export function zodErrorMessage(err: z.ZodError): string {
   const first = err.issues[0];
   return first ? `${first.path.join(".") || "body"}: ${first.message}` : "Validation failed.";

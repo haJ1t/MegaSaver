@@ -9,6 +9,12 @@ import { applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
 import { handleCaughtError } from "./error-mapping.js";
 import type { RouteContext, SendError, SendJson, SendText } from "./route-context.js";
 import {
+  handleDeleteSessionMemory,
+  handleGetSessionMemory,
+  handlePatchSessionMemory,
+  handlePostSessionMemory,
+} from "./routes/claude-session-memory.js";
+import {
   handleGetClaudeSession,
   handleGetClaudeSessionTelemetry,
   handleListClaudeSessions,
@@ -276,6 +282,36 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         methodNotAllowed(res, method, origin),
       );
       if (dispatched) return;
+    }
+
+    const claudeMemoryMatch = path.match(
+      /^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/memory(?:\/([^/]+))?$/,
+    );
+    if (claudeMemoryMatch) {
+      const dir = decodeURIComponent(claudeMemoryMatch[1] as string);
+      const id = decodeURIComponent(claudeMemoryMatch[2] as string);
+      const entryId = claudeMemoryMatch[3];
+      if (entryId === undefined) {
+        if (method === "GET") {
+          await handleGetSessionMemory(ctx, dir, id);
+          return;
+        }
+        if (method === "POST") {
+          await handlePostSessionMemory(ctx, dir, id);
+          return;
+        }
+        return methodNotAllowed(res, method, origin);
+      }
+      const decodedEntryId = decodeURIComponent(entryId);
+      if (method === "PATCH") {
+        await handlePatchSessionMemory(ctx, dir, id, decodedEntryId);
+        return;
+      }
+      if (method === "DELETE") {
+        await handleDeleteSessionMemory(ctx, dir, id, decodedEntryId);
+        return;
+      }
+      return methodNotAllowed(res, method, origin);
     }
 
     const claudeMatch = path.match(

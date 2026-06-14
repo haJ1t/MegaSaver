@@ -33,6 +33,17 @@ export type StoreSeed = {
     blocks: unknown[];
     manifest?: { files: Record<string, { fileHash: string; blockIds: string[] }> };
   }[];
+  // Phase 4 session-scoped overlay layout (keyed by workspaceKey/liveSessionId).
+  overlayMemory?: { workspaceKey: string; lines: unknown[] }[];
+  overlayTasks?: { workspaceKey: string; liveSessionId: string | null; lines: unknown[] }[];
+  overlaySummaries?: { workspaceKey: string; liveSessionId: string; summary: unknown }[];
+  overlayEvents?: { workspaceKey: string; liveSessionId: string; lines: (unknown | string)[] }[];
+  overlayChunkSets?: {
+    workspaceKey: string;
+    liveSessionId: string;
+    chunkSetId: string;
+    chunkSet: unknown;
+  }[];
 };
 
 function seedStore(root: string, seed: StoreSeed): void {
@@ -68,6 +79,31 @@ function seedStore(root: string, seed: StoreSeed): void {
       join(dir, "manifest.json"),
       `${JSON.stringify(idx.manifest ?? { files: {} }, null, 2)}\n`,
     );
+  }
+  for (const m of seed.overlayMemory ?? []) {
+    seedJsonl(join(root, "memory", `${m.workspaceKey}.jsonl`), m.lines);
+  }
+  for (const t of seed.overlayTasks ?? []) {
+    const segment = t.liveSessionId ?? "_workspace";
+    seedJsonl(join(root, "tasks", t.workspaceKey, `${segment}.jsonl`), t.lines);
+  }
+  for (const s of seed.overlaySummaries ?? []) {
+    const p = join(root, "stats", s.workspaceKey, `${s.liveSessionId}.json`);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, JSON.stringify(s.summary));
+  }
+  for (const e of seed.overlayEvents ?? []) {
+    const p = join(root, "stats", e.workspaceKey, `${e.liveSessionId}.events.jsonl`);
+    mkdirSync(dirname(p), { recursive: true });
+    const body = e.lines
+      .map((line) => (typeof line === "string" ? line : JSON.stringify(line)))
+      .join("\n");
+    writeFileSync(p, `${body}\n`);
+  }
+  for (const c of seed.overlayChunkSets ?? []) {
+    const p = join(root, "content", c.workspaceKey, c.liveSessionId, `${c.chunkSetId}.json`);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, JSON.stringify(c.chunkSet));
   }
 }
 
