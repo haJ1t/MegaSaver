@@ -8,7 +8,7 @@ import {
   upsertContextGateBlockText,
 } from "../src/index.js";
 
-const block = (mode = "balanced", bytes = 12_000) =>
+const block = (mode: "aggressive" | "balanced" | "safe" = "balanced", bytes = 12_000) =>
   renderContextGateBlockText({
     sessionId: "(workspace-wide)",
     projectId: "my-app",
