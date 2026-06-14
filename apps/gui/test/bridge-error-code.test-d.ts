@@ -5,6 +5,7 @@ describe("BridgeErrorCode tuple ordering", () => {
   it("pins exhaustive alphabetic tuple", () => {
     expectTypeOf<typeof BRIDGE_ERROR_CODES>().toEqualTypeOf<
       readonly [
+        "claude_session_not_found",
         "event_not_found",
         "index_unavailable",
         "internal_error",
@@ -26,6 +27,7 @@ describe("BridgeErrorCode tuple ordering", () => {
 
   it("BridgeErrorCode is the union of the tuple members", () => {
     expectTypeOf<BridgeErrorCode>().toEqualTypeOf<
+      | "claude_session_not_found"
       | "event_not_found"
       | "index_unavailable"
       | "internal_error"

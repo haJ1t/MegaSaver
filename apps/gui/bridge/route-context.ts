@@ -34,6 +34,9 @@ export type RouteContext = {
   origin: string | undefined;
   query: URLSearchParams;
   storeRoot: string;
+  // Absolute path to ~/.claude/projects (overridable in tests). Read-only source
+  // for the Claude Code live-sessions routes.
+  claudeProjectsDir: string;
   newId: () => string;
   now: () => string;
   sendJson: SendJson;

@@ -1,11 +1,18 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { CoreRegistry } from "@megasaver/core";
 import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
 import { applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
 import { handleCaughtError } from "./error-mapping.js";
 import type { RouteContext, SendError, SendJson, SendText } from "./route-context.js";
+import {
+  handleGetClaudeSession,
+  handleListClaudeSessions,
+  handleStreamClaudeSession,
+} from "./routes/claude-sessions.js";
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
 import {
@@ -37,6 +44,8 @@ export interface BridgeHandlerOptions {
    *  Production server.ts passes buildMcpSetupOps(...); omitted only in tests
    *  that exercise non-mcp routes (then an empty-status fallback is used). */
   mcpOps?: McpSetupOps;
+  /** Override for tests; defaults to ~/.claude/projects. */
+  claudeProjectsDir?: string;
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -107,6 +116,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
   const newId = opts.newId ?? randomUUID;
   const now = opts.now ?? (() => new Date().toISOString());
   const storePath = opts.storePath ?? "";
+  const claudeProjectsDir = opts.claudeProjectsDir ?? join(homedir(), ".claude", "projects");
 
   // Test-only fallback when no ops injected; production server.ts (BB8)
   // always passes buildMcpSetupOps(...). Reports an empty agent list so
@@ -154,6 +164,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       origin,
       query,
       storeRoot: storePath,
+      claudeProjectsDir,
       newId,
       now,
       sendJson,
@@ -233,6 +244,25 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         methodNotAllowed(res, method, origin),
       );
       if (dispatched) return;
+    }
+
+    if (path === "/api/claude-sessions") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleListClaudeSessions(ctx);
+      return;
+    }
+
+    const claudeMatch = path.match(/^\/api\/claude-sessions\/([^/]+)\/([^/]+?)(\/stream)?$/);
+    if (claudeMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      const dir = decodeURIComponent(claudeMatch[1] as string);
+      const id = decodeURIComponent(claudeMatch[2] as string);
+      if (claudeMatch[3] === "/stream") {
+        await handleStreamClaudeSession(ctx, dir, id);
+      } else {
+        await handleGetClaudeSession(ctx, dir, id);
+      }
+      return;
     }
 
     if (path === "/api/memory") {
