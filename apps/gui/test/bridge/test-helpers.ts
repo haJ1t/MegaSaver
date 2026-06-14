@@ -25,6 +25,14 @@ export type StoreSeed = {
   summaries?: { projectId: string; sessionId: string; summary: SessionTokenSaverStats }[];
   events?: { projectId: string; sessionId: string; lines: (TokenSaverEvent | string)[] }[];
   chunkSets?: { projectId: string; sessionId: string; chunkSet: ChunkSet }[];
+  // Phase 3 workspace overlay layout (keyed by workspaceKey, not projectId).
+  workspaceRules?: { workspaceKey: string; lines: unknown[] }[];
+  workspaceTools?: { workspaceKey: string; lines: unknown[] }[];
+  workspaceIndex?: {
+    workspaceKey: string;
+    blocks: unknown[];
+    manifest?: { files: Record<string, { fileHash: string; blockIds: string[] }> };
+  }[];
 };
 
 function seedStore(root: string, seed: StoreSeed): void {
@@ -46,6 +54,29 @@ function seedStore(root: string, seed: StoreSeed): void {
     mkdirSync(dirname(p), { recursive: true });
     writeFileSync(p, JSON.stringify(c.chunkSet));
   }
+  for (const r of seed.workspaceRules ?? []) {
+    seedJsonl(join(root, "rules", `${r.workspaceKey}.jsonl`), r.lines);
+  }
+  for (const t of seed.workspaceTools ?? []) {
+    seedJsonl(join(root, "tools", `${t.workspaceKey}.jsonl`), t.lines);
+  }
+  for (const idx of seed.workspaceIndex ?? []) {
+    const dir = join(root, "index", idx.workspaceKey);
+    seedJsonl(join(dir, "blocks.jsonl"), idx.blocks);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "manifest.json"),
+      `${JSON.stringify(idx.manifest ?? { files: {} }, null, 2)}\n`,
+    );
+  }
+}
+
+function seedJsonl(filePath: string, lines: unknown[]): void {
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(
+    filePath,
+    lines.map((line) => JSON.stringify(line)).join("\n") + (lines.length > 0 ? "\n" : ""),
+  );
 }
 
 export async function startTestBridge(seed?: {

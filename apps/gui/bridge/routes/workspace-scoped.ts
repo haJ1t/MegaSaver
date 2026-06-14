@@ -1,5 +1,6 @@
 import type { RouteContext } from "../route-context.js";
 import { resolveWorkspaceKey } from "./_workspace.js";
+import { handleGetWorkspaceIndexSearch, handleGetWorkspaceIndexStatus } from "./workspace-index.js";
 import { handleGetWorkspaceRules } from "./workspace-rules.js";
 
 // /api/workspaces/:key/<segment>[/search] — all read-only (GET). Mirrors
@@ -18,6 +19,7 @@ export async function dispatchWorkspaceScoped(
   if (!match) return false;
   const keyRaw = match[1] as string;
   const segment = match[2] as string;
+  const sub = match[3];
 
   if (method !== "GET") {
     onMethodNotAllowed();
@@ -27,10 +29,15 @@ export async function dispatchWorkspaceScoped(
   const key = resolveWorkspaceKey(ctx, keyRaw);
   if (!key) return true;
 
+  if (segment === "index") {
+    if (sub === "search") handleGetWorkspaceIndexSearch(ctx, key);
+    else handleGetWorkspaceIndexStatus(ctx, key);
+    return true;
+  }
   if (segment === "rules") {
     handleGetWorkspaceRules(ctx, key);
     return true;
   }
-  // index/context/tools/permissions are wired in Tasks 7, 9, 10, 11.
+  // context/tools/permissions are wired in Tasks 9, 10, 11.
   return false;
 }
