@@ -6,7 +6,7 @@ sources:
   - docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design.md
 status: shipped
 created: 2026-05-07
-updated: 2026-06-14
+updated: 2026-06-15
 ---
 
 # `@megasaver/connectors-shared`
@@ -27,6 +27,13 @@ agents — `agentId` is data carried through `ConnectorContext`.
   `block_conflict` with offending sentinel line numbers in the message
 - `upsertBlock({ existingContent, context })` — preserves dominant
   EOL (CRLF / LF) of input
+- `renderContextGateBlockText({ sessionId, projectId, mode, maxReturnedBytes })`
+  — pure CONTEXT_GATE block text (no `ConnectorContext`); `renderContextGateBlock`
+  delegates to it (byte-identical). Lets the GUI bridge render the block from
+  cwd-keyed settings without a registry session (2026-06-14).
+- `upsertContextGateBlockText(existingContent, block)` — CONTEXT_GATE-only
+  upsert; never touches the legacy block; empty `block` ⇒ remove. Preserves
+  dominant EOL.
 - `removeBlock(content)` — preserves dominant EOL
 - `readTargetFile(absPath)` — `null` on ENOENT
 - `writeTargetFile({ absPath, content })` — temp-file + rename;

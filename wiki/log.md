@@ -2283,3 +2283,23 @@ mega_read_file/mega_run_command/mega_fetch_chunk → proxy_* and passes every
 other name through in both modes. CLI registers all Phase 0–10 subcommands plus
 the hooks group. stats exports both the v1.2 proxy metrics and the Phase 8
 AuditEvent family. README kept at the v1.2 version.
+
+## [2026-06-15] feature | GUI workspace-scoped Saver Mode activation
+
+Re-hosted token-saver activation after the live-first pivot (PR #134) orphaned
+it. Investigation: `tokenSaver.enabled` is NOT a runtime compression gate —
+runtime compression (`filterOutput`) keys on `mode`/budget only; `enabled` is
+read solely by `connectors-shared/context-gate-block.ts` to decide whether to
+render the `CONTEXT_GATE` block into `<cwd>/CLAUDE.md`. So real activation is
+inherently per-workspace (cwd), not per Claude session (the MCP bridge never
+receives a Claude session id per call → no per-session runtime isolation).
+
+Shipped (Engine Option A — render-in-bridge): connectors-shared
+`renderContextGateBlockText` + `upsertContextGateBlockText` (CG-only, no
+ConnectorContext); GUI bridge route
+`/api/claude-sessions/:dir/:id/token-saver/workspace` (cwd server-derived,
+writes CLAUDE.md via sentinel-bounded atomic helpers, reports `mcpInstalled`);
+GUI `ws-token-saver` "Saver Mode" workspace panel. Followed full superpowers
+chain (HIGH risk, worktree, spec+plan, TDD, two-stage subagent review).
+Follow-up tracked: explicit `ConnectorError` mapping in bridge error-mapping.
+Spec: docs/superpowers/specs/2026-06-14-gui-workspace-token-saver-activation-design.md.
