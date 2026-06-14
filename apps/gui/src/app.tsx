@@ -1,10 +1,12 @@
 import type { Project } from "@megasaver/core";
 import { useEffect, useState } from "react";
+import { SessionCockpit } from "./cockpit/session-cockpit.js";
 import { ProjectCreateForm } from "./components/project-create-form.js";
 import { ProjectPicker, readPersistedProjectId } from "./components/project-picker.js";
 import { ErrorState, LoadingState, NoProjectState } from "./components/states.js";
 import type { BridgeError } from "./components/states.js";
 import { fetchProjects } from "./lib/api-client.js";
+import type { ClaudeSessionMeta } from "./lib/claude-sessions-client.js";
 import { PROJECT_SCOPED_VIEWS, VIEW_LABELS, type ViewId } from "./view-id.js";
 import { AgentSetupDoctor } from "./views/agent-setup-doctor.js";
 import { ClaudeSessionsView } from "./views/claude-sessions-view.js";
@@ -16,6 +18,9 @@ import { RulesView } from "./views/rules-view.js";
 import { SessionsView } from "./views/sessions-view.js";
 import { TasksView } from "./views/tasks-view.js";
 import { ToolsView } from "./views/tools-view.js";
+import { WorkspaceSessionList } from "./views/workspace-session-list.js";
+
+type ShellMode = "live" | "legacy";
 
 // Sidebar groups. Order is logical (not the enum's alphabetic pin): the project
 // workspace first, global tools below.
@@ -29,6 +34,57 @@ const NAV_GROUPS: ReadonlyArray<{ heading: string; views: readonly ViewId[] }> =
 ];
 
 export function App(): JSX.Element {
+  const [shellMode, setShellMode] = useState<ShellMode>("live");
+
+  return (
+    <div className="flex flex-col h-screen overflow-hidden bg-background">
+      <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-border bg-surface shrink-0">
+        <span className="text-sm font-medium text-text-primary tracking-tight select-none">
+          Mega Saver
+        </span>
+        <div className="flex items-center gap-1">
+          {(["live", "legacy"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              aria-current={shellMode === mode ? "page" : undefined}
+              onClick={() => setShellMode(mode)}
+              className={[
+                "px-2.5 py-1 text-xs rounded-md transition-colors duration-150 cursor-pointer",
+                "focus-visible:outline-2 focus-visible:outline-offset-2",
+                shellMode === mode
+                  ? "bg-accent/15 text-text-primary font-medium"
+                  : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated",
+              ].join(" ")}
+            >
+              {mode === "live" ? "Live" : "Legacy"}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {shellMode === "live" ? <LiveShell /> : <LegacyShell />}
+    </div>
+  );
+}
+
+function LiveShell(): JSX.Element {
+  const [selected, setSelected] = useState<ClaudeSessionMeta | null>(null);
+
+  if (selected)
+    return (
+      <SessionCockpit
+        dir={selected.dir}
+        id={selected.id}
+        cwd={selected.projectLabel}
+        title={selected.title}
+        onBack={() => setSelected(null)}
+      />
+    );
+  return <WorkspaceSessionList onSelect={setSelected} />;
+}
+
+function LegacyShell(): JSX.Element {
   const [view, setView] = useState<ViewId>("overview");
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -103,23 +159,17 @@ export function App(): JSX.Element {
   const showContent = projectsState === "ready" && !!activeProjectId;
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background">
-      <header className="flex items-center justify-between gap-4 px-4 py-2 border-b border-border bg-surface shrink-0">
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-text-primary tracking-tight select-none">
-            Mega Saver
-          </span>
-          {projectsState === "ready" && (
-            <ProjectPicker
-              projects={projects}
-              activeId={activeProjectId}
-              onSelect={setActiveProjectId}
-            />
-          )}
-          {projectsState === "ready" && <ProjectCreateForm onCreated={handleProjectCreated} />}
-        </div>
-      </header>
-
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="flex items-center gap-4 px-4 py-2 border-b border-border bg-surface shrink-0">
+        {projectsState === "ready" && (
+          <ProjectPicker
+            projects={projects}
+            activeId={activeProjectId}
+            onSelect={setActiveProjectId}
+          />
+        )}
+        {projectsState === "ready" && <ProjectCreateForm onCreated={handleProjectCreated} />}
+      </div>
       <div className="flex flex-1 min-h-0">
         {/* Sidebar nav */}
         <nav

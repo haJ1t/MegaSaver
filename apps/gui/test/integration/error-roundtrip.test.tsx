@@ -63,6 +63,7 @@ describe("Bridge error roundtrip", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Legacy" }));
     fireEvent.click(await screen.findByRole("button", { name: "Sessions" }));
     await waitFor(() => expect(screen.getByText("boom")).toBeDefined());
     fireEvent.click(screen.getByText("boom"));
@@ -102,6 +103,7 @@ describe("Bridge error roundtrip", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Legacy" }));
     fireEvent.click(await screen.findByRole("button", { name: "Sessions" }));
     await waitFor(() => expect(screen.getByText("No sessions yet.")).toBeDefined());
     fireEvent.click(screen.getByRole("button", { name: "Create new session" }));

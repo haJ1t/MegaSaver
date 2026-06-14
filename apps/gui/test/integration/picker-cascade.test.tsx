@@ -76,6 +76,7 @@ describe("Picker cascade — list filters by active project", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Legacy" }));
     // Wait for the picker to render.
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Active project/ })).toBeDefined(),
@@ -118,6 +119,7 @@ describe("Picker cascade — list filters by active project", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Legacy" }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Active project/ })).toBeDefined(),
     );

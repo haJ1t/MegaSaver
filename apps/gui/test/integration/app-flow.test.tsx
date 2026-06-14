@@ -45,10 +45,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("App — view switching", () => {
-  it("sets aria-current='page' on the Overview button by default", async () => {
+// The live-first shell defaults to Live mode; the project shell now lives under
+// the Legacy toggle. Each legacy assertion enters Legacy mode first (spec §6 risk 2).
+function enterLegacy(): void {
+  fireEvent.click(screen.getByRole("button", { name: "Legacy" }));
+}
+
+describe("App — view switching (legacy mode)", () => {
+  it("sets aria-current='page' on the Overview button by default in Legacy mode", async () => {
     stubFetchOneProject();
     render(<App />);
+    enterLegacy();
     const btn = await screen.findByRole("button", { name: "Overview" });
     expect(btn.getAttribute("aria-current")).toBe("page");
   });
@@ -56,6 +63,7 @@ describe("App — view switching", () => {
   it("switches aria-current to the Memory button when clicked", async () => {
     stubFetchOneProject();
     render(<App />);
+    enterLegacy();
     await screen.findByRole("button", { name: "Memory" });
     fireEvent.click(screen.getByRole("button", { name: "Memory" }));
     expect(screen.getByRole("button", { name: "Memory" }).getAttribute("aria-current")).toBe(
@@ -66,6 +74,7 @@ describe("App — view switching", () => {
   it("clears aria-current on the previously active button after switching", async () => {
     stubFetchOneProject();
     render(<App />);
+    enterLegacy();
     await screen.findByRole("button", { name: "Memory" });
     fireEvent.click(screen.getByRole("button", { name: "Memory" }));
     expect(
@@ -74,9 +83,10 @@ describe("App — view switching", () => {
   });
 });
 
-describe("App — picker visibility and project gating", () => {
+describe("App — picker visibility and project gating (legacy mode)", () => {
   it("renders the NoProjectState helper when the store has no projects", async () => {
     render(<App />);
+    enterLegacy();
     await waitFor(() => expect(screen.getByText("No projects yet.")).toBeDefined());
     expect(screen.getByText(/mega project create/)).toBeDefined();
   });
@@ -84,23 +94,26 @@ describe("App — picker visibility and project gating", () => {
   it("renders 'Pick a project to begin.' when projects exist but none selected", async () => {
     stubFetchOneProject();
     render(<App />);
+    enterLegacy();
     await waitFor(() => expect(screen.getByText("Pick a project to begin.")).toBeDefined());
   });
 
   it("shows the project picker only after projects load (not during loading)", async () => {
     stubFetchOneProject();
     render(<App />);
+    enterLegacy();
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Active project/ })).toBeDefined(),
     );
   });
 });
 
-describe("App — localStorage restore", () => {
+describe("App — localStorage restore (legacy mode)", () => {
   it("restores a persisted project id that matches an existing project", async () => {
     localStorage.setItem("megasaver:gui:v1:active-project-id", PROJECT.id);
     stubFetchOneProject();
     render(<App />);
+    enterLegacy();
     // After load, picker trigger should mention 'demo' (not 'Select project').
     await waitFor(() => expect(screen.getByRole("button", { name: /demo/ })).toBeDefined());
   });
@@ -112,6 +125,14 @@ describe("App — localStorage restore", () => {
     );
     stubFetchOneProject();
     render(<App />);
+    enterLegacy();
     await waitFor(() => expect(screen.getByText("Pick a project to begin.")).toBeDefined());
+  });
+});
+
+describe("App — live-first default", () => {
+  it("defaults to Live mode with the Live toggle active", () => {
+    render(<App />);
+    expect(screen.getByRole("button", { name: "Live" }).getAttribute("aria-current")).toBe("page");
   });
 });

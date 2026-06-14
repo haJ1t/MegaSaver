@@ -58,6 +58,7 @@ describe("End session roundtrip", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Legacy" }));
     // New IA: default landing is Overview; navigate to the Sessions view first.
     fireEvent.click(await screen.findByRole("button", { name: "Sessions" }));
     await waitFor(() => expect(screen.getByText("to-be-ended")).toBeDefined());
