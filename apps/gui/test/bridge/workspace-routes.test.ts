@@ -53,6 +53,41 @@ describe("workspace-scoped bridge routes", () => {
     });
   });
 
+  describe("rules ranking", () => {
+    it("ranks a seeded overlay rule for a task", async () => {
+      server = await startTestBridge({
+        store: {
+          workspaceRules: [
+            {
+              workspaceKey: KEY,
+              lines: [
+                {
+                  id: "00000000-0000-4000-8000-0000000000c1",
+                  projectId: BLOCK_PROJECT_ID,
+                  title: "no any",
+                  rule: "avoid any type",
+                  appliesTo: [],
+                  evidence: [],
+                  severity: "warning",
+                  confidence: "high",
+                  createdFrom: "manual",
+                  createdAt: "2026-06-14T00:00:00.000Z",
+                  updatedAt: "2026-06-14T00:00:00.000Z",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      const res = await fetch(
+        `${server.baseUrl}/api/workspaces/${KEY}/rules?task=${encodeURIComponent("avoid any type")}`,
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { rule: { title: string } }[];
+      expect(body[0]?.rule.title).toBe("no any");
+    });
+  });
+
   describe("index status + search", () => {
     it("reports indexed:false with no index seeded", async () => {
       server = await startTestBridge();
