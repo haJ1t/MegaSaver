@@ -1,6 +1,9 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, describe, expect, it } from "vitest";
-import { type TestServer, startTestBridge } from "./test-helpers.js";
+import { type TestServer, seedWorkspaceCwd, startTestBridge } from "./test-helpers.js";
 
 const KEY = encodeWorkspaceKey("/tmp/ws-a");
 const BLOCK_PROJECT_ID = "00000000-0000-4000-8000-000000000001";
@@ -188,6 +191,80 @@ describe("workspace-scoped bridge routes", () => {
       expect(body.indexed).toBe(true);
       expect(body.pack).toBeDefined();
       expect(body.audit).toBeDefined();
+    });
+  });
+
+  describe("permissions evaluation", () => {
+    const tmpRoots: string[] = [];
+
+    afterEach(() => {
+      for (const r of tmpRoots) rmSync(r, { recursive: true, force: true });
+      tmpRoots.length = 0;
+    });
+
+    function setup(permissionsYaml: string | null): {
+      cwd: string;
+      key: string;
+      projectsDir: string;
+      metaDir: string;
+    } {
+      const cwd = mkdtempSync(join(tmpdir(), "ws-cwd-"));
+      const projectsDir = mkdtempSync(join(tmpdir(), "ws-proj-"));
+      const metaDir = mkdtempSync(join(tmpdir(), "ws-meta-"));
+      tmpRoots.push(cwd, projectsDir, metaDir);
+      if (permissionsYaml !== null) {
+        mkdirSync(join(cwd, ".megasaver"), { recursive: true });
+        writeFileSync(join(cwd, ".megasaver", "permissions.yaml"), permissionsYaml);
+      }
+      seedWorkspaceCwd({ projectsDir, metaDir, cwd });
+      return { cwd, key: encodeWorkspaceKey(cwd), projectsDir, metaDir };
+    }
+
+    it("reports loaded:false when no permissions file exists", async () => {
+      const { key, projectsDir, metaDir } = setup(null);
+      server = await startTestBridge({
+        claudeProjectsDir: projectsDir,
+        claudeSessionsMetaDir: metaDir,
+      });
+      const res = await fetch(`${server.baseUrl}/api/workspaces/${key}/permissions`);
+      expect(res.status).toBe(200);
+      expect((await res.json()).loaded).toBe(false);
+    });
+
+    it("denies a command listed under deny.commands", async () => {
+      const { key, projectsDir, metaDir } = setup("deny:\n  commands: [curl]\n");
+      server = await startTestBridge({
+        claudeProjectsDir: projectsDir,
+        claudeSessionsMetaDir: metaDir,
+      });
+      const res = await fetch(`${server.baseUrl}/api/workspaces/${key}/permissions?command=curl`);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.loaded).toBe(true);
+      expect(body.evaluation.command.allowed).toBe(false);
+    });
+
+    it("denies reading a secret path", async () => {
+      const { key, projectsDir, metaDir } = setup("deny: {}\n");
+      server = await startTestBridge({
+        claudeProjectsDir: projectsDir,
+        claudeSessionsMetaDir: metaDir,
+      });
+      const res = await fetch(`${server.baseUrl}/api/workspaces/${key}/permissions?path=.env`);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.evaluation.pathRead.allowed).toBe(false);
+    });
+
+    it("returns 500 policy_load_failed for malformed YAML", async () => {
+      const { key, projectsDir, metaDir } = setup("deny: [this, is, not, an, object]\n");
+      server = await startTestBridge({
+        claudeProjectsDir: projectsDir,
+        claudeSessionsMetaDir: metaDir,
+      });
+      const res = await fetch(`${server.baseUrl}/api/workspaces/${key}/permissions`);
+      expect(res.status).toBe(500);
+      expect((await res.json()).code).toBe("policy_load_failed");
     });
   });
 

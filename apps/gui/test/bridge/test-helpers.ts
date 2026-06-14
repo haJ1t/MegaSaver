@@ -79,6 +79,41 @@ function seedJsonl(filePath: string, lines: unknown[]): void {
   );
 }
 
+// Write a fake transcript + desktop metadata so listSessions resolves a live
+// session whose projectLabel == cwd. Phase 3's permissions route derives the
+// real cwd from this live workspace listing (the R4 "derived cache", never the
+// URL), then reads <cwd>/.megasaver/permissions.yaml.
+export function seedWorkspaceCwd(opts: {
+  projectsDir: string;
+  metaDir: string;
+  cwd: string;
+  id?: string;
+}): void {
+  const id = opts.id ?? "wssess01";
+  const transcriptDir = join(opts.projectsDir, "ws-dir");
+  mkdirSync(transcriptDir, { recursive: true });
+  writeFileSync(
+    join(transcriptDir, `${id}.jsonl`),
+    `${JSON.stringify({
+      type: "user",
+      timestamp: "2026-06-14T10:00:00.000Z",
+      cwd: opts.cwd,
+      message: { role: "user", content: "hi" },
+    })}\n`,
+  );
+  const metaSubDir = join(opts.metaDir, "ws", "win");
+  mkdirSync(metaSubDir, { recursive: true });
+  writeFileSync(
+    join(metaSubDir, `local_${id}.json`),
+    JSON.stringify({
+      cliSessionId: id,
+      title: "Workspace session",
+      cwd: opts.cwd,
+      lastActivityAt: 1,
+    }),
+  );
+}
+
 export async function startTestBridge(seed?: {
   projects?: Project[];
   sessions?: Session[];

@@ -93,6 +93,9 @@ importers:
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../../packages/content-store
+      '@megasaver/context-gate':
+        specifier: workspace:*
+        version: link:../../packages/context-gate
       '@megasaver/context-pruner':
         specifier: workspace:*
         version: link:../../packages/context-pruner
@@ -105,6 +108,9 @@ importers:
       '@megasaver/mcp-bridge':
         specifier: workspace:*
         version: link:../../packages/mcp-bridge
+      '@megasaver/policy':
+        specifier: workspace:*
+        version: link:../../packages/policy
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../../packages/shared

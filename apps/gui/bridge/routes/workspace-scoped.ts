@@ -2,6 +2,7 @@ import type { RouteContext } from "../route-context.js";
 import { resolveWorkspaceKey } from "./_workspace.js";
 import { handleGetWorkspaceContext } from "./workspace-context.js";
 import { handleGetWorkspaceIndexSearch, handleGetWorkspaceIndexStatus } from "./workspace-index.js";
+import { handleGetWorkspacePermissions } from "./workspace-permissions.js";
 import { handleGetWorkspaceRules } from "./workspace-rules.js";
 import { handleGetWorkspaceTools } from "./workspace-tools.js";
 
@@ -48,6 +49,9 @@ export async function dispatchWorkspaceScoped(
     handleGetWorkspaceContext(ctx, key);
     return true;
   }
-  // permissions is wired in Task 11.
+  if (segment === "permissions") {
+    await handleGetWorkspacePermissions(ctx, key);
+    return true;
+  }
   return false;
 }
