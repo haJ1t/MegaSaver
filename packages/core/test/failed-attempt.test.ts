@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { type FailedAttempt, failedAttemptSchema } from "../src/failed-attempt.js";
 
 const FA_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const WORKSPACE_KEY = "ws-abc123";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const SESSION_ID = "22222222-2222-4222-8222-222222222222";
 const TS = "2026-06-11T00:00:00.000Z";
 
 const valid = {
   id: FA_ID,
-  workspaceKey: WORKSPACE_KEY,
+  projectId: PROJECT_ID,
   sessionId: SESSION_ID,
   task: "fix login bug",
   failedStep: "run auth tests",

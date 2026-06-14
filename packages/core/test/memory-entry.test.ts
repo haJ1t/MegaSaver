@@ -16,13 +16,13 @@ import {
 } from "../src/memory-entry.js";
 
 const MEMORY_ENTRY_ID = "33333333-3333-4333-8333-333333333333";
-const WORKSPACE_KEY = "ws-abc123";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const SESSION_ID = "22222222-2222-4222-8222-222222222222";
 const CREATED_AT = "2026-05-04T12:30:00.000Z";
 
 const validProjectMemory = {
   id: MEMORY_ENTRY_ID,
-  workspaceKey: WORKSPACE_KEY,
+  projectId: PROJECT_ID,
   sessionId: null,
   scope: "project",
   type: "decision",
@@ -239,25 +239,15 @@ describe("memoryEntrySchema", () => {
     const result = memoryEntrySchema.safeParse({
       ...validProjectMemory,
       id: "not-a-uuid",
-      workspaceKey: "",
+      projectId: "not-a-uuid",
       createdAt: "today",
     });
 
     expect(result.success).toBe(false);
     if (!result.success) {
       const paths = new Set(result.error.issues.map((issue) => issue.path.join(".")));
-      expect(paths).toEqual(new Set(["id", "workspaceKey", "createdAt"]));
+      expect(paths).toEqual(new Set(["id", "projectId", "createdAt"]));
     }
-  });
-
-  it("re-keys to workspaceKey and rejects a leftover projectId", () => {
-    const { workspaceKey: _drop, ...withoutWorkspaceKey } = validProjectMemory;
-    void _drop;
-    const result = memoryEntrySchema.safeParse({
-      ...withoutWorkspaceKey,
-      projectId: "11111111-1111-4111-8111-111111111111",
-    });
-    expect(result.success).toBe(false);
   });
 
   it("rejects unknown fields", () => {
@@ -288,7 +278,7 @@ describe("memoryEntrySchema", () => {
   it("backfills a v0.1-shaped row to the typed schema", () => {
     const legacy = {
       id: MEMORY_ENTRY_ID,
-      workspaceKey: WORKSPACE_KEY,
+      projectId: PROJECT_ID,
       sessionId: null,
       scope: "project",
       content: "Repo uses strict ESM.",
@@ -314,7 +304,7 @@ describe("memoryEntrySchema", () => {
   it("adds approval to a corrupt row but it still fails schema validation", () => {
     const corrupt = {
       id: MEMORY_ENTRY_ID,
-      workspaceKey: WORKSPACE_KEY,
+      projectId: PROJECT_ID,
       sessionId: null,
       scope: "project",
       content: "no timestamp",
@@ -352,7 +342,7 @@ describe("memoryEntrySchema", () => {
     >();
     expectTypeOf<MemoryEntry>().toMatchTypeOf<{
       id: string;
-      workspaceKey: string;
+      projectId: string;
       sessionId: string | null;
       scope: "project" | "session";
       type: MemoryType;

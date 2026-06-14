@@ -1,4 +1,4 @@
-import { projectRuleIdSchema, titleSchema } from "@megasaver/shared";
+import { projectIdSchema, projectRuleIdSchema, titleSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { memoryConfidenceSchema } from "./memory-entry.js";
 
@@ -18,7 +18,7 @@ export type RuleConfidence = z.infer<typeof ruleConfidenceSchema>;
 export const projectRuleSchema = z
   .object({
     id: projectRuleIdSchema,
-    workspaceKey: z.string().min(1),
+    projectId: projectIdSchema,
     title: titleSchema,
     rule: z.string().trim().min(1),
     appliesTo: z.array(z.string()).default([]),
@@ -34,7 +34,7 @@ export const projectRuleSchema = z
 export type ProjectRule = z.infer<typeof projectRuleSchema>;
 
 // Caller-supplied insight for convertFailureToRule: the rule fields the agent
-// writes. id/workspaceKey/createdFrom/createdAt/updatedAt are engine-owned.
+// writes. id/projectId/createdFrom/createdAt/updatedAt are engine-owned.
 export const failureToRuleInputSchema = z
   .object({
     title: titleSchema,

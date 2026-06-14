@@ -7,7 +7,7 @@ import {
   taskStepTypeSchema,
 } from "../src/task-plan.js";
 
-const WORKSPACE_KEY = "ws-abc123";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const S1 = "d0000000-0000-4000-8000-000000000011";
 const S2 = "d0000000-0000-4000-8000-000000000012";
 const TS = "2026-06-12T00:00:00.000Z";
@@ -18,7 +18,7 @@ function step(id: string, over: Record<string, unknown> = {}) {
 function plan(over: Record<string, unknown> = {}) {
   return {
     id: "d0000000-0000-4000-8000-000000000001",
-    workspaceKey: WORKSPACE_KEY,
+    projectId: PROJECT_ID,
     sessionId: null,
     task: "fix the login bug",
     status: "planned",

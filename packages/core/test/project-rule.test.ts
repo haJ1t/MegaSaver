@@ -7,12 +7,12 @@ import {
 } from "../src/project-rule.js";
 
 const RULE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const WORKSPACE_KEY = "ws-abc123";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const TS = "2026-06-11T00:00:00.000Z";
 
 const valid = {
   id: RULE_ID,
-  workspaceKey: WORKSPACE_KEY,
+  projectId: PROJECT_ID,
   title: "Migrate before regenerate",
   rule: "When changing Prisma schema, create a migration and regenerate the client.",
   appliesTo: ["prisma/schema.prisma", "src/db/"],
