@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { startTestBridge, type TestServer } from "./test-helpers.js";
+import { type TestServer, startTestBridge } from "./test-helpers.js";
 
 const DIR = "-Users-me-proj";
 
@@ -65,9 +65,25 @@ describe("claude-sessions routes", () => {
   });
 
   it("GET with path traversal → 400 validation_failed", async () => {
-    const res = await fetch(`${server.baseUrl}/api/claude-sessions/${DIR}/${encodeURIComponent("../../x")}`);
+    const res = await fetch(
+      `${server.baseUrl}/api/claude-sessions/${DIR}/${encodeURIComponent("../../x")}`,
+    );
     expect(res.status).toBe(400);
     expect(((await res.json()) as { code: string }).code).toBe("validation_failed");
+  });
+
+  it("GET with dir-segment traversal → 400 validation_failed", async () => {
+    const res = await fetch(
+      `${server.baseUrl}/api/claude-sessions/${encodeURIComponent("../../etc")}/passwd`,
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe("validation_failed");
+  });
+
+  it("POST /api/claude-sessions → 405 method_not_allowed", async () => {
+    const res = await fetch(`${server.baseUrl}/api/claude-sessions`, { method: "POST" });
+    expect(res.status).toBe(405);
+    expect(((await res.json()) as { code: string }).code).toBe("method_not_allowed");
   });
 
   it("GET /:dir/:id/stream opens an SSE stream with a snapshot event", async () => {

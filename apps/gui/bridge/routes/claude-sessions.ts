@@ -1,12 +1,22 @@
-import { handleCaughtError } from "../error-mapping.js";
-import type { RouteContext } from "../route-context.js";
 import {
   listSessions,
   readTranscript,
   safeSessionPath,
   tailTranscript,
 } from "../claude-sessions/reader.js";
+import { handleCaughtError } from "../error-mapping.js";
+import type { RouteContext } from "../route-context.js";
 import { intParam } from "./_query.js";
+
+// These routes are read-only; a filesystem errno (EACCES/EPERM/etc.) must map to
+// internal_error (500), not handleCaughtError's store_write_failed.
+function sendReadError(ctx: RouteContext, err: unknown): void {
+  if (err instanceof Error && typeof (err as NodeJS.ErrnoException).code === "string") {
+    ctx.sendError(ctx.res, 500, "internal_error", err.message, ctx.origin);
+    return;
+  }
+  handleCaughtError(ctx.res, ctx.origin, err, ctx.sendError);
+}
 
 export async function handleListClaudeSessions(ctx: RouteContext): Promise<void> {
   try {
@@ -15,7 +25,7 @@ export async function handleListClaudeSessions(ctx: RouteContext): Promise<void>
     const sessions = await listSessions(ctx.claudeProjectsDir, { limit, offset });
     ctx.sendJson(ctx.res, 200, sessions, ctx.origin);
   } catch (err) {
-    handleCaughtError(ctx.res, ctx.origin, err, ctx.sendError);
+    sendReadError(ctx, err);
   }
 }
 
@@ -24,6 +34,8 @@ export async function handleGetClaudeSession(
   dir: string,
   id: string,
 ): Promise<void> {
+  // Pre-validate to surface path-traversal as 400 distinctly from not-found (404);
+  // readTranscript re-runs safeSessionPath internally.
   if ((await safeSessionPath(ctx.claudeProjectsDir, dir, id)) === null) {
     ctx.sendError(ctx.res, 400, "validation_failed", "Invalid session path.", ctx.origin);
     return;
@@ -42,7 +54,7 @@ export async function handleGetClaudeSession(
     }
     ctx.sendJson(ctx.res, 200, transcript, ctx.origin);
   } catch (err) {
-    handleCaughtError(ctx.res, ctx.origin, err, ctx.sendError);
+    sendReadError(ctx, err);
   }
 }
 
@@ -53,20 +65,28 @@ export async function handleStreamClaudeSession(
   dir: string,
   id: string,
 ): Promise<void> {
-  const path = await safeSessionPath(ctx.claudeProjectsDir, dir, id);
-  if (path === null) {
-    ctx.sendError(ctx.res, 400, "validation_failed", "Invalid session path.", ctx.origin);
-    return;
-  }
-  const snapshot = await readTranscript(ctx.claudeProjectsDir, dir, id);
-  if (!snapshot) {
-    ctx.sendError(
-      ctx.res,
-      404,
-      "claude_session_not_found",
-      `Claude Code session not found: ${dir}/${id}`,
-      ctx.origin,
-    );
+  let path: string;
+  let snapshot: Awaited<ReturnType<typeof readTranscript>>;
+  try {
+    const resolved = await safeSessionPath(ctx.claudeProjectsDir, dir, id);
+    if (resolved === null) {
+      ctx.sendError(ctx.res, 400, "validation_failed", "Invalid session path.", ctx.origin);
+      return;
+    }
+    snapshot = await readTranscript(ctx.claudeProjectsDir, dir, id);
+    if (!snapshot) {
+      ctx.sendError(
+        ctx.res,
+        404,
+        "claude_session_not_found",
+        `Claude Code session not found: ${dir}/${id}`,
+        ctx.origin,
+      );
+      return;
+    }
+    path = resolved;
+  } catch (err) {
+    sendReadError(ctx, err);
     return;
   }
 
