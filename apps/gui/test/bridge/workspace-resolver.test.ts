@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, sep } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { encodeWorkspaceKey, workspaceKeySchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -23,7 +23,9 @@ describe("resolveWorkspace", () => {
 describe("safeWorkspaceOverlayDir", () => {
   it("returns a path inside <storeRoot>/<feature>", () => {
     const dir = safeWorkspaceOverlayDir("/store", "rules", KEY);
-    expect(dir).toBe(join("/store", "rules", KEY));
+    // resolve (not join): safeWorkspaceOverlayDir normalises via path.resolve,
+    // which prefixes the drive on win32 — join would not, breaking Windows CI.
+    expect(dir).toBe(resolve("/store", "rules", KEY));
   });
 
   it("returns null for a traversal-shaped key", () => {
@@ -32,7 +34,7 @@ describe("safeWorkspaceOverlayDir", () => {
 
   it("contains the resolved dir within the feature dir", () => {
     const dir = safeWorkspaceOverlayDir("/store", "index", KEY);
-    expect(dir?.startsWith(join("/store", "index") + sep)).toBe(true);
+    expect(dir?.startsWith(resolve("/store", "index") + sep)).toBe(true);
   });
 });
 
