@@ -41,6 +41,10 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
       className="flex flex-col gap-4 px-6 py-6 overflow-y-auto flex-1 min-h-0"
     >
       <h2 className="text-sm text-text-muted uppercase tracking-widest">Token saver</h2>
+      <p className="text-xs text-text-muted">
+        This tab shows recorded proxy savings. To turn Saver Mode on or off, use the workspace
+        “Saver Mode” tab — activation is per-folder, not per-session.
+      </p>
       {state === "loading" && <LoadingState label="Loading token-saver stats…" />}
       {state === "error" && error && <ErrorState error={error} onRetry={load} />}
       {state === "ready" && (
