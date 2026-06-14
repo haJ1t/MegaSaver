@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -108,5 +108,35 @@ describe("workspace token-saver activation route", () => {
     server = await start();
     const res = await fetch(url(), { method: "PUT" });
     expect(res.status).toBe(405);
+  });
+
+  it("preserves human CLAUDE.md content across enable→disable and is idempotent", async () => {
+    server = await start();
+    const claudeMdPath = join(cwd, "CLAUDE.md");
+    writeFileSync(claudeMdPath, "# User notes\n\nhello world\n", "utf8");
+
+    const post = (body: object) =>
+      fetch(url(), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    await post({ enabled: true, mode: "balanced" });
+    const afterEnable = readFileSync(claudeMdPath, "utf8");
+    expect(afterEnable).toContain("# User notes");
+    expect(afterEnable).toContain("hello world");
+    expect(afterEnable).toContain("CONTEXT_GATE");
+
+    // idempotent: enabling again yields identical file content (no duplicate block)
+    await post({ enabled: true, mode: "balanced" });
+    expect(readFileSync(claudeMdPath, "utf8")).toBe(afterEnable);
+
+    // disable removes the block but keeps the human content intact
+    await post({ enabled: false, mode: "balanced" });
+    const afterDisable = readFileSync(claudeMdPath, "utf8");
+    expect(afterDisable).not.toContain("CONTEXT_GATE");
+    expect(afterDisable).toContain("# User notes");
+    expect(afterDisable).toContain("hello world");
   });
 });

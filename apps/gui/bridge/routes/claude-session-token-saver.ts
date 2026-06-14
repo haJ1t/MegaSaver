@@ -161,6 +161,10 @@ export async function handleWorkspaceSaverSet(
           maxReturnedBytes: modeToBudget(mode),
         })
       : "";
+    // When disabling a CLAUDE.md whose only content was the CG block,
+    // upsertContextGateBlockText returns "" and we write a 0-byte file rather
+    // than deleting it — matching `mega connector sync` semantics. We never
+    // delete user files: an empty CLAUDE.md left behind is intentional.
     if (!(block === "" && existing === null)) {
       const next = upsertContextGateBlockText(existing ?? "", block);
       await writeTargetFile({ absPath: claudeMdPath, content: next });
