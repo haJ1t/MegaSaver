@@ -15,6 +15,7 @@ import {
   handlePostSessionMemory,
 } from "./routes/claude-session-memory.js";
 import { handleGetSessionTasks } from "./routes/claude-session-tasks.js";
+import { dispatchSessionTokenSaver } from "./routes/claude-session-token-saver.js";
 import {
   handleGetClaudeSession,
   handleGetClaudeSessionTelemetry,
@@ -313,6 +314,13 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         return;
       }
       return methodNotAllowed(res, method, origin);
+    }
+
+    if (path.startsWith("/api/claude-sessions/") && path.includes("/token-saver")) {
+      const dispatched = await dispatchSessionTokenSaver(ctx, method, path, () =>
+        methodNotAllowed(res, method, origin),
+      );
+      if (dispatched) return;
     }
 
     const claudeTasksMatch = path.match(/^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/tasks$/);
