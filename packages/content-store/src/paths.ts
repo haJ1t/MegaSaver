@@ -29,3 +29,21 @@ export function chunkSetPath(input: {
     `${input.chunkSetId}.json`,
   );
 }
+
+export function overlayChunkSetPath(input: {
+  storeRoot: string;
+  workspaceKey: string;
+  liveSessionId: string;
+  chunkSetId: string;
+}): string {
+  assertSafeSegment(input.workspaceKey);
+  assertSafeSegment(input.liveSessionId);
+  assertSafeSegment(input.chunkSetId);
+  return join(
+    input.storeRoot,
+    "content",
+    input.workspaceKey,
+    input.liveSessionId,
+    `${input.chunkSetId}.json`,
+  );
+}

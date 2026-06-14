@@ -4,6 +4,8 @@ export {
   type Chunk,
   type ChunkSet,
   type ChunkSetSummary,
+  overlayChunkSetSchema,
+  type OverlayChunkSet,
 } from "./chunk-set.js";
 
 export {
@@ -12,6 +14,8 @@ export {
   listChunkSets,
   deleteChunkSet,
   pruneOlderThan,
+  saveOverlayChunkSet,
+  loadOverlayChunkSet,
 } from "./store.js";
 
 export {
