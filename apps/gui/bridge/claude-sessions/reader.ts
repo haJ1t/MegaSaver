@@ -58,7 +58,14 @@ function parseLines(text: string): NormalizedMessage[] {
   return messages;
 }
 
-type SessionTitle = { title: string; cwd: string; lastActivityAt: number };
+type SessionTitle = {
+  title: string;
+  cwd: string;
+  lastActivityAt: number;
+  isArchived: boolean;
+  model: string;
+  permissionMode: string;
+};
 
 // Claude Code's desktop app stores one metadata file per session it surfaces,
 // nested under <metaDir>/<workspace>/<window>/local_*.json, each carrying the
@@ -84,6 +91,9 @@ async function readSessionTitles(metaDir: string): Promise<Map<string, SessionTi
           title?: unknown;
           cwd?: unknown;
           lastActivityAt?: unknown;
+          isArchived?: unknown;
+          model?: unknown;
+          permissionMode?: unknown;
         };
         if (typeof obj.cliSessionId !== "string" || typeof obj.title !== "string") return;
         const lastActivityAt = typeof obj.lastActivityAt === "number" ? obj.lastActivityAt : 0;
@@ -93,6 +103,9 @@ async function readSessionTitles(metaDir: string): Promise<Map<string, SessionTi
           title: obj.title,
           cwd: typeof obj.cwd === "string" ? obj.cwd : "",
           lastActivityAt,
+          isArchived: obj.isArchived === true,
+          model: typeof obj.model === "string" ? obj.model : "",
+          permissionMode: typeof obj.permissionMode === "string" ? obj.permissionMode : "",
         });
       } catch {
         // skip unreadable / partially-written metadata file
@@ -159,6 +172,10 @@ export async function listSessions(
           size: s.size,
           title: meta.title,
           projectLabel: meta.cwd,
+          isArchived: meta.isArchived,
+          model: meta.model,
+          permissionMode: meta.permissionMode,
+          lastActivityAt: meta.lastActivityAt,
         } satisfies ClaudeSessionMeta;
       } catch {
         return null;

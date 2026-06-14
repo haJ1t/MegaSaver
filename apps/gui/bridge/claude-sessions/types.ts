@@ -29,6 +29,10 @@ export type ClaudeSessionMeta = {
   size: number;
   title: string;
   projectLabel: string;
+  isArchived: boolean;
+  model: string;
+  permissionMode: string;
+  lastActivityAt: number;
 };
 
 export type ClaudeTranscript = {

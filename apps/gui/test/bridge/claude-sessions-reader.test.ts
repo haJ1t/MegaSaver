@@ -33,12 +33,30 @@ describe("claude-sessions reader", () => {
   let metaDir: string;
 
   // Mirror the desktop app's <metaDir>/<workspace>/<window>/local_*.json layout.
-  function writeMeta(id: string, title: string, cwd = "/Users/me/proj"): void {
+  function writeMeta(
+    id: string,
+    title: string,
+    cwd = "/Users/me/proj",
+    extra?: {
+      isArchived?: boolean;
+      model?: string;
+      permissionMode?: string;
+      lastActivityAt?: number;
+    },
+  ): void {
     const dir = join(metaDir, "ws", "win");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
       join(dir, `local_${id}.json`),
-      JSON.stringify({ cliSessionId: id, title, cwd, lastActivityAt: 1 }),
+      JSON.stringify({
+        cliSessionId: id,
+        title,
+        cwd,
+        lastActivityAt: extra?.lastActivityAt ?? 1,
+        ...(extra?.isArchived !== undefined ? { isArchived: extra.isArchived } : {}),
+        ...(extra?.model !== undefined ? { model: extra.model } : {}),
+        ...(extra?.permissionMode !== undefined ? { permissionMode: extra.permissionMode } : {}),
+      }),
     );
   }
 
@@ -70,6 +88,30 @@ describe("claude-sessions reader", () => {
     expect(sessions.map((s) => s.id)).toEqual(["bbbb", "aaaa"]);
     expect(sessions[0]?.title).toBe("Beta session");
     expect(sessions[0]?.projectLabel).toBe("/Users/me/proj");
+  });
+
+  it("surfaces isArchived/model/permissionMode/lastActivityAt from metadata", async () => {
+    writeMeta("bbbb", "Beta session", "/Users/me/proj", {
+      isArchived: true,
+      model: "claude-sonnet-4-6",
+      permissionMode: "plan",
+      lastActivityAt: 42,
+    });
+    const sessions = await listSessions(root, metaDir, { limit: 50, offset: 0 });
+    const beta = sessions.find((s) => s.id === "bbbb");
+    expect(beta?.isArchived).toBe(true);
+    expect(beta?.model).toBe("claude-sonnet-4-6");
+    expect(beta?.permissionMode).toBe("plan");
+    expect(beta?.lastActivityAt).toBe(42);
+  });
+
+  it("defaults metadata fields when the local file omits them", async () => {
+    const sessions = await listSessions(root, metaDir, { limit: 50, offset: 0 });
+    const alpha = sessions.find((s) => s.id === "aaaa");
+    expect(alpha?.isArchived).toBe(false);
+    expect(alpha?.model).toBe("");
+    expect(alpha?.permissionMode).toBe("");
+    expect(alpha?.lastActivityAt).toBe(1);
   });
 
   it("ignores transcripts that have no desktop metadata, even when newer", async () => {
