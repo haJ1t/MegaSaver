@@ -1,7 +1,7 @@
 # MegaSaver Live-First Architecture — Pivot from Projects to Live Claude Code Sessions
 
 **Date:** 2026-06-14
-**Status:** Architecture proposal (pre-spec). Produces per-phase specs/plans downstream.
+**Status:** Direction approved; the four open questions are **resolved** (see §7). Produces per-phase specs/plans downstream.
 **Author intent (verbatim):** remove the "project" concept; build the whole app directly on **live Claude Code sessions**; the app is always live and works only on live sessions; group by **cwd** (the session's working folder); **all features must remain usable on live sessions.**
 
 ---
@@ -142,7 +142,7 @@ Delete `ProjectPicker`/`ProjectCreateForm`/`activeProjectId`/`PROJECT_SCOPED_VIE
 
 ## 6. Risks & decisions
 
-1. **Token-saver ≠ transcript tokens.** Output-filter byte savings need the proxy to run; only LLM-token telemetry is free from the transcript. **Decision needed:** keep token-saver as a proxy-fed overlay (ties to Proxy Mode roadmap) vs drop it for v1 and ship only transcript telemetry.
+1. **Token-saver ≠ transcript tokens.** Output-filter byte savings need the proxy to run; only LLM-token telemetry is free from the transcript. **Decision (locked):** keep token-saver **live** as a proxy-fed overlay (ties to Proxy Mode), re-keyed by `(workspaceKey, liveSessionId)` — implemented in Phase 4. Transcript-derived LLM telemetry ships earlier (Phase 0) as a separate, complementary panel.
 2. **`workspaceKey` encoding.** cwd → stable filesystem-safe key (recommend short sha256 hash + human label). Handles spaces/unicode/path length.
 3. **Sessions without desktop metadata.** Current `listSessions` hides any transcript lacking a `local_*.json` (deliberate noise filter). CLI-only/headless sessions stay invisible. **Decision:** accept (matches "what Claude shows") vs add an opt-in "show untitled" mode.
 4. **Memory `scope` split.** Project-scoped memory is cross-session — it must re-key to **cwd**, not a session id. Session-scoped memory → live session id. The current single type carries both; needs a clean split.
@@ -152,12 +152,12 @@ Delete `ProjectPicker`/`ProjectCreateForm`/`activeProjectId`/`PROJECT_SCOPED_VIE
 
 ---
 
-## 7. Open questions for the author
+## 7. Resolved decisions
 
-1. **Token-saver / Proxy Mode:** keep it (proxy-fed overlay) in the live app, or defer and ship transcript-only telemetry first? (Affects Phase 4 scope.)
-2. **Scope of overlay write features:** confirm MegaSaver may keep its own overlay store (memory/rules/index/stats) keyed by cwd/session — never touching Claude's files. (Your "use all features on live sessions" implies yes.)
-3. **Cockpit vs per-view:** one rich **session cockpit** (panels/tabs) vs keep separate nav views re-scoped to the selected session? (Recommend cockpit.)
-4. **Untitled/CLI sessions:** show them (no Claude title) or keep hiding (current behavior)?
+1. **Token-saver / Proxy Mode — KEEP LIVE.** Token-saver stays in the live app as a proxy-fed overlay keyed by `(workspaceKey, liveSessionId)` (Phase 4). Transcript-derived LLM telemetry is a separate panel shipped in Phase 0.
+2. **Overlay store — YES.** MegaSaver keeps its own overlay store (memory/rules/index/tasks/stats/content) re-keyed by cwd (`workspaceKey`) and live session id. It **never** writes Claude's transcripts or metadata — read-only on all Claude data.
+3. **Session cockpit — YES (recommended path).** One rich session cockpit with panels/tabs (transcript, telemetry, memory, context, index, rules, tools, permissions, tasks, token-saver), all scoped to the selected live session + its cwd. Not separate nav views.
+4. **Untitled/CLI sessions — HIDE (current behavior).** The list stays metadata-gated: a transcript with no desktop `local_*.json` is not shown. Matches what Claude Code surfaces; keeps observer/agent/CLI noise out.
 
 ---
 
