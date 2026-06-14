@@ -65,7 +65,7 @@ export function ClaudeSessionsView(): JSX.Element {
     return dispose;
   }, [selected]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally trigger on messages to auto-scroll
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scrollRef is a stable ref, intentionally omitted from deps; effect re-runs only on messages change to auto-scroll
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
