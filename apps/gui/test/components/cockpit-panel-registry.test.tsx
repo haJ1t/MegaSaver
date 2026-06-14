@@ -34,6 +34,7 @@ describe("COCKPIT_PANELS registry", () => {
       "memory",
       "tasks",
       "token-saver",
+      "ws-token-saver",
       "ws-index",
       "ws-context",
       "ws-rules",

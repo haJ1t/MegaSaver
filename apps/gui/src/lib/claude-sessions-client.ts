@@ -319,3 +319,22 @@ export function fetchSessionTokenSaverEvents(
 ): Promise<OverlayTokenSaverEvent[]> {
   return getJson<OverlayTokenSaverEvent[]>(`${tokenSaverBase(dir, id)}/events`);
 }
+
+export type WorkspaceSaverStatus = {
+  enabled: boolean;
+  mode: "aggressive" | "balanced" | "safe";
+  blockPresent: boolean;
+  mcpInstalled: boolean;
+};
+
+export function fetchWorkspaceSaver(dir: string, id: string): Promise<WorkspaceSaverStatus> {
+  return getJson<WorkspaceSaverStatus>(`${tokenSaverBase(dir, id)}/workspace`);
+}
+
+export function setWorkspaceSaver(
+  dir: string,
+  id: string,
+  input: { enabled: boolean; mode: "aggressive" | "balanced" | "safe" },
+): Promise<WorkspaceSaverStatus> {
+  return mutateJson<WorkspaceSaverStatus>(`${tokenSaverBase(dir, id)}/workspace`, "POST", input);
+}
