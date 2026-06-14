@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -6,6 +6,7 @@ import {
   listSessions,
   readTranscript,
   safeSessionPath,
+  tailTranscript,
 } from "../../bridge/claude-sessions/reader.js";
 
 const DIR = "-Users-me-proj";
@@ -82,5 +83,18 @@ describe("claude-sessions reader", () => {
     expect(safeSessionPath(root, DIR, "../../etc/passwd")).toBeNull();
     expect(safeSessionPath(root, "a/b", "aaaa")).toBeNull();
     expect(safeSessionPath(root, DIR, "aaaa")).toBe(join(root, DIR, "aaaa.jsonl"));
+  });
+
+  it("tails appended lines via tailTranscript", async () => {
+    const path = join(root, DIR, "bbbb.jsonl");
+    const t = await readTranscript(root, DIR, "bbbb");
+    const received: string[] = [];
+    const stop = tailTranscript(path, t?.byteLength ?? 0, (m) => {
+      received.push(m.blocks.map((b) => b.text).join(""));
+    });
+    appendFileSync(path, `${asstLine("a fresh reply", "2026-06-14T11:05:00.000Z")}\n`);
+    await new Promise((r) => setTimeout(r, 700));
+    stop();
+    expect(received).toContain("a fresh reply");
   });
 });

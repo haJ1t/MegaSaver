@@ -1,4 +1,5 @@
-import { open, readdir, readFile, stat } from "node:fs/promises";
+import { unwatchFile, watchFile } from "node:fs";
+import { open, readFile, readdir, stat } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { normalizeLine } from "./parse.js";
 import type { ClaudeSessionMeta, ClaudeTranscript, NormalizedMessage } from "./types.js";
@@ -56,12 +57,15 @@ function deriveMeta(chunk: string): { title: string; projectLabel: string } {
       continue;
     }
     if (raw && typeof raw === "object") {
-      const obj = raw as Record<string, unknown>;
+      const obj = raw as { cwd: unknown };
       if (!projectLabel && typeof obj.cwd === "string") projectLabel = obj.cwd;
       if (!title) {
         const msg = normalizeLine(raw);
         if (msg?.role === "user") {
-          title = msg.blocks.map((b) => b.text).join(" ").slice(0, 120);
+          title = msg.blocks
+            .map((b) => b.text)
+            .join(" ")
+            .slice(0, 120);
         }
       }
     }
@@ -157,4 +161,64 @@ export async function readTranscript(
     byteLength: Buffer.byteLength(text, "utf8"),
     messages,
   } satisfies ClaudeTranscript;
+}
+
+// Poll the file for growth (watchFile is deterministic across platforms) and
+// emit each newly appended renderable turn. A trailing partial line is buffered
+// and retried on the next tick. Returns a disposer.
+export function tailTranscript(
+  path: string,
+  startOffset: number,
+  onMessage: (message: NormalizedMessage) => void,
+): () => void {
+  let offset = startOffset;
+  let buffer = "";
+  let reading = false;
+
+  async function drain(): Promise<void> {
+    if (reading) return;
+    reading = true;
+    try {
+      const s = await stat(path);
+      if (s.size <= offset) return;
+      const handle = await open(path, "r");
+      try {
+        const len = s.size - offset;
+        const buf = Buffer.alloc(len);
+        await handle.read(buf, 0, len, offset);
+        offset = s.size;
+        buffer += buf.toString("utf8");
+      } finally {
+        await handle.close();
+      }
+      let nl = buffer.indexOf("\n");
+      while (nl !== -1) {
+        const line = buffer.slice(0, nl);
+        buffer = buffer.slice(nl + 1);
+        if (line.trim().length > 0) {
+          try {
+            const msg = normalizeLine(JSON.parse(line));
+            if (msg) onMessage(msg);
+          } catch {
+            // Incomplete/corrupt line — skip; later writes re-emit complete data.
+          }
+        }
+        nl = buffer.indexOf("\n");
+      }
+    } catch {
+      // File vanished or unreadable — stop emitting; disposer still cleans up.
+    } finally {
+      reading = false;
+    }
+  }
+
+  const listener = (): void => {
+    void drain();
+  };
+  watchFile(path, { interval: 250 }, listener);
+  void drain();
+
+  return () => {
+    unwatchFile(path, listener);
+  };
 }
