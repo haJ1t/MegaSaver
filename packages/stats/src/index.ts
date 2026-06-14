@@ -1,6 +1,16 @@
-export { tokenSaverEventSchema, type TokenSaverEvent } from "./event.js";
+export {
+  tokenSaverEventSchema,
+  type TokenSaverEvent,
+  overlayTokenSaverEventSchema,
+  type OverlayTokenSaverEvent,
+} from "./event.js";
 
-export { sessionTokenSaverStatsSchema, type SessionTokenSaverStats } from "./summary.js";
+export {
+  sessionTokenSaverStatsSchema,
+  type SessionTokenSaverStats,
+  overlaySessionTokenSaverStatsSchema,
+  type OverlaySessionTokenSaverStats,
+} from "./summary.js";
 
 export {
   appendEvent,
@@ -9,6 +19,11 @@ export {
   readSummary,
   resetOnDisable,
   type StatsStore,
+  appendOverlayEvent,
+  type AppendOverlayEventInput,
+  readOverlayEvents,
+  readOverlaySummary,
+  resetOverlayOnDisable,
 } from "./store.js";
 
 export { StatsError, statsErrorCodeSchema, type StatsErrorCode } from "./errors.js";
