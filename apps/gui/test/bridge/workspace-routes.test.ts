@@ -151,6 +151,46 @@ describe("workspace-scoped bridge routes", () => {
     });
   });
 
+  describe("context preview", () => {
+    it("reports indexed:false with no index and a task", async () => {
+      server = await startTestBridge();
+      const res = await fetch(`${server.baseUrl}/api/workspaces/${KEY}/context?task=anything`);
+      expect(res.status).toBe(200);
+      expect((await res.json()).indexed).toBe(false);
+    });
+
+    it("returns 400 without a task", async () => {
+      server = await startTestBridge();
+      const res = await fetch(`${server.baseUrl}/api/workspaces/${KEY}/context`);
+      expect(res.status).toBe(400);
+    });
+
+    it("returns pack + audit with a seeded index", async () => {
+      server = await startTestBridge({
+        store: {
+          workspaceIndex: [
+            {
+              workspaceKey: KEY,
+              blocks: [
+                block({
+                  id: "00000000-0000-4000-8000-0000000000a1",
+                  blockType: "function",
+                  name: "foo",
+                }),
+              ],
+            },
+          ],
+        },
+      });
+      const res = await fetch(`${server.baseUrl}/api/workspaces/${KEY}/context?task=foo`);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.indexed).toBe(true);
+      expect(body.pack).toBeDefined();
+      expect(body.audit).toBeDefined();
+    });
+  });
+
   describe("index status + search", () => {
     it("reports indexed:false with no index seeded", async () => {
       server = await startTestBridge();
