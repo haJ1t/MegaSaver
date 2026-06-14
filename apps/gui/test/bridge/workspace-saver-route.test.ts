@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -138,5 +138,26 @@ describe("workspace token-saver activation route", () => {
     expect(afterDisable).not.toContain("CONTEXT_GATE");
     expect(afterDisable).toContain("# User notes");
     expect(afterDisable).toContain("hello world");
+  });
+
+  it("refuses to write a symlinked CLAUDE.md with connector_write_failed (no path/stack leak)", async () => {
+    server = await start();
+    // Make <cwd>/CLAUDE.md a symlink — writeTargetFile must refuse to replace it.
+    const realTarget = join(cwd, "real-notes.md");
+    writeFileSync(realTarget, "# notes\n", "utf8");
+    symlinkSync(realTarget, join(cwd, "CLAUDE.md"));
+
+    const res = await fetch(url(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: true, mode: "balanced" }),
+    });
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string; code: string; details?: unknown };
+    expect(body.code).toBe("connector_write_failed");
+    // The refusal message carries no filesystem path and no stack frame.
+    expect(body.error).not.toMatch(/\//);
+    expect(body.error).not.toMatch(/\bat\s/);
+    expect(body.details).toBeUndefined();
   });
 });

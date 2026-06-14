@@ -1,4 +1,5 @@
 import type { ServerResponse } from "node:http";
+import { ConnectorError } from "@megasaver/connectors-shared";
 import { ContentStoreError } from "@megasaver/content-store";
 import { CorePersistenceError, CoreRegistryError } from "@megasaver/core";
 import type { BridgeErrorCode } from "../src/bridge-error-code.js";
@@ -67,6 +68,16 @@ export function handleCaughtError(
   // problems → surface as store_write_failed, mirroring CorePersistenceError.
   if (err instanceof ContentStoreError) {
     sendError(res, 500, "store_write_failed", err.message, origin);
+    return;
+  }
+  // connectors-shared file ops (CLAUDE.md upsert on the workspace token-saver
+  // route): symlink refusal, tmp-write/rename failure, read failure. Caught here
+  // explicitly — BEFORE the errno heuristic below — so the safety-relevant
+  // symlink refusal gets a clear code, and a future ConnectorError code starting
+  // with "E" can never be misrouted by that heuristic. The message carries no
+  // path (it lives on the error's filePath field, not .message) and no stack.
+  if (err instanceof ConnectorError) {
+    sendError(res, 500, "connector_write_failed", err.message, origin);
     return;
   }
   // Heuristic: mirror the Node fs ErrnoException shape (EPERM / ENOENT / etc.)
