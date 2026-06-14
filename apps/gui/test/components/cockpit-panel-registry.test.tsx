@@ -31,6 +31,9 @@ describe("COCKPIT_PANELS registry", () => {
     expect(COCKPIT_PANELS.map((p) => p.id)).toEqual([
       "transcript",
       "telemetry",
+      "memory",
+      "tasks",
+      "token-saver",
       "ws-index",
       "ws-context",
       "ws-rules",
