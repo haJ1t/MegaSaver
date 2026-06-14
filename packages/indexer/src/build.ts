@@ -1,13 +1,21 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ProjectId } from "@megasaver/shared";
+import type { ProjectId, WorkspaceKey } from "@megasaver/shared";
 import { type CodeBlock, type ExtractedBlock, codeBlockSchema } from "./code-block.js";
 import { extractJson } from "./extract/extract-json.js";
 import { extractMd } from "./extract/extract-md.js";
 import { extractTs } from "./extract/extract-ts.js";
 import { scanRepo } from "./scan.js";
-import { type Manifest, readBlocks, readManifest, resolveIndexPaths, writeIndex } from "./store.js";
+import {
+  type IndexStorePaths,
+  type Manifest,
+  readBlocks,
+  readManifest,
+  resolveIndexPaths,
+  writeIndex,
+} from "./store.js";
+import { resolveWorkspaceIndexPaths, workspaceProjectId } from "./workspace-store.js";
 
 export type BuildResult = {
   added: number;
@@ -36,12 +44,51 @@ function extractorFor(path: string): Extractor | null {
   return null;
 }
 
+export type WorkspaceBuildOptions = {
+  rootDir: string;
+  storeDir: string;
+  workspaceKey: WorkspaceKey;
+  newId?: () => string;
+  maxFileSize?: number;
+};
+
 // Incremental: a file whose content hash matches the manifest keeps its existing
 // blocks untouched; only changed/new files are re-extracted, and files that
 // vanished drop their blocks. Persisted atomically (blocks.jsonl + manifest).
 export function buildIndex(options: BuildOptions): BuildResult {
+  return buildIndexCore({
+    rootDir: options.rootDir,
+    paths: resolveIndexPaths(options.storeDir, options.projectId),
+    projectId: options.projectId,
+    ...(options.newId !== undefined ? { newId: options.newId } : {}),
+    ...(options.maxFileSize !== undefined ? { maxFileSize: options.maxFileSize } : {}),
+  });
+}
+
+// Workspace-keyed build (CLI/seed only; not wired to a route in Phase 3). Writes
+// to index/<key>/ and stamps each block with a synthetic UUIDv5 projectId so the
+// existing codeBlockSchema parse passes without a schema migration (spec §6 R1).
+export function buildWorkspaceIndex(options: WorkspaceBuildOptions): BuildResult {
+  return buildIndexCore({
+    rootDir: options.rootDir,
+    paths: resolveWorkspaceIndexPaths(options.storeDir, options.workspaceKey),
+    projectId: workspaceProjectId(options.workspaceKey),
+    ...(options.newId !== undefined ? { newId: options.newId } : {}),
+    ...(options.maxFileSize !== undefined ? { maxFileSize: options.maxFileSize } : {}),
+  });
+}
+
+type BuildCoreOptions = {
+  rootDir: string;
+  paths: IndexStorePaths;
+  projectId: ProjectId;
+  newId?: () => string;
+  maxFileSize?: number;
+};
+
+function buildIndexCore(options: BuildCoreOptions): BuildResult {
   const newId = options.newId ?? (() => randomUUID());
-  const paths = resolveIndexPaths(options.storeDir, options.projectId);
+  const paths = options.paths;
   const scan = scanRepo({
     rootDir: options.rootDir,
     ...(options.maxFileSize !== undefined ? { maxFileSize: options.maxFileSize } : {}),
