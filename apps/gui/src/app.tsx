@@ -45,7 +45,7 @@ export function App(): JSX.Element {
 
       <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
         {view === "agent-setup" ? (
-          <AgentSetupDoctor activeProjectId={null} />
+          <AgentSetupDoctor />
         ) : selected ? (
           <SessionCockpit
             dir={selected.dir}

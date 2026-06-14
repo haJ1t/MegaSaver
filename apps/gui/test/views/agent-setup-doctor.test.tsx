@@ -35,11 +35,11 @@ describe("AgentSetupDoctor", () => {
       "fetch",
       vi.fn(async () => ({ ok: true, status: 200, json: async () => NOT_INSTALLED })),
     );
-    render(<AgentSetupDoctor activeProjectId="demo" />);
+    render(<AgentSetupDoctor />);
     await waitFor(() => expect(screen.getByRole("button", { name: /Repair/i })).toBeDefined());
   });
 
-  it("repairs on click (passing the project) and re-fetches, surfacing the restart hint", async () => {
+  it("repairs on click and re-fetches, surfacing the restart hint", async () => {
     const fetchMock = vi
       .fn()
       // initial status
@@ -50,16 +50,17 @@ describe("AgentSetupDoctor", () => {
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => REPAIRED });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AgentSetupDoctor activeProjectId="demo" />);
+    render(<AgentSetupDoctor />);
     await waitFor(() => screen.getByRole("button", { name: /Repair/i }));
     fireEvent.click(screen.getByRole("button", { name: /Repair/i }));
 
     await waitFor(() => expect(screen.getByText(/Restart Claude Code/i)).toBeDefined());
-    // repair POST carried the active project in its body.
+    // The live-first GUI is project-free; the repair POST still carries the
+    // bridge-required `project` field as a benign "." (cwd) placeholder.
     const repairCall = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/api/mcp/repair"));
     expect(JSON.parse((repairCall?.[1] as RequestInit).body as string)).toEqual({
       target: "claude-code",
-      project: "demo",
+      project: ".",
     });
   });
 
@@ -71,7 +72,7 @@ describe("AgentSetupDoctor", () => {
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => REPAIRED });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AgentSetupDoctor activeProjectId="demo" />);
+    render(<AgentSetupDoctor />);
     await waitFor(() => screen.getByRole("button", { name: /Repair/i }));
     // role=status carries implicit aria-live=polite (WCAG 4.1.3).
     const status = screen.getByRole("status");
@@ -80,16 +81,16 @@ describe("AgentSetupDoctor", () => {
     await waitFor(() => expect(status.textContent).toMatch(/repaired for claude-code/i));
   });
 
-  it("disables Repair when no project is selected", async () => {
+  it("keeps Repair enabled with no project notice (project-free shell)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({ ok: true, status: 200, json: async () => NOT_INSTALLED })),
     );
-    render(<AgentSetupDoctor activeProjectId={null} />);
+    render(<AgentSetupDoctor />);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /Repair/i }).hasAttribute("disabled")).toBe(true),
+      expect(screen.getByRole("button", { name: /Repair/i }).hasAttribute("disabled")).toBe(false),
     );
-    expect(screen.getByText(/Pick a project/i)).toBeDefined();
+    expect(screen.queryByText(/Pick a project/i)).toBeNull();
   });
 
   it("shows an error state when the status fetch fails", async () => {
@@ -101,7 +102,7 @@ describe("AgentSetupDoctor", () => {
         json: async () => ({ error: "boom", code: "mcp_setup_failed" }),
       })),
     );
-    render(<AgentSetupDoctor activeProjectId="demo" />);
+    render(<AgentSetupDoctor />);
     await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
   });
 });

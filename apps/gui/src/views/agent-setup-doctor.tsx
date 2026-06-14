@@ -10,13 +10,7 @@ import {
   uninstallMcp,
 } from "../lib/api-client.js";
 
-type AgentSetupDoctorProps = {
-  // From the app shell. install/repair need a project (epic §7); null disables
-  // those actions. Status + uninstall do not depend on it.
-  activeProjectId: string | null;
-};
-
-export function AgentSetupDoctor({ activeProjectId }: AgentSetupDoctorProps): JSX.Element {
+export function AgentSetupDoctor(): JSX.Element {
   const [agents, setAgents] = useState<McpAgentStatus[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<BridgeError | null>(null);
@@ -48,15 +42,12 @@ export function AgentSetupDoctor({ activeProjectId }: AgentSetupDoctorProps): JS
   }, [error]);
 
   async function runAction(agentId: string, action: McpAction): Promise<void> {
-    // install/repair require a project; the row disables them when none is
-    // selected, so this guard is belt-and-suspenders.
-    if ((action === "install" || action === "repair") && activeProjectId === null) return;
     setBusyAgent(agentId);
     setError(null);
     setAnnouncement("");
     try {
-      if (action === "install") await installMcp(agentId, activeProjectId as string);
-      else if (action === "repair") await repairMcp(agentId, activeProjectId as string);
+      if (action === "install") await installMcp(agentId);
+      else if (action === "repair") await repairMcp(agentId);
       else await uninstallMcp(agentId);
       await load();
       setAnnouncement(
@@ -101,7 +92,6 @@ export function AgentSetupDoctor({ activeProjectId }: AgentSetupDoctorProps): JS
               key={agent.agentId}
               agent={agent}
               busy={busyAgent === agent.agentId}
-              projectSelected={activeProjectId !== null}
               onAction={(action) => void runAction(agent.agentId, action)}
             />
           ))}
