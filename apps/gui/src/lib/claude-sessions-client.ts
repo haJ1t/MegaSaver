@@ -4,10 +4,22 @@ export type Block = {
   kind: "text" | "thinking" | "tool_use" | "tool_result";
   text: string;
 };
+export type MessageUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+};
+export type MessageMeta = {
+  model?: string;
+  usage?: MessageUsage;
+  gitBranch?: string;
+};
 export type NormalizedMessage = {
   role: "user" | "assistant";
   ts: string;
   blocks: Block[];
+  meta?: MessageMeta;
 };
 export type ClaudeSessionMeta = {
   dir: string;
@@ -16,10 +28,33 @@ export type ClaudeSessionMeta = {
   size: number;
   title: string;
   projectLabel: string;
+  isArchived: boolean;
+  model: string;
+  permissionMode: string;
+  lastActivityAt: number;
 };
 export type ClaudeTranscriptSnapshot = {
   projectLabel: string;
   messages: NormalizedMessage[];
+};
+export type ModelUsage = {
+  model: string;
+  turns: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+};
+export type SessionTelemetry = {
+  turnCount: number;
+  assistantTurns: number;
+  toolCallCount: number;
+  totals: MessageUsage;
+  models: ModelUsage[];
+  firstTs: string;
+  lastTs: string;
+  durationMs: number;
+  gitBranch: string;
 };
 
 async function getJson<T>(path: string): Promise<T> {
@@ -39,6 +74,12 @@ async function getJson<T>(path: string): Promise<T> {
 
 export function fetchClaudeSessions(limit = 50, offset = 0): Promise<ClaudeSessionMeta[]> {
   return getJson<ClaudeSessionMeta[]>(`/api/claude-sessions?limit=${limit}&offset=${offset}`);
+}
+
+export function fetchClaudeSessionTelemetry(dir: string, id: string): Promise<SessionTelemetry> {
+  return getJson<SessionTelemetry>(
+    `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/telemetry`,
+  );
 }
 
 export type StreamHandlers = {
