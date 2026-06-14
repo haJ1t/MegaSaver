@@ -100,16 +100,21 @@ export async function handleStreamClaudeSession(
   if (ctx.origin) headers["access-control-allow-origin"] = ctx.origin;
   ctx.res.writeHead(200, headers);
 
+  // Guarded against a late write from an in-flight tail drain after cleanup ran:
+  // writing past res.end() is a harmless no-op on Node, but skipping it is cleaner.
+  let closed = false;
   const send = (event: string, data: unknown): void => {
+    if (closed) return;
     ctx.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
   send("snapshot", { projectLabel: snapshot.projectLabel, messages: snapshot.messages });
 
-  const heartbeat = setInterval(() => ctx.res.write(": ping\n\n"), HEARTBEAT_MS);
+  const heartbeat = setInterval(() => {
+    if (!closed) ctx.res.write(": ping\n\n");
+  }, HEARTBEAT_MS);
   const dispose = tailTranscript(path, snapshot.byteLength, (message) => send("message", message));
 
-  let closed = false;
   const cleanup = (): void => {
     if (closed) return;
     closed = true;
