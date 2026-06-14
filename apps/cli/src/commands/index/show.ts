@@ -29,7 +29,7 @@ export async function runIndexShow(input: RunIndexShowInput): Promise<0 | 1> {
   try {
     parsedId = codeBlockIdSchema.parse(input.blockId);
   } catch (err) {
-    input.stderr(mapErrorToCliMessage(err, { kind: "name" }).message);
+    input.stderr(mapErrorToCliMessage(err, { kind: "blockId", value: input.blockId }).message);
     return 1;
   }
 

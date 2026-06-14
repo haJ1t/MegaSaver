@@ -99,6 +99,33 @@ describe("runOutputFile", () => {
     expect(persisted).toContain(`${NEW_ID}.json`);
   });
 
+  it("text mode surfaces the secret-redaction warning on stderr", async () => {
+    await seed(store, projectRoot, { storeRawOutput: true });
+    const secretPath = join(projectRoot, "config.ts");
+    await writeFile(secretPath, 'export const t = "ghp_1234567890123456789012345678901234AB"\n');
+
+    const { out, err } = capture();
+    const code = await runOutputFile({
+      sessionId: SESSION_ID,
+      intentFlag: "find token",
+      path: secretPath,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: projectRoot,
+      xdgDataHome: undefined,
+      platform: "linux",
+      localAppData: undefined,
+      stdout: (l) => out.push(l),
+      stderr: (l) => err.push(l),
+      json: false,
+      now: () => NOW,
+      newId: () => NEW_ID,
+    });
+
+    expect(code).toBe(0);
+    expect(err.some((l) => /redacted \d+ secret/.test(l))).toBe(true);
+  });
+
   it("storeRawOutput=false: exit 0, no chunkSetId, no file written", async () => {
     await seed(store, projectRoot, { storeRawOutput: false });
     const logPath = join(projectRoot, "log.txt");

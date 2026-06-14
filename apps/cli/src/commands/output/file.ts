@@ -105,6 +105,7 @@ export async function runOutputFile(input: RunOutputFileInput): Promise<0 | 1> {
     let line = `Filtered ${input.path} for ${input.sessionId} (${result.returnedBytes} B kept, ${result.bytesSaved} B saved, ${pct}%)`;
     if (result.chunkSetId !== undefined) line += ` chunkSetId=${result.chunkSetId}`;
     input.stdout(line);
+    for (const w of result.warnings ?? []) input.stderr(`warning: ${w}`);
   }
   return 0;
 }
