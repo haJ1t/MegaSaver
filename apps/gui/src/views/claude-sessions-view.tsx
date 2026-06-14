@@ -5,8 +5,10 @@ import {
   type ClaudeSessionMeta,
   type NormalizedMessage,
   type SessionTelemetry,
+  type Workspace,
   fetchClaudeSessionTelemetry,
   fetchClaudeSessions,
+  fetchWorkspaces,
   openClaudeSessionStream,
 } from "../lib/claude-sessions-client.js";
 
@@ -36,8 +38,50 @@ function durationLabel(ms: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+type SessionGroup = { label: string; rows: ClaudeSessionMeta[] };
+
+// Group rows by their cwd (projectLabel) and order the groups by the
+// server-provided workspaces (recent-first). When the workspaces fetch is
+// missing or disagrees mid-poll, fall back to deriving the order from the
+// rows themselves so a header never appears without its rows (spec §6 risk 3).
+function groupRows(sessions: ClaudeSessionMeta[], workspaces: Workspace[]): SessionGroup[] {
+  const byLabel = new Map<string, ClaudeSessionMeta[]>();
+  for (const s of sessions) {
+    if (s.projectLabel.length === 0) continue;
+    const rows = byLabel.get(s.projectLabel);
+    if (rows) rows.push(s);
+    else byLabel.set(s.projectLabel, [s]);
+  }
+  for (const rows of byLabel.values()) rows.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  for (const w of workspaces) {
+    if (byLabel.has(w.label) && !seen.has(w.label)) {
+      ordered.push(w.label);
+      seen.add(w.label);
+    }
+  }
+  const remaining = [...byLabel.keys()].filter((l) => !seen.has(l));
+  remaining.sort((a, b) => {
+    const am = byLabel.get(a)?.[0]?.mtimeMs ?? 0;
+    const bm = byLabel.get(b)?.[0]?.mtimeMs ?? 0;
+    return bm - am;
+  });
+  ordered.push(...remaining);
+
+  return ordered.map((label) => ({ label, rows: byLabel.get(label) ?? [] }));
+}
+
+function folderName(label: string): string {
+  const parts = label.split("/").filter((p) => p.length > 0);
+  return parts.at(-1) ?? label;
+}
+
 export function ClaudeSessionsView(): JSX.Element {
   const [sessions, setSessions] = useState<ClaudeSessionMeta[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
   const [listError, setListError] = useState<BridgeError | null>(null);
   const [selected, setSelected] = useState<ClaudeSessionMeta | null>(null);
@@ -49,12 +93,27 @@ export function ClaudeSessionsView(): JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const visibleSessions = sessions.filter((s) => showArchived || !s.isArchived);
+  const groups = groupRows(visibleSessions, workspaces);
+
+  const toggleGroup = (key: string): void => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const loadList = useCallback((): void => {
     fetchClaudeSessions(50, 0)
       .then((list) => {
         setSessions(list);
         setListState("ready");
+        // Headers are best-effort: a workspaces 500 leaves grouping to the
+        // client-side fallback derived from the session list itself.
+        fetchWorkspaces(50, 0)
+          .then(setWorkspaces)
+          .catch(() => setWorkspaces([]));
       })
       .catch((err: unknown) => {
         setListError(err as BridgeError);
@@ -123,47 +182,76 @@ export function ClaudeSessionsView(): JSX.Element {
           />
           Show archived
         </label>
-        {visibleSessions.length === 0 && (
+        {groups.length === 0 && (
           <p className="px-3 py-4 text-xs text-text-muted">
             No Claude Code sessions found in ~/.claude/projects.
           </p>
         )}
-        {visibleSessions.map((s) => {
-          const live = nowMs - s.mtimeMs < LIVE_WINDOW_MS;
-          const active = selected?.dir === s.dir && selected?.id === s.id;
+        {groups.map((group) => {
+          const expanded = !collapsed.has(group.label);
+          const groupLive = group.rows.some((r) => nowMs - r.mtimeMs < LIVE_WINDOW_MS);
           return (
-            <button
-              key={`${s.dir}/${s.id}`}
-              type="button"
-              onClick={() => setSelected(s)}
-              aria-current={active ? "true" : undefined}
-              className={[
-                "flex flex-col gap-0.5 px-3 py-2 text-left border-b border-border/50 cursor-pointer",
-                active ? "bg-accent/15" : "hover:bg-surface-elevated",
-              ].join(" ")}
-            >
-              <span className="flex items-center gap-1.5 text-xs text-text-secondary truncate">
-                {live && (
+            <div key={group.label}>
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.label)}
+                aria-expanded={expanded}
+                title={group.label}
+                className="flex items-center gap-1.5 w-full px-3 py-1.5 text-left border-b border-border bg-surface cursor-pointer"
+              >
+                <span className="text-text-muted text-[10px]">{expanded ? "▾" : "▸"}</span>
+                {groupLive && (
                   <span
                     className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"
                     aria-label="live"
                   />
                 )}
-                <span className="truncate">{s.projectLabel || s.dir}</span>
-              </span>
-              <span className="text-xs text-text-primary truncate">{s.title || s.id}</span>
-              <span className="flex items-center gap-1.5 text-[10px] text-text-muted">
-                <span>{relativeTime(s.mtimeMs, nowMs)}</span>
-                {s.model && (
-                  <span className="px-1 rounded bg-surface-elevated text-text-secondary">
-                    {shortModel(s.model)}
-                  </span>
-                )}
-                {s.isArchived && (
-                  <span className="px-1 rounded bg-surface-elevated text-text-muted">archived</span>
-                )}
-              </span>
-            </button>
+                <span className="truncate text-xs font-medium text-text-secondary">
+                  {folderName(group.label)}
+                </span>
+                <span className="ml-auto text-[10px] text-text-muted">{group.rows.length}</span>
+              </button>
+              {expanded &&
+                group.rows.map((s) => {
+                  const live = nowMs - s.mtimeMs < LIVE_WINDOW_MS;
+                  const active = selected?.dir === s.dir && selected?.id === s.id;
+                  return (
+                    <button
+                      key={`${s.dir}/${s.id}`}
+                      type="button"
+                      onClick={() => setSelected(s)}
+                      aria-current={active ? "true" : undefined}
+                      className={[
+                        "flex flex-col gap-0.5 pl-5 pr-3 py-2 text-left border-b border-border/50 cursor-pointer w-full",
+                        active ? "bg-accent/15" : "hover:bg-surface-elevated",
+                      ].join(" ")}
+                    >
+                      <span className="flex items-center gap-1.5 text-xs text-text-primary truncate">
+                        {live && (
+                          <span
+                            className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"
+                            aria-label="live"
+                          />
+                        )}
+                        <span className="truncate">{s.title || s.id}</span>
+                      </span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-text-muted">
+                        <span>{relativeTime(s.mtimeMs, nowMs)}</span>
+                        {s.model && (
+                          <span className="px-1 rounded bg-surface-elevated text-text-secondary">
+                            {shortModel(s.model)}
+                          </span>
+                        )}
+                        {s.isArchived && (
+                          <span className="px-1 rounded bg-surface-elevated text-text-muted">
+                            archived
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
           );
         })}
       </aside>
