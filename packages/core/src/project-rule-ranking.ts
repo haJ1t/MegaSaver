@@ -1,3 +1,4 @@
+import { compileGlob } from "@megasaver/policy";
 import { rankBm25 } from "@megasaver/retrieval";
 import { z } from "zod";
 import type { ProjectRule, RuleSeverity } from "./project-rule.js";
@@ -6,6 +7,18 @@ const DEFAULT_LIMIT = 20;
 // A file/appliesTo overlap is stronger evidence than a pure text hit, so weight
 // each matched path above a typical single-term BM25 score.
 const PATH_MATCH_WEIGHT = 2;
+
+// appliesTo entries are either glob patterns (`*.ts`, `**/*.ts`) or literal
+// path prefixes (`src/db/`). Globs compile to anchored RegExps via the same
+// engine as policy secret-paths; literals keep the bidirectional prefix match
+// so a directory like `src/db/` still covers `src/db/schema.ts`.
+function appliesToMatches(glob: string, file: string): boolean {
+  if (glob.length === 0) return false;
+  if (glob.includes("*") || glob.includes("?")) {
+    return compileGlob(glob).test(file);
+  }
+  return file.startsWith(glob) || glob.startsWith(file);
+}
 
 export const applicableRuleQuerySchema = z
   .object({
@@ -54,7 +67,7 @@ export function rankApplicableRules(
     const matchedPaths: string[] = [];
     for (const file of q.files) {
       for (const glob of rule.appliesTo) {
-        if (glob.length > 0 && (file.startsWith(glob) || glob.startsWith(file))) {
+        if (appliesToMatches(glob, file)) {
           matchedPaths.push(file);
           break;
         }

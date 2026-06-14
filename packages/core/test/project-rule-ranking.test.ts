@@ -64,4 +64,23 @@ describe("rankApplicableRules", () => {
       rankApplicableRules([rule({ id: "b0000000-0000-4000-8000-000000000001" })], { files: [""] }),
     ).toThrow();
   });
+
+  it("matches a `**/*.ts` glob against a nested file", () => {
+    const r = rule({
+      id: "b0000000-0000-4000-8000-000000000010",
+      appliesTo: ["**/*.ts"],
+    });
+    const out = rankApplicableRules([r], { files: ["src/index.ts"] });
+    expect(out[0]?.rule.id).toBe(r.id);
+    expect(out[0]?.reason).toContain("applies to src/index.ts");
+  });
+
+  it("matches a top-level `*.ts` glob but not a nested file", () => {
+    const r = rule({
+      id: "b0000000-0000-4000-8000-000000000011",
+      appliesTo: ["*.ts"],
+    });
+    expect(rankApplicableRules([r], { files: ["index.ts"] })[0]?.rule.id).toBe(r.id);
+    expect(rankApplicableRules([r], { files: ["src/index.ts"] })).toEqual([]);
+  });
 });

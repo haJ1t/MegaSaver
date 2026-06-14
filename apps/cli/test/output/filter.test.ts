@@ -92,6 +92,33 @@ describe("runOutputFilter", () => {
     expect(typeof parsed.result.rawBytes).toBe("number");
   });
 
+  it("text mode surfaces the secret-redaction warning on stderr", async () => {
+    await seed(store, projectRoot);
+    const secretPath = join(projectRoot, "config.log");
+    await writeFile(secretPath, "token ghp_1234567890123456789012345678901234AB here\n");
+
+    const { out, err } = capture();
+    const code = await runOutputFilter({
+      sessionId: SESSION_ID,
+      intentFlag: "find token",
+      fileFlag: secretPath,
+      storeFlag: store,
+      cwd: projectRoot,
+      home: projectRoot,
+      xdgDataHome: undefined,
+      platform: "linux",
+      localAppData: undefined,
+      stdout: (l) => out.push(l),
+      stderr: (l) => err.push(l),
+      json: false,
+      now: () => NOW,
+      newId: () => NEW_ID,
+    });
+
+    expect(code).toBe(0);
+    expect(err.some((l) => /redacted \d+ secret/.test(l))).toBe(true);
+  });
+
   it("missing --file → file_required, exit 1", async () => {
     await seed(store, projectRoot);
 

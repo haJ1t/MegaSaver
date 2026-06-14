@@ -153,6 +153,7 @@ export async function runOutputExec(input: RunOutputExecInput): Promise<number> 
       if (result.chunkSetId !== undefined) line += ` chunkSetId=${result.chunkSetId}`;
       input.stdout(line);
       if (result.summary.length > 0) input.stdout(result.summary);
+      for (const w of result.warnings ?? []) input.stderr(`warning: ${w}`);
     }
 
     // Mirror the child's exit code so CI/scripts see the real result.

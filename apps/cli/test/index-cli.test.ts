@@ -104,4 +104,12 @@ describe("mega scan + mega index", () => {
     expect(out()).toContain("validateToken");
     expect(out()).toContain("src/auth.ts");
   });
+
+  it("index show with a malformed block id reports an invalid-id error", async () => {
+    const errLine = (): string => errSpy.mock.calls.map((c) => c[0] as string).join("\n");
+    await run(indexShowCommand, { projectName: "demo", blockId: "not-a-uuid" });
+    expect(process.exitCode).toBe(1);
+    expect(errLine()).toMatch(/invalid block id/);
+    expect(errLine()).not.toMatch(/name must be non-empty/);
+  });
 });

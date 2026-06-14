@@ -18,6 +18,7 @@ export type ZodContext =
   | { kind: "store" }
   | { kind: "title" }
   | { kind: "sessionId" }
+  | { kind: "blockId"; value: string }
   | { kind: "memoryEntryId" }
   | { kind: "memory_create" }
   | { kind: "memory_update" }
@@ -32,6 +33,7 @@ export const TITLE_CONTROL_CHARS_MESSAGE = "title must not contain control chara
 export const AGENT_INVALID_MESSAGE_PREFIX = "error: invalid agent";
 export const RISK_INVALID_MESSAGE_PREFIX = "error: invalid risk";
 export const SESSION_ID_INVALID_PREFIX = "error: invalid session id";
+export const BLOCK_ID_INVALID_PREFIX = "error: invalid block id";
 export const MODE_INVALID_MESSAGE_PREFIX = "error: invalid mode";
 
 export function duplicateNameMessage(name: string): CliMessage {
@@ -95,6 +97,10 @@ export function invalidSessionIdMessage(value: string): CliMessage {
   return { message: `${SESSION_ID_INVALID_PREFIX} "${value}"`, exitCode: 1 };
 }
 
+export function invalidBlockIdMessage(value: string): CliMessage {
+  return { message: `${BLOCK_ID_INVALID_PREFIX} "${value}"`, exitCode: 1 };
+}
+
 export function nothingToUpdateMessage(): CliMessage {
   return { message: "error: nothing to update", exitCode: 1 };
 }
@@ -131,6 +137,9 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
       const issue = err.issues[0];
       const value = issue && "received" in issue ? String(issue.received) : "<unknown>";
       return invalidSessionIdMessage(value);
+    }
+    if (ctx?.kind === "blockId") {
+      return invalidBlockIdMessage(ctx.value);
     }
     if (ctx?.kind === "session_update") {
       const issue = err.issues[0];

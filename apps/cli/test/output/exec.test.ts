@@ -304,6 +304,19 @@ describe("runOutputExec", () => {
     expect(persisted).toContain(`${NEW_ID}.json`);
   });
 
+  it("spawn success (text): surfaces the secret-redaction warning on stderr", async () => {
+    await seed(store, projectRoot, { storeRawOutput: true });
+    const { input, err } = scriptedInput({
+      stdout: ["leaked ghp_1234567890123456789012345678901234AB\n"],
+      close: 0,
+    });
+
+    const code = await runOutputExec(input);
+
+    expect(code).toBe(0);
+    expect(err.some((l) => /redacted \d+ secret/.test(l))).toBe(true);
+  });
+
   // ---- spawn success (json) --------------------------------------------
 
   it("spawn success (--json): exit 0, single-line { sessionId, result } with childExitCode", async () => {
