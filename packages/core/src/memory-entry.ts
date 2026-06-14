@@ -109,6 +109,56 @@ export const memoryEntrySchema = z
 
 export type MemoryEntry = z.infer<typeof memoryEntrySchema>;
 
+// F4 live-first variant: drops the (projectId, sessionId) FK pair for the
+// cwd-derived workspaceKey + the Claude transcript liveSessionId. The `scope`
+// invariant now binds liveSessionId: "session" ⇒ conversation-scoped (non-null),
+// "project" ⇒ cwd/workspace-scoped cross-session (null). The "project" wire value
+// is retained for type-compat; it semantically means workspace-scoped now (F5
+// renames the enum). `.strict()` rejects any leftover projectId/sessionId.
+export const overlayMemoryEntrySchema = z
+  .object({
+    id: memoryEntryIdSchema,
+    workspaceKey: z.string().min(1),
+    liveSessionId: z.string().nullable(),
+    scope: memoryScopeSchema,
+    type: memoryTypeSchema,
+    title: titleSchema,
+    content: z.string().trim().min(1),
+    keywords: keywordsSchema,
+    confidence: memoryConfidenceSchema,
+    source: memorySourceSchema,
+    approval: memoryApprovalSchema.default("approved"),
+    reason: z.string().trim().min(1).optional(),
+    goal: z.string().trim().min(1).optional(),
+    evidence: z.array(z.string()).optional(),
+    relatedFiles: z.array(z.string()).optional(),
+    relatedSymbols: z.array(z.string()).optional(),
+    stale: z.boolean().default(false),
+    createdAt: z.string().datetime({ offset: true }),
+    updatedAt: z.string().datetime({ offset: true }),
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+  })
+  .strict()
+  .superRefine((entry, ctx) => {
+    if (entry.scope === "session" && entry.liveSessionId === null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Session-scoped memory requires liveSessionId.",
+        path: ["liveSessionId"],
+      });
+    }
+
+    if (entry.scope === "project" && entry.liveSessionId !== null) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Workspace-scoped memory cannot include liveSessionId.",
+        path: ["liveSessionId"],
+      });
+    }
+  });
+
+export type OverlayMemoryEntry = z.infer<typeof overlayMemoryEntrySchema>;
+
 // Partial update over the MUTABLE fields only. id/projectId/createdAt/scope/
 // sessionId are immutable after create; `.strict()` rejects them so a bad
 // caller fails loudly. `updatedAt` is required — the caller (CLI/MCP) owns the
@@ -135,6 +185,13 @@ export const memoryEntryUpdatePatchSchema = z
   .strict();
 
 export type MemoryEntryUpdatePatch = z.infer<typeof memoryEntryUpdatePatchSchema>;
+
+// The overlay variant mutates the same fields — only the immutable key columns
+// differ (workspaceKey/liveSessionId vs projectId/sessionId), and neither is
+// patchable — so the mutable-field patch is identical.
+export const overlayMemoryEntryUpdatePatchSchema = memoryEntryUpdatePatchSchema;
+
+export type OverlayMemoryEntryUpdatePatch = z.infer<typeof overlayMemoryEntryUpdatePatchSchema>;
 
 const LEGACY_TITLE_MAX = 59;
 

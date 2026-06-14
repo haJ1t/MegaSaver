@@ -17,6 +17,8 @@ export {
   type MemoryScope,
   type MemorySource,
   type MemoryType,
+  type OverlayMemoryEntry,
+  type OverlayMemoryEntryUpdatePatch,
   backfillMemoryEntry,
   memoryApprovalSchema,
   memoryConfidenceSchema,
@@ -25,6 +27,8 @@ export {
   memoryScopeSchema,
   memorySourceSchema,
   memoryTypeSchema,
+  overlayMemoryEntrySchema,
+  overlayMemoryEntryUpdatePatchSchema,
 } from "./memory-entry.js";
 export * from "./memory-search.js";
 export {
