@@ -107,8 +107,8 @@ export function WorkspaceSaverModePanel({
           )}
           {status.enabled && !status.mcpInstalled && (
             <p className="text-xs text-danger">
-              MCP bridge is not installed for Claude Code. Install it from the Agent Setup tab —
-              Saver Mode has no effect until the proxy tools are available.
+              MCP bridge is not installed for Claude Code. Install it from Agent setup — Saver Mode
+              has no effect until the proxy tools are available.
             </p>
           )}
         </>
