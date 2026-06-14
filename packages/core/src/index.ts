@@ -27,6 +27,13 @@ export {
   memoryTypeSchema,
 } from "./memory-entry.js";
 export * from "./memory-search.js";
+export {
+  type LiveSessionId,
+  type WorkspaceKey,
+  isSafeKeySegment,
+  liveSessionIdSchema,
+  workspaceKeySchema,
+} from "./overlay-key.js";
 export * from "./project-rule.js";
 export * from "./project.js";
 export * from "./registry.js";
