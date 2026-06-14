@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { CoreRegistry } from "@megasaver/core";
 import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import type { BridgeErrorCode } from "../src/bridge-error-code.js";
+import type { resolveWorkspace } from "./workspace-resolver.js";
 
 export type SendJson = (
   res: ServerResponse,
@@ -40,6 +41,9 @@ export type RouteContext = {
   // Absolute path to the desktop app's session-metadata dir (claude-code-sessions),
   // source of the AI-generated session titles. Overridable in tests.
   claudeSessionsMetaDir: string;
+  // Pure cwd → { workspaceKey, label, cwd } resolver, injected once so tests can
+  // override it. Used by the workspace-scoped routes.
+  resolveWorkspace: typeof resolveWorkspace;
   newId: () => string;
   now: () => string;
   sendJson: SendJson;

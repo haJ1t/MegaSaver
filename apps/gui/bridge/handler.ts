@@ -32,7 +32,9 @@ import {
   handlePostSession,
 } from "./routes/sessions.js";
 import { dispatchTokenSaver } from "./routes/token-saver.js";
+import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
+import { resolveWorkspace } from "./workspace-resolver.js";
 
 export interface BridgeHandlerOptions {
   registry: CoreRegistry;
@@ -175,6 +177,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       storeRoot: storePath,
       claudeProjectsDir,
       claudeSessionsMetaDir,
+      resolveWorkspace,
       newId,
       now,
       sendJson,
@@ -266,6 +269,13 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       await handleListWorkspaces(ctx);
       return;
+    }
+
+    if (path.startsWith("/api/workspaces/")) {
+      const dispatched = await dispatchWorkspaceScoped(ctx, method, path, () =>
+        methodNotAllowed(res, method, origin),
+      );
+      if (dispatched) return;
     }
 
     const claudeMatch = path.match(
