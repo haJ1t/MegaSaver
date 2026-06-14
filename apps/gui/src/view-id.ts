@@ -3,6 +3,7 @@
 // sidebar can group views logically without breaking the pinned enum order.
 export const VIEW_IDS = [
   "agent-setup",
+  "claude-sessions",
   "context",
   "index",
   "memory",
@@ -16,6 +17,7 @@ export type ViewId = (typeof VIEW_IDS)[number];
 
 export const VIEW_LABELS: Record<ViewId, string> = {
   "agent-setup": "Agent setup",
+  "claude-sessions": "Claude sessions",
   context: "Context",
   index: "Index",
   memory: "Memory",

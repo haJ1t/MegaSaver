@@ -6,6 +6,7 @@ describe("ViewId tuple ordering", () => {
     expectTypeOf<typeof VIEW_IDS>().toEqualTypeOf<
       readonly [
         "agent-setup",
+        "claude-sessions",
         "context",
         "index",
         "memory",
@@ -21,6 +22,7 @@ describe("ViewId tuple ordering", () => {
   it("ViewId is the union of the tuple members", () => {
     expectTypeOf<ViewId>().toEqualTypeOf<
       | "agent-setup"
+      | "claude-sessions"
       | "context"
       | "index"
       | "memory"
