@@ -42,3 +42,24 @@ export type ClaudeTranscript = {
   byteLength: number;
   messages: NormalizedMessage[];
 };
+
+export type ModelUsage = {
+  model: string;
+  turns: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+};
+
+export type SessionTelemetry = {
+  turnCount: number;
+  assistantTurns: number;
+  toolCallCount: number;
+  totals: MessageUsage;
+  models: ModelUsage[];
+  firstTs: string;
+  lastTs: string;
+  durationMs: number;
+  gitBranch: string;
+};
