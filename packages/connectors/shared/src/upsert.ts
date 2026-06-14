@@ -58,6 +58,16 @@ function applyOptionalBlock(normalized: string, block: string, sentinels: Sentin
   return ensureTrailingNewline(`${head}\n\n${block}`);
 }
 
+// CONTEXT_GATE-only upsert. Unlike upsertBlock, it never touches the legacy
+// managed block — used by the GUI workspace activation path, which has no
+// connector context. Empty block ⇒ remove the CG block if present.
+export function upsertContextGateBlockText(existingContent: string, block: string): string {
+  const eol = detectDominantEol(existingContent);
+  const normalized = existingContent.replace(/\r\n/g, "\n");
+  const result = applyOptionalBlock(normalized, block, CG_SENTINELS);
+  return eol === "\r\n" ? result.replace(/\n/g, "\r\n") : result;
+}
+
 export function removeBlock(content: string): string {
   const eol = detectDominantEol(content);
   const normalized = content.replace(/\r\n/g, "\n");

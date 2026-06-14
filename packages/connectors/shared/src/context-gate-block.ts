@@ -1,16 +1,17 @@
+import { type TokenSaverMode } from "@megasaver/shared";
 import { MEGA_SAVER_CG_BLOCK_END, MEGA_SAVER_CG_BLOCK_START } from "./constants.js";
 import { type ConnectorContext, assertConnectorContext } from "./context.js";
 
-// AA1 §7: rendered ONLY when session.tokenSaver?.enabled === true; otherwise "".
-// Agent-agnostic (CLAUDE.md §1) — no per-agent branching. Trailing newline
-// mirrors renderBlock (render.ts).
-export function renderContextGateBlock(input: ConnectorContext): string {
-  const context = assertConnectorContext(input);
-  const tokenSaver = context.session?.tokenSaver;
-  if (tokenSaver?.enabled !== true) {
-    return "";
-  }
+export type ContextGateBlockFields = {
+  sessionId: string;
+  projectId: string;
+  mode: TokenSaverMode;
+  maxReturnedBytes: number;
+};
 
+// Pure block text. Shared by the per-session connector render
+// (renderContextGateBlock) and the GUI workspace activation path.
+export function renderContextGateBlockText(fields: ContextGateBlockFields): string {
   return [
     MEGA_SAVER_CG_BLOCK_START,
     "# Mega Saver Mode",
@@ -20,9 +21,6 @@ export function renderContextGateBlock(input: ConnectorContext): string {
     "When reading large files, running commands, or inspecting build /",
     "test output, prefer the Mega Saver MCP tools over native ones:",
     "",
-    // Names track the default proxy naming mode (Proxy Mode v1.2 §5).
-    // Installs that set MEGASAVER_TOOL_NAMING=legacy expose the
-    // mega_* equivalents. Mode-aware rendering is Deliverable 8.
     "- `proxy_read_file(path, intent, ...)` over reading a whole file.",
     "- `proxy_run_command(command, args, intent, ...)` over `Bash`.",
     "- `proxy_expand_chunk(chunkSetId, chunkId)` to drill into a stored",
@@ -34,17 +32,31 @@ export function renderContextGateBlock(input: ConnectorContext): string {
     "locally; ask for it only when the filtered result is genuinely",
     "insufficient.",
     "",
-    // Proxy Mode v1.2 §6 / §14-D8 canonical instruction block.
     "Prefer proxy tools for reading files, searching code, running tests,",
     "running typecheck, inspecting build logs, and reviewing diffs.",
     "Use native tools only when explicitly required.",
     "Expand chunks before assuming omitted content is irrelevant.",
     "",
-    `Session: ${context.session?.id}`,
-    `Project: ${context.project.id}`,
-    `Mode: ${tokenSaver.mode}`,
-    `Max returned bytes: ${tokenSaver.maxReturnedBytes}`,
+    `Session: ${fields.sessionId}`,
+    `Project: ${fields.projectId}`,
+    `Mode: ${fields.mode}`,
+    `Max returned bytes: ${fields.maxReturnedBytes}`,
     MEGA_SAVER_CG_BLOCK_END,
     "",
   ].join("\n");
+}
+
+// AA1 §7: rendered ONLY when session.tokenSaver?.enabled === true; otherwise "".
+export function renderContextGateBlock(input: ConnectorContext): string {
+  const context = assertConnectorContext(input);
+  const session = context.session;
+  if (session?.tokenSaver?.enabled !== true) {
+    return "";
+  }
+  return renderContextGateBlockText({
+    sessionId: session.id,
+    projectId: context.project.id,
+    mode: session.tokenSaver.mode,
+    maxReturnedBytes: session.tokenSaver.maxReturnedBytes,
+  });
 }
