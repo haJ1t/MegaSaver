@@ -7,6 +7,7 @@ import type { BridgeError } from "./components/states.js";
 import { fetchProjects } from "./lib/api-client.js";
 import { PROJECT_SCOPED_VIEWS, VIEW_LABELS, type ViewId } from "./view-id.js";
 import { AgentSetupDoctor } from "./views/agent-setup-doctor.js";
+import { ClaudeSessionsView } from "./views/claude-sessions-view.js";
 import { ContextView } from "./views/context-view.js";
 import { IndexView } from "./views/index-view.js";
 import { MemoryView } from "./views/memory-view.js";
@@ -24,6 +25,7 @@ const NAV_GROUPS: ReadonlyArray<{ heading: string; views: readonly ViewId[] }> =
     views: ["overview", "sessions", "memory", "rules", "index", "context", "tasks", "tools"],
   },
   { heading: "Tools", views: ["agent-setup"] },
+  { heading: "Claude Code", views: ["claude-sessions"] },
 ];
 
 export function App(): JSX.Element {
@@ -154,6 +156,8 @@ export function App(): JSX.Element {
         <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
           {view === "agent-setup" ? (
             <AgentSetupDoctor activeProjectId={activeProjectId} />
+          ) : view === "claude-sessions" ? (
+            <ClaudeSessionsView />
           ) : (
             <>
               {showProjectsLoading && <LoadingState label="Connecting to bridge…" />}
