@@ -13,11 +13,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { z } from "zod";
+import type { ProjectId } from "@megasaver/shared";
+import { z } from "zod";
 import { CorePersistenceError } from "./errors.js";
 import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
 import { type MemoryEntry, backfillMemoryEntry, memoryEntrySchema } from "./memory-entry.js";
 import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
+import { type Project, projectSchema } from "./project.js";
+import { type Session, sessionSchema } from "./session.js";
 import { type TaskPlan, taskPlanSchema } from "./task-plan.js";
 import { type ToolDefinition, toolDefinitionSchema } from "./tool-definition.js";
 
@@ -27,27 +30,14 @@ const IS_WIN32 = process.platform === "win32";
 
 export type StorePaths = {
   rootDir: string;
+  projectsPath: string;
+  sessionsPath: string;
   memoryDir: string;
-  rulesDir: string;
+  projectRulesDir: string;
   failedAttemptsDir: string;
-  tasksDir: string;
-  toolsDir: string;
-  workspacesPath: string;
-  migrationsDir: string;
+  taskPlansDir: string;
+  toolDefinitionsDir: string;
 };
-
-function buildStorePaths(resolvedRootDir: string): StorePaths {
-  return {
-    rootDir: resolvedRootDir,
-    memoryDir: join(resolvedRootDir, "memory"),
-    rulesDir: join(resolvedRootDir, "rules"),
-    failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
-    tasksDir: join(resolvedRootDir, "tasks"),
-    toolsDir: join(resolvedRootDir, "tools"),
-    workspacesPath: join(resolvedRootDir, "workspaces.json"),
-    migrationsDir: join(resolvedRootDir, ".migrations"),
-  };
-}
 
 export function resolveStorePaths(rootDir: string): StorePaths {
   if (rootDir.trim().length === 0) {
@@ -64,7 +54,16 @@ export function resolveStorePaths(rootDir: string): StorePaths {
     }
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") {
-      return buildStorePaths(resolvedRootDir);
+      return {
+        rootDir: resolvedRootDir,
+        projectsPath: join(resolvedRootDir, "projects.json"),
+        sessionsPath: join(resolvedRootDir, "sessions.json"),
+        memoryDir: join(resolvedRootDir, "memory"),
+        projectRulesDir: join(resolvedRootDir, "project-rules"),
+        failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
+        taskPlansDir: join(resolvedRootDir, "task-plans"),
+        toolDefinitionsDir: join(resolvedRootDir, "tool-definitions"),
+      };
     }
 
     if (error instanceof CorePersistenceError) {
@@ -77,18 +76,47 @@ export function resolveStorePaths(rootDir: string): StorePaths {
     });
   }
 
-  return buildStorePaths(resolvedRootDir);
+  return {
+    rootDir: resolvedRootDir,
+    projectsPath: join(resolvedRootDir, "projects.json"),
+    sessionsPath: join(resolvedRootDir, "sessions.json"),
+    memoryDir: join(resolvedRootDir, "memory"),
+    projectRulesDir: join(resolvedRootDir, "project-rules"),
+    failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
+    taskPlansDir: join(resolvedRootDir, "task-plans"),
+    toolDefinitionsDir: join(resolvedRootDir, "tool-definitions"),
+  };
 }
 
-export function readMemoryEntriesForWorkspace(
+export function readProjects(paths: StorePaths): Project[] {
+  return readJsonArray(paths.projectsPath).map((project) =>
+    parseEntity(projectSchema, project, paths.projectsPath),
+  );
+}
+
+export function writeProjects(paths: StorePaths, projects: readonly Project[]): void {
+  atomicWriteFile(paths.projectsPath, `${JSON.stringify(projects, null, 2)}\n`);
+}
+
+export function readSessions(paths: StorePaths): Session[] {
+  return readJsonArray(paths.sessionsPath).map((session) =>
+    parseEntity(sessionSchema, session, paths.sessionsPath),
+  );
+}
+
+export function writeSessions(paths: StorePaths, sessions: readonly Session[]): void {
+  atomicWriteFile(paths.sessionsPath, `${JSON.stringify(sessions, null, 2)}\n`);
+}
+
+export function readMemoryEntriesForProject(
   paths: StorePaths,
-  workspaceKey: string,
+  projectId: ProjectId,
 ): MemoryEntry[] {
-  return readJsonLines(join(paths.memoryDir, `${workspaceKey}.jsonl`)).map((entry) =>
+  return readJsonLines(join(paths.memoryDir, `${projectId}.jsonl`)).map((entry) =>
     parseEntity(
       memoryEntrySchema,
       backfillMemoryEntry(entry),
-      join(paths.memoryDir, `${workspaceKey}.jsonl`),
+      join(paths.memoryDir, `${projectId}.jsonl`),
     ),
   );
 }
@@ -118,12 +146,12 @@ export function readAllMemoryEntries(paths: StorePaths): MemoryEntry[] {
     });
 }
 
-export function writeMemoryEntriesForWorkspace(
+export function writeMemoryEntriesForProject(
   paths: StorePaths,
-  workspaceKey: string,
+  projectId: ProjectId,
   entries: readonly MemoryEntry[],
 ): void {
-  const filePath = join(paths.memoryDir, `${workspaceKey}.jsonl`);
+  const filePath = join(paths.memoryDir, `${projectId}.jsonl`);
   // An empty set removes the file rather than leaving a zero-byte JSONL:
   // readJsonLines treats an empty existing file as corrupt, so deleting the
   // last entry must clear the file, not blank it. An already-absent file
@@ -146,25 +174,22 @@ export function writeMemoryEntriesForWorkspace(
   atomicWriteFile(filePath, `${content}\n`);
 }
 
-export function readProjectRulesForWorkspace(
-  paths: StorePaths,
-  workspaceKey: string,
-): ProjectRule[] {
-  const filePath = join(paths.rulesDir, `${workspaceKey}.jsonl`);
+export function readProjectRulesForProject(paths: StorePaths, projectId: ProjectId): ProjectRule[] {
+  const filePath = join(paths.projectRulesDir, `${projectId}.jsonl`);
   return readJsonLines(filePath).map((entry) => parseEntity(projectRuleSchema, entry, filePath));
 }
 
 export function readAllProjectRules(paths: StorePaths): ProjectRule[] {
   let fileNames: string[];
   try {
-    fileNames = readdirSync(paths.rulesDir);
+    fileNames = readdirSync(paths.projectRulesDir);
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") {
       return [];
     }
 
     throw new CorePersistenceError("store_read_failed", "Store read failed.", {
-      filePath: paths.rulesDir,
+      filePath: paths.projectRulesDir,
       cause: error,
     });
   }
@@ -172,19 +197,19 @@ export function readAllProjectRules(paths: StorePaths): ProjectRule[] {
   return fileNames
     .filter((fileName) => fileName.endsWith(".jsonl"))
     .flatMap((fileName) => {
-      const filePath = join(paths.rulesDir, fileName);
+      const filePath = join(paths.projectRulesDir, fileName);
       return readJsonLines(filePath).map((entry) =>
         parseEntity(projectRuleSchema, entry, filePath),
       );
     });
 }
 
-export function writeProjectRulesForWorkspace(
+export function writeProjectRulesForProject(
   paths: StorePaths,
-  workspaceKey: string,
+  projectId: ProjectId,
   rules: readonly ProjectRule[],
 ): void {
-  const filePath = join(paths.rulesDir, `${workspaceKey}.jsonl`);
+  const filePath = join(paths.projectRulesDir, `${projectId}.jsonl`);
   if (rules.length === 0) {
     removeIfExists(filePath);
     return;
@@ -192,11 +217,11 @@ export function writeProjectRulesForWorkspace(
   atomicWriteFile(filePath, `${rules.map((rule) => JSON.stringify(rule)).join("\n")}\n`);
 }
 
-export function readFailedAttemptsForWorkspace(
+export function readFailedAttemptsForProject(
   paths: StorePaths,
-  workspaceKey: string,
+  projectId: ProjectId,
 ): FailedAttempt[] {
-  const filePath = join(paths.failedAttemptsDir, `${workspaceKey}.jsonl`);
+  const filePath = join(paths.failedAttemptsDir, `${projectId}.jsonl`);
   return readJsonLines(filePath).map((entry) => parseEntity(failedAttemptSchema, entry, filePath));
 }
 
@@ -225,12 +250,12 @@ export function readAllFailedAttempts(paths: StorePaths): FailedAttempt[] {
     });
 }
 
-export function writeFailedAttemptsForWorkspace(
+export function writeFailedAttemptsForProject(
   paths: StorePaths,
-  workspaceKey: string,
+  projectId: ProjectId,
   attempts: readonly FailedAttempt[],
 ): void {
-  const filePath = join(paths.failedAttemptsDir, `${workspaceKey}.jsonl`);
+  const filePath = join(paths.failedAttemptsDir, `${projectId}.jsonl`);
   if (attempts.length === 0) {
     removeIfExists(filePath);
     return;
@@ -238,22 +263,22 @@ export function writeFailedAttemptsForWorkspace(
   atomicWriteFile(filePath, `${attempts.map((fa) => JSON.stringify(fa)).join("\n")}\n`);
 }
 
-export function readTaskPlansForWorkspace(paths: StorePaths, workspaceKey: string): TaskPlan[] {
-  const filePath = join(paths.tasksDir, `${workspaceKey}.jsonl`);
+export function readTaskPlansForProject(paths: StorePaths, projectId: ProjectId): TaskPlan[] {
+  const filePath = join(paths.taskPlansDir, `${projectId}.jsonl`);
   return readJsonLines(filePath).map((entry) => parseEntity(taskPlanSchema, entry, filePath));
 }
 
 export function readAllTaskPlans(paths: StorePaths): TaskPlan[] {
   let fileNames: string[];
   try {
-    fileNames = readdirSync(paths.tasksDir);
+    fileNames = readdirSync(paths.taskPlansDir);
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") {
       return [];
     }
 
     throw new CorePersistenceError("store_read_failed", "Store read failed.", {
-      filePath: paths.tasksDir,
+      filePath: paths.taskPlansDir,
       cause: error,
     });
   }
@@ -261,17 +286,17 @@ export function readAllTaskPlans(paths: StorePaths): TaskPlan[] {
   return fileNames
     .filter((fileName) => fileName.endsWith(".jsonl"))
     .flatMap((fileName) => {
-      const filePath = join(paths.tasksDir, fileName);
+      const filePath = join(paths.taskPlansDir, fileName);
       return readJsonLines(filePath).map((entry) => parseEntity(taskPlanSchema, entry, filePath));
     });
 }
 
-export function writeTaskPlansForWorkspace(
+export function writeTaskPlansForProject(
   paths: StorePaths,
-  workspaceKey: string,
+  projectId: ProjectId,
   plans: readonly TaskPlan[],
 ): void {
-  const filePath = join(paths.tasksDir, `${workspaceKey}.jsonl`);
+  const filePath = join(paths.taskPlansDir, `${projectId}.jsonl`);
   if (plans.length === 0) {
     removeIfExists(filePath);
     return;
@@ -279,25 +304,25 @@ export function writeTaskPlansForWorkspace(
   atomicWriteFile(filePath, `${plans.map((p) => JSON.stringify(p)).join("\n")}\n`);
 }
 
-export function readToolDefinitionsForWorkspace(
+export function readToolDefinitionsForProject(
   paths: StorePaths,
-  workspaceKey: string,
+  projectId: ProjectId,
 ): ToolDefinition[] {
-  const filePath = join(paths.toolsDir, `${workspaceKey}.jsonl`);
+  const filePath = join(paths.toolDefinitionsDir, `${projectId}.jsonl`);
   return readJsonLines(filePath).map((entry) => parseEntity(toolDefinitionSchema, entry, filePath));
 }
 
 export function readAllToolDefinitions(paths: StorePaths): ToolDefinition[] {
   let fileNames: string[];
   try {
-    fileNames = readdirSync(paths.toolsDir);
+    fileNames = readdirSync(paths.toolDefinitionsDir);
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") {
       return [];
     }
 
     throw new CorePersistenceError("store_read_failed", "Store read failed.", {
-      filePath: paths.toolsDir,
+      filePath: paths.toolDefinitionsDir,
       cause: error,
     });
   }
@@ -305,19 +330,19 @@ export function readAllToolDefinitions(paths: StorePaths): ToolDefinition[] {
   return fileNames
     .filter((fileName) => fileName.endsWith(".jsonl"))
     .flatMap((fileName) => {
-      const filePath = join(paths.toolsDir, fileName);
+      const filePath = join(paths.toolDefinitionsDir, fileName);
       return readJsonLines(filePath).map((entry) =>
         parseEntity(toolDefinitionSchema, entry, filePath),
       );
     });
 }
 
-export function writeToolDefinitionsForWorkspace(
+export function writeToolDefinitionsForProject(
   paths: StorePaths,
-  workspaceKey: string,
+  projectId: ProjectId,
   tools: readonly ToolDefinition[],
 ): void {
-  const filePath = join(paths.toolsDir, `${workspaceKey}.jsonl`);
+  const filePath = join(paths.toolDefinitionsDir, `${projectId}.jsonl`);
   if (tools.length === 0) {
     removeIfExists(filePath);
     return;
@@ -325,7 +350,7 @@ export function writeToolDefinitionsForWorkspace(
   atomicWriteFile(filePath, `${tools.map((t) => JSON.stringify(t)).join("\n")}\n`);
 }
 
-// Mirrors the empty-set branch of writeMemoryEntriesForWorkspace: an empty entity
+// Mirrors the empty-set branch of writeMemoryEntriesForProject: an empty entity
 // set must delete the file (readJsonLines treats a zero-byte file as corrupt).
 function removeIfExists(filePath: string): void {
   try {
@@ -337,6 +362,29 @@ function removeIfExists(filePath: string): void {
         cause: error,
       });
     }
+  }
+}
+
+function readJsonArray(filePath: string): unknown[] {
+  try {
+    return parseEntity(
+      z.array(z.unknown()),
+      parseJson(readFileSync(filePath, "utf8"), filePath),
+      filePath,
+    );
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return [];
+    }
+
+    if (error instanceof CorePersistenceError) {
+      throw error;
+    }
+
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath,
+      cause: error,
+    });
   }
 }
 
