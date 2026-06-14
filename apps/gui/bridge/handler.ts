@@ -8,8 +8,14 @@ import { handleCaughtError } from "./error-mapping.js";
 import type { RouteContext, SendError, SendJson, SendText } from "./route-context.js";
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
-import { handleGetMemory, handlePostMemory } from "./routes/memory.js";
-import { handleGetProjects } from "./routes/projects.js";
+import {
+  handleDeleteMemory,
+  handleGetMemory,
+  handlePatchMemory,
+  handlePostMemory,
+} from "./routes/memory.js";
+import { dispatchProjectScoped } from "./routes/project-scoped.js";
+import { handleGetProjects, handlePostProject } from "./routes/projects.js";
 import { dispatchRetention } from "./routes/retention.js";
 import {
   handleEndSession,
@@ -162,9 +168,22 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     }
 
     if (path === "/api/projects") {
-      if (method !== "GET") return methodNotAllowed(res, method, origin);
-      handleGetProjects(ctx);
-      return;
+      if (method === "GET") {
+        handleGetProjects(ctx);
+        return;
+      }
+      if (method === "POST") {
+        await handlePostProject(ctx);
+        return;
+      }
+      return methodNotAllowed(res, method, origin);
+    }
+
+    if (path.startsWith("/api/projects/")) {
+      const dispatched = dispatchProjectScoped(ctx, method, path, () =>
+        methodNotAllowed(res, method, origin),
+      );
+      if (dispatched) return;
     }
 
     if (path === "/api/sessions") {
@@ -223,6 +242,20 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       }
       if (method === "POST") {
         await handlePostMemory(ctx);
+        return;
+      }
+      return methodNotAllowed(res, method, origin);
+    }
+
+    const memoryMatch = path.match(/^\/api\/memory\/([^/]+)$/);
+    if (memoryMatch) {
+      const idRaw = memoryMatch[1] as string;
+      if (method === "PATCH") {
+        await handlePatchMemory(ctx, idRaw);
+        return;
+      }
+      if (method === "DELETE") {
+        await handleDeleteMemory(ctx, idRaw);
         return;
       }
       return methodNotAllowed(res, method, origin);

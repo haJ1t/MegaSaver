@@ -1,6 +1,18 @@
-import type { MemoryEntry, Session, TokenSaverSettings } from "@megasaver/core";
-import type { Project } from "@megasaver/core";
-import type { SessionTokenSaverStats, TokenSaverEvent } from "@megasaver/stats";
+import type { ContextPack, PackAudit } from "@megasaver/context-pruner";
+import type {
+  MemoryEntry,
+  Project,
+  ProjectRule,
+  RankedRule,
+  Session,
+  TaskPlan,
+  TokenSaverSettings,
+  ToolDefinition,
+  ToolRouteResult,
+} from "@megasaver/core";
+import type { BlockSearchHit } from "@megasaver/indexer";
+import type { TaskStepId } from "@megasaver/shared";
+import type { AuditSummary, SessionTokenSaverStats, TokenSaverEvent } from "@megasaver/stats";
 import type { BridgeError } from "../components/states.js";
 
 export type HealthResponse = {
@@ -53,6 +65,25 @@ async function patchJson<T>(path: string, body: unknown): Promise<T> {
   return handleResponse<T>(response);
 }
 
+async function deleteJson<T>(path: string): Promise<T> {
+  const response = await fetch(path, { method: "DELETE" });
+  return handleResponse<T>(response);
+}
+
+function qs(params: Record<string, string | number | undefined | readonly string[]>): string {
+  const sp = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const v of value) sp.append(key, v);
+    } else {
+      sp.set(key, String(value));
+    }
+  }
+  const s = sp.toString();
+  return s.length > 0 ? `?${s}` : "";
+}
+
 // ── Read endpoints ────────────────────────────────────────────────────────────
 
 export function fetchHealth(): Promise<HealthResponse> {
@@ -67,8 +98,12 @@ export function fetchSessions(projectId: string): Promise<Session[]> {
   return getJson<Session[]>(`/api/sessions?projectId=${encodeURIComponent(projectId)}`);
 }
 
-export function fetchMemory(projectId: string): Promise<MemoryEntry[]> {
-  return getJson<MemoryEntry[]>(`/api/memory?projectId=${encodeURIComponent(projectId)}`);
+export type MemoryQuery = { query?: string; limit?: number; offset?: number };
+
+export function fetchMemory(projectId: string, opts: MemoryQuery = {}): Promise<MemoryEntry[]> {
+  return getJson<MemoryEntry[]>(
+    `/api/memory${qs({ projectId, query: opts.query, limit: opts.limit, offset: opts.offset })}`,
+  );
 }
 
 // ── Write endpoints ───────────────────────────────────────────────────────────
@@ -209,3 +244,129 @@ export function repairMcp(target: string, project: string): Promise<McpStatusRes
 export function uninstallMcp(target: string): Promise<McpStatusResponse> {
   return postJson<McpStatusResponse>("/api/mcp/uninstall", { target });
 }
+
+// ── Project create (P0) ─────────────────────────────────────────────────────
+
+export type CreateProjectBody = { name: string; rootPath: string };
+
+export function createProject(body: CreateProjectBody): Promise<Project> {
+  return postJson<Project>("/api/projects", body);
+}
+
+// ── Memory mutation (P0/P1) ─────────────────────────────────────────────────
+// Editable subset of Core's update patch (the bridge stamps updatedAt).
+
+export type MemoryPatchBody = {
+  approval?: "suggested" | "approved" | "rejected";
+  type?: string;
+  title?: string;
+  content?: string;
+  confidence?: string;
+  source?: string;
+  keywords?: string[];
+  reason?: string;
+  goal?: string;
+  stale?: boolean;
+  expiresAt?: string | null;
+};
+
+export function updateMemoryEntry(id: string, body: MemoryPatchBody): Promise<MemoryEntry> {
+  return patchJson<MemoryEntry>(`/api/memory/${encodeURIComponent(id)}`, body);
+}
+
+export function deleteMemoryEntry(id: string): Promise<{ id: string }> {
+  return deleteJson<{ id: string }>(`/api/memory/${encodeURIComponent(id)}`);
+}
+
+// ── Audit (P0 Overview) ─────────────────────────────────────────────────────
+
+export type AuditQuery = { window?: "session" | "week" | "all"; session?: string };
+
+export function fetchAudit(projectId: string, opts: AuditQuery = {}): Promise<AuditSummary> {
+  return getJson<AuditSummary>(
+    `/api/projects/${encodeURIComponent(projectId)}/audit${qs({ window: opts.window, session: opts.session })}`,
+  );
+}
+
+// ── Rules (P1) ──────────────────────────────────────────────────────────────
+
+export type RulesQuery = { task?: string; files?: readonly string[] };
+
+export function fetchRules(projectId: string, opts: RulesQuery = {}): Promise<RankedRule[]> {
+  return getJson<RankedRule[]>(
+    `/api/projects/${encodeURIComponent(projectId)}/rules${qs({ task: opts.task, files: opts.files })}`,
+  );
+}
+
+// ── Index (P1, file-backed) ─────────────────────────────────────────────────
+
+export type IndexStatus = {
+  indexed: boolean;
+  total: number;
+  indexedFiles: number;
+  byType: Record<string, number>;
+};
+
+export function fetchIndexStatus(projectId: string): Promise<IndexStatus> {
+  return getJson<IndexStatus>(`/api/projects/${encodeURIComponent(projectId)}/index`);
+}
+
+export type IndexSearchQuery = { q: string; type?: string; limit?: number; offset?: number };
+
+export function searchIndex(projectId: string, opts: IndexSearchQuery): Promise<BlockSearchHit[]> {
+  return getJson<BlockSearchHit[]>(
+    `/api/projects/${encodeURIComponent(projectId)}/index/search${qs({
+      q: opts.q,
+      type: opts.type,
+      limit: opts.limit,
+      offset: opts.offset,
+    })}`,
+  );
+}
+
+// ── Context preview (P1, file-backed) ───────────────────────────────────────
+
+export type ContextPreview = { indexed: boolean; pack: ContextPack; audit: PackAudit };
+export type ContextQuery = {
+  task: string;
+  limit?: number;
+  maxTokens?: number;
+  changedFile?: readonly string[];
+  failingTest?: readonly string[];
+};
+
+export function fetchContext(projectId: string, opts: ContextQuery): Promise<ContextPreview> {
+  return getJson<ContextPreview>(
+    `/api/projects/${encodeURIComponent(projectId)}/context${qs({
+      task: opts.task,
+      limit: opts.limit,
+      maxTokens: opts.maxTokens,
+      changedFile: opts.changedFile,
+      failingTest: opts.failingTest,
+    })}`,
+  );
+}
+
+// ── Tasks (P1) ──────────────────────────────────────────────────────────────
+
+export type ReadyTaskPlan = { plan: TaskPlan; ready: TaskStepId[] };
+
+export function fetchTasks(projectId: string): Promise<ReadyTaskPlan[]> {
+  return getJson<ReadyTaskPlan[]>(`/api/projects/${encodeURIComponent(projectId)}/tasks`);
+}
+
+// ── Tools route preview (P1) ────────────────────────────────────────────────
+
+export type ToolsRouteResponse = { route: ToolRouteResult; tools: ToolDefinition[] };
+
+export function fetchToolsRoute(
+  projectId: string,
+  opts: { task?: string } = {},
+): Promise<ToolsRouteResponse> {
+  return getJson<ToolsRouteResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/tools${qs({ task: opts.task })}`,
+  );
+}
+
+// Re-export ProjectRule so views can render rule fields without a second import.
+export type { ProjectRule };

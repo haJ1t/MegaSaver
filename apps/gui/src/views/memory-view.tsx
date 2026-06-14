@@ -4,8 +4,20 @@ import { ScopeBadge } from "../components/badges.js";
 import { CreateMemoryForm } from "../components/memory-forms.js";
 import { EmptyState, ErrorState, LoadingState, NoSelectionState } from "../components/states.js";
 import type { BridgeError } from "../components/states.js";
-import { createMemoryEntry, fetchMemory, fetchSessions } from "../lib/api-client.js";
+import {
+  createMemoryEntry,
+  deleteMemoryEntry,
+  fetchMemory,
+  fetchSessions,
+  updateMemoryEntry,
+} from "../lib/api-client.js";
 import { shortId } from "../lib/short-id.js";
+
+const APPROVAL_CLASS: Record<"approved" | "rejected" | "suggested", string> = {
+  approved: "bg-ok/15 text-ok",
+  rejected: "bg-danger/15 text-danger",
+  suggested: "bg-warn/15 text-warn",
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -51,6 +63,10 @@ export function MemoryView({ projectId, onViewSession }: MemoryViewProps): JSX.E
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [mutating, setMutating] = useState(false);
+  const [mutateError, setMutateError] = useState<BridgeError | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -58,7 +74,7 @@ export function MemoryView({ projectId, onViewSession }: MemoryViewProps): JSX.E
     setLoadError(null);
     try {
       const [entriesData, sessionsData] = await Promise.all([
-        fetchMemory(projectId),
+        fetchMemory(projectId, appliedSearch.trim() ? { query: appliedSearch } : {}),
         fetchSessions(projectId),
       ]);
       // Newest createdAt first (spec §4).
@@ -70,7 +86,34 @@ export function MemoryView({ projectId, onViewSession }: MemoryViewProps): JSX.E
       setLoadError(err as BridgeError);
       setLoadState("error");
     }
-  }, [projectId]);
+  }, [projectId, appliedSearch]);
+
+  async function mutateApproval(id: string, approval: "approved" | "rejected"): Promise<void> {
+    setMutating(true);
+    setMutateError(null);
+    try {
+      const updated = await updateMemoryEntry(id, { approval });
+      setEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
+    } catch (err) {
+      setMutateError(err as BridgeError);
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function removeEntry(id: string): Promise<void> {
+    setMutating(true);
+    setMutateError(null);
+    try {
+      await deleteMemoryEntry(id);
+      setEntries((prev) => prev.filter((e) => e.id !== id));
+      setSelectedId(null);
+    } catch (err) {
+      setMutateError(err as BridgeError);
+    } finally {
+      setMutating(false);
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -125,6 +168,30 @@ export function MemoryView({ projectId, onViewSession }: MemoryViewProps): JSX.E
             + New entry
           </button>
         </div>
+
+        {/* Search */}
+        <form
+          className="flex items-center gap-2 px-4 py-2 border-b border-border shrink-0"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setAppliedSearch(search);
+          }}
+        >
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search memory…"
+            aria-label="Search memory entries"
+            className="flex-1 px-2 py-1 text-xs bg-surface-elevated border border-border rounded-md text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2"
+          />
+          <button
+            type="submit"
+            className="px-2 py-1 text-xs rounded-md border border-border text-text-secondary hover:text-text-primary cursor-pointer"
+          >
+            Search
+          </button>
+        </form>
 
         {/* Create form (inline, above list) */}
         {showCreateForm && (
@@ -221,7 +288,14 @@ export function MemoryView({ projectId, onViewSession }: MemoryViewProps): JSX.E
                 <h2 className="text-sm text-text-muted uppercase tracking-widest">Memory entry</h2>
                 <p className="text-xs text-text-muted mt-1 font-mono">{selected.id}</p>
               </div>
-              <ScopeBadge scope={selected.scope} />
+              <div className="flex items-center gap-2">
+                <span
+                  className={`px-2 py-0.5 text-xs rounded-sm ${APPROVAL_CLASS[selected.approval]}`}
+                >
+                  {selected.approval}
+                </span>
+                <ScopeBadge scope={selected.scope} />
+              </div>
             </div>
 
             {/* Content block — full, no truncation (spec §3d), monospace */}
@@ -267,6 +341,39 @@ export function MemoryView({ projectId, onViewSession }: MemoryViewProps): JSX.E
                 )}
               </Field>
             </dl>
+
+            {/* HITL + delete actions (P0). */}
+            <div className="flex items-center gap-2 mb-3">
+              <button
+                type="button"
+                disabled={mutating || selected.approval === "approved"}
+                onClick={() => void mutateApproval(selected.id, "approved")}
+                className="px-3 py-1 text-xs rounded-md bg-ok/15 text-ok cursor-pointer hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Approve
+              </button>
+              <button
+                type="button"
+                disabled={mutating || selected.approval === "rejected"}
+                onClick={() => void mutateApproval(selected.id, "rejected")}
+                className="px-3 py-1 text-xs rounded-md bg-warn/15 text-warn cursor-pointer hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                disabled={mutating}
+                onClick={() => {
+                  if (window.confirm("Delete this memory entry? This cannot be undone.")) {
+                    void removeEntry(selected.id);
+                  }
+                }}
+                className="ml-auto px-3 py-1 text-xs rounded-md border border-danger/30 text-danger cursor-pointer hover:bg-danger/5 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Delete
+              </button>
+            </div>
+            {mutateError && <ErrorState error={mutateError} />}
           </>
         )}
       </div>

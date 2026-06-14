@@ -6,11 +6,14 @@ describe("BridgeErrorCode tuple ordering", () => {
     expectTypeOf<typeof BRIDGE_ERROR_CODES>().toEqualTypeOf<
       readonly [
         "event_not_found",
+        "index_unavailable",
         "internal_error",
         "mcp_setup_failed",
+        "memory_entry_not_found",
         "method_not_allowed",
         "origin_forbidden",
         "project_not_found",
+        "rootpath_invalid",
         "route_not_found",
         "session_already_ended",
         "session_not_found",
@@ -24,11 +27,14 @@ describe("BridgeErrorCode tuple ordering", () => {
   it("BridgeErrorCode is the union of the tuple members", () => {
     expectTypeOf<BridgeErrorCode>().toEqualTypeOf<
       | "event_not_found"
+      | "index_unavailable"
       | "internal_error"
       | "mcp_setup_failed"
+      | "memory_entry_not_found"
       | "method_not_allowed"
       | "origin_forbidden"
       | "project_not_found"
+      | "rootpath_invalid"
       | "route_not_found"
       | "session_already_ended"
       | "session_not_found"

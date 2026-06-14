@@ -52,11 +52,18 @@ describe("Bridge error roundtrip", () => {
       if (url.startsWith("/api/sessions")) {
         return { ok: true, status: 200, json: async () => [OPEN_SESSION] };
       }
+      if (url.includes("/audit")) {
+        return { ok: true, status: 200, json: async () => ({ eventsTotal: 0 }) };
+      }
+      if (url.startsWith("/api/mcp")) {
+        return { ok: true, status: 200, json: async () => ({ agents: [] }) };
+      }
       return { ok: true, status: 200, json: async () => [] };
     });
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Sessions" }));
     await waitFor(() => expect(screen.getByText("boom")).toBeDefined());
     fireEvent.click(screen.getByText("boom"));
     fireEvent.click(screen.getByRole("button", { name: "End session" }));
@@ -84,11 +91,18 @@ describe("Bridge error roundtrip", () => {
       if (url.startsWith("/api/sessions")) {
         return { ok: true, status: 200, json: async () => [] };
       }
+      if (url.includes("/audit")) {
+        return { ok: true, status: 200, json: async () => ({ eventsTotal: 0 }) };
+      }
+      if (url.startsWith("/api/mcp")) {
+        return { ok: true, status: 200, json: async () => ({ agents: [] }) };
+      }
       return { ok: true, status: 200, json: async () => [] };
     });
     vi.stubGlobal("fetch", fetchSpy);
 
     render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Sessions" }));
     await waitFor(() => expect(screen.getByText("No sessions yet.")).toBeDefined());
     fireEvent.click(screen.getByRole("button", { name: "Create new session" }));
     fireEvent.submit(screen.getByLabelText("Create session"));

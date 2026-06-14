@@ -44,7 +44,7 @@ export function handleOptionsPreflight(res: ServerResponse, origin: string | und
   const headers: { [key: string]: string } = origin
     ? {
         "access-control-allow-origin": origin,
-        "access-control-allow-methods": "GET, POST, PATCH, OPTIONS",
+        "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS",
         "access-control-allow-headers": "content-type",
         vary: "origin",
       }
