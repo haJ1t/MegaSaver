@@ -63,4 +63,15 @@ describe("SessionCockpit", () => {
     fireEvent.click(screen.getByRole("button", { name: /Back/ }));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
+
+  it("mounts the workspace Rules panel keyed by the session cwd", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, status: 200, json: async () => [] })),
+    );
+    render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Rules" }));
+    await waitFor(() => expect(screen.getByText("No rules yet.")).toBeDefined());
+    vi.unstubAllGlobals();
+  });
 });

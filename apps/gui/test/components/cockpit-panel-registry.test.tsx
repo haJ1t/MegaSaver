@@ -27,8 +27,16 @@ describe("CockpitPanel contract", () => {
 });
 
 describe("COCKPIT_PANELS registry", () => {
-  it("exposes transcript then telemetry in order", () => {
-    expect(COCKPIT_PANELS.map((p) => p.id)).toEqual(["transcript", "telemetry"]);
+  it("exposes session panels then workspace panels in order", () => {
+    expect(COCKPIT_PANELS.map((p) => p.id)).toEqual([
+      "transcript",
+      "telemetry",
+      "ws-index",
+      "ws-context",
+      "ws-rules",
+      "ws-tools",
+      "ws-permissions",
+    ]);
   });
 
   it("resolves a registered panel via getPanel", () => {
