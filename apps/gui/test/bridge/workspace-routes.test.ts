@@ -88,6 +88,69 @@ describe("workspace-scoped bridge routes", () => {
     });
   });
 
+  describe("tools router", () => {
+    it("returns the route split + registered tools", async () => {
+      server = await startTestBridge({
+        store: {
+          workspaceTools: [
+            {
+              workspaceKey: KEY,
+              lines: [
+                {
+                  id: "00000000-0000-4000-8000-0000000000d1",
+                  projectId: BLOCK_PROJECT_ID,
+                  name: "git status",
+                  description: "show working tree status",
+                  category: "git",
+                  risk: "safe",
+                  inputSchema: null,
+                  outputSchema: null,
+                  keywords: ["git", "status"],
+                  createdAt: "2026-06-14T00:00:00.000Z",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      const res = await fetch(`${server.baseUrl}/api/workspaces/${KEY}/tools`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { route: { reason: string }; tools: unknown[] };
+      expect(body.tools).toHaveLength(1);
+      expect(typeof body.route.reason).toBe("string");
+    });
+
+    it("places a dangerous tool in blockedTools", async () => {
+      server = await startTestBridge({
+        store: {
+          workspaceTools: [
+            {
+              workspaceKey: KEY,
+              lines: [
+                {
+                  id: "00000000-0000-4000-8000-0000000000d2",
+                  projectId: BLOCK_PROJECT_ID,
+                  name: "rm rf",
+                  description: "delete everything",
+                  category: "dangerous",
+                  risk: "dangerous",
+                  inputSchema: null,
+                  outputSchema: null,
+                  keywords: ["delete"],
+                  createdAt: "2026-06-14T00:00:00.000Z",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      const res = await fetch(`${server.baseUrl}/api/workspaces/${KEY}/tools`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { route: { blockedTools: { name: string }[] } };
+      expect(body.route.blockedTools.map((t) => t.name)).toContain("rm rf");
+    });
+  });
+
   describe("index status + search", () => {
     it("reports indexed:false with no index seeded", async () => {
       server = await startTestBridge();

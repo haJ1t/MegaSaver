@@ -2,6 +2,7 @@ import type { RouteContext } from "../route-context.js";
 import { resolveWorkspaceKey } from "./_workspace.js";
 import { handleGetWorkspaceIndexSearch, handleGetWorkspaceIndexStatus } from "./workspace-index.js";
 import { handleGetWorkspaceRules } from "./workspace-rules.js";
+import { handleGetWorkspaceTools } from "./workspace-tools.js";
 
 // /api/workspaces/:key/<segment>[/search] — all read-only (GET). Mirrors
 // dispatchProjectScoped so handler.ts stays thin. The :key is schema-validated
@@ -38,6 +39,10 @@ export async function dispatchWorkspaceScoped(
     handleGetWorkspaceRules(ctx, key);
     return true;
   }
-  // context/tools/permissions are wired in Tasks 9, 10, 11.
+  if (segment === "tools") {
+    handleGetWorkspaceTools(ctx, key);
+    return true;
+  }
+  // context/permissions are wired in Tasks 10, 11.
   return false;
 }
