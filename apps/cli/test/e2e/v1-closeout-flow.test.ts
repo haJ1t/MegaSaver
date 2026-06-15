@@ -283,7 +283,13 @@ describe("v1.0 closeout end-to-end flow (plan L1672-L1702)", () => {
     expect(cgEnd - cgStart).toBeGreaterThan(0); // block bytes > 0
   });
 
-  it("[A6] GUI bridge serves token-saver status + stats for the enabled session", async () => {
+  it("[A6] CLI reports token-saver status + stats for the enabled session", () => {
+    // Note: the live-first GUI bridge (PR #134) removed the legacy registry-session
+    // token-saver routes (/api/sessions/:sid/token-saver/*). The bridge now only serves
+    // /api/claude-sessions/... and /api/workspaces/... keyed by Claude Code transcripts
+    // (see apps/gui/bridge/routes/claude-session-token-saver.ts). MegaSaver registry
+    // sessions (created via `mega session create`) have no Claude transcript, so those
+    // routes returned 404. This test now verifies the same intent via the CLI surface.
     const sid = JSON.parse(
       mega(
         [
@@ -323,29 +329,38 @@ describe("v1.0 closeout end-to-end flow (plan L1672-L1702)", () => {
       store,
     );
 
-    // BB10 route shape: GET /token-saver/status -> { enabled, settings }.
-    const statusRes = await fetch(`${baseUrl}/api/sessions/${sid}/token-saver/status`);
-    expect(statusRes.status).toBe(200);
-    const status = (await statusRes.json()) as {
-      enabled: boolean;
-      settings: { mode: string } | null;
+    // `mega session saver status --json` shape: { sessionId, tokenSaver: { enabled, mode, maxReturnedBytes } | null }
+    const statusOut = JSON.parse(
+      mega(["session", "saver", "status", sid, "--store", store, "--json"], store).stdout,
+    ) as {
+      sessionId: string;
+      tokenSaver: { enabled: boolean; mode: string; maxReturnedBytes: number } | null;
     };
-    expect(status.enabled).toBe(true);
-    expect(status.settings?.mode).toBe("balanced");
+    expect(statusOut.tokenSaver).not.toBeNull();
+    expect(statusOut.tokenSaver?.enabled).toBe(true);
+    expect(statusOut.tokenSaver?.mode).toBe("balanced");
 
-    // GET /token-saver/stats -> SessionTokenSaverStats (savingRatio ∈ [0,1]).
-    const statsRes = await fetch(`${baseUrl}/api/sessions/${sid}/token-saver/stats`);
-    expect(statsRes.status).toBe(200);
-    const stats = (await statsRes.json()) as {
-      savingRatio: number;
-      rawBytesTotal: number;
-      returnedBytesTotal: number;
+    // `mega session saver stats --json` shape: { sessionId, tokenSaver, eventStats: SessionTokenSaverStats | null }
+    // SessionTokenSaverStats fields: savingRatio, rawBytesTotal, returnedBytesTotal, bytesSavedTotal, eventsTotal, ...
+    const statsOut = JSON.parse(
+      mega(["session", "saver", "stats", sid, "--store", store, "--json"], store).stdout,
+    ) as {
+      sessionId: string;
+      tokenSaver: { enabled: boolean; mode: string } | null;
+      eventStats: {
+        savingRatio: number;
+        rawBytesTotal: number;
+        returnedBytesTotal: number;
+        bytesSavedTotal: number;
+        eventsTotal: number;
+      } | null;
     };
-    expect(typeof stats.savingRatio).toBe("number");
-    expect(stats.savingRatio).toBeGreaterThanOrEqual(0);
-    expect(stats.savingRatio).toBeLessThanOrEqual(1);
-    expect(stats.rawBytesTotal).toBeGreaterThan(0);
-    expect(stats.returnedBytesTotal).toBeGreaterThan(0);
+    expect(statsOut.eventStats).not.toBeNull();
+    expect(typeof statsOut.eventStats?.savingRatio).toBe("number");
+    expect(statsOut.eventStats?.savingRatio).toBeGreaterThanOrEqual(0);
+    expect(statsOut.eventStats?.savingRatio).toBeLessThanOrEqual(1);
+    expect(statsOut.eventStats?.rawBytesTotal).toBeGreaterThan(0);
+    expect(statsOut.eventStats?.returnedBytesTotal).toBeGreaterThan(0);
   });
 
   it("[A4+A6] GUI AgentSetupDoctor drives /api/mcp/* end-to-end (BB8-backed ops)", async () => {

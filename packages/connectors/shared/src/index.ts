@@ -4,7 +4,8 @@ export {
   MEGA_SAVER_CG_BLOCK_END,
   MEGA_SAVER_CG_BLOCK_START,
 } from "./constants.js";
-export { renderContextGateBlock } from "./context-gate-block.js";
+export { renderContextGateBlock, renderContextGateBlockText } from "./context-gate-block.js";
+export type { ContextGateBlockFields } from "./context-gate-block.js";
 export {
   type ConnectorContext,
   ConnectorContextSchema,
@@ -17,7 +18,7 @@ export {
 } from "./errors.js";
 export { renderBlock } from "./render.js";
 export { parseBlock, type ParsedBlock } from "./parse.js";
-export { removeBlock, upsertBlock } from "./upsert.js";
+export { removeBlock, upsertBlock, upsertContextGateBlockText } from "./upsert.js";
 export { normalizeEol } from "./eol.js";
 export {
   assertProjectRoot,

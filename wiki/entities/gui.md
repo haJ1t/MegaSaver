@@ -6,7 +6,7 @@ sources:
   - docs/superpowers/specs/2026-05-10-ll-gui-v1-design.md
 status: published
 created: 2026-05-10
-updated: 2026-05-10
+updated: 2026-06-15
 ---
 
 # `@megasaver/gui`
@@ -171,3 +171,27 @@ routes; each agent row carries a `restartHint`. The `connectors-shared`
   confirmation (session-scoped, irreversible).
 - `<output>` element gains `aria-live="polite"` for screen-reader
   announcements on savings updates.
+
+## Workspace Saver Mode activation (live-first, 2026-06-14)
+
+The live-first pivot (PR #134) left token-saver activation orphaned: the
+session token-saver panel and live bridge route became read-only, and the
+overlay `enabled` flag was written by nothing. Re-hosted as a
+**workspace-scoped** control (activation is per-cwd, not per Claude session —
+the runtime lever is the `CONTEXT_GATE` block in the folder's shared
+`CLAUDE.md`, which the MCP proxy honours; the bridge never sees a Claude
+session id per call).
+
+- New cockpit panel `ws-token-saver` ("Saver Mode", `scope: "workspace"`):
+  toggle + mode select + `blockPresent` / `mcpInstalled` status + an MCP-not-
+  installed warning. The session `token-saver` panel stays a read-only stats
+  viewer and points users here.
+- Bridge route `GET|POST /api/claude-sessions/:dir/:id/token-saver/workspace`
+  (extends `routes/claude-session-token-saver.ts`). cwd is derived server-side
+  from the transcript via `resolveSessionWorkspace` — never client-supplied
+  (traversal guard). POST persists `{enabled,mode}` to
+  `<storeRoot>/stats/<wk>/workspace-token-saver.json` and upserts the
+  CONTEXT_GATE block into `<cwd>/CLAUDE.md` via the connectors-shared
+  sentinel-bounded atomic helpers. MCP install stays AgentSetupDoctor's job;
+  this route only reports `mcpInstalled`.
+- Source: `docs/superpowers/specs/2026-06-14-gui-workspace-token-saver-activation-design.md`.

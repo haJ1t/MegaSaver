@@ -3,6 +3,7 @@
 // Mirrored in apps/gui/bridge/server.ts (bridge side).
 export const BRIDGE_ERROR_CODES = [
   "claude_session_not_found",
+  "connector_write_failed",
   "event_not_found",
   "index_unavailable",
   "internal_error",
@@ -26,6 +27,8 @@ export type BridgeErrorCode = (typeof BRIDGE_ERROR_CODES)[number];
 // Falls back to the bridge's `error` string field for unknown codes.
 export const BRIDGE_ERROR_COPY: Record<BridgeErrorCode, string> = {
   claude_session_not_found: "Claude Code session not found. It may have been removed.",
+  connector_write_failed:
+    "Could not write the workspace file. It may be a symlink or permission-protected.",
   event_not_found: "Event not found, or it has no stored output.",
   index_unavailable:
     "The semantic index is missing or corrupt. Rebuild it with `mega index build`.",
