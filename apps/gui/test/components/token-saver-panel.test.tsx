@@ -21,6 +21,8 @@ vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   setWorkspaceSaver: () => stub.saver(),
   fetchSessionTokenSaverStats: () => stub.stats(),
   fetchSessionTokenSaverEvents: () => stub.events(),
+  fetchClaudeHookStatus: () =>
+    Promise.resolve({ connected: false, preInstalled: false, postInstalled: false }),
 }));
 
 import { TokenSaverPanel } from "../../src/views/cockpit/token-saver-panel.js";
