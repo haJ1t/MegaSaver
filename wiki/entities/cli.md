@@ -247,12 +247,22 @@ Errors surface as `error: <SkillPackErrorCode>: <detail>` via
 Hook telemetry surface for measuring native-tool interception. Shipped
 P5 (commit `07040de`). See [[concepts/proxy-mode]].
 
-- `hooks install claude-code` — idempotent install of a Claude Code
-  PreToolUse hook (matcher `Read|Bash|Grep|Glob|LS`, command
-  `mega hooks log`). Re-running does not duplicate the entry.
+- `hooks install claude-code` — idempotent install of BOTH a Claude Code
+  PreToolUse telemetry hook (`mega hooks log`) AND a PostToolUse saver
+  hook (`mega hooks saver`), matcher `Read|Bash|Grep|Glob|LS`.
+  Re-running does not duplicate either entry.
 - `hooks status` — reports whether the hook is installed.
-- `hooks log` — the hook target itself: a metadata-only, best-effort
+- `hooks log` — the PreToolUse target: a metadata-only, best-effort
   logger that always exits 0 (never blocks the agent's tool call).
+- `hooks saver` (2026-06-15) — the PostToolUse target: realizes Saver
+  Mode. When Saver Mode is enabled for the workspace
+  (`stats/<wk>/workspace-token-saver.json`) and the tool output exceeds
+  the mode budget, it evidence-preservingly compresses the output via
+  `recordAndFilterOverlayOutput` (full redacted output stored as a
+  recoverable chunk), records the per-session overlay event (→ live GUI
+  Token saver tab), and returns `updatedToolOutput` so the model ingests
+  the compressed result. Always exits 0; any error / multi-modal output
+  ⇒ original untouched (passthrough).
 
 ### Store resolution
 

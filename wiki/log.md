@@ -2328,3 +2328,21 @@ saver" tab (activation on top, this-session stats below). Both client calls key
 on (dir,id) so no new props. Sub-headings keep the scope distinction explicit
 (activation = workspace-wide; stats = this session). GUI-only; bridge routes and
 client functions unchanged. See [[entities/gui]].
+
+## [2026-06-15] feature | realized Saver Mode PostToolUse hook
+
+Wired the previously-unbuilt overlay-stats producer so the live Token saver tab
+actually populates AND Saver Mode realizes token savings. New `mega hooks saver`
+PostToolUse hook: on an eligible native tool (Read/Bash/Grep/Glob/LS) in a
+Saver-Mode-enabled workspace, when output exceeds the mode budget, it
+evidence-preservingly compresses the output (filterOutput), stores the FULL
+redacted output as a recoverable chunk, records the per-session overlay event
+keyed by (workspaceKey=encode(cwd), liveSessionId=session_id — the hook's
+session_id is the missing key the MCP bridge never had), and returns
+`updatedToolOutput` so the model ingests the compressed result. New context-gate
+primitive `recordAndFilterOverlayOutput`. `mega hooks install` now installs both
+PreToolUse (telemetry) + PostToolUse (saver). SAFETY: always exit 0; any error /
+multi-modal (text+image) output ⇒ original untouched (passthrough); full output
+recoverable via proxy_expand_chunk. HIGH risk, full superpowers chain (spec/plan/
+TDD/two-stage subagent review incl. opus safety pass). See [[entities/cli]],
+[[entities/context-gate]]. Spec: docs/superpowers/specs/2026-06-15-realized-saver-hook-design.md.

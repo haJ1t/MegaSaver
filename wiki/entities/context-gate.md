@@ -37,6 +37,12 @@ any change.
   through `runOutputPipeline`.
 - `fetchChunk(chunkSetId, chunkId, around?)` — drill into a stored
   excerpt from content-store.
+- `recordAndFilterOverlayOutput(input)` (2026-06-15) — filters an
+  ALREADY-PRODUCED output buffer (no re-exec, no path gating), stores the
+  FULL redacted output as a recoverable overlay chunk, and
+  `appendOverlayEvent` keyed by `(workspaceKey, liveSessionId)`. Powers
+  the `mega hooks saver` PostToolUse hook → populates the live GUI Token
+  saver overlay stats. Generalizes the file-only `runOverlayOutputPipeline`.
 - `loadProjectPermissions(rootDir)` — reads `.megasaver/permissions.yaml`
   (yaml@^2 I/O) and returns `ProjectPermissions | null`. Used by
   `evaluateCommand` / `evaluatePathRead` for tighten-only project rules.
