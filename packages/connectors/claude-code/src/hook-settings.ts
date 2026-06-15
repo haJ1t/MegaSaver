@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const HOOK_MATCHER = "Read|Bash|Grep|Glob|LS";
@@ -123,9 +124,21 @@ function readSettings(settingsPath: string): unknown {
   return JSON.parse(readFileSync(settingsPath, "utf8"));
 }
 
+// Atomic write: a global user file (~/.claude/settings.json) must never be left
+// truncated by a crash mid-write. Write a sibling temp file, then rename() over
+// the target — rename is atomic within a filesystem, so a reader sees either the
+// old file or the complete new one, never a partial.
 function writeSettings(settingsPath: string, settings: SettingsObject): void {
-  mkdirSync(dirname(settingsPath), { recursive: true });
-  writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+  const dir = dirname(settingsPath);
+  mkdirSync(dir, { recursive: true });
+  const tempPath = join(dir, `.${randomUUID()}.tmp`);
+  try {
+    writeFileSync(tempPath, `${JSON.stringify(settings, null, 2)}\n`);
+    renameSync(tempPath, settingsPath);
+  } catch (error) {
+    rmSync(tempPath, { force: true });
+    throw error;
+  }
 }
 
 export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): ClaudeCodeHookResult {

@@ -1,6 +1,6 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_HOOK_COMMAND,
@@ -95,6 +95,14 @@ describe("hook-settings", () => {
     const p = tmpSettings({ model: "x" });
     expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(false);
     expect(JSON.parse(readFileSync(p, "utf8"))).toEqual({ model: "x" });
+  });
+
+  it("writes atomically, leaving no temp-file residue in the settings dir", () => {
+    const p = tmpSettings({ model: "x" });
+    installClaudeCodeHook({ settingsPath: p });
+    uninstallClaudeCodeHook({ settingsPath: p });
+    expect(readdirSync(dirname(p))).toEqual(["settings.json"]);
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).connected).toBe(false);
   });
 
   it("install then uninstall round-trips to empty hooks", () => {
