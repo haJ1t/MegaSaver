@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { recordAndFilterOverlayOutput } from "@megasaver/context-gate";
+import { recordAndFilterOverlayOutput } from "@megasaver/core";
 import { tokenSaverModeSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { readStoreEnv, resolveStorePath } from "../store.js";

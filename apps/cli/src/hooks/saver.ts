@@ -1,4 +1,4 @@
-import type { RecordOverlayOutputInput, RecordOverlayOutputResult } from "@megasaver/context-gate";
+import type { RecordOverlayOutputInput, RecordOverlayOutputResult } from "@megasaver/core";
 import type { OutputSourceKind } from "@megasaver/output-filter";
 import { type TokenSaverMode, encodeWorkspaceKey, modeToBudget } from "@megasaver/shared";
 
