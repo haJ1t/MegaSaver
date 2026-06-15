@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   OverlaySessionTokenSaverStats,
@@ -51,15 +51,17 @@ afterEach(() => {
 });
 
 describe("TokenSaverPanel (activation + stats)", () => {
-  it("renders the workspace activation toggle and the session stats together", async () => {
+  it("renders the workspace activation toggle and the session savings table together", async () => {
     stub.saver = () => Promise.resolve(SAVER);
     stub.stats = () => Promise.resolve(STATS);
     stub.events = () => Promise.resolve([]);
     render(<TokenSaverPanel dir="d" id="i" />);
     await waitFor(() => expect(screen.getByLabelText(/Saver Mode/i)).toBeDefined());
     expect((screen.getByLabelText(/Saver Mode/i) as HTMLInputElement).checked).toBe(true);
-    await waitFor(() => expect(screen.getByText("800")).toBeDefined());
+    // savings shown in a table, byte values humanized
+    await waitFor(() => expect(screen.getByText("800 B")).toBeDefined());
     expect(screen.getByText("80%")).toBeDefined();
+    expect(screen.getByText("Bytes saved")).toBeDefined();
   });
 
   it("shows the empty stats message when no proxy activity", async () => {
@@ -68,5 +70,32 @@ describe("TokenSaverPanel (activation + stats)", () => {
     stub.events = () => Promise.resolve([]);
     render(<TokenSaverPanel dir="d" id="i" />);
     await waitFor(() => expect(screen.getByText(/No proxy activity/i)).toBeDefined());
+  });
+
+  it("live-updates the savings table on the poll interval", async () => {
+    vi.useFakeTimers();
+    try {
+      let n = 0;
+      let statsCalls = 0;
+      stub.saver = () => Promise.resolve(SAVER);
+      stub.stats = () => {
+        statsCalls += 1;
+        return Promise.resolve({ ...STATS, bytesSavedTotal: n++ === 0 ? 800 : 900 });
+      };
+      stub.events = () => Promise.resolve([]);
+      render(<TokenSaverPanel dir="d" id="i" />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText("800 B")).toBeDefined();
+      const initialCalls = statsCalls;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(statsCalls).toBeGreaterThan(initialCalls); // a poll fired
+      expect(screen.getByText("900 B")).toBeDefined(); // and the table updated
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

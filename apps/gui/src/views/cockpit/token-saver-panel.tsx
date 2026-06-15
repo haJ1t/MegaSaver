@@ -9,32 +9,46 @@ import {
 } from "../../lib/claude-sessions-client.js";
 import { SaverModeActivation } from "./saver-mode-activation.js";
 
+// Stats are file-backed (the proxy writes them as it compresses), so a short
+// poll is the live-update mechanism. Silent polls keep the last good data on a
+// transient error rather than flashing the error state.
+const POLL_MS = 2_000;
+
 export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.Element {
   const [stats, setStats] = useState<OverlaySessionTokenSaverStats | null>(null);
   const [events, setEvents] = useState<OverlayTokenSaverEvent[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<BridgeError | null>(null);
 
-  const load = useCallback(async () => {
-    setState("loading");
-    setError(null);
-    try {
-      const [s, e] = await Promise.all([
-        fetchSessionTokenSaverStats(dir, id),
-        fetchSessionTokenSaverEvents(dir, id),
-      ]);
-      setStats(s);
-      setEvents(e);
-      setState("ready");
-    } catch (err) {
-      setError(err as BridgeError);
-      setState("error");
-    }
-  }, [dir, id]);
+  const fetchData = useCallback(
+    async (silent: boolean) => {
+      if (!silent) {
+        setState("loading");
+        setError(null);
+      }
+      try {
+        const [s, e] = await Promise.all([
+          fetchSessionTokenSaverStats(dir, id),
+          fetchSessionTokenSaverEvents(dir, id),
+        ]);
+        setStats(s);
+        setEvents(e);
+        setState("ready");
+      } catch (err) {
+        if (!silent) {
+          setError(err as BridgeError);
+          setState("error");
+        }
+      }
+    },
+    [dir, id],
+  );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void fetchData(false);
+    const timer = setInterval(() => void fetchData(true), POLL_MS);
+    return () => clearInterval(timer);
+  }, [fetchData]);
 
   return (
     <section
@@ -43,50 +57,104 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
     >
       <h2 className="text-sm text-text-muted uppercase tracking-widest">Token saver</h2>
       <SaverModeActivation dir={dir} id={id} />
-      <h3 className="text-xs text-text-muted uppercase tracking-widest">Stats (this session)</h3>
-      {state === "loading" && <LoadingState label="Loading token-saver stats..." />}
-      {state === "error" && error && <ErrorState error={error} onRetry={load} />}
+      <h3 className="flex items-center gap-2 text-xs text-text-muted uppercase tracking-widest">
+        Stats (this session)
+        <span className="inline-flex items-center gap-1 normal-case tracking-normal text-text-secondary">
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse"
+            aria-hidden="true"
+          />
+          live
+        </span>
+      </h3>
+      {state === "loading" && <LoadingState label="Loading token-saver stats…" />}
+      {state === "error" && error && (
+        <ErrorState error={error} onRetry={() => void fetchData(false)} />
+      )}
       {state === "ready" && (
-        <>
+        <div className="flex flex-col gap-3">
           {stats === null ? (
             <p className="text-xs text-text-muted">No proxy activity recorded for this session.</p>
           ) : (
-            <div className="flex flex-wrap gap-3">
-              <Stat label="events" value={stats.eventsTotal} />
-              <Stat label="raw bytes" value={stats.rawBytesTotal} />
-              <Stat label="returned bytes" value={stats.returnedBytesTotal} />
-              <Stat label="bytes saved" value={stats.bytesSavedTotal} />
-              <Stat label="saving ratio" value={`${Math.round(stats.savingRatio * 100)}%`} />
-              <Stat label="chunks stored" value={stats.chunksStoredTotal} />
-            </div>
+            <table className="w-full text-xs border border-border rounded-md overflow-hidden">
+              <caption className="sr-only">Token-saver totals for this session</caption>
+              <tbody>
+                <SummaryRow label="Events" value={stats.eventsTotal} />
+                <SummaryRow label="Raw bytes" value={fmtBytes(stats.rawBytesTotal)} />
+                <SummaryRow label="Returned bytes" value={fmtBytes(stats.returnedBytesTotal)} />
+                <SummaryRow label="Bytes saved" value={fmtBytes(stats.bytesSavedTotal)} />
+                <SummaryRow
+                  label="Saving ratio"
+                  value={`${Math.round(stats.savingRatio * 100)}%`}
+                />
+                <SummaryRow label="Chunks stored" value={stats.chunksStoredTotal} />
+              </tbody>
+            </table>
           )}
           {events.length > 0 && (
-            <ul className="flex flex-col gap-1">
-              {events.map((ev) => (
-                <li
-                  key={ev.id}
-                  className="flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-surface-elevated text-xs"
-                >
-                  <span className="text-text-secondary">{ev.sourceKind}</span>
-                  <span className="text-text-primary flex-1 truncate">{ev.label}</span>
-                  <span className="text-text-muted tabular-nums">
-                    {Math.round(ev.savingRatio * 100)}% saved
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <table className="w-full text-xs border border-border rounded-md">
+              <caption className="sr-only">Per-event savings</caption>
+              <thead>
+                <tr className="text-text-muted text-left">
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    source
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    label
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium text-right">
+                    raw
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium text-right">
+                    returned
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium text-right">
+                    saved
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium text-right">
+                    %
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((ev) => (
+                  <tr key={ev.id} className="border-t border-border">
+                    <td className="px-3 py-2 text-text-secondary">{ev.sourceKind}</td>
+                    <td className="px-3 py-2 text-text-primary truncate max-w-[16rem]">
+                      {ev.label}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtBytes(ev.rawBytes)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {fmtBytes(ev.returnedBytes)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-text-primary">
+                      {fmtBytes(ev.bytesSaved)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {Math.round(ev.savingRatio * 100)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
-        </>
+        </div>
       )}
     </section>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number | string }): JSX.Element {
+function SummaryRow({ label, value }: { label: string; value: number | string }): JSX.Element {
   return (
-    <div className="flex flex-col items-start px-3 py-2 rounded-md border border-border bg-surface-elevated min-w-[6rem]">
-      <span className="text-sm text-text-primary font-medium tabular-nums">{value}</span>
-      <span className="text-xs text-text-muted">{label}</span>
-    </div>
+    <tr className="border-t border-border first:border-t-0">
+      <td className="px-3 py-2 text-text-muted">{label}</td>
+      <td className="px-3 py-2 text-right text-text-primary font-medium tabular-nums">{value}</td>
+    </tr>
   );
+}
+
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
