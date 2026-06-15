@@ -338,3 +338,21 @@ export function setWorkspaceSaver(
 ): Promise<WorkspaceSaverStatus> {
   return mutateJson<WorkspaceSaverStatus>(`${tokenSaverBase(dir, id)}/workspace`, "POST", input);
 }
+
+export type ClaudeHookStatus = {
+  connected: boolean;
+  preInstalled: boolean;
+  postInstalled: boolean;
+};
+
+export function fetchClaudeHookStatus(): Promise<ClaudeHookStatus> {
+  return getJson<ClaudeHookStatus>("/api/hooks/claude-code");
+}
+
+export function connectClaudeHook(): Promise<ClaudeHookStatus> {
+  return mutateJson<ClaudeHookStatus>("/api/hooks/claude-code", "POST");
+}
+
+export function disconnectClaudeHook(): Promise<ClaudeHookStatus> {
+  return mutateJson<ClaudeHookStatus>("/api/hooks/claude-code", "DELETE");
+}
