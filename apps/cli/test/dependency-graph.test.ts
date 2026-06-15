@@ -7,10 +7,14 @@ import { describe, expect, it } from "vitest";
 // the bridge's install/status facade); skill-packs-real adds
 // @megasaver/skill-packs (the `mega pack` CLI drives the loader and
 // installer directly — core does not depend on skill-packs, so a core
-// re-export is not available). The arrow stays acyclic — skill-packs
+// re-export is not available). connector-claude-code is added so the CLI
+// can drive the Claude Code connector's saver hook directly; it stays
+// acyclic — the connector depends only on connectors-shared/core/shared/zod,
+// never on the CLI. The arrow stays acyclic — skill-packs
 // depends only on zod, never on the CLI.
 // The non-Mega deps (citty, zod) are ignored by the @megasaver/ filter.
 const ALLOWED_MEGA_DEPENDENCIES = [
+  "@megasaver/connector-claude-code",
   "@megasaver/connector-generic-cli",
   "@megasaver/connectors-shared",
   "@megasaver/content-store",
