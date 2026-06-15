@@ -37,3 +37,8 @@ export type {
   OverlayEffectiveSettings,
 } from "./types.js";
 export type { OrchestratorRegistry, SessionView, ProjectView } from "./registry-port.js";
+export {
+  recordAndFilterOverlayOutput,
+  type RecordOverlayOutputInput,
+  type RecordOverlayOutputResult,
+} from "./record-output.js";
