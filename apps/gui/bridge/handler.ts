@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { resolveClaudeCodeSettingsPath } from "@megasaver/connector-claude-code";
 import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
 import { applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
 import { handleCaughtError } from "./error-mapping.js";
 import type { RouteContext, SendError, SendJson, SendText } from "./route-context.js";
+import { dispatchClaudeHooks } from "./routes/claude-hooks.js";
 import {
   handleDeleteSessionMemory,
   handleGetSessionMemory,
@@ -42,6 +44,8 @@ export interface BridgeHandlerOptions {
   claudeProjectsDir?: string;
   /** Override for tests; defaults to the desktop app's claude-code-sessions dir. */
   claudeSessionsMetaDir?: string;
+  /** Override for tests; defaults to ~/.claude/settings.json. */
+  claudeSettingsPath?: string;
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -117,6 +121,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
   const claudeSessionsMetaDir =
     opts.claudeSessionsMetaDir ??
     join(homedir(), "Library", "Application Support", "Claude", "claude-code-sessions");
+  const claudeSettingsPath = opts.claudeSettingsPath ?? resolveClaudeCodeSettingsPath();
 
   // Test-only fallback when no ops injected; production server.ts (BB8)
   // always passes buildMcpSetupOps(...). Reports an empty agent list so
@@ -165,6 +170,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       storeRoot: storePath,
       claudeProjectsDir,
       claudeSessionsMetaDir,
+      claudeSettingsPath,
       resolveWorkspace,
       newId,
       now,
@@ -181,6 +187,13 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
 
     if (path.startsWith("/api/mcp/")) {
       const dispatched = await dispatchMcpSetup(ctx, method, path, () =>
+        methodNotAllowed(res, method, origin),
+      );
+      if (dispatched) return;
+    }
+
+    if (path === "/api/hooks/claude-code") {
+      const dispatched = await dispatchClaudeHooks(ctx, method, path, () =>
         methodNotAllowed(res, method, origin),
       );
       if (dispatched) return;

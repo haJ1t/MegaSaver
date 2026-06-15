@@ -26,6 +26,7 @@
     "postpack": "node scripts/strip-publish-manifest.mjs postpack"
   },
   "devDependencies": {
+    "@megasaver/connector-claude-code": "workspace:*",
     "@megasaver/connector-generic-cli": "workspace:*",
     "@megasaver/connectors-shared": "workspace:*",
     "@megasaver/content-store": "workspace:*",

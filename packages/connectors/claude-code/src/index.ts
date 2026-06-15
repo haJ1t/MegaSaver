@@ -22,3 +22,22 @@ export {
   renderClaudeCodeContext,
   upsertMegaSaverBlock,
 } from "./markdown.js";
+export {
+  HOOK_MATCHER,
+  DEFAULT_HOOK_COMMAND,
+  SAVER_HOOK_COMMAND,
+  SAVER_HOOK_MATCHER,
+  hasPreToolUseHook,
+  addPreToolUseHook,
+  hasPostToolUseHook,
+  addPostToolUseHook,
+  removePreToolUseHook,
+  removePostToolUseHook,
+  installClaudeCodeHook,
+  uninstallClaudeCodeHook,
+  readClaudeCodeHookStatus,
+  resolveClaudeCodeSettingsPath,
+  type InstallClaudeCodeHookInput,
+  type ClaudeCodeHookResult,
+  type ClaudeCodeHookStatus,
+} from "./hook-settings.js";

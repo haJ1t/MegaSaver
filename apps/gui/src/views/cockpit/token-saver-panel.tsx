@@ -7,6 +7,7 @@ import {
   fetchSessionTokenSaverEvents,
   fetchSessionTokenSaverStats,
 } from "../../lib/claude-sessions-client.js";
+import { HookConnection } from "./hook-connection.js";
 import { SaverModeActivation } from "./saver-mode-activation.js";
 
 // Stats are file-backed (the proxy writes them as it compresses), so a short
@@ -56,6 +57,7 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
       className="flex flex-col gap-4 px-6 py-6 overflow-y-auto flex-1 min-h-0"
     >
       <h2 className="text-sm text-text-muted uppercase tracking-widest">Token saver</h2>
+      <HookConnection />
       <SaverModeActivation dir={dir} id={id} />
       <h3 className="flex items-center gap-2 text-xs text-text-muted uppercase tracking-widest">
         Stats (this session)

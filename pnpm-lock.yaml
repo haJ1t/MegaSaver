@@ -36,6 +36,9 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
     devDependencies:
+      '@megasaver/connector-claude-code':
+        specifier: workspace:*
+        version: link:../../packages/connectors/claude-code
       '@megasaver/connector-generic-cli':
         specifier: workspace:*
         version: link:../../packages/connectors/generic-cli
@@ -84,6 +87,9 @@ importers:
       '@fontsource/dm-mono':
         specifier: ^5.0.0
         version: 5.2.7
+      '@megasaver/connector-claude-code':
+        specifier: workspace:*
+        version: link:../../packages/connectors/claude-code
       '@megasaver/connector-generic-cli':
         specifier: workspace:*
         version: link:../../packages/connectors/generic-cli

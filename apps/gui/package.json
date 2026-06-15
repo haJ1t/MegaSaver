@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@fontsource/dm-mono": "^5.0.0",
+    "@megasaver/connector-claude-code": "workspace:*",
     "@megasaver/connector-generic-cli": "workspace:*",
     "@megasaver/connectors-shared": "workspace:*",
     "@megasaver/content-store": "workspace:*",

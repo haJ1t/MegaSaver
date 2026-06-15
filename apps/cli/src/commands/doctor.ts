@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { DEFAULT_HOOK_COMMAND, hasPreToolUseHook } from "@megasaver/connector-claude-code";
 import { defineCommand } from "citty";
 import { HOOK_LOG_RELATIVE_PATH } from "../hooks/logger.js";
-import { DEFAULT_HOOK_COMMAND, hasPreToolUseHook } from "./hooks/install.js";
 import { resolveClaudeCodeSettingsPath } from "./hooks/settings-path.js";
 
 export type Check = {

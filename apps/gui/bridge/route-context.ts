@@ -39,6 +39,9 @@ export type RouteContext = {
   // Absolute path to the desktop app's session-metadata dir (claude-code-sessions),
   // source of the AI-generated session titles. Overridable in tests.
   claudeSessionsMetaDir: string;
+  // Absolute path to ~/.claude/settings.json (overridable in tests). Target of
+  // the global Claude Code hook connect/disconnect route.
+  claudeSettingsPath: string;
   // Pure cwd → { workspaceKey, label, cwd } resolver, injected once so tests can
   // override it. Used by the workspace-scoped routes.
   resolveWorkspace: typeof resolveWorkspace;
