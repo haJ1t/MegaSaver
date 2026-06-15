@@ -45,6 +45,9 @@ importers:
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../../packages/content-store
+      '@megasaver/context-gate':
+        specifier: workspace:*
+        version: link:../../packages/context-gate
       '@megasaver/context-pruner':
         specifier: workspace:*
         version: link:../../packages/context-pruner
