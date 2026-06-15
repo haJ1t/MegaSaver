@@ -9,13 +9,7 @@ import {
 
 const MODES = ["aggressive", "balanced", "safe"] as const;
 
-export function WorkspaceSaverModePanel({
-  dir,
-  id,
-}: {
-  dir: string;
-  id: string;
-}): JSX.Element {
+export function SaverModeActivation({ dir, id }: { dir: string; id: string }): JSX.Element {
   const [status, setStatus] = useState<WorkspaceSaverStatus | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<BridgeError | null>(null);
@@ -54,16 +48,13 @@ export function WorkspaceSaverModePanel({
   );
 
   return (
-    <section
-      aria-label="Workspace token saver panel"
-      className="flex flex-col gap-4 px-6 py-6 overflow-y-auto flex-1 min-h-0"
-    >
-      <h2 className="text-sm text-text-muted uppercase tracking-widest">Saver Mode</h2>
+    <section className="flex flex-col gap-3">
+      <h3 className="text-xs text-text-muted uppercase tracking-widest">Saver Mode</h3>
       <p className="text-xs text-text-muted">
         Activation is workspace-wide: it writes the Mega Saver block into this folder's CLAUDE.md
         and applies to every Claude session in the same directory.
       </p>
-      {state === "loading" && <LoadingState label="Loading saver mode…" />}
+      {state === "loading" && <LoadingState label="Loading saver mode..." />}
       {state === "error" && error && <ErrorState error={error} onRetry={load} />}
       {state === "ready" && status && (
         <>
