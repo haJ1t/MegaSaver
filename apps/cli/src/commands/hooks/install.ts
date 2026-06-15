@@ -17,12 +17,16 @@ export const HOOK_MATCHER = "Read|Bash|Grep|Glob|LS";
 // PreToolUse payload to its stdin.
 export const DEFAULT_HOOK_COMMAND = "mega hooks log";
 
+export const SAVER_HOOK_COMMAND = "mega hooks saver";
+export const SAVER_HOOK_MATCHER = "Read|Bash|Grep|Glob|LS";
+
 type CommandHook = { type: "command"; command: string };
 type PreToolUseEntry = { matcher?: string; hooks?: CommandHook[] };
+type PostToolUseEntry = { matcher?: string; hooks?: CommandHook[] };
 // Named `hooks` property (so dot access satisfies both TS and Biome) plus an
 // index signature so unrelated user keys (model, permissions, …) are preserved.
 type SettingsObject = {
-  hooks?: { PreToolUse?: unknown; [key: string]: unknown };
+  hooks?: { PreToolUse?: unknown; PostToolUse?: unknown; [key: string]: unknown };
   [key: string]: unknown;
 };
 
@@ -57,6 +61,23 @@ export function addPreToolUseHook(settings: unknown, command: string): SettingsO
   return next;
 }
 
+export function hasPostToolUseHook(settings: unknown, command: string): boolean {
+  if (typeof settings !== "object" || settings === null) return false;
+  const post = (settings as SettingsObject).hooks?.PostToolUse;
+  return Array.isArray(post) && post.some((e) => entryReferencesCommand(e, command));
+}
+
+export function addPostToolUseHook(settings: unknown, command: string): SettingsObject {
+  const next = asSettings(settings);
+  if (hasPostToolUseHook(next, command)) return next;
+  const hooks = next.hooks ? { ...next.hooks } : {};
+  const existingPost = (hooks as { PostToolUse?: unknown }).PostToolUse;
+  const post = Array.isArray(existingPost) ? [...(existingPost as PostToolUseEntry[])] : [];
+  post.push({ matcher: SAVER_HOOK_MATCHER, hooks: [{ type: "command", command }] });
+  next.hooks = { ...hooks, PostToolUse: post };
+  return next;
+}
+
 export type InstallClaudeCodeHookInput = {
   settingsPath: string;
   command?: string;
@@ -77,10 +98,13 @@ export function installClaudeCodeHook(
 ): InstallClaudeCodeHookResult {
   const command = input.command ?? DEFAULT_HOOK_COMMAND;
   const existing = readSettings(input.settingsPath);
-  if (hasPreToolUseHook(existing, command)) {
+  const alreadyPre = hasPreToolUseHook(existing, command);
+  const alreadyPost = hasPostToolUseHook(existing, SAVER_HOOK_COMMAND);
+  if (alreadyPre && alreadyPost) {
     return { settingsPath: input.settingsPath, changed: false };
   }
-  const next = addPreToolUseHook(existing, command);
+  let next = addPreToolUseHook(existing, command);
+  next = addPostToolUseHook(next, SAVER_HOOK_COMMAND);
   mkdirSync(dirname(input.settingsPath), { recursive: true });
   writeFileSync(input.settingsPath, `${JSON.stringify(next, null, 2)}\n`);
   return { settingsPath: input.settingsPath, changed: true };
@@ -119,8 +143,8 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
   } else {
     input.stdout(
       result.changed
-        ? `Installed Claude Code PreToolUse telemetry hook at ${result.settingsPath}`
-        : `Claude Code telemetry hook already installed at ${result.settingsPath} (no-op)`,
+        ? `Installed Claude Code Mega Saver hooks (PreToolUse telemetry + PostToolUse saver) at ${result.settingsPath}`
+        : `Claude Code Mega Saver hooks already installed at ${result.settingsPath} (no-op)`,
     );
   }
   return 0;
@@ -129,7 +153,7 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
 export const hooksInstallCommand = defineCommand({
   meta: {
     name: "install",
-    description: "Install the Claude Code PreToolUse telemetry hook.",
+    description: "Install the Claude Code Mega Saver hooks (telemetry + saver).",
   },
   args: {
     target: { type: "positional", required: true, description: "Hook target (claude-code)." },
