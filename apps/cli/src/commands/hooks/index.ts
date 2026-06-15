@@ -10,8 +10,12 @@ export {
   installClaudeCodeHook,
   addPreToolUseHook,
   hasPreToolUseHook,
+  addPostToolUseHook,
+  hasPostToolUseHook,
   HOOK_MATCHER,
   DEFAULT_HOOK_COMMAND,
+  SAVER_HOOK_COMMAND,
+  SAVER_HOOK_MATCHER,
   hooksInstallCommand,
 } from "./install.js";
 export { type RunHooksStatusInput, runHooksStatus, hooksStatusCommand } from "./status.js";

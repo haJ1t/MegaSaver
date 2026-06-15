@@ -4,7 +4,11 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   HOOK_MATCHER,
+  SAVER_HOOK_COMMAND,
+  SAVER_HOOK_MATCHER,
+  addPostToolUseHook,
   addPreToolUseHook,
+  hasPostToolUseHook,
   hasPreToolUseHook,
   installClaudeCodeHook,
 } from "../../src/commands/hooks/install.js";
@@ -53,6 +57,55 @@ describe("addPreToolUseHook (pure, idempotent)", () => {
   });
 });
 
+describe("addPostToolUseHook (pure, idempotent)", () => {
+  it("adds a PostToolUse matcher to empty settings", () => {
+    const next = addPostToolUseHook({}, SAVER_HOOK_COMMAND) as {
+      hooks: { PostToolUse: { matcher: string; hooks: { type: string; command: string }[] }[] };
+    };
+    const entry = next.hooks.PostToolUse[0];
+    expect(entry?.matcher).toBe(SAVER_HOOK_MATCHER);
+    expect(entry?.hooks[0]).toEqual({ type: "command", command: SAVER_HOOK_COMMAND });
+    expect(hasPostToolUseHook(next, SAVER_HOOK_COMMAND)).toBe(true);
+  });
+
+  it("is idempotent — re-adding does not duplicate the entry", () => {
+    const once = addPostToolUseHook({}, SAVER_HOOK_COMMAND);
+    const twice = addPostToolUseHook(once, SAVER_HOOK_COMMAND);
+    expect((twice as { hooks: { PostToolUse: unknown[] } }).hooks.PostToolUse).toHaveLength(1);
+    expect(hasPostToolUseHook(twice, SAVER_HOOK_COMMAND)).toBe(true);
+    expect(twice).toEqual(once);
+  });
+
+  it("preserves an existing unrelated PostToolUse entry", () => {
+    const existing = {
+      hooks: {
+        PostToolUse: [{ matcher: "X", hooks: [{ type: "command", command: "other" }] }],
+      },
+    };
+    const next = addPostToolUseHook(existing, SAVER_HOOK_COMMAND) as typeof existing;
+    expect(next.hooks.PostToolUse).toHaveLength(2);
+    expect(next.hooks.PostToolUse[0]).toEqual(existing.hooks.PostToolUse[0]);
+    expect(hasPostToolUseHook(next, "other")).toBe(true);
+    expect(hasPostToolUseHook(next, SAVER_HOOK_COMMAND)).toBe(true);
+  });
+
+  it("preserves a sibling PreToolUse array and unrelated top-level keys", () => {
+    const existing = {
+      model: "x",
+      hooks: {
+        PreToolUse: [{ matcher: "Write", hooks: [{ type: "command", command: "other-tool" }] }],
+      },
+    };
+    const next = addPostToolUseHook(existing, SAVER_HOOK_COMMAND) as typeof existing & {
+      hooks: { PostToolUse: unknown[] };
+    };
+    expect(next.model).toBe("x");
+    expect(next.hooks.PreToolUse).toEqual(existing.hooks.PreToolUse);
+    expect(next.hooks.PostToolUse).toHaveLength(1);
+    expect(hasPostToolUseHook(next, SAVER_HOOK_COMMAND)).toBe(true);
+  });
+});
+
 describe("installClaudeCodeHook (file)", () => {
   let dir: string;
   let settingsPath: string;
@@ -88,5 +141,26 @@ describe("installClaudeCodeHook (file)", () => {
     expect(written.model).toBe("x");
     expect(written.permissions).toEqual({ allow: ["Read"] });
     expect(hasPreToolUseHook(written, COMMAND)).toBe(true);
+  });
+
+  it("installs BOTH the PreToolUse log hook and the PostToolUse saver hook", () => {
+    installClaudeCodeHook({ settingsPath });
+    const s = JSON.parse(readFileSync(settingsPath, "utf8"));
+    const pre = (s.hooks.PreToolUse as Array<{ hooks: { command: string }[] }>).flatMap(
+      (e) => e.hooks,
+    );
+    const post = (s.hooks.PostToolUse as Array<{ hooks: { command: string }[] }>).flatMap(
+      (e) => e.hooks,
+    );
+    expect(pre.some((h) => h.command === "mega hooks log")).toBe(true);
+    expect(post.some((h) => h.command === "mega hooks saver")).toBe(true);
+  });
+
+  it("is idempotent across both hooks (re-install is a no-op)", () => {
+    installClaudeCodeHook({ settingsPath });
+    const first = readFileSync(settingsPath, "utf8");
+    const result = installClaudeCodeHook({ settingsPath });
+    expect(result.changed).toBe(false);
+    expect(readFileSync(settingsPath, "utf8")).toBe(first);
   });
 });
