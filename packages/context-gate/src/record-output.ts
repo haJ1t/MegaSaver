@@ -38,6 +38,19 @@ function returnedTextOf(result: FilterOutputResult): string {
   return [result.summary, ...result.excerpts.map((e) => e.text)].join("\n");
 }
 
+function chunkSetSource(kind: OutputSourceKind, label: string): OverlayChunkSet["source"] {
+  switch (kind) {
+    case "command":
+      return { kind: "command", command: label, args: [] };
+    case "grep":
+      return { kind: "grep", query: label };
+    case "fetch":
+      return { kind: "fetch", url: label };
+    case "file":
+      return { kind: "file", path: label };
+  }
+}
+
 // Filter an already-produced output buffer (no re-execution, no path gating —
 // the output is the tool's own trusted result), record the overlay event keyed
 // by (workspaceKey, liveSessionId), and store the FULL output (secrets redacted)
@@ -83,7 +96,7 @@ export async function recordAndFilterOverlayOutput(
       workspaceKey: input.workspaceKey,
       liveSessionId: input.liveSessionId,
       createdAt,
-      source: { kind: "file", path: input.label },
+      source: chunkSetSource(input.sourceKind, input.label),
       rawBytes: filtered.rawBytes,
       redacted: secretCount > 0,
       chunks: [

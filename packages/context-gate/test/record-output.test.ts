@@ -99,6 +99,32 @@ describe("recordAndFilterOverlayOutput", () => {
     expect(Buffer.byteLength(full, "utf8")).toBeGreaterThan(res.returnedBytes);
   });
 
+  it("stores a chunk-set whose source matches the tool's sourceKind (command, not file)", async () => {
+    const storeRoot = store();
+    const raw = `line ${"x".repeat(40)}\n`.repeat(2000);
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw,
+      sourceKind: "command",
+      label: "echo big",
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    expect(res.decision).toBe("compressed");
+
+    const cs = await loadOverlayChunkSet({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      // biome-ignore lint/style/noNonNullAssertion: decision === "compressed" guarantees chunkSetId
+      chunkSetId: res.chunkSetId!,
+    });
+    expect(cs.source.kind).toBe("command");
+    expect(cs.source).toEqual({ kind: "command", command: "echo big", args: [] });
+  });
+
   it("redacts secrets in the stored chunk and counts them in the summary", async () => {
     const storeRoot = store();
     const secret = "AKIAIOSFODNN7EXAMPLE";
