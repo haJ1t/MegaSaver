@@ -182,10 +182,12 @@ the runtime lever is the `CONTEXT_GATE` block in the folder's shared
 `CLAUDE.md`, which the MCP proxy honours; the bridge never sees a Claude
 session id per call).
 
-- New cockpit panel `ws-token-saver` ("Saver Mode", `scope: "workspace"`):
-  toggle + mode select + `blockPresent` / `mcpInstalled` status + an MCP-not-
-  installed warning. The session `token-saver` panel stays a read-only stats
-  viewer and points users here.
+- Activation UI: a `SaverModeActivation` sub-component (toggle + mode select +
+  `blockPresent` / `mcpInstalled` status + an MCP-not-installed warning) lives
+  inside the single **`token-saver` "Token saver" tab**, rendered above the
+  this-session stats. (Originally shipped as a separate `ws-token-saver` "Saver
+  Mode" workspace tab; merged into the Token saver tab — one tab, activation on
+  top + stats below, sub-headings keep the workspace-vs-session scope clear.)
 - Bridge route `GET|POST /api/claude-sessions/:dir/:id/token-saver/workspace`
   (extends `routes/claude-session-token-saver.ts`). cwd is derived server-side
   from the transcript via `resolveSessionWorkspace` — never client-supplied

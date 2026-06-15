@@ -17,7 +17,7 @@ vi.mock("../../src/lib/claude-sessions-client.js", () => ({
     stub.set(input),
 }));
 
-import { WorkspaceSaverModePanel } from "../../src/views/cockpit/workspace-saver-mode-panel.js";
+import { SaverModeActivation } from "../../src/views/cockpit/saver-mode-activation.js";
 
 const DISABLED: WorkspaceSaverStatus = {
   enabled: false,
@@ -32,10 +32,10 @@ afterEach(() => {
   stub.set = () => Promise.reject(new Error("not set"));
 });
 
-describe("WorkspaceSaverModePanel", () => {
+describe("SaverModeActivation", () => {
   it("renders the current disabled status", async () => {
     stub.fetch = () => Promise.resolve(DISABLED);
-    render(<WorkspaceSaverModePanel dir="d" id="i" />);
+    render(<SaverModeActivation dir="d" id="i" />);
     await waitFor(() => expect(screen.getByLabelText(/Saver Mode/i)).toBeDefined());
     expect((screen.getByLabelText(/Saver Mode/i) as HTMLInputElement).checked).toBe(false);
   });
@@ -47,7 +47,7 @@ describe("WorkspaceSaverModePanel", () => {
       calls.push(input);
       return Promise.resolve({ ...DISABLED, enabled: true, blockPresent: true });
     };
-    render(<WorkspaceSaverModePanel dir="d" id="i" />);
+    render(<SaverModeActivation dir="d" id="i" />);
     await waitFor(() => expect(screen.getByLabelText(/Saver Mode/i)).toBeDefined());
     fireEvent.click(screen.getByLabelText(/Saver Mode/i));
     await waitFor(() => expect(calls.length).toBe(1));
@@ -61,7 +61,7 @@ describe("WorkspaceSaverModePanel", () => {
       calls.push(input);
       return Promise.resolve({ ...DISABLED, mode: input.mode as WorkspaceSaverStatus["mode"] });
     };
-    render(<WorkspaceSaverModePanel dir="d" id="i" />);
+    render(<SaverModeActivation dir="d" id="i" />);
     await waitFor(() => expect(screen.getByLabelText("Compression budget")).toBeDefined());
     fireEvent.change(screen.getByLabelText("Compression budget"), { target: { value: "safe" } });
     await waitFor(() => expect(calls.length).toBe(1));
@@ -71,7 +71,7 @@ describe("WorkspaceSaverModePanel", () => {
   it("warns when enabled but MCP is not installed", async () => {
     stub.fetch = () =>
       Promise.resolve({ enabled: true, mode: "balanced", blockPresent: true, mcpInstalled: false });
-    render(<WorkspaceSaverModePanel dir="d" id="i" />);
+    render(<SaverModeActivation dir="d" id="i" />);
     await waitFor(() => expect(screen.getByText(/has no effect/i)).toBeDefined());
   });
 });

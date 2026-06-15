@@ -2318,3 +2318,13 @@ Audited path-assertion and `file://` classes too — assertions are symmetric
 URL(...))` (win32-safe), so timeouts were the only remaining class. Both
 `verify (ubuntu-latest)` and `verify (windows-latest)` now green — first
 fully-green CI on both platforms (no bypass). See [[concepts/windows-support]].
+
+## [2026-06-15] refactor | merge Saver Mode tab into Token saver tab
+
+Per user request, collapsed the two cockpit tabs into one. The standalone
+`ws-token-saver` "Saver Mode" workspace tab is removed; its controls now render
+as a `SaverModeActivation` sub-component inside the single `token-saver` "Token
+saver" tab (activation on top, this-session stats below). Both client calls key
+on (dir,id) so no new props. Sub-headings keep the scope distinction explicit
+(activation = workspace-wide; stats = this session). GUI-only; bridge routes and
+client functions unchanged. See [[entities/gui]].

@@ -13,20 +13,12 @@ import {
   WorkspaceRulesCockpitPanel,
   WorkspaceToolsCockpitPanel,
 } from "./panels/workspace-panels.js";
-import { WorkspaceSaverModeCockpitPanel } from "./panels/workspace-saver-mode-cockpit-panel.js";
-
 export const COCKPIT_PANELS: readonly CockpitPanel[] = [
   { id: "transcript", label: "Transcript", scope: "session", component: TranscriptPanel },
   { id: "telemetry", label: "Telemetry", scope: "session", component: TelemetryPanel },
   { id: "memory", label: "Memory", scope: "session", component: MemoryCockpitPanel },
   { id: "tasks", label: "Tasks", scope: "session", component: TasksCockpitPanel },
   { id: "token-saver", label: "Token saver", scope: "session", component: TokenSaverCockpitPanel },
-  {
-    id: "ws-token-saver",
-    label: "Saver Mode",
-    scope: "workspace",
-    component: WorkspaceSaverModeCockpitPanel,
-  },
   { id: "ws-index", label: "Index", scope: "workspace", component: WorkspaceIndexCockpitPanel },
   {
     id: "ws-context",
