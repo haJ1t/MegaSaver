@@ -1,7 +1,6 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   HOOK_MATCHER,
   SAVER_HOOK_COMMAND,
@@ -11,7 +10,8 @@ import {
   hasPostToolUseHook,
   hasPreToolUseHook,
   installClaudeCodeHook,
-} from "../../src/commands/hooks/install.js";
+} from "@megasaver/connector-claude-code";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const COMMAND = "mega hooks log";
 

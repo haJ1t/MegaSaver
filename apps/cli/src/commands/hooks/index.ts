@@ -3,21 +3,14 @@ import { hooksInstallCommand } from "./install.js";
 import { hooksLogCommand } from "./log.js";
 import { hooksSaverCommand } from "./saver.js";
 import { hooksStatusCommand } from "./status.js";
+import { hooksUninstallCommand } from "./uninstall.js";
 
+export { type RunHooksInstallInput, runHooksInstall, hooksInstallCommand } from "./install.js";
 export {
-  type RunHooksInstallInput,
-  runHooksInstall,
-  installClaudeCodeHook,
-  addPreToolUseHook,
-  hasPreToolUseHook,
-  addPostToolUseHook,
-  hasPostToolUseHook,
-  HOOK_MATCHER,
-  DEFAULT_HOOK_COMMAND,
-  SAVER_HOOK_COMMAND,
-  SAVER_HOOK_MATCHER,
-  hooksInstallCommand,
-} from "./install.js";
+  type RunHooksUninstallInput,
+  runHooksUninstall,
+  hooksUninstallCommand,
+} from "./uninstall.js";
 export { type RunHooksStatusInput, runHooksStatus, hooksStatusCommand } from "./status.js";
 export { resolveClaudeCodeSettingsPath } from "./settings-path.js";
 export { hooksLogCommand } from "./log.js";
@@ -30,6 +23,7 @@ export const hooksCommand = defineCommand({
   },
   subCommands: {
     install: hooksInstallCommand,
+    uninstall: hooksUninstallCommand,
     status: hooksStatusCommand,
     log: hooksLogCommand,
     saver: hooksSaverCommand,

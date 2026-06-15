@@ -1,8 +1,11 @@
-import { type ClaudeCodeHookResult, installClaudeCodeHook } from "@megasaver/connector-claude-code";
+import {
+  type ClaudeCodeHookResult,
+  uninstallClaudeCodeHook,
+} from "@megasaver/connector-claude-code";
 import { defineCommand } from "citty";
 import { resolveClaudeCodeSettingsPath } from "./settings-path.js";
 
-export type RunHooksInstallInput = {
+export type RunHooksUninstallInput = {
   target: string;
   settingsPath: string;
   command?: string;
@@ -11,20 +14,20 @@ export type RunHooksInstallInput = {
   json: boolean;
 };
 
-export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
+export function runHooksUninstall(input: RunHooksUninstallInput): 0 | 1 {
   if (input.target !== "claude-code") {
     input.stderr(`error: unknown hook target "${input.target}" (supported: claude-code)`);
     return 1;
   }
   let result: ClaudeCodeHookResult;
   try {
-    result = installClaudeCodeHook({
+    result = uninstallClaudeCodeHook({
       settingsPath: input.settingsPath,
       ...(input.command !== undefined ? { command: input.command } : {}),
     });
   } catch (err) {
     input.stderr(
-      `error: could not install Claude Code hook at ${input.settingsPath}: ${
+      `error: could not uninstall Claude Code hook at ${input.settingsPath}: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );
@@ -35,17 +38,17 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
   } else {
     input.stdout(
       result.changed
-        ? `Installed Claude Code Mega Saver hooks (PreToolUse telemetry + PostToolUse saver) at ${result.settingsPath}`
-        : `Claude Code Mega Saver hooks already installed at ${result.settingsPath} (no-op)`,
+        ? `Removed Claude Code Mega Saver hooks at ${result.settingsPath}`
+        : `No Claude Code Mega Saver hooks found at ${result.settingsPath} (no-op)`,
     );
   }
   return 0;
 }
 
-export const hooksInstallCommand = defineCommand({
+export const hooksUninstallCommand = defineCommand({
   meta: {
-    name: "install",
-    description: "Install the Claude Code Mega Saver hooks (telemetry + saver).",
+    name: "uninstall",
+    description: "Remove the Claude Code Mega Saver hooks (telemetry + saver).",
   },
   args: {
     target: { type: "positional", required: true, description: "Hook target (claude-code)." },
@@ -53,7 +56,7 @@ export const hooksInstallCommand = defineCommand({
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   run({ args }) {
-    const code = runHooksInstall({
+    const code = runHooksUninstall({
       target: typeof args.target === "string" ? args.target : "",
       settingsPath:
         typeof args.settings === "string" ? args.settings : resolveClaudeCodeSettingsPath(),

@@ -1,9 +1,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { installClaudeCodeHook } from "@megasaver/connector-claude-code";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { checkHookTelemetry } from "../../src/commands/doctor.js";
-import { installClaudeCodeHook } from "../../src/commands/hooks/install.js";
 
 let dir: string;
 
