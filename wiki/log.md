@@ -2303,3 +2303,18 @@ GUI `ws-token-saver` "Saver Mode" workspace panel. Followed full superpowers
 chain (HIGH risk, worktree, spec+plan, TDD, two-stage subagent review).
 Follow-up tracked: explicit `ConnectorError` mapping in bridge error-mapping.
 Spec: docs/superpowers/specs/2026-06-14-gui-workspace-token-saver-activation-design.md.
+
+## [2026-06-15] ci | fix pre-existing Windows verify failures (PR #136)
+
+`verify (windows-latest)` had accumulated pre-existing failures (masked while
+earlier PRs merged via owner CI-bypass; the Windows build failed first). After
+#135 fixed the build (shared `@types/node`) and a path assertion
+(workspace-resolver), Windows surfaced timeout-class failures one package at a
+time — windows-latest fs is slow, so fs-heavy suites exceeded vitest's default
+5000ms `testTimeout` (e.g. skill-packs `discover.test.ts` at 10800ms). Fix:
+raised `testTimeout` + `hookTimeout` to 30s in all 14 package `vitest.config.ts`.
+Audited path-assertion and `file://` classes too — assertions are symmetric
+`resolve`/`join` or string passthroughs, and file URLs use `fileURLToPath(new
+URL(...))` (win32-safe), so timeouts were the only remaining class. Both
+`verify (ubuntu-latest)` and `verify (windows-latest)` now green — first
+fully-green CI on both platforms (no bypass). See [[concepts/windows-support]].
