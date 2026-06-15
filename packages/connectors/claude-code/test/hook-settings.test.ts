@@ -57,6 +57,40 @@ describe("hook-settings", () => {
     expect(readClaudeCodeHookStatus({ settingsPath: p }).connected).toBe(false);
   });
 
+  it("uninstall strips only the Mega Saver command from a shared entry, keeping co-located user hooks", () => {
+    const p = tmpSettings({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "Read|Bash|Grep|Glob|LS",
+            hooks: [
+              { type: "command", command: "user-linter" },
+              { type: "command", command: "mega hooks log" },
+            ],
+          },
+        ],
+        PostToolUse: [
+          {
+            matcher: "Edit",
+            hooks: [
+              { type: "command", command: "mega hooks saver" },
+              { type: "command", command: "user-formatter" },
+            ],
+          },
+        ],
+      },
+    });
+    const res = uninstallClaudeCodeHook({ settingsPath: p });
+    expect(res.changed).toBe(true);
+    const after = JSON.parse(readFileSync(p, "utf8"));
+    expect(after.hooks.PreToolUse).toEqual([
+      { matcher: "Read|Bash|Grep|Glob|LS", hooks: [{ type: "command", command: "user-linter" }] },
+    ]);
+    expect(after.hooks.PostToolUse).toEqual([
+      { matcher: "Edit", hooks: [{ type: "command", command: "user-formatter" }] },
+    ]);
+  });
+
   it("uninstall on a file without the entries is a no-op", () => {
     const p = tmpSettings({ model: "x" });
     expect(uninstallClaudeCodeHook({ settingsPath: p }).changed).toBe(false);

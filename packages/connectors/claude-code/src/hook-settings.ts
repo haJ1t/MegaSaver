@@ -78,11 +78,32 @@ function pruneHooks(
   return { ...next, hooks };
 }
 
+// Strips `command` at the hook level, not the entry level: an entry that also
+// holds unrelated user commands keeps them (only the matching CommandHook is
+// dropped); an entry left with no hooks is removed. Entries without a hooks
+// array (or non-object entries) pass through untouched.
+function stripCommand(entries: ToolUseEntry[], command: string): ToolUseEntry[] {
+  const kept: ToolUseEntry[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== "object" || entry === null || !Array.isArray(entry.hooks)) {
+      kept.push(entry);
+      continue;
+    }
+    const hooks = entry.hooks.filter((h) => h?.command !== command);
+    if (hooks.length === entry.hooks.length) {
+      kept.push(entry);
+    } else if (hooks.length > 0) {
+      kept.push({ ...entry, hooks });
+    }
+  }
+  return kept;
+}
+
 export function removePreToolUseHook(settings: unknown, command: string): SettingsObject {
   const next = asSettings(settings);
   const existing = next.hooks?.PreToolUse;
   if (!Array.isArray(existing)) return next;
-  const kept = (existing as ToolUseEntry[]).filter((e) => !entryReferencesCommand(e, command));
+  const kept = stripCommand(existing as ToolUseEntry[], command);
   return pruneHooks(next, "PreToolUse", kept);
 }
 
@@ -90,7 +111,7 @@ export function removePostToolUseHook(settings: unknown, command: string): Setti
   const next = asSettings(settings);
   const existing = next.hooks?.PostToolUse;
   if (!Array.isArray(existing)) return next;
-  const kept = (existing as ToolUseEntry[]).filter((e) => !entryReferencesCommand(e, command));
+  const kept = stripCommand(existing as ToolUseEntry[], command);
   return pruneHooks(next, "PostToolUse", kept);
 }
 

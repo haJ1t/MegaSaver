@@ -40,6 +40,39 @@ describe("runHooksUninstall", () => {
     expect(JSON.parse(readFileSync(p, "utf8"))).toEqual({});
   });
 
+  it("emits the result as JSON with --json", () => {
+    const p = tmpSettings({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "Read|Bash|Grep|Glob|LS",
+            hooks: [{ type: "command", command: "mega hooks log" }],
+          },
+        ],
+        PostToolUse: [
+          {
+            matcher: "Read|Bash|Grep|Glob|LS",
+            hooks: [{ type: "command", command: "mega hooks saver" }],
+          },
+        ],
+      },
+    });
+    const out: string[] = [];
+    const code = runHooksUninstall({
+      target: "claude-code",
+      settingsPath: p,
+      stdout: (l) => out.push(l),
+      stderr: () => {},
+      json: true,
+    });
+    expect(code).toBe(0);
+    expect(JSON.parse(out[0] as string)).toEqual({
+      target: "claude-code",
+      settingsPath: p,
+      changed: true,
+    });
+  });
+
   it("rejects an unknown target with exit 1", () => {
     const errs: string[] = [];
     const code = runHooksUninstall({

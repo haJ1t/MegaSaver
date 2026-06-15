@@ -65,4 +65,14 @@ describe("HookConnection", () => {
     render(<HookConnection />);
     expect(await screen.findByText(/all Claude Code sessions/i)).toBeInTheDocument();
   });
+
+  it("renders an action error when connect fails", async () => {
+    fetchStatus.mockResolvedValue(OFF);
+    connect.mockRejectedValue({ error: "boom", code: "internal_error" });
+    render(<HookConnection />);
+    const box = await screen.findByRole("checkbox");
+    fireEvent.click(box);
+    expect(await screen.findByText(/could not update the hook/i)).toBeInTheDocument();
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+  });
 });
