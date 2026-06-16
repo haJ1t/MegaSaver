@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { digestContent } from "../src/digest.js";
 import type { EvidenceRecordInput } from "../src/schema.js";
-import { appendEvidence, getEvidenceStatus, loadEvidence } from "../src/store.js";
+import { appendEvidence, getEvidenceStatus, listEvidenceByWorkspace, loadEvidence } from "../src/store.js";
 
 let storeRoot: string;
 const workspaceKey = "0123456789abcdef";
@@ -91,5 +91,22 @@ describe("appendEvidence / loadEvidence", () => {
     await expect(
       loadEvidence({ storeRoot, workspaceKey: "ffffffffffffffff", evidenceId: rec.evidenceId }),
     ).rejects.toMatchObject({ code: "not_found" });
+  });
+});
+
+describe("listEvidenceByWorkspace", () => {
+  it("lists newest-first and filters by status", async () => {
+    const a = input({ createdAt: "2026-06-16T12:00:00.000Z" });
+    const b = input({ createdAt: "2026-06-16T13:00:00.000Z" });
+    await appendEvidence({ storeRoot, record: a });
+    await appendEvidence({ storeRoot, record: b });
+    const all = await listEvidenceByWorkspace({ storeRoot, workspaceKey });
+    expect(all.map((r) => r.evidenceId)).toEqual([b.evidenceId, a.evidenceId]);
+    expect(await listEvidenceByWorkspace({ storeRoot, workspaceKey, filters: { status: "available" } })).toHaveLength(2);
+    expect(await listEvidenceByWorkspace({ storeRoot, workspaceKey, filters: { status: "revoked" } })).toHaveLength(0);
+  });
+
+  it("returns an empty array for an unknown workspace", async () => {
+    expect(await listEvidenceByWorkspace({ storeRoot, workspaceKey: "ffffffffffffffff" })).toEqual([]);
   });
 });
