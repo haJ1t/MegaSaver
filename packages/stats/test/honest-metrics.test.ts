@@ -1,3 +1,4 @@
+import { estimateTokens } from "@megasaver/output-filter";
 import { describe, expect, it } from "vitest";
 import {
   aggregateHonestMetrics,
@@ -6,6 +7,8 @@ import {
   honestObservationSchema,
   mediationKindSchema,
   meetsGaGate,
+  observationsFromEvents,
+  recordedEventsFromLogs,
   type HonestObservation,
 } from "../src/honest-metrics.js";
 
@@ -157,5 +160,47 @@ describe("classifyObservation", () => {
     expect(
       classifyObservation({ decision: "compressed", rawTokens: 9000, returnedTokens: 9000, mediation: "native" }),
     ).toEqual({ rawTokens: 9000, returnedTokens: 9000, eligibility: "native_observed", mediation: "native" });
+  });
+});
+
+describe("tokensFromBytes mirrors estimateTokens", () => {
+  it("matches estimateTokens for the same content (bytes/4 ceiling)", () => {
+    const s = "a".repeat(123);
+    // estimateTokens(s) === Math.ceil(Buffer.byteLength(s)/4); the loader uses
+    // recorded byte counts, so the two must agree.
+    expect(estimateTokens(s)).toBe(Math.ceil(Buffer.byteLength(s, "utf8") / 4));
+  });
+});
+
+describe("recordedEventsFromLogs (mediation assigned by log source)", () => {
+  it("tags overlay events saver_hook, session events proxy, hook-log native", () => {
+    const recorded = recordedEventsFromLogs({
+      overlayEvents: [{ rawBytes: 8000, returnedBytes: 400 }],
+      sessionEvents: [{ rawBytes: 6000, returnedBytes: 300 }],
+      nativeEligible: [{ rawBytes: 12000 }],
+    });
+    expect(recorded).toContainEqual({ rawBytes: 8000, returnedBytes: 400, mediation: "saver_hook", decision: "compressed" });
+    expect(recorded).toContainEqual({ rawBytes: 6000, returnedBytes: 300, mediation: "proxy", decision: "compressed" });
+    expect(recorded).toContainEqual({ rawBytes: 12000, returnedBytes: 12000, mediation: "native", decision: "compressed" });
+  });
+});
+
+describe("observationsFromEvents", () => {
+  it("turns recorded events into eligible/native observations using bytes/4 tokens", () => {
+    const observations = observationsFromEvents([
+      // rawBytes 8000 -> 2000 tokens; returnedBytes 400 -> 100 tokens
+      { rawBytes: 8000, returnedBytes: 400, mediation: "saver_hook", decision: "compressed" },
+      { rawBytes: 12000, returnedBytes: 12000, mediation: "native", decision: "compressed" },
+    ]);
+    expect(observations).toContainEqual({ rawTokens: 2000, returnedTokens: 100, eligibility: "eligible", mediation: "saver_hook" });
+    expect(observations).toContainEqual({ rawTokens: 3000, returnedTokens: 3000, eligibility: "native_observed", mediation: "native" });
+  });
+
+  it("a non-compressed recorded event is NOT eligible (no fake savings)", () => {
+    const [obs] = observationsFromEvents([
+      { rawBytes: 4000, returnedBytes: 4000, mediation: "proxy", decision: "passthrough" },
+    ]);
+    expect(obs?.eligibility).toBe("passthrough");
+    expect(obs?.returnedTokens).toBe(obs?.rawTokens);
   });
 });

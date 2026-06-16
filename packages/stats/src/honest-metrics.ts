@@ -85,6 +85,57 @@ export function aggregateHonestMetrics(observations: readonly HonestObservation[
   };
 }
 
+// Mirror estimateTokens (Math.ceil(bytes/4)) so honest metrics use the same
+// token model as the rest of the pipeline. estimateTokens takes a string;
+// recorded events only retain byte counts, so apply the identical formula here.
+function tokensFromBytes(bytes: number): number {
+  return Math.ceil(bytes / 4);
+}
+
+// A persisted event always records a `compressed` mediated output. `decision`
+// and `mediation` are REQUIRED — the loader sets them from the log source
+// (overlay→saver_hook, session→proxy, hook-telemetry→native); they are never
+// read from the row, which does not carry them.
+export interface RecordedEventLike {
+  rawBytes: number;
+  returnedBytes: number;
+  mediation: MediationKind;
+  decision: FilterDecision;
+}
+
+export function observationsFromEvents(
+  events: readonly RecordedEventLike[],
+): readonly HonestObservation[] {
+  return events.map((e) =>
+    classifyObservation({
+      decision: e.decision,
+      rawTokens: tokensFromBytes(e.rawBytes),
+      returnedTokens: tokensFromBytes(e.returnedBytes),
+      mediation: e.mediation,
+    }),
+  );
+}
+
+// The honest projection from the two on-disk logs + hook telemetry. Mediation
+// is assigned by SOURCE, the only place that knows it. Native-eligible outputs
+// were observed but never mediated, so returned == raw (no reduction).
+export function recordedEventsFromLogs(input: {
+  overlayEvents: readonly { rawBytes: number; returnedBytes: number }[];
+  sessionEvents: readonly { rawBytes: number; returnedBytes: number }[];
+  nativeEligible: readonly { rawBytes: number }[];
+}): readonly RecordedEventLike[] {
+  return [
+    ...input.overlayEvents.map((e) => ({ ...e, mediation: "saver_hook" as const, decision: "compressed" as const })),
+    ...input.sessionEvents.map((e) => ({ ...e, mediation: "proxy" as const, decision: "compressed" as const })),
+    ...input.nativeEligible.map((n) => ({
+      rawBytes: n.rawBytes,
+      returnedBytes: n.rawBytes,
+      mediation: "native" as const,
+      decision: "compressed" as const,
+    })),
+  ];
+}
+
 export function classifyObservation(input: {
   decision: FilterDecision;
   rawTokens: number;

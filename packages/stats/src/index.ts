@@ -76,6 +76,8 @@ export {
   aggregateHonestMetrics,
   classifyObservation,
   meetsGaGate,
+  observationsFromEvents,
+  recordedEventsFromLogs,
   type EligibilityClass,
   type MediationKind,
   type HonestObservation,
@@ -83,4 +85,5 @@ export {
   type GaGateInput,
   type GaGateTargets,
   type GaGateResult,
+  type RecordedEventLike,
 } from "./honest-metrics.js";
