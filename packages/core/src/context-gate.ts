@@ -71,21 +71,7 @@ export {
 
 export {
   aggregateHonestMetrics,
-  classifyObservation,
-  eligibilityClassSchema,
-  honestObservationSchema,
-  mediationKindSchema,
-  meetsGaGate,
   observationsFromEvents,
   recordedEventsFromLogs,
-  readOverlayEvents,
-  type EligibilityClass,
-  type GaGateInput,
-  type GaGateResult,
-  type GaGateTargets,
   type HonestMetrics,
-  type HonestObservation,
-  type MediationKind,
-  type OverlayTokenSaverEvent,
-  type RecordedEventLike,
 } from "@megasaver/stats";

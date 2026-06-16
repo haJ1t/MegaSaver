@@ -212,12 +212,23 @@ describe("classifyObservation", () => {
   });
 });
 
-describe("tokensFromBytes mirrors estimateTokens", () => {
-  it("matches estimateTokens for the same content (bytes/4 ceiling)", () => {
-    const s = "a".repeat(123);
-    // estimateTokens(s) === Math.ceil(Buffer.byteLength(s)/4); the loader uses
-    // recorded byte counts, so the two must agree.
-    expect(estimateTokens(s)).toBe(Math.ceil(Buffer.byteLength(s, "utf8") / 4));
+describe("observationsFromEvents token count is pinned to estimateTokens", () => {
+  it("converts recorded byte counts to the same tokens estimateTokens gives the byte-equivalent string", () => {
+    // A string of N single-byte chars has N utf8 bytes, so a recorded event with
+    // rawBytes=N must yield estimateTokens(that string) tokens. This pins the
+    // production pipeline's token model to estimateTokens, not a restated formula.
+    const rawContent = "a".repeat(123);
+    const returnedContent = "a".repeat(40);
+    const [observation] = observationsFromEvents([
+      {
+        rawBytes: Buffer.byteLength(rawContent, "utf8"),
+        returnedBytes: Buffer.byteLength(returnedContent, "utf8"),
+        mediation: "proxy",
+        decision: "compressed",
+      },
+    ]);
+    expect(observation?.rawTokens).toBe(estimateTokens(rawContent));
+    expect(observation?.returnedTokens).toBe(estimateTokens(returnedContent));
   });
 });
 

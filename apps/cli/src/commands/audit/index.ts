@@ -12,7 +12,10 @@ export { type RunAuditExportInput, runAuditExport, auditExportCommand } from "./
 export { renderHonestReport, auditHonestCommand } from "./honest.js";
 
 export const auditCommand = defineCommand({
-  meta: { name: "audit", description: "Token-savings dashboard: report, last, session, export." },
+  meta: {
+    name: "audit",
+    description: "Token-savings dashboard: report, last, session, export, honest.",
+  },
   subCommands: {
     report: auditReportCommand,
     last: auditLastCommand,
