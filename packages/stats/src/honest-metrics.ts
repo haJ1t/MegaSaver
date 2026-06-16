@@ -21,6 +21,26 @@ export const honestObservationSchema = z
   });
 export type HonestObservation = z.infer<typeof honestObservationSchema>;
 
+export interface GaGateInput {
+  eligibleReduction: number;
+  actionabilityFixturePassRate: number;
+}
+export interface GaGateTargets {
+  reductionTarget: number;
+  sufficiencyTarget: number;
+}
+export interface GaGateResult {
+  pass: boolean;
+  failed: readonly ("reduction" | "sufficiency")[];
+}
+
+export function meetsGaGate(input: GaGateInput, targets: GaGateTargets): GaGateResult {
+  const failed: ("reduction" | "sufficiency")[] = [];
+  if (input.eligibleReduction < targets.reductionTarget) failed.push("reduction");
+  if (input.actionabilityFixturePassRate < targets.sufficiencyTarget) failed.push("sufficiency");
+  return { pass: failed.length === 0, failed };
+}
+
 export interface HonestMetrics {
   eligibleReduction: number;
   eligibleTokenFraction: number;

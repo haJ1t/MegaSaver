@@ -4,6 +4,7 @@ import {
   eligibilityClassSchema,
   honestObservationSchema,
   mediationKindSchema,
+  meetsGaGate,
   type HonestObservation,
 } from "../src/honest-metrics.js";
 
@@ -110,5 +111,24 @@ describe("honest-metrics enums + observation", () => {
         mediation: "native",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("meetsGaGate", () => {
+  const targets = { reductionTarget: 0.9, sufficiencyTarget: 0.95 };
+  it("passes only when BOTH reduction and sufficiency clear their targets", () => {
+    expect(meetsGaGate({ eligibleReduction: 0.92, actionabilityFixturePassRate: 0.96 }, targets)).toMatchObject({
+      pass: true,
+    });
+  });
+  it("fails when reduction clears but sufficiency does not (cannot trade evidence for tokens)", () => {
+    const r = meetsGaGate({ eligibleReduction: 0.99, actionabilityFixturePassRate: 0.5 }, targets);
+    expect(r.pass).toBe(false);
+    expect(r.failed).toContain("sufficiency");
+  });
+  it("fails when sufficiency clears but reduction does not", () => {
+    const r = meetsGaGate({ eligibleReduction: 0.7, actionabilityFixturePassRate: 0.99 }, targets);
+    expect(r.pass).toBe(false);
+    expect(r.failed).toContain("reduction");
   });
 });
