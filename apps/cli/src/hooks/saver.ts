@@ -63,6 +63,17 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     if (raw.length === 0) return null;
     return { raw, rebuild: (t) => ({ ...o, content: [{ type: "text", text: t }] }) };
   }
+  // Real Claude Code Read payload: the file body is nested at `file.content`, not
+  // top-level `content`. Swap it while preserving the surrounding file metadata.
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const file = o["file"];
+  if (typeof file === "object" && file !== null) {
+    const f = file as Record<string, unknown>;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (typeof f["content"] === "string")
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      return { raw: f["content"], rebuild: (t) => ({ ...o, file: { ...f, content: t } }) };
+  }
   return null;
 }
 
