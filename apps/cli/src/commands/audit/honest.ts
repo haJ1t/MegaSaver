@@ -38,8 +38,11 @@ export const auditHonestCommand = defineCommand({
     // liveSessionId. The overlay store is keyed by (workspaceKey, liveSessionId);
     // the workspaceKey is not available from the sessionId alone without a registry
     // lookup that maps liveSessionId → workspaceKey. That wiring lands in Plan 2c.
-    // Until then, proxy-mediated overlay events are not counted.
-    console.log("note: proxy-mediated overlay events not yet counted (wiring lands in Plan 2c)");
+    // Until then, proxy-mediated overlay events are not counted. Keep this note off
+    // stdout in --json mode so the stream stays a single parseable JSON object.
+    if (!args.json) {
+      console.log("note: proxy-mediated overlay events not yet counted (wiring lands in Plan 2c)");
+    }
     const recorded = recordedEventsFromLogs({
       overlayEvents: [],
       sessionEvents: [],
