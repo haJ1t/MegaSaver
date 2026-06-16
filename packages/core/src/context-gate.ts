@@ -68,3 +68,10 @@ export {
   type AuditWindow,
   resolveAuditWindow,
 } from "@megasaver/stats";
+
+export {
+  aggregateHonestMetrics,
+  observationsFromEvents,
+  recordedEventsFromLogs,
+  type HonestMetrics,
+} from "@megasaver/stats";
