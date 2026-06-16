@@ -1,0 +1,95 @@
+import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { digestContent } from "../src/digest.js";
+import type { EvidenceRecordInput } from "../src/schema.js";
+import { appendEvidence, getEvidenceStatus, loadEvidence } from "../src/store.js";
+
+let storeRoot: string;
+const workspaceKey = "0123456789abcdef";
+
+function input(over: Partial<EvidenceRecordInput> = {}): EvidenceRecordInput {
+  return {
+    evidenceId: randomUUID(),
+    workspaceKey,
+    sessionRef: { kind: "durable", id: "s-1" },
+    sourceKind: "command",
+    sourceRef: { command: "git", args: ["log"] },
+    classification: "generic_shell",
+    redactionReport: { redacted: true, highRiskFindings: 0, unresolvedHighRisk: false },
+    redactedRawContent: "redacted raw text",
+    redactedReturnedContent: "redacted returned text",
+    redactedRawChunkSetId: "cs-1",
+    returnedChunkRefs: [{ chunkSetId: "cs-1", chunkId: "0" }],
+    createdAt: "2026-06-16T12:00:00.000Z",
+    expiresAt: null,
+    retentionClass: "session",
+    policyVersion: "1",
+    pipelineVersion: "1",
+    ...over,
+  };
+}
+
+beforeEach(() => {
+  storeRoot = mkdtempSync(join(tmpdir(), "evidence-ledger-"));
+});
+afterEach(() => {
+  rmSync(storeRoot, { recursive: true, force: true });
+});
+
+describe("appendEvidence / loadEvidence", () => {
+  it("computes digests from the passed post-redaction content (caller supplies none)", async () => {
+    const rec = input();
+    await appendEvidence({ storeRoot, record: rec });
+    const loaded = await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId });
+    expect(loaded.rawDigest).toBe(digestContent("redacted raw text"));
+    expect(loaded.returnedDigest).toBe(digestContent("redacted returned text"));
+    expect(loaded.status).toBe("available");
+    expect(loaded.transitions).toHaveLength(1);
+    expect(loaded.transitions[0]).toMatchObject({ kind: "created" });
+  });
+
+  it("getEvidenceStatus returns the current status", async () => {
+    const rec = input();
+    await appendEvidence({ storeRoot, record: rec });
+    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe("available");
+  });
+
+  it("append-only: appending the same evidenceId twice throws already_exists", async () => {
+    const rec = input();
+    await appendEvidence({ storeRoot, record: rec });
+    await expect(appendEvidence({ storeRoot, record: rec })).rejects.toMatchObject({ code: "already_exists" });
+  });
+
+  it("rejects a retentionClass of pinned at append (pin only via pinEvidence)", async () => {
+    await expect(
+      appendEvidence({ storeRoot, record: input({ retentionClass: "pinned" }) }),
+    ).rejects.toMatchObject({ code: "schema_invalid" });
+  });
+
+  it("rejects input whose redactionReport has unresolved high-risk findings", async () => {
+    await expect(
+      appendEvidence({
+        storeRoot,
+        record: input({ redactionReport: { redacted: true, highRiskFindings: 1, unresolvedHighRisk: true } }),
+      }),
+    ).rejects.toMatchObject({ code: "schema_invalid" });
+  });
+
+  it("loadEvidence on a missing id throws not_found", async () => {
+    await expect(loadEvidence({ storeRoot, workspaceKey, evidenceId: randomUUID() })).rejects.toMatchObject({
+      code: "not_found",
+    });
+  });
+
+  it("read asserts the loaded record's workspaceKey matches the requested one", async () => {
+    const rec = input();
+    await appendEvidence({ storeRoot, record: rec });
+    // Reading the same id under a different (valid) workspace key must not return it.
+    await expect(
+      loadEvidence({ storeRoot, workspaceKey: "ffffffffffffffff", evidenceId: rec.evidenceId }),
+    ).rejects.toMatchObject({ code: "not_found" });
+  });
+});
