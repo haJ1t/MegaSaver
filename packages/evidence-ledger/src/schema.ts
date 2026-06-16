@@ -62,7 +62,9 @@ export const evidenceRecordSchema = z
     }
 
     if (rec.status === "retained_metadata_only" && rec.redactedRawChunkSetId !== null) {
-      issue("metadata-only evidence must not retain a raw chunk set reference.", ["redactedRawChunkSetId"]);
+      issue("metadata-only evidence must not retain a raw chunk set reference.", [
+        "redactedRawChunkSetId",
+      ]);
     }
 
     const isRevoked = rec.status === "revoked";
@@ -91,7 +93,9 @@ export const evidenceRecordSchema = z
         issue("pinned retention requires status available.", ["retentionClass"]);
       }
       if (rec.pinnedByMemoryIds.length === 0) {
-        issue("pinned retention requires at least one pinnedByMemoryIds entry.", ["pinnedByMemoryIds"]);
+        issue("pinned retention requires at least one pinnedByMemoryIds entry.", [
+          "pinnedByMemoryIds",
+        ]);
       }
     }
   });

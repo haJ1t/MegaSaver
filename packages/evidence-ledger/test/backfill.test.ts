@@ -27,7 +27,12 @@ function preLifecycleRow(): Record<string, unknown> {
 describe("backfillEvidenceRecord", () => {
   it("defaults lifecycle fields so a pre-lifecycle row loads as available", () => {
     const upgraded = evidenceRecordSchema.parse(backfillEvidenceRecord(preLifecycleRow()));
-    expect(upgraded).toMatchObject({ status: "available", revokedAt: null, revocationReason: null, pinnedByMemoryIds: [] });
+    expect(upgraded).toMatchObject({
+      status: "available",
+      revokedAt: null,
+      revocationReason: null,
+      pinnedByMemoryIds: [],
+    });
     expect(upgraded.transitions[0]).toMatchObject({ kind: "created", actor: "system" });
   });
 

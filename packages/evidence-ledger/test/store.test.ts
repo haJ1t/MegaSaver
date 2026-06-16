@@ -2,11 +2,21 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { memoryEntryIdSchema } from "@megasaver/shared";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { digestContent } from "../src/digest.js";
 import type { EvidenceRecordInput } from "../src/schema.js";
-import { memoryEntryIdSchema } from "@megasaver/shared";
-import { appendEvidence, explainEvidence, gcEvidence, getEvidenceStatus, listEvidenceByWorkspace, loadEvidence, pinEvidence, revokeEvidence, unpinEvidence } from "../src/store.js";
+import {
+  appendEvidence,
+  explainEvidence,
+  gcEvidence,
+  getEvidenceStatus,
+  listEvidenceByWorkspace,
+  loadEvidence,
+  pinEvidence,
+  revokeEvidence,
+  unpinEvidence,
+} from "../src/store.js";
 
 const MEM_ID = memoryEntryIdSchema.parse("00000000-0000-4000-8000-0000000000a1");
 
@@ -57,13 +67,17 @@ describe("appendEvidence / loadEvidence", () => {
   it("getEvidenceStatus returns the current status", async () => {
     const rec = input();
     await appendEvidence({ storeRoot, record: rec });
-    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe("available");
+    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe(
+      "available",
+    );
   });
 
   it("append-only: appending the same evidenceId twice throws already_exists", async () => {
     const rec = input();
     await appendEvidence({ storeRoot, record: rec });
-    await expect(appendEvidence({ storeRoot, record: rec })).rejects.toMatchObject({ code: "already_exists" });
+    await expect(appendEvidence({ storeRoot, record: rec })).rejects.toMatchObject({
+      code: "already_exists",
+    });
   });
 
   it("rejects a retentionClass of pinned at append (pin only via pinEvidence)", async () => {
@@ -76,13 +90,17 @@ describe("appendEvidence / loadEvidence", () => {
     await expect(
       appendEvidence({
         storeRoot,
-        record: input({ redactionReport: { redacted: true, highRiskFindings: 1, unresolvedHighRisk: true } }),
+        record: input({
+          redactionReport: { redacted: true, highRiskFindings: 1, unresolvedHighRisk: true },
+        }),
       }),
     ).rejects.toMatchObject({ code: "schema_invalid" });
   });
 
   it("loadEvidence on a missing id throws not_found", async () => {
-    await expect(loadEvidence({ storeRoot, workspaceKey, evidenceId: randomUUID() })).rejects.toMatchObject({
+    await expect(
+      loadEvidence({ storeRoot, workspaceKey, evidenceId: randomUUID() }),
+    ).rejects.toMatchObject({
       code: "not_found",
     });
   });
@@ -105,12 +123,18 @@ describe("listEvidenceByWorkspace", () => {
     await appendEvidence({ storeRoot, record: b });
     const all = await listEvidenceByWorkspace({ storeRoot, workspaceKey });
     expect(all.map((r) => r.evidenceId)).toEqual([b.evidenceId, a.evidenceId]);
-    expect(await listEvidenceByWorkspace({ storeRoot, workspaceKey, filters: { status: "available" } })).toHaveLength(2);
-    expect(await listEvidenceByWorkspace({ storeRoot, workspaceKey, filters: { status: "revoked" } })).toHaveLength(0);
+    expect(
+      await listEvidenceByWorkspace({ storeRoot, workspaceKey, filters: { status: "available" } }),
+    ).toHaveLength(2);
+    expect(
+      await listEvidenceByWorkspace({ storeRoot, workspaceKey, filters: { status: "revoked" } }),
+    ).toHaveLength(0);
   });
 
   it("returns an empty array for an unknown workspace", async () => {
-    expect(await listEvidenceByWorkspace({ storeRoot, workspaceKey: "ffffffffffffffff" })).toEqual([]);
+    expect(await listEvidenceByWorkspace({ storeRoot, workspaceKey: "ffffffffffffffff" })).toEqual(
+      [],
+    );
   });
 });
 
@@ -131,9 +155,10 @@ describe("pin / unpin (session <-> pinned)", () => {
     await appendEvidence({ storeRoot, record: rec });
     await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
     await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
-    expect((await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).pinnedByMemoryIds).toEqual([
-      MEM_ID,
-    ]);
+    expect(
+      (await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId }))
+        .pinnedByMemoryIds,
+    ).toEqual([MEM_ID]);
   });
 
   it("unpin of the last memory returns retentionClass to session", async () => {
@@ -158,7 +183,10 @@ describe("pin / unpin (session <-> pinned)", () => {
 describe("revoke / explain (secret purge)", () => {
   it("PURGES a planted secret from sourceRef, nulls digests, drops the chunk ref, calls delete port", async () => {
     const rec = input({
-      sourceRef: { command: "curl -H 'Authorization: Bearer sk-live-SECRET' https://api/x", url: "https://h?token=SECRET" },
+      sourceRef: {
+        command: "curl -H 'Authorization: Bearer sk-live-SECRET' https://api/x",
+        url: "https://h?token=SECRET",
+      },
       redactedRawChunkSetId: "cs-9",
     });
     await appendEvidence({ storeRoot, record: rec });
@@ -217,7 +245,9 @@ describe("revoke / explain (secret purge)", () => {
       },
       now: new Date("2026-06-16T14:00:00.000Z"),
     });
-    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe("revoked");
+    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe(
+      "revoked",
+    );
   });
 
   it("revoke is idempotent", async () => {
@@ -234,13 +264,17 @@ describe("revoke / explain (secret purge)", () => {
       });
     await run();
     await run();
-    expect((await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).status).toBe("revoked");
+    expect(
+      (await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).status,
+    ).toBe("revoked");
   });
 
   it("explain reports raw availability before and after revoke", async () => {
     const rec = input();
     await appendEvidence({ storeRoot, record: rec });
-    expect(await explainEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toMatchObject({
+    expect(
+      await explainEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId }),
+    ).toMatchObject({
       status: "available",
       rawExpandable: true,
     });
@@ -252,7 +286,9 @@ describe("revoke / explain (secret purge)", () => {
       deleteChunk: async () => {},
       now: new Date("2026-06-16T15:00:00.000Z"),
     });
-    expect(await explainEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toMatchObject({
+    expect(
+      await explainEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId }),
+    ).toMatchObject({
       status: "revoked",
       rawExpandable: false,
       revocationReason: "secret_false_negative",
@@ -286,23 +322,42 @@ describe("gcEvidence", () => {
     const rec = input({ expiresAt: "2026-06-16T12:30:00.000Z" });
     await appendEvidence({ storeRoot, record: rec });
     await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
-    const res = await gcEvidence({ storeRoot, workspaceKey, now: new Date("2026-06-16T13:00:00.000Z"), deleteChunk: async () => {} });
+    const res = await gcEvidence({
+      storeRoot,
+      workspaceKey,
+      now: new Date("2026-06-16T13:00:00.000Z"),
+      deleteChunk: async () => {},
+    });
     expect(res.degraded).toBe(0);
-    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe("available");
+    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe(
+      "available",
+    );
   });
 
   it("manual_hold evidence survives ordinary GC", async () => {
     const rec = input({ retentionClass: "manual_hold", expiresAt: "2026-06-16T12:30:00.000Z" });
     await appendEvidence({ storeRoot, record: rec });
-    const res = await gcEvidence({ storeRoot, workspaceKey, now: new Date("2026-06-16T13:00:00.000Z"), deleteChunk: async () => {} });
+    const res = await gcEvidence({
+      storeRoot,
+      workspaceKey,
+      now: new Date("2026-06-16T13:00:00.000Z"),
+      deleteChunk: async () => {},
+    });
     expect(res.degraded).toBe(0);
-    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe("available");
+    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe(
+      "available",
+    );
   });
 
   it("not-yet-expired and null-expiry evidence is left intact", async () => {
     await appendEvidence({ storeRoot, record: input({ expiresAt: null }) });
     await appendEvidence({ storeRoot, record: input({ expiresAt: "2026-06-16T23:59:00.000Z" }) });
-    const res = await gcEvidence({ storeRoot, workspaceKey, now: new Date("2026-06-16T13:00:00.000Z"), deleteChunk: async () => {} });
+    const res = await gcEvidence({
+      storeRoot,
+      workspaceKey,
+      now: new Date("2026-06-16T13:00:00.000Z"),
+      deleteChunk: async () => {},
+    });
     expect(res.degraded).toBe(0);
   });
 });

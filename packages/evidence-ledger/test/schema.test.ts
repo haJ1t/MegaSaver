@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { type EvidenceRecord, evidenceRecordSchema } from "../src/schema.js";
 import {
   isScrubbedSourceRef,
   redactionReportSchema,
@@ -9,7 +10,6 @@ import {
   sourceRefSchema,
   transitionSchema,
 } from "../src/sub-schemas.js";
-import { type EvidenceRecord, evidenceRecordSchema } from "../src/schema.js";
 
 function validRecord(over: Partial<EvidenceRecord> = {}): unknown {
   return {
@@ -75,24 +75,35 @@ describe("evidence-ledger sub-schemas", () => {
 
   it("redactionReport tracks unresolved high-risk findings", () => {
     expect(
-      redactionReportSchema.safeParse({ redacted: true, highRiskFindings: 0, unresolvedHighRisk: false })
-        .success,
+      redactionReportSchema.safeParse({
+        redacted: true,
+        highRiskFindings: 0,
+        unresolvedHighRisk: false,
+      }).success,
     ).toBe(true);
     expect(
-      redactionReportSchema.safeParse({ redacted: true, highRiskFindings: -1, unresolvedHighRisk: false })
-        .success,
+      redactionReportSchema.safeParse({
+        redacted: true,
+        highRiskFindings: -1,
+        unresolvedHighRisk: false,
+      }).success,
     ).toBe(false);
   });
 
   it("returnedChunkRef requires both ids", () => {
-    expect(returnedChunkRefSchema.safeParse({ chunkSetId: "cs-1", chunkId: "0" }).success).toBe(true);
+    expect(returnedChunkRefSchema.safeParse({ chunkSetId: "cs-1", chunkId: "0" }).success).toBe(
+      true,
+    );
     expect(returnedChunkRefSchema.safeParse({ chunkSetId: "cs-1" }).success).toBe(false);
   });
 
   it("transition records an auditable event with an optional memoryId", () => {
     expect(
-      transitionSchema.safeParse({ at: "2026-06-16T12:00:00.000Z", kind: "created", actor: "system" })
-        .success,
+      transitionSchema.safeParse({
+        at: "2026-06-16T12:00:00.000Z",
+        kind: "created",
+        actor: "system",
+      }).success,
     ).toBe(true);
     expect(
       transitionSchema.safeParse({
@@ -112,25 +123,34 @@ describe("evidenceRecordSchema", () => {
   });
 
   it("rejects unknown keys (.strict)", () => {
-    expect(evidenceRecordSchema.safeParse({ ...(validRecord() as object), x: 1 }).success).toBe(false);
+    expect(evidenceRecordSchema.safeParse({ ...(validRecord() as object), x: 1 }).success).toBe(
+      false,
+    );
   });
 
   it("rejects an uppercase evidenceId (lowercase-uuid contract)", () => {
     expect(
-      evidenceRecordSchema.safeParse(validRecord({ evidenceId: randomUUID().toUpperCase() as never })).success,
+      evidenceRecordSchema.safeParse(
+        validRecord({ evidenceId: randomUUID().toUpperCase() as never }),
+      ).success,
     ).toBe(false);
   });
 
   it("rejects a non-hex rawDigest", () => {
-    expect(evidenceRecordSchema.safeParse(validRecord({ rawDigest: "xyz" as never })).success).toBe(false);
+    expect(evidenceRecordSchema.safeParse(validRecord({ rawDigest: "xyz" as never })).success).toBe(
+      false,
+    );
   });
 
   it("INVARIANT available => redactedRawChunkSetId present + digests present", () => {
     expect(
-      evidenceRecordSchema.safeParse(validRecord({ status: "available", redactedRawChunkSetId: null })).success,
+      evidenceRecordSchema.safeParse(
+        validRecord({ status: "available", redactedRawChunkSetId: null }),
+      ).success,
     ).toBe(false);
     expect(
-      evidenceRecordSchema.safeParse(validRecord({ status: "available", rawDigest: null as never })).success,
+      evidenceRecordSchema.safeParse(validRecord({ status: "available", rawDigest: null as never }))
+        .success,
     ).toBe(false);
   });
 
@@ -172,18 +192,23 @@ describe("evidenceRecordSchema", () => {
       evidenceRecordSchema.safeParse({ ...(revoked as object), rawDigest: "a".repeat(64) }).success,
     ).toBe(false);
     // non-revoked but revocationReason set → reject
-    expect(evidenceRecordSchema.safeParse(validRecord({ revocationReason: "policy_change" as never })).success).toBe(
-      false,
-    );
+    expect(
+      evidenceRecordSchema.safeParse(validRecord({ revocationReason: "policy_change" as never }))
+        .success,
+    ).toBe(false);
   });
 
   it("INVARIANT pinned => status available AND pinnedByMemoryIds non-empty", () => {
     const MEM = "00000000-0000-4000-8000-0000000000a1";
     expect(
-      evidenceRecordSchema.safeParse(validRecord({ retentionClass: "pinned", pinnedByMemoryIds: [MEM] })).success,
+      evidenceRecordSchema.safeParse(
+        validRecord({ retentionClass: "pinned", pinnedByMemoryIds: [MEM] }),
+      ).success,
     ).toBe(true);
     expect(
-      evidenceRecordSchema.safeParse(validRecord({ retentionClass: "pinned", pinnedByMemoryIds: [] })).success,
+      evidenceRecordSchema.safeParse(
+        validRecord({ retentionClass: "pinned", pinnedByMemoryIds: [] }),
+      ).success,
     ).toBe(false);
     expect(
       evidenceRecordSchema.safeParse(
