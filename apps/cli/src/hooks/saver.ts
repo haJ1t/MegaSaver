@@ -24,7 +24,7 @@ export type SaverDecision = { updatedToolOutput: unknown } | { passthrough: true
 
 const PASSTHROUGH: SaverDecision = { passthrough: true };
 
-// Reads the text payload out of a Claude Code tool_output and returns a
+// Reads the text payload out of a Claude Code tool_response and returns a
 // rebuilder that swaps it for compressed text while preserving every other
 // field (so the emitted shape matches the tool's original schema). Unknown
 // shapes ⇒ null ⇒ caller passes through (original output preserved).
@@ -111,7 +111,7 @@ export async function buildSaverDecision(
     if (settings === null || !settings.enabled) return PASSTHROUGH;
 
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    const shape = readOutputShape(p["tool_output"]);
+    const shape = readOutputShape(p["tool_response"]);
     if (shape === null) return PASSTHROUGH;
     if (Buffer.byteLength(shape.raw, "utf8") <= modeToBudget(settings.mode)) return PASSTHROUGH;
 
