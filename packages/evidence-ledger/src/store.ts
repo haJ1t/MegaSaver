@@ -207,7 +207,7 @@ export async function revokeEvidence(args: {
     rawDigest: null,
     returnedDigest: null,
     redactedRawChunkSetId: null,
-    sourceRef: scrubSourceRef(rec.sourceRef),
+    sourceRef: scrubSourceRef(),
     pinnedByMemoryIds: [],
     retentionClass: rec.retentionClass === "pinned" ? "session" : rec.retentionClass,
     revokedAt: at,

@@ -25,8 +25,10 @@ export function isScrubbedSourceRef(ref: SourceRef): boolean {
   return SECRET_BEARING_KEYS.every((k) => ref[k] === undefined);
 }
 
-export function scrubSourceRef(_ref: SourceRef): SourceRef {
-  // Drop every secret-bearing field; keep a fixed non-reversible label.
+// Returns a fixed constant rather than transforming the input: even a preserved
+// `label` could carry a secret (callers set it freely), so we emit a known-safe
+// value and discard the original ref entirely.
+export function scrubSourceRef(): SourceRef {
   return { label: "redacted" };
 }
 

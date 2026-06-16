@@ -46,15 +46,8 @@ describe("evidence-ledger sub-schemas", () => {
     expect(sourceRefSchema.safeParse({ bogus: 1 }).success).toBe(false);
   });
 
-  it("scrubSourceRef drops secret-bearing fields and keeps only a label", () => {
-    const scrubbed = scrubSourceRef({
-      command: "curl -H 'Authorization: Bearer sk-live-XYZ' https://api/x",
-      args: ["--secret", "abc"],
-      url: "https://h/cb?token=SECRET",
-      path: "/etc/shadow",
-      query: "password=hunter2",
-      label: "git-log",
-    });
+  it("scrubSourceRef emits a fixed constant carrying only a non-reversible label", () => {
+    const scrubbed = scrubSourceRef();
     expect(scrubbed).toEqual({ label: "redacted" });
     expect(isScrubbedSourceRef(scrubbed)).toBe(true);
   });

@@ -24,6 +24,12 @@ export function atomicWriteFile(filePath: string, content: string): void {
     }
     mkdirSync(parentDir, { recursive: true });
     writeFileSync(tempPath, content);
+    // Durability: fsync the temp file before rename so its bytes are on disk,
+    // then fsync the parent dir after rename so the link is durable. POSIX
+    // best-practice for atomic-update semantics.
+    // Open read-WRITE for the fsync: on Windows FlushFileBuffers requires a
+    // write-capable handle (a read-only handle fails with EPERM/ACCESS_DENIED);
+    // "r+" works on POSIX too. The temp file already exists (just written).
     const tempFd = openSync(tempPath, "r+");
     try {
       fsyncSync(tempFd);
@@ -31,6 +37,11 @@ export function atomicWriteFile(filePath: string, content: string): void {
       closeSync(tempFd);
     }
     renameSync(tempPath, filePath);
+    // POSIX directory fsync: required on ext4/xfs/APFS so the rename
+    // metadata is durable against kernel-panic / power-loss. On Windows
+    // (NTFS) the rename's metadata is journaled and durable without a
+    // caller-side flush; FlushFileBuffers on a directory handle is a
+    // documented no-op, and openSync(dir, "r") itself fails with EISDIR.
     if (!IS_WIN32) {
       const dirFd = openSync(parentDir, "r");
       try {
