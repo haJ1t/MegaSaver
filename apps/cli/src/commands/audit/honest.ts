@@ -1,8 +1,8 @@
 import {
+  type HonestMetrics,
   aggregateHonestMetrics,
   observationsFromEvents,
   recordedEventsFromLogs,
-  type HonestMetrics,
 } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { readStoreEnv } from "../../store.js";
@@ -23,7 +23,10 @@ export function renderHonestReport(m: HonestMetrics): string {
 }
 
 export const auditHonestCommand = defineCommand({
-  meta: { name: "honest", description: "Honest token-reduction metrics (token-weighted + eligibility fractions)." },
+  meta: {
+    name: "honest",
+    description: "Honest token-reduction metrics (token-weighted + eligibility fractions).",
+  },
   args: {
     sessionId: { type: "positional", required: true, description: "Live session id." },
     store: { type: "string", description: "Override store directory." },

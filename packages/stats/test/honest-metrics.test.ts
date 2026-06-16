@@ -1,6 +1,7 @@
 import { estimateTokens } from "@megasaver/output-filter";
 import { describe, expect, it } from "vitest";
 import {
+  type HonestObservation,
   aggregateHonestMetrics,
   classifyObservation,
   eligibilityClassSchema,
@@ -9,7 +10,6 @@ import {
   meetsGaGate,
   observationsFromEvents,
   recordedEventsFromLogs,
-  type HonestObservation,
 } from "../src/honest-metrics.js";
 
 const obs = (o: Partial<HonestObservation>): HonestObservation => ({
@@ -34,8 +34,18 @@ describe("aggregateHonestMetrics", () => {
   it("reports eligible / proxied / passthrough fractions of total observed tokens", () => {
     const m = aggregateHonestMetrics([
       obs({ rawTokens: 8000, eligibility: "eligible", mediation: "proxy" }),
-      obs({ rawTokens: 1000, returnedTokens: 1000, eligibility: "passthrough", mediation: "native" }),
-      obs({ rawTokens: 1000, returnedTokens: 1000, eligibility: "native_observed", mediation: "native" }),
+      obs({
+        rawTokens: 1000,
+        returnedTokens: 1000,
+        eligibility: "passthrough",
+        mediation: "native",
+      }),
+      obs({
+        rawTokens: 1000,
+        returnedTokens: 1000,
+        eligibility: "native_observed",
+        mediation: "native",
+      }),
     ]);
     expect(m.rawTokensObserved).toBe(10000);
     expect(m.eligibleTokenFraction).toBeCloseTo(0.8, 5);
@@ -69,7 +79,9 @@ describe("aggregateHonestMetrics", () => {
   });
 
   it("passthrough cannot create positive savings: a passthrough-only set has reduction 0", () => {
-    const m = aggregateHonestMetrics([obs({ rawTokens: 500, returnedTokens: 500, eligibility: "passthrough", mediation: "native" })]);
+    const m = aggregateHonestMetrics([
+      obs({ rawTokens: 500, returnedTokens: 500, eligibility: "passthrough", mediation: "native" }),
+    ]);
     expect(m.eligibleReduction).toBe(0);
     expect(m.rawTokensEligible).toBe(0);
   });
@@ -121,7 +133,9 @@ describe("honest-metrics enums + observation", () => {
 describe("meetsGaGate", () => {
   const targets = { reductionTarget: 0.9, sufficiencyTarget: 0.95 };
   it("passes only when BOTH reduction and sufficiency clear their targets", () => {
-    expect(meetsGaGate({ eligibleReduction: 0.92, actionabilityFixturePassRate: 0.96 }, targets)).toMatchObject({
+    expect(
+      meetsGaGate({ eligibleReduction: 0.92, actionabilityFixturePassRate: 0.96 }, targets),
+    ).toMatchObject({
       pass: true,
     });
   });
@@ -140,26 +154,61 @@ describe("meetsGaGate", () => {
 describe("classifyObservation", () => {
   it("compressed mediated output above threshold is eligible", () => {
     expect(
-      classifyObservation({ decision: "compressed", rawTokens: 5000, returnedTokens: 400, mediation: "proxy" }),
-    ).toEqual({ rawTokens: 5000, returnedTokens: 400, eligibility: "eligible", mediation: "proxy" });
+      classifyObservation({
+        decision: "compressed",
+        rawTokens: 5000,
+        returnedTokens: 400,
+        mediation: "proxy",
+      }),
+    ).toEqual({
+      rawTokens: 5000,
+      returnedTokens: 400,
+      eligibility: "eligible",
+      mediation: "proxy",
+    });
   });
 
   it("passthrough output is passthrough with returned==raw (no fake savings)", () => {
     expect(
-      classifyObservation({ decision: "passthrough", rawTokens: 300, returnedTokens: 300, mediation: "saver_hook" }),
-    ).toEqual({ rawTokens: 300, returnedTokens: 300, eligibility: "passthrough", mediation: "saver_hook" });
+      classifyObservation({
+        decision: "passthrough",
+        rawTokens: 300,
+        returnedTokens: 300,
+        mediation: "saver_hook",
+      }),
+    ).toEqual({
+      rawTokens: 300,
+      returnedTokens: 300,
+      eligibility: "passthrough",
+      mediation: "saver_hook",
+    });
   });
 
   it("light decision is treated as passthrough for eligibility (not counted as savings)", () => {
-    expect(classifyObservation({ decision: "light", rawTokens: 1500, returnedTokens: 1400, mediation: "proxy" }).eligibility).toBe(
-      "passthrough",
-    );
+    expect(
+      classifyObservation({
+        decision: "light",
+        rawTokens: 1500,
+        returnedTokens: 1400,
+        mediation: "proxy",
+      }).eligibility,
+    ).toBe("passthrough");
   });
 
   it("native-observed output (from hook log, no mediation) is native_observed + native", () => {
     expect(
-      classifyObservation({ decision: "compressed", rawTokens: 9000, returnedTokens: 9000, mediation: "native" }),
-    ).toEqual({ rawTokens: 9000, returnedTokens: 9000, eligibility: "native_observed", mediation: "native" });
+      classifyObservation({
+        decision: "compressed",
+        rawTokens: 9000,
+        returnedTokens: 9000,
+        mediation: "native",
+      }),
+    ).toEqual({
+      rawTokens: 9000,
+      returnedTokens: 9000,
+      eligibility: "native_observed",
+      mediation: "native",
+    });
   });
 });
 
@@ -179,9 +228,24 @@ describe("recordedEventsFromLogs (mediation assigned by log source)", () => {
       sessionEvents: [{ rawBytes: 6000, returnedBytes: 300 }],
       nativeEligible: [{ rawBytes: 12000 }],
     });
-    expect(recorded).toContainEqual({ rawBytes: 8000, returnedBytes: 400, mediation: "saver_hook", decision: "compressed" });
-    expect(recorded).toContainEqual({ rawBytes: 6000, returnedBytes: 300, mediation: "proxy", decision: "compressed" });
-    expect(recorded).toContainEqual({ rawBytes: 12000, returnedBytes: 12000, mediation: "native", decision: "compressed" });
+    expect(recorded).toContainEqual({
+      rawBytes: 8000,
+      returnedBytes: 400,
+      mediation: "saver_hook",
+      decision: "compressed",
+    });
+    expect(recorded).toContainEqual({
+      rawBytes: 6000,
+      returnedBytes: 300,
+      mediation: "proxy",
+      decision: "compressed",
+    });
+    expect(recorded).toContainEqual({
+      rawBytes: 12000,
+      returnedBytes: 12000,
+      mediation: "native",
+      decision: "compressed",
+    });
   });
 });
 
@@ -192,8 +256,18 @@ describe("observationsFromEvents", () => {
       { rawBytes: 8000, returnedBytes: 400, mediation: "saver_hook", decision: "compressed" },
       { rawBytes: 12000, returnedBytes: 12000, mediation: "native", decision: "compressed" },
     ]);
-    expect(observations).toContainEqual({ rawTokens: 2000, returnedTokens: 100, eligibility: "eligible", mediation: "saver_hook" });
-    expect(observations).toContainEqual({ rawTokens: 3000, returnedTokens: 3000, eligibility: "native_observed", mediation: "native" });
+    expect(observations).toContainEqual({
+      rawTokens: 2000,
+      returnedTokens: 100,
+      eligibility: "eligible",
+      mediation: "saver_hook",
+    });
+    expect(observations).toContainEqual({
+      rawTokens: 3000,
+      returnedTokens: 3000,
+      eligibility: "native_observed",
+      mediation: "native",
+    });
   });
 
   it("a non-compressed recorded event is NOT eligible (no fake savings)", () => {

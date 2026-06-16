@@ -17,7 +17,11 @@ export const honestObservationSchema = z
   .strict()
   .superRefine((o, ctx) => {
     if (o.returnedTokens > o.rawTokens) {
-      ctx.addIssue({ code: "custom", message: "returnedTokens must not exceed rawTokens.", path: ["returnedTokens"] });
+      ctx.addIssue({
+        code: "custom",
+        message: "returnedTokens must not exceed rawTokens.",
+        path: ["returnedTokens"],
+      });
     }
   });
 export type HonestObservation = z.infer<typeof honestObservationSchema>;
@@ -125,8 +129,16 @@ export function recordedEventsFromLogs(input: {
   nativeEligible: readonly { rawBytes: number }[];
 }): readonly RecordedEventLike[] {
   return [
-    ...input.overlayEvents.map((e) => ({ ...e, mediation: "saver_hook" as const, decision: "compressed" as const })),
-    ...input.sessionEvents.map((e) => ({ ...e, mediation: "proxy" as const, decision: "compressed" as const })),
+    ...input.overlayEvents.map((e) => ({
+      ...e,
+      mediation: "saver_hook" as const,
+      decision: "compressed" as const,
+    })),
+    ...input.sessionEvents.map((e) => ({
+      ...e,
+      mediation: "proxy" as const,
+      decision: "compressed" as const,
+    })),
     ...input.nativeEligible.map((n) => ({
       rawBytes: n.rawBytes,
       returnedBytes: n.rawBytes,
@@ -145,7 +157,12 @@ export function classifyObservation(input: {
   // A natively-observed output (hook telemetry only, never mediated by a proxy
   // tool or the saver) is counted as observed-but-not-reduced.
   if (input.mediation === "native") {
-    return { rawTokens: input.rawTokens, returnedTokens: input.rawTokens, eligibility: "native_observed", mediation: "native" };
+    return {
+      rawTokens: input.rawTokens,
+      returnedTokens: input.rawTokens,
+      eligibility: "native_observed",
+      mediation: "native",
+    };
   }
   // Eligibility relies on the invariant that the filter only emits `decision:
   // "compressed"` for outputs above the large-output threshold (output-filter
@@ -153,7 +170,8 @@ export function classifyObservation(input: {
   // HARD_WRAP_THRESHOLD_TOKENS=2000, compressed only >= 2000). So `compressed`
   // implies above-threshold and `eligible` needs no separate threshold check.
   // passthrough/light return (near-)everything and must never count as savings.
-  const eligibility: EligibilityClass = input.decision === "compressed" ? "eligible" : "passthrough";
+  const eligibility: EligibilityClass =
+    input.decision === "compressed" ? "eligible" : "passthrough";
   const returnedTokens = eligibility === "eligible" ? input.returnedTokens : input.rawTokens;
   return { rawTokens: input.rawTokens, returnedTokens, eligibility, mediation: input.mediation };
 }
