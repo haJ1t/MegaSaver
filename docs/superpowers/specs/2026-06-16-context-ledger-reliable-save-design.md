@@ -1,7 +1,7 @@
 ---
 title: Context Ledger Reliable Save Architecture
 date: 2026-06-16
-status: draft
+status: superseded-by-split-specs
 risk: HIGH
 risk_note: >
   This design changes the trust boundary for saving project memory and for
@@ -19,6 +19,22 @@ related:
 ---
 
 # Context Ledger Reliable Save Architecture
+
+## 0. Status
+
+This draft is retained as the original umbrella architecture discussion. It is
+**not** the implementation source of truth after external review. The design is
+split into two narrower specs:
+
+- `docs/superpowers/specs/2026-06-16-contextgate-honest-90-design.md`
+  covers ContextGate token reduction, honest metrics, sufficiency counters,
+  adoption metrics, retention, and evidence revocation.
+- `docs/superpowers/specs/2026-06-16-reliable-save-ledger-design.md`
+  covers reliable save, Phase 10 approval reconciliation, validation, conflict
+  checks, MCP leak prevention, and connector projection safety.
+
+Do not write an implementation plan from this umbrella file. Plan from the split
+specs after they pass review.
 
 ## 1. Problem
 

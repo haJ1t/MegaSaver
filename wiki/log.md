@@ -2417,3 +2417,19 @@ new concept page [[concepts/context-ledger-architecture]]. Core decision:
 agent `save_memory` creates a candidate, not approved memory; evidence ledger +
 validator + conflict checker + approval policy decide whether memory can enter
 agent projections.
+
+## [2026-06-16] review | Context Ledger spec split after Claude review
+
+Claude Code review found real draft blockers: unpurgeable missed secrets in an
+append-only ledger, silent Phase-10 `save_memory` contract change, candidate/raw
+evidence MCP leak paths, 90% metric gaming, missing sufficiency metric, unbounded
+retention, replay-vs-GC contradiction, and an over-broad one-plan scope. Revised
+the design by marking the original umbrella spec superseded and splitting the
+work into two narrower specs:
+`2026-06-16-contextgate-honest-90-design.md` and
+`2026-06-16-reliable-save-ledger-design.md`. Key corrections: ContextGate naming
+only; token-weighted savings + eligible/mediated fractions; evidence sufficiency
+counter-metrics; redaction revocation/tombstones; retention/pinning semantics;
+candidate == existing Phase-10 suggested MemoryEntry; agent-facing MCP leak
+invariant; per-connector projection matrix including Aider/Gemini/Windsurf/
+Continue.
