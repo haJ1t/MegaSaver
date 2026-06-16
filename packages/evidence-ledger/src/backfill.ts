@@ -9,13 +9,13 @@ export function backfillEvidenceRecord(raw: unknown): unknown {
   if ("status" in rec && "transitions" in rec && "pinnedByMemoryIds" in rec) {
     return rec;
   }
-  const createdAt = typeof rec.createdAt === "string" ? rec.createdAt : undefined;
+  const createdAt = typeof rec["createdAt"] === "string" ? rec["createdAt"] : undefined;
   return {
     ...rec,
-    status: rec.status ?? "available",
-    revokedAt: rec.revokedAt ?? null,
-    revocationReason: rec.revocationReason ?? null,
-    pinnedByMemoryIds: rec.pinnedByMemoryIds ?? [],
-    transitions: rec.transitions ?? (createdAt ? [{ at: createdAt, kind: "created", actor: "system" }] : []),
+    status: rec["status"] ?? "available",
+    revokedAt: rec["revokedAt"] ?? null,
+    revocationReason: rec["revocationReason"] ?? null,
+    pinnedByMemoryIds: rec["pinnedByMemoryIds"] ?? [],
+    transitions: rec["transitions"] ?? (createdAt ? [{ at: createdAt, kind: "created", actor: "system" }] : []),
   };
 }
