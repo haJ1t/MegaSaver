@@ -6,7 +6,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { digestContent } from "../src/digest.js";
 import type { EvidenceRecordInput } from "../src/schema.js";
 import { memoryEntryIdSchema } from "@megasaver/shared";
-import { appendEvidence, getEvidenceStatus, listEvidenceByWorkspace, loadEvidence, pinEvidence, unpinEvidence } from "../src/store.js";
+import { appendEvidence, explainEvidence, getEvidenceStatus, listEvidenceByWorkspace, loadEvidence, pinEvidence, revokeEvidence, unpinEvidence } from "../src/store.js";
 
 const MEM_ID = memoryEntryIdSchema.parse("00000000-0000-4000-8000-0000000000a1");
 
@@ -152,5 +152,110 @@ describe("pin / unpin (session <-> pinned)", () => {
     await expect(
       pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID }),
     ).rejects.toMatchObject({ code: "invalid_transition" });
+  });
+});
+
+describe("revoke / explain (secret purge)", () => {
+  it("PURGES a planted secret from sourceRef, nulls digests, drops the chunk ref, calls delete port", async () => {
+    const rec = input({
+      sourceRef: { command: "curl -H 'Authorization: Bearer sk-live-SECRET' https://api/x", url: "https://h?token=SECRET" },
+      redactedRawChunkSetId: "cs-9",
+    });
+    await appendEvidence({ storeRoot, record: rec });
+    const deleted: string[] = [];
+    await revokeEvidence({
+      storeRoot,
+      workspaceKey,
+      evidenceId: rec.evidenceId,
+      reason: "secret_false_negative",
+      deleteChunk: async (id) => {
+        deleted.push(id);
+      },
+      now: new Date("2026-06-16T13:00:00.000Z"),
+    });
+    const loaded = await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId });
+    expect(loaded.status).toBe("revoked");
+    expect(loaded.revocationReason).toBe("secret_false_negative");
+    expect(loaded.revokedAt).toBe("2026-06-16T13:00:00.000Z");
+    expect(loaded.rawDigest).toBeNull();
+    expect(loaded.returnedDigest).toBeNull();
+    expect(loaded.redactedRawChunkSetId).toBeNull();
+    // The secret is GONE from the on-disk record entirely.
+    expect(loaded.sourceRef).toEqual({ label: "redacted" });
+    expect(JSON.stringify(loaded)).not.toContain("SECRET");
+    expect(deleted).toEqual(["cs-9"]);
+    expect(loaded.transitions.at(-1)).toMatchObject({ kind: "revoked" });
+  });
+
+  it("revoke of a pinned record clears pins and resets retentionClass off pinned", async () => {
+    const rec = input();
+    await appendEvidence({ storeRoot, record: rec });
+    await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
+    await revokeEvidence({
+      storeRoot,
+      workspaceKey,
+      evidenceId: rec.evidenceId,
+      reason: "user_requested_purge",
+      deleteChunk: async () => {},
+      now: new Date("2026-06-16T14:00:00.000Z"),
+    });
+    const loaded = await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId });
+    expect(loaded.pinnedByMemoryIds).toEqual([]);
+    expect(loaded.retentionClass).not.toBe("pinned");
+  });
+
+  it("swallows a failing delete port (best-effort) but still tombstones", async () => {
+    const rec = input({ redactedRawChunkSetId: "cs-9" });
+    await appendEvidence({ storeRoot, record: rec });
+    await revokeEvidence({
+      storeRoot,
+      workspaceKey,
+      evidenceId: rec.evidenceId,
+      reason: "user_requested_purge",
+      deleteChunk: async () => {
+        throw new Error("disk gone");
+      },
+      now: new Date("2026-06-16T14:00:00.000Z"),
+    });
+    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe("revoked");
+  });
+
+  it("revoke is idempotent", async () => {
+    const rec = input();
+    await appendEvidence({ storeRoot, record: rec });
+    const run = () =>
+      revokeEvidence({
+        storeRoot,
+        workspaceKey,
+        evidenceId: rec.evidenceId,
+        reason: "policy_change",
+        deleteChunk: async () => {},
+        now: new Date("2026-06-16T14:00:00.000Z"),
+      });
+    await run();
+    await run();
+    expect((await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).status).toBe("revoked");
+  });
+
+  it("explain reports raw availability before and after revoke", async () => {
+    const rec = input();
+    await appendEvidence({ storeRoot, record: rec });
+    expect(await explainEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toMatchObject({
+      status: "available",
+      rawExpandable: true,
+    });
+    await revokeEvidence({
+      storeRoot,
+      workspaceKey,
+      evidenceId: rec.evidenceId,
+      reason: "secret_false_negative",
+      deleteChunk: async () => {},
+      now: new Date("2026-06-16T15:00:00.000Z"),
+    });
+    expect(await explainEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toMatchObject({
+      status: "revoked",
+      rawExpandable: false,
+      revocationReason: "secret_false_negative",
+    });
   });
 });
