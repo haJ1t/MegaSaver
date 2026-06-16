@@ -1,3 +1,4 @@
+import type { FilterDecision } from "@megasaver/output-filter";
 import { z } from "zod";
 
 export const eligibilityClassSchema = z.enum(["eligible", "passthrough", "native_observed"]);
@@ -82,4 +83,26 @@ export function aggregateHonestMetrics(observations: readonly HonestObservation[
     rawTokensEligible: rawEligible,
     returnedTokensEligible: returnedEligible,
   };
+}
+
+export function classifyObservation(input: {
+  decision: FilterDecision;
+  rawTokens: number;
+  returnedTokens: number;
+  mediation: MediationKind;
+}): HonestObservation {
+  // A natively-observed output (hook telemetry only, never mediated by a proxy
+  // tool or the saver) is counted as observed-but-not-reduced.
+  if (input.mediation === "native") {
+    return { rawTokens: input.rawTokens, returnedTokens: input.rawTokens, eligibility: "native_observed", mediation: "native" };
+  }
+  // Eligibility relies on the invariant that the filter only emits `decision:
+  // "compressed"` for outputs above the large-output threshold (output-filter
+  // `tokens.ts`: passthrough < PASSTHROUGH_THRESHOLD_TOKENS=1200, light <
+  // HARD_WRAP_THRESHOLD_TOKENS=2000, compressed only >= 2000). So `compressed`
+  // implies above-threshold and `eligible` needs no separate threshold check.
+  // passthrough/light return (near-)everything and must never count as savings.
+  const eligibility: EligibilityClass = input.decision === "compressed" ? "eligible" : "passthrough";
+  const returnedTokens = eligibility === "eligible" ? input.returnedTokens : input.rawTokens;
+  return { rawTokens: input.rawTokens, returnedTokens, eligibility, mediation: input.mediation };
 }

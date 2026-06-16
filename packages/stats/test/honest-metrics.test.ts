@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregateHonestMetrics,
+  classifyObservation,
   eligibilityClassSchema,
   honestObservationSchema,
   mediationKindSchema,
@@ -130,5 +131,31 @@ describe("meetsGaGate", () => {
     const r = meetsGaGate({ eligibleReduction: 0.7, actionabilityFixturePassRate: 0.99 }, targets);
     expect(r.pass).toBe(false);
     expect(r.failed).toContain("reduction");
+  });
+});
+
+describe("classifyObservation", () => {
+  it("compressed mediated output above threshold is eligible", () => {
+    expect(
+      classifyObservation({ decision: "compressed", rawTokens: 5000, returnedTokens: 400, mediation: "proxy" }),
+    ).toEqual({ rawTokens: 5000, returnedTokens: 400, eligibility: "eligible", mediation: "proxy" });
+  });
+
+  it("passthrough output is passthrough with returned==raw (no fake savings)", () => {
+    expect(
+      classifyObservation({ decision: "passthrough", rawTokens: 300, returnedTokens: 300, mediation: "saver_hook" }),
+    ).toEqual({ rawTokens: 300, returnedTokens: 300, eligibility: "passthrough", mediation: "saver_hook" });
+  });
+
+  it("light decision is treated as passthrough for eligibility (not counted as savings)", () => {
+    expect(classifyObservation({ decision: "light", rawTokens: 1500, returnedTokens: 1400, mediation: "proxy" }).eligibility).toBe(
+      "passthrough",
+    );
+  });
+
+  it("native-observed output (from hook log, no mediation) is native_observed + native", () => {
+    expect(
+      classifyObservation({ decision: "compressed", rawTokens: 9000, returnedTokens: 9000, mediation: "native" }),
+    ).toEqual({ rawTokens: 9000, returnedTokens: 9000, eligibility: "native_observed", mediation: "native" });
   });
 });
