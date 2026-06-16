@@ -24,7 +24,7 @@ export type SaverDecision = { updatedToolOutput: unknown } | { passthrough: true
 
 const PASSTHROUGH: SaverDecision = { passthrough: true };
 
-// Reads the text payload out of a Claude Code tool_output and returns a
+// Reads the text payload out of a Claude Code tool_response and returns a
 // rebuilder that swaps it for compressed text while preserving every other
 // field (so the emitted shape matches the tool's original schema). Unknown
 // shapes ⇒ null ⇒ caller passes through (original output preserved).
@@ -62,6 +62,17 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     const raw = blocks.map((b) => (b as { text: string })["text"]).join("\n");
     if (raw.length === 0) return null;
     return { raw, rebuild: (t) => ({ ...o, content: [{ type: "text", text: t }] }) };
+  }
+  // Real Claude Code Read payload: the file body is nested at `file.content`, not
+  // top-level `content`. Swap it while preserving the surrounding file metadata.
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const file = o["file"];
+  if (typeof file === "object" && file !== null) {
+    const f = file as Record<string, unknown>;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    if (typeof f["content"] === "string")
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      return { raw: f["content"], rebuild: (t) => ({ ...o, file: { ...f, content: t } }) };
   }
   return null;
 }
@@ -111,7 +122,7 @@ export async function buildSaverDecision(
     if (settings === null || !settings.enabled) return PASSTHROUGH;
 
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    const shape = readOutputShape(p["tool_output"]);
+    const shape = readOutputShape(p["tool_response"]);
     if (shape === null) return PASSTHROUGH;
     if (Buffer.byteLength(shape.raw, "utf8") <= modeToBudget(settings.mode)) return PASSTHROUGH;
 
