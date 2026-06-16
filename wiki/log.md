@@ -2446,3 +2446,35 @@ logical tombstone + best-effort local delete unless future encrypted-at-rest
 storage lands. Also folded minor review items into Reliable Save: sidecar
 atomicity, per-workspace/CAS approval serialization, and connector projection
 validation staying out of Core.
+
+## [2026-06-16] plan+review | Evidence Ledger plan + security review
+
+Wrote `docs/superpowers/plans/2026-06-16-evidence-ledger.md` (13-task TDD plan
+for the `@megasaver/evidence-ledger` leaf, grounded in the content-store
+template + dependency-graph guard). Ran code-reviewer + adversarial critic.
+BLOCKING finding: revoke does not actually remove a leaked secret — it survives
+in `sourceRef` (command/url/query), in caller-supplied `rawDigest` (oracle), and
+in a redundant `events.jsonl` sidecar; revoke tests passed without asserting the
+secret was gone (false confidence). Plus compile/lint blockers (branded
+`WorkspaceKey` param vs string literals; duplicate `node:fs` imports) and
+integrity gaps (no atomicity between record write + event append; revoke deletes
+chunk before tombstone; `retentionClass: pinned` survives revoke). Handed
+spec-contract deltas to Codex via `wiki/agent-channel.md` (redact `sourceRef`,
+ledger-computed + revoke-nulled digests, drop events sidecar, GC-exempt
+`manual_hold`, boundary `workspaceKey` validation). Next: Codex amends interface
+spec → Claude revises plan + re-checks. CLAUDE.md gained a hand-kept Session
+Directives block (superpowers-for-everything + caveman ultra) outside managed
+sentinels.
+
+## [2026-06-16] spec | Evidence Ledger security amendments
+
+Amended `2026-06-16-evidence-ledger-interface-design.md` from the plan-review
+handoff. Spec now treats `sourceRef` as secret-bearing: redact at append time and
+scrub to a non-reversible label on revoke. Digests are ledger-computed over
+post-redaction content only, never caller-supplied, and are nulled on revoke.
+Revocation atomically tombstones the record before best-effort raw chunk delete,
+uses in-record `transitions[]` as the only audit trail, and explicitly drops
+plaintext `events.jsonl`. Retention coherence added: pinned requires available,
+manual_hold and pinned are GC-exempt, GC degrades only transient/session evidence,
+pin/unpin is session→pinned→session, and IO validates `workspaceKey` at the
+boundary while asserting loaded records match the requested workspace.

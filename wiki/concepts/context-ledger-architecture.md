@@ -68,6 +68,10 @@ evidence-sufficiency counters so MegaSaver cannot win by blinding the model.
 - Every committed memory can explain its evidence status and policy version.
 - Secret revocation can tombstone evidence and best-effort delete recoverable
   raw chunks; current plaintext content-store does not claim forensic erasure.
+- Evidence `sourceRef` is redacted at append time, and revocation scrubs it to a
+  non-reversible label.
+- Evidence digests are ledger-computed over post-redaction content and nulled on
+  revocation.
 
 ## Related
 
