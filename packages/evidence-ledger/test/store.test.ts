@@ -5,7 +5,10 @@ import { join } from "node:path";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { digestContent } from "../src/digest.js";
 import type { EvidenceRecordInput } from "../src/schema.js";
-import { appendEvidence, getEvidenceStatus, listEvidenceByWorkspace, loadEvidence } from "../src/store.js";
+import { memoryEntryIdSchema } from "@megasaver/shared";
+import { appendEvidence, getEvidenceStatus, listEvidenceByWorkspace, loadEvidence, pinEvidence, unpinEvidence } from "../src/store.js";
+
+const MEM_ID = memoryEntryIdSchema.parse("00000000-0000-4000-8000-0000000000a1");
 
 let storeRoot: string;
 const workspaceKey = "0123456789abcdef";
@@ -108,5 +111,46 @@ describe("listEvidenceByWorkspace", () => {
 
   it("returns an empty array for an unknown workspace", async () => {
     expect(await listEvidenceByWorkspace({ storeRoot, workspaceKey: "ffffffffffffffff" })).toEqual([]);
+  });
+});
+
+describe("pin / unpin (session <-> pinned)", () => {
+  it("pin from session sets pinned + records memoryId on the transition", async () => {
+    const rec = input();
+    await appendEvidence({ storeRoot, record: rec });
+    await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
+    const loaded = await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId });
+    expect(loaded.retentionClass).toBe("pinned");
+    expect(loaded.pinnedByMemoryIds).toEqual([MEM_ID]);
+    const last = loaded.transitions.at(-1);
+    expect(last).toMatchObject({ kind: "pinned", memoryId: MEM_ID });
+  });
+
+  it("pin is idempotent for the same memory id", async () => {
+    const rec = input();
+    await appendEvidence({ storeRoot, record: rec });
+    await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
+    await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
+    expect((await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).pinnedByMemoryIds).toEqual([
+      MEM_ID,
+    ]);
+  });
+
+  it("unpin of the last memory returns retentionClass to session", async () => {
+    const rec = input();
+    await appendEvidence({ storeRoot, record: rec });
+    await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
+    await unpinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
+    const loaded = await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId });
+    expect(loaded.pinnedByMemoryIds).toEqual([]);
+    expect(loaded.retentionClass).toBe("session");
+  });
+
+  it("rejects pinning a non-session record (manual_hold)", async () => {
+    const rec = input({ retentionClass: "manual_hold" });
+    await appendEvidence({ storeRoot, record: rec });
+    await expect(
+      pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID }),
+    ).rejects.toMatchObject({ code: "invalid_transition" });
   });
 });
