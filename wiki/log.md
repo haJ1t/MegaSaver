@@ -2433,3 +2433,16 @@ counter-metrics; redaction revocation/tombstones; retention/pinning semantics;
 candidate == existing Phase-10 suggested MemoryEntry; agent-facing MCP leak
 invariant; per-connector projection matrix including Aider/Gemini/Windsurf/
 Continue.
+
+## [2026-06-16] review | Evidence Ledger residuals resolved
+
+Second Claude Code re-check marked all prior blockers resolved and approved the
+split direction, with two plan-blocking residuals: shared ledger schema ownership
+and an overstrong `crypto-shred` phrase against the plaintext content-store.
+Added `docs/superpowers/specs/2026-06-16-evidence-ledger-interface-design.md`
+as the canonical package/schema/revocation/retention interface. Revised
+ContextGate to consume that interface and describe secret purge honestly as
+logical tombstone + best-effort local delete unless future encrypted-at-rest
+storage lands. Also folded minor review items into Reliable Save: sidecar
+atomicity, per-workspace/CAS approval serialization, and connector projection
+validation staying out of Core.

@@ -24,8 +24,11 @@ related:
 
 This draft is retained as the original umbrella architecture discussion. It is
 **not** the implementation source of truth after external review. The design is
-split into two narrower specs:
+split into narrower specs:
 
+- `docs/superpowers/specs/2026-06-16-evidence-ledger-interface-design.md`
+  covers the shared evidence package, canonical schema, revocation, retention,
+  digest rules, and package boundary.
 - `docs/superpowers/specs/2026-06-16-contextgate-honest-90-design.md`
   covers ContextGate token reduction, honest metrics, sufficiency counters,
   adoption metrics, retention, and evidence revocation.
@@ -97,7 +100,7 @@ memory is committed from verifiable evidence, not from agent confidence.
 
 ```text
 Read / Search / Command / Agent Save Request
-  -> Context Gateway
+  -> ContextGate
   -> Redact + classify + compress
   -> Evidence Ledger append
   -> Candidate Memory Builder
@@ -108,7 +111,7 @@ Read / Search / Command / Agent Save Request
   -> Agent Projection Builder
 ```
 
-The **Context Gateway** is the hot path. It should prefer `proxy_*` MCP tools
+The **ContextGate** is the hot path. It should prefer `proxy_*` MCP tools
 and treat hooks as fallback/telemetry. The **Evidence Ledger** is the durable
 source for all facts that might later become memory. The **Committed Memory
 Store** is the small trusted view consumed by agents.
@@ -118,7 +121,7 @@ conventions) are projections. They are never the source of truth.
 
 ## 6. Components
 
-### 6.1 Context Gateway
+### 6.1 ContextGate
 
 Purpose: make raw tool output pass through MegaSaver before it reaches the
 model.
@@ -438,7 +441,7 @@ Acceptance evidence:
 
 Recommended phased build:
 
-1. Evidence Ledger package and event writes from Context Gateway.
+1. Evidence Ledger package and event writes from ContextGate.
 2. Candidate Memory Store and `save_memory` candidate behavior.
 3. Validator and conflict checker.
 4. Approval policy and review CLI.

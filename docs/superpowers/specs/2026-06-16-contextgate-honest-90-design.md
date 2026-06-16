@@ -11,6 +11,7 @@ branch: codex/context-ledger-architecture
 related:
   - docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design.md
   - docs/superpowers/specs/2026-06-15-realized-saver-hook-design.md
+  - docs/superpowers/specs/2026-06-16-evidence-ledger-interface-design.md
   - docs/superpowers/specs/2026-06-16-reliable-save-ledger-design.md
   - wiki/concepts/context-gate-pipeline.md
   - wiki/concepts/proxy-mode.md
@@ -44,8 +45,8 @@ Define a ContextGate path that:
 ## 3. Naming
 
 Use the shipped architecture name **ContextGate** for the orchestrator and code
-surface. "Context Gateway" is not introduced as a new subsystem name. User-facing
-copy remains "Mega Saver Mode" where existing docs use that term.
+surface. No new gateway subsystem name is introduced. User-facing copy remains
+"Mega Saver Mode" where existing docs use that term.
 
 ## 4. Eligibility
 
@@ -132,15 +133,16 @@ save architecture:
 - digests are computed over **post-redaction** content only;
 - raw recoverable chunks are redacted before persistence;
 - each evidence row has a retention policy;
-- secret revocation can tombstone evidence and purge associated recoverable raw
-  chunks;
+- secret revocation can tombstone evidence and best-effort delete associated
+  recoverable raw chunks;
 - evidence referenced by approved memory is pinned against ordinary retention
   GC, but not against explicit secret revocation.
 
-The ledger is semantically append-only for audit. It is not physically
-unpurgeable. Raw chunks may be deleted for retention or secret revocation, while
-the ledger keeps a tombstone event explaining why evidence is no longer
-recoverable.
+The canonical schema, package placement, status enum, retention fields, and
+revocation reasons are owned by
+`docs/superpowers/specs/2026-06-16-evidence-ledger-interface-design.md`.
+ContextGate consumes that interface; it does not define a competing evidence
+schema.
 
 ## 9. Redaction Revocation
 
@@ -150,7 +152,7 @@ explicit revocation path:
 1. append `evidence_revoked` with reason `secret_false_negative` or
    `user_requested_purge`;
 2. tombstone the evidence row for future retrieval;
-3. delete or crypto-shred associated raw chunk material;
+3. best-effort delete associated raw chunk material;
 4. prevent `proxy_expand_chunk` and human evidence inspection from returning
    purged content;
 5. preserve metadata needed to explain that evidence existed but was revoked.
@@ -158,16 +160,15 @@ explicit revocation path:
 This is the exception to physical immutability. Without it, a missed secret would
 become unpurgeable local data.
 
+Current content-store chunks are plaintext JSON files. This spec does not claim
+forensic erasure or crypto-shredding. If a future encrypted-at-rest content store
+lands, key deletion may become a stronger purge mode; until then, the guarantee
+is logical tombstone plus best-effort local deletion.
+
 ## 10. Retention
 
-Evidence rows carry:
-
-- `createdAt`;
-- `expiresAt`;
-- `retentionClass`: transient | session | pinned | manual_hold;
-- `pinnedByMemoryIds`;
-- `revokedAt`;
-- `revocationReason`.
+Evidence rows use the retention fields defined by the Evidence Ledger Interface
+spec.
 
 Default retention is implementation-defined, but bounded. Large raw evidence
 cannot grow without a size/age policy.

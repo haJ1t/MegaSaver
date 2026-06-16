@@ -10,6 +10,7 @@ risk_note: >
 branch: codex/context-ledger-architecture
 related:
   - docs/superpowers/specs/2026-06-12-phase10-team-cloud-design.md
+  - docs/superpowers/specs/2026-06-16-evidence-ledger-interface-design.md
   - docs/superpowers/specs/2026-06-16-contextgate-honest-90-design.md
   - wiki/concepts/structured-memory-engine.md
   - wiki/concepts/memory-approval.md
@@ -92,8 +93,11 @@ Each suggested memory has either inline metadata or a sidecar:
   legacy_untracked.
 
 The implementation plan decides inline-vs-sidecar after inspecting current
-schemas. The contract is stable: suggested memory is reviewable, explainable,
-and blocked from projection until approved.
+schemas. If a sidecar is used, the memory row and sidecar must commit atomically
+or through an explicit pending/rollback state; partial validation metadata must
+not make a suggested memory appear approved or review-complete. The contract is
+stable: suggested memory is reviewable, explainable, and blocked from projection
+until approved.
 
 ## 5. Evidence Rules
 
@@ -108,6 +112,8 @@ Non-human memory needs at least one evidence reference unless explicitly marked
 
 Digests are computed over post-redaction content only. Pre-redaction hashes are
 not stored because they can become equality or presence oracles for secrets.
+The canonical evidence schema and retention/revocation fields are owned by
+`docs/superpowers/specs/2026-06-16-evidence-ledger-interface-design.md`.
 
 ## 6. Workspace Identity
 
@@ -164,6 +170,10 @@ Outcomes:
 No semantic update overwrites an existing memory row in place. Meaning changes
 create a revision/supersession relation.
 
+Approval is serialized per workspace or protected by compare-and-swap over the
+memory/revision set. Two conflicting suggested memories cannot both approve from
+stale conflict checks.
+
 ## 9. Approval Policy
 
 Default policy:
@@ -215,6 +225,12 @@ Projection validation is connector-specific:
 
 All targets render from the same approved semantic memory. A projection failure
 aborts only that connector write; it does not corrupt the store.
+
+Projection validation lives in `@megasaver/connectors-shared` and the
+agent-specific connector packages. Core remains agent-agnostic: it stores
+approved semantic memory and validation status, but it does not know
+`CLAUDE.md`, `AGENTS.md`, Cursor, Aider, Gemini, Windsurf, or Continue file
+formats.
 
 ## 12. Evidence Retention And Replay
 

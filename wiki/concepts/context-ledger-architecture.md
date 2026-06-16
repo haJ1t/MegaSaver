@@ -3,6 +3,7 @@ title: Context Ledger Architecture
 tags: [concept, architecture, memory, save, evidence-ledger, token-saver]
 sources:
   - docs/superpowers/specs/2026-06-16-context-ledger-reliable-save-design.md
+  - docs/superpowers/specs/2026-06-16-evidence-ledger-interface-design.md
   - docs/superpowers/specs/2026-06-16-contextgate-honest-90-design.md
   - docs/superpowers/specs/2026-06-16-reliable-save-ledger-design.md
   - concepts/agent-agnostic-core.md
@@ -20,8 +21,8 @@ updated: 2026-06-16
 Context Ledger Architecture is the proposed next MegaSaver architecture for
 making **save reliability** the product center while still targeting about 90%
 reduction on eligible MegaSaver-mediated context. After external review, the
-umbrella draft was split into two specs: ContextGate honest reduction and
-Reliable Save Ledger.
+umbrella draft was split into narrow specs: Evidence Ledger Interface,
+ContextGate honest reduction, and Reliable Save Ledger.
 
 ## Core idea
 
@@ -30,8 +31,9 @@ a commit pipeline:
 
 1. ContextGate observes or proxies read/search/command output.
 2. Redaction and compression run before evidence is persisted or returned.
-3. An Evidence Ledger stores redacted, expandable evidence references, with
-   tombstone/revocation and retention rather than unpurgeable raw content.
+3. An Evidence Ledger stores redacted, expandable evidence references, with a
+   canonical schema, tombstone/revocation, and retention rather than
+   unpurgeable raw content.
 4. Agent `save_memory` creates suggested memory, not approved memory.
 5. Validators check evidence, secrets, scope, schema, expiry, and source policy.
 6. Conflict checks catch duplicate, superseding, or contradictory memory.
@@ -64,7 +66,8 @@ evidence-sufficiency counters so MegaSaver cannot win by blinding the model.
 - No candidate claim or unapproved/raw evidence excerpt is returned by
   agent-facing MCP retrieval.
 - Every committed memory can explain its evidence status and policy version.
-- Secret revocation can tombstone evidence and purge recoverable raw chunks.
+- Secret revocation can tombstone evidence and best-effort delete recoverable
+  raw chunks; current plaintext content-store does not claim forensic erasure.
 
 ## Related
 
