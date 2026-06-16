@@ -2346,3 +2346,49 @@ multi-modal (text+image) output ⇒ original untouched (passthrough); full outpu
 recoverable via proxy_expand_chunk. HIGH risk, full superpowers chain (spec/plan/
 TDD/two-stage subagent review incl. opus safety pass). See [[entities/cli]],
 [[entities/context-gate]]. Spec: docs/superpowers/specs/2026-06-15-realized-saver-hook-design.md.
+
+## [2026-06-15] fix | chunk-set source maps to sourceKind (PR #140)
+
+`recordAndFilterOverlayOutput` stored every overlay chunk-set with
+`source: {kind:"file", path:label}` regardless of tool, so a Bash command/grep
+was recorded as a file path. Now maps `input.sourceKind` → the matching
+`OverlayChunkSet["source"]` variant (`command`/`grep`/`fetch`/`file`) via an
+exhaustive switch. Cosmetic metadata only — hook behaviour + lossless recovery
+unaffected; the overlay event already carried the right `sourceKind`. TDD; merged
+via squash to main (commit 7c916db). See [[entities/context-gate]].
+
+## [2026-06-15] feature | Connect Saver hook GUI toggle (PR #141)
+
+In-app toggle to install/uninstall the GLOBAL Claude Code Mega Saver hooks
+(`~/.claude/settings.json`), replacing terminal-only `mega hooks install`.
+Hook-settings logic MOVED into `@megasaver/connector-claude-code` (single source
+for CLI + GUI; `apps/gui` cannot import `apps/cli`) with new `uninstall` + status
+fns and ATOMIC writes (temp+rename). New CLI `mega hooks uninstall claude-code`.
+Global bridge route `GET|POST|DELETE /api/hooks/claude-code` (injectable
+`claudeSettingsPath`). `HookConnection` toggle in the Token saver panel, honestly
+labelled global, confirm-on-disconnect. HIGH risk, full superpowers chain;
+executed as a 6-task subagent workflow (per-task spec+quality review). Critic
+review caught a CRITICAL pre-merge bug: uninstall filtered whole entries by
+command → would delete co-located unrelated user hooks; fixed to command-level
+strip + regression test, critic re-verified (27/27 adversarial probes). Squash-
+merged to main (commit a71f06e). See [[entities/gui]], [[entities/connectors-claude-code]],
+[[entities/cli]]. Spec: docs/superpowers/specs/2026-06-15-gui-connect-saver-hook-design.md.
+
+## [2026-06-16] finding | saver activation mechanics (operational)
+
+While verifying live saving on the dev machine, captured the gotchas that make
+"enabled but not saving" the default surprise:
+(1) Claude Code loads hooks at **session start** — a hook connected mid-session
+takes effect only after `/hooks` review or a NEW session.
+(2) The installed hook command `mega hooks saver` must resolve on **PATH** — if
+`mega` is absent the hook fails silently (always exit 0) → passthrough, zero
+events. `pnpm link --global` needs `PNPM_HOME`/`pnpm setup`; fallback is a symlink
+of `dist-bundle/mega.mjs` into a PATH dir (e.g. `~/.local/bin`). The on-disk
+bundle must be rebuilt (`pnpm --filter @megasaver/cli bundle`) to include the
+saver hook.
+(3) Hook **install** (global, `settings.json`) and per-workspace **enable**
+(`stats/<wk>/workspace-token-saver.json`, keyed by `encodeWorkspaceKey(cwd)`) are
+ORTHOGONAL — both required, plus output > mode budget (safe 32000 / balanced 12000
+/ aggressive 4000 B). Verified end-to-end: `mega hooks saver` compressed a 72000 B
+payload → 44 B (99.94%), recording the overlay event. See [[entities/connectors-claude-code]],
+[[entities/cli]], [[entities/gui]].

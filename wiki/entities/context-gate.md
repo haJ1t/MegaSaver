@@ -43,6 +43,11 @@ any change.
   `appendOverlayEvent` keyed by `(workspaceKey, liveSessionId)`. Powers
   the `mega hooks saver` PostToolUse hook → populates the live GUI Token
   saver overlay stats. Generalizes the file-only `runOverlayOutputPipeline`.
+  Fix (PR #140, 2026-06-15): the stored chunk-set's `source` now maps from
+  `input.sourceKind` to the matching discriminated-union variant
+  (`command`/`grep`/`fetch`/`file`) instead of always `{kind:"file"}` — a
+  Bash command was previously recorded as a file path (cosmetic metadata only;
+  hook behaviour + lossless recovery unaffected).
 - `loadProjectPermissions(rootDir)` — reads `.megasaver/permissions.yaml`
   (yaml@^2 I/O) and returns `ProjectPermissions | null`. Used by
   `evaluateCommand` / `evaluatePathRead` for tighten-only project rules.

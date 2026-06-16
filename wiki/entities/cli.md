@@ -242,7 +242,7 @@ flag shape; failure = text stderr, exit 1, no stdout).
 Errors surface as `error: <SkillPackErrorCode>: <detail>` via
 `skillPackErrorMessage` (closed 7-member enum, [[entities/skill-packs]]).
 
-### `mega hooks {install,status}` (Proxy Mode v1.2, P5)
+### `mega hooks {install,uninstall,status}` (Proxy Mode v1.2, P5; uninstall PR #141)
 
 Hook telemetry surface for measuring native-tool interception. Shipped
 P5 (commit `07040de`). See [[concepts/proxy-mode]].
@@ -251,6 +251,16 @@ P5 (commit `07040de`). See [[concepts/proxy-mode]].
   PreToolUse telemetry hook (`mega hooks log`) AND a PostToolUse saver
   hook (`mega hooks saver`), matcher `Read|Bash|Grep|Glob|LS`.
   Re-running does not duplicate either entry.
+- `hooks uninstall claude-code` (PR #141, 2026-06-15) — symmetric removal:
+  strips ONLY the two Mega Saver hook entries from `~/.claude/settings.json`
+  at the **command** level, so a co-located unrelated user hook in the same
+  entry is preserved (the original entry-level filter would have deleted it —
+  caught by critic review). No-op if absent. The install/uninstall/status
+  hook-settings logic now lives in `@megasaver/connector-claude-code` so the
+  GUI bridge can reuse it (`apps/gui` cannot import `apps/cli`);
+  `hooks/install.ts` + `settings-path.ts` re-point to that package. Settings
+  writes are atomic (temp + rename). See [[entities/connectors-claude-code]],
+  [[entities/gui]].
 - `hooks status` — reports whether the hook is installed.
 - `hooks log` — the PreToolUse target: a metadata-only, best-effort
   logger that always exits 0 (never blocks the agent's tool call).

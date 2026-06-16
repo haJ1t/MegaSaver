@@ -197,3 +197,28 @@ session id per call).
   sentinel-bounded atomic helpers. MCP install stays AgentSetupDoctor's job;
   this route only reports `mcpInstalled`.
 - Source: `docs/superpowers/specs/2026-06-14-gui-workspace-token-saver-activation-design.md`.
+
+## Connect Saver hook toggle (PR #141, 2026-06-15)
+
+Closes the gap that "Saver Mode enabled" does nothing unless the global Claude
+Code hook is installed (previously terminal-only `mega hooks install`). The
+Token saver panel now renders a `HookConnection` toggle (above
+`SaverModeActivation`) that connects/disconnects the **global** hook in the
+background — honestly labelled global ("applies to all Claude Code sessions"),
+with confirm-on-disconnect.
+
+- Global bridge route (NOT session-scoped) `routes/claude-hooks.ts`:
+  `GET /api/hooks/claude-code` → `{ connected, preInstalled, postInstalled }`,
+  `POST` connect, `DELETE` disconnect. Injectable
+  `RouteContext.claudeSettingsPath` (prod = `resolveClaudeCodeSettingsPath()`,
+  tests inject a temp path).
+- Calls `install/uninstall/readClaudeCodeHookStatus` from
+  `@megasaver/connector-claude-code` (new `apps/gui` dependency); see
+  [[entities/connectors-claude-code]] for atomic-write + command-level-strip.
+- Client: `fetch/connect/disconnectClaudeHook` (no dir/id — global).
+- Scope ≠ effect: this only **installs** the hook; per-workspace Saver enable
+  (`SaverModeActivation`) is the orthogonal runtime gate. Both must hold, and
+  `mega hooks saver` must resolve on PATH, for compression to run. Hooks load
+  at CC **session start** → mid-session connect needs `/hooks` review or a new
+  session.
+- Source: `docs/superpowers/specs/2026-06-15-gui-connect-saver-hook-design.md`.

@@ -6,7 +6,7 @@ sources:
   - https://code.claude.com/docs/en/memory
 status: merged
 created: 2026-05-06
-updated: 2026-05-07
+updated: 2026-06-15
 ---
 
 # `@megasaver/connector-claude-code`
@@ -140,8 +140,43 @@ Note (semver): `ClaudeCodeContextSchema` now requires a top-level
 `agentId: "claude-code"` field. PR #8 changeset was bumped from
 `patch` to `minor` to acknowledge this required-field addition.
 
+## Hook settings (PR #141, 2026-06-15)
+
+Second responsibility (beyond the `CLAUDE.md` block): the single source of
+truth for the Claude Code Mega Saver **hook entries** in
+`~/.claude/settings.json`. Moved here from `apps/cli` so both the CLI and the
+GUI bridge can consume it (`apps/gui` cannot import `apps/cli` — §8). Module
+`src/hook-settings.ts`; pure + boundary-validated; writes are **atomic**
+(temp file + `rename`, so a crash can't truncate the user's global config).
+
+Public surface (added):
+
+- `installClaudeCodeHook({ settingsPath, command? })` — idempotent add of
+  PreToolUse `mega hooks log` + PostToolUse `mega hooks saver`.
+- `uninstallClaudeCodeHook({ settingsPath, command? })` — removes ONLY those
+  two entries at the **command** level (preserves co-located user hooks and
+  every unrelated key). No-op if absent.
+- `readClaudeCodeHookStatus({ settingsPath, command? })` →
+  `{ connected, preInstalled, postInstalled }`; missing/malformed file ⇒
+  all-false (never throws).
+- `removePre/PostToolUseHook`, `has/addPre/PostToolUseHook`,
+  `resolveClaudeCodeSettingsPath` (mirrors `apps/cli` `resolveHomeDir`:
+  `HOME ?? USERPROFILE ?? ""`), constants `HOOK_MATCHER`,
+  `DEFAULT_HOOK_COMMAND` (`mega hooks log`), `SAVER_HOOK_COMMAND`
+  (`mega hooks saver`).
+
+Consumed by `mega hooks install|uninstall` ([[entities/cli]]) and the GUI
+bridge route `GET|POST|DELETE /api/hooks/claude-code` ([[entities/gui]]).
+Critic review caught a Critical bug pre-merge: entry-level removal deleted
+co-located user hooks → fixed to command-level strip + regression test.
+Operational gotcha: Claude Code loads hooks at **session start**, so a hook
+connected mid-session only takes effect after `/hooks` review or a new
+session; and the installed command (`mega hooks saver`) must resolve on PATH.
+
 ## Related
 
 - [[entities/core]]
 - [[entities/shared]]
+- [[entities/cli]]
+- [[entities/gui]]
 - [[concepts/agent-agnostic-core]]
