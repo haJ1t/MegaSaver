@@ -6,7 +6,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { digestContent } from "../src/digest.js";
 import type { EvidenceRecordInput } from "../src/schema.js";
 import { memoryEntryIdSchema } from "@megasaver/shared";
-import { appendEvidence, explainEvidence, getEvidenceStatus, listEvidenceByWorkspace, loadEvidence, pinEvidence, revokeEvidence, unpinEvidence } from "../src/store.js";
+import { appendEvidence, explainEvidence, gcEvidence, getEvidenceStatus, listEvidenceByWorkspace, loadEvidence, pinEvidence, revokeEvidence, unpinEvidence } from "../src/store.js";
 
 const MEM_ID = memoryEntryIdSchema.parse("00000000-0000-4000-8000-0000000000a1");
 
@@ -257,5 +257,52 @@ describe("revoke / explain (secret purge)", () => {
       rawExpandable: false,
       revocationReason: "secret_false_negative",
     });
+  });
+});
+
+describe("gcEvidence", () => {
+  it("degrades expired transient/session available evidence to retained_metadata_only and deletes its chunk", async () => {
+    const rec = input({ expiresAt: "2026-06-16T12:30:00.000Z", redactedRawChunkSetId: "cs-7" });
+    await appendEvidence({ storeRoot, record: rec });
+    const deleted: string[] = [];
+    const res = await gcEvidence({
+      storeRoot,
+      workspaceKey,
+      now: new Date("2026-06-16T13:00:00.000Z"),
+      deleteChunk: async (id) => {
+        deleted.push(id);
+      },
+    });
+    expect(res.degraded).toBe(1);
+    const loaded = await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId });
+    expect(loaded.status).toBe("retained_metadata_only");
+    expect(loaded.redactedRawChunkSetId).toBeNull();
+    expect(loaded.revocationReason).toBeNull(); // GC is NOT a revocation
+    expect(loaded.transitions.at(-1)).toMatchObject({ kind: "raw_gc" });
+    expect(deleted).toEqual(["cs-7"]);
+  });
+
+  it("pinned evidence survives ordinary GC", async () => {
+    const rec = input({ expiresAt: "2026-06-16T12:30:00.000Z" });
+    await appendEvidence({ storeRoot, record: rec });
+    await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
+    const res = await gcEvidence({ storeRoot, workspaceKey, now: new Date("2026-06-16T13:00:00.000Z"), deleteChunk: async () => {} });
+    expect(res.degraded).toBe(0);
+    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe("available");
+  });
+
+  it("manual_hold evidence survives ordinary GC", async () => {
+    const rec = input({ retentionClass: "manual_hold", expiresAt: "2026-06-16T12:30:00.000Z" });
+    await appendEvidence({ storeRoot, record: rec });
+    const res = await gcEvidence({ storeRoot, workspaceKey, now: new Date("2026-06-16T13:00:00.000Z"), deleteChunk: async () => {} });
+    expect(res.degraded).toBe(0);
+    expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe("available");
+  });
+
+  it("not-yet-expired and null-expiry evidence is left intact", async () => {
+    await appendEvidence({ storeRoot, record: input({ expiresAt: null }) });
+    await appendEvidence({ storeRoot, record: input({ expiresAt: "2026-06-16T23:59:00.000Z" }) });
+    const res = await gcEvidence({ storeRoot, workspaceKey, now: new Date("2026-06-16T13:00:00.000Z"), deleteChunk: async () => {} });
+    expect(res.degraded).toBe(0);
   });
 });
