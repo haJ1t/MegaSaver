@@ -68,3 +68,19 @@ export {
   type AppendAuditEventInput,
   readAuditEvents,
 } from "./audit-store.js";
+
+export {
+  eligibilityClassSchema,
+  mediationKindSchema,
+  honestObservationSchema,
+  aggregateHonestMetrics,
+  classifyObservation,
+  meetsGaGate,
+  type EligibilityClass,
+  type MediationKind,
+  type HonestObservation,
+  type HonestMetrics,
+  type GaGateInput,
+  type GaGateTargets,
+  type GaGateResult,
+} from "./honest-metrics.js";
