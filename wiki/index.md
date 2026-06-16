@@ -32,6 +32,7 @@ updated: 2026-06-16
 - [[concepts/audit-dashboard]] — roadmap Phase 8: one windowed, persisted token-savings summary; extends @megasaver/stats with an AuditEvent family.
 - [[concepts/memory-approval]] — roadmap Phase 10: agent-suggests → human-approves memory gate; team = shared store + gate; cloud SaaS deferred.
 - [[concepts/proxy-mode]] — Proxy Mode v1.2 (7 phases shipped): public naming mode, output classifier, vitest/tsc compressors + passthrough, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics, replay trace.
+- [[concepts/context-ledger-architecture]] — proposed next architecture: evidence-backed save pipeline + honest ~90% reduction target for eligible MegaSaver-mediated context.
 
 ## Entities
 

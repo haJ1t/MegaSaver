@@ -2392,3 +2392,28 @@ ORTHOGONAL — both required, plus output > mode budget (safe 32000 / balanced 1
 / aggressive 4000 B). Verified end-to-end: `mega hooks saver` compressed a 72000 B
 payload → 44 B (99.94%), recording the overlay event. See [[entities/connectors-claude-code]],
 [[entities/cli]], [[entities/gui]].
+
+## [2026-06-16] architecture note | DFMT comparison direction
+
+User shared Claude Code's DFMT comparison and asked whether MegaSaver should avoid
+becoming a DFMT clone. Read [[concepts/agent-agnostic-core]],
+[[concepts/contextops-roadmap]], [[concepts/proxy-mode]],
+[[concepts/context-gate-pipeline]], and [[entities/mcp-bridge]]. Assessment:
+Claude's timing diagnosis is directionally right — PostToolUse is a fallback and
+MCP/proxy tools are the reliable pre-context hot path — but MegaSaver's
+differentiator should be a broader ContextOps Gateway: agent-agnostic proxy
+tools + optional hot local data plane + memory/repo/failure-aware ranking +
+policy/redaction + replay/audit + expansion handles. This keeps DFMT's useful
+"raw output never enters context first" lesson without copying its product shape.
+
+## [2026-06-16] spec | Context Ledger reliable save architecture
+
+User approved a save-first architecture target: cover all save error classes
+(false memory, overwrite/conflict, secrets, broken agent config) with save as the
+main focus, while targeting roughly 10% returned context / ~90% savings on
+eligible MegaSaver-mediated large outputs. Wrote
+`docs/superpowers/specs/2026-06-16-context-ledger-reliable-save-design.md` and
+new concept page [[concepts/context-ledger-architecture]]. Core decision:
+agent `save_memory` creates a candidate, not approved memory; evidence ledger +
+validator + conflict checker + approval policy decide whether memory can enter
+agent projections.
