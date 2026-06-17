@@ -25,6 +25,10 @@ describe("GenericCliConnectorError", () => {
     expect(mapSharedErrorCode("target_path_invalid")).toBe("project_root_invalid");
   });
 
+  it("collapses projection_invalid onto block_conflict", () => {
+    expect(mapSharedErrorCode("projection_invalid")).toBe("block_conflict");
+  });
+
   it("captures code and filePath", () => {
     const err = new GenericCliConnectorError("context_invalid", "msg");
     expect(err.code).toBe("context_invalid");

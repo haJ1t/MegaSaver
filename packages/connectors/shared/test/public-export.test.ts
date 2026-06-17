@@ -7,6 +7,7 @@ describe("@megasaver/connectors-shared public exports", () => {
     expect(typeof pkg.MEGA_SAVER_BLOCK_END).toBe("string");
     expect(typeof pkg.renderBlock).toBe("function");
     expect(typeof pkg.parseBlock).toBe("function");
+    expect(typeof pkg.projectionPreflight).toBe("function");
     expect(typeof pkg.upsertBlock).toBe("function");
     expect(typeof pkg.removeBlock).toBe("function");
     expect(typeof pkg.readTargetFile).toBe("function");

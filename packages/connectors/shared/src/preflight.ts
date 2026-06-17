@@ -22,7 +22,10 @@ export function projectionPreflight(content: string, opts: { expectHeader?: bool
   }
 
   // The CONTEXT_GATE block is optional (present only when Mega Saver Mode is on);
-  // when present it must be exactly one balanced pair.
+  // when present it must be exactly one balanced pair. The two blocks are
+  // validated independently; this assumes the renderer never INTERLEAVES them
+  // (upsertBlock always emits the CG block sequentially after the managed block).
+  // If a future renderer can interleave, this preflight must add an ordering check.
   try {
     parseBlock(content, { start: MEGA_SAVER_CG_BLOCK_START, end: MEGA_SAVER_CG_BLOCK_END });
   } catch (err) {
