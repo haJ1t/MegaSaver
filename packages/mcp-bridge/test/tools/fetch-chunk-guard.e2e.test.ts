@@ -77,7 +77,10 @@ describe("mega_fetch_chunk dispatch: allowedChunkSetIds guard", () => {
     await Promise.all([server.connect(serverT), client.connect(clientT)]);
 
     await expect(
-      client.callTool({ name: "mega_fetch_chunk", arguments: { chunkSetId: "cs-blocked", chunkId: "0" } }),
+      client.callTool({
+        name: "mega_fetch_chunk",
+        arguments: { chunkSetId: "cs-blocked", chunkId: "0" },
+      }),
     ).rejects.toThrow(/expansion_blocked/);
     await server.close();
   });
