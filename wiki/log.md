@@ -2392,3 +2392,427 @@ ORTHOGONAL — both required, plus output > mode budget (safe 32000 / balanced 1
 / aggressive 4000 B). Verified end-to-end: `mega hooks saver` compressed a 72000 B
 payload → 44 B (99.94%), recording the overlay event. See [[entities/connectors-claude-code]],
 [[entities/cli]], [[entities/gui]].
+
+## [2026-06-16] architecture note | DFMT comparison direction
+
+User shared Claude Code's DFMT comparison and asked whether MegaSaver should avoid
+becoming a DFMT clone. Read [[concepts/agent-agnostic-core]],
+[[concepts/contextops-roadmap]], [[concepts/proxy-mode]],
+[[concepts/context-gate-pipeline]], and [[entities/mcp-bridge]]. Assessment:
+Claude's timing diagnosis is directionally right — PostToolUse is a fallback and
+MCP/proxy tools are the reliable pre-context hot path — but MegaSaver's
+differentiator should be a broader ContextOps Gateway: agent-agnostic proxy
+tools + optional hot local data plane + memory/repo/failure-aware ranking +
+policy/redaction + replay/audit + expansion handles. This keeps DFMT's useful
+"raw output never enters context first" lesson without copying its product shape.
+
+## [2026-06-16] spec | Context Ledger reliable save architecture
+
+User approved a save-first architecture target: cover all save error classes
+(false memory, overwrite/conflict, secrets, broken agent config) with save as the
+main focus, while targeting roughly 10% returned context / ~90% savings on
+eligible MegaSaver-mediated large outputs. Wrote
+`docs/superpowers/specs/2026-06-16-context-ledger-reliable-save-design.md` and
+new concept page [[concepts/context-ledger-architecture]]. Core decision:
+agent `save_memory` creates a candidate, not approved memory; evidence ledger +
+validator + conflict checker + approval policy decide whether memory can enter
+agent projections.
+
+## [2026-06-16] review | Context Ledger spec split after Claude review
+
+Claude Code review found real draft blockers: unpurgeable missed secrets in an
+append-only ledger, silent Phase-10 `save_memory` contract change, candidate/raw
+evidence MCP leak paths, 90% metric gaming, missing sufficiency metric, unbounded
+retention, replay-vs-GC contradiction, and an over-broad one-plan scope. Revised
+the design by marking the original umbrella spec superseded and splitting the
+work into two narrower specs:
+`2026-06-16-contextgate-honest-90-design.md` and
+`2026-06-16-reliable-save-ledger-design.md`. Key corrections: ContextGate naming
+only; token-weighted savings + eligible/mediated fractions; evidence sufficiency
+counter-metrics; redaction revocation/tombstones; retention/pinning semantics;
+candidate == existing Phase-10 suggested MemoryEntry; agent-facing MCP leak
+invariant; per-connector projection matrix including Aider/Gemini/Windsurf/
+Continue.
+
+## [2026-06-16] review | Evidence Ledger residuals resolved
+
+Second Claude Code re-check marked all prior blockers resolved and approved the
+split direction, with two plan-blocking residuals: shared ledger schema ownership
+and an overstrong `crypto-shred` phrase against the plaintext content-store.
+Added `docs/superpowers/specs/2026-06-16-evidence-ledger-interface-design.md`
+as the canonical package/schema/revocation/retention interface. Revised
+ContextGate to consume that interface and describe secret purge honestly as
+logical tombstone + best-effort local delete unless future encrypted-at-rest
+storage lands. Also folded minor review items into Reliable Save: sidecar
+atomicity, per-workspace/CAS approval serialization, and connector projection
+validation staying out of Core.
+
+## [2026-06-16] plan+review | Evidence Ledger plan + security review
+
+Wrote `docs/superpowers/plans/2026-06-16-evidence-ledger.md` (13-task TDD plan
+for the `@megasaver/evidence-ledger` leaf, grounded in the content-store
+template + dependency-graph guard). Ran code-reviewer + adversarial critic.
+BLOCKING finding: revoke does not actually remove a leaked secret — it survives
+in `sourceRef` (command/url/query), in caller-supplied `rawDigest` (oracle), and
+in a redundant `events.jsonl` sidecar; revoke tests passed without asserting the
+secret was gone (false confidence). Plus compile/lint blockers (branded
+`WorkspaceKey` param vs string literals; duplicate `node:fs` imports) and
+integrity gaps (no atomicity between record write + event append; revoke deletes
+chunk before tombstone; `retentionClass: pinned` survives revoke). Handed
+spec-contract deltas to Codex via `wiki/agent-channel.md` (redact `sourceRef`,
+ledger-computed + revoke-nulled digests, drop events sidecar, GC-exempt
+`manual_hold`, boundary `workspaceKey` validation). Next: Codex amends interface
+spec → Claude revises plan + re-checks. CLAUDE.md gained a hand-kept Session
+Directives block (superpowers-for-everything + caveman ultra) outside managed
+sentinels.
+
+## [2026-06-16] spec | Evidence Ledger security amendments
+
+Amended `2026-06-16-evidence-ledger-interface-design.md` from the plan-review
+handoff. Spec now treats `sourceRef` as secret-bearing: redact at append time and
+scrub to a non-reversible label on revoke. Digests are ledger-computed over
+post-redaction content only, never caller-supplied, and are nulled on revoke.
+Revocation atomically tombstones the record before best-effort raw chunk delete,
+uses in-record `transitions[]` as the only audit trail, and explicitly drops
+plaintext `events.jsonl`. Retention coherence added: pinned requires available,
+manual_hold and pinned are GC-exempt, GC degrades only transient/session evidence,
+pin/unpin is session→pinned→session, and IO validates `workspaceKey` at the
+boundary while asserting loaded records match the requested workspace.
+
+## [2026-06-16] plan-v2 | Evidence Ledger plan revised + re-verified
+
+Codex hardened the interface spec (commit cd6b634); Claude revised
+`docs/superpowers/plans/2026-06-16-evidence-ledger.md` to match: digests are
+ledger-computed from passed post-redaction content (input carries no digest) and
+nulled on revoke; revoke scrubs `sourceRef` + clears pins + resets retention,
+tombstoning atomically BEFORE best-effort chunk delete; `events.jsonl` removed
+(audit = in-record `transitions[]`); `workspaceKey` params are plain strings
+parsed at the boundary with a record-match guard; pin is legal only from
+`session`; GC exempts `manual_hold`; planted-secret purge tests added (assert
+`JSON.stringify(record)` no longer contains the secret). Independent critic
+re-verification confirmed all 8 prior blockers CLOSED, and found 2 new
+compile/lint blockers (`nowTransition` violating `exactOptionalPropertyTypes`;
+`store.ts` biome import order) + 1 minor — all fixed with the critic's verified
+forms. Plan ready to execute. Next: execute Plan 1 in a worktree, or author
+Plan 2 (ContextGate) + Plan 3 (Reliable Save).
+
+## [2026-06-16] plans | ContextGate honest-90 + Reliable Save plans written
+
+Wrote two more implementation plans (explore-grounded against real surfaces).
+`docs/superpowers/plans/2026-06-16-contextgate-honest-90.md` — honest-metrics
+engine in `@megasaver/stats`: token-weighted eligible reduction + eligible/
+proxied/passthrough/mediated fractions + GA gate pairing reduction with a
+sufficiency floor + `mega audit honest`. Critic found 2 blockers (persisted
+overlay events carry no mediation/decision → loader can't honestly source
+observations; unused `estimateTokens` import) + 2 important (threshold invariant
+undocumented; load-bearing decision default) — all FIXED: mediation now assigned
+by log source via a tested `recordedEventsFromLogs` projection, decision required,
+threshold invariant documented. Sufficiency fixtures / evidence-write / MCP
+expansion scoped as Plans 2b/2c/2d.
+`docs/superpowers/plans/2026-06-16-reliable-save-ledger.md` — validator + conflict
+checker + approval gate in `@megasaver/core` (candidate == suggested; no parallel
+entity; MemoryValidation sidecar; deterministic hard checks + advisory heuristics;
+dup/supersession/contradiction; approve_memory gated). Discovered MCP leak (§10) +
+connector approval gate (§11) are ALREADY enforced today — plan locks them with a
+regression test rather than rebuilding. Found a spec error: reliable-save §11 calls
+Aider CONVENTIONS.md "full-file no sentinel" but shipped `aiderTarget` is
+sentinel-based — flagged to Codex via agent-channel; Plan 3c (projection conformance)
++ Plan 3b (evidence linkage, needs Plan 1) scoped as follow-ons. Plan 3 critic pass
+still pending.
+
+## [2026-06-17] plan-review | Reliable Save plan critic + fixes
+
+Independent critic on the Reliable Save plan found 3 blockers + 5 important/minor,
+all FIXED: (1) approving an exact duplicate of an approved memory now REJECTS the
+suggested row instead of creating a second approved row (spec §8) + test; (2)
+`ApproveMemoryResult` extension specified concretely (optional `validation`/
+`conflict`) instead of prose; (3) exact insertion anchor given (real handler has no
+`approval==="approved"` branch — gate inserted after the no-op equality check,
+before the flip); (4) §8 per-workspace serialization/CAS flagged as deferred to 3b
+(in-memory registry makes sequential approval safe); (5) dead/speculative
+`MemoryValidation` sidecar dropped — only the `validationStatus` enum ships (full
+sidecar = 3b where it's read); (6) changeset states the unresolved-secret gate is
+inert until 3b (evidence-presence gate active); (7) contradiction test assertion
+tightened; (8) conflict-check precedence documented. All three plans (evidence-ledger,
+contextgate-honest-90, reliable-save) now critic-verified and execution-ready;
+follow-ons 2b/2c/2d/3b/3c named. Pending: Codex §11 Aider matrix correction.
+
+## [2026-06-17] implement | Evidence Ledger package shipped → PR #143
+
+Executed Plan 1 subagent-driven in an isolated worktree (`feat/evidence-ledger`, off
+`main`). `@megasaver/evidence-ledger` built TDD across 14 commits: enums, sub-schemas
+(+ sourceRef scrub), evidence record schema with revoke/pin/GC superRefine invariants,
+read-boundary backfill, errors + ledger digest + ChunkDeletePort, atomic-write +
+boundary workspaceKey parse, append-only store with ledger-computed digests +
+workspace-match guard, list/pin/unpin/revoke(tombstone-before-delete)/explain/gc,
+public surface + changeset. Implementer hit + correctly resolved 3 strict-TS/tooling
+deviations (backfill TS4111+useLiteralKeys → named-interface cast; test-d describe
+wrapper; store.ts single-write). Two-stage review: spec-compliance PASS (all 8
+security invariants, file:line evidence, secret-purge test confirms revoked JSON has
+no planted secret) + code-quality APPROVED-WITH-NITS (2 nits fixed: honest
+`scrubSourceRef()` signature, restored atomic-write Windows-durability WHY comments).
+Gates: 58/58 tests, tsc clean, biome clean, `pnpm verify` green. Deps exactly
+{shared, zod} (dependency-graph test enforces no core/content-store edge). Pushed +
+PR https://github.com/haJ1t/MegaSaver/pull/143 (base main).
+**MERGED** (squash `9fc766e`) after CI green on ubuntu + windows-latest (the windows
+verify validates the `IS_WIN32` atomic-write paths); remote branch + worktree cleaned
+up. `@megasaver/evidence-ledger` (25 files) now on `main`. Next: wire
+ChunkDeletePort→content-store in ContextGate (Plan 2c), then execute Plan 2 / Plan 3.
+
+## [2026-06-17] implement | ContextGate honest-90 metrics shipped → PR #144
+
+Executed Plan 2 subagent-driven in worktree (`feat/contextgate-honest-90`, off `main`).
+`@megasaver/stats/src/honest-metrics.ts` (8 TDD commits): token-weighted
+`eligibleReduction = 1 − Σreturned/Σraw` over the eligible set + eligible/proxied/
+passthrough/mediated fractions (no per-output-mean gaming), `classifyObservation`
+(passthrough/light/native never create savings), `recordedEventsFromLogs` (mediation
+assigned by log source: overlay→saver_hook, session→proxy, hook→native), `meetsGaGate`
+(reduction AND sufficiency floor), and a `mega audit honest` CLI. CLI reaches stats via
+`@megasaver/core` re-export (CLI→core→stats; direct CLI→stats forbidden by the cycle
+guard). Two-stage review: spec found + fixed a `--json` stdout-corruption bug (caveat
+now gated behind `!args.json`); code-quality APPROVED-WITH-NITS, fixed (trimmed core
+re-export 13→4 symbols, stale audit description, tautological token test made
+load-bearing). Gates: stats 116 + cli 628 tests, tsc + biome clean, `pnpm verify`
+36/36. **MERGED** (squash `62b3c65`) after CI green ubuntu + windows. `mega audit honest`
+ships wired+tested but reports an empty set until Plan 2c supplies the
+liveSessionId→workspaceKey loader (named-deferral, no silent cap). Deferred: 2b
+(sufficiency fixtures), 2c (evidence-write + loader), 2d (MCP expansion). Next: Plan 3
+(Reliable Save) — validator/conflict/approve-gate in core; Codex §11 Aider matrix fix
+still pending.
+
+## [2026-06-17] implement | Reliable Save validator+conflict+gate shipped → PR #145
+
+Executed Plan 3 subagent-driven in worktree (`feat/reliable-save-ledger`, off `main`),
+with superpowers skills invoked properly per step (using-git-worktrees →
+subagent-driven-development → finishing-a-development-branch) after the operator flagged
+that Plan 2 reused the pattern without re-invoking. 10 commits in `@megasaver/core` +
+`@megasaver/mcp-bridge`: `validation-status` enum, `save-validator` (fail-closed hard
+checks + downgrade-only advisory heuristics), `conflict-checker` (deterministic
+dup/supersession/contradiction, precedence-ordered), exports, and the `approve_memory`
+gate (runs validate+conflict before the suggested→approved flip; exact duplicate of an
+approved memory → suggested row REJECTED, never a second approved row; non-valid/
+conflicted → stays suggested with reasons). Two-stage review: spec PASS (all 6
+invariants; the agent-no-evidence BLOCK path confirmed tested) + a completeness gap
+fixed (MCP leak lock extended from 2→4 tools: search_memory, get_relevant_memories,
+mega_recall, get_project_context — all pass against existing gates, regression lock).
+Code-quality APPROVED-WITH-NITS, fixed (hoist NEGATIONS, document conflict precedence,
+single-source duplicate reason). Gates: core 467 + mcp-bridge 183 tests, tsc + biome
+clean, verify 36/36. **MERGED** (squash `f46ce66`) after CI green ubuntu + windows.
+Known limitation (in changeset): `unresolvedSecret` defaults false → secret gate inert
+until Plan 3b wires evidence ports; evidence-presence gate active. Deferred: 3b
+(evidence linkage + workspace identity + approval serialization/CAS + `mega memory
+review`/`explain`), 3c (projection conformance — needs Codex §11 Aider matrix fix
+first). All three context-ledger implementation plans now on `main` (#143/#144/#145).
+
+## [2026-06-17] implement | Context-ledger follow-ons shipped via dynamic workflow → PR #146
+
+Ran a dynamic Workflow (18 agents: parallel design → sequential TDD build → per-slice
+adversarial review) on a main-based worktree to finish the full remaining follow-on
+scope. Six slices, all merged (squash `c25cadf`): 2b sufficiency counter-metrics +
+fixture corpus (stats); 2d MCP expansion guard (`expansion_blocked`); 2c ContextGate
+evidence-write wiring + honest-audit `liveSessionId→workspaceKey` loader (`mega audit
+honest` now reports real numbers); 3b evidence linkage that ACTIVATES the secret gate
+(evidence-resolver + workspace match + revoked/missing block); 3b approval
+serialization (critical-section re-check); 3b `mega memory review`/`explain` +
+persisted MemoryValidation sidecar. CRITICAL LESSON: `pnpm verify` was 36/36 green but
+the per-slice adversarial reviewers caught THREE fail-open security gaps green tests
+missed — (1) `sourceRef.label` persisted unredacted (secret leak), (2) unconsumed
+`missingIds` (a memory citing a non-existent evidenceId approved), (3) the MCP
+expansion guard never wired into the production `createBridge` path (agent could browse
+any chunkSet). A focused opus security-fix pass closed all three with RED→GREEN tests
+on the real path (e6cfc55 redact label, 6fd50ed block missing evidence, 5d941c4
+per-server returnedChunkSetIds set); an independent security verification confirmed
+closure, no new fail-open/over-block. Gates: `pnpm verify` 36/36 green, CI green ubuntu
++ windows. Two latent residuals filed as a follow-up task (appendEvidence should redact
+sourceRef itself, not rely on the caller; expansion guard set is per-server not
+per-session + unbounded). 3c (projection conformance) still deferred — blocked on Codex
+§11 Aider-matrix fix (agent-channel). Context Ledger architecture now fully implemented
+on `main` except 3c. Takeaway: green gates ≠ secure; adversarial review after green is
+load-bearing, especially for evidence/secret-handling code.
+
+## [2026-06-17] fix | Evidence sourceRef redaction + bounded expansion guard → PR #147
+
+Closed the two latent defense-in-depth residuals from #146 (subagent-driven, worktree
+off main, skills invoked per step). `fix(evidence-ledger)` (`da9d3a7` squash): `appendEvidence`
+now takes a REQUIRED `redactSourceRef: SourceRefRedactor` port applied to `record.sourceRef`
+before schema-parse + persist — compile-time fail-closed, leaf stays policy-free, spec §3
+redaction now enforced at the append boundary instead of relying on the caller; the
+ContextGate composer wires `policy.redact` over command/args/url/query/path/label (single
+redaction source, removed the e6cfc55 call-site dup). `fix(mcp-bridge)`: expansion-guard
+`returnedChunkSetIds` is now a `BoundedSet` (FIFO cap 4096); per-session keying deferred (the
+`mega_fetch_chunk` wire carries no sessionId; stdio is single-session-per-process — documented).
+RED empirically reproduced (planted marker in all 6 sourceRef fields survived without the port).
+Adversarial review: Part A CLOSED (no production identity-redactor bypass, no regression),
+Part B SOUND. Gates: pnpm verify 36/36, CI green ubuntu+windows. Review surfaced a NEW
+pre-existing out-of-scope leak (filed as task chip): the raw `label` (command/url/path) still
+reaches `OverlayChunkSet.source` + the overlay stats event UNREDACTED on the shipping saver
+path — separate code path, not an evidence-ledger regression. Five context-ledger PRs now on
+main (#143–#147). Still open: 3c projection conformance (Codex §11 blocker) + the overlay-source
+label-redaction follow-up.
+
+## [2026-06-17] fix | Overlay source-label redaction → PR #148
+
+Closed the overlay-source label-redaction leak flagged by #147's adversarial review (worktree
+off main, full superpowers chain, skills invoked per step). `fix(context-gate)` (`97ccb98`
+squash): `recordAndFilterOverlayOutput` persisted the RAW `label` to two on-disk sinks — the
+overlay chunk-set `source` (command/url/grep-query/file-path, via `chunkSetSource` →
+content-store) and the overlay stats event `label` (→ @megasaver/stats) — so a credential-bearing
+command line, token-bearing fetch URL, or secret path landed unredacted even though the chunk
+CONTENT was redacted. Fix computes `redactedLabel = redact(input.label).redacted` once (same
+`@megasaver/policy` `redact` as content) and feeds both sinks; evidence `sourceRef` untouched
+(redacts via its own #147 port). TDD: 3 RED tests (secret in command/event/fetch-URL → present
+on disk) + 2 contract-lock tests (grep/file) — all assert on the reloaded on-disk artifact, not
+in-memory. Empirically confirmed a redacted fetch URL still passes `overlayChunkSetSchema`
+`z.string().url()`. Gates: pnpm verify 36/36, CI green ubuntu(2m55s)+windows(4m48s). Adversarial
+review (3 lenses + synthesis): APPROVE, no must-fix; surfaced honest residuals → (a) tightened
+changeset wording (redact only catches prefix/structure-shaped secrets, not bare `?token=<hex>`
+or `user:pass@host` — same blind spot as content path); (b) NEW follow-up task chip
+(`task_18423994`): the parallel saver paths still leak raw command/args/path —
+`run-command.ts` (the LIVE `proxy_run_command`, persists the real `args` array so a bearer token
+in `-H` lands in `source.args`), `run.ts:207`, `read.ts:213`; pre-existing, untouched here.
+Six context-ledger PRs now on main (#143–#148). Still open: 3c projection conformance (Codex §11
+blocker) + the parallel-path label leak (`task_18423994`). Takeaway reconfirmed: adversarial
+review after green gates is load-bearing — it caught the changeset overstatement AND a more
+severe sibling leak (raw args on the live MCP command path) that the green suite never touched.
+
+## [2026-06-17] fix | Parallel saver-path label redaction → PR #149
+
+Closed the parallel-path label leak (`task_18423994`) flagged by #148's review (worktree off
+main, full superpowers chain, skills per step). `fix(context-gate)` (`aa42dbd` squash): #148 only
+redacted the label inside `recordAndFilterOverlayOutput`; the other live saver paths still wrote
+the RAW label to disk — `run-command.ts` (`runOutputExecCommand` legacy + `runOverlayOutputExecCommand`
+overlay, the latter behind `proxy_run_command`) persisted `source.command`, `source.args`, and the
+event `label` raw (it stores the REAL args array → a `curl -H "Authorization: Bearer ..."` token
+landed in `source.args` on disk); `run.ts` (legacy+overlay file pipelines) persisted the file
+`path` raw in the event label; `read.ts` `persistChunkSet` + `persistOverlayChunkSet` persisted
+the file `path` raw in `source.path`. Fix applies `@megasaver/policy` `redact` (same detector as
+content) at every sink: command+args redacted element-wise, the event label rebuilt from the
+redacted parts, the file path redacted at the `persist*` sink (covers all callers of the exported
+fns) + the `run.ts` event label. TDD: 4 RED on-disk round-trip tests (legacy+overlay × command+file,
+assert secret body absent + `[REDACTED]` marker on the persisted chunk JSON + events.jsonl) → GREEN.
+Gates: pnpm verify 36/36, 55/55 context-gate, CI green ubuntu+windows. Adversarial review (3 lenses
++ synthesis): APPROVE, no must-fix; acted pre-merge on its findings → reverted a no-op `redact` the
+initial `replace_all` over-applied to `readAndFilter`'s `filterOutput` call (not a persistence sink;
+`filterOutput` reads `source` only for command-classification), strengthened the 2 legacy tests with
+positive `[REDACTED]` marker assertions. Seven context-ledger PRs now on main (#143–#149). Known
+limits (tracked, not regressions): `redact` misses bare `?token=<hex>` / `user:pass@host` (detector
+blind spot, shared with content path → `redaction-patterns.ts` hardening follow-up); `secretsRedacted`
+metric undercounts secrets that appear only in label/args/path. Still open: 3c projection conformance
+(Codex §11 blocker) + redactor-pattern hardening. The secret-on-disk leak class across the saver
+persistence paths is now closed for all structurally-detectable secrets.
+
+## [2026-06-17] feat | Contextual no-prefix secret redaction → PR #150
+
+Closed the redactor detector blind spot (`task_00c4363d`) flagged across #148/#149 reviews
+(worktree off main, full superpowers chain). `feat(policy)` (`b2e39cd` squash): `redact()` —
+the SINGLE detector shared by chunk content + every saver sink + evidence sourceRef — matched
+only prefix/structure-shaped secrets, so contextual secrets (secret-named URL query/fragment
+param, userinfo creds on non-db schemes, secret CLI flag value, api-key/Basic header) passed
+through verbatim and reached disk. Added 5 LOOKBEHIND patterns after the locked baseline
+(additive-only, baseline untouched; backrefs avoided because `redact()` applies replacements via
+a function → `$1` would be literal): `url_basic_auth`, `url_query_secret` (query+fragment),
+`cli_secret_flag_eq` + `cli_secret_flag_spaced` (quoted-only), `api_key_header`,
+`basic_auth_header`. A generic high-entropy matcher for CONTEXTLESS opaque tokens was
+deliberately omitted (indistinguishable from SHAs/UUIDs/hashes → mass false positives).
+
+**Adversarial review earned its keep — BLOCK → fix → re-APPROVE.** First 3-lens review (false-
+positive / coverage / regression+ReDoS) BLOCKED with 4 verified defects the green suite missed:
+(C1 critical) OAuth **fragment** tokens `#access_token=` leaked (lookbehind took only `[?&]`);
+(C2 critical) `url_basic_auth` forbade `/` in the password → slash-passwords leaked the whole
+cred, strictly weaker than the baseline `db_url` it copied; (I1 important) the cli flag space
+form ate the next token / prose / shell operators (`&&`,`|`,`>`) → corrupted the first-failure
+evidence the saver preserves; (I2 important) empty-username userinfo (`redis://:pw@`) leaked.
+All fixed via TDD (RED tests for each leak + each over-redaction negative): `[?&]`→`[?&#]`,
+basic-auth class `[^\s/@]*:[^\s@]+(?=@)`, cli flag SPLIT into `=`-form (unquoted) + space-form
+(quoted-only). A focused 2-lens re-review empirically confirmed all 4 CLOSED + no new
+leak/false-positive (17-case benign battery clean, no ReDoS <5ms/500KB, every redacted URL still
+passes `z.string().url()`). Gates: pnpm verify 36/36, policy 143/143, context-gate 15/15, CI green
+ubuntu+windows. Documented minors (non-leaks): `@`-in-password short tail (RFC requires
+%-encoding; first-`@` anchor), baseline-shaped query value double-counted, `Authorization: Basic
+<prose-word>` cosmetic over-redaction. Eight context-ledger PRs now on main (#143–#150). Still
+open: 3c projection conformance (Codex §11 blocker). Takeaway, reconfirmed hardest here:
+adversarial review after green is load-bearing — green `pnpm verify` shipped 2 CRITICAL credential
+leaks (OAuth fragment, slash-password) that only the adversarial pass caught.
+
+## [2026-06-18] feat | Token-saver completion (4 slices, dynamic workflow) → PR #151
+
+Closed the buildable gaps keeping the auto-saver (`mega hooks saver` PostToolUse) from being fully
+usable end-to-end. Built as ONE dynamic Workflow: sequential TDD implement (4 slices share
+`apps/cli/src/hooks/saver.ts` → serialized, subagent-driven, git-safe) + parallel per-slice
+adversarial review + full verify. `feat(cli)` (`1565d40` squash, 4 commits, 695+/7−, surgical):
+- **S1 activation CLI** (`ab988a4`): `mega session saver workspace enable|disable [--mode]` writes/
+  toggles `<storeRoot>/stats/<wk>/workspace-token-saver.json` (exact `z.object({enabled,mode})` the
+  hook reads, atomic, `--mode` validated) → saver usable WITHOUT the GUI (was GUI-only). New
+  `workspace` subgroup to avoid colliding with the session-scoped `enable/disable`.
+- **S2 evidence wire** (`20bb885`, HIGH): live saver now passes `evidenceStoreRoot: deps.storeRoot`
+  into `recordAndFilterOverlayOutput` → evidence-ledger rows written on the AUTO path, not only MCP/
+  memory. Same `<storeRoot>/evidence/<wk>/` convention; best-effort intact (4-line prod change).
+- **S3 honest token metrics** (`3a5b35d`): inline pointer + `session saver stats` now report
+  token-weighted savings (`~A→B tokens, P%`) via the `@megasaver/stats` estimator (was byte-only);
+  `--json` additive/backward-compatible.
+- **S4 truncation-honest recovery** (`be6684b`): if input pre-truncated by the harness (end-anchored
+  marker, low false-positive), pointer says recovered chunk is PARTIAL instead of lying "Full output
+  recoverable" — the buildable core of the native-truncation shadowing finding.
+Final pointer composes all three saver.ts slices:
+`[Mega Saver: compressed X→Y B (~A→B tokens, P%). <Full output recoverable | PARTIAL note>.]`
+Gates: 4/4 slice reviews APPROVE (only cosmetic minors), self-run `pnpm verify` exit 0, CI green
+ubuntu(3m5s)+windows(4m48s). Workflow note: first run failed on a paren bug in the review phase
+(`(await parallel(...).filter(...))` → `await` bound to the Promise, not the array) AFTER all 4
+implements had committed; fixed paren + resumed with `resumeFromRunId` → implements returned cached,
+review+verify ran live. Nine context-ledger/saver PRs now on main (#143–#151).
+
+**Out of scope (stated, not buildable here):** npm publish (`NPM_TOKEN` maintainer secret) · GUI
+approval UX (v0.3+ deferred) · 3c projection conformance (Codex §11 Aider-matrix blocker, pending).
+Token saver now works end-to-end in-session: enable via the CLI, compress + redact (#147–#150) +
+evidence (#143) + honest token metrics + honest partial-recovery signal.
+
+## [2026-06-18] spec | Aider projection matrix corrected
+
+Addressed Claude Code's 3c blocker in
+`docs/superpowers/specs/2026-06-16-reliable-save-ledger-design.md` §11. Verified
+`packages/connectors/generic-cli/src/targets.ts`: `aiderTarget` is in
+`builtinTargets` with no special full-file path, so it uses the shared
+`MEGA_SAVER:BEGIN` / `MEGA_SAVER:END` sentinel block like Codex, Gemini,
+Windsurf, and Continue. Spec now marks Aider `CONVENTIONS.md` as sentinel-based;
+Cursor remains the only current generic target with header/frontmatter outside
+the sentinel block.
+
+## [2026-06-18] feat | Plan 3c projection conformance → PR #152 (LAST platform item)
+
+Codex corrected §11 (`43e9709`: all connector targets sentinel-based; only Cursor carries
+frontmatter outside the sentinel) → 3c unblocked, executed end-to-end under the full chain
+(worktree off main, writing-plans, TDD, adversarial review). `feat(connectors)` (`1db07df` squash):
+added `projectionPreflight(content, {expectHeader})` in `@megasaver/connectors-shared` — validates
+the FINAL rendered connector output before the atomic write (exactly one balanced managed sentinel
+block via `parseBlock`, balanced `CONTEXT_GATE` block when present, seed-path-only Cursor frontmatter
+survival). New `projection_invalid` error code mapped in all three exhaustive `ConnectorErrorCode`
+consumers (generic-cli + claude-code `mapSharedErrorCode` → block-conflict, completeness-only since
+preflight lives in the CLI; apps/cli message map). Wired into `connector sync` before each write
+(seed + update); a `projection_invalid` throw hits the existing per-target try/catch → only that
+connector's write aborts, store + other targets intact, exit 1 (spec §11/§14). Agent-agnostic (no
+`ConnectorTarget` import; core untouched). Conformance matrix across all 7 targets + corrupt-isolation
++ a `vi.mock` call-site abort test proving the guard fires + disk unchanged. Self-verify caught a real
+regression MID-BUILD: initial `expectHeader`-on-update falsely aborted a header-less Cursor re-sync
+(broke U5) → fixed seed-only (header prepended only on seed; out-of-block text is user-owned on
+update). Adversarial review (2 lenses + synthesis): APPROVE, no must-fix; acted pre-merge on minor
+coverage findings. Gates: pnpm verify 36/36, CI green ubuntu(3m11s)+windows(4m29s). Ten PRs on main
+(#143–#152).
+
+**Platform status: all buildable items shipped.** Remaining non-code items are maintainer-only: npm
+publish (`NPM_TOKEN` secret + `@megasaver` scope claim — verified publish-ready) and the GUI (v0.3+
+deferred; saver activation already covered by the #151 CLI). Context-ledger + reliable-save +
+token-saver arc complete.
+
+## [2026-06-18] release | @megasaver/cli@1.0.2 PUBLISHED to npm
+
+`@megasaver/cli@1.0.2` is live on npm (`registry.npmjs.org/@megasaver/cli/1.0.2`) — installable
+via `npm i -g @megasaver/cli` (`mega` bin). Closes the MVP→installable-product gap (post-v1.1
+roadmap #1). Maintainer claimed the `@megasaver` org/scope + write token + `NPM_TOKEN` secret;
+`v1.0.2` tag triggered `release.yml`. CI npm-publish could NOT pass 2FA: account/org enforces
+2FA-for-writes; granular token + account "auth only" still EOTP; maintainer uses a security key
+(FIDO/WebAuthn) not TOTP, so `--otp` is impossible in CI. Resolution: `npm pack` the released `main`
+code into a tarball, then `npm publish <tarball> --access public` LOCALLY, completing the
+security-key 2FA in the browser. For hands-off CI releases later: disable 2FA-for-writes at the ORG
+level (per-account change was overridden by org enforcement) or use a 2FA-bypass token. Bundle is
+self-contained (single ~11MB `dist-bundle/mega.mjs`, 0 workspace refs). Ten PRs (#143–#152) + this
+release: the context-ledger / reliable-save / token-saver arc is complete AND shipped to npm.
