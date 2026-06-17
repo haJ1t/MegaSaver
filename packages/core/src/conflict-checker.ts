@@ -9,6 +9,11 @@ export interface ConflictResult {
   reasons: readonly string[];
 }
 
+// Negation-bearing keywords whose presence/absence across two rules signals a
+// polarity divergence (one says "do X", the other "skip X"). Illustrative,
+// extensible starter set — not exhaustive; extend as new rule vocabulary appears.
+const NEGATIONS = new Set(["skip", "without", "no", "never", "disable"]);
+
 function norm(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -22,6 +27,9 @@ export function checkConflicts(
   candidate: MemoryEntry,
   approvedActive: readonly MemoryEntry[],
 ): ConflictResult {
+  // Branches are PRECEDENCE-ORDERED, first-match-wins: duplicate → supersession
+  // → contradiction. A same-type file-overlap divergence is classified
+  // `supersession` before `contradiction` is ever considered.
   const candContent = norm(candidate.content);
   const candTitle = norm(candidate.title);
 
@@ -46,7 +54,6 @@ export function checkConflicts(
 
   // 3) contradiction: project_rule with overlapping files/keywords but a
   // negation-bearing keyword set divergence. Heuristic → quarantine upstream.
-  const NEGATIONS = new Set(["skip", "without", "no", "never", "disable"]);
   const candNeg = candidate.keywords.some((k) => NEGATIONS.has(k.toLowerCase()));
   const contra = approvedActive.find(
     (m) =>

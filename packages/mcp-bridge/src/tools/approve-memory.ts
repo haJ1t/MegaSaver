@@ -77,7 +77,7 @@ export async function handleApproveMemory(
       return {
         id: rejected.id,
         approval: rejected.approval,
-        validation: { status: "rejected", reasons: ["exact_duplicate"] },
+        validation: { status: "rejected", reasons: conflict.reasons },
         conflict: { outcome: conflict.outcome, conflictIds: conflict.conflictIds },
       };
     }
