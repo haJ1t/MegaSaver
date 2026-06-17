@@ -1,5 +1,5 @@
 import type { FilterOutputResult } from "@megasaver/output-filter";
-import type { ProjectPermissions } from "@megasaver/policy";
+import { type ProjectPermissions, redact } from "@megasaver/policy";
 import type { SessionId, TokenSaverMode } from "@megasaver/shared";
 import {
   type OverlayTokenSaverEvent,
@@ -104,7 +104,9 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     projectId: settings.projectId,
     createdAt: now(),
     sourceKind: "file",
-    label: input.path,
+    // Secret-bearing path → redact before persisting the event label (the
+    // chunk-set source is redacted at the persist* sink in read.ts).
+    label: redact(input.path).redacted,
     rawBytes: filtered.result.rawBytes,
     returnedBytes: filtered.result.returnedBytes,
     bytesSaved: filtered.result.bytesSaved,
@@ -204,7 +206,9 @@ export async function runOverlayOutputPipeline(
     liveSessionId: input.liveSessionId,
     createdAt: now(),
     sourceKind: "file",
-    label: input.path,
+    // Secret-bearing path → redact before persisting the event label (the
+    // chunk-set source is redacted at the persist* sink in read.ts).
+    label: redact(input.path).redacted,
     rawBytes: filtered.result.rawBytes,
     returnedBytes: filtered.result.returnedBytes,
     bytesSaved: filtered.result.bytesSaved,
