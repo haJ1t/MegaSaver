@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, memoryEntryNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
-import { formatMemoryExplainLines, memoryEntryIdSchema } from "./shared.js";
+import { formatMemoryExplainLines, formatMemoryValidationLines, memoryEntryIdSchema } from "./shared.js";
 
 export type RunMemoryExplainInput = {
   memoryEntryId: string;
@@ -51,10 +51,12 @@ export async function runMemoryExplain(input: RunMemoryExplainInput): Promise<0 
       input.stderr(cli.message);
       return cli.exitCode;
     }
+    const validation = registry.getMemoryValidation(parsedId);
     if (input.jsonFlag) {
-      input.stdout(JSON.stringify(entry));
+      input.stdout(JSON.stringify({ ...entry, validation: validation ?? null }));
     } else {
       for (const line of formatMemoryExplainLines(entry)) input.stdout(line);
+      for (const line of formatMemoryValidationLines(validation)) input.stdout(line);
     }
     return 0;
   } catch (err) {

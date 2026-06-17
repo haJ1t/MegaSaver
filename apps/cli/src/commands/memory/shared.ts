@@ -1,4 +1,4 @@
-import type { MemoryEntry } from "@megasaver/core";
+import type { MemoryEntry, MemoryValidation } from "@megasaver/core";
 import { memoryEntryIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { NAME_CONTROL_CHARS_MESSAGE } from "../../errors.js";
@@ -119,4 +119,18 @@ export function formatMemoryExplainLines(entry: MemoryEntry): string[] {
 
 function padExplain(key: string): string {
   return key.padEnd(EXPLAIN_KEY_WIDTH, " ");
+}
+
+export function formatMemoryValidationLines(v: MemoryValidation | null): string[] {
+  if (v === null) {
+    return [`${padExplain("validationStatus")}unvalidated`];
+  }
+  return [
+    `${padExplain("validationStatus")}${v.validationStatus}`,
+    `${padExplain("validatedAt")}${v.validatedAt}`,
+    `${padExplain("validatedBy")}${v.validatedBy}`,
+    `${padExplain("policyVersion")}${v.policyVersion}`,
+    `${padExplain("reasons")}${v.reasons.length > 0 ? v.reasons.join(", ") : "-"}`,
+    `${padExplain("conflictIds")}${v.conflictIds.length > 0 ? v.conflictIds.join(", ") : "-"}`,
+  ];
 }
