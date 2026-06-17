@@ -9,7 +9,13 @@ const APPROVED_ID = "33333333-3333-4333-8333-333333333333";
 const DUP_ID = "44444444-4444-4444-8444-444444444444";
 const TS = "2026-06-12T00:00:00.000Z";
 
-function seededRegistry(over: { source?: "agent" | "manual"; evidenceIds?: string[]; confidence?: "low" | "medium" | "high" } = {}) {
+function seededRegistry(
+  over: {
+    source?: "agent" | "manual";
+    evidenceIds?: string[];
+    confidence?: "low" | "medium" | "high";
+  } = {},
+) {
   const registry = createInMemoryCoreRegistry();
   registry.createProject({
     id: PROJECT_ID,
@@ -194,24 +200,37 @@ describe("approve_memory validation gate (adversarial)", () => {
 
   it("approves a human-curated memory with no conflicts", async () => {
     const registry = seededRegistry({ source: "manual", confidence: "medium", evidenceIds: [] });
-    const result = await handleApproveMemory({ registry, now: () => TS }, { memoryEntryId: MEMORY_ID, approval: "approved" });
+    const result = await handleApproveMemory(
+      { registry, now: () => TS },
+      { memoryEntryId: MEMORY_ID, approval: "approved" },
+    );
     expect(result.approval).toBe("approved");
   });
 
   it("a reject decision still rejects regardless of validation", async () => {
     const registry = seededRegistry();
-    const result = await handleApproveMemory({ registry, now: () => TS }, { memoryEntryId: MEMORY_ID, approval: "rejected" });
+    const result = await handleApproveMemory(
+      { registry, now: () => TS },
+      { memoryEntryId: MEMORY_ID, approval: "rejected" },
+    );
     expect(result.approval).toBe("rejected");
   });
 
   it("approving an exact duplicate of an approved memory REJECTS it (no second approved row) — spec §8", async () => {
     // Seed an already-approved memory + a suggested duplicate with the same title+content.
     const registry = seededDuplicateRegistry();
-    const before = registry.listMemoryEntries(PROJECT_ID).filter((m) => m.approval === "approved").length;
-    const result = await handleApproveMemory({ registry, now: () => TS }, { memoryEntryId: DUP_ID, approval: "approved" });
+    const before = registry
+      .listMemoryEntries(PROJECT_ID)
+      .filter((m) => m.approval === "approved").length;
+    const result = await handleApproveMemory(
+      { registry, now: () => TS },
+      { memoryEntryId: DUP_ID, approval: "approved" },
+    );
     expect(result.approval).toBe("rejected");
     expect(result.conflict?.outcome).toBe("duplicate");
-    const after = registry.listMemoryEntries(PROJECT_ID).filter((m) => m.approval === "approved").length;
+    const after = registry
+      .listMemoryEntries(PROJECT_ID)
+      .filter((m) => m.approval === "approved").length;
     expect(after).toBe(before); // duplicate did NOT create a second approved row
   });
 });

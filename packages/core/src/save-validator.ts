@@ -42,7 +42,11 @@ export function validateSave(input: ValidateSaveInput): ValidateSaveResult {
   if (candidate.content.length > MAX_CONTENT) reasons.push("content_too_long");
 
   // Hard failures first (unchanged): rejected / quarantined short-circuit.
-  if (reasons.includes("unresolved_secret") || reasons.includes("unsafe_related_file") || reasons.includes("content_too_long")) {
+  if (
+    reasons.includes("unresolved_secret") ||
+    reasons.includes("unsafe_related_file") ||
+    reasons.includes("content_too_long")
+  ) {
     return { status: "rejected", reasons };
   }
   if (reasons.includes("missing_evidence")) {

@@ -27,23 +27,39 @@ function candidate(over: Partial<MemoryEntry> = {}): MemoryEntry {
 
 describe("validateSave hard checks", () => {
   it("a human save with no evidence is valid (humans assert directly)", () => {
-    const r = validateSave({ candidate: candidate({ source: "manual" }), evidenceIds: [], unresolvedSecret: false });
+    const r = validateSave({
+      candidate: candidate({ source: "manual" }),
+      evidenceIds: [],
+      unresolvedSecret: false,
+    });
     expect(r.status).toBe("valid");
   });
 
   it("an agent save with no evidence is quarantined (non-human needs evidence)", () => {
-    const r = validateSave({ candidate: candidate({ source: "agent" }), evidenceIds: [], unresolvedSecret: false });
+    const r = validateSave({
+      candidate: candidate({ source: "agent" }),
+      evidenceIds: [],
+      unresolvedSecret: false,
+    });
     expect(r.status).toBe("quarantined");
     expect(r.reasons).toContain("missing_evidence");
   });
 
   it("an agent save with evidence and no flags is valid", () => {
-    const r = validateSave({ candidate: candidate({ source: "agent" }), evidenceIds: ["ev-1"], unresolvedSecret: false });
+    const r = validateSave({
+      candidate: candidate({ source: "agent" }),
+      evidenceIds: ["ev-1"],
+      unresolvedSecret: false,
+    });
     expect(r.status).toBe("valid");
   });
 
   it("an unresolved secret finding is rejected regardless of source", () => {
-    const r = validateSave({ candidate: candidate({ source: "manual" }), evidenceIds: ["ev-1"], unresolvedSecret: true });
+    const r = validateSave({
+      candidate: candidate({ source: "manual" }),
+      evidenceIds: ["ev-1"],
+      unresolvedSecret: true,
+    });
     expect(r.status).toBe("rejected");
     expect(r.reasons).toContain("unresolved_secret");
   });
@@ -82,7 +98,9 @@ describe("validateSave advisory heuristics", () => {
 
   it("a transcript-fragment-looking content is needs_approval", () => {
     const r = validateSave({
-      candidate: candidate({ content: "@@ -1,4 +1,4 @@ const x = 1;\n+const y = 2;\n-const z = 3;" }),
+      candidate: candidate({
+        content: "@@ -1,4 +1,4 @@ const x = 1;\n+const y = 2;\n-const z = 3;",
+      }),
       evidenceIds: ["ev-1"],
       unresolvedSecret: false,
     });

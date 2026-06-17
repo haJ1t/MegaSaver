@@ -19,6 +19,8 @@ describe("reliable-save public type surface", () => {
     expectTypeOf<ConflictResult>().toHaveProperty("outcome");
   });
   it("ValidationStatus union is correct", () => {
-    expectTypeOf<ValidationStatus>().toEqualTypeOf<"unvalidated" | "valid" | "needs_approval" | "quarantined" | "rejected">();
+    expectTypeOf<ValidationStatus>().toEqualTypeOf<
+      "unvalidated" | "valid" | "needs_approval" | "quarantined" | "rejected"
+    >();
   });
 });

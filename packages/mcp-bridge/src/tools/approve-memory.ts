@@ -70,7 +70,10 @@ export async function handleApproveMemory(
     // spec §8: an exact duplicate of an approved memory must NOT become a second
     // approved row. Reject the suggested duplicate (kept for audit), do not flip.
     if (conflict.outcome === "duplicate") {
-      const rejected = env.registry.updateMemoryEntry(existing.id, { approval: "rejected", updatedAt: env.now() });
+      const rejected = env.registry.updateMemoryEntry(existing.id, {
+        approval: "rejected",
+        updatedAt: env.now(),
+      });
       return {
         id: rejected.id,
         approval: rejected.approval,
@@ -84,7 +87,10 @@ export async function handleApproveMemory(
       return {
         id: existing.id,
         approval: existing.approval, // still "suggested"
-        validation: { status: validation.status, reasons: [...validation.reasons, ...conflict.reasons] },
+        validation: {
+          status: validation.status,
+          reasons: [...validation.reasons, ...conflict.reasons],
+        },
         conflict: { outcome: conflict.outcome, conflictIds: conflict.conflictIds },
       };
     }
