@@ -468,6 +468,21 @@ describe("approve_memory — evidence-port integration (slice 3b)", () => {
     expect(result.validation?.reasons).toContain("cross_workspace_evidence");
   });
 
+  it("rejects approval when a cited evidence record is missing", async () => {
+    // Agent memory cites an evidenceId that has NO record on disk. The resolver
+    // returns it in missingIds; approval must NOT fall through to validateSave
+    // with the cited (but unresolvable) id.
+    const MISSING_EV_ID = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    const registry = seededRegistryWithEvidence([MISSING_EV_ID]);
+    const result = await handleApproveMemory(
+      { registry, storeRoot, now: () => TS },
+      { memoryEntryId: MEMORY_ID, approval: "approved" },
+    );
+    expect(result.approval).toBe("suggested");
+    expect(result.validation?.reasons).toContain("missing_evidence_record");
+    expect(registry.getMemoryEntry(MEMORY_ID as never)?.approval).toBe("suggested");
+  });
+
   it("writes a MemoryValidation sidecar when validation passes and memory is approved", async () => {
     const registry = seededRegistry({ source: "manual", confidence: "medium" });
     await handleApproveMemory(

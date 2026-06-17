@@ -76,11 +76,20 @@ export async function handleApproveMemory(
         evidenceIds,
         projectRootPath: project.rootPath,
       });
-      // Cross-workspace or revoked evidence blocks approval immediately (fail-closed).
-      if (resolution.hasCrossWorkspace || resolution.hasRevoked) {
+      // A cited evidenceId that resolves to no record means the memory points at
+      // evidence that does not exist for a non-human author. The cited id is still
+      // present in evidenceIds, so validateSave's presence check would pass it —
+      // block here (fail-closed) before that check can be fooled. Human-authored
+      // memories don't require resolvable evidence, so this only gates agents.
+      const isHuman = existing.source === "manual";
+      // Cross-workspace, revoked, or missing evidence blocks approval immediately
+      // (fail-closed).
+      const hasMissingRecord = !isHuman && resolution.missingIds.length > 0;
+      if (resolution.hasCrossWorkspace || resolution.hasRevoked || hasMissingRecord) {
         const reasons = [
           ...(resolution.hasCrossWorkspace ? ["cross_workspace_evidence"] : []),
           ...(resolution.hasRevoked ? ["revoked_evidence"] : []),
+          ...(hasMissingRecord ? ["missing_evidence_record"] : []),
         ];
         writeSidecar(env, existing.id as MemoryEntryId, {
           validationStatus: "rejected",
