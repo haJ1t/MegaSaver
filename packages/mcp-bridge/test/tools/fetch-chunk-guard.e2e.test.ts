@@ -85,19 +85,23 @@ describe("mega_fetch_chunk dispatch: allowedChunkSetIds guard", () => {
     await server.close();
   });
 
-  it("allows chunk when allowedChunkSetIds is absent (unconstrained/legacy)", async () => {
+  it("blocks a chunk never returned this session when no explicit allow-set is given", async () => {
+    // When buildServer gets no explicit allowedChunkSetIds it falls back to the
+    // server-owned "returned this session" set. A chunk seeded directly on disk
+    // was never returned, so it must be blocked — the production guard is real,
+    // not unconstrained-by-default (contextgate-honest-90 §11).
     await seedChunkSet(store, "cs-legacy");
-    const server = buildConnectedServer(store); // no allowedChunkSetIds
+    const server = buildConnectedServer(store); // no explicit allowedChunkSetIds
     const [clientT, serverT] = InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "test", version: "0" }, { capabilities: {} });
     await Promise.all([server.connect(serverT), client.connect(clientT)]);
 
-    const res = (await client.callTool({
-      name: "mega_fetch_chunk",
-      arguments: { chunkSetId: "cs-legacy", chunkId: "0" },
-    })) as { content: { text: string }[] };
-    const payload = JSON.parse(res.content[0]?.text ?? "{}") as { chunkSetId: string };
-    expect(payload.chunkSetId).toBe("cs-legacy");
+    await expect(
+      client.callTool({
+        name: "mega_fetch_chunk",
+        arguments: { chunkSetId: "cs-legacy", chunkId: "0" },
+      }),
+    ).rejects.toThrow(/expansion_blocked/);
     await server.close();
   });
 });

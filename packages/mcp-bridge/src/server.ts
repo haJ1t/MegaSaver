@@ -52,9 +52,10 @@ export type ServerDeps = {
   // readline to process.stdin under Vitest (CRITICAL §12). Production
   // defaults to a real StdioServerTransport.
   transportFactory?: () => StdioServerTransport;
-  // Chunk set ids the agent may expand in this server instance.
-  // Absent = unconstrained (test/CLI use only). Set to an empty Set for
-  // agent MCP paths where no response has been produced yet.
+  // Explicit override of the chunk set ids the agent may expand in this server
+  // instance (tests/CLI). When absent, buildServer falls back to a server-owned
+  // set populated from the chunk sets it actually returned this session, so the
+  // expansion guard is always engaged on the production path.
   allowedChunkSetIds?: ReadonlySet<string>;
 };
 
@@ -163,6 +164,16 @@ export function buildServer(deps: ServerDeps): {
   const newId = deps.newId ?? (() => randomUUID());
   const naming = deps.toolNaming ?? namingModeFromEnv();
   const originPid = resolveOriginPid();
+
+  // Chunk sets this server has actually returned this session. The expansion
+  // guard (fetch-chunk) only allows ids in here, so an agent cannot expand an
+  // arbitrary chunk set it never received (contextgate-honest-90 §11). An
+  // explicit deps.allowedChunkSetIds (tests/CLI) overrides this server-owned set.
+  const returnedChunkSetIds = new Set<string>();
+  const recordChunkSetId = <T extends { chunkSetId?: string | undefined }>(result: T): T => {
+    if (result.chunkSetId !== undefined) returnedChunkSetIds.add(result.chunkSetId);
+    return result;
+  };
   const server = new Server(
     { name: "megasaver", version: "0.5.0" },
     { capabilities: { tools: {} } },
@@ -218,9 +229,7 @@ export function buildServer(deps: ServerDeps): {
         return handleFetchChunk(
           {
             storeRoot: deps.storeRoot,
-            ...(deps.allowedChunkSetIds !== undefined
-              ? { allowedChunkSetIds: deps.allowedChunkSetIds }
-              : {}),
+            allowedChunkSetIds: deps.allowedChunkSetIds ?? returnedChunkSetIds,
           },
           args,
         );
@@ -228,19 +237,19 @@ export function buildServer(deps: ServerDeps): {
         return handleReadFile(
           { registry: deps.registry, storeRoot: deps.storeRoot, now, newId },
           args,
-        );
+        ).then(recordChunkSetId);
       case "mega_recall":
         return handleRecall({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "mega_run_command":
         return handleRunCommand(
           { registry: deps.registry, storeRoot: deps.storeRoot, now, newId, originPid },
           args,
-        );
+        ).then(recordChunkSetId);
       case "proxy_search_code":
         return handleSearchCode(
           { registry: deps.registry, storeRoot: deps.storeRoot, now, newId, originPid },
           args,
-        );
+        ).then(recordChunkSetId);
       case "save_memory":
         return handleSaveMemory({ registry: deps.registry, now, newId }, args);
       case "search_memory":
