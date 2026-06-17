@@ -8,7 +8,11 @@ import { EvidenceLedgerError } from "./errors.js";
 import { parseWorkspaceKey, recordPath, workspaceDir } from "./paths.js";
 import type { ChunkDeletePort } from "./ports.js";
 import { type EvidenceRecord, type EvidenceRecordInput, evidenceRecordSchema } from "./schema.js";
-import { type Transition, scrubSourceRef } from "./sub-schemas.js";
+import { type SourceRef, type Transition, scrubSourceRef } from "./sub-schemas.js";
+
+// Dependency-graph guard: the ledger cannot import @megasaver/policy. Callers
+// supply redaction as a port so the ledger stays policy-agnostic.
+export type SourceRefRedactor = (ref: SourceRef) => SourceRef;
 
 function readRecord(storeRoot: string, workspaceKey: string, evidenceId: string): EvidenceRecord {
   const key = parseWorkspaceKey(workspaceKey);
@@ -48,12 +52,23 @@ function writeRecord(storeRoot: string, rec: EvidenceRecord): void {
 
 export async function appendEvidence(args: {
   storeRoot: string;
+  // Required redaction port: the ledger cannot import @megasaver/policy, so
+  // callers must supply a function that scrubs secret-bearing fields from the
+  // sourceRef before it is persisted (spec §3 — stored sourceRef may never
+  // contain an unredacted secret). Required (not optional) = compile-time
+  // fail-closed: every caller must wire it.
+  redactSourceRef: SourceRefRedactor;
   record: EvidenceRecordInput;
 }): Promise<void> {
   const { redactedRawContent, redactedReturnedContent, ...rest } = args.record;
   const created: Transition = { at: rest.createdAt, kind: "created", actor: "system" };
+  // Apply redaction port to sourceRef BEFORE schema parse — the stored record
+  // must never contain an unredacted secret-bearing field.
+  const redactedSourceRef =
+    rest.sourceRef !== undefined ? args.redactSourceRef(rest.sourceRef) : rest.sourceRef;
   const full: unknown = {
     ...rest,
+    ...(redactedSourceRef !== undefined ? { sourceRef: redactedSourceRef } : {}),
     rawDigest: digestContent(redactedRawContent),
     returnedDigest: digestContent(redactedReturnedContent),
     status: "available",

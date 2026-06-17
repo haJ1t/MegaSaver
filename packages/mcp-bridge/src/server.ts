@@ -39,6 +39,46 @@ import { handleSaveMemory } from "./tools/save-memory.js";
 import { handleSearchCode } from "./tools/search-code.js";
 import { handleSearchMemory } from "./tools/search-memory.js";
 
+// Maximum number of chunkSetIds the server-owned expansion-guard set may hold.
+// Evicts the oldest entry (FIFO) when the cap is exceeded so a long-lived
+// server process can't grow unbounded (contextgate-honest-90 §11).
+// Per-session keying is deferred: sessionId is not carried in mega_fetch_chunk
+// args (only chunkSetId + chunkId), so we cannot key by session without a
+// breaking contract change on the expand wire. stdio MCP is single-session-per-
+// process in practice, so this per-server cap is sufficient for now.
+export const EXPANSION_GUARD_CAP = 4096;
+
+// FIFO-bounded Set. Exceeding cap evicts the oldest element.
+// Exported for unit tests only — not part of the public package API.
+export class BoundedSet {
+  readonly #cap: number;
+  readonly #order: string[] = [];
+  readonly #set = new Set<string>();
+
+  constructor(cap: number) {
+    this.#cap = cap;
+  }
+
+  add(id: string): void {
+    if (this.#set.has(id)) return;
+    if (this.#order.length >= this.#cap) {
+      const evicted = this.#order.shift();
+      if (evicted !== undefined) this.#set.delete(evicted);
+    }
+    this.#order.push(id);
+    this.#set.add(id);
+  }
+
+  has(id: string): boolean {
+    return this.#set.has(id);
+  }
+
+  // Returns a read-only view of the underlying Set for use as ReadonlySet<string>.
+  asReadonlySet(): ReadonlySet<string> {
+    return this.#set;
+  }
+}
+
 export type ServerDeps = {
   registry: CoreRegistry;
   storeRoot: string;
@@ -167,9 +207,11 @@ export function buildServer(deps: ServerDeps): {
 
   // Chunk sets this server has actually returned this session. The expansion
   // guard (fetch-chunk) only allows ids in here, so an agent cannot expand an
-  // arbitrary chunk set it never received (contextgate-honest-90 §11). An
-  // explicit deps.allowedChunkSetIds (tests/CLI) overrides this server-owned set.
-  const returnedChunkSetIds = new Set<string>();
+  // arbitrary chunk set it never received (contextgate-honest-90 §11). Bounded
+  // at EXPANSION_GUARD_CAP entries (FIFO eviction) so a long-lived server
+  // never grows unbounded. An explicit deps.allowedChunkSetIds (tests/CLI)
+  // overrides this server-owned set entirely.
+  const returnedChunkSetIds = new BoundedSet(EXPANSION_GUARD_CAP);
   const recordChunkSetId = <T extends { chunkSetId?: string | undefined }>(result: T): T => {
     if (result.chunkSetId !== undefined) returnedChunkSetIds.add(result.chunkSetId);
     return result;
@@ -229,7 +271,7 @@ export function buildServer(deps: ServerDeps): {
         return handleFetchChunk(
           {
             storeRoot: deps.storeRoot,
-            allowedChunkSetIds: deps.allowedChunkSetIds ?? returnedChunkSetIds,
+            allowedChunkSetIds: deps.allowedChunkSetIds ?? returnedChunkSetIds.asReadonlySet(),
           },
           args,
         );

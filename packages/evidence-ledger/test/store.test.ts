@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { digestContent } from "../src/digest.js";
 import type { EvidenceRecordInput } from "../src/schema.js";
 import {
+  type SourceRefRedactor,
   appendEvidence,
   explainEvidence,
   gcEvidence,
@@ -55,7 +56,7 @@ afterEach(() => {
 describe("appendEvidence / loadEvidence", () => {
   it("computes digests from the passed post-redaction content (caller supplies none)", async () => {
     const rec = input();
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     const loaded = await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId });
     expect(loaded.rawDigest).toBe(digestContent("redacted raw text"));
     expect(loaded.returnedDigest).toBe(digestContent("redacted returned text"));
@@ -66,7 +67,7 @@ describe("appendEvidence / loadEvidence", () => {
 
   it("getEvidenceStatus returns the current status", async () => {
     const rec = input();
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     expect(await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: rec.evidenceId })).toBe(
       "available",
     );
@@ -74,15 +75,21 @@ describe("appendEvidence / loadEvidence", () => {
 
   it("append-only: appending the same evidenceId twice throws already_exists", async () => {
     const rec = input();
-    await appendEvidence({ storeRoot, record: rec });
-    await expect(appendEvidence({ storeRoot, record: rec })).rejects.toMatchObject({
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
+    await expect(
+      appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec }),
+    ).rejects.toMatchObject({
       code: "already_exists",
     });
   });
 
   it("rejects a retentionClass of pinned at append (pin only via pinEvidence)", async () => {
     await expect(
-      appendEvidence({ storeRoot, record: input({ retentionClass: "pinned" }) }),
+      appendEvidence({
+        storeRoot,
+        redactSourceRef: (r) => r,
+        record: input({ retentionClass: "pinned" }),
+      }),
     ).rejects.toMatchObject({ code: "schema_invalid" });
   });
 
@@ -90,6 +97,7 @@ describe("appendEvidence / loadEvidence", () => {
     await expect(
       appendEvidence({
         storeRoot,
+        redactSourceRef: (r) => r,
         record: input({
           redactionReport: { redacted: true, highRiskFindings: 1, unresolvedHighRisk: true },
         }),
@@ -107,11 +115,43 @@ describe("appendEvidence / loadEvidence", () => {
 
   it("read asserts the loaded record's workspaceKey matches the requested one", async () => {
     const rec = input();
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     // Reading the same id under a different (valid) workspace key must not return it.
     await expect(
       loadEvidence({ storeRoot, workspaceKey: "ffffffffffffffff", evidenceId: rec.evidenceId }),
     ).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("redactSourceRef port scrubs marker from EVERY sourceRef field before persistence", async () => {
+    // The port is the ONLY redaction layer — if it isn't applied, the marker
+    // must survive in the stored record (RED). After implementation it must be
+    // absent from every field (GREEN).
+    const MARKER = "SECRETXYZ";
+    const scrubMarker: SourceRefRedactor = (ref) => {
+      const scrub = (s: string): string => s.replaceAll(MARKER, "[REDACTED]");
+      return {
+        ...(ref.command !== undefined ? { command: scrub(ref.command) } : {}),
+        ...(ref.args !== undefined ? { args: ref.args.map(scrub) } : {}),
+        ...(ref.url !== undefined ? { url: scrub(ref.url) } : {}),
+        ...(ref.query !== undefined ? { query: scrub(ref.query) } : {}),
+        ...(ref.path !== undefined ? { path: scrub(ref.path) } : {}),
+        ...(ref.label !== undefined ? { label: scrub(ref.label) } : {}),
+        ...(ref.hookTool !== undefined ? { hookTool: ref.hookTool } : {}),
+      };
+    };
+    const rec = input({
+      sourceRef: {
+        command: `cmd-${MARKER}`,
+        args: [`arg-${MARKER}`],
+        url: `https://example.com?t=${MARKER}`,
+        query: `q-${MARKER}`,
+        path: `/tmp/${MARKER}`,
+        label: `lbl-${MARKER}`,
+      },
+    });
+    await appendEvidence({ storeRoot, redactSourceRef: scrubMarker, record: rec });
+    const loaded = await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId });
+    expect(JSON.stringify(loaded)).not.toContain(MARKER);
   });
 });
 
@@ -119,8 +159,8 @@ describe("listEvidenceByWorkspace", () => {
   it("lists newest-first and filters by status", async () => {
     const a = input({ createdAt: "2026-06-16T12:00:00.000Z" });
     const b = input({ createdAt: "2026-06-16T13:00:00.000Z" });
-    await appendEvidence({ storeRoot, record: a });
-    await appendEvidence({ storeRoot, record: b });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: a });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: b });
     const all = await listEvidenceByWorkspace({ storeRoot, workspaceKey });
     expect(all.map((r) => r.evidenceId)).toEqual([b.evidenceId, a.evidenceId]);
     expect(
@@ -141,7 +181,7 @@ describe("listEvidenceByWorkspace", () => {
 describe("pin / unpin (session <-> pinned)", () => {
   it("pin from session sets pinned + records memoryId on the transition", async () => {
     const rec = input();
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
     const loaded = await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId });
     expect(loaded.retentionClass).toBe("pinned");
@@ -152,7 +192,7 @@ describe("pin / unpin (session <-> pinned)", () => {
 
   it("pin is idempotent for the same memory id", async () => {
     const rec = input();
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
     await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
     expect(
@@ -163,7 +203,7 @@ describe("pin / unpin (session <-> pinned)", () => {
 
   it("unpin of the last memory returns retentionClass to session", async () => {
     const rec = input();
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
     await unpinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
     const loaded = await loadEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId });
@@ -173,7 +213,7 @@ describe("pin / unpin (session <-> pinned)", () => {
 
   it("rejects pinning a non-session record (manual_hold)", async () => {
     const rec = input({ retentionClass: "manual_hold" });
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     await expect(
       pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID }),
     ).rejects.toMatchObject({ code: "invalid_transition" });
@@ -189,7 +229,7 @@ describe("revoke / explain (secret purge)", () => {
       },
       redactedRawChunkSetId: "cs-9",
     });
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     const deleted: string[] = [];
     await revokeEvidence({
       storeRoot,
@@ -217,7 +257,7 @@ describe("revoke / explain (secret purge)", () => {
 
   it("revoke of a pinned record clears pins and resets retentionClass off pinned", async () => {
     const rec = input();
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
     await revokeEvidence({
       storeRoot,
@@ -234,7 +274,7 @@ describe("revoke / explain (secret purge)", () => {
 
   it("swallows a failing delete port (best-effort) but still tombstones", async () => {
     const rec = input({ redactedRawChunkSetId: "cs-9" });
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     await revokeEvidence({
       storeRoot,
       workspaceKey,
@@ -252,7 +292,7 @@ describe("revoke / explain (secret purge)", () => {
 
   it("revoke is idempotent", async () => {
     const rec = input();
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     const run = () =>
       revokeEvidence({
         storeRoot,
@@ -271,7 +311,7 @@ describe("revoke / explain (secret purge)", () => {
 
   it("explain reports raw availability before and after revoke", async () => {
     const rec = input();
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     expect(
       await explainEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId }),
     ).toMatchObject({
@@ -299,7 +339,7 @@ describe("revoke / explain (secret purge)", () => {
 describe("gcEvidence", () => {
   it("degrades expired transient/session available evidence to retained_metadata_only and deletes its chunk", async () => {
     const rec = input({ expiresAt: "2026-06-16T12:30:00.000Z", redactedRawChunkSetId: "cs-7" });
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     const deleted: string[] = [];
     const res = await gcEvidence({
       storeRoot,
@@ -320,7 +360,7 @@ describe("gcEvidence", () => {
 
   it("pinned evidence survives ordinary GC", async () => {
     const rec = input({ expiresAt: "2026-06-16T12:30:00.000Z" });
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     await pinEvidence({ storeRoot, workspaceKey, evidenceId: rec.evidenceId, memoryId: MEM_ID });
     const res = await gcEvidence({
       storeRoot,
@@ -336,7 +376,7 @@ describe("gcEvidence", () => {
 
   it("manual_hold evidence survives ordinary GC", async () => {
     const rec = input({ retentionClass: "manual_hold", expiresAt: "2026-06-16T12:30:00.000Z" });
-    await appendEvidence({ storeRoot, record: rec });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: rec });
     const res = await gcEvidence({
       storeRoot,
       workspaceKey,
@@ -350,8 +390,16 @@ describe("gcEvidence", () => {
   });
 
   it("not-yet-expired and null-expiry evidence is left intact", async () => {
-    await appendEvidence({ storeRoot, record: input({ expiresAt: null }) });
-    await appendEvidence({ storeRoot, record: input({ expiresAt: "2026-06-16T23:59:00.000Z" }) });
+    await appendEvidence({
+      storeRoot,
+      redactSourceRef: (r) => r,
+      record: input({ expiresAt: null }),
+    });
+    await appendEvidence({
+      storeRoot,
+      redactSourceRef: (r) => r,
+      record: input({ expiresAt: "2026-06-16T23:59:00.000Z" }),
+    });
     const res = await gcEvidence({
       storeRoot,
       workspaceKey,

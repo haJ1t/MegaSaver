@@ -48,4 +48,5 @@ export {
   gcEvidence,
   type EvidenceFilters,
   type EvidenceExplanation,
+  type SourceRefRedactor,
 } from "./store.js";
