@@ -1,4 +1,11 @@
-import type { CoreRegistry, MemoryApproval } from "@megasaver/core";
+import {
+  type ConflictOutcome,
+  type CoreRegistry,
+  type MemoryApproval,
+  type ValidationStatus,
+  checkConflicts,
+  validateSave,
+} from "@megasaver/core";
 import type { MemoryEntryId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
@@ -19,7 +26,12 @@ const approveMemoryInputSchema = z
   })
   .strict();
 
-export type ApproveMemoryResult = { id: string; approval: MemoryApproval };
+export interface ApproveMemoryResult {
+  id: string;
+  approval: MemoryApproval;
+  validation?: { status: ValidationStatus; reasons: readonly string[] };
+  conflict?: { outcome: ConflictOutcome; conflictIds: readonly MemoryEntryId[] };
+}
 
 export async function handleApproveMemory(
   env: ApproveMemoryEnv,
@@ -40,6 +52,44 @@ export async function handleApproveMemory(
   if (existing.approval === approval) {
     return { id: existing.id, approval: existing.approval };
   }
+
+  // Only an APPROVE decision is gated; a REJECT is always honoured (it proceeds
+  // to the existing updateMemoryEntry flip below).
+  if (approval === "approved") {
+    // Plan 3b wires these to the evidence ledger; until then evidence comes from
+    // the entry's own `evidence[]` and the secret input defaults false (see
+    // changeset: the unresolved-secret gate is INERT until Plan 3b).
+    const evidenceIds = existing.evidence ?? [];
+    const unresolvedSecret = false;
+    const validation = validateSave({ candidate: existing, evidenceIds, unresolvedSecret });
+    const approvedActive = env.registry
+      .listMemoryEntries(existing.projectId)
+      .filter((m) => m.approval === "approved" && !m.stale && m.id !== existing.id);
+    const conflict = checkConflicts(existing, approvedActive);
+
+    // spec §8: an exact duplicate of an approved memory must NOT become a second
+    // approved row. Reject the suggested duplicate (kept for audit), do not flip.
+    if (conflict.outcome === "duplicate") {
+      const rejected = env.registry.updateMemoryEntry(existing.id, { approval: "rejected", updatedAt: env.now() });
+      return {
+        id: rejected.id,
+        approval: rejected.approval,
+        validation: { status: "rejected", reasons: ["exact_duplicate"] },
+        conflict: { outcome: conflict.outcome, conflictIds: conflict.conflictIds },
+      };
+    }
+    // Any non-valid validation or any non-unrelated conflict blocks the flip: the
+    // row stays `suggested` and the reasons are surfaced for the human to resolve.
+    if (validation.status !== "valid" || conflict.outcome !== "unrelated") {
+      return {
+        id: existing.id,
+        approval: existing.approval, // still "suggested"
+        validation: { status: validation.status, reasons: [...validation.reasons, ...conflict.reasons] },
+        conflict: { outcome: conflict.outcome, conflictIds: conflict.conflictIds },
+      };
+    }
+  }
+  // fall through to the existing updateMemoryEntry({ approval, updatedAt }) flip.
 
   const updated = env.registry.updateMemoryEntry(id, { approval, updatedAt: env.now() });
   return { id: updated.id, approval: updated.approval };
