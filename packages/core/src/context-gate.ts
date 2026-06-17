@@ -74,6 +74,7 @@ export {
   observationsFromEvents,
   readOverlayEvents,
   recordedEventsFromLogs,
+  tokensFromBytes,
   type HonestMetrics,
   type OverlayTokenSaverEvent,
 } from "@megasaver/stats";

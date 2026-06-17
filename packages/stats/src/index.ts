@@ -79,6 +79,7 @@ export {
   meetsGaGateFromCorpus,
   observationsFromEvents,
   recordedEventsFromLogs,
+  tokensFromBytes,
   type EligibilityClass,
   type MediationKind,
   type HonestObservation,

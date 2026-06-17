@@ -93,7 +93,7 @@ export function aggregateHonestMetrics(observations: readonly HonestObservation[
 // Mirror estimateTokens (Math.ceil(bytes/4)) so honest metrics use the same
 // token model as the rest of the pipeline. estimateTokens takes a string;
 // recorded events only retain byte counts, so apply the identical formula here.
-function tokensFromBytes(bytes: number): number {
+export function tokensFromBytes(bytes: number): number {
   return Math.ceil(bytes / 4);
 }
 

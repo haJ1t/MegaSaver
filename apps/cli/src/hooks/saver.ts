@@ -1,4 +1,8 @@
-import type { RecordOverlayOutputInput, RecordOverlayOutputResult } from "@megasaver/core";
+import {
+  type RecordOverlayOutputInput,
+  type RecordOverlayOutputResult,
+  tokensFromBytes,
+} from "@megasaver/core";
 import type { OutputSourceKind } from "@megasaver/output-filter";
 import { type TokenSaverMode, encodeWorkspaceKey, modeToBudget } from "@megasaver/shared";
 
@@ -143,8 +147,11 @@ export async function buildSaverDecision(
     });
     if (recorded.decision !== "compressed") return PASSTHROUGH;
 
+    const rawTokens = tokensFromBytes(recorded.rawBytes);
+    const returnedTokens = tokensFromBytes(recorded.returnedBytes);
+    const tokenPct = rawTokens === 0 ? "0.0" : ((1 - returnedTokens / rawTokens) * 100).toFixed(1);
     const pointer = recorded.chunkSetId
-      ? `\n\n[Mega Saver: compressed ${recorded.rawBytes}→${recorded.returnedBytes} B. Full output recoverable — call proxy_expand_chunk("${recorded.chunkSetId}", "0") (or mega_fetch_chunk).]`
+      ? `\n\n[Mega Saver: compressed ${recorded.rawBytes}→${recorded.returnedBytes} B (~${rawTokens}→${returnedTokens} tokens, ${tokenPct}%). Full output recoverable — call proxy_expand_chunk("${recorded.chunkSetId}", "0") (or mega_fetch_chunk).]`
       : "";
     return { updatedToolOutput: shape.rebuild(`${recorded.returnedText}${pointer}`) };
   } catch {

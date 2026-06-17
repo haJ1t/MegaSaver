@@ -1,4 +1,12 @@
-import { type SessionTokenSaverStats, StatsError, readSummary } from "@megasaver/core";
+import {
+  type HonestMetrics,
+  type SessionTokenSaverStats,
+  StatsError,
+  aggregateHonestMetrics,
+  observationsFromEvents,
+  readEvents,
+  readSummary,
+} from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import {
@@ -71,9 +79,35 @@ export async function runSessionSaverStats(input: RunSessionSaverStatsInput): Pr
       session.projectId,
       parsedSessionId,
     );
+    // Honest token-weighted savings (§1): the byte summary cannot report tokens,
+    // so re-derive from the per-call log through the @megasaver/stats estimator.
+    const honest: HonestMetrics | null = eventStats
+      ? aggregateHonestMetrics(
+          observationsFromEvents(
+            readEvents({ root: rootDir }, session.projectId, parsedSessionId).map((e) => ({
+              rawBytes: e.rawBytes,
+              returnedBytes: e.returnedBytes,
+              mediation: "proxy",
+              decision: "compressed",
+            })),
+          ),
+        )
+      : null;
+    const tokenMetrics = honest
+      ? {
+          rawTokens: honest.rawTokensEligible,
+          returnedTokens: honest.returnedTokensEligible,
+          tokenReduction: honest.eligibleReduction,
+        }
+      : null;
     if (input.json) {
       input.stdout(
-        JSON.stringify({ sessionId: parsedSessionId, tokenSaver: ts ?? null, eventStats }),
+        JSON.stringify({
+          sessionId: parsedSessionId,
+          tokenSaver: ts ?? null,
+          eventStats,
+          tokenMetrics,
+        }),
       );
       return 0;
     }
@@ -94,6 +128,12 @@ export async function runSessionSaverStats(input: RunSessionSaverStatsInput): Pr
     input.stdout(
       `events: ${eventStats.eventsTotal} | raw: ${eventStats.rawBytesTotal} B | returned: ${eventStats.returnedBytesTotal} B | saved: ${eventStats.bytesSavedTotal} B (${pct}%)`,
     );
+    if (tokenMetrics) {
+      const tokenPct = (tokenMetrics.tokenReduction * 100).toFixed(1);
+      input.stdout(
+        `tokens: ${tokenMetrics.rawTokens} → ${tokenMetrics.returnedTokens} (${tokenPct}% reduction)`,
+      );
+    }
     input.stdout(
       `secrets redacted: ${eventStats.secretsRedactedTotal} | chunks stored: ${eventStats.chunksStoredTotal} | updated: ${eventStats.updatedAt}`,
     );

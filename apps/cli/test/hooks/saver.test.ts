@@ -256,9 +256,24 @@ describe("buildSaverDecision", () => {
   it("passes evidenceStoreRoot (the base store root) to record() on compress", async () => {
     const d = deps();
     await buildSaverDecision(bigBash("X".repeat(50_000)), d);
-    expect(d.record).toHaveBeenCalledWith(
-      expect.objectContaining({ evidenceStoreRoot: "/store" }),
-    );
+    expect(d.record).toHaveBeenCalledWith(expect.objectContaining({ evidenceStoreRoot: "/store" }));
+  });
+
+  it("inline pointer reports a token figure from the @megasaver/stats estimator", async () => {
+    // RECORDED: rawBytes 100_000, returnedBytes 200 → tokensFromBytes (ceil/4)
+    // gives 25_000 raw, 50 returned, so 1 - 50/25_000 = 99.8% token reduction.
+    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), deps());
+    expect("updatedToolOutput" in out).toBe(true);
+    if ("updatedToolOutput" in out) {
+      const u = out.updatedToolOutput as { stdout: string };
+      expect(u.stdout).toContain("25000");
+      expect(u.stdout).toContain("50 tokens");
+      expect(u.stdout).toContain("99.8%");
+      // Byte figures + recovery pointer must remain.
+      expect(u.stdout).toContain("100000");
+      expect(u.stdout).toContain("cs-1");
+      expect(u.stdout).toContain("proxy_expand_chunk");
+    }
   });
 });
 
