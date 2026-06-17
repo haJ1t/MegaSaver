@@ -107,6 +107,10 @@ export async function recordAndFilterOverlayOutput(
 
   const createdAt = now();
   const { redacted: redactedText, count: secretCount } = redact(input.raw);
+  // The label is itself secret-bearing (full command line, fetch URL, file
+  // path). Redact it before it reaches the persisted chunk-set source and the
+  // overlay stats event — mirrors policyRedactSourceRef on the evidence path.
+  const redactedLabel = redact(input.label).redacted;
 
   // A throw here is fine: the PostToolUse hook caller treats any failure as
   // passthrough (the original output reaches the model untouched), so a partial
@@ -121,7 +125,7 @@ export async function recordAndFilterOverlayOutput(
       workspaceKey: input.workspaceKey,
       liveSessionId: input.liveSessionId,
       createdAt,
-      source: chunkSetSource(input.sourceKind, input.label),
+      source: chunkSetSource(input.sourceKind, redactedLabel),
       rawBytes: filtered.rawBytes,
       redacted: secretCount > 0,
       chunks: [
@@ -149,7 +153,7 @@ export async function recordAndFilterOverlayOutput(
       workspaceKey: input.workspaceKey,
       createdAt,
       sourceKind: input.sourceKind,
-      label: input.label,
+      label: redactedLabel,
       rawBytes: filtered.rawBytes,
       returnedBytes: filtered.returnedBytes,
       bytesSaved: filtered.bytesSaved,
