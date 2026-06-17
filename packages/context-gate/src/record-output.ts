@@ -1,17 +1,25 @@
 import { randomUUID } from "node:crypto";
 import { type OverlayChunkSet, saveOverlayChunkSet } from "@megasaver/content-store";
 import {
+  type EvidenceRecordInput,
+  type SourceKind,
+  appendEvidence,
+} from "@megasaver/evidence-ledger";
+import {
   type FilterDecision,
   type FilterOutputResult,
   type OutputSourceKind,
   filterOutput,
 } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
-import { type TokenSaverMode, modeToBudget } from "@megasaver/shared";
+import { type TokenSaverMode, type WorkspaceKey, modeToBudget } from "@megasaver/shared";
 import { appendOverlayEvent } from "@megasaver/stats";
 
 export type RecordOverlayOutputInput = {
   storeRoot: string;
+  // When set, one evidence row is written per compressed+stored chunk set.
+  // Absent → no evidence row (backward-compatible for callers without a store).
+  evidenceStoreRoot?: string;
   workspaceKey: string;
   liveSessionId: string;
   raw: string;
@@ -136,6 +144,44 @@ export async function recordAndFilterOverlayOutput(
     secretsRedacted: secretCount,
     chunksStored,
   });
+
+  // Evidence write: only when chunk was persisted AND a store is configured.
+  // Fire-and-await but swallowed: evidence failure must never block compressed output
+  // (same fail-safe posture as appendOverlayEvent above).
+  if (input.evidenceStoreRoot !== undefined && chunkSetId !== undefined) {
+    const { redacted: redactedReturnedText } = redact(returnedTextOf(filtered));
+    const evidenceRecord: EvidenceRecordInput = {
+      evidenceId: newId(),
+      // workspaceKey in RecordOverlayOutputInput is plain string; evidence schema
+      // requires the branded WorkspaceKey — the value is already validated upstream
+      // by the overlay event path, so this cast is safe at the call boundary.
+      workspaceKey: input.workspaceKey as WorkspaceKey,
+      sessionRef: { kind: "live", id: input.liveSessionId },
+      // OutputSourceKind values are a strict subset of SourceKind — cast is safe.
+      sourceKind: input.sourceKind as SourceKind,
+      sourceRef: { label: input.label },
+      classification: input.sourceKind,
+      redactionReport: {
+        redacted: secretCount > 0,
+        highRiskFindings: secretCount,
+        unresolvedHighRisk: false,
+      },
+      redactedRawContent: redactedText,
+      redactedReturnedContent: redactedReturnedText,
+      redactedRawChunkSetId: chunkSetId,
+      returnedChunkRefs: [{ chunkSetId, chunkId: "0" }],
+      createdAt,
+      expiresAt: null,
+      retentionClass: "session",
+      policyVersion: "1",
+      pipelineVersion: "1",
+    };
+    try {
+      await appendEvidence({ storeRoot: input.evidenceStoreRoot, record: evidenceRecord });
+    } catch {
+      // Best-effort: evidence failure must never surface to the caller.
+    }
+  }
 
   return { ...base, ...(chunkSetId !== undefined ? { chunkSetId } : {}) };
 }
