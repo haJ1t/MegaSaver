@@ -3,6 +3,8 @@ import { type OverlayChunkSet, saveOverlayChunkSet } from "@megasaver/content-st
 import {
   type EvidenceRecordInput,
   type SourceKind,
+  type SourceRef,
+  type SourceRefRedactor,
   appendEvidence,
 } from "@megasaver/evidence-ledger";
 import {
@@ -14,6 +16,21 @@ import {
 import { redact } from "@megasaver/policy";
 import { type TokenSaverMode, type WorkspaceKey, modeToBudget } from "@megasaver/shared";
 import { appendOverlayEvent } from "@megasaver/stats";
+
+// Redacts every secret-bearing string field in a SourceRef using the policy
+// redactor. hookTool is a tool name (not secret-bearing) and is left as-is.
+const policyRedactSourceRef: SourceRefRedactor = (ref: SourceRef): SourceRef => {
+  const r = (s: string): string => redact(s).redacted;
+  return {
+    ...(ref.command !== undefined ? { command: r(ref.command) } : {}),
+    ...(ref.args !== undefined ? { args: ref.args.map(r) } : {}),
+    ...(ref.url !== undefined ? { url: r(ref.url) } : {}),
+    ...(ref.query !== undefined ? { query: r(ref.query) } : {}),
+    ...(ref.path !== undefined ? { path: r(ref.path) } : {}),
+    ...(ref.label !== undefined ? { label: r(ref.label) } : {}),
+    ...(ref.hookTool !== undefined ? { hookTool: ref.hookTool } : {}),
+  };
+};
 
 export type RecordOverlayOutputInput = {
   storeRoot: string;
@@ -159,11 +176,9 @@ export async function recordAndFilterOverlayOutput(
       sessionRef: { kind: "live", id: input.liveSessionId },
       // OutputSourceKind values are a strict subset of SourceKind — cast is safe.
       sourceKind: input.sourceKind as SourceKind,
-      // label is secret-bearing (full command line, path, or fetch URL). The
-      // evidence spec forbids an unredacted secret in stored sourceRef, and
-      // appendEvidence does not redact on append — so redact here, same detector
-      // as raw/returned content above.
-      sourceRef: { label: redact(input.label).redacted },
+      // sourceRef redaction is handled by the policyRedactSourceRef port passed
+      // to appendEvidence below — do NOT pre-redact here (single responsibility).
+      sourceRef: { label: input.label },
       classification: input.sourceKind,
       redactionReport: {
         redacted: secretCount > 0,
@@ -181,7 +196,11 @@ export async function recordAndFilterOverlayOutput(
       pipelineVersion: "1",
     };
     try {
-      await appendEvidence({ storeRoot: input.evidenceStoreRoot, record: evidenceRecord });
+      await appendEvidence({
+        storeRoot: input.evidenceStoreRoot,
+        redactSourceRef: policyRedactSourceRef,
+        record: evidenceRecord,
+      });
     } catch {
       // Best-effort: evidence failure must never surface to the caller.
     }

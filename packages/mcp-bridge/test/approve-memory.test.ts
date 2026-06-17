@@ -326,7 +326,11 @@ describe("approve_memory — evidence-port integration (slice 3b)", () => {
   });
 
   it("approves when evidence exists, workspace matches, not revoked, no secret", async () => {
-    await appendEvidence({ storeRoot, record: minimalInput(EV_ID_1, WORKSPACE_KEY) });
+    await appendEvidence({
+      storeRoot,
+      redactSourceRef: (r) => r,
+      record: minimalInput(EV_ID_1, WORKSPACE_KEY),
+    });
     const registry = seededRegistryWithEvidence([EV_ID_1]);
     const result = await handleApproveMemory(
       { registry, storeRoot, now: () => TS },
