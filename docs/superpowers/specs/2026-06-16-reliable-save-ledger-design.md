@@ -218,13 +218,17 @@ Projection validation is connector-specific:
 | Claude Code | `CLAUDE.md` sentinel block | parse sentinel before/after render; preserve outside text |
 | Codex | `AGENTS.md` sentinel block | parse sentinel before/after render; preserve outside text |
 | Cursor | `.cursor/rules/*.mdc` frontmatter + sentinel | preserve frontmatter; parse sentinel block |
-| Aider | `CONVENTIONS.md` full generated file | validate whole-file render; no sentinel assumption |
-| Gemini | `GEMINI.md` full or block target per connector manifest | validate against target manifest, not hard-coded sentinel rules |
-| Windsurf | `.windsurfrules` target | validate against target manifest |
-| Continue | `.continue/rules/megasaver.md` target | validate against target manifest |
+| Aider | `CONVENTIONS.md` sentinel block | parse sentinel before/after render; preserve outside text |
+| Gemini | `GEMINI.md` sentinel block | parse sentinel before/after render; preserve outside text |
+| Windsurf | `.windsurfrules` sentinel block | parse sentinel before/after render; preserve outside text |
+| Continue | `.continue/rules/megasaver.md` sentinel block | parse sentinel before/after render; preserve outside text |
 
 All targets render from the same approved semantic memory. A projection failure
 aborts only that connector write; it does not corrupt the store.
+
+All current generic-CLI targets are sentinel-based using the shared
+`MEGA_SAVER:BEGIN` / `MEGA_SAVER:END` pair. Cursor is the only current generic
+target with connector-owned header/frontmatter outside the sentinel block.
 
 Projection validation lives in `@megasaver/connectors-shared` and the
 agent-specific connector packages. Core remains agent-agnostic: it stores
