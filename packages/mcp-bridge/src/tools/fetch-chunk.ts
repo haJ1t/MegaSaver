@@ -3,7 +3,13 @@ import { fetchChunk } from "@megasaver/core";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 
-export type FetchChunkToolEnv = { storeRoot: string };
+export type FetchChunkToolEnv = {
+  storeRoot: string;
+  // When present, only chunkSetIds in this set may be expanded.
+  // Absent = unconstrained (CLI/non-agent callers). Never set to undefined
+  // for agent MCP dispatch — always pass the current-response set (may be empty).
+  allowedChunkSetIds?: ReadonlySet<string>;
+};
 
 const fetchChunkInputSchema = z
   .object({
@@ -28,6 +34,13 @@ export async function handleFetchChunk(
     throw new McpBridgeError("validation_failed", parsed.error.message);
   }
   const { chunkSetId, chunkId } = parsed.data;
+
+  if (env.allowedChunkSetIds !== undefined && !env.allowedChunkSetIds.has(chunkSetId)) {
+    throw new McpBridgeError(
+      "expansion_blocked",
+      `chunk set not in current response set: ${chunkSetId}`,
+    );
+  }
 
   const outcome = await fetchChunk({ storeRoot: env.storeRoot, chunkSetId, chunkId });
   if (!outcome.ok) {

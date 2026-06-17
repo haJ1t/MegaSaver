@@ -66,4 +66,44 @@ describe("handleFetchChunk", () => {
       handleFetchChunk({ storeRoot: store }, { chunkSetId: "", chunkId: "0" }),
     ).rejects.toMatchObject({ code: "validation_failed" });
   });
+
+  it("returns the chunk when chunkSetId is in the allowed set", async () => {
+    await seedChunkSet(store, "cs-allowed");
+    const result = await handleFetchChunk(
+      { storeRoot: store, allowedChunkSetIds: new Set(["cs-allowed"]) },
+      { chunkSetId: "cs-allowed", chunkId: "0" },
+    );
+    expect(result.chunkSetId).toBe("cs-allowed");
+  });
+
+  it("throws expansion_blocked when chunkSetId is not in the allowed set", async () => {
+    await seedChunkSet(store, "cs-not-current");
+    await expect(
+      handleFetchChunk(
+        { storeRoot: store, allowedChunkSetIds: new Set(["cs-other"]) },
+        { chunkSetId: "cs-not-current", chunkId: "0" },
+      ),
+    ).rejects.toMatchObject({ name: "McpBridgeError", code: "expansion_blocked" });
+  });
+
+  it("throws expansion_blocked when allowedChunkSetIds is empty (tombstoned/revoked semantics)", async () => {
+    await seedChunkSet(store, "cs-revoked");
+    await expect(
+      handleFetchChunk(
+        { storeRoot: store, allowedChunkSetIds: new Set() },
+        { chunkSetId: "cs-revoked", chunkId: "0" },
+      ),
+    ).rejects.toMatchObject({ name: "McpBridgeError", code: "expansion_blocked" });
+  });
+
+  it("returns chunk when allowedChunkSetIds is undefined (unconstrained; legacy/CLI path)", async () => {
+    // When env carries no allowedChunkSetIds, the guard is skipped (backward-compat for
+    // callers that don't thread a response set — e.g. direct CLI/test calls).
+    await seedChunkSet(store, "cs-legacy");
+    const result = await handleFetchChunk(
+      { storeRoot: store },
+      { chunkSetId: "cs-legacy", chunkId: "0" },
+    );
+    expect(result.chunkSetId).toBe("cs-legacy");
+  });
 });
