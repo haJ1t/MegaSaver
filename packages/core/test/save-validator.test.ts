@@ -68,3 +68,34 @@ describe("validateSave hard checks", () => {
     expect(r.reasons).toContain("content_too_long");
   });
 });
+
+describe("validateSave advisory heuristics", () => {
+  it("high confidence with zero evidence is needs_approval (confidence exceeds evidence)", () => {
+    const r = validateSave({
+      candidate: candidate({ source: "manual", confidence: "high" }),
+      evidenceIds: [],
+      unresolvedSecret: false,
+    });
+    expect(r.status).toBe("needs_approval");
+    expect(r.reasons).toContain("confidence_exceeds_evidence");
+  });
+
+  it("a transcript-fragment-looking content is needs_approval", () => {
+    const r = validateSave({
+      candidate: candidate({ content: "@@ -1,4 +1,4 @@ const x = 1;\n+const y = 2;\n-const z = 3;" }),
+      evidenceIds: ["ev-1"],
+      unresolvedSecret: false,
+    });
+    expect(r.status).toBe("needs_approval");
+    expect(r.reasons).toContain("looks_like_transcript_fragment");
+  });
+
+  it("advisory never overrides a hard rejection", () => {
+    const r = validateSave({
+      candidate: candidate({ source: "manual", confidence: "high", content: "x".repeat(8001) }),
+      evidenceIds: [],
+      unresolvedSecret: false,
+    });
+    expect(r.status).toBe("rejected"); // content_too_long wins
+  });
+});
