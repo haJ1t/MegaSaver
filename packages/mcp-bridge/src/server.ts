@@ -52,6 +52,10 @@ export type ServerDeps = {
   // readline to process.stdin under Vitest (CRITICAL §12). Production
   // defaults to a real StdioServerTransport.
   transportFactory?: () => StdioServerTransport;
+  // Chunk set ids the agent may expand in this server instance.
+  // Absent = unconstrained (test/CLI use only). Set to an empty Set for
+  // agent MCP paths where no response has been produced yet.
+  allowedChunkSetIds?: ReadonlySet<string>;
 };
 
 // Internal dispatch id (== legacy wire name) + description. The
@@ -208,7 +212,15 @@ export function buildServer(deps: ServerDeps): {
       case "build_task_plan":
         return handleBuildTaskPlan({ registry: deps.registry, now, newId }, args);
       case "mega_fetch_chunk":
-        return handleFetchChunk({ storeRoot: deps.storeRoot }, args);
+        return handleFetchChunk(
+          {
+            storeRoot: deps.storeRoot,
+            ...(deps.allowedChunkSetIds !== undefined
+              ? { allowedChunkSetIds: deps.allowedChunkSetIds }
+              : {}),
+          },
+          args,
+        );
       case "mega_read_file":
         return handleReadFile(
           { registry: deps.registry, storeRoot: deps.storeRoot, now, newId },
