@@ -128,6 +128,10 @@ export async function buildSaverDecision(
 
     const recorded = await deps.record({
       storeRoot: deps.storeRoot,
+      // Evidence rows live under <storeRoot>/evidence/<wk>/ — same base root the
+      // MCP approve-memory path reads from. Passing it turns on the best-effort
+      // evidence write inside record(); a failure there never blocks compression.
+      evidenceStoreRoot: deps.storeRoot,
       workspaceKey,
       liveSessionId: sessionId,
       raw: shape.raw,

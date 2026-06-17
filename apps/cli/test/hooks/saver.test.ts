@@ -1,3 +1,8 @@
+import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { recordAndFilterOverlayOutput } from "@megasaver/core";
+import { encodeWorkspaceKey } from "@megasaver/shared";
 import { describe, expect, it, vi } from "vitest";
 import { buildSaverDecision } from "../../src/hooks/saver.js";
 
@@ -245,6 +250,83 @@ describe("buildSaverDecision", () => {
     if ("updatedToolOutput" in out) {
       const u = out.updatedToolOutput as { content: Array<{ type: string; text: string }> };
       expect(u.content[0]?.text).toContain("SHORT");
+    }
+  });
+
+  it("passes evidenceStoreRoot (the base store root) to record() on compress", async () => {
+    const d = deps();
+    await buildSaverDecision(bigBash("X".repeat(50_000)), d);
+    expect(d.record).toHaveBeenCalledWith(
+      expect.objectContaining({ evidenceStoreRoot: "/store" }),
+    );
+  });
+});
+
+describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
+  const realDeps = (storeRoot: string) => ({
+    storeRoot,
+    readSettings: () => ({ enabled: true, mode: "balanced" as const }),
+    record: recordAndFilterOverlayOutput,
+  });
+
+  function evidenceRecords(storeRoot: string, cwd: string): unknown[] {
+    const dir = join(storeRoot, "evidence", encodeWorkspaceKey(cwd));
+    let names: string[];
+    try {
+      names = readdirSync(dir);
+    } catch {
+      return [];
+    }
+    return names
+      .filter((n) => n.endsWith(".json"))
+      .map((n) => JSON.parse(readFileSync(join(dir, n), "utf8")));
+  }
+
+  it("writes a real evidence record with a redaction report for a compressed output", async () => {
+    const storeRoot = mkdtempSync(join(tmpdir(), "saver-evidence-"));
+    const cwd = "/Users/x/proj";
+    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), {
+      ...realDeps(storeRoot),
+      readSettings: () => ({ enabled: true, mode: "balanced" }),
+    });
+    expect("updatedToolOutput" in out).toBe(true);
+    const records = evidenceRecords(storeRoot, cwd) as Array<{
+      redactionReport?: { redacted: boolean };
+    }>;
+    expect(records.length).toBe(1);
+    expect(records[0]?.redactionReport).toBeDefined();
+    expect(records[0]?.redactionReport?.redacted).toBe(false);
+  });
+
+  it("writes NO evidence record on passthrough (below budget)", async () => {
+    const storeRoot = mkdtempSync(join(tmpdir(), "saver-evidence-"));
+    const cwd = "/Users/x/proj";
+    const out = await buildSaverDecision(bigBash("tiny"), realDeps(storeRoot));
+    expect(out).toEqual({ passthrough: true });
+    expect(evidenceRecords(storeRoot, cwd).length).toBe(0);
+  });
+
+  it("still returns compressed output when the evidence write throws", async () => {
+    const storeRoot = mkdtempSync(join(tmpdir(), "saver-evidence-"));
+    // A record() that compresses normally but whose injected evidence append throws
+    // mirrors recordAndFilterOverlayOutput's best-effort swallow: compression must
+    // survive an evidence-store failure.
+    const record = vi.fn(async (input: Parameters<typeof recordAndFilterOverlayOutput>[0]) => {
+      expect(input.evidenceStoreRoot).toBe(storeRoot);
+      return recordAndFilterOverlayOutput({
+        ...input,
+        evidenceStoreRoot: join(storeRoot, "\0bad-evidence-root"),
+      });
+    });
+    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), {
+      storeRoot,
+      readSettings: () => ({ enabled: true, mode: "balanced" }),
+      record,
+    });
+    expect("updatedToolOutput" in out).toBe(true);
+    if ("updatedToolOutput" in out) {
+      const u = out.updatedToolOutput as { stdout: string };
+      expect(u.stdout).toContain("Mega Saver: compressed");
     }
   });
 });
