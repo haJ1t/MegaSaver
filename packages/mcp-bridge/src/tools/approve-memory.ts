@@ -2,6 +2,7 @@ import {
   type ConflictOutcome,
   type CoreRegistry,
   type MemoryApproval,
+  type MemoryValidation,
   type ValidationStatus,
   checkConflicts,
   validateSave,
@@ -11,7 +12,12 @@ import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 import { resolveEvidenceForMemory } from "../evidence-resolver.js";
 
-export type ApproveMemoryEnv = { registry: CoreRegistry; storeRoot: string; now: () => string };
+export type ApproveMemoryEnv = {
+  registry: CoreRegistry;
+  storeRoot: string;
+  now: () => string;
+  policyVersion?: string;
+};
 
 // `suggested` is deliberately NOT an accepted input: a memory cannot be moved
 // back into the unapproved state via this tool — that is not an approval
@@ -72,16 +78,20 @@ export async function handleApproveMemory(
       });
       // Cross-workspace or revoked evidence blocks approval immediately (fail-closed).
       if (resolution.hasCrossWorkspace || resolution.hasRevoked) {
+        const reasons = [
+          ...(resolution.hasCrossWorkspace ? ["cross_workspace_evidence"] : []),
+          ...(resolution.hasRevoked ? ["revoked_evidence"] : []),
+        ];
+        writeSidecar(env, existing.id as MemoryEntryId, {
+          validationStatus: "rejected",
+          reasons,
+          conflictIds: [],
+          validatedBy: "system",
+        });
         return {
           id: existing.id,
           approval: existing.approval, // still "suggested"
-          validation: {
-            status: "rejected",
-            reasons: [
-              ...(resolution.hasCrossWorkspace ? ["cross_workspace_evidence"] : []),
-              ...(resolution.hasRevoked ? ["revoked_evidence"] : []),
-            ],
-          },
+          validation: { status: "rejected", reasons },
           conflict: { outcome: "unrelated", conflictIds: [] },
         };
       }
@@ -105,6 +115,12 @@ export async function handleApproveMemory(
         approval: "rejected",
         updatedAt: env.now(),
       });
+      writeSidecar(env, rejected.id as MemoryEntryId, {
+        validationStatus: "rejected",
+        reasons: conflict.reasons,
+        conflictIds: conflict.conflictIds,
+        validatedBy: "system",
+      });
       return {
         id: rejected.id,
         approval: rejected.approval,
@@ -115,6 +131,12 @@ export async function handleApproveMemory(
     // Any non-valid validation or any non-unrelated conflict blocks the flip: the
     // row stays `suggested` and the reasons are surfaced for the human to resolve.
     if (validation.status !== "valid" || conflict.outcome !== "unrelated") {
+      writeSidecar(env, existing.id as MemoryEntryId, {
+        validationStatus: validation.status,
+        reasons: [...validation.reasons, ...conflict.reasons],
+        conflictIds: conflict.conflictIds,
+        validatedBy: "system",
+      });
       return {
         id: existing.id,
         approval: existing.approval, // still "suggested"
@@ -129,5 +151,34 @@ export async function handleApproveMemory(
   // fall through to the existing updateMemoryEntry({ approval, updatedAt }) flip.
 
   const updated = env.registry.updateMemoryEntry(id, { approval, updatedAt: env.now() });
+  // Write sidecar: approved path → system valid, reject path → human rejected.
+  writeSidecar(env, updated.id as MemoryEntryId, {
+    validationStatus: approval === "rejected" ? "rejected" : "valid",
+    reasons: [],
+    conflictIds: [],
+    validatedBy: approval === "rejected" ? "human" : "system",
+  });
   return { id: updated.id, approval: updated.approval };
+}
+
+function writeSidecar(
+  env: ApproveMemoryEnv,
+  memoryEntryId: MemoryEntryId,
+  fields: {
+    validationStatus: MemoryValidation["validationStatus"];
+    reasons: readonly string[];
+    conflictIds: readonly MemoryEntryId[];
+    validatedBy: "system" | "human";
+  },
+): void {
+  const policyVersion = env.policyVersion ?? "1";
+  env.registry.setMemoryValidation({
+    memoryEntryId,
+    validationStatus: fields.validationStatus,
+    reasons: [...fields.reasons],
+    conflictIds: [...fields.conflictIds],
+    validatedAt: env.now(),
+    validatedBy: fields.validatedBy,
+    policyVersion,
+  });
 }

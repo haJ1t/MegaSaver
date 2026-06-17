@@ -467,4 +467,57 @@ describe("approve_memory — evidence-port integration (slice 3b)", () => {
     expect(result.validation?.status).toBe("rejected");
     expect(result.validation?.reasons).toContain("cross_workspace_evidence");
   });
+
+  it("writes a MemoryValidation sidecar when validation passes and memory is approved", async () => {
+    const registry = seededRegistry({ source: "manual", confidence: "medium" });
+    await handleApproveMemory(
+      { registry, storeRoot: "", now: () => TS },
+      { memoryEntryId: MEMORY_ID, approval: "approved" },
+    );
+    const sidecar = registry.getMemoryValidation(MEMORY_ID as never);
+    expect(sidecar).not.toBeNull();
+    expect(sidecar?.validationStatus).toBe("valid");
+    expect(sidecar?.validatedBy).toBe("system");
+    expect(sidecar?.policyVersion).toBe("1");
+    expect(sidecar?.memoryEntryId).toBe(MEMORY_ID);
+  });
+
+  it("writes a MemoryValidation sidecar even when validation blocks (entry stays suggested)", async () => {
+    // agent source + no evidence → fails validateSave → stays suggested
+    const registry = seededRegistry({ source: "agent" });
+    const result = await handleApproveMemory(
+      { registry, storeRoot: "", now: () => TS },
+      { memoryEntryId: MEMORY_ID, approval: "approved" },
+    );
+    expect(result.approval).toBe("suggested");
+    const sidecar = registry.getMemoryValidation(MEMORY_ID as never);
+    expect(sidecar).not.toBeNull();
+    expect(sidecar?.validationStatus).not.toBe("valid");
+    expect(sidecar?.validatedBy).toBe("system");
+  });
+
+  it("writes a MemoryValidation sidecar on reject with validatedBy: human", async () => {
+    const registry = seededRegistry();
+    await handleApproveMemory(
+      { registry, storeRoot: "", now: () => TS },
+      { memoryEntryId: MEMORY_ID, approval: "rejected" },
+    );
+    const sidecar = registry.getMemoryValidation(MEMORY_ID as never);
+    expect(sidecar).not.toBeNull();
+    expect(sidecar?.validationStatus).toBe("rejected");
+    expect(sidecar?.validatedBy).toBe("human");
+  });
+
+  it("writes a MemoryValidation sidecar with validatedBy: system on duplicate rejection", async () => {
+    const registry = seededDuplicateRegistry();
+    await handleApproveMemory(
+      { registry, storeRoot: "", now: () => TS },
+      { memoryEntryId: DUP_ID, approval: "approved" },
+    );
+    const sidecar = registry.getMemoryValidation(DUP_ID as never);
+    expect(sidecar).not.toBeNull();
+    expect(sidecar?.validationStatus).toBe("rejected");
+    expect(sidecar?.validatedBy).toBe("system");
+    expect(sidecar?.conflictIds).toContain(APPROVED_ID);
+  });
 });
