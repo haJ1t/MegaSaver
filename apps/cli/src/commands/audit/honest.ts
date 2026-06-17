@@ -2,10 +2,12 @@ import {
   type HonestMetrics,
   aggregateHonestMetrics,
   observationsFromEvents,
+  readOverlayEvents,
   recordedEventsFromLogs,
 } from "@megasaver/core";
+import { encodeWorkspaceKey } from "@megasaver/shared";
 import { defineCommand } from "citty";
-import { readStoreEnv } from "../../store.js";
+import { readStoreEnv, resolveStorePath } from "../../store.js";
 
 export function renderHonestReport(m: HonestMetrics): string {
   const pct = (n: number): string => `${(n * 100).toFixed(1)}%`;
@@ -22,6 +24,30 @@ export function renderHonestReport(m: HonestMetrics): string {
   ].join("\n");
 }
 
+export type RunHonestAuditInput = {
+  liveSessionId: string;
+  storeRoot: string;
+  cwd: string;
+  json: boolean;
+};
+
+export async function runHonestAudit(input: RunHonestAuditInput): Promise<string> {
+  const workspaceKey = encodeWorkspaceKey(input.cwd);
+  let overlayEvents: readonly { rawBytes: number; returnedBytes: number }[] = [];
+  try {
+    overlayEvents = readOverlayEvents({ root: input.storeRoot }, workspaceKey, input.liveSessionId);
+  } catch {
+    // Store not initialized or no events for this session — report zeros.
+  }
+  const recorded = recordedEventsFromLogs({
+    overlayEvents,
+    sessionEvents: [],
+    nativeEligible: [],
+  });
+  const metrics = aggregateHonestMetrics(observationsFromEvents(recorded));
+  return input.json ? JSON.stringify(metrics) : renderHonestReport(metrics);
+}
+
 export const auditHonestCommand = defineCommand({
   meta: {
     name: "honest",
@@ -33,26 +59,20 @@ export const auditHonestCommand = defineCommand({
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
-    void readStoreEnv(typeof args.store === "string" ? args.store : undefined);
-    // A session-stats loader (readOverlayEvents) requires both workspaceKey and
-    // liveSessionId. The overlay store is keyed by (workspaceKey, liveSessionId);
-    // the workspaceKey is not available from the sessionId alone without a registry
-    // lookup that maps liveSessionId → workspaceKey. That wiring lands in Plan 2c.
-    // Until then, proxy-mediated overlay events are not counted. Keep this note off
-    // stdout in --json mode so the stream stays a single parseable JSON object.
-    if (!args.json) {
-      console.log("note: proxy-mediated overlay events not yet counted (wiring lands in Plan 2c)");
+    const storeEnv = readStoreEnv(typeof args.store === "string" ? args.store : undefined);
+    let storeRoot: string;
+    try {
+      storeRoot = resolveStorePath(storeEnv);
+    } catch {
+      // Store path unresolvable — return zeros rather than crashing.
+      storeRoot = "";
     }
-    const recorded = recordedEventsFromLogs({
-      overlayEvents: [],
-      sessionEvents: [],
-      nativeEligible: [],
+    const out = await runHonestAudit({
+      liveSessionId: args.sessionId,
+      storeRoot,
+      cwd: process.cwd(),
+      json: args.json ?? false,
     });
-    const metrics = aggregateHonestMetrics(observationsFromEvents(recorded));
-    if (args.json) {
-      process.stdout.write(JSON.stringify(metrics));
-    } else {
-      process.stdout.write(renderHonestReport(metrics));
-    }
+    process.stdout.write(out);
   },
 });
