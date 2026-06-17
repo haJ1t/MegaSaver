@@ -203,7 +203,10 @@ export function buildServer(deps: ServerDeps): {
   function dispatch(toolName: McpToolName, args: unknown) {
     switch (toolName) {
       case "approve_memory":
-        return handleApproveMemory({ registry: deps.registry, now }, args);
+        return handleApproveMemory(
+          { registry: deps.registry, storeRoot: deps.storeRoot, now },
+          args,
+        );
       case "audit_token_usage":
         return handleAuditTokenUsage(
           { registry: deps.registry, storeRoot: deps.storeRoot, now },

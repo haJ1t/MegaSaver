@@ -379,6 +379,9 @@ importers:
       '@megasaver/core':
         specifier: workspace:*
         version: link:../core
+      '@megasaver/evidence-ledger':
+        specifier: workspace:*
+        version: link:../evidence-ledger
       '@megasaver/indexer':
         specifier: workspace:*
         version: link:../indexer

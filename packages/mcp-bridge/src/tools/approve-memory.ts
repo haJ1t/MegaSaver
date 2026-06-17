@@ -9,8 +9,9 @@ import {
 import type { MemoryEntryId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
+import { resolveEvidenceForMemory } from "../evidence-resolver.js";
 
-export type ApproveMemoryEnv = { registry: CoreRegistry; now: () => string };
+export type ApproveMemoryEnv = { registry: CoreRegistry; storeRoot: string; now: () => string };
 
 // `suggested` is deliberately NOT an accepted input: a memory cannot be moved
 // back into the unapproved state via this tool — that is not an approval
@@ -56,11 +57,37 @@ export async function handleApproveMemory(
   // Only an APPROVE decision is gated; a REJECT is always honoured (it proceeds
   // to the existing updateMemoryEntry flip below).
   if (approval === "approved") {
-    // Plan 3b wires these to the evidence ledger; until then evidence comes from
-    // the entry's own `evidence[]` and the secret input defaults false (see
-    // changeset: the unresolved-secret gate is INERT until Plan 3b).
     const evidenceIds = existing.evidence ?? [];
-    const unresolvedSecret = false;
+    let unresolvedSecret = false;
+
+    if (evidenceIds.length > 0) {
+      const project = env.registry.getProject(existing.projectId);
+      if (project === null) {
+        throw new McpBridgeError("resource_not_found", `project not found: ${existing.projectId}`);
+      }
+      const resolution = await resolveEvidenceForMemory({
+        storeRoot: env.storeRoot,
+        evidenceIds,
+        projectRootPath: project.rootPath,
+      });
+      // Cross-workspace or revoked evidence blocks approval immediately (fail-closed).
+      if (resolution.hasCrossWorkspace || resolution.hasRevoked) {
+        return {
+          id: existing.id,
+          approval: existing.approval, // still "suggested"
+          validation: {
+            status: "rejected",
+            reasons: [
+              ...(resolution.hasCrossWorkspace ? ["cross_workspace_evidence"] : []),
+              ...(resolution.hasRevoked ? ["revoked_evidence"] : []),
+            ],
+          },
+          conflict: { outcome: "unrelated", conflictIds: [] },
+        };
+      }
+      unresolvedSecret = resolution.unresolvedSecret;
+    }
+
     const validation = validateSave({ candidate: existing, evidenceIds, unresolvedSecret });
     const approvedActive = env.registry
       .listMemoryEntries(existing.projectId)
