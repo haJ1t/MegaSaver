@@ -246,6 +246,37 @@ describe("recordAndFilterOverlayOutput", () => {
     expect(src.url).toContain("[REDACTED]");
   });
 
+  // The query-param secret has NO recognised prefix (the gap the redactor
+  // hardening closes): proves url_query_secret redacts it on the persisted-on-
+  // disk source.url AND the result still satisfies the z.string().url() guard.
+  const OPAQUE_TOKEN = "deadbeefcafe0123456789abcdef0123";
+  it("redacts a NON-prefixed query-token fetch URL on disk, staying schema-valid", async () => {
+    const storeRoot = store();
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: bigRaw(),
+      sourceKind: "fetch",
+      label: `https://api.example.com/data?api_key=${OPAQUE_TOKEN}`,
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    expect(res.decision).toBe("compressed");
+
+    const cs = await loadOverlayChunkSet({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      // biome-ignore lint/style/noNonNullAssertion: decision === "compressed" guarantees chunkSetId
+      chunkSetId: res.chunkSetId!,
+    });
+    const src = cs.source;
+    if (src.kind !== "fetch") throw new Error("expected fetch source");
+    expect(src.url).not.toContain(OPAQUE_TOKEN);
+    expect(src.url).toBe("https://api.example.com/data?api_key=[REDACTED]");
+  });
+
   // grep + file lock the contract that chunkSetSource applies no per-kind
   // transform: every sourceKind redacts the single label, so a future refactor
   // splitting redaction per kind cannot silently regress query/path.

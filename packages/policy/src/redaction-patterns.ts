@@ -64,6 +64,66 @@ const baseline: RedactionPattern[] = [
     pattern: /(?:postgres|postgresql|mysql|mongodb):\/\/[^\s/]+:[^\s@]+@\S+/g,
     replacement: "[scheme]://[REDACTED]@[host]",
   },
+  // --- Contextual secrets (no recognised prefix; identified by surrounding key).
+  // Appended AFTER the prefix/structure patterns so those run first; these catch
+  // the residue. Each uses a LOOKBEHIND for the indicator (param/flag/header/
+  // scheme) so only the secret VALUE is matched and replaced with the marker —
+  // the readable structure survives, and a redacted fetch URL still satisfies
+  // overlayChunkSetSchema's z.string().url() guard. (Backreferences are not an
+  // option: redact() applies replacements via a function, so `$1` is literal.)
+  {
+    // Credentials in URL userinfo on ANY scheme (db_url covers the db schemes
+    // first; this catches http(s)/ftp/etc.). Username may be empty (password-only
+    // / token-as-password) and the password may contain '/' — matching db_url's
+    // strength. Scheme + host are kept, so the URL stays valid:
+    // scheme://user:pass@host -> scheme://[REDACTED]@host. (A literal '@' inside
+    // the password — which RFC 3986 requires percent-encoded — leaves a tail; the
+    // first-'@' anchor is deliberate to avoid over-matching host/path.)
+    name: "url_basic_auth",
+    pattern: /(?<=[a-z][a-z0-9+.-]*:\/\/)[^\s/@]*:[^\s@]+(?=@)/gi,
+    replacement: "[REDACTED]",
+  },
+  {
+    // Secret-valued query OR fragment params (#access_token=... is the OAuth
+    // implicit-flow callback shape). Param name gated to clearly sensitive keys
+    // to avoid redacting benign params (?page=, ?sort=); value stops at
+    // &/#/quote/ws.
+    name: "url_query_secret",
+    pattern:
+      /(?<=[?&#](?:access[_-]?token|api[_-]?key|client[_-]?secret|auth[_-]?token|session[_-]?(?:id|token)|id[_-]?token|token|secret|password|passwd|pwd|apikey|signature)=)[^&\s#"'<>]+/gi,
+    replacement: "[REDACTED]",
+  },
+  {
+    // Secret passed via a CLI flag with '=': --token=VALUE. Unambiguous, so the
+    // unquoted value is matched directly. Bare --key is excluded (too ambiguous).
+    name: "cli_secret_flag_eq",
+    pattern:
+      /(?<=--(?:password|passwd|pwd|token|api[_-]?key|apikey|secret|access[_-]?token|client[_-]?secret|auth[_-]?token)=)(?:"[^"]*"|'[^']*'|[^\s"']+)/gi,
+    replacement: "[REDACTED]",
+  },
+  {
+    // Secret passed via a space-separated CLI flag: --token "VALUE". ONLY a
+    // QUOTED value is matched — an unquoted next token is indistinguishable from
+    // prose / a following flag / a shell operator (&&, |, >), so matching it would
+    // over-redact captured help text and error messages.
+    name: "cli_secret_flag_spaced",
+    pattern:
+      /(?<=--(?:password|passwd|pwd|token|api[_-]?key|apikey|secret|access[_-]?token|client[_-]?secret|auth[_-]?token)[ \t])(?:"[^"]*"|'[^']*')/gi,
+    replacement: "[REDACTED]",
+  },
+  {
+    // Dedicated api-key / auth-token request headers (Bearer is handled above).
+    name: "api_key_header",
+    pattern:
+      /(?<=(?:x-api-key|x-auth-token|x-access-token)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s"']{8,})/gi,
+    replacement: "[REDACTED]",
+  },
+  {
+    // HTTP Basic credentials in an Authorization header (Bearer covered above).
+    name: "basic_auth_header",
+    pattern: /(?<=authorization\s*[:=]\s*basic\s+)[A-Za-z0-9+/=]{8,}/gi,
+    replacement: "[REDACTED]",
+  },
 ];
 
 export const REDACTION_PATTERNS: readonly RedactionPattern[] = z
