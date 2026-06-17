@@ -8,9 +8,11 @@ import {
   honestObservationSchema,
   mediationKindSchema,
   meetsGaGate,
+  meetsGaGateFromCorpus,
   observationsFromEvents,
   recordedEventsFromLogs,
 } from "../src/honest-metrics.js";
+import { computeSufficiencyMetrics } from "../src/sufficiency-metrics.js";
 
 const obs = (o: Partial<HonestObservation>): HonestObservation => ({
   rawTokens: 1000,
@@ -257,6 +259,50 @@ describe("recordedEventsFromLogs (mediation assigned by log source)", () => {
       mediation: "native",
       decision: "compressed",
     });
+  });
+});
+
+describe("meetsGaGate — corpus-computed overload", () => {
+  const targets = { reductionTarget: 0.9, sufficiencyTarget: 0.95 };
+
+  it("accepts pre-computed scalar (existing API unchanged)", () => {
+    expect(
+      meetsGaGate({ eligibleReduction: 0.92, actionabilityFixturePassRate: 0.96 }, targets),
+    ).toMatchObject({ pass: true });
+  });
+
+  it("accepts GaGateFromCorpus and computes actionabilityFixturePassRate internally", () => {
+    const sufficiency = computeSufficiencyMetrics({
+      expandedCount: 1,
+      totalCompressedResponses: 5,
+      expansionsWithUsefulResult: 1,
+      compressedOutputFor: (f) => f.compressedContent, // identity — corpus passes
+      secretBlockCount: 0,
+      totalEligibleCount: 10,
+    });
+    // The corpus is designed so compressedContent retains nextAction → pass rate = 1
+    const result = meetsGaGateFromCorpus(
+      { eligibleReduction: 0.92, sufficiencyMetrics: sufficiency },
+      targets,
+    );
+    expect(result.pass).toBe(true);
+  });
+
+  it("fails sufficiency when actionabilityFixturePassRate from corpus is below target", () => {
+    const sufficiency = computeSufficiencyMetrics({
+      expandedCount: 0,
+      totalCompressedResponses: 0,
+      expansionsWithUsefulResult: 0,
+      compressedOutputFor: () => "", // nothing retained → pass rate = 0
+      secretBlockCount: 0,
+      totalEligibleCount: 0,
+    });
+    const result = meetsGaGateFromCorpus(
+      { eligibleReduction: 0.92, sufficiencyMetrics: sufficiency },
+      targets,
+    );
+    expect(result.pass).toBe(false);
+    expect(result.failed).toContain("sufficiency");
   });
 });
 

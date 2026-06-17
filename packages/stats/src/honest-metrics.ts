@@ -1,5 +1,6 @@
 import type { FilterDecision } from "@megasaver/output-filter";
 import { z } from "zod";
+import type { SufficiencyMetrics } from "./sufficiency-metrics.js";
 
 export const eligibilityClassSchema = z.enum(["eligible", "passthrough", "native_observed"]);
 export type EligibilityClass = z.infer<typeof eligibilityClassSchema>;
@@ -146,6 +147,30 @@ export function recordedEventsFromLogs(input: {
       decision: "compressed" as const,
     })),
   ];
+}
+
+export interface GaGateFromCorpusInput {
+  eligibleReduction: number;
+  sufficiencyMetrics: SufficiencyMetrics;
+}
+
+/**
+ * Overload of meetsGaGate that derives actionabilityFixturePassRate from a
+ * SufficiencyMetrics struct produced by computeSufficiencyMetrics, rather
+ * than requiring the caller to pass a bare scalar.
+ * Existing meetsGaGate(GaGateInput, ...) call sites are unaffected.
+ */
+export function meetsGaGateFromCorpus(
+  input: GaGateFromCorpusInput,
+  targets: GaGateTargets,
+): GaGateResult {
+  return meetsGaGate(
+    {
+      eligibleReduction: input.eligibleReduction,
+      actionabilityFixturePassRate: input.sufficiencyMetrics.actionabilityFixturePassRate,
+    },
+    targets,
+  );
 }
 
 export function classifyObservation(input: {
