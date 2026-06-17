@@ -155,4 +155,151 @@ describe("recordAndFilterOverlayOutput", () => {
     expect(full).not.toContain(secret);
     expect(cs.redacted).toBe(true);
   });
+
+  // The source label is itself secret-bearing (full command line, fetch URL,
+  // file path). Like the chunk CONTENT, it must be redacted before it is
+  // persisted to the overlay chunk-set source AND the overlay stats event —
+  // otherwise a credential in the command/URL lands unredacted on disk.
+  const SECRET_BODY = "0123456789abcdefghijABCDEFGHIJ0123456789";
+  const SECRET_TOKEN = `ghp_${SECRET_BODY}`;
+  const bigRaw = (): string => `line ${"x".repeat(40)}\n`.repeat(2000);
+
+  it("redacts the secret in a command label before persisting OverlayChunkSet.source", async () => {
+    const storeRoot = store();
+    const label = `curl https://api.github.com -H "Authorization: Bearer ${SECRET_TOKEN}"`;
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: bigRaw(),
+      sourceKind: "command",
+      label,
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    expect(res.decision).toBe("compressed");
+
+    const cs = await loadOverlayChunkSet({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      // biome-ignore lint/style/noNonNullAssertion: decision === "compressed" guarantees chunkSetId
+      chunkSetId: res.chunkSetId!,
+    });
+    const src = cs.source;
+    if (src.kind !== "command") throw new Error("expected command source");
+    expect(src.command).not.toContain(SECRET_BODY);
+    // Readable, not blanked: the non-secret prefix survives, secret → marker.
+    expect(src.command).toContain("curl https://api.github.com");
+    expect(src.command).toContain("[REDACTED]");
+  });
+
+  it("redacts the secret in the overlay stats event label", async () => {
+    const storeRoot = store();
+    const label = `curl https://api.github.com -H "Authorization: Bearer ${SECRET_TOKEN}"`;
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: bigRaw(),
+      sourceKind: "command",
+      label,
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    expect(res.decision).toBe("compressed");
+
+    const events = readOverlayEvents({ root: storeRoot }, WK, SID);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.label).not.toContain(SECRET_BODY);
+    expect(events[0]?.label).toContain("[REDACTED]");
+  });
+
+  it("redacts a token-bearing fetch URL label, keeping a schema-valid, readable source.url", async () => {
+    const storeRoot = store();
+    const label = `https://api.example.com/data?token=${SECRET_TOKEN}`;
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: bigRaw(),
+      sourceKind: "fetch",
+      label,
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    expect(res.decision).toBe("compressed");
+
+    // Round-trips through loadOverlayChunkSet → the redacted URL still passes
+    // the overlayChunkSetSchema z.string().url() guard (no schema_invalid throw).
+    const cs = await loadOverlayChunkSet({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      // biome-ignore lint/style/noNonNullAssertion: decision === "compressed" guarantees chunkSetId
+      chunkSetId: res.chunkSetId!,
+    });
+    const src = cs.source;
+    if (src.kind !== "fetch") throw new Error("expected fetch source");
+    expect(src.url).not.toContain(SECRET_BODY);
+    expect(src.url).toContain("https://api.example.com/data");
+    expect(src.url).toContain("[REDACTED]");
+  });
+
+  // grep + file lock the contract that chunkSetSource applies no per-kind
+  // transform: every sourceKind redacts the single label, so a future refactor
+  // splitting redaction per kind cannot silently regress query/path.
+  it("redacts the secret in a grep query label before persisting source.query", async () => {
+    const storeRoot = store();
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: bigRaw(),
+      sourceKind: "grep",
+      label: `rg ${SECRET_TOKEN} src`,
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    expect(res.decision).toBe("compressed");
+
+    const cs = await loadOverlayChunkSet({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      // biome-ignore lint/style/noNonNullAssertion: decision === "compressed" guarantees chunkSetId
+      chunkSetId: res.chunkSetId!,
+    });
+    const src = cs.source;
+    if (src.kind !== "grep") throw new Error("expected grep source");
+    expect(src.query).not.toContain(SECRET_BODY);
+    expect(src.query).toContain("[REDACTED]");
+  });
+
+  it("redacts the secret in a file path label before persisting source.path", async () => {
+    const storeRoot = store();
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: bigRaw(),
+      sourceKind: "file",
+      label: `/tmp/${SECRET_TOKEN}/creds.env`,
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    expect(res.decision).toBe("compressed");
+
+    const cs = await loadOverlayChunkSet({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      // biome-ignore lint/style/noNonNullAssertion: decision === "compressed" guarantees chunkSetId
+      chunkSetId: res.chunkSetId!,
+    });
+    const src = cs.source;
+    if (src.kind !== "file") throw new Error("expected file source");
+    expect(src.path).not.toContain(SECRET_BODY);
+    expect(src.path).toContain("[REDACTED]");
+  });
 });
