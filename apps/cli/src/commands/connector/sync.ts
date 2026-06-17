@@ -4,6 +4,7 @@ import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
 import {
   ConnectorError,
   normalizeEol,
+  projectionPreflight,
   readTargetFile,
   upsertBlock,
   writeTargetFile,
@@ -88,6 +89,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
         }
 
         const context = buildConnectorContext(target, project, sessions, memoryEntries);
+        const expectHeader = Boolean(target.header);
 
         if (existing === null) {
           // Seed via upsertBlock (not renderBlock) so a brand-new file also
@@ -97,6 +99,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           // for tokenSaver-off sessions, and appends the CG block when on.
           const header = "header" in target ? (target.header ?? "") : "";
           const newContent = upsertBlock({ existingContent: header, context });
+          projectionPreflight(newContent, { expectHeader });
           try {
             await mkdir(dirname(absPath), { recursive: true });
           } catch (mkdirErr) {
@@ -115,6 +118,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           emit(target, "noop", sessionId);
           continue;
         }
+        projectionPreflight(newContent, { expectHeader });
         await writeTargetFile({ absPath, content: newContent });
         emit(target, "wrote", sessionId);
       } catch (err) {
