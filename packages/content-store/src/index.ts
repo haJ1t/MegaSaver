@@ -16,6 +16,7 @@ export {
   pruneOlderThan,
   saveOverlayChunkSet,
   loadOverlayChunkSet,
+  deleteOverlayChunkSet,
 } from "./store.js";
 
 export {

@@ -2,6 +2,7 @@ import {
   type ConflictOutcome,
   type CoreRegistry,
   type MemoryApproval,
+  type MemoryValidation,
   type ValidationStatus,
   checkConflicts,
   validateSave,
@@ -9,8 +10,14 @@ import {
 import type { MemoryEntryId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
+import { resolveEvidenceForMemory } from "../evidence-resolver.js";
 
-export type ApproveMemoryEnv = { registry: CoreRegistry; now: () => string };
+export type ApproveMemoryEnv = {
+  registry: CoreRegistry;
+  storeRoot: string;
+  now: () => string;
+  policyVersion?: string;
+};
 
 // `suggested` is deliberately NOT an accepted input: a memory cannot be moved
 // back into the unapproved state via this tool — that is not an approval
@@ -56,12 +63,55 @@ export async function handleApproveMemory(
   // Only an APPROVE decision is gated; a REJECT is always honoured (it proceeds
   // to the existing updateMemoryEntry flip below).
   if (approval === "approved") {
-    // Plan 3b wires these to the evidence ledger; until then evidence comes from
-    // the entry's own `evidence[]` and the secret input defaults false (see
-    // changeset: the unresolved-secret gate is INERT until Plan 3b).
     const evidenceIds = existing.evidence ?? [];
-    const unresolvedSecret = false;
+    let unresolvedSecret = false;
+
+    if (evidenceIds.length > 0) {
+      const project = env.registry.getProject(existing.projectId);
+      if (project === null) {
+        throw new McpBridgeError("resource_not_found", `project not found: ${existing.projectId}`);
+      }
+      const resolution = await resolveEvidenceForMemory({
+        storeRoot: env.storeRoot,
+        evidenceIds,
+        projectRootPath: project.rootPath,
+      });
+      // A cited evidenceId that resolves to no record means the memory points at
+      // evidence that does not exist for a non-human author. The cited id is still
+      // present in evidenceIds, so validateSave's presence check would pass it —
+      // block here (fail-closed) before that check can be fooled. Human-authored
+      // memories don't require resolvable evidence, so this only gates agents.
+      const isHuman = existing.source === "manual";
+      // Cross-workspace, revoked, or missing evidence blocks approval immediately
+      // (fail-closed).
+      const hasMissingRecord = !isHuman && resolution.missingIds.length > 0;
+      if (resolution.hasCrossWorkspace || resolution.hasRevoked || hasMissingRecord) {
+        const reasons = [
+          ...(resolution.hasCrossWorkspace ? ["cross_workspace_evidence"] : []),
+          ...(resolution.hasRevoked ? ["revoked_evidence"] : []),
+          ...(hasMissingRecord ? ["missing_evidence_record"] : []),
+        ];
+        writeSidecar(env, existing.id as MemoryEntryId, {
+          validationStatus: "rejected",
+          reasons,
+          conflictIds: [],
+          validatedBy: "system",
+        });
+        return {
+          id: existing.id,
+          approval: existing.approval, // still "suggested"
+          validation: { status: "rejected", reasons },
+          conflict: { outcome: "unrelated", conflictIds: [] },
+        };
+      }
+      unresolvedSecret = resolution.unresolvedSecret;
+    }
+
     const validation = validateSave({ candidate: existing, evidenceIds, unresolvedSecret });
+    // Spec §8 serialization guard: re-read the approved set immediately before
+    // the flip — same synchronous critical section, no await between here and
+    // updateMemoryEntry below. This ensures a prior approval of a conflicting
+    // entry (A approved, then B attempted) is always visible to B's check.
     const approvedActive = env.registry
       .listMemoryEntries(existing.projectId)
       .filter((m) => m.approval === "approved" && !m.stale && m.id !== existing.id);
@@ -74,6 +124,12 @@ export async function handleApproveMemory(
         approval: "rejected",
         updatedAt: env.now(),
       });
+      writeSidecar(env, rejected.id as MemoryEntryId, {
+        validationStatus: "rejected",
+        reasons: conflict.reasons,
+        conflictIds: conflict.conflictIds,
+        validatedBy: "system",
+      });
       return {
         id: rejected.id,
         approval: rejected.approval,
@@ -84,6 +140,12 @@ export async function handleApproveMemory(
     // Any non-valid validation or any non-unrelated conflict blocks the flip: the
     // row stays `suggested` and the reasons are surfaced for the human to resolve.
     if (validation.status !== "valid" || conflict.outcome !== "unrelated") {
+      writeSidecar(env, existing.id as MemoryEntryId, {
+        validationStatus: validation.status,
+        reasons: [...validation.reasons, ...conflict.reasons],
+        conflictIds: conflict.conflictIds,
+        validatedBy: "system",
+      });
       return {
         id: existing.id,
         approval: existing.approval, // still "suggested"
@@ -98,5 +160,34 @@ export async function handleApproveMemory(
   // fall through to the existing updateMemoryEntry({ approval, updatedAt }) flip.
 
   const updated = env.registry.updateMemoryEntry(id, { approval, updatedAt: env.now() });
+  // Write sidecar: approved path → system valid, reject path → human rejected.
+  writeSidecar(env, updated.id as MemoryEntryId, {
+    validationStatus: approval === "rejected" ? "rejected" : "valid",
+    reasons: [],
+    conflictIds: [],
+    validatedBy: approval === "rejected" ? "human" : "system",
+  });
   return { id: updated.id, approval: updated.approval };
+}
+
+function writeSidecar(
+  env: ApproveMemoryEnv,
+  memoryEntryId: MemoryEntryId,
+  fields: {
+    validationStatus: MemoryValidation["validationStatus"];
+    reasons: readonly string[];
+    conflictIds: readonly MemoryEntryId[];
+    validatedBy: "system" | "human";
+  },
+): void {
+  const policyVersion = env.policyVersion ?? "1";
+  env.registry.setMemoryValidation({
+    memoryEntryId,
+    validationStatus: fields.validationStatus,
+    reasons: [...fields.reasons],
+    conflictIds: [...fields.conflictIds],
+    validatedAt: env.now(),
+    validatedBy: fields.validatedBy,
+    policyVersion,
+  });
 }

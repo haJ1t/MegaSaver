@@ -1,14 +1,11 @@
 import { defineCommand } from "citty";
-import { mapErrorToCliMessage, memoryEntryNotFoundMessage } from "../../errors.js";
+import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
-import {
-  formatMemoryExplainLines,
-  formatMemoryValidationLines,
-  memoryEntryIdSchema,
-} from "./shared.js";
+import { projectNameSchema } from "../shared/schemas.js";
+import { formatMemoryListLine } from "./shared.js";
 
-export type RunMemoryExplainInput = {
-  memoryEntryId: string;
+export type RunMemoryReviewInput = {
+  projectName: string;
   storeFlag: string | undefined;
   jsonFlag: boolean;
   cwd: string;
@@ -20,7 +17,7 @@ export type RunMemoryExplainInput = {
   stderr: (line: string) => void;
 };
 
-export async function runMemoryExplain(input: RunMemoryExplainInput): Promise<0 | 1> {
+export async function runMemoryReview(input: RunMemoryReviewInput): Promise<0 | 1> {
   let rootDir: string;
   try {
     rootDir = resolveStorePath({
@@ -37,11 +34,11 @@ export async function runMemoryExplain(input: RunMemoryExplainInput): Promise<0 
     return cli.exitCode;
   }
 
-  let parsedId: ReturnType<typeof memoryEntryIdSchema.parse>;
+  let projectName: string;
   try {
-    parsedId = memoryEntryIdSchema.parse(input.memoryEntryId);
+    projectName = projectNameSchema.parse(input.projectName);
   } catch (err) {
-    const cli = mapErrorToCliMessage(err, { kind: "memoryEntryId" });
+    const cli = mapErrorToCliMessage(err, { kind: "name" });
     input.stderr(cli.message);
     return cli.exitCode;
   }
@@ -49,18 +46,21 @@ export async function runMemoryExplain(input: RunMemoryExplainInput): Promise<0 
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
-    const entry = registry.getMemoryEntry(parsedId);
-    if (!entry) {
-      const cli = memoryEntryNotFoundMessage(parsedId);
+
+    const project = registry.listProjects().find((p) => p.name === projectName);
+    if (!project) {
+      const cli = projectNotFoundMessage(projectName);
       input.stderr(cli.message);
       return cli.exitCode;
     }
-    const validation = registry.getMemoryValidation(parsedId);
+
+    const all = registry.searchMemoryEntries(project.id, { includeUnapproved: true, limit: 1000 });
+    const unapproved = all.filter((e) => e.approval !== "approved");
+
     if (input.jsonFlag) {
-      input.stdout(JSON.stringify({ ...entry, validation: validation ?? null }));
+      input.stdout(JSON.stringify(unapproved));
     } else {
-      for (const line of formatMemoryExplainLines(entry)) input.stdout(line);
-      for (const line of formatMemoryValidationLines(validation)) input.stdout(line);
+      for (const entry of unapproved) input.stdout(formatMemoryListLine(entry));
     }
     return 0;
   } catch (err) {
@@ -70,21 +70,20 @@ export async function runMemoryExplain(input: RunMemoryExplainInput): Promise<0 
   }
 }
 
-export const memoryExplainCommand = defineCommand({
-  meta: { name: "explain", description: "Explain a memory entry (all fields)." },
+export const memoryReviewCommand = defineCommand({
+  meta: {
+    name: "review",
+    description: "List suggested, quarantined, and rejected memory entries for human review.",
+  },
   args: {
-    memoryEntryId: {
-      type: "positional",
-      required: true,
-      description: "Memory entry id (UUID).",
-    },
+    projectName: { type: "positional", required: true, description: "Project name." },
     store: { type: "string", description: "Override store directory." },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
-    const code = await runMemoryExplain({
+    const code = await runMemoryReview({
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
-      memoryEntryId: typeof args.memoryEntryId === "string" ? args.memoryEntryId : "",
+      projectName: typeof args.projectName === "string" ? args.projectName : "",
       jsonFlag: args.json === true,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),

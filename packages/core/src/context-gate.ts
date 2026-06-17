@@ -72,6 +72,8 @@ export {
 export {
   aggregateHonestMetrics,
   observationsFromEvents,
+  readOverlayEvents,
   recordedEventsFromLogs,
   type HonestMetrics,
+  type OverlayTokenSaverEvent,
 } from "@megasaver/stats";

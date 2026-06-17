@@ -76,6 +76,7 @@ export {
   aggregateHonestMetrics,
   classifyObservation,
   meetsGaGate,
+  meetsGaGateFromCorpus,
   observationsFromEvents,
   recordedEventsFromLogs,
   type EligibilityClass,
@@ -85,5 +86,21 @@ export {
   type GaGateInput,
   type GaGateTargets,
   type GaGateResult,
+  type GaGateFromCorpusInput,
   type RecordedEventLike,
 } from "./honest-metrics.js";
+
+export {
+  type SufficiencyFixture,
+  type FixtureKind,
+  SUFFICIENCY_FIXTURES,
+} from "./sufficiency-fixtures.js";
+
+export {
+  type SufficiencyMetrics,
+  type ComputeSufficiencyInput,
+  computeSufficiencyMetrics,
+  scoreFailureEvidenceRecall,
+  scoreActionabilityPassRate,
+  scoreFirstExpansionSuccessRate,
+} from "./sufficiency-metrics.js";

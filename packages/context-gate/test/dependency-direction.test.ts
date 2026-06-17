@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 // for loadProjectPermissions — it lives HERE, not in pure policy.
 const ALLOWED_DEPENDENCIES = [
   "@megasaver/content-store",
+  "@megasaver/evidence-ledger",
   "@megasaver/output-filter",
   "@megasaver/policy",
   "@megasaver/shared",

@@ -145,6 +145,22 @@ export async function deleteChunkSet(input: {
   }
 }
 
+export async function deleteOverlayChunkSet(input: {
+  storeRoot: string;
+  workspaceKey: string;
+  liveSessionId: string;
+  chunkSetId: string;
+}): Promise<void> {
+  const path = overlayChunkSetPath(input);
+  try {
+    rmSync(path, { force: true });
+  } catch (error) {
+    throw new ContentStoreError("write_failed", `Delete failed: ${input.chunkSetId}`, {
+      cause: error,
+    });
+  }
+}
+
 export async function saveOverlayChunkSet(input: {
   storeRoot: string;
   chunkSet: OverlayChunkSet;

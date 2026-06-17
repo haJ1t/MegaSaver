@@ -17,6 +17,7 @@ import {
   readAllToolDefinitions,
   readFailedAttemptsForProject,
   readMemoryEntriesForProject,
+  readMemoryValidation,
   readProjectRulesForProject,
   readProjects,
   readSessions,
@@ -25,6 +26,7 @@ import {
   resolveStorePaths,
   writeFailedAttemptsForProject,
   writeMemoryEntriesForProject,
+  writeMemoryValidation,
   writeProjectRulesForProject,
   writeProjects,
   writeSessions,
@@ -33,6 +35,7 @@ import {
 } from "./json-directory-store.js";
 import { memoryEntrySchema, memoryEntryUpdatePatchSchema } from "./memory-entry.js";
 import { searchMemoryEntries as searchEntries } from "./memory-search.js";
+import { memoryValidationSchema } from "./memory-validation.js";
 import { type ProjectRule, failureToRuleInputSchema, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import {
@@ -600,6 +603,16 @@ export function createJsonDirectoryCoreRegistry(
         toolDefinitionSchema.parse(t),
       );
       return routeTools(tools, query);
+    },
+
+    setMemoryValidation(validation) {
+      const parsed = memoryValidationSchema.parse(validation);
+      writeMemoryValidation(paths, parsed);
+      return parsed;
+    },
+
+    getMemoryValidation(id) {
+      return readMemoryValidation(paths, id);
     },
   };
 }

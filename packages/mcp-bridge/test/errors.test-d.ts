@@ -28,11 +28,17 @@ describe("McpBridgeErrorCode type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 16-member alphabetic order (AA1 §8b)", () => {
+  it("expansion_blocked is a valid McpBridgeErrorCode", () => {
+    const _c: McpBridgeErrorCode = "expansion_blocked";
+    void _c;
+  });
+
+  it("schema.options preserves the 17-member alphabetic order (AA1 §8b)", () => {
     const _t: readonly [
       "auth_failed",
       "command_denied",
       "content_store_miss",
+      "expansion_blocked",
       "intent_required",
       "max_bytes_exceeded",
       "path_denied",

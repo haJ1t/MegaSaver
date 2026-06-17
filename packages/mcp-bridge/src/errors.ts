@@ -1,14 +1,16 @@
 import { z } from "zod";
 
-// Order: alphabetic (AA1 §8b, §17). 16 members. The v0.3
+// Order: alphabetic (AA1 §8b, §17). 17 members. The v0.3
 // `not_implemented` member is removed — every entrypoint now has
 // a real implementation (CLAUDE.md §13: no pre-1.0 shims).
 // `resource_not_found` honours HH §7 reservation (F-MAJ-9);
-// `path_denied` added per F-CRIT-2.
+// `path_denied` added per F-CRIT-2;
+// `expansion_blocked` added per contextgate-honest-90 §11 (MCP expansion guard).
 export const mcpBridgeErrorCodeSchema = z.enum([
   "auth_failed",
   "command_denied",
   "content_store_miss",
+  "expansion_blocked",
   "intent_required",
   "max_bytes_exceeded",
   "path_denied",
