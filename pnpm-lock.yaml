@@ -251,6 +251,9 @@ importers:
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../content-store
+      '@megasaver/evidence-ledger':
+        specifier: workspace:*
+        version: link:../evidence-ledger
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter
