@@ -7,10 +7,7 @@ import { type ParsedBlock, parseBlock } from "./parse.js";
 // "projection preflight failure aborts the connector write"). Agent-agnostic:
 // takes only the rendered string + whether a header/frontmatter is expected, so
 // it does not depend on any connector's ConnectorTarget shape.
-export function projectionPreflight(
-  content: string,
-  opts: { expectHeader?: boolean } = {},
-): void {
+export function projectionPreflight(content: string, opts: { expectHeader?: boolean } = {}): void {
   let managed: ParsedBlock;
   try {
     managed = parseBlock(content);

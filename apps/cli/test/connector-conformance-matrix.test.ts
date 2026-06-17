@@ -71,7 +71,7 @@ describe("connector projection conformance matrix", () => {
       await runSync(target.id);
 
       const content = await readTarget(target.relativePath);
-      const expectHeader = Boolean(target.header);
+      const expectHeader = "header" in target && Boolean(target.header);
 
       // (1) the rendered output passes the runtime preflight,
       expect(() => projectionPreflight(content, { expectHeader })).not.toThrow();

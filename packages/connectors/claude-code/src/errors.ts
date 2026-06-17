@@ -43,6 +43,11 @@ export function mapSharedErrorCode(code: ConnectorErrorCode): ClaudeCodeConnecto
       return "claude_md_write_failed";
     case "target_path_invalid":
       return "project_root_invalid";
+    case "projection_invalid":
+      // A projection-validity failure is a malformed-block condition for this
+      // taxonomy; preflight itself lives in the CLI, so this path is for
+      // completeness over the shared union.
+      return "claude_md_block_conflict";
   }
 }
 

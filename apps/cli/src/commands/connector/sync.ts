@@ -89,7 +89,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
         }
 
         const context = buildConnectorContext(target, project, sessions, memoryEntries);
-        const expectHeader = Boolean(target.header);
+        const expectHeader = "header" in target && Boolean(target.header);
 
         if (existing === null) {
           // Seed via upsertBlock (not renderBlock) so a brand-new file also
@@ -118,7 +118,10 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           emit(target, "noop", sessionId);
           continue;
         }
-        projectionPreflight(newContent, { expectHeader });
+        // No expectHeader on the update path: the connector prepends a header
+        // only on SEED; on update the text outside the block is user-owned and
+        // may legitimately have no frontmatter, so we only check block balance.
+        projectionPreflight(newContent);
         await writeTargetFile({ absPath, content: newContent });
         emit(target, "wrote", sessionId);
       } catch (err) {
