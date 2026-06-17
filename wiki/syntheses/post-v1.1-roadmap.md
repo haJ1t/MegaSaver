@@ -46,12 +46,34 @@ consumer (#112) — all agent files regenerate from `docs/conventions/`.
 
 ## Remaining, by priority
 
-1. **Verify npm publish** — `@megasaver/cli` was NEVER published (registry
-   E404). The release workflow's npm-publish job is skipped because the
-   `NPM_TOKEN` repo secret is unset. **Needs the maintainer** (not automatable
-   here): create an npm automation token for the `@megasaver` scope,
-   `gh secret set NPM_TOKEN`, then re-tag / re-run `release.yml`. This is the
-   one real MVP→installable-product gap.
+1. ~~**npm publish**~~ — **SHIPPED 2026-06-18. `@megasaver/cli@1.0.2` is live on
+   npm** (`registry.npmjs.org/@megasaver/cli/1.0.2`), installable via
+   `npm i -g @megasaver/cli` (`mega` bin). The MVP→installable-product gap is
+   closed. How it went: maintainer claimed the `@megasaver` org/scope + created
+   a write token + set `NPM_TOKEN`; the `v1.0.2` tag triggered `release.yml` but
+   the **CI npm-publish job could not satisfy 2FA** — the account/org enforces
+   2FA-for-writes and the granular token + account "auth only" change still hit
+   `EOTP`, and the maintainer uses a **security key (FIDO/WebAuthn)**, not TOTP,
+   so `--otp=<code>` is impossible in CI. Resolution: published the prebuilt
+   tarball (`npm pack` of the released `main` code) **locally** via
+   `npm publish <tarball> --access public`, completing the security-key 2FA in
+   the browser. Follow-up for hands-off CI releases: either disable
+   2FA-for-writes at the **org** level (the per-account "auth only" change was
+   insufficient — org enforcement overrode it), or provision a token type that
+   bypasses 2FA. Until then, releases are a one-command local publish from a
+   clean `main` checkout. (Minor: `apps/cli` still lists `typescript` as a
+   runtime `dependency`; if it is bundled, drop it to shrink `npm i` footprint.)
+   - **Publish-readiness VERIFIED 2026-06-18:** `pnpm --filter @megasaver/cli
+     bundle` emits a single self-contained `dist-bundle/mega.mjs` (~11 MB, `0`
+     `@megasaver/*` runtime refs); `files:["dist-bundle"]` + `bin.mega` +
+     `publishConfig.access:public` + `prepack` (bundle + `strip-publish-manifest`
+     drops the `workspace:*` devDeps); `release.yml` has the NPM_TOKEN gate job +
+     `npm-publish` job wired to `NODE_AUTH_TOKEN`. Everything is ready — only the
+     three maintainer-only steps remain (claim `@megasaver` scope, create the
+     automation token, set the `NPM_TOKEN` secret). Nothing left to build.
+     (Minor optional follow-up: `apps/cli` lists `typescript` as a runtime
+     `dependency`; confirm it's needed at runtime vs already in the bundle — if
+     bundled, the dep could be dropped to shrink `npm i` footprint.)
 2. ~~**conventions:sync → CLAUDE.md tagged blocks**~~ — **SHIPPED, PR #112**
    (merged `c2ee52a`). `CLAUDE.md` is now a managed
    consumer (§0 wiki-first + §1–§13). Billed "small/cosmetic" but the audit
