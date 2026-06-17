@@ -2,9 +2,9 @@ import { existsSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
 import { deleteOverlayChunkSet } from "@megasaver/content-store";
 import { listEvidenceByWorkspace, revokeEvidence } from "@megasaver/evidence-ledger";
+import { describe, expect, it } from "vitest";
 import { recordAndFilterOverlayOutput } from "../src/record-output.js";
 
 const WK = "0123456789abcdef";
@@ -74,8 +74,10 @@ describe("recordAndFilterOverlayOutput — evidence write", () => {
     });
 
     const records = await listEvidenceByWorkspace({ storeRoot, workspaceKey: WK });
-    const evidenceId = records[0]!.evidenceId;
-    const chunkSetId = res.chunkSetId!;
+    const firstRecord = records[0];
+    expect(firstRecord).toBeDefined();
+    const evidenceId = firstRecord?.evidenceId ?? "";
+    const chunkSetId = res.chunkSetId ?? "";
     const chunkPath = join(storeRoot, "content", WK, SID, `${chunkSetId}.json`);
     expect(existsSync(chunkPath)).toBe(true);
 
