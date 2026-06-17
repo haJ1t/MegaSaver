@@ -9,6 +9,7 @@ describe("ConnectorError", () => {
       "file_read_failed",
       "file_write_failed",
       "target_path_invalid",
+      "projection_invalid",
     ]);
   });
 

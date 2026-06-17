@@ -18,6 +18,7 @@ export {
 } from "./errors.js";
 export { renderBlock } from "./render.js";
 export { parseBlock, type ParsedBlock } from "./parse.js";
+export { projectionPreflight } from "./preflight.js";
 export { removeBlock, upsertBlock, upsertContextGateBlockText } from "./upsert.js";
 export { normalizeEol } from "./eol.js";
 export {

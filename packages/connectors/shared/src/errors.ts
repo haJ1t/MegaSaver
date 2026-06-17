@@ -6,6 +6,7 @@ export const connectorErrorCodeSchema = z.enum([
   "file_read_failed",
   "file_write_failed",
   "target_path_invalid",
+  "projection_invalid",
 ]);
 export type ConnectorErrorCode = z.infer<typeof connectorErrorCodeSchema>;
 
