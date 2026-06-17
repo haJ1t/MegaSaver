@@ -11,7 +11,7 @@ import {
   filterOutput,
   resolveSafeReadPath,
 } from "@megasaver/output-filter";
-import { type ProjectPermissions, evaluatePathRead } from "@megasaver/policy";
+import { type ProjectPermissions, evaluatePathRead, redact } from "@megasaver/policy";
 import type { ProjectId, SessionId, TokenSaverMode } from "@megasaver/shared";
 import { loadProjectPermissions } from "./load-project-permissions.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
@@ -182,7 +182,9 @@ export async function persistChunkSet(input: {
     sessionId: input.sessionId,
     projectId: input.projectId,
     createdAt: input.createdAt,
-    source: { kind: "file", path: input.path },
+    // The file path is secret-bearing (tokens in query-style paths, secret
+    // filenames). Redact at this persistence sink so every caller is covered.
+    source: { kind: "file", path: redact(input.path).redacted },
     rawBytes: input.result.rawBytes,
     redacted: (input.result.warnings ?? []).some((w) => w.startsWith("redacted")),
     chunks: input.result.excerpts.map((e, i) => ({
@@ -210,7 +212,9 @@ export async function persistOverlayChunkSet(input: {
     workspaceKey: input.workspaceKey,
     liveSessionId: input.liveSessionId,
     createdAt: input.createdAt,
-    source: { kind: "file", path: input.path },
+    // The file path is secret-bearing (tokens in query-style paths, secret
+    // filenames). Redact at this persistence sink so every caller is covered.
+    source: { kind: "file", path: redact(input.path).redacted },
     rawBytes: input.result.rawBytes,
     redacted: (input.result.warnings ?? []).some((w) => w.startsWith("redacted")),
     chunks: input.result.excerpts.map((e, i) => ({

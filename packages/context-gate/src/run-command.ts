@@ -7,7 +7,12 @@ import {
   saveOverlayChunkSet,
 } from "@megasaver/content-store";
 import { type FilterOutputResult, filterOutput } from "@megasaver/output-filter";
-import { type PolicyDenyCode, type ProjectPermissions, evaluateCommand } from "@megasaver/policy";
+import {
+  type PolicyDenyCode,
+  type ProjectPermissions,
+  evaluateCommand,
+  redact,
+} from "@megasaver/policy";
 import {
   type ProjectId,
   type SessionId,
@@ -231,6 +236,12 @@ export async function runOutputExecCommand(
   const warnings = filtered.warnings ?? [];
   const redacted = warnings.some((w) => w.startsWith("redacted"));
   const secretsRedacted = redactedCount(warnings);
+  // The command and args are secret-bearing (e.g. `curl -H "Authorization:
+  // Bearer ..."`). Redact each before it reaches the persisted chunk-set source
+  // and the stats event label — args element-wise, mirroring policyRedactSourceRef.
+  const redactedCommand = redact(input.command).redacted;
+  const redactedArgs = input.args.map((a) => redact(a).redacted);
+  const redactedLabel = [redactedCommand, ...redactedArgs].join(" ");
 
   const now = input.now ?? defaultNow;
   const newId = input.newId ?? defaultNewId;
@@ -256,7 +267,7 @@ export async function runOutputExecCommand(
       sessionId: input.sessionId,
       projectId: settings.projectId,
       createdAt: now(),
-      source: { kind: "command", command: input.command, args: input.args },
+      source: { kind: "command", command: redactedCommand, args: redactedArgs },
       rawBytes: filtered.rawBytes,
       redacted,
       chunks: filtered.excerpts.map((e, i) => ({
@@ -281,7 +292,7 @@ export async function runOutputExecCommand(
     projectId: settings.projectId,
     createdAt: now(),
     sourceKind: "command",
-    label: [input.command, ...input.args].join(" "),
+    label: redactedLabel,
     rawBytes: filtered.rawBytes,
     returnedBytes: filtered.returnedBytes,
     bytesSaved: filtered.bytesSaved,
@@ -373,6 +384,12 @@ export async function runOverlayOutputExecCommand(
   const warnings = filtered.warnings ?? [];
   const redacted = warnings.some((w) => w.startsWith("redacted"));
   const secretsRedacted = redactedCount(warnings);
+  // The command and args are secret-bearing (e.g. `curl -H "Authorization:
+  // Bearer ..."`). Redact each before it reaches the persisted chunk-set source
+  // and the stats event label — args element-wise, mirroring policyRedactSourceRef.
+  const redactedCommand = redact(input.command).redacted;
+  const redactedArgs = input.args.map((a) => redact(a).redacted);
+  const redactedLabel = [redactedCommand, ...redactedArgs].join(" ");
 
   const now = input.now ?? defaultNow;
   const newId = input.newId ?? defaultNewId;
@@ -395,7 +412,7 @@ export async function runOverlayOutputExecCommand(
       workspaceKey: input.workspaceKey,
       liveSessionId: input.liveSessionId,
       createdAt: now(),
-      source: { kind: "command", command: input.command, args: input.args },
+      source: { kind: "command", command: redactedCommand, args: redactedArgs },
       rawBytes: filtered.rawBytes,
       redacted,
       chunks: filtered.excerpts.map((e, i) => ({
@@ -420,7 +437,7 @@ export async function runOverlayOutputExecCommand(
     liveSessionId: input.liveSessionId,
     createdAt: now(),
     sourceKind: "command",
-    label: [input.command, ...input.args].join(" "),
+    label: redactedLabel,
     rawBytes: filtered.rawBytes,
     returnedBytes: filtered.returnedBytes,
     bytesSaved: filtered.bytesSaved,
