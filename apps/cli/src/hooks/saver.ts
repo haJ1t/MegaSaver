@@ -1,4 +1,8 @@
-import type { RecordOverlayOutputInput, RecordOverlayOutputResult } from "@megasaver/core";
+import {
+  type RecordOverlayOutputInput,
+  type RecordOverlayOutputResult,
+  tokensFromBytes,
+} from "@megasaver/core";
 import type { OutputSourceKind } from "@megasaver/output-filter";
 import { type TokenSaverMode, encodeWorkspaceKey, modeToBudget } from "@megasaver/shared";
 
@@ -81,6 +85,17 @@ function asStr(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
+// The harness can truncate a tool output BEFORE the PostToolUse hook sees it; the
+// stored chunk is then incomplete and "Full output recoverable" would be a lie.
+// Anchored near the END of the buffer (last 256 bytes) to keep false positives low:
+// a mid-text mention of truncation is normal content, not a real cutoff.
+const TRUNCATION_MARKER = /\[truncated\b|output truncated|<truncated\b/i;
+const TRUNCATION_TAIL_BYTES = 256;
+function looksPreTruncated(raw: string): boolean {
+  const tail = raw.length > TRUNCATION_TAIL_BYTES ? raw.slice(-TRUNCATION_TAIL_BYTES) : raw;
+  return TRUNCATION_MARKER.test(tail);
+}
+
 function labelOf(toolInput: unknown, fallback: string): string {
   if (typeof toolInput !== "object" || toolInput === null) return fallback;
   const i = toolInput as Record<string, unknown>;
@@ -128,6 +143,10 @@ export async function buildSaverDecision(
 
     const recorded = await deps.record({
       storeRoot: deps.storeRoot,
+      // Evidence rows live under <storeRoot>/evidence/<wk>/ — same base root the
+      // MCP approve-memory path reads from. Passing it turns on the best-effort
+      // evidence write inside record(); a failure there never blocks compression.
+      evidenceStoreRoot: deps.storeRoot,
       workspaceKey,
       liveSessionId: sessionId,
       raw: shape.raw,
@@ -139,8 +158,14 @@ export async function buildSaverDecision(
     });
     if (recorded.decision !== "compressed") return PASSTHROUGH;
 
+    const rawTokens = tokensFromBytes(recorded.rawBytes);
+    const returnedTokens = tokensFromBytes(recorded.returnedBytes);
+    const tokenPct = rawTokens === 0 ? "0.0" : ((1 - returnedTokens / rawTokens) * 100).toFixed(1);
+    const recovery = looksPreTruncated(shape.raw)
+      ? `NOTE: upstream output appears truncated, recovered chunk is PARTIAL, not complete — call proxy_expand_chunk("${recorded.chunkSetId}", "0") (or mega_fetch_chunk)`
+      : `Full output recoverable — call proxy_expand_chunk("${recorded.chunkSetId}", "0") (or mega_fetch_chunk)`;
     const pointer = recorded.chunkSetId
-      ? `\n\n[Mega Saver: compressed ${recorded.rawBytes}→${recorded.returnedBytes} B. Full output recoverable — call proxy_expand_chunk("${recorded.chunkSetId}", "0") (or mega_fetch_chunk).]`
+      ? `\n\n[Mega Saver: compressed ${recorded.rawBytes}→${recorded.returnedBytes} B (~${rawTokens}→${returnedTokens} tokens, ${tokenPct}%). ${recovery}.]`
       : "";
     return { updatedToolOutput: shape.rebuild(`${recorded.returnedText}${pointer}`) };
   } catch {

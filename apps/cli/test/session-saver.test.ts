@@ -564,6 +564,17 @@ describe("session saver commands", () => {
       expect(joined).toContain("chunks stored: 3");
     });
 
+    it("with recorded events → token-weighted savings line", async () => {
+      await seed();
+      await enable({ mode: "balanced" });
+      recordEvent();
+      const { out, code } = await stats();
+      expect(code).toBe(0);
+      const joined = out.join("\n");
+      // tokensFromBytes (ceil/4): raw 1000→250, returned 200→50, 1-50/250=80.0%.
+      expect(joined).toContain("tokens: 250 → 50 (80.0% reduction)");
+    });
+
     it("corrupt summary file → error: store_corrupt, exit 1, no stdout", async () => {
       await seed();
       await enable({ mode: "balanced" });
@@ -591,6 +602,24 @@ describe("session saver commands", () => {
         savingRatio: 0.8,
         secretsRedactedTotal: 1,
         chunksStoredTotal: 3,
+      });
+    });
+
+    it("with recorded events → --json adds token-weighted tokenMetrics (additive)", async () => {
+      await seed();
+      await enable({ mode: "balanced" });
+      recordEvent();
+      const { out, code } = await stats({ json: true });
+      expect(code).toBe(0);
+      const payload = JSON.parse(out[0] as string);
+      // Backward-compatible: byte eventStats untouched.
+      expect(payload.eventStats.rawBytesTotal).toBe(1000);
+      expect(payload.eventStats.returnedBytesTotal).toBe(200);
+      // Additive: token-weighted savings via the @megasaver/stats estimator.
+      expect(payload.tokenMetrics).toMatchObject({
+        rawTokens: 250,
+        returnedTokens: 50,
+        tokenReduction: 0.8,
       });
     });
 
@@ -643,9 +672,9 @@ describe("session saver commands", () => {
 // ---------------------------------------------------------------------------
 
 describe("sessionSaverCommand wiring", () => {
-  it("exposes the four subcommands", () => {
+  it("exposes the saver subcommands", () => {
     const sub = sessionSaverCommand.subCommands as Record<string, unknown>;
-    expect(Object.keys(sub).sort()).toEqual(["disable", "enable", "stats", "status"]);
+    expect(Object.keys(sub).sort()).toEqual(["disable", "enable", "stats", "status", "workspace"]);
   });
 });
 
