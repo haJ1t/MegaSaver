@@ -259,6 +259,47 @@ describe("buildSaverDecision", () => {
     expect(d.record).toHaveBeenCalledWith(expect.objectContaining({ evidenceStoreRoot: "/store" }));
   });
 
+  it("marks the pointer PARTIAL when the raw output ends with a truncation marker", async () => {
+    // The harness can truncate a tool output BEFORE the PostToolUse hook sees it.
+    // When the recovered chunk is therefore incomplete, the pointer must not promise
+    // "Full output recoverable" — it must say the recovered chunk is PARTIAL.
+    const truncated = `${"X".repeat(50_000)}\n[truncated]`;
+    const out = await buildSaverDecision(bigBash(truncated), deps());
+    expect("updatedToolOutput" in out).toBe(true);
+    if ("updatedToolOutput" in out) {
+      const u = out.updatedToolOutput as { stdout: string };
+      expect(u.stdout).not.toContain("Full output recoverable");
+      expect(u.stdout).toContain("PARTIAL");
+      expect(u.stdout).toContain("truncated");
+      // Recovery hint must stay so the model can still fetch what was stored.
+      expect(u.stdout).toContain("proxy_expand_chunk");
+      expect(u.stdout).toContain("cs-1");
+    }
+  });
+
+  it("keeps the normal pointer when the raw output is not truncated", async () => {
+    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), deps());
+    expect("updatedToolOutput" in out).toBe(true);
+    if ("updatedToolOutput" in out) {
+      const u = out.updatedToolOutput as { stdout: string };
+      expect(u.stdout).toContain("Full output recoverable");
+      expect(u.stdout).not.toContain("PARTIAL");
+    }
+  });
+
+  it("does not trip on a benign 'truncated' word in the middle of the output", async () => {
+    // Anchored detection: the marker is meaningful only near the END of the buffer.
+    // A mid-text mention of truncation is normal content, not a real cutoff.
+    const benign = `the build log was truncated earlier\n${"X".repeat(50_000)}`;
+    const out = await buildSaverDecision(bigBash(benign), deps());
+    expect("updatedToolOutput" in out).toBe(true);
+    if ("updatedToolOutput" in out) {
+      const u = out.updatedToolOutput as { stdout: string };
+      expect(u.stdout).toContain("Full output recoverable");
+      expect(u.stdout).not.toContain("PARTIAL");
+    }
+  });
+
   it("inline pointer reports a token figure from the @megasaver/stats estimator", async () => {
     // RECORDED: rawBytes 100_000, returnedBytes 200 → tokensFromBytes (ceil/4)
     // gives 25_000 raw, 50 returned, so 1 - 50/25_000 = 99.8% token reduction.
