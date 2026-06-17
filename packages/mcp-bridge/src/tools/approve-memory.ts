@@ -89,6 +89,10 @@ export async function handleApproveMemory(
     }
 
     const validation = validateSave({ candidate: existing, evidenceIds, unresolvedSecret });
+    // Spec §8 serialization guard: re-read the approved set immediately before
+    // the flip — same synchronous critical section, no await between here and
+    // updateMemoryEntry below. This ensures a prior approval of a conflicting
+    // entry (A approved, then B attempted) is always visible to B's check.
     const approvedActive = env.registry
       .listMemoryEntries(existing.projectId)
       .filter((m) => m.approval === "approved" && !m.stale && m.id !== existing.id);
