@@ -3,6 +3,7 @@ import { sessionSaverDisableCommand } from "./disable.js";
 import { sessionSaverEnableCommand } from "./enable.js";
 import { sessionSaverStatsCommand } from "./stats.js";
 import { sessionSaverStatusCommand } from "./status.js";
+import { sessionSaverWorkspaceCommand } from "./workspace.js";
 
 export {
   type RunSessionSaverDisableInput,
@@ -24,6 +25,13 @@ export {
   runSessionSaverStatus,
   sessionSaverStatusCommand,
 } from "./status.js";
+export {
+  type RunSessionSaverWorkspaceDisableInput,
+  type RunSessionSaverWorkspaceEnableInput,
+  runSessionSaverWorkspaceDisable,
+  runSessionSaverWorkspaceEnable,
+  sessionSaverWorkspaceCommand,
+} from "./workspace.js";
 
 export const sessionSaverCommand = defineCommand({
   meta: { name: "saver", description: "Manage Mega Saver Mode on a session." },
@@ -32,5 +40,6 @@ export const sessionSaverCommand = defineCommand({
     disable: sessionSaverDisableCommand,
     status: sessionSaverStatusCommand,
     stats: sessionSaverStatsCommand,
+    workspace: sessionSaverWorkspaceCommand,
   },
 });

@@ -643,9 +643,9 @@ describe("session saver commands", () => {
 // ---------------------------------------------------------------------------
 
 describe("sessionSaverCommand wiring", () => {
-  it("exposes the four subcommands", () => {
+  it("exposes the saver subcommands", () => {
     const sub = sessionSaverCommand.subCommands as Record<string, unknown>;
-    expect(Object.keys(sub).sort()).toEqual(["disable", "enable", "stats", "status"]);
+    expect(Object.keys(sub).sort()).toEqual(["disable", "enable", "stats", "status", "workspace"]);
   });
 });
 
