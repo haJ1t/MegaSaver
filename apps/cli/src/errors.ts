@@ -234,6 +234,11 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
             message: `error: project root invalid: ${err.message}`,
             exitCode: 1,
           };
+        case "projection_invalid":
+          return {
+            message: `error: connector projection invalid for ${ctx.relativePath}: ${err.message}`,
+            exitCode: 1,
+          };
       }
     }
     if (err.code === "target_path_invalid") {
