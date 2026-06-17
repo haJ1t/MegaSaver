@@ -159,7 +159,11 @@ export async function recordAndFilterOverlayOutput(
       sessionRef: { kind: "live", id: input.liveSessionId },
       // OutputSourceKind values are a strict subset of SourceKind — cast is safe.
       sourceKind: input.sourceKind as SourceKind,
-      sourceRef: { label: input.label },
+      // label is secret-bearing (full command line, path, or fetch URL). The
+      // evidence spec forbids an unredacted secret in stored sourceRef, and
+      // appendEvidence does not redact on append — so redact here, same detector
+      // as raw/returned content above.
+      sourceRef: { label: redact(input.label).redacted },
       classification: input.sourceKind,
       redactionReport: {
         redacted: secretCount > 0,

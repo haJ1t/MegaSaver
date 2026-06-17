@@ -59,6 +59,28 @@ describe("recordAndFilterOverlayOutput — evidence write", () => {
     expect(records).toHaveLength(0);
   });
 
+  it("redacts a secret-bearing label before writing it into sourceRef", async () => {
+    const storeRoot = store();
+    const secretLabel = "curl -H 'Authorization: Bearer abc123SECRETXYZdef456ghi789'";
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      evidenceStoreRoot: storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: bigRaw,
+      sourceKind: "command",
+      label: secretLabel,
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    expect(res.decision).toBe("compressed");
+
+    const records = await listEvidenceByWorkspace({ storeRoot, workspaceKey: WK });
+    expect(records).toHaveLength(1);
+    const row = records[0];
+    expect(JSON.stringify(row)).not.toContain("SECRETXYZ");
+  });
+
   it("deleteOverlayChunkSet port purges the chunk on revoke", async () => {
     const storeRoot = store();
     const res = await recordAndFilterOverlayOutput({
