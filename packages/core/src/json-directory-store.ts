@@ -13,11 +13,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { ProjectId } from "@megasaver/shared";
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { CorePersistenceError } from "./errors.js";
 import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
 import { type MemoryEntry, backfillMemoryEntry, memoryEntrySchema } from "./memory-entry.js";
+import { type MemoryValidation, memoryValidationSchema } from "./memory-validation.js";
 import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import { type Session, sessionSchema } from "./session.js";
@@ -33,6 +34,7 @@ export type StorePaths = {
   projectsPath: string;
   sessionsPath: string;
   memoryDir: string;
+  memoryValidationsDir: string;
   projectRulesDir: string;
   failedAttemptsDir: string;
   taskPlansDir: string;
@@ -59,6 +61,7 @@ export function resolveStorePaths(rootDir: string): StorePaths {
         projectsPath: join(resolvedRootDir, "projects.json"),
         sessionsPath: join(resolvedRootDir, "sessions.json"),
         memoryDir: join(resolvedRootDir, "memory"),
+        memoryValidationsDir: join(resolvedRootDir, "memory-validations"),
         projectRulesDir: join(resolvedRootDir, "project-rules"),
         failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
         taskPlansDir: join(resolvedRootDir, "task-plans"),
@@ -81,6 +84,7 @@ export function resolveStorePaths(rootDir: string): StorePaths {
     projectsPath: join(resolvedRootDir, "projects.json"),
     sessionsPath: join(resolvedRootDir, "sessions.json"),
     memoryDir: join(resolvedRootDir, "memory"),
+    memoryValidationsDir: join(resolvedRootDir, "memory-validations"),
     projectRulesDir: join(resolvedRootDir, "project-rules"),
     failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
     taskPlansDir: join(resolvedRootDir, "task-plans"),
@@ -172,6 +176,32 @@ export function writeMemoryEntriesForProject(
   }
   const content = entries.map((entry) => JSON.stringify(entry)).join("\n");
   atomicWriteFile(filePath, `${content}\n`);
+}
+
+export function readMemoryValidation(
+  paths: StorePaths,
+  id: MemoryEntryId,
+): MemoryValidation | null {
+  const filePath = join(paths.memoryValidationsDir, `${id}.json`);
+  try {
+    const raw = JSON.parse(readFileSync(filePath, "utf8") as string);
+    return memoryValidationSchema.parse(raw);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return null;
+    throw new CorePersistenceError("store_read_failed", "Store read failed.", {
+      filePath,
+      cause: error,
+    });
+  }
+}
+
+export function writeMemoryValidation(
+  paths: StorePaths,
+  validation: MemoryValidation,
+): void {
+  mkdirSync(paths.memoryValidationsDir, { recursive: true });
+  const filePath = join(paths.memoryValidationsDir, `${validation.memoryEntryId}.json`);
+  atomicWriteFile(filePath, `${JSON.stringify(validation, null, 2)}\n`);
 }
 
 export function readProjectRulesForProject(paths: StorePaths, projectId: ProjectId): ProjectRule[] {

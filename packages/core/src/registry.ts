@@ -8,6 +8,7 @@ import type {
   TaskStepId,
   ToolDefinitionId,
 } from "@megasaver/shared";
+import { memoryValidationSchema, type MemoryValidation } from "./memory-validation.js";
 import { CoreRegistryError } from "./errors.js";
 import {
   type FailedAttemptSearchQuery,
@@ -120,6 +121,8 @@ export interface CoreRegistry {
   getToolDefinition(id: ToolDefinitionId): ToolDefinition | null;
   listToolDefinitions(projectId: ProjectId): ToolDefinition[];
   routeToolsForTask(projectId: ProjectId, query: string | undefined): ToolRouteResult;
+  setMemoryValidation(validation: MemoryValidation): MemoryValidation;
+  getMemoryValidation(id: MemoryEntryId): MemoryValidation | null;
 }
 
 export type ConvertFailureResult = { rule: ProjectRule; failure: FailedAttempt };
@@ -223,6 +226,7 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
   const projects = new Map<ProjectId, Project>();
   const sessions = new Map<SessionId, Session>();
   const memoryEntries = new Map<MemoryEntryId, MemoryEntry>();
+  const memoryValidations = new Map<MemoryEntryId, MemoryValidation>();
   const projectRules = new Map<ProjectRuleId, ProjectRule>();
   const failedAttempts = new Map<FailedAttemptId, FailedAttempt>();
   const taskPlans = new Map<TaskPlanId, TaskPlan>();
@@ -614,6 +618,16 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
         .filter((t) => t.projectId === projectId)
         .map((t) => toolDefinitionSchema.parse(t));
       return routeTools(tools, query);
+    },
+
+    setMemoryValidation(validation) {
+      const parsed = memoryValidationSchema.parse(validation);
+      memoryValidations.set(parsed.memoryEntryId, parsed);
+      return parsed;
+    },
+
+    getMemoryValidation(id) {
+      return memoryValidations.get(id) ?? null;
     },
   };
 }

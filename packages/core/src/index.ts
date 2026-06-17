@@ -54,3 +54,4 @@ export { buildPrMemoryComment, type PrMemoryCommentOptions } from "./pr-memory-c
 export { validationStatusSchema, type ValidationStatus } from "./validation-status.js";
 export { validateSave, type ValidateSaveInput, type ValidateSaveResult } from "./save-validator.js";
 export { checkConflicts, type ConflictOutcome, type ConflictResult } from "./conflict-checker.js";
+export { memoryValidationSchema, type MemoryValidation } from "./memory-validation.js";
