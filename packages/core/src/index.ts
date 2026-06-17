@@ -51,3 +51,6 @@ export * from "./session.js";
 export * from "./token-saver.js";
 export * from "./workspace-overlay-store.js";
 export { buildPrMemoryComment, type PrMemoryCommentOptions } from "./pr-memory-comment.js";
+export { validationStatusSchema, type ValidationStatus } from "./validation-status.js";
+export { validateSave, type ValidateSaveInput, type ValidateSaveResult } from "./save-validator.js";
+export { checkConflicts, type ConflictOutcome, type ConflictResult } from "./conflict-checker.js";
