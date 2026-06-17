@@ -8,7 +8,6 @@ import type {
   TaskStepId,
   ToolDefinitionId,
 } from "@megasaver/shared";
-import { memoryValidationSchema, type MemoryValidation } from "./memory-validation.js";
 import { CoreRegistryError } from "./errors.js";
 import {
   type FailedAttemptSearchQuery,
@@ -28,6 +27,7 @@ import {
   memoryEntryUpdatePatchSchema,
 } from "./memory-entry.js";
 import { type MemorySearchQuery, searchMemoryEntries as searchEntries } from "./memory-search.js";
+import { type MemoryValidation, memoryValidationSchema } from "./memory-validation.js";
 import {
   type FailureToRuleInput,
   type ProjectRule,

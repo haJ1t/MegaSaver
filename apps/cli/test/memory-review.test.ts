@@ -42,6 +42,7 @@ describe("runMemoryReview", () => {
       storeFlag: store,
       jsonFlag: false,
       cwd: process.cwd(),
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       home: process.env["HOME"] ?? "",
       xdgDataHome: undefined,
       platform: process.platform as NodeJS.Platform,

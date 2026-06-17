@@ -195,10 +195,7 @@ export function readMemoryValidation(
   }
 }
 
-export function writeMemoryValidation(
-  paths: StorePaths,
-  validation: MemoryValidation,
-): void {
+export function writeMemoryValidation(paths: StorePaths, validation: MemoryValidation): void {
   mkdirSync(paths.memoryValidationsDir, { recursive: true });
   const filePath = join(paths.memoryValidationsDir, `${validation.memoryEntryId}.json`);
   atomicWriteFile(filePath, `${JSON.stringify(validation, null, 2)}\n`);

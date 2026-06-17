@@ -33,9 +33,9 @@ import {
   writeTaskPlansForProject,
   writeToolDefinitionsForProject,
 } from "./json-directory-store.js";
-import { memoryValidationSchema } from "./memory-validation.js";
 import { memoryEntrySchema, memoryEntryUpdatePatchSchema } from "./memory-entry.js";
 import { searchMemoryEntries as searchEntries } from "./memory-search.js";
+import { memoryValidationSchema } from "./memory-validation.js";
 import { type ProjectRule, failureToRuleInputSchema, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
 import {

@@ -1,7 +1,11 @@
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, memoryEntryNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
-import { formatMemoryExplainLines, formatMemoryValidationLines, memoryEntryIdSchema } from "./shared.js";
+import {
+  formatMemoryExplainLines,
+  formatMemoryValidationLines,
+  memoryEntryIdSchema,
+} from "./shared.js";
 
 export type RunMemoryExplainInput = {
   memoryEntryId: string;

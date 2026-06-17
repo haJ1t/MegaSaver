@@ -71,7 +71,10 @@ export async function runMemoryReview(input: RunMemoryReviewInput): Promise<0 | 
 }
 
 export const memoryReviewCommand = defineCommand({
-  meta: { name: "review", description: "List suggested, quarantined, and rejected memory entries for human review." },
+  meta: {
+    name: "review",
+    description: "List suggested, quarantined, and rejected memory entries for human review.",
+  },
   args: {
     projectName: { type: "positional", required: true, description: "Project name." },
     store: { type: "string", description: "Override store directory." },
