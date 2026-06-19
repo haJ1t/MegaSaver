@@ -289,6 +289,30 @@ export function deleteSessionMemory(
   );
 }
 
+export type MemoryGraphNode = {
+  id: string;
+  kind: string;
+  label: string;
+  meta: Record<string, unknown>;
+};
+
+export type MemoryGraphEdge = {
+  id: string;
+  kind: string;
+  from: string;
+  to: string;
+};
+
+export type MemoryGraphData = {
+  nodes: MemoryGraphNode[];
+  edges: MemoryGraphEdge[];
+  stats: { nodeCount: number; edgeCount: number };
+};
+
+export function fetchSessionMemoryGraph(dir: string, id: string): Promise<MemoryGraphData> {
+  return getJson<MemoryGraphData>(`${memoryBase(dir, id)}/graph`);
+}
+
 export function fetchSessionTasks(dir: string, id: string): Promise<SessionTaskPlanView[]> {
   return getJson<SessionTaskPlanView[]>(
     `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/tasks`,

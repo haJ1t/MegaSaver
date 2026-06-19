@@ -67,6 +67,16 @@
   --badge-scope-project-fg: #3a4498;
   --badge-scope-session-bg: #f0e8f6;
   --badge-scope-session-fg: #6b3a98;
+
+  /* Memory-graph node palette (per memory-graph spec) */
+  --graph-project: #7c3aed;
+  --graph-session: #2563eb;
+  --graph-memory: #059669;
+  --graph-memory-decision: #059669;
+  --graph-memory-bug: #dc2626;
+  --graph-memory-architecture: #0d9488;
+  --graph-evidence: #d97706;
+  --graph-chunkset: #6b7280;
 }
 
 /* ── Dark mode (auto via OS preference) ── */
@@ -125,6 +135,16 @@
     --badge-scope-project-fg: #8b9fe0;
     --badge-scope-session-bg: #1c1428;
     --badge-scope-session-fg: #b88fe0;
+
+    /* Memory-graph node palette — brightened for the dark canvas */
+    --graph-project: #a78bfa;
+    --graph-session: #60a5fa;
+    --graph-memory: #34d399;
+    --graph-memory-decision: #34d399;
+    --graph-memory-bug: #f87171;
+    --graph-memory-architecture: #2dd4bf;
+    --graph-evidence: #fbbf24;
+    --graph-chunkset: #9ca3af;
   }
 }
 

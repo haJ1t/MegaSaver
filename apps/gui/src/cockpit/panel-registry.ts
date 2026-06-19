@@ -1,6 +1,7 @@
 import type { CockpitPanel } from "./panel.js";
 import {
   MemoryCockpitPanel,
+  MemoryGraphCockpitPanel,
   TasksCockpitPanel,
   TokenSaverCockpitPanel,
 } from "./panels/session-overlay-panels.js";
@@ -17,6 +18,12 @@ export const COCKPIT_PANELS: readonly CockpitPanel[] = [
   { id: "transcript", label: "Transcript", scope: "session", component: TranscriptPanel },
   { id: "telemetry", label: "Telemetry", scope: "session", component: TelemetryPanel },
   { id: "memory", label: "Memory", scope: "session", component: MemoryCockpitPanel },
+  {
+    id: "memory-graph",
+    label: "Memory Graph",
+    scope: "session",
+    component: MemoryGraphCockpitPanel,
+  },
   { id: "tasks", label: "Tasks", scope: "session", component: TasksCockpitPanel },
   { id: "token-saver", label: "Token saver", scope: "session", component: TokenSaverCockpitPanel },
   { id: "ws-index", label: "Index", scope: "workspace", component: WorkspaceIndexCockpitPanel },
