@@ -60,6 +60,9 @@ importers:
       '@megasaver/mcp-bridge':
         specifier: workspace:*
         version: link:../../packages/mcp-bridge
+      '@megasaver/memory-graph':
+        specifier: workspace:*
+        version: link:../../packages/memory-graph
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../../packages/output-filter
