@@ -12,6 +12,7 @@ export {
 } from "./model.js";
 
 export { buildGraph } from "./build-graph.js";
+export { parseWikiPage } from "./parse-wiki.js";
 export {
   memoryInputSchema,
   evidenceInputSchema,
