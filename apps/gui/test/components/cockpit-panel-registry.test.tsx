@@ -32,6 +32,7 @@ describe("COCKPIT_PANELS registry", () => {
       "transcript",
       "telemetry",
       "memory",
+      "memory-graph",
       "tasks",
       "token-saver",
       "ws-index",
