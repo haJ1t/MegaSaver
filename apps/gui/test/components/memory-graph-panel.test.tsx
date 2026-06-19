@@ -172,10 +172,15 @@ describe("MemoryGraphPanel", () => {
     });
   });
 
-  it("toggling Code off removes file and symbol nodes and code-link edges", async () => {
+  it("toggling Code off removes file/symbol nodes, code-link edges, and the wiki-cite bridge", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
     await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    // The wiki-cite edge (w1 -> f1) bridges to a file node before the toggle.
+    const beforeClasses = capturedElements.map((el) => el.classes);
+    expect(beforeClasses).toContain("file");
+    expect(beforeClasses).toContain("wiki-cite");
 
     fireEvent.click(screen.getByRole("button", { name: /Code/i }));
 
@@ -184,6 +189,8 @@ describe("MemoryGraphPanel", () => {
       expect(afterClasses).not.toContain("file");
       expect(afterClasses).not.toContain("symbol");
       expect(afterClasses).not.toContain("code-link");
+      // wiki-cite points at the now-hidden file node, so the endpoint check drops it.
+      expect(afterClasses).not.toContain("wiki-cite");
     });
   });
 
