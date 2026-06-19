@@ -95,6 +95,8 @@ export async function runMemoryGraph(input: RunMemoryGraphInput): Promise<0 | 1>
         source: m.source,
         stale: m.stale,
         evidenceIds: m.evidence ?? [],
+        relatedFiles: m.relatedFiles ?? [],
+        relatedSymbols: m.relatedSymbols ?? [],
       })),
       // Evidence and chunkSets are workspace-keyed and handled by the GUI
       // overlay path; the project-scoped CLI view omits them deliberately to
@@ -102,6 +104,11 @@ export async function runMemoryGraph(input: RunMemoryGraphInput): Promise<0 | 1>
       evidence: [],
       chunkSets: [],
       conflicts,
+      // Wiki + derived code nodes are not yet ingested by the CLI path (Task 5);
+      // empty for now so this command stays purely project-registry-driven.
+      files: [],
+      symbols: [],
+      wikiPages: [],
     };
 
     const graph = buildGraph(graphInput);
