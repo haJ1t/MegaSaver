@@ -84,8 +84,8 @@ export function buildGraph(input: GraphInput): Graph {
     if (m.scope === "session" && m.sessionId) link("scope", m.sessionId, m.id);
     else if (m.scope === "project" && m.projectId) link("project-memory", m.projectId, m.id);
     for (const evId of m.evidenceIds) link("cites", m.id, evId);
-    for (const fp of m.relatedFiles ?? []) link("code-link", m.id, fp);
-    for (const sym of m.relatedSymbols ?? []) link("code-link", m.id, sym);
+    for (const fp of m.relatedFiles) link("code-link", m.id, fp);
+    for (const sym of m.relatedSymbols) link("code-link", m.id, sym);
   }
   for (const e of input.evidence) {
     if (e.sessionId) link("from-session", e.evidenceId, e.sessionId);
