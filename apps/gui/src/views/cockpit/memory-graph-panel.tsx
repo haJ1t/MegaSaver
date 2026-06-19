@@ -24,10 +24,26 @@ const PALETTE: Record<string, { cssVar: string; fallback: string }> = {
   "memory-architecture": { cssVar: "--graph-memory-architecture", fallback: "#0D9488" },
   evidence: { cssVar: "--graph-evidence", fallback: "#D97706" },
   chunkset: { cssVar: "--graph-chunkset", fallback: "#6B7280" },
+  file: { cssVar: "--graph-file", fallback: "#475569" },
+  symbol: { cssVar: "--graph-symbol", fallback: "#64748B" },
+  wiki: { cssVar: "--graph-wiki", fallback: "#9333EA" },
 };
 
 const PROVENANCE_EDGES = new Set(["cites", "chunk-of", "from-session"]);
 const CONFLICT_EDGES = new Set(["conflict", "supersede", "duplicate"]);
+// code-link / wiki-cite: thin solid arrows pointing to file nodes (bridge)
+const CODE_BRIDGE_EDGES = new Set(["code-link", "wiki-cite"]);
+// wiki-link / wiki-source: violet solid — wiki-to-wiki and wiki-to-evidence structure
+const WIKI_EDGES = new Set(["wiki-link", "wiki-source"]);
+
+// Which node kinds belong to each layer toggle
+const WIKI_LAYER_KINDS = new Set(["wiki"]);
+// Edges dropped when the wiki layer is hidden (all edges with a wiki node as source)
+const WIKI_LAYER_EDGES = new Set(["wiki-link", "wiki-source", "wiki-cite"]);
+const CODE_LAYER_KINDS = new Set(["file", "symbol"]);
+const CODE_LAYER_EDGES = new Set(["code-link"]);
+
+type Layer = "wiki" | "code";
 
 function readColor(cssVar: string, fallback: string): string {
   if (typeof window === "undefined") return fallback;
@@ -50,15 +66,38 @@ function nodeColorKey(node: MemoryGraphNode): string {
   return "memory";
 }
 
-function toElements(data: MemoryGraphData): ElementDefinition[] {
-  const nodes: ElementDefinition[] = data.nodes.map((node) => ({
+function toElements(data: MemoryGraphData, hiddenLayers: Set<Layer>): ElementDefinition[] {
+  const hiddenNodeKinds = new Set<string>();
+  const hiddenEdgeKinds = new Set<string>();
+
+  if (hiddenLayers.has("wiki")) {
+    for (const k of WIKI_LAYER_KINDS) hiddenNodeKinds.add(k);
+    for (const k of WIKI_LAYER_EDGES) hiddenEdgeKinds.add(k);
+  }
+  if (hiddenLayers.has("code")) {
+    for (const k of CODE_LAYER_KINDS) hiddenNodeKinds.add(k);
+    for (const k of CODE_LAYER_EDGES) hiddenEdgeKinds.add(k);
+  }
+
+  const visibleNodes = data.nodes.filter((n) => !hiddenNodeKinds.has(n.kind));
+  const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
+
+  const nodes: ElementDefinition[] = visibleNodes.map((node) => ({
     data: { id: node.id, label: node.label, color: colorForKey(nodeColorKey(node)) },
     classes: node.kind,
   }));
-  const edges: ElementDefinition[] = data.edges.map((edge) => ({
-    data: { id: edge.id, source: edge.from, target: edge.to },
-    classes: edge.kind,
-  }));
+
+  // Drop an edge if its kind is explicitly hidden OR if either endpoint is a hidden node.
+  // This ensures wiki-cite drops when Code layer is off (file node vanishes).
+  const edges: ElementDefinition[] = data.edges
+    .filter(
+      (e) => !hiddenEdgeKinds.has(e.kind) && visibleNodeIds.has(e.from) && visibleNodeIds.has(e.to),
+    )
+    .map((edge) => ({
+      data: { id: edge.id, source: edge.from, target: edge.to },
+      classes: edge.kind,
+    }));
+
   return [...nodes, ...edges];
 }
 
@@ -67,6 +106,7 @@ function buildStylesheet(): StylesheetJson {
   const conflictColor = readColor("--color-danger", "#DC2626");
   const structuralColor = readColor("--color-border", "#9CA3AF");
   const provenanceColor = readColor("--color-text-muted", "#646b77");
+  const wikiColor = readColor("--graph-wiki", "#9333EA");
 
   const sheet: StylesheetJson = [
     {
@@ -123,6 +163,32 @@ function buildStylesheet(): StylesheetJson {
     });
   }
 
+  for (const kind of CODE_BRIDGE_EDGES) {
+    sheet.push({
+      selector: `edge.${kind}`,
+      style: {
+        width: 1,
+        "line-color": structuralColor,
+        "target-arrow-color": structuralColor,
+        "target-arrow-shape": "triangle",
+        "curve-style": "bezier",
+      },
+    });
+  }
+
+  for (const kind of WIKI_EDGES) {
+    sheet.push({
+      selector: `edge.${kind}`,
+      style: {
+        width: 1.5,
+        "line-color": wikiColor,
+        "target-arrow-color": wikiColor,
+        "target-arrow-shape": "triangle",
+        "curve-style": "bezier",
+      },
+    });
+  }
+
   return sheet;
 }
 
@@ -142,6 +208,7 @@ export function MemoryGraphPanel({
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<BridgeError | null>(null);
   const [selected, setSelected] = useState<MemoryGraphNode | null>(null);
+  const [hiddenLayers, setHiddenLayers] = useState<Set<Layer>>(new Set());
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
@@ -170,7 +237,7 @@ export function MemoryGraphPanel({
 
     const cy = cytoscape({
       container,
-      elements: toElements(data),
+      elements: toElements(data, hiddenLayers),
       style: buildStylesheet(),
     });
     cyRef.current = cy;
@@ -187,7 +254,19 @@ export function MemoryGraphPanel({
       cy.destroy();
       cyRef.current = null;
     };
-  }, [state, data]);
+  }, [state, data, hiddenLayers]);
+
+  function toggleLayer(layer: Layer) {
+    setHiddenLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(layer)) {
+        next.delete(layer);
+      } else {
+        next.add(layer);
+      }
+      return next;
+    });
+  }
 
   if (state === "loading") {
     return (
@@ -221,12 +300,40 @@ export function MemoryGraphPanel({
     <section aria-label="Memory graph" className="flex flex-col flex-1 min-h-0">
       <header className="flex items-center justify-between px-6 py-3 border-b border-border">
         <h2 className="text-sm text-text-muted uppercase tracking-widest">Memory graph</h2>
-        {data && (
-          <p className="text-xs text-text-muted">
-            {data.stats.nodeCount} {data.stats.nodeCount === 1 ? "node" : "nodes"} ·{" "}
-            {data.stats.edgeCount} {data.stats.edgeCount === 1 ? "edge" : "edges"}
-          </p>
-        )}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => toggleLayer("wiki")}
+              aria-pressed={!hiddenLayers.has("wiki")}
+              className={`text-xs px-2 py-0.5 rounded border ${
+                hiddenLayers.has("wiki")
+                  ? "border-border text-text-muted"
+                  : "border-[var(--graph-wiki)] text-[var(--graph-wiki)]"
+              }`}
+            >
+              Wiki
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleLayer("code")}
+              aria-pressed={!hiddenLayers.has("code")}
+              className={`text-xs px-2 py-0.5 rounded border ${
+                hiddenLayers.has("code")
+                  ? "border-border text-text-muted"
+                  : "border-[var(--graph-file)] text-[var(--graph-file)]"
+              }`}
+            >
+              Code
+            </button>
+          </div>
+          {data && (
+            <p className="text-xs text-text-muted">
+              {data.stats.nodeCount} {data.stats.nodeCount === 1 ? "node" : "nodes"} ·{" "}
+              {data.stats.edgeCount} {data.stats.edgeCount === 1 ? "edge" : "edges"}
+            </p>
+          )}
+        </div>
       </header>
 
       <div className="flex flex-1 min-h-0">
