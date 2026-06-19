@@ -20,6 +20,37 @@ describe("memory-graph model", () => {
       expect(edgeKindSchema.parse(k)).toBe(k);
     }
   });
+  it("accepts every Phase 2 node + edge kind", () => {
+    for (const k of [
+      "project",
+      "session",
+      "memory",
+      "evidence",
+      "chunkset",
+      "file",
+      "symbol",
+      "wiki",
+    ]) {
+      expect(nodeKindSchema.parse(k)).toBe(k);
+    }
+    for (const k of [
+      "contains",
+      "scope",
+      "project-memory",
+      "cites",
+      "chunk-of",
+      "from-session",
+      "conflict",
+      "supersede",
+      "duplicate",
+      "code-link",
+      "wiki-link",
+      "wiki-source",
+      "wiki-cite",
+    ]) {
+      expect(edgeKindSchema.parse(k)).toBe(k);
+    }
+  });
   it("validates a minimal graph", () => {
     const g = graphSchema.parse({
       nodes: [{ id: "m1", kind: "memory", label: "X", meta: {} }],
