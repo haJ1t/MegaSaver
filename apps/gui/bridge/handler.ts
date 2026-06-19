@@ -25,6 +25,7 @@ import {
 } from "./routes/claude-sessions.js";
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
+import { handleGetMemoryGraph } from "./routes/memory-graph.js";
 import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
 import { resolveWorkspace } from "./workspace-resolver.js";
@@ -216,6 +217,17 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         methodNotAllowed(res, method, origin),
       );
       if (dispatched) return;
+    }
+
+    const memoryGraphMatch = path.match(
+      /^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/memory\/graph$/,
+    );
+    if (memoryGraphMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      const dir = decodeURIComponent(memoryGraphMatch[1] as string);
+      const id = decodeURIComponent(memoryGraphMatch[2] as string);
+      await handleGetMemoryGraph(ctx, dir, id);
+      return;
     }
 
     const claudeMemoryMatch = path.match(
