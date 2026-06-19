@@ -61,7 +61,7 @@ const WIKI_FOLDERS = ["entities", "concepts", "decisions", "syntheses", "workflo
 // Walk a wiki folder and return parsed WikiInput entries.
 // Path confinement: every resolved real path must start with wikiRoot + sep,
 // so ../ segments and absolute symlink targets can never escape the wiki tree.
-// Symlinks are skipped (lstat detects them) so a symlink whose real path
+// Symlinks are skipped (Dirent.isSymbolicLink) so a symlink whose real path
 // escapes wiki/ can't redirect the read outside the tree.
 async function readWikiPages(cwd: string): Promise<WikiInput[]> {
   const wikiRoot = resolve(join(cwd, "wiki"));
