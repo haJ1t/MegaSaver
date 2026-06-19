@@ -24,6 +24,8 @@ beforeEach(() => {
 
 afterEach(async () => {
   if (server) await server.close();
+  rmSync(join(CWD, "wiki"), { recursive: true, force: true });
+  rmSync(join(CWD, "outside-secret.md"), { force: true });
 });
 
 async function start() {
@@ -175,7 +177,7 @@ describe("memory graph route", () => {
     expect(res.status).toBe(405);
   });
 
-  it("GET /memory/graph ingestsiki pages + code-link from memory relatedFiles", async () => {
+  it("GET /memory/graph ingests wiki pages + code-link from memory relatedFiles", async () => {
     // Write wiki fixture under CWD/wiki/
     const wikiRoot = join(CWD, "wiki");
     mkdirSync(join(wikiRoot, "entities"), { recursive: true });
