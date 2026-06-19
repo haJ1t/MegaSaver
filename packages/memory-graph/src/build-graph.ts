@@ -47,18 +47,31 @@ export function buildGraph(input: GraphInput): Graph {
   for (const w of input.wikiPages)
     add({ id: w.path, kind: "wiki", label: w.title, meta: { tags: w.tags, status: w.status } });
 
-  // Build resolution map: lowercase key -> canonical path.
-  // Each wikiPage is indexed under four keys so [[link]] strings can match
-  // by full path, path-without-.md, basename-without-.md, or title.
+  // [[link]] strings can match by full path, path-without-.md, basename, or
+  // title. The path keys are unique per page so they always resolve; basename
+  // and title can collide across pages, so a shared one resolves to nothing —
+  // a missing edge is acceptable, a wrong edge is not.
   const wikiResolve = new Map<string, string>();
+  const ambiguous = new Set<string>();
+  const addKey = (key: string, path: string, allowAmbiguous: boolean): void => {
+    const lo = key.toLowerCase();
+    if (
+      allowAmbiguous &&
+      (ambiguous.has(lo) || (wikiResolve.has(lo) && wikiResolve.get(lo) !== path))
+    ) {
+      ambiguous.add(lo);
+      wikiResolve.delete(lo);
+      return;
+    }
+    if (!ambiguous.has(lo)) wikiResolve.set(lo, path);
+  };
   for (const w of input.wikiPages) {
     const p = w.path;
-    wikiResolve.set(p.toLowerCase(), p);
     const withoutMd = p.endsWith(".md") ? p.slice(0, -3) : p;
-    wikiResolve.set(withoutMd.toLowerCase(), p);
-    const basename = withoutMd.split("/").pop() ?? withoutMd;
-    wikiResolve.set(basename.toLowerCase(), p);
-    wikiResolve.set(w.title.toLowerCase(), p);
+    addKey(p, p, false);
+    addKey(withoutMd, p, false);
+    addKey(withoutMd.split("/").pop() ?? withoutMd, p, true);
+    addKey(w.title, p, true);
   }
   const resolveWiki = (raw: string): string | undefined => {
     const lo = raw.toLowerCase();

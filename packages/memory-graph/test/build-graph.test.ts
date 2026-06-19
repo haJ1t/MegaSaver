@@ -219,4 +219,28 @@ describe("buildGraph — file/symbol/wiki nodes + edges", () => {
     const g = buildGraph(input);
     expect(has(g, "code-link", "m1", "packages/ghost/not-listed.ts")).toBe(false);
   });
+  it("ambiguous basename: shared basename resolves to nothing, full path still wins", () => {
+    const input = base();
+    const wiki = (path: string, links: string[]): GraphInput["wikiPages"][number] => ({
+      path,
+      title: path,
+      tags: [],
+      status: "active",
+      links,
+      sources: [],
+      fileCites: [],
+    });
+    input.wikiPages = [
+      wiki("a/dup.md", []),
+      wiki("b/dup.md", []),
+      wiki("ambiguous-ref.md", ["dup"]),
+      wiki("specific-ref.md", ["a/dup"]),
+    ];
+    const g = buildGraph(input);
+    // bare [[dup]] is ambiguous across a/dup.md and b/dup.md -> no edge from ambiguous-ref
+    expect(has(g, "wiki-link", "ambiguous-ref.md", "a/dup.md")).toBe(false);
+    expect(has(g, "wiki-link", "ambiguous-ref.md", "b/dup.md")).toBe(false);
+    // full path-without-.md [[a/dup]] is unique -> resolves
+    expect(has(g, "wiki-link", "specific-ref.md", "a/dup.md")).toBe(true);
+  });
 });
