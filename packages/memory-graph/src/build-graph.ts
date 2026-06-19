@@ -38,12 +38,16 @@ export function buildGraph(input: GraphInput): Graph {
 
   const edges: GraphEdge[] = [];
   const seen = new Set<string>();
+  // conflict/duplicate are undirected; canonicalize to a sorted pair so a loader
+  // emitting both a->b and b->a collapses to one edge. supersede stays directed.
+  const undirected = new Set<GraphEdge["kind"]>(["conflict", "duplicate"]);
   const link = (kind: GraphEdge["kind"], from: string, to: string): void => {
     if (!ids.has(from) || !ids.has(to)) return;
-    const id = `${kind}:${from}->${to}`;
+    const [a, b] = undirected.has(kind) && from > to ? [to, from] : [from, to];
+    const id = `${kind}:${a}->${b}`;
     if (seen.has(id)) return;
     seen.add(id);
-    edges.push({ id, kind, from, to });
+    edges.push({ id, kind, from: a, to: b });
   };
 
   for (const s of input.sessions) if (s.projectId) link("contains", s.projectId, s.id);

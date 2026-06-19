@@ -76,6 +76,19 @@ describe("buildGraph", () => {
     expect(m1?.meta.memoryType).toBe("decision");
     expect(m1?.meta.approval).toBe("approved");
   });
+  it("collapses a bidirectional undirected conflict/duplicate into one edge", () => {
+    const input = base();
+    input.conflicts = [
+      { from: "m1", to: "m2", kind: "duplicate" },
+      { from: "m2", to: "m1", kind: "duplicate" },
+    ];
+    expect(buildGraph(input).edges.filter((e) => e.kind === "duplicate")).toHaveLength(1);
+  });
+  it("keeps directed supersede direction (not canonicalized)", () => {
+    const input = base();
+    input.conflicts = [{ from: "m2", to: "m1", kind: "supersede" }];
+    expect(has(buildGraph(input), "supersede", "m2", "m1")).toBe(true);
+  });
   it("contains: project->session", () => {
     expect(has(buildGraph(base()), "contains", "p1", "s1")).toBe(true);
   });
