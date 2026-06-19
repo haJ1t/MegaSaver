@@ -1,4 +1,4 @@
-import { readFile, readdir } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { type WikiInput, parseWikiPage } from "@megasaver/memory-graph";
 
@@ -7,10 +7,9 @@ import { type WikiInput, parseWikiPage } from "@megasaver/memory-graph";
 const WIKI_FOLDERS = ["entities", "concepts", "decisions", "syntheses", "workflows", "sources"];
 
 // Walk the project's wiki/ directory and return parsed WikiInput entries.
-// Path confinement: every resolved real path must start with wikiRoot + sep,
-// so ../ segments and absolute symlink targets can never escape the wiki tree.
-// Symlinks are skipped (Dirent.isSymbolicLink()) so a symlink whose real path
-// escapes wiki/ can't redirect the read outside the tree.
+// Path confinement: top-level folders are lstat'd and skipped if they are symlinks;
+// entries inside each walk are skipped via Dirent.isSymbolicLink(); the resolved-path
+// startsWith check guards against any remaining ../ traversal.
 export async function readWikiPages(rootPath: string): Promise<WikiInput[]> {
   const wikiRoot = resolve(join(rootPath, "wiki"));
   const confinementPrefix = wikiRoot + sep;
@@ -42,7 +41,12 @@ export async function readWikiPages(rootPath: string): Promise<WikiInput[]> {
   }
 
   for (const folder of WIKI_FOLDERS) {
-    await walkDir(join(wikiRoot, folder));
+    const folderPath = join(wikiRoot, folder);
+    // Skip top-level folder if it is a symlink — mirrors the in-walk isSymbolicLink() skip.
+    // lstat throws on ENOENT (folder absent) → treat as skip, same as readdir catching null.
+    const st = await lstat(folderPath).catch(() => null);
+    if (st === null || st.isSymbolicLink()) continue;
+    await walkDir(folderPath);
   }
 
   return results;

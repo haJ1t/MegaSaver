@@ -32,11 +32,12 @@ export function parseWikiPage(relPath: string, content: string): WikiInput {
   const sources: string[] = [];
   let status = "active";
 
-  const fm = content.match(/^---\n([\s\S]*?)\n---/);
+  // \r?\n throughout so CRLF wiki pages parse identically to LF.
+  const fm = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (fm) {
-    const lines = (fm[1] as string).split("\n");
+    const lines = (fm[1] as string).split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i] as string;
+      const line = (lines[i] as string).replace(/\r$/, "");
       const m = line.match(/^([A-Za-z_]+):\s*(.*)$/);
       if (!m) continue;
       const key = m[1] as string;
@@ -45,7 +46,9 @@ export function parseWikiPage(relPath: string, content: string): WikiInput {
         if (rest.startsWith("[")) return parseInlineArray(rest);
         const out: string[] = [];
         while (i + 1 < lines.length && /^\s*-\s+/.test(lines[i + 1] as string)) {
-          out.push(stripQuotes((lines[++i] as string).replace(/^\s*-\s+/, "")).trim());
+          out.push(
+            stripQuotes((lines[++i] as string).replace(/\r$/, "").replace(/^\s*-\s+/, "")).trim(),
+          );
         }
         return out;
       };
@@ -65,8 +68,25 @@ export function parseWikiPage(relPath: string, content: string): WikiInput {
   const fileCites = [
     ...new Set(
       [...body.matchAll(/\(source:\s*([^)]+)\)/g)]
-        .map((mm) => (mm[1] as string).trim().replace(/:\d+$/, "").trim())
-        .filter(looksLikePath),
+        .map((mm) => {
+          let s = (mm[1] as string).trim();
+          // Reject [[wikilink]]-shaped refs — they are page links, not file paths.
+          if (s.startsWith("[[")) return null;
+          // Strip wrapping backticks or quotes added by wiki authors.
+          if (
+            (s.startsWith("`") && s.endsWith("`")) ||
+            (s.startsWith("'") && s.endsWith("'")) ||
+            (s.startsWith('"') && s.endsWith('"'))
+          ) {
+            s = s.slice(1, -1).trim();
+          }
+          // Strip line number suffix including ranges (ASCII hyphen or en-dash).
+          s = s.replace(/:\d+(?:[-–]\d+)?$/, "").trim();
+          // Canonicalize leading ./
+          if (s.startsWith("./")) s = s.slice(2);
+          return s;
+        })
+        .filter((s): s is string => s !== null && looksLikePath(s)),
     ),
   ];
 

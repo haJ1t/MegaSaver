@@ -165,6 +165,52 @@ describe("runMemoryGraph", () => {
     expect(wikiLinkEdge).toBeDefined();
   });
 
+  it("backtick-wrapped wiki citation and memory relatedFiles share ONE file node", async () => {
+    await seed();
+    const wikiRoot = join(rootPath, "wiki");
+    await mkdir(join(wikiRoot, "entities"), { recursive: true });
+    // Wiki page cites src/shared/x.ts wrapped in backticks — the real-world pattern.
+    await writeFile(
+      join(wikiRoot, "entities", "ref.md"),
+      "---\ntitle: Ref\ntags: []\nstatus: active\n---\nSome claim (source: `src/shared/x.ts`).\n",
+    );
+    // Seed a memory whose relatedFiles includes the same path WITHOUT backticks.
+    await writeFile(
+      join(store, "memory", `${PROJECT_ID}.jsonl`),
+      `${JSON.stringify({
+        id: MEMORY_ID_SESSION,
+        projectId: PROJECT_ID,
+        sessionId: SESSION_ID,
+        scope: "session",
+        type: "decision",
+        title: "uses shared",
+        content: "uses src/shared/x.ts",
+        keywords: [],
+        confidence: "medium",
+        source: "agent",
+        approval: "approved",
+        stale: false,
+        relatedFiles: ["src/shared/x.ts"],
+        createdAt: TS,
+        updatedAt: TS,
+      })}\n`,
+    );
+
+    const code = await runMemoryGraph(makeInput({ jsonFlag: true }));
+    expect(code).toBe(0);
+    const graph = JSON.parse(lines[0] ?? "") as Graph;
+
+    // Exactly ONE file node for src/shared/x.ts (not two with/without backticks).
+    const fileNodes = graph.nodes.filter((n) => n.kind === "file" && n.id === "src/shared/x.ts");
+    expect(fileNodes).toHaveLength(1);
+
+    // That node must have BOTH a code-link (from memory) AND a wiki-cite (from wiki).
+    const codeLink = graph.edges.find((e) => e.kind === "code-link" && e.to === "src/shared/x.ts");
+    expect(codeLink).toBeDefined();
+    const wikiCite = graph.edges.find((e) => e.kind === "wiki-cite" && e.to === "src/shared/x.ts");
+    expect(wikiCite).toBeDefined();
+  });
+
   it("path-safety: symlink inside wiki/ pointing outside is NOT followed", async () => {
     await seed();
     const secretMarker = "TOPSECRET-cli-should-never-appear";
@@ -196,5 +242,35 @@ describe("runMemoryGraph", () => {
     const serialized = JSON.stringify(graph);
     expect(serialized).not.toContain(secretMarker);
     expect(serialized).not.toContain("outside-secret");
+  });
+
+  it("path-safety: TOP-LEVEL wiki folder that is a symlink is NOT followed", async () => {
+    await seed();
+
+    // Create a real directory OUTSIDE the wiki tree with a page.
+    const outsideDir = join(rootPath, "outside-dir");
+    await mkdir(outsideDir, { recursive: true });
+    await writeFile(join(outsideDir, "leaked.md"), "# Leaked\nno links\n");
+
+    const wikiRoot = join(rootPath, "wiki");
+    // Create one real folder so the walk definitely runs.
+    await mkdir(join(wikiRoot, "concepts"), { recursive: true });
+    await writeFile(join(wikiRoot, "concepts", "safe.md"), "# Safe\nno links\n");
+    // entities/ is a TOP-LEVEL symlink pointing outside the wiki tree.
+    await symlink(outsideDir, join(wikiRoot, "entities"));
+
+    const code = await runMemoryGraph(makeInput({ jsonFlag: true }));
+    expect(code).toBe(0);
+    const graph = JSON.parse(lines[0] ?? "") as Graph;
+
+    // safe.md inside concepts/ IS present (proves the walk ran).
+    const safeNode = graph.nodes.find((n) => n.kind === "wiki" && n.id === "concepts/safe.md");
+    expect(safeNode).toBeDefined();
+
+    // leaked.md from the symlinked entities/ dir must NOT appear as a wiki node.
+    // Without the fix, the loader calls walkDir(join(wikiRoot, "entities")) which
+    // reads through the symlink and ingests leaked.md as "entities/leaked.md".
+    const leakedNode = graph.nodes.find((n) => n.kind === "wiki" && n.id === "entities/leaked.md");
+    expect(leakedNode).toBeUndefined();
   });
 });
