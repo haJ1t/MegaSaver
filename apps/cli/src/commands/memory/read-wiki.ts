@@ -34,7 +34,9 @@ export async function readWikiPages(rootPath: string): Promise<WikiInput[]> {
         } catch {
           continue;
         }
-        const relPath = relative(wikiRoot, realPath);
+        // Normalize to POSIX separators: the wiki node id must be /-separated on
+        // every OS so it matches /-shaped [[link]] targets and (source:) citations.
+        const relPath = relative(wikiRoot, realPath).split(sep).join("/");
         results.push(parseWikiPage(relPath, content));
       }
     }
