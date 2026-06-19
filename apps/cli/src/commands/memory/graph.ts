@@ -1,10 +1,11 @@
 import { checkConflicts } from "@megasaver/core";
 import { buildGraph } from "@megasaver/memory-graph";
-import type { ConflictPair, GraphInput } from "@megasaver/memory-graph";
+import type { ConflictPair, FileInput, GraphInput, SymbolInput } from "@megasaver/memory-graph";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { projectNameSchema } from "../shared/schemas.js";
+import { readWikiPages } from "./read-wiki.js";
 
 export type RunMemoryGraphInput = {
   projectName: string;
@@ -80,35 +81,48 @@ export async function runMemoryGraph(input: RunMemoryGraphInput): Promise<0 | 1>
       }
     }
 
+    const wikiPages = await readWikiPages(project.rootPath);
+
+    const memoryInputs = memories.map((m) => ({
+      id: m.id,
+      scope: m.scope,
+      sessionId: m.sessionId,
+      projectId: m.projectId,
+      memoryType: m.type,
+      title: m.title,
+      approval: m.approval,
+      confidence: m.confidence,
+      source: m.source,
+      stale: m.stale,
+      evidenceIds: m.evidence ?? [],
+      relatedFiles: m.relatedFiles ?? [],
+      relatedSymbols: m.relatedSymbols ?? [],
+    }));
+
+    // Unique file paths from memory relatedFiles + wiki fileCites.
+    const filePathSet = new Set<string>();
+    for (const m of memoryInputs) for (const fp of m.relatedFiles) filePathSet.add(fp);
+    for (const w of wikiPages) for (const fc of w.fileCites) filePathSet.add(fc);
+    const files: FileInput[] = Array.from(filePathSet).map((path) => ({ path }));
+
+    // Unique symbols from memory relatedSymbols.
+    const symbolSet = new Set<string>();
+    for (const m of memoryInputs) for (const sym of m.relatedSymbols) symbolSet.add(sym);
+    const symbols: SymbolInput[] = Array.from(symbolSet).map((symbol) => ({ symbol }));
+
     const graphInput: GraphInput = {
       projects: [{ id: project.id, name: project.name }],
       sessions: sessions.map((s) => ({ id: s.id, projectId: s.projectId })),
-      memories: memories.map((m) => ({
-        id: m.id,
-        scope: m.scope,
-        sessionId: m.sessionId,
-        projectId: m.projectId,
-        memoryType: m.type,
-        title: m.title,
-        approval: m.approval,
-        confidence: m.confidence,
-        source: m.source,
-        stale: m.stale,
-        evidenceIds: m.evidence ?? [],
-        relatedFiles: m.relatedFiles ?? [],
-        relatedSymbols: m.relatedSymbols ?? [],
-      })),
+      memories: memoryInputs,
       // Evidence and chunkSets are workspace-keyed and handled by the GUI
       // overlay path; the project-scoped CLI view omits them deliberately to
       // keep this command purely project-registry-driven.
       evidence: [],
       chunkSets: [],
       conflicts,
-      // Wiki + derived code nodes are not yet ingested by the CLI path (Task 5);
-      // empty for now so this command stays purely project-registry-driven.
-      files: [],
-      symbols: [],
-      wikiPages: [],
+      files,
+      symbols,
+      wikiPages,
     };
 
     const graph = buildGraph(graphInput);
