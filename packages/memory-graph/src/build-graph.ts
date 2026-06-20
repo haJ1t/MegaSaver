@@ -1,6 +1,12 @@
 import type { GraphInput } from "./inputs.js";
 import type { Graph, GraphEdge, GraphNode } from "./model.js";
 
+// File-node ids must agree across both referrers. Wiki fileCites arrive already
+// './'-stripped from parseWikiPage, but memory relatedFiles are pre-validated
+// data the leaf passes through verbatim — so strip './' here, the one choke
+// point both paths cross, to keep './x' and 'x' a single shared file node.
+const canonFilePath = (p: string): string => (p.startsWith("./") ? p.slice(2) : p);
+
 export function buildGraph(input: GraphInput): Graph {
   const nodes: GraphNode[] = [];
   const ids = new Set<string>();
@@ -41,13 +47,10 @@ export function buildGraph(input: GraphInput): Graph {
     add({ id: c.chunkSetId, kind: "chunkset", label: c.label, meta: { redacted: c.redacted } });
   for (const w of input.wikiPages)
     add({ id: w.path, kind: "wiki", label: w.title, meta: { tags: w.tags, status: w.status } });
-  for (const f of input.files)
-    add({
-      id: f.path,
-      kind: "file",
-      label: f.path.split("/").pop() ?? f.path,
-      meta: { path: f.path },
-    });
+  for (const f of input.files) {
+    const path = canonFilePath(f.path);
+    add({ id: path, kind: "file", label: path.split("/").pop() ?? path, meta: { path } });
+  }
   for (const sym of input.symbols)
     add({ id: sym.symbol, kind: "symbol", label: sym.symbol, meta: {} });
 
@@ -101,7 +104,7 @@ export function buildGraph(input: GraphInput): Graph {
     if (m.scope === "session" && m.sessionId) link("scope", m.sessionId, m.id);
     else if (m.scope === "project" && m.projectId) link("project-memory", m.projectId, m.id);
     for (const evId of m.evidenceIds) link("cites", m.id, evId);
-    for (const fp of m.relatedFiles) link("code-link", m.id, fp);
+    for (const fp of m.relatedFiles) link("code-link", m.id, canonFilePath(fp));
     for (const sym of m.relatedSymbols) link("code-link", m.id, sym);
   }
   for (const e of input.evidence) {
@@ -118,7 +121,7 @@ export function buildGraph(input: GraphInput): Graph {
       const resolved = resolveWiki(src);
       if (resolved) link("wiki-source", w.path, resolved);
     }
-    for (const cite of w.fileCites) link("wiki-cite", w.path, cite);
+    for (const cite of w.fileCites) link("wiki-cite", w.path, canonFilePath(cite));
   }
 
   return { nodes, edges, stats: { nodeCount: nodes.length, edgeCount: edges.length } };

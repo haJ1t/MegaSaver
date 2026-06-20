@@ -249,6 +249,23 @@ describe("buildGraph — file/symbol/wiki nodes + edges", () => {
     expect(node.label).toBe("Target");
     expect(node.meta.tags).toEqual(["roadmap"]);
   });
+  it("collapses ./-prefixed memory relatedFiles with clean wiki fileCites into one file node", () => {
+    const input = base();
+    input.files = [{ path: "./docs/x.md" }, { path: "docs/x.md" }];
+    input.symbols = [];
+    input.conflicts = [];
+    // biome-ignore lint/style/noNonNullAssertion: noUncheckedIndexedAccess requires ! for array index
+    input.memories[0]!.relatedFiles = ["./docs/x.md"];
+    // biome-ignore lint/style/noNonNullAssertion: noUncheckedIndexedAccess requires ! for array index
+    input.memories[0]!.relatedSymbols = [];
+    // biome-ignore lint/style/noNonNullAssertion: noUncheckedIndexedAccess requires ! for array index
+    input.wikiPages[0]!.fileCites = ["docs/x.md"];
+    const g = buildGraph(input);
+    expect(g.nodes.filter((n) => n.id === "docs/x.md")).toHaveLength(1);
+    expect(g.nodes.some((n) => n.id === "./docs/x.md")).toBe(false);
+    expect(has(g, "code-link", "m1", "docs/x.md")).toBe(true);
+    expect(has(g, "wiki-cite", "entities/core.md", "docs/x.md")).toBe(true);
+  });
   it("ambiguous basename: shared basename resolves to nothing, full path still wins", () => {
     const input = base();
     const wiki = (path: string, links: string[]): GraphInput["wikiPages"][number] => ({
