@@ -376,10 +376,10 @@ describe("memory graph route", () => {
 
   it("GET /memory/graph path-safety: a symlink in wiki/ pointing outside is NOT followed", async () => {
     // The secret lives OUTSIDE the wiki tree, with content that must never leak.
-    const secretMarker = "TOPSECRET-should-never-appear";
+    const leakedCite = "secret/leaked-path.ts";
     const outsidePath = join(CWD, "outside-secret.md");
     mkdirSync(CWD, { recursive: true });
-    writeFileSync(outsidePath, `# Outside\n${secretMarker}\n`);
+    writeFileSync(outsidePath, `# Outside\n(source: ${leakedCite})\n`);
 
     // A valid in-tree page so wiki ingestion definitely runs.
     const wikiRoot = join(CWD, "wiki");
@@ -411,10 +411,17 @@ describe("memory graph route", () => {
     );
     expect(escapeNode).toBeUndefined();
 
-    // The secret content/path must not surface anywhere in the serialized graph.
-    const serialized = JSON.stringify(graph);
-    expect(serialized).not.toContain(secretMarker);
-    expect(serialized).not.toContain("outside-secret");
+    // Following the symlink would parse escape.md's (source:) citation into a
+    // file node and a wiki-cite edge; both must be absent because the page was
+    // never read.
+    const leakedFileNode = graph.nodes.find(
+      (n: { kind: string; id: string }) => n.kind === "file" && n.id === leakedCite,
+    );
+    expect(leakedFileNode).toBeUndefined();
+    const leakedCiteEdge = graph.edges.find(
+      (e: { kind: string; to: string }) => e.kind === "wiki-cite" && e.to === leakedCite,
+    );
+    expect(leakedCiteEdge).toBeUndefined();
   });
 
   // chmod 000 does not block reads when running as root, which makes the EACCES

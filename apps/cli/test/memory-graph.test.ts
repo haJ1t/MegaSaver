@@ -297,9 +297,9 @@ describe("runMemoryGraph", () => {
 
   it("path-safety: symlink inside wiki/ pointing outside is NOT followed", async () => {
     await seed();
-    const secretMarker = "TOPSECRET-cli-should-never-appear";
+    const leakedCite = "secret/leaked-path.ts";
     const outsidePath = join(rootPath, "outside-secret.md");
-    await writeFile(outsidePath, `# Outside\n${secretMarker}\n`);
+    await writeFile(outsidePath, `# Outside\n(source: ${leakedCite})\n`);
 
     const wikiRoot = join(rootPath, "wiki");
     await mkdir(join(wikiRoot, "entities"), { recursive: true });
@@ -322,10 +322,13 @@ describe("runMemoryGraph", () => {
     const escapeNode = graph.nodes.find((n) => n.kind === "wiki" && n.id === "entities/escape.md");
     expect(escapeNode).toBeUndefined();
 
-    // Secret content and path must not surface anywhere in the serialized graph.
-    const serialized = JSON.stringify(graph);
-    expect(serialized).not.toContain(secretMarker);
-    expect(serialized).not.toContain("outside-secret");
+    // Following the symlink would parse escape.md's (source:) citation into a
+    // file node and a wiki-cite edge; both must be absent because the page was
+    // never read.
+    const leakedFileNode = graph.nodes.find((n) => n.kind === "file" && n.id === leakedCite);
+    expect(leakedFileNode).toBeUndefined();
+    const leakedCiteEdge = graph.edges.find((e) => e.kind === "wiki-cite" && e.to === leakedCite);
+    expect(leakedCiteEdge).toBeUndefined();
   });
 
   it("path-safety: TOP-LEVEL wiki folder that is a symlink is NOT followed", async () => {
