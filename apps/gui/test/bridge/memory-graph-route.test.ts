@@ -240,33 +240,33 @@ describe("memory graph route", () => {
 
     // wiki node for entities/a.md
     const wikiNodeA = graph.nodes.find(
-      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "entities/a.md",
+      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "wiki:entities/a.md",
     );
     expect(wikiNodeA).toBeDefined();
 
     // wiki node for concepts/b.md
     const wikiNodeB = graph.nodes.find(
-      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "concepts/b.md",
+      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "wiki:concepts/b.md",
     );
     expect(wikiNodeB).toBeDefined();
 
     // wiki-link edge from entities/a.md → concepts/b.md
     const wikiLinkEdge = graph.edges.find(
       (e: { kind: string; from: string; to: string }) =>
-        e.kind === "wiki-link" && e.from === "entities/a.md" && e.to === "concepts/b.md",
+        e.kind === "wiki-link" && e.from === "wiki:entities/a.md" && e.to === "wiki:concepts/b.md",
     );
     expect(wikiLinkEdge).toBeDefined();
 
     // file node for src/foo.ts (from memory relatedFiles)
     const fileNode = graph.nodes.find(
-      (n: { kind: string; id: string }) => n.kind === "file" && n.id === "src/foo.ts",
+      (n: { kind: string; id: string }) => n.kind === "file" && n.id === "file:src/foo.ts",
     );
     expect(fileNode).toBeDefined();
 
     // code-link edge from memory → src/foo.ts
     const codeLinkEdge = graph.edges.find(
       (e: { kind: string; from: string; to: string }) =>
-        e.kind === "code-link" && e.from === memId && e.to === "src/foo.ts",
+        e.kind === "code-link" && e.from === memId && e.to === "file:src/foo.ts",
     );
     expect(codeLinkEdge).toBeDefined();
   });
@@ -307,17 +307,18 @@ describe("memory graph route", () => {
     const graph = await res.json();
 
     const fileNodes = graph.nodes.filter(
-      (n: { kind: string; id: string }) => n.kind === "file" && n.id === "src/shared/x.ts",
+      (n: { kind: string; id: string }) => n.kind === "file" && n.id === "file:src/shared/x.ts",
     );
     expect(fileNodes).toHaveLength(1);
 
     const codeLink = graph.edges.find(
       (e: { kind: string; from: string; to: string }) =>
-        e.kind === "code-link" && e.from === memId && e.to === "src/shared/x.ts",
+        e.kind === "code-link" && e.from === memId && e.to === "file:src/shared/x.ts",
     );
     expect(codeLink).toBeDefined();
     const wikiCite = graph.edges.find(
-      (e: { kind: string; to: string }) => e.kind === "wiki-cite" && e.to === "src/shared/x.ts",
+      (e: { kind: string; to: string }) =>
+        e.kind === "wiki-cite" && e.to === "file:src/shared/x.ts",
     );
     expect(wikiCite).toBeDefined();
   });
@@ -358,17 +359,18 @@ describe("memory graph route", () => {
     const graph = await res.json();
 
     const fileNodes = graph.nodes.filter(
-      (n: { kind: string; id: string }) => n.kind === "file" && n.id === "src/shared/x.ts",
+      (n: { kind: string; id: string }) => n.kind === "file" && n.id === "file:src/shared/x.ts",
     );
     expect(fileNodes).toHaveLength(1);
 
     const codeLink = graph.edges.find(
       (e: { kind: string; from: string; to: string }) =>
-        e.kind === "code-link" && e.from === memId && e.to === "src/shared/x.ts",
+        e.kind === "code-link" && e.from === memId && e.to === "file:src/shared/x.ts",
     );
     expect(codeLink).toBeDefined();
     const wikiCite = graph.edges.find(
-      (e: { kind: string; to: string }) => e.kind === "wiki-cite" && e.to === "src/shared/x.ts",
+      (e: { kind: string; to: string }) =>
+        e.kind === "wiki-cite" && e.to === "file:src/shared/x.ts",
     );
     expect(wikiCite).toBeDefined();
   });
@@ -398,13 +400,13 @@ describe("memory graph route", () => {
 
     // safe.md inside wiki/ IS present (proves the walk actually ran).
     const safeNode = graph.nodes.find(
-      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "entities/safe.md",
+      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "wiki:entities/safe.md",
     );
     expect(safeNode).toBeDefined();
 
     // No wiki node for the symlink that escapes the tree.
     const escapeNode = graph.nodes.find(
-      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "entities/escape.md",
+      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "wiki:entities/escape.md",
     );
     expect(escapeNode).toBeUndefined();
 
@@ -412,11 +414,11 @@ describe("memory graph route", () => {
     // file node and a wiki-cite edge; both must be absent because the page was
     // never read.
     const leakedFileNode = graph.nodes.find(
-      (n: { kind: string; id: string }) => n.kind === "file" && n.id === leakedCite,
+      (n: { kind: string; id: string }) => n.kind === "file" && n.id === `file:${leakedCite}`,
     );
     expect(leakedFileNode).toBeUndefined();
     const leakedCiteEdge = graph.edges.find(
-      (e: { kind: string; to: string }) => e.kind === "wiki-cite" && e.to === leakedCite,
+      (e: { kind: string; to: string }) => e.kind === "wiki-cite" && e.to === `file:${leakedCite}`,
     );
     expect(leakedCiteEdge).toBeUndefined();
   });
