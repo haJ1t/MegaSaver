@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type OverlayMemoryEntry, writeOverlayMemory } from "@megasaver/core";
@@ -416,4 +416,26 @@ describe("memory graph route", () => {
     expect(serialized).not.toContain(secretMarker);
     expect(serialized).not.toContain("outside-secret");
   });
+
+  // chmod 000 does not block reads when running as root, which makes the EACCES
+  // path unreachable; skip there so the suite stays deterministic in CI containers.
+  const itUnlessRoot = process.getuid?.() === 0 ? it.skip : it;
+
+  itUnlessRoot(
+    "GET /memory/graph surfaces an unreadable wiki folder (EACCES) as 500, not an empty graph",
+    async () => {
+      const wikiRoot = join(CWD, "wiki");
+      const entitiesDir = join(wikiRoot, "entities");
+      mkdirSync(entitiesDir, { recursive: true });
+      writeFileSync(join(entitiesDir, "a.md"), "# Entity A\nno links\n");
+      chmodSync(entitiesDir, 0o000);
+      server = await start();
+      try {
+        const res = await fetch(graphUrl());
+        expect(res.status).toBe(500);
+      } finally {
+        chmodSync(entitiesDir, 0o755);
+      }
+    },
+  );
 });

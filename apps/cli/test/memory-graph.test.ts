@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Graph } from "@megasaver/memory-graph";
@@ -357,4 +357,27 @@ describe("runMemoryGraph", () => {
     const leakedNode = graph.nodes.find((n) => n.kind === "wiki" && n.id === "entities/leaked.md");
     expect(leakedNode).toBeUndefined();
   });
+
+  // chmod 000 does not block reads when running as root, which makes the EACCES
+  // path unreachable; skip there so the suite stays deterministic in CI containers.
+  const itUnlessRoot = process.getuid?.() === 0 ? it.skip : it;
+
+  itUnlessRoot(
+    "surfaces an unreadable wiki folder (EACCES) instead of returning an empty graph",
+    async () => {
+      await seed();
+      const wikiRoot = join(rootPath, "wiki");
+      const entitiesDir = join(wikiRoot, "entities");
+      await mkdir(entitiesDir, { recursive: true });
+      await writeFile(join(entitiesDir, "a.md"), "# Entity A\nno links\n");
+      await chmod(entitiesDir, 0o000);
+      try {
+        const code = await runMemoryGraph(makeInput({ jsonFlag: true }));
+        expect(code).toBe(1);
+        expect(lines).toHaveLength(0);
+      } finally {
+        await chmod(entitiesDir, 0o755);
+      }
+    },
+  );
 });
