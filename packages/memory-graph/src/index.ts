@@ -12,6 +12,7 @@ export {
 } from "./model.js";
 
 export { buildGraph } from "./build-graph.js";
+export { parseWikiPage } from "./parse-wiki.js";
 export {
   memoryInputSchema,
   evidenceInputSchema,
@@ -19,6 +20,9 @@ export {
   projectInputSchema,
   chunkSetInputSchema,
   conflictPairSchema,
+  fileInputSchema,
+  symbolInputSchema,
+  wikiInputSchema,
   graphInputSchema,
   type MemoryInput,
   type EvidenceInput,
@@ -26,5 +30,8 @@ export {
   type ProjectInput,
   type ChunkSetInput,
   type ConflictPair,
+  type FileInput,
+  type SymbolInput,
+  type WikiInput,
   type GraphInput,
 } from "./inputs.js";

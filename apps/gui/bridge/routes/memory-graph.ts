@@ -1,3 +1,5 @@
+import { lstat, readFile, readdir } from "node:fs/promises";
+import { join, relative, resolve, sep } from "node:path";
 import {
   type MemoryEntry,
   type OverlayMemoryEntry,
@@ -9,11 +11,14 @@ import type {
   ChunkSetInput,
   ConflictPair,
   EvidenceInput,
+  FileInput,
   GraphInput,
   MemoryInput,
   SessionInput,
+  SymbolInput,
+  WikiInput,
 } from "@megasaver/memory-graph";
-import { buildGraph } from "@megasaver/memory-graph";
+import { buildGraph, parseWikiPage } from "@megasaver/memory-graph";
 import { handleCaughtError } from "../error-mapping.js";
 import type { RouteContext } from "../route-context.js";
 import { resolveSessionWorkspace, sendSessionResolveError } from "./_claude-session.js";
@@ -49,10 +54,63 @@ function toConflictEntry(entry: OverlayMemoryEntry): MemoryEntry {
   };
 }
 
+// Only these six folders are in-scope wiki folders; raw/ and archive/ are
+// intentionally excluded — raw/ is immutable and archive/ is stale content.
+const WIKI_FOLDERS = ["entities", "concepts", "decisions", "syntheses", "workflows", "sources"];
+
+// Walk a wiki folder and return parsed WikiInput entries.
+// Path confinement: top-level folders are lstat'd and skipped if they are symlinks;
+// entries inside each walk are skipped via Dirent.isSymbolicLink(); the resolved-path
+// startsWith check guards against any remaining ../ traversal.
+async function readWikiPages(cwd: string): Promise<WikiInput[]> {
+  const wikiRoot = resolve(join(cwd, "wiki"));
+  const confinementPrefix = wikiRoot + sep;
+  const results: WikiInput[] = [];
+
+  async function walkDir(dir: string): Promise<void> {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => null);
+    if (entries === null) return;
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      // Skip symlinks — a symlinked target could escape the wiki tree.
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        await walkDir(fullPath);
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        // Verify the resolved path stays within wiki root before reading.
+        const realPath = resolve(fullPath);
+        if (!realPath.startsWith(confinementPrefix)) continue;
+        let content: string;
+        try {
+          content = await readFile(fullPath, "utf8");
+        } catch {
+          continue;
+        }
+        // Normalize to POSIX separators: the wiki node id must be /-separated on
+        // every OS so it matches /-shaped [[link]] targets and (source:) citations.
+        const relPath = relative(wikiRoot, realPath).split(sep).join("/");
+        results.push(parseWikiPage(relPath, content));
+      }
+    }
+  }
+
+  for (const folder of WIKI_FOLDERS) {
+    const folderPath = join(wikiRoot, folder);
+    // Skip top-level folder if it is a symlink — mirrors the in-walk isSymbolicLink() skip.
+    // lstat throws on ENOENT (folder absent) → treat as skip, same as readdir catching null.
+    const st = await lstat(folderPath).catch(() => null);
+    if (st === null || st.isSymbolicLink()) continue;
+    await walkDir(folderPath);
+  }
+
+  return results;
+}
+
 async function loadGraphInput(
   storeRoot: string,
   workspaceKey: string,
   liveSessionId: string | null,
+  cwd: string,
 ): Promise<GraphInput> {
   const overlayEntries = readOverlayMemory(storeRoot, workspaceKey);
   const evidenceRecords = await listEvidenceByWorkspace({ storeRoot, workspaceKey });
@@ -69,6 +127,8 @@ async function loadGraphInput(
     source: entry.source,
     stale: entry.stale,
     evidenceIds: entry.evidence ?? [],
+    relatedFiles: entry.relatedFiles ?? [],
+    relatedSymbols: entry.relatedSymbols ?? [],
   }));
 
   const evidence: EvidenceInput[] = evidenceRecords.map((rec) => ({
@@ -121,6 +181,19 @@ async function loadGraphInput(
     }
   }
 
+  const wikiPages = await readWikiPages(cwd);
+
+  // Unique file paths from memory relatedFiles + wiki fileCites.
+  const filePathSet = new Set<string>();
+  for (const m of memories) for (const fp of m.relatedFiles) filePathSet.add(fp);
+  for (const w of wikiPages) for (const fc of w.fileCites) filePathSet.add(fc);
+  const files: FileInput[] = Array.from(filePathSet).map((path) => ({ path }));
+
+  // Unique symbols from memory relatedSymbols.
+  const symbolSet = new Set<string>();
+  for (const m of memories) for (const sym of m.relatedSymbols) symbolSet.add(sym);
+  const symbols: SymbolInput[] = Array.from(symbolSet).map((symbol) => ({ symbol }));
+
   return {
     projects: [],
     sessions,
@@ -128,6 +201,9 @@ async function loadGraphInput(
     evidence,
     chunkSets,
     conflicts,
+    files,
+    symbols,
+    wikiPages,
   };
 }
 
@@ -146,6 +222,7 @@ export async function handleGetMemoryGraph(
       ctx.storeRoot,
       resolved.workspaceKey,
       resolved.liveSessionId,
+      resolved.cwd,
     );
     const graph = buildGraph(input);
     ctx.sendJson(ctx.res, 200, graph, ctx.origin);

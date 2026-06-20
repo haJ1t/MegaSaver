@@ -1,6 +1,15 @@
 import { z } from "zod";
 
-export const nodeKindSchema = z.enum(["project", "session", "memory", "evidence", "chunkset"]);
+export const nodeKindSchema = z.enum([
+  "project",
+  "session",
+  "memory",
+  "evidence",
+  "chunkset",
+  "file",
+  "symbol",
+  "wiki",
+]);
 export type NodeKind = z.infer<typeof nodeKindSchema>;
 
 export const edgeKindSchema = z.enum([
@@ -13,6 +22,10 @@ export const edgeKindSchema = z.enum([
   "conflict",
   "supersede",
   "duplicate",
+  "code-link",
+  "wiki-link",
+  "wiki-source",
+  "wiki-cite",
 ]);
 export type EdgeKind = z.infer<typeof edgeKindSchema>;
 

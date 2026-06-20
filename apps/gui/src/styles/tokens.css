@@ -77,6 +77,9 @@
   --graph-memory-architecture: #0d9488;
   --graph-evidence: #d97706;
   --graph-chunkset: #6b7280;
+  --graph-file: #475569;
+  --graph-symbol: #64748b;
+  --graph-wiki: #9333ea;
 }
 
 /* ── Dark mode (auto via OS preference) ── */
@@ -145,6 +148,9 @@
     --graph-memory-architecture: #2dd4bf;
     --graph-evidence: #fbbf24;
     --graph-chunkset: #9ca3af;
+    --graph-file: #94a3b8;
+    --graph-symbol: #cbd5e1;
+    --graph-wiki: #c084fc;
   }
 }
 
