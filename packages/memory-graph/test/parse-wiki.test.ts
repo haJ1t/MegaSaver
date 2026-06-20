@@ -75,6 +75,21 @@ describe("parseWikiPage", () => {
     expect(w.fileCites).toEqual(["docs/x.md"]);
   });
 
+  // Defect 5: trailing Obsidian/markdown anchor stripped so the file node unifies
+  it("strips a trailing space-separated anchor from file citations", () => {
+    const w = parseWikiPage(
+      "syntheses/s.md",
+      "x (source: decisions/bootstrap-matrix.md #8) y (source: decisions/bootstrap-matrix.md) z",
+    );
+    expect(w.fileCites).toEqual(["decisions/bootstrap-matrix.md"]);
+  });
+
+  // Defect 5: prose with a trailing # token still drops (no spurious path)
+  it("keeps prose citations with a trailing # token dropped", () => {
+    const w = parseWikiPage("syntheses/s.md", "claim (source: AA1 §2a; PR #75) text");
+    expect(w.fileCites).toEqual([]);
+  });
+
   // Defect 2: CRLF frontmatter
   it("parses CRLF frontmatter correctly without trailing \\r in values", () => {
     const crlfPage = [

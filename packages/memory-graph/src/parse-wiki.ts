@@ -80,6 +80,10 @@ export function parseWikiPage(relPath: string, content: string): WikiInput {
           ) {
             s = s.slice(1, -1).trim();
           }
+          // Strip a trailing space-separated Obsidian/markdown anchor before the
+          // line-number strip so `path.md:12 #8` collapses to `path.md`; the file
+          // node must unify with the same path cited without an anchor.
+          s = s.replace(/\s+#\S.*$/, "").trim();
           // Strip line number suffix including ranges (ASCII hyphen or en-dash).
           s = s.replace(/:\d+(?:[-–]\d+)?$/, "").trim();
           // Canonicalize leading ./
