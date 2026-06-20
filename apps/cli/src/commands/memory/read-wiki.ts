@@ -7,12 +7,10 @@ import { type WikiInput, parseWikiPage } from "@megasaver/memory-graph";
 const WIKI_FOLDERS = ["entities", "concepts", "decisions", "syntheses", "workflows", "sources"];
 
 // Walk the project's wiki/ directory and return parsed WikiInput entries.
-// Path confinement: top-level folders are lstat'd and skipped if they are symlinks;
-// entries inside each walk are skipped via Dirent.isSymbolicLink(); the resolved-path
-// startsWith check guards against any remaining ../ traversal.
+// Path confinement: top-level folders and in-walk entries are skipped when they are
+// symlinks (Dirent.isSymbolicLink); a symlinked target could escape the wiki tree.
 export async function readWikiPages(rootPath: string): Promise<WikiInput[]> {
   const wikiRoot = resolve(join(rootPath, "wiki"));
-  const confinementPrefix = wikiRoot + sep;
   const results: WikiInput[] = [];
 
   async function walkDir(dir: string): Promise<void> {
@@ -25,9 +23,6 @@ export async function readWikiPages(rootPath: string): Promise<WikiInput[]> {
       if (entry.isDirectory()) {
         await walkDir(fullPath);
       } else if (entry.isFile() && entry.name.endsWith(".md")) {
-        // Verify the resolved path stays within wiki root before reading.
-        const realPath = resolve(fullPath);
-        if (!realPath.startsWith(confinementPrefix)) continue;
         let content: string;
         try {
           content = await readFile(fullPath, "utf8");
@@ -36,7 +31,7 @@ export async function readWikiPages(rootPath: string): Promise<WikiInput[]> {
         }
         // Normalize to POSIX separators: the wiki node id must be /-separated on
         // every OS so it matches /-shaped [[link]] targets and (source:) citations.
-        const relPath = relative(wikiRoot, realPath).split(sep).join("/");
+        const relPath = relative(wikiRoot, fullPath).split(sep).join("/");
         results.push(parseWikiPage(relPath, content));
       }
     }
