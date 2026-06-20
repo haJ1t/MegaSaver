@@ -1,6 +1,6 @@
 import cytoscape from "cytoscape";
 import type { Core, ElementDefinition, StylesheetJson } from "cytoscape";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorState, LoadingState } from "../../components/states.js";
 import type { BridgeError } from "../../components/states.js";
 import {
@@ -213,6 +213,15 @@ export function MemoryGraphPanel({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
 
+  const elements = useMemo(
+    () => (data === null ? [] : toElements(data, hiddenLayers)),
+    [data, hiddenLayers],
+  );
+  // Edge elements carry data.source; node elements do not. Count from the
+  // rendered set so the header tracks layer toggles, not the unfiltered totals.
+  const visibleNodes = elements.filter((el) => el.data.source === undefined).length;
+  const visibleEdges = elements.length - visibleNodes;
+
   const load = useCallback(async () => {
     setState("loading");
     setError(null);
@@ -237,7 +246,7 @@ export function MemoryGraphPanel({
 
     const cy = cytoscape({
       container,
-      elements: toElements(data, hiddenLayers),
+      elements,
       style: buildStylesheet(),
     });
     cyRef.current = cy;
@@ -254,7 +263,7 @@ export function MemoryGraphPanel({
       cy.destroy();
       cyRef.current = null;
     };
-  }, [state, data, hiddenLayers]);
+  }, [state, data, elements]);
 
   function toggleLayer(layer: Layer) {
     setHiddenLayers((prev) => {
@@ -329,8 +338,8 @@ export function MemoryGraphPanel({
           </div>
           {data && (
             <p className="text-xs text-text-muted">
-              {data.stats.nodeCount} {data.stats.nodeCount === 1 ? "node" : "nodes"} ·{" "}
-              {data.stats.edgeCount} {data.stats.edgeCount === 1 ? "edge" : "edges"}
+              {visibleNodes} {visibleNodes === 1 ? "node" : "nodes"} · {visibleEdges}{" "}
+              {visibleEdges === 1 ? "edge" : "edges"}
             </p>
           )}
         </div>

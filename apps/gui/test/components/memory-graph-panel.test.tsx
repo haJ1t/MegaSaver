@@ -194,6 +194,20 @@ describe("MemoryGraphPanel", () => {
     });
   });
 
+  it("updates the header counts to the visible graph after toggling Wiki off", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    expect(screen.getByText(/5 nodes/)).toBeDefined();
+    expect(screen.getByText(/5 edges/)).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /Wiki/i }));
+
+    await waitFor(() => expect(screen.getByText(/4 nodes/)).toBeDefined());
+    expect(screen.getByText(/2 edges/)).toBeDefined();
+  });
+
   it("shows wiki node detail with title, tags, status when tapped", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
