@@ -57,7 +57,7 @@ const FIXTURE_PHASE2: MemoryGraphData = {
       id: "w1",
       kind: "wiki",
       label: "Memory Graph design",
-      meta: { title: "Memory Graph design", tags: "design,graph", status: "active" },
+      meta: { title: "Memory Graph design", tags: ["design", "graph"], status: "active" },
     },
   ],
   edges: [
@@ -77,6 +77,19 @@ const FIXTURE_MEMORY_SUBTYPES: MemoryGraphData = {
   ],
   edges: [],
   stats: { nodeCount: 2, edgeCount: 0 },
+};
+
+const FIXTURE_TAGLESS_WIKI: MemoryGraphData = {
+  nodes: [
+    {
+      id: "w1",
+      kind: "wiki",
+      label: "Tagless page",
+      meta: { title: "Tagless page", tags: [], status: "active" },
+    },
+  ],
+  edges: [],
+  stats: { nodeCount: 1, edgeCount: 0 },
 };
 
 const EMPTY: MemoryGraphData = {
@@ -244,8 +257,20 @@ describe("MemoryGraphPanel", () => {
     await waitFor(() =>
       expect(screen.getAllByText("Memory Graph design").length).toBeGreaterThan(0),
     );
-    expect(screen.getByText(/design,graph/)).toBeDefined();
+    expect(screen.getByText(/design, graph/)).toBeDefined();
     expect(screen.getByText(/active/)).toBeDefined();
+  });
+
+  it("omits the tags row for a wiki node with no tags", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_TAGLESS_WIKI);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    const handler = tapHandlers[0];
+    if (handler) handler({ target: { id: () => "w1" } });
+
+    await waitFor(() => expect(screen.getByText(/active/)).toBeDefined());
+    expect(screen.queryByText("tags")).toBeNull();
   });
 
   it("shows file node detail with path when tapped", async () => {
@@ -269,12 +294,12 @@ describe("MemoryGraphPanel", () => {
     const handler = tapHandlers[0];
     if (handler) handler({ target: { id: () => "w1" } });
 
-    await waitFor(() => expect(screen.getByText(/design,graph/)).toBeDefined());
+    await waitFor(() => expect(screen.getByText(/design, graph/)).toBeDefined());
 
     fireEvent.click(screen.getByRole("button", { name: /Wiki/i }));
 
     await waitFor(() => expect(screen.getByText(/Select a node to inspect/)).toBeDefined());
-    expect(screen.queryByText(/design,graph/)).toBeNull();
+    expect(screen.queryByText(/design, graph/)).toBeNull();
   });
 
   it("clears the detail panel when the selected file node's layer is toggled off", async () => {

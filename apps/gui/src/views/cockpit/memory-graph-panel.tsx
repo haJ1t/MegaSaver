@@ -200,7 +200,11 @@ function buildStylesheet(): StylesheetJson {
 }
 
 function metaEntries(meta: Record<string, unknown>): [string, string][] {
-  return Object.entries(meta).map(([key, value]) => [key, String(value)]);
+  return Object.entries(meta)
+    .map(([key, value]): [string, string] =>
+      Array.isArray(value) ? [key, value.join(", ")] : [key, String(value)],
+    )
+    .filter(([, value]) => value.length > 0);
 }
 
 export function MemoryGraphPanel({
