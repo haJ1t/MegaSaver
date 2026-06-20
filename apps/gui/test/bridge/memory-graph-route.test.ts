@@ -8,24 +8,24 @@ import { encodeWorkspaceKey, memoryEntryIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type TestServer, seedWorkspaceCwd, startTestBridge } from "./test-helpers.js";
 
-const CWD = "/tmp/live-ws-graph";
 const DIR = "ws-dir";
 const ID = "wssessgraph";
 
+let cwd: string;
 let projectsDir: string;
 let metaDir: string;
 let server: TestServer;
 
 beforeEach(() => {
+  cwd = mkdtempSync(join(tmpdir(), "live-ws-graph-"));
   projectsDir = mkdtempSync(join(tmpdir(), "live-projects-graph-"));
   metaDir = mkdtempSync(join(tmpdir(), "live-meta-graph-"));
-  seedWorkspaceCwd({ projectsDir, metaDir, cwd: CWD, id: ID });
+  seedWorkspaceCwd({ projectsDir, metaDir, cwd, id: ID });
 });
 
 afterEach(async () => {
   if (server) await server.close();
-  rmSync(join(CWD, "wiki"), { recursive: true, force: true });
-  rmSync(join(CWD, "outside-secret.md"), { force: true });
+  rmSync(cwd, { recursive: true, force: true });
 });
 
 async function start() {
@@ -108,7 +108,7 @@ describe("memory graph route", () => {
   it("GET /memory/graph emits a cites edge from a memory to its evidence", async () => {
     server = await start();
 
-    const workspaceKey = encodeWorkspaceKey(CWD);
+    const workspaceKey = encodeWorkspaceKey(cwd);
     const memId = memoryEntryIdSchema.parse(randomUUID().toLowerCase());
     const evId = randomUUID().toLowerCase();
 
@@ -202,8 +202,7 @@ describe("memory graph route", () => {
   });
 
   it("GET /memory/graph ingests wiki pages + code-link from memory relatedFiles", async () => {
-    // Write wiki fixture under CWD/wiki/
-    const wikiRoot = join(CWD, "wiki");
+    const wikiRoot = join(cwd, "wiki");
     mkdirSync(join(wikiRoot, "entities"), { recursive: true });
     mkdirSync(join(wikiRoot, "concepts"), { recursive: true });
     writeFileSync(
@@ -214,7 +213,7 @@ describe("memory graph route", () => {
 
     server = await start();
 
-    const workspaceKey = encodeWorkspaceKey(CWD);
+    const workspaceKey = encodeWorkspaceKey(cwd);
     const memId = memoryEntryIdSchema.parse(randomUUID().toLowerCase());
     const memory: OverlayMemoryEntry = {
       id: memId,
@@ -273,7 +272,7 @@ describe("memory graph route", () => {
   });
 
   it("GET /memory/graph: ./-prefixed memory relatedFile + plain wiki citation share ONE file node", async () => {
-    const wikiRoot = join(CWD, "wiki");
+    const wikiRoot = join(cwd, "wiki");
     mkdirSync(join(wikiRoot, "entities"), { recursive: true });
     writeFileSync(
       join(wikiRoot, "entities", "ref.md"),
@@ -282,7 +281,7 @@ describe("memory graph route", () => {
 
     server = await start();
 
-    const workspaceKey = encodeWorkspaceKey(CWD);
+    const workspaceKey = encodeWorkspaceKey(cwd);
     const memId = memoryEntryIdSchema.parse(randomUUID().toLowerCase());
     const memory: OverlayMemoryEntry = {
       id: memId,
@@ -324,7 +323,7 @@ describe("memory graph route", () => {
   });
 
   it("GET /memory/graph: :line-suffixed memory relatedFile + plain wiki citation share ONE file node", async () => {
-    const wikiRoot = join(CWD, "wiki");
+    const wikiRoot = join(cwd, "wiki");
     mkdirSync(join(wikiRoot, "entities"), { recursive: true });
     writeFileSync(
       join(wikiRoot, "entities", "ref.md"),
@@ -333,7 +332,7 @@ describe("memory graph route", () => {
 
     server = await start();
 
-    const workspaceKey = encodeWorkspaceKey(CWD);
+    const workspaceKey = encodeWorkspaceKey(cwd);
     const memId = memoryEntryIdSchema.parse(randomUUID().toLowerCase());
     const memory: OverlayMemoryEntry = {
       id: memId,
@@ -377,12 +376,11 @@ describe("memory graph route", () => {
   it("GET /memory/graph path-safety: a symlink in wiki/ pointing outside is NOT followed", async () => {
     // The secret lives OUTSIDE the wiki tree, with content that must never leak.
     const leakedCite = "secret/leaked-path.ts";
-    const outsidePath = join(CWD, "outside-secret.md");
-    mkdirSync(CWD, { recursive: true });
+    const outsidePath = join(cwd, "outside-secret.md");
     writeFileSync(outsidePath, `# Outside\n(source: ${leakedCite})\n`);
 
     // A valid in-tree page so wiki ingestion definitely runs.
-    const wikiRoot = join(CWD, "wiki");
+    const wikiRoot = join(cwd, "wiki");
     mkdirSync(join(wikiRoot, "entities"), { recursive: true });
     writeFileSync(join(wikiRoot, "entities", "safe.md"), "# Safe\nno links\n");
 
@@ -390,7 +388,6 @@ describe("memory graph route", () => {
     // Dirent.isSymbolicLink() skip is the sole confinement mechanism — without
     // it, escape.md would be read and the secret would leak.
     const escapeLink = join(wikiRoot, "entities", "escape.md");
-    rmSync(escapeLink, { force: true });
     symlinkSync(outsidePath, escapeLink);
 
     server = await start();
@@ -431,7 +428,7 @@ describe("memory graph route", () => {
   itUnlessRoot(
     "GET /memory/graph surfaces an unreadable wiki folder (EACCES) as 500, not an empty graph",
     async () => {
-      const wikiRoot = join(CWD, "wiki");
+      const wikiRoot = join(cwd, "wiki");
       const entitiesDir = join(wikiRoot, "entities");
       mkdirSync(entitiesDir, { recursive: true });
       writeFileSync(join(entitiesDir, "a.md"), "# Entity A\nno links\n");
