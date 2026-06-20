@@ -305,9 +305,9 @@ describe("runMemoryGraph", () => {
     await mkdir(join(wikiRoot, "entities"), { recursive: true });
     // A valid in-tree page so wiki ingestion definitely runs.
     await writeFile(join(wikiRoot, "entities", "safe.md"), "# Safe\nno links\n");
-    // Symlink inside the walked tree whose target escapes wiki/. Exercises both
-    // Dirent.isSymbolicLink() skip and resolved-path confinement guard — without
-    // them, escape.md would be read and the secret would leak.
+    // Symlink inside the walked tree whose target escapes wiki/. The in-walk
+    // Dirent.isSymbolicLink() skip is the sole confinement mechanism — without
+    // it, escape.md would be read and the secret would leak.
     await symlink(outsidePath, join(wikiRoot, "entities", "escape.md"));
 
     const code = await runMemoryGraph(makeInput({ jsonFlag: true }));

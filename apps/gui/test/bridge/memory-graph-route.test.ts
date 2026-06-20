@@ -386,9 +386,9 @@ describe("memory graph route", () => {
     mkdirSync(join(wikiRoot, "entities"), { recursive: true });
     writeFileSync(join(wikiRoot, "entities", "safe.md"), "# Safe\nno links\n");
 
-    // A symlink INSIDE the walked tree whose target escapes wiki/. Exercises
-    // both the Dirent.isSymbolicLink() skip and the resolved-path confinement
-    // guard — without them, escape.md would be read and the secret would leak.
+    // A symlink INSIDE the walked tree whose target escapes wiki/. The in-walk
+    // Dirent.isSymbolicLink() skip is the sole confinement mechanism — without
+    // it, escape.md would be read and the secret would leak.
     const escapeLink = join(wikiRoot, "entities", "escape.md");
     rmSync(escapeLink, { force: true });
     symlinkSync(outsidePath, escapeLink);
