@@ -62,4 +62,28 @@ describe("memory-graph model", () => {
   it("rejects an unknown node kind", () => {
     expect(() => nodeKindSchema.parse("banana")).toThrow();
   });
+  it("rejects a graph with an unknown edge kind", () => {
+    expect(() =>
+      graphSchema.parse({
+        nodes: [
+          { id: "a", kind: "memory", label: "A", meta: {} },
+          { id: "b", kind: "memory", label: "B", meta: {} },
+        ],
+        edges: [{ id: "e1", kind: "banana", from: "a", to: "b" }],
+        stats: { nodeCount: 2, edgeCount: 1 },
+      }),
+    ).toThrow();
+  });
+  it("round-trips a graph with an edge and multi-key meta", () => {
+    const g = graphSchema.parse({
+      nodes: [
+        { id: "a", kind: "wiki", label: "A", meta: { tags: ["x"], status: "active" } },
+        { id: "b", kind: "file", label: "b.ts", meta: {} },
+      ],
+      edges: [{ id: "e1", kind: "wiki-cite", from: "a", to: "b" }],
+      stats: { nodeCount: 2, edgeCount: 1 },
+    });
+    expect(g.edges[0]?.kind).toBe("wiki-cite");
+    expect(g.nodes[0]?.meta.status).toBe("active");
+  });
 });
