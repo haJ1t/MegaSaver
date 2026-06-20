@@ -15,10 +15,12 @@ vi.mock("../../src/lib/claude-sessions-client.js", () => ({
 // touching the real rendering pipeline. Captures the elements array so tests can
 // assert that the correct cytoscape elements (by class) are passed.
 const tapHandlers: Array<(evt: { target: { id: () => string } }) => void> = [];
-let capturedElements: Array<{ classes?: string }> = [];
+let capturedElements: Array<{ data?: { id?: string; color?: string }; classes?: string }> = [];
 
 vi.mock("cytoscape", () => ({
-  default: (opts: { elements?: Array<{ classes?: string }> }) => {
+  default: (opts: {
+    elements?: Array<{ data?: { id?: string; color?: string }; classes?: string }>;
+  }) => {
     capturedElements = opts.elements ?? [];
     return {
       on: (
@@ -68,6 +70,15 @@ const FIXTURE_PHASE2: MemoryGraphData = {
   stats: { nodeCount: 5, edgeCount: 5 },
 };
 
+const FIXTURE_MEMORY_SUBTYPES: MemoryGraphData = {
+  nodes: [
+    { id: "m1", kind: "memory", label: "decided to use cose", meta: { memoryType: "decision" } },
+    { id: "m2", kind: "memory", label: "a plain note", meta: {} },
+  ],
+  edges: [],
+  stats: { nodeCount: 2, edgeCount: 0 },
+};
+
 const EMPTY: MemoryGraphData = {
   nodes: [],
   edges: [],
@@ -111,6 +122,19 @@ describe("MemoryGraphPanel", () => {
 
     await waitFor(() => expect(screen.getByText("decided to use cose")).toBeDefined());
     expect(screen.getByText(/decision/)).toBeDefined();
+  });
+
+  it("paints a decision memory a distinct color from a generic memory node", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_MEMORY_SUBTYPES);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    const decisionColor = capturedElements.find((el) => el.data?.id === "m1")?.data?.color;
+    const genericColor = capturedElements.find((el) => el.data?.id === "m2")?.data?.color;
+
+    expect(decisionColor).toBeDefined();
+    expect(genericColor).toBeDefined();
+    expect(decisionColor).not.toBe(genericColor);
   });
 
   it("renders an empty-state message for a zero-node graph", async () => {

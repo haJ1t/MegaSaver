@@ -19,7 +19,7 @@ const PALETTE: Record<string, { cssVar: string; fallback: string }> = {
   project: { cssVar: "--graph-project", fallback: "#7C3AED" },
   session: { cssVar: "--graph-session", fallback: "#2563EB" },
   memory: DEFAULT_MEMORY,
-  "memory-decision": { cssVar: "--graph-memory-decision", fallback: "#059669" },
+  "memory-decision": { cssVar: "--graph-memory-decision", fallback: "#0EA5E9" },
   "memory-bug": { cssVar: "--graph-memory-bug", fallback: "#DC2626" },
   "memory-architecture": { cssVar: "--graph-memory-architecture", fallback: "#0D9488" },
   evidence: { cssVar: "--graph-evidence", fallback: "#D97706" },
