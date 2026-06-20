@@ -95,7 +95,9 @@ export async function runMemoryGraph(input: RunMemoryGraphInput): Promise<0 | 1>
       source: m.source,
       stale: m.stale,
       evidenceIds: m.evidence ?? [],
-      relatedFiles: m.relatedFiles ?? [],
+      // Mirror parse-wiki's leading-"./" canonicalization so a memory relatedFile
+      // and a wiki source: citation for the same path collapse to ONE file node.
+      relatedFiles: (m.relatedFiles ?? []).map((f) => (f.startsWith("./") ? f.slice(2) : f)),
       relatedSymbols: m.relatedSymbols ?? [],
     }));
 

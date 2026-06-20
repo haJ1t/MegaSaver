@@ -127,7 +127,9 @@ async function loadGraphInput(
     source: entry.source,
     stale: entry.stale,
     evidenceIds: entry.evidence ?? [],
-    relatedFiles: entry.relatedFiles ?? [],
+    // Mirror parse-wiki's leading-"./" canonicalization so a memory relatedFile
+    // and a wiki source: citation for the same path collapse to ONE file node.
+    relatedFiles: (entry.relatedFiles ?? []).map((f) => (f.startsWith("./") ? f.slice(2) : f)),
     relatedSymbols: entry.relatedSymbols ?? [],
   }));
 
