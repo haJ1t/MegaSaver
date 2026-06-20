@@ -18,8 +18,6 @@ Harden the Memory Graph against real-world data after Phase 2 (bug-fix sweep).
 - The bridge parents workspace-scoped overlay memories to a synthetic workspace
   project node, so project-scoped memories get their `project-memory` edge
   instead of rendering as orphans (matching the CLI graph shape).
-- The wiki walk now surfaces real read failures (EACCES/EIO) instead of
-  swallowing them as an empty wiki; only ENOENT (a missing folder) is skipped.
 - GUI: the header node/edge counts reflect the *visible* graph after a layer
   toggle (not the raw server totals); a selected node's detail panel clears when
   its layer is toggled off; `decision` memories get a distinct hue; empty meta
