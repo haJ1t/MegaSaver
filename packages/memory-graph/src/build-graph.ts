@@ -4,7 +4,11 @@ import type { Graph, GraphEdge, GraphNode } from "./model.js";
 export function buildGraph(input: GraphInput): Graph {
   const nodes: GraphNode[] = [];
   const ids = new Set<string>();
+  // A wiki page and a cited .md file can share an id (the page's relative path).
+  // First-writer-wins keeps the richer wiki node only if wiki pages are emitted
+  // before files; see the file/wiki loop order below.
   const add = (n: GraphNode): void => {
+    if (ids.has(n.id)) return;
     nodes.push(n);
     ids.add(n.id);
   };
@@ -35,6 +39,8 @@ export function buildGraph(input: GraphInput): Graph {
     });
   for (const c of input.chunkSets)
     add({ id: c.chunkSetId, kind: "chunkset", label: c.label, meta: { redacted: c.redacted } });
+  for (const w of input.wikiPages)
+    add({ id: w.path, kind: "wiki", label: w.title, meta: { tags: w.tags, status: w.status } });
   for (const f of input.files)
     add({
       id: f.path,
@@ -44,8 +50,6 @@ export function buildGraph(input: GraphInput): Graph {
     });
   for (const sym of input.symbols)
     add({ id: sym.symbol, kind: "symbol", label: sym.symbol, meta: {} });
-  for (const w of input.wikiPages)
-    add({ id: w.path, kind: "wiki", label: w.title, meta: { tags: w.tags, status: w.status } });
 
   // [[link]] strings can match by full path, path-without-.md, basename, or
   // title. The path keys are unique per page so they always resolve; basename

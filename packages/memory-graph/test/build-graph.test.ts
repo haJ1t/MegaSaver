@@ -219,6 +219,36 @@ describe("buildGraph — file/symbol/wiki nodes + edges", () => {
     const g = buildGraph(input);
     expect(has(g, "code-link", "m1", "packages/ghost/not-listed.ts")).toBe(false);
   });
+  it("wiki .md cite colliding with a wiki page id yields one wiki node, not a dup", () => {
+    const input = base();
+    const wiki = (
+      path: string,
+      title: string,
+      fileCites: string[],
+    ): GraphInput["wikiPages"][number] => ({
+      path,
+      title,
+      tags: ["roadmap"],
+      status: "active",
+      links: [],
+      sources: [],
+      fileCites,
+    });
+    input.files = [{ path: "a/b.md" }];
+    input.memories = [];
+    input.symbols = [];
+    input.conflicts = [];
+    input.wikiPages = [wiki("citer.md", "Citer", ["a/b.md"]), wiki("a/b.md", "Target", [])];
+    const g = buildGraph(input);
+    expect(new Set(g.nodes.map((n) => n.id)).size).toBe(g.nodes.length);
+    const collided = g.nodes.filter((n) => n.id === "a/b.md");
+    expect(collided).toHaveLength(1);
+    // biome-ignore lint/style/noNonNullAssertion: length asserted above
+    const node = collided[0]!;
+    expect(node.kind).toBe("wiki");
+    expect(node.label).toBe("Target");
+    expect(node.meta.tags).toEqual(["roadmap"]);
+  });
   it("ambiguous basename: shared basename resolves to nothing, full path still wins", () => {
     const input = base();
     const wiki = (path: string, links: string[]): GraphInput["wikiPages"][number] => ({
