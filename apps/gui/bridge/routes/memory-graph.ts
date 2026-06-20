@@ -119,7 +119,10 @@ async function loadGraphInput(
     id: entry.id,
     scope: entry.scope,
     sessionId: entry.liveSessionId,
-    projectId: null,
+    // Overlay memories have no registry project; the workspace is their structural
+    // parent. Workspace-scoped entries point at the synthetic workspace node below
+    // so buildGraph emits a project-memory edge instead of orphaning them.
+    projectId: entry.scope === "project" ? workspaceKey : null,
     memoryType: entry.type,
     title: entry.title,
     approval: entry.approval,
@@ -197,7 +200,7 @@ async function loadGraphInput(
   const symbols: SymbolInput[] = Array.from(symbolSet).map((symbol) => ({ symbol }));
 
   return {
-    projects: [],
+    projects: [{ id: workspaceKey, name: workspaceKey }],
     sessions,
     memories,
     evidence,

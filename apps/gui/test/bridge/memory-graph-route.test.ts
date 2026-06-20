@@ -171,6 +171,30 @@ describe("memory graph route", () => {
     expect(citesEdge).toBeDefined();
   });
 
+  it("GET /memory/graph: a project-scoped memory gets a project-memory edge (not orphaned)", async () => {
+    server = await start();
+
+    const post = await fetch(memoryBase(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ scope: "project", content: "project memory node", type: "decision" }),
+    });
+    expect(post.status).toBe(201);
+    const mem = await post.json();
+
+    const res = await fetch(graphUrl());
+    expect(res.status).toBe(200);
+    const graph = await res.json();
+
+    const projectMemoryEdge = graph.edges.find(
+      (e: { kind: string; to: string }) => e.kind === "project-memory" && e.to === mem.id,
+    );
+    expect(projectMemoryEdge).toBeDefined();
+
+    const parentNode = graph.nodes.find((n: { id: string }) => n.id === projectMemoryEdge.from);
+    expect(parentNode).toBeDefined();
+  });
+
   it("POST to /memory/graph → 405 method_not_allowed", async () => {
     server = await start();
     const res = await fetch(graphUrl(), { method: "POST" });
