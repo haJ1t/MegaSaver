@@ -18,7 +18,7 @@ import type {
   SymbolInput,
   WikiInput,
 } from "@megasaver/memory-graph";
-import { buildGraph, parseWikiPage } from "@megasaver/memory-graph";
+import { buildGraph, canonicalizeFilePath, parseWikiPage } from "@megasaver/memory-graph";
 import { handleCaughtError } from "../error-mapping.js";
 import type { RouteContext } from "../route-context.js";
 import { resolveSessionWorkspace, sendSessionResolveError } from "./_claude-session.js";
@@ -127,9 +127,9 @@ async function loadGraphInput(
     source: entry.source,
     stale: entry.stale,
     evidenceIds: entry.evidence ?? [],
-    // Mirror parse-wiki's leading-"./" canonicalization so a memory relatedFile
-    // and a wiki source: citation for the same path collapse to ONE file node.
-    relatedFiles: (entry.relatedFiles ?? []).map((f) => (f.startsWith("./") ? f.slice(2) : f)),
+    // Mirror parse-wiki's fileCite canonicalization so a memory relatedFile and a
+    // wiki source: citation for the same path collapse to ONE file node.
+    relatedFiles: (entry.relatedFiles ?? []).map((f) => canonicalizeFilePath(f)),
     relatedSymbols: entry.relatedSymbols ?? [],
   }));
 

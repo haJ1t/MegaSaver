@@ -299,6 +299,57 @@ describe("memory graph route", () => {
     expect(wikiCite).toBeDefined();
   });
 
+  it("GET /memory/graph: :line-suffixed memory relatedFile + plain wiki citation share ONE file node", async () => {
+    const wikiRoot = join(CWD, "wiki");
+    mkdirSync(join(wikiRoot, "entities"), { recursive: true });
+    writeFileSync(
+      join(wikiRoot, "entities", "ref.md"),
+      "---\ntitle: Ref\ntags: []\nstatus: active\n---\nSome claim (source: src/shared/x.ts:12).\n",
+    );
+
+    server = await start();
+
+    const workspaceKey = encodeWorkspaceKey(CWD);
+    const memId = memoryEntryIdSchema.parse(randomUUID().toLowerCase());
+    const memory: OverlayMemoryEntry = {
+      id: memId,
+      workspaceKey,
+      liveSessionId: ID,
+      scope: "session",
+      type: "decision",
+      title: "uses shared",
+      content: "uses src/shared/x.ts",
+      keywords: [],
+      confidence: "medium",
+      source: "agent",
+      approval: "approved",
+      stale: false,
+      relatedFiles: ["src/shared/x.ts:12"],
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+    };
+    writeOverlayMemory(server.storePath, workspaceKey, [memory]);
+
+    const res = await fetch(graphUrl());
+    expect(res.status).toBe(200);
+    const graph = await res.json();
+
+    const fileNodes = graph.nodes.filter(
+      (n: { kind: string; id: string }) => n.kind === "file" && n.id === "src/shared/x.ts",
+    );
+    expect(fileNodes).toHaveLength(1);
+
+    const codeLink = graph.edges.find(
+      (e: { kind: string; from: string; to: string }) =>
+        e.kind === "code-link" && e.from === memId && e.to === "src/shared/x.ts",
+    );
+    expect(codeLink).toBeDefined();
+    const wikiCite = graph.edges.find(
+      (e: { kind: string; to: string }) => e.kind === "wiki-cite" && e.to === "src/shared/x.ts",
+    );
+    expect(wikiCite).toBeDefined();
+  });
+
   it("GET /memory/graph path-safety: a symlink in wiki/ pointing outside is NOT followed", async () => {
     // The secret lives OUTSIDE the wiki tree, with content that must never leak.
     const secretMarker = "TOPSECRET-should-never-appear";

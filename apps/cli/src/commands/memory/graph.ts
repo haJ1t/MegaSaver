@@ -1,5 +1,5 @@
 import { checkConflicts } from "@megasaver/core";
-import { buildGraph } from "@megasaver/memory-graph";
+import { buildGraph, canonicalizeFilePath } from "@megasaver/memory-graph";
 import type { ConflictPair, FileInput, GraphInput, SymbolInput } from "@megasaver/memory-graph";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
@@ -95,9 +95,9 @@ export async function runMemoryGraph(input: RunMemoryGraphInput): Promise<0 | 1>
       source: m.source,
       stale: m.stale,
       evidenceIds: m.evidence ?? [],
-      // Mirror parse-wiki's leading-"./" canonicalization so a memory relatedFile
-      // and a wiki source: citation for the same path collapse to ONE file node.
-      relatedFiles: (m.relatedFiles ?? []).map((f) => (f.startsWith("./") ? f.slice(2) : f)),
+      // Mirror parse-wiki's fileCite canonicalization so a memory relatedFile and a
+      // wiki source: citation for the same path collapse to ONE file node.
+      relatedFiles: (m.relatedFiles ?? []).map((f) => canonicalizeFilePath(f)),
       relatedSymbols: m.relatedSymbols ?? [],
     }));
 

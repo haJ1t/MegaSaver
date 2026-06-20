@@ -253,6 +253,48 @@ describe("runMemoryGraph", () => {
     expect(wikiCite).toBeDefined();
   });
 
+  it(":line-suffixed memory relatedFiles and plain wiki citation share ONE file node", async () => {
+    await seed();
+    const wikiRoot = join(rootPath, "wiki");
+    await mkdir(join(wikiRoot, "entities"), { recursive: true });
+    await writeFile(
+      join(wikiRoot, "entities", "ref.md"),
+      "---\ntitle: Ref\ntags: []\nstatus: active\n---\nSome claim (source: src/shared/x.ts:12).\n",
+    );
+    await writeFile(
+      join(store, "memory", `${PROJECT_ID}.jsonl`),
+      `${JSON.stringify({
+        id: MEMORY_ID_SESSION,
+        projectId: PROJECT_ID,
+        sessionId: SESSION_ID,
+        scope: "session",
+        type: "decision",
+        title: "uses shared",
+        content: "uses src/shared/x.ts",
+        keywords: [],
+        confidence: "medium",
+        source: "agent",
+        approval: "approved",
+        stale: false,
+        relatedFiles: ["src/shared/x.ts:12"],
+        createdAt: TS,
+        updatedAt: TS,
+      })}\n`,
+    );
+
+    const code = await runMemoryGraph(makeInput({ jsonFlag: true }));
+    expect(code).toBe(0);
+    const graph = JSON.parse(lines[0] ?? "") as Graph;
+
+    const fileNodes = graph.nodes.filter((n) => n.kind === "file" && n.id === "src/shared/x.ts");
+    expect(fileNodes).toHaveLength(1);
+
+    const codeLink = graph.edges.find((e) => e.kind === "code-link" && e.to === "src/shared/x.ts");
+    expect(codeLink).toBeDefined();
+    const wikiCite = graph.edges.find((e) => e.kind === "wiki-cite" && e.to === "src/shared/x.ts");
+    expect(wikiCite).toBeDefined();
+  });
+
   it("path-safety: symlink inside wiki/ pointing outside is NOT followed", async () => {
     await seed();
     const secretMarker = "TOPSECRET-cli-should-never-appear";

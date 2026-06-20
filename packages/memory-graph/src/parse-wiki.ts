@@ -1,3 +1,4 @@
+import { canonicalizeFilePath } from "./canonical-path.js";
 import type { WikiInput } from "./inputs.js";
 
 function stripQuotes(s: string): string {
@@ -72,23 +73,11 @@ export function parseWikiPage(relPath: string, content: string): WikiInput {
           let s = (mm[1] as string).trim();
           // Reject [[wikilink]]-shaped refs — they are page links, not file paths.
           if (s.startsWith("[[")) return null;
-          // Strip wrapping backticks or quotes added by wiki authors.
-          if (
-            (s.startsWith("`") && s.endsWith("`")) ||
-            (s.startsWith("'") && s.endsWith("'")) ||
-            (s.startsWith('"') && s.endsWith('"'))
-          ) {
-            s = s.slice(1, -1).trim();
-          }
-          // Strip a trailing space-separated Obsidian/markdown anchor before the
-          // line-number strip so `path.md:12 #8` collapses to `path.md`; the file
+          // Strip a trailing space-separated Obsidian/markdown anchor before path
+          // canonicalization so `path.md:12 #8` collapses to `path.md`; the file
           // node must unify with the same path cited without an anchor.
           s = s.replace(/\s+#\S.*$/, "").trim();
-          // Strip line number suffix including ranges (ASCII hyphen or en-dash).
-          s = s.replace(/:\d+(?:[-–]\d+)?$/, "").trim();
-          // Canonicalize leading ./
-          if (s.startsWith("./")) s = s.slice(2);
-          return s;
+          return canonicalizeFilePath(s);
         })
         .filter((s): s is string => s !== null && looksLikePath(s)),
     ),
