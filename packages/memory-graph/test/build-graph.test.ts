@@ -106,6 +106,11 @@ describe("buildGraph", () => {
     expect(g.nodes.find((n) => n.id === "c1")?.kind).toBe("chunkset");
     expect(g.stats.nodeCount).toBe(g.nodes.length);
   });
+  it("edgeCount matches edges.length and the base fixture's emitted edge count", () => {
+    const g = buildGraph(base());
+    expect(g.stats.edgeCount).toBe(g.edges.length);
+    expect(g.stats.edgeCount).toBe(12);
+  });
   it("carries memory meta (type/approval/confidence/stale)", () => {
     const m1 = buildGraph(base()).nodes.find((n) => n.id === "m1");
     expect(m1?.meta.memoryType).toBe("decision");
