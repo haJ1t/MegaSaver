@@ -66,23 +66,30 @@ function nodeColorKey(node: MemoryGraphNode): string {
   return "memory";
 }
 
-function toElements(data: MemoryGraphData, hiddenLayers: Set<Layer>): ElementDefinition[] {
+function visibleNodes(data: MemoryGraphData, hiddenLayers: Set<Layer>): MemoryGraphNode[] {
   const hiddenNodeKinds = new Set<string>();
-  const hiddenEdgeKinds = new Set<string>();
-
   if (hiddenLayers.has("wiki")) {
     for (const k of WIKI_LAYER_KINDS) hiddenNodeKinds.add(k);
-    for (const k of WIKI_LAYER_EDGES) hiddenEdgeKinds.add(k);
   }
   if (hiddenLayers.has("code")) {
     for (const k of CODE_LAYER_KINDS) hiddenNodeKinds.add(k);
+  }
+  return data.nodes.filter((n) => !hiddenNodeKinds.has(n.kind));
+}
+
+function toElements(data: MemoryGraphData, hiddenLayers: Set<Layer>): ElementDefinition[] {
+  const hiddenEdgeKinds = new Set<string>();
+  if (hiddenLayers.has("wiki")) {
+    for (const k of WIKI_LAYER_EDGES) hiddenEdgeKinds.add(k);
+  }
+  if (hiddenLayers.has("code")) {
     for (const k of CODE_LAYER_EDGES) hiddenEdgeKinds.add(k);
   }
 
-  const visibleNodes = data.nodes.filter((n) => !hiddenNodeKinds.has(n.kind));
-  const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
+  const nodesVisible = visibleNodes(data, hiddenLayers);
+  const visibleNodeIds = new Set(nodesVisible.map((n) => n.id));
 
-  const nodes: ElementDefinition[] = visibleNodes.map((node) => ({
+  const nodes: ElementDefinition[] = nodesVisible.map((node) => ({
     data: { id: node.id, label: node.label, color: colorForKey(nodeColorKey(node)) },
     classes: node.kind,
   }));
@@ -217,10 +224,14 @@ export function MemoryGraphPanel({
     () => (data === null ? [] : toElements(data, hiddenLayers)),
     [data, hiddenLayers],
   );
+  const visibleNodeIds = useMemo(
+    () => new Set(data === null ? [] : visibleNodes(data, hiddenLayers).map((n) => n.id)),
+    [data, hiddenLayers],
+  );
   // Edge elements carry data.source; node elements do not. Count from the
   // rendered set so the header tracks layer toggles, not the unfiltered totals.
-  const visibleNodes = elements.filter((el) => el.data.source === undefined).length;
-  const visibleEdges = elements.length - visibleNodes;
+  const visibleNodeCount = elements.filter((el) => el.data.source === undefined).length;
+  const visibleEdges = elements.length - visibleNodeCount;
 
   const load = useCallback(async () => {
     setState("loading");
@@ -244,6 +255,10 @@ export function MemoryGraphPanel({
     const container = containerRef.current;
     if (container === null) return;
 
+    // Toggling a layer hides its nodes; drop a stale selection so the detail
+    // panel never describes a node that is no longer on the canvas.
+    setSelected((prev) => (prev !== null && visibleNodeIds.has(prev.id) ? prev : null));
+
     const cy = cytoscape({
       container,
       elements,
@@ -263,7 +278,7 @@ export function MemoryGraphPanel({
       cy.destroy();
       cyRef.current = null;
     };
-  }, [state, data, elements]);
+  }, [state, data, elements, visibleNodeIds]);
 
   function toggleLayer(layer: Layer) {
     setHiddenLayers((prev) => {
@@ -338,7 +353,7 @@ export function MemoryGraphPanel({
           </div>
           {data && (
             <p className="text-xs text-text-muted">
-              {visibleNodes} {visibleNodes === 1 ? "node" : "nodes"} · {visibleEdges}{" "}
+              {visibleNodeCount} {visibleNodeCount === 1 ? "node" : "nodes"} · {visibleEdges}{" "}
               {visibleEdges === 1 ? "edge" : "edges"}
             </p>
           )}

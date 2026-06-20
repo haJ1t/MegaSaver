@@ -236,4 +236,55 @@ describe("MemoryGraphPanel", () => {
     await waitFor(() => expect(screen.getAllByText("src/lib/core.ts").length).toBeGreaterThan(0));
     expect(screen.getByText(/path/)).toBeDefined();
   });
+
+  it("clears the detail panel when the selected wiki node's layer is toggled off", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    const handler = tapHandlers[0];
+    if (handler) handler({ target: { id: () => "w1" } });
+
+    await waitFor(() => expect(screen.getByText(/design,graph/)).toBeDefined());
+
+    fireEvent.click(screen.getByRole("button", { name: /Wiki/i }));
+
+    await waitFor(() => expect(screen.getByText(/Select a node to inspect/)).toBeDefined());
+    expect(screen.queryByText(/design,graph/)).toBeNull();
+  });
+
+  it("clears the detail panel when the selected file node's layer is toggled off", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    const handler = tapHandlers[0];
+    if (handler) handler({ target: { id: () => "f1" } });
+
+    await waitFor(() => expect(screen.getAllByText("src/lib/core.ts").length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByRole("button", { name: /Code/i }));
+
+    await waitFor(() => expect(screen.getByText(/Select a node to inspect/)).toBeDefined());
+    expect(screen.queryByText("src/lib/core.ts")).toBeNull();
+  });
+
+  it("keeps the detail panel for a still-visible node after an unrelated layer toggles off", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    const handler = tapHandlers[0];
+    if (handler) handler({ target: { id: () => "m1" } });
+
+    await waitFor(() => expect(screen.getByText("decided to use cose")).toBeDefined());
+
+    fireEvent.click(screen.getByRole("button", { name: /Wiki/i }));
+
+    await waitFor(() => {
+      const afterClasses = capturedElements.map((el) => el.classes);
+      expect(afterClasses).not.toContain("wiki");
+    });
+    expect(screen.getByText("decided to use cose")).toBeDefined();
+  });
 });
