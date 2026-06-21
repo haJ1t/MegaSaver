@@ -1,8 +1,10 @@
 import type { AgentId } from "@megasaver/shared";
 import { z } from "zod";
 
-export type LauncherPermissionMode = "plan" | "acceptEdits" | "full";
-export type LauncherModel = "opus" | "sonnet" | "haiku";
+export const launcherPermissionModeSchema = z.enum(["plan", "acceptEdits", "full"]);
+export type LauncherPermissionMode = z.infer<typeof launcherPermissionModeSchema>;
+export const launcherModelSchema = z.enum(["opus", "sonnet", "haiku"]);
+export type LauncherModel = z.infer<typeof launcherModelSchema>;
 
 export interface LaunchInput {
   workdir: string;
