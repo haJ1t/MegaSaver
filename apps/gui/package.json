@@ -8,6 +8,7 @@
   "sideEffects": false,
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names vite,bridge -c blue,magenta \"pnpm dev:vite\" \"pnpm dev:bridge\"",
+    "app": "concurrently --kill-others-on-fail --names vite,bridge,electron -c blue,magenta,cyan \"pnpm dev:vite\" \"pnpm dev:bridge\" \"wait-on tcp:5173 && electron electron/main.cjs\"",
     "dev:vite": "vite",
     "dev:bridge": "node --import tsx bridge/server.ts",
     "bridge": "node --import tsx bridge/server.ts",
@@ -48,10 +49,12 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4",
     "concurrently": "^9.1.0",
+    "electron": "^42.4.1",
     "jsdom": "^25.0.1",
     "postcss": "^8.4",
     "tailwindcss": "^3.4.0",
     "tsx": "^4.19.2",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "wait-on": "^9.0.10"
   }
 }
