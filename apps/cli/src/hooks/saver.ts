@@ -14,6 +14,7 @@ const TOOL_SOURCE: Record<string, OutputSourceKind> = {
   Bash: "command",
   Grep: "grep",
   Glob: "grep",
+  WebFetch: "fetch",
 };
 
 export type SaverSettings = { enabled: boolean; mode: TokenSaverMode };
@@ -32,10 +33,20 @@ const PASSTHROUGH: SaverDecision = { passthrough: true };
 // rebuilder that swaps it for compressed text while preserving every other
 // field (so the emitted shape matches the tool's original schema). Unknown
 // shapes ⇒ null ⇒ caller passes through (original output preserved).
-type Shaped = { raw: string; rebuild: (text: string) => Record<string, unknown> };
+type Shaped = { raw: string; rebuild: (text: string) => unknown };
 function readOutputShape(toolOutput: unknown): Shaped | null {
+  // WebFetch (and other tools) can return the body as a bare string; the
+  // updated output must stay a bare string so the tool schema is preserved.
+  if (typeof toolOutput === "string") {
+    return toolOutput.length === 0 ? null : { raw: toolOutput, rebuild: (t) => t };
+  }
   if (typeof toolOutput !== "object" || toolOutput === null) return null;
   const o = toolOutput as Record<string, unknown>;
+  // WebFetch object shape: { result: "<markdown/answer>" }.
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  if (typeof o["result"] === "string")
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    return { raw: o["result"], rebuild: (t) => ({ ...o, result: t }) };
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   if (typeof o["stdout"] === "string")
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
@@ -108,6 +119,10 @@ function labelOf(toolInput: unknown, fallback: string): string {
     asStr(i["command"]) ??
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     asStr(i["pattern"]) ??
+    // WebFetch labels by url; the fetch chunk-set source validates it as a URL,
+    // so a bad fallback ("WebFetch") would fail persistence and blank the save.
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    asStr(i["url"]) ??
     fallback
   );
 }

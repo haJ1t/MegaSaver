@@ -385,4 +385,50 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
       expect(u.stdout).toContain("Mega Saver: compressed");
     }
   });
+
+  it("compresses a large WebFetch result object and preserves the string shape", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(
+      {
+        tool_name: "WebFetch",
+        tool_input: { url: "https://example.com", prompt: "summarize" },
+        tool_response: { result: "Y".repeat(50_000) },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    if ("updatedToolOutput" in out) {
+      const u = out.updatedToolOutput as { result: string };
+      expect(u.result).toContain("SHORT");
+      expect(u.result).toContain("cs-1");
+    }
+    expect(d.record).toHaveBeenCalledOnce();
+    // The fetch chunk-set source validates the label as a URL — it must be the
+    // request url, not the "WebFetch" tool-name fallback.
+    expect(d.record).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceKind: "fetch", label: "https://example.com" }),
+    );
+  });
+
+  it("compresses a large WebFetch bare-string response, keeping it a string", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(
+      {
+        tool_name: "WebFetch",
+        tool_input: { url: "https://example.com", prompt: "summarize" },
+        tool_response: "Z".repeat(50_000),
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    if ("updatedToolOutput" in out) {
+      expect(typeof out.updatedToolOutput).toBe("string");
+      expect(out.updatedToolOutput as string).toContain("SHORT");
+    }
+    expect(d.record).toHaveBeenCalledOnce();
+  });
 });
