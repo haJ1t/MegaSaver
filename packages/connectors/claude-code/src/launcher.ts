@@ -1,5 +1,6 @@
 import { spawn as nodeSpawn } from "node:child_process";
 import type { Readable } from "node:stream";
+import { StringDecoder } from "node:string_decoder";
 import {
   type AgentLauncher,
   type LaunchHandle,
@@ -66,12 +67,10 @@ export type SpawnFn = (
   options: { cwd: string },
 ) => SpawnedChild;
 
+// ChildProcess.on() returns `this`; SpawnedChild.on() returns void — structurally
+// incompatible despite runtime compatibility, so the cast is safe and minimal.
 const defaultSpawn: SpawnFn = (command, args, options) =>
   nodeSpawn(command, [...args], options) as unknown as SpawnedChild;
-
-function toText(chunk: string | Buffer): string {
-  return typeof chunk === "string" ? chunk : chunk.toString("utf8");
-}
 
 export function createClaudeCodeLauncher(options: { spawn?: SpawnFn } = {}): AgentLauncher {
   const spawn = options.spawn ?? defaultSpawn;
@@ -85,14 +84,22 @@ export function createClaudeCodeLauncher(options: { spawn?: SpawnFn } = {}): Age
 
       const eventCbs: ((event: LauncherEvent) => void)[] = [];
       const exitCbs: ((result: { code: number | null }) => void)[] = [];
+      let exited = false;
+      let exitResult: { code: number | null } | undefined;
       const emitEvent = (event: LauncherEvent) => {
         for (const cb of eventCbs) cb(event);
       };
       const emitExit = (result: { code: number | null }) => {
+        if (exited) return;
+        exited = true;
+        exitResult = result;
         for (const cb of exitCbs) cb(result);
       };
 
       const child = spawn("claude", args, { cwd: input.workdir });
+
+      const stdoutDecoder = new StringDecoder("utf8");
+      const stderrDecoder = new StringDecoder("utf8");
 
       let buffer = "";
       const emitLine = (line: string) => {
@@ -106,19 +113,23 @@ export function createClaudeCodeLauncher(options: { spawn?: SpawnFn } = {}): Age
       };
 
       child.stdout?.on("data", (chunk: string | Buffer) => {
-        buffer += toText(chunk);
+        buffer += typeof chunk === "string" ? chunk : stdoutDecoder.write(chunk);
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
         for (const line of lines) emitLine(line);
       });
       child.stderr?.on("data", (chunk: string | Buffer) => {
-        emitEvent({ kind: "stderr", text: toText(chunk) });
+        emitEvent({
+          kind: "stderr",
+          text: typeof chunk === "string" ? chunk : stderrDecoder.write(chunk),
+        });
       });
       child.on("error", (error) => {
         emitEvent({ kind: "stderr", text: error.message });
         emitExit({ code: null });
       });
       child.on("close", (code) => {
+        buffer += stdoutDecoder.end();
         if (buffer.trim().length > 0) emitLine(buffer);
         buffer = "";
         emitExit({ code });
@@ -130,7 +141,11 @@ export function createClaudeCodeLauncher(options: { spawn?: SpawnFn } = {}): Age
           eventCbs.push(cb);
         },
         onExit(cb) {
-          exitCbs.push(cb);
+          if (exited && exitResult !== undefined) {
+            cb(exitResult);
+          } else {
+            exitCbs.push(cb);
+          }
         },
         cancel() {
           child.kill("SIGTERM");

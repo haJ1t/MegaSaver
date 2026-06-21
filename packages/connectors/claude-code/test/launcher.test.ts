@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import type { LaunchInput } from "@megasaver/connectors-shared";
 import { describe, expect, it, vi } from "vitest";
+import * as claudeCodeApi from "../src/index.js";
 import { type SpawnFn, type SpawnedChild, createClaudeCodeLauncher } from "../src/launcher.js";
 
 function makeFakeChild() {
@@ -107,6 +108,51 @@ describe("createClaudeCodeLauncher", () => {
     expect(exit).toEqual({ code: null });
   });
 
+  it("fires onExit exactly once when error then close both arrive", () => {
+    const child = makeFakeChild();
+    const handle = createClaudeCodeLauncher({
+      spawn: () => child as unknown as SpawnedChild,
+    }).launch(input());
+    let count = 0;
+    let exit: { code: number | null } | undefined;
+    handle.onExit((r) => {
+      count += 1;
+      exit = r;
+    });
+    child.emit("error", new Error("spawn claude ENOENT"));
+    child.emit("close", 1);
+    expect(count).toBe(1);
+    expect(exit).toEqual({ code: null });
+  });
+
+  it("replays the exit result to a late onExit subscriber", () => {
+    const child = makeFakeChild();
+    const handle = createClaudeCodeLauncher({
+      spawn: () => child as unknown as SpawnedChild,
+    }).launch(input());
+    child.emit("close", 0);
+    let exit: { code: number | null } | undefined;
+    handle.onExit((r) => {
+      exit = r;
+    });
+    expect(exit).toEqual({ code: 0 });
+  });
+
+  it("decodes a multibyte char split across chunk boundaries", () => {
+    const child = makeFakeChild();
+    const handle = createClaudeCodeLauncher({
+      spawn: () => child as unknown as SpawnedChild,
+    }).launch(input());
+    const payloads: unknown[] = [];
+    handle.onEvent((e) => {
+      if (e.kind === "stream") payloads.push(e.payload);
+    });
+    const buf = Buffer.from('{"x":"€"}\n', "utf8");
+    child.stdout.emit("data", buf.subarray(0, 7));
+    child.stdout.emit("data", buf.subarray(7));
+    expect(payloads).toEqual([{ x: "€" }]);
+  });
+
   it("cancel() sends SIGTERM", () => {
     const child = makeFakeChild();
     const handle = createClaudeCodeLauncher({
@@ -129,8 +175,6 @@ describe("createClaudeCodeLauncher", () => {
     expect(createClaudeCodeLauncher().kind).toBe("claude-code");
   });
 });
-
-import * as claudeCodeApi from "../src/index.js";
 
 describe("public surface", () => {
   it("re-exports the launcher entry points", () => {
