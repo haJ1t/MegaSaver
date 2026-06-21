@@ -2838,3 +2838,25 @@ Built subagent-driven (4 batches, two-stage spec+quality review each). New entit
 their own specs; the CRITICAL spawning lands in Phases 1-2. Follow-ups noted: tighten
 `workspaceKey` to the branded schema in Phase 2; harden `atomicWriteFile` dir-fsync edge across
 content-store + agent-office.
+
+## [2026-06-22] feature | agent-office Phase 1 (launcher capability)
+
+Shipped the spawning capability on branch `worktree-feat+agent-office-phase1` (spec
+docs/superpowers/specs/2026-06-22-agent-office-phase1-launcher-design.md, plan
+.../plans/2026-06-22-agent-office-phase1-launcher.md). Grounded against installed `claude`
+2.1.177: all assumed flags exist; persona via `--append-system-prompt`, session continuity via
+`--session-id` (new) / `--resume` (later); permission map plan→plan, acceptEdits→acceptEdits,
+full→bypassPermissions.
+
+Added agent-agnostic `AgentLauncher` interface + `LauncherError` + `launcherPermissionMode`/
+`launcherModel` zod schemas to `@megasaver/connectors-shared`, and the claude-code adapter
+(`buildClaudeArgs` pure builder + `createClaudeCodeLauncher` with injectable spawn,
+StringDecoder-based UTF-8-safe stdout line parsing, one-shot onExit latch, SIGTERM cancel) to
+`@megasaver/connector-claude-code`. Workdir confinement (cwd only, no --add-dir); argv array (no
+shell injection). Risk HIGH; every test injects a fake spawn — no real `claude` spawned.
+
+Built subagent-driven; reviewed by code-reviewer + adversarial critic. Critic caught two real bugs
+fixed before merge: double `onExit` on ENOENT (error+close both fire) and UTF-8 multibyte
+chunk-split corruption — both now have regression tests. `pnpm verify` green; changeset minor×2.
+Phase 2 carry-overs recorded on [[entities/agent-office]]: event buffering for async subscribers,
+SIGKILL escalation, gate full/bypassPermissions, listener teardown, brand `workspaceKey`.
