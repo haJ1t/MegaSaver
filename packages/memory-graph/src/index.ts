@@ -13,6 +13,7 @@ export {
 
 export { buildGraph } from "./build-graph.js";
 export { parseWikiPage } from "./parse-wiki.js";
+export { canonicalizeFilePath } from "./canonical-path.js";
 export {
   memoryInputSchema,
   evidenceInputSchema,

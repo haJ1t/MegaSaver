@@ -8,24 +8,24 @@ import { encodeWorkspaceKey, memoryEntryIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type TestServer, seedWorkspaceCwd, startTestBridge } from "./test-helpers.js";
 
-const CWD = "/tmp/live-ws-graph";
 const DIR = "ws-dir";
 const ID = "wssessgraph";
 
+let cwd: string;
 let projectsDir: string;
 let metaDir: string;
 let server: TestServer;
 
 beforeEach(() => {
+  cwd = mkdtempSync(join(tmpdir(), "live-ws-graph-"));
   projectsDir = mkdtempSync(join(tmpdir(), "live-projects-graph-"));
   metaDir = mkdtempSync(join(tmpdir(), "live-meta-graph-"));
-  seedWorkspaceCwd({ projectsDir, metaDir, cwd: CWD, id: ID });
+  seedWorkspaceCwd({ projectsDir, metaDir, cwd, id: ID });
 });
 
 afterEach(async () => {
   if (server) await server.close();
-  rmSync(join(CWD, "wiki"), { recursive: true, force: true });
-  rmSync(join(CWD, "outside-secret.md"), { force: true });
+  rmSync(cwd, { recursive: true, force: true });
 });
 
 async function start() {
@@ -108,7 +108,7 @@ describe("memory graph route", () => {
   it("GET /memory/graph emits a cites edge from a memory to its evidence", async () => {
     server = await start();
 
-    const workspaceKey = encodeWorkspaceKey(CWD);
+    const workspaceKey = encodeWorkspaceKey(cwd);
     const memId = memoryEntryIdSchema.parse(randomUUID().toLowerCase());
     const evId = randomUUID().toLowerCase();
 
@@ -171,6 +171,30 @@ describe("memory graph route", () => {
     expect(citesEdge).toBeDefined();
   });
 
+  it("GET /memory/graph: a project-scoped memory gets a project-memory edge (not orphaned)", async () => {
+    server = await start();
+
+    const post = await fetch(memoryBase(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ scope: "project", content: "project memory node", type: "decision" }),
+    });
+    expect(post.status).toBe(201);
+    const mem = await post.json();
+
+    const res = await fetch(graphUrl());
+    expect(res.status).toBe(200);
+    const graph = await res.json();
+
+    const projectMemoryEdge = graph.edges.find(
+      (e: { kind: string; to: string }) => e.kind === "project-memory" && e.to === mem.id,
+    );
+    expect(projectMemoryEdge).toBeDefined();
+
+    const parentNode = graph.nodes.find((n: { id: string }) => n.id === projectMemoryEdge.from);
+    expect(parentNode).toBeDefined();
+  });
+
   it("POST to /memory/graph → 405 method_not_allowed", async () => {
     server = await start();
     const res = await fetch(graphUrl(), { method: "POST" });
@@ -178,8 +202,7 @@ describe("memory graph route", () => {
   });
 
   it("GET /memory/graph ingests wiki pages + code-link from memory relatedFiles", async () => {
-    // Write wiki fixture under CWD/wiki/
-    const wikiRoot = join(CWD, "wiki");
+    const wikiRoot = join(cwd, "wiki");
     mkdirSync(join(wikiRoot, "entities"), { recursive: true });
     mkdirSync(join(wikiRoot, "concepts"), { recursive: true });
     writeFileSync(
@@ -190,7 +213,7 @@ describe("memory graph route", () => {
 
     server = await start();
 
-    const workspaceKey = encodeWorkspaceKey(CWD);
+    const workspaceKey = encodeWorkspaceKey(cwd);
     const memId = memoryEntryIdSchema.parse(randomUUID().toLowerCase());
     const memory: OverlayMemoryEntry = {
       id: memId,
@@ -217,54 +240,156 @@ describe("memory graph route", () => {
 
     // wiki node for entities/a.md
     const wikiNodeA = graph.nodes.find(
-      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "entities/a.md",
+      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "wiki:entities/a.md",
     );
     expect(wikiNodeA).toBeDefined();
 
     // wiki node for concepts/b.md
     const wikiNodeB = graph.nodes.find(
-      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "concepts/b.md",
+      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "wiki:concepts/b.md",
     );
     expect(wikiNodeB).toBeDefined();
 
     // wiki-link edge from entities/a.md → concepts/b.md
     const wikiLinkEdge = graph.edges.find(
       (e: { kind: string; from: string; to: string }) =>
-        e.kind === "wiki-link" && e.from === "entities/a.md" && e.to === "concepts/b.md",
+        e.kind === "wiki-link" && e.from === "wiki:entities/a.md" && e.to === "wiki:concepts/b.md",
     );
     expect(wikiLinkEdge).toBeDefined();
 
     // file node for src/foo.ts (from memory relatedFiles)
     const fileNode = graph.nodes.find(
-      (n: { kind: string; id: string }) => n.kind === "file" && n.id === "src/foo.ts",
+      (n: { kind: string; id: string }) => n.kind === "file" && n.id === "file:src/foo.ts",
     );
     expect(fileNode).toBeDefined();
 
     // code-link edge from memory → src/foo.ts
     const codeLinkEdge = graph.edges.find(
       (e: { kind: string; from: string; to: string }) =>
-        e.kind === "code-link" && e.from === memId && e.to === "src/foo.ts",
+        e.kind === "code-link" && e.from === memId && e.to === "file:src/foo.ts",
     );
     expect(codeLinkEdge).toBeDefined();
   });
 
+  it("GET /memory/graph: ./-prefixed memory relatedFile + plain wiki citation share ONE file node", async () => {
+    const wikiRoot = join(cwd, "wiki");
+    mkdirSync(join(wikiRoot, "entities"), { recursive: true });
+    writeFileSync(
+      join(wikiRoot, "entities", "ref.md"),
+      "---\ntitle: Ref\ntags: []\nstatus: active\n---\nSome claim (source: src/shared/x.ts).\n",
+    );
+
+    server = await start();
+
+    const workspaceKey = encodeWorkspaceKey(cwd);
+    const memId = memoryEntryIdSchema.parse(randomUUID().toLowerCase());
+    const memory: OverlayMemoryEntry = {
+      id: memId,
+      workspaceKey,
+      liveSessionId: ID,
+      scope: "session",
+      type: "decision",
+      title: "uses shared",
+      content: "uses src/shared/x.ts",
+      keywords: [],
+      confidence: "medium",
+      source: "agent",
+      approval: "approved",
+      stale: false,
+      relatedFiles: ["./src/shared/x.ts"],
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+    };
+    writeOverlayMemory(server.storePath, workspaceKey, [memory]);
+
+    const res = await fetch(graphUrl());
+    expect(res.status).toBe(200);
+    const graph = await res.json();
+
+    const fileNodes = graph.nodes.filter(
+      (n: { kind: string; id: string }) => n.kind === "file" && n.id === "file:src/shared/x.ts",
+    );
+    expect(fileNodes).toHaveLength(1);
+
+    const codeLink = graph.edges.find(
+      (e: { kind: string; from: string; to: string }) =>
+        e.kind === "code-link" && e.from === memId && e.to === "file:src/shared/x.ts",
+    );
+    expect(codeLink).toBeDefined();
+    const wikiCite = graph.edges.find(
+      (e: { kind: string; to: string }) =>
+        e.kind === "wiki-cite" && e.to === "file:src/shared/x.ts",
+    );
+    expect(wikiCite).toBeDefined();
+  });
+
+  it("GET /memory/graph: :line-suffixed memory relatedFile + plain wiki citation share ONE file node", async () => {
+    const wikiRoot = join(cwd, "wiki");
+    mkdirSync(join(wikiRoot, "entities"), { recursive: true });
+    writeFileSync(
+      join(wikiRoot, "entities", "ref.md"),
+      "---\ntitle: Ref\ntags: []\nstatus: active\n---\nSome claim (source: src/shared/x.ts:12).\n",
+    );
+
+    server = await start();
+
+    const workspaceKey = encodeWorkspaceKey(cwd);
+    const memId = memoryEntryIdSchema.parse(randomUUID().toLowerCase());
+    const memory: OverlayMemoryEntry = {
+      id: memId,
+      workspaceKey,
+      liveSessionId: ID,
+      scope: "session",
+      type: "decision",
+      title: "uses shared",
+      content: "uses src/shared/x.ts",
+      keywords: [],
+      confidence: "medium",
+      source: "agent",
+      approval: "approved",
+      stale: false,
+      relatedFiles: ["src/shared/x.ts:12"],
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+    };
+    writeOverlayMemory(server.storePath, workspaceKey, [memory]);
+
+    const res = await fetch(graphUrl());
+    expect(res.status).toBe(200);
+    const graph = await res.json();
+
+    const fileNodes = graph.nodes.filter(
+      (n: { kind: string; id: string }) => n.kind === "file" && n.id === "file:src/shared/x.ts",
+    );
+    expect(fileNodes).toHaveLength(1);
+
+    const codeLink = graph.edges.find(
+      (e: { kind: string; from: string; to: string }) =>
+        e.kind === "code-link" && e.from === memId && e.to === "file:src/shared/x.ts",
+    );
+    expect(codeLink).toBeDefined();
+    const wikiCite = graph.edges.find(
+      (e: { kind: string; to: string }) =>
+        e.kind === "wiki-cite" && e.to === "file:src/shared/x.ts",
+    );
+    expect(wikiCite).toBeDefined();
+  });
+
   it("GET /memory/graph path-safety: a symlink in wiki/ pointing outside is NOT followed", async () => {
     // The secret lives OUTSIDE the wiki tree, with content that must never leak.
-    const secretMarker = "TOPSECRET-should-never-appear";
-    const outsidePath = join(CWD, "outside-secret.md");
-    mkdirSync(CWD, { recursive: true });
-    writeFileSync(outsidePath, `# Outside\n${secretMarker}\n`);
+    const leakedCite = "secret/leaked-path.ts";
+    const outsidePath = join(cwd, "outside-secret.md");
+    writeFileSync(outsidePath, `# Outside\n(source: ${leakedCite})\n`);
 
     // A valid in-tree page so wiki ingestion definitely runs.
-    const wikiRoot = join(CWD, "wiki");
+    const wikiRoot = join(cwd, "wiki");
     mkdirSync(join(wikiRoot, "entities"), { recursive: true });
     writeFileSync(join(wikiRoot, "entities", "safe.md"), "# Safe\nno links\n");
 
-    // A symlink INSIDE the walked tree whose target escapes wiki/. Exercises
-    // both the Dirent.isSymbolicLink() skip and the resolved-path confinement
-    // guard — without them, escape.md would be read and the secret would leak.
+    // A symlink INSIDE the walked tree whose target escapes wiki/. The in-walk
+    // Dirent.isSymbolicLink() skip is the sole confinement mechanism — without
+    // it, escape.md would be read and the secret would leak.
     const escapeLink = join(wikiRoot, "entities", "escape.md");
-    rmSync(escapeLink, { force: true });
     symlinkSync(outsidePath, escapeLink);
 
     server = await start();
@@ -275,19 +400,26 @@ describe("memory graph route", () => {
 
     // safe.md inside wiki/ IS present (proves the walk actually ran).
     const safeNode = graph.nodes.find(
-      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "entities/safe.md",
+      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "wiki:entities/safe.md",
     );
     expect(safeNode).toBeDefined();
 
     // No wiki node for the symlink that escapes the tree.
     const escapeNode = graph.nodes.find(
-      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "entities/escape.md",
+      (n: { kind: string; id: string }) => n.kind === "wiki" && n.id === "wiki:entities/escape.md",
     );
     expect(escapeNode).toBeUndefined();
 
-    // The secret content/path must not surface anywhere in the serialized graph.
-    const serialized = JSON.stringify(graph);
-    expect(serialized).not.toContain(secretMarker);
-    expect(serialized).not.toContain("outside-secret");
+    // Following the symlink would parse escape.md's (source:) citation into a
+    // file node and a wiki-cite edge; both must be absent because the page was
+    // never read.
+    const leakedFileNode = graph.nodes.find(
+      (n: { kind: string; id: string }) => n.kind === "file" && n.id === `file:${leakedCite}`,
+    );
+    expect(leakedFileNode).toBeUndefined();
+    const leakedCiteEdge = graph.edges.find(
+      (e: { kind: string; to: string }) => e.kind === "wiki-cite" && e.to === `file:${leakedCite}`,
+    );
+    expect(leakedCiteEdge).toBeUndefined();
   });
 });

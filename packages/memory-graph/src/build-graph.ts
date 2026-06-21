@@ -1,10 +1,29 @@
 import type { GraphInput } from "./inputs.js";
 import type { Graph, GraphEdge, GraphNode } from "./model.js";
 
+// File-node ids must agree across both referrers. Wiki fileCites arrive already
+// './'-stripped from parseWikiPage, but memory relatedFiles are pre-validated
+// data the leaf passes through verbatim — so strip './' here, the one choke
+// point both paths cross, to keep './x' and 'x' a single shared file node.
+const canonFilePath = (p: string): string => (p.startsWith("./") ? p.slice(2) : p);
+
+// file/symbol/wiki ids derive from free-form strings (paths, symbol names, wiki
+// page paths) that can collide across kinds — a bare module name 'foo' as both a
+// path and a symbol. Kind-prefix their node ids so the three id spaces stay
+// disjoint; without it two distinct nodes silently merge and one of their edges,
+// sharing an id, is dropped by the seen guard.
+const fileId = (path: string): string => `file:${canonFilePath(path)}`;
+const symbolId = (symbol: string): string => `symbol:${symbol}`;
+const wikiId = (path: string): string => `wiki:${path}`;
+
 export function buildGraph(input: GraphInput): Graph {
   const nodes: GraphNode[] = [];
   const ids = new Set<string>();
+  // A .md path cited as a file and a wiki page at that same path produce two
+  // nodes (file:<path> and wiki:<path>) — distinct kinds, distinct ids. Within
+  // one kind, repeats are deduped first-writer-wins.
   const add = (n: GraphNode): void => {
+    if (ids.has(n.id)) return;
     nodes.push(n);
     ids.add(n.id);
   };
@@ -35,17 +54,19 @@ export function buildGraph(input: GraphInput): Graph {
     });
   for (const c of input.chunkSets)
     add({ id: c.chunkSetId, kind: "chunkset", label: c.label, meta: { redacted: c.redacted } });
-  for (const f of input.files)
-    add({
-      id: f.path,
-      kind: "file",
-      label: f.path.split("/").pop() ?? f.path,
-      meta: { path: f.path },
-    });
-  for (const sym of input.symbols)
-    add({ id: sym.symbol, kind: "symbol", label: sym.symbol, meta: {} });
   for (const w of input.wikiPages)
-    add({ id: w.path, kind: "wiki", label: w.title, meta: { tags: w.tags, status: w.status } });
+    add({
+      id: wikiId(w.path),
+      kind: "wiki",
+      label: w.title,
+      meta: { tags: w.tags, status: w.status },
+    });
+  for (const f of input.files) {
+    const path = canonFilePath(f.path);
+    add({ id: fileId(f.path), kind: "file", label: path.split("/").pop() ?? path, meta: { path } });
+  }
+  for (const sym of input.symbols)
+    add({ id: symbolId(sym.symbol), kind: "symbol", label: sym.symbol, meta: {} });
 
   // [[link]] strings can match by full path, path-without-.md, basename, or
   // title. The path keys are unique per page so they always resolve; basename
@@ -97,8 +118,8 @@ export function buildGraph(input: GraphInput): Graph {
     if (m.scope === "session" && m.sessionId) link("scope", m.sessionId, m.id);
     else if (m.scope === "project" && m.projectId) link("project-memory", m.projectId, m.id);
     for (const evId of m.evidenceIds) link("cites", m.id, evId);
-    for (const fp of m.relatedFiles) link("code-link", m.id, fp);
-    for (const sym of m.relatedSymbols) link("code-link", m.id, sym);
+    for (const fp of m.relatedFiles) link("code-link", m.id, fileId(fp));
+    for (const sym of m.relatedSymbols) link("code-link", m.id, symbolId(sym));
   }
   for (const e of input.evidence) {
     if (e.sessionId) link("from-session", e.evidenceId, e.sessionId);
@@ -108,13 +129,13 @@ export function buildGraph(input: GraphInput): Graph {
   for (const w of input.wikiPages) {
     for (const lnk of w.links) {
       const resolved = resolveWiki(lnk);
-      if (resolved) link("wiki-link", w.path, resolved);
+      if (resolved) link("wiki-link", wikiId(w.path), wikiId(resolved));
     }
     for (const src of w.sources) {
       const resolved = resolveWiki(src);
-      if (resolved) link("wiki-source", w.path, resolved);
+      if (resolved) link("wiki-source", wikiId(w.path), wikiId(resolved));
     }
-    for (const cite of w.fileCites) link("wiki-cite", w.path, cite);
+    for (const cite of w.fileCites) link("wiki-cite", wikiId(w.path), fileId(cite));
   }
 
   return { nodes, edges, stats: { nodeCount: nodes.length, edgeCount: edges.length } };

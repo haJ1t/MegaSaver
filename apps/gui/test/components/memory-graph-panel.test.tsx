@@ -15,10 +15,12 @@ vi.mock("../../src/lib/claude-sessions-client.js", () => ({
 // touching the real rendering pipeline. Captures the elements array so tests can
 // assert that the correct cytoscape elements (by class) are passed.
 const tapHandlers: Array<(evt: { target: { id: () => string } }) => void> = [];
-let capturedElements: Array<{ classes?: string }> = [];
+let capturedElements: Array<{ data?: { id?: string; color?: string }; classes?: string }> = [];
 
 vi.mock("cytoscape", () => ({
-  default: (opts: { elements?: Array<{ classes?: string }> }) => {
+  default: (opts: {
+    elements?: Array<{ data?: { id?: string; color?: string }; classes?: string }>;
+  }) => {
     capturedElements = opts.elements ?? [];
     return {
       on: (
@@ -55,7 +57,7 @@ const FIXTURE_PHASE2: MemoryGraphData = {
       id: "w1",
       kind: "wiki",
       label: "Memory Graph design",
-      meta: { title: "Memory Graph design", tags: "design,graph", status: "active" },
+      meta: { title: "Memory Graph design", tags: ["design", "graph"], status: "active" },
     },
   ],
   edges: [
@@ -66,6 +68,28 @@ const FIXTURE_PHASE2: MemoryGraphData = {
     { id: "edge5", kind: "wiki-source", from: "w1", to: "e1" },
   ],
   stats: { nodeCount: 5, edgeCount: 5 },
+};
+
+const FIXTURE_MEMORY_SUBTYPES: MemoryGraphData = {
+  nodes: [
+    { id: "m1", kind: "memory", label: "decided to use cose", meta: { memoryType: "decision" } },
+    { id: "m2", kind: "memory", label: "a plain note", meta: {} },
+  ],
+  edges: [],
+  stats: { nodeCount: 2, edgeCount: 0 },
+};
+
+const FIXTURE_TAGLESS_WIKI: MemoryGraphData = {
+  nodes: [
+    {
+      id: "w1",
+      kind: "wiki",
+      label: "Tagless page",
+      meta: { title: "Tagless page", tags: [], status: "active" },
+    },
+  ],
+  edges: [],
+  stats: { nodeCount: 1, edgeCount: 0 },
 };
 
 const EMPTY: MemoryGraphData = {
@@ -111,6 +135,19 @@ describe("MemoryGraphPanel", () => {
 
     await waitFor(() => expect(screen.getByText("decided to use cose")).toBeDefined());
     expect(screen.getByText(/decision/)).toBeDefined();
+  });
+
+  it("paints a decision memory a distinct color from a generic memory node", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_MEMORY_SUBTYPES);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    const decisionColor = capturedElements.find((el) => el.data?.id === "m1")?.data?.color;
+    const genericColor = capturedElements.find((el) => el.data?.id === "m2")?.data?.color;
+
+    expect(decisionColor).toBeDefined();
+    expect(genericColor).toBeDefined();
+    expect(decisionColor).not.toBe(genericColor);
   });
 
   it("renders an empty-state message for a zero-node graph", async () => {
@@ -194,6 +231,20 @@ describe("MemoryGraphPanel", () => {
     });
   });
 
+  it("updates the header counts to the visible graph after toggling Wiki off", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    expect(screen.getByText(/5 nodes/)).toBeDefined();
+    expect(screen.getByText(/5 edges/)).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /Wiki/i }));
+
+    await waitFor(() => expect(screen.getByText(/4 nodes/)).toBeDefined());
+    expect(screen.getByText(/2 edges/)).toBeDefined();
+  });
+
   it("shows wiki node detail with title, tags, status when tapped", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
@@ -206,8 +257,20 @@ describe("MemoryGraphPanel", () => {
     await waitFor(() =>
       expect(screen.getAllByText("Memory Graph design").length).toBeGreaterThan(0),
     );
-    expect(screen.getByText(/design,graph/)).toBeDefined();
+    expect(screen.getByText(/design, graph/)).toBeDefined();
     expect(screen.getByText(/active/)).toBeDefined();
+  });
+
+  it("omits the tags row for a wiki node with no tags", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_TAGLESS_WIKI);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    const handler = tapHandlers[0];
+    if (handler) handler({ target: { id: () => "w1" } });
+
+    await waitFor(() => expect(screen.getByText(/active/)).toBeDefined());
+    expect(screen.queryByText("tags")).toBeNull();
   });
 
   it("shows file node detail with path when tapped", async () => {
@@ -221,5 +284,56 @@ describe("MemoryGraphPanel", () => {
     // "src/lib/core.ts" appears in both the label <p> and the meta path <dd>
     await waitFor(() => expect(screen.getAllByText("src/lib/core.ts").length).toBeGreaterThan(0));
     expect(screen.getByText(/path/)).toBeDefined();
+  });
+
+  it("clears the detail panel when the selected wiki node's layer is toggled off", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    const handler = tapHandlers[0];
+    if (handler) handler({ target: { id: () => "w1" } });
+
+    await waitFor(() => expect(screen.getByText(/design, graph/)).toBeDefined());
+
+    fireEvent.click(screen.getByRole("button", { name: /Wiki/i }));
+
+    await waitFor(() => expect(screen.getByText(/Select a node to inspect/)).toBeDefined());
+    expect(screen.queryByText(/design, graph/)).toBeNull();
+  });
+
+  it("clears the detail panel when the selected file node's layer is toggled off", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    const handler = tapHandlers[0];
+    if (handler) handler({ target: { id: () => "f1" } });
+
+    await waitFor(() => expect(screen.getAllByText("src/lib/core.ts").length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByRole("button", { name: /Code/i }));
+
+    await waitFor(() => expect(screen.getByText(/Select a node to inspect/)).toBeDefined());
+    expect(screen.queryByText("src/lib/core.ts")).toBeNull();
+  });
+
+  it("keeps the detail panel for a still-visible node after an unrelated layer toggles off", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+
+    const handler = tapHandlers[0];
+    if (handler) handler({ target: { id: () => "m1" } });
+
+    await waitFor(() => expect(screen.getByText("decided to use cose")).toBeDefined());
+
+    fireEvent.click(screen.getByRole("button", { name: /Wiki/i }));
+
+    await waitFor(() => {
+      const afterClasses = capturedElements.map((el) => el.classes);
+      expect(afterClasses).not.toContain("wiki");
+    });
+    expect(screen.getByText("decided to use cose")).toBeDefined();
   });
 });
