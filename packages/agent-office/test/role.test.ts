@@ -45,4 +45,8 @@ describe("roleSchema", () => {
   it("rejects a control-char name", () => {
     expect(() => roleSchema.parse(makeRole({ name: "bad\x07name" }))).toThrow();
   });
+
+  it("rejects an empty persona", () => {
+    expect(() => roleSchema.parse(makeRole({ persona: "" }))).toThrow();
+  });
 });

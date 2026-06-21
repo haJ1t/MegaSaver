@@ -18,4 +18,11 @@ describe("AgentOfficeError", () => {
       "write_failed",
     ]);
   });
+
+  it("forwards a custom message and cause", () => {
+    const root = new Error("disk full");
+    const err = new AgentOfficeError("write_failed", "custom", { cause: root });
+    expect(err.message).toBe("custom");
+    expect(err.cause).toBe(root);
+  });
 });

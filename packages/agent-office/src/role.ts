@@ -12,7 +12,7 @@ export const roleSchema = z
     id: roleIdSchema,
     name: titleSchema,
     kind: agentIdSchema,
-    persona: z.string(),
+    persona: z.string().min(1),
     model: roleModelSchema,
     allowedTools: z.array(z.string()).readonly(),
     skillPacks: z.array(z.string()).readonly(),

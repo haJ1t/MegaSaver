@@ -45,4 +45,10 @@ describe("officeAgentSchema", () => {
   it("rejects extra keys (strict)", () => {
     expect(() => officeAgentSchema.parse({ ...makeAgent(), extra: 1 })).toThrow();
   });
+
+  it("rejects a datetime without timezone offset", () => {
+    expect(() =>
+      officeAgentSchema.parse(makeAgent({ createdAt: "2026-06-22T12:00:00" })),
+    ).toThrow();
+  });
 });
