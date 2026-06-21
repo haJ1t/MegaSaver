@@ -11,7 +11,7 @@ import {
 } from "../src/paths.js";
 
 describe("assertSafeSegment", () => {
-  it.each(["", ".", "..", "a/b", "a\\b"])("rejects %p", (seg) => {
+  it.each(["", ".", "..", "a/b", "a\\b", "\0"])("rejects %p", (seg) => {
     expect(() => assertSafeSegment(seg)).toThrow(AgentOfficeError);
   });
   it("accepts a normal segment", () => {

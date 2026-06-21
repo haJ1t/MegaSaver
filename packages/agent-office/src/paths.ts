@@ -7,7 +7,8 @@ export function assertSafeSegment(segment: string): void {
     segment === "." ||
     segment === ".." ||
     segment.includes("/") ||
-    segment.includes("\\")
+    segment.includes("\\") ||
+    segment.includes("\0")
   ) {
     throw new AgentOfficeError("write_failed", `Unsafe path segment: ${segment}`);
   }

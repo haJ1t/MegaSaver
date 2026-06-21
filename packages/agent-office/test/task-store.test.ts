@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { officeAgentIdSchema, officeTaskIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { taskPath } from "../src/paths.js";
 import { deleteTask, listTasks, loadTask, saveTask } from "../src/task-store.js";
 import { type OfficeTask, officeTaskSchema } from "../src/task.js";
 
@@ -75,5 +76,17 @@ describe("task store", () => {
       loadTask({ storeRoot, workspaceKey, officeAgentId: agentId, officeTaskId: task.id }),
     ).rejects.toMatchObject({ code: "not_found" });
     await deleteTask({ storeRoot, workspaceKey, officeAgentId: agentId, officeTaskId: task.id });
+  });
+
+  it("throws store_corrupt for a non-json file", async () => {
+    const task = makeTask();
+    await saveTask({ storeRoot, task });
+    writeFileSync(
+      taskPath({ storeRoot, workspaceKey, officeAgentId: agentId, officeTaskId: task.id }),
+      "{ not json",
+    );
+    await expect(
+      loadTask({ storeRoot, workspaceKey, officeAgentId: agentId, officeTaskId: task.id }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
   });
 });

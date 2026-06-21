@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { roleIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AgentOfficeError } from "../src/errors.js";
-import { rolePath, rolesDir } from "../src/paths.js";
+import { rolePath } from "../src/paths.js";
 import { deleteRole, listRoles, loadRole, saveRole } from "../src/role-store.js";
 import { type Role, roleSchema } from "../src/role.js";
 
@@ -73,7 +72,8 @@ describe("role store", () => {
     // ensure dir exists by saving then clobbering
     await saveRole({ storeRoot, role });
     writeFileSync(path, "{ not json");
-    await expect(loadRole({ storeRoot, roleId: role.id })).rejects.toBeInstanceOf(AgentOfficeError);
-    expect(rolesDir(storeRoot)).toContain("office");
+    await expect(loadRole({ storeRoot, roleId: role.id })).rejects.toMatchObject({
+      code: "store_corrupt",
+    });
   });
 });

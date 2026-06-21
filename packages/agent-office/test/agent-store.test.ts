@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { officeAgentIdSchema, roleIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { deleteAgent, listAgents, loadAgent, saveAgent } from "../src/agent-store.js";
 import { type OfficeAgent, officeAgentSchema } from "../src/agent.js";
+import { agentPath } from "../src/paths.js";
 
 let storeRoot: string;
 const workspaceKey = "0123456789abcdef";
@@ -63,5 +64,14 @@ describe("agent store", () => {
       loadAgent({ storeRoot, workspaceKey, officeAgentId: agent.id }),
     ).rejects.toMatchObject({ code: "not_found" });
     await deleteAgent({ storeRoot, workspaceKey, officeAgentId: agent.id });
+  });
+
+  it("throws store_corrupt for a non-json file", async () => {
+    const agent = makeAgent();
+    await saveAgent({ storeRoot, agent });
+    writeFileSync(agentPath({ storeRoot, workspaceKey, officeAgentId: agent.id }), "{ not json");
+    await expect(
+      loadAgent({ storeRoot, workspaceKey, officeAgentId: agent.id }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
   });
 });

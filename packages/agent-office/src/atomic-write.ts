@@ -33,6 +33,7 @@ export function atomicWriteFile(filePath: string, content: string): void {
       closeSync(tempFd);
     }
     renameSync(tempPath, filePath);
+    // Windows does not support fsync on directory handles; the rename is durable via NTFS journaling.
     if (!IS_WIN32) {
       const dirFd = openSync(parentDir, "r");
       try {
