@@ -1,6 +1,11 @@
+import { spawn as nodeSpawn } from "node:child_process";
+import type { Readable } from "node:stream";
 import {
+  type AgentLauncher,
+  type LaunchHandle,
   type LaunchInput,
   LauncherError,
+  type LauncherEvent,
   type LauncherPermissionMode,
 } from "@megasaver/connectors-shared";
 
@@ -45,4 +50,92 @@ export function buildClaudeArgs(input: LaunchInput): string[] {
   }
 
   return args;
+}
+
+export interface SpawnedChild {
+  stdout: Readable | null;
+  stderr: Readable | null;
+  on(event: "close", listener: (code: number | null) => void): void;
+  on(event: "error", listener: (error: Error) => void): void;
+  kill(signal?: NodeJS.Signals): void;
+}
+
+export type SpawnFn = (
+  command: string,
+  args: readonly string[],
+  options: { cwd: string },
+) => SpawnedChild;
+
+const defaultSpawn: SpawnFn = (command, args, options) =>
+  nodeSpawn(command, [...args], options) as unknown as SpawnedChild;
+
+function toText(chunk: string | Buffer): string {
+  return typeof chunk === "string" ? chunk : chunk.toString("utf8");
+}
+
+export function createClaudeCodeLauncher(options: { spawn?: SpawnFn } = {}): AgentLauncher {
+  const spawn = options.spawn ?? defaultSpawn;
+
+  return {
+    kind: "claude-code",
+    launch(input): LaunchHandle {
+      const args = buildClaudeArgs(input); // throws on bad session config before spawning
+      // buildClaudeArgs guarantees exactly one id is set.
+      const sessionId = (input.resumeSessionId ?? input.sessionId) as string;
+
+      const eventCbs: ((event: LauncherEvent) => void)[] = [];
+      const exitCbs: ((result: { code: number | null }) => void)[] = [];
+      const emitEvent = (event: LauncherEvent) => {
+        for (const cb of eventCbs) cb(event);
+      };
+      const emitExit = (result: { code: number | null }) => {
+        for (const cb of exitCbs) cb(result);
+      };
+
+      const child = spawn("claude", args, { cwd: input.workdir });
+
+      let buffer = "";
+      const emitLine = (line: string) => {
+        const trimmed = line.trim();
+        if (trimmed.length === 0) return;
+        try {
+          emitEvent({ kind: "stream", payload: JSON.parse(trimmed) });
+        } catch {
+          // Non-JSON line (verbose noise) — skip.
+        }
+      };
+
+      child.stdout?.on("data", (chunk: string | Buffer) => {
+        buffer += toText(chunk);
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) emitLine(line);
+      });
+      child.stderr?.on("data", (chunk: string | Buffer) => {
+        emitEvent({ kind: "stderr", text: toText(chunk) });
+      });
+      child.on("error", (error) => {
+        emitEvent({ kind: "stderr", text: error.message });
+        emitExit({ code: null });
+      });
+      child.on("close", (code) => {
+        if (buffer.trim().length > 0) emitLine(buffer);
+        buffer = "";
+        emitExit({ code });
+      });
+
+      return {
+        sessionId,
+        onEvent(cb) {
+          eventCbs.push(cb);
+        },
+        onExit(cb) {
+          exitCbs.push(cb);
+        },
+        cancel() {
+          child.kill("SIGTERM");
+        },
+      };
+    },
+  };
 }
