@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/cli",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Mega Saver CLI - the `mega` command.",
   "type": "module",
   "bin": {
