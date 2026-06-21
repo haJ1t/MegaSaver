@@ -14,6 +14,10 @@ describe("buildPredefinedRoles", () => {
     }
   });
 
+  it("builds the full 13-role roster", () => {
+    expect(buildPredefinedRoles({ now, newId: () => randomUUID() })).toHaveLength(13);
+  });
+
   it("makes every predefined role safe-by-default (permissionMode plan)", () => {
     const roles = buildPredefinedRoles({ now, newId: () => randomUUID() });
     expect(roles.every((r) => r.permissionMode === "plan")).toBe(true);
@@ -37,9 +41,10 @@ describe("buildPredefinedRoles", () => {
     let i = 0;
     const roles = buildPredefinedRoles({
       now,
-      newId: () => `00000000-0000-4000-8000-00000000000${i++}`,
+      newId: () => `00000000-0000-4000-8000-${String(i++).padStart(12, "0")}`,
     });
     expect(roles[0]?.createdAt).toBe(now);
     expect(roles[0]?.id).toBe("00000000-0000-4000-8000-000000000000");
+    expect(roles.every((r) => r.createdAt === now)).toBe(true);
   });
 });

@@ -51,6 +51,26 @@ const SEEDS: readonly Seed[] = [
     model: "sonnet",
     persona: "Design test strategy; harden flaky tests; cover edge cases.",
   },
+  {
+    name: "Document Specialist",
+    model: "sonnet",
+    persona: "Research external SDK/API docs and summarize accurately, with sources.",
+  },
+  {
+    name: "Tracer",
+    model: "opus",
+    persona: "Trace causal hypotheses through evidence to the true failure path.",
+  },
+  {
+    name: "Explorer",
+    model: "sonnet",
+    persona: "Search and map the codebase; locate code without modifying it.",
+  },
+  {
+    name: "Designer",
+    model: "sonnet",
+    persona: "Implement UI/UX work with attention to hierarchy, spacing, and polish.",
+  },
 ];
 
 export function buildPredefinedRoles(input: { now: string; newId: () => string }): Role[] {
