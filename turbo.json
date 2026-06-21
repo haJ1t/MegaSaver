@@ -9,7 +9,7 @@
     },
     "typecheck": {
       "dependsOn": ["^build", "build"],
-      "outputs": ["*.tsbuildinfo"]
+      "outputs": ["*.tsbuildinfo", "**/*.tsbuildinfo"]
     },
     "test": {
       "dependsOn": ["^build", "build"],
