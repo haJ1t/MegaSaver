@@ -35,7 +35,7 @@ describe("createClaudeCodeLauncher", () => {
     createClaudeCodeLauncher({ spawn }).launch(input());
     expect(spawn).toHaveBeenCalledOnce();
     const call = (spawn as unknown as { mock: { calls: [string, string[], { cwd: string }][] } })
-      .mock.calls[0];
+      .mock.calls[0] as [string, string[], { cwd: string }];
     expect(call[0]).toBe("claude");
     expect(call[2]).toEqual({ cwd: "/repo" });
     expect(call[1]).toContain("--session-id");
@@ -118,13 +118,23 @@ describe("createClaudeCodeLauncher", () => {
 
   it("handle.sessionId reflects the resume id", () => {
     const child = makeFakeChild();
+    const { sessionId: _omit, ...rest } = input();
     const handle = createClaudeCodeLauncher({
       spawn: () => child as unknown as SpawnedChild,
-    }).launch(input({ sessionId: undefined, resumeSessionId: "resume-xyz" }));
+    }).launch({ ...rest, resumeSessionId: "resume-xyz" });
     expect(handle.sessionId).toBe("resume-xyz");
   });
 
   it("kind is claude-code", () => {
     expect(createClaudeCodeLauncher().kind).toBe("claude-code");
+  });
+});
+
+import * as claudeCodeApi from "../src/index.js";
+
+describe("public surface", () => {
+  it("re-exports the launcher entry points", () => {
+    expect(claudeCodeApi).toHaveProperty("createClaudeCodeLauncher");
+    expect(claudeCodeApi).toHaveProperty("buildClaudeArgs");
   });
 });

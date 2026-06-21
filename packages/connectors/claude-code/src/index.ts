@@ -41,3 +41,9 @@ export {
   type ClaudeCodeHookResult,
   type ClaudeCodeHookStatus,
 } from "./hook-settings.js";
+export {
+  buildClaudeArgs,
+  createClaudeCodeLauncher,
+  type SpawnFn,
+  type SpawnedChild,
+} from "./launcher.js";

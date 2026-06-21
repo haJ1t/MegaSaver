@@ -32,7 +32,8 @@ describe("buildClaudeArgs", () => {
   });
 
   it("uses --resume (not --session-id) for a resumed run", () => {
-    const args = buildClaudeArgs(base({ sessionId: undefined, resumeSessionId: "sess-abc" }));
+    const { sessionId: _omit, ...rest } = base();
+    const args = buildClaudeArgs({ ...rest, resumeSessionId: "sess-abc" });
     expect(args).toContain("--resume");
     expect(args[args.indexOf("--resume") + 1]).toBe("sess-abc");
     expect(args).not.toContain("--session-id");
@@ -64,7 +65,8 @@ describe("buildClaudeArgs", () => {
   });
 
   it("throws LauncherError when neither session id is provided", () => {
-    expect(() => buildClaudeArgs(base({ sessionId: undefined }))).toThrow(LauncherError);
+    const { sessionId: _omit, ...rest } = base();
+    expect(() => buildClaudeArgs(rest)).toThrow(LauncherError);
   });
 
   it("throws LauncherError when both session ids are provided", () => {
