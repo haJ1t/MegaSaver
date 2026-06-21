@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 export const HOOK_MATCHER = "Read|Bash|Grep|Glob|LS";
 export const DEFAULT_HOOK_COMMAND = "mega hooks log";
 export const SAVER_HOOK_COMMAND = "mega hooks saver";
-export const SAVER_HOOK_MATCHER = "Read|Bash|Grep|Glob|LS";
+export const SAVER_HOOK_MATCHER = "Read|Bash|Grep|Glob|LS|WebFetch";
 
 type CommandHook = { type: "command"; command: string };
 type ToolUseEntry = { matcher?: string; hooks?: CommandHook[] };
