@@ -21,6 +21,7 @@ export function atomicWriteFile(filePath: string, content: string): void {
   const parentDir = dirname(filePath);
   const tempPath = join(parentDir, `.${randomUUID()}.tmp`);
 
+  let renamed = false;
   try {
     if (existsSync(parentDir) && lstatSync(parentDir).isSymbolicLink()) {
       throw new ContentStoreError("write_failed", "Store write failed.");
@@ -41,6 +42,7 @@ export function atomicWriteFile(filePath: string, content: string): void {
       closeSync(tempFd);
     }
     renameSync(tempPath, filePath);
+    renamed = true;
     // POSIX directory fsync: required on ext4/xfs/APFS so the rename
     // metadata is durable against kernel-panic / power-loss. On Windows
     // (NTFS) the rename's metadata is journaled and durable without a
@@ -55,6 +57,11 @@ export function atomicWriteFile(filePath: string, content: string): void {
       }
     }
   } catch (error) {
+    // After a successful rename the file is committed; the parent-dir fsync is
+    // a durability hint, not a correctness gate. Don't fail (or clean up) a
+    // write that already landed.
+    if (renamed) return;
+
     try {
       rmSync(tempPath, { force: true });
     } catch {
