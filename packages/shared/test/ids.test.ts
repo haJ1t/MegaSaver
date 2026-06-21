@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import * as fc from "fast-check";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
@@ -7,7 +8,10 @@ import {
   type SessionId,
   codeBlockIdSchema,
   memoryEntryIdSchema,
+  officeAgentIdSchema,
+  officeTaskIdSchema,
   projectIdSchema,
+  roleIdSchema,
   sessionIdSchema,
 } from "../src/ids.js";
 
@@ -61,6 +65,22 @@ describe.each([
         },
       ),
     );
+  });
+});
+
+describe("office branded ids", () => {
+  it("accepts a lowercase uuid for each office id", () => {
+    const id = randomUUID();
+    expect(roleIdSchema.parse(id)).toBe(id);
+    expect(officeAgentIdSchema.parse(id)).toBe(id);
+    expect(officeTaskIdSchema.parse(id)).toBe(id);
+  });
+
+  it("rejects an uppercase uuid (case-aliasing guard)", () => {
+    const upper = randomUUID().toUpperCase();
+    expect(roleIdSchema.safeParse(upper).success).toBe(false);
+    expect(officeAgentIdSchema.safeParse(upper).success).toBe(false);
+    expect(officeTaskIdSchema.safeParse(upper).success).toBe(false);
   });
 });
 
