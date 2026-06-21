@@ -1,6 +1,7 @@
 import { redact } from "@megasaver/policy";
 import { modeToBudget, riskLevelSchema, tokenSaverModeSchema } from "@megasaver/shared";
 import { z } from "zod";
+import { chunkByLines } from "./chunk.js";
 import { type Classification, classifyOutput, isConfidentClassification } from "./classify.js";
 import { type CompressorName, compressByCategory } from "./compress/index.js";
 import { dedupe } from "./dedupe.js";
@@ -88,6 +89,32 @@ export type FilterOutputResult = {
   warnings?: readonly string[];
 };
 
+// Generic line grouping for the no-blind fallback; matches the default
+// used by the generic chunker.
+const GENERIC_FALLBACK_LINES_PER_CHUNK = 40;
+
+function truncateToBytes(text: string, maxBytes: number): string {
+  const buf = Buffer.from(text, "utf8");
+  if (buf.length <= maxBytes) return text;
+  let end = maxBytes;
+  // Back off any UTF-8 continuation byte (0b10xxxxxx) so we never split a
+  // code point. At most three iterations.
+  while (end > 0) {
+    const byte = buf[end];
+    if (byte === undefined || (byte & 0xc0) !== 0x80) break;
+    end -= 1;
+  }
+  return buf.toString("utf8", 0, end);
+}
+
+function truncateChunkToBytes(chunk: RankedChunk, maxBytes: number): RankedChunk {
+  const text = truncateToBytes(chunk.text, maxBytes);
+  if (text === chunk.text) return chunk;
+  // Keep the reported line span consistent with the truncated body.
+  const endLine = chunk.startLine + text.split("\n").length - 1;
+  return { ...chunk, text, endLine };
+}
+
 function excerptOf(chunk: RankedChunk): OutputExcerpt {
   const base = {
     text: chunk.text,
@@ -152,9 +179,43 @@ export function filterOutput(input: FilterOutputInput): FilterOutputResult {
 
   const ordered = [...deduped].sort((a, b) => b.score - a.score);
   const budget = effectiveBudget(maxReturnedBytes, modeToBudget(mode));
-  const kept = decision === "compressed" ? fitBudget(deduped, budget) : ordered;
-  const omitted = deduped.filter((c) => !kept.includes(c));
-  const droppedCount = deduped.length - kept.length;
+  let kept = decision === "compressed" ? fitBudget(deduped, budget) : ordered;
+  let omitted = deduped.filter((c) => !kept.includes(c));
+  let droppedCount = deduped.length - kept.length;
+
+  // No-blind floor (mission: never strip what the model needs to decide).
+  // The compressed path can yield zero excerpts two ways: a specialized
+  // compressor empties its input (e.g. misclassified output whose pattern
+  // never matches), or every chunk exceeds the byte budget. Re-chunk the
+  // normalized (uncompressed) output generically and keep the top-ranked
+  // content within budget — truncating the single top chunk when even one
+  // chunk overflows — so the model is never handed an empty result.
+  if (kept.length === 0 && normalized.trim() !== "") {
+    const scoredFallback = chunkByLines(normalized, GENERIC_FALLBACK_LINES_PER_CHUNK).map((c) =>
+      scoreChunk(intent, c, sessionHints),
+    );
+    const fallback = engineEnabled
+      ? applyEngineRanking(scoredFallback, sessionHints)
+      : scoredFallback;
+    const fallbackOrdered = [...fallback].sort((a, b) => b.score - a.score);
+    const fitted = fitBudget(fallback, budget);
+    const top = fallbackOrdered[0];
+    if (fitted.length > 0) {
+      kept = fitted;
+      omitted = fallbackOrdered.filter((c) => !kept.includes(c));
+      droppedCount = fallbackOrdered.length - fitted.length;
+    } else if (top !== undefined) {
+      // Nothing fit — keep the top-ranked chunk truncated to budget. The
+      // truncated chunk is a new object, so derive omitted from the rest
+      // explicitly rather than by reference identity.
+      kept = [truncateChunkToBytes(top, budget)];
+      omitted = fallbackOrdered.slice(1);
+      droppedCount = fallbackOrdered.length - 1;
+    }
+    if (kept.length > 0) {
+      warnings.push("specialized compression produced no excerpts; returned generic excerpt");
+    }
+  }
   const summary =
     decision === "passthrough"
       ? `passthrough: ${rawTokens} tokens below compression threshold`

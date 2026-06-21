@@ -154,3 +154,47 @@ describe("filterOutput pipeline (spec §6 / §11)", () => {
     expect(result.chunkSetId).toBeUndefined();
   });
 });
+
+describe("filterOutput no-blind floor (mission: never strip what the model needs)", () => {
+  // grep-style output that trips the typescript classifier via a stray
+  // "error TSxxxx:" token but carries no parseable tsc diagnostic, so the
+  // specialized compressor empties it. The model must still get content.
+  const grepLike = (): string => {
+    const lines: string[] = [];
+    for (let i = 0; i < 3000; i++) {
+      lines.push(`packages/x/src/file${i}.ts:${i}:import { thing } from "./dep";`);
+    }
+    lines.push("readme: see error TS9999: legacy migration note");
+    return lines.join("\n");
+  };
+
+  it("returns excerpts when a specialized compressor matches nothing", () => {
+    const raw = grepLike();
+    const result = filterOutput(base(raw, { mode: "aggressive" }));
+    expect(result.decision).toBe("compressed");
+    expect(result.classification.category).toBe("typescript");
+    expect(result.excerpts.length).toBeGreaterThan(0);
+  });
+
+  it("returns real content, not just the summary line", () => {
+    const result = filterOutput(base(grepLike(), { mode: "aggressive" }));
+    const excerptBytes = result.excerpts.reduce((n, e) => n + Buffer.byteLength(e.text), 0);
+    expect(excerptBytes).toBeGreaterThan(0);
+    expect(result.returnedBytes).toBeGreaterThan(Buffer.byteLength(result.summary));
+  });
+
+  it("keeps a truncated top excerpt when every chunk exceeds the budget", () => {
+    // one very long line per chunk: each 40-line chunk far exceeds the
+    // 4000-byte aggressive budget, so the greedy fit keeps zero and the
+    // floor must keep exactly one truncated top excerpt within budget.
+    const huge = Array.from({ length: 200 }, (_, i) => `line ${i} ${"x".repeat(500)}`).join("\n");
+    const result = filterOutput(base(huge, { mode: "aggressive" }));
+    expect(result.decision).toBe("compressed");
+    expect(result.excerpts).toHaveLength(1);
+    expect(result.warnings).toContain(
+      "specialized compression produced no excerpts; returned generic excerpt",
+    );
+    const excerptBytes = result.excerpts.reduce((n, e) => n + Buffer.byteLength(e.text), 0);
+    expect(excerptBytes).toBeLessThanOrEqual(4000); // aggressive budget
+  });
+});
