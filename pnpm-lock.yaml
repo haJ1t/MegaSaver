@@ -194,6 +194,22 @@ importers:
         specifier: ^9.0.10
         version: 9.0.10
 
+  packages/agent-office:
+    dependencies:
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+      fast-check:
+        specifier: ^3.23.2
+        version: 3.23.2
+
   packages/connectors/claude-code:
     dependencies:
       '@megasaver/connectors-shared':
