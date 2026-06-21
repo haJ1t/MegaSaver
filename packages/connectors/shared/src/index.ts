@@ -27,3 +27,16 @@ export {
   syncTargetBlock,
   writeTargetFile,
 } from "./filesystem.js";
+export {
+  type AgentLauncher,
+  type LaunchHandle,
+  type LaunchInput,
+  type LauncherEvent,
+  type LauncherModel,
+  launcherModelSchema,
+  type LauncherPermissionMode,
+  launcherPermissionModeSchema,
+  LauncherError,
+  type LauncherErrorCode,
+  launcherErrorCodeSchema,
+} from "./launcher.js";

@@ -55,10 +55,31 @@ no core edge yet — that arrives in Phase 2's supervisor).
 - 57 tests, `pnpm verify` green. Risk this phase: MEDIUM (pure data
   layer; no spawning).
 
+## Phase 1 shipped (launcher capability)
+
+`AgentLauncher` interface (+ `LauncherError`, `launcherPermissionMode`/
+`launcherModel` schemas) in `@megasaver/connectors-shared`, and a
+claude-code adapter in `@megasaver/connector-claude-code`:
+
+- `buildClaudeArgs(input)` (pure): `claude -p <instruction>
+  --output-format stream-json --verbose --model <alias> --permission-mode
+  <plan|acceptEdits|bypassPermissions> [--allowedTools …]
+  [--append-system-prompt <persona>] (--session-id | --resume)`. Exactly
+  one of new/resume session id (throws `LauncherError` otherwise).
+- `createClaudeCodeLauncher({ spawn })`: injectable spawn; stdout
+  line-buffered + `StringDecoder` (UTF-8 multibyte-safe) → `JSON.parse`
+  (non-JSON skipped) → `{kind:"stream"}` events; stderr events;
+  one-shot `onExit` latch (at-most-once, replays to late subscribers);
+  `cancel()` → SIGTERM. `cwd = workdir`, no `--add-dir` (workdir
+  confinement); argv array (no shell → no injection).
+- Risk HIGH (introduces spawning); tests inject a fake spawn — never a
+  real `claude`. `pnpm verify` green. Reviewed by code-reviewer + critic.
+- Phase 2 carry-overs (from critic): event buffering for async
+  subscribers, SIGKILL escalation, gate `full`/`bypassPermissions`,
+  listener teardown.
+
 ## Phases not yet built
 
-1. `AgentLauncher` connector capability + claude-code adapter (spawn
-   `claude -p`; the CRITICAL part, fake-child tested).
 2. Supervisor (queue loop, resume continuity, concurrency cap) +
    per-role permission/workdir enforcement + evidence-ledger audit
    (composes `@megasaver/core` `CoreRegistry`). Also tighten
