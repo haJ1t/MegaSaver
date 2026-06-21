@@ -2816,3 +2816,25 @@ security-key 2FA in the browser. For hands-off CI releases later: disable 2FA-fo
 level (per-account change was overridden by org enforcement) or use a 2FA-bypass token. Bundle is
 self-contained (single ~11MB `dist-bundle/mega.mjs`, 0 workspace refs). Ten PRs (#143–#152) + this
 release: the context-ledger / reliable-save / token-saver arc is complete AND shipped to npm.
+
+## [2026-06-22] feature | agent-office Phase 0 (engine data layer)
+
+New feature **Agent Office** (spec docs/superpowers/specs/2026-06-22-agent-office-design.md,
+plan docs/superpowers/plans/2026-06-22-agent-office-phase0-engine.md). Brainstorming locked:
+hybrid launch+track; four agent kinds by interface with claude-code adapter first; rich roles
+(persona+model+tools/skills+permission+workdir, seeded from CLAUDE.md §6 + custom); per-agent
+task queue with lifecycle; headless `claude -p --resume` execution; engine package + GUI board +
+thin `mega office` CLI; safety risk CRITICAL — safe-by-default (`plan`), opt-in writes per role,
+workdir confinement, evidence-ledger audit (user sign-off recorded in spec frontmatter).
+
+Phase 0 shipped on branch `worktree-feat+agent-office`: new agent-agnostic package
+`@megasaver/agent-office` (deps: `@megasaver/shared` + zod only; no core edge yet). Delivered the
+data layer — zod `.strict()` schemas `Role`/`OfficeAgent`/`OfficeTask` (+ enums), new shared
+branded ids `roleId`/`officeAgentId`/`officeTaskId`, atomic-json stores mirroring content-store
+(temp→fsync→rename, `assertSafeSegment` incl. NUL guard, typed `AgentOfficeError`), and
+`buildPredefinedRoles` (13 seed roles, ALL `permissionMode: plan`). 57 tests, `pnpm verify` green.
+Built subagent-driven (4 batches, two-stage spec+quality review each). New entity page
+[[entities/agent-office]]. Phases 1-5 (launcher → supervisor → bridge → GUI → CLI) deferred to
+their own specs; the CRITICAL spawning lands in Phases 1-2. Follow-ups noted: tighten
+`workspaceKey` to the branded schema in Phase 2; harden `atomicWriteFile` dir-fsync edge across
+content-store + agent-office.

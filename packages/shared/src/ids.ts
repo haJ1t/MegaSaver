@@ -37,3 +37,12 @@ export type TaskStepId = z.infer<typeof taskStepIdSchema>;
 
 export const toolDefinitionIdSchema = lowercaseUuid.brand<"ToolDefinitionId">();
 export type ToolDefinitionId = z.infer<typeof toolDefinitionIdSchema>;
+
+export const roleIdSchema = lowercaseUuid.brand<"RoleId">();
+export type RoleId = z.infer<typeof roleIdSchema>;
+
+export const officeAgentIdSchema = lowercaseUuid.brand<"OfficeAgentId">();
+export type OfficeAgentId = z.infer<typeof officeAgentIdSchema>;
+
+export const officeTaskIdSchema = lowercaseUuid.brand<"OfficeTaskId">();
+export type OfficeTaskId = z.infer<typeof officeTaskIdSchema>;
