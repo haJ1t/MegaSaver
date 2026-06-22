@@ -41,6 +41,25 @@ runtime that drives the Phase 2 supervisor with the real claude-code launcher.
   office-native state (agent status + tasks + audit), which answers "what is
   each agent doing" at the task level.
 - No new agent kinds (claude-code only, per the registry).
+- No cooperative cancellation. `control stop` flips the agent's stored status to
+  `stopped`; it does NOT signal or kill an in-flight spawned process. The
+  current task continues until the launcher exits (or the supervisor's
+  30-minute timeout escalates to SIGKILL). True mid-run cancellation is Phase 4.
+- `control pause` / `resume` are best-effort status flips (`paused` / `idle`);
+  they do not interrupt a task already `running`. The supervisor refuses to
+  start *new* tasks for a non-runnable agent, which is the effective guarantee.
+
+## Security posture
+
+- The bridge is localhost-only and unauthenticated, consistent with the
+  existing GUI bridge routes. It is not intended to be exposed to a network.
+- `allowedTools` entries that begin with `-` are rejected at the role schema
+  (the launcher trust boundary) to prevent CLI flag injection, and again at the
+  HTTP create-role boundary.
+- `workdir` is currently unconfined: an agent created with `acceptEdits` or
+  (when `MEGA_OFFICE_ALLOW_FULL=1`) `full` permission writes wherever its
+  `workdir` points. Path confinement is deferred; until then, operators must
+  trust the workdirs they configure. `MEGA_OFFICE_ALLOW_FULL` defaults off.
 
 ## Risk & process
 

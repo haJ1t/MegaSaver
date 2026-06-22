@@ -2,13 +2,22 @@ import { mkdtempSync, rmSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AgentOfficeError, createLauncherRegistry } from "@megasaver/agent-office";
+import {
+  AgentOfficeError,
+  createLauncherRegistry,
+  createSupervisor,
+  listAgents,
+  listAudit,
+  saveAgent,
+} from "@megasaver/agent-office";
 import type { AgentLauncher, LaunchHandle } from "@megasaver/connectors-shared";
-import { createInMemoryCoreRegistry } from "@megasaver/core";
+import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
 import type { AgentId } from "@megasaver/shared";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OfficeContext, RouteContext } from "../../../bridge/route-context.js";
 import {
+  OFFICE_PROJECT_ID,
+  ensureOfficeProject,
   handleControlAgent,
   handleCreateAgent,
   handleCreateRole,
@@ -22,6 +31,7 @@ import {
   handleOfficeStatus,
   handleOfficeStream,
   handleRunAgent,
+  mapOfficeError,
 } from "../../../bridge/routes/office.js";
 
 // ---------------------------------------------------------------------------
@@ -216,7 +226,7 @@ describe("handleListRoles / handleCreateRole / handleDeleteRole", () => {
     expect(ctx.capturedError[0]?.code).toBe("validation_failed");
   });
 
-  it("delete role → 200 with id", async () => {
+  it("delete role → 204 no content", async () => {
     // First create the role
     const createCtx = makeCtx({ req: makeBodyReq(ROLE_BODY) });
     await handleCreateRole(createCtx);
@@ -224,7 +234,9 @@ describe("handleListRoles / handleCreateRole / handleDeleteRole", () => {
 
     const delCtx = makeCtx();
     await handleDeleteRole(delCtx, roleId);
-    expect(delCtx.capturedJson[0]?.status).toBe(200);
+    expect(delCtx.capturedJson).toHaveLength(0);
+    expect(delCtx.res.writeHead as Mock).toHaveBeenCalledWith(204, expect.anything());
+    expect(delCtx.res.end as Mock).toHaveBeenCalled();
   });
 
   it("delete role with bad id → 404", async () => {
@@ -285,7 +297,7 @@ describe("handleListAgents / handleCreateAgent / handleDeleteAgent", () => {
     expect(ctx.capturedError[0]?.status).toBe(400);
   });
 
-  it("delete agent → 200", async () => {
+  it("delete agent → 204 no content", async () => {
     // Create role
     const roleCtx = makeCtx({ req: makeBodyReq(ROLE_BODY), newId: () => UUID_C });
     await handleCreateRole(roleCtx);
@@ -303,7 +315,9 @@ describe("handleListAgents / handleCreateAgent / handleDeleteAgent", () => {
     // Delete
     const delCtx = makeCtx();
     await handleDeleteAgent(delCtx, WK, agentId);
-    expect(delCtx.capturedJson[0]?.status).toBe(200);
+    expect(delCtx.capturedJson).toHaveLength(0);
+    expect(delCtx.res.writeHead as Mock).toHaveBeenCalledWith(204, expect.anything());
+    expect(delCtx.res.end as Mock).toHaveBeenCalled();
   });
 
   it("delete agent with non-uuid → 404", async () => {
@@ -477,9 +491,72 @@ describe("handleRunAgent", () => {
     expect(ctx.capturedError[0]?.status).toBe(404);
   });
 
-  it("run with allowFull=false and full-permission role → handler still returns 202 (fire-and-forget)", async () => {
-    // Supervisor may fail internally (permission denied) but that's fire-and-forget.
-    // Handler always returns 202 immediately after kicking off the supervisor.
+  it("does not start a second drain when the agent is already working (concurrent-run guard)", async () => {
+    const { agentId } = await setupAgentWithTask();
+    // Force the agent into `working` directly in the store.
+    const agents = await listAgents({ storeRoot, workspaceKey: WK });
+    const existing = agents[0];
+    if (existing === undefined) throw new Error("expected an agent in the store");
+    await saveAgent({ storeRoot, agent: { ...existing, status: "working" } });
+
+    // A launcher that, if ever called, would prove a second drain started.
+    const launchSpy = vi.fn();
+    const coreRegistry = createInMemoryCoreRegistry();
+    ensureOfficeProject(coreRegistry, () => "2026-06-22T12:00:00.000Z");
+    const office: OfficeContext = {
+      coreRegistry,
+      registry: createLauncherRegistry([
+        {
+          kind: "claude-code" as AgentId,
+          launch(opts) {
+            launchSpy();
+            return makeFakeLauncher().launch(opts);
+          },
+        },
+      ]),
+      allowFull: false,
+    };
+    const ctx = makeCtx({ office });
+    await handleRunAgent(ctx, WK, agentId);
+    // wait a tick for any (incorrectly) started drain to reach launch()
+    await new Promise((r) => setTimeout(r, 10));
+    expect(ctx.capturedJson[0]?.status).toBe(202);
+    expect((ctx.capturedJson[0]?.body as AgentBody).status).toBe("working");
+    expect(launchSpy).not.toHaveBeenCalled();
+  });
+
+  // C1: prove the supervisor drain actually completes against a seeded office
+  // project. Awaits drainAgent DIRECTLY (not the fire-and-forget handler) so a
+  // project_not_found regression fails this test loudly.
+  it("integration: drained agent reaches task done with seeded office project + audit rows", async () => {
+    const { agentId } = await setupAgentWithTask();
+    const coreRegistry = createInMemoryCoreRegistry();
+    ensureOfficeProject(coreRegistry, () => "2026-06-22T12:00:00.000Z");
+    expect(coreRegistry.getProject(OFFICE_PROJECT_ID)).not.toBeNull();
+
+    let idN = 0;
+    let tsN = 0;
+    const genUuid = () => `${String(++idN).padStart(8, "0")}-0000-4000-8000-000000000000`;
+    const supervisor = createSupervisor({
+      storeRoot,
+      registry: createLauncherRegistry([makeFakeLauncher({ exitCode: 0 })]),
+      coreRegistry,
+      projectId: OFFICE_PROJECT_ID,
+      now: () => `2026-06-22T13:${String(tsN++).padStart(2, "0")}:00.000Z`,
+      newId: genUuid,
+    });
+
+    const processed = await supervisor.drainAgent(WK, agentId);
+    expect(processed).toHaveLength(1);
+    expect(processed[0]?.status).toBe("done");
+
+    const audit = await listAudit({ storeRoot, workspaceKey: WK });
+    const types = audit.map((e) => e.type);
+    expect(types).toContain("spawn");
+    expect(types).toContain("task_done");
+  });
+
+  it("integration: allowFull=false + full-permission role → task failed, no spawn audit", async () => {
     const FULL_ROLE = { ...ROLE_BODY, permissionMode: "full" } as const;
     const roleCtx = makeCtx({ req: makeBodyReq(FULL_ROLE), newId: () => UUID_D });
     await handleCreateRole(roleCtx);
@@ -498,16 +575,24 @@ describe("handleRunAgent", () => {
     });
     await handleCreateTask(taskCtx, WK, agentId);
 
-    // Use a context where office is known (allowFull: false is the default)
-    const office: OfficeContext = {
-      coreRegistry: createInMemoryCoreRegistry(),
+    const coreRegistry = createInMemoryCoreRegistry();
+    ensureOfficeProject(coreRegistry, () => "2026-06-22T12:00:00.000Z");
+    let idN = 0;
+    const supervisor = createSupervisor({
+      storeRoot,
       registry: createLauncherRegistry([makeFakeLauncher()]),
+      coreRegistry,
+      projectId: OFFICE_PROJECT_ID,
+      now: () => "2026-06-22T13:00:00.000Z",
+      newId: () => `${String(++idN).padStart(8, "0")}-0000-4000-8000-000000000000`,
       allowFull: false,
-    };
-    const ctx = makeCtx({ office });
-    await handleRunAgent(ctx, WK, agentId);
-    // Should still 202 (fire-and-forget; permission failure is internal)
-    expect(ctx.capturedJson[0]?.status).toBe(202);
+    });
+
+    const processed = await supervisor.drainAgent(WK, agentId);
+    expect(processed[0]?.status).toBe("failed");
+    const audit = await listAudit({ storeRoot, workspaceKey: WK });
+    // Permission denied happens before session/launch → no spawn row.
+    expect(audit.map((e) => e.type)).not.toContain("spawn");
   });
 });
 
@@ -556,6 +641,81 @@ describe("office error mapping", () => {
     await handleControlAgent(ctx, WK, UUID_A);
     expect(ctx.capturedError[0]?.status).toBe(404);
     expect(ctx.capturedError[0]?.code).toBe("office_not_found");
+  });
+
+  it("mapOfficeError: not_found → 404 office_not_found", () => {
+    expect(mapOfficeError(new AgentOfficeError("not_found", "x"))).toEqual({
+      status: 404,
+      code: "office_not_found",
+    });
+  });
+
+  it("mapOfficeError: permission_denied → 400 validation_failed", () => {
+    expect(mapOfficeError(new AgentOfficeError("permission_denied", "x"))).toEqual({
+      status: 400,
+      code: "validation_failed",
+    });
+  });
+
+  it("mapOfficeError: schema_invalid → 400 validation_failed", () => {
+    expect(mapOfficeError(new AgentOfficeError("schema_invalid", "x"))).toEqual({
+      status: 400,
+      code: "validation_failed",
+    });
+  });
+
+  it("mapOfficeError: store_corrupt → 500 internal_error", () => {
+    expect(mapOfficeError(new AgentOfficeError("store_corrupt", "x"))).toEqual({
+      status: 500,
+      code: "internal_error",
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Workspace-key validation (C4 / security)
+// ---------------------------------------------------------------------------
+
+describe("workspace key validation", () => {
+  beforeEach(() => {
+    storeRoot = mkdtempSync(join(tmpdir(), "office-test-"));
+  });
+  afterEach(() => {
+    rmSync(storeRoot, { recursive: true, force: true });
+  });
+
+  const BAD_WK = "../etc/passwd";
+
+  it("listAgents rejects a malformed workspace key with 400 before any store call", async () => {
+    const ctx = makeCtx();
+    await handleListAgents(ctx, BAD_WK);
+    expect(ctx.capturedError[0]).toMatchObject({ status: 400, code: "validation_failed" });
+    expect(ctx.capturedJson).toHaveLength(0);
+  });
+
+  it("listTasks rejects a malformed workspace key with 400", async () => {
+    const ctx = makeCtx();
+    await handleListTasks(ctx, BAD_WK, UUID_A);
+    expect(ctx.capturedError[0]).toMatchObject({ status: 400, code: "validation_failed" });
+  });
+
+  it("listAudit rejects a malformed workspace key with 400", async () => {
+    const ctx = makeCtx();
+    await handleListAudit(ctx, BAD_WK);
+    expect(ctx.capturedError[0]).toMatchObject({ status: 400, code: "validation_failed" });
+  });
+
+  it("status rejects a malformed workspace key with 400", async () => {
+    const ctx = makeCtx();
+    await handleOfficeStatus(ctx, BAD_WK);
+    expect(ctx.capturedError[0]).toMatchObject({ status: 400, code: "validation_failed" });
+  });
+
+  it("stream rejects a malformed workspace key with 400 (watcher path never built)", async () => {
+    const ctx = makeCtx();
+    await handleOfficeStream(ctx, BAD_WK);
+    expect(ctx.capturedError[0]).toMatchObject({ status: 400, code: "validation_failed" });
+    expect(ctx.res.writeHead as Mock).not.toHaveBeenCalled();
   });
 });
 
@@ -607,5 +767,34 @@ describe("handleOfficeStream", () => {
     expect(writes.some((w) => w.includes("event: snapshot"))).toBe(true);
     // End should be called on close
     expect((fakeRes.end as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
+  });
+
+  // C6: a disconnect that happens DURING the initial snapshot build must still
+  // clean up (end called exactly once), proving cleanup is armed before the await.
+  it("cleans up when the client disconnects during the initial snapshot build", async () => {
+    const fakeRes = {
+      write: vi.fn(),
+      writeHead: vi.fn(),
+      end: vi.fn(),
+      headersSent: false,
+    } as unknown as ServerResponse;
+
+    let closeHandler: (() => void) | undefined;
+    const fakeReq = {
+      on: (event: string, cb: () => void) => {
+        if (event === "close") closeHandler = cb;
+      },
+    } as unknown as IncomingMessage;
+
+    const ctx = makeCtx({ req: fakeReq, res: fakeRes });
+    const streamPromise = handleOfficeStream(ctx, WK);
+    // Fire close synchronously — before the awaited snapshot build resolves.
+    closeHandler?.();
+    await streamPromise;
+
+    expect((fakeRes.end as Mock).mock.calls.length).toBe(1);
+    // After close, the watcher must never be set up (no extra ticks needed).
+    await new Promise((r) => setTimeout(r, 20));
+    expect((fakeRes.end as Mock).mock.calls.length).toBe(1);
   });
 });

@@ -19,7 +19,14 @@ import {
   saveTask,
 } from "@megasaver/agent-office";
 import type { OfficeAgent } from "@megasaver/agent-office";
-import { officeAgentIdSchema, projectIdSchema, roleIdSchema } from "@megasaver/shared";
+import type { CoreRegistry } from "@megasaver/core";
+import {
+  type WorkspaceKey,
+  officeAgentIdSchema,
+  projectIdSchema,
+  roleIdSchema,
+  workspaceKeySchema,
+} from "@megasaver/shared";
 import { handleCaughtError } from "../error-mapping.js";
 import {
   agentCreateInputSchema,
@@ -37,8 +44,25 @@ import { readJsonBody } from "./_body.js";
 // This is a stable sentinel value, documented here as the canonical source.
 export const OFFICE_PROJECT_ID = projectIdSchema.parse("00000000-beef-0000-0000-000000000001");
 
-// Map AgentOfficeError codes to HTTP status + BridgeErrorCode
-function mapOfficeError(err: AgentOfficeError): {
+// The office project must exist before any supervisor-created Core Session,
+// because CoreRegistry.createSession calls requireProject and throws
+// `project_not_found` otherwise. Seed it idempotently at server start (and the
+// same way in tests). `now` lets callers pin a deterministic timestamp.
+export function ensureOfficeProject(coreRegistry: CoreRegistry, now: () => string): void {
+  if (coreRegistry.getProject(OFFICE_PROJECT_ID) !== null) return;
+  const ts = now();
+  coreRegistry.createProject({
+    id: OFFICE_PROJECT_ID,
+    name: "Agent Office",
+    rootPath: "office",
+    createdAt: ts,
+    updatedAt: ts,
+  });
+}
+
+// Map AgentOfficeError codes to HTTP status + BridgeErrorCode.
+// Exported for unit tests covering each mapping arm.
+export function mapOfficeError(err: AgentOfficeError): {
   status: number;
   code: "office_not_found" | "validation_failed" | "internal_error";
 } {
@@ -68,6 +92,29 @@ function guardOffice(ctx: RouteContext): boolean {
     return false;
   }
   return true;
+}
+
+// Spec: a successful DELETE returns 204 No Content (no body). Mirrors the
+// bridge's existing 204 shape (cors.ts preflight): writeHead + end, CORS origin
+// echoed when present.
+function sendNoContent(ctx: RouteContext): void {
+  const headers: Record<string, string> = ctx.origin
+    ? { "access-control-allow-origin": ctx.origin, vary: "origin" }
+    : {};
+  ctx.res.writeHead(204, headers);
+  ctx.res.end();
+}
+
+// SECURITY: validate the workspace key BEFORE any store/path call so a malformed
+// `wk` cannot reach a filesystem path (e.g. the SSE watch dir) or echo back in a
+// 500. Returns the branded key on success, or null after sending a 400.
+function validateWk(ctx: RouteContext, wk: string): WorkspaceKey | null {
+  const parsed = workspaceKeySchema.safeParse(wk);
+  if (!parsed.success) {
+    ctx.sendError(ctx.res, 400, "validation_failed", "invalid workspace key", ctx.origin);
+    return null;
+  }
+  return parsed.data;
 }
 
 // Roles (global — no workspace scope)
@@ -134,7 +181,7 @@ export async function handleDeleteRole(ctx: RouteContext, roleId: string): Promi
   }
   try {
     await deleteRole({ storeRoot: ctx.storeRoot, roleId: idParse.data });
-    ctx.sendJson(ctx.res, 200, { id: idParse.data }, ctx.origin);
+    sendNoContent(ctx);
   } catch (err) {
     handleOfficeError(ctx, err);
   }
@@ -144,6 +191,7 @@ export async function handleDeleteRole(ctx: RouteContext, roleId: string): Promi
 
 export async function handleListAgents(ctx: RouteContext, wk: string): Promise<void> {
   if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
   try {
     const agents = await listAgents({ storeRoot: ctx.storeRoot, workspaceKey: wk });
     ctx.sendJson(ctx.res, 200, agents, ctx.origin);
@@ -154,6 +202,7 @@ export async function handleListAgents(ctx: RouteContext, wk: string): Promise<v
 
 export async function handleCreateAgent(ctx: RouteContext, wk: string): Promise<void> {
   if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
   let body: unknown;
   try {
     body = await readJsonBody(ctx.req);
@@ -199,6 +248,7 @@ export async function handleDeleteAgent(
   agentId: string,
 ): Promise<void> {
   if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
   const idParse = officeAgentIdSchema.safeParse(agentId);
   if (!idParse.success) {
     ctx.sendError(ctx.res, 404, "office_not_found", `Agent not found: ${agentId}`, ctx.origin);
@@ -206,7 +256,7 @@ export async function handleDeleteAgent(
   }
   try {
     await deleteAgent({ storeRoot: ctx.storeRoot, workspaceKey: wk, officeAgentId: idParse.data });
-    ctx.sendJson(ctx.res, 200, { id: idParse.data }, ctx.origin);
+    sendNoContent(ctx);
   } catch (err) {
     handleOfficeError(ctx, err);
   }
@@ -220,11 +270,17 @@ export async function handleListTasks(
   agentId: string,
 ): Promise<void> {
   if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
+  const idParse = officeAgentIdSchema.safeParse(agentId);
+  if (!idParse.success) {
+    ctx.sendError(ctx.res, 404, "office_not_found", `Agent not found: ${agentId}`, ctx.origin);
+    return;
+  }
   try {
     const tasks = await listTasks({
       storeRoot: ctx.storeRoot,
       workspaceKey: wk,
-      officeAgentId: agentId,
+      officeAgentId: idParse.data,
     });
     ctx.sendJson(ctx.res, 200, tasks, ctx.origin);
   } catch (err) {
@@ -238,6 +294,7 @@ export async function handleCreateTask(
   agentId: string,
 ): Promise<void> {
   if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
   const agentIdParse = officeAgentIdSchema.safeParse(agentId);
   if (!agentIdParse.success) {
     ctx.sendError(ctx.res, 404, "office_not_found", `Agent not found: ${agentId}`, ctx.origin);
@@ -287,6 +344,7 @@ export async function handleRunAgent(
   agentId: string,
 ): Promise<void> {
   if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
   const idParse = officeAgentIdSchema.safeParse(agentId);
   if (!idParse.success) {
     ctx.sendError(ctx.res, 404, "office_not_found", `Agent not found: ${agentId}`, ctx.origin);
@@ -298,6 +356,13 @@ export async function handleRunAgent(
       workspaceKey: wk,
       officeAgentId: idParse.data,
     });
+    // Concurrent-run guard: an agent already `working` has an in-flight drain
+    // on the same workdir. Returning its snapshot without starting a second
+    // drain prevents a double-spawn (spec contract).
+    if (agent.status === "working") {
+      ctx.sendJson(ctx.res, 202, agent, ctx.origin);
+      return;
+    }
     // Fire-and-forget: supervisor runs in the background
     // guardOffice asserts ctx.office is defined; capture to satisfy strict null checks
     const office = ctx.office as NonNullable<typeof ctx.office>;
@@ -310,7 +375,12 @@ export async function handleRunAgent(
       newId: ctx.newId,
       allowFull: office.allowFull,
     });
-    supervisor.drainAgent(wk, idParse.data).catch(() => {});
+    // Log the rejection so a silent total failure (e.g. a missing office
+    // project, a launcher crash) is debuggable. The supervisor itself settles
+    // task/agent to terminal states; this catch only surfaces unexpected throws.
+    supervisor.drainAgent(wk, idParse.data).catch((drainErr) => {
+      console.error(`[office] drainAgent failed for ${wk}/${idParse.data}:`, drainErr);
+    });
     ctx.sendJson(ctx.res, 202, agent, ctx.origin);
   } catch (err) {
     handleOfficeError(ctx, err);
@@ -323,6 +393,7 @@ export async function handleControlAgent(
   agentId: string,
 ): Promise<void> {
   if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
   const idParse = officeAgentIdSchema.safeParse(agentId);
   if (!idParse.success) {
     ctx.sendError(ctx.res, 404, "office_not_found", `Agent not found: ${agentId}`, ctx.origin);
@@ -376,6 +447,7 @@ export async function handleControlAgent(
 
 export async function handleListAudit(ctx: RouteContext, wk: string): Promise<void> {
   if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
   try {
     const events = await listAudit({ storeRoot: ctx.storeRoot, workspaceKey: wk });
     ctx.sendJson(ctx.res, 200, events, ctx.origin);
@@ -385,11 +457,11 @@ export async function handleListAudit(ctx: RouteContext, wk: string): Promise<vo
 }
 
 async function buildStatusPayload(ctx: RouteContext, wk: string): Promise<unknown> {
-  const [agents, allTasks, allAudit] = await Promise.all([
-    listAgents({ storeRoot: ctx.storeRoot, workspaceKey: wk }),
+  const agents = await listAgents({ storeRoot: ctx.storeRoot, workspaceKey: wk });
+  const [allTasks, allAudit] = await Promise.all([
     (async () => {
       const result = [];
-      for (const a of await listAgents({ storeRoot: ctx.storeRoot, workspaceKey: wk })) {
+      for (const a of agents) {
         const tasks = await listTasks({
           storeRoot: ctx.storeRoot,
           workspaceKey: wk,
@@ -420,6 +492,7 @@ async function buildStatusPayload(ctx: RouteContext, wk: string): Promise<unknow
 
 export async function handleOfficeStatus(ctx: RouteContext, wk: string): Promise<void> {
   if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
   try {
     const payload = await buildStatusPayload(ctx, wk);
     ctx.sendJson(ctx.res, 200, payload, ctx.origin);
@@ -432,6 +505,7 @@ const HEARTBEAT_MS = 15000;
 
 export async function handleOfficeStream(ctx: RouteContext, wk: string): Promise<void> {
   if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
 
   // Write SSE headers
   const headers: Record<string, string> = {
@@ -450,24 +524,44 @@ export async function handleOfficeStream(ctx: RouteContext, wk: string): Promise
     ctx.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  // Emit initial snapshot
-  try {
-    const snapshot = await buildStatusPayload(ctx, wk);
-    send("snapshot", snapshot);
-  } catch (err) {
-    // If we can't build snapshot, write a comment and keep stream open
-    if (!closed) ctx.res.write(": snapshot_error\n\n");
-  }
+  // C6: register timer + watcher cleanup and the disconnect listeners BEFORE the
+  // first `await`, so a client that disconnects during the initial snapshot
+  // build cannot leak the heartbeat timer or the fs watcher.
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  let watcher: ReturnType<typeof watch> | undefined;
+
+  const cleanup = (): void => {
+    if (closed) return;
+    closed = true;
+    clearInterval(heartbeat);
+    clearTimeout(debounceTimer);
+    try {
+      watcher?.close();
+    } catch {
+      /* ignore */
+    }
+    ctx.res.end();
+  };
 
   const heartbeat = setInterval(() => {
     if (!closed) ctx.res.write(": ping\n\n");
   }, HEARTBEAT_MS);
 
+  ctx.req.on("close", cleanup);
+  ctx.req.on("aborted", cleanup);
+
+  // Emit initial snapshot (cleanup is already armed for a mid-await disconnect)
+  try {
+    const snapshot = await buildStatusPayload(ctx, wk);
+    send("snapshot", snapshot);
+  } catch {
+    // If we can't build snapshot, write a comment and keep stream open
+    if (!closed) ctx.res.write(": snapshot_error\n\n");
+  }
+  if (closed) return;
+
   // Watch the audit dir for changes and re-emit status
   const watchDir = join(ctx.storeRoot, "office", wk, "audit");
-  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-  let watcher: ReturnType<typeof watch> | undefined;
-
   try {
     watcher = watch(watchDir, { persistent: false }, () => {
       if (closed) return;
@@ -485,20 +579,4 @@ export async function handleOfficeStream(ctx: RouteContext, wk: string): Promise
   } catch {
     // Dir may not exist yet (no tasks run) — watcher is simply absent; heartbeat keeps stream alive
   }
-
-  const cleanup = (): void => {
-    if (closed) return;
-    closed = true;
-    clearInterval(heartbeat);
-    clearTimeout(debounceTimer);
-    try {
-      watcher?.close();
-    } catch {
-      /* ignore */
-    }
-    ctx.res.end();
-  };
-
-  ctx.req.on("close", cleanup);
-  ctx.req.on("aborted", cleanup);
 }
