@@ -133,9 +133,23 @@ supervisor + claude-code launcher:
   NOT cancel an in-flight spawn (cooperative cancel = Phase 4); `workdir`
   unconfined (confinement deferred).
 
+## Phase 4 shipped (GUI office board)
+
+`agent-office` GUI view (`apps/gui/src`): workspace selector + global
+**role manager** (CRUD; full-permission warning re `MEGA_OFFICE_ALLOW_FULL`) +
+per-workspace **agent board** (cards: role/name, status dot, current task, last
+audit event; controls run/pause/resume/stop/remove + inline assign; add-agent
+form). `lib/office-client.ts` wraps the Phase 3 API + `openOfficeStream` SSE
+(disposer). Live updates via the SSE `status` event. Built consistent with the
+existing utilitarian GUI (no bespoke design pass — follow-up). Risk MEDIUM.
+Reviewed by code-reviewer + critic — two reproduced UX bugs fixed before merge:
+a stale-status overwrite race on fast workspace switch (per-run ignore flag) and
+a sticky "Live stream disconnected" banner (cleared on the next status push),
+both regression-tested. 360 gui tests; `pnpm verify` green; tests stub
+fetch/EventSource (no real bridge/claude).
+
 ## Phases not yet built
 
-4. GUI office board view + role manager.
 5. CLI `mega office` commands.
 
 See [[concepts/agent-agnostic-core]], [[entities/core]],
