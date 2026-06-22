@@ -205,21 +205,30 @@ export function createSupervisor(deps: {
       await appendAudit({ storeRoot, event: terminalAudit });
       return settledTask;
     } catch {
-      // Infra failure mid-run — settle best-effort, do NOT rethrow.
+      // Infra failure mid-run — settle best-effort, do NOT rethrow. Each write
+      // is independent: a stuck `working` agent is treated as runnable (a
+      // livelock), so the agent→error write matters most and is attempted FIRST
+      // and on its own, even if the task write also fails on a double fault.
       const failedTask: OfficeTask = { ...runningTask, status: "failed", finishedAt: now() };
       try {
-        await saveTask({ storeRoot, task: failedTask });
         await saveAgent({ storeRoot, agent: { ...workingAgent, status: "error" } });
-        if (sessionId !== undefined && !sessionEnded) {
-          // Best-effort: a failing endSession here must not block the terminal
-          // audit row below, which is the durable record of the failure.
-          try {
-            coreRegistry.endSession(sessionId, { endedAt: now() });
-          } catch {
-            // Session may already be ended or core may be down — ignore.
-          }
+      } catch {
+        // Double fault (store still failing); the returned task still signals failure.
+      }
+      try {
+        await saveTask({ storeRoot, task: failedTask });
+      } catch {
+        // Ignore; agent is already settled to error above.
+      }
+      if (sessionId !== undefined && !sessionEnded) {
+        try {
+          coreRegistry.endSession(sessionId, { endedAt: now() });
+        } catch {
+          // Session may already be ended or core may be down — ignore.
         }
-        if (spawnAudited && sessionId !== undefined) {
+      }
+      if (spawnAudited && sessionId !== undefined) {
+        try {
           const failedAudit: AuditEvent = {
             id: newId(),
             ts: now(),
@@ -238,9 +247,9 @@ export function createSupervisor(deps: {
             exitCode: null,
           };
           await appendAudit({ storeRoot, event: failedAudit });
+        } catch {
+          // Ignore audit write failure; the returned failed task is the signal.
         }
-      } catch {
-        // Ignore settle errors; the returned failed task is the best signal.
       }
       return failedTask;
     }
