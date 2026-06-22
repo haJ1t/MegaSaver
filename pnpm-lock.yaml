@@ -196,6 +196,12 @@ importers:
 
   packages/agent-office:
     dependencies:
+      '@megasaver/connectors-shared':
+        specifier: workspace:*
+        version: link:../connectors/shared
+      '@megasaver/core':
+        specifier: workspace:*
+        version: link:../core
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../shared
