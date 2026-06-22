@@ -36,6 +36,9 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
     devDependencies:
+      '@megasaver/agent-office':
+        specifier: workspace:*
+        version: link:../../packages/agent-office
       '@megasaver/connector-claude-code':
         specifier: workspace:*
         version: link:../../packages/connectors/claude-code
