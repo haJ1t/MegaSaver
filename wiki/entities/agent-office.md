@@ -109,9 +109,32 @@ Supervisor in `@megasaver/agent-office` (now deps `core` +
   full evidence-ledger integration, a startup reconciliation reaper for
   double-fault residue.
 
+## Phase 3 shipped (bridge)
+
+`/api/office/*` REST routes on the GUI bridge (`apps/gui/bridge`) driving the
+supervisor + claude-code launcher:
+
+- Routes: role/agent/task CRUD, `run` (202 fire-and-forget drainAgent; no-op if
+  agent already `working`), `control` (pause/resume/stop), `audit`, `status`
+  snapshot, `stream` (audit-tail SSE). HTTP-boundary zod validation
+  (parse-on-handoff); `wk` (workspaceKeySchema) + ids validated → 400/404.
+- Safe-by-default over HTTP: `allowFull` is env-only (`MEGA_OFFICE_ALLOW_FULL=1`,
+  default off) — no request field can set it; a `full` role fails closed.
+  `allowedTools` leading-`-` flag-injection guard hoisted into `roleSchema`
+  (launcher trust boundary) + the HTTP create schema.
+- **Office Project seeded** at server startup (`ensureOfficeProject`,
+  `OFFICE_PROJECT_ID`) — without it `createSession` throws `project_not_found`
+  and every task fails (critic-caught prod-breaker; now covered by a
+  drain-to-`done` integration test).
+- Risk HIGH; reviewed by code-reviewer + critic (DO NOT SHIP → fixed → ship) +
+  security-reviewer (PASS with remediations). gui 318 / agent-office 107 tests;
+  tests use a fake launcher + in-memory core (no real claude, no real HTTP).
+- Posture/limits (spec Non-goals): localhost-only/no-auth; `control stop` does
+  NOT cancel an in-flight spawn (cooperative cancel = Phase 4); `workdir`
+  unconfined (confinement deferred).
+
 ## Phases not yet built
 
-3. Bridge `/api/office` routes + reuse `tailTranscript`/SSE.
 4. GUI office board view + role manager.
 5. CLI `mega office` commands.
 
