@@ -105,6 +105,18 @@ afterEach(() => {
   stub.fetch = () => Promise.reject(new Error("not set"));
 });
 
+// The cytoscape mock fills capturedElements/tapHandlers from inside the panel's
+// effect, which runs AFTER the canvas testid first paints. Tests that then read
+// capturedElements/tapHandlers must wait for that effect — not just the testid —
+// or they race (flaky on slow / Windows CI). Wait for both. (Used only with
+// non-empty fixtures, where capturedElements is always populated.)
+async function waitForGraph(): Promise<void> {
+  await waitFor(() => {
+    expect(screen.getByTestId("memory-graph-canvas")).toBeDefined();
+    expect(capturedElements.length).toBeGreaterThan(0);
+  });
+}
+
 describe("MemoryGraphPanel", () => {
   it("shows the loading state then the graph canvas and stats", async () => {
     let resolve: (data: MemoryGraphData) => void = () => undefined;
@@ -119,7 +131,7 @@ describe("MemoryGraphPanel", () => {
 
     resolve(FIXTURE);
 
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
     expect(screen.getByText(/2 nodes/)).toBeDefined();
     expect(screen.getByText(/1 edge/)).toBeDefined();
   });
@@ -127,7 +139,7 @@ describe("MemoryGraphPanel", () => {
   it("renders a node detail panel when a node is tapped", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     expect(tapHandlers.length).toBeGreaterThan(0);
     const handler = tapHandlers[0];
@@ -140,14 +152,15 @@ describe("MemoryGraphPanel", () => {
   it("paints a decision memory a distinct color from a generic memory node", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_MEMORY_SUBTYPES);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
-    const decisionColor = capturedElements.find((el) => el.data?.id === "m1")?.data?.color;
-    const genericColor = capturedElements.find((el) => el.data?.id === "m2")?.data?.color;
-
-    expect(decisionColor).toBeDefined();
-    expect(genericColor).toBeDefined();
-    expect(decisionColor).not.toBe(genericColor);
+    await waitFor(() => {
+      const decisionColor = capturedElements.find((el) => el.data?.id === "m1")?.data?.color;
+      const genericColor = capturedElements.find((el) => el.data?.id === "m2")?.data?.color;
+      expect(decisionColor).toBeDefined();
+      expect(genericColor).toBeDefined();
+      expect(decisionColor).not.toBe(genericColor);
+    });
   });
 
   it("renders an empty-state message for a zero-node graph", async () => {
@@ -165,7 +178,7 @@ describe("MemoryGraphPanel", () => {
   it("passes file, symbol, and wiki nodes with correct classes to cytoscape", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     const nodeClasses = capturedElements.map((el) => el.classes);
     expect(nodeClasses).toContain("file");
@@ -180,7 +193,7 @@ describe("MemoryGraphPanel", () => {
   it("renders Wiki and Code layer toggle buttons", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     expect(screen.getByRole("button", { name: /Wiki/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Code/i })).toBeDefined();
@@ -189,7 +202,7 @@ describe("MemoryGraphPanel", () => {
   it("toggling Wiki off removes wiki nodes and their incident edges from cytoscape elements", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     // All wiki-kind elements present before toggle
     const beforeClasses = capturedElements.map((el) => el.classes);
@@ -212,7 +225,7 @@ describe("MemoryGraphPanel", () => {
   it("toggling Code off removes file/symbol nodes, code-link edges, and the wiki-cite bridge", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     // The wiki-cite edge (w1 -> f1) bridges to a file node before the toggle.
     const beforeClasses = capturedElements.map((el) => el.classes);
@@ -234,7 +247,7 @@ describe("MemoryGraphPanel", () => {
   it("updates the header counts to the visible graph after toggling Wiki off", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     expect(screen.getByText(/5 nodes/)).toBeDefined();
     expect(screen.getByText(/5 edges/)).toBeDefined();
@@ -248,7 +261,7 @@ describe("MemoryGraphPanel", () => {
   it("shows wiki node detail with title, tags, status when tapped", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     const handler = tapHandlers[0];
     if (handler) handler({ target: { id: () => "w1" } });
@@ -264,7 +277,7 @@ describe("MemoryGraphPanel", () => {
   it("omits the tags row for a wiki node with no tags", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_TAGLESS_WIKI);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     const handler = tapHandlers[0];
     if (handler) handler({ target: { id: () => "w1" } });
@@ -276,7 +289,7 @@ describe("MemoryGraphPanel", () => {
   it("shows file node detail with path when tapped", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     const handler = tapHandlers[0];
     if (handler) handler({ target: { id: () => "f1" } });
@@ -289,7 +302,7 @@ describe("MemoryGraphPanel", () => {
   it("clears the detail panel when the selected wiki node's layer is toggled off", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     const handler = tapHandlers[0];
     if (handler) handler({ target: { id: () => "w1" } });
@@ -305,7 +318,7 @@ describe("MemoryGraphPanel", () => {
   it("clears the detail panel when the selected file node's layer is toggled off", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     const handler = tapHandlers[0];
     if (handler) handler({ target: { id: () => "f1" } });
@@ -321,7 +334,7 @@ describe("MemoryGraphPanel", () => {
   it("keeps the detail panel for a still-visible node after an unrelated layer toggles off", async () => {
     stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
-    await waitFor(() => expect(screen.getByTestId("memory-graph-canvas")).toBeDefined());
+    await waitForGraph();
 
     const handler = tapHandlers[0];
     if (handler) handler({ target: { id: () => "m1" } });
