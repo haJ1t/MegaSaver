@@ -170,6 +170,18 @@ critic (SHIP WITH FIXES → error-message/precheck fixes applied) + security-rev
 (PASS). cli 719 / agent-office 113 / gui 360 tests; fake launcher + in-memory core
 (no real claude).
 
+## Auto workdir (2026-06-22)
+
+Agent `workdir` is no longer user-chosen — it is the project directory,
+derived automatically. The CLI `office agent create` dropped its `--workdir`
+flag and uses the invocation `cwd`; the GUI add-agent form dropped its workdir
+input and sends the selected workspace's `label` (= its cwd path; workspaces are
+`{key: encodeWorkspaceKey(cwd), label: cwd}`). The bridge `handleCreateAgent`
+now enforces `encodeWorkspaceKey(workdir) === wk` (400 on mismatch) — the
+launcher-cwd invariant at the HTTP boundary. `role.defaultWorkdir` is left
+untouched (separate, still inert — flagged follow-up). Risk HIGH (launcher cwd +
+public CLI flag); spec + plan in `docs/superpowers/{specs,plans}/2026-06-22-office-auto-workdir-*`.
+
 ## Status: feature complete (Phases 0–5)
 
 All Agent Office phases shipped to `main`: 0 engine data layer, 1 launcher, 2
@@ -178,7 +190,8 @@ to end from the GUI and the CLI. Open follow-ups (filed): cooperative cancel for
 a running task, `workdir` confinement, full evidence-ledger integration,
 per-agent raw-transcript stream, bridge task-create agent precheck, `status
 --json` instruction-exposure doc note, flaky memory-graph-panel test hardening,
-the atomicWriteFile dir-fsync shared-util hoist.
+the atomicWriteFile dir-fsync shared-util hoist, and removing the inert
+`role.defaultWorkdir` field.
 
 See [[concepts/agent-agnostic-core]], [[entities/core]],
 [[entities/connectors-shared]], [[entities/content-store]],
