@@ -25,6 +25,15 @@ import {
 } from "../../../bridge/routes/office.js";
 
 // ---------------------------------------------------------------------------
+// Typed body shapes for assertions (avoids Record<string,unknown> conflicts)
+// ---------------------------------------------------------------------------
+
+type RoleBody = { id: string; name: string };
+type AgentBody = { id: string; status: string; kind: string; workspaceKey: string };
+type TaskBody = { id: string; status: string; agentId: string };
+type StatusBody = { agents: unknown[] };
+
+// ---------------------------------------------------------------------------
 // Fake launcher (no real 'claude' subprocess)
 // ---------------------------------------------------------------------------
 
@@ -90,7 +99,11 @@ function makeCtx(overrides: Partial<RouteContext> = {}): RouteContext & {
     claudeProjectsDir: "/tmp/projects",
     claudeSessionsMetaDir: "/tmp/meta",
     claudeSettingsPath: "/tmp/settings.json",
-    resolveWorkspace: async () => null,
+    resolveWorkspace: (cwd: string) => ({
+      workspaceKey: WK as import("@megasaver/shared").WorkspaceKey,
+      label: cwd,
+      cwd,
+    }),
     newId: () => UUID_A,
     now: () => "2026-06-22T12:00:00.000Z",
     sendJson: (res, status, body) => {
@@ -114,11 +127,17 @@ function makeCtx(overrides: Partial<RouteContext> = {}): RouteContext & {
 function makeBodyReq(body: unknown): IncomingMessage {
   const json = JSON.stringify(body);
   const chunks = [Buffer.from(json)];
-  const listeners: Record<string, ((...args: unknown[]) => void)[]> = {};
+  type ListenerMap = {
+    data: ((...args: unknown[]) => void)[];
+    end: ((...args: unknown[]) => void)[];
+  };
+  const listeners: Partial<ListenerMap> = {};
   const req = {
     on(event: string, cb: (...args: unknown[]) => void) {
-      if (!listeners[event]) listeners[event] = [];
-      listeners[event].push(cb);
+      const key = event as keyof ListenerMap;
+      if (!listeners[key]) listeners[key] = [];
+      // biome-ignore lint/style/noNonNullAssertion: just initialized above
+      listeners[key]!.push(cb);
       if (event === "end") {
         // Trigger data + end after current microtask
         Promise.resolve().then(() => {
@@ -176,7 +195,7 @@ describe("handleListRoles / handleCreateRole / handleDeleteRole", () => {
     const ctx = makeCtx({ req: makeBodyReq(ROLE_BODY) });
     await handleCreateRole(ctx);
     expect(ctx.capturedJson[0]?.status).toBe(201);
-    const role = ctx.capturedJson[0]?.body as Record<string, unknown>;
+    const role = ctx.capturedJson[0]?.body as RoleBody;
     expect(role.name).toBe("Dev Agent");
     expect(role.id).toBe(UUID_A);
   });
@@ -201,7 +220,7 @@ describe("handleListRoles / handleCreateRole / handleDeleteRole", () => {
     // First create the role
     const createCtx = makeCtx({ req: makeBodyReq(ROLE_BODY) });
     await handleCreateRole(createCtx);
-    const roleId = (createCtx.capturedJson[0]?.body as Record<string, unknown>).id as string;
+    const roleId = (createCtx.capturedJson[0]?.body as RoleBody).id;
 
     const delCtx = makeCtx();
     await handleDeleteRole(delCtx, roleId);
@@ -215,7 +234,8 @@ describe("handleListRoles / handleCreateRole / handleDeleteRole", () => {
   });
 
   it("sendError 500 when office not configured", async () => {
-    const ctx = makeCtx({ office: undefined });
+    // Double cast needed: exactOptionalPropertyTypes forbids explicit undefined in Partial<RouteContext>
+    const ctx = makeCtx({ office: undefined } as unknown as Partial<RouteContext>);
     await handleListRoles(ctx);
     expect(ctx.capturedError[0]?.status).toBe(500);
     expect(ctx.capturedError[0]?.code).toBe("office_not_configured");
@@ -244,7 +264,7 @@ describe("handleListAgents / handleCreateAgent / handleDeleteAgent", () => {
     // Create role first (uses UUID_A for id)
     const roleCtx = makeCtx({ req: makeBodyReq(ROLE_BODY), newId: () => UUID_A });
     await handleCreateRole(roleCtx);
-    const roleId = (roleCtx.capturedJson[0]?.body as Record<string, unknown>).id as string;
+    const roleId = (roleCtx.capturedJson[0]?.body as RoleBody).id;
     expect(roleId).toBe(UUID_A);
 
     // Create agent (uses UUID_B for id)
@@ -252,7 +272,7 @@ describe("handleListAgents / handleCreateAgent / handleDeleteAgent", () => {
     const agentCtx = makeCtx({ req: makeBodyReq(agentBody), newId: () => UUID_B });
     await handleCreateAgent(agentCtx, WK);
     expect(agentCtx.capturedJson[0]?.status).toBe(201);
-    const agent = agentCtx.capturedJson[0]?.body as Record<string, unknown>;
+    const agent = agentCtx.capturedJson[0]?.body as AgentBody;
     expect(agent.status).toBe("idle");
     expect(agent.kind).toBe("claude-code");
     expect(agent.workspaceKey).toBe(WK);
@@ -269,7 +289,7 @@ describe("handleListAgents / handleCreateAgent / handleDeleteAgent", () => {
     // Create role
     const roleCtx = makeCtx({ req: makeBodyReq(ROLE_BODY), newId: () => UUID_C });
     await handleCreateRole(roleCtx);
-    const roleId = (roleCtx.capturedJson[0]?.body as Record<string, unknown>).id as string;
+    const roleId = (roleCtx.capturedJson[0]?.body as RoleBody).id;
 
     // Create agent
     const agentCtx = makeCtx({
@@ -277,7 +297,7 @@ describe("handleListAgents / handleCreateAgent / handleDeleteAgent", () => {
       newId: () => UUID_D,
     });
     await handleCreateAgent(agentCtx, WK);
-    const agentId = (agentCtx.capturedJson[0]?.body as Record<string, unknown>).id as string;
+    const agentId = (agentCtx.capturedJson[0]?.body as AgentBody).id;
     expect(agentId).toBe(UUID_D);
 
     // Delete
@@ -321,7 +341,7 @@ describe("handleListTasks / handleCreateTask", () => {
     });
     await handleCreateTask(ctx, WK, AGENT_ID);
     expect(ctx.capturedJson[0]?.status).toBe(201);
-    const task = ctx.capturedJson[0]?.body as Record<string, unknown>;
+    const task = ctx.capturedJson[0]?.body as TaskBody;
     expect(task.status).toBe("queued");
     expect(task.agentId).toBe(AGENT_ID);
     expect(task.id).toBe(UUID_F);
@@ -357,8 +377,7 @@ describe("handleControlAgent", () => {
     const roleCtx = makeCtx({ req: makeBodyReq(ROLE_BODY), newId: () => UUID_A });
     await handleCreateRole(roleCtx);
     expect(roleCtx.capturedJson[0]?.status).toBe(201);
-    const roleBody = roleCtx.capturedJson[0]?.body as Record<string, unknown>;
-    const roleId = roleBody.id as string;
+    const roleId = (roleCtx.capturedJson[0]?.body as RoleBody).id;
 
     const agentCtx = makeCtx({
       req: makeBodyReq({ name: "Ctrl Agent", roleId, workdir: "/tmp" }),
@@ -366,8 +385,7 @@ describe("handleControlAgent", () => {
     });
     await handleCreateAgent(agentCtx, WK);
     expect(agentCtx.capturedJson[0]?.status).toBe(201);
-    const agentBody = agentCtx.capturedJson[0]?.body as Record<string, unknown>;
-    return agentBody.id as string;
+    return (agentCtx.capturedJson[0]?.body as AgentBody).id;
   }
 
   it("pause → status paused", async () => {
@@ -375,7 +393,7 @@ describe("handleControlAgent", () => {
     const ctx = makeCtx({ req: makeBodyReq({ action: "pause" }) });
     await handleControlAgent(ctx, WK, agentId);
     expect(ctx.capturedJson[0]?.status).toBe(200);
-    expect((ctx.capturedJson[0]?.body as Record<string, unknown>).status).toBe("paused");
+    expect((ctx.capturedJson[0]?.body as AgentBody).status).toBe("paused");
   });
 
   it("resume → status idle", async () => {
@@ -385,14 +403,14 @@ describe("handleControlAgent", () => {
 
     const ctx = makeCtx({ req: makeBodyReq({ action: "resume" }) });
     await handleControlAgent(ctx, WK, agentId);
-    expect((ctx.capturedJson[0]?.body as Record<string, unknown>).status).toBe("idle");
+    expect((ctx.capturedJson[0]?.body as AgentBody).status).toBe("idle");
   });
 
   it("stop → status stopped", async () => {
     const agentId = await createAgentInStore();
     const ctx = makeCtx({ req: makeBodyReq({ action: "stop" }) });
     await handleControlAgent(ctx, WK, agentId);
-    expect((ctx.capturedJson[0]?.body as Record<string, unknown>).status).toBe("stopped");
+    expect((ctx.capturedJson[0]?.body as AgentBody).status).toBe("stopped");
   });
 
   it("invalid action → 400", async () => {
@@ -425,21 +443,21 @@ describe("handleRunAgent", () => {
   async function setupAgentWithTask(): Promise<{ agentId: string; taskId: string }> {
     const roleCtx = makeCtx({ req: makeBodyReq(ROLE_BODY), newId: () => UUID_A });
     await handleCreateRole(roleCtx);
-    const roleId = (roleCtx.capturedJson[0]?.body as Record<string, unknown>).id as string;
+    const roleId = (roleCtx.capturedJson[0]?.body as RoleBody).id;
 
     const agentCtx = makeCtx({
       req: makeBodyReq({ name: "Run Agent", roleId, workdir: storeRoot }),
       newId: () => UUID_B,
     });
     await handleCreateAgent(agentCtx, WK);
-    const agentId = (agentCtx.capturedJson[0]?.body as Record<string, unknown>).id as string;
+    const agentId = (agentCtx.capturedJson[0]?.body as AgentBody).id;
 
     const taskCtx = makeCtx({
       req: makeBodyReq({ instruction: "Do something." }),
       newId: () => UUID_C,
     });
     await handleCreateTask(taskCtx, WK, agentId);
-    const taskId = (taskCtx.capturedJson[0]?.body as Record<string, unknown>).id as string;
+    const taskId = (taskCtx.capturedJson[0]?.body as TaskBody).id;
 
     return { agentId, taskId };
   }
@@ -449,7 +467,7 @@ describe("handleRunAgent", () => {
     const ctx = makeCtx();
     await handleRunAgent(ctx, WK, agentId);
     expect(ctx.capturedJson[0]?.status).toBe(202);
-    const agent = ctx.capturedJson[0]?.body as Record<string, unknown>;
+    const agent = ctx.capturedJson[0]?.body as AgentBody;
     expect(agent.id).toBe(agentId);
   });
 
@@ -465,14 +483,14 @@ describe("handleRunAgent", () => {
     const FULL_ROLE = { ...ROLE_BODY, permissionMode: "full" } as const;
     const roleCtx = makeCtx({ req: makeBodyReq(FULL_ROLE), newId: () => UUID_D });
     await handleCreateRole(roleCtx);
-    const roleId = (roleCtx.capturedJson[0]?.body as Record<string, unknown>).id as string;
+    const roleId = (roleCtx.capturedJson[0]?.body as RoleBody).id;
 
     const agentCtx = makeCtx({
       req: makeBodyReq({ name: "Full Agent", roleId, workdir: storeRoot }),
       newId: () => UUID_E,
     });
     await handleCreateAgent(agentCtx, WK);
-    const agentId = (agentCtx.capturedJson[0]?.body as Record<string, unknown>).id as string;
+    const agentId = (agentCtx.capturedJson[0]?.body as AgentBody).id;
 
     const taskCtx = makeCtx({
       req: makeBodyReq({ instruction: "Full task." }),
@@ -515,7 +533,7 @@ describe("handleListAudit / handleOfficeStatus", () => {
     const ctx = makeCtx();
     await handleOfficeStatus(ctx, WK);
     expect(ctx.capturedJson[0]?.status).toBe(200);
-    const payload = ctx.capturedJson[0]?.body as Record<string, unknown>;
+    const payload = ctx.capturedJson[0]?.body as StatusBody;
     expect(Array.isArray(payload.agents)).toBe(true);
   });
 });
