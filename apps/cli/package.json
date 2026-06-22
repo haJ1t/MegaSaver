@@ -26,6 +26,7 @@
     "postpack": "node scripts/strip-publish-manifest.mjs postpack"
   },
   "devDependencies": {
+    "@megasaver/agent-office": "workspace:*",
     "@megasaver/connector-claude-code": "workspace:*",
     "@megasaver/memory-graph": "workspace:*",
     "@megasaver/connector-generic-cli": "workspace:*",

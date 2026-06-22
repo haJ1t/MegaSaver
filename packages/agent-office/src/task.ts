@@ -9,7 +9,7 @@ export const officeTaskSchema = z
     id: officeTaskIdSchema,
     agentId: officeAgentIdSchema,
     workspaceKey: workspaceKeySchema,
-    instruction: z.string().min(1),
+    instruction: z.string().trim().min(1),
     status: taskStatusSchema,
     queuedAt: z.string().datetime({ offset: true }),
     startedAt: z.string().datetime({ offset: true }).optional(),

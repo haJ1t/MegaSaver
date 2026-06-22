@@ -148,9 +148,31 @@ a sticky "Live stream disconnected" banner (cleared on the next status push),
 both regression-tested. 360 gui tests; `pnpm verify` green; tests stub
 fetch/EventSource (no real bridge/claude).
 
-## Phases not yet built
+## Phase 5 shipped (CLI `mega office`)
 
-5. CLI `mega office` commands.
+`mega office` Citty subcommands in `apps/cli` (thin handlers over the engine):
+`role list|create|rm`, `agent list|create|rm`, `assign <agent> <instruction>`,
+`run <agent> [--allow-full]` (drives the supervisor, awaits drainAgent, prints
+task outcomes, exit 1 on any failure), `status [agent]`, `logs [agent]`,
+`pause|resume|stop <agent>`. Workspace = `encodeWorkspaceKey(cwd)`; roles global.
+`OFFICE_PROJECT_ID` + `ensureOfficeProject` hoisted into `@megasaver/agent-office`
+(bridge now re-exports them — one canonical office project id). Safe-by-default:
+`allowFull` only via `--allow-full` / `MEGA_OFFICE_ALLOW_FULL=1`, default off,
+`full` fails closed (test-asserted no spawn); `allowedTools` leading-`-` guard
+inherited from `roleSchema`. Risk HIGH; reviewed by code-reviewer (APPROVED) +
+critic (SHIP WITH FIXES → error-message/precheck fixes applied) + security-reviewer
+(PASS). cli 719 / agent-office 113 / gui 360 tests; fake launcher + in-memory core
+(no real claude).
+
+## Status: feature complete (Phases 0–5)
+
+All Agent Office phases shipped to `main`: 0 engine data layer, 1 launcher, 2
+supervisor, 3 bridge `/api/office`, 4 GUI board, 5 CLI. The office is usable end
+to end from the GUI and the CLI. Open follow-ups (filed): cooperative cancel for
+a running task, `workdir` confinement, full evidence-ledger integration,
+per-agent raw-transcript stream, bridge task-create agent precheck, `status
+--json` instruction-exposure doc note, flaky memory-graph-panel test hardening,
+the atomicWriteFile dir-fsync shared-util hoist.
 
 See [[concepts/agent-agnostic-core]], [[entities/core]],
 [[entities/connectors-shared]], [[entities/content-store]],

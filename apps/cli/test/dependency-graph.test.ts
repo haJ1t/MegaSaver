@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 // depends only on zod, never on the CLI.
 // The non-Mega deps (citty, zod) are ignored by the @megasaver/ filter.
 const ALLOWED_MEGA_DEPENDENCIES = [
+  "@megasaver/agent-office",
   "@megasaver/connector-claude-code",
   "@megasaver/connector-generic-cli",
   "@megasaver/connectors-shared",

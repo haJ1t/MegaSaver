@@ -1,3 +1,4 @@
+import { AgentOfficeError } from "@megasaver/agent-office";
 import { ConnectorError } from "@megasaver/connectors-shared";
 import {
   CorePersistenceError,
@@ -25,7 +26,10 @@ export type ZodContext =
   | { kind: "project"; name: string }
   | { kind: "session"; id: string }
   | { kind: "session_update"; id: string }
-  | { kind: "connector"; targetId: string; relativePath: string };
+  | { kind: "connector"; targetId: string; relativePath: string }
+  | { kind: "office_role" }
+  | { kind: "office_agent" }
+  | { kind: "office_task" };
 
 export const NAME_CONTROL_CHARS_MESSAGE = "name must not contain control characters";
 export const TITLE_EMPTY_MESSAGE = "title must not be empty";
@@ -147,6 +151,24 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
       const msg = issue?.message ?? "invalid";
       return { message: `error: invalid session update: ${path}: ${msg}`, exitCode: 1 };
     }
+    if (
+      ctx?.kind === "office_role" ||
+      ctx?.kind === "office_agent" ||
+      ctx?.kind === "office_task"
+    ) {
+      const entity =
+        ctx.kind === "office_role" ? "role" : ctx.kind === "office_agent" ? "agent" : "task";
+      const issue = err.issues[0];
+      const path = issue && issue.path.length > 0 ? issue.path.join(".") : "<unknown>";
+      // A failing `id` field means a malformed id was passed (e.g. `mega office
+      // assign not-a-uuid ...`); surface an id-oriented message rather than the
+      // generic "name must be non-empty" fall-through.
+      if (path === "id") {
+        return { message: `error: invalid ${entity} id`, exitCode: 1 };
+      }
+      const msg = issue?.message ?? "invalid";
+      return { message: `error: invalid ${entity} field: ${path} (${msg})`, exitCode: 1 };
+    }
     const firstIssue = err.issues[0];
     if (firstIssue?.message === NAME_CONTROL_CHARS_MESSAGE) {
       return {
@@ -205,6 +227,26 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
       message: `error: store I/O failed: ${err.message}`,
       exitCode: 1,
     };
+  }
+  if (err instanceof AgentOfficeError) {
+    if (err.code === "not_found") {
+      const entity =
+        ctx?.kind === "office_role"
+          ? "role"
+          : ctx?.kind === "office_agent"
+            ? "agent"
+            : ctx?.kind === "office_task"
+              ? "task"
+              : "entity";
+      return { message: `error: ${entity} not found`, exitCode: 1 };
+    }
+    if (err.code === "permission_denied") {
+      return officePermissionDeniedMessage(err.message);
+    }
+    if (err.code === "schema_invalid") {
+      return officeSchemaInvalidMessage(err.message);
+    }
+    return { message: `error: ${err.code}: ${err.message}`, exitCode: 1 };
   }
   if (err instanceof ConnectorError) {
     if (ctx?.kind === "connector") {
@@ -380,6 +422,35 @@ export function emptyFieldMessage(field: string): CliMessage {
 export function invalidExpiresMessage(value: string): CliMessage {
   return {
     message: `error: invalid expires "${value}", expected ISO-8601 datetime`,
+    exitCode: 1,
+  };
+}
+
+export function officePermissionDeniedMessage(detail: string): CliMessage {
+  return { message: `error: permission_denied: ${detail}`, exitCode: 1 };
+}
+
+export function officeSchemaInvalidMessage(detail: string): CliMessage {
+  return { message: `error: schema_invalid: ${detail}`, exitCode: 1 };
+}
+
+export function invalidPermissionModeMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid permission-mode "${value}", expected: plan | acceptEdits | full`,
+    exitCode: 1,
+  };
+}
+
+export function invalidRoleModelMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid model "${value}", expected: opus | sonnet | haiku`,
+    exitCode: 1,
+  };
+}
+
+export function invalidToolMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid tool "${value}": tool must not start with '-'`,
     exitCode: 1,
   };
 }

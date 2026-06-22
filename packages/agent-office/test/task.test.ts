@@ -40,6 +40,15 @@ describe("officeTaskSchema", () => {
     expect(() => officeTaskSchema.parse(makeTask({ instruction: "" }))).toThrow();
   });
 
+  it("rejects a whitespace-only instruction (empty after trim)", () => {
+    expect(() => officeTaskSchema.parse(makeTask({ instruction: "   " }))).toThrow();
+  });
+
+  it("trims a padded instruction", () => {
+    const parsed = officeTaskSchema.parse(makeTask({ instruction: "  do work  " }));
+    expect(parsed.instruction).toBe("do work");
+  });
+
   it("rejects extra keys (strict)", () => {
     expect(() => officeTaskSchema.parse({ ...makeTask(), extra: 1 })).toThrow();
   });

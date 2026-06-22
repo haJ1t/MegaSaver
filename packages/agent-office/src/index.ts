@@ -52,3 +52,5 @@ export {
   createSupervisor,
   type Supervisor,
 } from "./supervisor.js";
+
+export { OFFICE_PROJECT_ID, ensureOfficeProject } from "./office-project.js";

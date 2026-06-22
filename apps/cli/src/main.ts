@@ -11,6 +11,7 @@ import { indexCommand } from "./commands/index/index.js";
 import { learnCommand } from "./commands/learn.js";
 import { mcpCommand } from "./commands/mcp/index.js";
 import { memoryCommand } from "./commands/memory/index.js";
+import { officeCommand } from "./commands/office/index.js";
 import { outputCommand } from "./commands/output/index.js";
 import { packCommand } from "./commands/pack/index.js";
 import { projectCommand } from "./commands/project.js";
@@ -49,6 +50,7 @@ export const mainCommand = defineCommand({
     session: sessionCommand,
     connector: connectorCommand,
     memory: memoryCommand,
+    office: officeCommand,
     output: outputCommand,
     mcp: mcpCommand,
     pack: packCommand,
