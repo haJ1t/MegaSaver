@@ -208,6 +208,8 @@ export async function handleCreateAgent(ctx: RouteContext, wk: string): Promise<
   }
   // workdir is derived from the workspace (no longer user-chosen); enforce that
   // it is the workspace's project directory before it reaches the launcher cwd.
+  // Runs after agentCreateInputSchema (workdir min(1)) so an empty workdir — whose
+  // hash is itself a valid key — is already rejected and cannot alias a workspace.
   if (encodeWorkspaceKey(parsed.data.workdir) !== wk) {
     ctx.sendError(
       ctx.res,

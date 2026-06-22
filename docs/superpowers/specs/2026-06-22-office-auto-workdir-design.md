@@ -63,9 +63,10 @@ Workdir becomes **derived, never chosen**.
    now that no UI lets the user diverge from it. The GUI's auto-filled
    label satisfies it by construction.
 
-`CreateAgentInput.workdir` (office-client) becomes required (always sent
-now). `agentCreateInputSchema` and `officeAgentSchema` keep `workdir`
-required — no schema change.
+`CreateAgentInput.workdir` (office-client) stays optional — it is a thin
+transport wrapper and `AgentBoard` always supplies the value. The bridge
+`agentCreateInputSchema` and `officeAgentSchema` keep `workdir` required —
+no schema change.
 
 ## Out of scope
 
