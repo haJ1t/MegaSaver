@@ -2,9 +2,11 @@ import { watch } from "node:fs";
 import { join } from "node:path";
 import {
   AgentOfficeError,
+  OFFICE_PROJECT_ID,
   createSupervisor,
   deleteAgent,
   deleteRole,
+  ensureOfficeProject,
   listAgents,
   listAudit,
   listRoles,
@@ -23,7 +25,6 @@ import type { CoreRegistry } from "@megasaver/core";
 import {
   type WorkspaceKey,
   officeAgentIdSchema,
-  projectIdSchema,
   roleIdSchema,
   workspaceKeySchema,
 } from "@megasaver/shared";
@@ -38,27 +39,9 @@ import type { RouteContext } from "../route-context.js";
 import { zodErrorMessage } from "../zod-schemas.js";
 import { readJsonBody } from "./_body.js";
 
-// Fixed namespaced project id for supervisor-created Core Sessions.
-// All office sessions across workspaces share this project — they are
-// supervisor-managed and not tied to a user-created project.
-// This is a stable sentinel value, documented here as the canonical source.
-export const OFFICE_PROJECT_ID = projectIdSchema.parse("00000000-beef-0000-0000-000000000001");
-
-// The office project must exist before any supervisor-created Core Session,
-// because CoreRegistry.createSession calls requireProject and throws
-// `project_not_found` otherwise. Seed it idempotently at server start (and the
-// same way in tests). `now` lets callers pin a deterministic timestamp.
-export function ensureOfficeProject(coreRegistry: CoreRegistry, now: () => string): void {
-  if (coreRegistry.getProject(OFFICE_PROJECT_ID) !== null) return;
-  const ts = now();
-  coreRegistry.createProject({
-    id: OFFICE_PROJECT_ID,
-    name: "Agent Office",
-    rootPath: "office",
-    createdAt: ts,
-    updatedAt: ts,
-  });
-}
+// Re-export so existing bridge consumers (tests, server bootstrap) keep working
+// without an import change — the canonical definitions live in @megasaver/agent-office.
+export { OFFICE_PROJECT_ID, ensureOfficeProject };
 
 // Map AgentOfficeError codes to HTTP status + BridgeErrorCode.
 // Exported for unit tests covering each mapping arm.
