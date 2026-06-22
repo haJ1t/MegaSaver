@@ -51,4 +51,20 @@ describe("officeAgentSchema", () => {
       officeAgentSchema.parse(makeAgent({ createdAt: "2026-06-22T12:00:00" })),
     ).toThrow();
   });
+
+  it("rejects an invalid workspaceKey (uppercase)", () => {
+    expect(() => officeAgentSchema.parse({ ...makeAgent(), workspaceKey: "WK" })).toThrow();
+  });
+
+  it("rejects an invalid workspaceKey (wrong length)", () => {
+    expect(() =>
+      officeAgentSchema.parse({ ...makeAgent(), workspaceKey: "0123456789ab" }),
+    ).toThrow();
+  });
+
+  it("rejects an invalid workspaceKey (contains uppercase hex)", () => {
+    expect(() =>
+      officeAgentSchema.parse({ ...makeAgent(), workspaceKey: "0123456789ABCDEF" }),
+    ).toThrow();
+  });
 });

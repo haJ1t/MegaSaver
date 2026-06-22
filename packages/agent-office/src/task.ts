@@ -1,4 +1,4 @@
-import { officeAgentIdSchema, officeTaskIdSchema } from "@megasaver/shared";
+import { officeAgentIdSchema, officeTaskIdSchema, workspaceKeySchema } from "@megasaver/shared";
 import { z } from "zod";
 
 export const taskStatusSchema = z.enum(["canceled", "done", "failed", "queued", "running"]);
@@ -8,7 +8,7 @@ export const officeTaskSchema = z
   .object({
     id: officeTaskIdSchema,
     agentId: officeAgentIdSchema,
-    workspaceKey: z.string().min(1),
+    workspaceKey: workspaceKeySchema,
     instruction: z.string().min(1),
     status: taskStatusSchema,
     queuedAt: z.string().datetime({ offset: true }),

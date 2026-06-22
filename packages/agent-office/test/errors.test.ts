@@ -10,9 +10,11 @@ describe("AgentOfficeError", () => {
     expect(err.message).toBe("not_found");
   });
 
-  it("enumerates the four codes", () => {
+  it("enumerates all six codes alphabetically", () => {
     expect(agentOfficeErrorCodeSchema.options).toEqual([
+      "launcher_not_registered",
       "not_found",
+      "permission_denied",
       "schema_invalid",
       "store_corrupt",
       "write_failed",

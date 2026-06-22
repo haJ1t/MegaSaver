@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 export const agentOfficeErrorCodeSchema = z.enum([
+  "launcher_not_registered",
   "not_found",
+  "permission_denied",
   "schema_invalid",
   "store_corrupt",
   "write_failed",
