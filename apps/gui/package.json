@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@fontsource/dm-mono": "^5.0.0",
+    "@megasaver/agent-office": "workspace:*",
     "@megasaver/connector-claude-code": "workspace:*",
     "@megasaver/connector-generic-cli": "workspace:*",
     "@megasaver/connectors-shared": "workspace:*",
