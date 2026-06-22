@@ -63,12 +63,28 @@ describe("runOfficeAgentCreate", () => {
       ...inp,
       nameFlag: "Archie",
       roleIdFlag: ROLE_ID,
-      workdirFlag: "/repo",
       newId: () => AGENT_ID,
       now: () => NOW,
     });
     expect(code).toBe(0);
     expect(inp.lines[0]).toBe(AGENT_ID);
+  });
+
+  it("derives workdir from cwd (no --workdir)", async () => {
+    await createRole(tmpDir);
+    const inp = makeBaseInput(tmpDir);
+    const code = await runOfficeAgentCreate({
+      ...inp,
+      nameFlag: "Archie",
+      roleIdFlag: ROLE_ID,
+      newId: () => AGENT_ID,
+      now: () => NOW,
+      json: true,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(inp.lines[0] ?? "{}") as { id: string; workdir: string };
+    expect(parsed.id).toBe(AGENT_ID);
+    expect(parsed.workdir).toBe(tmpDir);
   });
 
   it("json flag — prints JSON with correct id", async () => {
@@ -78,7 +94,6 @@ describe("runOfficeAgentCreate", () => {
       ...inp,
       nameFlag: "Archie",
       roleIdFlag: ROLE_ID,
-      workdirFlag: "/repo",
       newId: () => AGENT_ID,
       now: () => NOW,
       json: true,
@@ -95,7 +110,6 @@ describe("runOfficeAgentCreate", () => {
       ...inp,
       nameFlag: "Archie",
       roleIdFlag: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-      workdirFlag: "/repo",
       newId: () => AGENT_ID,
       now: () => NOW,
     });
@@ -127,7 +141,6 @@ describe("runOfficeAgentList", () => {
       ...createInp,
       nameFlag: "Archie",
       roleIdFlag: ROLE_ID,
-      workdirFlag: "/repo",
       newId: () => AGENT_ID,
       now: () => NOW,
     });
@@ -156,7 +169,6 @@ describe("runOfficeAgentRm", () => {
       ...createInp,
       nameFlag: "Archie",
       roleIdFlag: ROLE_ID,
-      workdirFlag: "/repo",
       newId: () => AGENT_ID,
       now: () => NOW,
     });
@@ -187,7 +199,6 @@ describe("runOfficeAssign", () => {
       ...agentInp,
       nameFlag: "Archie",
       roleIdFlag: ROLE_ID,
-      workdirFlag: "/repo",
       newId: () => AGENT_ID,
       now: () => NOW,
     });
@@ -211,7 +222,6 @@ describe("runOfficeAssign", () => {
       ...agentInp,
       nameFlag: "Archie",
       roleIdFlag: ROLE_ID,
-      workdirFlag: "/repo",
       newId: () => AGENT_ID,
       now: () => NOW,
     });
@@ -279,7 +289,6 @@ describe("runOfficeAssign", () => {
       ...agentInp,
       nameFlag: "Archie",
       roleIdFlag: ROLE_ID,
-      workdirFlag: "/repo",
       newId: () => AGENT_ID,
       now: () => NOW,
     });

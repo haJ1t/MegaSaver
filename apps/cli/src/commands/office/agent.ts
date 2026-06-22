@@ -72,7 +72,6 @@ export const officeAgentListCommand = defineCommand({
 export type RunOfficeAgentCreateInput = RoleStoreEnvInput & {
   nameFlag: string;
   roleIdFlag: string;
-  workdirFlag: string;
   json?: boolean;
   newId?: () => string;
   now?: () => string;
@@ -117,7 +116,7 @@ export async function runOfficeAgentCreate(input: RunOfficeAgentCreateInput): Pr
       roleId: role.id,
       kind: role.kind,
       workspaceKey: wk,
-      workdir: input.workdirFlag,
+      workdir: input.cwd,
       status: "idle",
       createdAt,
     });
@@ -137,7 +136,6 @@ export const officeAgentCreateCommand = defineCommand({
   args: {
     name: { type: "string", required: true, description: "Agent name." },
     role: { type: "string", required: true, description: "Role id." },
-    workdir: { type: "string", required: true, description: "Working directory for this agent." },
     store: { type: "string", description: "Override store directory." },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
@@ -146,7 +144,6 @@ export const officeAgentCreateCommand = defineCommand({
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       nameFlag: typeof args.name === "string" ? args.name : "",
       roleIdFlag: typeof args.role === "string" ? args.role : "",
-      workdirFlag: typeof args.workdir === "string" ? args.workdir : "",
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,
