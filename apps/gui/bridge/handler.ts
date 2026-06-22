@@ -7,7 +7,13 @@ import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
 import { applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
 import { handleCaughtError } from "./error-mapping.js";
-import type { RouteContext, SendError, SendJson, SendText } from "./route-context.js";
+import type {
+  OfficeContext,
+  RouteContext,
+  SendError,
+  SendJson,
+  SendText,
+} from "./route-context.js";
 import { dispatchClaudeHooks } from "./routes/claude-hooks.js";
 import {
   handleDeleteSessionMemory,
@@ -26,6 +32,21 @@ import {
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
 import { handleGetMemoryGraph } from "./routes/memory-graph.js";
+import {
+  handleControlAgent,
+  handleCreateAgent,
+  handleCreateRole,
+  handleCreateTask,
+  handleDeleteAgent,
+  handleDeleteRole,
+  handleListAgents,
+  handleListAudit,
+  handleListRoles,
+  handleListTasks,
+  handleOfficeStatus,
+  handleOfficeStream,
+  handleRunAgent,
+} from "./routes/office.js";
 import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
 import { resolveWorkspace } from "./workspace-resolver.js";
@@ -47,6 +68,8 @@ export interface BridgeHandlerOptions {
   claudeSessionsMetaDir?: string;
   /** Override for tests; defaults to ~/.claude/settings.json. */
   claudeSettingsPath?: string;
+  /** Office supervisor deps. Populated by production server.ts; injected in tests. */
+  office?: OfficeContext;
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -178,6 +201,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       sendJson,
       sendError,
       sendText,
+      ...(opts.office !== undefined ? { office: opts.office } : {}),
     };
 
     if (path === "/api/health") {
@@ -290,6 +314,105 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       } else {
         await handleGetClaudeSession(ctx, dir, id);
       }
+      return;
+    }
+
+    // Office routes — /api/office/*
+    // Roles (global)
+    if (path === "/api/office/roles") {
+      if (method === "GET") {
+        await handleListRoles(ctx);
+        return;
+      }
+      if (method === "POST") {
+        await handleCreateRole(ctx);
+        return;
+      }
+      return methodNotAllowed(res, method, origin);
+    }
+    const officeRoleMatch = path.match(/^\/api\/office\/roles\/([^/]+)$/);
+    if (officeRoleMatch) {
+      if (method !== "DELETE") return methodNotAllowed(res, method, origin);
+      await handleDeleteRole(ctx, decodeURIComponent(officeRoleMatch[1] as string));
+      return;
+    }
+
+    // Agents (workspace-scoped)
+    const officeAgentsMatch = path.match(/^\/api\/office\/([^/]+)\/agents$/);
+    if (officeAgentsMatch) {
+      const wk = decodeURIComponent(officeAgentsMatch[1] as string);
+      if (method === "GET") {
+        await handleListAgents(ctx, wk);
+        return;
+      }
+      if (method === "POST") {
+        await handleCreateAgent(ctx, wk);
+        return;
+      }
+      return methodNotAllowed(res, method, origin);
+    }
+    const officeAgentMatch = path.match(/^\/api\/office\/([^/]+)\/agents\/([^/]+)$/);
+    if (officeAgentMatch) {
+      const wk = decodeURIComponent(officeAgentMatch[1] as string);
+      const agentId = decodeURIComponent(officeAgentMatch[2] as string);
+      if (method !== "DELETE") return methodNotAllowed(res, method, origin);
+      await handleDeleteAgent(ctx, wk, agentId);
+      return;
+    }
+
+    // Tasks
+    const officeTasksMatch = path.match(/^\/api\/office\/([^/]+)\/agents\/([^/]+)\/tasks$/);
+    if (officeTasksMatch) {
+      const wk = decodeURIComponent(officeTasksMatch[1] as string);
+      const agentId = decodeURIComponent(officeTasksMatch[2] as string);
+      if (method === "GET") {
+        await handleListTasks(ctx, wk, agentId);
+        return;
+      }
+      if (method === "POST") {
+        await handleCreateTask(ctx, wk, agentId);
+        return;
+      }
+      return methodNotAllowed(res, method, origin);
+    }
+
+    // Run
+    const officeRunMatch = path.match(/^\/api\/office\/([^/]+)\/agents\/([^/]+)\/run$/);
+    if (officeRunMatch) {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      const wk = decodeURIComponent(officeRunMatch[1] as string);
+      const agentId = decodeURIComponent(officeRunMatch[2] as string);
+      await handleRunAgent(ctx, wk, agentId);
+      return;
+    }
+
+    // Control
+    const officeControlMatch = path.match(/^\/api\/office\/([^/]+)\/agents\/([^/]+)\/control$/);
+    if (officeControlMatch) {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      const wk = decodeURIComponent(officeControlMatch[1] as string);
+      const agentId = decodeURIComponent(officeControlMatch[2] as string);
+      await handleControlAgent(ctx, wk, agentId);
+      return;
+    }
+
+    // Audit / status / stream
+    const officeAuditMatch = path.match(/^\/api\/office\/([^/]+)\/audit$/);
+    if (officeAuditMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleListAudit(ctx, decodeURIComponent(officeAuditMatch[1] as string));
+      return;
+    }
+    const officeStatusMatch = path.match(/^\/api\/office\/([^/]+)\/status$/);
+    if (officeStatusMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleOfficeStatus(ctx, decodeURIComponent(officeStatusMatch[1] as string));
+      return;
+    }
+    const officeStreamMatch = path.match(/^\/api\/office\/([^/]+)\/stream$/);
+    if (officeStreamMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleOfficeStream(ctx, decodeURIComponent(officeStreamMatch[1] as string));
       return;
     }
 
