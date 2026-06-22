@@ -2927,3 +2927,27 @@ never cleared (now cleared on every successful status push). Both regression-tes
 fail-without-fix). Also cleaned dead imports/test vars + a loadRoles spurious-refetch. 360 gui tests;
 `pnpm verify` green; tests stub fetch + EventSource (no real bridge/claude). Phase 5 (CLI `mega office`)
 remains.
+
+## [2026-06-22] feature | agent-office Phase 5 (CLI) — feature complete
+
+Added `mega office` CLI on branch `worktree-feat+agent-office-phase5` (spec
+docs/superpowers/specs/2026-06-22-agent-office-phase5-cli-design.md): Citty subcommands
+role/agent CRUD, assign, run (drives the supervisor, awaits drainAgent, exit 1 on failure),
+status, logs, pause/resume/stop — thin handlers over the engine, mirroring the memory command
+pattern. wk = encodeWorkspaceKey(cwd); roles global. Hoisted OFFICE_PROJECT_ID + ensureOfficeProject
+from the bridge into @megasaver/agent-office (engine) so CLI + bridge share one canonical office
+project id; bridge re-exports them. apps/cli gained agent-office + connector-claude-code devDeps
+(bundled by tsup; lockfile committed).
+
+Risk HIGH. Reviewed by code-reviewer (APPROVED) + critic (SHIP WITH FIXES) + security-reviewer (PASS).
+Safe-by-default holds: allowFull only via --allow-full / MEGA_OFFICE_ALLOW_FULL=1 (default off),
+full fails closed with no spawn (test-asserted launcher-not-called); allowedTools leading-`-` guard
+inherited from roleSchema (triple-layered); argv-array spawn (no shell injection); assertSafeSegment
+on all paths; instruction kept out of the audit store. Critic-found fixes applied before merge:
+office-specific ZodError messages (bad agent id no longer says "name must be non-empty"); run/assign
+report "agent not found" (not "task not found"); assign prechecks the agent exists (no orphan tasks);
+instruction trimmed (z.string().trim().min(1)); run prints a note when nothing drains. cli 719 /
+agent-office 113 / gui 360 tests; pnpm verify green; fake launcher + in-memory core (no real claude).
+
+**Agent Office is feature-complete: Phases 0-5 all on `main`** (engine → launcher → supervisor →
+bridge → GUI → CLI). Usable end to end. Follow-ups tracked on [[entities/agent-office]].
