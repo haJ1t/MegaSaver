@@ -12,7 +12,7 @@ import {
 } from "@megasaver/agent-office";
 import type { AgentLauncher, LaunchHandle } from "@megasaver/connectors-shared";
 import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
-import type { AgentId } from "@megasaver/shared";
+import { type AgentId, encodeWorkspaceKey } from "@megasaver/shared";
 import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OfficeContext, RouteContext } from "../../../bridge/route-context.js";
 import {
@@ -166,9 +166,11 @@ function makeBodyReq(body: unknown): IncomingMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Workspace key used in tests (16 lowercase hex chars — workspaceKeySchema)
+// Workspace key used in tests — derived from a fixed project dir so the bridge's
+// `encodeWorkspaceKey(workdir) === wk` guard holds for agent-create bodies.
 // ---------------------------------------------------------------------------
-const WK = "0000000000000001";
+const WORKDIR = "/tmp/office-workdir";
+const WK = encodeWorkspaceKey(WORKDIR);
 
 // ---------------------------------------------------------------------------
 // Shared role fixture
@@ -280,7 +282,7 @@ describe("handleListAgents / handleCreateAgent / handleDeleteAgent", () => {
     expect(roleId).toBe(UUID_A);
 
     // Create agent (uses UUID_B for id)
-    const agentBody = { name: "My Agent", roleId, workdir: "/tmp/workdir" };
+    const agentBody = { name: "My Agent", roleId, workdir: WORKDIR };
     const agentCtx = makeCtx({ req: makeBodyReq(agentBody), newId: () => UUID_B });
     await handleCreateAgent(agentCtx, WK);
     expect(agentCtx.capturedJson[0]?.status).toBe(201);
@@ -297,6 +299,20 @@ describe("handleListAgents / handleCreateAgent / handleDeleteAgent", () => {
     expect(ctx.capturedError[0]?.status).toBe(400);
   });
 
+  it("create agent rejects a workdir that does not match the workspace → 400", async () => {
+    const roleCtx = makeCtx({ req: makeBodyReq(ROLE_BODY), newId: () => UUID_A });
+    await handleCreateRole(roleCtx);
+    const roleId = (roleCtx.capturedJson[0]?.body as RoleBody).id;
+
+    const agentCtx = makeCtx({
+      req: makeBodyReq({ name: "Mismatch", roleId, workdir: "/somewhere/else" }),
+      newId: () => UUID_B,
+    });
+    await handleCreateAgent(agentCtx, WK);
+    expect(agentCtx.capturedError[0]?.status).toBe(400);
+    expect(agentCtx.capturedError[0]?.code).toBe("validation_failed");
+  });
+
   it("delete agent → 204 no content", async () => {
     // Create role
     const roleCtx = makeCtx({ req: makeBodyReq(ROLE_BODY), newId: () => UUID_C });
@@ -305,7 +321,7 @@ describe("handleListAgents / handleCreateAgent / handleDeleteAgent", () => {
 
     // Create agent
     const agentCtx = makeCtx({
-      req: makeBodyReq({ name: "Del Agent", roleId, workdir: "/tmp" }),
+      req: makeBodyReq({ name: "Del Agent", roleId, workdir: WORKDIR }),
       newId: () => UUID_D,
     });
     await handleCreateAgent(agentCtx, WK);
@@ -394,7 +410,7 @@ describe("handleControlAgent", () => {
     const roleId = (roleCtx.capturedJson[0]?.body as RoleBody).id;
 
     const agentCtx = makeCtx({
-      req: makeBodyReq({ name: "Ctrl Agent", roleId, workdir: "/tmp" }),
+      req: makeBodyReq({ name: "Ctrl Agent", roleId, workdir: WORKDIR }),
       newId: () => UUID_B,
     });
     await handleCreateAgent(agentCtx, WK);
@@ -460,7 +476,7 @@ describe("handleRunAgent", () => {
     const roleId = (roleCtx.capturedJson[0]?.body as RoleBody).id;
 
     const agentCtx = makeCtx({
-      req: makeBodyReq({ name: "Run Agent", roleId, workdir: storeRoot }),
+      req: makeBodyReq({ name: "Run Agent", roleId, workdir: WORKDIR }),
       newId: () => UUID_B,
     });
     await handleCreateAgent(agentCtx, WK);
@@ -563,7 +579,7 @@ describe("handleRunAgent", () => {
     const roleId = (roleCtx.capturedJson[0]?.body as RoleBody).id;
 
     const agentCtx = makeCtx({
-      req: makeBodyReq({ name: "Full Agent", roleId, workdir: storeRoot }),
+      req: makeBodyReq({ name: "Full Agent", roleId, workdir: WORKDIR }),
       newId: () => UUID_E,
     });
     await handleCreateAgent(agentCtx, WK);
