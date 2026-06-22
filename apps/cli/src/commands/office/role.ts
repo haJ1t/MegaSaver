@@ -1,5 +1,6 @@
 import {
   deleteRole,
+  ensurePredefinedRoles,
   listRoles,
   roleModelSchema,
   rolePermissionModeSchema,
@@ -280,6 +281,63 @@ export const officeRoleRmCommand = defineCommand({
   },
 });
 
+// ─── role seed ─────────────────────────────────────────────────────────────
+
+export type RunOfficeRoleSeedInput = RoleStoreEnvInput & {
+  json?: boolean;
+  newId?: () => string;
+  now?: () => string;
+};
+
+export async function runOfficeRoleSeed(input: RunOfficeRoleSeedInput): Promise<0 | 1> {
+  let rootDir: string;
+  try {
+    rootDir = resolveStorePath(input);
+  } catch (err) {
+    const cli = mapErrorToCliMessage(err, { kind: "store" });
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+
+  try {
+    const { initialized } = await ensureStoreReady(rootDir);
+    if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
+
+    const newId = input.newId ?? (() => crypto.randomUUID());
+    const now = input.now ?? (() => new Date().toISOString());
+    const result = await ensurePredefinedRoles({ storeRoot: rootDir, now, newId });
+    input.stdout(
+      input.json
+        ? JSON.stringify(result)
+        : result.seeded > 0
+          ? `seeded ${result.seeded} predefined roles`
+          : "roles already present; nothing seeded",
+    );
+    return 0;
+  } catch (err) {
+    const cli = mapErrorToCliMessage(err, { kind: "office_role" });
+    input.stderr(cli.message);
+    return cli.exitCode;
+  }
+}
+
+export const officeRoleSeedCommand = defineCommand({
+  meta: { name: "seed", description: "Seed the predefined role roster (idempotent)." },
+  args: {
+    store: { type: "string", description: "Override store directory." },
+    json: { type: "boolean", default: false, description: "Emit JSON output." },
+  },
+  async run({ args }) {
+    const code = await runOfficeRoleSeed({
+      ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
+      stdout: (line) => console.log(line),
+      stderr: (line) => console.error(line),
+      json: !!args.json,
+    });
+    if (code !== 0) process.exitCode = code;
+  },
+});
+
 // ─── role command group ───────────────────────────────────────────────────────
 
 export const officeRoleCommand = defineCommand({
@@ -287,6 +345,7 @@ export const officeRoleCommand = defineCommand({
   subCommands: {
     list: officeRoleListCommand,
     create: officeRoleCreateCommand,
+    seed: officeRoleSeedCommand,
     rm: officeRoleRmCommand,
   },
 });

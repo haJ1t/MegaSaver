@@ -2951,3 +2951,19 @@ agent-office 113 / gui 360 tests; pnpm verify green; fake launcher + in-memory c
 
 **Agent Office is feature-complete: Phases 0-5 all on `main`** (engine → launcher → supervisor →
 bridge → GUI → CLI). Usable end to end. Follow-ups tracked on [[entities/agent-office]].
+
+## [2026-06-22] feature | agent-office predefined roles from addyosmani/agent-skills
+
+Replaced the 13 generic predefined roles with a 24-role catalog modeled on
+https://github.com/addyosmani/agent-skills (one role per skill, grouped by lifecycle phase:
+Define/Plan/Build/Verify/Review/Ship/Meta) on branch `worktree-feat+agent-office-skill-roles` (spec
+docs/superpowers/specs/2026-06-22-agent-office-skill-roles-design.md). Each role: kind claude-code,
+permissionMode plan (safe-by-default), allowedTools [], skillPacks [skill-slug], persona from the
+skill's purpose, model tiered (opus reasoning / sonnet build / haiku docs).
+
+Found + fixed a latent gap while verifying in the running GUI: `buildPredefinedRoles` was exported +
+tested but NEVER called at runtime (Phase 0 deferred seeding-to-disk to a phase that never landed), so
+the office showed zero roles. Added `ensurePredefinedRoles` (idempotent — no-op once any role exists),
+wired into the bridge startup (server.ts) + a new `mega office role seed` CLI command. Now the roster
+appears in the GUI role manager + `mega office role list` on first run. agent-office 117 / cli 721 /
+gui tests green; changeset minor (agent-office, cli) + patch (gui).

@@ -30,7 +30,7 @@ export {
 export { saveRole, loadRole, listRoles, deleteRole } from "./role-store.js";
 export { saveAgent, loadAgent, listAgents, deleteAgent } from "./agent-store.js";
 export { saveTask, loadTask, listTasks, deleteTask } from "./task-store.js";
-export { buildPredefinedRoles } from "./predefined-roles.js";
+export { buildPredefinedRoles, ensurePredefinedRoles } from "./predefined-roles.js";
 
 export { resolveLauncherPermission } from "./permission.js";
 
