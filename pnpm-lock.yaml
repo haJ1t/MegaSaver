@@ -90,6 +90,9 @@ importers:
       '@fontsource/dm-mono':
         specifier: ^5.0.0
         version: 5.2.7
+      '@megasaver/agent-office':
+        specifier: workspace:*
+        version: link:../../packages/agent-office
       '@megasaver/connector-claude-code':
         specifier: workspace:*
         version: link:../../packages/connectors/claude-code

@@ -2884,3 +2884,26 @@ agent→error persisted first on double-fault, claudeSessionId persisted on fail
 cleartext-secret sink (core Session title no longer the instruction → `Office: <role>`). Crash-injection
 + hang tests added; critic re-verify: SHIP. 105 agent-office tests; `pnpm verify` green; changeset
 minor×3. Tests use a fake launcher + in-memory CoreRegistry — no real `claude` spawned.
+
+## [2026-06-22] feature | agent-office Phase 3 (bridge /api/office)
+
+Exposed the office over the GUI bridge on branch `worktree-feat+agent-office-phase3` (spec
+docs/superpowers/specs/2026-06-22-agent-office-phase3-bridge-design.md). Added `/api/office/*` REST
+routes (role/agent/task CRUD, run, control, audit, status, audit-tail SSE) in `apps/gui/bridge`,
+HTTP-boundary zod validation, dispatch wiring, and production server deps (json-directory core +
+claude-code launcher registry + `MEGA_OFFICE_ALLOW_FULL` env). `apps/gui` gained deps on
+agent-office + connector-claude-code (lockfile committed).
+
+Risk HIGH. Reviewed by code-reviewer + critic + security-reviewer. critic returned DO NOT SHIP on a
+PROVEN production-breaker: `OFFICE_PROJECT_ID` was never created as a Project, so the json-directory
+`createSession` throws `project_not_found` → every office task fails in prod; the run test missed it
+(fire-and-forget, never awaited the drain). Fixed: `ensureOfficeProject` seeds the office Project at
+server startup + a real integration test awaits `drainAgent` and asserts task `done` + spawn/task_done
+audit. Also fixed: concurrent-run guard (no double-spawn), `wk`/`agentId` validation at the route
+layer (400/404, closes a 500+segment-echo + an SSE watch-path traversal gap), SSE cleanup armed before
+the snapshot await, DELETE→204, drain-rejection logged, and the `allowedTools` leading-`-` flag-guard
+hoisted into `roleSchema` (launcher trust boundary). security-reviewer: PASS with remediations —
+safe-by-default holds over HTTP (allowFull env-only/default-off, full fails closed, no flag injection,
+instruction kept out of cleartext sinks). Documented localhost/no-auth + unconfined-`workdir` posture
+and that `control stop` doesn't cancel an in-flight spawn (Phase 4). gui 318 / agent-office 107 tests;
+`pnpm verify` green; no real claude/HTTP in tests.

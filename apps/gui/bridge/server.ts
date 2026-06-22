@@ -1,8 +1,11 @@
 import { createServer } from "node:http";
+import { createLauncherRegistry } from "@megasaver/agent-office";
+import { createClaudeCodeLauncher } from "@megasaver/connector-claude-code";
 import { createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
 import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "@megasaver/mcp-bridge";
 import { createBridgeHandler } from "./handler.js";
 import { createMcpOps } from "./mcp-ops.js";
+import { ensureOfficeProject } from "./routes/office.js";
 import { resolveBridgeStorePath } from "./store-path.js";
 
 const DEFAULT_PORT = 5174;
@@ -33,7 +36,16 @@ async function main(): Promise<void> {
     command: DEFAULT_MCP_COMMAND,
     args: [...DEFAULT_MCP_ARGS],
   });
-  const handler = createBridgeHandler({ storePath: storeDir, mcpOps });
+  const launcherRegistry = createLauncherRegistry([createClaudeCodeLauncher()]);
+  const allowFull = readEnv("MEGA_OFFICE_ALLOW_FULL") === "1";
+  // Seed the office Core project before serving: supervisor-created sessions
+  // require it to exist, else every office task fails with project_not_found.
+  ensureOfficeProject(registry, () => new Date().toISOString());
+  const handler = createBridgeHandler({
+    storePath: storeDir,
+    mcpOps,
+    office: { coreRegistry: registry, registry: launcherRegistry, allowFull },
+  });
   const server = createServer(handler);
 
   const portRaw = readEnv("MEGASAVER_GUI_BRIDGE_PORT");

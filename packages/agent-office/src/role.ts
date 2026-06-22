@@ -14,7 +14,12 @@ export const roleSchema = z
     kind: agentIdSchema,
     persona: z.string().min(1),
     model: roleModelSchema,
-    allowedTools: z.array(z.string()).readonly(),
+    // SECURITY: a leading '-' would be interpreted as a CLI flag when the role's
+    // allowedTools are passed to the launcher. Reject it at this trust boundary
+    // so every consumer (bridge, future Phase 5 CLI) is protected.
+    allowedTools: z
+      .array(z.string().min(1).regex(/^[^-]/, "tool must not start with '-'"))
+      .readonly(),
     skillPacks: z.array(z.string()).readonly(),
     permissionMode: rolePermissionModeSchema,
     defaultWorkdir: z.string().min(1).optional(),

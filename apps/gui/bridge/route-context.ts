@@ -1,7 +1,16 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { CoreRegistry } from "@megasaver/core";
 import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import type { BridgeErrorCode } from "../src/bridge-error-code.js";
 import type { resolveWorkspace } from "./workspace-resolver.js";
+
+// Injected office deps. Optional so existing handlers and tests are unaffected
+// when office routes are not exercised. Production server.ts always populates it.
+export type OfficeContext = {
+  coreRegistry: CoreRegistry;
+  registry: import("@megasaver/agent-office").LauncherRegistry;
+  allowFull: boolean;
+};
 
 export type SendJson = (
   res: ServerResponse,
@@ -50,4 +59,6 @@ export type RouteContext = {
   sendJson: SendJson;
   sendError: SendError;
   sendText: SendText;
+  /** Office supervisor deps — populated by createBridgeHandler in production; injected in tests. */
+  office?: OfficeContext;
 };

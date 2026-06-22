@@ -13,6 +13,8 @@ describe("BridgeErrorCode tuple ordering", () => {
         "mcp_setup_failed",
         "memory_entry_not_found",
         "method_not_allowed",
+        "office_not_configured",
+        "office_not_found",
         "origin_forbidden",
         "policy_load_failed",
         "project_not_found",
@@ -37,6 +39,8 @@ describe("BridgeErrorCode tuple ordering", () => {
       | "mcp_setup_failed"
       | "memory_entry_not_found"
       | "method_not_allowed"
+      | "office_not_configured"
+      | "office_not_found"
       | "origin_forbidden"
       | "policy_load_failed"
       | "project_not_found"

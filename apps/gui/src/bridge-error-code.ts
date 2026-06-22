@@ -10,6 +10,8 @@ export const BRIDGE_ERROR_CODES = [
   "mcp_setup_failed",
   "memory_entry_not_found",
   "method_not_allowed",
+  "office_not_configured",
+  "office_not_found",
   "origin_forbidden",
   "policy_load_failed",
   "project_not_found",
@@ -36,6 +38,8 @@ export const BRIDGE_ERROR_COPY: Record<BridgeErrorCode, string> = {
   mcp_setup_failed: "Agent setup failed. Check permissions and try again.",
   memory_entry_not_found: "Memory entry not found. It may have been removed.",
   method_not_allowed: "Request method not allowed.",
+  office_not_configured: "Office is not configured. Server is missing office deps.",
+  office_not_found: "Office resource not found. It may have been removed.",
   origin_forbidden: "Request blocked by the bridge origin policy.",
   policy_load_failed:
     "Permissions file is malformed. Fix .megasaver/permissions.yaml and try again.",
