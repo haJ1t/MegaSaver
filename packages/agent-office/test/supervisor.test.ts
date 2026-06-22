@@ -12,7 +12,7 @@ import {
   workspaceKeySchema,
 } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { saveAgent } from "../src/agent-store.js";
+import { loadAgent, saveAgent } from "../src/agent-store.js";
 import type { OfficeAgent } from "../src/agent.js";
 import { listAudit } from "../src/audit-store.js";
 import { createLauncherRegistry } from "../src/launcher-registry.js";
@@ -111,6 +111,31 @@ function makeFakeLauncher(exitCode: number | null = 0): {
       return launchCalls[launchCalls.length - 1];
     },
   };
+}
+
+// A launcher whose handle NEVER fires onExit — exercises the task timeout path.
+// Records the signal passed to cancel() so the test can assert SIGKILL.
+function makeHangingLauncher(): {
+  launcher: AgentLauncher;
+  cancelSignals: (NodeJS.Signals | undefined)[];
+} {
+  const cancelSignals: (NodeJS.Signals | undefined)[] = [];
+  const launcher: AgentLauncher = {
+    kind: "claude-code",
+    launch(input: LaunchInput): LaunchHandle {
+      return {
+        sessionId: input.resumeSessionId ?? input.sessionId ?? `fake-${randomUUID()}`,
+        onEvent(_cb) {},
+        onExit(_cb) {
+          // Never fires — simulates a hung agent.
+        },
+        cancel(signal) {
+          cancelSignals.push(signal);
+        },
+      };
+    },
+  };
+  return { launcher, cancelSignals };
 }
 
 // ─── setup helpers ───────────────────────────────────────────────────────────
@@ -240,12 +265,12 @@ describe("createSupervisor", () => {
       expect(li?.resumeSessionId).toBeUndefined();
     });
 
-    it("session title truncated to 120 chars", async () => {
+    it("session title does NOT leak the instruction (secret-safe)", async () => {
       const { launcher } = makeFakeLauncher(0);
       const registry = createLauncherRegistry([launcher]);
-      const { agent } = await seedRoleAgent(storeRoot, coreRegistry);
-      const longInstruction = "A".repeat(200);
-      const task = makeTask(agent.id, { instruction: longInstruction });
+      const SECRET = "AKIA-SUPER-SECRET-INSTRUCTION";
+      const { agent, role } = await seedRoleAgent(storeRoot, coreRegistry, { name: "Coder" });
+      const task = makeTask(agent.id, { instruction: SECRET });
       await saveTask({ storeRoot, task });
       const { now, newId } = makeClock();
 
@@ -260,7 +285,8 @@ describe("createSupervisor", () => {
       await supervisor.processNextTask(WK, agent.id);
 
       const sessions = coreRegistry.listSessions(PROJECT_ID);
-      expect(sessions[0]?.title).toHaveLength(120);
+      expect(sessions[0]?.title).not.toContain(SECRET);
+      expect(sessions[0]?.title).toBe(`Office: ${role.name}`);
     });
   });
 
@@ -315,9 +341,42 @@ describe("createSupervisor", () => {
       const result = await supervisor.processNextTask(WK, agent.id);
 
       expect(result?.status).toBe("done");
-      // The sessionId used for launch becomes the agent's claudeSessionId for next run
+      // The sessionId used for launch becomes the agent's claudeSessionId for next run.
       const li = launchCalls[0];
       expect(li?.sessionId).toBeDefined();
+      // Round-trip: the fake handle's sessionId (= input.sessionId on a fresh run)
+      // is persisted onto the agent so a later run can --resume it.
+      const reloaded = await loadAgent({ storeRoot, workspaceKey: WK, officeAgentId: agent.id });
+      expect(reloaded.claudeSessionId).toBe(li?.sessionId);
+    });
+
+    it("persists handle.sessionId (resume id) onto agent after a resume run", async () => {
+      const PRIOR_CLAUDE_SESSION = "prior-claude-session-id";
+      const { launcher } = makeFakeLauncher(0);
+      const registry = createLauncherRegistry([launcher]);
+      const { agent } = await seedRoleAgent(
+        storeRoot,
+        coreRegistry,
+        {},
+        { claudeSessionId: PRIOR_CLAUDE_SESSION },
+      );
+      const task = makeTask(agent.id);
+      await saveTask({ storeRoot, task });
+      const { now, newId } = makeClock();
+
+      const supervisor = createSupervisor({
+        storeRoot,
+        registry,
+        coreRegistry,
+        projectId: PROJECT_ID,
+        now,
+        newId,
+      });
+      await supervisor.processNextTask(WK, agent.id);
+
+      // The fake handle's sessionId resolves to the resume id; it round-trips.
+      const reloaded = await loadAgent({ storeRoot, workspaceKey: WK, officeAgentId: agent.id });
+      expect(reloaded.claudeSessionId).toBe(PRIOR_CLAUDE_SESSION);
     });
   });
 
@@ -342,6 +401,9 @@ describe("createSupervisor", () => {
 
       if (result === null) throw new Error("result is null");
       expect(result.status).toBe("failed");
+      // Round-trip: the persisted agent is error, not the returned object only.
+      const reloaded = await loadAgent({ storeRoot, workspaceKey: WK, officeAgentId: agent.id });
+      expect(reloaded.status).toBe("error");
       const auditRows = await listAudit({ storeRoot, workspaceKey: WK });
       expect(auditRows.some((r) => r.type === "task_failed")).toBe(true);
     });
@@ -368,6 +430,9 @@ describe("createSupervisor", () => {
 
       if (result === null) throw new Error("result is null");
       expect(result.status).toBe("failed");
+      // Round-trip: the persisted agent is error.
+      const reloaded = await loadAgent({ storeRoot, workspaceKey: WK, officeAgentId: agent.id });
+      expect(reloaded.status).toBe("error");
       const auditRows = await listAudit({ storeRoot, workspaceKey: WK });
       expect(auditRows.some((r) => r.type === "task_failed" && r.exitCode === null)).toBe(true);
     });
@@ -464,6 +529,147 @@ describe("createSupervisor", () => {
       });
       const result = await supervisor.processNextTask(WK, agent.id);
       expect(result).toBeNull();
+    });
+  });
+
+  describe("processNextTask — failure-path hardening", () => {
+    it("settles to failed/error (never running/working) when createSession throws", async () => {
+      const { launcher, launchCalls } = makeFakeLauncher(0);
+      const registry = createLauncherRegistry([launcher]);
+      const { agent } = await seedRoleAgent(storeRoot, coreRegistry);
+      const task = makeTask(agent.id);
+      await saveTask({ storeRoot, task });
+      const { now, newId } = makeClock();
+
+      // Wrap the registry so createSession throws — simulates a core infra failure
+      // AFTER the task is marked running + agent working.
+      const crashingRegistry: CoreRegistry = {
+        ...coreRegistry,
+        createSession() {
+          throw new Error("core down");
+        },
+      };
+
+      const supervisor = createSupervisor({
+        storeRoot,
+        registry,
+        coreRegistry: crashingRegistry,
+        projectId: PROJECT_ID,
+        now,
+        newId,
+      });
+
+      // Must resolve (not reject) and settle to a terminal state.
+      const result = await supervisor.processNextTask(WK, agent.id);
+      if (result === null) throw new Error("result is null");
+      expect(result.status).toBe("failed");
+
+      // Round-trip: agent error, task failed — NEVER left working/running.
+      const reloadedAgent = await loadAgent({
+        storeRoot,
+        workspaceKey: WK,
+        officeAgentId: agent.id,
+      });
+      expect(reloadedAgent.status).toBe("error");
+      expect(reloadedAgent.status).not.toBe("working");
+
+      // No spawn happened (createSession threw before launch).
+      expect(launchCalls).toHaveLength(0);
+    });
+
+    it("settles to failed/error when endSession throws (after a real spawn)", async () => {
+      const { launcher } = makeFakeLauncher(0);
+      const registry = createLauncherRegistry([launcher]);
+      const { agent } = await seedRoleAgent(storeRoot, coreRegistry);
+      const task = makeTask(agent.id);
+      await saveTask({ storeRoot, task });
+      const { now, newId } = makeClock();
+
+      const crashingRegistry: CoreRegistry = {
+        ...coreRegistry,
+        createSession: coreRegistry.createSession.bind(coreRegistry),
+        endSession() {
+          throw new Error("end session blew up");
+        },
+      };
+
+      const supervisor = createSupervisor({
+        storeRoot,
+        registry,
+        coreRegistry: crashingRegistry,
+        projectId: PROJECT_ID,
+        now,
+        newId,
+      });
+
+      const result = await supervisor.processNextTask(WK, agent.id);
+      if (result === null) throw new Error("result is null");
+      expect(result.status).toBe("failed");
+
+      const reloadedAgent = await loadAgent({
+        storeRoot,
+        workspaceKey: WK,
+        officeAgentId: agent.id,
+      });
+      expect(reloadedAgent.status).toBe("error");
+
+      // A spawn audit was written; the catch path writes a terminal task_failed.
+      const auditRows = await listAudit({ storeRoot, workspaceKey: WK });
+      expect(auditRows.some((r) => r.type === "spawn")).toBe(true);
+      expect(auditRows.some((r) => r.type === "task_failed")).toBe(true);
+    });
+
+    it("times out a hung agent: SIGKILL + task failed within the timeout", async () => {
+      const { launcher, cancelSignals } = makeHangingLauncher();
+      const registry = createLauncherRegistry([launcher]);
+      const { agent } = await seedRoleAgent(storeRoot, coreRegistry);
+      const task = makeTask(agent.id);
+      await saveTask({ storeRoot, task });
+      const { now, newId } = makeClock();
+
+      const supervisor = createSupervisor({
+        storeRoot,
+        registry,
+        coreRegistry,
+        projectId: PROJECT_ID,
+        now,
+        newId,
+        taskTimeoutMs: 50,
+      });
+
+      const result = await supervisor.processNextTask(WK, agent.id);
+      if (result === null) throw new Error("result is null");
+      expect(result.status).toBe("failed");
+      expect(cancelSignals).toContain("SIGKILL");
+
+      const reloadedAgent = await loadAgent({
+        storeRoot,
+        workspaceKey: WK,
+        officeAgentId: agent.id,
+      });
+      expect(reloadedAgent.status).toBe("error");
+    });
+
+    it("writes BOTH a spawn and a task_failed audit row on a normal failed run", async () => {
+      const { launcher } = makeFakeLauncher(1);
+      const registry = createLauncherRegistry([launcher]);
+      const { agent } = await seedRoleAgent(storeRoot, coreRegistry);
+      const task = makeTask(agent.id);
+      await saveTask({ storeRoot, task });
+      const { now, newId } = makeClock();
+
+      const supervisor = createSupervisor({
+        storeRoot,
+        registry,
+        coreRegistry,
+        projectId: PROJECT_ID,
+        now,
+        newId,
+      });
+      await supervisor.processNextTask(WK, agent.id);
+
+      const auditRows = await listAudit({ storeRoot, workspaceKey: WK });
+      expect(auditRows.map((r) => r.type)).toEqual(["spawn", "task_failed"]);
     });
   });
 

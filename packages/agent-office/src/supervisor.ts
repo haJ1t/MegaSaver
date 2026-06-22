@@ -1,5 +1,6 @@
+import type { LaunchHandle } from "@megasaver/connectors-shared";
 import type { CoreRegistry } from "@megasaver/core";
-import type { ProjectId } from "@megasaver/shared";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { listAgents, loadAgent, saveAgent } from "./agent-store.js";
 import type { OfficeAgent } from "./agent.js";
 import { appendAudit } from "./audit-store.js";
@@ -10,8 +11,27 @@ import { loadRole } from "./role-store.js";
 import { listTasks, saveTask } from "./task-store.js";
 import type { OfficeTask } from "./task.js";
 
-function truncate(s: string, max: number): string {
-  return s.length <= max ? s : s.slice(0, max);
+const DEFAULT_TASK_TIMEOUT_MS = 30 * 60 * 1000;
+
+// Await the handle's exit, escalating to SIGKILL if it never exits within the
+// timeout. clearTimeout on a normal exit is required so the process is not kept
+// alive by a pending 30-minute timer.
+function awaitExit(handle: LaunchHandle, timeoutMs: number): Promise<{ code: number | null }> {
+  return new Promise((resolve) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      handle.cancel("SIGKILL");
+      resolve({ code: null });
+    }, timeoutMs);
+    handle.onExit(({ code }) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve({ code });
+    });
+  });
 }
 
 export interface Supervisor {
@@ -28,8 +48,18 @@ export function createSupervisor(deps: {
   now: () => string;
   newId: () => string;
   allowFull?: boolean;
+  taskTimeoutMs?: number;
 }): Supervisor {
-  const { storeRoot, registry, coreRegistry, projectId, now, newId, allowFull = false } = deps;
+  const {
+    storeRoot,
+    registry,
+    coreRegistry,
+    projectId,
+    now,
+    newId,
+    allowFull = false,
+    taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
+  } = deps;
 
   async function processNextTask(
     workspaceKey: string,
@@ -74,129 +104,146 @@ export function createSupervisor(deps: {
     const workingAgent: OfficeAgent = { ...agent, status: "working" };
     await saveAgent({ storeRoot, agent: workingAgent });
 
-    // Step 5: Create core session
-    const coreSessionId = newId();
-    const sessionTitle = truncate(task.instruction, 120) || "Agent task";
-    coreRegistry.createSession({
-      id: coreSessionId as Parameters<CoreRegistry["createSession"]>[0]["id"],
-      projectId,
-      agentId: agent.kind,
-      riskLevel: "high",
-      title: sessionTitle,
-      startedAt: now(),
-      endedAt: null,
-    });
+    // From here on, an infra error (createSession / appendAudit / launch /
+    // endSession / a store write) must NEVER leave the task `running` or the
+    // agent `working`, and must NEVER reject — we settle to a terminal state and
+    // return the failed task. Explicit flags drive cleanup in the catch.
+    let sessionId: SessionId | undefined;
+    let sessionEnded = false;
+    let spawnAudited = false;
+    try {
+      // Step 5: Create core session. The title is intentionally NOT the
+      // instruction (which may carry secrets) — core's session store is a
+      // cleartext sink, so we record only a non-sensitive label.
+      const session = coreRegistry.createSession({
+        id: newId() as SessionId,
+        projectId,
+        agentId: agent.kind,
+        riskLevel: "high",
+        title: `Office: ${role.name}`,
+        startedAt: now(),
+        endedAt: null,
+      });
+      sessionId = session.id;
 
-    // Step 6: Decide session continuity
-    const claudeSessionInput: { sessionId?: string; resumeSessionId?: string } =
-      agent.claudeSessionId !== undefined
-        ? { resumeSessionId: agent.claudeSessionId }
-        : { sessionId: newId() };
+      // Step 6: Decide session continuity
+      const claudeSessionInput: { sessionId?: string; resumeSessionId?: string } =
+        agent.claudeSessionId !== undefined
+          ? { resumeSessionId: agent.claudeSessionId }
+          : { sessionId: newId() };
 
-    // Step 7: appendAudit(spawn)
-    const auditId = newId();
-    const spawnAudit: AuditEvent = {
-      id: auditId,
-      ts: now(),
-      type: "spawn",
-      workspaceKey: agent.workspaceKey,
-      officeAgentId: agent.id,
-      taskId: task.id,
-      kind: agent.kind,
-      permissionMode,
-      workdir: agent.workdir,
-      coreSessionId: coreSessionId as AuditEvent["coreSessionId"],
-      claudeSessionId: claudeSessionInput.resumeSessionId ?? claudeSessionInput.sessionId ?? "",
-    };
-    await appendAudit({ storeRoot, event: spawnAudit });
-
-    // Step 8: Launch and await exit
-    const handle = registry.get(agent.kind).launch({
-      workdir: agent.workdir,
-      instruction: task.instruction,
-      model: role.model,
-      permissionMode,
-      allowedTools: role.allowedTools as string[],
-      persona: role.persona,
-      ...claudeSessionInput,
-    });
-
-    // Subscribe onEvent (Phase 2: presence proves wiring; ignore payloads)
-    handle.onEvent(() => {});
-
-    const { code } = await new Promise<{ code: number | null }>((res) => {
-      handle.onExit(res);
-    });
-
-    // Step 9: Handle exit
-    const finishedAt = now();
-    const exitCode = code;
-    const newClaudeSessionId = handle.sessionId;
-
-    coreRegistry.endSession(coreSessionId as Parameters<CoreRegistry["endSession"]>[0], {
-      endedAt: finishedAt,
-    });
-
-    if (exitCode === 0) {
-      const doneTask: OfficeTask = {
-        ...runningTask,
-        status: "done",
-        finishedAt,
-        exitCode: 0,
-      };
-      await saveTask({ storeRoot, task: doneTask });
-
-      const idleAgent: OfficeAgent = {
-        ...workingAgent,
-        status: "idle",
-        claudeSessionId: newClaudeSessionId,
-      };
-      await saveAgent({ storeRoot, agent: idleAgent });
-
-      const doneAudit: AuditEvent = {
+      // Step 7: appendAudit(spawn)
+      const spawnAudit: AuditEvent = {
         id: newId(),
-        ts: finishedAt,
-        type: "task_done",
+        ts: now(),
+        type: "spawn",
         workspaceKey: agent.workspaceKey,
         officeAgentId: agent.id,
         taskId: task.id,
         kind: agent.kind,
         permissionMode,
         workdir: agent.workdir,
-        coreSessionId: coreSessionId as AuditEvent["coreSessionId"],
-        claudeSessionId: newClaudeSessionId,
-        exitCode: 0,
+        coreSessionId: sessionId as AuditEvent["coreSessionId"],
+        claudeSessionId: claudeSessionInput.resumeSessionId ?? claudeSessionInput.sessionId ?? "",
       };
-      await appendAudit({ storeRoot, event: doneAudit });
-      return doneTask;
+      await appendAudit({ storeRoot, event: spawnAudit });
+      spawnAudited = true;
+
+      // Step 8: Launch and await exit (with timeout → SIGKILL escalation)
+      const handle = registry.get(agent.kind).launch({
+        workdir: agent.workdir,
+        instruction: task.instruction,
+        model: role.model,
+        permissionMode,
+        allowedTools: role.allowedTools as string[],
+        persona: role.persona,
+        ...claudeSessionInput,
+      });
+      // Subscribe onEvent (Phase 2: presence proves wiring; ignore payloads)
+      handle.onEvent(() => {});
+
+      const exit = await awaitExit(handle, taskTimeoutMs);
+
+      // Step 9: End session, settle task + agent, write the terminal audit row.
+      coreRegistry.endSession(sessionId, { endedAt: now() });
+      sessionEnded = true;
+
+      const ok = exit.code === 0;
+      const finishedAt = now();
+      const newClaudeSessionId = handle.sessionId;
+
+      const settledTask: OfficeTask = {
+        ...runningTask,
+        status: ok ? "done" : "failed",
+        finishedAt,
+        exitCode: exit.code ?? undefined,
+      };
+      await saveTask({ storeRoot, task: settledTask });
+
+      // I5: persist handle.sessionId on BOTH paths so a retry can --resume.
+      const settledAgent: OfficeAgent = {
+        ...workingAgent,
+        status: ok ? "idle" : "error",
+        claudeSessionId: newClaudeSessionId,
+      };
+      await saveAgent({ storeRoot, agent: settledAgent });
+
+      const terminalAudit: AuditEvent = {
+        id: newId(),
+        ts: finishedAt,
+        type: ok ? "task_done" : "task_failed",
+        workspaceKey: agent.workspaceKey,
+        officeAgentId: agent.id,
+        taskId: task.id,
+        kind: agent.kind,
+        permissionMode,
+        workdir: agent.workdir,
+        coreSessionId: sessionId as AuditEvent["coreSessionId"],
+        claudeSessionId: newClaudeSessionId,
+        exitCode: exit.code,
+      };
+      await appendAudit({ storeRoot, event: terminalAudit });
+      return settledTask;
+    } catch {
+      // Infra failure mid-run — settle best-effort, do NOT rethrow.
+      const failedTask: OfficeTask = { ...runningTask, status: "failed", finishedAt: now() };
+      try {
+        await saveTask({ storeRoot, task: failedTask });
+        await saveAgent({ storeRoot, agent: { ...workingAgent, status: "error" } });
+        if (sessionId !== undefined && !sessionEnded) {
+          // Best-effort: a failing endSession here must not block the terminal
+          // audit row below, which is the durable record of the failure.
+          try {
+            coreRegistry.endSession(sessionId, { endedAt: now() });
+          } catch {
+            // Session may already be ended or core may be down — ignore.
+          }
+        }
+        if (spawnAudited && sessionId !== undefined) {
+          const failedAudit: AuditEvent = {
+            id: newId(),
+            ts: now(),
+            type: "task_failed",
+            workspaceKey: agent.workspaceKey,
+            officeAgentId: agent.id,
+            taskId: task.id,
+            kind: agent.kind,
+            permissionMode,
+            workdir: agent.workdir,
+            coreSessionId: sessionId as AuditEvent["coreSessionId"],
+            // The handle's session id is unavailable on the infra-failure path
+            // (it may have failed before/at launch). Record the resume id if the
+            // agent had one, else a sentinel — claudeSessionId is `.min(1)`.
+            claudeSessionId: agent.claudeSessionId ?? "unknown",
+            exitCode: null,
+          };
+          await appendAudit({ storeRoot, event: failedAudit });
+        }
+      } catch {
+        // Ignore settle errors; the returned failed task is the best signal.
+      }
+      return failedTask;
     }
-    const failedTask: OfficeTask = {
-      ...runningTask,
-      status: "failed",
-      finishedAt,
-      exitCode: exitCode ?? undefined,
-    };
-    await saveTask({ storeRoot, task: failedTask });
-
-    const errorAgent: OfficeAgent = { ...workingAgent, status: "error" };
-    await saveAgent({ storeRoot, agent: errorAgent });
-
-    const failedAudit: AuditEvent = {
-      id: newId(),
-      ts: finishedAt,
-      type: "task_failed",
-      workspaceKey: agent.workspaceKey,
-      officeAgentId: agent.id,
-      taskId: task.id,
-      kind: agent.kind,
-      permissionMode,
-      workdir: agent.workdir,
-      coreSessionId: coreSessionId as AuditEvent["coreSessionId"],
-      claudeSessionId: newClaudeSessionId,
-      exitCode: exitCode,
-    };
-    await appendAudit({ storeRoot, event: failedAudit });
-    return failedTask;
   }
 
   async function drainAgent(workspaceKey: string, officeAgentId: string): Promise<OfficeTask[]> {
