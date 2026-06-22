@@ -249,18 +249,18 @@ function AgentCard({ entry, wk, roles, nowMs, onRefresh }: AgentCardProps): JSX.
 
 type AgentBoardProps = {
   wk: string;
+  workdir: string;
   status: OfficeStatus | null;
   onRefresh: () => void;
 };
 
-export function AgentBoard({ wk, status, onRefresh }: AgentBoardProps): JSX.Element {
+export function AgentBoard({ wk, workdir, status, onRefresh }: AgentBoardProps): JSX.Element {
   const [roles, setRoles] = useState<OfficeRole[]>([]);
   const [rolesError, setRolesError] = useState<string | null>(null);
 
   const [showAdd, setShowAdd] = useState(false);
   const [addName, setAddName] = useState("");
   const [addRoleId, setAddRoleId] = useState("");
-  const [addWorkdir, setAddWorkdir] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
@@ -293,12 +293,10 @@ export function AgentBoard({ wk, status, onRefresh }: AgentBoardProps): JSX.Elem
     e.preventDefault();
     setAdding(true);
     setAddError(null);
-    const input: CreateAgentInput = { name: addName.trim(), roleId: addRoleId };
-    if (addWorkdir.trim()) input.workdir = addWorkdir.trim();
+    const input: CreateAgentInput = { name: addName.trim(), roleId: addRoleId, workdir };
     createAgent(wk, input)
       .then(() => {
         setAddName("");
-        setAddWorkdir("");
         setShowAdd(false);
         onRefresh();
       })
@@ -377,21 +375,6 @@ export function AgentBoard({ wk, status, onRefresh }: AgentBoardProps): JSX.Elem
                   </option>
                 ))}
               </select>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <label
-                className="text-[10px] text-text-muted uppercase tracking-wide"
-                htmlFor="agent-workdir"
-              >
-                Workdir (optional)
-              </label>
-              <input
-                id="agent-workdir"
-                value={addWorkdir}
-                onChange={(e) => setAddWorkdir(e.target.value)}
-                placeholder="/home/user/projects/foo"
-                className="text-xs px-2 py-1 border border-border rounded bg-surface text-text-primary"
-              />
             </div>
             {addError && (
               <p role="alert" className="text-xs text-danger">

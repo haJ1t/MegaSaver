@@ -277,6 +277,35 @@ describe("AgentOfficeView", () => {
     await waitFor(() => expect(screen.getAllByText(/Roles/i).length).toBeGreaterThan(0));
   });
 
+  it("add-agent through the view sends workdir = selected workspace label", async () => {
+    stub.fetchWorkspaces = () => Promise.resolve([WS_1]); // label "my-project", auto-selected
+    stub.fetchRoles = () =>
+      Promise.resolve([
+        {
+          id: "r1",
+          name: "coder",
+          kind: "claude-code",
+          permissionMode: "plan",
+          allowedTools: [],
+          createdAt: "2026-06-22T00:00:00Z",
+        },
+      ]);
+    let captured: unknown;
+    stub.createAgent = (_wk, input) => {
+      captured = input;
+      return Promise.resolve(AGENT_WK1);
+    };
+    render(<AgentOfficeView />);
+    await waitFor(() => expect(screen.getByText(/No agents yet/)).toBeDefined());
+
+    fireEvent.click(screen.getByText(/\+ Add agent/));
+    await waitFor(() => expect(screen.getByLabelText(/Add agent form/)).toBeDefined());
+    fireEvent.change(screen.getByLabelText(/Name \*/), { target: { value: "x" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Add$/ }));
+
+    await waitFor(() => expect(captured).toMatchObject({ name: "x", workdir: "my-project" }));
+  });
+
   it("shows prompt to select workspace when multiple workspaces and none selected", async () => {
     stub.fetchWorkspaces = () => Promise.resolve([WS_1, WS_2]);
     render(<AgentOfficeView />);

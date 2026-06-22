@@ -104,13 +104,17 @@ afterEach(() => {
 describe("AgentBoard", () => {
   it("renders empty state when status has no agents", async () => {
     stub.fetchRoles = () => Promise.resolve([ROLE_1]);
-    render(<AgentBoard wk="wk1" status={{ agents: [] }} onRefresh={() => undefined} />);
+    render(<AgentBoard
+        wk="wk1"
+        workdir="/home/user/project" status={{ agents: [] }} onRefresh={() => undefined} />);
     await waitFor(() => expect(screen.getByText(/No agents yet/)).toBeDefined());
   });
 
   it("renders agent cards from status payload with status dot and task", async () => {
     stub.fetchRoles = () => Promise.resolve([ROLE_1]);
-    render(<AgentBoard wk="wk1" status={STATUS} onRefresh={() => undefined} />);
+    render(<AgentBoard
+        wk="wk1"
+        workdir="/home/user/project" status={STATUS} onRefresh={() => undefined} />);
 
     await waitFor(() => expect(screen.getByText("worker-1")).toBeDefined());
     expect(screen.getByText("idle-agent")).toBeDefined();
@@ -128,7 +132,9 @@ describe("AgentBoard", () => {
 
   it("shows status dot with correct data-status for idle agent", async () => {
     stub.fetchRoles = () => Promise.resolve([ROLE_1]);
-    render(<AgentBoard wk="wk1" status={STATUS} onRefresh={() => undefined} />);
+    render(<AgentBoard
+        wk="wk1"
+        workdir="/home/user/project" status={STATUS} onRefresh={() => undefined} />);
     await waitFor(() => expect(screen.getByText("idle-agent")).toBeDefined());
 
     const idleDot = screen.getByTestId("agent-card-a2").querySelector("[data-status]");
@@ -144,9 +150,7 @@ describe("AgentBoard", () => {
       return Promise.resolve(AGENT_IDLE);
     };
     render(
-      <AgentBoard
-        wk="wk1"
-        status={STATUS}
+      <AgentBoard wk="wk1" workdir="/home/user/project" status={STATUS}
         onRefresh={() => {
           refreshCalled = true;
         }}
@@ -170,7 +174,9 @@ describe("AgentBoard", () => {
       capturedAction = action;
       return Promise.resolve({ ...AGENT_WORKING, status: "paused" });
     };
-    render(<AgentBoard wk="wk1" status={STATUS} onRefresh={() => undefined} />);
+    render(<AgentBoard
+        wk="wk1"
+        workdir="/home/user/project" status={STATUS} onRefresh={() => undefined} />);
     await waitFor(() => expect(screen.getByText("worker-1")).toBeDefined());
 
     fireEvent.click(screen.getByRole("button", { name: /^Pause$/ }));
@@ -184,7 +190,9 @@ describe("AgentBoard", () => {
       capturedAction = action;
       return Promise.resolve({ ...AGENT_WORKING, status: "stopped" });
     };
-    render(<AgentBoard wk="wk1" status={STATUS} onRefresh={() => undefined} />);
+    render(<AgentBoard
+        wk="wk1"
+        workdir="/home/user/project" status={STATUS} onRefresh={() => undefined} />);
     await waitFor(() => expect(screen.getByText("worker-1")).toBeDefined());
 
     // Stop button for working agent (not disabled)
@@ -200,7 +208,9 @@ describe("AgentBoard", () => {
       deletedAgentId = agentId;
       return Promise.resolve();
     };
-    render(<AgentBoard wk="wk1" status={STATUS} onRefresh={() => undefined} />);
+    render(<AgentBoard
+        wk="wk1"
+        workdir="/home/user/project" status={STATUS} onRefresh={() => undefined} />);
     await waitFor(() => expect(screen.getByText("idle-agent")).toBeDefined());
 
     // Click remove on idle agent
@@ -223,7 +233,9 @@ describe("AgentBoard", () => {
         createdAt: new Date().toISOString(),
       });
     };
-    render(<AgentBoard wk="wk1" status={STATUS} onRefresh={() => undefined} />);
+    render(<AgentBoard
+        wk="wk1"
+        workdir="/home/user/project" status={STATUS} onRefresh={() => undefined} />);
     await waitFor(() => expect(screen.getByText("idle-agent")).toBeDefined());
 
     // Open assign form on idle agent card (a2) using within scoping
@@ -251,9 +263,7 @@ describe("AgentBoard", () => {
       return Promise.resolve({ ...AGENT_IDLE, id: "a3" });
     };
     render(
-      <AgentBoard
-        wk="wk1"
-        status={{ agents: [] }}
+      <AgentBoard wk="wk1" workdir="/home/user/project" status={{ agents: [] }}
         onRefresh={() => {
           refreshCalled = true;
         }}
@@ -268,6 +278,22 @@ describe("AgentBoard", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Add$/ }));
 
     await waitFor(() => expect(refreshCalled).toBe(true));
-    expect(capturedInput).toMatchObject({ name: "new-agent" });
+    expect(capturedInput).toMatchObject({ name: "new-agent", workdir: "/home/user/project" });
+  });
+
+  it("renders no workdir input in the add-agent form", async () => {
+    stub.fetchRoles = () => Promise.resolve([ROLE_1]);
+    render(
+      <AgentBoard
+        wk="wk1"
+        workdir="/home/user/project"
+        status={{ agents: [] }}
+        onRefresh={() => undefined}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText(/No agents yet/)).toBeDefined());
+    fireEvent.click(screen.getByText(/\+ Add agent/));
+    await waitFor(() => expect(screen.getByLabelText(/Add agent form/)).toBeDefined());
+    expect(screen.queryByLabelText(/Workdir/i)).toBeNull();
   });
 });

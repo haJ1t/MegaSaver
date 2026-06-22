@@ -132,6 +132,7 @@ export function AgentOfficeView(): JSX.Element {
           )}
           <AgentBoard
             wk={selectedWk}
+            workdir={workspaces.find((w) => w.key === selectedWk)?.label ?? ""}
             status={boardStatus}
             onRefresh={() => handleRefresh(selectedWk)}
           />
