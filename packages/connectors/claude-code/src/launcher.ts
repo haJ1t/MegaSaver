@@ -147,8 +147,8 @@ export function createClaudeCodeLauncher(options: { spawn?: SpawnFn } = {}): Age
             exitCbs.push(cb);
           }
         },
-        cancel() {
-          child.kill("SIGTERM");
+        cancel(signal) {
+          child.kill(signal ?? "SIGTERM");
         },
       };
     },

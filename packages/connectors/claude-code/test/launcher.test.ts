@@ -162,6 +162,24 @@ describe("createClaudeCodeLauncher", () => {
     expect(child.kill).toHaveBeenCalledWith("SIGTERM");
   });
 
+  it("cancel('SIGKILL') sends SIGKILL", () => {
+    const child = makeFakeChild();
+    const handle = createClaudeCodeLauncher({
+      spawn: () => child as unknown as SpawnedChild,
+    }).launch(input());
+    handle.cancel("SIGKILL");
+    expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+  });
+
+  it("cancel() with no arg still sends SIGTERM (default)", () => {
+    const child = makeFakeChild();
+    const handle = createClaudeCodeLauncher({
+      spawn: () => child as unknown as SpawnedChild,
+    }).launch(input());
+    handle.cancel();
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+  });
+
   it("handle.sessionId reflects the resume id", () => {
     const child = makeFakeChild();
     const { sessionId: _omit, ...rest } = input();
