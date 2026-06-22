@@ -55,3 +55,17 @@ export function taskPath(input: {
     `${input.officeTaskId}.json`,
   );
 }
+
+export function auditDir(storeRoot: string, workspaceKey: string): string {
+  assertSafeSegment(workspaceKey);
+  return join(storeRoot, "office", workspaceKey, "audit");
+}
+
+export function auditPath(input: {
+  storeRoot: string;
+  workspaceKey: string;
+  auditId: string;
+}): string {
+  assertSafeSegment(input.auditId);
+  return join(auditDir(input.storeRoot, input.workspaceKey), `${input.auditId}.json`);
+}
