@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   OfficeAgent,
@@ -11,7 +11,14 @@ import type {
 
 // ── Module stubs ──────────────────────────────────────────────────────────────
 
-const stub = {
+const stub: {
+  fetchRoles: () => Promise<OfficeRole[]>;
+  createAgent: (_wk: string, _input: unknown) => Promise<OfficeAgent>;
+  deleteAgent: (_wk: string, _agentId: string) => Promise<void>;
+  runAgent: (_wk: string, _agentId: string) => Promise<OfficeAgent>;
+  controlAgent: (_wk: string, _agentId: string, _action: string) => Promise<OfficeAgent>;
+  assignTask: (_wk: string, _agentId: string, _instruction: string) => Promise<OfficeTask>;
+} = {
   fetchRoles: () => Promise.resolve([] as OfficeRole[]),
   createAgent: (_wk: string, _input: unknown) => Promise.reject(new Error("not set")),
   deleteAgent: (_wk: string, _agentId: string) => Promise.reject(new Error("not set")),
@@ -219,17 +226,18 @@ describe("AgentBoard", () => {
     render(<AgentBoard wk="wk1" status={STATUS} onRefresh={() => undefined} />);
     await waitFor(() => expect(screen.getByText("idle-agent")).toBeDefined());
 
-    // Open assign form on idle agent card
-    const assignBtns = screen.getAllByRole("button", { name: /^Assign$/ });
-    // second button is for idle agent (a2), but find the toggle button (not submit)
-    // The Assign toggle buttons are those labeled "Assign" that aren't submits
-    fireEvent.click(assignBtns[1] as Element); // idle agent's Assign toggle
+    // Open assign form on idle agent card (a2) using within scoping
+    const idleCard = screen.getByTestId("agent-card-a2");
+    const idleScope = within(idleCard);
+    fireEvent.click(idleScope.getByRole("button", { name: /^Assign$/ }));
 
-    await waitFor(() => expect(screen.getByLabelText(/Task instruction/)).toBeDefined());
-    fireEvent.change(screen.getByLabelText(/Task instruction/), {
+    await waitFor(() => expect(idleScope.getByLabelText(/Task instruction/)).toBeDefined());
+    fireEvent.change(idleScope.getByLabelText(/Task instruction/), {
       target: { value: "Run tests" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^Assign$/, hidden: false }));
+    // After opening form, there's both toggle (button) and submit (button) — use submit type
+    const assignForm = idleCard.querySelector("form") as HTMLFormElement;
+    fireEvent.click(within(assignForm).getByRole("button", { name: /^Assign$/ }));
 
     await waitFor(() => expect(capturedInstruction).toBe("Run tests"));
   });

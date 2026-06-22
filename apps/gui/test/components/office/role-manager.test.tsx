@@ -5,7 +5,11 @@ import type { OfficeRole } from "../../../src/lib/office-client.js";
 
 // ── Module stubs ──────────────────────────────────────────────────────────────
 
-const stub = {
+const stub: {
+  fetchRoles: () => Promise<OfficeRole[]>;
+  createRole: (_input: unknown) => Promise<OfficeRole>;
+  deleteRole: (_id: string) => Promise<void>;
+} = {
   fetchRoles: () => Promise.reject(new Error("not set")),
   createRole: (_input: unknown) => Promise.reject(new Error("not set")),
   deleteRole: (_id: string) => Promise.reject(new Error("not set")),
