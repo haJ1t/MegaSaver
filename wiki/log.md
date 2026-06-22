@@ -2860,3 +2860,27 @@ fixed before merge: double `onExit` on ENOENT (error+close both fire) and UTF-8 
 chunk-split corruption — both now have regression tests. `pnpm verify` green; changeset minor×2.
 Phase 2 carry-overs recorded on [[entities/agent-office]]: event buffering for async subscribers,
 SIGKILL escalation, gate full/bypassPermissions, listener teardown, brand `workspaceKey`.
+
+## [2026-06-22] feature | agent-office Phase 2 (supervisor)
+
+Wired the launcher into the office on branch `worktree-feat+agent-office-phase2` (spec
+docs/superpowers/specs/2026-06-22-agent-office-phase2-supervisor-design.md). `@megasaver/agent-office`
+now deps `core` + `connectors-shared`. Added: `resolveLauncherPermission` (safe-by-default gate —
+`full` refused unless `allowFull` explicitly granted), `createLauncherRegistry`, an append-only
+office audit log, and `createSupervisor` (processNextTask/drainAgent/runWorkspace). Branded
+`workspaceKey` on agent/task schemas; added `cancel(signal?)` to the launcher handle.
+
+Decision: used a lightweight dedicated audit log instead of `@megasaver/evidence-ledger` — the
+ledger's appendEvidence is content-redaction-shaped (redactSourceRef/redactedRawContent/policyVersion),
+a poor fit for spawn events. Full ledger integration deferred.
+
+Risk CRITICAL. Reviewed by code-reviewer + critic + security-reviewer. security-reviewer: PASS — the
+safe-by-default permission gate is airtight (impossible to spawn bypassPermissions without
+allowFull), workdir confinement holds (cwd only, no --add-dir, argv array), audit metadata complete.
+critic first returned DO NOT SHIP on failure-path correctness; fixed before merge: try/catch settles
+task→failed + agent→error on ANY throw (no poisoned running/working persisted state), endSession
+exactly once, terminal audit row per spawn, `taskTimeoutMs` (30 min default) SIGKILLs a hung child,
+agent→error persisted first on double-fault, claudeSessionId persisted on failure too. Also closed a
+cleartext-secret sink (core Session title no longer the instruction → `Office: <role>`). Crash-injection
++ hang tests added; critic re-verify: SHIP. 105 agent-office tests; `pnpm verify` green; changeset
+minor×3. Tests use a fake launcher + in-memory CoreRegistry — no real `claude` spawned.
