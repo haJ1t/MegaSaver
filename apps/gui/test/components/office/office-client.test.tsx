@@ -1,22 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-// ── fetch stub ────────────────────────────────────────────────────────────────
-
-type FetchStubConfig = {
-  status: number;
-  body: unknown;
-};
-
-let fetchConfig: FetchStubConfig = { status: 200, body: {} };
-
-function makeFetchStub(cfg: FetchStubConfig) {
-  return vi.fn().mockResolvedValue({
-    ok: cfg.status >= 200 && cfg.status < 300,
-    status: cfg.status,
-    json: () => Promise.resolve(cfg.body),
-  });
-}
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   assignTask,
@@ -33,15 +16,11 @@ import {
   runAgent,
 } from "../../../src/lib/office-client.js";
 
-// stub fetch before module resolves
-beforeEach(() => {
-  fetchConfig = { status: 200, body: {} };
-  global.fetch = makeFetchStub(fetchConfig);
-});
-
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+// ── fetch stub ────────────────────────────────────────────────────────────────
 
 function stubFetch(status: number, body: unknown) {
   global.fetch = vi.fn().mockResolvedValue({

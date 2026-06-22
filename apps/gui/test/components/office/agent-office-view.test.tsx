@@ -17,7 +17,6 @@ const stub: {
   fetchOfficeStatus: (_wk: string) => Promise<OfficeStatus>;
   openOfficeStream: (_wk: string, _handlers: OfficeStreamHandlers) => () => void;
   fetchRoles: () => Promise<OfficeRole[]>;
-  fetchAgents: (_wk: string) => Promise<OfficeAgent[]>;
   createAgent: (_wk: string, _input: unknown) => Promise<OfficeAgent>;
   deleteAgent: (_wk: string, _agentId: string) => Promise<void>;
   runAgent: (_wk: string, _agentId: string) => Promise<OfficeAgent>;
@@ -28,7 +27,6 @@ const stub: {
   fetchOfficeStatus: (_wk: string) => Promise.resolve({ agents: [] } as OfficeStatus),
   openOfficeStream: (_wk: string, _handlers: OfficeStreamHandlers) => () => undefined,
   fetchRoles: () => Promise.resolve([] as OfficeRole[]),
-  fetchAgents: (_wk: string) => Promise.resolve([] as OfficeAgent[]),
   createAgent: (_wk: string, _input: unknown) => Promise.reject(new Error("not set")),
   deleteAgent: (_wk: string, _agentId: string) => Promise.reject(new Error("not set")),
   runAgent: (_wk: string, _agentId: string) => Promise.reject(new Error("not set")),
@@ -82,8 +80,32 @@ const AGENT_WORKING: OfficeAgent = {
   createdAt: "2026-06-22T00:00:00Z",
 };
 
+const AGENT_WK1: OfficeAgent = {
+  id: "wk1-agent",
+  name: "wk1-only-agent",
+  roleId: "r1",
+  status: "idle",
+  createdAt: "2026-06-22T00:00:00Z",
+};
+
+const AGENT_WK2: OfficeAgent = {
+  id: "wk2-agent",
+  name: "wk2-only-agent",
+  roleId: "r1",
+  status: "idle",
+  createdAt: "2026-06-22T00:00:00Z",
+};
+
 const STATUS_WITH_AGENT: OfficeStatus = {
   agents: [{ agent: AGENT_WORKING, currentTask: null, lastEvent: null }],
+};
+
+const STATUS_WK1: OfficeStatus = {
+  agents: [{ agent: AGENT_WK1, currentTask: null, lastEvent: null }],
+};
+
+const STATUS_WK2: OfficeStatus = {
+  agents: [{ agent: AGENT_WK2, currentTask: null, lastEvent: null }],
 };
 
 afterEach(() => {
@@ -92,7 +114,6 @@ afterEach(() => {
   stub.fetchOfficeStatus = () => Promise.resolve({ agents: [] });
   stub.openOfficeStream = () => () => undefined;
   stub.fetchRoles = () => Promise.resolve([]);
-  stub.fetchAgents = () => Promise.resolve([]);
   stub.createAgent = () => Promise.reject(new Error("not set"));
   stub.deleteAgent = () => Promise.reject(new Error("not set"));
   stub.runAgent = () => Promise.reject(new Error("not set"));
@@ -153,6 +174,62 @@ describe("AgentOfficeView", () => {
     (capturedHandlers as OfficeStreamHandlers | null)?.onStatus(STATUS_WITH_AGENT);
 
     await waitFor(() => expect(screen.getByText("worker-1")).toBeDefined());
+  });
+
+  it("does not let a late wk1 status response overwrite the wk2 board (stale-response race)", async () => {
+    stub.fetchWorkspaces = () => Promise.resolve([WS_1, WS_2]);
+    stub.openOfficeStream = () => () => undefined;
+
+    // wk1's fetch hangs; we resolve it manually AFTER switching to wk2.
+    let resolveWk1: (s: OfficeStatus) => void = () => undefined;
+    stub.fetchOfficeStatus = (wk) => {
+      if (wk === "wk1") {
+        return new Promise<OfficeStatus>((r) => {
+          resolveWk1 = r;
+        });
+      }
+      return Promise.resolve(STATUS_WK2);
+    };
+
+    render(<AgentOfficeView />);
+    await waitFor(() => expect(screen.getByLabelText(/Select workspace/)).toBeDefined());
+
+    // Select wk1 (fetch hangs) then immediately switch to wk2 (resolves).
+    fireEvent.change(screen.getByLabelText(/Select workspace/), { target: { value: "wk1" } });
+    fireEvent.change(screen.getByLabelText(/Select workspace/), { target: { value: "wk2" } });
+
+    await waitFor(() => expect(screen.getByText("wk2-only-agent")).toBeDefined());
+
+    // Now the stale wk1 response arrives late — it MUST be ignored.
+    resolveWk1(STATUS_WK1);
+
+    // Give the stale promise a chance to (incorrectly) apply, then assert it didn't.
+    await waitFor(() => expect(screen.getByText("wk2-only-agent")).toBeDefined());
+    expect(screen.queryByText("wk1-only-agent")).toBeNull();
+  });
+
+  it("clears the disconnect banner when a live status push follows an onError blip", async () => {
+    stub.fetchWorkspaces = () => Promise.resolve([WS_1]);
+    stub.fetchOfficeStatus = () => Promise.resolve({ agents: [] });
+
+    let capturedHandlers: OfficeStreamHandlers | null = null;
+    stub.openOfficeStream = (_wk, handlers) => {
+      capturedHandlers = handlers;
+      return () => undefined;
+    };
+
+    render(<AgentOfficeView />);
+    await waitFor(() => expect(screen.getByText(/No agents yet/)).toBeDefined());
+
+    // Transient blip — EventSource auto-reconnects but fires onError first.
+    (capturedHandlers as OfficeStreamHandlers | null)?.onError();
+    await waitFor(() => expect(screen.getByText(/Live stream disconnected/)).toBeDefined());
+
+    // Reconnect delivers a fresh status push — the banner must clear.
+    (capturedHandlers as OfficeStreamHandlers | null)?.onStatus(STATUS_WITH_AGENT);
+
+    await waitFor(() => expect(screen.getByText("worker-1")).toBeDefined());
+    expect(screen.queryByText(/Live stream disconnected/)).toBeNull();
   });
 
   it("closes stream on workspace change", async () => {

@@ -64,8 +64,9 @@ or replicate the tiny wrappers). Add a DELETE helper. Methods + response types:
 - `fetchAudit(wk): Promise<AuditEvent[]>`
 - `fetchOfficeStatus(wk): Promise<OfficeStatus>` where
   `OfficeStatus = { agents: { agent, currentTask, lastEvent }[] }`
-- `openOfficeStream(wk, { onStatus, onError }): EventSource` — wrap `EventSource`
-  on `/api/office/:wk/stream`, parse `snapshot`/`status` events → `onStatus`.
+- `openOfficeStream(wk, { onStatus, onError }): () => void` — wrap `EventSource`
+  on `/api/office/:wk/stream`, parse `snapshot`/`status` events → `onStatus`;
+  returns a disposer the caller invokes on workspace change / unmount.
   Mirror `openClaudeSessionStream` in `lib/claude-sessions-client.ts`.
 
 Types mirror the engine (`Role`, `OfficeAgent`, `OfficeTask`, `AuditEvent`) —

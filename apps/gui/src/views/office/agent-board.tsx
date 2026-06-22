@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { BridgeError } from "../../components/states.js";
-import { EmptyState, ErrorState, LoadingState } from "../../components/states.js";
+import { EmptyState } from "../../components/states.js";
 import {
   type CreateAgentInput,
   type OfficeAgent,
@@ -11,7 +11,6 @@ import {
   controlAgent,
   createAgent,
   deleteAgent,
-  fetchOfficeStatus,
   fetchRoles,
   runAgent,
 } from "../../lib/office-client.js";
@@ -269,19 +268,21 @@ export function AgentBoard({ wk, status, onRefresh }: AgentBoardProps): JSX.Elem
 
   const loadRoles = useCallback((): void => {
     fetchRoles()
-      .then((list) => {
-        setRoles(list);
-        if (list.length > 0 && !addRoleId) setAddRoleId(list[0]?.id ?? "");
-      })
+      .then((list) => setRoles(list))
       .catch((err: unknown) => {
         const e = err as BridgeError;
         setRolesError(e.error ?? "Failed to load roles");
       });
-  }, [addRoleId]);
+  }, []);
 
   useEffect(() => {
     loadRoles();
   }, [loadRoles]);
+
+  // Default the add-agent role select to the first role once roles load.
+  useEffect(() => {
+    if (roles.length > 0 && !addRoleId) setAddRoleId(roles[0]?.id ?? "");
+  }, [roles, addRoleId]);
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 5000);

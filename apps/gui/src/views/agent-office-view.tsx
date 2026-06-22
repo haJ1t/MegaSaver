@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BridgeError } from "../components/states.js";
 import { ErrorState, LoadingState } from "../components/states.js";
 import { type Workspace, fetchWorkspaces } from "../lib/claude-sessions-client.js";
 import { type OfficeStatus, fetchOfficeStatus, openOfficeStream } from "../lib/office-client.js";
 import { AgentBoard } from "./office/agent-board.js";
 import { RoleManager } from "./office/role-manager.js";
+
+function envelopeMessage(err: unknown): string {
+  const e = err as BridgeError;
+  return e.error ?? "Failed to load office status";
+}
 
 export function AgentOfficeView(): JSX.Element {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -15,7 +20,10 @@ export function AgentOfficeView(): JSX.Element {
   const [boardStatus, setBoardStatus] = useState<OfficeStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
 
-  const closeStreamRef = useRef<(() => void) | null>(null);
+  // Per-run ignore flag for the active workspace effect; the manual refresh
+  // (onRefresh) reads this so a stale in-flight refetch can't overwrite a
+  // newer workspace's board after the user switched.
+  const ignoreRef = useRef(false);
 
   // Load workspaces once
   useEffect(() => {
@@ -34,40 +42,54 @@ export function AgentOfficeView(): JSX.Element {
       });
   }, []);
 
-  // Load status + open SSE stream when workspace selected
-  const loadStatus = useCallback((wk: string): void => {
-    fetchOfficeStatus(wk)
-      .then((s) => setBoardStatus(s))
-      .catch((err: unknown) => {
-        const e = err as BridgeError;
-        setStatusError(e.error ?? "Failed to load office status");
-      });
-  }, []);
-
+  // Load status + open SSE stream when workspace selected. The `ignore` flag
+  // gates every state write so a late wk1 response can't clobber the wk2 board.
   useEffect(() => {
-    // Close previous stream
-    if (closeStreamRef.current) {
-      closeStreamRef.current();
-      closeStreamRef.current = null;
-    }
+    let ignore = false;
+    ignoreRef.current = false;
     setBoardStatus(null);
     setStatusError(null);
 
     if (!selectedWk) return;
 
-    loadStatus(selectedWk);
+    fetchOfficeStatus(selectedWk)
+      .then((s) => {
+        if (!ignore) setBoardStatus(s);
+      })
+      .catch((e: unknown) => {
+        if (!ignore) setStatusError(envelopeMessage(e));
+      });
 
     const close = openOfficeStream(selectedWk, {
-      onStatus: (status) => setBoardStatus(status),
-      onError: () => setStatusError("Live stream disconnected"),
+      onStatus: (s) => {
+        if (!ignore) {
+          setBoardStatus(s);
+          // A live status push means the stream is healthy — clear any
+          // transient "disconnected" banner left by an auto-reconnected blip.
+          setStatusError(null);
+        }
+      },
+      onError: () => {
+        if (!ignore) setStatusError("Live stream disconnected");
+      },
     });
-    closeStreamRef.current = close;
 
     return () => {
+      ignore = true;
+      ignoreRef.current = true;
       close();
-      closeStreamRef.current = null;
     };
-  }, [selectedWk, loadStatus]);
+  }, [selectedWk]);
+
+  function handleRefresh(wk: string): void {
+    fetchOfficeStatus(wk)
+      .then((s) => {
+        if (!ignoreRef.current) setBoardStatus(s);
+      })
+      .catch((e: unknown) => {
+        if (!ignoreRef.current) setStatusError(envelopeMessage(e));
+      });
+  }
 
   if (wsState === "loading") return <LoadingState label="Loading workspaces…" />;
   if (wsState === "error" && wsError) return <ErrorState error={wsError} />;
@@ -111,7 +133,7 @@ export function AgentOfficeView(): JSX.Element {
           <AgentBoard
             wk={selectedWk}
             status={boardStatus}
-            onRefresh={() => loadStatus(selectedWk)}
+            onRefresh={() => handleRefresh(selectedWk)}
           />
         </>
       )}
