@@ -3,6 +3,7 @@ import {
   createLauncherRegistry,
   createSupervisor,
   ensureOfficeProject,
+  loadAgent,
 } from "@megasaver/agent-office";
 import type { LauncherRegistry } from "@megasaver/agent-office";
 import { createClaudeCodeLauncher } from "@megasaver/connector-claude-code";
@@ -56,6 +57,23 @@ export async function runOfficeRun(input: RunOfficeRunInput): Promise<0 | 1> {
     const newId = input.newId ?? (() => crypto.randomUUID());
     const now = input.now ?? (() => new Date().toISOString());
 
+    // Load the agent first: an unknown agent is the missing thing here (run
+    // loads/drains the agent), so map not_found → "agent not found". Also gives
+    // us the status for the no-op note below.
+    let agentStatus: string;
+    try {
+      const agent = await loadAgent({
+        storeRoot: rootDir,
+        workspaceKey: wk,
+        officeAgentId: input.agentId,
+      });
+      agentStatus = agent.status;
+    } catch (err) {
+      const cli = mapErrorToCliMessage(err, { kind: "office_agent" });
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
+
     ensureOfficeProject(coreRegistry, now);
 
     const registry = input.registry ?? createLauncherRegistry([createClaudeCodeLauncher()]);
@@ -71,6 +89,12 @@ export async function runOfficeRun(input: RunOfficeRunInput): Promise<0 | 1> {
     });
 
     const tasks = await supervisor.drainAgent(wk, input.agentId);
+
+    // drainAgent returns [] when the agent is paused/stopped/error or has no
+    // queued task. Surface a one-line note so the no-op is not silent.
+    if (tasks.length === 0) {
+      input.stderr(`note: no tasks drained for ${input.agentId} (status=${agentStatus})`);
+    }
 
     const anyFailed = tasks.some((t) => t.status === "failed");
 
@@ -89,7 +113,7 @@ export async function runOfficeRun(input: RunOfficeRunInput): Promise<0 | 1> {
 
     return anyFailed ? 1 : 0;
   } catch (err) {
-    const cli = mapErrorToCliMessage(err, { kind: "office_task" });
+    const cli = mapErrorToCliMessage(err, { kind: "office_agent" });
     input.stderr(cli.message);
     return cli.exitCode;
   }

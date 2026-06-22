@@ -311,6 +311,128 @@ describe("runOfficeRun", () => {
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed[0]?.status).toBe("done");
   });
+
+  it("I4: unknown agent → 'agent not found', exits 1", async () => {
+    const coreRegistry = createInMemoryCoreRegistry();
+    const registry = createLauncherRegistry([makeFakeLauncher(0)]);
+
+    const inp = makeBaseInput(tmpDir);
+    const code = await runOfficeRun({
+      ...inp,
+      agentId: "99999999-9999-4999-8999-999999999999",
+      registry,
+      coreRegistry,
+      newId: makeIdSeq([AUDIT_ID1, AUDIT_ID2]),
+      now: () => NOW,
+    });
+
+    expect(code).toBe(1);
+    expect(inp.errs.join("")).toContain("agent not found");
+  });
+
+  it("I3: no queued task → stderr note, exits 0", async () => {
+    await setupRoleAndAgent(tmpDir);
+    // No assignTask — the agent is idle with an empty queue.
+
+    const coreRegistry = createInMemoryCoreRegistry();
+    const registry = createLauncherRegistry([makeFakeLauncher(0)]);
+
+    const inp = makeBaseInput(tmpDir);
+    const code = await runOfficeRun({
+      ...inp,
+      agentId: AGENT_ID,
+      registry,
+      coreRegistry,
+      newId: makeIdSeq([AUDIT_ID1, AUDIT_ID2]),
+      now: () => NOW,
+    });
+
+    expect(code).toBe(0);
+    const errText = inp.errs.join("");
+    expect(errText).toContain(`no tasks drained for ${AGENT_ID}`);
+    expect(errText).toContain("status=idle");
+  });
+
+  it("MEGA_OFFICE_ALLOW_FULL=1 → full role runs without --allow-full flag", async () => {
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const prev = process.env["MEGA_OFFICE_ALLOW_FULL"];
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    process.env["MEGA_OFFICE_ALLOW_FULL"] = "1";
+    try {
+      const FULL_ROLE_ID = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+      const roleInp = makeBaseInput(tmpDir);
+      await runOfficeRoleCreate({
+        ...roleInp,
+        nameFlag: "FullCoder",
+        personaFlag: "Full permission agent.",
+        modelFlag: "sonnet",
+        permissionModeFlag: "full",
+        newId: () => FULL_ROLE_ID,
+        now: () => NOW,
+      });
+
+      const FULL_AGENT_ID = "11111111-1111-4111-8111-111111111111";
+      const agentInp = makeBaseInput(tmpDir);
+      await runOfficeAgentCreate({
+        ...agentInp,
+        nameFlag: "FullArchie",
+        roleIdFlag: FULL_ROLE_ID,
+        workdirFlag: "/repo",
+        newId: () => FULL_AGENT_ID,
+        now: () => NOW,
+      });
+
+      const taskInp = makeBaseInput(tmpDir);
+      await runOfficeAssign({
+        ...taskInp,
+        agentId: FULL_AGENT_ID,
+        instruction: "Do allowed things.",
+        newId: () => TASK_ID,
+        now: () => NOW,
+      });
+
+      const launchSpy = vi.fn(
+        (): LaunchHandle => ({
+          sessionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          onEvent: () => {},
+          onExit(cb) {
+            Promise.resolve().then(() => cb({ code: 0 }));
+          },
+          cancel: vi.fn(),
+        }),
+      );
+      const spyLauncher: AgentLauncher = {
+        kind: "claude-code" as AgentId,
+        launch: launchSpy,
+      };
+      const coreRegistry = createInMemoryCoreRegistry();
+      const registry = createLauncherRegistry([spyLauncher]);
+
+      const inp = makeBaseInput(tmpDir);
+      const code = await runOfficeRun({
+        ...inp,
+        agentId: FULL_AGENT_ID,
+        // NOTE: no allowFull flag — relies on env var
+        registry,
+        coreRegistry,
+        newId: makeIdSeq([AUDIT_ID1, AUDIT_ID2]),
+        now: () => NOW,
+      });
+
+      expect(code).toBe(0);
+      expect(launchSpy).toHaveBeenCalledTimes(1); // spawned despite no flag
+      expect(inp.lines.join("")).toContain("done");
+    } finally {
+      if (prev === undefined) {
+        // biome-ignore lint/performance/noDelete: restoring env to absent state requires delete
+        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+        delete process.env["MEGA_OFFICE_ALLOW_FULL"];
+      } else {
+        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+        process.env["MEGA_OFFICE_ALLOW_FULL"] = prev;
+      }
+    }
+  });
 });
 
 // ─── control tests ────────────────────────────────────────────────────────────

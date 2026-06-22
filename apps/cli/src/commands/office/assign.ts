@@ -1,4 +1,4 @@
-import { officeTaskSchema, saveTask } from "@megasaver/agent-office";
+import { loadAgent, officeTaskSchema, saveTask } from "@megasaver/agent-office";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
@@ -30,6 +30,17 @@ export async function runOfficeAssign(input: RunOfficeAssignInput): Promise<0 | 
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
     void registry;
+
+    // Precheck the agent exists BEFORE writing a task, so we never persist an
+    // orphan task under a ghost agent id. A nonexistent agent throws not_found
+    // → "agent not found".
+    try {
+      await loadAgent({ storeRoot: rootDir, workspaceKey: wk, officeAgentId: input.agentId });
+    } catch (err) {
+      const cli = mapErrorToCliMessage(err, { kind: "office_agent" });
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
 
     const newId = input.newId ?? (() => crypto.randomUUID());
     const now = input.now ?? (() => new Date().toISOString());

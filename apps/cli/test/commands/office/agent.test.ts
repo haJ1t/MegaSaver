@@ -1,6 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { listTasks } from "@megasaver/agent-office";
+import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   runOfficeAgentCreate,
@@ -227,5 +229,74 @@ describe("runOfficeAssign", () => {
     const parsed = JSON.parse(inp.lines[0] ?? "{}") as { id: string; status: string };
     expect(parsed.id).toBe(TASK_ID);
     expect(parsed.status).toBe("queued");
+  });
+
+  it("I2: rejects a well-formed but nonexistent agent, no task written", async () => {
+    await createRole(tmpDir);
+    // Note: NO agent created.
+    const inp = makeBaseInput(tmpDir);
+    const GHOST_AGENT = "99999999-9999-4999-8999-999999999999";
+    const code = await runOfficeAssign({
+      ...inp,
+      agentId: GHOST_AGENT,
+      instruction: "Orphan task.",
+      newId: () => TASK_ID,
+      now: () => NOW,
+    });
+    expect(code).toBe(1);
+    expect(inp.errs.join("")).toContain("agent not found");
+
+    // No task persisted under the ghost agent.
+    const wk = encodeWorkspaceKey(tmpDir);
+    const tasks = await listTasks({
+      storeRoot: tmpDir,
+      workspaceKey: wk,
+      officeAgentId: GHOST_AGENT,
+    });
+    expect(tasks).toHaveLength(0);
+  });
+
+  it("I1: malformed agentId produces an agent-oriented message, not 'name must be non-empty'", async () => {
+    await createRole(tmpDir);
+    const inp = makeBaseInput(tmpDir);
+    const code = await runOfficeAssign({
+      ...inp,
+      agentId: "not-a-uuid",
+      instruction: "Do work.",
+      newId: () => TASK_ID,
+      now: () => NOW,
+    });
+    expect(code).toBe(1);
+    const errText = inp.errs.join("");
+    expect(errText).not.toContain("name must be non-empty");
+    expect(errText.toLowerCase()).toContain("agent");
+  });
+
+  it("I5: rejects a whitespace-only instruction (empty after trim)", async () => {
+    await createRole(tmpDir);
+    const agentInp = makeBaseInput(tmpDir);
+    await runOfficeAgentCreate({
+      ...agentInp,
+      nameFlag: "Archie",
+      roleIdFlag: ROLE_ID,
+      workdirFlag: "/repo",
+      newId: () => AGENT_ID,
+      now: () => NOW,
+    });
+
+    const inp = makeBaseInput(tmpDir);
+    const code = await runOfficeAssign({
+      ...inp,
+      agentId: AGENT_ID,
+      instruction: "   ",
+      newId: () => TASK_ID,
+      now: () => NOW,
+    });
+    expect(code).toBe(1);
+
+    // No task persisted.
+    const wk = encodeWorkspaceKey(tmpDir);
+    const tasks = await listTasks({ storeRoot: tmpDir, workspaceKey: wk, officeAgentId: AGENT_ID });
+    expect(tasks).toHaveLength(0);
   });
 });

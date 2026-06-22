@@ -1,6 +1,6 @@
 ---
 title: Agent Office Phase 5 — CLI `mega office`
-status: draft
+status: approved
 risk: high
 created: 2026-06-22
 author: brainstorming session (Halit Ozger + Claude Code)

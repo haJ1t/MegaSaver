@@ -151,6 +151,24 @@ export function mapErrorToCliMessage(err: unknown, ctx?: ZodContext): CliMessage
       const msg = issue?.message ?? "invalid";
       return { message: `error: invalid session update: ${path}: ${msg}`, exitCode: 1 };
     }
+    if (
+      ctx?.kind === "office_role" ||
+      ctx?.kind === "office_agent" ||
+      ctx?.kind === "office_task"
+    ) {
+      const entity =
+        ctx.kind === "office_role" ? "role" : ctx.kind === "office_agent" ? "agent" : "task";
+      const issue = err.issues[0];
+      const path = issue && issue.path.length > 0 ? issue.path.join(".") : "<unknown>";
+      // A failing `id` field means a malformed id was passed (e.g. `mega office
+      // assign not-a-uuid ...`); surface an id-oriented message rather than the
+      // generic "name must be non-empty" fall-through.
+      if (path === "id") {
+        return { message: `error: invalid ${entity} id`, exitCode: 1 };
+      }
+      const msg = issue?.message ?? "invalid";
+      return { message: `error: invalid ${entity} field: ${path} (${msg})`, exitCode: 1 };
+    }
     const firstIssue = err.issues[0];
     if (firstIssue?.message === NAME_CONTROL_CHARS_MESSAGE) {
       return {
@@ -406,10 +424,6 @@ export function invalidExpiresMessage(value: string): CliMessage {
     message: `error: invalid expires "${value}", expected ISO-8601 datetime`,
     exitCode: 1,
   };
-}
-
-export function officeNotFoundMessage(kind: string, id: string): CliMessage {
-  return { message: `error: ${kind} "${id}" not found`, exitCode: 1 };
 }
 
 export function officePermissionDeniedMessage(detail: string): CliMessage {
