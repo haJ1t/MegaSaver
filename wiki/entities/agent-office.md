@@ -50,8 +50,14 @@ no core edge yet — that arrives in Phase 2's supervisor).
   save+load, typed `AgentOfficeError`). Layout:
   `office/roles/<id>.json`, `office/<wk>/agents/<id>.json`,
   `office/<wk>/tasks/<agent>/<id>.json`.
-- `buildPredefinedRoles({now,newId})` — 13 seed roles, ALL
-  `permissionMode: plan` (safe-by-default invariant, tested).
+- `buildPredefinedRoles({now,newId})` — predefined role catalog, ALL
+  `permissionMode: plan` (safe-by-default invariant, tested). **Updated
+  2026-06-22:** the catalog is now **24 roles modeled on
+  addyosmani/agent-skills** (one per skill, grouped by lifecycle phase; each
+  carries its skill slug in `skillPacks`), replacing the original 13.
+  `ensurePredefinedRoles` (idempotent) seeds them into the role store on bridge
+  startup + via `mega office role seed`, so the roster actually appears in the
+  GUI/CLI on first run (the builder was previously never called at runtime).
 - 57 tests, `pnpm verify` green. Risk this phase: MEDIUM (pure data
   layer; no spawning).
 

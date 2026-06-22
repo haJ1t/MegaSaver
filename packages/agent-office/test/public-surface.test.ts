@@ -26,6 +26,7 @@ describe("public surface", () => {
       "listTasks",
       "deleteTask",
       "buildPredefinedRoles",
+      "ensurePredefinedRoles",
       "resolveLauncherPermission",
       "createLauncherRegistry",
       "auditEventSchema",

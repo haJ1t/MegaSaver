@@ -76,12 +76,31 @@ ready-made, opinionated roster out of the box.
 `titleSchema` accepts `/` (only control chars + U+2028/2029 are rejected), so
 "CI/CD Engineer" is valid. All names are non-empty, single-line, NFC.
 
+## Seeding (the roles must actually appear)
+
+`buildPredefinedRoles` is a pure builder that, before this change, was **never
+called at runtime** (Phase 0 deferred "seeding-to-disk" to a later phase that
+never landed) — so the office showed zero roles. To make the catalog real:
+
+- New `ensurePredefinedRoles({ storeRoot, now, newId })` in
+  `@megasaver/agent-office`: if `listRoles` is empty, save all 24 (idempotent —
+  a no-op once any role exists, so it never clobbers user edits or re-adds
+  deleted roles). Returns `{ seeded }`.
+- Bridge `apps/gui/bridge/server.ts` `main()`: `await ensurePredefinedRoles(...)`
+  right after `ensureOfficeProject`, so the GUI shows the roster on first run.
+- CLI: `mega office role seed` (`runOfficeRoleSeed`) for parity/dogfood — prints
+  how many were seeded.
+
 ## Changes
 
 - `packages/agent-office/src/predefined-roles.ts`: add `skill: string` to the
   `Seed` type; replace `SEEDS` with the 24 entries; set
   `skillPacks: [seed.skill]` in `buildPredefinedRoles`. Update the leading
-  comment (no longer "from CLAUDE.md §6").
+  comment (no longer "from CLAUDE.md §6"). Add `ensurePredefinedRoles`; export
+  it from the package index.
+- `apps/gui/bridge/server.ts`: await `ensurePredefinedRoles` on startup.
+- `apps/cli/src/commands/office/role.ts` (+ `index.ts`): add the `seed`
+  subcommand.
 - `packages/agent-office/test/predefined-roles.test.ts`: update the count
   assertion (13 → 24); keep the all-`plan` invariant; replace the old
   roster-name assertion with the new names (e.g. Code Reviewer, Security
@@ -93,9 +112,11 @@ ready-made, opinionated roster out of the box.
 
 ## Out of scope
 
-- No change to the launcher, supervisor, bridge, GUI, or CLI — they read roles
-  generically; 24 vs 13 is transparent. `skillPacks` stays inert (no skill
-  loading) until the skill-packs feature ships.
+- No change to the launcher or supervisor — they read roles generically; 24 vs
+  13 is transparent. The bridge/CLI changes are limited to the one-time seeding
+  call above (no logic change). `skillPacks` stays inert (no skill loading)
+  until the skill-packs feature ships. The GUI is unchanged — it renders
+  whatever roles the seeded store returns.
 - Not importing the actual SKILL.md bodies — personas are concise summaries of
   each skill's purpose (the slug links back to the source).
 

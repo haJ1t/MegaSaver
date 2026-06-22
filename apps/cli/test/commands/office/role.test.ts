@@ -6,6 +6,7 @@ import {
   runOfficeRoleCreate,
   runOfficeRoleList,
   runOfficeRoleRm,
+  runOfficeRoleSeed,
 } from "../../../src/commands/office/role.js";
 
 // Fixed UUIDs for deterministic test output
@@ -181,5 +182,39 @@ describe("runOfficeRoleRm", () => {
       roleId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     });
     expect(code).toBe(0);
+  });
+});
+
+describe("runOfficeRoleSeed", () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "cli-office-role-test-"));
+  });
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function seedNewId(): () => string {
+    let i = 0;
+    return () => `00000000-0000-4000-8000-${String(i++).padStart(12, "0")}`;
+  }
+
+  it("seeds the predefined roster, then list shows 24", async () => {
+    const inp = makeInput(tmpDir, { newId: seedNewId() });
+    const code = await runOfficeRoleSeed({ ...inp });
+    expect(code).toBe(0);
+    expect(inp.lines.join("\n")).toContain("seeded 24");
+
+    const listInp = makeInput(tmpDir);
+    await runOfficeRoleList({ ...listInp, json: true });
+    expect(JSON.parse(listInp.lines[0] ?? "[]")).toHaveLength(24);
+  });
+
+  it("is idempotent: a second seed reports nothing seeded", async () => {
+    await runOfficeRoleSeed({ ...makeInput(tmpDir, { newId: seedNewId() }) });
+    const inp = makeInput(tmpDir, { newId: seedNewId() });
+    const code = await runOfficeRoleSeed({ ...inp });
+    expect(code).toBe(0);
+    expect(inp.lines.join("\n")).toContain("nothing seeded");
   });
 });

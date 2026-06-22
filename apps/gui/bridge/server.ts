@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
-import { createLauncherRegistry } from "@megasaver/agent-office";
+import { createLauncherRegistry, ensurePredefinedRoles } from "@megasaver/agent-office";
 import { createClaudeCodeLauncher } from "@megasaver/connector-claude-code";
 import { createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
 import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "@megasaver/mcp-bridge";
@@ -41,6 +42,13 @@ async function main(): Promise<void> {
   // Seed the office Core project before serving: supervisor-created sessions
   // require it to exist, else every office task fails with project_not_found.
   ensureOfficeProject(registry, () => new Date().toISOString());
+  // Seed the predefined role roster (idempotent) so the office shows ready-made
+  // roles on first run; a no-op once any role exists.
+  await ensurePredefinedRoles({
+    storeRoot: storeDir,
+    now: () => new Date().toISOString(),
+    newId: () => randomUUID(),
+  });
   const handler = createBridgeHandler({
     storePath: storeDir,
     mcpOps,
