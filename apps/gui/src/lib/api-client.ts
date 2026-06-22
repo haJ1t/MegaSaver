@@ -24,12 +24,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
   throw body;
 }
 
-async function getJson<T>(path: string): Promise<T> {
+export async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path);
   return handleResponse<T>(response);
 }
 
-async function postJson<T>(path: string, body?: unknown): Promise<T> {
+export async function postJson<T>(path: string, body?: unknown): Promise<T> {
   const init: RequestInit = {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -39,6 +39,23 @@ async function postJson<T>(path: string, body?: unknown): Promise<T> {
   }
   const response = await fetch(path, init);
   return handleResponse<T>(response);
+}
+
+export async function deleteJson(path: string): Promise<void> {
+  const response = await fetch(path, { method: "DELETE" });
+  if (response.status === 204) return;
+  // Non-204 success codes: still ok
+  if (response.ok) return;
+  let body: import("../components/states.js").BridgeError;
+  try {
+    body = (await response.json()) as import("../components/states.js").BridgeError;
+  } catch {
+    body = {
+      error: `Bridge request failed with status ${response.status}`,
+      code: "internal_error",
+    };
+  }
+  throw body;
 }
 
 // ── Health ────────────────────────────────────────────────────────────────────
