@@ -78,12 +78,39 @@ claude-code adapter in `@megasaver/connector-claude-code`:
   subscribers, SIGKILL escalation, gate `full`/`bypassPermissions`,
   listener teardown.
 
+## Phase 2 shipped (supervisor)
+
+Supervisor in `@megasaver/agent-office` (now deps `core` +
+`connectors-shared`):
+
+- `resolveLauncherPermission(roleMode, {allowFull})` — safe-by-default
+  gate: `full` refused (throws `permission_denied`) unless `allowFull`
+  explicitly granted to `createSupervisor`; never silently downgrades or
+  bypasses. (security-reviewer: airtight.)
+- `createLauncherRegistry` — `get(kind)` → `AgentLauncher`; engine stays
+  agent-agnostic (launchers injected).
+- Office audit log (`auditEventSchema` + `appendAudit`/`listAudit`) —
+  append-only, metadata-complete; spawn + terminal (done/failed) rows.
+  (Lightweight; full evidence-ledger redaction integration deferred.)
+- `createSupervisor` — `processNextTask`/`drainAgent`/`runWorkspace`:
+  pulls earliest queued task, gates permission, creates a `core` Session,
+  spawns via launcher (new `--session-id` / resume continuity), awaits
+  exit, settles task+agent, audits. **Failure-hardened** (critic SHIP):
+  try/catch settles task→failed + agent→error on ANY throw (no poisoned
+  running/working state), endSession exactly once, terminal audit per
+  spawn; `taskTimeoutMs` (30 min default) → SIGKILL on hang; agent→error
+  persisted first on double-fault. `workspaceKey` branded;
+  `cancel(signal?)` added. Session title is `Office: <role>` (no
+  instruction cleartext in core store). Risk CRITICAL; fake launcher +
+  in-memory core in tests (no real claude). 105 tests; reviewed by
+  code-reviewer + critic + security-reviewer.
+- Phase 3+ carry-overs: SIGKILL escalation timer wiring, event buffering
+  for async subscribers, `allowedTools` validation before HTTP exposure,
+  full evidence-ledger integration, a startup reconciliation reaper for
+  double-fault residue.
+
 ## Phases not yet built
 
-2. Supervisor (queue loop, resume continuity, concurrency cap) +
-   per-role permission/workdir enforcement + evidence-ledger audit
-   (composes `@megasaver/core` `CoreRegistry`). Also tighten
-   `workspaceKey` to the branded `workspaceKeySchema` here.
 3. Bridge `/api/office` routes + reuse `tailTranscript`/SSE.
 4. GUI office board view + role manager.
 5. CLI `mega office` commands.

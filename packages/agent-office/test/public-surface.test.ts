@@ -26,6 +26,13 @@ describe("public surface", () => {
       "listTasks",
       "deleteTask",
       "buildPredefinedRoles",
+      "resolveLauncherPermission",
+      "createLauncherRegistry",
+      "auditEventSchema",
+      "auditEventTypeSchema",
+      "appendAudit",
+      "listAudit",
+      "createSupervisor",
     ]) {
       expect(api).toHaveProperty(name);
     }

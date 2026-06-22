@@ -43,4 +43,12 @@ describe("officeTaskSchema", () => {
   it("rejects extra keys (strict)", () => {
     expect(() => officeTaskSchema.parse({ ...makeTask(), extra: 1 })).toThrow();
   });
+
+  it("rejects an invalid workspaceKey (uppercase)", () => {
+    expect(() => officeTaskSchema.parse({ ...makeTask(), workspaceKey: "WK" })).toThrow();
+  });
+
+  it("rejects an invalid workspaceKey (wrong length)", () => {
+    expect(() => officeTaskSchema.parse({ ...makeTask(), workspaceKey: "0123456789ab" })).toThrow();
+  });
 });

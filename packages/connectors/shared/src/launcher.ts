@@ -23,7 +23,7 @@ export interface LaunchHandle {
   readonly sessionId: string;
   onEvent(cb: (event: LauncherEvent) => void): void;
   onExit(cb: (result: { code: number | null }) => void): void;
-  cancel(): void;
+  cancel(signal?: NodeJS.Signals): void;
 }
 
 export interface AgentLauncher {

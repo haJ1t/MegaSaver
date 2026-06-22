@@ -4,6 +4,7 @@ import {
   roleIdSchema,
   sessionIdSchema,
   titleSchema,
+  workspaceKeySchema,
 } from "@megasaver/shared";
 import { z } from "zod";
 
@@ -16,7 +17,7 @@ export const officeAgentSchema = z
     name: titleSchema,
     roleId: roleIdSchema,
     kind: agentIdSchema,
-    workspaceKey: z.string().min(1),
+    workspaceKey: workspaceKeySchema,
     workdir: z.string().min(1),
     status: agentStatusSchema,
     claudeSessionId: z.string().min(1).optional(),

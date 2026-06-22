@@ -31,3 +31,24 @@ export { saveRole, loadRole, listRoles, deleteRole } from "./role-store.js";
 export { saveAgent, loadAgent, listAgents, deleteAgent } from "./agent-store.js";
 export { saveTask, loadTask, listTasks, deleteTask } from "./task-store.js";
 export { buildPredefinedRoles } from "./predefined-roles.js";
+
+export { resolveLauncherPermission } from "./permission.js";
+
+export {
+  createLauncherRegistry,
+  type LauncherRegistry,
+} from "./launcher-registry.js";
+
+export {
+  auditEventSchema,
+  auditEventTypeSchema,
+  type AuditEvent,
+  type AuditEventType,
+} from "./audit.js";
+
+export { appendAudit, listAudit } from "./audit-store.js";
+
+export {
+  createSupervisor,
+  type Supervisor,
+} from "./supervisor.js";
