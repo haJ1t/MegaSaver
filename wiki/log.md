@@ -2907,3 +2907,23 @@ safe-by-default holds over HTTP (allowFull env-only/default-off, full fails clos
 instruction kept out of cleartext sinks). Documented localhost/no-auth + unconfined-`workdir` posture
 and that `control stop` doesn't cancel an in-flight spawn (Phase 4). gui 318 / agent-office 107 tests;
 `pnpm verify` green; no real claude/HTTP in tests.
+
+## [2026-06-22] feature | agent-office Phase 4 (GUI office board)
+
+Added the `agent-office` GUI view on branch `worktree-feat+agent-office-phase4` (spec
+docs/superpowers/specs/2026-06-22-agent-office-phase4-gui-design.md). `apps/gui/src`: workspace
+selector + global role manager (CRUD, full-permission warning) + per-workspace agent board
+(AgentCard with status dot/current task/last event + run/pause/resume/stop/remove/assign +
+add-agent), a `lib/office-client.ts` wrapping the Phase 3 API + `openOfficeStream` SSE (disposer),
+and live board updates on the SSE `status` event. Built consistent with the existing utilitarian GUI;
+a dedicated visual-design pass (huashu/taste) is a noted follow-up.
+
+Risk MEDIUM. Reviewed by code-reviewer + critic (UI). critic found two reproduced UX-correctness bugs,
+fixed before merge: (1) stale-response overwrite race — a late `fetchOfficeStatus` for a previous
+workspace could overwrite the current board (fixed with a per-effect-run ignore flag gating
+setBoardStatus/setStatusError, and an ignoreRef on the manual refresh path; closeStreamRef removed as
+redundant); (2) sticky "Live stream disconnected" banner — EventSource auto-reconnects but the banner
+never cleared (now cleared on every successful status push). Both regression-tested (verified
+fail-without-fix). Also cleaned dead imports/test vars + a loadRoles spurious-refetch. 360 gui tests;
+`pnpm verify` green; tests stub fetch + EventSource (no real bridge/claude). Phase 5 (CLI `mega office`)
+remains.

@@ -2,12 +2,13 @@ import { useState } from "react";
 import { SessionCockpit } from "./cockpit/session-cockpit.js";
 import type { ClaudeSessionMeta } from "./lib/claude-sessions-client.js";
 import { VIEW_LABELS, type ViewId } from "./view-id.js";
+import { AgentOfficeView } from "./views/agent-office-view.js";
 import { AgentSetupDoctor } from "./views/agent-setup-doctor.js";
 import { WorkspaceSessionList } from "./views/workspace-session-list.js";
 
 // Live-first shell: the grouped session home is the default surface; the
 // global agent-setup view is the only other destination. No project state.
-const NAV_VIEWS: readonly ViewId[] = ["claude-sessions", "agent-setup"];
+const NAV_VIEWS: readonly ViewId[] = ["claude-sessions", "agent-office", "agent-setup"];
 
 export function App(): JSX.Element {
   const [view, setView] = useState<ViewId>("claude-sessions");
@@ -46,6 +47,8 @@ export function App(): JSX.Element {
       <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
         {view === "agent-setup" ? (
           <AgentSetupDoctor />
+        ) : view === "agent-office" ? (
+          <AgentOfficeView />
         ) : selected ? (
           <SessionCockpit
             dir={selected.dir}
