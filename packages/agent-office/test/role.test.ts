@@ -49,4 +49,13 @@ describe("roleSchema", () => {
   it("rejects an empty persona", () => {
     expect(() => roleSchema.parse(makeRole({ persona: "" }))).toThrow();
   });
+
+  it("rejects an allowedTools entry starting with '-' (CLI flag injection guard)", () => {
+    expect(() => roleSchema.parse(makeRole({ allowedTools: ["--dangerously-skip"] }))).toThrow();
+    expect(() => roleSchema.parse(makeRole({ allowedTools: ["-x"] }))).toThrow();
+  });
+
+  it("rejects an empty allowedTools entry", () => {
+    expect(() => roleSchema.parse(makeRole({ allowedTools: [""] }))).toThrow();
+  });
 });
