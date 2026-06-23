@@ -36,8 +36,16 @@ const MAX = 200;
 const truncate = (s: string, n = MAX): string => (s.length > n ? `${s.slice(0, n)}…` : s);
 const basename = (p: string): string => p.split("/").pop() ?? p;
 
+type ContentBlock = {
+  type?: string;
+  text?: string;
+  name?: string;
+  input?: unknown;
+  content?: unknown;
+};
+
 function toolSummary(name: string, input: unknown): string | undefined {
-  const obj = (input ?? {}) as Record<string, unknown>;
+  const obj = (input ?? {}) as { file_path?: unknown; command?: unknown };
   if (
     (name === "Edit" || name === "Write" || name === "Read") &&
     typeof obj.file_path === "string"
@@ -69,7 +77,7 @@ export function projectEvent(event: LauncherEvent): TranscriptEntryInput | null 
   }
 
   if (p.type === "assistant" && Array.isArray(p.message?.content)) {
-    for (const b of p.message.content as Array<Record<string, unknown>>) {
+    for (const b of p.message.content as ContentBlock[]) {
       if (b.type === "text" && typeof b.text === "string") {
         return { role: "assistant", text: b.text };
       }
@@ -84,7 +92,7 @@ export function projectEvent(event: LauncherEvent): TranscriptEntryInput | null 
   }
 
   if (p.type === "user" && Array.isArray(p.message?.content)) {
-    for (const b of p.message.content as Array<Record<string, unknown>>) {
+    for (const b of p.message.content as ContentBlock[]) {
       if (b.type === "tool_result") {
         const c = b.content;
         const text =
