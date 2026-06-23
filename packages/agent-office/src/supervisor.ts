@@ -10,6 +10,13 @@ import { resolveLauncherPermission } from "./permission.js";
 import { loadRole } from "./role-store.js";
 import { listTasks, saveTask } from "./task-store.js";
 import type { OfficeTask } from "./task.js";
+import { projectEvent, type TranscriptEntry, transcriptEntrySchema } from "./transcript.js";
+
+export type TranscriptSink = (x: {
+  workspaceKey: string;
+  officeAgentId: string;
+  entry: TranscriptEntry;
+}) => void;
 
 const DEFAULT_TASK_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -49,6 +56,7 @@ export function createSupervisor(deps: {
   newId: () => string;
   allowFull?: boolean;
   taskTimeoutMs?: number;
+  onTranscript?: TranscriptSink;
 }): Supervisor {
   const {
     storeRoot,
@@ -59,6 +67,7 @@ export function createSupervisor(deps: {
     newId,
     allowFull = false,
     taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
+    onTranscript,
   } = deps;
 
   async function processNextTask(
@@ -159,8 +168,24 @@ export function createSupervisor(deps: {
         persona: role.persona,
         ...claudeSessionInput,
       });
-      // Subscribe onEvent (Phase 2: presence proves wiring; ignore payloads)
-      handle.onEvent(() => {});
+      // Capture the launcher's stream events as a compact, persisted transcript.
+      // Best-effort: a sink throw must never poison task execution.
+      let transcriptSeq = 0;
+      handle.onEvent((event) => {
+        const input = projectEvent(event);
+        if (input === null) return;
+        const entry = transcriptEntrySchema.parse({
+          id: newId(),
+          seq: transcriptSeq++,
+          ts: now(),
+          ...input,
+        });
+        try {
+          onTranscript?.({ workspaceKey: agent.workspaceKey, officeAgentId: agent.id, entry });
+        } catch {
+          // capture is best-effort
+        }
+      });
 
       const exit = await awaitExit(handle, taskTimeoutMs);
 
