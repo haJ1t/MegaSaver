@@ -351,7 +351,12 @@ describe("AgentBoard", () => {
       return Promise.resolve([]);
     };
     render(
-      <AgentBoard wk="wk1" workdir="/home/user/project" status={STATUS} onRefresh={() => undefined} />,
+      <AgentBoard
+        wk="wk1"
+        workdir="/home/user/project"
+        status={STATUS}
+        onRefresh={() => undefined}
+      />,
     );
     await waitFor(() => expect(screen.getByText("idle-agent")).toBeDefined());
 

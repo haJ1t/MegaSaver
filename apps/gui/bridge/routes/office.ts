@@ -32,11 +32,7 @@ import {
   workspaceKeySchema,
 } from "@megasaver/shared";
 import { handleCaughtError } from "../error-mapping.js";
-import {
-  publishTranscript,
-  subscribeTranscript,
-  transcriptKey,
-} from "../office-transcript-bus.js";
+import { publishTranscript, subscribeTranscript, transcriptKey } from "../office-transcript-bus.js";
 import {
   agentCreateInputSchema,
   controlInputSchema,

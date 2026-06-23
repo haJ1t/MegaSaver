@@ -15,7 +15,9 @@ describe("projectEvent", () => {
       kind: "stream",
       payload: {
         type: "assistant",
-        message: { content: [{ type: "tool_use", name: "Edit", input: { file_path: "/a/b/foo.ts" } }] },
+        message: {
+          content: [{ type: "tool_use", name: "Edit", input: { file_path: "/a/b/foo.ts" } }],
+        },
       },
     });
     expect(e).toEqual({ role: "tool", tool: "Edit", summary: "foo.ts" });
@@ -46,7 +48,10 @@ describe("projectEvent", () => {
   it("maps a tool_result (user) to a truncated summary", () => {
     const e = projectEvent({
       kind: "stream",
-      payload: { type: "user", message: { content: [{ type: "tool_result", content: "x".repeat(500) }] } },
+      payload: {
+        type: "user",
+        message: { content: [{ type: "tool_result", content: "x".repeat(500) }] },
+      },
     });
     expect(e?.role).toBe("tool_result");
     expect((e?.summary ?? "").length).toBeLessThanOrEqual(201);
@@ -67,11 +72,16 @@ describe("projectEvent", () => {
   });
 
   it("skips system events", () => {
-    expect(projectEvent({ kind: "stream", payload: { type: "system", subtype: "init" } })).toBeNull();
+    expect(
+      projectEvent({ kind: "stream", payload: { type: "system", subtype: "init" } }),
+    ).toBeNull();
   });
 
   it("maps non-empty stderr", () => {
-    expect(projectEvent({ kind: "stderr", text: " boom\n" })).toEqual({ role: "stderr", summary: "boom" });
+    expect(projectEvent({ kind: "stderr", text: " boom\n" })).toEqual({
+      role: "stderr",
+      summary: "boom",
+    });
   });
 
   it("skips empty stderr", () => {

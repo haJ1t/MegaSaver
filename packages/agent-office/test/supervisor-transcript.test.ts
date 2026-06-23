@@ -12,11 +12,11 @@ import {
   workspaceKeySchema,
 } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadTask, saveTask } from "../src/task-store.js";
 import { saveAgent } from "../src/agent-store.js";
-import { saveRole } from "../src/role-store.js";
 import { createLauncherRegistry } from "../src/launcher-registry.js";
+import { saveRole } from "../src/role-store.js";
 import { createSupervisor } from "../src/supervisor.js";
+import { loadTask, saveTask } from "../src/task-store.js";
 import type { TranscriptEntry } from "../src/transcript.js";
 
 const WK = workspaceKeySchema.parse("0123456789abcdef");
@@ -29,8 +29,20 @@ const TASK_ID = officeTaskIdSchema.parse("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 // subscribed, then exits 0 — exercises the supervisor's transcript capture.
 function makeEmittingLauncher(): AgentLauncher {
   const events: LauncherEvent[] = [
-    { kind: "stream", payload: { type: "assistant", message: { content: [{ type: "text", text: "Working on it" }] } } },
-    { kind: "stream", payload: { type: "assistant", message: { content: [{ type: "tool_use", name: "Bash", input: { command: "pnpm test" } }] } } },
+    {
+      kind: "stream",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Working on it" }] },
+      },
+    },
+    {
+      kind: "stream",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", name: "Bash", input: { command: "pnpm test" } }] },
+      },
+    },
   ];
   return {
     kind: "claude-code",
@@ -143,7 +155,12 @@ describe("supervisor transcript capture", () => {
       throw new Error("sink boom");
     });
     await supervisor.drainAgent(WK, AGENT_ID);
-    const task = await loadTask({ storeRoot: root, workspaceKey: WK, officeAgentId: AGENT_ID, officeTaskId: TASK_ID });
+    const task = await loadTask({
+      storeRoot: root,
+      workspaceKey: WK,
+      officeAgentId: AGENT_ID,
+      officeTaskId: TASK_ID,
+    });
     expect(task.status).toBe("done");
   });
 });

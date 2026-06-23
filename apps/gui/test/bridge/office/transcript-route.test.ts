@@ -2,12 +2,17 @@ import { mkdtempSync, rmSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendTranscript, createLauncherRegistry } from "@megasaver/agent-office";
+import {
+  type TranscriptEntry,
+  appendTranscript,
+  createLauncherRegistry,
+  transcriptEntrySchema,
+} from "@megasaver/agent-office";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
 import { type AgentId, encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RouteContext } from "../../../bridge/route-context.js";
 import { publishTranscript, transcriptKey } from "../../../bridge/office-transcript-bus.js";
+import type { RouteContext } from "../../../bridge/route-context.js";
 import { handleListTranscript, handleTranscriptStream } from "../../../bridge/routes/office.js";
 
 const WORKDIR = "/tmp/office-transcript-wk";
@@ -58,17 +63,20 @@ function makeCtx(): RouteContext & Captured {
     resolveWorkspace: (cwd: string) => ({ workspaceKey: WK, label: cwd, cwd }),
     newId: () => "00000000-0000-4000-8000-000000000000",
     now: () => "2026-06-23T12:00:00.000Z",
-    sendJson: (_res, status, body) => {
+    sendJson: (_res: unknown, status: number, body: unknown) => {
       json.push({ status, body });
     },
-    sendError: (_res, status, code) => {
+    sendError: (_res: unknown, status: number, code: string) => {
       err.push({ status, code });
     },
     sendText: vi.fn(),
     office: {
       coreRegistry: createInMemoryCoreRegistry(),
       registry: createLauncherRegistry([
-        { kind: "claude-code" as AgentId, launch: () => ({ sessionId: "x", onEvent() {}, onExit() {}, cancel() {} }) },
+        {
+          kind: "claude-code" as AgentId,
+          launch: () => ({ sessionId: "x", onEvent() {}, onExit() {}, cancel() {} }),
+        },
       ]),
       allowFull: false,
     },
@@ -77,14 +85,14 @@ function makeCtx(): RouteContext & Captured {
   return Object.assign(ctx, { json, err, writes, closeListeners });
 }
 
-function entry(seq: number) {
-  return {
+function entry(seq: number): TranscriptEntry {
+  return transcriptEntrySchema.parse({
     id: `33333333-3333-4333-8333-3333333333${String(seq).padStart(2, "0")}`,
     seq,
     ts: `2026-06-23T12:00:0${seq}.000Z`,
     role: "assistant" as const,
     text: `entry ${seq}`,
-  };
+  });
 }
 
 describe("handleListTranscript", () => {
@@ -134,7 +142,7 @@ describe("handleTranscriptStream", () => {
   it("pushes a published entry as an SSE transcript frame", async () => {
     const ctx = makeCtx();
     await handleTranscriptStream(ctx, WK, AID);
-    publishTranscript(transcriptKey(WK, AID), entry(0) as never);
+    publishTranscript(transcriptKey(WK, AID), entry(0));
     const frame = ctx.writes.find((w) => w.includes("event: transcript"));
     expect(frame).toBeDefined();
     expect(frame).toContain("entry 0");

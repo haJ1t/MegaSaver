@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { TranscriptEntry } from "../src/transcript.js";
 import { appendTranscript, listTranscript } from "../src/transcript-store.js";
+import type { TranscriptEntry } from "../src/transcript.js";
 
 const WK = "0000000000000abc";
 const AID = "11111111-1111-4111-8111-111111111111";

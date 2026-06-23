@@ -10,7 +10,7 @@ import { resolveLauncherPermission } from "./permission.js";
 import { loadRole } from "./role-store.js";
 import { listTasks, saveTask } from "./task-store.js";
 import type { OfficeTask } from "./task.js";
-import { projectEvent, type TranscriptEntry, transcriptEntrySchema } from "./transcript.js";
+import { type TranscriptEntry, projectEvent, transcriptEntrySchema } from "./transcript.js";
 
 export type TranscriptSink = (x: {
   workspaceKey: string;
