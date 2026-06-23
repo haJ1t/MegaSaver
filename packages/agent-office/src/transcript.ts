@@ -107,7 +107,13 @@ export function projectEvent(event: LauncherEvent): TranscriptEntryInput | null 
           typeof c === "string"
             ? c
             : Array.isArray(c)
-              ? c.map((x) => (x as { text?: string }).text ?? "").join(" ")
+              ? c
+                  .map((x) =>
+                    typeof x === "object" && x !== null
+                      ? ((x as { text?: string }).text ?? "")
+                      : "",
+                  )
+                  .join(" ")
               : "";
         return { role: "tool_result", summary: truncate(text.trim()) };
       }

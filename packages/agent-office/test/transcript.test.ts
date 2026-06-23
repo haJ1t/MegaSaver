@@ -122,6 +122,15 @@ describe("projectEvent", () => {
     ).not.toThrow();
   });
 
+  it("does not throw on a tool_result with a null nested content element", () => {
+    expect(() =>
+      projectEvent({
+        kind: "stream",
+        payload: { type: "user", message: { content: [{ type: "tool_result", content: [null] }] } },
+      }),
+    ).not.toThrow();
+  });
+
   it("returns null when message is missing", () => {
     expect(projectEvent({ kind: "stream", payload: { type: "assistant" } })).toBeNull();
   });
