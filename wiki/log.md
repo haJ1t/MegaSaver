@@ -2967,3 +2967,12 @@ the office showed zero roles. Added `ensurePredefinedRoles` (idempotent — no-o
 wired into the bridge startup (server.ts) + a new `mega office role seed` CLI command. Now the roster
 appears in the GUI role manager + `mega office role list` on first run. agent-office 117 / cli 721 /
 gui tests green; changeset minor (agent-office, cli) + patch (gui).
+
+## [2026-06-22] feature | office auto agent workdir
+
+Agent `workdir` now derived from the project dir, not user-chosen. CLI dropped
+`office agent create --workdir` (uses cwd); GUI add-agent dropped its workdir
+input (uses selected workspace label); bridge enforces `encodeWorkspaceKey(workdir)
+=== wk`. Branch `feat/office-auto-workdir`, 4 commits, `pnpm verify` green
+(cli 721 / gui tests pass), CLI smoke confirms no `--workdir` flag + workdir===cwd.
+role.defaultWorkdir left inert (follow-up).

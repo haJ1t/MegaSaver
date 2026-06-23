@@ -84,7 +84,6 @@ async function setupRoleAndAgent(tmpDir: string) {
     ...agentInp,
     nameFlag: "Archie",
     roleIdFlag: ROLE_ID,
-    workdirFlag: "/repo",
     newId: () => AGENT_ID,
     now: () => NOW,
   });
@@ -174,7 +173,6 @@ describe("runOfficeRun", () => {
       ...agentInp,
       nameFlag: "FullArchie",
       roleIdFlag: FULL_ROLE_ID,
-      workdirFlag: "/repo",
       newId: () => FULL_AGENT_ID,
       now: () => NOW,
     });
@@ -231,7 +229,6 @@ describe("runOfficeRun", () => {
       ...agentInp,
       nameFlag: "FullArchie",
       roleIdFlag: FULL_ROLE_ID,
-      workdirFlag: "/repo",
       newId: () => FULL_AGENT_ID,
       now: () => NOW,
     });
@@ -377,7 +374,6 @@ describe("runOfficeRun", () => {
         ...agentInp,
         nameFlag: "FullArchie",
         roleIdFlag: FULL_ROLE_ID,
-        workdirFlag: "/repo",
         newId: () => FULL_AGENT_ID,
         now: () => NOW,
       });

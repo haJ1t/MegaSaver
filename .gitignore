@@ -48,6 +48,7 @@ yarn-error.log*
 .megasaver/state/
 .megasaver/sessions/
 .megasaver/cache/
+.megasaver/hooks/
 
 # Wiki raw sources — local-only.
 # Per the wiki schema (wiki/CLAUDE.md), raw/ contents are read by the

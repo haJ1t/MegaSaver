@@ -24,6 +24,7 @@ import type { OfficeAgent } from "@megasaver/agent-office";
 import type { CoreRegistry } from "@megasaver/core";
 import {
   type WorkspaceKey,
+  encodeWorkspaceKey,
   officeAgentIdSchema,
   roleIdSchema,
   workspaceKeySchema,
@@ -202,6 +203,20 @@ export async function handleCreateAgent(ctx: RouteContext, wk: string): Promise<
       zodErrorMessage(parsed.error),
       ctx.origin,
       parsed.error.issues,
+    );
+    return;
+  }
+  // workdir is derived from the workspace (no longer user-chosen); enforce that
+  // it is the workspace's project directory before it reaches the launcher cwd.
+  // Runs after agentCreateInputSchema (workdir min(1)) so an empty workdir — whose
+  // hash is itself a valid key — is already rejected and cannot alias a workspace.
+  if (encodeWorkspaceKey(parsed.data.workdir) !== wk) {
+    ctx.sendError(
+      ctx.res,
+      400,
+      "validation_failed",
+      "workdir must match the workspace directory.",
+      ctx.origin,
     );
     return;
   }
