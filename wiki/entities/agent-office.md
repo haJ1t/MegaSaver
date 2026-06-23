@@ -210,17 +210,33 @@ Phase A captures + persists + streams them:
 interactive but in a background session" — the interactive-vs-resume model is
 deferred to the Phase B spec.
 
-## Status: feature complete (Phases 0–5) + transcript Phase A
+## Chat — Phase B (2026-06-23)
+
+Talk to an agent. The transcript panel gains a message box; sending posts to
+`POST /api/office/:wk/agents/:id/chat {message}` which records a `user`
+transcript turn (new role), queues the message as a task, and runs the agent —
+the supervisor **resumes** `agent.claudeSessionId` so the conversation has
+continuity (the agent remembers prior turns). The reply streams back over the
+Phase A SSE feed. Server-side `trim` rejects a blank message; a
+`paused`/`stopped`/`error` agent is rejected `409` before any turn is written.
+**Concurrency:** drains are serialized per `(wk, agentId)` by an in-process
+`Map<string, Promise>` — a second run/chat request chains behind the in-flight
+drain instead of spawning a parallel supervisor (fixes a double-spawn TOCTOU)
+and re-picks tasks queued during a drain's tail (fixes the stranded chat
+follow-up). Risk HIGH; reviewed by code-reviewer + critic (three race findings
+fixed before merge: serializer + 409 + trim).
+
+## Status: feature complete (Phases 0–5) + transcript A + chat B
 
 All Agent Office phases shipped to `main`: 0 engine data layer, 1 launcher, 2
-supervisor, 3 bridge `/api/office`, 4 GUI board, 5 CLI, plus auto-workdir and
-live-transcript Phase A. The office is usable end to end from the GUI and the
-CLI. Open follow-ups (filed): cooperative cancel for a running task, `workdir`
-confinement, full evidence-ledger integration, transcript **Phase B** (talk to
-the agent), bridge task-create agent precheck, `status --json`
-instruction-exposure doc note, flaky memory-graph-panel test hardening, the
-atomicWriteFile dir-fsync shared-util hoist, and removing the inert
-`role.defaultWorkdir` field.
+supervisor, 3 bridge `/api/office`, 4 GUI board, 5 CLI, plus auto-workdir,
+live-transcript Phase A, and chat Phase B. The office is usable end to end from
+the GUI and the CLI. Open follow-ups (filed): cooperative cancel for a running
+task, `workdir` confinement, full evidence-ledger integration, bridge
+task-create agent precheck, `status --json` instruction-exposure doc note,
+flaky memory-graph-panel test hardening, the atomicWriteFile dir-fsync
+shared-util hoist, removing the inert `role.defaultWorkdir` field, and a single
+monotonic transcript sequence (user/reply ordering robustness).
 
 See [[concepts/agent-agnostic-core]], [[entities/core]],
 [[entities/connectors-shared]], [[entities/content-store]],

@@ -2986,3 +2986,12 @@ bridge backlog GET + SSE (`office-transcript-bus`, in-process) → GUI
 `TranscriptPanel` (click-to-open). New `officeTranscriptId` brand. Branch
 `feat/office-agent-transcript`, 8 commits, TDD, `pnpm verify` green
 (agent-office + gui 108 office tests). Phase B (talk to agent) deferred.
+
+## [2026-06-23] feature | agent chat (Phase B)
+
+Talk to an office agent: message box in the transcript panel → `POST .../chat` →
+`user` turn + queued task + drain (resumes claude session for continuity) → reply
+streams into the Phase A feed. Per-agent drain serializer (in-process Map) fixes
+double-spawn TOCTOU + stranded chat follow-ups; 409 on non-runnable agent; server
+trims blank messages. Branch `feat/office-agent-chat`; reviewed by code-reviewer +
+critic (3 race findings fixed); `pnpm verify` green; agent-office + gui tests pass.
