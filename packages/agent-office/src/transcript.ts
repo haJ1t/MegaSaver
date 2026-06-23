@@ -3,6 +3,7 @@ import { officeTranscriptIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 
 export const transcriptRoleSchema = z.enum([
+  "user",
   "assistant",
   "tool",
   "tool_result",
