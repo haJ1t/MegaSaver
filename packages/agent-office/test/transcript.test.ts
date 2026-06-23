@@ -103,6 +103,54 @@ describe("projectEvent", () => {
     });
     expect(e).toEqual({ role: "assistant", text: "hi" });
   });
+
+  // Hostile / malformed payloads must never throw — the launcher emits these
+  // from an async stdout callback, so a throw would become an uncaughtException
+  // and crash the bridge.
+  it("does not throw on a null content block", () => {
+    expect(() =>
+      projectEvent({
+        kind: "stream",
+        payload: { type: "assistant", message: { content: [null] } },
+      }),
+    ).not.toThrow();
+  });
+
+  it("does not throw on a primitive content block", () => {
+    expect(() =>
+      projectEvent({ kind: "stream", payload: { type: "user", message: { content: [42, "x"] } } }),
+    ).not.toThrow();
+  });
+
+  it("returns null when message is missing", () => {
+    expect(projectEvent({ kind: "stream", payload: { type: "assistant" } })).toBeNull();
+  });
+
+  it("returns null when content is not an array", () => {
+    expect(
+      projectEvent({
+        kind: "stream",
+        payload: { type: "assistant", message: { content: "nope" } },
+      }),
+    ).toBeNull();
+  });
+
+  it("returns null for a non-object payload", () => {
+    expect(projectEvent({ kind: "stream", payload: 42 })).toBeNull();
+    expect(projectEvent({ kind: "stream", payload: null })).toBeNull();
+  });
+
+  it("truncates very long assistant text", () => {
+    const e = projectEvent({
+      kind: "stream",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "x".repeat(9000) }] },
+      },
+    });
+    expect(e?.role).toBe("assistant");
+    expect((e?.text ?? "").length).toBeLessThanOrEqual(4001);
+  });
 });
 
 describe("transcriptEntrySchema", () => {

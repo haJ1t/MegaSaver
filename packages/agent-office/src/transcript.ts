@@ -33,6 +33,10 @@ export type TranscriptEntryInput = {
 };
 
 const MAX = 200;
+// Assistant prose is the readable core of the feed, so it gets a far larger cap
+// than tool summaries — but it is still bounded: an unbounded entry would be a
+// disk/SSE DoS and persist arbitrarily large quoted content.
+const ASSISTANT_MAX = 4000;
 const truncate = (s: string, n = MAX): string => (s.length > n ? `${s.slice(0, n)}…` : s);
 const basename = (p: string): string => p.split("/").pop() ?? p;
 
@@ -77,24 +81,28 @@ export function projectEvent(event: LauncherEvent): TranscriptEntryInput | null 
   }
 
   if (p.type === "assistant" && Array.isArray(p.message?.content)) {
-    for (const b of p.message.content as ContentBlock[]) {
-      if (b.type === "text" && typeof b.text === "string") {
-        return { role: "assistant", text: b.text };
+    for (const b of p.message.content as unknown[]) {
+      if (typeof b !== "object" || b === null) continue;
+      const block = b as ContentBlock;
+      if (block.type === "text" && typeof block.text === "string") {
+        return { role: "assistant", text: truncate(block.text, ASSISTANT_MAX) };
       }
-      if (b.type === "tool_use" && typeof b.name === "string") {
-        const summary = toolSummary(b.name, b.input);
+      if (block.type === "tool_use" && typeof block.name === "string") {
+        const summary = toolSummary(block.name, block.input);
         return summary !== undefined
-          ? { role: "tool", tool: b.name, summary }
-          : { role: "tool", tool: b.name };
+          ? { role: "tool", tool: block.name, summary }
+          : { role: "tool", tool: block.name };
       }
     }
     return null;
   }
 
   if (p.type === "user" && Array.isArray(p.message?.content)) {
-    for (const b of p.message.content as ContentBlock[]) {
-      if (b.type === "tool_result") {
-        const c = b.content;
+    for (const b of p.message.content as unknown[]) {
+      if (typeof b !== "object" || b === null) continue;
+      const block = b as ContentBlock;
+      if (block.type === "tool_result") {
+        const c = block.content;
         const text =
           typeof c === "string"
             ? c

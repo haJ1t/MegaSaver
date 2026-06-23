@@ -59,15 +59,22 @@ Mapping from `{kind:"stream", payload}` (claude stream-json):
 - `system` / unknown → null (skip)
 - `{kind:"stderr", text}` → `{role:"stderr", summary: truncate(text,200)}` (non-empty only)
 
-Compaction + truncation is the privacy boundary: no full tool outputs, no
-full file contents are persisted. (Still HIGH risk — summaries may carry
-fragments; store is localhost-only, under the office store dir.)
+Compaction bounds what is persisted: tool summaries + tool_result/stderr text
+truncate to 200 chars (Bash command to 80). Assistant prose is the readable
+core of the feed, so it is kept up to a larger cap (4000 chars) — bounded (no
+unbounded disk/SSE entry) but NOT a secrecy boundary: assistant text may quote
+file contents or command output the model echoes. Accepted HIGH-risk exposure;
+mitigated only by the store being localhost-only under the office store dir.
+`projectEvent` must never throw — the launcher emits from an async stdout
+callback, so a throw would crash the bridge; malformed/hostile payloads return
+null and are dropped (the supervisor also wraps the whole capture in try/catch).
 
 ### 2. Store (`transcript-store.ts`)
 
-Append-only JSONL per agent, mirroring the audit-store pattern (atomic append,
-`assertSafeSegment`, zod-on-load):
-`office/<wk>/transcript/<officeAgentId>.jsonl`.
+Append-only per agent, mirroring the audit-store pattern (one JSON file per
+entry, atomic write, `assertSafeSegment`, zod-on-load):
+`office/<wk>/transcript/<officeAgentId>/<transcriptId>.json`. `listTranscript`
+reads the dir and sorts by `(ts, seq)`.
 - `appendTranscript({storeRoot, workspaceKey, officeAgentId, entry})`
 - `listTranscript({storeRoot, workspaceKey, officeAgentId})` → `TranscriptEntry[]`
 

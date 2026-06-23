@@ -163,4 +163,66 @@ describe("supervisor transcript capture", () => {
     });
     expect(task.status).toBe("done");
   });
+
+  it("drops a malformed stream event without failing the task", async () => {
+    await seed(root);
+    const seen: { entry: TranscriptEntry }[] = [];
+    let n = 0;
+    const coreRegistry = createInMemoryCoreRegistry();
+    coreRegistry.createProject({
+      id: PROJECT_ID,
+      name: "P",
+      rootPath: "/repo",
+      createdAt: "2026-06-23T12:00:00.000Z",
+      updatedAt: "2026-06-23T12:00:00.000Z",
+    });
+    // Launcher emits a malformed event (null content block) then a good one,
+    // asynchronously (microtask) — mirrors production's async stdout callback.
+    const malformedLauncher: AgentLauncher = {
+      kind: "claude-code",
+      launch(): LaunchHandle {
+        return {
+          sessionId: `fake-${randomUUID()}`,
+          onEvent(cb) {
+            Promise.resolve().then(() => {
+              cb({ kind: "stream", payload: { type: "assistant", message: { content: [null] } } });
+              cb({
+                kind: "stream",
+                payload: {
+                  type: "assistant",
+                  message: { content: [{ type: "text", text: "ok" }] },
+                },
+              });
+            });
+          },
+          onExit(cb) {
+            // exit after the emitted events settle
+            Promise.resolve()
+              .then(() => undefined)
+              .then(() => cb({ code: 0 }));
+          },
+          cancel() {},
+        };
+      },
+    };
+    const supervisor = createSupervisor({
+      storeRoot: root,
+      registry: createLauncherRegistry([malformedLauncher]),
+      coreRegistry,
+      projectId: PROJECT_ID,
+      now: () => "2026-06-23T13:00:00.000Z",
+      newId: () => `00000000-0000-4000-8000-${String(n++).padStart(12, "0")}`,
+      onTranscript: (x) => seen.push(x),
+    });
+    await supervisor.drainAgent(WK, AGENT_ID);
+    const task = await loadTask({
+      storeRoot: root,
+      workspaceKey: WK,
+      officeAgentId: AGENT_ID,
+      officeTaskId: TASK_ID,
+    });
+    expect(task.status).toBe("done");
+    // The malformed event is skipped; the good one is captured.
+    expect(seen.map((s) => s.entry.text)).toEqual(["ok"]);
+  });
 });

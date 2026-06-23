@@ -169,21 +169,24 @@ export function createSupervisor(deps: {
         ...claudeSessionInput,
       });
       // Capture the launcher's stream events as a compact, persisted transcript.
-      // Best-effort: a sink throw must never poison task execution.
+      // The launcher emits from an async stdout callback, so a throw here would
+      // become an uncaughtException and crash the bridge — the entire body
+      // (project + parse + sink) is guarded. Capture is best-effort and must
+      // never poison task execution; a malformed event is simply dropped.
       let transcriptSeq = 0;
       handle.onEvent((event) => {
-        const input = projectEvent(event);
-        if (input === null) return;
-        const entry = transcriptEntrySchema.parse({
-          id: newId(),
-          seq: transcriptSeq++,
-          ts: now(),
-          ...input,
-        });
         try {
+          const input = projectEvent(event);
+          if (input === null) return;
+          const entry = transcriptEntrySchema.parse({
+            id: newId(),
+            seq: transcriptSeq++,
+            ts: now(),
+            ...input,
+          });
           onTranscript?.({ workspaceKey: agent.workspaceKey, officeAgentId: agent.id, entry });
         } catch {
-          // capture is best-effort
+          // capture is best-effort — never let it fail the run
         }
       });
 
