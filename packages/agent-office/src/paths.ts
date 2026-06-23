@@ -69,3 +69,26 @@ export function auditPath(input: {
   assertSafeSegment(input.auditId);
   return join(auditDir(input.storeRoot, input.workspaceKey), `${input.auditId}.json`);
 }
+
+export function transcriptDir(
+  storeRoot: string,
+  workspaceKey: string,
+  officeAgentId: string,
+): string {
+  assertSafeSegment(workspaceKey);
+  assertSafeSegment(officeAgentId);
+  return join(storeRoot, "office", workspaceKey, "transcript", officeAgentId);
+}
+
+export function transcriptPath(input: {
+  storeRoot: string;
+  workspaceKey: string;
+  officeAgentId: string;
+  transcriptId: string;
+}): string {
+  assertSafeSegment(input.transcriptId);
+  return join(
+    transcriptDir(input.storeRoot, input.workspaceKey, input.officeAgentId),
+    `${input.transcriptId}.json`,
+  );
+}
