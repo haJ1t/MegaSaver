@@ -867,9 +867,34 @@ describe("handleChat", () => {
     expect(ctx.capturedError[0]?.code).toBe("validation_failed");
   });
 
+  it("whitespace-only message → 400 (server trims, not just the client)", async () => {
+    const agentId = await setupAgent();
+    const ctx = makeCtx({ req: makeBodyReq({ message: "   \n  " }) });
+    await handleChat(ctx, WK, agentId);
+    expect(ctx.capturedError[0]?.status).toBe(400);
+  });
+
   it("unknown agent → 404", async () => {
     const ctx = makeCtx({ req: makeBodyReq({ message: "hi" }) });
     await handleChat(ctx, WK, "99999999-9999-4999-8999-999999999999");
     expect(ctx.capturedError[0]?.status).toBe(404);
+  });
+
+  it("rejects a non-runnable (paused) agent → 409, no user turn, no task", async () => {
+    const agentId = await setupAgent();
+    const agents = await listAgents({ storeRoot, workspaceKey: WK });
+    const existing = agents.find((a) => a.id === agentId);
+    if (existing === undefined) throw new Error("expected the agent in the store");
+    await saveAgent({ storeRoot, agent: { ...existing, status: "paused" } });
+
+    const ctx = makeCtx({ req: makeBodyReq({ message: "are you there" }) });
+    await handleChat(ctx, WK, agentId);
+    expect(ctx.capturedError[0]?.status).toBe(409);
+
+    // No ghost: neither a user transcript turn nor a queued task was written.
+    const tr = await listTranscript({ storeRoot, workspaceKey: WK, officeAgentId: agentId });
+    expect(tr.length).toBe(0);
+    const tasks = await listTasks({ storeRoot, workspaceKey: WK, officeAgentId: agentId });
+    expect(tasks.length).toBe(0);
   });
 });

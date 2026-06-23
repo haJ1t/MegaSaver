@@ -359,25 +359,30 @@ export async function handleRunAgent(
       workspaceKey: wk,
       officeAgentId: idParse.data,
     });
-    // Concurrent-run guard: an agent already `working` has an in-flight drain
-    // on the same workdir. Returning its snapshot without starting a second
-    // drain prevents a double-spawn (spec contract).
+    // Fast-path: an agent already `working` has an in-flight drain; return its
+    // snapshot without scheduling another (the serializer would no-op anyway).
     if (agent.status === "working") {
       ctx.sendJson(ctx.res, 202, agent, ctx.origin);
       return;
     }
-    startAgentDrain(ctx, wk, idParse.data);
+    scheduleDrain(ctx, wk, idParse.data);
     ctx.sendJson(ctx.res, 202, agent, ctx.origin);
   } catch (err) {
     handleOfficeError(ctx, err);
   }
 }
 
-// Build a supervisor (with the transcript persist+publish sink) and kick off a
-// fire-and-forget drain. Shared by `handleRunAgent` and `handleChat` so both
-// paths spawn through one wiring. The supervisor settles task/agent to terminal
-// states itself; the catch only surfaces unexpected throws.
-function startAgentDrain(ctx: RouteContext, wk: string, officeAgentId: string): void {
+// One drain at a time per agent, in-process. A file-status `working` check is a
+// racy concurrency primitive (read-then-act over an await gap): two near-
+// simultaneous run/chat requests can both observe a non-working agent and spawn
+// two supervisors on the same workdir. Serializing per `(wk, agentId)` here makes
+// a second request CHAIN behind the first instead — which also closes the queue
+// gap: a task queued during the tail of one drain is picked up by the chained
+// drain (each drain re-lists tasks from scratch), so chat follow-ups are never
+// stranded.
+const agentDrains = new Map<string, Promise<void>>();
+
+function buildAndDrain(ctx: RouteContext, wk: string, officeAgentId: string): Promise<void> {
   // guardOffice (asserted by callers) guarantees ctx.office is defined.
   const office = ctx.office as NonNullable<typeof ctx.office>;
   const supervisor = createSupervisor({
@@ -403,9 +408,24 @@ function startAgentDrain(ctx: RouteContext, wk: string, officeAgentId: string): 
       publishTranscript(transcriptKey(workspaceKey, aid), entry);
     },
   });
-  supervisor.drainAgent(wk, officeAgentId).catch((drainErr) => {
-    console.error(`[office] drainAgent failed for ${wk}/${officeAgentId}:`, drainErr);
-  });
+  return supervisor.drainAgent(wk, officeAgentId).then(() => undefined);
+}
+
+function scheduleDrain(ctx: RouteContext, wk: string, officeAgentId: string): void {
+  const key = transcriptKey(wk, officeAgentId);
+  const prev = agentDrains.get(key) ?? Promise.resolve();
+  // Chain after any in-flight drain for this agent. The supervisor settles
+  // task/agent to terminal states itself; the catch only surfaces unexpected
+  // throws so a single failure can't break the chain.
+  const next = prev
+    .then(() => buildAndDrain(ctx, wk, officeAgentId))
+    .catch((drainErr) =>
+      console.error(`[office] drainAgent failed for ${wk}/${officeAgentId}:`, drainErr),
+    )
+    .finally(() => {
+      if (agentDrains.get(key) === next) agentDrains.delete(key);
+    });
+  agentDrains.set(key, next);
 }
 
 // Chat: append a `user` turn to the transcript, queue it as a task, and start a
@@ -444,6 +464,22 @@ export async function handleChat(ctx: RouteContext, wk: string, agentId: string)
       workspaceKey: wk,
       officeAgentId: idParse.data,
     });
+    // The supervisor refuses to drain a paused/stopped/error agent, so a message
+    // to one would queue + show a user turn but never get a reply. Reject up front
+    // (before persisting the turn) so the user gets a clear signal instead of a
+    // dead chat. `idle` and `working` are runnable (working → queues behind the
+    // in-flight drain).
+    if (agent.status === "paused" || agent.status === "stopped" || agent.status === "error") {
+      ctx.sendError(
+        ctx.res,
+        409,
+        "validation_failed",
+        `Agent is ${agent.status}; resume or run it before chatting.`,
+        ctx.origin,
+      );
+      return;
+    }
+
     const entry = transcriptEntrySchema.parse({
       id: ctx.newId(),
       seq: 0,
@@ -469,9 +505,10 @@ export async function handleChat(ctx: RouteContext, wk: string, agentId: string)
     });
     await saveTask({ storeRoot: ctx.storeRoot, task });
 
-    // If the agent is already working, the message just queues behind the
-    // in-flight drain; otherwise start one now.
-    if (agent.status !== "working") startAgentDrain(ctx, wk, idParse.data);
+    // Always schedule: the per-agent serializer either runs now (idle) or chains
+    // behind the in-flight drain (working), so the queued message is never
+    // stranded and two concurrent sends can't double-spawn.
+    scheduleDrain(ctx, wk, idParse.data);
     ctx.sendJson(ctx.res, 202, task, ctx.origin);
   } catch (err) {
     handleOfficeError(ctx, err);
