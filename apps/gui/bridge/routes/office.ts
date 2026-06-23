@@ -376,8 +376,20 @@ export async function handleRunAgent(
       newId: ctx.newId,
       allowFull: office.allowFull,
       onTranscript: ({ workspaceKey, officeAgentId, entry }) => {
-        // Persist for the backlog, then push live to any open stream.
-        void appendTranscript({ storeRoot: ctx.storeRoot, workspaceKey, officeAgentId, entry });
+        // Persist for the backlog, then push live to any open stream. The persist
+        // is fire-and-forget; a rejection MUST be caught or it becomes an
+        // unhandledRejection that can crash the bridge. Live push is best-effort.
+        void appendTranscript({
+          storeRoot: ctx.storeRoot,
+          workspaceKey,
+          officeAgentId,
+          entry,
+        }).catch((err) =>
+          console.error(
+            `[office] transcript persist failed for ${workspaceKey}/${officeAgentId}:`,
+            err,
+          ),
+        );
         publishTranscript(transcriptKey(workspaceKey, officeAgentId), entry);
       },
     });
