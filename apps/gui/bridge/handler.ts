@@ -43,9 +43,11 @@ import {
   handleListAudit,
   handleListRoles,
   handleListTasks,
+  handleListTranscript,
   handleOfficeStatus,
   handleOfficeStream,
   handleRunAgent,
+  handleTranscriptStream,
 } from "./routes/office.js";
 import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
@@ -383,6 +385,28 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       const wk = decodeURIComponent(officeRunMatch[1] as string);
       const agentId = decodeURIComponent(officeRunMatch[2] as string);
       await handleRunAgent(ctx, wk, agentId);
+      return;
+    }
+
+    // Transcript — live feed (stream) + backlog. Stream checked first (more specific).
+    const officeTranscriptStreamMatch = path.match(
+      /^\/api\/office\/([^/]+)\/agents\/([^/]+)\/transcript\/stream$/,
+    );
+    if (officeTranscriptStreamMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      const wk = decodeURIComponent(officeTranscriptStreamMatch[1] as string);
+      const agentId = decodeURIComponent(officeTranscriptStreamMatch[2] as string);
+      await handleTranscriptStream(ctx, wk, agentId);
+      return;
+    }
+    const officeTranscriptMatch = path.match(
+      /^\/api\/office\/([^/]+)\/agents\/([^/]+)\/transcript$/,
+    );
+    if (officeTranscriptMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      const wk = decodeURIComponent(officeTranscriptMatch[1] as string);
+      const agentId = decodeURIComponent(officeTranscriptMatch[2] as string);
+      await handleListTranscript(ctx, wk, agentId);
       return;
     }
 

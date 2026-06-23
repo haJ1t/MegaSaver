@@ -49,6 +49,17 @@ export {
 export { appendAudit, listAudit } from "./audit-store.js";
 
 export {
+  transcriptEntrySchema,
+  transcriptRoleSchema,
+  projectEvent,
+  type TranscriptEntry,
+  type TranscriptEntryInput,
+  type TranscriptRole,
+} from "./transcript.js";
+
+export { appendTranscript, listTranscript } from "./transcript-store.js";
+
+export {
   createSupervisor,
   type Supervisor,
 } from "./supervisor.js";

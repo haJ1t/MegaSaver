@@ -18,6 +18,7 @@ const stub: {
   runAgent: (_wk: string, _agentId: string) => Promise<OfficeAgent>;
   controlAgent: (_wk: string, _agentId: string, _action: string) => Promise<OfficeAgent>;
   assignTask: (_wk: string, _agentId: string, _instruction: string) => Promise<OfficeTask>;
+  fetchTranscript: (_wk: string, _agentId: string) => Promise<unknown[]>;
 } = {
   fetchRoles: () => Promise.resolve([] as OfficeRole[]),
   createAgent: (_wk: string, _input: unknown) => Promise.reject(new Error("not set")),
@@ -27,6 +28,7 @@ const stub: {
     Promise.reject(new Error("not set")),
   assignTask: (_wk: string, _agentId: string, _instruction: string) =>
     Promise.reject(new Error("not set")),
+  fetchTranscript: (_wk: string, _agentId: string) => Promise.resolve([]),
 };
 
 vi.mock("../../../src/lib/office-client.js", () => ({
@@ -38,6 +40,8 @@ vi.mock("../../../src/lib/office-client.js", () => ({
     stub.controlAgent(wk, agentId, action),
   assignTask: (wk: string, agentId: string, instruction: string) =>
     stub.assignTask(wk, agentId, instruction),
+  fetchTranscript: (wk: string, agentId: string) => stub.fetchTranscript(wk, agentId),
+  openTranscriptStream: () => () => undefined,
 }));
 
 import { AgentBoard } from "../../../src/views/office/agent-board.js";
@@ -99,6 +103,7 @@ afterEach(() => {
   stub.runAgent = () => Promise.reject(new Error("not set"));
   stub.controlAgent = () => Promise.reject(new Error("not set"));
   stub.assignTask = () => Promise.reject(new Error("not set"));
+  stub.fetchTranscript = () => Promise.resolve([]);
 });
 
 describe("AgentBoard", () => {
@@ -336,5 +341,26 @@ describe("AgentBoard", () => {
     fireEvent.click(screen.getByText(/\+ Add agent/));
     await waitFor(() => expect(screen.getByLabelText(/Add agent form/)).toBeDefined());
     expect(screen.queryByLabelText(/Workdir/i)).toBeNull();
+  });
+
+  it("clicking an agent card opens its transcript panel", async () => {
+    stub.fetchRoles = () => Promise.resolve([ROLE_1]);
+    let calledWith: { wk: string; agentId: string } | null = null;
+    stub.fetchTranscript = (wk, agentId) => {
+      calledWith = { wk, agentId };
+      return Promise.resolve([]);
+    };
+    render(
+      <AgentBoard
+        wk="wk1"
+        workdir="/home/user/project"
+        status={STATUS}
+        onRefresh={() => undefined}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText("idle-agent")).toBeDefined());
+
+    fireEvent.click(screen.getByLabelText(/View activity for idle-agent/));
+    await waitFor(() => expect(calledWith).toEqual({ wk: "wk1", agentId: "a2" }));
   });
 });

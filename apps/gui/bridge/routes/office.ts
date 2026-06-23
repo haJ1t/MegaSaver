@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   AgentOfficeError,
   OFFICE_PROJECT_ID,
+  appendTranscript,
   createSupervisor,
   deleteAgent,
   deleteRole,
@@ -11,6 +12,7 @@ import {
   listAudit,
   listRoles,
   listTasks,
+  listTranscript,
   loadAgent,
   loadRole,
   officeAgentSchema,
@@ -30,6 +32,7 @@ import {
   workspaceKeySchema,
 } from "@megasaver/shared";
 import { handleCaughtError } from "../error-mapping.js";
+import { publishTranscript, subscribeTranscript, transcriptKey } from "../office-transcript-bus.js";
 import {
   agentCreateInputSchema,
   controlInputSchema,
@@ -372,6 +375,23 @@ export async function handleRunAgent(
       now: ctx.now,
       newId: ctx.newId,
       allowFull: office.allowFull,
+      onTranscript: ({ workspaceKey, officeAgentId, entry }) => {
+        // Persist for the backlog, then push live to any open stream. The persist
+        // is fire-and-forget; a rejection MUST be caught or it becomes an
+        // unhandledRejection that can crash the bridge. Live push is best-effort.
+        void appendTranscript({
+          storeRoot: ctx.storeRoot,
+          workspaceKey,
+          officeAgentId,
+          entry,
+        }).catch((err) =>
+          console.error(
+            `[office] transcript persist failed for ${workspaceKey}/${officeAgentId}:`,
+            err,
+          ),
+        );
+        publishTranscript(transcriptKey(workspaceKey, officeAgentId), entry);
+      },
     });
     // Log the rejection so a silent total failure (e.g. a missing office
     // project, a launcher crash) is debuggable. The supervisor itself settles
@@ -577,4 +597,81 @@ export async function handleOfficeStream(ctx: RouteContext, wk: string): Promise
   } catch {
     // Dir may not exist yet (no tasks run) — watcher is simply absent; heartbeat keeps stream alive
   }
+}
+
+// Backlog of a single agent's transcript (assistant text, tool calls, results).
+export async function handleListTranscript(
+  ctx: RouteContext,
+  wk: string,
+  agentId: string,
+): Promise<void> {
+  if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
+  const idParse = officeAgentIdSchema.safeParse(agentId);
+  if (!idParse.success) {
+    ctx.sendError(ctx.res, 404, "office_not_found", `Agent not found: ${agentId}`, ctx.origin);
+    return;
+  }
+  try {
+    const entries = await listTranscript({
+      storeRoot: ctx.storeRoot,
+      workspaceKey: wk,
+      officeAgentId: idParse.data,
+    });
+    ctx.sendJson(ctx.res, 200, entries, ctx.origin);
+  } catch (err) {
+    handleOfficeError(ctx, err);
+  }
+}
+
+// Live SSE feed of an agent's transcript. The run handler's onTranscript sink
+// publishes new entries to the in-process bus; this stream relays them. The GUI
+// fetches the backlog via handleListTranscript first, then opens this for new
+// entries only.
+export async function handleTranscriptStream(
+  ctx: RouteContext,
+  wk: string,
+  agentId: string,
+): Promise<void> {
+  if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
+  const idParse = officeAgentIdSchema.safeParse(agentId);
+  if (!idParse.success) {
+    ctx.sendError(ctx.res, 404, "office_not_found", `Agent not found: ${agentId}`, ctx.origin);
+    return;
+  }
+
+  const headers: Record<string, string> = {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+    "content-security-policy": "default-src 'self'",
+    vary: "origin",
+  };
+  if (ctx.origin) headers["access-control-allow-origin"] = ctx.origin;
+  ctx.res.writeHead(200, headers);
+
+  let closed = false;
+  const send = (event: string, data: unknown): void => {
+    if (closed) return;
+    ctx.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const unsubscribe = subscribeTranscript(transcriptKey(wk, idParse.data), (entry) => {
+    send("transcript", entry);
+  });
+
+  const heartbeat = setInterval(() => {
+    if (!closed) ctx.res.write(": ping\n\n");
+  }, HEARTBEAT_MS);
+
+  const cleanup = (): void => {
+    if (closed) return;
+    closed = true;
+    clearInterval(heartbeat);
+    unsubscribe();
+    ctx.res.end();
+  };
+  ctx.req.on("close", cleanup);
+  ctx.req.on("aborted", cleanup);
 }

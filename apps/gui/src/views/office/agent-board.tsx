@@ -14,6 +14,7 @@ import {
   fetchRoles,
   runAgent,
 } from "../../lib/office-client.js";
+import { TranscriptPanel } from "./transcript-panel.js";
 
 // ── Status dot colors per agent status ────────────────────────────────────────
 // Uses tailwind-compatible inline styles referencing design tokens or
@@ -52,10 +53,20 @@ type AgentCardProps = {
   wk: string;
   roles: OfficeRole[];
   nowMs: number;
+  selected: boolean;
+  onSelect: () => void;
   onRefresh: () => void;
 };
 
-function AgentCard({ entry, wk, roles, nowMs, onRefresh }: AgentCardProps): JSX.Element {
+function AgentCard({
+  entry,
+  wk,
+  roles,
+  nowMs,
+  selected,
+  onSelect,
+  onRefresh,
+}: AgentCardProps): JSX.Element {
   const { agent, currentTask, lastEvent } = entry;
   const role = roles.find((r) => r.id === agent.roleId);
 
@@ -102,11 +113,16 @@ function AgentCard({ entry, wk, roles, nowMs, onRefresh }: AgentCardProps): JSX.
 
   return (
     <div
-      className="border border-border rounded-md bg-surface p-3 flex flex-col gap-2"
+      className={`border rounded-md bg-surface p-3 flex flex-col gap-2 ${selected ? "border-accent" : "border-border"}`}
       data-testid={`agent-card-${agent.id}`}
     >
-      {/* Header */}
-      <div className="flex items-center gap-2">
+      {/* Header — click to open the agent's live transcript */}
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-label={`View activity for ${agent.name}`}
+        className="flex items-center gap-2 text-left cursor-pointer"
+      >
         <span
           className={`inline-block w-2 h-2 rounded-full shrink-0 ${statusDotClass(agent.status)}`}
           aria-label={`status: ${agent.status}`}
@@ -119,7 +135,7 @@ function AgentCard({ entry, wk, roles, nowMs, onRefresh }: AgentCardProps): JSX.
         <span className="text-[10px] px-1 rounded bg-surface-elevated text-text-secondary shrink-0">
           {agent.status}
         </span>
-      </div>
+      </button>
 
       {/* Current task */}
       {currentTask && (
@@ -262,6 +278,7 @@ export function AgentBoard({ wk, workdir, status, onRefresh }: AgentBoardProps):
   const [addName, setAddName] = useState("");
   const [addRoleId, setAddRoleId] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -406,9 +423,31 @@ export function AgentBoard({ wk, workdir, status, onRefresh }: AgentBoardProps):
               wk={wk}
               roles={roles}
               nowMs={nowMs}
+              selected={selectedAgentId === entry.agent.id}
+              onSelect={() =>
+                setSelectedAgentId((cur) => (cur === entry.agent.id ? null : entry.agent.id))
+              }
               onRefresh={onRefresh}
             />
           ))}
+        </div>
+      )}
+
+      {selectedAgentId !== null && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+              Activity
+            </h3>
+            <button
+              type="button"
+              onClick={() => setSelectedAgentId(null)}
+              className="text-[10px] text-accent hover:underline cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+          <TranscriptPanel wk={wk} agentId={selectedAgentId} />
         </div>
       )}
     </div>

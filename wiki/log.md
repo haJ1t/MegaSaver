@@ -2976,3 +2976,13 @@ input (uses selected workspace label); bridge enforces `encodeWorkspaceKey(workd
 === wk`. Branch `feat/office-auto-workdir`, 4 commits, `pnpm verify` green
 (cli 721 / gui tests pass), CLI smoke confirms no `--workdir` flag + workdir===cwd.
 role.defaultWorkdir left inert (follow-up).
+
+## [2026-06-23] feature | office live transcript (Phase A)
+
+Click an office agent → live read-only feed of its activity. Captured the
+launcher stream-json events the supervisor was dropping (`onEvent(()=>{})`):
+`projectEvent` → compact `TranscriptEntry` → per-agent `transcript-store` →
+bridge backlog GET + SSE (`office-transcript-bus`, in-process) → GUI
+`TranscriptPanel` (click-to-open). New `officeTranscriptId` brand. Branch
+`feat/office-agent-transcript`, 8 commits, TDD, `pnpm verify` green
+(agent-office + gui 108 office tests). Phase B (talk to agent) deferred.

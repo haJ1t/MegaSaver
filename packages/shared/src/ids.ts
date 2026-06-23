@@ -46,3 +46,6 @@ export type OfficeAgentId = z.infer<typeof officeAgentIdSchema>;
 
 export const officeTaskIdSchema = lowercaseUuid.brand<"OfficeTaskId">();
 export type OfficeTaskId = z.infer<typeof officeTaskIdSchema>;
+
+export const officeTranscriptIdSchema = lowercaseUuid.brand<"OfficeTranscriptId">();
+export type OfficeTranscriptId = z.infer<typeof officeTranscriptIdSchema>;
