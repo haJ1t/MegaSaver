@@ -29,6 +29,10 @@ export const agentCreateInputSchema = z
 
 export const taskCreateInputSchema = z.object({ instruction: z.string().min(1) }).strict();
 
+// trim()+min(1): the client trims, but the server is the trust boundary — reject
+// a blank/whitespace message so it can't reach `claude -p` as the instruction.
+export const chatInputSchema = z.object({ message: z.string().trim().min(1) }).strict();
+
 export const controlInputSchema = z
   .object({ action: z.enum(["pause", "resume", "stop"]) })
   .strict();

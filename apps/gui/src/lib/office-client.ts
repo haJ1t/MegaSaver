@@ -175,7 +175,7 @@ export type TranscriptEntry = {
   id: string;
   seq: number;
   ts: string;
-  role: "assistant" | "tool" | "tool_result" | "result" | "stderr";
+  role: "user" | "assistant" | "tool" | "tool_result" | "result" | "stderr";
   text?: string;
   tool?: string;
   summary?: string;
@@ -184,6 +184,15 @@ export type TranscriptEntry = {
 export function fetchTranscript(wk: string, agentId: string): Promise<TranscriptEntry[]> {
   return getJson<TranscriptEntry[]>(
     `/api/office/${encodeURIComponent(wk)}/agents/${encodeURIComponent(agentId)}/transcript`,
+  );
+}
+
+// Send a chat message to the agent. The user turn + the agent's reply both
+// arrive over the transcript stream; this returns the queued task.
+export function sendChat(wk: string, agentId: string, message: string): Promise<OfficeTask> {
+  return postJson<OfficeTask>(
+    `/api/office/${encodeURIComponent(wk)}/agents/${encodeURIComponent(agentId)}/chat`,
+    { message },
   );
 }
 
