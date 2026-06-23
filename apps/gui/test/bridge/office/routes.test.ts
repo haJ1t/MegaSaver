@@ -20,8 +20,8 @@ import type { OfficeContext, RouteContext } from "../../../bridge/route-context.
 import {
   OFFICE_PROJECT_ID,
   ensureOfficeProject,
-  handleControlAgent,
   handleChat,
+  handleControlAgent,
   handleCreateAgent,
   handleCreateRole,
   handleCreateTask,

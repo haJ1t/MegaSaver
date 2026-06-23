@@ -392,9 +392,13 @@ function startAgentDrain(ctx: RouteContext, wk: string, officeAgentId: string): 
       // Persist for the backlog, then push live to any open stream. The persist
       // is fire-and-forget; a rejection MUST be caught or it becomes an
       // unhandledRejection that can crash the bridge. Live push is best-effort.
-      void appendTranscript({ storeRoot: ctx.storeRoot, workspaceKey, officeAgentId: aid, entry }).catch(
-        (err) =>
-          console.error(`[office] transcript persist failed for ${workspaceKey}/${aid}:`, err),
+      void appendTranscript({
+        storeRoot: ctx.storeRoot,
+        workspaceKey,
+        officeAgentId: aid,
+        entry,
+      }).catch((err) =>
+        console.error(`[office] transcript persist failed for ${workspaceKey}/${aid}:`, err),
       );
       publishTranscript(transcriptKey(workspaceKey, aid), entry);
     },

@@ -33,9 +33,9 @@ import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
 import { handleGetMemoryGraph } from "./routes/memory-graph.js";
 import {
+  handleChat,
   handleControlAgent,
   handleCreateAgent,
-  handleChat,
   handleCreateRole,
   handleCreateTask,
   handleDeleteAgent,
