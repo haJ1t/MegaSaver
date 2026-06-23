@@ -8,6 +8,8 @@ import {
   createSupervisor,
   listAgents,
   listAudit,
+  listTasks,
+  listTranscript,
   saveAgent,
 } from "@megasaver/agent-office";
 import type { AgentLauncher, LaunchHandle } from "@megasaver/connectors-shared";
@@ -19,6 +21,7 @@ import {
   OFFICE_PROJECT_ID,
   ensureOfficeProject,
   handleControlAgent,
+  handleChat,
   handleCreateAgent,
   handleCreateRole,
   handleCreateTask,
@@ -812,5 +815,61 @@ describe("handleOfficeStream", () => {
     // After close, the watcher must never be set up (no extra ticks needed).
     await new Promise((r) => setTimeout(r, 20));
     expect((fakeRes.end as Mock).mock.calls.length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat (Phase B): user turn + queued task + drain
+// ---------------------------------------------------------------------------
+
+describe("handleChat", () => {
+  beforeEach(() => {
+    storeRoot = mkdtempSync(join(tmpdir(), "office-test-"));
+  });
+  afterEach(() => {
+    rmSync(storeRoot, { recursive: true, force: true });
+  });
+
+  async function setupAgent(): Promise<string> {
+    const roleCtx = makeCtx({ req: makeBodyReq(ROLE_BODY), newId: () => UUID_A });
+    await handleCreateRole(roleCtx);
+    const roleId = (roleCtx.capturedJson[0]?.body as RoleBody).id;
+    const agentCtx = makeCtx({
+      req: makeBodyReq({ name: "Chat Agent", roleId, workdir: WORKDIR }),
+      newId: () => UUID_B,
+    });
+    await handleCreateAgent(agentCtx, WK);
+    return (agentCtx.capturedJson[0]?.body as AgentBody).id;
+  }
+
+  it("chat → 202, appends a user transcript entry + queues a task", async () => {
+    const agentId = await setupAgent();
+    let n = 0;
+    const ctx = makeCtx({
+      req: makeBodyReq({ message: "hello agent" }),
+      newId: () => `0000000${n++}-0000-4000-8000-000000000000`,
+    });
+    await handleChat(ctx, WK, agentId);
+    expect(ctx.capturedJson[0]?.status).toBe(202);
+
+    const tr = await listTranscript({ storeRoot, workspaceKey: WK, officeAgentId: agentId });
+    expect(tr.some((e) => e.role === "user" && e.text === "hello agent")).toBe(true);
+
+    const tasks = await listTasks({ storeRoot, workspaceKey: WK, officeAgentId: agentId });
+    expect(tasks.some((t) => t.instruction === "hello agent" && t.status === "queued")).toBe(true);
+  });
+
+  it("empty message → 400", async () => {
+    const agentId = await setupAgent();
+    const ctx = makeCtx({ req: makeBodyReq({ message: "" }) });
+    await handleChat(ctx, WK, agentId);
+    expect(ctx.capturedError[0]?.status).toBe(400);
+    expect(ctx.capturedError[0]?.code).toBe("validation_failed");
+  });
+
+  it("unknown agent → 404", async () => {
+    const ctx = makeCtx({ req: makeBodyReq({ message: "hi" }) });
+    await handleChat(ctx, WK, "99999999-9999-4999-8999-999999999999");
+    expect(ctx.capturedError[0]?.status).toBe(404);
   });
 });

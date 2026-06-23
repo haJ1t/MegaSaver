@@ -21,6 +21,7 @@ import {
   saveAgent,
   saveRole,
   saveTask,
+  transcriptEntrySchema,
 } from "@megasaver/agent-office";
 import type { OfficeAgent } from "@megasaver/agent-office";
 import type { CoreRegistry } from "@megasaver/core";
@@ -35,6 +36,7 @@ import { handleCaughtError } from "../error-mapping.js";
 import { publishTranscript, subscribeTranscript, transcriptKey } from "../office-transcript-bus.js";
 import {
   agentCreateInputSchema,
+  chatInputSchema,
   controlInputSchema,
   roleCreateInputSchema,
   taskCreateInputSchema,
@@ -364,42 +366,109 @@ export async function handleRunAgent(
       ctx.sendJson(ctx.res, 202, agent, ctx.origin);
       return;
     }
-    // Fire-and-forget: supervisor runs in the background
-    // guardOffice asserts ctx.office is defined; capture to satisfy strict null checks
-    const office = ctx.office as NonNullable<typeof ctx.office>;
-    const supervisor = createSupervisor({
-      storeRoot: ctx.storeRoot,
-      registry: office.registry,
-      coreRegistry: office.coreRegistry,
-      projectId: OFFICE_PROJECT_ID,
-      now: ctx.now,
-      newId: ctx.newId,
-      allowFull: office.allowFull,
-      onTranscript: ({ workspaceKey, officeAgentId, entry }) => {
-        // Persist for the backlog, then push live to any open stream. The persist
-        // is fire-and-forget; a rejection MUST be caught or it becomes an
-        // unhandledRejection that can crash the bridge. Live push is best-effort.
-        void appendTranscript({
-          storeRoot: ctx.storeRoot,
-          workspaceKey,
-          officeAgentId,
-          entry,
-        }).catch((err) =>
-          console.error(
-            `[office] transcript persist failed for ${workspaceKey}/${officeAgentId}:`,
-            err,
-          ),
-        );
-        publishTranscript(transcriptKey(workspaceKey, officeAgentId), entry);
-      },
-    });
-    // Log the rejection so a silent total failure (e.g. a missing office
-    // project, a launcher crash) is debuggable. The supervisor itself settles
-    // task/agent to terminal states; this catch only surfaces unexpected throws.
-    supervisor.drainAgent(wk, idParse.data).catch((drainErr) => {
-      console.error(`[office] drainAgent failed for ${wk}/${idParse.data}:`, drainErr);
-    });
+    startAgentDrain(ctx, wk, idParse.data);
     ctx.sendJson(ctx.res, 202, agent, ctx.origin);
+  } catch (err) {
+    handleOfficeError(ctx, err);
+  }
+}
+
+// Build a supervisor (with the transcript persist+publish sink) and kick off a
+// fire-and-forget drain. Shared by `handleRunAgent` and `handleChat` so both
+// paths spawn through one wiring. The supervisor settles task/agent to terminal
+// states itself; the catch only surfaces unexpected throws.
+function startAgentDrain(ctx: RouteContext, wk: string, officeAgentId: string): void {
+  // guardOffice (asserted by callers) guarantees ctx.office is defined.
+  const office = ctx.office as NonNullable<typeof ctx.office>;
+  const supervisor = createSupervisor({
+    storeRoot: ctx.storeRoot,
+    registry: office.registry,
+    coreRegistry: office.coreRegistry,
+    projectId: OFFICE_PROJECT_ID,
+    now: ctx.now,
+    newId: ctx.newId,
+    allowFull: office.allowFull,
+    onTranscript: ({ workspaceKey, officeAgentId: aid, entry }) => {
+      // Persist for the backlog, then push live to any open stream. The persist
+      // is fire-and-forget; a rejection MUST be caught or it becomes an
+      // unhandledRejection that can crash the bridge. Live push is best-effort.
+      void appendTranscript({ storeRoot: ctx.storeRoot, workspaceKey, officeAgentId: aid, entry }).catch(
+        (err) =>
+          console.error(`[office] transcript persist failed for ${workspaceKey}/${aid}:`, err),
+      );
+      publishTranscript(transcriptKey(workspaceKey, aid), entry);
+    },
+  });
+  supervisor.drainAgent(wk, officeAgentId).catch((drainErr) => {
+    console.error(`[office] drainAgent failed for ${wk}/${officeAgentId}:`, drainErr);
+  });
+}
+
+// Chat: append a `user` turn to the transcript, queue it as a task, and start a
+// drain so the agent replies (resuming its session for continuity). The reply
+// streams back over the existing transcript SSE.
+export async function handleChat(ctx: RouteContext, wk: string, agentId: string): Promise<void> {
+  if (!guardOffice(ctx)) return;
+  if (validateWk(ctx, wk) === null) return;
+  const idParse = officeAgentIdSchema.safeParse(agentId);
+  if (!idParse.success) {
+    ctx.sendError(ctx.res, 404, "office_not_found", `Agent not found: ${agentId}`, ctx.origin);
+    return;
+  }
+  let body: unknown;
+  try {
+    body = await readJsonBody(ctx.req);
+  } catch {
+    ctx.sendError(ctx.res, 400, "validation_failed", "Invalid JSON body.", ctx.origin);
+    return;
+  }
+  const parsed = chatInputSchema.safeParse(body);
+  if (!parsed.success) {
+    ctx.sendError(
+      ctx.res,
+      400,
+      "validation_failed",
+      zodErrorMessage(parsed.error),
+      ctx.origin,
+      parsed.error.issues,
+    );
+    return;
+  }
+  try {
+    const agent = await loadAgent({
+      storeRoot: ctx.storeRoot,
+      workspaceKey: wk,
+      officeAgentId: idParse.data,
+    });
+    const entry = transcriptEntrySchema.parse({
+      id: ctx.newId(),
+      seq: 0,
+      ts: ctx.now(),
+      role: "user",
+      text: parsed.data.message,
+    });
+    await appendTranscript({
+      storeRoot: ctx.storeRoot,
+      workspaceKey: wk,
+      officeAgentId: idParse.data,
+      entry,
+    });
+    publishTranscript(transcriptKey(wk, idParse.data), entry);
+
+    const task = officeTaskSchema.parse({
+      id: ctx.newId(),
+      agentId: idParse.data,
+      workspaceKey: wk,
+      instruction: parsed.data.message,
+      status: "queued",
+      queuedAt: ctx.now(),
+    });
+    await saveTask({ storeRoot: ctx.storeRoot, task });
+
+    // If the agent is already working, the message just queues behind the
+    // in-flight drain; otherwise start one now.
+    if (agent.status !== "working") startAgentDrain(ctx, wk, idParse.data);
+    ctx.sendJson(ctx.res, 202, task, ctx.origin);
   } catch (err) {
     handleOfficeError(ctx, err);
   }

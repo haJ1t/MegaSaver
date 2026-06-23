@@ -29,6 +29,8 @@ export const agentCreateInputSchema = z
 
 export const taskCreateInputSchema = z.object({ instruction: z.string().min(1) }).strict();
 
+export const chatInputSchema = z.object({ message: z.string().min(1) }).strict();
+
 export const controlInputSchema = z
   .object({ action: z.enum(["pause", "resume", "stop"]) })
   .strict();

@@ -35,6 +35,7 @@ import { handleGetMemoryGraph } from "./routes/memory-graph.js";
 import {
   handleControlAgent,
   handleCreateAgent,
+  handleChat,
   handleCreateRole,
   handleCreateTask,
   handleDeleteAgent,
@@ -385,6 +386,16 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       const wk = decodeURIComponent(officeRunMatch[1] as string);
       const agentId = decodeURIComponent(officeRunMatch[2] as string);
       await handleRunAgent(ctx, wk, agentId);
+      return;
+    }
+
+    // Chat — send a message to the agent (user turn + queued task + drain)
+    const officeChatMatch = path.match(/^\/api\/office\/([^/]+)\/agents\/([^/]+)\/chat$/);
+    if (officeChatMatch) {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      const wk = decodeURIComponent(officeChatMatch[1] as string);
+      const agentId = decodeURIComponent(officeChatMatch[2] as string);
+      await handleChat(ctx, wk, agentId);
       return;
     }
 
