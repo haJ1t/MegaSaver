@@ -182,15 +182,44 @@ launcher-cwd invariant at the HTTP boundary. `role.defaultWorkdir` is left
 untouched (separate, still inert — flagged follow-up). Risk HIGH (launcher cwd +
 public CLI flag); spec + plan in `docs/superpowers/{specs,plans}/2026-06-22-office-auto-workdir-*`.
 
-## Status: feature complete (Phases 0–5)
+## Live transcript — Phase A (2026-06-23)
+
+You can now click an office agent in the GUI and watch, live, a compact feed of
+what it is doing. The launcher always emitted claude stream-json events via
+`handle.onEvent`; the supervisor previously dropped them (`onEvent(() => {})`).
+Phase A captures + persists + streams them:
+
+- `projectEvent(LauncherEvent)` (in `transcript.ts`) maps each stream event to a
+  compact `TranscriptEntry` (`assistant` text, `tool` "Edit foo.ts"/"Bash: …",
+  `tool_result`/`stderr` truncated summary, `result` done/failed). Compaction +
+  200-char truncation is the privacy boundary — no full tool outputs/file
+  contents persisted (still localhost-only, HIGH risk).
+- `transcript-store.ts` persists one JSON file per entry under
+  `office/<wk>/transcript/<agentId>/` (audit-store pattern), per-agent so the
+  feed accumulates across that agent's task runs.
+- The supervisor takes an injected `onTranscript` sink (stamps id/seq/ts; a sink
+  throw is swallowed — capture never poisons the run).
+- Bridge: `GET …/agents/:id/transcript` (backlog) + `…/transcript/stream` (SSE).
+  An in-process `office-transcript-bus` lets the run handler's `onTranscript`
+  publish live to open streams (supervisor runs in-process → no fs-watch).
+- GUI: clicking an agent card opens a read-only `TranscriptPanel`
+  (backlog + live SSE, auto-scroll). New `officeTranscriptId` brand in
+  `@megasaver/shared`.
+
+**Phase B (next):** a message box to talk to the agent. User direction: "live
+interactive but in a background session" — the interactive-vs-resume model is
+deferred to the Phase B spec.
+
+## Status: feature complete (Phases 0–5) + transcript Phase A
 
 All Agent Office phases shipped to `main`: 0 engine data layer, 1 launcher, 2
-supervisor, 3 bridge `/api/office`, 4 GUI board, 5 CLI. The office is usable end
-to end from the GUI and the CLI. Open follow-ups (filed): cooperative cancel for
-a running task, `workdir` confinement, full evidence-ledger integration,
-per-agent raw-transcript stream, bridge task-create agent precheck, `status
---json` instruction-exposure doc note, flaky memory-graph-panel test hardening,
-the atomicWriteFile dir-fsync shared-util hoist, and removing the inert
+supervisor, 3 bridge `/api/office`, 4 GUI board, 5 CLI, plus auto-workdir and
+live-transcript Phase A. The office is usable end to end from the GUI and the
+CLI. Open follow-ups (filed): cooperative cancel for a running task, `workdir`
+confinement, full evidence-ledger integration, transcript **Phase B** (talk to
+the agent), bridge task-create agent precheck, `status --json`
+instruction-exposure doc note, flaky memory-graph-panel test hardening, the
+atomicWriteFile dir-fsync shared-util hoist, and removing the inert
 `role.defaultWorkdir` field.
 
 See [[concepts/agent-agnostic-core]], [[entities/core]],
