@@ -168,3 +168,42 @@ export function openOfficeStream(wk: string, handlers: OfficeStreamHandlers): ()
   source.addEventListener("error", () => handlers.onError());
   return () => source.close();
 }
+
+// ── Transcript ──────────────────────────────────────────────────────────────
+
+export type TranscriptEntry = {
+  id: string;
+  seq: number;
+  ts: string;
+  role: "assistant" | "tool" | "tool_result" | "result" | "stderr";
+  text?: string;
+  tool?: string;
+  summary?: string;
+};
+
+export function fetchTranscript(wk: string, agentId: string): Promise<TranscriptEntry[]> {
+  return getJson<TranscriptEntry[]>(
+    `/api/office/${encodeURIComponent(wk)}/agents/${encodeURIComponent(agentId)}/transcript`,
+  );
+}
+
+export type TranscriptStreamHandlers = {
+  onEntry: (entry: TranscriptEntry) => void;
+  onError: () => void;
+};
+
+// Opens an EventSource against an agent's live transcript stream. Caller MUST
+// call the returned disposer when the selected agent changes or on unmount.
+export function openTranscriptStream(
+  wk: string,
+  agentId: string,
+  handlers: TranscriptStreamHandlers,
+): () => void {
+  const url = `/api/office/${encodeURIComponent(wk)}/agents/${encodeURIComponent(agentId)}/transcript/stream`;
+  const source = new EventSource(url);
+  source.addEventListener("transcript", (e) => {
+    handlers.onEntry(JSON.parse((e as MessageEvent).data) as TranscriptEntry);
+  });
+  source.addEventListener("error", () => handlers.onError());
+  return () => source.close();
+}
