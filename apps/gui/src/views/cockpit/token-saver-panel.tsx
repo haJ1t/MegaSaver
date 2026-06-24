@@ -125,7 +125,7 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
               <tbody>
                 {events.map((ev) => (
                   <tr key={ev.id} className="border-t border-border">
-                    <td className="px-3 py-2 text-text-muted tabular-nums whitespace-nowrap">
+                    <td className="px-3 py-2 text-text-secondary tabular-nums whitespace-nowrap">
                       {fmtTimestamp(ev.createdAt)}
                     </td>
                     <td className="px-3 py-2 text-text-secondary">{ev.sourceKind}</td>
