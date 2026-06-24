@@ -90,6 +90,7 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
                   value={`${Math.round(stats.savingRatio * 100)}%`}
                 />
                 <SummaryRow label="Chunks stored" value={stats.chunksStoredTotal} />
+                <SummaryRow label="Last save" value={fmtTimestamp(stats.updatedAt)} />
               </tbody>
             </table>
           )}
@@ -98,6 +99,9 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
               <caption className="sr-only">Per-event savings</caption>
               <thead>
                 <tr className="text-text-muted text-left">
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    when
+                  </th>
                   <th scope="col" className="px-3 py-2 font-medium">
                     source
                   </th>
@@ -121,6 +125,9 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
               <tbody>
                 {events.map((ev) => (
                   <tr key={ev.id} className="border-t border-border">
+                    <td className="px-3 py-2 text-text-secondary tabular-nums whitespace-nowrap">
+                      {fmtTimestamp(ev.createdAt)}
+                    </td>
                     <td className="px-3 py-2 text-text-secondary">{ev.sourceKind}</td>
                     <td className="px-3 py-2 text-text-primary truncate max-w-[16rem]">
                       {ev.label}
@@ -159,4 +166,14 @@ function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Local YYYY-MM-DD HH:MM:SS (to the second). Built from Date local parts rather
+// than toLocaleString so the output is stable across locales and testable. The
+// value is display-only, so an unparseable input falls back to the raw string.
+export function fmtTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n: number): string => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
