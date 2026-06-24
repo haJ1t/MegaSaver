@@ -363,6 +363,21 @@ export function setWorkspaceSaver(
   return mutateJson<WorkspaceSaverStatus>(`${tokenSaverBase(dir, id)}/workspace`, "POST", input);
 }
 
+export type ProxyStatus = {
+  running: boolean;
+  url?: string;
+  port?: number;
+  error?: string;
+};
+
+export function fetchProxyStatus(): Promise<ProxyStatus> {
+  return getJson<ProxyStatus>("/api/proxy");
+}
+
+export function setProxy(enabled: boolean): Promise<ProxyStatus> {
+  return mutateJson<ProxyStatus>("/api/proxy", "POST", { enabled });
+}
+
 export type ClaudeHookStatus = {
   connected: boolean;
   preInstalled: boolean;

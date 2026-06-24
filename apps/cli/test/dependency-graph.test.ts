@@ -22,6 +22,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/context-pruner",
   "@megasaver/core",
   "@megasaver/indexer",
+  "@megasaver/llm-proxy",
   "@megasaver/mcp-bridge",
   "@megasaver/memory-graph",
   "@megasaver/output-filter",

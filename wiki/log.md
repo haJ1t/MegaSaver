@@ -2995,3 +2995,12 @@ streams into the Phase A feed. Per-agent drain serializer (in-process Map) fixes
 double-spawn TOCTOU + stranded chat follow-ups; 409 on non-runnable agent; server
 trims blank messages. Branch `feat/office-agent-chat`; reviewed by code-reviewer +
 critic (3 race findings fixed); `pnpm verify` green; agent-office + gui tests pass.
+
+## [2026-06-24] feature | local llm-proxy Phase 0
+
+New @megasaver/llm-proxy + `mega proxy start`: opt-in transparent local Anthropic
+proxy (127.0.0.1) that forwards verbatim + meters real token usage per /v1/messages
+(counts only — never prompts/responses/keys). Foundation for conversation-token
+saving (compression = Phase 1). Relaxed mission §1 ("not a model proxy" → opt-in
+allowed) via conventions:sync. Risk CRITICAL; security+critic+code reviews applied
+(SSE-undercount + backpressure + loopback fixes). Branch feat/llm-proxy-phase0.
