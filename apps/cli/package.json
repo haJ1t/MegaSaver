@@ -35,6 +35,7 @@
     "@megasaver/context-pruner": "workspace:*",
     "@megasaver/core": "workspace:*",
     "@megasaver/indexer": "workspace:*",
+    "@megasaver/llm-proxy": "workspace:*",
     "@megasaver/mcp-bridge": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",

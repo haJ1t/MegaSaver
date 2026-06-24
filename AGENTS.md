@@ -83,7 +83,9 @@ agent-specific logic bleed into Core.
 
 ## What we are NOT
 
-- Not a model proxy.
+- Not a model proxy by default. An opt-in local proxy is permitted
+  (`mega proxy`) for token metering and, later, conversation-context
+  saving; it is never on unless the operator points an agent at it.
 - Not an LLM-blinder. We preserve evidence; we never strip what
   the model needs to decide.
 - Not a team chatops tool. Single-developer first.

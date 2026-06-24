@@ -15,6 +15,7 @@ import { officeCommand } from "./commands/office/index.js";
 import { outputCommand } from "./commands/output/index.js";
 import { packCommand } from "./commands/pack/index.js";
 import { projectCommand } from "./commands/project.js";
+import { proxyCommand } from "./commands/proxy/index.js";
 import { rulesCommand } from "./commands/rules/index.js";
 import { scanCommand } from "./commands/scan.js";
 import { sessionCommand } from "./commands/session/index.js";
@@ -46,6 +47,7 @@ export const mainCommand = defineCommand({
     fail: failCommand,
     learn: learnCommand,
     project: projectCommand,
+    proxy: proxyCommand,
     rules: rulesCommand,
     session: sessionCommand,
     connector: connectorCommand,

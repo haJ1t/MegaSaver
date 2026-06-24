@@ -60,6 +60,9 @@ importers:
       '@megasaver/indexer':
         specifier: workspace:*
         version: link:../../packages/indexer
+      '@megasaver/llm-proxy':
+        specifier: workspace:*
+        version: link:../../packages/llm-proxy
       '@megasaver/mcp-bridge':
         specifier: workspace:*
         version: link:../../packages/mcp-bridge
@@ -412,6 +415,19 @@ importers:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+
+  packages/llm-proxy:
+    dependencies:
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
       zod:
         specifier: ^3.24.1
         version: 3.25.76
