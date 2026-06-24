@@ -50,6 +50,7 @@ import {
   handleRunAgent,
   handleTranscriptStream,
 } from "./routes/office.js";
+import { handleProxySet, handleProxyStatus } from "./routes/proxy.js";
 import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
 import { resolveWorkspace } from "./workspace-resolver.js";
@@ -211,6 +212,18 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       handleGetHealth(ctx, storePath);
       return;
+    }
+
+    if (path === "/api/proxy") {
+      if (method === "GET") {
+        await handleProxyStatus(ctx);
+        return;
+      }
+      if (method === "POST") {
+        await handleProxySet(ctx);
+        return;
+      }
+      return methodNotAllowed(res, method, origin);
     }
 
     if (path.startsWith("/api/mcp/")) {

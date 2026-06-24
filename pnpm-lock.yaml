@@ -126,6 +126,9 @@ importers:
       '@megasaver/indexer':
         specifier: workspace:*
         version: link:../../packages/indexer
+      '@megasaver/llm-proxy':
+        specifier: workspace:*
+        version: link:../../packages/llm-proxy
       '@megasaver/mcp-bridge':
         specifier: workspace:*
         version: link:../../packages/mcp-bridge

@@ -30,6 +30,7 @@
     "@megasaver/core": "workspace:*",
     "@megasaver/evidence-ledger": "workspace:*",
     "@megasaver/indexer": "workspace:*",
+    "@megasaver/llm-proxy": "workspace:*",
     "@megasaver/mcp-bridge": "workspace:*",
     "@megasaver/memory-graph": "workspace:*",
     "@megasaver/policy": "workspace:*",

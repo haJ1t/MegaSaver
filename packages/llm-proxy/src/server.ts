@@ -40,8 +40,12 @@ export function startProxyServer(opts: StartProxyOptions): Promise<RunningProxy>
     });
   });
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    // Surface a pre-listen failure (e.g. EADDRINUSE) as a rejection instead of
+    // hanging the promise + emitting an unhandled 'error'.
+    server.once("error", reject);
     server.listen(opts.port, host, () => {
+      server.removeListener("error", reject);
       const addr = server.address();
       const port = typeof addr === "object" && addr !== null ? addr.port : opts.port;
       resolve({
