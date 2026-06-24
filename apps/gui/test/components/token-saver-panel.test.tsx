@@ -3,6 +3,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   OverlaySessionTokenSaverStats,
+  OverlayTokenSaverEvent,
   WorkspaceSaverStatus,
 } from "../../src/lib/claude-sessions-client.js";
 
@@ -25,7 +26,7 @@ vi.mock("../../src/lib/claude-sessions-client.js", () => ({
     Promise.resolve({ connected: false, preInstalled: false, postInstalled: false }),
 }));
 
-import { TokenSaverPanel } from "../../src/views/cockpit/token-saver-panel.js";
+import { TokenSaverPanel, fmtTimestamp } from "../../src/views/cockpit/token-saver-panel.js";
 
 const SAVER: WorkspaceSaverStatus = {
   enabled: true,
@@ -52,6 +53,37 @@ afterEach(() => {
   stub.events = () => Promise.reject(new Error("not set"));
 });
 
+describe("fmtTimestamp", () => {
+  it("formats local YYYY-MM-DD HH:MM:SS round-trip (timezone-independent)", () => {
+    const d = new Date(2026, 5, 24, 9, 5, 7); // local 2026-06-24 09:05:07
+    expect(fmtTimestamp(d.toISOString())).toBe("2026-06-24 09:05:07");
+  });
+
+  it("zero-pads single-digit fields", () => {
+    const d = new Date(2026, 0, 3, 1, 2, 3); // local 2026-01-03 01:02:03
+    expect(fmtTimestamp(d.toISOString())).toBe("2026-01-03 01:02:03");
+  });
+
+  it("returns the raw string for an unparseable input", () => {
+    expect(fmtTimestamp("not-a-date")).toBe("not-a-date");
+  });
+});
+
+const EVENT: OverlayTokenSaverEvent = {
+  id: "e1",
+  workspaceKey: "wk",
+  liveSessionId: "s",
+  createdAt: new Date(2026, 5, 24, 14, 30, 5).toISOString(), // local 2026-06-24 14:30:05
+  sourceKind: "file",
+  label: "src/foo.ts",
+  rawBytes: 1000,
+  returnedBytes: 200,
+  bytesSaved: 800,
+  savingRatio: 0.8,
+  summary: "…",
+  mode: "balanced",
+};
+
 describe("TokenSaverPanel (activation + stats)", () => {
   it("renders the workspace activation toggle and the session savings table together", async () => {
     stub.saver = () => Promise.resolve(SAVER);
@@ -64,6 +96,19 @@ describe("TokenSaverPanel (activation + stats)", () => {
     await waitFor(() => expect(screen.getByText("800 B")).toBeDefined());
     expect(screen.getByText("80%")).toBeDefined();
     expect(screen.getByText("Bytes saved")).toBeDefined();
+  });
+
+  it("renders a 'when' column with each save's timestamp + a 'Last save' summary row", async () => {
+    stub.saver = () => Promise.resolve(SAVER);
+    stub.stats = () => Promise.resolve(STATS);
+    stub.events = () => Promise.resolve([EVENT]);
+    render(<TokenSaverPanel dir="d" id="i" />);
+    // per-save table has a "when" header + the formatted event timestamp
+    await waitFor(() => expect(screen.getByText("when")).toBeDefined());
+    expect(screen.getByText("2026-06-24 14:30:05")).toBeDefined();
+    // summary shows the last-save time (STATS.updatedAt)
+    expect(screen.getByText("Last save")).toBeDefined();
+    expect(screen.getByText(fmtTimestamp(STATS.updatedAt))).toBeDefined();
   });
 
   it("shows the empty stats message when no proxy activity", async () => {
