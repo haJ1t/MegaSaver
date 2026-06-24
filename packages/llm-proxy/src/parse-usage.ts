@@ -71,9 +71,37 @@ export function parseUsageFromJson(bodyText: string): UsageCounts | null {
   return usage ? usageFromRaw(usage) : null;
 }
 
-// Streaming responses split usage across events: `message_start` carries input +
-// cache tokens (and an initial output_tokens), `message_delta` carries the final
-// output_tokens. Accumulate across the SSE `data:` lines.
+// Apply one SSE `data:` line's usage to the accumulator. Returns true if the
+// line carried usage. `message_start` carries input + cache tokens (and a seed
+// output_tokens); `message_delta` carries the final output_tokens.
+function consumeSseLine(line: string, acc: UsageCounts): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("data:")) return false;
+  const payload = trimmed.slice("data:".length).trim();
+  if (payload.length === 0 || payload === "[DONE]") return false;
+  const event = asObject<RawStreamEvent>(parseJson(payload));
+  if (event === null) return false;
+  if (event.type === "message_start") {
+    const message = asObject<{ usage?: unknown }>(event.message);
+    const usage = message && asObject<RawUsage>(message.usage);
+    if (usage) {
+      const u = usageFromRaw(usage);
+      acc.inputTokens = u.inputTokens;
+      acc.cacheReadTokens = u.cacheReadTokens;
+      acc.cacheCreationTokens = u.cacheCreationTokens;
+      acc.outputTokens = u.outputTokens;
+      return true;
+    }
+  } else if (event.type === "message_delta") {
+    const usage = asObject<RawUsage>(event.usage);
+    if (usage) {
+      acc.outputTokens = int(usage.output_tokens);
+      return true;
+    }
+  }
+  return false;
+}
+
 export function parseUsageFromSse(sseText: string): UsageCounts | null {
   let seen = false;
   const acc: UsageCounts = {
@@ -83,30 +111,43 @@ export function parseUsageFromSse(sseText: string): UsageCounts | null {
     cacheCreationTokens: 0,
   };
   for (const line of sseText.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("data:")) continue;
-    const payload = trimmed.slice("data:".length).trim();
-    if (payload.length === 0 || payload === "[DONE]") continue;
-    const event = asObject<RawStreamEvent>(parseJson(payload));
-    if (event === null) continue;
-    if (event.type === "message_start") {
-      const message = asObject<{ usage?: unknown }>(event.message);
-      const usage = message && asObject<RawUsage>(message.usage);
-      if (usage) {
-        const u = usageFromRaw(usage);
-        acc.inputTokens = u.inputTokens;
-        acc.cacheReadTokens = u.cacheReadTokens;
-        acc.cacheCreationTokens = u.cacheCreationTokens;
-        acc.outputTokens = u.outputTokens;
-        seen = true;
-      }
-    } else if (event.type === "message_delta") {
-      const usage = asObject<RawUsage>(event.usage);
-      if (usage) {
-        acc.outputTokens = int(usage.output_tokens);
-        seen = true;
-      }
-    }
+    if (consumeSseLine(line, acc)) seen = true;
   }
   return seen ? acc : null;
+}
+
+export type SseUsageScanner = {
+  push: (chunk: string) => void;
+  result: () => UsageCounts | null;
+};
+
+// Incremental SSE usage scanner: feed streamed text chunks as they arrive and it
+// tracks usage line-by-line, retaining no body text. This is why the proxy can
+// measure a multi-megabyte stream correctly — the terminal `message_delta`
+// (final output_tokens) is parsed as it flies past, not from a bounded buffer
+// that a long stream would overflow before the delta arrives.
+export function createSseUsageScanner(): SseUsageScanner {
+  let leftover = "";
+  let seen = false;
+  const acc: UsageCounts = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+  };
+  return {
+    push(chunk: string): void {
+      leftover += chunk;
+      const lines = leftover.split("\n");
+      leftover = lines.pop() ?? "";
+      for (const line of lines) {
+        if (consumeSseLine(line, acc)) seen = true;
+      }
+    },
+    result(): UsageCounts | null {
+      if (leftover.length > 0 && consumeSseLine(leftover, acc)) seen = true;
+      leftover = "";
+      return seen ? acc : null;
+    },
+  };
 }

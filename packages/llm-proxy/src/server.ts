@@ -4,8 +4,6 @@ import { createProxyHandler } from "./proxy-handler.js";
 import type { ProxyUsageEvent } from "./usage-event.js";
 
 export type StartProxyOptions = {
-  /** Defaults to 127.0.0.1 — the proxy is local-only and never binds publicly. */
-  host?: string;
   port: number;
   upstreamBaseUrl: string;
   upstreamFetch?: typeof fetch;
@@ -14,6 +12,10 @@ export type StartProxyOptions = {
   newId?: () => string;
 };
 
+// Hard-coded, not an option: the proxy carries the operator's API key, so it must
+// never be exposed beyond loopback. There is deliberately no `host` override.
+const LOOPBACK_HOST = "127.0.0.1";
+
 export type RunningProxy = {
   url: string;
   port: number;
@@ -21,7 +23,7 @@ export type RunningProxy = {
 };
 
 export function startProxyServer(opts: StartProxyOptions): Promise<RunningProxy> {
-  const host = opts.host ?? "127.0.0.1";
+  const host = LOOPBACK_HOST;
   const handler = createProxyHandler({
     upstreamBaseUrl: opts.upstreamBaseUrl,
     ...(opts.upstreamFetch ? { upstreamFetch: opts.upstreamFetch } : {}),

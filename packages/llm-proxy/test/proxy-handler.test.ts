@@ -28,6 +28,7 @@ function makeRes() {
       },
       write(c: Buffer | string) {
         chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
+        return true; // no backpressure in tests
       },
       end(c?: Buffer | string) {
         if (c) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
@@ -151,6 +152,36 @@ describe("createProxyHandler", () => {
     expect(event?.stream).toBe(true);
     expect(event?.inputTokens).toBe(80);
     expect(event?.outputTokens).toBe(40);
+  });
+
+  it("captures final SSE output_tokens even when the stream exceeds the old capture cap", async () => {
+    // message_start (input) at the front, a >2MB filler of content deltas, then
+    // the terminal message_delta (real output_tokens) at the very end. A
+    // head-bounded buffer would miss the delta; incremental scanning must not.
+    const filler = Array.from(
+      { length: 40_000 },
+      () =>
+        'data: {"type":"content_block_delta","delta":{"text":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}\n',
+    ).join("\n");
+    const sse = `data: {"type":"message_start","message":{"usage":{"input_tokens":500,"output_tokens":1}}}\n\n${filler}\ndata: {"type":"message_delta","usage":{"output_tokens":9999}}\n\n`;
+    expect(sse.length).toBeGreaterThan(2_000_000);
+    const upstreamFetch = async () =>
+      new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
+    let event: ProxyUsageEvent | null = null;
+    const handler = createProxyHandler(
+      deps({
+        upstreamFetch,
+        onUsage: (e) => {
+          event = e;
+        },
+      }),
+    );
+    await handler(
+      makeReq("POST", "/v1/messages", {}, JSON.stringify({ model: "m", messages: [{}] })),
+      makeRes().res as never,
+    );
+    expect(event?.inputTokens).toBe(500);
+    expect(event?.outputTokens).toBe(9999);
   });
 
   it("does not record usage for non-/v1/messages paths", async () => {

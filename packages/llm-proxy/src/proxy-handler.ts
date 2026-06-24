@@ -1,5 +1,6 @@
+import { once } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { countRequestMessages, parseUsageFromJson, parseUsageFromSse } from "./parse-usage.js";
+import { countRequestMessages, createSseUsageScanner, parseUsageFromJson } from "./parse-usage.js";
 import type { ProxyUsageEvent } from "./usage-event.js";
 
 export type ProxyHandlerDeps = {
@@ -33,12 +34,22 @@ const STRIP_RESPONSE = new Set([
   "connection",
 ]);
 
-const MAX_CAPTURE_BYTES = 2_000_000;
+// Non-stream JSON message responses are small; cap the capture so a pathological
+// body can't balloon memory. Streaming responses are NOT captured — they are
+// scanned incrementally (see below), so their size is irrelevant to memory.
+const MAX_JSON_CAPTURE_BYTES = 5_000_000;
+// Whole request body is buffered before forwarding (no upstream request
+// streaming), so bound it. Generous headroom for image/large-context requests.
+const MAX_REQUEST_BYTES = 50_000_000;
 
-async function readBody(req: IncomingMessage): Promise<Buffer> {
+async function readBody(req: IncomingMessage): Promise<Buffer | null> {
   const chunks: Buffer[] = [];
+  let total = 0;
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buf.length;
+    if (total > MAX_REQUEST_BYTES) return null;
+    chunks.push(buf);
   }
   return Buffer.concat(chunks);
 }
@@ -75,12 +86,21 @@ export function createProxyHandler(
     const path = req.url ?? "/";
     const method = req.method ?? "GET";
     const bodyBuf = await readBody(req);
+    if (bodyBuf === null) {
+      res.writeHead(413, { "content-type": "text/plain; charset=utf-8" });
+      res.end("mega proxy: request body too large");
+      return;
+    }
     const headers = filterRequestHeaders(req.headers);
     const init: RequestInit =
       bodyBuf.length > 0 ? { method, headers, body: bodyBuf } : { method, headers };
 
     let upstream: Response;
     try {
+      // String concat (NOT new URL(path, base)) is deliberate: it keeps the
+      // upstream host a literal prefix so a hostile request-target (`//evil`,
+      // absolute-form) becomes a path under api.anthropic.com, never a new
+      // origin. Do not "fix" this to new URL() — that reintroduces SSRF.
       upstream = await doFetch(`${upstreamBaseUrl}${path}`, init);
     } catch {
       res.writeHead(502, { "content-type": "text/plain; charset=utf-8" });
@@ -91,18 +111,29 @@ export function createProxyHandler(
     const respHeaders = responseHeaders(upstream.headers);
     res.writeHead(upstream.status, respHeaders);
 
-    const captured: Buffer[] = [];
-    let capturedLen = 0;
+    const contentType = String(respHeaders["content-type"] ?? "");
+    const stream = contentType.includes("event-stream");
+    // SSE → scan incrementally (no body retained); JSON → capture (bounded).
+    const scanner = stream ? createSseUsageScanner() : null;
+    const decoder = new TextDecoder();
+    const jsonCaptured: Buffer[] = [];
+    let jsonLen = 0;
+
     if (upstream.body) {
       const reader = upstream.body.getReader();
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         const buf = Buffer.from(value);
-        res.write(buf);
-        if (capturedLen < MAX_CAPTURE_BYTES) {
-          captured.push(buf);
-          capturedLen += buf.length;
+        // Honor backpressure: if the client socket is full, wait for it to drain
+        // before pulling more from upstream, so a slow client can't balloon the
+        // proxy's heap.
+        if (!res.write(buf)) await once(res, "drain");
+        if (scanner) {
+          scanner.push(decoder.decode(value, { stream: true }));
+        } else if (jsonLen < MAX_JSON_CAPTURE_BYTES) {
+          jsonCaptured.push(buf);
+          jsonLen += buf.length;
         }
       }
     }
@@ -111,10 +142,9 @@ export function createProxyHandler(
     try {
       if (method === "POST" && path.startsWith("/v1/messages") && onUsage) {
         const { model, messageCount } = countRequestMessages(bodyBuf.toString("utf8"));
-        const contentType = String(respHeaders["content-type"] ?? "");
-        const stream = contentType.includes("event-stream");
-        const text = Buffer.concat(captured).toString("utf8");
-        const usage = stream ? parseUsageFromSse(text) : parseUsageFromJson(text);
+        const usage = scanner
+          ? scanner.result()
+          : parseUsageFromJson(Buffer.concat(jsonCaptured).toString("utf8"));
         if (usage) {
           onUsage({
             id: newId(),
