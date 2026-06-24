@@ -41,8 +41,9 @@ export function ProxyActivation(): JSX.Element {
     <section className="flex flex-col gap-2">
       <h3 className="text-xs text-text-muted uppercase tracking-widest">Conversation proxy</h3>
       <p className="text-xs text-text-muted">
-        Opt-in local proxy that meters your conversation token usage. Turn it on, then point your
-        agent at it: <code>export ANTHROPIC_BASE_URL={status?.url ?? "http://127.0.0.1:8787"}</code>
+        Opt-in local proxy that meters your conversation token usage. Turning it on auto-routes new
+        claude sessions through it (no export needed); a session already running must be restarted
+        to pick it up.
       </p>
       <label className="flex items-center gap-2 text-sm text-text-primary">
         <input

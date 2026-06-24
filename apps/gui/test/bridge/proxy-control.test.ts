@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-// Random free port so the test never collides with a running proxy. Set before
-// importing the singleton (it reads the env at module load).
-Object.assign(process.env, { MEGA_PROXY_PORT: "0" });
+// Random free port (no collision) + a temp settings path (don't touch the real
+// ~/.claude/settings.json). Set before importing — read at module load.
+const SETTINGS = join(mkdtempSync(join(tmpdir(), "proxy-settings-")), "settings.json");
+Object.assign(process.env, { MEGA_PROXY_PORT: "0", MEGA_PROXY_SETTINGS_PATH: SETTINGS });
 const { startProxy, stopProxy, proxyStatus } = await import("../../bridge/proxy-control.js");
 
 describe("proxy-control", () => {
