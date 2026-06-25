@@ -7,7 +7,8 @@ import { runIntentHookFromProcess } from "../../hooks/intent-run.js";
 export const hooksIntentCommand = defineCommand({
   meta: {
     name: "intent",
-    description: "Internal: record the latest Claude Code prompt as ranking intent (stdin payload).",
+    description:
+      "Internal: record the latest Claude Code prompt as ranking intent (stdin payload).",
   },
   run() {
     runIntentHookFromProcess();

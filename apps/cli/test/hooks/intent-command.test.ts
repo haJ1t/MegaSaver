@@ -3,9 +3,8 @@ import { hooksCommand } from "../../src/commands/hooks/index.js";
 
 describe("hooks command group", () => {
   it("registers the intent subcommand", () => {
-    expect(hooksCommand.subCommands).toHaveProperty("intent");
-    expect((hooksCommand.subCommands?.intent as { meta?: { name?: string } })?.meta?.name).toBe(
-      "intent",
-    );
+    const sub = hooksCommand.subCommands as Record<string, unknown>;
+    expect(sub).toHaveProperty("intent");
+    expect((sub["intent"] as { meta?: { name?: string } })?.meta?.name).toBe("intent");
   });
 });

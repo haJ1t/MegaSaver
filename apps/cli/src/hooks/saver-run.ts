@@ -97,7 +97,12 @@ export async function runSaverHookFromProcess(): Promise<void> {
     if (raw === "") return;
     const payload: unknown = JSON.parse(raw);
     const storeRoot = resolveStorePath(readStoreEnv(undefined));
-    const deps: SaverDeps = { storeRoot, readSettings, readSessionIntent, record: makeRecord(storeRoot) };
+    const deps: SaverDeps = {
+      storeRoot,
+      readSettings,
+      readSessionIntent,
+      record: makeRecord(storeRoot),
+    };
     const decision = await buildSaverDecision(payload, deps);
     const s = renderSaverStdout(decision);
     if (s !== "") process.stdout.write(s);

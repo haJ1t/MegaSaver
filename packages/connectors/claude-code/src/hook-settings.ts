@@ -11,7 +11,12 @@ export const INTENT_HOOK_COMMAND = "mega hooks intent";
 type CommandHook = { type: "command"; command: string };
 type ToolUseEntry = { matcher?: string; hooks?: CommandHook[] };
 type SettingsObject = {
-  hooks?: { PreToolUse?: unknown; PostToolUse?: unknown; UserPromptSubmit?: unknown; [key: string]: unknown };
+  hooks?: {
+    PreToolUse?: unknown;
+    PostToolUse?: unknown;
+    UserPromptSubmit?: unknown;
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 };
 

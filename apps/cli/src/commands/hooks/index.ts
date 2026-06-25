@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { hooksInstallCommand } from "./install.js";
-import { hooksLogCommand } from "./log.js";
 import { hooksIntentCommand } from "./intent.js";
+import { hooksLogCommand } from "./log.js";
 import { hooksSaverCommand } from "./saver.js";
 import { hooksStatusCommand } from "./status.js";
 import { hooksUninstallCommand } from "./uninstall.js";

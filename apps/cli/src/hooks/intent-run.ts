@@ -27,7 +27,12 @@ export function readSessionIntent(storeRoot: string, workspaceKey: string): stri
 
 // Atomic write (tmp + rename): the file is read by a separate process (the saver
 // hook / daemon); a reader must never see a half-written file.
-function writeIntentFile(storeRoot: string, workspaceKey: string, prompt: string, ts: number): void {
+function writeIntentFile(
+  storeRoot: string,
+  workspaceKey: string,
+  prompt: string,
+  ts: number,
+): void {
   const path = intentFilePath(storeRoot, workspaceKey);
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true });
