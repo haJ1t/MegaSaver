@@ -3,7 +3,13 @@ import { createServer } from "node:http";
 import type { RunCommandSpawn } from "@megasaver/context-gate";
 import { readJsonBody } from "./body.js";
 import { clearDiscovery, writeDiscovery } from "./discovery.js";
-import { excerptHandler, execHandler, expandHandler, searchHandler } from "./handlers.js";
+import {
+  excerptHandler,
+  execHandler,
+  expandHandler,
+  recallHandler,
+  searchHandler,
+} from "./handlers.js";
 
 // Hard-coded: the daemon executes shell commands and reads files on behalf of
 // the agent, so it must never bind beyond loopback. No host override.
@@ -52,7 +58,11 @@ export function startDaemonServer(opts: StartDaemonOptions): Promise<RunningDaem
     }
     if (
       req.method === "POST" &&
-      (path === "/excerpt" || path === "/expand" || path === "/exec" || path === "/search")
+      (path === "/excerpt" ||
+        path === "/expand" ||
+        path === "/exec" ||
+        path === "/search" ||
+        path === "/recall")
     ) {
       void (async () => {
         let body: unknown;
@@ -73,6 +83,7 @@ export function startDaemonServer(opts: StartDaemonOptions): Promise<RunningDaem
         else if (path === "/expand") result = await expandHandler(opts.storeRoot, body);
         else if (path === "/exec")
           result = await execHandler(opts.storeRoot, body, hasDeps ? deps : undefined);
+        else if (path === "/recall") result = await recallHandler(opts.storeRoot, body);
         else result = await searchHandler(opts.storeRoot, body, hasDeps ? deps : undefined);
         res.writeHead(result.status, { "content-type": "application/json" });
         res.end(JSON.stringify(result.json));

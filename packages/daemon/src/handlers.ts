@@ -7,7 +7,9 @@ import {
 } from "@megasaver/context-gate";
 import { isSafeKeySegment, liveSessionIdSchema, workspaceKeySchema } from "@megasaver/core";
 import { outputSourceKindSchema } from "@megasaver/output-filter";
+import { type Bm25Document, rankBm25 } from "@megasaver/retrieval";
 import { tokenSaverModeSchema } from "@megasaver/shared";
+import { readOverlayEvents } from "@megasaver/stats";
 import { z } from "zod";
 
 export type HandlerResponse = { status: number; json: Record<string, unknown> };
@@ -312,4 +314,50 @@ export async function searchHandler(
       summary: result.result.summary,
     },
   };
+}
+
+// ─── recallHandler ────────────────────────────────────────────────────────────
+
+const recallRequestSchema = z
+  .object({
+    workspaceKey: workspaceKeySchema,
+    liveSessionId: liveSessionIdSchema,
+    intent: z.string().min(1),
+  })
+  .strict();
+
+export async function recallHandler(storeRoot: string, body: unknown): Promise<HandlerResponse> {
+  const parsed = recallRequestSchema.safeParse(body);
+  if (!parsed.success) return { status: 400, json: { error: parsed.error.message } };
+
+  const events = readOverlayEvents(
+    { root: storeRoot },
+    parsed.data.workspaceKey,
+    parsed.data.liveSessionId,
+  );
+
+  // Guard: rankBm25 throws on topN<=0 (RetrievalError('invalid_input'))
+  if (events.length === 0) return { status: 200, json: { records: [] } };
+
+  const documents: Bm25Document[] = events.map((e, i) => ({
+    id: String(i),
+    text: `${e.label} ${e.summary}`,
+  }));
+
+  const ranked = rankBm25({ query: parsed.data.intent, documents, topN: events.length });
+
+  const records = ranked.map((r) => {
+    const e = events[Number(r.id)];
+    // exactOptionalPropertyTypes: spread chunkSetId conditionally
+    return {
+      label: e?.label ?? "",
+      summary: e?.summary ?? "",
+      sourceKind: e?.sourceKind ?? "",
+      createdAt: e?.createdAt ?? "",
+      score: r.score,
+      ...(e?.chunkSetId !== undefined ? { chunkSetId: e.chunkSetId } : {}),
+    };
+  });
+
+  return { status: 200, json: { records } };
 }

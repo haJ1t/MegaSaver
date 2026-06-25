@@ -15,6 +15,7 @@ export {
   excerptHandler,
   expandHandler,
   execHandler,
+  recallHandler,
   searchHandler,
 } from "./handlers.js";
 export { readJsonBody } from "./body.js";

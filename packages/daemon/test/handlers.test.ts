@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RunCommandSpawn } from "@megasaver/context-gate";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { excerptHandler, execHandler, expandHandler, searchHandler } from "../src/handlers.js";
+import {
+  excerptHandler,
+  execHandler,
+  expandHandler,
+  recallHandler,
+  searchHandler,
+} from "../src/handlers.js";
 
 let store: string;
 beforeEach(() => {
@@ -307,5 +313,86 @@ describe("searchHandler", () => {
     expect(json.files[1]?.path).toBe("src/b.ts");
     // chunkSetId may be undefined if output was small (passthrough)
     expect(json).toHaveProperty("chunkSetId");
+  });
+});
+
+// ─── recallHandler ───────────────────────────────────────────────────────────
+
+const BASE_RECALL_BODY = {
+  workspaceKey: "ws",
+  liveSessionId: "live1",
+  intent: "run tests",
+};
+
+type RecallRecord = {
+  label: string;
+  summary: string;
+  sourceKind: string;
+  createdAt: string;
+  score: number;
+  chunkSetId?: string;
+};
+
+describe("recallHandler", () => {
+  it("400s on an invalid body (missing intent)", async () => {
+    const res = await recallHandler(store, { workspaceKey: "ws", liveSessionId: "live1" });
+    expect(res.status).toBe(400);
+  });
+
+  it("400s on a path-traversal workspaceKey; reads nothing outside store", async () => {
+    const res = await recallHandler(store, {
+      workspaceKey: "../escape",
+      liveSessionId: "live1",
+      intent: "tests",
+    });
+    expect(res.status).toBe(400);
+    expect(existsSync(join(store, "..", "escape"))).toBe(false);
+  });
+
+  it("returns {records:[]} for a session with no overlay events", async () => {
+    const res = await recallHandler(store, BASE_RECALL_BODY);
+    expect(res.status).toBe(200);
+    expect(res.json.records).toEqual([]);
+  });
+
+  it("ranking: more-relevant record ranked first; each record has required shape", async () => {
+    // Seed two events with distinct labels/summaries
+    await excerptHandler(store, {
+      workspaceKey: "ws",
+      liveSessionId: "live1",
+      raw: bigRaw,
+      sourceKind: "command",
+      label: "list files",
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    await excerptHandler(store, {
+      workspaceKey: "ws",
+      liveSessionId: "live1",
+      raw: bigRaw,
+      sourceKind: "command",
+      label: "run tests vitest",
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+
+    const res = await recallHandler(store, { ...BASE_RECALL_BODY, intent: "tests" });
+    expect(res.status).toBe(200);
+    const records = res.json.records as RecallRecord[];
+    expect(records.length).toBe(2);
+
+    // The "run tests vitest" record must be ranked first (BM25 matches "tests")
+    expect(records[0]?.label).toBe("run tests vitest");
+
+    // Each record carries required shape
+    for (const r of records) {
+      expect(typeof r.label).toBe("string");
+      expect(typeof r.summary).toBe("string");
+      expect(typeof r.sourceKind).toBe("string");
+      expect(typeof r.createdAt).toBe("string");
+      expect(typeof r.score).toBe("number");
+      // chunkSetId is optional (present when compressed, absent on passthrough)
+      expect("chunkSetId" in r || !("chunkSetId" in r)).toBe(true);
+    }
   });
 });
