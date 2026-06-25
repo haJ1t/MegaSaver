@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -39,4 +39,12 @@ describe("discovery", () => {
     clearDiscovery(store);
     expect(readDiscovery(store)).toBeNull();
   });
+
+  it.skipIf(process.platform === "win32")(
+    "writes the discovery file with owner-only (0o600) permissions",
+    () => {
+      writeDiscovery(store, { port: 1, token: "secret", pid: 1, startedAt: "x" });
+      expect(statSync(discoveryPath(store)).mode & 0o777).toBe(0o600);
+    },
+  );
 });
