@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
+import type { RunCommandSpawn } from "@megasaver/context-gate";
 import { readJsonBody } from "./body.js";
 import { clearDiscovery, writeDiscovery } from "./discovery.js";
-import { excerptHandler, expandHandler } from "./handlers.js";
+import { excerptHandler, execHandler, expandHandler, searchHandler } from "./handlers.js";
 
 // Hard-coded: the daemon executes shell commands and reads files on behalf of
 // the agent, so it must never bind beyond loopback. No host override.
@@ -15,6 +16,8 @@ export type StartDaemonOptions = {
   /** Default: a fresh random token. */
   token?: string;
   now?: () => string;
+  /** Injectable spawn for testing exec/search handlers without real processes. */
+  spawn?: RunCommandSpawn;
 };
 
 export type RunningDaemon = {
@@ -47,7 +50,10 @@ export function startDaemonServer(opts: StartDaemonOptions): Promise<RunningDaem
       void close();
       return;
     }
-    if (req.method === "POST" && (path === "/excerpt" || path === "/expand")) {
+    if (
+      req.method === "POST" &&
+      (path === "/excerpt" || path === "/expand" || path === "/exec" || path === "/search")
+    ) {
       void (async () => {
         let body: unknown;
         try {
@@ -57,10 +63,17 @@ export function startDaemonServer(opts: StartDaemonOptions): Promise<RunningDaem
           res.end(JSON.stringify({ error: err instanceof Error ? err.message : "bad body" }));
           return;
         }
-        const result =
-          path === "/excerpt"
-            ? await excerptHandler(opts.storeRoot, body)
-            : await expandHandler(opts.storeRoot, body);
+        // Build deps without undefined values (exactOptionalPropertyTypes)
+        const deps: { spawn?: typeof opts.spawn; now?: typeof opts.now } = {};
+        if (opts.spawn !== undefined) deps.spawn = opts.spawn;
+        if (opts.now !== undefined) deps.now = opts.now;
+        const hasDeps = opts.spawn !== undefined || opts.now !== undefined;
+        let result: { status: number; json: Record<string, unknown> };
+        if (path === "/excerpt") result = await excerptHandler(opts.storeRoot, body);
+        else if (path === "/expand") result = await expandHandler(opts.storeRoot, body);
+        else if (path === "/exec")
+          result = await execHandler(opts.storeRoot, body, hasDeps ? deps : undefined);
+        else result = await searchHandler(opts.storeRoot, body, hasDeps ? deps : undefined);
         res.writeHead(result.status, { "content-type": "application/json" });
         res.end(JSON.stringify(result.json));
       })().catch(() => {

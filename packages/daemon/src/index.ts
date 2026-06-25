@@ -8,5 +8,13 @@ export {
 } from "./server.js";
 export { daemonSpawnArgs, spawnDaemon } from "./spawn.js";
 export { type DaemonHandle, type GetDaemonOptions, getDaemon } from "./client.js";
-export { type HandlerResponse, excerptHandler, expandHandler } from "./handlers.js";
+export {
+  type HandlerResponse,
+  type ExecHandlerDeps,
+  type SearchHandlerDeps,
+  excerptHandler,
+  expandHandler,
+  execHandler,
+  searchHandler,
+} from "./handlers.js";
 export { readJsonBody } from "./body.js";

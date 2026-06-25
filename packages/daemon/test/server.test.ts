@@ -1,9 +1,28 @@
+import { EventEmitter } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { RunCommandSpawn } from "@megasaver/context-gate";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readDiscovery } from "../src/discovery.js";
 import { type RunningDaemon, startDaemonServer } from "../src/server.js";
+
+/** Fake spawn emitting stdout then close(0). */
+function makeFakeSpawn(stdout: string): RunCommandSpawn {
+  return vi.fn((_cmd: string, _args: string[], _opts: unknown) => {
+    const ee = new EventEmitter() as ReturnType<RunCommandSpawn>;
+    const stdoutEm = new EventEmitter() as NodeJS.ReadableStream;
+    const stderrEm = new EventEmitter() as NodeJS.ReadableStream;
+    (ee as unknown as { stdout: unknown; stderr: unknown }).stdout = stdoutEm;
+    (ee as unknown as { stdout: unknown; stderr: unknown }).stderr = stderrEm;
+    (ee as unknown as { kill: (sig?: string) => boolean }).kill = () => true;
+    setImmediate(() => {
+      stdoutEm.emit("data", Buffer.from(stdout));
+      ee.emit("close", 0);
+    });
+    return ee;
+  }) as unknown as RunCommandSpawn;
+}
 
 let store: string;
 let daemon: RunningDaemon | null;
@@ -88,5 +107,79 @@ describe("startDaemonServer", () => {
     daemon = await startDaemonServer({ storeRoot: store, port: 0, token: "secret" });
     const res = await fetch(`${daemon.url}/excerpt`, { method: "POST", body: "{}" });
     expect(res.status).toBe(401);
+  });
+
+  it("POST /exec without a token → 401", async () => {
+    daemon = await startDaemonServer({ storeRoot: store, port: 0, token: "secret" });
+    const res = await fetch(`${daemon.url}/exec`, { method: "POST", body: "{}" });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /exec with token + injected spawn → 200 excerpt shape", async () => {
+    const bigOutput = Array.from({ length: 500 }, (_, i) => `file${i}.ts`).join("\n");
+    const fakeSpawn = makeFakeSpawn(bigOutput);
+    daemon = await startDaemonServer({
+      storeRoot: store,
+      port: 0,
+      token: "secret",
+      spawn: fakeSpawn,
+    });
+    const auth = { authorization: "Bearer secret", "content-type": "application/json" };
+    const res = await fetch(`${daemon.url}/exec`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        workspaceKey: "ws",
+        liveSessionId: "live1",
+        cwd: "/tmp",
+        command: "ls",
+        args: [],
+        intent: "list files",
+        mode: "aggressive",
+        storeRawOutput: true,
+      }),
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { chunkSetId?: string; decision: string; rawBytes: number };
+    expect(typeof json.decision).toBe("string");
+    expect(typeof json.rawBytes).toBe("number");
+  });
+
+  it("POST /search without a token → 401", async () => {
+    daemon = await startDaemonServer({ storeRoot: store, port: 0, token: "secret" });
+    const res = await fetch(`${daemon.url}/search`, { method: "POST", body: "{}" });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /search with token + injected grep spawn → 200 with files/chunkSetId", async () => {
+    const grepOutput = ["src/a.ts:12:TODO fix", "src/b.ts:5:TODO next"].join("\n");
+    const fakeSpawn = makeFakeSpawn(grepOutput);
+    daemon = await startDaemonServer({
+      storeRoot: store,
+      port: 0,
+      token: "secret",
+      spawn: fakeSpawn,
+    });
+    const auth = { authorization: "Bearer secret", "content-type": "application/json" };
+    const res = await fetch(`${daemon.url}/search`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        workspaceKey: "ws",
+        liveSessionId: "live1",
+        cwd: "/tmp",
+        query: "TODO",
+        intent: "find todos",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      query: string;
+      files: Array<{ path: string; matchCount: number }>;
+      chunkSetId: string | undefined;
+    };
+    expect(json.query).toBe("TODO");
+    expect(Array.isArray(json.files)).toBe(true);
+    expect(json).toHaveProperty("chunkSetId");
   });
 });
