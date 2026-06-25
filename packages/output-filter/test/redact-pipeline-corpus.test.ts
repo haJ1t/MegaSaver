@@ -6,8 +6,8 @@ import { filterOutput } from "../src/types.js";
 const fixturesDir = fileURLToPath(new URL("./fixtures/redaction", import.meta.url));
 const names = readdirSync(fixturesDir).sort();
 
-const surfaceOf = (raw: string): { surface: string; warnedRedaction: boolean } => {
-  const result = filterOutput({ raw, mode: "safe" });
+const surfaceOf = async (raw: string): Promise<{ surface: string; warnedRedaction: boolean }> => {
+  const result = await filterOutput({ raw, mode: "safe" });
   const warnedRedaction = (result.warnings ?? []).some((w) => w.includes("redacted"));
   return {
     surface: result.summary + result.excerpts.map((e) => e.text).join("\n"),
@@ -23,18 +23,18 @@ describe("redact pipeline corpus (F-MED-1, spec §10)", () => {
     const presentPath = `${dir}/expected-present.txt`;
 
     if (existsSync(absentPath)) {
-      it(`${name}: secret token is absent from the filtered result`, () => {
+      it(`${name}: secret token is absent from the filtered result`, async () => {
         const secret = readFileSync(absentPath, "utf8").trim();
-        const { surface } = surfaceOf(input);
+        const { surface } = await surfaceOf(input);
         expect(secret.length).toBeGreaterThan(0);
         expect(surface).not.toContain(secret);
       });
     }
 
     if (existsSync(presentPath)) {
-      it(`${name}: benign text survives without a false-positive redaction`, () => {
+      it(`${name}: benign text survives without a false-positive redaction`, async () => {
         const present = readFileSync(presentPath, "utf8").trim();
-        const { surface, warnedRedaction } = surfaceOf(input);
+        const { surface, warnedRedaction } = await surfaceOf(input);
         expect(surface).toContain(present);
         expect(warnedRedaction).toBe(false);
       });

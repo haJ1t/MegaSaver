@@ -32,8 +32,8 @@ describe("readRaw (C3)", () => {
 });
 
 describe("filterRaw (C3)", () => {
-  it("produces a FilterOutputResult from raw text", () => {
-    const result = filterRaw({
+  it("produces a FilterOutputResult from raw text", async () => {
+    const result = await filterRaw({
       raw: "line one\nerror: boom\nline three\n",
       path: file,
       intent: "find the error",

@@ -215,43 +215,43 @@ describe("eslint parser", () => {
 });
 
 describe("chunkByFormat dispatch (spec §6 stage 4 precedence)", () => {
-  it("routes test output to the test-output parser", () => {
-    expect(chunkByFormat(TEST_OUTPUT).length).toBeGreaterThan(0);
+  it("routes test output to the test-output parser", async () => {
+    expect((await chunkByFormat(TEST_OUTPUT)).length).toBeGreaterThan(0);
   });
 
-  it("falls back to line chunking on no format match", () => {
-    const chunks = chunkByFormat(PLAIN);
+  it("falls back to line chunking on no format match", async () => {
+    const chunks = await chunkByFormat(PLAIN);
     expect(chunks).toHaveLength(1);
     expect(chunks[0]?.text).toBe(PLAIN);
   });
 });
 
 describe("chunkByFormat routes each fixture to the right parser", () => {
-  it("routes pytest output to the pytest parser (failure block stays whole)", () => {
-    const chunks = chunkByFormat(PYTEST);
+  it("routes pytest output to the pytest parser (failure block stays whole)", async () => {
+    const chunks = await chunkByFormat(PYTEST);
     const block = chunks.find((c) => c.text.includes("test_division"));
     // The generic test-output parser splits every line; pytest keeps the
     // traceback + assertion together in one chunk.
     expect(block?.text).toContain("ZeroDivisionError: division by zero");
   });
 
-  it("routes go test output to the go-test parser, not generic test-output", () => {
-    const chunks = chunkByFormat(GO_TEST);
+  it("routes go test output to the go-test parser, not generic test-output", async () => {
+    const chunks = await chunkByFormat(GO_TEST);
     const block = chunks.find((c) => c.text.includes("--- FAIL: TestDivide"));
     // Generic test-output would split the FAIL detail onto its own line;
     // go-test keeps the failure message with its --- FAIL: marker.
     expect(block?.text).toContain("Divide(1, 0) = 0; want error");
   });
 
-  it("routes cargo test output to the cargo-test parser", () => {
-    const chunks = chunkByFormat(CARGO_TEST);
+  it("routes cargo test output to the cargo-test parser", async () => {
+    const chunks = await chunkByFormat(CARGO_TEST);
     const block = chunks.find((c) => c.text.includes("tests::test_divide stdout ----"));
     // cargo keeps the panic message with its stdout block, not line-split.
     expect(block?.text).toContain("assertion `left == right` failed");
   });
 
-  it("routes eslint output to the eslint parser (file group stays whole)", () => {
-    const chunks = chunkByFormat(ESLINT);
+  it("routes eslint output to the eslint parser (file group stays whole)", async () => {
+    const chunks = await chunkByFormat(ESLINT);
     const group = chunks.find((c) => c.text.includes("/app/src/foo.ts"));
     // The file header and its rule rows stay in one chunk.
     expect(group?.text).toContain("no-unused-vars");

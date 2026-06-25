@@ -225,7 +225,7 @@ export async function runOutputExecCommand(
     settings.maxReturnedBytes !== undefined
       ? Math.min(settings.maxReturnedBytes, MAX_RETURNED_CEILING)
       : undefined;
-  const filtered = filterOutput({
+  const filtered = await filterOutput({
     raw: outcome.capture.raw,
     intent: input.intent,
     mode: settings.mode,
@@ -373,7 +373,7 @@ export async function runOverlayOutputExecCommand(
     settings.maxReturnedBytes !== undefined
       ? Math.min(settings.maxReturnedBytes, MAX_RETURNED_CEILING)
       : undefined;
-  const filtered = filterOutput({
+  const filtered = await filterOutput({
     raw: outcome.capture.raw,
     intent: input.intent,
     mode: settings.mode,

@@ -159,7 +159,7 @@ export function filterRaw(input: {
   intent: string;
   mode: TokenSaverMode;
   maxReturnedBytes: number | undefined;
-}): FilterOutputResult {
+}): Promise<FilterOutputResult> {
   return filterOutput({
     raw: input.raw,
     intent: input.intent,
@@ -183,7 +183,7 @@ export async function readAndFilter(input: {
   return {
     ok: true,
     raw: r.raw,
-    result: filterRaw({
+    result: await filterRaw({
       raw: r.raw,
       path: input.path,
       intent: input.intent,

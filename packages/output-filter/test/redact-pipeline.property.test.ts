@@ -22,18 +22,18 @@ const awsAccessKeyArb = fc
 
 const secretArb = fc.oneof(githubTokenArb, openaiKeyArb, awsAccessKeyArb);
 
-const surfaceOf = (raw: string): string => {
-  const result = filterOutput({ raw, mode: "safe" });
+const surfaceOf = async (raw: string): Promise<string> => {
+  const result = await filterOutput({ raw, mode: "safe" });
   return result.summary + result.excerpts.map((e) => e.text).join("\n");
 };
 
 describe("redact pipeline invariant (F-MED-1, spec §3.1/§11)", () => {
-  it("no recognised secret survives filterOutput even amid noise", () => {
-    fc.assert(
-      fc.property(secretArb, fc.integer({ min: 0, max: 50 }), (secret, position) => {
+  it("no recognised secret survives filterOutput even amid noise", async () => {
+    await fc.assert(
+      fc.asyncProperty(secretArb, fc.integer({ min: 0, max: 50 }), async (secret, position) => {
         const noise = Array.from({ length: 60 }, (_, i) => `log line ${i}`);
         noise.splice(Math.min(position, noise.length), 0, `token=${secret}`);
-        const surface = surfaceOf(noise.join("\n"));
+        const surface = await surfaceOf(noise.join("\n"));
         expect(surface).not.toContain(secret);
       }),
       { numRuns: 100 },
