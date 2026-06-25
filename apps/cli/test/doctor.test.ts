@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type Check,
   checkCwd,
+  checkHookTelemetry,
   checkNode,
   checkPlatform,
   doctorCommand,
@@ -200,17 +201,25 @@ describe("doctorCommand", () => {
     expect(process.exitCode).toBe(0);
   });
 
-  it("reports hook telemetry as missing with the install hint when absent", async () => {
-    await doctorCommand.run?.({
-      args: {},
-      cmd: doctorCommand,
-      rawArgs: [],
-      data: undefined,
-    } as never);
-    const output = logSpy.mock.calls[0]?.[0] as string;
-    expect(output).toContain("Claude Code hook telemetry: missing");
-    expect(output).toContain("mega hooks install claude-code");
-    // Missing telemetry is informational — it must not fail the doctor.
-    expect(process.exitCode).toBe(0);
+  it("reports hook telemetry as missing with the install hint when absent", () => {
+    // Inject temp paths so the check is deterministic regardless of the dev's
+    // real ~/.claude. The HOME stub above is ineffective here: run()'s default
+    // paths resolve via os.homedir() (which ignores the HOME env), so a machine
+    // with the hook installed would otherwise report "installed". Test the
+    // injectable unit directly — exactly what the doctor's design intends.
+    const dir = mkdtempSync(join(tmpdir(), "megasaver-doctor-tele-"));
+    try {
+      const check = checkHookTelemetry({
+        settingsPath: join(dir, "settings.json"), // absent
+        hookLogPath: join(dir, "hooks.jsonl"), // absent
+      });
+      expect(check.value).toBe("missing");
+      expect(check.pass).toBe(false);
+      expect(check.reason).toContain("mega hooks install claude-code");
+      // Telemetry is informational — it is excluded from the doctor's exit code.
+      expect(exitCodeFor(runChecks())).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
