@@ -458,4 +458,46 @@ describe("readRegistryHandler", () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.json.excerpts)).toBe(true);
   });
+
+  it("T11: a re-read of an unchanged file returns the unchanged marker via { ...result.result }", async () => {
+    seedRegistry();
+    writeFileSync(join(projectRoot, "reread.txt"), "hello world content for diff-on-reread test");
+
+    const body = {
+      sessionId: SESSION_ID as string,
+      path: "reread.txt",
+      intent: "read it",
+    };
+
+    const first = await readRegistryHandler(storeRoot, body);
+    expect(first.status).toBe(200);
+    const firstJson = first.json as Record<string, unknown>;
+    expect("unchanged" in firstJson).toBe(false);
+    const firstChunkSetId = firstJson.chunkSetId as string;
+    expect(firstChunkSetId).toBeDefined();
+
+    const second = await readRegistryHandler(storeRoot, body);
+    expect(second.status).toBe(200);
+    const secondJson = second.json as Record<string, unknown>;
+    expect(secondJson.unchanged).toEqual({ priorChunkSetId: firstChunkSetId });
+    expect(secondJson.excerpts).toEqual([]);
+    expect(typeof secondJson.summary).toBe("string");
+    expect(secondJson.summary as string).toContain("unchanged");
+  });
+
+  it("T13-recall: recall still works after a suppressed read wrote read-index.json", async () => {
+    seedRegistry();
+    writeFileSync(
+      join(projectRoot, "reread2.txt"),
+      "content for recall regression after read-index",
+    );
+    const body = { sessionId: SESSION_ID as string, path: "reread2.txt", intent: "read" };
+    await readRegistryHandler(storeRoot, body);
+    // read-index.json now lives in the session dir; recall must not throw store_corrupt.
+    const recall = await recallRegistryHandler(storeRoot, {
+      sessionId: SESSION_ID as string,
+      intent: "read",
+    });
+    expect(recall.status).toBe(200);
+  });
 });
