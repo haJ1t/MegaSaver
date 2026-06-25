@@ -143,6 +143,32 @@ export function runOverlayTwoGates(input: {
   return { ok: true, absolute };
 }
 
+export async function readRaw(
+  absolute: string,
+): Promise<{ ok: true; raw: string } | { ok: false; message: string }> {
+  try {
+    return { ok: true, raw: await readFile(absolute, "utf8") };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "read failed" };
+  }
+}
+
+export function filterRaw(input: {
+  raw: string;
+  path: string;
+  intent: string;
+  mode: TokenSaverMode;
+  maxReturnedBytes: number | undefined;
+}): FilterOutputResult {
+  return filterOutput({
+    raw: input.raw,
+    intent: input.intent,
+    mode: input.mode,
+    ...(input.maxReturnedBytes !== undefined ? { maxReturnedBytes: input.maxReturnedBytes } : {}),
+    source: { kind: "file", path: input.path },
+  });
+}
+
 export async function readAndFilter(input: {
   absolute: string;
   path: string;
@@ -152,20 +178,19 @@ export async function readAndFilter(input: {
 }): Promise<
   { ok: true; raw: string; result: FilterOutputResult } | { ok: false; message: string }
 > {
-  let raw: string;
-  try {
-    raw = await readFile(input.absolute, "utf8");
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "read failed" };
-  }
-  const result = filterOutput({
-    raw,
-    intent: input.intent,
-    mode: input.mode,
-    ...(input.maxReturnedBytes !== undefined ? { maxReturnedBytes: input.maxReturnedBytes } : {}),
-    source: { kind: "file", path: input.path },
-  });
-  return { ok: true, raw, result };
+  const r = await readRaw(input.absolute);
+  if (!r.ok) return r;
+  return {
+    ok: true,
+    raw: r.raw,
+    result: filterRaw({
+      raw: r.raw,
+      path: input.path,
+      intent: input.intent,
+      mode: input.mode,
+      maxReturnedBytes: input.maxReturnedBytes,
+    }),
+  };
 }
 
 export async function persistChunkSet(input: {

@@ -20,6 +20,8 @@ export { locateChunkSet, type LocatedChunkSet } from "./locate-chunk-set.js";
 export {
   resolveEffectiveSettings,
   runTwoGates,
+  readRaw,
+  filterRaw,
   readAndFilter,
   persistChunkSet,
   defaultNow,
