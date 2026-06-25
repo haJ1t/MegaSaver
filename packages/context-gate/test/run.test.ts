@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProjectId, SessionId } from "@megasaver/shared";
@@ -120,5 +120,102 @@ describe("runOutputPipeline — stats event wiring", () => {
     const outcome = await run(registry(projectRoot));
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) expect(outcome.reason).toBe("store_write_failed");
+  });
+});
+
+describe("runOutputPipeline — diff-on-reread suppression (registry)", () => {
+  let store: string;
+  let projectRoot: string;
+  let filePath: string;
+  let idCounter: number;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "cg-reread-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "cg-reread-root-"));
+    filePath = join(projectRoot, "f.txt");
+    await writeFile(filePath, "line one\nerror: boom\nline three\n");
+    idCounter = 0;
+  });
+
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  function run(opts: { storeRawOutput?: boolean } = {}) {
+    return runOutputPipeline({
+      registry: registry(projectRoot, opts),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      path: filePath,
+      intent: "find the error",
+      now: () => NOW,
+      newId: () => `cs-${idCounter++}`,
+      loadPermissions: () => null,
+    });
+  }
+
+  function sessionContentDir() {
+    return join(store, "content", PROJECT_ID, SESSION_ID);
+  }
+
+  it("T6: first read is a miss — persists, records, no unchanged field", async () => {
+    const r1 = await run();
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    expect("unchanged" in r1.result).toBe(false);
+    expect(r1.result.chunkSetId).toBeDefined();
+
+    const names = await readdir(sessionContentDir());
+    expect(names).toContain("read-index.json");
+    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(1);
+  });
+
+  it("T7: second read of an unchanged file suppresses + skips filter/persist", async () => {
+    const r1 = await run();
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    const firstChunkSetId = r1.result.chunkSetId;
+
+    const r2 = await run();
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.result.excerpts).toEqual([]);
+    expect(r2.result.unchanged?.priorChunkSetId).toBe(firstChunkSetId);
+    expect(r2.result.decision).toBe("unchanged-marker");
+    expect(r2.result.summary).toContain("unchanged");
+
+    // No second chunk-set persisted: still exactly one chunk-set on disk.
+    const names = await readdir(sessionContentDir());
+    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(1);
+  });
+
+  it("T8/T10: changed content is a miss with no unchanged field; index updated", async () => {
+    const r1 = await run();
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    const firstChunkSetId = r1.result.chunkSetId;
+
+    await writeFile(filePath, "DIFFERENT bytes now\n");
+    const r2 = await run();
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect("unchanged" in r2.result).toBe(false);
+    expect(r2.result.chunkSetId).toBeDefined();
+    expect(r2.result.chunkSetId).not.toBe(firstChunkSetId);
+
+    const names = await readdir(sessionContentDir());
+    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(2);
+  });
+
+  it("T12: storeRawOutput=false writes no index; next read is a normal miss", async () => {
+    const r1 = await run({ storeRawOutput: false });
+    expect(r1.ok).toBe(true);
+    await expect(readdir(sessionContentDir())).rejects.toMatchObject({ code: "ENOENT" });
+
+    const r2 = await run({ storeRawOutput: false });
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect("unchanged" in r2.result).toBe(false);
   });
 });
