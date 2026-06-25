@@ -46,4 +46,47 @@ describe("startDaemonServer", () => {
     daemon = null;
     expect(readDiscovery(store)).toBeNull();
   });
+
+  it("excerpt → expand round-trips over HTTP with the token", async () => {
+    daemon = await startDaemonServer({ storeRoot: store, port: 0, token: "secret" });
+    const auth = { authorization: "Bearer secret", "content-type": "application/json" };
+    const bigRaw = Array.from({ length: 400 }, (_, i) => `line ${i} lorem ipsum dolor`).join("\n");
+
+    const exRes = await fetch(`${daemon.url}/excerpt`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        workspaceKey: "ws",
+        liveSessionId: "live1",
+        raw: bigRaw,
+        sourceKind: "command",
+        label: "run tests",
+        mode: "aggressive",
+        storeRawOutput: true,
+      }),
+    });
+    expect(exRes.status).toBe(200);
+    const ex = (await exRes.json()) as { chunkSetId: string; decision: string };
+    expect(ex.decision).toBe("compressed");
+
+    const expRes = await fetch(`${daemon.url}/expand`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        workspaceKey: "ws",
+        liveSessionId: "live1",
+        chunkSetId: ex.chunkSetId,
+        chunkId: "0",
+      }),
+    });
+    expect(expRes.status).toBe(200);
+    const exp = (await expRes.json()) as { chunk: { text: string } };
+    expect(exp.chunk.text).toContain("line 0");
+  });
+
+  it("excerpt without a token is rejected (401)", async () => {
+    daemon = await startDaemonServer({ storeRoot: store, port: 0, token: "secret" });
+    const res = await fetch(`${daemon.url}/excerpt`, { method: "POST", body: "{}" });
+    expect(res.status).toBe(401);
+  });
 });
