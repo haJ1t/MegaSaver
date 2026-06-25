@@ -2,13 +2,17 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type SearchCodeMatchGroup,
   assertSafePathScope,
   groupGrepMatches,
   handleSearchCode,
 } from "../../src/tools/search-code.js";
+
+vi.mock("@megasaver/daemon", () => ({ getRunningDaemon: vi.fn() }));
+import { getRunningDaemon } from "@megasaver/daemon";
+const mockGetRunningDaemon = vi.mocked(getRunningDaemon);
 
 describe("assertSafePathScope (path-traversal guard)", () => {
   it("accepts relative paths inside the project", () => {
@@ -98,10 +102,13 @@ describe("handleSearchCode", () => {
   beforeEach(async () => {
     store = await mkdtemp(join(tmpdir(), "mcp-search-store-"));
     projectRoot = await mkdtemp(join(tmpdir(), "mcp-search-root-"));
+    // Default: no daemon → existing tests run in-process.
+    mockGetRunningDaemon.mockResolvedValue(null);
   });
   afterEach(async () => {
     await rm(store, { recursive: true, force: true });
     await rm(projectRoot, { recursive: true, force: true });
+    vi.clearAllMocks();
   });
 
   function env(registry = seededRegistry(projectRoot)) {
@@ -210,5 +217,71 @@ describe("handleSearchCode", () => {
     await expect(
       handleSearchCode(env(registry), { query: "needle", sessionId: SESSION_ID }),
     ).rejects.toMatchObject({ code: "policy_load_failed" });
+  });
+
+  // ─── daemon-forward cases ─────────────────────────────────────────────────────
+
+  it("daemon 200 ExecResult → shapeResult applied → SearchCodeResult with files + index_enrichment", async () => {
+    // Daemon returns a raw ExecResult (grep output in excerpts).
+    const daemonExec = {
+      chunkSetId: "cs-search-daemon",
+      rawBytes: 100,
+      returnedBytes: 80,
+      bytesSaved: 20,
+      savingRatio: 0.2,
+      rawTokens: 25,
+      returnedTokens: 20,
+      summary: "grep output",
+      excerpts: [
+        { id: "0", startLine: 1, endLine: 1, bytes: 30, text: "./a.ts:3:const needle = 1;" },
+      ],
+    };
+    const handle = {
+      url: "http://127.0.0.1:1",
+      token: "t",
+      request: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(daemonExec), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    };
+    mockGetRunningDaemon.mockResolvedValue(handle);
+
+    // Registry has no session — in-process would throw session_not_found.
+    const registry = createInMemoryCoreRegistry();
+    const result = await handleSearchCode(
+      { registry, storeRoot: store, now: () => TS, newId: () => "x", originPid: "1" },
+      { query: "needle", sessionId: SESSION_ID },
+    );
+
+    // shapeResult ran: files grouped, metrics present, chunkSetId threaded.
+    expect(result.query).toBe("needle");
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0]?.path).toBe("./a.ts");
+    expect(result.chunkSetId).toBe("cs-search-daemon");
+    expect(result.metrics.rawBytes).toBe(100);
+    // BM25 with 1 file → "unavailable" (nothing to reorder)
+    expect(["applied", "unavailable"]).toContain(result.index_enrichment);
+
+    const [method, path, body] = handle.request.mock.calls[0] as [string, string, unknown];
+    expect(method).toBe("POST");
+    expect(path).toBe("/exec-registry");
+    expect((body as Record<string, unknown>).command).toBe("grep");
+  });
+
+  it("falls back to in-process on daemon non-2xx", async () => {
+    const handle = {
+      url: "http://127.0.0.1:1",
+      token: "t",
+      request: vi.fn().mockResolvedValue(new Response("{}", { status: 503 })),
+    };
+    mockGetRunningDaemon.mockResolvedValue(handle);
+
+    await writeFile(join(projectRoot, "a.ts"), "const needle = 1;\n");
+    const result = await handleSearchCode(env(), { query: "needle", sessionId: SESSION_ID });
+
+    // In-process ran: real file system was searched.
+    expect(result.files.length).toBeGreaterThan(0);
   });
 });

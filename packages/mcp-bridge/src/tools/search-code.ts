@@ -2,6 +2,7 @@ import { type CoreRegistry, type ExecResult, runOutputExecCommand } from "@megas
 import { rankBm25 } from "@megasaver/retrieval";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
+import { forwardOrFallback } from "./forward.js";
 
 const MAX_BYTES_CEILING = 64_000; // mirrors run-command (AA1 §8a)
 const SPAWN_TIMEOUT_MS = 5 * 60 * 1000;
@@ -184,51 +185,59 @@ export async function handleSearchCode(
     contextLines: parsed.data.context_lines ?? 0,
   });
 
-  // ponytail: in-process path only. Forwarding to daemon /search requires
-  // workspaceKey+liveSessionId (overlay keying) which are absent from this env.
-  // The daemon's /search also skips BM25 re-ranking; forwarding would change the
-  // tool's output contract (index_enrichment always 'unavailable') without gaining
-  // shared-daemon benefits. Defer until env carries overlay keys + store is unified.
-  //
-  // The orchestrator owns spawn + policy gate + redact + filterOutput +
-  // saveChunkSet + stats. The task drives task-aware ranking (intent); fall
-  // back to the query when absent.
-  const outcome = await runOutputExecCommand({
-    registry: env.registry,
-    storeRoot: env.storeRoot,
-    sessionId: sessionId as Parameters<typeof runOutputExecCommand>[0]["sessionId"],
-    command: "grep",
-    args: grepArgs,
-    intent: task !== undefined && task.trim() !== "" ? task : query,
-    originPid: env.originPid,
-    timeoutMs: SPAWN_TIMEOUT_MS,
-    maxBytes: (max_tokens ?? MAX_BYTES_CEILING) * MAX_CAPTURE_FACTOR,
-    now: env.now,
-    newId: env.newId,
-  });
+  const intent = task !== undefined && task.trim() !== "" ? task : query;
+  const maxBytes = (max_tokens ?? MAX_BYTES_CEILING) * MAX_CAPTURE_FACTOR;
 
-  if (!outcome.ok) {
-    switch (outcome.reason) {
-      case "session_not_found":
-        throw new McpBridgeError("session_not_found", `session not found: ${sessionId}`);
-      case "policy_load_failed":
-        throw new McpBridgeError("policy_load_failed", `policy load failed: ${outcome.detail}`, {
-          details: { reason: outcome.detail },
-        });
-      case "command_denied":
-        throw new McpBridgeError("command_denied", `command denied: ${outcome.code}`, {
-          details: { reason: outcome.code },
-        });
-      case "command_failed":
-        throw new McpBridgeError("tool_invocation_failed", outcome.detail, {
-          cause: new Error(outcome.detail),
-        });
-      case "store_write_failed":
-        throw new McpBridgeError("store_write_failed", outcome.detail);
-    }
-  }
+  // shapeResult (BM25 re-rank) runs on the daemon ExecResult too — forwarding
+  // does NOT change the index_enrichment contract.
+  return forwardOrFallback(
+    env.storeRoot,
+    "/exec-registry",
+    { sessionId, command: "grep", args: grepArgs, intent, maxBytes },
+    async () => {
+      const outcome = await runOutputExecCommand({
+        registry: env.registry,
+        storeRoot: env.storeRoot,
+        sessionId: sessionId as Parameters<typeof runOutputExecCommand>[0]["sessionId"],
+        command: "grep",
+        args: grepArgs,
+        intent,
+        originPid: env.originPid,
+        timeoutMs: SPAWN_TIMEOUT_MS,
+        maxBytes,
+        now: env.now,
+        newId: env.newId,
+      });
 
-  return shapeResult(query, outcome.result);
+      if (!outcome.ok) {
+        switch (outcome.reason) {
+          case "session_not_found":
+            throw new McpBridgeError("session_not_found", `session not found: ${sessionId}`);
+          case "policy_load_failed":
+            throw new McpBridgeError(
+              "policy_load_failed",
+              `policy load failed: ${outcome.detail}`,
+              {
+                details: { reason: outcome.detail },
+              },
+            );
+          case "command_denied":
+            throw new McpBridgeError("command_denied", `command denied: ${outcome.code}`, {
+              details: { reason: outcome.code },
+            });
+          case "command_failed":
+            throw new McpBridgeError("tool_invocation_failed", outcome.detail, {
+              cause: new Error(outcome.detail),
+            });
+          case "store_write_failed":
+            throw new McpBridgeError("store_write_failed", outcome.detail);
+        }
+      }
+
+      return shapeResult(query, outcome.result);
+    },
+    (json) => shapeResult(query, json as ExecResult),
+  );
 }
 
 function shapeResult(query: string, exec: ExecResult): SearchCodeResult {

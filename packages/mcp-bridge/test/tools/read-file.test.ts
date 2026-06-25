@@ -2,8 +2,12 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleReadFile } from "../../src/tools/read-file.js";
+
+vi.mock("@megasaver/daemon", () => ({ getRunningDaemon: vi.fn() }));
+import { getRunningDaemon } from "@megasaver/daemon";
+const mockGetRunningDaemon = vi.mocked(getRunningDaemon);
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const SESSION_ID = "22222222-2222-4222-8222-222222222222";
@@ -36,10 +40,13 @@ describe("handleReadFile", () => {
   beforeEach(async () => {
     store = await mkdtemp(join(tmpdir(), "mcp-read-store-"));
     projectRoot = await mkdtemp(join(tmpdir(), "mcp-read-root-"));
+    // Default: no daemon → existing tests run in-process.
+    mockGetRunningDaemon.mockResolvedValue(null);
   });
   afterEach(async () => {
     await rm(store, { recursive: true, force: true });
     await rm(projectRoot, { recursive: true, force: true });
+    vi.clearAllMocks();
   });
 
   it("filters an in-sandbox file and returns a result with chunkSetId", async () => {
@@ -125,5 +132,65 @@ describe("handleReadFile", () => {
         { path: logPath, intent: "read it", sessionId: SESSION_ID },
       ),
     ).rejects.toMatchObject({ code: "store_write_failed" });
+  });
+
+  it("returns daemon FilterOutputResult as-is when daemon present (no maxBytes in body)", async () => {
+    const daemonResult = {
+      chunkSetId: "cs-from-daemon",
+      rawBytes: 100,
+      returnedBytes: 50,
+      bytesSaved: 50,
+      savingRatio: 0.5,
+      rawTokens: 25,
+      returnedTokens: 12,
+      summary: "from daemon",
+      excerpts: [],
+    };
+    const handle = {
+      url: "http://127.0.0.1:1",
+      token: "t",
+      request: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(daemonResult), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    };
+    mockGetRunningDaemon.mockResolvedValue(handle);
+
+    // Registry has no session — if in-process ran it would throw session_not_found.
+    const registry = createInMemoryCoreRegistry();
+    const result = await handleReadFile(
+      { registry, storeRoot: store, now: () => TS, newId: () => "x" },
+      { path: "/any/path.txt", intent: "find errors", sessionId: SESSION_ID },
+    );
+
+    expect(result).toEqual(daemonResult);
+    // Verify body sent to daemon has NO maxBytes field (schema is .strict())
+    const [method, path, body] = handle.request.mock.calls[0] as [string, string, unknown];
+    expect(method).toBe("POST");
+    expect(path).toBe("/read-registry");
+    expect(body).toEqual({ sessionId: SESSION_ID, path: "/any/path.txt", intent: "find errors" });
+    expect((body as Record<string, unknown>).maxBytes).toBeUndefined();
+  });
+
+  it("falls back to in-process on daemon non-2xx", async () => {
+    const handle = {
+      url: "http://127.0.0.1:1",
+      token: "t",
+      request: vi.fn().mockResolvedValue(new Response("{}", { status: 503 })),
+    };
+    mockGetRunningDaemon.mockResolvedValue(handle);
+
+    const registry = seededRegistry(projectRoot);
+    const logPath = join(projectRoot, "log.txt");
+    await writeFile(logPath, "line one\n");
+
+    const result = await handleReadFile(
+      { registry, storeRoot: store, now: () => TS, newId: () => "cs-fixed" },
+      { path: logPath, intent: "find errors", sessionId: SESSION_ID },
+    );
+
+    expect(result.chunkSetId).toBe("cs-fixed");
   });
 });

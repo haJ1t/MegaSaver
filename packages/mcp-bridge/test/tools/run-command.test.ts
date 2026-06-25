@@ -2,8 +2,12 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleRunCommand } from "../../src/tools/run-command.js";
+
+vi.mock("@megasaver/daemon", () => ({ getRunningDaemon: vi.fn() }));
+import { getRunningDaemon } from "@megasaver/daemon";
+const mockGetRunningDaemon = vi.mocked(getRunningDaemon);
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const SESSION_ID = "22222222-2222-4222-8222-222222222222";
@@ -36,10 +40,13 @@ describe("handleRunCommand", () => {
   beforeEach(async () => {
     store = await mkdtemp(join(tmpdir(), "mcp-run-store-"));
     projectRoot = await mkdtemp(join(tmpdir(), "mcp-run-root-"));
+    // Default: no daemon → existing tests run in-process.
+    mockGetRunningDaemon.mockResolvedValue(null);
   });
   afterEach(async () => {
     await rm(store, { recursive: true, force: true });
     await rm(projectRoot, { recursive: true, force: true });
+    vi.clearAllMocks();
   });
 
   // originPid === String(process.pid) → root MegaSaver, no
@@ -121,5 +128,70 @@ describe("handleRunCommand", () => {
         { command: "ls", args: [], intent: "", sessionId: SESSION_ID },
       ),
     ).rejects.toMatchObject({ code: "intent_required" });
+  });
+
+  // ─── daemon-forward cases ─────────────────────────────────────────────────────
+
+  it("returns daemon ExecResult as-is when daemon is present", async () => {
+    const daemonResult = {
+      chunkSetId: "cs-daemon",
+      rawBytes: 200,
+      returnedBytes: 100,
+      bytesSaved: 100,
+      savingRatio: 0.5,
+      rawTokens: 50,
+      returnedTokens: 25,
+      summary: "from daemon",
+      excerpts: [],
+    };
+    const handle = {
+      url: "http://127.0.0.1:1",
+      token: "t",
+      request: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(daemonResult), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    };
+    mockGetRunningDaemon.mockResolvedValue(handle);
+
+    // Registry has no session — in-process would throw session_not_found.
+    const registry = createInMemoryCoreRegistry();
+    const result = await handleRunCommand(
+      { registry, storeRoot: store, now: () => TS, newId: () => "x", originPid: "1" },
+      { command: "ls", args: ["-a"], intent: "see files", sessionId: SESSION_ID },
+    );
+
+    expect(result).toEqual(daemonResult);
+    const [method, path, body] = handle.request.mock.calls[0] as [string, string, unknown];
+    expect(method).toBe("POST");
+    expect(path).toBe("/exec-registry");
+    expect((body as Record<string, unknown>).sessionId).toBe(SESSION_ID);
+    expect((body as Record<string, unknown>).command).toBe("ls");
+  });
+
+  it("falls back to in-process on daemon non-2xx (command_denied re-derived)", async () => {
+    const handle = {
+      url: "http://127.0.0.1:1",
+      token: "t",
+      request: vi.fn().mockResolvedValue(new Response("{}", { status: 400 })),
+    };
+    mockGetRunningDaemon.mockResolvedValue(handle);
+
+    const registry = seededRegistry(projectRoot);
+    // rm -rf / is denied → in-process throws command_denied
+    await expect(
+      handleRunCommand(
+        {
+          registry,
+          storeRoot: store,
+          now: () => TS,
+          newId: () => "x",
+          originPid: String(process.pid),
+        },
+        { command: "rm", args: ["-rf", "/"], intent: "cleanup", sessionId: SESSION_ID },
+      ),
+    ).rejects.toMatchObject({ code: "command_denied" });
   });
 });
