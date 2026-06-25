@@ -9,6 +9,7 @@ export {
 } from "./chunk-set.js";
 
 export {
+  READ_INDEX_FILENAME,
   saveChunkSet,
   loadChunkSet,
   listChunkSets,
