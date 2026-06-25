@@ -9,6 +9,7 @@ import { getRunningDaemon } from "@megasaver/daemon";
 import { tokenSaverModeSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { readStoreEnv, resolveStorePath } from "../store.js";
+import { readSessionIntent } from "./intent-run.js";
 import {
   type SaverDecision,
   type SaverDeps,
@@ -96,7 +97,7 @@ export async function runSaverHookFromProcess(): Promise<void> {
     if (raw === "") return;
     const payload: unknown = JSON.parse(raw);
     const storeRoot = resolveStorePath(readStoreEnv(undefined));
-    const deps: SaverDeps = { storeRoot, readSettings, record: makeRecord(storeRoot) };
+    const deps: SaverDeps = { storeRoot, readSettings, readSessionIntent, record: makeRecord(storeRoot) };
     const decision = await buildSaverDecision(payload, deps);
     const s = renderSaverStdout(decision);
     if (s !== "") process.stdout.write(s);

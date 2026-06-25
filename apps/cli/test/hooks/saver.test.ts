@@ -21,6 +21,7 @@ function deps(overrides: Partial<Parameters<typeof buildSaverDecision>[1]> = {})
   return {
     storeRoot: "/store",
     readSettings: () => ({ enabled: true, mode: "balanced" as const }),
+    readSessionIntent: () => undefined,
     record: vi.fn().mockResolvedValue(RECORDED),
     ...overrides,
   };
@@ -322,6 +323,7 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
   const realDeps = (storeRoot: string) => ({
     storeRoot,
     readSettings: () => ({ enabled: true, mode: "balanced" as const }),
+    readSessionIntent: () => undefined,
     record: recordAndFilterOverlayOutput,
   });
 
@@ -377,6 +379,7 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
     const out = await buildSaverDecision(bigBash("X".repeat(50_000)), {
       storeRoot,
       readSettings: () => ({ enabled: true, mode: "balanced" }),
+      readSessionIntent: () => undefined,
       record,
     });
     expect("updatedToolOutput" in out).toBe(true);
@@ -430,5 +433,63 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
       expect(out.updatedToolOutput as string).toContain("SHORT");
     }
     expect(d.record).toHaveBeenCalledOnce();
+  });
+});
+
+describe("buildSaverDecision intent fill-gap", () => {
+  const validPayload = {
+    tool_name: "Bash",
+    tool_input: { command: "echo big" },
+    tool_response: { stdout: "X".repeat(50_000), stderr: "", interrupted: false, isImage: false },
+    session_id: "live-1",
+    cwd: "/Users/x/proj",
+  };
+
+  it("sets intent from readSessionIntent when present", async () => {
+    let captured: { intent?: string } | undefined;
+    const d = {
+      storeRoot: "/store",
+      readSettings: () => ({ enabled: true, mode: "safe" as const }),
+      readSessionIntent: () => "refactor the auth module",
+      record: async (input: { intent?: string }) => {
+        captured = input;
+        return {
+          decision: "compressed" as const,
+          summary: "s",
+          returnedText: "s",
+          rawBytes: 10_000,
+          returnedBytes: 100,
+          bytesSaved: 9_900,
+          savingRatio: 0.99,
+          chunkSetId: "c1",
+        };
+      },
+    };
+    await buildSaverDecision(validPayload, d as never);
+    expect(captured?.intent).toBe("refactor the auth module");
+  });
+
+  it("omits intent when readSessionIntent returns undefined", async () => {
+    let captured: Record<string, unknown> | undefined;
+    const d = {
+      storeRoot: "/store",
+      readSettings: () => ({ enabled: true, mode: "safe" as const }),
+      readSessionIntent: () => undefined,
+      record: async (input: Record<string, unknown>) => {
+        captured = input;
+        return {
+          decision: "compressed" as const,
+          summary: "s",
+          returnedText: "s",
+          rawBytes: 10_000,
+          returnedBytes: 100,
+          bytesSaved: 9_900,
+          savingRatio: 0.99,
+          chunkSetId: "c1",
+        };
+      },
+    };
+    await buildSaverDecision(validPayload, d as never);
+    expect(captured && "intent" in captured).toBe(false);
   });
 });
