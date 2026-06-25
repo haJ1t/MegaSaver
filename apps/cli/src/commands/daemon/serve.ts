@@ -1,4 +1,4 @@
-import { acquireLock, startDaemonServer } from "@megasaver/daemon";
+import { type RunningDaemon, acquireLock, startDaemonServer } from "@megasaver/daemon";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
 
@@ -19,9 +19,18 @@ export const daemonServeCommand = defineCommand({
       console.log("mega daemon already running (lock held)");
       return;
     }
-    const running = await startDaemonServer({ storeRoot });
+    let running: RunningDaemon;
+    try {
+      running = await startDaemonServer({ storeRoot });
+    } catch (err) {
+      release();
+      throw err;
+    }
     console.log(`mega daemon listening on ${running.url}`);
+    let shuttingDown = false;
     const shutdown = (): void => {
+      if (shuttingDown) return;
+      shuttingDown = true;
       release();
       void running.close().finally(() => process.exit(0));
     };
