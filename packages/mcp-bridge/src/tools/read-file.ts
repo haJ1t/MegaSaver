@@ -41,6 +41,11 @@ export async function handleReadFile(
     );
   }
 
+  // ponytail: in-process path only. The daemon has no /read route — /excerpt only
+  // filters pre-captured raw output, it does NOT read a file by path. Adding a
+  // /read route (wrapping runOverlayOutputPipeline) is a daemon-side addition
+  // deferred to a later phase. Forwarding also requires overlay keying (workspaceKey
+  // + liveSessionId) absent from this env shape.
   const outcome = await runOutputPipeline({
     registry: env.registry,
     storeRoot: env.storeRoot,

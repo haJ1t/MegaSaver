@@ -38,6 +38,11 @@ export async function handleRecall(
     throw new McpBridgeError("session_not_found", `session not found: ${sessionId}`);
   }
 
+  // ponytail: in-process path only. The daemon /recall returns overlay stats events
+  // ({records} with label/summary/score) — a fundamentally different shape from this
+  // tool's registry-backed {memory, chunkSets}. Forwarding would silently change the
+  // output contract and break callers. Deferred until the daemon exposes a
+  // registry-backed recall route.
   const allMemory = env.registry.listMemoryEntries(session.projectId);
   const memory = allMemory.filter(
     (m) => m.approval === "approved" && (m.sessionId === session.id || m.scope === "project"),

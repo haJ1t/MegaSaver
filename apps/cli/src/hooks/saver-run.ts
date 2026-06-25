@@ -1,6 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { recordAndFilterOverlayOutput } from "@megasaver/core";
+import {
+  type RecordOverlayOutputInput,
+  type RecordOverlayOutputResult,
+  recordAndFilterOverlayOutput,
+} from "@megasaver/core";
+import { getRunningDaemon } from "@megasaver/daemon";
 import { tokenSaverModeSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { readStoreEnv, resolveStorePath } from "../store.js";
@@ -33,6 +38,42 @@ function readStdinSync(): string {
   }
 }
 
+const DAEMON_TIMEOUT_MS = 1500; // ponytail: short timeout; a hung socket must not stall the hook
+
+/** Try to forward to the running daemon's /excerpt; fall back to in-process on any failure.
+ *  Exported for tests. Never throws — every failure mode returns in-process result. */
+export function makeRecord(storeRoot: string): SaverDeps["record"] {
+  return async (input: RecordOverlayOutputInput): Promise<RecordOverlayOutputResult> => {
+    try {
+      const handle = await getRunningDaemon({ storeRoot });
+      if (handle !== null) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), DAEMON_TIMEOUT_MS);
+        try {
+          const {
+            storeRoot: _sr,
+            evidenceStoreRoot: _esr,
+            now: _now,
+            newId: _nid,
+            ...daemonBody
+          } = input;
+          // ponytail: daemon excerptHandler supplies storeRoot itself; do NOT add evidenceStoreRoot
+          const res = await handle.request("POST", "/excerpt", daemonBody, controller.signal);
+          clearTimeout(timer);
+          if (res.ok) {
+            return (await res.json()) as RecordOverlayOutputResult;
+          }
+        } catch {
+          clearTimeout(timer);
+        }
+      }
+    } catch {
+      // fall through to in-process
+    }
+    return recordAndFilterOverlayOutput(input);
+  };
+}
+
 // Pure stdout renderer: the PostToolUse envelope on compress, "" on passthrough
 // (no JSON = the model keeps the original output). Extracted so the envelope is
 // testable without mocking fd 0.
@@ -55,7 +96,7 @@ export async function runSaverHookFromProcess(): Promise<void> {
     if (raw === "") return;
     const payload: unknown = JSON.parse(raw);
     const storeRoot = resolveStorePath(readStoreEnv(undefined));
-    const deps: SaverDeps = { storeRoot, readSettings, record: recordAndFilterOverlayOutput };
+    const deps: SaverDeps = { storeRoot, readSettings, record: makeRecord(storeRoot) };
     const decision = await buildSaverDecision(payload, deps);
     const s = renderSaverStdout(decision);
     if (s !== "") process.stdout.write(s);
