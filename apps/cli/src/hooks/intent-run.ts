@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { redact } from "@megasaver/policy";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { z } from "zod";
 import { readStoreEnv, resolveStorePath } from "../store.js";
@@ -57,7 +58,9 @@ export function captureIntent(
   if (!parsed.success) return;
   const prompt = parsed.data.prompt.trim();
   if (prompt === "") return;
-  writeIntentFile(storeRoot, encodeWorkspaceKey(parsed.data.cwd), prompt, now());
+  // Redact secrets before persisting — a user may paste an API key into a prompt;
+  // the sibling tool-output path (context-gate record-output.ts) redacts the same way.
+  writeIntentFile(storeRoot, encodeWorkspaceKey(parsed.data.cwd), redact(prompt).redacted, now());
 }
 
 function readStdinSync(): string {

@@ -32,6 +32,14 @@ describe("captureIntent", () => {
     captureIntent(storeRoot, { nope: true }, () => 1);
     expect(existsSync(intentFilePath(storeRoot, wk))).toBe(false);
   });
+
+  it("redacts secrets in the prompt before persisting", () => {
+    const secret = "AKIAIOSFODNN7EXAMPLE";
+    captureIntent(storeRoot, { prompt: `use key ${secret} please`, cwd }, () => 1);
+    const raw = readFileSync(intentFilePath(storeRoot, wk), "utf8");
+    expect(raw).not.toContain(secret);
+    expect(JSON.parse(raw).prompt).toBe("use key AKIA[REDACTED] please");
+  });
 });
 
 describe("readSessionIntent", () => {
