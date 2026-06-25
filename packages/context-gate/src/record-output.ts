@@ -44,6 +44,10 @@ export type RecordOverlayOutputInput = {
   label: string;
   mode: TokenSaverMode;
   storeRawOutput: boolean;
+  // Ranking hint passed to filterOutput. Optional: when absent, ranking is
+  // generic (today's behavior). The hook path fills it from the captured
+  // session prompt; proxy tools already pass their own explicit intent.
+  intent?: string;
   now?: () => string;
   newId?: () => string;
 };
@@ -92,6 +96,7 @@ export async function recordAndFilterOverlayOutput(
     raw: input.raw,
     mode: input.mode,
     maxReturnedBytes: modeToBudget(input.mode),
+    ...(input.intent !== undefined ? { intent: input.intent } : {}),
   });
 
   const base = {

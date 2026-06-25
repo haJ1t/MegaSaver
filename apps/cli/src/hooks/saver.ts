@@ -22,6 +22,7 @@ export type SaverSettings = { enabled: boolean; mode: TokenSaverMode };
 export type SaverDeps = {
   storeRoot: string;
   readSettings: (storeRoot: string, workspaceKey: string) => SaverSettings | null;
+  readSessionIntent: (storeRoot: string, workspaceKey: string) => string | undefined;
   record: (input: RecordOverlayOutputInput) => Promise<RecordOverlayOutputResult>;
 };
 
@@ -150,6 +151,7 @@ export async function buildSaverDecision(
     const workspaceKey = encodeWorkspaceKey(cwd);
     const settings = deps.readSettings(deps.storeRoot, workspaceKey);
     if (settings === null || !settings.enabled) return PASSTHROUGH;
+    const sessionIntent = deps.readSessionIntent(deps.storeRoot, workspaceKey);
 
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     const shape = readOutputShape(p["tool_response"]);
@@ -170,6 +172,7 @@ export async function buildSaverDecision(
       label: labelOf(p["tool_input"], tool),
       mode: settings.mode,
       storeRawOutput: true,
+      ...(sessionIntent !== undefined ? { intent: sessionIntent } : {}),
     });
     if (recorded.decision !== "compressed") return PASSTHROUGH;
 

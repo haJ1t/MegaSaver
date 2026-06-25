@@ -79,6 +79,20 @@ describe("excerptHandler", () => {
     const rows = await listEvidenceByWorkspace({ storeRoot: store, workspaceKey: ws });
     expect(rows.length).toBeGreaterThan(0);
   });
+
+  it("accepts an optional intent field (strict schema passthrough)", async () => {
+    const res = await excerptHandler(store, {
+      workspaceKey: "ws",
+      liveSessionId: "live1",
+      raw: "hi",
+      sourceKind: "command",
+      label: "test",
+      mode: "aggressive",
+      storeRawOutput: false,
+      intent: "find the bug",
+    });
+    expect(res.status).toBe(200);
+  });
 });
 
 describe("expandHandler", () => {
