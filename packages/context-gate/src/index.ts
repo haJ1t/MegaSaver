@@ -20,6 +20,8 @@ export { locateChunkSet, type LocatedChunkSet } from "./locate-chunk-set.js";
 export {
   resolveEffectiveSettings,
   runTwoGates,
+  readRaw,
+  filterRaw,
   readAndFilter,
   persistChunkSet,
   defaultNow,
@@ -43,3 +45,11 @@ export {
   type RecordOverlayOutputInput,
   type RecordOverlayOutputResult,
 } from "./record-output.js";
+export {
+  hashContent,
+  hashPath,
+  readIndexPath,
+  loadReadIndex,
+  recordRead,
+  type ReadIndexEntry,
+} from "./read-index.js";

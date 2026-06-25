@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readOverlaySummary } from "@megasaver/stats";
@@ -172,5 +172,92 @@ describe("resolveOverlayEffectiveSettings — no registry", () => {
     expect(result.mode).toBe("balanced");
     expect(result.storeRawOutput).toBe(false);
     expect(result.permissions).toBeNull();
+  });
+});
+
+describe("runOverlayOutputPipeline — diff-on-reread suppression (overlay)", () => {
+  let store: string;
+  let cwd: string;
+  let filePath: string;
+  let idCounter: number;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "cg-overlay-reread-store-"));
+    cwd = await mkdtemp(join(tmpdir(), "cg-overlay-reread-cwd-"));
+    filePath = join(cwd, "f.txt");
+    await writeFile(filePath, "line one\nerror: boom\nline three\n");
+    idCounter = 0;
+  });
+
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  function run(opts: { storeRawOutput?: boolean } = {}) {
+    return runOverlayOutputPipeline({
+      storeRoot: store,
+      workspaceKey: WK,
+      liveSessionId: LSID,
+      cwd,
+      path: filePath,
+      intent: "find the error",
+      mode: "balanced",
+      maxReturnedBytes: 12_000,
+      storeRawOutput: opts.storeRawOutput ?? true,
+      permissions: null,
+      now: () => NOW,
+      newId: () => `cs-${idCounter++}`,
+    });
+  }
+
+  function sessionContentDir() {
+    return join(store, "content", WK, LSID);
+  }
+
+  it("T6: first read persists + records; no unchanged field", async () => {
+    const r1 = await run();
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    expect("unchanged" in r1.result).toBe(false);
+    const names = await readdir(sessionContentDir());
+    expect(names).toContain("read-index.json");
+    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(1);
+  });
+
+  it("T7: second unchanged read suppresses + skips persist", async () => {
+    const r1 = await run();
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    const firstChunkSetId = r1.result.chunkSetId;
+    const r2 = await run();
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.result.excerpts).toEqual([]);
+    expect(r2.result.unchanged?.priorChunkSetId).toBe(firstChunkSetId);
+    expect(r2.result.summary).toContain("unchanged");
+    const names = await readdir(sessionContentDir());
+    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(1);
+  });
+
+  it("T8/T10: changed content is a miss with no unchanged field", async () => {
+    const r1 = await run();
+    expect(r1.ok).toBe(true);
+    await writeFile(filePath, "changed bytes\n");
+    const r2 = await run();
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect("unchanged" in r2.result).toBe(false);
+    const names = await readdir(sessionContentDir());
+    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(2);
+  });
+
+  it("T12: storeRawOutput=false writes no index; next read is a miss", async () => {
+    await run({ storeRawOutput: false });
+    await expect(readdir(sessionContentDir())).rejects.toMatchObject({ code: "ENOENT" });
+    const r2 = await run({ storeRawOutput: false });
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect("unchanged" in r2.result).toBe(false);
   });
 });

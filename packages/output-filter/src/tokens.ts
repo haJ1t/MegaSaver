@@ -5,7 +5,7 @@
 export const PASSTHROUGH_THRESHOLD_TOKENS = 1200;
 export const HARD_WRAP_THRESHOLD_TOKENS = 2000;
 
-export type FilterDecision = "passthrough" | "light" | "compressed";
+export type FilterDecision = "passthrough" | "light" | "compressed" | "unchanged-marker";
 
 // Heuristic ~4 bytes per token. Good enough for threshold gating and
 // savings reporting; we never bill a model off this number.
