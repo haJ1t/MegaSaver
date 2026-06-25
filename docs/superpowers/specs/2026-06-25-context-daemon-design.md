@@ -156,6 +156,10 @@ moves behind the daemon-client.
 - **Hook intent:** v1 generic-only (no intent on the hook path). Capturing the
   last user prompt as a soft "session intent" (via a UserPromptSubmit hook) is a
   later phase, not v1.
+- **Spawn cost on MCP hot path (2026-06-25):** Option A — the wiring phase uses
+  a no-spawn `getDaemon` variant that returns `null` immediately when the daemon
+  is unreachable, triggering in-process fallback with zero spawn latency. Opt-in
+  spawn (env-gated) is not needed; falling back in-process is the correct default.
 
 ## Reuse / deprecate
 
@@ -188,6 +192,18 @@ design pass + `critic` adversarial review + worktree (no `main` edits).
 2. Daemon `/excerpt` + `/expand` wrapping `output-filter` + `content-store`.
 3. `/exec` policy-gated + `proxy_search_code` parity.
 4. `session-store` + `/recall` + `mega_recall`.
-5. Refactor `mcp-bridge` tools onto `daemon-client` (fallback preserved).
+5a. **Prerequisites for mcp-bridge wiring (OPEN):**
+    - Extend each `proxy_*` tool env to carry `workspaceKey` + `liveSessionId`
+      (sourced from the live-session mapping in `@megasaver/context-gate`).
+    - Resolve chunk-store split: decide between migrating registry chunk sets to
+      overlay layout OR adding a `/expand-registry` daemon route. Capture the
+      decision as a spec update before phase 5b begins.
+    - Note: daemon has no `/read-by-path` route (`/excerpt` only filters
+      pre-captured raw); `proxy_read_file` may need a new daemon route or stays
+      in-process permanently. Decision required.
+5b. **Refactor `mcp-bridge` tools onto `daemon-client` (BLOCKED on 5a):**
+    Reintroduce `forwardOrFallback` (Option A: no-spawn, immediate in-process
+    fallback when daemon is down). Wire into `proxy_run_command` first (TDD: red
+    test → green), then roll to remaining tools. `pnpm verify` green.
 6. Refactor `mega hooks saver` onto `daemon-client` (generic).
 7. GUI: "Context daemon" status/control; deprecate "Conversation proxy".
