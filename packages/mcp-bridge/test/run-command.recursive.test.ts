@@ -2,8 +2,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleRunCommand } from "../src/tools/run-command.js";
+
+// ponytail: hoisted mock — ensures forward.ts sees the mock regardless of
+// module-evaluation order (vitest hoisting contract).
+vi.mock("@megasaver/daemon", () => ({ getRunningDaemon: vi.fn() }));
+import { getRunningDaemon } from "@megasaver/daemon";
+const mockGetRunningDaemon = vi.mocked(getRunningDaemon);
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const SESSION_ID = "22222222-2222-4222-8222-222222222222";
@@ -36,10 +42,12 @@ describe("handleRunCommand recursion guard (AA1 §8d step 4, §9a)", () => {
   beforeEach(async () => {
     store = await mkdtemp(join(tmpdir(), "mcp-rec-store-"));
     projectRoot = await mkdtemp(join(tmpdir(), "mcp-rec-root-"));
+    mockGetRunningDaemon.mockResolvedValue(null);
   });
   afterEach(async () => {
     await rm(store, { recursive: true, force: true });
     await rm(projectRoot, { recursive: true, force: true });
+    vi.clearAllMocks();
   });
 
   it("inherited originPid mismatching this process → command_denied: recursive_megasaver", async () => {
@@ -57,5 +65,32 @@ describe("handleRunCommand recursion guard (AA1 §8d step 4, §9a)", () => {
       code: "command_denied",
       details: { reason: "recursive_megasaver" },
     });
+  });
+
+  it("daemon reachable but foreign originPid → still command_denied: recursive_megasaver (no forward)", async () => {
+    // Regression: the daemon runs under its own pid so evaluateCommand inside the
+    // daemon would never fire recursive_megasaver. The guard must fire in the tool
+    // BEFORE forwardOrFallback is reached (fixes security bypass, Phase 5b review).
+    const daemonRequest = vi.fn();
+    mockGetRunningDaemon.mockResolvedValue({
+      request: daemonRequest,
+      close: vi.fn(),
+    } as unknown as Awaited<ReturnType<typeof getRunningDaemon>>);
+
+    const registry = seededRegistry(projectRoot);
+    const foreignPid = String(process.pid + 1);
+
+    await expect(
+      handleRunCommand(
+        { registry, storeRoot: store, now: () => TS, newId: () => "x", originPid: foreignPid },
+        { command: "ls", args: ["-a"], intent: "list", sessionId: SESSION_ID },
+      ),
+    ).rejects.toMatchObject({
+      code: "command_denied",
+      details: { reason: "recursive_megasaver" },
+    });
+
+    // Guard must fire before any daemon call.
+    expect(daemonRequest).not.toHaveBeenCalled();
   });
 });

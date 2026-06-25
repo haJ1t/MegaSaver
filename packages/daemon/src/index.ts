@@ -18,4 +18,11 @@ export {
   recallHandler,
   searchHandler,
 } from "./handlers.js";
+export {
+  type RegistryHandlerDeps,
+  execRegistryHandler,
+  expandRegistryHandler,
+  readRegistryHandler,
+  recallRegistryHandler,
+} from "./handlers-registry.js";
 export { readJsonBody } from "./body.js";
