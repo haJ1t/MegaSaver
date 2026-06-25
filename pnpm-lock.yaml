@@ -399,6 +399,9 @@ importers:
       '@megasaver/context-gate':
         specifier: workspace:*
         version: link:../context-gate
+      '@megasaver/core':
+        specifier: workspace:*
+        version: link:../core
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter

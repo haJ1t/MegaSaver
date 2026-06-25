@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -37,6 +37,21 @@ describe("excerptHandler", () => {
     expect(typeof res.json.chunkSetId).toBe("string");
     expect(res.json.returnedBytes).toBeLessThan(res.json.rawBytes);
   });
+
+  it("rejects a path-traversal workspaceKey without writing outside the store", async () => {
+    const res = await excerptHandler(store, {
+      workspaceKey: "../escape",
+      liveSessionId: "x",
+      raw: bigRaw,
+      sourceKind: "command",
+      label: "l",
+      mode: "aggressive",
+      // storeRawOutput:false is the unguarded stats-write path the POC abused.
+      storeRawOutput: false,
+    });
+    expect(res.status).toBe(400);
+    expect(existsSync(join(store, "..", "escape"))).toBe(false);
+  });
 });
 
 describe("expandHandler", () => {
@@ -68,5 +83,15 @@ describe("expandHandler", () => {
       chunkId: "0",
     });
     expect(res.status).toBe(404);
+  });
+
+  it("400s on a path-traversal chunkSetId", async () => {
+    const res = await expandHandler(store, {
+      workspaceKey: "ws",
+      liveSessionId: "live1",
+      chunkSetId: "..",
+      chunkId: "0",
+    });
+    expect(res.status).toBe(400);
   });
 });

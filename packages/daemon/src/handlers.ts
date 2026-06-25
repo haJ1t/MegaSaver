@@ -1,14 +1,20 @@
 import { fetchOverlayChunk, recordAndFilterOverlayOutput } from "@megasaver/context-gate";
+import { isSafeKeySegment, liveSessionIdSchema, workspaceKeySchema } from "@megasaver/core";
 import { outputSourceKindSchema } from "@megasaver/output-filter";
 import { tokenSaverModeSchema } from "@megasaver/shared";
 import { z } from "zod";
 
 export type HandlerResponse = { status: number; json: Record<string, unknown> };
 
+// workspaceKey/liveSessionId/chunk ids become filesystem path segments downstream
+// (stats dir + overlay chunk store), so a ".." value would escape the store root.
+// Reject containment-breaking segments at the trust boundary, before any write.
+const safeSegmentSchema = z.string().min(1).refine(isSafeKeySegment);
+
 const excerptRequestSchema = z
   .object({
-    workspaceKey: z.string().min(1),
-    liveSessionId: z.string().min(1),
+    workspaceKey: workspaceKeySchema,
+    liveSessionId: liveSessionIdSchema,
     raw: z.string(),
     sourceKind: outputSourceKindSchema,
     label: z.string(),
@@ -26,10 +32,10 @@ export async function excerptHandler(storeRoot: string, body: unknown): Promise<
 
 const expandRequestSchema = z
   .object({
-    workspaceKey: z.string().min(1),
-    liveSessionId: z.string().min(1),
-    chunkSetId: z.string().min(1),
-    chunkId: z.string().min(1),
+    workspaceKey: workspaceKeySchema,
+    liveSessionId: liveSessionIdSchema,
+    chunkSetId: safeSegmentSchema,
+    chunkId: safeSegmentSchema,
   })
   .strict();
 
