@@ -393,6 +393,18 @@ importers:
 
   packages/daemon:
     dependencies:
+      '@megasaver/content-store':
+        specifier: workspace:*
+        version: link:../content-store
+      '@megasaver/context-gate':
+        specifier: workspace:*
+        version: link:../context-gate
+      '@megasaver/output-filter':
+        specifier: workspace:*
+        version: link:../output-filter
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
       zod:
         specifier: ^3.24.1
         version: 3.25.76
