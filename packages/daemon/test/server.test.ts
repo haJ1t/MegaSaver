@@ -182,4 +182,27 @@ describe("startDaemonServer", () => {
     expect(Array.isArray(json.files)).toBe(true);
     expect(json).toHaveProperty("chunkSetId");
   });
+
+  it("/status lists sessions seen via excerpt", async () => {
+    daemon = await startDaemonServer({ storeRoot: store, port: 0, token: "secret" });
+    const auth = { authorization: "Bearer secret", "content-type": "application/json" };
+    const bigRaw = Array.from({ length: 400 }, (_, i) => `line ${i} lorem ipsum`).join("\n");
+    await fetch(`${daemon.url}/excerpt`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        workspaceKey: "ws",
+        liveSessionId: "live1",
+        raw: bigRaw,
+        sourceKind: "command",
+        label: "t",
+        mode: "aggressive",
+        storeRawOutput: true,
+      }),
+    });
+    const st = (await (
+      await fetch(`${daemon.url}/status`, { headers: { authorization: "Bearer secret" } })
+    ).json()) as { sessions: Array<{ workspaceKey: string; liveSessionId: string }> };
+    expect(st.sessions).toContainEqual({ workspaceKey: "ws", liveSessionId: "live1" });
+  });
 });
