@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RunCommandSpawn } from "@megasaver/context-gate";
+import { listEvidenceByWorkspace } from "@megasaver/evidence-ledger";
+import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   excerptHandler,
@@ -59,6 +61,23 @@ describe("excerptHandler", () => {
     });
     expect(res.status).toBe(400);
     expect(existsSync(join(store, "..", "escape"))).toBe(false);
+  });
+
+  // Parity with the in-process hook path, which writes evidence rows. The daemon
+  // path must too (a real workspaceKey — evidence is keyed by the 16-hex brand).
+  it("writes an evidence row on the daemon path (parity with in-process fallback)", async () => {
+    const ws = encodeWorkspaceKey("/test/proj");
+    await excerptHandler(store, {
+      workspaceKey: ws,
+      liveSessionId: "live1",
+      raw: bigRaw,
+      sourceKind: "command",
+      label: "run tests",
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    const rows = await listEvidenceByWorkspace({ storeRoot: store, workspaceKey: ws });
+    expect(rows.length).toBeGreaterThan(0);
   });
 });
 

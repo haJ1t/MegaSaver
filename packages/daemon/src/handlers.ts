@@ -34,7 +34,14 @@ const excerptRequestSchema = z
 export async function excerptHandler(storeRoot: string, body: unknown): Promise<HandlerResponse> {
   const parsed = excerptRequestSchema.safeParse(body);
   if (!parsed.success) return { status: 400, json: { error: parsed.error.message } };
-  const result = await recordAndFilterOverlayOutput({ storeRoot, ...parsed.data });
+  // Parity with the in-process hook path, which writes evidence rows. The daemon
+  // owns its evidence location (= storeRoot) — the hook never sends a filesystem
+  // path over HTTP (that would be a traversal surface).
+  const result = await recordAndFilterOverlayOutput({
+    storeRoot,
+    evidenceStoreRoot: storeRoot,
+    ...parsed.data,
+  });
   return { status: 200, json: { ...result } };
 }
 
