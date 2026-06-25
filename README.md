@@ -1,313 +1,283 @@
 # Mega Saver
 
-> **ContextOps for coding agents.**
+> **A local context engine for AI coding agents.**
 > Less tokens. More signal. Same or better agent performance.
 
-Mega Saver is a single control panel for context, memory, sessions, and
-token efficiency across modern coding agents — Claude Code, Codex,
-Cursor, Aider, and any CLI agent. Your agents connect to Mega Saver; it
-manages the expensive, fragile parts of context so the model sees signal
-instead of noise — and the raw evidence stays on your disk.
+Mega Saver sits between your coding agent (Claude Code, Codex, Cursor, Aider, or
+any CLI agent) and its tools. When the agent reads a big file, runs a command, or
+scans a noisy build log, Mega Saver routes that output through a deterministic
+**redact → chunk → rank → fit → summarize** pipeline and hands the model only the
+relevant excerpts. The full raw output stays on your disk, one call away.
 
-**Others prune output. MegaSaver prunes with your project’s memory.**
+The result: a 60 KB file read or a 300 KB test log reaches the model as a few
+hundred tokens of the parts that actually matter — not the whole wall of text.
+
+**Others prune output. Mega Saver prunes with your project's memory** — it uses
+your structured memory and past failures to decide what's relevant, so the
+excerpts it keeps are the ones your current task needs.
+
+Everything runs locally. No database, no account, no cloud. Your code and outputs
+never leave your machine.
 
 ---
 
 ## Table of contents
 
 - [What it does](#what-it-does)
-- [Install](#install)
-- [Quickstart](#quickstart)
+- [Supported agents](#supported-agents)
+- [Quick start](#quick-start)
+- [Why use it](#why-use-it)
+- [How it works](#how-it-works)
+- [Proxy tools](#proxy-tools)
 - [The `mega` CLI](#the-mega-cli)
-- [Proxy Mode](#proxy-mode)
 - [Connectors](#connectors)
-- [Desktop / GUI console](#desktop--gui-console)
+- [Desktop console](#desktop-console)
 - [Where your data lives](#where-your-data-lives)
 - [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Project layout](#project-layout)
 - [License](#license)
 
 ---
 
 ## What it does
 
-- **Compresses tool output.** Big file reads, command runs, and
-  build/test logs are routed through a deterministic
-  redact → chunk → rank → fit → summarize pipeline. Only the relevant
-  excerpts reach the model; the full raw output stays on disk and is one
-  call away when you need it.
-- **Prunes with your project's memory.** Unlike a generic text filter,
-  Mega Saver uses your project's structured memory and past failures to
-  decide what matters — so the excerpts it keeps are the ones your task
-  actually needs.
-- **One persistent store** for projects, sessions, and memory entries
-  that any connected agent can read or write.
-- **Honest, measurable savings.** Every routed call records raw vs.
-  returned bytes and a savings ratio, shown live in the GUI and CLI.
-- **Works everywhere.** macOS, Linux, and Windows. Plain JSON on disk —
-  no database, no daemon, no account.
-
-What Mega Saver is **not**: not a model proxy or token blinder (it
-preserves the evidence the model needs to decide), and not a team
-chatops tool (single-developer first).
+- **Compresses tool output.** Large file reads, command runs, and build/test
+  logs go through redact → chunk → rank → fit → summarize. Only the relevant
+  excerpts reach the model; the full raw output is stored and recoverable.
+- **Ranks by what you're working on.** A prompt-capture hook feeds your latest
+  request in as ranking intent, so compression keeps the lines about *your* task
+  instead of generic ones.
+- **Skips unchanged re-reads.** Re-reading a file you already read this session —
+  and that hasn't changed — returns a tiny "unchanged" marker instead of the
+  whole file again. No wasted tokens, and the prior version is still expandable.
+- **Chunks code on real boundaries.** For source files, excerpts are split on
+  function / class / heading boundaries (via the project's AST index), not
+  arbitrary line counts — so the model sees whole, coherent units.
+- **Keeps the evidence.** Nothing is thrown away. Every compressed result points
+  at a recoverable chunk set you can expand back to the complete output.
+- **Stays out of the way.** Compression is opt-in per session, secrets are
+  redacted before anything is stored, and on any error the agent gets the
+  original output untouched.
 
 ---
 
-## Install
+## Supported agents
 
-### Standalone binary (recommended)
+Agents connect to Mega Saver — never the reverse. Each connector is a thin
+adapter; the core is agent-agnostic.
 
-The `mega` CLI ships as a single self-contained file — every dependency
-inlined, no `node_modules`, **Node 22+** the only requirement.
+| Agent | How it connects | Instruction file written |
+|-------|-----------------|--------------------------|
+| **Claude Code** | MCP bridge + Pre/PostToolUse + UserPromptSubmit hooks | `CLAUDE.md` |
+| **Codex** | MCP bridge | `AGENTS.md` |
+| **Cursor** | MCP bridge | `.cursor/rules/megasaver.mdc` |
+| **Aider** | conventions file | `CONVENTIONS.md` |
+| **Any CLI agent** | `mega output exec` wrapper / MCP | — |
+
+---
+
+## Quick start
+
+Mega Saver needs **Node.js 22+**.
+
+### 1. Install
+
+**Standalone bundle (recommended).** Grab the zero-dependency `mega.mjs` from the
+[latest release](https://github.com/haJ1t/MegaSaver/releases/latest):
 
 ```bash
-# Download the latest release and run it
 curl -fsSL -o mega.mjs \
   https://github.com/haJ1t/MegaSaver/releases/latest/download/mega.mjs
-node mega.mjs doctor
-
-# Or put it on your PATH as `mega`
-chmod +x mega.mjs
-mv mega.mjs ~/.local/bin/mega
-mega doctor
+node mega.mjs --help
 ```
 
-The file carries a `#!/usr/bin/env node` shebang, so once it's
-executable and on your PATH it runs as `mega`.
+Put it on your `PATH` (e.g. save as `mega`, `chmod +x`) and you can call `mega`
+directly.
 
-### From source
+**From source:**
 
 ```bash
 git clone https://github.com/haJ1t/MegaSaver.git
 cd MegaSaver
-corepack enable          # pnpm 9.x
 pnpm install
-pnpm --filter @megasaver/cli build
-alias mega="node $PWD/apps/cli/dist/cli.js"
-mega doctor
+pnpm build
+node apps/cli/dist-bundle/mega.mjs --help
 ```
 
-> npm install (`npm i -g @megasaver/cli`) lands once the package is
-> published; until then use the release binary above.
+### 2. Connect your agent
 
----
-
-## Quickstart
+Install the MCP bridge and write the connector instruction block for your agent:
 
 ```bash
-# 1. Create a project
-mega project create demo
+mega mcp install --target claude-code --project myapp
+mega connector sync myapp --target claude-code
+```
 
-# 2. Open a session
-mega session create demo --agent claude-code --title "first session"
+For Claude Code, also install the hooks (telemetry + output saver + prompt
+capture):
 
-# 3. Add a memory entry the agent will see
-mega memory create demo --scope project \
-  --content "Prefers TypeScript strict mode and Vitest."
+```bash
+mega hooks install claude-code
+```
 
-# 4. Write the connector block into the project's CLAUDE.md
-mega connector sync demo --target claude-code
+### 3. Turn on compression for a session
 
-# 5. Turn on Mega Saver Mode for the session
+```bash
 mega session saver enable <session-id> --mode balanced
 ```
 
-Every read/write command accepts `--json` for scripting and agent use;
-text output is the default for humans. Run `mega doctor` anytime to
-check your Node version, store path, and connector status.
+Modes: `safe` (conservative), `balanced` (default), `aggressive` (maximum
+savings). Now point your agent at the [`proxy_*` tools](#proxy-tools) instead of
+native Read / Bash / grep — or, with hooks installed, native tool output is
+compressed automatically.
+
+### 4. Verify
+
+```bash
+mega doctor              # checks bridge, hooks, connector blocks
+mega hooks status        # shows which hooks are installed + adoption metrics
+```
+
+---
+
+## Why use it
+
+- **Cut token spend.** Big reads and logs become small, relevant excerpts —
+  typically 60–90% fewer tokens on noisy output, with no loss of recoverable
+  detail.
+- **Keep agent quality.** Memory- and intent-aware ranking means the model still
+  sees the lines it needs to decide. Less noise often *improves* answers.
+- **Never lose evidence.** Full raw output is stored locally; expand any chunk
+  set back to the complete text on demand.
+- **Private by default.** Local-only. Secrets are redacted before storage. No
+  account, no telemetry leaving your machine.
+- **Works with the agents you already use.** One core, thin connectors. Switch
+  agents without re-learning anything.
+
+---
+
+## How it works
+
+```
+   your coding agent
+        │
+        │  reads a file / runs a command / greps
+        ▼
+  ┌───────────────────────────────────────────────┐
+  │  proxy_* tools   or   PostToolUse hook         │   (opt-in per session)
+  └───────────────────────────────────────────────┘
+        │
+        ▼
+  ┌───────────────────────────────────────────────┐
+  │  local daemon  →  context-gate pipeline        │
+  │                                                │
+  │   redact  →  chunk  →  rank  →  fit  →  sum     │
+  │   (secrets) (AST/    (intent+ (budget) (brief)  │
+  │             lines)   memory)                    │
+  └───────────────────────────────────────────────┘
+        │                          │
+        │ relevant excerpts        │ full raw output (lossless)
+        ▼                          ▼
+   back to the model          on-disk chunk store
+                              (expand any time)
+```
+
+1. **Capture.** Tool output is captured via the agent's hooks or the `proxy_*`
+   tools — only when compression is enabled for that session.
+2. **Redact.** Secrets are stripped before anything is stored.
+3. **Chunk.** Source files split on AST boundaries (functions, classes,
+   headings); everything else splits by lines.
+4. **Rank.** Chunks are scored against your task — your captured prompt (intent),
+   project memory, and past failures all feed the score.
+5. **Fit & summarize.** The top chunks that fit the token budget are returned
+   with a short summary and a pointer to expand the rest.
+6. **Store.** The complete raw output is saved locally so nothing is ever lost.
+
+A re-read of an unchanged file short-circuits this entirely and returns an
+"unchanged" marker pointing at the prior result — zero re-spend.
+
+---
+
+## Proxy tools
+
+When compression is on for a session, point the agent at these instead of its
+native tools. Each returns a task-aware summary, ranked excerpts, an expandable
+chunk pointer, and savings metrics — while the full output stays on disk.
+
+| Tool | Use instead of | What you get |
+|------|----------------|--------------|
+| `proxy_read_file` | Read | AST-aware excerpts of the relevant parts; unchanged re-reads suppressed |
+| `proxy_run_command` | Bash | compressed command output, full log recoverable |
+| `proxy_search_code` | grep / Glob | ranked matches scoped to your task |
+| `proxy_expand_chunk` | — | expand any stored chunk back to full text |
+
+Proxy Mode is **opt-in**: nothing is intercepted unless the agent chooses these
+tools, and adoption is reported honestly (`mega hooks status`).
 
 ---
 
 ## The `mega` CLI
 
-```bash
-# Projects & sessions
-mega project create <name> [--root <dir>]
-mega project list
-mega session create <project> --agent <id> [--risk low|medium|high|critical] [--title <s>]
-mega session list <project>
-mega session show <session-id>
-mega session update <session-id> [--title <s>] [--risk <level>] [--agent <id>]
-mega session end <session-id>
-
-# Memory
-mega memory create <project> --scope project|session --content <s> [--session <id>]
-mega memory list <project>
-mega memory show <entry-id>
-
-# Connectors (write per-agent config blocks)
-mega connector sync <project> [--target claude-code|codex|cursor|aider]
-mega connector status <project> [--target <id>]
-
-# Mega Saver Mode / Proxy Mode
-mega session saver enable <session-id> --mode safe|balanced|aggressive
-mega session saver disable <session-id>
-mega session saver status <session-id>
-mega session saver stats <session-id>          # raw / returned / saved totals
-
-mega output file   <session-id> --intent <s> <path>     # policy-gated read + filter
-mega output filter <session-id> --intent <s> --file <log>
-mega output exec   <session-id> --intent <s> -- <cmd…>   # run a command, filter its output
-mega output chunk  <chunk-set-id> <chunk-id>            # expand a stored excerpt
-
-# MCP bridge (connect an agent to Mega Saver)
-mega mcp install|repair|status|uninstall [--target <id>] [--project <name>]
-mega mcp serve
-
-# Proxy Mode adoption metrics + Claude Code telemetry hook
-mega hooks install claude-code
-mega hooks status
-
-# Skill packs
-mega pack install <path> [--force]
-mega pack list
-mega pack info <name>
-mega pack remove <name>
+```
+mega <command> [subcommand] [flags]
 ```
 
-Closed-enum flags (`--agent`, `--risk`, `--scope`, `--target`,
-`--mode`) take their help text and error messages straight from the
-source schema, so the accepted values are always exactly what the help
-shows.
+| Command | What it does |
+|---------|--------------|
+| `mega mcp` | install / repair / status / serve the MCP bridge for an agent |
+| `mega hooks` | install / status / uninstall Claude Code hooks (telemetry, saver, intent) |
+| `mega connector` | write & sync the per-agent instruction block; report drift |
+| `mega session` | manage sessions and per-session Mega Saver Mode |
+| `mega output` | run a command through the compression pipeline (`mega output exec`) |
+| `mega proxy` | start the opt-in local token-metering proxy |
+| `mega memory` | view & write structured project memory |
+| `mega audit` | windowed token-savings summary |
+| `mega doctor` | diagnose bridge / hooks / connector setup |
 
----
+Run `mega <command> --help` for subcommands and flags. Closed-enum flags
+(`--target`, `--mode`, `--risk`, `--scope`) take their accepted values straight
+from the source, so `--help` always lists exactly what's valid.
 
-## Proxy Mode
-
-Proxy Mode is the public face of Mega Saver Mode. When it's on for a
-session, point your agent at the `proxy_*` MCP tools instead of native
-Read / Bash / grep, and Mega Saver returns task-aware summaries,
-relevant excerpts, expandable chunks, and savings metrics — while the
-full raw output stays on disk.
-
-Proxy Mode is **opt-in**: nothing is intercepted unless the agent
-chooses the proxy tools, and adoption is reported honestly.
-
-### Turn it on
-
-In the GUI: open **Sessions**, pick one, click **Enable Mega Saver
-Mode**, choose a mode. In one step it writes the session settings, syncs
-the connector instruction block, installs/repairs the MCP bridge, and
-initializes stats. From the CLI:
-
-```bash
-mega session saver enable <session-id> --mode balanced
-mega mcp install --target claude-code --project <name>
-mega connector sync <name> --target claude-code
-```
-
-### The proxy tools
-
-| Tool | Use instead of | What you get |
-|------|----------------|--------------|
-| `proxy_read_file` | reading a whole file | Redacted, ranked excerpts within a byte budget |
-| `proxy_run_command` | `Bash` | Policy-gated run; compressed output (test/typecheck logs collapse to the failures that matter) |
-| `proxy_search_code` | `grep` / native search | Matches grouped by file, noise collapsed, ranked by your task |
-| `proxy_expand_chunk` | — | Pull back any omitted excerpt when you need the full detail |
-
-Two **naming modes** are available so a token-saving product never
-wastes context on duplicate tool schemas — only one name per tool is
-ever listed:
-
-```bash
-MEGASAVER_TOOL_NAMING=proxy    # default: proxy_read_file, proxy_run_command, …
-MEGASAVER_TOOL_NAMING=legacy   # the original mega_* names, for existing setups
-```
-
-### Smarter compression for tests & types
-
-Mega Saver recognizes Vitest and TypeScript (`tsc`) output and
-compresses it specially — keeping failing tests, assertions, stack
-traces, file/line numbers, and grouped compiler errors while collapsing
-passing tests and cascading duplicates. Small outputs pass through
-untouched (a wrapper would cost more than it saves), so you only pay for
-compression when there's something to save.
-
-### Memory-aware ranking (opt-in)
-
-Turn on engine-aware ranking to let your project's memory and past
-failures lift the most relevant excerpts:
-
-```bash
-MEGASAVER_ENGINE_RANKING=true
-```
-
-This re-weights ranking with a memory boost and a failure-history boost
-on top of base relevance. It's off by default; flip it on per your
-preference.
-
-### Measure adoption honestly
-
-```bash
-mega hooks status
-```
-
-shows your **proxy adoption rate** (proxy calls vs. all Mega Saver
-calls). For Claude Code you can also install an optional telemetry hook
-that records native tool-call *metadata only* (never file contents),
-which unlocks a **hook-based interception rate** — how often the agent
-reaches for proxy tools vs. native ones:
-
-```bash
-mega hooks install claude-code
-```
-
-Without the hook installed, only the adoption rate is shown (with a hint
-to install the hook) — the interception rate is never guessed or
-overstated.
-
-### Modes
-
-Each mode caps the bytes returned per call:
-
-| Mode | Returned-byte budget | Use when |
-|------|----------------------|----------|
-| `safe` | 32 000 | You want more context retained; exploratory work. |
-| `balanced` | 12 000 | Default. Strong savings, ample signal. |
-| `aggressive` | 4 000 | Maximum savings; tight, focused tasks. |
-
-### Nothing is lost
-
-Compression never deletes evidence. For any event you can open the
-**raw** captured output and the **sent** excerpts side by side in the
-GUI, or expand a chunk from the CLI. Ask for raw bytes only when the
-filtered result is genuinely insufficient. Every command is gated
-through the policy allow/deny list and secrets are redacted before
-anything is stored or returned.
+Common flags on most commands: `--store <path>` (storage location), `--json`
+(machine-readable output), `--mode safe|balanced|aggressive`.
 
 ---
 
 ## Connectors
 
-Mega Saver writes a per-project instruction block into **one** file per
-agent, inside a sentinel-bounded block. Your own content outside the
-block is preserved across syncs.
+Mega Saver writes a per-project instruction block into **one** file per agent,
+inside a sentinel-bounded block. Your own content outside the block is preserved
+across syncs.
 
 | Target | File written | Format |
 |--------|--------------|--------|
 | `claude-code` | `CLAUDE.md` (project root) | Markdown block |
 | `codex` | `AGENTS.md` (project root) | Markdown block |
 | `cursor` | `.cursor/rules/megasaver.mdc` | Cursor rule |
-| `aider` | `CONVENTIONS.md` | Plain markdown (`--read`) |
+| `aider` | `CONVENTIONS.md` | plain markdown (`--read`) |
 
-`mega connector status` reports `in-sync`, `drift`, `no-block`,
-`missing`, or `error` per target.
+```bash
+mega connector sync myapp --target claude-code
+mega connector status myapp --target claude-code   # in-sync | drift | no-block | missing
+```
 
 ---
 
-## Desktop / GUI console
+## Desktop console
 
-A localhost web console over the same store:
+A localhost web console over the same on-disk store — no terminal required:
 
 ```bash
-pnpm --filter @megasaver/gui dev   # boots the UI (5173) + bridge (5174)
+pnpm --filter @megasaver/gui dev   # UI on :5173, bridge on :5174
 ```
 
-Open <http://localhost:5173>. It shows **Sessions** and **Memory
-entries** with write actions, an **Agent Setup Doctor** that
-installs/repairs the MCP bridge and connector blocks with no terminal,
-and a per-session **Token Saver panel** — mode picker, savings ratio, a
-savings-history chart, a recent-events feed, a raw/sent viewer, and
-raw-output retention controls. Keyboard-reachable, WCAG AA contrast.
+Open <http://localhost:5173>. It shows your **sessions** and **memory entries**
+with write actions, an **Agent Setup Doctor** that installs/repairs the bridge
+and connector blocks in one click, and a per-session **Token Saver panel** with a
+mode picker, savings ratio, a savings-history chart, a recent-events feed, a
+raw/sent viewer, and raw-output retention controls. Keyboard-reachable, WCAG AA
+contrast.
 
 ---
 
@@ -317,9 +287,10 @@ Everything is plain JSON / JSONL on disk — no database, no service.
 
 | Path | Contents |
 |------|----------|
-| `<store>/projects.json` | Your projects |
-| `<store>/sessions.json` | Sessions (incl. Mega Saver Mode settings) |
-| `<store>/memory/<projectId>.jsonl` | Memory entries, one per line |
+| `<store>/projects.json` | your projects |
+| `<store>/sessions.json` | sessions (incl. Mega Saver Mode settings) |
+| `<store>/memory/<projectId>.jsonl` | memory entries, one per line |
+| `<store>/content/.../<chunkSetId>.json` | stored raw output (expandable) |
 
 **Default store path:**
 
@@ -327,26 +298,56 @@ Everything is plain JSON / JSONL on disk — no database, no service.
 - `%LOCALAPPDATA%\megasaver` (Windows)
 - override on any command with `--store <path>`
 
-Writes are atomic and durable on both POSIX and Windows; on any error
-the original file is untouched.
+Writes are atomic and durable on POSIX and Windows; on any error the original
+file is left untouched.
 
 ---
 
 ## Configuration
 
-Environment variables you can set:
-
 | Variable | Values | Default | Effect |
 |----------|--------|---------|--------|
-| `MEGASAVER_TOOL_NAMING` | `proxy` \| `legacy` | `proxy` | Which MCP tool names are exposed (`proxy_*` vs. `mega_*`). |
-| `MEGASAVER_ENGINE_RANKING` | `true` \| unset | off | Enable memory + failure-history aware ranking. |
+| `MEGASAVER_TOOL_NAMING` | `proxy` \| `legacy` | `proxy` | which MCP tool names are exposed (`proxy_*` vs. `mega_*`) |
+| `MEGASAVER_ENGINE_RANKING` | `true` \| unset | off | enable memory + failure-history aware ranking |
 
-Per-command: `--store <path>` (storage location), `--json` (machine
-output), `--mode safe\|balanced\|aggressive` (savings level).
+An optional `permissions.yaml` in a project tightens the command/path allow-list.
+It is **tighten-only** — it can never loosen the built-in safety gates.
 
-Optional `permissions.yaml` in a project tightens the command/path
-allow-list (tighten-only — it can never loosen the built-in safety
-gates).
+---
+
+## Troubleshooting
+
+```bash
+mega doctor          # one-shot health check: bridge, hooks, connector blocks
+mega hooks status    # which hooks are installed + how often the agent uses the proxy
+```
+
+- **Agent isn't using the proxy tools** — confirm Mega Saver Mode is enabled for
+  the session (`mega session saver enable <id>`) and the connector block is
+  in-sync (`mega connector status`).
+- **No compression on native reads** — install hooks (`mega hooks install
+  claude-code`) and check `mega hooks status` shows all three installed.
+- **Want the full output** — every compressed result ends with a
+  `proxy_expand_chunk(<chunkSetId>, "0")` pointer; call it to get the complete
+  text.
+
+---
+
+## Project layout
+
+pnpm + Turborepo monorepo.
+
+| Path | Package | Role |
+|------|---------|------|
+| `apps/cli` | `@megasaver/cli` | the `mega` command |
+| `apps/gui` | `@megasaver/gui` | desktop console |
+| `packages/core` | `@megasaver/core` | core engine |
+| `packages/context-gate` | `@megasaver/context-gate` | read/compress pipeline |
+| `packages/output-filter` | `@megasaver/output-filter` | chunk → rank → fit |
+| `packages/content-store` | `@megasaver/content-store` | on-disk chunk store |
+| `packages/indexer` | `@megasaver/indexer` | AST code index |
+| `packages/connectors/*` | connectors | per-agent adapters |
+| `packages/daemon` | `@megasaver/daemon` | local request daemon |
 
 ---
 
