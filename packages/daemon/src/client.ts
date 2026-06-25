@@ -49,6 +49,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Returns a handle to an already-running daemon, or null if none is reachable.
+ *  Never spawns, never waits, never mutates lock/discovery. */
+export async function getRunningDaemon(opts: { storeRoot: string }): Promise<DaemonHandle | null> {
+  const disc = readDiscovery(opts.storeRoot);
+  if (disc === null) return null;
+  const url = urlFor(disc.port);
+  if (!(await ping(url, disc.token))) return null;
+  return makeHandle(url, disc.token);
+}
+
 export async function getDaemon(opts: GetDaemonOptions): Promise<DaemonHandle> {
   const { storeRoot } = opts;
   const spawn = opts.spawn ?? spawnDaemon;

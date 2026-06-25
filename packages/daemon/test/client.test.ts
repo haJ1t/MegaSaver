@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getDaemon } from "../src/client.js";
+import { getDaemon, getRunningDaemon } from "../src/client.js";
 import { writeDiscovery } from "../src/discovery.js";
 import { acquireLock } from "../src/lock.js";
 import { type RunningDaemon, startDaemonServer } from "../src/server.js";
@@ -68,5 +68,27 @@ describe("getDaemon", () => {
     await expect(getDaemon({ storeRoot: store, spawn: () => {}, waitMs: 300 })).rejects.toThrow(
       /did not come up/,
     );
+  });
+});
+
+describe("getRunningDaemon", () => {
+  it("returns a handle when a daemon is already running", async () => {
+    const running = await startDaemonServer({ storeRoot: store, port: 0, token: "live" });
+    servers.push(running);
+    const handle = await getRunningDaemon({ storeRoot: store });
+    expect(handle).not.toBeNull();
+    const res = await handle?.request("GET", "/status");
+    expect(res?.status).toBe(200);
+  });
+
+  it("returns null when no discovery file exists", async () => {
+    const handle = await getRunningDaemon({ storeRoot: store });
+    expect(handle).toBeNull();
+  });
+
+  it("returns null when discovery points at a dead port (ping fails)", async () => {
+    writeDiscovery(store, { port: 1, token: "dead", pid: 1, startedAt: "x" });
+    const handle = await getRunningDaemon({ storeRoot: store });
+    expect(handle).toBeNull();
   });
 });

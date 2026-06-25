@@ -7,7 +7,7 @@ export {
   startDaemonServer,
 } from "./server.js";
 export { daemonSpawnArgs, spawnDaemon } from "./spawn.js";
-export { type DaemonHandle, type GetDaemonOptions, getDaemon } from "./client.js";
+export { type DaemonHandle, type GetDaemonOptions, getDaemon, getRunningDaemon } from "./client.js";
 export {
   type HandlerResponse,
   type ExecHandlerDeps,
