@@ -7,6 +7,7 @@ import {
   fetchSessionTokenSaverEvents,
   fetchSessionTokenSaverStats,
 } from "../../lib/claude-sessions-client.js";
+import { DaemonStatusPanel } from "./daemon-status.js";
 import { HookConnection } from "./hook-connection.js";
 import { ProxyActivation } from "./proxy-activation.js";
 import { SaverModeActivation } from "./saver-mode-activation.js";
@@ -61,6 +62,7 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
       <HookConnection />
       <SaverModeActivation dir={dir} id={id} />
       <ProxyActivation />
+      <DaemonStatusPanel />
       <h3 className="flex items-center gap-2 text-xs text-text-muted uppercase tracking-widest">
         Stats (this session)
         <span className="inline-flex items-center gap-1 normal-case tracking-normal text-text-secondary">

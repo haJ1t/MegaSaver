@@ -374,6 +374,12 @@ export function fetchProxyStatus(): Promise<ProxyStatus> {
   return getJson<ProxyStatus>("/api/proxy");
 }
 
+export type DaemonStatus = { running: boolean; url?: string; sessions?: number };
+
+export function fetchDaemonStatus(): Promise<DaemonStatus> {
+  return getJson<DaemonStatus>("/api/daemon");
+}
+
 export function setProxy(enabled: boolean): Promise<ProxyStatus> {
   return mutateJson<ProxyStatus>("/api/proxy", "POST", { enabled });
 }

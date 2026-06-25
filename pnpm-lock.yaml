@@ -123,6 +123,9 @@ importers:
       '@megasaver/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@megasaver/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
       '@megasaver/evidence-ledger':
         specifier: workspace:*
         version: link:../../packages/evidence-ledger

@@ -29,6 +29,7 @@ import {
   handleListClaudeSessions,
   handleStreamClaudeSession,
 } from "./routes/claude-sessions.js";
+import { handleDaemonStatus } from "./routes/daemon.js";
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
 import { handleGetMemoryGraph } from "./routes/memory-graph.js";
@@ -224,6 +225,12 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         return;
       }
       return methodNotAllowed(res, method, origin);
+    }
+
+    if (path === "/api/daemon") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleDaemonStatus(ctx);
+      return;
     }
 
     if (path.startsWith("/api/mcp/")) {
