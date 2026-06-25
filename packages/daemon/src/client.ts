@@ -57,12 +57,11 @@ export async function getDaemon(opts: GetDaemonOptions): Promise<DaemonHandle> {
   if (existing && (await ping(urlFor(existing.port), existing.token))) {
     return makeHandle(urlFor(existing.port), existing.token);
   }
-  // Stale advertisement (or none): reap before spawning so the new daemon's
-  // exclusive lock + discovery write win cleanly.
-  if (existing) {
-    clearDiscovery(storeRoot);
-    clearLock(storeRoot);
-  }
+  // A leftover lock with no live discovery is exactly the post-/shutdown state,
+  // so reap both unconditionally before spawning — the live-daemon case already
+  // returned above.
+  clearDiscovery(storeRoot);
+  clearLock(storeRoot);
 
   spawn(storeRoot);
 

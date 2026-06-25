@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getDaemon } from "../src/client.js";
 import { writeDiscovery } from "../src/discovery.js";
+import { acquireLock } from "../src/lock.js";
 import { type RunningDaemon, startDaemonServer } from "../src/server.js";
 
 let store: string;
@@ -47,6 +48,19 @@ describe("getDaemon", () => {
   it("reaps stale discovery (points at a dead port) before spawning", async () => {
     writeDiscovery(store, { port: 1, token: "dead", pid: 1, startedAt: "x" });
     const handle = await getDaemon({ storeRoot: store, spawn: inProcessSpawn, waitMs: 3000 });
+    expect((await handle.request("GET", "/status")).status).toBe(200);
+  });
+
+  it("reaps a leftover lock with no discovery (post-/shutdown state) before spawning", async () => {
+    // Post-/shutdown: discovery cleared by server.close(), lock left behind.
+    expect(acquireLock(store)).not.toBeNull();
+    // Spawn that models `mega daemon serve`: it only starts if it wins the lock,
+    // so a surviving lock wedges it unless getDaemon reaps the lock first.
+    const lockAwareSpawn = (root: string) => {
+      if (acquireLock(root) === null) return;
+      void startDaemonServer({ storeRoot: root, port: 0 }).then((s) => servers.push(s));
+    };
+    const handle = await getDaemon({ storeRoot: store, spawn: lockAwareSpawn, waitMs: 3000 });
     expect((await handle.request("GET", "/status")).status).toBe(200);
   });
 
