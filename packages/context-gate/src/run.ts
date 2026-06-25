@@ -16,7 +16,6 @@ import {
   filterRaw,
   persistChunkSet,
   persistOverlayChunkSet,
-  readAndFilter,
   readRaw,
   resolveEffectiveSettings,
   resolveOverlayEffectiveSettings,
@@ -204,19 +203,29 @@ export async function runOverlayOutputPipeline(
       : { ok: false, reason: "path_unsafe", detail: gate.message };
   }
 
-  const filtered = await readAndFilter({
-    absolute: gate.absolute,
+  const now = input.now ?? defaultNow;
+  const newId = input.newId ?? defaultNewId;
+  const sessionDir = join(input.storeRoot, "content", input.workspaceKey, input.liveSessionId);
+
+  const read = await readRaw(gate.absolute);
+  if (!read.ok) return { ok: false, reason: "file_read_failed", detail: read.message };
+
+  const newHash = hashContent(read.raw);
+  const pathHash = hashPath(gate.absolute);
+  const prior = loadReadIndex(sessionDir)[pathHash];
+  if (prior !== undefined && prior.contentHash === newHash) {
+    return { ok: true, result: unchangedResult(prior.chunkSetId, read.raw) };
+  }
+
+  const filteredResult = filterRaw({
+    raw: read.raw,
     path: input.path,
     intent: input.intent,
     mode: settings.mode,
     maxReturnedBytes: settings.maxReturnedBytes,
   });
-  if (!filtered.ok) return { ok: false, reason: "file_read_failed", detail: filtered.message };
 
-  const now = input.now ?? defaultNow;
-  const newId = input.newId ?? defaultNewId;
-
-  const result = { ...filtered.result };
+  const result = { ...filteredResult };
   if (settings.storeRawOutput) {
     const chunkSetId = newId();
     try {
@@ -227,12 +236,13 @@ export async function runOverlayOutputPipeline(
         liveSessionId: input.liveSessionId,
         createdAt: now(),
         path: input.path,
-        result: filtered.result,
+        result: filteredResult,
       });
     } catch (err) {
       return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
     }
     result.chunkSetId = chunkSetId;
+    recordRead(sessionDir, pathHash, { contentHash: newHash, chunkSetId });
   }
 
   const event: OverlayTokenSaverEvent = {
@@ -244,20 +254,20 @@ export async function runOverlayOutputPipeline(
     // Secret-bearing path → redact before persisting the event label (the
     // chunk-set source is redacted at the persist* sink in read.ts).
     label: redact(input.path).redacted,
-    rawBytes: filtered.result.rawBytes,
-    returnedBytes: filtered.result.returnedBytes,
-    bytesSaved: filtered.result.bytesSaved,
-    savingRatio: filtered.result.savingRatio,
+    rawBytes: filteredResult.rawBytes,
+    returnedBytes: filteredResult.returnedBytes,
+    bytesSaved: filteredResult.bytesSaved,
+    savingRatio: filteredResult.savingRatio,
     ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
-    summary: filtered.result.summary,
+    summary: filteredResult.summary,
     mode: settings.mode,
   };
   try {
     appendOverlayEvent({
       store: { root: input.storeRoot },
       event,
-      secretsRedacted: redactedCount(filtered.result.warnings ?? []),
-      chunksStored: filtered.result.excerpts.length,
+      secretsRedacted: redactedCount(filteredResult.warnings ?? []),
+      chunksStored: filteredResult.excerpts.length,
     });
   } catch (err) {
     return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
