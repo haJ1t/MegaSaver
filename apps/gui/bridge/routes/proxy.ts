@@ -1,4 +1,5 @@
 import { proxyStatus, startProxy, stopProxy } from "../proxy-control.js";
+import { restartClaude } from "../restart-claude.js";
 import type { RouteContext } from "../route-context.js";
 import { readJsonBody } from "./_body.js";
 
@@ -21,4 +22,14 @@ export async function handleProxySet(ctx: RouteContext): Promise<void> {
   }
   const status = enabled ? await startProxy(ctx.storeRoot) : await stopProxy();
   ctx.sendJson(ctx.res, 200, status, ctx.origin);
+}
+
+export async function handleProxyRestartClaude(ctx: RouteContext): Promise<void> {
+  const { running, url } = proxyStatus();
+  if (!running || !url) {
+    ctx.sendError(ctx.res, 409, "validation_failed", "Proxy is not running.", ctx.origin);
+    return;
+  }
+  restartClaude(url);
+  ctx.sendJson(ctx.res, 202, { restarting: true }, ctx.origin);
 }

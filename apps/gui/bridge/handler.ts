@@ -50,7 +50,7 @@ import {
   handleRunAgent,
   handleTranscriptStream,
 } from "./routes/office.js";
-import { handleProxySet, handleProxyStatus } from "./routes/proxy.js";
+import { handleProxyRestartClaude, handleProxySet, handleProxyStatus } from "./routes/proxy.js";
 import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
 import { resolveWorkspace } from "./workspace-resolver.js";
@@ -224,6 +224,12 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         return;
       }
       return methodNotAllowed(res, method, origin);
+    }
+
+    if (path === "/api/proxy/restart-claude") {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      await handleProxyRestartClaude(ctx);
+      return;
     }
 
     if (path.startsWith("/api/mcp/")) {
