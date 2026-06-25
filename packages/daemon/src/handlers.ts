@@ -28,6 +28,7 @@ const excerptRequestSchema = z
     label: z.string(),
     mode: tokenSaverModeSchema,
     storeRawOutput: z.boolean(),
+    intent: z.string().min(1).optional(),
   })
   .strict();
 
