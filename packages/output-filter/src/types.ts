@@ -8,7 +8,7 @@ import { dedupe } from "./dedupe.js";
 import { OutputFilterError } from "./errors.js";
 import { effectiveBudget, fitBudget } from "./fit.js";
 import { collapseRepeatedLines, normalize } from "./normalize.js";
-import { chunkByFormat } from "./parsers/index.js";
+import { chunkByFormatWithMeta } from "./parsers/index.js";
 import {
   type EngineScore,
   type RankFeatures,
@@ -164,19 +164,22 @@ export function filterOutput(input: FilterOutputInput): FilterOutputResult {
 
   let compressor: CompressorName = "generic";
   let textForChunks = normalized;
-  if (decision === "compressed" && isConfidentClassification(classification)) {
+  const isFileSource = source?.kind === "file";
+  if (decision === "compressed" && !isFileSource && isConfidentClassification(classification)) {
     const compressed = compressByCategory(classification.category, normalized);
     compressor = compressed.compressor;
     textForChunks = compressed.text;
   }
 
-  const chunks = chunkByFormat(textForChunks);
+  const { chunks, semantic: usedSemantic } = chunkByFormatWithMeta(textForChunks, source);
   const scored = chunks.map((c) => scoreChunk(intent, c, sessionHints));
   // §8: engine-aware re-ranking is behind a flag and reuses the base
   // relevance — no second scorer. Off by default.
   const engineEnabled = parsed.data.engineRanking ?? engineRankingFromEnv();
   const ranked = engineEnabled ? applyEngineRanking(scored, sessionHints) : scored;
-  const deduped = dedupe(ranked);
+  // Semantic chunks are an exhaustive partition of one file — no true
+  // duplicates exist, so dedupe would only erase distinct declarations.
+  const deduped = usedSemantic ? ranked : dedupe(ranked);
 
   const ordered = [...deduped].sort((a, b) => b.score - a.score);
   const budget = effectiveBudget(maxReturnedBytes, modeToBudget(mode));
