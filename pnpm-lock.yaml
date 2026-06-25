@@ -57,6 +57,9 @@ importers:
       '@megasaver/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@megasaver/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
       '@megasaver/indexer':
         specifier: workspace:*
         version: link:../../packages/indexer
@@ -387,6 +390,16 @@ importers:
       fast-check:
         specifier: ^3.23.2
         version: 3.23.2
+
+  packages/daemon:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
 
   packages/evidence-ledger:
     dependencies:

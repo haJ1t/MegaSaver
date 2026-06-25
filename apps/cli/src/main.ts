@@ -3,6 +3,7 @@ import { defineCommand } from "citty";
 import { auditCommand } from "./commands/audit/index.js";
 import { connectorCommand } from "./commands/connector/index.js";
 import { contextCommand } from "./commands/context/index.js";
+import { daemonCommand } from "./commands/daemon/index.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { failCommand } from "./commands/fail/index.js";
 import { githubCommand } from "./commands/github/index.js";
@@ -48,6 +49,7 @@ export const mainCommand = defineCommand({
     learn: learnCommand,
     project: projectCommand,
     proxy: proxyCommand,
+    daemon: daemonCommand,
     rules: rulesCommand,
     session: sessionCommand,
     connector: connectorCommand,

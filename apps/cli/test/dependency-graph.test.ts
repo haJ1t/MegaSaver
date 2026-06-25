@@ -21,6 +21,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/content-store",
   "@megasaver/context-pruner",
   "@megasaver/core",
+  "@megasaver/daemon",
   "@megasaver/indexer",
   "@megasaver/llm-proxy",
   "@megasaver/mcp-bridge",
