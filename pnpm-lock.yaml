@@ -537,6 +537,9 @@ importers:
 
   packages/output-filter:
     dependencies:
+      '@megasaver/indexer':
+        specifier: workspace:*
+        version: link:../indexer
       '@megasaver/policy':
         specifier: workspace:*
         version: link:../policy
