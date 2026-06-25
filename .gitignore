@@ -44,11 +44,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Mega Saver runtime (project-local state)
-.megasaver/state/
-.megasaver/sessions/
-.megasaver/cache/
-.megasaver/hooks/
+# Mega Saver runtime store (project-local state) — never committed
+**/.megasaver/
 
 # Wiki raw sources — local-only.
 # Per the wiki schema (wiki/CLAUDE.md), raw/ contents are read by the
@@ -61,6 +58,21 @@ wiki/raw/*.pdf
 !wiki/raw/.gitkeep
 
 # OMC runtime
-.omc/state/
-.omc/sessions/
-.omc/logs/
+.omc/
+
+# AI agent / assistant tooling — personal, never committed.
+# NOTE: the product's own dogfood files (CLAUDE.md, AGENTS.md, CONVENTIONS.md,
+# .cursor/rules/*.mdc) ARE tracked on purpose and must stay out of this list.
+.claude/
+.claire/
+.cursorrules
+.mcp.json
+GEMINI.md
+.github/copilot-instructions.md
+.aider*
+.continue/
+.windsurf/
+.codeium/
+
+# Personal local dev helpers (machine-specific launchers, scratch)
+scripts/launch-megasaver.sh
