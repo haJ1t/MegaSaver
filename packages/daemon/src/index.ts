@@ -1,1 +1,10 @@
-export const DAEMON_PACKAGE = "@megasaver/daemon";
+export { daemonDir, discoveryPath, lockPath } from "./paths.js";
+export { type Discovery, clearDiscovery, readDiscovery, writeDiscovery } from "./discovery.js";
+export { acquireLock, clearLock } from "./lock.js";
+export {
+  type RunningDaemon,
+  type StartDaemonOptions,
+  startDaemonServer,
+} from "./server.js";
+export { daemonSpawnArgs, spawnDaemon } from "./spawn.js";
+export { type DaemonHandle, type GetDaemonOptions, getDaemon } from "./client.js";

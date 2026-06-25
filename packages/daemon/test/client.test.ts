@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { writeDiscovery } from "../src/discovery.js";
 import { getDaemon } from "../src/client.js";
+import { writeDiscovery } from "../src/discovery.js";
 import { type RunningDaemon, startDaemonServer } from "../src/server.js";
 
 let store: string;
@@ -51,8 +51,8 @@ describe("getDaemon", () => {
   });
 
   it("throws if the daemon never comes up", async () => {
-    await expect(
-      getDaemon({ storeRoot: store, spawn: () => {}, waitMs: 300 }),
-    ).rejects.toThrow(/did not come up/);
+    await expect(getDaemon({ storeRoot: store, spawn: () => {}, waitMs: 300 })).rejects.toThrow(
+      /did not come up/,
+    );
   });
 });
