@@ -14,11 +14,14 @@ export type Discovery = z.infer<typeof discoverySchema>;
 
 // The token in this file IS the daemon's auth boundary: any local user who can
 // read it can drive a daemon that runs shell commands. Restrict dir to 0o700
-// and file to 0o600 (no-op on Windows, where POSIX modes don't apply).
+// and file to 0o600 (no-op on Windows, where POSIX modes don't apply). The
+// create-time `mode` closes the window where a fresh file would briefly be
+// world-readable; the explicit chmod is the robust backstop (writeFileSync's
+// mode is masked by umask and skipped entirely when the file already exists).
 export function writeDiscovery(storeRoot: string, record: Discovery): void {
   const path = discoveryPath(storeRoot);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`);
+  writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 });
   chmodSync(path, 0o600);
 }
 

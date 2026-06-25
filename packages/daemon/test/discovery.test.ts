@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { clearDiscovery, readDiscovery, writeDiscovery } from "../src/discovery.js";
 import { discoveryPath } from "../src/paths.js";
+import { describeUnlessWindows } from "./_platform.js";
 
 let store: string;
 beforeEach(() => {
@@ -39,12 +40,24 @@ describe("discovery", () => {
     clearDiscovery(store);
     expect(readDiscovery(store)).toBeNull();
   });
+});
 
-  it.skipIf(process.platform === "win32")(
-    "writes the discovery file with owner-only (0o600) permissions",
-    () => {
-      writeDiscovery(store, { port: 1, token: "secret", pid: 1, startedAt: "x" });
-      expect(statSync(discoveryPath(store)).mode & 0o777).toBe(0o600);
-    },
-  );
+describeUnlessWindows("discovery file permissions", () => {
+  let store: string;
+  beforeEach(() => {
+    store = mkdtempSync(join(tmpdir(), "daemon-disc-perm-"));
+  });
+  afterEach(() => {
+    rmSync(store, { recursive: true, force: true });
+  });
+
+  it("writes the discovery file with owner-only (0o600) permissions", () => {
+    writeDiscovery(store, { port: 1, token: "secret", pid: 1, startedAt: "x" });
+    expect(statSync(discoveryPath(store)).mode & 0o777).toBe(0o600);
+  });
+
+  it("creates the daemon dir with owner-only (0o700) permissions", () => {
+    writeDiscovery(store, { port: 1, token: "secret", pid: 1, startedAt: "x" });
+    expect(statSync(join(store, "daemon")).mode & 0o777).toBe(0o700);
+  });
 });
