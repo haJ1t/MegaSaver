@@ -15,6 +15,7 @@ export {
   type RunOverlayOutputExecInput,
 } from "./run-command.js";
 export { fetchChunk, type FetchChunkResult } from "./fetch-chunk.js";
+export { fetchOverlayChunk, type FetchOverlayChunkResult } from "./fetch-overlay-chunk.js";
 export { locateChunkSet, type LocatedChunkSet } from "./locate-chunk-set.js";
 export {
   resolveEffectiveSettings,
