@@ -45,3 +45,11 @@ export {
   type RecordOverlayOutputInput,
   type RecordOverlayOutputResult,
 } from "./record-output.js";
+export {
+  hashContent,
+  hashPath,
+  readIndexPath,
+  loadReadIndex,
+  recordRead,
+  type ReadIndexEntry,
+} from "./read-index.js";
