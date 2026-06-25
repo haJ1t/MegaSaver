@@ -184,6 +184,12 @@ export async function handleSearchCode(
     contextLines: parsed.data.context_lines ?? 0,
   });
 
+  // ponytail: in-process path only. Forwarding to daemon /search requires
+  // workspaceKey+liveSessionId (overlay keying) which are absent from this env.
+  // The daemon's /search also skips BM25 re-ranking; forwarding would change the
+  // tool's output contract (index_enrichment always 'unavailable') without gaining
+  // shared-daemon benefits. Defer until env carries overlay keys + store is unified.
+  //
   // The orchestrator owns spawn + policy gate + redact + filterOutput +
   // saveChunkSet + stats. The task drives task-aware ranking (intent); fall
   // back to the query when absent.

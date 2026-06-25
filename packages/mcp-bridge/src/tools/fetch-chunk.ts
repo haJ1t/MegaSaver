@@ -42,6 +42,12 @@ export async function handleFetchChunk(
     );
   }
 
+  // ponytail: in-process path only. The daemon /expand reads the OVERLAY chunk
+  // store; in-process fetchChunk reads the REGISTRY chunk store. A chunkSetId
+  // minted in-process is not expandable via the daemon and vice-versa. Forwarding
+  // fetch-chunk requires a unified (or session-mapped) chunk store — a separate
+  // daemon-side phase. The allowedChunkSetIds guard above MUST run in-process
+  // before any future daemon call (daemon /expand has no per-session guard).
   const outcome = await fetchChunk({ storeRoot: env.storeRoot, chunkSetId, chunkId });
   if (!outcome.ok) {
     if (outcome.reason === "store_corrupt") {

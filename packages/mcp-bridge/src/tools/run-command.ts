@@ -46,6 +46,11 @@ export async function handleRunCommand(
     );
   }
 
+  // ponytail: in-process path only. Forwarding to the daemon (forwardOrFallback /exec)
+  // requires workspaceKey (cwd-derived hash) + liveSessionId (Claude transcript UUID)
+  // which are NOT in this tool's env. The env only carries registry+sessionId (registry
+  // keying). Extending env with overlay keys is a separate phase; until then the daemon
+  // /exec route and the registry chunk store cannot share chunks without a store split.
   // BB7b orchestrator (authoritative: bb7b-output-exec-plan.md
   // Task 1). It owns spawn, env-marker check (AA1 §8d steps 3+5),
   // redact (step 6), filterOutput (step 7), saveChunkSet (step 8),
