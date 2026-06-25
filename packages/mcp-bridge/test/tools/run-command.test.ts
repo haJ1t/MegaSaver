@@ -169,6 +169,8 @@ describe("handleRunCommand", () => {
     expect(path).toBe("/exec-registry");
     expect((body as Record<string, unknown>).sessionId).toBe(SESSION_ID);
     expect((body as Record<string, unknown>).command).toBe("ls");
+    // maxBytes is absent when caller didn't specify (daemon uses its own default)
+    expect((body as Record<string, unknown>).maxBytes).toBeUndefined();
   });
 
   it("falls back to in-process on daemon non-2xx (command_denied re-derived)", async () => {

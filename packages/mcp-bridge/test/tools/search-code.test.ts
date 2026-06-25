@@ -268,6 +268,8 @@ describe("handleSearchCode", () => {
     expect(method).toBe("POST");
     expect(path).toBe("/exec-registry");
     expect((body as Record<string, unknown>).command).toBe("grep");
+    // forwarded maxBytes is the RAW token cap (not 64x-multiplied) — daemon applies its own factor
+    expect((body as Record<string, unknown>).maxBytes).toBe(64_000);
   });
 
   it("falls back to in-process on daemon non-2xx", async () => {

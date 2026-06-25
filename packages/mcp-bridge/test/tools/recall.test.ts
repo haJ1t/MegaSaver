@@ -2,8 +2,12 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleRecall } from "../../src/tools/recall.js";
+
+vi.mock("@megasaver/daemon", () => ({ getRunningDaemon: vi.fn() }));
+import { getRunningDaemon } from "@megasaver/daemon";
+const mockGetRunningDaemon = vi.mocked(getRunningDaemon);
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const SESSION_ID = "22222222-2222-4222-8222-222222222222";
@@ -67,9 +71,12 @@ describe("handleRecall", () => {
   let store: string;
   beforeEach(async () => {
     store = await mkdtemp(join(tmpdir(), "mcp-recall-"));
+    // Default: no daemon running → all existing tests run in-process.
+    mockGetRunningDaemon.mockResolvedValue(null);
   });
   afterEach(async () => {
     await rm(store, { recursive: true, force: true });
+    vi.clearAllMocks();
   });
 
   it("returns session memory and chunk-set summaries", async () => {
@@ -124,5 +131,54 @@ describe("handleRecall", () => {
     const contents = result.memory.map((m) => m.content);
     expect(contents).toContain("use pnpm not npm");
     expect(contents).not.toContain("agent suggestion not yet approved");
+  });
+
+  it("returns daemon {memory,chunkSets} when daemon is present, registry NOT read", async () => {
+    const daemonResult = {
+      memory: [{ id: "daemon-mem", content: "from daemon" }],
+      chunkSets: [{ chunkSetId: "cs-daemon" }],
+    };
+    const handle = {
+      url: "http://127.0.0.1:1",
+      token: "t",
+      request: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(daemonResult), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    };
+    mockGetRunningDaemon.mockResolvedValue(handle);
+
+    // Registry has no matching session — if in-process ran it would throw session_not_found.
+    const registry = createInMemoryCoreRegistry();
+    const result = await handleRecall(
+      { registry, storeRoot: store },
+      { sessionId: SESSION_ID, intent: "build tooling" },
+    );
+
+    expect(handle.request).toHaveBeenCalledWith("POST", "/recall-registry", {
+      sessionId: SESSION_ID,
+      intent: "build tooling",
+    });
+    expect(result).toEqual(daemonResult);
+  });
+
+  it("falls back to in-process on daemon non-2xx (registry lookup runs)", async () => {
+    const handle = {
+      url: "http://127.0.0.1:1",
+      token: "t",
+      request: vi.fn().mockResolvedValue(new Response("{}", { status: 503 })),
+    };
+    mockGetRunningDaemon.mockResolvedValue(handle);
+
+    const registry = seededRegistry();
+    const result = await handleRecall(
+      { registry, storeRoot: store },
+      { sessionId: SESSION_ID, intent: "build tooling" },
+    );
+
+    // In-process path ran: we get real memory from the registry.
+    expect(result.memory.map((m) => m.content)).toContain("use pnpm not npm");
   });
 });

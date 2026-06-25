@@ -487,6 +487,9 @@ importers:
       '@megasaver/core':
         specifier: workspace:*
         version: link:../core
+      '@megasaver/daemon':
+        specifier: workspace:*
+        version: link:../daemon
       '@megasaver/evidence-ledger':
         specifier: workspace:*
         version: link:../evidence-ledger

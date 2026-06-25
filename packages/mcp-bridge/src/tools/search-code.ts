@@ -186,14 +186,18 @@ export async function handleSearchCode(
   });
 
   const intent = task !== undefined && task.trim() !== "" ? task : query;
-  const maxBytes = (max_tokens ?? MAX_BYTES_CEILING) * MAX_CAPTURE_FACTOR;
+  // maxBytesRaw is the user-facing token cap (≤ 64_000). The in-process
+  // orchestrator applies its own *64 factor; the daemon handler does the same,
+  // so we send the raw value to both to avoid double-multiplying.
+  const maxBytesRaw = max_tokens ?? MAX_BYTES_CEILING;
+  const maxBytes = maxBytesRaw * MAX_CAPTURE_FACTOR;
 
   // shapeResult (BM25 re-rank) runs on the daemon ExecResult too — forwarding
   // does NOT change the index_enrichment contract.
   return forwardOrFallback(
     env.storeRoot,
     "/exec-registry",
-    { sessionId, command: "grep", args: grepArgs, intent, maxBytes },
+    { sessionId, command: "grep", args: grepArgs, intent, maxBytes: maxBytesRaw },
     async () => {
       const outcome = await runOutputExecCommand({
         registry: env.registry,
