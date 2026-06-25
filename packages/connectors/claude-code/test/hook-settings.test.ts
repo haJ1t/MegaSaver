@@ -4,7 +4,10 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_HOOK_COMMAND,
+  INTENT_HOOK_COMMAND,
   SAVER_HOOK_COMMAND,
+  addUserPromptSubmitHook,
+  hasUserPromptSubmitHook,
   installClaudeCodeHook,
   readClaudeCodeHookStatus,
   removePostToolUseHook,
@@ -29,7 +32,12 @@ describe("hook-settings", () => {
     const p = tmpSettings();
     expect(installClaudeCodeHook({ settingsPath: p }).changed).toBe(true);
     const status = readClaudeCodeHookStatus({ settingsPath: p });
-    expect(status).toEqual({ connected: true, preInstalled: true, postInstalled: true });
+    expect(status).toEqual({
+      connected: true,
+      preInstalled: true,
+      postInstalled: true,
+      intentInstalled: true,
+    });
     expect(installClaudeCodeHook({ settingsPath: p }).changed).toBe(false);
   });
 
@@ -118,6 +126,7 @@ describe("hook-settings", () => {
       connected: false,
       preInstalled: false,
       postInstalled: false,
+      intentInstalled: false,
     });
     const bad = tmpSettings();
     writeFileSync(bad, "{ not json");
@@ -135,8 +144,33 @@ describe("hook-settings", () => {
       connected: false,
       preInstalled: false,
       postInstalled: true,
+      intentInstalled: true,
     });
     expect(SAVER_HOOK_COMMAND).toBe("mega hooks saver");
     expect(removePostToolUseHook).toBeTypeOf("function");
+  });
+});
+
+describe("UserPromptSubmit intent hook", () => {
+  it("adds a UserPromptSubmit hook idempotently", () => {
+    const once = addUserPromptSubmitHook({}, INTENT_HOOK_COMMAND);
+    expect(hasUserPromptSubmitHook(once, INTENT_HOOK_COMMAND)).toBe(true);
+    const twice = addUserPromptSubmitHook(once, INTENT_HOOK_COMMAND);
+    expect(JSON.stringify(twice)).toBe(JSON.stringify(once));
+  });
+
+  it("install writes the UserPromptSubmit intent hook", () => {
+    const p = tmpSettings();
+    installClaudeCodeHook({ settingsPath: p });
+    const written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasUserPromptSubmitHook(written, INTENT_HOOK_COMMAND)).toBe(true);
+  });
+
+  it("uninstall removes the UserPromptSubmit intent hook", () => {
+    const p = tmpSettings();
+    installClaudeCodeHook({ settingsPath: p });
+    uninstallClaudeCodeHook({ settingsPath: p });
+    const written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasUserPromptSubmitHook(written, INTENT_HOOK_COMMAND)).toBe(false);
   });
 });

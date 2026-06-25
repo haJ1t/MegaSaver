@@ -6,11 +6,12 @@ export const HOOK_MATCHER = "Read|Bash|Grep|Glob|LS";
 export const DEFAULT_HOOK_COMMAND = "mega hooks log";
 export const SAVER_HOOK_COMMAND = "mega hooks saver";
 export const SAVER_HOOK_MATCHER = "Read|Bash|Grep|Glob|LS|WebFetch";
+export const INTENT_HOOK_COMMAND = "mega hooks intent";
 
 type CommandHook = { type: "command"; command: string };
 type ToolUseEntry = { matcher?: string; hooks?: CommandHook[] };
 type SettingsObject = {
-  hooks?: { PreToolUse?: unknown; PostToolUse?: unknown; [key: string]: unknown };
+  hooks?: { PreToolUse?: unknown; PostToolUse?: unknown; UserPromptSubmit?: unknown; [key: string]: unknown };
   [key: string]: unknown;
 };
 
@@ -63,7 +64,7 @@ export function addPostToolUseHook(settings: unknown, command: string): Settings
 // so a clean uninstall leaves no residue.
 function pruneHooks(
   next: SettingsObject,
-  key: "PreToolUse" | "PostToolUse",
+  key: "PreToolUse" | "PostToolUse" | "UserPromptSubmit",
   kept: ToolUseEntry[],
 ): SettingsObject {
   const hooks = { ...(next.hooks ?? {}) };
@@ -116,6 +117,32 @@ export function removePostToolUseHook(settings: unknown, command: string): Setti
   return pruneHooks(next, "PostToolUse", kept);
 }
 
+export function hasUserPromptSubmitHook(settings: unknown, command: string): boolean {
+  if (typeof settings !== "object" || settings === null) return false;
+  const ups = (settings as SettingsObject).hooks?.UserPromptSubmit;
+  return Array.isArray(ups) && ups.some((e) => entryReferencesCommand(e, command));
+}
+
+export function addUserPromptSubmitHook(settings: unknown, command: string): SettingsObject {
+  const next = asSettings(settings);
+  if (hasUserPromptSubmitHook(next, command)) return next;
+  const hooks = next.hooks ? { ...next.hooks } : {};
+  const existingUps = hooks.UserPromptSubmit;
+  const ups = Array.isArray(existingUps) ? [...(existingUps as ToolUseEntry[])] : [];
+  // ponytail: no matcher for UserPromptSubmit — Claude Code ignores the field for this event type
+  ups.push({ hooks: [{ type: "command", command }] });
+  next.hooks = { ...hooks, UserPromptSubmit: ups };
+  return next;
+}
+
+export function removeUserPromptSubmitHook(settings: unknown, command: string): SettingsObject {
+  const next = asSettings(settings);
+  const existing = next.hooks?.UserPromptSubmit;
+  if (!Array.isArray(existing)) return next;
+  const kept = stripCommand(existing as ToolUseEntry[], command);
+  return pruneHooks(next, "UserPromptSubmit", kept);
+}
+
 export type InstallClaudeCodeHookInput = { settingsPath: string; command?: string };
 export type ClaudeCodeHookResult = { settingsPath: string; changed: boolean };
 
@@ -144,11 +171,16 @@ function writeSettings(settingsPath: string, settings: SettingsObject): void {
 export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): ClaudeCodeHookResult {
   const command = input.command ?? DEFAULT_HOOK_COMMAND;
   const existing = readSettings(input.settingsPath);
-  if (hasPreToolUseHook(existing, command) && hasPostToolUseHook(existing, SAVER_HOOK_COMMAND)) {
+  if (
+    hasPreToolUseHook(existing, command) &&
+    hasPostToolUseHook(existing, SAVER_HOOK_COMMAND) &&
+    hasUserPromptSubmitHook(existing, INTENT_HOOK_COMMAND)
+  ) {
     return { settingsPath: input.settingsPath, changed: false };
   }
   let next = addPreToolUseHook(existing, command);
   next = addPostToolUseHook(next, SAVER_HOOK_COMMAND);
+  next = addUserPromptSubmitHook(next, INTENT_HOOK_COMMAND);
   writeSettings(input.settingsPath, next);
   return { settingsPath: input.settingsPath, changed: true };
 }
@@ -159,11 +191,16 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
     return { settingsPath: input.settingsPath, changed: false };
   }
   const existing = readSettings(input.settingsPath);
-  if (!hasPreToolUseHook(existing, command) && !hasPostToolUseHook(existing, SAVER_HOOK_COMMAND)) {
+  if (
+    !hasPreToolUseHook(existing, command) &&
+    !hasPostToolUseHook(existing, SAVER_HOOK_COMMAND) &&
+    !hasUserPromptSubmitHook(existing, INTENT_HOOK_COMMAND)
+  ) {
     return { settingsPath: input.settingsPath, changed: false };
   }
   let next = removePreToolUseHook(existing, command);
   next = removePostToolUseHook(next, SAVER_HOOK_COMMAND);
+  next = removeUserPromptSubmitHook(next, INTENT_HOOK_COMMAND);
   writeSettings(input.settingsPath, next);
   return { settingsPath: input.settingsPath, changed: true };
 }
@@ -172,6 +209,7 @@ export type ClaudeCodeHookStatus = {
   connected: boolean;
   preInstalled: boolean;
   postInstalled: boolean;
+  intentInstalled: boolean;
 };
 
 export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): ClaudeCodeHookStatus {
@@ -180,11 +218,17 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
   try {
     settings = readSettings(input.settingsPath);
   } catch {
-    return { connected: false, preInstalled: false, postInstalled: false };
+    return { connected: false, preInstalled: false, postInstalled: false, intentInstalled: false };
   }
   const preInstalled = hasPreToolUseHook(settings, command);
   const postInstalled = hasPostToolUseHook(settings, SAVER_HOOK_COMMAND);
-  return { connected: preInstalled && postInstalled, preInstalled, postInstalled };
+  const intentInstalled = hasUserPromptSubmitHook(settings, INTENT_HOOK_COMMAND);
+  return {
+    connected: preInstalled && postInstalled && intentInstalled,
+    preInstalled,
+    postInstalled,
+    intentInstalled,
+  };
 }
 
 // Mirrors apps/cli/src/store.ts resolveHomeDir exactly: Windows has no HOME →
