@@ -76,3 +76,9 @@ GEMINI.md
 
 # Personal local dev helpers (machine-specific launchers, scratch)
 scripts/launch-megasaver.sh
+
+# Local WIP — not part of the published repo
+.github/workflows/changeset-check.yml
+.github/workflows/coverage.yml
+packages/agent-office/test/supervisor-permission-edge.test.ts
+packages/context-pruner/test/score-edge.test.ts
