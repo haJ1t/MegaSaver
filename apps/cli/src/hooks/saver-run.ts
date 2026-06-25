@@ -57,10 +57,8 @@ export function makeRecord(storeRoot: string): SaverDeps["record"] {
             newId: _nid,
             ...daemonBody
           } = input;
-          const res = await handle.request("POST", "/excerpt", {
-            ...daemonBody,
-            evidenceStoreRoot: storeRoot,
-          });
+          // ponytail: daemon excerptHandler supplies storeRoot itself; do NOT add evidenceStoreRoot
+          const res = await handle.request("POST", "/excerpt", daemonBody, controller.signal);
           clearTimeout(timer);
           if (res.ok) {
             return (await res.json()) as RecordOverlayOutputResult;

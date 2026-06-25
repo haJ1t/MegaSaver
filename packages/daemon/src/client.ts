@@ -5,7 +5,12 @@ import { spawnDaemon } from "./spawn.js";
 export type DaemonHandle = {
   url: string;
   token: string;
-  request: (method: string, path: string, body?: unknown) => Promise<Response>;
+  request: (
+    method: string,
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ) => Promise<Response>;
 };
 
 export type GetDaemonOptions = {
@@ -22,7 +27,10 @@ function urlFor(port: number): string {
 
 async function ping(url: string, token: string): Promise<boolean> {
   try {
-    const res = await fetch(`${url}/status`, { headers: { authorization: `Bearer ${token}` } });
+    const res = await fetch(`${url}/status`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(1500),
+    });
     return res.ok;
   } catch {
     return false;
@@ -33,7 +41,7 @@ function makeHandle(url: string, token: string): DaemonHandle {
   return {
     url,
     token,
-    request: (method, path, body) =>
+    request: (method, path, body, signal) =>
       fetch(`${url}${path}`, {
         method,
         headers: {
@@ -41,6 +49,7 @@ function makeHandle(url: string, token: string): DaemonHandle {
           ...(body === undefined ? {} : { "content-type": "application/json" }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(signal !== undefined ? { signal } : {}),
       }),
   };
 }
