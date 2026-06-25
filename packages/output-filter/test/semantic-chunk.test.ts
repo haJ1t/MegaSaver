@@ -23,7 +23,7 @@ function assertExhaustivePartition(text: string, chunks: Chunk[]): void {
 }
 
 describe("chunkBySemantic (T2)", () => {
-  it("aligns chunks to function boundaries for a .ts file", () => {
+  it("aligns chunks to function boundaries for a .ts file", async () => {
     const text = [
       "import { x } from './x.js';",
       "",
@@ -36,7 +36,7 @@ describe("chunkBySemantic (T2)", () => {
       "}",
       "",
     ].join("\n");
-    const chunks = chunkBySemantic(text, "mod.ts");
+    const chunks = await chunkBySemantic(text, "mod.ts");
     expect(chunks).not.toBeNull();
     const c = chunks ?? [];
     // a chunk covers the alpha body and a chunk covers the beta body
@@ -45,7 +45,7 @@ describe("chunkBySemantic (T2)", () => {
     assertExhaustivePartition(text, c);
   });
 
-  it("gap-fills uncovered ranges (imports + trailing) so the whole file is partitioned", () => {
+  it("gap-fills uncovered ranges (imports + trailing) so the whole file is partitioned", async () => {
     const text = [
       "import a from 'a';", // line 1 — not a declaration block
       "const Z = 1;", // line 2 — not function-like, not a block
@@ -54,15 +54,15 @@ describe("chunkBySemantic (T2)", () => {
       "}", // 5
       "const trailing = 9;", // 6 — trailing gap
     ].join("\n");
-    const chunks = chunkBySemantic(text, "g.ts");
+    const chunks = await chunkBySemantic(text, "g.ts");
     expect(chunks).not.toBeNull();
     assertExhaustivePartition(text, chunks ?? []);
   });
 
-  it("sub-splits an oversized block into line-chunks with remapped line numbers", () => {
+  it("sub-splits an oversized block into line-chunks with remapped line numbers", async () => {
     const bodyLines = Array.from({ length: 200 }, (_, i) => `  const v${i} = ${i};`);
     const text = ["export function big() {", ...bodyLines, "}"].join("\n");
-    const chunks = chunkBySemantic(text, "big.ts");
+    const chunks = await chunkBySemantic(text, "big.ts");
     expect(chunks).not.toBeNull();
     const c = chunks ?? [];
     // the single 202-line function must NOT be one chunk — it exceeds the cap
@@ -71,24 +71,24 @@ describe("chunkBySemantic (T2)", () => {
     assertExhaustivePartition(text, c);
   });
 
-  it("returns null for an unsupported extension (caller falls back)", () => {
-    expect(chunkBySemantic("some text\nmore", "data.csv")).toBeNull();
+  it("returns null for an unsupported extension (caller falls back)", async () => {
+    expect(await chunkBySemantic("some text\nmore", "data.csv")).toBeNull();
   });
 
-  it("returns null when the extractor finds zero blocks (heading-less md)", () => {
+  it("returns null when the extractor finds zero blocks (heading-less md)", async () => {
     expect(
-      chunkBySemantic("plain prose with no heading\nand a second line", "notes.md"),
+      await chunkBySemantic("plain prose with no heading\nand a second line", "notes.md"),
     ).toBeNull();
   });
 
-  it("returns null (never throws) when parsing throws", () => {
+  it("returns null (never throws) when parsing throws", async () => {
     // empty .ts yields zero TS declarations -> null; proves no throw path
-    expect(chunkBySemantic("", "empty.ts")).toBeNull();
+    expect(await chunkBySemantic("", "empty.ts")).toBeNull();
   });
 
-  it("chunks a .json file by top-level keys, exhaustively partitioned", () => {
+  it("chunks a .json file by top-level keys, exhaustively partitioned", async () => {
     const text = '{\n  "name": "x",\n  "version": "1.0.0",\n  "private": true\n}';
-    const chunks = chunkBySemantic(text, "package.json");
+    const chunks = await chunkBySemantic(text, "package.json");
     expect(chunks).not.toBeNull();
     assertExhaustivePartition(text, chunks ?? []);
   });

@@ -1,4 +1,3 @@
-import { extractJson, extractMd, extractTs } from "@megasaver/indexer";
 import { chunkByLines } from "../chunk.js";
 import type { Chunk } from "../rank.js";
 
@@ -10,12 +9,26 @@ type Extractor = (
   endLine: number;
 }>;
 
+// @megasaver/indexer statically imports the multi-MB `typescript` compiler.
+// Loading it lazily keeps it out of output-filter's eager import graph so a
+// plain `import("@megasaver/output-filter")` (and thus every per-tool-call
+// hook / daemon / CLI start) never pays the compiler load — only an actual
+// semantic chunk of a supported source file does.
+let indexerMod: typeof import("@megasaver/indexer") | undefined;
+async function loadExtractors(): Promise<typeof import("@megasaver/indexer")> {
+  if (indexerMod === undefined) indexerMod = await import("@megasaver/indexer");
+  return indexerMod;
+}
+
 const TS_EXT = /\.(mts|cts|tsx|jsx|ts|js|mjs|cjs)$/;
 
-function extractorFor(path: string): Extractor | undefined {
-  if (TS_EXT.test(path)) return extractTs;
-  if (path.endsWith(".md")) return extractMd;
-  if (path.endsWith(".json")) return extractJson;
+function extractorFor(
+  path: string,
+  extractors: typeof import("@megasaver/indexer"),
+): Extractor | undefined {
+  if (TS_EXT.test(path)) return extractors.extractTs;
+  if (path.endsWith(".md")) return extractors.extractMd;
+  if (path.endsWith(".json")) return extractors.extractJson;
   return undefined;
 }
 
@@ -79,11 +92,18 @@ export function partitionFile(
   return chunks;
 }
 
+function isSupportedSource(path: string): boolean {
+  return TS_EXT.test(path) || path.endsWith(".md") || path.endsWith(".json");
+}
+
 // Returns null (never throws) to signal "use line chunking": unsupported
 // extension, parse failure, or zero extracted blocks all collapse to one
-// fallback path for the gate and the caller.
-export function chunkBySemantic(text: string, path: string): Chunk[] | null {
-  const extractor = extractorFor(path);
+// fallback path for the gate and the caller. Async only because the indexer
+// (and its `typescript` dep) is loaded lazily — the extension precheck avoids
+// that load entirely for unsupported sources.
+export async function chunkBySemantic(text: string, path: string): Promise<Chunk[] | null> {
+  if (!isSupportedSource(path)) return null;
+  const extractor = extractorFor(path, await loadExtractors());
   if (extractor === undefined) return null;
   let blocks: ReadonlyArray<{ startLine: number; endLine: number }>;
   try {

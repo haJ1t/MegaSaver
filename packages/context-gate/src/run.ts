@@ -104,7 +104,7 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     return { ok: true, result: unchangedResult(prior.chunkSetId, read.raw) };
   }
 
-  const filteredResult = filterRaw({
+  const filteredResult = await filterRaw({
     raw: read.raw,
     path: input.path,
     intent: input.intent,
@@ -217,7 +217,7 @@ export async function runOverlayOutputPipeline(
     return { ok: true, result: unchangedResult(prior.chunkSetId, read.raw) };
   }
 
-  const filteredResult = filterRaw({
+  const filteredResult = await filterRaw({
     raw: read.raw,
     path: input.path,
     intent: input.intent,

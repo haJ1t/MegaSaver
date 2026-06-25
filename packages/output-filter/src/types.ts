@@ -127,7 +127,7 @@ function excerptOf(chunk: RankedChunk): OutputExcerpt {
   return chunk.engine !== undefined ? { ...base, engine: chunk.engine } : base;
 }
 
-export function filterOutput(input: FilterOutputInput): FilterOutputResult {
+export async function filterOutput(input: FilterOutputInput): Promise<FilterOutputResult> {
   const parsed = filterOutputInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new OutputFilterError("validation_failed", parsed.error.message);
@@ -171,7 +171,7 @@ export function filterOutput(input: FilterOutputInput): FilterOutputResult {
     textForChunks = compressed.text;
   }
 
-  const { chunks, semantic: usedSemantic } = chunkByFormatWithMeta(textForChunks, source);
+  const { chunks, semantic: usedSemantic } = await chunkByFormatWithMeta(textForChunks, source);
   const scored = chunks.map((c) => scoreChunk(intent, c, sessionHints));
   // §8: engine-aware re-ranking is behind a flag and reuses the base
   // relevance — no second scorer. Off by default.

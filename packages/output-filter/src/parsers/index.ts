@@ -15,12 +15,12 @@ const DEFAULT_LINES_PER_CHUNK = 40;
 // in types.ts; only kind and (for files) path matter to chunk production.
 export type FilterSource = { kind: string; path?: string };
 
-export function chunkByFormatWithMeta(
+export async function chunkByFormatWithMeta(
   text: string,
   source?: FilterSource,
-): { chunks: Chunk[]; semantic: boolean } {
+): Promise<{ chunks: Chunk[]; semantic: boolean }> {
   if (source?.kind === "file" && source.path !== undefined) {
-    const semantic = chunkBySemantic(text, source.path);
+    const semantic = await chunkBySemantic(text, source.path);
     if (semantic !== null) return { chunks: semantic, semantic: true };
   }
   if (detectPytest(text)) return { chunks: parsePytest(text), semantic: false };
@@ -33,6 +33,6 @@ export function chunkByFormatWithMeta(
   return { chunks: chunkByLines(text, DEFAULT_LINES_PER_CHUNK), semantic: false };
 }
 
-export function chunkByFormat(text: string, source?: FilterSource): Chunk[] {
-  return chunkByFormatWithMeta(text, source).chunks;
+export async function chunkByFormat(text: string, source?: FilterSource): Promise<Chunk[]> {
+  return (await chunkByFormatWithMeta(text, source)).chunks;
 }

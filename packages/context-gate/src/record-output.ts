@@ -92,7 +92,7 @@ export async function recordAndFilterOverlayOutput(
   const now = input.now ?? (() => new Date().toISOString());
   const newId = input.newId ?? (() => randomUUID());
 
-  const filtered = filterOutput({
+  const filtered = await filterOutput({
     raw: input.raw,
     mode: input.mode,
     maxReturnedBytes: modeToBudget(input.mode),

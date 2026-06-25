@@ -5,8 +5,8 @@ import { type Chunk, scoreChunk } from "../src/rank.js";
 
 const chunk = (text: string): Chunk => ({ text, startLine: 1, endLine: 1 });
 
-const rankChunks = (text: string) =>
-  chunkByFormat(text)
+const rankChunks = async (text: string) =>
+  (await chunkByFormat(text))
     .map((c) => scoreChunk(undefined, c))
     .sort((a, b) => b.score - a.score);
 
@@ -155,8 +155,8 @@ describe("scoreChunk failure-marker breadth (ranker regression)", () => {
 // broadened error signal and outranks passing-run noise. Asserts ordering, not
 // just presence — this is the originally reported Phase-3a parser regression.
 describe("ranking integration: failures outrank passing-run noise", () => {
-  it("pytest: the ZeroDivisionError traceback block now carries an error signal", () => {
-    const ranked = rankChunks(PYTEST_FIXTURE);
+  it("pytest: the ZeroDivisionError traceback block now carries an error signal", async () => {
+    const ranked = await rankChunks(PYTEST_FIXTURE);
     const failure = ranked.find(
       (r) => r.text.includes("def test_division") && r.text.includes("ZeroDivisionError"),
     );
@@ -168,8 +168,8 @@ describe("ranking integration: failures outrank passing-run noise", () => {
     expect(failure?.score).toBeGreaterThan(banner?.score ?? 0);
   });
 
-  it("cargo: the panicked + ParseError block outranks the passing run header", () => {
-    const ranked = rankChunks(CARGO_FIXTURE);
+  it("cargo: the panicked + ParseError block outranks the passing run header", async () => {
+    const ranked = await rankChunks(CARGO_FIXTURE);
     const panicBlock = ranked.find(
       (r) => r.text.includes("panicked at") && r.text.includes("ParseError"),
     );
@@ -182,8 +182,8 @@ describe("ranking integration: failures outrank passing-run noise", () => {
     expect((panicBlock?.score ?? 0) > (runHeader?.score ?? 0)).toBe(true);
   });
 
-  it("go: the --- FAIL: block ranks above noise and passing tests are collapsed out", () => {
-    const ranked = rankChunks(GO_FIXTURE);
+  it("go: the --- FAIL: block ranks above noise and passing tests are collapsed out", async () => {
+    const ranked = await rankChunks(GO_FIXTURE);
     const failure = ranked.find((r) => r.text.includes("--- FAIL: TestDivide"));
     expect(failure).toBeDefined();
     expect(failure?.score).toBeGreaterThanOrEqual(5);
@@ -191,8 +191,8 @@ describe("ranking integration: failures outrank passing-run noise", () => {
     expect(ranked.some((r) => r.text.includes("TestAdd"))).toBe(false);
   });
 
-  it("eslint: the error file group outranks the problems summary", () => {
-    const ranked = rankChunks(ESLINT_FIXTURE);
+  it("eslint: the error file group outranks the problems summary", async () => {
+    const ranked = await rankChunks(ESLINT_FIXTURE);
     const group = ranked.find((r) => r.text.includes("/app/src/foo.ts"));
     const summary = ranked.find((r) => /✖ \d+ problem/.test(r.text));
     expect(group).toBeDefined();
