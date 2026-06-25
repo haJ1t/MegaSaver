@@ -40,6 +40,20 @@ describe("ProxyActivation", () => {
     await waitFor(() => expect(screen.getByText(/live ·/)).toBeDefined());
   });
 
+  it("warns that already-open sessions bypass the proxy while running", async () => {
+    stub.fetchProxyStatus = () =>
+      Promise.resolve({ running: true, url: "http://127.0.0.1:8787", port: 8787 });
+    render(<ProxyActivation />);
+    await waitFor(() => expect(screen.getByRole("status")).toBeDefined());
+    expect(screen.getByRole("status").textContent).toMatch(/restart/i);
+  });
+
+  it("hides the bypass warning while the proxy is off", async () => {
+    render(<ProxyActivation />);
+    await waitFor(() => expect(screen.getByText(/Proxy off/)).toBeDefined());
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("shows the error code/reason when the proxy failed to start", async () => {
     stub.fetchProxyStatus = () =>
       Promise.resolve({

@@ -378,6 +378,10 @@ export function setProxy(enabled: boolean): Promise<ProxyStatus> {
   return mutateJson<ProxyStatus>("/api/proxy", "POST", { enabled });
 }
 
+export function restartClaudeThroughProxy(): Promise<{ restarting: boolean }> {
+  return mutateJson<{ restarting: boolean }>("/api/proxy/restart-claude", "POST", {});
+}
+
 export type ClaudeHookStatus = {
   connected: boolean;
   preInstalled: boolean;
