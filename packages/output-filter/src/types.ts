@@ -87,6 +87,7 @@ export type FilterOutputResult = {
   trace?: RankingTrace;
   chunkSetId?: string;
   warnings?: readonly string[];
+  unchanged?: { priorChunkSetId: string };
 };
 
 // Generic line grouping for the no-blind fallback; matches the default
