@@ -10,9 +10,10 @@ sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
   - docs/superpowers/specs/2026-06-12-phase9-connectors-design.md
   - docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design.md
+  - docs/superpowers/specs/2026-06-25-intent-aware-hook-design.md
 status: published
 created: 2026-05-05
-updated: 2026-06-14
+updated: 2026-06-26
 ---
 
 # `@megasaver/cli`
@@ -242,7 +243,7 @@ flag shape; failure = text stderr, exit 1, no stdout).
 Errors surface as `error: <SkillPackErrorCode>: <detail>` via
 `skillPackErrorMessage` (closed 7-member enum, [[entities/skill-packs]]).
 
-### `mega hooks {install,uninstall,status}` (Proxy Mode v1.2, P5; uninstall PR #141)
+### `mega hooks {install,uninstall,status,intent}` (Proxy Mode v1.2, P5; uninstall PR #141; intent PR #180)
 
 Hook telemetry surface for measuring native-tool interception. Shipped
 P5 (commit `07040de`). See [[concepts/proxy-mode]].
@@ -261,6 +262,19 @@ P5 (commit `07040de`). See [[concepts/proxy-mode]].
   `hooks/install.ts` + `settings-path.ts` re-point to that package. Settings
   writes are atomic (temp + rename). See [[entities/connectors-claude-code]],
   [[entities/gui]].
+- `hooks intent` (Phase 6b, PR #180) — the UserPromptSubmit target. Reads
+  the prompt payload on stdin and records the user's latest prompt as the
+  session ranking intent (`stats/<wk>/session-intent.json`, atomic
+  latest-wins, SECRET-REDACTED via `@megasaver/policy`); `workspaceKey`
+  derived with the shared `encodeWorkspaceKey(cwd)` so it matches the saver
+  hook's key. ALWAYS exits 0 / writes nothing on error so the prompt is never
+  blocked. `captureIntent`/`runIntentHookFromProcess` + the `readSessionIntent`
+  reader live in `apps/cli/src/hooks/intent-run.ts` (cmd:
+  `apps/cli/src/commands/hooks/intent.ts`). `hooks install` now wires this
+  UserPromptSubmit hook too; the saver hook (`buildSaverDecision`) FILL-GAP
+  injects this intent into ranking (used only when no explicit intent is
+  present). See [[entities/connectors-claude-code]], [[entities/context-gate]],
+  [[concepts/intent-aware-hook]].
 - `hooks status` — reports whether the hook is installed.
 - `hooks log` — the PreToolUse target: a metadata-only, best-effort
   logger that always exits 0 (never blocks the agent's tool call).

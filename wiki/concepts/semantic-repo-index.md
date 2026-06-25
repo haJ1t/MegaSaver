@@ -5,9 +5,10 @@ sources:
   - sources/roadmap-phases-v2.md
   - syntheses/contextops-roadmap.md
   - entities/retrieval.md
+  - docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md
 status: active
 created: 2026-06-11
-updated: 2026-06-11
+updated: 2026-06-26
 ---
 
 # Semantic Repo Index
@@ -46,6 +47,17 @@ exposed as `mega scan` and `mega index build/status/search/show`. See
 `@megasaver/content-store` (ChunkSet) stays the separate output-pipeline
 store. Spec:
 `docs/superpowers/specs/2026-06-11-phase2-semantic-repo-index-design.md`.
+
+## Reuse on the read path
+
+The same extractors (`extractTs` / `extractMd` / `extractJson`) that build
+this offline index now also drive on-read [[semantic-ast-read]] (PR #182):
+[[output-filter]] produces AST-aligned chunks for large source files by
+calling them via a lazy cached dynamic `import("@megasaver/indexer")` — keeping
+the multi-MB `typescript` compiler off the hot import path
+(code: packages/output-filter/src/parsers/semantic.ts). One extraction surface,
+two consumers: offline `mega index` and per-read filtering
+(spec: docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md).
 
 ## Why it matters
 

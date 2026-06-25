@@ -4,9 +4,10 @@ tags: [entity, package, indexing, phase-2]
 sources:
   - concepts/semantic-repo-index.md
   - docs/superpowers/specs/2026-06-11-phase2-semantic-repo-index-design.md
+  - docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md
 status: active
 created: 2026-06-11
-updated: 2026-06-11
+updated: 2026-06-26
 ---
 
 # @megasaver/indexer
@@ -52,6 +53,22 @@ incremental index. Leaf package — depends only on `@megasaver/shared`,
 indexer over the core registry (project name → rootPath + id).
 `typescript` is a CLI runtime dependency (externalized from the bundle —
 it references `__filename` at load and cannot be inlined into ESM).
+
+## Read-time consumer (semantic AST read, #182)
+
+The extractors (`extractTs`/`extractMd`/`extractJson`) are now ALSO
+consumed at read-time by [[output-filter]] for [[semantic-ast-read]] —
+`chunkBySemantic` aligns ranking chunks to declarations instead of naive
+line slices (PR #182). Previously the extractors only powered the offline
+[[concepts/semantic-repo-index]].
+
+Dependency direction is `@megasaver/output-filter` → `@megasaver/indexer`
+(cycle-safe; indexer never imports output-filter). output-filter loads
+the indexer via a LAZY cached dynamic `import("@megasaver/indexer")` so
+the multi-MB `typescript` compiler stays OFF the eager output-filter
+import path — the hook/daemon/CLI hot path pays the compiler load only on
+an actual semantic chunk of a supported source
+(code: packages/output-filter/src/parsers/semantic.ts:12-21).
 
 ## Reconciliation
 

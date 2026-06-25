@@ -3,10 +3,12 @@ title: '@megasaver/connector-claude-code'
 tags: [entity, connector, claude-code, v0.1]
 sources:
   - docs/superpowers/specs/2026-05-06-claude-code-connector-design.md
+  - docs/superpowers/specs/2026-06-25-intent-aware-hook-design.md
+  - https://github.com/haJ1t/MegaSaver/pull/180
   - https://code.claude.com/docs/en/memory
 status: merged
 created: 2026-05-06
-updated: 2026-06-15
+updated: 2026-06-26
 ---
 
 # `@megasaver/connector-claude-code`
@@ -172,6 +174,25 @@ co-located user hooks → fixed to command-level strip + regression test.
 Operational gotcha: Claude Code loads hooks at **session start**, so a hook
 connected mid-session only takes effect after `/hooks` review or a new
 session; and the installed command (`mega hooks saver`) must resolve on PATH.
+
+## Intent hook (PR #180, 2026-06-25)
+
+`hook-settings.ts` now manages a **third** hook: a `UserPromptSubmit`
+entry running `mega hooks intent`
+(code: packages/connectors/claude-code/src/hook-settings.ts:9
+`INTENT_HOOK_COMMAND = "mega hooks intent"`). It has **no tool matcher** —
+Claude Code ignores `matcher` for this event type
+(code: hook-settings.ts:137). It captures the user's latest prompt for the
+intent-aware saver ranking (see [[intent-aware-hook]]).
+
+Added helpers: `has/add/removeUserPromptSubmitHook`
+(code: hook-settings.ts:125,131,143). `installClaudeCodeHook` /
+`uninstallClaudeCodeHook` now also seed/strip the intent entry idempotently
+(code: hook-settings.ts:188,208). `ClaudeCodeHookStatus` gained
+`intentInstalled`, and `connected = preInstalled && postInstalled &&
+intentInstalled` (code: hook-settings.ts:217,232) — so a connector counts as
+connected only when all three hooks are present. Consumed by
+`mega connector claude-code install|uninstall|status` ([[cli]]) (PR #180).
 
 ## Related
 

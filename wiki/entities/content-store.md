@@ -3,9 +3,10 @@ title: '@megasaver/content-store'
 tags: [entity, package, content-store, persistence, v0.5, aa1]
 sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
+  - docs/superpowers/specs/2026-06-25-diff-on-reread-design.md
 status: active
 created: 2026-05-11
-updated: 2026-05-11
+updated: 2026-06-26
 ---
 
 # `@megasaver/content-store`
@@ -54,6 +55,18 @@ duplication is the accepted cost. See
 [[decisions/content-store-no-core-edge]]. Dependencies:
 `@megasaver/shared` + `@megasaver/output-filter` only; a
 `dependency-graph.test.ts` fails on any core import.
+
+## Read-index sibling (diff-on-reread, PR #181)
+
+`atomicWriteFile` is now part of the public surface (`src/index.ts`,
+PR #181) so [[context-gate]]'s read-index module can reuse it for atomic
+index writes. `READ_INDEX_FILENAME = "read-index.json"` is exported
+(code: packages/content-store/src/store.ts:20) — a reserved per-session
+sibling of the chunk-set files. `listChunkSets` and `pruneOlderThan`
+skip it by name so it is never mistaken for a chunk-set
+(code: packages/content-store/src/store.ts:119,244). content-store owns
+the constant + atomic primitive only; the index's contents/lookup live
+in context-gate. See [[diff-on-reread]].
 
 ## Retention
 

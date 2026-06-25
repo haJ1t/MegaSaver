@@ -5,9 +5,12 @@ sources:
   - sources/roadmap-phases-v2.md
   - syntheses/contextops-roadmap.md
   - concepts/context-gate-pipeline.md
+  - docs/superpowers/specs/2026-06-25-intent-aware-hook-design.md
+  - docs/superpowers/specs/2026-06-25-diff-on-reread-design.md
+  - docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md
 status: active
 created: 2026-06-11
-updated: 2026-06-11
+updated: 2026-06-26
 ---
 
 # Context Pruning Engine (LAMR)
@@ -53,7 +56,20 @@ fit→summarize in `@megasaver/output-filter` (9 rank features) +
 `@megasaver/context-gate`. But it is **output-centric** — it
 compresses one tool's stdout, scoring for errors/test-failures/noise.
 LAMR is **task-and-repo-centric** — it scores [[concepts/semantic-repo-index]]
-blocks against a task description. Status: **shipped** (Phase 3, PR
+blocks against a task description.
+
+The output-side cousin gained three ranking-input upgrades (scoreChunk
+weights themselves unchanged): hook-captured output now ranks against the
+session prompt as a **fill-gap** intent (used only when no explicit intent
+is present; [[intent-aware-hook]], PR #180); re-reading an unchanged file in
+a session is fully suppressed via an `unchanged` marker rather than
+re-ranked ([[diff-on-reread]], PR #181); and source-file chunks fed to
+`scoreChunk` are **AST-aligned** (functions/classes/headings/JSON keys) not
+naive line slices, so coherent declarations get scored (code:
+packages/output-filter/src/parsers/semantic.ts, [[semantic-ast-read]], PR
+#182).
+
+Status: **shipped** (Phase 3, PR
 pending) — `@megasaver/context-pruner` implements the 8-factor model,
 selection with dependency closure + token budget (named/failing blocks
 never silently dropped), per-block reasons, and a savings audit, exposed

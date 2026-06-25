@@ -3,9 +3,11 @@ title: Context Gate pipeline & redaction flow
 tags: [concept, context-gate, redaction, token-saver, aa1]
 sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
+  - docs/superpowers/specs/2026-06-25-diff-on-reread-design.md
+  - docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md
 status: active
 created: 2026-05-11
-updated: 2026-06-10
+updated: 2026-06-26
 ---
 
 # Context Gate pipeline & redaction flow
@@ -26,11 +28,23 @@ For a read / command / grep / fetch, the flow is:
 1. **Read gates** (file/exec only) — `policy.evaluatePathRead`
    (secret-path denylist) THEN `outputFilter.resolveSafeReadPath`
    (structural sandbox). Both must pass before any `fs.readFile`.
+1b. **unchanged short-circuit** (read path only) — read raw → sha256 →
+   look up the per-session read-index (key = sha256(absPath)); on a
+   content-hash hit, return a tiny `unchanged-marker` result
+   (`decision: "unchanged-marker"`, empty excerpts, `unchanged:
+   { priorChunkSetId }`) and SKIP filter+persist. Lossless: the prior
+   chunk-set stays expandable ([[diff-on-reread]], PR #181;
+   code: packages/context-gate/src/run.ts, read-index.ts).
 2. **redact** — `policy.redact(raw)`. Runs FIRST inside `filterOutput`
    so secrets never reach a persistence call (§11b critical ordering).
 3. **normalize → collapse → chunk → rank → dedupe → fit → summarize →
-   compose** — `outputFilter.filterOutput` (pure, no IO). Produces
-   `{ summary, excerpts, rawBytes, returnedBytes, bytesSaved, savingRatio }`.
+   compose** — `outputFilter.filterOutput` (now ASYNC; pure, no IO).
+   Produces `{ summary, excerpts, rawBytes, returnedBytes, bytesSaved,
+   savingRatio }`. The chunk step is AST-aligned for supported source
+   files (functions/classes/headings/JSON keys via the indexer's TS
+   compiler API), falling back to line-slices otherwise — so ranking
+   scores coherent declarations ([[semantic-ast-read]], PR #182;
+   code: packages/output-filter/src/parsers/semantic.ts).
 4. **persist** — `contentStore.saveChunkSet` writes the raw chunk set
    to `<store>/content/<projectId>/<sessionId>/<chunkSetId>.json`.
 5. **stats** — `stats.appendEvent` + session summary at

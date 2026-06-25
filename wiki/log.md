@@ -3004,3 +3004,29 @@ proxy (127.0.0.1) that forwards verbatim + meters real token usage per /v1/messa
 saving (compression = Phase 1). Relaxed mission §1 ("not a model proxy" → opt-in
 allowed) via conventions:sync. Risk CRITICAL; security+critic+code reviews applied
 (SSE-undercount + backpressure + loopback fixes). Branch feat/llm-proxy-phase0.
+
+## [2026-06-26] feature | 3 ContextOps features shipped (#2→#1→#3)
+
+Three features built (brainstorm→spec→plan→TDD→verify→adversarial review per
+feature; #1/#3 via dynamic multi-agent workflows) and merged to main in the
+recommended build order:
+- **intent-aware hook** (Phase 6b, PR #180) — UserPromptSubmit hook `mega hooks
+  intent` writes the redacted prompt to `session-intent.json`; saver hook
+  fill-gap-injects it as ranking intent. Risk MEDIUM. See [[concepts/intent-aware-hook]].
+- **diff-on-reread** (PR #181) — unchanged re-reads return a lossless
+  `unchanged-marker` (prior chunkSetId) via a per-session sha256 read-index,
+  skipping re-filter/re-persist. Risk HIGH. See [[concepts/diff-on-reread]].
+- **semantic AST read** (PR #182) — source files chunk on AST boundaries (reuses
+  [[entities/indexer]] extractors), line-chunk fallback otherwise. Risk HIGH. The
+  indexer is lazy dynamic-imported so the TS compiler stays off the hot path
+  (filterOutput is now async) — see [[decisions/lazy-load-heavy-deps]] and
+  [[concepts/semantic-ast-read]]. Two CI failures caught + fixed before merge
+  (ubuntu eager-load timeout; windows ESM-URL guard test).
+
+## [2026-06-26] update | wiki sync for the 3 features
+
+Updated 10 pages (entities output-filter/context-gate/cli/content-store/
+connectors-claude-code/indexer; concepts context-gate-pipeline/context-pruning-engine/
+semantic-repo-index; synthesis post-v1.1-roadmap), created 5 (concepts
+intent-aware-hook/diff-on-reread/semantic-ast-read; decision lazy-load-heavy-deps;
+source post-v1.1-features), and catalogued the new pages in index.md.

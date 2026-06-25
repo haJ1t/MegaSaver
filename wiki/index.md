@@ -13,6 +13,7 @@ updated: 2026-06-16
 - [[decisions/policy-is-bb3]] — `@megasaver/policy` ships at BB3 (v0.5), not the v0.9 roadmap.
 - [[decisions/content-store-no-core-edge]] — AA1 §3c: the 5 leaf packages must not import core.
 - [[decisions/context-gate-extraction]] — AA1 §2a folded-vs-extracted outcome (post-BB7b LOC audit).
+- [[decisions/lazy-load-heavy-deps]] — heavy deps (TS compiler via [[entities/indexer]]) must be lazy dynamic-imported, never statically imported, in core hot-path packages; PR #182 root-cause fix + no-eager-load guard test.
 
 ## Concepts (cross-cutting ideas)
 
@@ -33,6 +34,9 @@ updated: 2026-06-16
 - [[concepts/memory-approval]] — roadmap Phase 10: agent-suggests → human-approves memory gate; team = shared store + gate; cloud SaaS deferred.
 - [[concepts/proxy-mode]] — Proxy Mode v1.2 (7 phases shipped): public naming mode, output classifier, vitest/tsc compressors + passthrough, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics, replay trace.
 - [[concepts/context-ledger-architecture]] — proposed next architecture: split specs for ContextGate honest ~90% reduction + reliable save ledger.
+- [[concepts/intent-aware-hook]] — Phase 6b (PR #180): UserPromptSubmit hook captures the prompt → fill-gap ranking intent for PostToolUse-captured output.
+- [[concepts/diff-on-reread]] — PR #181: unchanged re-reads return a lossless `unchanged-marker` (prior chunkSetId) via a per-session sha256 read-index; skips re-filter/re-persist.
+- [[concepts/semantic-ast-read]] — PR #182: source-file reads chunk on AST boundaries (reuses [[entities/indexer]] extractors, lazy-loaded); line-chunk fallback for everything else.
 
 ## Entities
 
@@ -81,6 +85,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 - [[sources/spec-bootstrap]] — pointer to `docs/superpowers/specs/2026-05-03-mega-saver-bootstrap-design.md`.
 - [[sources/plan-bootstrap]] — pointer to `docs/superpowers/plans/2026-05-03-mega-saver-bootstrap-plan.md`.
 - [[sources/roadmap-phases-v2]] — summary of `~/Desktop/MegaSaver_Roadmap.txt` (Phase 0–10 strategic roadmap, 2026-06-11). Synthesized into [[syntheses/contextops-roadmap]].
+- [[sources/post-v1.1-features]] — pointers to the 3 shipped ContextOps feature specs+plans (intent-aware hook #180, diff-on-reread #181, semantic AST read #182).
 
 ## Raw
 

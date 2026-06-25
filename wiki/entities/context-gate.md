@@ -3,9 +3,12 @@ title: '@megasaver/context-gate'
 tags: [entity, package, context-gate, orchestrator, aa1, v1.1]
 sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
+  - docs/superpowers/specs/2026-06-25-intent-aware-hook-design.md
+  - docs/superpowers/specs/2026-06-25-diff-on-reread-design.md
+  - docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md
 status: active
 created: 2026-06-03
-updated: 2026-06-03
+updated: 2026-06-26
 ---
 
 # `@megasaver/context-gate`
@@ -43,6 +46,8 @@ any change.
   `appendOverlayEvent` keyed by `(workspaceKey, liveSessionId)`. Powers
   the `mega hooks saver` PostToolUse hook → populates the live GUI Token
   saver overlay stats. Generalizes the file-only `runOverlayOutputPipeline`.
+  Takes an optional `intent` threaded into `filterOutput` → `scoreChunk` as
+  the ranking intent (FILL-GAP; see [[intent-aware-hook]], PR #180).
   Fix (PR #140, 2026-06-15): the stored chunk-set's `source` now maps from
   `input.sourceKind` to the matching discriminated-union variant
   (`command`/`grep`/`fetch`/`file`) instead of always `{kind:"file"}` — a
@@ -76,6 +81,26 @@ PR #88 (`@megasaver/context-gate` extraction, BB12). 605 LOC moved.
 `OrchestratorRegistry` structural port breaks the core import cleanly.
 `@megasaver/core` re-exports: consumers import via core unchanged.
 context-gate@0.2.0.
+
+## Read pipeline (v1.1, June 2026)
+
+- **Split** `readAndFilter` → `readRaw` (fs read) + `filterRaw` (thin
+  `filterOutput` wrapper); `readAndFilter` kept as a wrapper (code:
+  src/read.ts, PR #181).
+- **Unchanged-suppression short-circuit** in BOTH `runOutputPipeline`
+  (registry: `projectId`/`sessionId`) and `runOverlayOutputPipeline`
+  (overlay: `workspaceKey`/`liveSessionId`): read raw → `hashContent` (sha256)
+  → look up the on-disk per-session read-index keyed by `hashPath` (sha256 of
+  absolute path — no raw paths on disk); hit + match returns a lossless
+  `unchangedResult` (`decision: "unchanged-marker"`, empty excerpts,
+  `unchanged.priorChunkSetId` still expandable), skipping filter/persist
+  (code: src/run.ts, src/read-index.ts). `recordRead` runs only AFTER persist
+  so `priorChunkSetId` always resolves. See [[diff-on-reread]] (PR #181);
+  read-index uses `READ_INDEX_FILENAME` + `atomicWriteFile` from
+  [[content-store]].
+- **Async propagation** (PR #182): `filterRaw`/`readAndFilter` now `await`
+  `filterOutput`, which became async when [[output-filter]] lazy-loads the
+  TS compiler for AST-aligned chunking.
 
 ## Related
 

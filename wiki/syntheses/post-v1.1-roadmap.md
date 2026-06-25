@@ -1,10 +1,10 @@
 ---
 title: Post-v1.1 Roadmap — Remaining Work
 tags: [roadmap, backlog, mvp]
-sources: [index.md, decisions/bootstrap-matrix.md, syntheses/mega-saver-product.md, sources/fikri-original.md, log.md]
+sources: [index.md, decisions/bootstrap-matrix.md, syntheses/mega-saver-product.md, sources/fikri-original.md, log.md, docs/superpowers/specs/2026-06-25-intent-aware-hook-design.md, docs/superpowers/specs/2026-06-25-diff-on-reread-design.md, docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md]
 status: active
 created: 2026-06-10
-updated: 2026-06-11
+updated: 2026-06-26
 ---
 
 # Post-v1.1 Roadmap — Remaining Work
@@ -43,6 +43,34 @@ consumer (#112) — all agent files regenerate from `docs/conventions/`.
 - ~~**test-typecheck no-op**~~ (follow-up) — PR #110. `tsconfig.test.json`
   silently excluded `test/` from typecheck; enabling it surfaced + fixed 113
   pre-existing type errors and a cross-package e2e import leak.
+
+## Shipped (ContextOps Context Gate arc, 2026-06-25/26)
+
+Build order **#2 → #1 → #3** (per spec frontmatter) was followed.
+
+- ~~**#2 intent-aware hook (Phase 6b)**~~ — PR #180, 2026-06-25. A
+  `UserPromptSubmit` hook (`mega hooks intent`) captures the latest prompt
+  to `session-intent.json` (atomic, SECRET-REDACTED); the saver hook reads
+  it via `readSessionIntent` and threads it as FILL-GAP ranking intent into
+  `scoreChunk` (used only when no explicit intent present). connector-claude-code
+  now installs/removes the hook (status gained `intentInstalled`).
+  (spec: docs/superpowers/specs/2026-06-25-intent-aware-hook-design.md)
+- ~~**#1 diff-on-reread + unchanged-suppression**~~ — PR #181, 2026-06-25.
+  Re-reading an UNCHANGED file returns a tiny `unchanged` marker
+  (`priorChunkSetId`, empty excerpts) instead of re-filtering/re-persisting —
+  LOSSLESS (prior chunk-set stays expandable). sha256 over raw vs an on-disk
+  per-session read-index keyed by `sha256(absolutePath)`. v1 suppress-only;
+  suppressed reads not yet metered in stats (deferred).
+  (spec: docs/superpowers/specs/2026-06-25-diff-on-reread-design.md)
+- ~~**#3 semantic AST read**~~ — PR #182, 2026-06-26. Large SOURCE files chunk
+  on AST boundaries (functions/classes/headings/JSON keys) via
+  `chunkBySemantic` reusing the indexer's TS-compiler extractors (no
+  tree-sitter); unsupported/parse-error/command/grep falls back to
+  `chunkByLines`. Perf fix: indexer is lazy-imported off the hot path, making
+  `chunkBySemantic`/`filterOutput`/`filterRaw` async; a guard test asserts no
+  eager `typescript` load. (spec: docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md)
+
+> Phase-level tracking of these lives at [[syntheses/contextops-roadmap]].
 
 ## Remaining, by priority
 

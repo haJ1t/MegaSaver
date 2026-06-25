@@ -4,9 +4,11 @@ tags: [entity, package, output-filter, redaction, v0.5, aa1]
 sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
   - docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design.md
+  - docs/superpowers/specs/2026-06-25-diff-on-reread-design.md
+  - docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md
 status: active
 created: 2026-05-11
-updated: 2026-06-14
+updated: 2026-06-26
 ---
 
 # `@megasaver/output-filter`
@@ -128,3 +130,45 @@ full arc.
   `writeReplayTrace` append JSONL best-effort, referencing the content-store
   `chunkSetId` and chunk references (scores + signals) — never raw text.
   Feeds the v1.4 ablation ladder.
+
+## v0.6 — diff-on-reread (2026-06-25, PR #181)
+
+Adds an `unchanged` short-circuit to the read path. `FilterOutputResult`
+gained `unchanged?: { priorChunkSetId: string }` and `FilterDecision`
+gained a fourth member `"unchanged-marker"` (code:
+packages/output-filter/src/tokens.ts, types.ts:90). When [[context-gate]]
+detects a re-read of an unchanged file it short-circuits BEFORE
+`filterOutput` and returns this marker with empty excerpts instead of
+re-filtering — LOSSLESS, the prior chunk-set stays expandable. output-filter
+only carries the marker type + decision; the suppression mechanism (raw →
+sha256 → on-disk read-index) lives in context-gate. See [[diff-on-reread]].
+
+## v0.7 — semantic AST read (2026-06-26, PR #182)
+
+For large **source** files, chunk production is AST-aligned instead of
+naive line slices, so ranking scores coherent declarations
+(functions/classes/headings/JSON keys). See [[semantic-ast-read]].
+
+- New `src/parsers/semantic.ts`: `chunkBySemantic(text, path)` +
+  `partitionFile` (code: packages/output-filter/src/parsers/semantic.ts).
+  Reuses [[indexer]]'s `extractTs` / `extractMd` / `extractJson` (TS
+  compiler API, already vendored — NO tree-sitter). Whole-file
+  gap-filling partition (no lines dropped from ranking); blocks over 80
+  lines sub-split via `chunkByLines`; NEVER throws — returns `null` to
+  signal line-chunk fallback.
+- Gating in `chunkByFormatWithMeta`: semantic is attempted only when
+  `source.kind === "file"` with a supported ext
+  (.ts/.mts/.cts/.tsx/.jsx/.js/.mjs/.cjs/.md/.json) and precedes the
+  test/diagnostic parsers; null (unsupported ext, parse error, zero
+  blocks) and all command/grep/fetch output fall through to
+  `chunkByLines` (code: packages/output-filter/src/parsers/index.ts).
+- **ASYNC**: `chunkBySemantic` / `chunkByFormatWithMeta` / `filterOutput`
+  / `filterRaw` are now `Promise`-returning (types.ts:130).
+- **Lazy compiler load**: [[indexer]] is imported via a cached dynamic
+  `import()` inside `chunkBySemantic`, so the multi-MB `typescript`
+  compiler is NOT eager-loaded on every `@megasaver/output-filter` import
+  (it sits on the hot path: hooks saver → core → context-gate →
+  output-filter). A guard test (`no-eager-typescript.test.ts`) asserts
+  zero `typescript` modules load on import.
+- New dep: `@megasaver/indexer` (cycle-safe), relaxing §3c's prior
+  shared+policy-only rule for this one edge.
