@@ -47,6 +47,14 @@ export async function handleRunCommand(
     );
   }
 
+  // ponytail: mirror evaluateCommand's recursive_megasaver guard BEFORE forwarding —
+  // the daemon runs under its own pid so its evaluateCommand would never fire.
+  if (env.originPid !== String(process.pid)) {
+    throw new McpBridgeError("command_denied", "command denied: recursive_megasaver", {
+      details: { reason: "recursive_megasaver" },
+    });
+  }
+
   return forwardOrFallback(
     env.storeRoot,
     "/exec-registry",

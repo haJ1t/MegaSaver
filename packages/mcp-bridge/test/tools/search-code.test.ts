@@ -249,9 +249,16 @@ describe("handleSearchCode", () => {
     mockGetRunningDaemon.mockResolvedValue(handle);
 
     // Registry has no session — in-process would throw session_not_found.
+    // originPid must be the root (String(process.pid)) so the recursion guard passes.
     const registry = createInMemoryCoreRegistry();
     const result = await handleSearchCode(
-      { registry, storeRoot: store, now: () => TS, newId: () => "x", originPid: "1" },
+      {
+        registry,
+        storeRoot: store,
+        now: () => TS,
+        newId: () => "x",
+        originPid: String(process.pid),
+      },
       { query: "needle", sessionId: SESSION_ID },
     );
 

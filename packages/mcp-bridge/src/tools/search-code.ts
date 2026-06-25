@@ -192,6 +192,14 @@ export async function handleSearchCode(
   const maxBytesRaw = max_tokens ?? MAX_BYTES_CEILING;
   const maxBytes = maxBytesRaw * MAX_CAPTURE_FACTOR;
 
+  // ponytail: mirror evaluateCommand's recursive_megasaver guard BEFORE forwarding —
+  // the daemon runs under its own pid so its evaluateCommand would never fire.
+  if (env.originPid !== String(process.pid)) {
+    throw new McpBridgeError("command_denied", "command denied: recursive_megasaver", {
+      details: { reason: "recursive_megasaver" },
+    });
+  }
+
   // shapeResult (BM25 re-rank) runs on the daemon ExecResult too — forwarding
   // does NOT change the index_enrichment contract.
   return forwardOrFallback(
