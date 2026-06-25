@@ -8,7 +8,10 @@ import { lockPath } from "./paths.js";
 // daemon means the client clears discovery + lock before spawning).
 export function acquireLock(storeRoot: string): (() => void) | null {
   const path = lockPath(storeRoot);
-  mkdirSync(dirname(path), { recursive: true });
+  // 0o700 to match writeDiscovery: the CLI acquires the lock before the server
+  // writes discovery, so whichever creates the daemon dir first must restrict it
+  // (a later mkdir is a no-op and can't tighten an existing 0o755 dir).
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   try {
     closeSync(openSync(path, "wx"));
   } catch {
