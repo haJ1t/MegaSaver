@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { hooksInstallCommand } from "./install.js";
 import { hooksLogCommand } from "./log.js";
+import { hooksIntentCommand } from "./intent.js";
 import { hooksSaverCommand } from "./saver.js";
 import { hooksStatusCommand } from "./status.js";
 import { hooksUninstallCommand } from "./uninstall.js";
@@ -15,6 +16,7 @@ export { type RunHooksStatusInput, runHooksStatus, hooksStatusCommand } from "./
 export { resolveClaudeCodeSettingsPath } from "./settings-path.js";
 export { hooksLogCommand } from "./log.js";
 export { hooksSaverCommand } from "./saver.js";
+export { hooksIntentCommand } from "./intent.js";
 
 export const hooksCommand = defineCommand({
   meta: {
@@ -27,5 +29,6 @@ export const hooksCommand = defineCommand({
     status: hooksStatusCommand,
     log: hooksLogCommand,
     saver: hooksSaverCommand,
+    intent: hooksIntentCommand,
   },
 });
