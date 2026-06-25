@@ -9,6 +9,7 @@ import {
   overlayTokenSaverEventSchema,
   tokenSaverEventSchema,
 } from "./event.js";
+import { assertSafeSegment } from "./safe-segment.js";
 import {
   type OverlaySessionTokenSaverStats,
   type SessionTokenSaverStats,
@@ -157,10 +158,16 @@ function overlaySummaryPath(
   workspaceKey: string,
   liveSessionId: string,
 ): string {
+  // Both keys are interpolated into the path — guard every caller (append, read,
+  // reset) here so a `..` / `/` segment can never escape the store root.
+  assertSafeSegment(workspaceKey);
+  assertSafeSegment(liveSessionId);
   return join(store.root, "stats", workspaceKey, `${liveSessionId}.json`);
 }
 
 function overlayEventsPath(store: StatsStore, workspaceKey: string, liveSessionId: string): string {
+  assertSafeSegment(workspaceKey);
+  assertSafeSegment(liveSessionId);
   return join(store.root, "stats", workspaceKey, `${liveSessionId}.events.jsonl`);
 }
 

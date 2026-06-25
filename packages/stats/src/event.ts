@@ -1,6 +1,11 @@
 import { outputSourceKindSchema } from "@megasaver/output-filter";
 import { projectIdSchema, sessionIdSchema, tokenSaverModeSchema } from "@megasaver/shared";
 import { z } from "zod";
+import { isSafeSegment } from "./safe-segment.js";
+
+// Overlay keys are interpolated into the on-disk path — reject containment-
+// breaking segments (`..`, `/`, …) at the schema boundary, before any write.
+const safeSegment = z.string().min(1).refine(isSafeSegment, "unsafe path segment");
 
 export const tokenSaverEventSchema = z
   .object({
@@ -28,8 +33,8 @@ export type TokenSaverEvent = z.infer<typeof tokenSaverEventSchema>;
 export const overlayTokenSaverEventSchema = z
   .object({
     id: z.string().min(1),
-    liveSessionId: z.string().min(1),
-    workspaceKey: z.string().min(1),
+    liveSessionId: safeSegment,
+    workspaceKey: safeSegment,
     createdAt: z.string().datetime({ offset: true }),
     sourceKind: outputSourceKindSchema,
     label: z.string(),
