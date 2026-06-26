@@ -49,32 +49,31 @@ afterEach(() => {
   stub.stats = () => Promise.reject(new Error("not set"));
 });
 
-describe("TokenSaverPanel — tokens-saved mini table", () => {
-  it("shows would-have-used / actually-used / saved in tokens", async () => {
+describe("TokenSaverPanel — tokens-saved hero metric", () => {
+  it("shows hero saved tokens and supporting metrics", async () => {
     stub.saver = () => Promise.resolve(SAVER);
     stub.stats = () => Promise.resolve(STATS);
     render(<TokenSaverPanel dir="d" id="i" />);
-    await waitFor(() => expect(screen.getByText("Would have used")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Tokens saved this session")).toBeDefined());
+    expect(screen.getByText("200")).toBeDefined();
+    expect(screen.getByText("80%")).toBeDefined();
+    expect(screen.getByText("Would have used")).toBeDefined();
     expect(screen.getByText("Actually used")).toBeDefined();
-    expect(screen.getByText("Saved")).toBeDefined();
-    expect(screen.getByText("250 tokens")).toBeDefined(); // would have used
-    expect(screen.getByText("50 tokens")).toBeDefined(); // actually used
-    expect(screen.getByText("200 tokens")).toBeDefined(); // saved
-    expect(screen.getByText("Saved %")).toBeDefined();
-    expect(screen.getByText("80%")).toBeDefined(); // 200 / 250
+    expect(screen.getByText("250 tokens")).toBeDefined();
+    expect(screen.getByText("50 tokens")).toBeDefined();
   });
 
-  it("drops the byte summary and the per-event compression detail", async () => {
+  it("hides byte summary and per-event compression detail", async () => {
     stub.saver = () => Promise.resolve(SAVER);
     stub.stats = () => Promise.resolve(STATS);
     render(<TokenSaverPanel dir="d" id="i" />);
-    await waitFor(() => expect(screen.getByText("Saved")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Tokens saved this session")).toBeDefined());
     expect(screen.queryByText("Bytes saved")).toBeNull();
     expect(screen.queryByText("Raw bytes")).toBeNull();
     expect(screen.queryByText(/Saving ratio/)).toBeNull();
     expect(screen.queryByText("Chunks stored")).toBeNull();
     expect(screen.queryByText("800 B")).toBeNull();
-    expect(screen.queryByText("source")).toBeNull(); // per-event table header gone
+    expect(screen.queryByText("source")).toBeNull();
     expect(screen.queryByText("when")).toBeNull();
   });
 
@@ -90,17 +89,17 @@ describe("TokenSaverPanel — tokens-saved mini table", () => {
     try {
       let n = 0;
       stub.saver = () => Promise.resolve(SAVER);
-      // first poll: returned 200 B -> saved 200 tok; second: returned 100 B -> saved 225 tok
+      // first poll: returned 200 B -> saved 200; second: returned 100 B -> saved 225
       stub.stats = () => Promise.resolve({ ...STATS, returnedBytesTotal: n++ === 0 ? 200 : 100 });
       render(<TokenSaverPanel dir="d" id="i" />);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      expect(screen.getByText("200 tokens")).toBeDefined();
+      expect(screen.getByText("200")).toBeDefined();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2000);
       });
-      expect(screen.getByText("225 tokens")).toBeDefined();
+      expect(screen.getByText("225")).toBeDefined();
     } finally {
       vi.useRealTimers();
     }

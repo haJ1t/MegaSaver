@@ -48,26 +48,23 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
   return (
     <section
       aria-label="Session token saver"
-      className="flex flex-col gap-4 px-6 py-6 overflow-y-auto flex-1 min-h-0"
+      className="flex flex-col gap-6 px-6 py-6 overflow-y-auto flex-1 min-h-0"
     >
-      <h2 className="text-sm text-text-muted uppercase tracking-widest">Token saver</h2>
-      <HookConnection />
-      <SaverModeActivation dir={dir} id={id} />
-      {/* Conversation proxy (llm-proxy) is hidden: it routes via ANTHROPIC_BASE_URL,
-          which Claude Desktop overrides, so it is dead in the cockpit's context.
-          The context daemon (below) is the active token-saver here. The proxy code
-          stays for CLI/Codex token metering — see ProxyActivation / @megasaver/llm-proxy. */}
-      <DaemonStatusPanel />
-      <h3 className="flex items-center gap-2 text-xs text-text-muted uppercase tracking-widest">
-        Tokens saved (this session)
-        <span className="inline-flex items-center gap-1 normal-case tracking-normal text-text-secondary">
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse"
-            aria-hidden="true"
-          />
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm text-text-muted uppercase tracking-widest">Token saver</h2>
+        <span className="inline-flex items-center gap-1 text-xs text-text-secondary normal-case tracking-normal"
+        >
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" aria-hidden="true" />
           live
         </span>
-      </h3>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <HookConnection />
+        <SaverModeActivation dir={dir} id={id} />
+        <DaemonStatusPanel />
+      </div>
+
       {state === "loading" && <LoadingState label="Loading token-saver stats…" />}
       {state === "error" && error && (
         <ErrorState error={error} onRetry={() => void fetchData(false)} />
@@ -76,31 +73,44 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
         (stats === null ? (
           <p className="text-xs text-text-muted">No proxy activity recorded for this session.</p>
         ) : (
-          <TokensSavedTable stats={stats} />
+          <TokensSavedHero stats={stats} />
         ))}
     </section>
   );
 }
 
-// The tokens Claude Code would have spent on raw tool output vs. what MegaSaver
-// actually returned this session. tokensFromBytes mirrors @megasaver/stats
-// honest-metrics (Math.ceil(bytes / 4)); replicated here so the node-coupled
-// stats package is never pulled into the browser bundle.
-function TokensSavedTable({ stats }: { stats: OverlaySessionTokenSaverStats }): JSX.Element {
+function TokensSavedHero({ stats }: { stats: OverlaySessionTokenSaverStats }): JSX.Element {
   const would = tokensFromBytes(stats.rawBytesTotal);
   const used = tokensFromBytes(stats.returnedBytesTotal);
   const saved = Math.max(0, would - used);
   const pct = would === 0 ? 0 : Math.round((saved / would) * 100);
   return (
-    <table className="w-full text-xs border border-border rounded-md overflow-hidden">
-      <caption className="sr-only">Tokens saved from the Claude Code budget this session</caption>
-      <tbody>
-        <Row label="Would have used" value={fmtTokens(would)} />
-        <Row label="Actually used" value={fmtTokens(used)} />
-        <Row label="Saved" value={fmtTokens(saved)} emphasis />
-        <Row label="Saved %" value={`${pct}%`} emphasis />
-      </tbody>
-    </table>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="md:col-span-2 flex flex-col justify-between gap-4 p-6 border border-border rounded-xl bg-surface-elevated/30">
+        <div className="text-sm text-text-muted">Tokens saved this session</div>
+        <div className="flex items-baseline gap-3">
+          <div className="text-5xl font-semibold tracking-tight text-text-primary tabular-nums">
+            {fmt(saved)}
+          </div>
+          <div className="text-lg font-medium text-ok">{pct}%</div>
+        </div>
+        <div className="text-xs text-text-muted">Based on raw tool output vs. compressed output.</div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        <MiniMetric label="Would have used" value={`${fmt(would)} tokens`} />
+        <MiniMetric label="Actually used" value={`${fmt(used)} tokens`} />
+      </div>
+    </div>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }): JSX.Element {
+  return (
+    <div className="flex flex-col justify-center gap-1 px-4 py-3 border border-border rounded-xl bg-surface">
+      <div className="text-xs text-text-muted">{label}</div>
+      <div className="text-base font-semibold text-text-primary tabular-nums">{value}</div>
+    </div>
   );
 }
 
@@ -108,31 +118,6 @@ function tokensFromBytes(bytes: number): number {
   return Math.ceil(bytes / 4);
 }
 
-function fmtTokens(n: number): string {
-  return `${n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")} tokens`;
-}
-
-function Row({
-  label,
-  value,
-  emphasis = false,
-}: {
-  label: string;
-  value: string;
-  emphasis?: boolean;
-}): JSX.Element {
-  return (
-    <tr className="border-t border-border first:border-t-0">
-      <td
-        className={`px-3 py-2 ${emphasis ? "text-text-primary font-semibold" : "text-text-muted"}`}
-      >
-        {label}
-      </td>
-      <td
-        className={`px-3 py-2 text-right tabular-nums ${emphasis ? "text-accent font-semibold" : "text-text-primary font-medium"}`}
-      >
-        {value}
-      </td>
-    </tr>
-  );
+function fmt(n: number): string {
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
