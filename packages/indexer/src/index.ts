@@ -3,6 +3,7 @@ export * from "./extract/extract-ts.js";
 export * from "./extract/extract-md.js";
 export * from "./extract/extract-json.js";
 export * from "./extract/extract-py.js";
+export * from "./extract/extract-go.js";
 export * from "./scan.js";
 export * from "./store.js";
 export * from "./workspace-store.js";
