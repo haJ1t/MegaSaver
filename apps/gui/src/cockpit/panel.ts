@@ -12,3 +12,9 @@ export type CockpitPanel = {
   scope: CockpitPanelScope;
   component: (props: CockpitPanelProps) => JSX.Element;
 };
+
+export type CockpitTabGroup = {
+  id: string;
+  label: string;
+  panelIds: readonly string[];
+};

@@ -35,14 +35,13 @@ afterEach(() => {
 });
 
 describe("SessionCockpit", () => {
-  it("renders one tab per registered panel with Transcript active by default", () => {
+  it("renders top-level groups with Transcript active by default", () => {
     render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);
     const transcriptTab = screen.getByRole("button", { name: "Transcript" });
-    const telemetryTab = screen.getByRole("button", { name: "Telemetry" });
+    const workspaceTab = screen.getByRole("button", { name: /Workspace/ });
     expect(transcriptTab).toBeDefined();
-    expect(telemetryTab).toBeDefined();
+    expect(workspaceTab).toBeDefined();
     expect(transcriptTab.getAttribute("aria-current")).toBe("page");
-    expect(telemetryTab.getAttribute("aria-current")).toBeNull();
   });
 
   it("switches active panel and renders telemetry when the Telemetry tab is clicked", async () => {
@@ -64,14 +63,18 @@ describe("SessionCockpit", () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it("mounts the workspace Rules panel keyed by the session cwd", async () => {
+  it("opens grouped workspace panels and mounts Rules keyed by cwd", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({ ok: true, status: 200, json: async () => [] })),
     );
     render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "Rules" }));
+    fireEvent.click(screen.getByRole("button", { name: /Workspace/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rules" }));
     await waitFor(() => expect(screen.getByText("No rules yet.")).toBeDefined());
+    expect(screen.getByRole("button", { name: /Workspace/ }).getAttribute("aria-current")).toBe(
+      "page",
+    );
     vi.unstubAllGlobals();
   });
 });
