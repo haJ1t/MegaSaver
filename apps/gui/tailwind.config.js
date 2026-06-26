@@ -4,8 +4,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        mono: ["DM Mono", "ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
-      },
+      sans: ["SF Pro Display", "Geist Sans", "Helvetica Neue", "system-ui", "sans-serif"],
+      mono: ["DM Mono", "ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
+    },
       colors: {
         // All semantic colors reference CSS variables defined in styles.css.
         // Components use these Tailwind utilities; they never hardcode hex.
@@ -57,15 +58,14 @@ export default {
         // Pin subset: none sm md lg full (spec §6d)
         none: "0",
         sm: "0.125rem",
-        md: "0.25rem",
-        lg: "0.375rem",
+        md: "0.375rem",
+        lg: "0.75rem",
         full: "9999px",
       },
       boxShadow: {
-        // Pin subset: none sm md (spec §6e)
+        // Pin subset: none sm (spec §6e)
         none: "none",
-        sm: "0 1px 2px 0 rgb(0 0 0 / 0.12)",
-        md: "0 4px 12px 0 rgb(0 0 0 / 0.20)",
+        sm: "0 2px 8px rgb(0 0 0 / 0.04)",
       },
     },
   },
