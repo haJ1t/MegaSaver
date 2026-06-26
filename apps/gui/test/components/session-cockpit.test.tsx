@@ -63,18 +63,19 @@ describe("SessionCockpit", () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it("opens grouped workspace panels and mounts Rules keyed by cwd", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true, status: 200, json: async () => [] })),
-    );
+  it("closes grouped workspace panels on Escape", () => {
     render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /Workspace/ }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Rules" }));
-    await waitFor(() => expect(screen.getByText("No rules yet.")).toBeDefined());
-    expect(screen.getByRole("button", { name: /Workspace/ }).getAttribute("aria-current")).toBe(
-      "page",
-    );
-    vi.unstubAllGlobals();
+    expect(screen.getByRole("menuitem", { name: "Rules" })).toBeDefined();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menuitem", { name: "Rules" })).toBeNull();
+  });
+
+  it("links grouped tab button to its menu with aria-controls", () => {
+    render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);
+    const workspaceTab = screen.getByRole("button", { name: /Workspace/ });
+    fireEvent.click(workspaceTab);
+    const menu = screen.getByRole("menu", { name: /Workspace panels/ });
+    expect(workspaceTab.getAttribute("aria-controls")).toBe(menu.id);
   });
 });

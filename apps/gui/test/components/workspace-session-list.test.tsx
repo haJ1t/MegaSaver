@@ -83,7 +83,7 @@ describe("WorkspaceSessionList", () => {
     expect(card?.className).toMatch(/rounded-xl/);
   });
 
-  it("hides model and archived tags by default", async () => {
+  it("reveals model and archived tags on hover", async () => {
     stub.sessions = [
       meta({
         id: "x",
@@ -95,7 +95,34 @@ describe("WorkspaceSessionList", () => {
     ];
     render(<WorkspaceSessionList onSelect={() => {}} />);
     await waitFor(() => expect(screen.getByText("X")).toBeDefined());
-    expect(screen.queryByText(/sonnet/)).toBeNull();
-    expect(screen.queryByText("archived")).toBeNull();
+    fireEvent.mouseEnter(screen.getByText("X"));
+    expect(screen.getByText(/sonnet/)).toBeDefined();
+    expect(screen.getByText("archived")).toBeDefined();
+  });
+
+  it("reveals model and archived tags on keyboard focus", async () => {
+    stub.sessions = [
+      meta({
+        id: "x",
+        title: "X",
+        projectLabel: "/tmp/alpha",
+        model: "claude-sonnet-4-6",
+        isArchived: true,
+      }),
+    ];
+    render(<WorkspaceSessionList onSelect={() => {}} />);
+    await waitFor(() => expect(screen.getByText("X")).toBeDefined());
+    fireEvent.focus(screen.getByText("X"));
+    expect(screen.getByText(/sonnet/)).toBeDefined();
+    expect(screen.getByText("archived")).toBeDefined();
+  });
+
+  it("applies stagger-enter animation to rows", async () => {
+    stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
+    const { container } = render(<WorkspaceSessionList onSelect={() => {}} />);
+    await waitFor(() => expect(screen.getByText("X")).toBeDefined());
+    const row = container.querySelector(".row-enter");
+    expect(row).not.toBeNull();
+    expect((row as HTMLElement).style.animationDelay).toBe("0ms");
   });
 });

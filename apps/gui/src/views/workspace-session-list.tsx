@@ -37,6 +37,7 @@ export function WorkspaceSessionList({
   const [listError, setListError] = useState<BridgeError | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
   const groups = groupSessionsByCwd(sessions);
 
@@ -116,7 +117,7 @@ export function WorkspaceSessionList({
                   group.sessions.map((s, index) => {
                     const live = nowMs - s.mtimeMs < LIVE_WINDOW_MS;
                     const key = sessionKey(s);
-                    const hovered = hoveredKey === key;
+                    const revealed = hoveredKey === key || focusedKey === key;
                     return (
                       <button
                         key={key}
@@ -124,9 +125,9 @@ export function WorkspaceSessionList({
                         onClick={() => onSelect(s)}
                         onMouseEnter={() => setHoveredKey(key)}
                         onMouseLeave={() => setHoveredKey((prev) => (prev === key ? null : prev))}
-                        onFocus={() => setHoveredKey(key)}
-                        onBlur={() => setHoveredKey(null)}
-                        className="flex items-center gap-3 w-full px-4 py-3 text-left border-t border-border/50 cursor-pointer hover:bg-surface-elevated transition-colors row-enter row-enter-done"
+                        onFocus={() => setFocusedKey(key)}
+                        onBlur={() => setFocusedKey((prev) => (prev === key ? null : prev))}
+                        className="flex items-center gap-3 w-full px-4 py-3 text-left border-t border-border/50 cursor-pointer hover:bg-surface-elevated transition-colors row-enter"
                         style={{ animationDelay: `${index * 40}ms` }}
                       >
                         <span
@@ -136,7 +137,7 @@ export function WorkspaceSessionList({
                         <span className="flex-1 min-w-0 truncate text-sm text-text-primary">
                           {s.title || s.id}
                         </span>
-                        {hovered ? (
+                        {revealed ? (
                           <span className="flex items-center gap-2 text-[11px] text-text-muted">
                             {s.model && (
                               <span className="px-1.5 py-0.5 rounded bg-surface-elevated text-text-secondary">

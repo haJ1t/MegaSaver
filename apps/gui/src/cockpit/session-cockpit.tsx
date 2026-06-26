@@ -77,6 +77,7 @@ export function SessionCockpit({
                 aria-current={inGroup ? "page" : undefined}
                 aria-expanded={grouped ? expanded : undefined}
                 aria-haspopup={grouped ? "menu" : undefined}
+                aria-controls={grouped && expanded ? `${group.id}-menu` : undefined}
                 onClick={() => {
                   if (grouped) {
                     setOpenGroup(expanded ? null : group.id);
@@ -98,6 +99,7 @@ export function SessionCockpit({
               </button>
               {expanded && (
                 <div
+                  id={`${group.id}-menu`}
                   role="menu"
                   aria-label={`${group.label} panels`}
                   className="absolute top-full left-0 mt-1 py-1 bg-surface border border-border rounded-md shadow-sm min-w-[140px] z-10"

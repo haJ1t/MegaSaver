@@ -16,7 +16,7 @@ been relaxed to reduce eye strain during long sessions.
 | `text-sm` | 0.8125rem / 1.25rem | Secondary body, form hints |
 | `text-base` | 0.875rem / 1.5rem | Default body |
 | `text-lg` | 1rem / 1.5rem | Card titles, cockpit header |
-| `text-xl` | 1.25rem / 1.5rem | Page title only |
+| `text-xl` | 1.125rem / 1.75rem | Page title only |
 | `text-4xl` | 2.25rem / 1 | Hero metrics (tokens saved) |
 | `font-normal` | 400 | Body text |
 | `font-medium` | 500 | Labels, active nav, button text |
