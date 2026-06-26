@@ -10,6 +10,7 @@ export {
 
 export {
   READ_INDEX_FILENAME,
+  SHOWN_INDEX_FILENAME,
   saveChunkSet,
   loadChunkSet,
   listChunkSets,

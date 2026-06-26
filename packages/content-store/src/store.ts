@@ -18,6 +18,7 @@ import { ContentStoreError } from "./errors.js";
 import { chunkSetPath, overlayChunkSetPath } from "./paths.js";
 
 export const READ_INDEX_FILENAME = "read-index.json";
+export const SHOWN_INDEX_FILENAME = "shown-index.json";
 
 function isErrno(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
@@ -117,6 +118,7 @@ export async function listChunkSets(input: {
   for (const name of names) {
     if (!name.endsWith(".json")) continue;
     if (name === READ_INDEX_FILENAME) continue; // sibling index, not a chunk-set
+    if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
     const path = join(dir, name);
     const chunkSet = parseExistingFile(path, readFileSync(path, "utf8"));
     summaries.push({
@@ -242,6 +244,7 @@ export async function pruneOlderThan(input: {
       for (const name of readdirSync(sessionPath)) {
         if (!name.endsWith(".json")) continue;
         if (name === READ_INDEX_FILENAME) continue; // sibling index, not a chunk-set
+        if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
         const path = join(sessionPath, name);
         let chunkSet: ChunkSet;
         try {
