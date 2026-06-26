@@ -4,9 +4,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-      sans: ["SF Pro Display", "Geist Sans", "Helvetica Neue", "system-ui", "sans-serif"],
-      mono: ["DM Mono", "ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
-    },
+        sans: ["SF Pro Display", "Geist Sans", "Helvetica Neue", "system-ui", "sans-serif"],
+        mono: ["DM Mono", "ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
+      },
       colors: {
         // All semantic colors reference CSS variables defined in styles.css.
         // Components use these Tailwind utilities; they never hardcode hex.

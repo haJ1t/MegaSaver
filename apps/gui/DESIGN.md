@@ -1,7 +1,8 @@
-# Mega Saver GUI v1 — Design System
+# Mega Saver GUI v2 — Design System
 
-Aesthetic direction: **Editorial Terminal**. Dense, precise, purposeful developer console.
-Zinc base, DM Mono typeface throughout, desaturated amber accent.
+Aesthetic direction: **Editorial Workspace**. Warm monochrome, generous whitespace,
+crisp cards, and typography-led hierarchy. The previous dense terminal style has
+been relaxed to reduce eye strain during long sessions.
 
 ---
 
@@ -9,15 +10,17 @@ Zinc base, DM Mono typeface throughout, desaturated amber accent.
 
 | Token | Value | Use |
 |-------|-------|-----|
-| Font family | `DM Mono` (Google Fonts, 400 + 500) → `ui-monospace` fallback | All text — no mixed sans stack |
-| `text-xs` | 0.75rem / 1rem line-height | Table metadata, badge labels, field labels |
-| `text-sm` | 0.8125rem / 1.25rem | Body in dense tables, form inputs |
+| `font-sans` | `SF Pro Display`, `Geist Sans`, `Helvetica Neue`, `system-ui`, sans-serif | UI chrome, headings, body |
+| `font-mono` | `DM Mono`, `ui-monospace`, `SFMono-Regular`, `Consolas`, monospace | Code, timestamps, metrics, kebab-style meta |
+| `text-xs` | 0.75rem / 1rem line-height | Labels, badge text, timestamps |
+| `text-sm` | 0.8125rem / 1.25rem | Secondary body, form hints |
 | `text-base` | 0.875rem / 1.5rem | Default body |
-| `text-lg` | 1rem / 1.5rem | Subheadings, detail panel titles |
-| `text-xl` | 1.125rem / 1.75rem | Page title only |
-| `font-normal` | 400 | All body text |
+| `text-lg` | 1rem / 1.5rem | Card titles, cockpit header |
+| `text-xl` | 1.25rem / 1.5rem | Page title only |
+| `text-5xl` | 3rem / 1 | Hero metrics (tokens saved) |
+| `font-normal` | 400 | Body text |
 | `font-medium` | 500 | Labels, active nav, button text |
-| `font-semibold` | 600 | Reserved — not used in v1 |
+| `font-semibold` | 600 | Headings, metric values |
 
 ---
 
@@ -30,68 +33,77 @@ Tailwind utilities (`bg-surface`, `text-accent`, etc.) — never hardcode hex.
 
 | Variable | Hex | Role |
 |----------|-----|------|
-| `--color-background` | `#f5f4f2` | Page background |
-| `--color-surface` | `#ffffff` | Card, list, detail panel base |
-| `--color-surface-elevated` | `#f0ede8` | Selected row, hover, code blocks |
-| `--color-text-primary` | `#141519` | Headings, body |
-| `--color-text-secondary` | `#545968` | Metadata, timestamps |
-| `--color-text-muted` | `#9ea3ad` | Disabled, placeholder, field labels |
-| `--color-border` | `#d4d1cb` | Dividers, input borders |
-| `--color-accent` | `#c4681a` | Primary action, selected state |
-| `--color-accent-fg` | `#ffffff` | Text on accent |
-| `--color-danger` | `#b83232` | End session, destructive |
-| `--color-danger-fg` | `#fff0f0` | Text on danger |
-| `--color-warn` | `#b85e15` | Medium risk badge, warnings |
-| `--color-warn-fg` | `#fff3e6` | Text on warn |
-| `--color-ok` | `#2c7348` | Open status, success |
-| `--color-ok-fg` | `#ebf5ef` | Text on ok |
-| `--color-focus-ring` | `#c4681a` | WCAG focus indicator |
+| `--color-background` | `#F7F6F3` | Warm page background |
+| `--color-surface` | `#FFFFFF` | Cards, panels, list surface |
+| `--color-surface-elevated` | `#F9F9F8` | Hover, selected row, input background |
+| `--color-text-primary` | `#111111` | Headings, primary body |
+| `--color-text-secondary` | `#5E5C58` | Secondary text, metadata |
+| `--color-text-muted` | `#A09D98` | Disabled, placeholder, field labels |
+| `--color-border` | `#EAEAEA` | Dividers, input borders, card borders |
+| `--color-accent` | `#111111` | Active nav pill, primary emphasis |
+| `--color-accent-fg` | `#FFFFFF` | Text on accent |
+| `--color-danger` | `#B83232` | Destructive actions |
+| `--color-danger-fg` | `#FFF0F0` | Text on danger |
+| `--color-warn` | `#B85E15` | Warnings |
+| `--color-warn-fg` | `#FFF3E6` | Text on warn |
+| `--color-ok` | `#2C7348` | Success, live status |
+| `--color-ok-fg` | `#EBF5EF` | Text on ok |
+| `--color-focus-ring` | `#111111` | Focus indicator |
 
 ### Dark mode (auto via `prefers-color-scheme: dark`)
 
 | Variable | Hex | Role |
 |----------|-----|------|
-| `--color-background` | `#0c0d0f` | OLED-safe near-black |
-| `--color-surface` | `#141519` | Surface base |
-| `--color-surface-elevated` | `#1c1d23` | Elevated / selected |
-| `--color-text-primary` | `#f0f1f3` | Body |
-| `--color-text-secondary` | `#9ea3ad` | Metadata |
-| `--color-text-muted` | `#565b66` | Muted |
-| `--color-border` | `#2a2d35` | Dividers |
-| `--color-accent` | `#e8973a` | Warm amber against zinc |
-| `--color-accent-fg` | `#0c0d0f` | Text on accent |
-| `--color-danger` | `#dc4f4f` | Destructive |
-| `--color-danger-fg` | `#fff0f0` | |
-| `--color-warn` | `#d97b2a` | Caution |
-| `--color-warn-fg` | `#fff7ed` | |
-| `--color-ok` | `#3b8c5a` | Open / success |
-| `--color-ok-fg` | `#e8f5ee` | |
-| `--color-focus-ring` | `#e8973a` | |
+| `--color-background` | `#0F0F0E` | Warm near-black |
+| `--color-surface` | `#171716` | Surface base |
+| `--color-surface-elevated` | `#1E1E1D` | Elevated / selected |
+| `--color-text-primary` | `#F0F0EE` | Body |
+| `--color-text-secondary` | `#9E9C98` | Metadata |
+| `--color-text-muted` | `#5E5D59` | Muted |
+| `--color-border` | `#2A2A28` | Dividers |
+| `--color-accent` | `#FFFFFF` | Active emphasis |
+| `--color-accent-fg` | `#111111` | Text on accent |
+
+### Spot pastels (status badges only)
+
+| Variable | Background | Foreground | Use |
+|----------|------------|------------|-----|
+| `--status-live-bg` | `#EDF3EC` | `#346538` | Live session dot |
+| `--status-info-bg` | `#E1F3FE` | `#1F6C9F` | Info badges |
+| `--status-warn-bg` | `#FBF3DB` | `#956400` | Caution badges |
+| `--status-error-bg` | `#FDEBEC` | `#9F2F2D` | Error badges |
 
 ---
 
-## Badge variants
+## Layout
 
-Defined as `@layer utilities` in `tokens.css`. Apply as a single class.
-
-| Class | Semantic meaning |
-|-------|-----------------|
-| `badge-risk-low` | RiskLevel "low" — muted slate |
-| `badge-risk-medium` | RiskLevel "medium" — amber-tinted |
-| `badge-risk-high` | RiskLevel "high" — orange-red-tinted |
-| `badge-risk-critical` | RiskLevel "critical" — red-tinted |
-| `badge-status-open` | Session open — green-tinted |
-| `badge-status-ended` | Session ended — muted |
-| `badge-scope-project` | MemoryScope "project" — indigo-tinted |
-| `badge-scope-session` | MemoryScope "session" — purple-tinted |
-
-Agents (`AgentId`) reuse `badge-risk-low` (muted slate) — they are metadata, not status.
+- Page constrained to `max-w-5xl mx-auto` with `px-6` gutters.
+- Cards and detail panes use `rounded-xl` (12px) with `1px solid #EAEAEA` borders.
+- Vertical rhythm: `gap-4` (16px) inside cards, `gap-6` (24px) between sections.
+- Lists are inset inside rounded cards; rows separated by `border-border/50`.
 
 ---
 
-## Spacing (4 px base grid)
+## Components
 
-Pin subset per spec §6c: `0 / 1(4px) / 2(8px) / 3(12px) / 4(16px) / 6(24px) / 8(32px) / 12(48px)`.
+### Navigation
+
+- Global nav uses a single solid pill for the active item (`bg-text-primary text-surface`).
+- Cockpit nav groups related panels under dropdowns (`Workspace`, `Memory`).
+- Active group shows a bottom border indicator, not a filled pill.
+
+### Session list
+
+- Workspaces rendered as collapsible sections inside a card.
+- Each row shows title + relative time by default.
+- Model and archived status appear only on hover/focus.
+- No per-group live dot; only sessions have a live dot.
+
+### Cockpit panels
+
+- Header: back link + session title + cwd subtitle.
+- Token saver uses a hero metric: large saved-token count with supporting
+  "Would have used" / "Actually used" mini-metrics.
 
 ---
 
@@ -99,11 +111,10 @@ Pin subset per spec §6c: `0 / 1(4px) / 2(8px) / 3(12px) / 4(16px) / 6(24px) / 8
 
 | Class | Value | When to use |
 |-------|-------|-------------|
-| `rounded-none` | 0 | Table rows, dividers |
-| `rounded-sm` | 2px | Badges, pills |
-| `rounded-md` | 4px | Buttons, inputs, cards (default) |
-| `rounded-lg` | 6px | Code blocks |
-| `rounded-full` | 9999px | Dot indicators |
+| `rounded-md` | 6px | Buttons, inputs, badges |
+| `rounded-lg` | 12px | Cards, panels |
+| `rounded-xl` | 12px | Primary cards (alias) |
+| `rounded-full` | 9999px | Status dots |
 
 ---
 
@@ -112,37 +123,35 @@ Pin subset per spec §6c: `0 / 1(4px) / 2(8px) / 3(12px) / 4(16px) / 6(24px) / 8
 | Class | When to use |
 |-------|-------------|
 | `shadow-none` | Default — most surfaces |
-| `shadow-sm` | Subtle card elevation (detail pane if needed) |
-| `shadow-md` | Floating listbox (project picker dropdown) |
+| `shadow-sm` | `0 2px 8px rgb(0 0 0 / 0.04)` — dropdowns, subtle lift |
 
 ---
 
 ## Motion
 
-- Row stagger on list mount: 120ms `opacity 0→1` per row, 50ms stagger delay.
-- Transitions: 150ms for hover color changes, 150ms for tab/button state changes.
-- `prefers-reduced-motion: reduce` → all transitions and animations disabled (enforced in `tokens.css` base layer).
+- Row stagger on list mount: `opacity 0→1` + `translateY(8px→0)`, 40ms stagger.
+- Hover transitions: 150ms color/background changes.
+- Dropdown: instant appear; no scale/fade required.
+- `prefers-reduced-motion: reduce` → all transitions and animations disabled.
 
 ---
 
-## Accessibility commitments (spec §9)
+## Accessibility commitments
 
 1. Every focusable element receives `:focus-visible` ring via `--color-focus-ring`.
 2. Icon-only buttons carry `aria-label`.
 3. Error containers use `role="alert"` and receive programmatic focus on mount.
 4. Form inputs are associated with `<label>` via `htmlFor`.
-5. Listboxes use `role="listbox"` + `role="option"` + `aria-selected`.
-6. View switcher preserves `aria-current="page"` from v0.3.
+5. Cockpit groups use `aria-expanded`, `aria-haspopup="menu"`, and `role="menuitem"`.
+6. View switcher preserves `aria-current="page"`.
 7. Reduced motion respected globally.
 8. No `outline: none` without token-defined replacement.
 
 ---
 
-## Alternatives considered
+## Migration from v1
 
-- **Full serif/sans mixed stack** — rejected. Committing to mono everywhere is the
-  one memorable thing: it signals "developer console" from first glance.
-- **Modal forms** — rejected in favour of inline expansion in the detail pane.
-  Fewer z-layers, Esc key works naturally, no focus trap required for a 3-field form.
-- **Purple/blue accent** — rejected as AI slop baseline. Amber reads as "alert/precision"
-  in terminal culture without being alarming.
+- Editorial Terminal mono-everywhere aesthetic replaced by sans UI + mono code.
+- Zinc/amber palette replaced by warm monochrome with black accent.
+- Dense inline lists replaced by rounded cards and grouped tabs.
+- Token-saver table replaced by hero-metric layout.

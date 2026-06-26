@@ -1,6 +1,6 @@
+import { describe, expect, it } from "vitest";
 // @vitest-environment jsdom
 import tokens from "../../src/styles/tokens.css?raw";
-import { describe, expect, it } from "vitest";
 
 describe("design tokens v2", () => {
   it("uses warm monochrome background and surface colors", () => {

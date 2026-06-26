@@ -35,8 +35,12 @@ export function SessionCockpit({
           ← Back
         </button>
         <div className="flex flex-col min-w-0">
-          <span className="text-lg font-semibold tracking-tight text-text-primary truncate">{title || id}</span>
-          <span className="text-xs text-text-muted truncate" title={cwd}>{cwd}</span>
+          <span className="text-lg font-semibold tracking-tight text-text-primary truncate">
+            {title || id}
+          </span>
+          <span className="text-xs text-text-muted truncate" title={cwd}>
+            {cwd}
+          </span>
         </div>
       </header>
 
@@ -59,7 +63,7 @@ export function SessionCockpit({
                   if (grouped) {
                     setOpenGroup(expanded ? null : group.id);
                   } else {
-                    setActivePanelId(group.panelIds[0]);
+                    setActivePanelId(group.panelIds[0] ?? activePanelId);
                     setOpenGroup(null);
                   }
                 }}

@@ -85,7 +85,9 @@ export function WorkspaceSessionList({
       </div>
 
       {groups.length === 0 ? (
-        <p className="text-sm text-text-muted">No Claude Code sessions found in ~/.claude/projects.</p>
+        <p className="text-sm text-text-muted">
+          No Claude Code sessions found in ~/.claude/projects.
+        </p>
       ) : (
         <div
           data-testid="session-list-card"
@@ -103,8 +105,12 @@ export function WorkspaceSessionList({
                   className="flex items-center gap-2 w-full px-4 py-2.5 text-left cursor-pointer hover:bg-surface-elevated transition-colors"
                 >
                   <span className="text-text-muted text-xs">{expanded ? "▾" : "▸"}</span>
-                  <span className="truncate text-xs font-medium text-text-secondary">{group.label}</span>
-                  <span className="ml-auto text-[11px] text-text-muted tabular-nums">{group.sessions.length}</span>
+                  <span className="truncate text-xs font-medium text-text-secondary">
+                    {group.label}
+                  </span>
+                  <span className="ml-auto text-[11px] text-text-muted tabular-nums">
+                    {group.sessions.length}
+                  </span>
                 </button>
                 {expanded &&
                   group.sessions.map((s, index) => {
@@ -125,7 +131,9 @@ export function WorkspaceSessionList({
                           className={`inline-block w-2 h-2 rounded-full shrink-0 ${live ? "bg-ok" : "bg-border"}`}
                           aria-label={live ? "live" : undefined}
                         />
-                        <span className="flex-1 min-w-0 truncate text-sm text-text-primary">{s.title || s.id}</span>
+                        <span className="flex-1 min-w-0 truncate text-sm text-text-primary">
+                          {s.title || s.id}
+                        </span>
                         {hovered ? (
                           <span className="flex items-center gap-2 text-[11px] text-text-muted">
                             {s.model && (
@@ -134,7 +142,9 @@ export function WorkspaceSessionList({
                               </span>
                             )}
                             {s.isArchived && (
-                              <span className="px-1.5 py-0.5 rounded bg-surface-elevated text-text-muted">archived</span>
+                              <span className="px-1.5 py-0.5 rounded bg-surface-elevated text-text-muted">
+                                archived
+                              </span>
                             )}
                             <span className="tabular-nums">{relativeTime(s.mtimeMs, nowMs)}</span>
                           </span>

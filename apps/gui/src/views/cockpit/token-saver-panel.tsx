@@ -52,9 +52,11 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
     >
       <div className="flex items-center gap-2">
         <h2 className="text-sm text-text-muted uppercase tracking-widest">Token saver</h2>
-        <span className="inline-flex items-center gap-1 text-xs text-text-secondary normal-case tracking-normal"
-        >
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" aria-hidden="true" />
+        <span className="inline-flex items-center gap-1 text-xs text-text-secondary normal-case tracking-normal">
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse"
+            aria-hidden="true"
+          />
           live
         </span>
       </div>
@@ -94,7 +96,9 @@ function TokensSavedHero({ stats }: { stats: OverlaySessionTokenSaverStats }): J
           </div>
           <div className="text-lg font-medium text-ok">{pct}%</div>
         </div>
-        <div className="text-xs text-text-muted">Based on raw tool output vs. compressed output.</div>
+        <div className="text-xs text-text-muted">
+          Based on raw tool output vs. compressed output.
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
