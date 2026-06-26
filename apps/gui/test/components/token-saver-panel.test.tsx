@@ -3,30 +3,26 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   OverlaySessionTokenSaverStats,
-  OverlayTokenSaverEvent,
   WorkspaceSaverStatus,
 } from "../../src/lib/claude-sessions-client.js";
 
 const stub: {
   saver: () => Promise<WorkspaceSaverStatus>;
   stats: () => Promise<OverlaySessionTokenSaverStats | null>;
-  events: () => Promise<unknown[]>;
 } = {
   saver: () => Promise.reject(new Error("not set")),
   stats: () => Promise.reject(new Error("not set")),
-  events: () => Promise.reject(new Error("not set")),
 };
 
 vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchWorkspaceSaver: () => stub.saver(),
   setWorkspaceSaver: () => stub.saver(),
   fetchSessionTokenSaverStats: () => stub.stats(),
-  fetchSessionTokenSaverEvents: () => stub.events(),
   fetchClaudeHookStatus: () =>
     Promise.resolve({ connected: false, preInstalled: false, postInstalled: false }),
 }));
 
-import { TokenSaverPanel, fmtTimestamp } from "../../src/views/cockpit/token-saver-panel.js";
+import { TokenSaverPanel } from "../../src/views/cockpit/token-saver-panel.js";
 
 const SAVER: WorkspaceSaverStatus = {
   enabled: true,
@@ -34,6 +30,7 @@ const SAVER: WorkspaceSaverStatus = {
   blockPresent: true,
   mcpInstalled: true,
 };
+// raw 1000 B -> ceil(1000/4)=250 tok ; returned 200 B -> 50 tok ; saved = 200 tok
 const STATS: OverlaySessionTokenSaverStats = {
   liveSessionId: "s",
   eventsTotal: 3,
@@ -50,97 +47,58 @@ afterEach(() => {
   cleanup();
   stub.saver = () => Promise.reject(new Error("not set"));
   stub.stats = () => Promise.reject(new Error("not set"));
-  stub.events = () => Promise.reject(new Error("not set"));
 });
 
-describe("fmtTimestamp", () => {
-  it("formats local YYYY-MM-DD HH:MM:SS round-trip (timezone-independent)", () => {
-    const d = new Date(2026, 5, 24, 9, 5, 7); // local 2026-06-24 09:05:07
-    expect(fmtTimestamp(d.toISOString())).toBe("2026-06-24 09:05:07");
-  });
-
-  it("zero-pads single-digit fields", () => {
-    const d = new Date(2026, 0, 3, 1, 2, 3); // local 2026-01-03 01:02:03
-    expect(fmtTimestamp(d.toISOString())).toBe("2026-01-03 01:02:03");
-  });
-
-  it("returns the raw string for an unparseable input", () => {
-    expect(fmtTimestamp("not-a-date")).toBe("not-a-date");
-  });
-});
-
-const EVENT: OverlayTokenSaverEvent = {
-  id: "e1",
-  workspaceKey: "wk",
-  liveSessionId: "s",
-  createdAt: new Date(2026, 5, 24, 14, 30, 5).toISOString(), // local 2026-06-24 14:30:05
-  sourceKind: "file",
-  label: "src/foo.ts",
-  rawBytes: 1000,
-  returnedBytes: 200,
-  bytesSaved: 800,
-  savingRatio: 0.8,
-  summary: "…",
-  mode: "balanced",
-};
-
-describe("TokenSaverPanel (activation + stats)", () => {
-  it("renders the workspace activation toggle and the session savings table together", async () => {
+describe("TokenSaverPanel — tokens-saved mini table", () => {
+  it("shows would-have-used / actually-used / saved in tokens", async () => {
     stub.saver = () => Promise.resolve(SAVER);
     stub.stats = () => Promise.resolve(STATS);
-    stub.events = () => Promise.resolve([]);
     render(<TokenSaverPanel dir="d" id="i" />);
-    await waitFor(() => expect(screen.getByLabelText(/Saver Mode/i)).toBeDefined());
-    expect((screen.getByLabelText(/Saver Mode/i) as HTMLInputElement).checked).toBe(true);
-    // savings shown in a table, byte values humanized
-    await waitFor(() => expect(screen.getByText("800 B")).toBeDefined());
-    expect(screen.getByText("80%")).toBeDefined();
-    expect(screen.getByText("Bytes saved")).toBeDefined();
+    await waitFor(() => expect(screen.getByText("Would have used")).toBeDefined());
+    expect(screen.getByText("Actually used")).toBeDefined();
+    expect(screen.getByText("Saved")).toBeDefined();
+    expect(screen.getByText("250 tokens")).toBeDefined(); // would have used
+    expect(screen.getByText("50 tokens")).toBeDefined(); // actually used
+    expect(screen.getByText("200 tokens")).toBeDefined(); // saved
   });
 
-  it("renders a 'when' column with each save's timestamp + a 'Last save' summary row", async () => {
+  it("drops the byte summary and the per-event compression detail", async () => {
     stub.saver = () => Promise.resolve(SAVER);
     stub.stats = () => Promise.resolve(STATS);
-    stub.events = () => Promise.resolve([EVENT]);
     render(<TokenSaverPanel dir="d" id="i" />);
-    // per-save table has a "when" header + the formatted event timestamp
-    await waitFor(() => expect(screen.getByText("when")).toBeDefined());
-    expect(screen.getByText("2026-06-24 14:30:05")).toBeDefined();
-    // summary shows the last-save time (STATS.updatedAt)
-    expect(screen.getByText("Last save")).toBeDefined();
-    expect(screen.getByText(fmtTimestamp(STATS.updatedAt))).toBeDefined();
+    await waitFor(() => expect(screen.getByText("Saved")).toBeDefined());
+    expect(screen.queryByText("Bytes saved")).toBeNull();
+    expect(screen.queryByText("Raw bytes")).toBeNull();
+    expect(screen.queryByText(/Saving ratio/)).toBeNull();
+    expect(screen.queryByText("Chunks stored")).toBeNull();
+    expect(screen.queryByText("800 B")).toBeNull();
+    expect(screen.queryByText("source")).toBeNull(); // per-event table header gone
+    expect(screen.queryByText("when")).toBeNull();
   });
 
-  it("shows the empty stats message when no proxy activity", async () => {
+  it("shows the empty message when no proxy activity", async () => {
     stub.saver = () => Promise.resolve({ ...SAVER, enabled: false });
     stub.stats = () => Promise.resolve(null);
-    stub.events = () => Promise.resolve([]);
     render(<TokenSaverPanel dir="d" id="i" />);
     await waitFor(() => expect(screen.getByText(/No proxy activity/i)).toBeDefined());
   });
 
-  it("live-updates the savings table on the poll interval", async () => {
+  it("live-updates the saved tokens on the poll interval", async () => {
     vi.useFakeTimers();
     try {
       let n = 0;
-      let statsCalls = 0;
       stub.saver = () => Promise.resolve(SAVER);
-      stub.stats = () => {
-        statsCalls += 1;
-        return Promise.resolve({ ...STATS, bytesSavedTotal: n++ === 0 ? 800 : 900 });
-      };
-      stub.events = () => Promise.resolve([]);
+      // first poll: returned 200 B -> saved 200 tok; second: returned 100 B -> saved 225 tok
+      stub.stats = () => Promise.resolve({ ...STATS, returnedBytesTotal: n++ === 0 ? 200 : 100 });
       render(<TokenSaverPanel dir="d" id="i" />);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      expect(screen.getByText("800 B")).toBeDefined();
-      const initialCalls = statsCalls;
+      expect(screen.getByText("200 tokens")).toBeDefined();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2000);
       });
-      expect(statsCalls).toBeGreaterThan(initialCalls); // a poll fired
-      expect(screen.getByText("900 B")).toBeDefined(); // and the table updated
+      expect(screen.getByText("225 tokens")).toBeDefined();
     } finally {
       vi.useRealTimers();
     }
