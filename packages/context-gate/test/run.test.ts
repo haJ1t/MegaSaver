@@ -4,12 +4,18 @@ import { join } from "node:path";
 import type { ProjectId, SessionId } from "@megasaver/shared";
 import { readSummary } from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { hashContent as hc } from "../src/read-index.js";
 import type { OrchestratorRegistry } from "../src/registry-port.js";
 import { runOutputPipeline } from "../src/run.js";
+import { loadShownIndex } from "../src/shown-index.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
 const NOW = "2026-06-10T12:00:00.000Z";
+
+// A chunk-set file, excluding the sibling read/shown index files.
+const isChunkSetFile = (n: string): boolean =>
+  n.endsWith(".json") && n !== "read-index.json" && n !== "shown-index.json";
 const NEW_ID = "fixed-id";
 
 function registry(
@@ -168,7 +174,7 @@ describe("runOutputPipeline — diff-on-reread suppression (registry)", () => {
 
     const names = await readdir(sessionContentDir());
     expect(names).toContain("read-index.json");
-    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(1);
+    expect(names.filter(isChunkSetFile)).toHaveLength(1);
   });
 
   it("T7: second read of an unchanged file suppresses + skips filter/persist", async () => {
@@ -187,7 +193,7 @@ describe("runOutputPipeline — diff-on-reread suppression (registry)", () => {
 
     // No second chunk-set persisted: still exactly one chunk-set on disk.
     const names = await readdir(sessionContentDir());
-    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(1);
+    expect(names.filter(isChunkSetFile)).toHaveLength(1);
   });
 
   it("T8/T10: changed content is a miss with no unchanged field; index updated", async () => {
@@ -205,7 +211,7 @@ describe("runOutputPipeline — diff-on-reread suppression (registry)", () => {
     expect(r2.result.chunkSetId).not.toBe(firstChunkSetId);
 
     const names = await readdir(sessionContentDir());
-    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(2);
+    expect(names.filter(isChunkSetFile)).toHaveLength(2);
   });
 
   it("T12: storeRawOutput=false writes no index; next read is a normal miss", async () => {
@@ -217,5 +223,104 @@ describe("runOutputPipeline — diff-on-reread suppression (registry)", () => {
     expect(r2.ok).toBe(true);
     if (!r2.ok) return;
     expect("unchanged" in r2.result).toBe(false);
+  });
+});
+
+describe("runOutputPipeline — already-in-context dedup (registry)", () => {
+  let store: string;
+  let projectRoot: string;
+  let fileA: string;
+  let fileB: string;
+  let idCounter: number;
+  const BODY = "line one\nerror: boom\nline three\n";
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "cg-dedup-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "cg-dedup-root-"));
+    fileA = join(projectRoot, "a.txt");
+    fileB = join(projectRoot, "b.txt");
+    await writeFile(fileA, BODY);
+    await writeFile(fileB, BODY);
+    idCounter = 0;
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  function run(path: string, opts: { storeRawOutput?: boolean } = {}) {
+    return runOutputPipeline({
+      registry: registry(projectRoot, opts),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      path,
+      intent: "find the error",
+      now: () => NOW,
+      newId: () => `cs-${idCounter++}`,
+      loadPermissions: () => null,
+    });
+  }
+  function sessionContentDir() {
+    return join(store, "content", PROJECT_ID, SESSION_ID);
+  }
+
+  it("first read returns excerpts, no deduped field, records shown-index", async () => {
+    const r1 = await run(fileA);
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    expect(r1.result.excerpts.length).toBeGreaterThan(0);
+    expect("deduped" in r1.result).toBe(false);
+    const idx = loadShownIndex(sessionContentDir());
+    // biome-ignore lint/style/noNonNullAssertion: length > 0 asserted above
+    expect(idx[hc(r1.result.excerpts[0]!.text)]).toEqual({ chunkSetId: r1.result.chunkSetId });
+  });
+
+  it("second read of identical content (different path) suppresses + references prior", async () => {
+    const r1 = await run(fileA);
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    // biome-ignore lint/style/noNonNullAssertion: storeRawOutput=true persists a chunkSetId
+    const firstChunkSetId = r1.result.chunkSetId!;
+    const r2 = await run(fileB);
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.result.deduped?.suppressed).toBeGreaterThanOrEqual(1);
+    expect(r2.result.deduped?.priorChunkSetIds).toContain(firstChunkSetId);
+    expect(r2.result.summary).toContain("already shown earlier this session");
+    expect(r2.result.summary).toContain(firstChunkSetId);
+    // biome-ignore lint/style/noNonNullAssertion: first read returned >=1 excerpt
+    expect(r2.result.excerpts.map((e) => e.text)).not.toContain(r1.result.excerpts[0]!.text);
+    const firstRaw = await readFile(join(sessionContentDir(), `${firstChunkSetId}.json`), "utf8");
+    expect(firstRaw).toContain("error: boom");
+  });
+
+  it("no prior hit -> nothing suppressed (distinct content)", async () => {
+    await writeFile(fileA, "totally unique alpha content\n");
+    await writeFile(fileB, "totally unique beta content\n");
+    await run(fileA);
+    const r2 = await run(fileB);
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect("deduped" in r2.result).toBe(false);
+  });
+
+  it("storeRawOutput=false -> dedup skipped, no shown-index.json", async () => {
+    await run(fileA, { storeRawOutput: false });
+    const r2 = await run(fileB, { storeRawOutput: false });
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect("deduped" in r2.result).toBe(false);
+    await expect(
+      readFile(join(sessionContentDir(), "shown-index.json"), "utf8"),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("diff-on-reread still wins for an unchanged same-path re-read", async () => {
+    await run(fileA);
+    const r2 = await run(fileA);
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.result.decision).toBe("unchanged-marker");
+    expect("deduped" in r2.result).toBe(false);
   });
 });

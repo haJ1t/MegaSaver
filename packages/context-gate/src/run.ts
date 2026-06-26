@@ -23,6 +23,7 @@ import {
   runTwoGates,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
+import { dedupShownExcerpts, recordShown } from "./shown-index.js";
 import { messageOf, redactedCount } from "./stats-helpers.js";
 
 // Lossless suppression marker for an unchanged re-read: zero excerpts, the prior
@@ -112,7 +113,7 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     maxReturnedBytes: settings.maxReturnedBytes,
   });
 
-  const result = { ...filteredResult };
+  let result: FilterOutputResult = { ...filteredResult };
   if (settings.storeRawOutput) {
     const chunkSetId = newId();
     try {
@@ -130,6 +131,21 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     }
     result.chunkSetId = chunkSetId;
     recordRead(sessionDir, pathHash, { contentHash: newHash, chunkSetId });
+    const dd = dedupShownExcerpts({
+      sessionDir,
+      currentChunkSetId: chunkSetId,
+      excerpts: filteredResult.excerpts,
+    });
+    result =
+      dd.suppressed > 0
+        ? {
+            ...result,
+            excerpts: dd.excerpts,
+            summary: `${result.summary} (${dd.suppressed} chunk(s) already shown earlier this session — expand ${dd.priorChunkSetIds.join(", ")} to view)`,
+            deduped: { suppressed: dd.suppressed, priorChunkSetIds: dd.priorChunkSetIds },
+          }
+        : { ...result, excerpts: dd.excerpts };
+    recordShown(sessionDir, dd.recordEntries);
   }
 
   const event: TokenSaverEvent = {
