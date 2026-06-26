@@ -4,6 +4,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
+        sans: ["SF Pro Display", "Geist Sans", "Helvetica Neue", "system-ui", "sans-serif"],
         mono: ["DM Mono", "ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
       },
       colors: {
@@ -24,6 +25,14 @@ export default {
         "warn-fg": "var(--color-warn-fg)",
         ok: "var(--color-ok)",
         "ok-fg": "var(--color-ok-fg)",
+        "status-live-bg": "var(--status-live-bg)",
+        "status-live-fg": "var(--status-live-fg)",
+        "status-active-bg": "var(--status-active-bg)",
+        "status-active-fg": "var(--status-active-fg)",
+        "status-warn-bg": "var(--status-warn-bg)",
+        "status-warn-fg": "var(--status-warn-fg)",
+        "status-danger-bg": "var(--status-danger-bg)",
+        "status-danger-fg": "var(--status-danger-fg)",
       },
       ringColor: {
         DEFAULT: "var(--color-focus-ring)",
@@ -57,15 +66,14 @@ export default {
         // Pin subset: none sm md lg full (spec §6d)
         none: "0",
         sm: "0.125rem",
-        md: "0.25rem",
-        lg: "0.375rem",
+        md: "0.375rem",
+        lg: "0.75rem",
         full: "9999px",
       },
       boxShadow: {
-        // Pin subset: none sm md (spec §6e)
+        // Pin subset: none sm (spec §6e)
         none: "none",
-        sm: "0 1px 2px 0 rgb(0 0 0 / 0.12)",
-        md: "0 4px 12px 0 rgb(0 0 0 / 0.20)",
+        sm: "0 2px 8px rgb(0 0 0 / 0.04)",
       },
     },
   },

@@ -9,17 +9,21 @@ import type {
 const stub: {
   saver: () => Promise<WorkspaceSaverStatus>;
   stats: () => Promise<OverlaySessionTokenSaverStats | null>;
+  hook: () => Promise<{ connected: boolean; preInstalled: boolean; postInstalled: boolean }>;
+  daemon: () => Promise<{ running: boolean }>;
 } = {
   saver: () => Promise.reject(new Error("not set")),
   stats: () => Promise.reject(new Error("not set")),
+  hook: () => Promise.resolve({ connected: false, preInstalled: false, postInstalled: false }),
+  daemon: () => Promise.resolve({ running: false }),
 };
 
 vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchWorkspaceSaver: () => stub.saver(),
   setWorkspaceSaver: () => stub.saver(),
   fetchSessionTokenSaverStats: () => stub.stats(),
-  fetchClaudeHookStatus: () =>
-    Promise.resolve({ connected: false, preInstalled: false, postInstalled: false }),
+  fetchClaudeHookStatus: () => stub.hook(),
+  fetchDaemonStatus: () => stub.daemon(),
 }));
 
 import { TokenSaverPanel } from "../../src/views/cockpit/token-saver-panel.js";
@@ -30,7 +34,7 @@ const SAVER: WorkspaceSaverStatus = {
   blockPresent: true,
   mcpInstalled: true,
 };
-// raw 1000 B -> ceil(1000/4)=250 tok ; returned 200 B -> 50 tok ; saved = 200 tok
+
 const STATS: OverlaySessionTokenSaverStats = {
   liveSessionId: "s",
   eventsTotal: 3,
@@ -47,35 +51,29 @@ afterEach(() => {
   cleanup();
   stub.saver = () => Promise.reject(new Error("not set"));
   stub.stats = () => Promise.reject(new Error("not set"));
+  stub.hook = () =>
+    Promise.resolve({ connected: false, preInstalled: false, postInstalled: false });
+  stub.daemon = () => Promise.resolve({ running: false });
 });
 
-describe("TokenSaverPanel — tokens-saved mini table", () => {
-  it("shows would-have-used / actually-used / saved in tokens", async () => {
+describe("TokenSaverPanel", () => {
+  it("shows a hero token-saved metric", async () => {
     stub.saver = () => Promise.resolve(SAVER);
     stub.stats = () => Promise.resolve(STATS);
     render(<TokenSaverPanel dir="d" id="i" />);
-    await waitFor(() => expect(screen.getByText("Would have used")).toBeDefined());
-    expect(screen.getByText("Actually used")).toBeDefined();
-    expect(screen.getByText("Saved")).toBeDefined();
-    expect(screen.getByText("250 tokens")).toBeDefined(); // would have used
-    expect(screen.getByText("50 tokens")).toBeDefined(); // actually used
-    expect(screen.getByText("200 tokens")).toBeDefined(); // saved
-    expect(screen.getByText("Saved %")).toBeDefined();
-    expect(screen.getByText("80%")).toBeDefined(); // 200 / 250
+    await waitFor(() => expect(screen.getByText("200")).toBeDefined());
+    expect(screen.getByText("tokens saved")).toBeDefined();
   });
 
-  it("drops the byte summary and the per-event compression detail", async () => {
+  it("shows status badges and hides byte-level table labels", async () => {
     stub.saver = () => Promise.resolve(SAVER);
     stub.stats = () => Promise.resolve(STATS);
     render(<TokenSaverPanel dir="d" id="i" />);
-    await waitFor(() => expect(screen.getByText("Saved")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("tokens saved")).toBeDefined());
+    expect(screen.queryByText("Would have used")).toBeNull();
+    expect(screen.queryByText("Actually used")).toBeNull();
+    expect(screen.queryByText("Saved %")).toBeNull();
     expect(screen.queryByText("Bytes saved")).toBeNull();
-    expect(screen.queryByText("Raw bytes")).toBeNull();
-    expect(screen.queryByText(/Saving ratio/)).toBeNull();
-    expect(screen.queryByText("Chunks stored")).toBeNull();
-    expect(screen.queryByText("800 B")).toBeNull();
-    expect(screen.queryByText("source")).toBeNull(); // per-event table header gone
-    expect(screen.queryByText("when")).toBeNull();
   });
 
   it("shows the empty message when no proxy activity", async () => {
@@ -90,17 +88,16 @@ describe("TokenSaverPanel — tokens-saved mini table", () => {
     try {
       let n = 0;
       stub.saver = () => Promise.resolve(SAVER);
-      // first poll: returned 200 B -> saved 200 tok; second: returned 100 B -> saved 225 tok
       stub.stats = () => Promise.resolve({ ...STATS, returnedBytesTotal: n++ === 0 ? 200 : 100 });
       render(<TokenSaverPanel dir="d" id="i" />);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(0);
       });
-      expect(screen.getByText("200 tokens")).toBeDefined();
+      expect(screen.getByText("200")).toBeDefined();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2000);
       });
-      expect(screen.getByText("225 tokens")).toBeDefined();
+      expect(screen.getByText("225")).toBeDefined();
     } finally {
       vi.useRealTimers();
     }

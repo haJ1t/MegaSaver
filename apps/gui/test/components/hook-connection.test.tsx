@@ -60,12 +60,6 @@ describe("HookConnection", () => {
     await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1));
   });
 
-  it("shows the global-scope note", async () => {
-    fetchStatus.mockResolvedValue(OFF);
-    render(<HookConnection />);
-    expect(await screen.findByText(/all Claude Code sessions/i)).toBeInTheDocument();
-  });
-
   it("renders an action error when connect fails", async () => {
     fetchStatus.mockResolvedValue(OFF);
     connect.mockRejectedValue({ error: "boom", code: "internal_error" });

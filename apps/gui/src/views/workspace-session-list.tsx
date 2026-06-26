@@ -10,16 +10,20 @@ const LIVE_WINDOW_MS = 8000;
 function relativeTime(mtimeMs: number, nowMs: number): string {
   const diff = Math.max(0, nowMs - mtimeMs);
   const s = Math.round(diff / 1000);
-  if (s < 60) return `${s}s ago`;
+  if (s < 60) return `${s}s`;
   const m = Math.round(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return `${m}m`;
   const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
+  if (h < 24) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
 }
 
 function shortModel(model: string): string {
   return model.replace(/-\d{8}$/, "");
+}
+
+function sessionKey(s: ClaudeSessionMeta): string {
+  return `${s.dir}/${s.id}`;
 }
 
 export function WorkspaceSessionList({
@@ -32,6 +36,8 @@ export function WorkspaceSessionList({
   const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
   const [listError, setListError] = useState<BridgeError | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
   const groups = groupSessionsByCwd(sessions);
 
@@ -70,74 +76,94 @@ export function WorkspaceSessionList({
     return <ErrorState error={listError} onRetry={loadList} />;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
-      {groups.length === 0 && (
-        <p className="px-3 py-4 text-xs text-text-muted">
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="flex items-baseline justify-between mb-4">
+        <h2 className="text-xl font-semibold tracking-tight text-text-primary">Claude sessions</h2>
+        <span className="text-xs text-text-muted">
+          {groups.length} workspace{groups.length === 1 ? "" : "s"} · {sessions.length} session
+          {sessions.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      {groups.length === 0 ? (
+        <p className="text-sm text-text-muted">
           No Claude Code sessions found in ~/.claude/projects.
         </p>
-      )}
-      {groups.map((group) => {
-        const expanded = !collapsed.has(group.cwd);
-        const groupLive = group.sessions.some((r) => nowMs - r.mtimeMs < LIVE_WINDOW_MS);
-        return (
-          <div key={group.cwd}>
-            <button
-              type="button"
-              onClick={() => toggleGroup(group.cwd)}
-              aria-expanded={expanded}
-              title={group.cwd}
-              className="flex items-center gap-1.5 w-full px-3 py-1.5 text-left border-b border-border bg-surface cursor-pointer"
-            >
-              <span className="text-text-muted text-[10px]">{expanded ? "▾" : "▸"}</span>
-              {groupLive && (
-                <span
-                  className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"
-                  aria-label="live"
-                />
-              )}
-              <span className="truncate text-xs font-medium text-text-secondary">
-                {group.label}
-              </span>
-              <span className="ml-auto text-[10px] text-text-muted">{group.sessions.length}</span>
-            </button>
-            {expanded &&
-              group.sessions.map((s) => {
-                const live = nowMs - s.mtimeMs < LIVE_WINDOW_MS;
-                return (
-                  <button
-                    key={`${s.dir}/${s.id}`}
-                    type="button"
-                    onClick={() => onSelect(s)}
-                    className="flex flex-col gap-0.5 pl-5 pr-3 py-2 text-left border-b border-border/50 cursor-pointer w-full hover:bg-surface-elevated"
-                  >
-                    <span className="flex items-center gap-1.5 text-xs text-text-primary truncate">
-                      {live && (
+      ) : (
+        <div
+          data-testid="session-list-card"
+          className="bg-surface border border-border rounded-xl overflow-hidden"
+        >
+          {groups.map((group, groupIndex) => {
+            const expanded = !collapsed.has(group.cwd);
+            return (
+              <div key={group.cwd} className={groupIndex > 0 ? "border-t border-border" : ""}>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.cwd)}
+                  aria-expanded={expanded}
+                  title={group.cwd}
+                  className="flex items-center gap-2 w-full px-4 py-2.5 text-left cursor-pointer hover:bg-surface-elevated transition-colors"
+                >
+                  <span className="text-text-muted text-xs">{expanded ? "▾" : "▸"}</span>
+                  <span className="truncate text-xs font-medium text-text-secondary">
+                    {group.label}
+                  </span>
+                  <span className="ml-auto text-[11px] text-text-muted tabular-nums">
+                    {group.sessions.length}
+                  </span>
+                </button>
+                {expanded &&
+                  group.sessions.map((s, index) => {
+                    const live = nowMs - s.mtimeMs < LIVE_WINDOW_MS;
+                    const key = sessionKey(s);
+                    const revealed = hoveredKey === key || focusedKey === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => onSelect(s)}
+                        onMouseEnter={() => setHoveredKey(key)}
+                        onMouseLeave={() => setHoveredKey((prev) => (prev === key ? null : prev))}
+                        onFocus={() => setFocusedKey(key)}
+                        onBlur={() => setFocusedKey((prev) => (prev === key ? null : prev))}
+                        className="flex items-center gap-3 w-full px-4 py-3 text-left border-t border-border/50 cursor-pointer hover:bg-surface-elevated transition-colors row-enter"
+                        style={{ animationDelay: `${index * 40}ms` }}
+                      >
                         <span
-                          className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"
-                          aria-label="live"
+                          className={`inline-block w-2 h-2 rounded-full shrink-0 ${live ? "bg-ok" : "bg-border"}`}
+                          aria-label={live ? "live" : undefined}
                         />
-                      )}
-                      <span className="truncate">{s.title || s.id}</span>
-                    </span>
-                    <span className="flex items-center gap-1.5 text-[10px] text-text-muted">
-                      <span>{relativeTime(s.mtimeMs, nowMs)}</span>
-                      {s.model && (
-                        <span className="px-1 rounded bg-surface-elevated text-text-secondary">
-                          {shortModel(s.model)}
+                        <span className="flex-1 min-w-0 truncate text-sm text-text-primary">
+                          {s.title || s.id}
                         </span>
-                      )}
-                      {s.isArchived && (
-                        <span className="px-1 rounded bg-surface-elevated text-text-muted">
-                          archived
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-          </div>
-        );
-      })}
+                        {revealed ? (
+                          <span className="flex items-center gap-2 text-[11px] text-text-muted">
+                            {s.model && (
+                              <span className="px-1.5 py-0.5 rounded bg-surface-elevated text-text-secondary">
+                                {shortModel(s.model)}
+                              </span>
+                            )}
+                            {s.isArchived && (
+                              <span className="px-1.5 py-0.5 rounded bg-surface-elevated text-text-muted">
+                                archived
+                              </span>
+                            )}
+                            <span className="tabular-nums">{relativeTime(s.mtimeMs, nowMs)}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-text-muted tabular-nums">
+                            {relativeTime(s.mtimeMs, nowMs)}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

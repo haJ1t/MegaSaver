@@ -104,7 +104,7 @@ describe("TasksPanel", () => {
 });
 
 describe("Session TokenSaverPanel (read-only)", () => {
-  it("renders the tokens-saved table with no write controls", async () => {
+  it("renders the tokens-saved hero metric with no write controls", async () => {
     const stats = {
       liveSessionId: ID,
       eventsTotal: 1,
@@ -125,8 +125,9 @@ describe("Session TokenSaverPanel (read-only)", () => {
     );
     render(<SessionTokenSaverPanel dir={DIR} id={ID} />);
     // raw 1000 B -> 250 tok, returned 200 B -> 50 tok, saved 200 tok
-    await waitFor(() => expect(screen.getByText("200 tokens")).toBeDefined());
-    expect(screen.getByText("Saved")).toBeDefined();
+    await waitFor(() => expect(screen.getByText("tokens saved")).toBeDefined());
+    expect(screen.getByText("200")).toBeDefined();
+    expect(screen.getByText(/80%/)).toBeDefined();
     expect(screen.queryByRole("button", { name: /enable/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /disable/i })).toBeNull();
   });

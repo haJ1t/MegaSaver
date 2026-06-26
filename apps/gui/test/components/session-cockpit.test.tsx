@@ -35,14 +35,13 @@ afterEach(() => {
 });
 
 describe("SessionCockpit", () => {
-  it("renders one tab per registered panel with Transcript active by default", () => {
+  it("renders top-level groups with Transcript active by default", () => {
     render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);
     const transcriptTab = screen.getByRole("button", { name: "Transcript" });
-    const telemetryTab = screen.getByRole("button", { name: "Telemetry" });
+    const workspaceTab = screen.getByRole("button", { name: /Workspace/ });
     expect(transcriptTab).toBeDefined();
-    expect(telemetryTab).toBeDefined();
+    expect(workspaceTab).toBeDefined();
     expect(transcriptTab.getAttribute("aria-current")).toBe("page");
-    expect(telemetryTab.getAttribute("aria-current")).toBeNull();
   });
 
   it("switches active panel and renders telemetry when the Telemetry tab is clicked", async () => {
@@ -64,14 +63,19 @@ describe("SessionCockpit", () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it("mounts the workspace Rules panel keyed by the session cwd", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true, status: 200, json: async () => [] })),
-    );
+  it("closes grouped workspace panels on Escape", () => {
     render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "Rules" }));
-    await waitFor(() => expect(screen.getByText("No rules yet.")).toBeDefined());
-    vi.unstubAllGlobals();
+    fireEvent.click(screen.getByRole("button", { name: /Workspace/ }));
+    expect(screen.getByRole("menuitem", { name: "Rules" })).toBeDefined();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menuitem", { name: "Rules" })).toBeNull();
+  });
+
+  it("links grouped tab button to its menu with aria-controls", () => {
+    render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);
+    const workspaceTab = screen.getByRole("button", { name: /Workspace/ });
+    fireEvent.click(workspaceTab);
+    const menu = screen.getByRole("menu", { name: /Workspace panels/ });
+    expect(workspaceTab.getAttribute("aria-controls")).toBe(menu.id);
   });
 });

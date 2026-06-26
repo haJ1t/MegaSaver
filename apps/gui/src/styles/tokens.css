@@ -1,10 +1,11 @@
-/*
- * Mega Saver GUI v1 — Design Tokens
- * Editorial Terminal aesthetic: zinc base, DM Mono, amber accent.
- * CSS variables are the single source of truth for all color/radius/shadow.
+/**
+ * Mega Saver GUI v2 — Design Tokens
+ * Editorial Workspace aesthetic: warm monochrome, geometric sans UI,
+ * DM Mono retained for code/data only.
+ * CSS variables are the single source of truth for color/radius/shadow.
  * Tailwind utilities reference these via tailwind.config.js.
  *
- * Token surface is a closed set per spec §6a. Adding a new color role
+ * Token surface is a closed set per spec. Adding a new color role
  * requires a spec amendment — do NOT add inline hex literals in components.
  */
 
@@ -15,36 +16,48 @@
 /* ── Light mode (default) ── */
 :root {
   /* Backgrounds */
-  --color-background: #f5f4f2;
+  --color-background: #f7f6f3;
   --color-surface: #ffffff;
-  --color-surface-elevated: #f0ede8;
+  --color-surface-elevated: #f0eeeb;
 
   /* Text */
-  --color-text-primary: #141519;
+  --color-text-primary: #111111;
   --color-text-secondary: #545968;
-  --color-text-muted: #646b77;
+  --color-text-muted: #787774;
 
   /* Borders */
-  --color-border: #d4d1cb;
+  --color-border: #eaeaea;
 
-  /* Accent — desaturated amber, warm against cool zinc */
-  --color-accent: #a25616;
+  /* Accent — near-black for primary actions; high contrast without color noise */
+  --color-accent: #111111;
   --color-accent-fg: #ffffff;
 
   /* Danger — destructive actions (End session) */
-  --color-danger: #b83232;
+  --color-danger: #9f2f2d;
   --color-danger-fg: #fff0f0;
 
   /* Warn — medium risk, caution states */
-  --color-warn: #b85e15;
-  --color-warn-fg: #fff3e6;
+  --color-warn: #956400;
+  --color-warn-fg: #fff3db;
 
   /* Ok — open status, success */
-  --color-ok: #2c7348;
-  --color-ok-fg: #ebf5ef;
+  --color-ok: #346538;
+  --color-ok-fg: #edf3ec;
 
-  /* Focus ring — accessibility, uses accent in both modes */
-  --color-focus-ring: #c4681a;
+  /* Focus ring — accessibility */
+  --color-focus-ring: #111111;
+
+  /* Spot-pastel status badges */
+  --status-live-bg: #edf3ec;
+  --status-live-fg: #346538;
+  --status-active-bg: #e1f3fe;
+  --status-active-fg: #1f6c9f;
+  --status-warn-bg: #fbf3db;
+  --status-warn-fg: #956400;
+  --status-danger-bg: #fdebef;
+  --status-danger-fg: #9f2f2d;
+  --status-muted-bg: #f0eeeb;
+  --status-muted-fg: #545968;
 
   /* Badge backgrounds and foregrounds for risk levels */
   --badge-risk-low-bg: #ededec;
@@ -85,7 +98,7 @@
 /* ── Dark mode (auto via OS preference) ── */
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Backgrounds — near-black zinc, OLED-safe */
+    /* Backgrounds — warm near-black, OLED-safe */
     --color-background: #0c0d0f;
     --color-surface: #141519;
     --color-surface-elevated: #1c1d23;
@@ -93,39 +106,51 @@
     /* Text */
     --color-text-primary: #f0f1f3;
     --color-text-secondary: #9ea3ad;
-    --color-text-muted: #8b909d;
+    --color-text-muted: #6e747f;
 
     /* Borders */
     --color-border: #2a2d35;
 
-    /* Accent — desaturated amber, warm against zinc */
-    --color-accent: #e8973a;
+    /* Accent */
+    --color-accent: #f0f1f3;
     --color-accent-fg: #0c0d0f;
 
     /* Danger */
-    --color-danger: #dc4f4f;
-    --color-danger-fg: #fff0f0;
+    --color-danger: #e87171;
+    --color-danger-fg: #2a1010;
 
     /* Warn */
-    --color-warn: #d97b2a;
-    --color-warn-fg: #fff7ed;
+    --color-warn: #fbbf24;
+    --color-warn-fg: #2a2010;
 
     /* Ok */
-    --color-ok: #3b8c5a;
-    --color-ok-fg: #e8f5ee;
+    --color-ok: #5ec98a;
+    --color-ok-fg: #0e2018;
 
     /* Focus ring */
-    --color-focus-ring: #e8973a;
+    --color-focus-ring: #f0f1f3;
+
+    /* Spot-pastel status badges — brightened for dark canvas */
+    --status-live-bg: #0e2018;
+    --status-live-fg: #5ec98a;
+    --status-active-bg: #0f1f2a;
+    --status-active-fg: #60a5fa;
+    --status-warn-bg: #2a2010;
+    --status-warn-fg: #fbbf24;
+    --status-danger-bg: #2a1010;
+    --status-danger-fg: #f87171;
+    --status-muted-bg: #1c1d23;
+    --status-muted-fg: #9ea3ad;
 
     /* Badge: risk levels */
     --badge-risk-low-bg: #20222a;
     --badge-risk-low-fg: #9ea3ad;
     --badge-risk-medium-bg: #2a2010;
-    --badge-risk-medium-fg: #e8973a;
+    --badge-risk-medium-fg: #fbbf24;
     --badge-risk-high-bg: #2a1510;
-    --badge-risk-high-fg: #e8714a;
+    --badge-risk-high-fg: #f08a6a;
     --badge-risk-critical-bg: #2a1010;
-    --badge-risk-critical-fg: #e85555;
+    --badge-risk-critical-fg: #f87171;
 
     /* Badge: session status */
     --badge-status-open-bg: #0e2018;
@@ -157,14 +182,14 @@
 /* ── Base layer overrides ── */
 @layer base {
   *,
-  *::before,
-  *::after {
+  *::after,
+  *::before {
     box-sizing: border-box;
   }
 
   html {
-    font-family: "DM Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 14px; /* base = 14px on desktop, dense console */
+    font-family: "SF Pro Display", "Geist Sans", "Helvetica Neue", system-ui, sans-serif;
+    font-size: 14px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -172,8 +197,16 @@
   body {
     background-color: var(--color-background);
     color: var(--color-text-primary);
+    line-height: 1.6;
     margin: 0;
     padding: 0;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: "DM Mono", "Geist Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
   }
 
   /* Visible focus ring using the token — never suppress outline without replacement */
@@ -185,10 +218,10 @@
   /* Respect reduced motion for all transitions and animations */
   @media (prefers-reduced-motion: reduce) {
     *,
-    *::before,
-    *::after {
-      transition: none !important;
+    *::after,
+    *::before {
       animation: none !important;
+      transition: none !important;
     }
   }
 }
@@ -228,12 +261,46 @@
     color: var(--badge-scope-session-fg);
   }
 
-  /* Row animation: stagger-fade on list mount */
-  .row-enter {
-    opacity: 0;
+  /* Spot-pastel status badges */
+  .badge-status-live {
+    background-color: var(--status-live-bg);
+    color: var(--status-live-fg);
   }
-  .row-enter-done {
-    opacity: 1;
-    transition: opacity 120ms ease-out;
+  .badge-status-active {
+    background-color: var(--status-active-bg);
+    color: var(--status-active-fg);
+  }
+  .badge-status-warn {
+    background-color: var(--status-warn-bg);
+    color: var(--status-warn-fg);
+  }
+  .badge-status-danger {
+    background-color: var(--status-danger-bg);
+    color: var(--status-danger-fg);
+  }
+  .badge-status-muted {
+    background-color: var(--status-muted-bg);
+    color: var(--status-muted-fg);
+  }
+
+  /* Row animation: stagger-fade on list mount */
+  @keyframes row-enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .row-enter {
+    animation: row-enter 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-enter {
+    animation: none;
   }
 }

@@ -49,11 +49,7 @@ export function HookConnection(): JSX.Element {
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-xs text-text-muted uppercase tracking-widest">Saver hook</h3>
-      <p className="text-xs text-text-muted">
-        Connecting installs the Mega Saver hooks into Claude Code. This applies to all Claude Code
-        sessions on this machine.
-      </p>
+      <h3 className="text-sm font-medium text-text-primary">Saver hook</h3>
       {state === "loading" && <LoadingState label="Loading hook status..." />}
       {state === "error" && error && <ErrorState error={error} onRetry={load} />}
       {state === "ready" && status && (

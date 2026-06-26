@@ -2,16 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorState, LoadingState } from "../../components/states.js";
 import type { BridgeError } from "../../components/states.js";
 import {
+  type ClaudeHookStatus,
+  type DaemonStatus,
   type OverlaySessionTokenSaverStats,
+  type WorkspaceSaverStatus,
+  fetchClaudeHookStatus,
+  fetchDaemonStatus,
   fetchSessionTokenSaverStats,
+  fetchWorkspaceSaver,
 } from "../../lib/claude-sessions-client.js";
 import { DaemonStatusPanel } from "./daemon-status.js";
 import { HookConnection } from "./hook-connection.js";
 import { SaverModeActivation } from "./saver-mode-activation.js";
 
-// Stats are file-backed (the proxy writes them as it compresses), so a short
-// poll is the live-update mechanism. Silent polls keep the last good data on a
-// transient error rather than flashing the error state.
 const POLL_MS = 2_000;
 
 export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.Element {
@@ -48,91 +51,131 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
   return (
     <section
       aria-label="Session token saver"
-      className="flex flex-col gap-4 px-6 py-6 overflow-y-auto flex-1 min-h-0"
+      className="flex flex-col gap-6 px-6 py-6 overflow-y-auto flex-1 min-h-0"
     >
-      <h2 className="text-sm text-text-muted uppercase tracking-widest">Token saver</h2>
-      <HookConnection />
-      <SaverModeActivation dir={dir} id={id} />
-      {/* Conversation proxy (llm-proxy) is hidden: it routes via ANTHROPIC_BASE_URL,
-          which Claude Desktop overrides, so it is dead in the cockpit's context.
-          The context daemon (below) is the active token-saver here. The proxy code
-          stays for CLI/Codex token metering — see ProxyActivation / @megasaver/llm-proxy. */}
-      <DaemonStatusPanel />
-      <h3 className="flex items-center gap-2 text-xs text-text-muted uppercase tracking-widest">
-        Tokens saved (this session)
-        <span className="inline-flex items-center gap-1 normal-case tracking-normal text-text-secondary">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold tracking-tight text-text-primary">Token saver</h2>
+        <span className="flex items-center gap-1.5 text-xs text-text-muted">
           <span
             className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse"
             aria-hidden="true"
           />
           live
         </span>
-      </h3>
+      </div>
+
       {state === "loading" && <LoadingState label="Loading token-saver stats…" />}
       {state === "error" && error && (
         <ErrorState error={error} onRetry={() => void fetchData(false)} />
       )}
       {state === "ready" &&
         (stats === null ? (
-          <p className="text-xs text-text-muted">No proxy activity recorded for this session.</p>
+          <p className="text-sm text-text-muted">No proxy activity recorded for this session.</p>
         ) : (
-          <TokensSavedTable stats={stats} />
+          <div className="bg-surface border border-border rounded-xl p-6">
+            <HeroMetric stats={stats} />
+            <div className="mt-4 flex flex-wrap gap-2">
+              <HookBadge />
+              <SaverBadge dir={dir} id={id} />
+              <DaemonBadge />
+            </div>
+          </div>
         ))}
+
+      <details className="group">
+        <summary className="text-xs text-text-secondary cursor-pointer hover:text-text-primary transition-colors">
+          Advanced
+        </summary>
+        <div className="mt-4 flex flex-col gap-6">
+          <HookConnection />
+          <SaverModeActivation dir={dir} id={id} />
+          <DaemonStatusPanel />
+        </div>
+      </details>
     </section>
   );
 }
 
-// The tokens Claude Code would have spent on raw tool output vs. what MegaSaver
-// actually returned this session. tokensFromBytes mirrors @megasaver/stats
-// honest-metrics (Math.ceil(bytes / 4)); replicated here so the node-coupled
-// stats package is never pulled into the browser bundle.
-function TokensSavedTable({ stats }: { stats: OverlaySessionTokenSaverStats }): JSX.Element {
+function HeroMetric({ stats }: { stats: OverlaySessionTokenSaverStats }): JSX.Element {
   const would = tokensFromBytes(stats.rawBytesTotal);
   const used = tokensFromBytes(stats.returnedBytesTotal);
   const saved = Math.max(0, would - used);
   const pct = would === 0 ? 0 : Math.round((saved / would) * 100);
   return (
-    <table className="w-full text-xs border border-border rounded-md overflow-hidden">
-      <caption className="sr-only">Tokens saved from the Claude Code budget this session</caption>
-      <tbody>
-        <Row label="Would have used" value={fmtTokens(would)} />
-        <Row label="Actually used" value={fmtTokens(used)} />
-        <Row label="Saved" value={fmtTokens(saved)} emphasis />
-        <Row label="Saved %" value={`${pct}%`} emphasis />
-      </tbody>
-    </table>
+    <div>
+      <div className="text-4xl font-semibold tracking-tight text-text-primary tabular-nums">
+        {saved.toLocaleString()}
+      </div>
+      <div className="text-sm text-text-secondary">tokens saved</div>
+      <div className="mt-1 text-xs text-text-muted">
+        {pct}% vs. raw output · {would.toLocaleString()} would-have-used
+      </div>
+    </div>
+  );
+}
+
+function HookBadge(): JSX.Element {
+  const [status, setStatus] = useState<ClaudeHookStatus | null>(null);
+  useEffect(() => {
+    void fetchClaudeHookStatus().then(setStatus);
+  }, []);
+  const connected = status?.connected ?? false;
+  return (
+    <StatusBadge tone={connected ? "ok" : "muted"}>
+      {connected ? "Hook connected" : "Hook disconnected"}
+    </StatusBadge>
+  );
+}
+
+function SaverBadge({ dir, id }: { dir: string; id: string }): JSX.Element {
+  const [status, setStatus] = useState<WorkspaceSaverStatus | null>(null);
+  useEffect(() => {
+    void fetchWorkspaceSaver(dir, id).then(setStatus);
+  }, [dir, id]);
+  const enabled = status?.enabled ?? false;
+  return (
+    <StatusBadge tone={enabled ? "active" : "muted"}>
+      {enabled ? "Saver active" : "Saver off"}
+    </StatusBadge>
+  );
+}
+
+function DaemonBadge(): JSX.Element {
+  const [status, setStatus] = useState<DaemonStatus | null>(null);
+  useEffect(() => {
+    void fetchDaemonStatus().then(setStatus);
+  }, []);
+  const running = status?.running ?? false;
+  return (
+    <StatusBadge tone={running ? "ok" : "muted"}>
+      {running ? "Daemon live" : "Daemon stopped"}
+    </StatusBadge>
+  );
+}
+
+function StatusBadge({
+  children,
+  tone,
+}: {
+  children: React.ReactNode;
+  tone: "ok" | "active" | "muted" | "warn" | "danger";
+}): JSX.Element {
+  const toneClass = {
+    ok: "badge-status-live",
+    active: "badge-status-active",
+    muted: "badge-status-muted",
+    warn: "badge-status-warn",
+    danger: "badge-status-danger",
+  }[tone];
+  return (
+    <span
+      className={`px-2.5 py-1 rounded-full text-[11px] font-medium uppercase tracking-wide ${toneClass}`}
+    >
+      {children}
+    </span>
   );
 }
 
 function tokensFromBytes(bytes: number): number {
   return Math.ceil(bytes / 4);
-}
-
-function fmtTokens(n: number): string {
-  return `${n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")} tokens`;
-}
-
-function Row({
-  label,
-  value,
-  emphasis = false,
-}: {
-  label: string;
-  value: string;
-  emphasis?: boolean;
-}): JSX.Element {
-  return (
-    <tr className="border-t border-border first:border-t-0">
-      <td
-        className={`px-3 py-2 ${emphasis ? "text-text-primary font-semibold" : "text-text-muted"}`}
-      >
-        {label}
-      </td>
-      <td
-        className={`px-3 py-2 text-right tabular-nums ${emphasis ? "text-accent font-semibold" : "text-text-primary font-medium"}`}
-      >
-        {value}
-      </td>
-    </tr>
-  );
 }
