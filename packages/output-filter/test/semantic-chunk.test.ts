@@ -98,6 +98,76 @@ describe("chunkBySemantic (T2)", () => {
     expect(chunks).not.toBeNull();
     assertExhaustivePartition(text, chunks ?? []);
   });
+
+  it("aligns chunks to def/class boundaries for a .py file", async () => {
+    const text = [
+      "import os",
+      "",
+      "def alpha():",
+      "    return 1",
+      "",
+      "class Beta:",
+      "    def m(self):",
+      "        return 2",
+      "",
+    ].join("\n");
+    const chunks = await chunkBySemantic(text, "mod.py");
+    expect(chunks).not.toBeNull();
+    const c = chunks ?? [];
+    expect(c.some((k) => k.text.includes("def alpha"))).toBe(true);
+    expect(c.some((k) => k.text.includes("class Beta"))).toBe(true);
+    assertExhaustivePartition(text, c);
+  });
+
+  it("aligns chunks to func/type boundaries for a .go file", async () => {
+    const text = [
+      "package main",
+      "",
+      "func Alpha() int {",
+      "\treturn 1",
+      "}",
+      "",
+      "type Beta struct {",
+      "\tN int",
+      "}",
+      "",
+    ].join("\n");
+    const chunks = await chunkBySemantic(text, "mod.go");
+    expect(chunks).not.toBeNull();
+    const c = chunks ?? [];
+    expect(c.some((k) => k.text.includes("func Alpha"))).toBe(true);
+    expect(c.some((k) => k.text.includes("type Beta"))).toBe(true);
+    assertExhaustivePartition(text, c);
+  });
+
+  it("aligns chunks to fn/struct boundaries for a .rs file", async () => {
+    const text = [
+      "use std::io;",
+      "",
+      "pub fn alpha() -> i32 {",
+      "    1",
+      "}",
+      "",
+      "struct Beta {",
+      "    n: i32,",
+      "}",
+      "",
+    ].join("\n");
+    const chunks = await chunkBySemantic(text, "mod.rs");
+    expect(chunks).not.toBeNull();
+    const c = chunks ?? [];
+    expect(c.some((k) => k.text.includes("pub fn alpha"))).toBe(true);
+    expect(c.some((k) => k.text.includes("struct Beta"))).toBe(true);
+    assertExhaustivePartition(text, c);
+  });
+
+  it("returns null for an unsupported source extension (.pyc)", async () => {
+    expect(await chunkBySemantic("blob\nmore", "mod.pyc")).toBeNull();
+  });
+
+  it("returns null when a .py file has zero top-level decls", async () => {
+    expect(await chunkBySemantic("x = 1\ny = 2", "consts.py")).toBeNull();
+  });
 });
 
 describe("partitionFile (T2 helper)", () => {

@@ -21,12 +21,18 @@ async function loadExtractors(): Promise<typeof import("@megasaver/indexer")> {
 }
 
 const TS_EXT = /\.(mts|cts|tsx|jsx|ts|js|mjs|cjs)$/;
+const PY_EXT = /\.py$/;
+const GO_EXT = /\.go$/;
+const RS_EXT = /\.rs$/;
 
 function extractorFor(
   path: string,
   extractors: typeof import("@megasaver/indexer"),
 ): Extractor | undefined {
   if (TS_EXT.test(path)) return extractors.extractTs;
+  if (PY_EXT.test(path)) return extractors.extractPy;
+  if (GO_EXT.test(path)) return extractors.extractGo;
+  if (RS_EXT.test(path)) return extractors.extractRs;
   if (path.endsWith(".md")) return extractors.extractMd;
   if (path.endsWith(".json")) return extractors.extractJson;
   return undefined;
@@ -100,7 +106,14 @@ export function partitionFile(
 }
 
 function isSupportedSource(path: string): boolean {
-  return TS_EXT.test(path) || path.endsWith(".md") || path.endsWith(".json");
+  return (
+    TS_EXT.test(path) ||
+    PY_EXT.test(path) ||
+    GO_EXT.test(path) ||
+    RS_EXT.test(path) ||
+    path.endsWith(".md") ||
+    path.endsWith(".json")
+  );
 }
 
 // Returns null (never throws) to signal "use line chunking": unsupported
