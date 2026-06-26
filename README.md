@@ -12,7 +12,7 @@ relevant excerpts. The full raw output stays on your disk, one call away.
 The result: a 60 KB file read or a 300 KB test log reaches the model as a few
 hundred tokens of the parts that actually matter — not the whole wall of text.
 
-**Others prune output. Mega Saver prunes with your project's memory** — it uses
+**Others prune output. MegaSaver prunes with your project’s memory.** It uses
 your structured memory and past failures to decide what's relevant, so the
 excerpts it keeps are the ones your current task needs.
 
