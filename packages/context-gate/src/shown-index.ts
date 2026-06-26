@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { SHOWN_INDEX_FILENAME, atomicWriteFile } from "@megasaver/content-store";
+import type { OutputExcerpt } from "@megasaver/output-filter";
+import { hashContent } from "./read-index.js";
 
 export type ShownIndexEntry = { chunkSetId: string };
 type ShownIndex = Record<string, ShownIndexEntry>;
@@ -46,4 +48,50 @@ export function recordShown(
   } catch {
     // best-effort: a failed record just means the next occurrence is a dedup miss.
   }
+}
+
+export function dedupShownExcerpts(input: {
+  sessionDir: string;
+  currentChunkSetId: string;
+  excerpts: readonly OutputExcerpt[];
+}): {
+  excerpts: OutputExcerpt[];
+  suppressed: number;
+  priorChunkSetIds: string[];
+  recordEntries: { textHash: string; chunkSetId: string }[];
+} {
+  const index = loadShownIndex(input.sessionDir);
+  const seenThisBatch = new Set<string>();
+  const kept: OutputExcerpt[] = [];
+  const recordEntries: { textHash: string; chunkSetId: string }[] = [];
+  const priorChunkSetIds: string[] = [];
+  let suppressed = 0;
+
+  const pushDistinct = (id: string): void => {
+    if (!priorChunkSetIds.includes(id)) priorChunkSetIds.push(id);
+  };
+
+  for (const excerpt of input.excerpts) {
+    const h = hashContent(excerpt.text);
+    const row = index[h];
+    const priorId =
+      row !== undefined && typeof row.chunkSetId === "string" && row.chunkSetId.length > 0
+        ? row.chunkSetId
+        : undefined;
+    if (priorId !== undefined) {
+      suppressed++;
+      pushDistinct(priorId);
+      continue;
+    }
+    if (seenThisBatch.has(h)) {
+      suppressed++;
+      pushDistinct(input.currentChunkSetId);
+      continue;
+    }
+    seenThisBatch.add(h);
+    kept.push(excerpt);
+    recordEntries.push({ textHash: h, chunkSetId: input.currentChunkSetId });
+  }
+
+  return { excerpts: kept, suppressed, priorChunkSetIds, recordEntries };
 }
