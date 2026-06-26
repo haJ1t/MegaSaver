@@ -124,7 +124,9 @@ export function WorkspaceSessionList({
                         onClick={() => onSelect(s)}
                         onMouseEnter={() => setHoveredKey(key)}
                         onMouseLeave={() => setHoveredKey((prev) => (prev === key ? null : prev))}
-                        className="flex items-center gap-3 w-full px-4 py-3 text-left border-t border-border/50 cursor-pointer hover:bg-surface-elevated transition-colors"
+                        onFocus={() => setHoveredKey(key)}
+                        onBlur={() => setHoveredKey(null)}
+                        className="flex items-center gap-3 w-full px-4 py-3 text-left border-t border-border/50 cursor-pointer hover:bg-surface-elevated transition-colors row-enter row-enter-done"
                         style={{ animationDelay: `${index * 40}ms` }}
                       >
                         <span

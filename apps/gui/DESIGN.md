@@ -17,7 +17,7 @@ been relaxed to reduce eye strain during long sessions.
 | `text-base` | 0.875rem / 1.5rem | Default body |
 | `text-lg` | 1rem / 1.5rem | Card titles, cockpit header |
 | `text-xl` | 1.25rem / 1.5rem | Page title only |
-| `text-5xl` | 3rem / 1 | Hero metrics (tokens saved) |
+| `text-4xl` | 2.25rem / 1 | Hero metrics (tokens saved) |
 | `font-normal` | 400 | Body text |
 | `font-medium` | 500 | Labels, active nav, button text |
 | `font-semibold` | 600 | Headings, metric values |
@@ -35,43 +35,54 @@ Tailwind utilities (`bg-surface`, `text-accent`, etc.) — never hardcode hex.
 |----------|-----|------|
 | `--color-background` | `#F7F6F3` | Warm page background |
 | `--color-surface` | `#FFFFFF` | Cards, panels, list surface |
-| `--color-surface-elevated` | `#F9F9F8` | Hover, selected row, input background |
-| `--color-text-primary` | `#111111` | Headings, primary body |
-| `--color-text-secondary` | `#5E5C58` | Secondary text, metadata |
-| `--color-text-muted` | `#A09D98` | Disabled, placeholder, field labels |
-| `--color-border` | `#EAEAEA` | Dividers, input borders, card borders |
-| `--color-accent` | `#111111` | Active nav pill, primary emphasis |
+| `--color-surface-elevated` | `#F0EEEB` | Hover, selected row |
+| `--color-text-primary` | `#111111` | Primary text |
+| `--color-text-secondary` | `#545968` | Metadata |
+| `--color-text-muted` | `#787774` | Placeholders, disabled |
+| `--color-border` | `#EAEAEA` | Dividers |
+| `--color-accent` | `#111111` | Primary actions, active nav pill |
 | `--color-accent-fg` | `#FFFFFF` | Text on accent |
-| `--color-danger` | `#B83232` | Destructive actions |
+| `--color-danger` | `#9F2F2D` | Destructive actions |
 | `--color-danger-fg` | `#FFF0F0` | Text on danger |
-| `--color-warn` | `#B85E15` | Warnings |
-| `--color-warn-fg` | `#FFF3E6` | Text on warn |
-| `--color-ok` | `#2C7348` | Success, live status |
-| `--color-ok-fg` | `#EBF5EF` | Text on ok |
+| `--color-warn` | `#956400` | Warnings |
+| `--color-warn-fg` | `#FFF3DB` | Text on warn |
+| `--color-ok` | `#346538` | Success, live status |
+| `--color-ok-fg` | `#EDF3EC` | Text on ok |
 | `--color-focus-ring` | `#111111` | Focus indicator |
 
 ### Dark mode (auto via `prefers-color-scheme: dark`)
 
 | Variable | Hex | Role |
 |----------|-----|------|
-| `--color-background` | `#0F0F0E` | Warm near-black |
-| `--color-surface` | `#171716` | Surface base |
-| `--color-surface-elevated` | `#1E1E1D` | Elevated / selected |
-| `--color-text-primary` | `#F0F0EE` | Body |
-| `--color-text-secondary` | `#9E9C98` | Metadata |
-| `--color-text-muted` | `#5E5D59` | Muted |
-| `--color-border` | `#2A2A28` | Dividers |
-| `--color-accent` | `#FFFFFF` | Active emphasis |
-| `--color-accent-fg` | `#111111` | Text on accent |
+| `--color-background` | `#0C0D0F` | Warm near-black |
+| `--color-surface` | `#141519` | Surface base |
+| `--color-surface-elevated` | `#1C1D23` | Elevated / selected |
+| `--color-text-primary` | `#F0F1F3` | Body |
+| `--color-text-secondary` | `#9EA3AD` | Metadata |
+| `--color-text-muted` | `#6E747F` | Muted |
+| `--color-border` | `#2A2D35` | Dividers |
+| `--color-accent` | `#F0F1F3` | Active emphasis |
+| `--color-accent-fg` | `#0C0D0F` | Text on accent |
+| `--color-danger` | `#E87171` | Destructive |
+| `--color-danger-fg` | `#2A1010` | Text on danger |
+| `--color-warn` | `#FBBF24` | Warnings |
+| `--color-warn-fg` | `#2A2010` | Text on warn |
+| `--color-ok` | `#5EC98A` | Success |
+| `--color-ok-fg` | `#0E2018` | Text on ok |
+| `--color-focus-ring` | `#F0F1F3` | Focus indicator |
 
 ### Spot pastels (status badges only)
 
 | Variable | Background | Foreground | Use |
 |----------|------------|------------|-----|
-| `--status-live-bg` | `#EDF3EC` | `#346538` | Live session dot |
-| `--status-info-bg` | `#E1F3FE` | `#1F6C9F` | Info badges |
-| `--status-warn-bg` | `#FBF3DB` | `#956400` | Caution badges |
-| `--status-error-bg` | `#FDEBEC` | `#9F2F2D` | Error badges |
+| `--status-live-bg` / `fg` | `#EDF3EC` | `#346538` | Live / connected / ok |
+| `--status-active-bg` / `fg` | `#E1F3FE` | `#1F6C9F` | Active / in-progress |
+| `--status-warn-bg` / `fg` | `#FBF3DB` | `#956400` | Caution |
+| `--status-danger-bg` / `fg` | `#FDEBEF` | `#9F2F2D` | Error / disconnected |
+| `--status-muted-bg` / `fg` | `#F0EEEB` | `#545968` | Off / stopped |
+
+Dark variants of the pastel variables are defined in `tokens.css` and accessed
+through the same utility classes.
 
 ---
 
@@ -95,15 +106,15 @@ Tailwind utilities (`bg-surface`, `text-accent`, etc.) — never hardcode hex.
 ### Session list
 
 - Workspaces rendered as collapsible sections inside a card.
-- Each row shows title + relative time by default.
-- Model and archived status appear only on hover/focus.
+- Each row shows title + live/idle dot + relative time by default.
+- Model and archived status appear on hover or keyboard focus.
 - No per-group live dot; only sessions have a live dot.
 
 ### Cockpit panels
 
-- Header: back link + session title + cwd subtitle.
-- Token saver uses a hero metric: large saved-token count with supporting
-  "Would have used" / "Actually used" mini-metrics.
+- Header: text-only "← Back" + stacked title and path.
+- Token saver uses a hero metric: large saved-token count with pastel status
+  badges (Hook, Saver, Daemon). Controls live under an "Advanced" `<details>`.
 
 ---
 
@@ -112,8 +123,7 @@ Tailwind utilities (`bg-surface`, `text-accent`, etc.) — never hardcode hex.
 | Class | Value | When to use |
 |-------|-------|-------------|
 | `rounded-md` | 6px | Buttons, inputs, badges |
-| `rounded-lg` | 12px | Cards, panels |
-| `rounded-xl` | 12px | Primary cards (alias) |
+| `rounded-lg` / `rounded-xl` | 12px | Cards, panels |
 | `rounded-full` | 9999px | Status dots |
 
 ---
@@ -129,9 +139,9 @@ Tailwind utilities (`bg-surface`, `text-accent`, etc.) — never hardcode hex.
 
 ## Motion
 
-- Row stagger on list mount: `opacity 0→1` + `translateY(8px→0)`, 40ms stagger.
+- Row stagger on list mount: `opacity 0→1` + `translateY(8px)→0`, 40ms stagger,
+  400ms `cubic-bezier(0.16, 1, 0.3, 1)`.
 - Hover transitions: 150ms color/background changes.
-- Dropdown: instant appear; no scale/fade required.
 - `prefers-reduced-motion: reduce` → all transitions and animations disabled.
 
 ---
@@ -154,4 +164,4 @@ Tailwind utilities (`bg-surface`, `text-accent`, etc.) — never hardcode hex.
 - Editorial Terminal mono-everywhere aesthetic replaced by sans UI + mono code.
 - Zinc/amber palette replaced by warm monochrome with black accent.
 - Dense inline lists replaced by rounded cards and grouped tabs.
-- Token-saver table replaced by hero-metric layout.
+- Token-saver table replaced by hero-metric layout with pastel badges.

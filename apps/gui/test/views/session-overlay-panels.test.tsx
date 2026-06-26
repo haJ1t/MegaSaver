@@ -125,9 +125,9 @@ describe("Session TokenSaverPanel (read-only)", () => {
     );
     render(<SessionTokenSaverPanel dir={DIR} id={ID} />);
     // raw 1000 B -> 250 tok, returned 200 B -> 50 tok, saved 200 tok
-    await waitFor(() => expect(screen.getByText("Tokens saved this session")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("tokens saved")).toBeDefined());
     expect(screen.getByText("200")).toBeDefined();
-    expect(screen.getByText("80%")).toBeDefined();
+    expect(screen.getByText(/80%/)).toBeDefined();
     expect(screen.queryByRole("button", { name: /enable/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /disable/i })).toBeNull();
   });

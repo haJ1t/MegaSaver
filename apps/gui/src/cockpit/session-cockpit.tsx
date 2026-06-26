@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { COCKPIT_TAB_GROUPS, getPanel } from "./panel-registry.js";
 
 export function SessionCockpit({
@@ -16,6 +16,7 @@ export function SessionCockpit({
 }): JSX.Element {
   const [activePanelId, setActivePanelId] = useState<string>("transcript");
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const navRef = useRef<HTMLElement>(null);
   const active = getPanel(activePanelId);
   const Body = active?.component;
 
@@ -23,6 +24,22 @@ export function SessionCockpit({
     () => COCKPIT_TAB_GROUPS.find((g) => g.panelIds.includes(activePanelId))?.id ?? null,
     [activePanelId],
   );
+
+  useEffect(() => {
+    if (!openGroup) return;
+    const handlePointer = (e: MouseEvent) => {
+      if (!navRef.current?.contains(e.target as Node)) setOpenGroup(null);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenGroup(null);
+    };
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [openGroup]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-surface border border-border rounded-xl overflow-hidden">
@@ -45,6 +62,7 @@ export function SessionCockpit({
       </header>
 
       <nav
+        ref={navRef}
         aria-label="Cockpit panels"
         className="flex items-center gap-6 px-5 border-b border-border shrink-0"
       >

@@ -26,10 +26,7 @@ export function DaemonStatusPanel(): JSX.Element {
 
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="text-xs text-text-muted uppercase tracking-widest">Context daemon</h3>
-      <p className="text-xs text-text-muted">
-        Agent↔tool context daemon; lazily spawned by Claude Code MCP and hook clients.
-      </p>
+      <h3 className="text-sm font-medium text-text-primary">Context daemon</h3>
       <div className="flex items-center gap-2 text-xs">
         <span
           data-status={running ? "live" : "stopped"}

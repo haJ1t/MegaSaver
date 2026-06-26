@@ -261,6 +261,28 @@
     color: var(--badge-scope-session-fg);
   }
 
+  /* Spot-pastel status badges */
+  .badge-status-live {
+    background-color: var(--status-live-bg);
+    color: var(--status-live-fg);
+  }
+  .badge-status-active {
+    background-color: var(--status-active-bg);
+    color: var(--status-active-fg);
+  }
+  .badge-status-warn {
+    background-color: var(--status-warn-bg);
+    color: var(--status-warn-fg);
+  }
+  .badge-status-danger {
+    background-color: var(--status-danger-bg);
+    color: var(--status-danger-fg);
+  }
+  .badge-status-muted {
+    background-color: var(--status-muted-bg);
+    color: var(--status-muted-fg);
+  }
+
   /* Row animation: stagger-fade on list mount */
   .row-enter {
     opacity: 0;

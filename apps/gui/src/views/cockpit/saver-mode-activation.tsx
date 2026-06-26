@@ -49,11 +49,7 @@ export function SaverModeActivation({ dir, id }: { dir: string; id: string }): J
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-xs text-text-muted uppercase tracking-widest">Saver Mode</h3>
-      <p className="text-xs text-text-muted">
-        Activation is workspace-wide: it writes the Mega Saver block into this folder's CLAUDE.md
-        and applies to every Claude session in the same directory.
-      </p>
+      <h3 className="text-sm font-medium text-text-primary">Saver Mode</h3>
       {state === "loading" && <LoadingState label="Loading saver mode..." />}
       {state === "error" && error && <ErrorState error={error} onRetry={load} />}
       {state === "ready" && status && (
