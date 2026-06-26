@@ -60,6 +60,8 @@ describe("TokenSaverPanel — tokens-saved mini table", () => {
     expect(screen.getByText("250 tokens")).toBeDefined(); // would have used
     expect(screen.getByText("50 tokens")).toBeDefined(); // actually used
     expect(screen.getByText("200 tokens")).toBeDefined(); // saved
+    expect(screen.getByText("Saved %")).toBeDefined();
+    expect(screen.getByText("80%")).toBeDefined(); // 200 / 250
   });
 
   it("drops the byte summary and the per-event compression detail", async () => {

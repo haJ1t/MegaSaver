@@ -90,6 +90,7 @@ function TokensSavedTable({ stats }: { stats: OverlaySessionTokenSaverStats }): 
   const would = tokensFromBytes(stats.rawBytesTotal);
   const used = tokensFromBytes(stats.returnedBytesTotal);
   const saved = Math.max(0, would - used);
+  const pct = would === 0 ? 0 : Math.round((saved / would) * 100);
   return (
     <table className="w-full text-xs border border-border rounded-md overflow-hidden">
       <caption className="sr-only">Tokens saved from the Claude Code budget this session</caption>
@@ -97,6 +98,7 @@ function TokensSavedTable({ stats }: { stats: OverlaySessionTokenSaverStats }): 
         <Row label="Would have used" value={fmtTokens(would)} />
         <Row label="Actually used" value={fmtTokens(used)} />
         <Row label="Saved" value={fmtTokens(saved)} emphasis />
+        <Row label="Saved %" value={`${pct}%`} emphasis />
       </tbody>
     </table>
   );
