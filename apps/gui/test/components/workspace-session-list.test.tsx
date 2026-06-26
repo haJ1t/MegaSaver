@@ -73,4 +73,29 @@ describe("WorkspaceSessionList", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect.mock.calls[0]?.[0]?.id).toBe("pick");
   });
+
+  it("wraps groups in a rounded card on a warm background", async () => {
+    stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
+    const { container } = render(<WorkspaceSessionList onSelect={() => {}} />);
+    await waitFor(() => expect(screen.getByText("alpha")).toBeDefined());
+    const card = container.querySelector("[data-testid='session-list-card']");
+    expect(card).not.toBeNull();
+    expect(card?.className).toMatch(/rounded-xl/);
+  });
+
+  it("hides model and archived tags by default", async () => {
+    stub.sessions = [
+      meta({
+        id: "x",
+        title: "X",
+        projectLabel: "/tmp/alpha",
+        model: "claude-sonnet-4-6",
+        isArchived: true,
+      }),
+    ];
+    render(<WorkspaceSessionList onSelect={() => {}} />);
+    await waitFor(() => expect(screen.getByText("X")).toBeDefined());
+    expect(screen.queryByText(/sonnet/)).toBeNull();
+    expect(screen.queryByText("archived")).toBeNull();
+  });
 });
