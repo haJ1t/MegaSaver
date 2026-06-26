@@ -5,9 +5,9 @@ import { join } from "node:path";
 import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrchestratorRegistry } from "../src/registry-port.js";
-import { runOutputExecCommand } from "../src/run-command.js";
+import { runOutputExecCommand, runOverlayOutputExecCommand } from "../src/run-command.js";
 import type { RunCommandSpawn } from "../src/run-command.js";
-import { runOutputPipeline } from "../src/run.js";
+import { runOutputPipeline, runOverlayOutputPipeline } from "../src/run.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
@@ -136,5 +136,78 @@ describe("runOutputExecCommand — grep-then-read dedup (shared session index)",
     expect(o.ok).toBe(true);
     if (!o.ok) return;
     expect("deduped" in o.result).toBe(false);
+  });
+});
+
+const WK = "0123456789abcdef";
+const LSID = "33333333-3333-4333-8333-333333333333";
+
+describe("runOverlayOutputExecCommand — grep-then-read dedup (overlay)", () => {
+  let store: string;
+  let cwd: string;
+  let idCounter: number;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "cg-ov-exec-dedup-store-"));
+    cwd = await mkdtemp(join(tmpdir(), "cg-ov-exec-dedup-cwd-"));
+    idCounter = 0;
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("overlay exec records; later overlay read of same text is suppressed", async () => {
+    const child = makeChild();
+    const execPromise = runOverlayOutputExecCommand({
+      storeRoot: store,
+      workspaceKey: WK,
+      liveSessionId: LSID,
+      cwd,
+      command: "grep",
+      args: ["error"],
+      intent: "find the error",
+      originPid: ROOT_PID,
+      timeoutMs: 300_000,
+      maxBytes: 20_000_000,
+      mode: "balanced",
+      maxReturnedBytes: 12_000,
+      storeRawOutput: true,
+      permissions: null,
+      now: () => NOW,
+      newId: () => `cs-${idCounter++}`,
+      spawn: spawnMock(child),
+    });
+    child.stdout.emit("data", Buffer.from(BODY));
+    child.emit("close", 0);
+    const execOutcome = await execPromise;
+    expect(execOutcome.ok).toBe(true);
+    if (!execOutcome.ok) return;
+    // biome-ignore lint/style/noNonNullAssertion: storeRawOutput true guarantees chunkSetId
+    const grepChunkSetId = execOutcome.result.chunkSetId!;
+
+    const filePath = join(cwd, "f.txt");
+    await writeFile(filePath, BODY);
+    const readOutcome = await runOverlayOutputPipeline({
+      storeRoot: store,
+      workspaceKey: WK,
+      liveSessionId: LSID,
+      cwd,
+      path: filePath,
+      intent: "find the error",
+      mode: "balanced",
+      maxReturnedBytes: 12_000,
+      storeRawOutput: true,
+      permissions: null,
+      now: () => NOW,
+      newId: () => `cs-${idCounter++}`,
+    });
+    expect(readOutcome.ok).toBe(true);
+    if (!readOutcome.ok) return;
+    expect(readOutcome.result.deduped?.priorChunkSetIds).toContain(grepChunkSetId);
+    const grepRaw = await readFile(
+      join(store, "content", WK, LSID, `${grepChunkSetId}.json`),
+      "utf8",
+    );
+    expect(grepRaw).toContain("error: boom");
   });
 });

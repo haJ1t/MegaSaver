@@ -416,7 +416,7 @@ export async function runOverlayOutputExecCommand(
     outcome.capture.terminated !== undefined
       ? [...warnings, `terminated: ${outcome.capture.terminated}`]
       : warnings;
-  const result: ExecResult = {
+  let result: ExecResult = {
     ...filtered,
     ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),
     childExitCode: outcome.capture.childExitCode,
@@ -447,6 +447,22 @@ export async function runOverlayOutputExecCommand(
       return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
     }
     result.chunkSetId = chunkSetId;
+    const sessionDir = join(input.storeRoot, "content", input.workspaceKey, input.liveSessionId);
+    const dd = dedupShownExcerpts({
+      sessionDir,
+      currentChunkSetId: chunkSetId,
+      excerpts: filtered.excerpts,
+    });
+    result =
+      dd.suppressed > 0
+        ? {
+            ...result,
+            excerpts: dd.excerpts,
+            summary: `${result.summary} (${dd.suppressed} chunk(s) already shown earlier this session — expand ${dd.priorChunkSetIds.join(", ")} to view)`,
+            deduped: { suppressed: dd.suppressed, priorChunkSetIds: dd.priorChunkSetIds },
+          }
+        : { ...result, excerpts: dd.excerpts };
+    recordShown(sessionDir, dd.recordEntries);
   }
 
   const event: OverlayTokenSaverEvent = {
