@@ -4,10 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readOverlaySummary } from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { hashContent as hc } from "../src/read-index.js";
 import { resolveOverlayEffectiveSettings } from "../src/read.js";
 import { runOverlayOutputExecCommand } from "../src/run-command.js";
 import type { RunCommandSpawn } from "../src/run-command.js";
 import { runOverlayOutputPipeline } from "../src/run.js";
+import { loadShownIndex } from "../src/shown-index.js";
 
 const ROOT_PID = String(process.pid);
 
@@ -222,7 +224,11 @@ describe("runOverlayOutputPipeline — diff-on-reread suppression (overlay)", ()
     expect("unchanged" in r1.result).toBe(false);
     const names = await readdir(sessionContentDir());
     expect(names).toContain("read-index.json");
-    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(1);
+    expect(
+      names.filter(
+        (n) => n.endsWith(".json") && n !== "read-index.json" && n !== "shown-index.json",
+      ),
+    ).toHaveLength(1);
   });
 
   it("T7: second unchanged read suppresses + skips persist", async () => {
@@ -237,7 +243,11 @@ describe("runOverlayOutputPipeline — diff-on-reread suppression (overlay)", ()
     expect(r2.result.unchanged?.priorChunkSetId).toBe(firstChunkSetId);
     expect(r2.result.summary).toContain("unchanged");
     const names = await readdir(sessionContentDir());
-    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(1);
+    expect(
+      names.filter(
+        (n) => n.endsWith(".json") && n !== "read-index.json" && n !== "shown-index.json",
+      ),
+    ).toHaveLength(1);
   });
 
   it("T8/T10: changed content is a miss with no unchanged field", async () => {
@@ -249,7 +259,11 @@ describe("runOverlayOutputPipeline — diff-on-reread suppression (overlay)", ()
     if (!r2.ok) return;
     expect("unchanged" in r2.result).toBe(false);
     const names = await readdir(sessionContentDir());
-    expect(names.filter((n) => n.endsWith(".json") && n !== "read-index.json")).toHaveLength(2);
+    expect(
+      names.filter(
+        (n) => n.endsWith(".json") && n !== "read-index.json" && n !== "shown-index.json",
+      ),
+    ).toHaveLength(2);
   });
 
   it("T12: storeRawOutput=false writes no index; next read is a miss", async () => {
@@ -259,5 +273,76 @@ describe("runOverlayOutputPipeline — diff-on-reread suppression (overlay)", ()
     expect(r2.ok).toBe(true);
     if (!r2.ok) return;
     expect("unchanged" in r2.result).toBe(false);
+  });
+});
+
+describe("runOverlayOutputPipeline — already-in-context dedup (overlay)", () => {
+  let store: string;
+  let cwd: string;
+  let fileA: string;
+  let fileB: string;
+  let idCounter: number;
+  const BODY = "line one\nerror: boom\nline three\n";
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "cg-ov-dedup-store-"));
+    cwd = await mkdtemp(join(tmpdir(), "cg-ov-dedup-cwd-"));
+    fileA = join(cwd, "a.txt");
+    fileB = join(cwd, "b.txt");
+    await writeFile(fileA, BODY);
+    await writeFile(fileB, BODY);
+    idCounter = 0;
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  function run(path: string, opts: { storeRawOutput?: boolean } = {}) {
+    return runOverlayOutputPipeline({
+      storeRoot: store,
+      workspaceKey: WK,
+      liveSessionId: LSID,
+      cwd,
+      path,
+      intent: "find the error",
+      mode: "balanced",
+      maxReturnedBytes: 12_000,
+      storeRawOutput: opts.storeRawOutput ?? true,
+      permissions: null,
+      now: () => NOW,
+      newId: () => `cs-${idCounter++}`,
+    });
+  }
+  function sessionContentDir() {
+    return join(store, "content", WK, LSID);
+  }
+
+  it("suppresses identical content under overlay keys + evidence preserved", async () => {
+    const r1 = await run(fileA);
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    // biome-ignore lint/style/noNonNullAssertion: storeRawOutput=true persists a chunkSetId
+    const firstChunkSetId = r1.result.chunkSetId!;
+    const r2 = await run(fileB);
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.result.deduped?.priorChunkSetIds).toContain(firstChunkSetId);
+    expect(r2.result.summary).toContain("already shown earlier this session");
+    const idx = loadShownIndex(sessionContentDir());
+    // biome-ignore lint/style/noNonNullAssertion: first read returned >=1 excerpt
+    expect(idx[hc(r1.result.excerpts[0]!.text)]).toEqual({ chunkSetId: firstChunkSetId });
+    const firstRaw = await readFile(join(sessionContentDir(), `${firstChunkSetId}.json`), "utf8");
+    expect(firstRaw).toContain("error: boom");
+  });
+
+  it("no prior hit -> nothing suppressed", async () => {
+    await writeFile(fileA, "unique alpha\n");
+    await writeFile(fileB, "unique beta\n");
+    await run(fileA);
+    const r2 = await run(fileB);
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect("deduped" in r2.result).toBe(false);
   });
 });
