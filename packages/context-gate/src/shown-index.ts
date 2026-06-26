@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { SHOWN_INDEX_FILENAME, atomicWriteFile } from "@megasaver/content-store";
-import type { OutputExcerpt } from "@megasaver/output-filter";
+import type { FilterOutputResult, OutputExcerpt } from "@megasaver/output-filter";
 import { hashContent } from "./read-index.js";
 
 export type ShownIndexEntry = { chunkSetId: string };
@@ -94,4 +94,31 @@ export function dedupShownExcerpts(input: {
   }
 
   return { excerpts: kept, suppressed, priorChunkSetIds, recordEntries };
+}
+
+// Best-effort shown-dedup applied AFTER the chunk-set is persisted: drop excerpts
+// whose text was already shown earlier this session, annotate the summary, and
+// record the kept text so future reads dedup against it. Shared by all four
+// output pipelines (registry/overlay × read/exec); never throws.
+export function applyShownDedup<T extends FilterOutputResult>(input: {
+  result: T;
+  sessionDir: string;
+  chunkSetId: string;
+}): T {
+  const dd = dedupShownExcerpts({
+    sessionDir: input.sessionDir,
+    currentChunkSetId: input.chunkSetId,
+    excerpts: input.result.excerpts,
+  });
+  const result =
+    dd.suppressed > 0
+      ? {
+          ...input.result,
+          excerpts: dd.excerpts,
+          summary: `${input.result.summary} (${dd.suppressed} chunk(s) already shown earlier this session — expand ${dd.priorChunkSetIds.join(", ")} to view)`,
+          deduped: { suppressed: dd.suppressed, priorChunkSetIds: dd.priorChunkSetIds },
+        }
+      : { ...input.result, excerpts: dd.excerpts };
+  recordShown(input.sessionDir, dd.recordEntries);
+  return result;
 }

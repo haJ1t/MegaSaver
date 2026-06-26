@@ -34,7 +34,7 @@ import {
   resolveOverlayEffectiveSettings,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
-import { dedupShownExcerpts, recordShown } from "./shown-index.js";
+import { applyShownDedup } from "./shown-index.js";
 import { messageOf, redactedCount } from "./stats-helpers.js";
 
 // evaluateCommand's `project` field is a vestigial label it never reads — a
@@ -287,21 +287,7 @@ export async function runOutputExecCommand(
     }
     result.chunkSetId = chunkSetId;
     const sessionDir = join(input.storeRoot, "content", settings.projectId, input.sessionId);
-    const dd = dedupShownExcerpts({
-      sessionDir,
-      currentChunkSetId: chunkSetId,
-      excerpts: filtered.excerpts,
-    });
-    result =
-      dd.suppressed > 0
-        ? {
-            ...result,
-            excerpts: dd.excerpts,
-            summary: `${result.summary} (${dd.suppressed} chunk(s) already shown earlier this session — expand ${dd.priorChunkSetIds.join(", ")} to view)`,
-            deduped: { suppressed: dd.suppressed, priorChunkSetIds: dd.priorChunkSetIds },
-          }
-        : { ...result, excerpts: dd.excerpts };
-    recordShown(sessionDir, dd.recordEntries);
+    result = applyShownDedup({ result, sessionDir, chunkSetId });
   }
 
   const event: TokenSaverEvent = {
@@ -448,21 +434,7 @@ export async function runOverlayOutputExecCommand(
     }
     result.chunkSetId = chunkSetId;
     const sessionDir = join(input.storeRoot, "content", input.workspaceKey, input.liveSessionId);
-    const dd = dedupShownExcerpts({
-      sessionDir,
-      currentChunkSetId: chunkSetId,
-      excerpts: filtered.excerpts,
-    });
-    result =
-      dd.suppressed > 0
-        ? {
-            ...result,
-            excerpts: dd.excerpts,
-            summary: `${result.summary} (${dd.suppressed} chunk(s) already shown earlier this session — expand ${dd.priorChunkSetIds.join(", ")} to view)`,
-            deduped: { suppressed: dd.suppressed, priorChunkSetIds: dd.priorChunkSetIds },
-          }
-        : { ...result, excerpts: dd.excerpts };
-    recordShown(sessionDir, dd.recordEntries);
+    result = applyShownDedup({ result, sessionDir, chunkSetId });
   }
 
   const event: OverlayTokenSaverEvent = {
