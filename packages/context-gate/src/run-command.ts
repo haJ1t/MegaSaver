@@ -1,5 +1,6 @@
 import type { ChildProcess } from "node:child_process";
 import { spawn as nodeSpawn } from "node:child_process";
+import { join } from "node:path";
 import {
   type ChunkSet,
   type OverlayChunkSet,
@@ -33,6 +34,7 @@ import {
   resolveOverlayEffectiveSettings,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
+import { dedupShownExcerpts, recordShown } from "./shown-index.js";
 import { messageOf, redactedCount } from "./stats-helpers.js";
 
 // evaluateCommand's `project` field is a vestigial label it never reads — a
@@ -253,7 +255,7 @@ export async function runOutputExecCommand(
     outcome.capture.terminated !== undefined
       ? [...warnings, `terminated: ${outcome.capture.terminated}`]
       : warnings;
-  const result: ExecResult = {
+  let result: ExecResult = {
     ...filtered,
     ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),
     childExitCode: outcome.capture.childExitCode,
@@ -284,6 +286,22 @@ export async function runOutputExecCommand(
       return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
     }
     result.chunkSetId = chunkSetId;
+    const sessionDir = join(input.storeRoot, "content", settings.projectId, input.sessionId);
+    const dd = dedupShownExcerpts({
+      sessionDir,
+      currentChunkSetId: chunkSetId,
+      excerpts: filtered.excerpts,
+    });
+    result =
+      dd.suppressed > 0
+        ? {
+            ...result,
+            excerpts: dd.excerpts,
+            summary: `${result.summary} (${dd.suppressed} chunk(s) already shown earlier this session — expand ${dd.priorChunkSetIds.join(", ")} to view)`,
+            deduped: { suppressed: dd.suppressed, priorChunkSetIds: dd.priorChunkSetIds },
+          }
+        : { ...result, excerpts: dd.excerpts };
+    recordShown(sessionDir, dd.recordEntries);
   }
 
   const event: TokenSaverEvent = {
