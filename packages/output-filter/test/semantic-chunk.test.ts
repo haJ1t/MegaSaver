@@ -10,15 +10,21 @@ describe("@megasaver/indexer dependency wiring (T1)", () => {
   });
 });
 
-// Every line of the original text must appear in exactly one chunk, with no
-// gaps and no overlaps. This is the partition invariant (spec decision 5).
+// Partition invariant (spec decision 5, refined): chunks are sorted and never
+// overlap, no chunk is pure whitespace, and every NON-BLANK line is covered by
+// exactly one chunk. All-whitespace separators between blocks are intentionally
+// dropped (they carry no rankable content), so blank lines may be uncovered.
 function assertExhaustivePartition(text: string, chunks: Chunk[]): void {
-  const lastLine = text.split("\n").length;
+  const lines = text.split("\n");
+  for (const c of chunks) expect(c.text.trim()).not.toBe("");
   const sorted = [...chunks].sort((a, b) => a.startLine - b.startLine);
-  expect(sorted[0]?.startLine).toBe(1);
-  expect(sorted.at(-1)?.endLine).toBe(lastLine);
   for (let i = 1; i < sorted.length; i += 1) {
-    expect(sorted[i]?.startLine).toBe((sorted[i - 1]?.endLine ?? 0) + 1);
+    expect((sorted[i]?.startLine ?? 0) > (sorted[i - 1]?.endLine ?? 0)).toBe(true);
+  }
+  for (let n = 1; n <= lines.length; n += 1) {
+    if ((lines[n - 1] ?? "").trim() === "") continue;
+    const covering = sorted.filter((c) => n >= c.startLine && n <= c.endLine);
+    expect(covering.length).toBe(1);
   }
 }
 
@@ -106,6 +112,39 @@ describe("partitionFile (T2 helper)", () => {
 
   it("returns empty for empty text", () => {
     expect(partitionFile("", [], 80)).toEqual([]);
+  });
+
+  it("drops whitespace-only gap chunks but keeps every non-blank line", () => {
+    const text = [
+      "export function a() {", // 1
+      "  return 1;", // 2
+      "}", // 3
+      "", // 4 — blank gap between blocks
+      "export function b() {", // 5
+      "  return 2;", // 6
+      "}", // 7
+      "", // 8 — trailing blank gap
+    ].join("\n");
+    const chunks = partitionFile(
+      text,
+      [
+        { startLine: 1, endLine: 3 },
+        { startLine: 5, endLine: 7 },
+      ],
+      80,
+    );
+    // no chunk is pure whitespace (the blank gaps must not become chunks)
+    expect(chunks.every((c) => c.text.trim() !== "")).toBe(true);
+    // both real blocks survive
+    expect(chunks.some((c) => c.text.includes("function a"))).toBe(true);
+    expect(chunks.some((c) => c.text.includes("function b"))).toBe(true);
+    // every NON-BLANK line is still covered by exactly one chunk
+    const lines = text.split("\n");
+    for (let n = 1; n <= lines.length; n += 1) {
+      if ((lines[n - 1] ?? "").trim() === "") continue;
+      const covering = chunks.filter((c) => n >= c.startLine && n <= c.endLine);
+      expect(covering.length).toBe(1);
+    }
   });
 
   it("skips a block span already covered (defensive against overlap)", () => {

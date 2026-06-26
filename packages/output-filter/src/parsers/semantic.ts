@@ -39,8 +39,8 @@ const OVERSIZE_BLOCK_LINES = 80;
 
 // Line windows for [start, end] (1-indexed inclusive), with chunkByLines'
 // 1-based output remapped to begin at `start`. A span whose text is empty (a
-// lone trailing blank line) still emits one chunk — chunkByLines drops "" and
-// would otherwise leave a one-line hole in the partition.
+// lone trailing blank line) still emits one chunk so block sub-splitting stays
+// exhaustive; gap-fill drops the all-whitespace ones (see gapChunks).
 function lineChunksFor(lines: readonly string[], start: number, end: number): Chunk[] {
   const text = lines.slice(start - 1, end).join("\n");
   if (text === "") return [{ text, startLine: start, endLine: end }];
@@ -49,6 +49,13 @@ function lineChunksFor(lines: readonly string[], start: number, end: number): Ch
     startLine: c.startLine + (start - 1),
     endLine: c.endLine + (start - 1),
   }));
+}
+
+// Gap-fill for an uncovered range, with pure-whitespace chunks dropped. Blank
+// separators between blocks carry no rankable content; emitting them pollutes
+// the excerpt list with empty chunks. Block content is never routed here.
+function gapChunks(lines: readonly string[], start: number, end: number): Chunk[] {
+  return lineChunksFor(lines, start, end).filter((c) => c.text.trim() !== "");
 }
 
 export function partitionFile(
@@ -72,7 +79,7 @@ export function partitionFile(
   for (const span of spans) {
     if (span.startLine < cursor) continue; // already covered (defensive)
     if (span.startLine > cursor) {
-      chunks.push(...lineChunksFor(lines, cursor, span.startLine - 1));
+      chunks.push(...gapChunks(lines, cursor, span.startLine - 1));
     }
     const blockLineCount = span.endLine - span.startLine + 1;
     if (blockLineCount > oversizeLines) {
@@ -87,7 +94,7 @@ export function partitionFile(
     cursor = span.endLine + 1;
   }
   if (cursor <= lastLine) {
-    chunks.push(...lineChunksFor(lines, cursor, lastLine));
+    chunks.push(...gapChunks(lines, cursor, lastLine));
   }
   return chunks;
 }
