@@ -104,7 +104,7 @@ describe("TasksPanel", () => {
 });
 
 describe("Session TokenSaverPanel (read-only)", () => {
-  it("renders stats and events with no write controls", async () => {
+  it("renders the tokens-saved table with no write controls", async () => {
     const stats = {
       liveSessionId: ID,
       eventsTotal: 1,
@@ -116,32 +116,17 @@ describe("Session TokenSaverPanel (read-only)", () => {
       chunksStoredTotal: 1,
       updatedAt: "2026-06-14T00:00:00.000Z",
     };
-    const events = [
-      {
-        id: "evt-1",
-        workspaceKey: WK,
-        liveSessionId: ID,
-        createdAt: "2026-06-14T00:00:00.000Z",
-        sourceKind: "file",
-        label: "/tmp/x.txt",
-        rawBytes: 1000,
-        returnedBytes: 200,
-        bytesSaved: 800,
-        savingRatio: 0.8,
-        summary: "s",
-        mode: "balanced",
-      },
-    ];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
         if (url.includes("/stats")) return { ok: true, status: 200, json: async () => stats };
-        if (url.includes("/events")) return { ok: true, status: 200, json: async () => events };
         return { ok: true, status: 200, json: async () => ({ enabled: false, settings: null }) };
       }),
     );
     render(<SessionTokenSaverPanel dir={DIR} id={ID} />);
-    await waitFor(() => expect(screen.getByText("/tmp/x.txt")).toBeDefined());
+    // raw 1000 B -> 250 tok, returned 200 B -> 50 tok, saved 200 tok
+    await waitFor(() => expect(screen.getByText("200 tokens")).toBeDefined());
+    expect(screen.getByText("Saved")).toBeDefined();
     expect(screen.queryByRole("button", { name: /enable/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /disable/i })).toBeNull();
   });
