@@ -23,6 +23,7 @@ import {
   runTwoGates,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
+import { applyShownDedup } from "./shown-index.js";
 import { messageOf, redactedCount } from "./stats-helpers.js";
 
 // Lossless suppression marker for an unchanged re-read: zero excerpts, the prior
@@ -112,7 +113,7 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     maxReturnedBytes: settings.maxReturnedBytes,
   });
 
-  const result = { ...filteredResult };
+  let result: FilterOutputResult = { ...filteredResult };
   if (settings.storeRawOutput) {
     const chunkSetId = newId();
     try {
@@ -130,6 +131,7 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     }
     result.chunkSetId = chunkSetId;
     recordRead(sessionDir, pathHash, { contentHash: newHash, chunkSetId });
+    result = applyShownDedup({ result, sessionDir, chunkSetId });
   }
 
   const event: TokenSaverEvent = {
@@ -225,7 +227,7 @@ export async function runOverlayOutputPipeline(
     maxReturnedBytes: settings.maxReturnedBytes,
   });
 
-  const result = { ...filteredResult };
+  let result: FilterOutputResult = { ...filteredResult };
   if (settings.storeRawOutput) {
     const chunkSetId = newId();
     try {
@@ -243,6 +245,7 @@ export async function runOverlayOutputPipeline(
     }
     result.chunkSetId = chunkSetId;
     recordRead(sessionDir, pathHash, { contentHash: newHash, chunkSetId });
+    result = applyShownDedup({ result, sessionDir, chunkSetId });
   }
 
   const event: OverlayTokenSaverEvent = {

@@ -1,5 +1,6 @@
 import type { ChildProcess } from "node:child_process";
 import { spawn as nodeSpawn } from "node:child_process";
+import { join } from "node:path";
 import {
   type ChunkSet,
   type OverlayChunkSet,
@@ -33,6 +34,7 @@ import {
   resolveOverlayEffectiveSettings,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
+import { applyShownDedup } from "./shown-index.js";
 import { messageOf, redactedCount } from "./stats-helpers.js";
 
 // evaluateCommand's `project` field is a vestigial label it never reads — a
@@ -253,7 +255,7 @@ export async function runOutputExecCommand(
     outcome.capture.terminated !== undefined
       ? [...warnings, `terminated: ${outcome.capture.terminated}`]
       : warnings;
-  const result: ExecResult = {
+  let result: ExecResult = {
     ...filtered,
     ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),
     childExitCode: outcome.capture.childExitCode,
@@ -284,6 +286,8 @@ export async function runOutputExecCommand(
       return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
     }
     result.chunkSetId = chunkSetId;
+    const sessionDir = join(input.storeRoot, "content", settings.projectId, input.sessionId);
+    result = applyShownDedup({ result, sessionDir, chunkSetId });
   }
 
   const event: TokenSaverEvent = {
@@ -398,7 +402,7 @@ export async function runOverlayOutputExecCommand(
     outcome.capture.terminated !== undefined
       ? [...warnings, `terminated: ${outcome.capture.terminated}`]
       : warnings;
-  const result: ExecResult = {
+  let result: ExecResult = {
     ...filtered,
     ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),
     childExitCode: outcome.capture.childExitCode,
@@ -429,6 +433,8 @@ export async function runOverlayOutputExecCommand(
       return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
     }
     result.chunkSetId = chunkSetId;
+    const sessionDir = join(input.storeRoot, "content", input.workspaceKey, input.liveSessionId);
+    result = applyShownDedup({ result, sessionDir, chunkSetId });
   }
 
   const event: OverlayTokenSaverEvent = {

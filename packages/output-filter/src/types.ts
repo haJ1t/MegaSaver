@@ -88,6 +88,7 @@ export type FilterOutputResult = {
   chunkSetId?: string;
   warnings?: readonly string[];
   unchanged?: { priorChunkSetId: string };
+  deduped?: { suppressed: number; priorChunkSetIds: string[] };
 };
 
 // Generic line grouping for the no-blind fallback; matches the default
