@@ -10,13 +10,35 @@ const PROJECT_ID = "33333333-3333-4333-8333-333333333333" as ProjectId;
 const SESSION_ID = "44444444-4444-4444-8444-444444444444" as SessionId;
 const NOW = "2026-06-29T09:00:00.000Z";
 
-// A multi-declaration TS file so outlineFile produces blocks.
-const TS_FIXTURE = `export function alpha(x: number): number {
-  return x * 2;
+// A multi-declaration TS file with real bodies, so outlineFile produces
+// blocks AND the signature skeleton is meaningfully smaller than raw (the
+// outline size floor only takes the branch when it actually saves context).
+const TS_FIXTURE = `import { readFile } from "node:fs/promises";
+
+export function alpha(x: number): number {
+  const doubled = x * 2;
+  const plus = doubled + 1;
+  return plus;
 }
 
 export function beta(s: string): string {
-  return s.trim();
+  const trimmed = s.trim();
+  const upper = trimmed.toUpperCase();
+  return upper;
+}
+
+export async function gamma(path: string): Promise<string> {
+  const raw = await readFile(path, "utf8");
+  const trimmed = raw.trim();
+  return trimmed;
+}
+
+export function delta(values: number[]): number {
+  let sum = 0;
+  for (const v of values) {
+    sum += v;
+  }
+  return sum;
 }
 `;
 

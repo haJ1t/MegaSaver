@@ -62,10 +62,15 @@ file content.
   JSON/JS, one-liner exports) share a single chunk; the skeleton emits one
   entry per distinct chunk id (whose signature line already shows them all),
   so `#id`s stay unique and the count is honest.
-- No "saves tokens" floor: on tiny or dense files the skeleton can be as large
-  as (or larger than) the raw file, and outline still persists the bodies. It
-  is opt-in, so the caller chooses it; a size-threshold fallback is a possible
-  follow-up (spec §Out of scope).
+- Size floor (implemented): outline only takes the branch when the skeleton is
+  meaningfully smaller than raw — `skeletonBytes < 0.9 × rawBytes`
+  (`OUTLINE_MAX_SKELETON_RATIO` in `output-filter/src/types.ts`). On tiny or
+  dense/minified files the signature skeleton can equal or exceed raw bytes
+  (measured: a small `alpha`/`beta` `.ts` → skeleton 204 B vs raw 148 B); there
+  the read falls through to the normal rank/fit pipeline rather than return a
+  payload larger than a plain read. Lossless either way (the normal read
+  persists its own chunks). The 0.9 ratio (vs. merely "not bigger") avoids a
+  near-raw skeleton that costs a second fetch round-trip for ~no saving.
 
 ## Related
 
