@@ -19,6 +19,10 @@ const GRAPH = /^[\s|*\\/_]+$/;
 // silently dropped; only redundant context/decoration is trimmed.
 export function compressDiff(text: string): string {
   const lines = text.split("\n");
+  // A trailing newline is a line terminator, not a context line; the
+  // empty tail element it leaves behind would otherwise be collapsed and
+  // inflate the final "[N unchanged]" marker by one.
+  if (lines.at(-1) === "") lines.pop();
   const hasHunk = lines.some((l) => l.startsWith("@@ "));
   if (!hasHunk) return compressStat(lines);
 

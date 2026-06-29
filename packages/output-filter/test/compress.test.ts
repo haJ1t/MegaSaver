@@ -49,6 +49,41 @@ const DIFF_UNIFIED = [
   " line 12 unchanged",
 ].join("\n");
 
+// Multi-hunk unified diff across two files, terminated by a trailing
+// newline exactly as real `git diff` output is. Each trailing context
+// run is 8 lines; the trailing newline must NOT be miscounted as a 9th
+// collapsed context line.
+const DIFF_MULTI_HUNK = `${[
+  "diff --git a/src/x.ts b/src/x.ts",
+  "--- a/src/x.ts",
+  "+++ b/src/x.ts",
+  "@@ -1,10 +1,10 @@",
+  " x1",
+  " x2",
+  " x3",
+  " x4",
+  "-old x",
+  "+new x",
+  " x5",
+  " x6",
+  " x7",
+  " x8",
+  "diff --git a/src/y.ts b/src/y.ts",
+  "--- a/src/y.ts",
+  "+++ b/src/y.ts",
+  "@@ -1,10 +1,10 @@",
+  " y1",
+  " y2",
+  " y3",
+  " y4",
+  "-old y",
+  "+new y",
+  " y5",
+  " y6",
+  " y7",
+  " y8",
+].join("\n")}\n`;
+
 // git log --stat with an ASCII graph and a stat summary.
 const DIFF_STAT = [
   "* commit abc123 (HEAD -> main)",
@@ -85,6 +120,45 @@ describe("compressDiff (Diff-aware compressor)", () => {
   });
   it("is smaller than the raw input", () => {
     expect(out.length).toBeLessThan(DIFF_UNIFIED.length);
+  });
+
+  // Accounting invariant: the sum of every "[N unchanged]" marker MUST
+  // equal the exact number of context lines the compressor removed —
+  // never over-count (cosmetic lie) and never under-count (silent loss).
+  // Real `git diff` output is terminated by a trailing newline; that
+  // terminator must NOT be counted as a collapsed context line.
+  const isHeader = (l: string) =>
+    /^(diff --git |index |--- |\+\+\+ |@@ |rename |new file |deleted file |old mode |new mode |similarity )/.test(
+      l,
+    );
+  const isChanged = (l: string) => /^[+-](?![+-]{2} )/.test(l);
+  const isMarker = (l: string) => /^… \[\d+ unchanged\]$/.test(l);
+  const accountingDelta = (input: string) => {
+    const compressed = compressDiff(input);
+    // Count body context lines only — a trailing newline is a line
+    // terminator, not a context line of the diff.
+    const inputLines = input.split("\n");
+    if (inputLines.at(-1) === "") inputLines.pop();
+    const ctxIn = inputLines.filter((l) => !isHeader(l) && !isChanged(l)).length;
+    const ctxOut = compressed
+      .split("\n")
+      .filter((l) => !isHeader(l) && !isChanged(l) && !isMarker(l)).length;
+    const dropped = ctxIn - ctxOut;
+    const claimed = [...compressed.matchAll(/\[(\d+) unchanged\]/g)].reduce(
+      (sum, m) => sum + Number(m[1]),
+      0,
+    );
+    return { dropped, claimed };
+  };
+
+  it("multi-hunk markers count collapsed context exactly (no boundary over-count)", () => {
+    const { dropped, claimed } = accountingDelta(DIFF_MULTI_HUNK);
+    expect(claimed).toBe(dropped);
+  });
+
+  it("single-hunk marker count stays exact", () => {
+    const { dropped, claimed } = accountingDelta(DIFF_UNIFIED);
+    expect(claimed).toBe(dropped);
   });
 
   it("summarises git log --stat: keeps stat + content, collapses spine", () => {
