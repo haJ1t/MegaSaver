@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { handleFetchChunk } from "../../src/tools/fetch-chunk.js";
 import { handleReadFile } from "../../src/tools/read-file.js";
 
 vi.mock("@megasaver/daemon", () => ({ getRunningDaemon: vi.fn() }));
@@ -248,5 +249,59 @@ describe("handleReadFile", () => {
     );
 
     expect(result.chunkSetId).toBe("cs-fixed");
+  });
+
+  it("e2e: outline read produces skeleton + chunkSetId; fetch-chunk returns the full body", async () => {
+    // A multi-declaration TS file so outlineFile fires.
+    const srcPath = join(projectRoot, "multi-decl.ts");
+    await writeFile(
+      srcPath,
+      [
+        "export function alpha() { return 1; }",
+        "export function beta() { return 'hello world'; }",
+        "export function gamma() { return 3; }",
+        "export function delta() { return 4; }",
+        "export function epsilon() { return 5; }",
+      ].join("\n"),
+    );
+
+    // ── Step 1: outline read ──────────────────────────────────────────────
+    const registry = seededRegistry(projectRoot);
+    let idSeq = 0;
+    const newId = () => `cs-e2e-${idSeq++}`;
+
+    const readResult = await handleReadFile(
+      { registry, storeRoot: store, now: () => TS, newId },
+      { path: srcPath, intent: "map structure", sessionId: SESSION_ID, outline: true },
+    );
+
+    // Skeleton returned, chunkSetId persisted.
+    expect(readResult.decision).toBe("outline");
+    expect(readResult.chunkSetId).toBeDefined();
+    const chunkSetId = readResult.chunkSetId as string;
+
+    // Skeleton lists chunk ids as "#<n>  L".
+    const skeletonText = readResult.excerpts[0]?.text ?? "";
+    expect(skeletonText).toMatch(/#(\d+) {2}L/);
+
+    // ── Step 2: extract a known chunk id (beta's body) ────────────────────
+    // Find the line for "beta" and extract its #id.
+    const betaLine = skeletonText.split("\n").find((l) => l.includes("beta"));
+    expect(betaLine).toBeDefined();
+    const idMatch = betaLine?.match(/#(\d+)/);
+    expect(idMatch).not.toBeNull();
+    const betaChunkId = idMatch?.[1] as string;
+
+    // ── Step 3: fetch the body via handleFetchChunk ───────────────────────
+    // storeRoot is shared — no extra seeding needed; runOutputPipeline already persisted it.
+    const fetchResult = await handleFetchChunk(
+      { storeRoot: store },
+      { chunkSetId, chunkId: betaChunkId },
+    );
+
+    // The fetched chunk must contain the full body (return statement), not just the signature.
+    expect(fetchResult.chunkSetId).toBe(chunkSetId);
+    expect(fetchResult.chunkId).toBe(betaChunkId);
+    expect(fetchResult.chunk.text).toContain("hello world");
   });
 });

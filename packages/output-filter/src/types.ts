@@ -172,7 +172,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
       const bytesSaved = Math.max(0, rawBytes - returnedBytes);
       const base: FilterOutputResult = {
         // ponytail: tool name hardcoded; lift to a constant when the CLI surface stabilises.
-        summary: `outline mode: expand bodies via mega_fetch_chunk`,
+        summary: "outline mode: expand bodies via mega_fetch_chunk",
         excerpts: [excerpt],
         chunks: outline.chunks.map((c) => ({
           startLine: c.startLine,

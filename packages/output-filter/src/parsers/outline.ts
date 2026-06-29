@@ -101,9 +101,7 @@ export async function outlineFile(
   }
 
   const imports = uniqueImports(blocks);
-  const header =
-    `outline: ${declLines.length} declaration(s), ${lastLine} line(s). ` +
-    `Expand a body: mega_fetch_chunk(chunkSetId, <id>).`;
+  const header = `outline: ${declLines.length} declaration(s), ${lastLine} line(s). Expand a body: mega_fetch_chunk(chunkSetId, <id>).`;
   const importLine = imports.length > 0 ? `imports: ${imports.join(", ")}` : "imports: (none)";
   const skeleton = [header, importLine, "", ...declLines].join("\n");
 

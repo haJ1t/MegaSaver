@@ -16,7 +16,9 @@ const CREATED_AT = "2026-06-29T00:00:00.000Z";
 function outlineResult(): FilterOutputResult {
   return {
     summary: "outline mode",
-    excerpts: [{ text: "skeleton text", startLine: 1, endLine: 9, score: 0, features: {} as RankFeatures }],
+    excerpts: [
+      { text: "skeleton text", startLine: 1, endLine: 9, score: 0, features: {} as RankFeatures },
+    ],
     chunks: [
       { startLine: 3, endLine: 5, text: "export function alpha() { return 1; }" },
       { startLine: 7, endLine: 9, text: "export function beta() { return 2; }" },
@@ -36,7 +38,15 @@ function outlineResult(): FilterOutputResult {
 function normalResult(): FilterOutputResult {
   return {
     summary: "normal mode",
-    excerpts: [{ text: "normal excerpt text", startLine: 1, endLine: 5, score: 0.9, features: {} as RankFeatures }],
+    excerpts: [
+      {
+        text: "normal excerpt text",
+        startLine: 1,
+        endLine: 5,
+        score: 0.9,
+        features: {} as RankFeatures,
+      },
+    ],
     classification: { category: "unknown", confidence: 1 },
     decision: "compress",
     compressor: "generic",
