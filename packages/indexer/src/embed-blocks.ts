@@ -14,6 +14,10 @@ function embedText(block: CodeBlock): string {
   return text.length > 0 ? text : block.id;
 }
 
+// Embed function shape; defaults to the real lazy embed(). Injectable so the
+// carry-forward logic can be unit-tested with a counting fake — no model.
+export type EmbedFn = (texts: readonly string[]) => Promise<Float32Array[]>;
+
 // Build/refresh the embeddings.jsonl sidecar for the just-written block set.
 // Incremental: a block whose id+contentHash is unchanged from the prior build
 // carries its existing vector forward (no re-embed); only new/changed blocks
@@ -24,6 +28,7 @@ export async function embedBlocks(
   paths: IndexStorePaths,
   blocks: readonly CodeBlock[],
   priorHashById: ReadonlyMap<string, string>,
+  embedFn: EmbedFn = embed,
 ): Promise<void> {
   const sidecarPath = embeddingsSidecarPath(paths);
   const priorVectors = readVectors(sidecarPath);
@@ -39,7 +44,7 @@ export async function embedBlocks(
     }
   }
 
-  const fresh = toEmbed.length > 0 ? await embed(toEmbed.map(embedText)) : [];
+  const fresh = toEmbed.length > 0 ? await embedFn(toEmbed.map(embedText)) : [];
   const entries = blocks.map((block) => {
     const carriedVec = carried.get(block.id);
     if (carriedVec !== undefined) return { id: block.id, vector: carriedVec };
