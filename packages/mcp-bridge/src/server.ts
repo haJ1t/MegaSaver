@@ -27,6 +27,7 @@ import { handleFindSimilarFailures } from "./tools/find-similar-failures.js";
 import { handleGetApplicableRules } from "./tools/get-applicable-rules.js";
 import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
 import { handleGetTaskStatus } from "./tools/get-task-status.js";
+import { handleImpact } from "./tools/impact.js";
 import { handleGetProjectContext } from "./tools/project-context.js";
 import { handleGetProjectRules, handleSaveProjectRule } from "./tools/project-rules.js";
 import { handleReadFile } from "./tools/read-file.js";
@@ -148,6 +149,11 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
   { id: "get_relevant_memories", description: "Rank project memories by relevance to a task." },
   { id: "get_task_status", description: "Plan status, per-step state, and ready steps." },
   { id: "mega_fetch_chunk", description: "Fetch one stored chunk from a chunk set." },
+  {
+    id: "mega_impact",
+    description:
+      "Reverse call-graph blast radius: given a symbol, return it plus every transitive caller affected by changing it. Prefer this over grepping for 'who calls this' — the closure is exhaustive within budget.",
+  },
   { id: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
   { id: "mega_recall", description: "Recall session memory and stored chunk sets." },
   { id: "mega_run_command", description: "Run a policy-gated command and filter its output." },
@@ -280,6 +286,8 @@ export function buildServer(deps: ServerDeps): {
           { registry: deps.registry, storeRoot: deps.storeRoot, now, newId },
           args,
         ).then(recordChunkSetId);
+      case "mega_impact":
+        return handleImpact({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "mega_recall":
         return handleRecall({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "mega_run_command":

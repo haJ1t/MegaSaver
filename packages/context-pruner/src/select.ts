@@ -110,3 +110,82 @@ export function selectPack(
 
   return { included, excluded, usedTokens, blocksConsidered: candidates.length };
 }
+
+export type ImpactSelectOptions = { limit?: number; maxTokens?: number };
+
+// Reverse closure (blast radius): seed from the edited symbol's block(s), then
+// BFS over `calledBy` to gather every transitive caller — the blocks a change to
+// `symbol` could break. Mirrors selectPack's forward `calls` walk (~line 86) but
+// inverted. The root is force-included (always present); callers fill under the
+// budget. Callers cut by budget land in `excluded` (reason "budget"), never
+// silently dropped — the closure is exhaustive within budget. An unknown symbol
+// yields an empty selection (no root, no walk).
+export function selectImpact(
+  candidates: readonly ScoredCandidate[],
+  symbol: string,
+  options: ImpactSelectOptions,
+): Selection {
+  const limit = options.limit ?? DEFAULT_LIMIT;
+  const maxTokens = options.maxTokens;
+  const tokensOf = new Map(candidates.map((c) => [c.block.id, estimateBlockTokens(c.block)]));
+
+  // Name → block, first writer wins (candidates are id-stable here, no scoring).
+  const byName = new Map<string, ScoredCandidate>();
+  for (const candidate of candidates) {
+    if (candidate.block.name && !byName.has(candidate.block.name)) {
+      byName.set(candidate.block.name, candidate);
+    }
+    for (const exported of candidate.block.exports) {
+      if (!byName.has(exported)) byName.set(exported, candidate);
+    }
+  }
+
+  const included: ScoredCandidate[] = [];
+  const includedIds = new Set<string>();
+  let usedTokens = 0;
+
+  const add = (candidate: ScoredCandidate, force: boolean): boolean => {
+    if (includedIds.has(candidate.block.id)) return true;
+    const cost = tokensOf.get(candidate.block.id) ?? 1;
+    if (!force) {
+      if (included.length >= limit) return false;
+      if (maxTokens !== undefined && usedTokens + cost > maxTokens) return false;
+    }
+    included.push(candidate);
+    includedIds.add(candidate.block.id);
+    usedTokens += cost;
+    return true;
+  };
+
+  const root = byName.get(symbol);
+  if (root === undefined) {
+    return { included: [], excluded: [], usedTokens: 0, blocksConsidered: candidates.length };
+  }
+  add(root, true);
+
+  // BFS over calledBy: a caller is a block affected by changing `current`. A
+  // caller that does not fit the budget is recorded once (reason "budget") so
+  // the blast radius is reported in full; its own callers are not walked further
+  // (it never entered the pack). Only blocks reached by the reverse walk appear
+  // in excluded — blocks outside the blast radius are simply not part of it.
+  const excluded: ExcludedCandidate[] = [];
+  const reached = new Set<string>([root.block.id]);
+  const queue: ScoredCandidate[] = [root];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+    for (const caller of current.block.calledBy) {
+      const target = byName.get(caller);
+      if (!target || reached.has(target.block.id)) continue;
+      reached.add(target.block.id);
+      if (add(target, false)) {
+        target.factors.dependencyRelevance = 1;
+        queue.push(target);
+      } else {
+        excluded.push({ candidate: target, reason: "budget" });
+      }
+    }
+  }
+
+  return { included, excluded, usedTokens, blocksConsidered: candidates.length };
+}
