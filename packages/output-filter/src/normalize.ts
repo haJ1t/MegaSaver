@@ -29,8 +29,10 @@ export function collapseRepeatedLines(text: string): string {
 // Evidence guard (§12 HIGH): a line carrying any diagnostic signal is never
 // folded — two such lines may be distinct events an agent must see.
 const DIAGNOSTIC = /\b(error|fail(?:ed|ure)?|exception|warn(?:ing)?|panic|fatal)\b|\bTS\d+\b/i;
-// A file:line:col position is structural evidence, not volatile noise.
-const POSITION = /\b\d+:\d+(?::\d+)?\b/;
+// A real source position is structural evidence, not volatile noise. It must be
+// a path/filename token (starts with a letter) followed by :line:col — NOT a
+// bare wall-clock HH:MM:SS, which starts with a digit and is masked by <ts>.
+const POSITION = /[A-Za-z][\w./-]*:\d+:\d+/;
 
 // Volatile tokens masked to a placeholder before similarity comparison. Only
 // pure identity noise — timestamps, uuids, hex ids, request-id ports — is
@@ -42,6 +44,7 @@ const POSITION = /\b\d+:\d+(?::\d+)?\b/;
 // matters: timestamps before the rest so the longer match wins.
 const MASKS: Array<[RegExp, string]> = [
   [/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/g, "<ts>"],
+  [/\b\d{2}:\d{2}:\d{2}(?:\.\d+)?\b/g, "<ts>"],
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<uuid>"],
   // ponytail: hex and port masks removed — they folded distinct value-bearing events
   // (content hashes, fault addresses, bind ports). Only timestamps and UUIDs are
@@ -63,12 +66,14 @@ export function collapseSimilar(text: string): string {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i] as string;
-    if (DIAGNOSTIC.test(line) || POSITION.test(line)) {
+    const template = maskTemplate(line);
+    // Guards run on the MASKED template so a masked timestamp's `T`-separator
+    // (e.g. ...T10:00:01) cannot masquerade as a file:line:col position.
+    if (DIAGNOSTIC.test(template) || POSITION.test(template)) {
       out.push(line);
       i += 1;
       continue;
     }
-    const template = maskTemplate(line);
     // Only volatile-bearing lines (template differs from raw) are fold
     // candidates; otherwise collapseRepeatedLines already handled exact dupes.
     if (template === line) {
@@ -79,8 +84,9 @@ export function collapseSimilar(text: string): string {
     let run = 1;
     while (i + run < lines.length) {
       const next = lines[i + run] as string;
-      if (DIAGNOSTIC.test(next) || POSITION.test(next)) break;
-      if (maskTemplate(next) !== template) break;
+      const nextTemplate = maskTemplate(next);
+      if (DIAGNOSTIC.test(nextTemplate) || POSITION.test(nextTemplate)) break;
+      if (nextTemplate !== template) break;
       run += 1;
     }
     if (run >= 3) {
