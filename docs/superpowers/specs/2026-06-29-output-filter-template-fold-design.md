@@ -22,15 +22,19 @@ logs while staying lossless and evidence-preserving.
 A second pass, `collapseSimilar`, runs in
 `packages/output-filter/src/normalize.ts` AFTER `collapseRepeatedLines`.
 
-1. For each line, compute a MASKED form: replace clearly-volatile tokens
-   with stable placeholders — ISO/clock timestamps, long hex/uuid ids,
-   port numbers, byte counts, and duration counts.
+1. For each line, compute a MASKED form: replace pure identity-noise
+   tokens with stable placeholders — ISO/clock timestamps, uuid ids, long
+   hex ids (requiring at least one `a-f` letter so pure-decimal ids never
+   match), and request-id port numbers. Duration, byte-count, and bare
+   decimal-number masks are deliberately NOT applied: those values are
+   often the distinguishing signal and the return path is the only copy
+   the agent sees (see Lossless note), so masking them would silently drop
+   evidence.
 2. Fold a run of consecutive lines whose MASKED form is identical into:
    - the FIRST concrete instance, verbatim;
    - a marker line: `… [N similar: <masked template>]`;
    - the LAST concrete instance, verbatim.
-   `N` is the run length. First and last are kept as boundary evidence;
-   the middle is recoverable from the ChunkSet.
+   `N` is the run length. First and last are kept as boundary evidence.
 3. Runs of length 1 (no following match) are emitted unchanged.
 
 Pure, deterministic, no LLM.
@@ -57,11 +61,16 @@ CLI saver hook and the MCP `mega_run_command` / `mega_read_file` paths).
 
 ## Lossless / evidence-preservation note
 
-Compression only changes what is RETURNED. Raw output is already
-persisted to a ChunkSet and recoverable via `mega_fetch_chunk`, so
-folded middle lines are never lost. Keeping the first AND last concrete
-instance preserves run boundaries. The masking guards above ensure no
-two distinct errors or diagnostics are ever merged or hidden.
+Compression only changes what is RETURNED. NOTE: in this repo the
+persisted ChunkSet is built from the filtered excerpts
+(`context-gate` run-command / read paths), not from raw output, so a
+folded middle line does NOT reach the ChunkSet and is NOT recoverable
+via `mega_fetch_chunk`. The return path is therefore treated as the only
+copy the agent sees. Folding is kept safe by narrowing the masks (no
+duration/byte/decimal masks — those carry signal) rather than by relying
+on a recovery net. Keeping the first AND last concrete instance preserves
+run boundaries; the keyword/position/decimal guards ensure no two distinct
+errors, diagnostics, or value-bearing events are ever merged or hidden.
 
 ## Test plan
 
