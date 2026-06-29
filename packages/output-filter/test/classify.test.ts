@@ -263,3 +263,119 @@ describe("classifyOutput — mixed stdout/stderr", () => {
     expect(classifyOutput({ text: mixed }).category).toBe("typescript");
   });
 });
+
+// ─── prose category ───────────────────────────────────────────────────────────
+
+const MARKDOWN_DOC = [
+  "# Getting Started",
+  "",
+  "Install the package using npm:",
+  "",
+  "```bash",
+  "npm install",
+  "```",
+  "",
+  "Then run the dev server.",
+  "",
+  "# Configuration",
+  "",
+  "Create a config file at `config.json`.",
+  "",
+  "Add your settings there.",
+].join("\n");
+
+const LONG_MARKDOWN = [
+  "# Section One",
+  "",
+  "First paragraph of section one. This introduces the concept.",
+  "",
+  "Second paragraph with more details that will be collapsed.",
+  "",
+  "Third paragraph, also collapsed by the compressor.",
+  "",
+  "Fourth paragraph, still collapsed.",
+  "",
+  "Fifth paragraph, also collapsed.",
+  "",
+  "Sixth paragraph, also collapsed.",
+  "",
+  "# Section Two",
+  "",
+  "First paragraph of section two. Kept verbatim.",
+  "",
+  "```typescript",
+  "const x = 1;",
+  "```",
+  "",
+  "More details after the code block, collapsed.",
+  "",
+  "Even more details, also collapsed.",
+].join("\n");
+
+describe("classifyOutput — prose category", () => {
+  it("classifies markdown with headings + code blocks as prose", () => {
+    const c = classifyOutput({ text: MARKDOWN_DOC });
+    expect(c.category).toBe("prose");
+    expect(isConfidentClassification(c)).toBe(true);
+  });
+
+  it("classifies markdown with only headings as prose (lower confidence)", () => {
+    const headingsOnly = "# Intro\n\nSome text.\n\n# Usage\n\nMore text.";
+    const c = classifyOutput({ text: headingsOnly });
+    expect(c.category).toBe("prose");
+  });
+
+  it("classifies a fetch-source markdown doc as prose", () => {
+    const c = classifyOutput({ source: "fetch", text: MARKDOWN_DOC });
+    expect(c.category).toBe("prose");
+  });
+
+  it("classifies cat *.md command as prose", () => {
+    const c = classifyOutput({ command: "cat README.md", text: MARKDOWN_DOC });
+    expect(c.category).toBe("prose");
+    expect(c.confidence).toBeGreaterThanOrEqual(0.8);
+  });
+
+  it("does NOT misclassify a git diff as prose", () => {
+    const c = classifyOutput({ text: "diff --git a/foo b/foo\n@@ -1 +1 @@\n-old\n+new" });
+    expect(c.category).not.toBe("prose");
+  });
+
+  it("does NOT misclassify tsc output as prose", () => {
+    const c = classifyOutput({
+      text: "src/foo.ts(1,1): error TS2304: Cannot find name 'x'.",
+    });
+    expect(c.category).not.toBe("prose");
+  });
+
+  it("does NOT misclassify vitest output as prose", () => {
+    const c = classifyOutput({
+      text: " Test Files  1 failed | 1 passed (2)\n      Tests  1 failed | 4 passed (5)",
+    });
+    expect(c.category).not.toBe("prose");
+  });
+
+  it("does NOT misclassify plain shell log as prose", () => {
+    const shellLog = [".", "..", "file1.ts", "file2.ts", "node_modules"].join("\n");
+    const c = classifyOutput({ command: "ls", text: shellLog });
+    expect(c.category).not.toBe("prose");
+  });
+
+  it("does NOT misclassify large JSON array as prose", () => {
+    const arr = JSON.stringify(Array.from({ length: 50 }, (_, i) => ({ id: i, name: `n${i}` })));
+    const c = classifyOutput({ text: arr });
+    expect(c.category).not.toBe("prose");
+  });
+});
+
+describe("compressByCategory — prose dispatch", () => {
+  it("routes prose to the prose compressor", () => {
+    const r = compressByCategory("prose", MARKDOWN_DOC);
+    expect(r.compressor).toBe("prose");
+  });
+
+  it("prose compressor reduces a long markdown doc", () => {
+    const r = compressByCategory("prose", LONG_MARKDOWN);
+    expect(r.text.length).toBeLessThan(LONG_MARKDOWN.length);
+  });
+});
