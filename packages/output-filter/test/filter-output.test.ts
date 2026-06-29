@@ -294,3 +294,57 @@ export function delta(values: number[]): number {
     expect(result.chunks).toBeUndefined();
   });
 });
+
+describe("filterOutput diagnostic dedupe exemption (distinct diagnostics survive)", () => {
+  it("keeps every distinct tsc diagnostic (no simhash collapse of distinct codes)", async () => {
+    // 90 distinct `error TSxxxx` lines, each a different file/line/code. They
+    // are near-duplicates to simhash, so a blanket dedupe would collapse most.
+    // A generous byte budget isolates dedupe as the only possible cause of
+    // loss: every distinct code must reach the kept excerpts.
+    const N = 90;
+    const lines = Array.from(
+      { length: N },
+      (_, i) =>
+        `src/area/module${i}/handler${i}.ts(${10 + i},${(i % 9) + 1}): error TS${2300 + i}: diagnostic message number ${i} explaining the type problem in detail.`,
+    );
+    lines.push(`Found ${N} errors in ${N} files.`);
+    const raw = `${lines.join("\n")}\n`;
+
+    const result = await filterOutput(
+      base(raw, {
+        mode: "safe",
+        maxReturnedBytes: 200_000,
+        source: { kind: "command", command: "tsc", args: ["--noEmit"] },
+      }),
+    );
+
+    expect(result.decision).toBe("compressed");
+    expect(result.classification.category).toBe("typescript");
+
+    const joined = result.excerpts.map((e) => e.text).join("\n");
+    const codesKept = new Set(joined.match(/TS\d{3,}/g) ?? []);
+    const expectedCodes = Array.from({ length: N }, (_, i) => `TS${2300 + i}`);
+    for (const code of expectedCodes) {
+      expect(codesKept.has(code)).toBe(true);
+    }
+    expect(codesKept.size).toBe(N);
+  });
+
+  it("regression: generic near-duplicate noise is still deduped", async () => {
+    // The exemption must not disable dedupe globally. A large generic blob of
+    // near-identical lines (no diagnostic classification) must still collapse.
+    const dup = Array.from(
+      { length: 400 },
+      (_, i) =>
+        `processed record batch with status ok and trailing punctuation ${".".repeat(i % 3)}`,
+    );
+    const raw = `${dup.join("\n")}\nunique tail marker line\n`;
+
+    const result = await filterOutput(base(raw, { mode: "aggressive", maxReturnedBytes: 200_000 }));
+
+    expect(result.decision).toBe("compressed");
+    expect(["generic_shell", "unknown"]).toContain(result.classification.category);
+    // Near-duplicate lines collapse: far fewer excerpts than input lines.
+    expect(result.excerpts.length).toBeLessThan(dup.length);
+  });
+});
