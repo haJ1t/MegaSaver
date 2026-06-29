@@ -78,4 +78,14 @@ describe("outlineFile", () => {
       if (lines[ln - 1]?.trim() !== "") expect(covered.has(ln)).toBe(true);
     }
   });
+
+  it("collapses co-located declarations on one line to unique skeleton ids", async () => {
+    const src = "export const a = () => 1; export const b = () => 2;\n";
+    const result = await outlineFile(src, "x.ts");
+    if (result === null) throw new Error("expected outline");
+    const ids = [...result.skeleton.matchAll(/#(\d+) {2}L/g)].map((m) => m[1]);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length); // no duplicate #ids
+    for (const id of ids) expect(result.chunks[Number(id)]).toBeDefined();
+  });
 });

@@ -91,11 +91,18 @@ export async function outlineFile(
     .sort((a, b) => a.startLine - b.startLine);
 
   const declLines: string[] = [];
+  const seenIds = new Set<number>();
   for (const b of sorted) {
     const id = idBySpan.get(`${b.startLine}:${b.endLine}`);
     // A block with no own chunk was folded by partitionFile's overlap guard;
     // its lines are still in a covering chunk (lossless), just not listed.
     if (id === undefined) continue;
+    // Co-located declarations (multiple decls on one line, e.g. minified JSON)
+    // share a single chunk; emit one skeleton entry per chunk so #ids stay
+    // unique and the count is honest. The shared signature line already shows
+    // every declaration on that line, and fetching the id returns them all.
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
     const sig = renderSignature(lines, b.startLine, b.endLine, path);
     declLines.push(`#${id}  L${b.startLine}-${b.endLine}  ${sig}`);
   }
