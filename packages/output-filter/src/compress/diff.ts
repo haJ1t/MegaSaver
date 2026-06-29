@@ -4,17 +4,19 @@ const HEADER =
   /^(diff --git |index |--- |\+\+\+ |@@ |rename |new file |deleted file |old mode |new mode |similarity )/;
 // A changed line in a unified diff (but not the +++/--- file headers).
 const CHANGED = /^[+-](?![+-]{2} )/;
-// git log/show graph decoration: a leading run of │ * | \ / _ and spaces
-// with no file/stat payload. The stat summary (" file | N ++--") and the
-// "N files changed" footer are kept; bare graph spines are dropped.
+// git log/show graph decoration: a line made up of NOTHING but
+// │ * | \ / _ and spaces (a pure spine, no payload). Lines that also
+// carry content — the stat summary " file | N ++--", a "N files changed"
+// footer, or a "| * <sha> <subject>" graph content line — do not match
+// and are preserved.
 const GRAPH = /^[\s|*\\/_]+$/;
-const STAT = /\|\s+\d+\s+[+-]|files? changed|insertions?\(\+\)|deletions?\(-\)/;
 
 // Unified diff: keep headers + every +/- line, reduce each unchanged
 // context block to 1 line on each side of a change, collapse the dropped
-// middle to a marker. git status/log --stat: keep the file/stat summary,
-// drop decorative graph spine lines. Lossless — raw output persists to
-// the ChunkSet; this only trims what is RETURNED.
+// middle to a marker. git status/log --stat: keep every content line and
+// collapse only pure graph-spine runs to a counted marker. Both paths emit
+// a marker for anything collapsed, so distinct data items are never
+// silently dropped; only redundant context/decoration is trimmed.
 export function compressDiff(text: string): string {
   const lines = text.split("\n");
   const hasHunk = lines.some((l) => l.startsWith("@@ "));
@@ -60,6 +62,25 @@ export function compressDiff(text: string): string {
   return out.join("\n");
 }
 
+// Drop ONLY pure graph-spine lines (the GRAPH regex: nothing but
+// │ * | \ / _ and spaces). Any line carrying content — a stat summary,
+// a commit subject with a literal '|', or a "| * <sha> <subject>" graph
+// content line — is preserved. Collapsed spines become a counted marker
+// so no data item is silently dropped (evidence preservation).
 function compressStat(lines: string[]): string {
-  return lines.filter((l) => !GRAPH.test(l) && (STAT.test(l) || !l.includes("|"))).join("\n");
+  const out: string[] = [];
+  let spine = 0;
+  for (const line of lines) {
+    if (GRAPH.test(line)) {
+      spine += 1;
+      continue;
+    }
+    if (spine > 0) {
+      out.push(`… [${spine} graph]`);
+      spine = 0;
+    }
+    out.push(line);
+  }
+  if (spine > 0) out.push(`… [${spine} graph]`);
+  return out.join("\n");
 }

@@ -87,11 +87,36 @@ describe("compressDiff (Diff-aware compressor)", () => {
     expect(out.length).toBeLessThan(DIFF_UNIFIED.length);
   });
 
-  it("summarises git log --stat: keeps stat, drops graph lines", () => {
+  it("summarises git log --stat: keeps stat + content, collapses spine", () => {
     const stat = compressDiff(DIFF_STAT);
     expect(stat).toContain("src/foo.ts | 4 ++--");
     expect(stat).toContain("2 files changed, 4 insertions(+), 2 deletions(-)");
-    expect(stat).not.toContain("| Author: Dev");
+    // Author/subject lines carry content behind the graph column — keep them.
+    expect(stat).toContain("| Author: Dev");
+    expect(stat).toContain("|     feat: add thing");
+    // Only the lone "|" spine line is collapsed, into a counted marker.
+    expect(stat).toMatch(/\[\d+ graph\]/);
+  });
+
+  it("keeps a git log --graph content line | * <sha> <subject>", () => {
+    const graph = ["* abc123 feat: a", "| * def456 feat: b", "|/", "* 789xyz feat: c"].join("\n");
+    const out = compressDiff(graph);
+    // The "| * def456 ..." line is a whole commit — never drop it.
+    expect(out).toContain("| * def456 feat: b");
+    expect(out).toContain("* abc123 feat: a");
+    expect(out).toContain("* 789xyz feat: c");
+  });
+
+  it("keeps a git log --stat subject containing a literal pipe", () => {
+    const piped = [
+      "commit abc123",
+      "    fix: handle a | b precedence",
+      " src/foo.ts | 4 ++--",
+      " 1 file changed, 4 insertions(+)",
+    ].join("\n");
+    const out = compressDiff(piped);
+    expect(out).toContain("fix: handle a | b precedence");
+    expect(out).toContain("src/foo.ts | 4 ++--");
   });
 });
 

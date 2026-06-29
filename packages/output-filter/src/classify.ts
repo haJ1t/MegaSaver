@@ -37,7 +37,12 @@ const DIFF_CMD = /\bgit\s+(?:diff|status|log|show)\b/i;
 const VITEST_OUT =
   /^\s*Test Files\s|^\s*Tests\s+\d|Serialized Error|AssertionError|^\s*(?:FAIL|PASS)\b|Duration\s+\d/m;
 const TS_OUT = /\(\d+,\d+\):\s+error\s+TS\d+:|error\s+TS\d+:|Found\s+\d+\s+errors?/m;
-const DIFF_OUT = /^diff --git |^@@ .* @@|^[+-](?![+-]{2} )/m;
+// Out-only sniff requires a real diff anchor: a `diff --git` header or a
+// `@@ ... @@` hunk. A lone leading +/- line is NOT a confident diff signal
+// — npm/yarn logs, markdown bullets, ASCII tables and console output all
+// carry one and must not be routed to the diff compressor. git status/log
+// without these anchors is caught by the command path instead.
+const DIFF_OUT = /^diff --git |^@@ .* @@/m;
 
 // Typescript is checked before vitest: a TS error signature is highly
 // specific, whereas a test command may incidentally compile TS.
