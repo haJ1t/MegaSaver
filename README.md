@@ -21,6 +21,25 @@ never leave your machine.
 
 ---
 
+## Install
+
+```sh
+npm install -g @megasaver/cli
+```
+
+Or download the zero-dependency `mega.mjs` bundle from
+[GitHub Releases](https://github.com/haJ1t/MegaSaver/releases/latest).
+Full setup guide (prerequisites, hooks, first session): **[docs/getting-started.md](docs/getting-started.md)**.
+
+## Benchmarks
+
+90–99% token reduction on common agent workloads — re-reads of unchanged
+files, large JSON, noisy logs, outline-first reads, and session context replay —
+all lossless via ChunkSet (full raw output recoverable on demand).
+See **[docs/benchmarks.md](docs/benchmarks.md)** for the full table.
+
+---
+
 ## Table of contents
 
 - [What it does](#what-it-does)
