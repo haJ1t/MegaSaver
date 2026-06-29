@@ -104,6 +104,13 @@ export type FilterOutputResult = {
 // used by the generic chunker.
 const GENERIC_FALLBACK_LINES_PER_CHUNK = 40;
 
+// Outline mode only pays off when the skeleton is meaningfully smaller than
+// the raw file. On tiny or dense/minified files the signature skeleton can
+// equal or exceed raw bytes, so below this fraction of raw we keep the
+// outline; at or above it we fall through to a normal read — an opt-in
+// outline must never return a payload larger than a plain read.
+const OUTLINE_MAX_SKELETON_RATIO = 0.9;
+
 function truncateToBytes(text: string, maxBytes: number): string {
   const buf = Buffer.from(text, "utf8");
   if (buf.length <= maxBytes) return text;
@@ -155,19 +162,23 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
     source?.kind === "command" ? `${source.command} ${source.args.join(" ")}`.trim() : undefined;
   const classification = classifyOutput({ command, text: normalized });
 
+  const rawBytes = Buffer.byteLength(raw, "utf8");
+
   // Narrow `source` to the file variant directly so `source.path` is typed.
   if (parsed.data.outline === true && source?.kind === "file") {
     const outline = await outlineFile(normalized, source.path);
-    if (outline !== null) {
+    const returnedBytes = outline === null ? 0 : Buffer.byteLength(outline.skeleton, "utf8");
+    // Size floor: only take the outline branch when the skeleton actually
+    // saves context. Otherwise fall through to the normal rank/fit pipeline
+    // (still lossless — it persists its own chunks).
+    if (outline !== null && returnedBytes < rawBytes * OUTLINE_MAX_SKELETON_RATIO) {
       const skeletonChunk = {
         text: outline.skeleton,
         startLine: 1,
         endLine: normalized.replace(/\n$/, "").split("\n").length,
       };
       const excerpt = excerptOf(scoreChunk(intent, skeletonChunk, sessionHints));
-      const rawBytes = Buffer.byteLength(raw, "utf8");
       const rawTokens = estimateTokens(raw);
-      const returnedBytes = Buffer.byteLength(outline.skeleton, "utf8");
       const returnedTokens = estimateTokens(outline.skeleton);
       const bytesSaved = Math.max(0, rawBytes - returnedBytes);
       const base: FilterOutputResult = {
@@ -193,7 +204,6 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
     }
   }
 
-  const rawBytes = Buffer.byteLength(raw, "utf8");
   const rawTokens = estimateTokens(raw);
   const passthroughThreshold =
     parsed.data.passthroughThresholdTokens ?? PASSTHROUGH_THRESHOLD_TOKENS;

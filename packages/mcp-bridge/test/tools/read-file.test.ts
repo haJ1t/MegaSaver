@@ -65,15 +65,38 @@ describe("handleReadFile", () => {
   it("returns decision=outline when outline:true is passed", async () => {
     const registry = seededRegistry(projectRoot);
     const srcPath = join(projectRoot, "multi.ts");
-    // A file with multiple top-level declarations so the outline path fires.
+    // Multiple top-level declarations with real bodies so the outline path
+    // fires AND the signature skeleton is smaller than raw (size floor).
     await writeFile(
       srcPath,
       [
-        "export function alpha() { return 1; }",
-        "export function beta() { return 2; }",
-        "export function gamma() { return 3; }",
-        "export function delta() { return 4; }",
-        "export function epsilon() { return 5; }",
+        'import { readFile } from "node:fs/promises";',
+        "",
+        "export function alpha(x: number): number {",
+        "  const doubled = x * 2;",
+        "  const plus = doubled + 1;",
+        "  return plus;",
+        "}",
+        "",
+        "export function beta(s: string): string {",
+        "  const trimmed = s.trim();",
+        "  const upper = trimmed.toUpperCase();",
+        "  return upper;",
+        "}",
+        "",
+        "export async function gamma(path: string): Promise<string> {",
+        '  const raw = await readFile(path, "utf8");',
+        "  const trimmed = raw.trim();",
+        "  return trimmed;",
+        "}",
+        "",
+        "export function delta(values: number[]): number {",
+        "  let sum = 0;",
+        "  for (const v of values) {",
+        "    sum += v;",
+        "  }",
+        "  return sum;",
+        "}",
       ].join("\n"),
     );
     const result = await handleReadFile(
@@ -254,14 +277,37 @@ describe("handleReadFile", () => {
   it("e2e: outline read produces skeleton + chunkSetId; fetch-chunk returns the full body", async () => {
     // A multi-declaration TS file so outlineFile fires.
     const srcPath = join(projectRoot, "multi-decl.ts");
+    // Real multi-line bodies so the skeleton is smaller than raw (size floor);
+    // beta's body keeps "hello world" for the fetch-chunk assertion below.
     await writeFile(
       srcPath,
       [
-        "export function alpha() { return 1; }",
-        "export function beta() { return 'hello world'; }",
-        "export function gamma() { return 3; }",
-        "export function delta() { return 4; }",
-        "export function epsilon() { return 5; }",
+        'import { readFile } from "node:fs/promises";',
+        "",
+        "export function alpha(x: number): number {",
+        "  const doubled = x * 2;",
+        "  const plus = doubled + 1;",
+        "  return plus;",
+        "}",
+        "",
+        "export function beta(s: string): string {",
+        "  const greeting = 'hello world';",
+        "  return greeting + s;",
+        "}",
+        "",
+        "export async function gamma(path: string): Promise<string> {",
+        '  const raw = await readFile(path, "utf8");',
+        "  const trimmed = raw.trim();",
+        "  return trimmed;",
+        "}",
+        "",
+        "export function delta(values: number[]): number {",
+        "  let sum = 0;",
+        "  for (const v of values) {",
+        "    sum += v;",
+        "  }",
+        "  return sum;",
+        "}",
       ].join("\n"),
     );
 

@@ -3047,3 +3047,13 @@ co-located decls sharing a line collapsed to duplicate `#id`s + inflated count
 Verified safe: redaction (skeleton + bodies on post-redact text), fetch-id
 ordering, `\0outline` slot isolation, line coverage. Known limitation (opt-in):
 skeleton may exceed raw bytes on tiny/dense files; no size-threshold fallback.
+
+## [2026-06-29] feat | outline size floor
+
+Closed the "skeleton may exceed raw bytes" limitation above. `filterOutput`
+now takes the outline branch only when `skeletonBytes < 0.9 * rawBytes`
+(`OUTLINE_MAX_SKELETON_RATIO`); otherwise falls through to the normal
+rank/fit read (lossless — it persists its own chunks). TDD: tiny/dense file
+falls back, body-dominant file still outlines. Reviewer: 1 redundant-decl
+cleanup + 1 test-assertion tightened (assert the 0.9 ratio, not just <raw).
+`pnpm verify` green (44/44). patch changeset @megasaver/output-filter.

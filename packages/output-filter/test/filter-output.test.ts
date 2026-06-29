@@ -202,7 +202,9 @@ describe("filterOutput no-blind floor (mission: never strip what the model needs
 });
 
 describe("filterOutput outline branch", () => {
-  const TS_SRC = `import { z } from "zod";
+  // Tiny file: its skeleton (header + import line + 2 signatures) is LARGER
+  // than the raw bodies, so the size floor sends it to a normal read.
+  const TINY_TS_SRC = `import { z } from "zod";
 
 export function alpha(a: number): number {
   return a + 1;
@@ -213,9 +215,41 @@ export function beta(b: number): number {
 }
 `;
 
-  it("returns a skeleton excerpt plus body chunks when outline is set", async () => {
+  // Multi-declaration file with real bodies: the signature-only skeleton is
+  // meaningfully smaller than raw, so outline wins.
+  const LARGE_TS_SRC = `import { z } from "zod";
+import { readFile } from "node:fs/promises";
+
+export function alpha(a: number): number {
+  const doubled = a * 2;
+  const plus = doubled + 1;
+  return plus;
+}
+
+export function beta(b: number): number {
+  const squared = b * b;
+  const minus = squared - 1;
+  return minus;
+}
+
+export async function gamma(path: string): Promise<string> {
+  const raw = await readFile(path, "utf8");
+  const trimmed = raw.trim();
+  return trimmed;
+}
+
+export function delta(values: number[]): number {
+  let sum = 0;
+  for (const v of values) {
+    sum += v;
+  }
+  return sum;
+}
+`;
+
+  it("returns a skeleton excerpt plus body chunks when outline saves context", async () => {
     const result = await filterOutput({
-      raw: TS_SRC,
+      raw: LARGE_TS_SRC,
       mode: "safe",
       outline: true,
       source: { kind: "file", path: "a.ts" },
@@ -224,18 +258,35 @@ export function beta(b: number): number {
     expect(result.excerpts).toHaveLength(1);
     expect(result.excerpts[0]?.text).toContain("export function alpha");
     expect(result.chunks).toBeDefined();
-    expect(result.chunks?.some((c) => c.text.includes("return a + 1;"))).toBe(true);
+    expect(result.chunks?.some((c) => c.text.includes("return plus;"))).toBe(true);
+    // Floor is satisfied: the skeleton clears the 0.9 ratio (real saving),
+    // not merely "smaller than raw".
+    expect(result.returnedBytes).toBeLessThan(result.rawBytes * 0.9);
+  });
+
+  it("falls back to a normal read when the skeleton would not save context", async () => {
+    // outlineFile returns a valid skeleton here (it is a real .ts file with
+    // two functions), but the skeleton is larger than the raw bodies, so the
+    // size floor declines the outline branch.
+    const result = await filterOutput({
+      raw: TINY_TS_SRC,
+      mode: "safe",
+      outline: true,
+      source: { kind: "file", path: "a.ts" },
+    });
+    expect(result.decision).not.toBe("outline");
+    expect(result.chunks).toBeUndefined();
   });
 
   it("ignores outline for a non-file source (falls back to normal filtering)", async () => {
-    const result = await filterOutput({ raw: TS_SRC, mode: "safe", outline: true });
+    const result = await filterOutput({ raw: LARGE_TS_SRC, mode: "safe", outline: true });
     expect(result.decision).not.toBe("outline");
     expect(result.chunks).toBeUndefined();
   });
 
   it("behaves exactly as today when outline is absent", async () => {
     const result = await filterOutput({
-      raw: TS_SRC,
+      raw: LARGE_TS_SRC,
       mode: "safe",
       source: { kind: "file", path: "a.ts" },
     });

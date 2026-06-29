@@ -227,7 +227,26 @@ caution applied to a MEDIUM change.
 ## Out of scope / future
 
 - Auto-activation over a size threshold (add when opt-in adoption
-  proves the demand).
+  proves the demand). Note: this is distinct from the size *floor*
+  below — auto-activation would turn outline *on* by file size; the
+  floor only declines an already-requested outline.
 - Nested-member depth (method signatures inside classes).
 - Heuristic or LLM-generated summary lines.
 - Signature rendering beyond the line cap.
+
+## Follow-up: skeleton size floor (implemented)
+
+The skeleton can be as large as — or larger than — the raw file on
+tiny or dense/minified files (measured: a small `alpha`/`beta` `.ts` →
+raw 148 B, skeleton 204 B). Outline is opt-in so this is not a
+correctness bug, but the "saves tokens" framing is false there and
+nothing stopped returning a payload larger than a plain read.
+
+Guard: in `filterOutput`, after `outlineFile` returns non-null, take
+the outline branch only when `skeletonBytes < OUTLINE_MAX_SKELETON_RATIO
+* rawBytes` with `OUTLINE_MAX_SKELETON_RATIO = 0.9` (skeleton must save
+≥ 10 %). Otherwise fall through to the normal rank/fit read — lossless,
+since the normal read persists its own chunks. The 0.9 ratio (rather
+than merely "not bigger") rejects a near-raw skeleton that would cost a
+second `mega_fetch_chunk` round-trip for ~no saving. Plan:
+[2026-06-29-outline-size-floor-plan.md](../plans/2026-06-29-outline-size-floor-plan.md).
