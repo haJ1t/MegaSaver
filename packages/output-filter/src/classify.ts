@@ -9,6 +9,7 @@ export const outputCategorySchema = z.enum([
   "typescript",
   "diff",
   "structured",
+  "prose",
   "generic_shell",
   "unknown",
 ]);
@@ -21,6 +22,8 @@ export type ClassifyInput = {
   // Source file path, when the output came from a read-file call. A *.json
   // / lockfile path raises confidence for the structured category.
   path?: string | undefined;
+  // Source kind — "fetch" for URL-fetched content (e.g. web docs).
+  source?: string | undefined;
   text: string;
 };
 
@@ -54,6 +57,19 @@ const JSON_CMD = /\b(?:cat|jq|curl)\b.*\.json\b|\bjq\b/i;
 // compressJson's MIN_ARRAY_LEN; small arrays fall through to existing
 // behaviour even when path/command hint at JSON.
 const STRUCTURED_MIN_ARRAY_LEN = 20;
+
+// Prose / markdown docs sniff. Checked last — must not steal diff/ts/vitest.
+// Requires at least one ATX heading as the primary signal; structural markers
+// (code fences, bullet/numbered lists) raise confidence. A command reading a
+// *.md/.rst/.txt file is an independent high-confidence signal.
+const PROSE_CMD = /\b(?:cat|less|bat)\b.*\.(?:md|rst|txt)\b/i;
+const PROSE_HEADING = /^#{1,6} /m;
+const PROSE_STRUCT = /^```|^[-*+] |\b\d+\. /m;
+// Anti-guards: if any fires on the normalized text, prose is disqualified.
+// These shadow the earlier category checks but are kept here for locality.
+const PROSE_ANTI_DIFF = /^diff --git |^@@ .* @@/m;
+const PROSE_ANTI_TS = /\(\d+,\d+\):\s+error\s+TS\d+:|error\s+TS\d+:|Found\s+\d+\s+errors?/m;
+const PROSE_ANTI_VI = /^\s*Test Files\s|^\s*Tests\s+\d|AssertionError/m;
 
 // The structured sniff fires ONLY when the body actually parses to a large
 // homogeneous array of objects — the only shape compressJson collapses.
@@ -114,6 +130,29 @@ export function classifyOutput(input: ClassifyInput): Classification {
     return { category: "structured", confidence: hint ? 0.95 : 0.7 };
   }
 
+  // Prose is checked after all other specialized categories so it never
+  // steals diff/typescript/vitest/structured. Anti-guards double-check the
+  // text even though those categories are checked earlier — defence in depth.
+  if (!PROSE_ANTI_DIFF.test(text) && !PROSE_ANTI_TS.test(text) && !PROSE_ANTI_VI.test(text)) {
+    const hasHeading = PROSE_HEADING.test(text);
+    const hasStruct = PROSE_STRUCT.test(text);
+    const proseCmd = PROSE_CMD.test(command);
+    const isFetch = (input.source ?? "") === "fetch";
+
+    if (proseCmd) {
+      return { category: "prose", confidence: 0.8 };
+    }
+    if (isFetch && hasHeading) {
+      return { category: "prose", confidence: 0.75 };
+    }
+    if (hasHeading && hasStruct) {
+      return { category: "prose", confidence: 0.85 };
+    }
+    if (hasHeading) {
+      return { category: "prose", confidence: 0.7 };
+    }
+  }
+
   if (command !== "") {
     return { category: "generic_shell", confidence: 0.6 };
   }
@@ -125,7 +164,8 @@ export function isConfidentClassification(c: Classification): boolean {
     (c.category === "vitest" ||
       c.category === "typescript" ||
       c.category === "diff" ||
-      c.category === "structured") &&
+      c.category === "structured" ||
+      c.category === "prose") &&
     c.confidence >= CLASSIFICATION_CONFIDENCE_FLOOR
   );
 }

@@ -1,10 +1,11 @@
 import type { OutputCategory } from "../classify.js";
 import { compressDiff } from "./diff.js";
 import { compressJson } from "./json.js";
+import { compressProse } from "./prose.js";
 import { compressTsc } from "./tsc.js";
 import { compressVitest } from "./vitest.js";
 
-export type CompressorName = "vitest" | "typescript" | "diff" | "structured" | "generic";
+export type CompressorName = "vitest" | "typescript" | "diff" | "structured" | "prose" | "generic";
 
 // Dispatch the category-specific compressor. generic_shell/unknown (and
 // any low-confidence call upstream) pass through unchanged to the
@@ -20,5 +21,6 @@ export function compressByCategory(
   if (category === "diff") return { text: compressDiff(text), compressor: "diff" };
   if (category === "structured")
     return { text: compressJson(text, intent), compressor: "structured" };
+  if (category === "prose") return { text: compressProse(text), compressor: "prose" };
   return { text, compressor: "generic" };
 }
