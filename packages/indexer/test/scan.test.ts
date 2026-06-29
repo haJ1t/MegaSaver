@@ -67,4 +67,22 @@ describe("scanRepo", () => {
     expect(app?.path.includes("\\")).toBe(false);
     expect((app?.size ?? 0) > 0).toBe(true);
   });
+
+  it("scans a UTF-8 source with high-bit/control bytes but no NUL (not binary)", () => {
+    // Mirrors compress/json.ts: box-drawing / high-bit UTF-8 bytes, no NUL.
+    // Only a NUL byte signals binary; high-bit bytes alone must not.
+    writeFileSync(join(root, "src", "highbit.ts"), 'export const box = "│├─ schema sample";\n');
+    const result = scanRepo({ rootDir: root, maxFileSize: 10_000 });
+    expect(result.files.map((f) => f.path)).toContain("src/highbit.ts");
+    expect(result.skipped.find((s) => s.path === "src/highbit.ts")).toBeUndefined();
+  });
+
+  it("flags a source containing a raw NUL byte as binary (correct, strict)", () => {
+    // Build the NUL via a byte array so the test source itself stays NUL-free.
+    const withNul = Buffer.concat([Buffer.from('export const s = "ab";\n'), Buffer.from([0])]);
+    writeFileSync(join(root, "src", "withnul.ts"), withNul);
+    const result = scanRepo({ rootDir: root, maxFileSize: 10_000 });
+    expect(result.skipped.find((s) => s.path === "src/withnul.ts")?.reason).toBe("binary");
+    expect(result.files.map((f) => f.path)).not.toContain("src/withnul.ts");
+  });
 });
