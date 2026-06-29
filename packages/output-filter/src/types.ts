@@ -160,7 +160,8 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   // Classify after ANSI strip, before compressor dispatch (§10.2).
   const command =
     source?.kind === "command" ? `${source.command} ${source.args.join(" ")}`.trim() : undefined;
-  const classification = classifyOutput({ command, text: normalized });
+  const path = source?.kind === "file" ? source.path : undefined;
+  const classification = classifyOutput({ command, path, text: normalized });
 
   const rawBytes = Buffer.byteLength(raw, "utf8");
 
@@ -223,8 +224,15 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   let compressor: CompressorName = "generic";
   let textForChunks = normalized;
   const isFileSource = source?.kind === "file";
-  if (decision === "compressed" && !isFileSource && isConfidentClassification(classification)) {
-    const compressed = compressByCategory(classification.category, normalized);
+  // Source-code file reads route to semantic AST chunking, not a category
+  // compressor. The structured (JSON) compressor is exempt: a *.json read is
+  // exactly its target, and semantic chunking ignores non-code files anyway.
+  const compressorEligible =
+    decision === "compressed" &&
+    (!isFileSource || classification.category === "structured") &&
+    isConfidentClassification(classification);
+  if (compressorEligible) {
+    const compressed = compressByCategory(classification.category, normalized, intent);
     compressor = compressed.compressor;
     textForChunks = compressed.text;
   }

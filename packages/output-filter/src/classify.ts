@@ -8,6 +8,7 @@ export const outputCategorySchema = z.enum([
   "vitest",
   "typescript",
   "diff",
+  "structured",
   "generic_shell",
   "unknown",
 ]);
@@ -17,6 +18,9 @@ export type ClassifyInput = {
   // Command line (command + args joined), when the output came from a
   // run-command call. Used alongside output sniffing (§10.3).
   command?: string | undefined;
+  // Source file path, when the output came from a read-file call. A *.json
+  // / lockfile path raises confidence for the structured category.
+  path?: string | undefined;
   text: string;
 };
 
@@ -44,10 +48,43 @@ const TS_OUT = /\(\d+,\d+\):\s+error\s+TS\d+:|error\s+TS\d+:|Found\s+\d+\s+error
 // without these anchors is caught by the command path instead.
 const DIFF_OUT = /^diff --git |^@@ .* @@/m;
 
+const JSON_PATH = /\.json$|(?:^|\/)pnpm-lock\.yaml$/i;
+const JSON_CMD = /\b(?:cat|jq|curl)\b.*\.json\b|\bjq\b/i;
+// Above this length a homogeneous array benefits from schematizing. Mirrors
+// compressJson's MIN_ARRAY_LEN; small arrays fall through to existing
+// behaviour even when path/command hint at JSON.
+const STRUCTURED_MIN_ARRAY_LEN = 20;
+
+// The structured sniff fires ONLY when the body actually parses to a large
+// homogeneous array of objects — the only shape compressJson collapses.
+// Path/command (*.json, cat/jq) raise confidence but never fire on their own,
+// so a small/heterogeneous/non-array JSON file falls through untouched.
+function structuredArrayMatch(text: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return false;
+  }
+  if (!Array.isArray(parsed) || parsed.length <= STRUCTURED_MIN_ARRAY_LEN) return false;
+  const first = parsed[0];
+  if (typeof first !== "object" || first === null || Array.isArray(first)) return false;
+  const keySet = Object.keys(first).join(" ");
+  if (keySet === "") return false;
+  return parsed.every(
+    (el) =>
+      typeof el === "object" &&
+      el !== null &&
+      !Array.isArray(el) &&
+      Object.keys(el).join(" ") === keySet,
+  );
+}
+
 // Typescript is checked before vitest: a TS error signature is highly
 // specific, whereas a test command may incidentally compile TS.
 export function classifyOutput(input: ClassifyInput): Classification {
   const command = input.command ?? "";
+  const path = input.path ?? "";
   const text = normalize(input.text);
 
   const tsCmd = TS_CMD.test(command);
@@ -68,6 +105,11 @@ export function classifyOutput(input: ClassifyInput): Classification {
     return { category: "diff", confidence: diffCmd && diffOut ? 0.95 : diffCmd ? 0.8 : 0.7 };
   }
 
+  if (structuredArrayMatch(text)) {
+    const hint = JSON_PATH.test(path) || JSON_CMD.test(command);
+    return { category: "structured", confidence: hint ? 0.95 : 0.7 };
+  }
+
   if (command !== "") {
     return { category: "generic_shell", confidence: 0.6 };
   }
@@ -76,7 +118,10 @@ export function classifyOutput(input: ClassifyInput): Classification {
 
 export function isConfidentClassification(c: Classification): boolean {
   return (
-    (c.category === "vitest" || c.category === "typescript" || c.category === "diff") &&
+    (c.category === "vitest" ||
+      c.category === "typescript" ||
+      c.category === "diff" ||
+      c.category === "structured") &&
     c.confidence >= CLASSIFICATION_CONFIDENCE_FLOOR
   );
 }
