@@ -3057,3 +3057,23 @@ rank/fit read (lossless — it persists its own chunks). TDD: tiny/dense file
 falls back, body-dominant file still outlines. Reviewer: 1 redundant-decl
 cleanup + 1 test-assertion tightened (assert the 0.9 ratio, not just <raw).
 `pnpm verify` green (44/44). patch changeset @megasaver/output-filter.
+
+## [2026-06-29] feat | context-pruner git co-change ranking signal
+
+Added a deterministic git-history co-change factor to the LAMR scorer
+(spec: docs/superpowers/specs/2026-06-29-context-pruner-cochange-signal-design.md,
+risk MEDIUM). New `packages/context-pruner/src/cochange.ts`:
+`parseNumstat(raw)` builds a per-file co-change map + churn + global
+peak from `git log --numstat` text; `coChangeStrength(map, file,
+changedFiles)` scores co-evolution with the edit site, normalized 0..1
+by the global peak. Wired `coChangeRelevance` into `ScoreFactors`
+(strict schema), `scoreBlocks`, `finalScore`, with `WEIGHTS.coChange =
+0.5` (below `dependency`). Raw text injected via
+`ScoreInput.coChangeLog`, memoized per process (no shell-out in the
+scored core — pure/no-LLM/no-I/O). No-op on empty/absent history:
+factor 0, ranking byte-identical, never throws. TDD: 10 new tests
+(map+churn from a fixture numstat string, factor raises a co-changing
+block's score, unrelated file stays 0, empty history no-op).
+context-pruner suite 54/54 green; typecheck + biome green; downstream
+mcp-bridge/cli typecheck green (optional field, backward compatible).
+minor changeset @megasaver/context-pruner.

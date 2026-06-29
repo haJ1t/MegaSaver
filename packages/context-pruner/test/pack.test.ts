@@ -4,6 +4,7 @@ import { contextPackSchema, scoreFactorsSchema } from "../src/pack.js";
 const factors = {
   semanticRelevance: 0.9,
   dependencyRelevance: 0,
+  coChangeRelevance: 0,
   testFailureRelevance: 0,
   recentEditRelevance: 0,
   memoryRelevance: 0,

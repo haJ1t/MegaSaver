@@ -1,5 +1,6 @@
 import type { CodeBlock } from "@megasaver/indexer";
 import { rankBm25 } from "@megasaver/retrieval";
+import { type CoChangeMap, coChangeStrength, parseNumstat } from "./cochange.js";
 import type { ScoreFactors } from "./pack.js";
 import { WEIGHTS } from "./weights.js";
 
@@ -10,7 +11,27 @@ export type ScoreInput = {
   failingTests?: readonly string[];
   memoryFiles?: readonly string[];
   staleFiles?: readonly string[];
+  // Raw `git log --numstat` text. Parsed once (memoized on the string) into a
+  // co-change map; absent/empty => co-change factor is 0 for every block.
+  coChangeLog?: string;
 };
+
+// Parse-once cache: `git log --numstat` is large and the same text is handed to
+// repeated scoreBlocks calls within a process. Memoize on the raw string so the
+// O(commits²-per-commit) parse runs once. ponytail: single-entry memo is enough
+// — the log is per-repo and stable for a process; widen to a Map if multi-repo
+// scoring in one process ever matters.
+let lastLog: string | undefined;
+let lastMap: CoChangeMap | undefined;
+
+function coChangeMapFor(raw: string | undefined): CoChangeMap | undefined {
+  if (raw === undefined || raw === "") return undefined;
+  if (raw !== lastLog) {
+    lastLog = raw;
+    lastMap = parseNumstat(raw);
+  }
+  return lastMap;
+}
 
 export type ScoredCandidate = { block: CodeBlock; factors: ScoreFactors; score: number };
 
@@ -65,12 +86,16 @@ export function scoreBlocks(input: ScoreInput): ScoredCandidate[] {
   const memory = new Set(input.memoryFiles ?? []);
   const stale = new Set(input.staleFiles ?? []);
   const semantic = semanticScores(input.task, input.blocks);
+  const coChange = coChangeMapFor(input.coChangeLog);
+  const changedFiles = input.changedFiles ?? [];
 
   const scored = input.blocks.map((block) => {
     const factors: ScoreFactors = {
       semanticRelevance: semantic.get(block.id) ?? 0,
       // dependencyRelevance is assigned during selection (closure pull-ins).
       dependencyRelevance: 0,
+      coChangeRelevance:
+        coChange === undefined ? 0 : coChangeStrength(coChange, block.filePath, changedFiles),
       testFailureRelevance: failing.has(block.filePath) ? 1 : 0,
       recentEditRelevance: changed.has(block.filePath) ? 1 : 0,
       memoryRelevance: memory.has(block.filePath) ? 1 : 0,
@@ -90,6 +115,7 @@ export function finalScore(factors: ScoreFactors): number {
   return (
     WEIGHTS.semantic * factors.semanticRelevance +
     WEIGHTS.dependency * factors.dependencyRelevance +
+    WEIGHTS.coChange * factors.coChangeRelevance +
     WEIGHTS.testFailure * factors.testFailureRelevance +
     WEIGHTS.recentEdit * factors.recentEditRelevance +
     WEIGHTS.memory * factors.memoryRelevance +
