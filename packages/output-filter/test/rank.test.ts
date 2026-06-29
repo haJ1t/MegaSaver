@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fitBudget } from "../src/fit.js";
 import { chunkByFormat } from "../src/parsers/index.js";
 import { rankFeatureNameSchema } from "../src/rank-features.js";
 import { type Chunk, scoreChunk } from "../src/rank.js";
@@ -198,5 +199,71 @@ describe("ranking integration: failures outrank passing-run noise", () => {
     expect(group).toBeDefined();
     expect(summary).toBeDefined();
     expect((group?.score ?? 0) > (summary?.score ?? 0)).toBe(true);
+  });
+});
+
+// FIX D (semantic-ast-read gap): an EXACT intent-token match in a declaration
+// must rank at/near the top and survive budget pressure. Previously a small
+// intent-matched function scored low (keywordScore only) and lost to larger,
+// error/diagnostic-heavy off-intent blocks.
+describe("scoreChunk exact-intent-match bump", () => {
+  it("ranks a tiny exact-intent-match declaration above a larger off-intent block", () => {
+    // The wanted declaration: name == intent token, otherwise unremarkable.
+    const target = scoreChunk(
+      "parseConfig",
+      chunk("export function parseConfig(raw: string) { return JSON.parse(raw); }"),
+    );
+    // A larger off-intent block that scores well on raw signals (file path +
+    // diagnostic-looking content) but contains NO intent token.
+    const offIntent = scoreChunk(
+      "parseConfig",
+      chunk("src/other.ts(1,1): error TS2322: nope\n".repeat(20)),
+    );
+    expect(target.score).toBeGreaterThan(offIntent.score);
+  });
+
+  it("gives a decisive bump only on a whole-token match, not a substring", () => {
+    const exact = scoreChunk("config", chunk("function config() {}"));
+    const substring = scoreChunk("config", chunk("function configuration() {}"));
+    expect(exact.score).toBeGreaterThan(substring.score);
+  });
+
+  it("does not bump when intent is absent", () => {
+    const withIntent = scoreChunk("parseConfig", chunk("function parseConfig() {}"));
+    const noIntent = scoreChunk(undefined, chunk("function parseConfig() {}"));
+    expect(withIntent.score).toBeGreaterThan(noIntent.score);
+  });
+});
+
+describe("fitBudget pins the top intent match under budget pressure", () => {
+  it("keeps the intent match even when a higher-scored off-intent chunk would fill the budget first", () => {
+    // Isolate the pin from the score bump: force an off-intent chunk to outscore
+    // the intent chunk (override score) so it sorts first and, kept greedily,
+    // fills the budget — leaving no room for the intent chunk. fitBudget pins
+    // the top intent-scoring chunk (keywordScore>0), so it survives regardless.
+    const intentMatch = scoreChunk("parseConfig", chunk("function parseConfig() {}"));
+    expect(intentMatch.features.keywordScore).toBeGreaterThan(0);
+
+    const offIntentBase = scoreChunk(undefined, chunk("a".repeat(40)));
+    expect(offIntentBase.features.keywordScore).toBe(0);
+    const offIntent = { ...offIntentBase, score: intentMatch.score + 100 };
+
+    // Budget holds both only if the intent chunk is reserved first; the higher-
+    // scored off-intent chunk alone leaves under one intent chunk of room.
+    const budget = Buffer.byteLength(offIntent.text, "utf8") + 1;
+    const kept = fitBudget([offIntent, intentMatch], budget);
+
+    expect(kept).toContain(intentMatch);
+  });
+
+  it("still drops the intent match if it alone overflows the budget", () => {
+    // Pinning must not blow the hard byte budget — an oversized intent chunk
+    // that cannot fit is not force-kept.
+    const huge = scoreChunk("parseConfig", chunk("function parseConfig() {}\n".repeat(100)));
+    const tiny = scoreChunk(undefined, chunk("ok"));
+    const budget = Buffer.byteLength(tiny.text, "utf8") + 5;
+    const kept = fitBudget([huge, tiny], budget);
+    expect(kept).not.toContain(huge);
+    expect(kept).toContain(tiny);
   });
 });

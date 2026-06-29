@@ -69,6 +69,15 @@ function keywordScore(intent: string | undefined, text: string): number {
   return hits;
 }
 
+// An exact intent-token hit (whole word, not a substring) is the strongest
+// relevance signal a read can carry: the user asked for `parseConfig`, this
+// declaration IS `parseConfig`. Bump it decisively above raw error/diagnostic
+// noise so a small intent-matched declaration is never out-ranked — and pinned
+// by fitBudget when budget is tight. The bump dwarfs the max additive raw score
+// (diagnostic 5 + error 4 + stack 3 + testFailure 4 + filePath 1 = 17) so one
+// hit clears it; it scales with hit count without starving multi-signal blocks.
+export const INTENT_MATCH_BUMP = 20;
+
 function recentFileScore(text: string, recentFiles: readonly string[] | undefined): number {
   if (recentFiles === undefined) return 0;
   let hits = 0;
@@ -99,6 +108,7 @@ export function scoreChunk(
     features.errorScore +
     features.filePathScore +
     features.keywordScore +
+    features.keywordScore * INTENT_MATCH_BUMP +
     features.recentFileScore +
     features.stackTraceScore +
     features.testFailureScore -
