@@ -27,6 +27,7 @@ export const mcpToolNameSchema = z.enum([
   "get_relevant_memories",
   "get_task_status",
   "mega_fetch_chunk",
+  "mega_impact",
   "mega_read_file",
   "mega_recall",
   "mega_run_command",

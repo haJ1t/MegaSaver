@@ -19,6 +19,7 @@ describe("McpToolName type regression", () => {
       "get_relevant_memories",
       "get_task_status",
       "mega_fetch_chunk",
+      "mega_impact",
       "mega_read_file",
       "mega_recall",
       "mega_run_command",
@@ -45,7 +46,7 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 26-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search)", () => {
+  it("schema.options preserves the 27-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact)", () => {
     const _t: readonly [
       "approve_memory",
       "audit_token_usage",
@@ -62,6 +63,7 @@ describe("McpToolName type regression", () => {
       "get_relevant_memories",
       "get_task_status",
       "mega_fetch_chunk",
+      "mega_impact",
       "mega_read_file",
       "mega_recall",
       "mega_run_command",

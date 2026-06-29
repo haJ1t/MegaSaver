@@ -1,7 +1,8 @@
+import type { CodeBlock } from "@megasaver/indexer";
 import { blockTypeSchema } from "@megasaver/indexer";
 import { z } from "zod";
 import { type ScoreInput, type ScoredCandidate, scoreBlocks } from "./score.js";
-import { type ExclusionReason, selectPack } from "./select.js";
+import { type ExclusionReason, selectImpact, selectPack } from "./select.js";
 
 // The eight LAMR relevance factors (positive) and penalties (kept positive,
 // subtracted in finalScore). Every factor is recorded per block so `explain`
@@ -99,6 +100,37 @@ export function buildContextPack(request: PruneRequest): ContextPack {
   });
   return {
     task: request.task,
+    included: selection.included.map((c) => toScoredBlock(c, inclusionReasons(c))),
+    excluded: selection.excluded.map((e) =>
+      toScoredBlock(e.candidate, [exclusionReason(e.reason)]),
+    ),
+    budget: {
+      maxTokens: request.maxTokens ?? null,
+      usedTokens: selection.usedTokens,
+      blocksConsidered: selection.blocksConsidered,
+    },
+  };
+}
+
+export type ImpactRequest = {
+  symbol: string;
+  blocks: readonly CodeBlock[];
+  limit?: number;
+  maxTokens?: number;
+};
+
+// Reverse-BFS blast radius: the symbol + its transitive callers, packaged in the
+// same ContextPack shape as buildContextPack so the MCP tool returns one type.
+// Scored with the symbol as the task so the root reads as "named in task" and
+// pulled-in callers as "dependency support". `task` echoes the queried symbol.
+export function buildImpactPack(request: ImpactRequest): ContextPack {
+  const candidates = scoreBlocks({ task: request.symbol, blocks: request.blocks });
+  const selection = selectImpact(candidates, request.symbol, {
+    ...(request.limit !== undefined ? { limit: request.limit } : {}),
+    ...(request.maxTokens !== undefined ? { maxTokens: request.maxTokens } : {}),
+  });
+  return {
+    task: request.symbol,
     included: selection.included.map((c) => toScoredBlock(c, inclusionReasons(c))),
     excluded: selection.excluded.map((e) =>
       toScoredBlock(e.candidate, [exclusionReason(e.reason)]),
