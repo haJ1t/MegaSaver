@@ -61,6 +61,27 @@ describe("handleReadFile", () => {
     expect(result.rawBytes).toBeGreaterThan(0);
   });
 
+  it("returns decision=outline when outline:true is passed", async () => {
+    const registry = seededRegistry(projectRoot);
+    const srcPath = join(projectRoot, "multi.ts");
+    // A file with multiple top-level declarations so the outline path fires.
+    await writeFile(
+      srcPath,
+      [
+        "export function alpha() { return 1; }",
+        "export function beta() { return 2; }",
+        "export function gamma() { return 3; }",
+        "export function delta() { return 4; }",
+        "export function epsilon() { return 5; }",
+      ].join("\n"),
+    );
+    const result = await handleReadFile(
+      { registry, storeRoot: store, now: () => TS, newId: () => "cs-outline" },
+      { path: srcPath, intent: "get structure", sessionId: SESSION_ID, outline: true },
+    );
+    expect(result.decision).toBe("outline");
+  });
+
   it("throws intent_required when intent is empty", async () => {
     const registry = seededRegistry(projectRoot);
     await expect(
@@ -172,6 +193,41 @@ describe("handleReadFile", () => {
     expect(path).toBe("/read-registry");
     expect(body).toEqual({ sessionId: SESSION_ID, path: "/any/path.txt", intent: "find errors" });
     expect((body as Record<string, unknown>).maxBytes).toBeUndefined();
+    expect((body as Record<string, unknown>).outline).toBeUndefined();
+  });
+
+  it("forwards outline:true in the daemon body when the caller passes it", async () => {
+    const daemonResult = {
+      chunkSetId: "cs-from-daemon",
+      rawBytes: 100,
+      returnedBytes: 50,
+      bytesSaved: 50,
+      savingRatio: 0.5,
+      rawTokens: 25,
+      returnedTokens: 12,
+      summary: "from daemon",
+      excerpts: [],
+    };
+    const handle = {
+      url: "http://127.0.0.1:1",
+      token: "t",
+      request: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(daemonResult), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    };
+    mockGetRunningDaemon.mockResolvedValue(handle);
+
+    const registry = createInMemoryCoreRegistry();
+    await handleReadFile(
+      { registry, storeRoot: store, now: () => TS, newId: () => "x" },
+      { path: "/any/path.txt", intent: "get structure", sessionId: SESSION_ID, outline: true },
+    );
+
+    const [, , body] = handle.request.mock.calls[0] as [string, string, unknown];
+    expect((body as Record<string, unknown>).outline).toBe(true);
   });
 
   it("falls back to in-process on daemon non-2xx", async () => {
