@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { compressDiff } from "../src/compress/diff.js";
 import { compressByCategory } from "../src/compress/index.js";
 import { compressTsc } from "../src/compress/tsc.js";
 import { compressVitest } from "../src/compress/vitest.js";
@@ -25,6 +26,74 @@ const TSC_MIX = [
   "  cascading type expansion noise that nobody needs",
   "Found 3 errors in 2 files.",
 ].join("\n");
+
+// Unified diff: 2 changed lines surrounded by a long unchanged run.
+const DIFF_UNIFIED = [
+  "diff --git a/src/foo.ts b/src/foo.ts",
+  "index 1234567..89abcde 100644",
+  "--- a/src/foo.ts",
+  "+++ b/src/foo.ts",
+  "@@ -1,12 +1,12 @@",
+  " line 1 unchanged",
+  " line 2 unchanged",
+  " line 3 unchanged",
+  " line 4 unchanged",
+  " line 5 unchanged",
+  "-removed line six",
+  "+added line six",
+  " line 7 unchanged",
+  " line 8 unchanged",
+  " line 9 unchanged",
+  " line 10 unchanged",
+  " line 11 unchanged",
+  " line 12 unchanged",
+].join("\n");
+
+// git log --stat with an ASCII graph and a stat summary.
+const DIFF_STAT = [
+  "* commit abc123 (HEAD -> main)",
+  "| Author: Dev <dev@example.com>",
+  "|",
+  "|     feat: add thing",
+  "|",
+  "| src/foo.ts | 4 ++--",
+  "| src/bar.ts | 2 +-",
+  "| 2 files changed, 4 insertions(+), 2 deletions(-)",
+  "* commit def456",
+].join("\n");
+
+describe("compressDiff (Diff-aware compressor)", () => {
+  const out = compressDiff(DIFF_UNIFIED);
+  it("keeps file headers and hunk headers", () => {
+    expect(out).toContain("diff --git a/src/foo.ts b/src/foo.ts");
+    expect(out).toContain("--- a/src/foo.ts");
+    expect(out).toContain("+++ b/src/foo.ts");
+    expect(out).toContain("@@ -1,12 +1,12 @@");
+  });
+  it("keeps every changed +/- line", () => {
+    expect(out).toContain("-removed line six");
+    expect(out).toContain("+added line six");
+  });
+  it("collapses a fully-unchanged run to a marker", () => {
+    expect(out).toMatch(/\[\d+ unchanged\]/);
+    // The deep middle of the leading unchanged run is dropped.
+    expect(out).not.toContain("line 3 unchanged");
+  });
+  it("keeps one line of context on each side of a change", () => {
+    expect(out).toContain("line 5 unchanged");
+    expect(out).toContain("line 7 unchanged");
+  });
+  it("is smaller than the raw input", () => {
+    expect(out.length).toBeLessThan(DIFF_UNIFIED.length);
+  });
+
+  it("summarises git log --stat: keeps stat, drops graph lines", () => {
+    const stat = compressDiff(DIFF_STAT);
+    expect(stat).toContain("src/foo.ts | 4 ++--");
+    expect(stat).toContain("2 files changed, 4 insertions(+), 2 deletions(-)");
+    expect(stat).not.toContain("| Author: Dev");
+  });
+});
 
 describe("compressVitest (Deliverable 3)", () => {
   const out = compressVitest(VITEST_MIX);
@@ -74,6 +143,16 @@ describe("compressByCategory dispatch", () => {
   });
   it("routes typescript", () => {
     expect(compressByCategory("typescript", TSC_MIX).compressor).toBe("typescript");
+  });
+  it("routes diff", () => {
+    expect(compressByCategory("diff", DIFF_UNIFIED).compressor).toBe("diff");
+  });
+  it("a non-diff category does not invoke compressDiff", () => {
+    // compressDiff only fires on the diff category; generic input falls
+    // through to existing behaviour untouched.
+    const r = compressByCategory("generic_shell", DIFF_UNIFIED);
+    expect(r.compressor).toBe("generic");
+    expect(r.text).toBe(DIFF_UNIFIED);
   });
   it("passes generic categories through unchanged", () => {
     const r = compressByCategory("generic_shell", "a\nb\nc");
