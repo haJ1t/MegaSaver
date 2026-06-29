@@ -19,6 +19,7 @@ const readFileInputSchema = z
     intent: z.string(),
     sessionId: z.string().min(1),
     maxBytes: z.number().int().positive().optional(),
+    outline: z.boolean().optional(),
   })
   .strict();
 
@@ -30,7 +31,7 @@ export async function handleReadFile(
   if (!parsed.success) {
     throw new McpBridgeError("validation_failed", parsed.error.message);
   }
-  const { path, intent, sessionId, maxBytes } = parsed.data;
+  const { path, intent, sessionId, maxBytes, outline } = parsed.data;
 
   if (intent.trim() === "") {
     throw new McpBridgeError("intent_required", "mega_read_file requires a non-empty intent");
@@ -46,7 +47,7 @@ export async function handleReadFile(
   return forwardOrFallback(
     env.storeRoot,
     "/read-registry",
-    { sessionId, path, intent },
+    { sessionId, path, intent, ...(outline === true ? { outline: true } : {}) },
     async () => {
       const outcome = await runOutputPipeline({
         registry: env.registry,
@@ -54,6 +55,7 @@ export async function handleReadFile(
         sessionId: sessionId as Parameters<typeof runOutputPipeline>[0]["sessionId"],
         path,
         intent,
+        ...(outline === true ? { outline: true } : {}),
         now: env.now,
         newId: env.newId,
       });

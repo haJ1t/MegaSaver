@@ -3030,3 +3030,20 @@ connectors-claude-code/indexer; concepts context-gate-pipeline/context-pruning-e
 semantic-repo-index; synthesis post-v1.1-roadmap), created 5 (concepts
 intent-aware-hook/diff-on-reread/semantic-ast-read; decision lazy-load-heavy-deps;
 source post-v1.1-features), and catalogued the new pages in index.md.
+
+## [2026-06-29] feature | outline-first-read
+
+Spec + plan authored, 7-task subagent-driven implementation across 4 packages
+(`@megasaver/output-filter`, `context-gate`, `daemon`, `mcp-bridge`): `outlineFile`
+parser, `partitionFile(Infinity)` bodies-as-chunks persist, `\0outline` read-index
+key, daemon forwarding, e2e round-trip test. Lossless skeleton reads — agents
+expand only the bodies they need via `mega_fetch_chunk`.
+
+## [2026-06-29] review | outline-first-read final pass
+
+code-reviewer (ready-to-merge) + adversarial critic. Critic blocker fixed:
+co-located decls sharing a line collapsed to duplicate `#id`s + inflated count
+→ dedupe skeleton by chunk id (`fix(output-filter): dedupe co-located decls`).
+Verified safe: redaction (skeleton + bodies on post-redact text), fetch-id
+ordering, `\0outline` slot isolation, line coverage. Known limitation (opt-in):
+skeleton may exceed raw bytes on tiny/dense files; no size-threshold fallback.

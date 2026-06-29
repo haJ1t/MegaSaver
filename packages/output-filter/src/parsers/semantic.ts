@@ -15,7 +15,7 @@ type Extractor = (
 // hook / daemon / CLI start) never pays the compiler load — only an actual
 // semantic chunk of a supported source file does.
 let indexerMod: typeof import("@megasaver/indexer") | undefined;
-async function loadExtractors(): Promise<typeof import("@megasaver/indexer")> {
+export async function loadExtractors(): Promise<typeof import("@megasaver/indexer")> {
   if (indexerMod === undefined) indexerMod = await import("@megasaver/indexer");
   return indexerMod;
 }

@@ -37,6 +37,7 @@ updated: 2026-06-16
 - [[concepts/intent-aware-hook]] — Phase 6b (PR #180): UserPromptSubmit hook captures the prompt → fill-gap ranking intent for PostToolUse-captured output.
 - [[concepts/diff-on-reread]] — PR #181: unchanged re-reads return a lossless `unchanged-marker` (prior chunkSetId) via a per-session sha256 read-index; skips re-filter/re-persist.
 - [[concepts/semantic-ast-read]] — PR #182: source-file reads chunk on AST boundaries (reuses [[entities/indexer]] extractors, lazy-loaded); line-chunk fallback for everything else.
+- [[concepts/outline-first-read]] — opt-in skeleton reads: signatures + line ranges + chunk ids; bodies fetch-on-demand (lossless, additive).
 
 ## Entities
 

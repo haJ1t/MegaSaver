@@ -9,6 +9,7 @@ import { OutputFilterError } from "./errors.js";
 import { effectiveBudget, fitBudget } from "./fit.js";
 import { collapseRepeatedLines, normalize } from "./normalize.js";
 import { chunkByFormatWithMeta } from "./parsers/index.js";
+import { outlineFile } from "./parsers/outline.js";
 import {
   type EngineScore,
   type RankFeatures,
@@ -46,6 +47,7 @@ export const filterOutputInputSchema = z
       .optional(),
     engineRanking: z.boolean().optional(),
     recordTrace: z.boolean().optional(),
+    outline: z.boolean().optional(),
     source: z
       .discriminatedUnion("kind", [
         z.object({ kind: z.literal("file"), path: z.string() }),
@@ -72,6 +74,12 @@ export type OutputExcerpt = {
   engine?: EngineScore;
 };
 
+export type OutlineBody = {
+  startLine: number;
+  endLine: number;
+  text: string;
+};
+
 export type FilterOutputResult = {
   summary: string;
   excerpts: readonly OutputExcerpt[];
@@ -86,6 +94,7 @@ export type FilterOutputResult = {
   savingRatio: number;
   trace?: RankingTrace;
   chunkSetId?: string;
+  chunks?: readonly OutlineBody[];
   warnings?: readonly string[];
   unchanged?: { priorChunkSetId: string };
   deduped?: { suppressed: number; priorChunkSetIds: string[] };
@@ -145,6 +154,44 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   const command =
     source?.kind === "command" ? `${source.command} ${source.args.join(" ")}`.trim() : undefined;
   const classification = classifyOutput({ command, text: normalized });
+
+  // Narrow `source` to the file variant directly so `source.path` is typed.
+  if (parsed.data.outline === true && source?.kind === "file") {
+    const outline = await outlineFile(normalized, source.path);
+    if (outline !== null) {
+      const skeletonChunk = {
+        text: outline.skeleton,
+        startLine: 1,
+        endLine: normalized.replace(/\n$/, "").split("\n").length,
+      };
+      const excerpt = excerptOf(scoreChunk(intent, skeletonChunk, sessionHints));
+      const rawBytes = Buffer.byteLength(raw, "utf8");
+      const rawTokens = estimateTokens(raw);
+      const returnedBytes = Buffer.byteLength(outline.skeleton, "utf8");
+      const returnedTokens = estimateTokens(outline.skeleton);
+      const bytesSaved = Math.max(0, rawBytes - returnedBytes);
+      const base: FilterOutputResult = {
+        // ponytail: tool name hardcoded; lift to a constant when the CLI surface stabilises.
+        summary: "outline mode: expand bodies via mega_fetch_chunk",
+        excerpts: [excerpt],
+        chunks: outline.chunks.map((c) => ({
+          startLine: c.startLine,
+          endLine: c.endLine,
+          text: c.text,
+        })),
+        classification,
+        decision: "outline",
+        compressor: "generic",
+        rawBytes,
+        returnedBytes,
+        rawTokens,
+        returnedTokens,
+        bytesSaved,
+        savingRatio: rawBytes === 0 ? 0 : bytesSaved / rawBytes,
+      };
+      return warnings.length > 0 ? { ...base, warnings } : base;
+    }
+  }
 
   const rawBytes = Buffer.byteLength(raw, "utf8");
   const rawTokens = estimateTokens(raw);

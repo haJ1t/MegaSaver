@@ -163,6 +163,7 @@ const readRegistryRequestSchema = z
     sessionId: sessionIdSchema,
     path: z.string().min(1),
     intent: z.string().min(1),
+    outline: z.boolean().optional(),
   })
   .strict();
 
@@ -182,6 +183,7 @@ export async function readRegistryHandler(
     sessionId: parsed.data.sessionId,
     path: parsed.data.path,
     intent: parsed.data.intent,
+    ...(parsed.data.outline === true ? { outline: true } : {}),
     ...(deps?.now !== undefined ? { now: deps.now } : {}),
     ...(deps?.newId !== undefined ? { newId: deps.newId } : {}),
   });

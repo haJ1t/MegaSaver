@@ -200,3 +200,46 @@ describe("filterOutput no-blind floor (mission: never strip what the model needs
     expect(excerptBytes).toBeLessThanOrEqual(4000); // aggressive budget
   });
 });
+
+describe("filterOutput outline branch", () => {
+  const TS_SRC = `import { z } from "zod";
+
+export function alpha(a: number): number {
+  return a + 1;
+}
+
+export function beta(b: number): number {
+  return b * 2;
+}
+`;
+
+  it("returns a skeleton excerpt plus body chunks when outline is set", async () => {
+    const result = await filterOutput({
+      raw: TS_SRC,
+      mode: "safe",
+      outline: true,
+      source: { kind: "file", path: "a.ts" },
+    });
+    expect(result.decision).toBe("outline");
+    expect(result.excerpts).toHaveLength(1);
+    expect(result.excerpts[0]?.text).toContain("export function alpha");
+    expect(result.chunks).toBeDefined();
+    expect(result.chunks?.some((c) => c.text.includes("return a + 1;"))).toBe(true);
+  });
+
+  it("ignores outline for a non-file source (falls back to normal filtering)", async () => {
+    const result = await filterOutput({ raw: TS_SRC, mode: "safe", outline: true });
+    expect(result.decision).not.toBe("outline");
+    expect(result.chunks).toBeUndefined();
+  });
+
+  it("behaves exactly as today when outline is absent", async () => {
+    const result = await filterOutput({
+      raw: TS_SRC,
+      mode: "safe",
+      source: { kind: "file", path: "a.ts" },
+    });
+    expect(result.decision).not.toBe("outline");
+    expect(result.chunks).toBeUndefined();
+  });
+});

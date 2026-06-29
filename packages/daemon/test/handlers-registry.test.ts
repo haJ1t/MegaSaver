@@ -485,6 +485,35 @@ describe("readRegistryHandler", () => {
     expect(secondJson.summary as string).toContain("unchanged");
   });
 
+  it("200s with decision=outline when outline:true forwarded", async () => {
+    seedRegistry();
+    writeFileSync(
+      join(projectRoot, "multi.ts"),
+      [
+        "export function alpha() { return 1; }",
+        "export function beta() { return 2; }",
+        "export function gamma() { return 3; }",
+        "export function delta() { return 4; }",
+        "export function epsilon() { return 5; }",
+      ].join("\n"),
+    );
+    const res = await readRegistryHandler(
+      storeRoot,
+      {
+        sessionId: SESSION_ID as string,
+        path: "multi.ts",
+        intent: "get structure",
+        outline: true,
+      },
+      {
+        now: () => TS,
+        newId: () => "rid-outline",
+      },
+    );
+    expect(res.status).toBe(200);
+    expect((res.json as Record<string, unknown>).decision).toBe("outline");
+  });
+
   it("T13-recall: recall still works after a suppressed read wrote read-index.json", async () => {
     seedRegistry();
     writeFileSync(
