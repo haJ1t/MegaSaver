@@ -46,6 +46,7 @@ export const filterOutputInputSchema = z
       .optional(),
     engineRanking: z.boolean().optional(),
     recordTrace: z.boolean().optional(),
+    outline: z.boolean().optional(),
     source: z
       .discriminatedUnion("kind", [
         z.object({ kind: z.literal("file"), path: z.string() }),
@@ -72,6 +73,12 @@ export type OutputExcerpt = {
   engine?: EngineScore;
 };
 
+export type OutlineBody = {
+  startLine: number;
+  endLine: number;
+  text: string;
+};
+
 export type FilterOutputResult = {
   summary: string;
   excerpts: readonly OutputExcerpt[];
@@ -86,6 +93,7 @@ export type FilterOutputResult = {
   savingRatio: number;
   trace?: RankingTrace;
   chunkSetId?: string;
+  chunks?: readonly OutlineBody[];
   warnings?: readonly string[];
   unchanged?: { priorChunkSetId: string };
   deduped?: { suppressed: number; priorChunkSetIds: string[] };
