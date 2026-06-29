@@ -144,6 +144,20 @@ function excerptOf(chunk: RankedChunk): OutputExcerpt {
   return chunk.engine !== undefined ? { ...base, engine: chunk.engine } : base;
 }
 
+// Diagnostic/error-family classifications whose chunks are each distinct
+// evidence (one per file/line/code) and must NOT be simhash-deduped. Only the
+// families that exist in OutputCategory take effect; the rest are listed so the
+// intent survives when classify.ts grows eslint/pytest/etc. vitest/test is
+// deliberately excluded — its compressor already collapses duplicate failures.
+const DIAGNOSTIC_CATEGORIES = new Set<string>([
+  "typescript",
+  "eslint",
+  "stacktrace",
+  "pytest",
+  "go_test",
+  "cargo_test",
+]);
+
 export async function filterOutput(input: FilterOutputInput): Promise<FilterOutputResult> {
   const parsed = filterOutputInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -245,7 +259,13 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   const ranked = engineEnabled ? applyEngineRanking(scored, sessionHints) : scored;
   // Semantic chunks are an exhaustive partition of one file — no true
   // duplicates exist, so dedupe would only erase distinct declarations.
-  const deduped = usedSemantic ? ranked : dedupe(ranked);
+  // Diagnostic-class outputs share that property: every `error TSxxxx` line
+  // is distinct evidence (a different file/line/code), but they are near
+  // enough for simhash to collapse, so dedupe would erase real diagnostics.
+  // vitest/test is exempt from THIS exemption — its compressor already folds
+  // duplicate failures, so its chunks stay deduped.
+  const skipDedupe = usedSemantic || DIAGNOSTIC_CATEGORIES.has(classification.category);
+  const deduped = skipDedupe ? ranked : dedupe(ranked);
 
   const ordered = [...deduped].sort((a, b) => b.score - a.score);
   const budget = effectiveBudget(maxReturnedBytes, modeToBudget(mode));
