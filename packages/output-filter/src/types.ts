@@ -7,7 +7,7 @@ import { type CompressorName, compressByCategory } from "./compress/index.js";
 import { dedupe } from "./dedupe.js";
 import { OutputFilterError } from "./errors.js";
 import { effectiveBudget, fitBudget } from "./fit.js";
-import { collapseRepeatedLines, normalize } from "./normalize.js";
+import { collapseRepeatedLines, collapseSimilar, normalize } from "./normalize.js";
 import { chunkByFormatWithMeta } from "./parsers/index.js";
 import { outlineFile } from "./parsers/outline.js";
 import {
@@ -156,7 +156,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   const { redacted, count } = redact(raw);
   if (count > 0) warnings.push(`redacted ${count} secret(s) before processing`);
 
-  const normalized = collapseRepeatedLines(normalize(redacted));
+  const normalized = collapseSimilar(collapseRepeatedLines(normalize(redacted)));
   // Classify after ANSI strip, before compressor dispatch (§10.2).
   const command =
     source?.kind === "command" ? `${source.command} ${source.args.join(" ")}`.trim() : undefined;
