@@ -1,3 +1,4 @@
+import { cosine } from "@megasaver/embeddings";
 import type { CodeBlock } from "@megasaver/indexer";
 import { rankBm25 } from "@megasaver/retrieval";
 import { type CoChangeMap, coChangeStrength, parseNumstat } from "./cochange.js";
@@ -14,6 +15,11 @@ export type ScoreInput = {
   // Raw `git log --numstat` text. Parsed once (memoized on the string) into a
   // co-change map; absent/empty => co-change factor is 0 for every block.
   coChangeLog?: string;
+  // Pre-computed embedding vectors (the async work — embedding the task + loading
+  // the block-vector sidecar — happens at the boundary, NOT here, so the scorer
+  // stays synchronous). Absent ⇒ embeddingRelevance is 0 for every block.
+  taskVector?: Float32Array;
+  blockVectors?: Map<string, Float32Array>;
 };
 
 // Parse-once cache: `git log --numstat` is large and the same text is handed to
@@ -80,6 +86,20 @@ function semanticScores(task: string, blocks: readonly CodeBlock[]): Map<string,
   return scores;
 }
 
+// Embedding relevance for one block: clamped cosine(taskVector, blockVector) in
+// 0..1. Returns 0 when either vector is missing (graceful BM25-only fallback) or
+// when cosine is negative (so it never fights the positive factors).
+function embeddingRelevanceFor(
+  blockId: string,
+  taskVector: Float32Array | undefined,
+  blockVectors: Map<string, Float32Array> | undefined,
+): number {
+  if (taskVector === undefined || blockVectors === undefined) return 0;
+  const v = blockVectors.get(blockId);
+  if (v === undefined) return 0;
+  return Math.max(0, cosine(taskVector, v));
+}
+
 export function scoreBlocks(input: ScoreInput): ScoredCandidate[] {
   const changed = new Set(input.changedFiles ?? []);
   const failing = new Set(input.failingTests ?? []);
@@ -92,6 +112,7 @@ export function scoreBlocks(input: ScoreInput): ScoredCandidate[] {
   const scored = input.blocks.map((block) => {
     const factors: ScoreFactors = {
       semanticRelevance: semantic.get(block.id) ?? 0,
+      embeddingRelevance: embeddingRelevanceFor(block.id, input.taskVector, input.blockVectors),
       // dependencyRelevance is assigned during selection (closure pull-ins).
       dependencyRelevance: 0,
       coChangeRelevance:
@@ -114,6 +135,7 @@ export function scoreBlocks(input: ScoreInput): ScoredCandidate[] {
 export function finalScore(factors: ScoreFactors): number {
   return (
     WEIGHTS.semantic * factors.semanticRelevance +
+    WEIGHTS.embedding * factors.embeddingRelevance +
     WEIGHTS.dependency * factors.dependencyRelevance +
     WEIGHTS.coChange * factors.coChangeRelevance +
     WEIGHTS.testFailure * factors.testFailureRelevance +

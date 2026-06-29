@@ -10,6 +10,7 @@ import { type ExclusionReason, selectImpact, selectPack } from "./select.js";
 export const scoreFactorsSchema = z
   .object({
     semanticRelevance: z.number(),
+    embeddingRelevance: z.number(),
     dependencyRelevance: z.number(),
     coChangeRelevance: z.number(),
     testFailureRelevance: z.number(),

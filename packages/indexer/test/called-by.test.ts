@@ -34,8 +34,8 @@ afterEach(() => {
 });
 
 describe("calledBy population (inverse of calls)", () => {
-  it("calledBy[X] equals the names of every block whose calls include X", () => {
-    buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+  it("calledBy[X] equals the names of every block whose calls include X", async () => {
+    await buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
     const blocks = readBlocks(resolveIndexPaths(store, PROJECT_ID));
     const byName = new Map(blocks.map((b) => [b.name, b]));
 
@@ -44,8 +44,8 @@ describe("calledBy population (inverse of calls)", () => {
     expect(byName.get("top")?.calledBy).toEqual([]);
   });
 
-  it("calledBy is the exact inverse of calls across the indexed set", () => {
-    buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+  it("calledBy is the exact inverse of calls across the indexed set", async () => {
+    await buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
     const blocks = readBlocks(resolveIndexPaths(store, PROJECT_ID));
 
     const forward = new Set<string>();

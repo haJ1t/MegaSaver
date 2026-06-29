@@ -26,6 +26,7 @@
     "@megasaver/content-store": "workspace:*",
     "@megasaver/context-pruner": "workspace:*",
     "@megasaver/core": "workspace:*",
+    "@megasaver/embeddings": "workspace:*",
     "@megasaver/daemon": "workspace:*",
     "@megasaver/evidence-ledger": "workspace:*",
     "@megasaver/indexer": "workspace:*",

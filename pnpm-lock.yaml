@@ -343,6 +343,9 @@ importers:
 
   packages/context-pruner:
     dependencies:
+      '@megasaver/embeddings':
+        specifier: workspace:*
+        version: link:../embeddings
       '@megasaver/indexer':
         specifier: workspace:*
         version: link:../indexer
@@ -457,6 +460,9 @@ importers:
 
   packages/indexer:
     dependencies:
+      '@megasaver/embeddings':
+        specifier: workspace:*
+        version: link:../embeddings
       '@megasaver/policy':
         specifier: workspace:*
         version: link:../policy
@@ -504,6 +510,9 @@ importers:
       '@megasaver/daemon':
         specifier: workspace:*
         version: link:../daemon
+      '@megasaver/embeddings':
+        specifier: workspace:*
+        version: link:../embeddings
       '@megasaver/evidence-ledger':
         specifier: workspace:*
         version: link:../evidence-ledger
