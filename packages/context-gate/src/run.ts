@@ -57,6 +57,7 @@ export type RunOutputInput = {
   // Injectable project-permissions loader (default = real fs+yaml loader) so
   // tests drive absent/valid/throwing without a real file (permissions-yaml §5.2).
   loadPermissions?: LoadProjectPermissions;
+  outline?: boolean;
 };
 
 export type RunOutputResult =
@@ -99,7 +100,11 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
   if (!read.ok) return { ok: false, reason: "file_read_failed", detail: read.message };
 
   const newHash = hashContent(read.raw);
-  const pathHash = hashPath(gate.absolute);
+  // Outline reads key into a separate read-index slot so a prior full-read's
+  // unchanged-marker can't suppress an outline request (and vice versa). The
+  // \0 separator is illegal in filesystem paths on every OS, so it can never
+  // collide with a real path hash — unlike `#`, which is legal on Windows NTFS.
+  const pathHash = hashPath(input.outline === true ? `${gate.absolute}\0outline` : gate.absolute);
   const prior = loadReadIndex(sessionDir)[pathHash];
   if (prior !== undefined && prior.contentHash === newHash) {
     return { ok: true, result: unchangedResult(prior.chunkSetId, read.raw) };
@@ -111,6 +116,7 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     intent: input.intent,
     mode: settings.mode,
     maxReturnedBytes: settings.maxReturnedBytes,
+    ...(input.outline === true ? { outline: true } : {}),
   });
 
   let result: FilterOutputResult = { ...filteredResult };

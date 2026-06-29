@@ -159,12 +159,14 @@ export function filterRaw(input: {
   intent: string;
   mode: TokenSaverMode;
   maxReturnedBytes: number | undefined;
+  outline?: boolean;
 }): Promise<FilterOutputResult> {
   return filterOutput({
     raw: input.raw,
     intent: input.intent,
     mode: input.mode,
     ...(input.maxReturnedBytes !== undefined ? { maxReturnedBytes: input.maxReturnedBytes } : {}),
+    ...(input.outline === true ? { outline: true } : {}),
     source: { kind: "file", path: input.path },
   });
 }
