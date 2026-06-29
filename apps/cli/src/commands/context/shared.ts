@@ -1,4 +1,4 @@
-import { type ContextPack, buildContextPack } from "@megasaver/context-pruner";
+import { type ContextPack, buildContextPack, readCoChangeLog } from "@megasaver/context-pruner";
 import { readBlocks, resolveIndexPaths } from "@megasaver/indexer";
 import type { ProjectId } from "@megasaver/shared";
 import { mapErrorToCliMessage } from "../../errors.js";
@@ -46,6 +46,7 @@ export async function loadPack(input: ContextRequest): Promise<LoadedPack | null
       failingTests: input.failingTests,
       memoryFiles,
       staleFiles,
+      coChangeLog: readCoChangeLog(ctx.project.rootPath),
       ...(input.limitFlag !== undefined ? { limit: input.limitFlag } : {}),
       ...(input.maxTokensFlag !== undefined ? { maxTokens: input.maxTokensFlag } : {}),
     });

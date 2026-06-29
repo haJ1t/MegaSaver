@@ -35,6 +35,15 @@ relevance is passed in as `memoryFiles`/`staleFiles` data).
   unchanged. Surfaces the migration/fixture/config that always changes
   with the edit site but is invisible to call/import edges.
   (source: docs/superpowers/specs/2026-06-29-context-pruner-cochange-signal-design.md)
+- `readCoChangeLog(cwd)` (`read-cochange-log.ts`) — the I/O edge:
+  shells out `git log --max-count=1000 --numstat` once per cwd (memoized),
+  returns `""` (a no-op for the scorer) on any failure. Kept OUT of the
+  scored core so `score.ts` stays pure. Wired into the MCP `packFor`
+  (`project.rootPath`) and CLI `loadPack` (`ctx.project.rootPath`) so the
+  factor actually reranks in production. GUI `workspace-context` route is
+  NOT wired — it addresses workspaces by a one-way FNV hash with no cwd
+  reverse-lookup, so there is no repo path; deferred to Phase 4 cwd-scoped
+  work (same blocker as memoryFiles).
 - `selectPack(candidates, {limit, maxTokens})` — force-include
   named/failing blocks (the **safety invariant**: never silently
   dropped; a budget overflow is reported via `usedTokens`), fill to

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -82,5 +83,80 @@ describe("context MCP tools", () => {
         task: "x",
       }),
     ).toThrowError(/project not found/);
+  });
+});
+
+const CO_PROJECT_ID = "33333333-3333-4333-8333-333333333333";
+
+function git(repo: string, ...args: string[]): void {
+  execFileSync("git", args, { cwd: repo, stdio: "ignore" });
+}
+
+// A repo whose migration always co-changes with the edit-site file but shares no
+// task keywords with it: the only reason it can rank is git history.
+function setupCoChangeRepo(useGit: boolean): {
+  env: { registry: ReturnType<typeof createInMemoryCoreRegistry>; storeRoot: string };
+} {
+  const store = mkdtempSync(join(tmpdir(), "mcp-cochange-store-"));
+  const repo = mkdtempSync(join(tmpdir(), "mcp-cochange-repo-"));
+  dirs.push(store, repo);
+  mkdirSync(join(repo, "src"));
+  mkdirSync(join(repo, "migrations"));
+  writeFileSync(
+    join(repo, "src", "auth.ts"),
+    "export function validateToken() {\n  return true;\n}\n",
+  );
+  // .md so the indexer extracts it (it indexes ts/md/json, not sql) — the block
+  // must exist in the pack for its co-change factor to be observable.
+  writeFileSync(join(repo, "migrations", "001.md"), "# release notes\nschema bump\n");
+
+  if (useGit) {
+    git(repo, "init");
+    git(repo, "config", "user.email", "t@t.t");
+    git(repo, "config", "user.name", "t");
+    // Three commits that touch auth.ts AND 001.md together → strong co-change.
+    for (let i = 0; i < 3; i += 1) {
+      writeFileSync(
+        join(repo, "src", "auth.ts"),
+        `export function validateToken() {\n  return ${i};\n}\n`,
+      );
+      writeFileSync(join(repo, "migrations", "001.md"), `# release notes v${i}\nschema bump\n`);
+      git(repo, "add", "-A");
+      git(repo, "commit", "-m", `change ${i}`);
+    }
+  }
+
+  buildIndex({ rootDir: repo, storeDir: store, projectId: CO_PROJECT_ID as never });
+  const registry = createInMemoryCoreRegistry();
+  registry.createProject({
+    id: CO_PROJECT_ID as never,
+    name: "cochange",
+    rootPath: repo,
+    createdAt: TS,
+    updatedAt: TS,
+  });
+  return { env: { registry, storeRoot: store } };
+}
+
+function migrationFactor(env: ReturnType<typeof setupCoChangeRepo>["env"]): number | undefined {
+  const pack = handleGetRelevantContext(env, {
+    projectId: CO_PROJECT_ID,
+    // A task with no overlap with "migration"/"sql" so semantic relevance can't
+    // explain a rank bump — only co-change history can.
+    task: "validateToken auth",
+    changedFiles: ["src/auth.ts"],
+  });
+  const block = [...pack.included, ...pack.excluded].find(
+    (b) => b.filePath === "migrations/001.md",
+  );
+  return block?.factors.coChangeRelevance;
+}
+
+describe("context MCP tools — git co-change wiring", () => {
+  it("a co-changing migration outranks its no-history baseline through packFor", () => {
+    const withGit = migrationFactor(setupCoChangeRepo(true).env);
+    const baseline = migrationFactor(setupCoChangeRepo(false).env);
+    expect(baseline).toBe(0);
+    expect(withGit).toBeGreaterThan(0);
   });
 });
