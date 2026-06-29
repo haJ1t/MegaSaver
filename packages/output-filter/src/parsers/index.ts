@@ -15,22 +15,36 @@ const DEFAULT_LINES_PER_CHUNK = 40;
 // in types.ts; only kind and (for files) path matter to chunk production.
 export type FilterSource = { kind: string; path?: string };
 
+// `diagnostic: true` marks parsers that emit one chunk per distinct diagnostic
+// (eslint problem, pytest/go/cargo failure, stack frame). Those chunks are near
+// enough for simhash to collapse, so filterOutput skips dedupe on them — same
+// reason the typescript category is exempt. These outputs classify as
+// generic_shell/unknown, so a parser-level flag (not classification.category)
+// is what carries the exemption. test-output is vitest-like and stays deduped.
 export async function chunkByFormatWithMeta(
   text: string,
   source?: FilterSource,
-): Promise<{ chunks: Chunk[]; semantic: boolean }> {
+): Promise<{ chunks: Chunk[]; semantic: boolean; diagnostic: boolean }> {
   if (source?.kind === "file" && source.path !== undefined) {
     const semantic = await chunkBySemantic(text, source.path);
-    if (semantic !== null) return { chunks: semantic, semantic: true };
+    if (semantic !== null) return { chunks: semantic, semantic: true, diagnostic: false };
   }
-  if (detectPytest(text)) return { chunks: parsePytest(text), semantic: false };
-  if (detectCargoTest(text)) return { chunks: parseCargoTest(text), semantic: false };
-  if (detectGoTest(text)) return { chunks: parseGoTest(text), semantic: false };
-  if (detectEslint(text)) return { chunks: parseEslint(text), semantic: false };
-  if (detectTestOutput(text)) return { chunks: parseTestOutput(text), semantic: false };
-  if (detectTsDiagnostic(text)) return { chunks: parseTsDiagnostic(text), semantic: false };
-  if (detectStacktrace(text)) return { chunks: parseStacktrace(text), semantic: false };
-  return { chunks: chunkByLines(text, DEFAULT_LINES_PER_CHUNK), semantic: false };
+  if (detectPytest(text)) return { chunks: parsePytest(text), semantic: false, diagnostic: true };
+  if (detectCargoTest(text))
+    return { chunks: parseCargoTest(text), semantic: false, diagnostic: true };
+  if (detectGoTest(text)) return { chunks: parseGoTest(text), semantic: false, diagnostic: true };
+  if (detectEslint(text)) return { chunks: parseEslint(text), semantic: false, diagnostic: true };
+  if (detectTestOutput(text))
+    return { chunks: parseTestOutput(text), semantic: false, diagnostic: false };
+  if (detectTsDiagnostic(text))
+    return { chunks: parseTsDiagnostic(text), semantic: false, diagnostic: true };
+  if (detectStacktrace(text))
+    return { chunks: parseStacktrace(text), semantic: false, diagnostic: true };
+  return {
+    chunks: chunkByLines(text, DEFAULT_LINES_PER_CHUNK),
+    semantic: false,
+    diagnostic: false,
+  };
 }
 
 export async function chunkByFormat(text: string, source?: FilterSource): Promise<Chunk[]> {
