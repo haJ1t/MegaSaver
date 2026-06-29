@@ -77,10 +77,10 @@ describe("workspaceProjectId", () => {
 });
 
 describe("buildWorkspaceIndex", () => {
-  it("writes index/<key>/blocks.jsonl with workspaceProjectId blocks", () => {
+  it("writes index/<key>/blocks.jsonl with workspaceProjectId blocks", async () => {
     mkdirSync(join(repo, "src"));
     writeFileSync(join(repo, "src", "a.ts"), "export function a() { return 1; }\n");
-    const result = buildWorkspaceIndex({ rootDir: repo, storeDir: store, workspaceKey: KEY });
+    const result = await buildWorkspaceIndex({ rootDir: repo, storeDir: store, workspaceKey: KEY });
     expect(result.blockCount).toBeGreaterThan(0);
 
     const blocks = readBlocks(resolveWorkspaceIndexPaths(store, KEY));

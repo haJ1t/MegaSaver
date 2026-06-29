@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ProjectId, WorkspaceKey } from "@megasaver/shared";
 import { type CodeBlock, type ExtractedBlock, codeBlockSchema } from "./code-block.js";
+import { embedBlocks } from "./embed-blocks.js";
 import { extractJson } from "./extract/extract-json.js";
 import { extractMd } from "./extract/extract-md.js";
 import { extractTs } from "./extract/extract-ts.js";
@@ -31,6 +32,10 @@ export type BuildOptions = {
   projectId: ProjectId;
   newId?: () => string;
   maxFileSize?: number;
+  // Opt-in (default false). When true, embed each block and write an
+  // embeddings.jsonl sidecar next to blocks.jsonl. Default builds touch no
+  // embeddings code path and load no model.
+  embeddings?: boolean;
 };
 
 const TS_LIKE_RE = /\.[cm]?[jt]sx?$/;
@@ -50,31 +55,34 @@ export type WorkspaceBuildOptions = {
   workspaceKey: WorkspaceKey;
   newId?: () => string;
   maxFileSize?: number;
+  embeddings?: boolean;
 };
 
 // Incremental: a file whose content hash matches the manifest keeps its existing
 // blocks untouched; only changed/new files are re-extracted, and files that
 // vanished drop their blocks. Persisted atomically (blocks.jsonl + manifest).
-export function buildIndex(options: BuildOptions): BuildResult {
+export function buildIndex(options: BuildOptions): Promise<BuildResult> {
   return buildIndexCore({
     rootDir: options.rootDir,
     paths: resolveIndexPaths(options.storeDir, options.projectId),
     projectId: options.projectId,
     ...(options.newId !== undefined ? { newId: options.newId } : {}),
     ...(options.maxFileSize !== undefined ? { maxFileSize: options.maxFileSize } : {}),
+    ...(options.embeddings !== undefined ? { embeddings: options.embeddings } : {}),
   });
 }
 
 // Workspace-keyed build (CLI/seed only; not wired to a route in Phase 3). Writes
 // to index/<key>/ and stamps each block with a synthetic UUIDv5 projectId so the
 // existing codeBlockSchema parse passes without a schema migration (spec §6 R1).
-export function buildWorkspaceIndex(options: WorkspaceBuildOptions): BuildResult {
+export function buildWorkspaceIndex(options: WorkspaceBuildOptions): Promise<BuildResult> {
   return buildIndexCore({
     rootDir: options.rootDir,
     paths: resolveWorkspaceIndexPaths(options.storeDir, options.workspaceKey),
     projectId: workspaceProjectId(options.workspaceKey),
     ...(options.newId !== undefined ? { newId: options.newId } : {}),
     ...(options.maxFileSize !== undefined ? { maxFileSize: options.maxFileSize } : {}),
+    ...(options.embeddings !== undefined ? { embeddings: options.embeddings } : {}),
   });
 }
 
@@ -84,9 +92,10 @@ type BuildCoreOptions = {
   projectId: ProjectId;
   newId?: () => string;
   maxFileSize?: number;
+  embeddings?: boolean;
 };
 
-function buildIndexCore(options: BuildCoreOptions): BuildResult {
+async function buildIndexCore(options: BuildCoreOptions): Promise<BuildResult> {
   const newId = options.newId ?? (() => randomUUID());
   const paths = options.paths;
   const scan = scanRepo({
@@ -174,5 +183,12 @@ function buildIndexCore(options: BuildCoreOptions): BuildResult {
   }));
 
   writeIndex(paths, finalBlocks, nextManifest);
+
+  if (options.embeddings === true) {
+    const priorHashById = new Map<string, string>();
+    for (const [id, block] of prevById) priorHashById.set(id, block.contentHash);
+    await embedBlocks(paths, finalBlocks, priorHashById);
+  }
+
   return { added, updated, removed, unchanged, blockCount: nextBlocks.length };
 }

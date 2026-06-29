@@ -9,4 +9,5 @@ export * from "./scan.js";
 export * from "./store.js";
 export * from "./workspace-store.js";
 export * from "./build.js";
+export * from "./embed-blocks.js";
 export * from "./search-blocks.js";

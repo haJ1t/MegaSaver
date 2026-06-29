@@ -23,6 +23,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@megasaver/embeddings": "workspace:*",
     "@megasaver/indexer": "workspace:*",
     "@megasaver/retrieval": "workspace:*",
     "@megasaver/shared": "workspace:*",

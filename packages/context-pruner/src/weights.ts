@@ -3,6 +3,7 @@
 // in the pack. Penalties are subtracted in finalScore.
 export const WEIGHTS = {
   semantic: 1,
+  embedding: 0.8,
   dependency: 0.6,
   coChange: 0.5,
   testFailure: 2.5,

@@ -31,8 +31,13 @@ afterEach(() => {
 });
 
 describe("buildIndex", () => {
-  it("first build adds all blocks and persists blocks.jsonl + manifest.json", () => {
-    const result = buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+  it("first build adds all blocks and persists blocks.jsonl + manifest.json", async () => {
+    const result = await buildIndex({
+      rootDir: repo,
+      storeDir: store,
+      projectId: PROJECT_ID,
+      newId,
+    });
     expect(result.added).toBe(2);
     expect(result.updated).toBe(0);
     expect(result.removed).toBe(0);
@@ -44,20 +49,30 @@ describe("buildIndex", () => {
     expect(readBlocks(paths)).toHaveLength(2);
   });
 
-  it("incremental rebuild only reprocesses the changed file", () => {
-    buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+  it("incremental rebuild only reprocesses the changed file", async () => {
+    await buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
     writeFileSync(join(repo, "src", "a.ts"), "export function a() { return 99; }\n");
-    const result = buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+    const result = await buildIndex({
+      rootDir: repo,
+      storeDir: store,
+      projectId: PROJECT_ID,
+      newId,
+    });
     expect(result.updated).toBe(1);
     expect(result.unchanged).toBe(1);
     expect(result.added).toBe(0);
     expect(result.blockCount).toBe(2);
   });
 
-  it("removing a file drops its blocks on rebuild", () => {
-    buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+  it("removing a file drops its blocks on rebuild", async () => {
+    await buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
     rmSync(join(repo, "src", "b.ts"));
-    const result = buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+    const result = await buildIndex({
+      rootDir: repo,
+      storeDir: store,
+      projectId: PROJECT_ID,
+      newId,
+    });
     expect(result.removed).toBe(1);
     expect(result.unchanged).toBe(1);
     expect(result.blockCount).toBe(1);
@@ -66,31 +81,41 @@ describe("buildIndex", () => {
     ]);
   });
 
-  it("tracks a zero-block file and reports it unchanged on rebuild", () => {
+  it("tracks a zero-block file and reports it unchanged on rebuild", async () => {
     writeFileSync(join(repo, "plain.md"), "just prose, no headings\n");
-    buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
-    const second = buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+    await buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+    const second = await buildIndex({
+      rootDir: repo,
+      storeDir: store,
+      projectId: PROJECT_ID,
+      newId,
+    });
     expect(second.unchanged).toBe(3);
     expect(second.added).toBe(0);
   });
 
-  it("derives calledBy across the indexed set (second pass)", () => {
+  it("derives calledBy across the indexed set (second pass)", async () => {
     writeFileSync(
       join(repo, "src", "c.ts"),
       "export function caller() {\n  return target();\n}\nexport function target() {\n  return 1;\n}\n",
     );
-    buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+    await buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
     const target = readBlocks(resolveIndexPaths(store, PROJECT_ID)).find(
       (b) => b.name === "target",
     );
     expect(target?.calledBy).toContain("caller");
   });
 
-  it("self-heals a corrupt blocks.jsonl by re-extracting on rebuild", () => {
-    buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+  it("self-heals a corrupt blocks.jsonl by re-extracting on rebuild", async () => {
+    await buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
     const paths = resolveIndexPaths(store, PROJECT_ID);
     writeFileSync(paths.blocksPath, "{ not valid json\n");
-    const result = buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID, newId });
+    const result = await buildIndex({
+      rootDir: repo,
+      storeDir: store,
+      projectId: PROJECT_ID,
+      newId,
+    });
     expect(result.blockCount).toBe(2);
     expect(readBlocks(paths)).toHaveLength(2);
   });

@@ -15,7 +15,7 @@ export async function runIndexBuild(input: RunIndexBuildInput): Promise<0 | 1> {
   const ctx = await loadProjectContext(input.projectName, input, input.stderr);
   if (!ctx) return 1;
   try {
-    const result = buildIndex({
+    const result = await buildIndex({
       rootDir: ctx.project.rootPath,
       storeDir: ctx.rootDir,
       projectId: ctx.project.id,

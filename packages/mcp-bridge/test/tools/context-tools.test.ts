@@ -21,9 +21,9 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-function setup(): {
+async function setup(): Promise<{
   env: { registry: ReturnType<typeof createInMemoryCoreRegistry>; storeRoot: string };
-} {
+}> {
   const store = mkdtempSync(join(tmpdir(), "mcp-ctx-store-"));
   const repo = mkdtempSync(join(tmpdir(), "mcp-ctx-repo-"));
   dirs.push(store, repo);
@@ -32,7 +32,7 @@ function setup(): {
     join(repo, "src", "auth.ts"),
     "export function validateToken(t: string) {\n  return t.length > 0;\n}\n",
   );
-  buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID as never });
+  await buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID as never });
   const registry = createInMemoryCoreRegistry();
   registry.createProject({
     id: PROJECT_ID as never,
@@ -45,9 +45,9 @@ function setup(): {
 }
 
 describe("context MCP tools", () => {
-  it("get_relevant_context returns a schema-valid pack", () => {
-    const { env } = setup();
-    const pack = handleGetRelevantContext(env, {
+  it("get_relevant_context returns a schema-valid pack", async () => {
+    const { env } = await setup();
+    const pack = await handleGetRelevantContext(env, {
       projectId: PROJECT_ID,
       task: "fix validateToken",
     });
@@ -55,34 +55,36 @@ describe("context MCP tools", () => {
     expect(pack.included.some((b) => b.name === "validateToken")).toBe(true);
   });
 
-  it("get_relevant_code_blocks projects the included blocks", () => {
-    const { env } = setup();
-    const blocks = handleGetRelevantCodeBlocks(env, {
+  it("get_relevant_code_blocks projects the included blocks", async () => {
+    const { env } = await setup();
+    const blocks = await handleGetRelevantCodeBlocks(env, {
       projectId: PROJECT_ID,
       task: "validateToken",
     });
     expect(Array.isArray(blocks)).toBe(true);
   });
 
-  it("get_context_budget_report returns audit numbers", () => {
-    const { env } = setup();
-    const audit = handleGetContextBudgetReport(env, { projectId: PROJECT_ID, task: "auth" });
+  it("get_context_budget_report returns audit numbers", async () => {
+    const { env } = await setup();
+    const audit = await handleGetContextBudgetReport(env, { projectId: PROJECT_ID, task: "auth" });
     expect(audit.blocksConsidered).toBeGreaterThanOrEqual(1);
   });
 
-  it("rejects a missing task", () => {
-    const { env } = setup();
-    expect(() => handleGetRelevantContext(env, { projectId: PROJECT_ID })).toThrow(McpBridgeError);
+  it("rejects a missing task", async () => {
+    const { env } = await setup();
+    await expect(handleGetRelevantContext(env, { projectId: PROJECT_ID })).rejects.toThrow(
+      McpBridgeError,
+    );
   });
 
-  it("rejects an unknown project", () => {
-    const { env } = setup();
-    expect(() =>
+  it("rejects an unknown project", async () => {
+    const { env } = await setup();
+    await expect(
       handleGetRelevantContext(env, {
         projectId: "22222222-2222-4222-8222-222222222222",
         task: "x",
       }),
-    ).toThrowError(/project not found/);
+    ).rejects.toThrowError(/project not found/);
   });
 });
 
@@ -94,9 +96,9 @@ function git(repo: string, ...args: string[]): void {
 
 // A repo whose migration always co-changes with the edit-site file but shares no
 // task keywords with it: the only reason it can rank is git history.
-function setupCoChangeRepo(useGit: boolean): {
+async function setupCoChangeRepo(useGit: boolean): Promise<{
   env: { registry: ReturnType<typeof createInMemoryCoreRegistry>; storeRoot: string };
-} {
+}> {
   const store = mkdtempSync(join(tmpdir(), "mcp-cochange-store-"));
   const repo = mkdtempSync(join(tmpdir(), "mcp-cochange-repo-"));
   dirs.push(store, repo);
@@ -126,7 +128,7 @@ function setupCoChangeRepo(useGit: boolean): {
     }
   }
 
-  buildIndex({ rootDir: repo, storeDir: store, projectId: CO_PROJECT_ID as never });
+  await buildIndex({ rootDir: repo, storeDir: store, projectId: CO_PROJECT_ID as never });
   const registry = createInMemoryCoreRegistry();
   registry.createProject({
     id: CO_PROJECT_ID as never,
@@ -138,8 +140,10 @@ function setupCoChangeRepo(useGit: boolean): {
   return { env: { registry, storeRoot: store } };
 }
 
-function migrationFactor(env: ReturnType<typeof setupCoChangeRepo>["env"]): number | undefined {
-  const pack = handleGetRelevantContext(env, {
+type CoChangeEnv = Awaited<ReturnType<typeof setupCoChangeRepo>>["env"];
+
+async function migrationFactor(env: CoChangeEnv): Promise<number | undefined> {
+  const pack = await handleGetRelevantContext(env, {
     projectId: CO_PROJECT_ID,
     // A task with no overlap with "migration"/"sql" so semantic relevance can't
     // explain a rank bump — only co-change history can.
@@ -153,9 +157,9 @@ function migrationFactor(env: ReturnType<typeof setupCoChangeRepo>["env"]): numb
 }
 
 describe("context MCP tools — git co-change wiring", () => {
-  it("a co-changing migration outranks its no-history baseline through packFor", () => {
-    const withGit = migrationFactor(setupCoChangeRepo(true).env);
-    const baseline = migrationFactor(setupCoChangeRepo(false).env);
+  it("a co-changing migration outranks its no-history baseline through packFor", async () => {
+    const withGit = await migrationFactor((await setupCoChangeRepo(true)).env);
+    const baseline = await migrationFactor((await setupCoChangeRepo(false)).env);
     expect(baseline).toBe(0);
     expect(withGit).toBeGreaterThan(0);
   });
