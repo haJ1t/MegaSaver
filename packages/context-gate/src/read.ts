@@ -212,7 +212,8 @@ export async function persistChunkSet(input: {
     source: { kind: "file", path: redact(input.path).redacted },
     rawBytes: input.result.rawBytes,
     redacted: (input.result.warnings ?? []).some((w) => w.startsWith("redacted")),
-    chunks: input.result.excerpts.map((e, i) => ({
+    // chunks = outline bodies (present only in outline mode); excerpts = the skeleton placeholder. Persist bodies so mega_fetch_chunk returns real declarations.
+    chunks: (input.result.chunks ?? input.result.excerpts).map((e, i) => ({
       id: String(i),
       startLine: e.startLine,
       endLine: e.endLine,
@@ -242,6 +243,7 @@ export async function persistOverlayChunkSet(input: {
     source: { kind: "file", path: redact(input.path).redacted },
     rawBytes: input.result.rawBytes,
     redacted: (input.result.warnings ?? []).some((w) => w.startsWith("redacted")),
+    // Overlay path never carries outline bodies (outline is registry-path only in v1), so excerpts is correct here.
     chunks: input.result.excerpts.map((e, i) => ({
       id: String(i),
       startLine: e.startLine,
