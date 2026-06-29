@@ -25,3 +25,67 @@ export function collapseRepeatedLines(text: string): string {
   }
   return out.join("\n");
 }
+
+// Evidence guard (§12 HIGH): a line carrying any diagnostic signal is never
+// folded — two such lines may be distinct events an agent must see.
+const DIAGNOSTIC = /\b(error|fail(?:ed|ure)?|exception|warn(?:ing)?|panic|fatal)\b|\bTS\d+\b/i;
+// A file:line:col position is structural evidence, not volatile noise.
+const POSITION = /\b\d+:\d+(?::\d+)?\b/;
+
+// Volatile tokens masked to a placeholder before similarity comparison. Order
+// matters: timestamps before bare ports/durations so the longer match wins.
+const MASKS: Array<[RegExp, string]> = [
+  [/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/g, "<ts>"],
+  [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<uuid>"],
+  [/\b[0-9a-f]{12,}\b/gi, "<hex>"],
+  [/\b\d+(?:\.\d+)?(?:ms|s|ns|µs|us|m)\b/g, "<dur>"],
+  [/\b\d+(?:\.\d+)?\s?(?:[KMGT]i?)?B\b/g, "<bytes>"],
+  [/\bport\s+\d+\b/gi, "port <port>"],
+];
+
+function maskTemplate(line: string): string {
+  let t = line;
+  for (const [re, sub] of MASKS) t = t.replace(re, sub);
+  return t;
+}
+
+// Second normalize pass (runs after collapseRepeatedLines): fold a run of
+// consecutive lines whose MASKED form is identical into FIRST + marker + LAST,
+// preserving boundary evidence and the count. Conservative — see DIAGNOSTIC.
+export function collapseSimilar(text: string): string {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i] as string;
+    if (DIAGNOSTIC.test(line) || POSITION.test(line)) {
+      out.push(line);
+      i += 1;
+      continue;
+    }
+    const template = maskTemplate(line);
+    // Only volatile-bearing lines (template differs from raw) are fold
+    // candidates; otherwise collapseRepeatedLines already handled exact dupes.
+    if (template === line) {
+      out.push(line);
+      i += 1;
+      continue;
+    }
+    let run = 1;
+    while (i + run < lines.length) {
+      const next = lines[i + run] as string;
+      if (DIAGNOSTIC.test(next) || POSITION.test(next)) break;
+      if (maskTemplate(next) !== template) break;
+      run += 1;
+    }
+    if (run >= 3) {
+      out.push(line);
+      out.push(`… [${run - 2} similar: ${template}]`);
+      out.push(lines[i + run - 1] as string);
+    } else {
+      for (let k = 0; k < run; k += 1) out.push(lines[i + k] as string);
+    }
+    i += run;
+  }
+  return out.join("\n");
+}
