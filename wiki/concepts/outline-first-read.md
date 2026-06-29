@@ -51,10 +51,21 @@ collisions with real path hashes.
 
 ## Lossless property
 
-Every declaration body is persisted as a fetchable chunk. No line is dropped:
-`partitionFile` with `Infinity` limit produces one chunk per AST block, and
-the skeleton lists all of them. An agent that fetches every chunk recovers
-100% of the file content.
+Every source line is persisted in some fetchable chunk. `partitionFile` is an
+exhaustive gap-filling partition (declaration blocks + line-chunks for the gaps
+between/around them), so an agent that fetches every chunk recovers 100% of the
+file content.
+
+## Limitations
+
+- Co-located declarations (multiple top-level decls on one line — minified
+  JSON/JS, one-liner exports) share a single chunk; the skeleton emits one
+  entry per distinct chunk id (whose signature line already shows them all),
+  so `#id`s stay unique and the count is honest.
+- No "saves tokens" floor: on tiny or dense files the skeleton can be as large
+  as (or larger than) the raw file, and outline still persists the bodies. It
+  is opt-in, so the caller chooses it; a size-threshold fallback is a possible
+  follow-up (spec §Out of scope).
 
 ## Related
 
