@@ -348,3 +348,40 @@ describe("filterOutput diagnostic dedupe exemption (distinct diagnostics survive
     expect(result.excerpts.length).toBeLessThan(dup.length);
   });
 });
+
+describe("filterOutput diagnostic-parser dedupe exemption (eslint/pytest)", () => {
+  // Generous budget so fitBudget never truncates — any missing entry is dedupe.
+  const generous = { maxReturnedBytes: 300_000 };
+
+  it("keeps every distinct eslint problem (parser flag, classifies generic)", async () => {
+    const files = Array.from({ length: 40 }, (_, i) => `src/file${i}.ts`);
+    const eslint = [
+      ...files.flatMap((f) => [f, "  1:1  error  'a' is not defined  no-undef"]),
+      "",
+      "✖ 40 problems (40 errors, 0 warnings)",
+    ].join("\n");
+
+    const result = await filterOutput(base(eslint, generous));
+    const out = result.excerpts.map((e) => e.text).join("\n");
+    // classifies generic/unknown — the exemption rides on the parser flag.
+    expect(["generic_shell", "unknown"]).toContain(result.classification.category);
+    for (const f of files) expect(out).toContain(f);
+  });
+
+  it("keeps every distinct pytest failure (near-identical bodies, distinct names)", async () => {
+    const names = Array.from({ length: 40 }, (_, i) => `test_case_${String(i).padStart(2, "0")}`);
+    const pytest = [
+      "========================= FAILURES =========================",
+      ...names.flatMap((n) => [
+        `_________________________ ${n} _________________________`,
+        "    assert do_thing() == expected",
+        "E   AssertionError: assert 0 == 1",
+        "",
+      ]),
+    ].join("\n");
+
+    const result = await filterOutput(base(pytest, generous));
+    const out = result.excerpts.map((e) => e.text).join("\n");
+    for (const n of names) expect(out).toContain(n);
+  });
+});

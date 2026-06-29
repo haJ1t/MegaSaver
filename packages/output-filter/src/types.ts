@@ -251,7 +251,11 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
     textForChunks = compressed.text;
   }
 
-  const { chunks, semantic: usedSemantic } = await chunkByFormatWithMeta(textForChunks, source);
+  const {
+    chunks,
+    semantic: usedSemantic,
+    diagnostic: usedDiagnostic,
+  } = await chunkByFormatWithMeta(textForChunks, source);
   const scored = chunks.map((c) => scoreChunk(intent, c, sessionHints));
   // §8: engine-aware re-ranking is behind a flag and reuses the base
   // relevance — no second scorer. Off by default.
@@ -264,7 +268,11 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   // enough for simhash to collapse, so dedupe would erase real diagnostics.
   // vitest/test is exempt from THIS exemption — its compressor already folds
   // duplicate failures, so its chunks stay deduped.
-  const skipDedupe = usedSemantic || DIAGNOSTIC_CATEGORIES.has(classification.category);
+  // usedDiagnostic covers parsers (eslint/pytest/go/cargo/stacktrace) whose
+  // outputs classify as generic_shell/unknown — the category set can't catch
+  // them, so the parser reports the per-diagnostic shape directly.
+  const skipDedupe =
+    usedSemantic || usedDiagnostic || DIAGNOSTIC_CATEGORIES.has(classification.category);
   const deduped = skipDedupe ? ranked : dedupe(ranked);
 
   const ordered = [...deduped].sort((a, b) => b.score - a.score);
