@@ -111,4 +111,41 @@ describe("collapseSimilar (template-line folding)", () => {
     );
     expect(collapseSimilar(input)).toBe(input);
   });
+
+  // Evidence-preservation: PORT mask folded distinct bind ports — non-recoverable loss
+  it("does NOT fold lines differing only by port number (evidence)", () => {
+    const input = [
+      "listening on port 8080",
+      "listening on port 8081",
+      "listening on port 9090",
+    ].join("\n");
+    const out = collapseSimilar(input);
+    expect(out).toContain("8080");
+    expect(out).toContain("8081");
+    expect(out).toContain("9090");
+    expect(out).not.toMatch(/\[3 similar:/);
+  });
+
+  // Evidence-preservation: bare-HEX mask folded distinct content hashes — non-recoverable loss
+  it("does NOT fold lines differing only by content hash (evidence)", () => {
+    const input = [
+      "blob hash 0123456789abcdef0123456789ab",
+      "blob hash fedcba9876543210fedcba987654",
+      "blob hash aaaa1111bbbb2222cccc3333dddd",
+    ].join("\n");
+    const out = collapseSimilar(input);
+    expect(out).toContain("fedcba9876543210fedcba987654");
+    expect(out).not.toMatch(/\[3 similar:/);
+  });
+
+  it("does NOT fold lines differing only by fault address (evidence)", () => {
+    const input = [
+      "accessing deadbeefdeadbeef",
+      "accessing cafebabecafebabe",
+      "accessing feedfacefeedface",
+    ].join("\n");
+    const out = collapseSimilar(input);
+    expect(out).toContain("cafebabecafebabe");
+    expect(out).not.toMatch(/\[3 similar:/);
+  });
 });

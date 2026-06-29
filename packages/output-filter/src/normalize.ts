@@ -43,8 +43,9 @@ const POSITION = /\b\d+:\d+(?::\d+)?\b/;
 const MASKS: Array<[RegExp, string]> = [
   [/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/g, "<ts>"],
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<uuid>"],
-  [/\b(?=[0-9a-f]{12,}\b)[0-9a-f]*[a-f][0-9a-f]*\b/gi, "<hex>"],
-  [/\bport\s+\d+\b/gi, "port <port>"],
+  // ponytail: hex and port masks removed — they folded distinct value-bearing events
+  // (content hashes, fault addresses, bind ports). Only timestamps and UUIDs are
+  // true identity noise with recoverable-enough signal to fold safely.
 ];
 
 function maskTemplate(line: string): string {
