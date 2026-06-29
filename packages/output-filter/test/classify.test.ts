@@ -153,6 +153,32 @@ describe("classifyOutput — diff category", () => {
       isConfidentClassification(classifyOutput({ command: "git diff", text: DIFF_PLAIN })),
     ).toBe(true);
   });
+
+  it("does NOT route generic output with a lone leading +/- to diff", () => {
+    // npm/console output: leading +/- without a diff header or hunk must
+    // not be a confident diff (would route to compressStat and lose data).
+    const consoleLog = ["+ building app", "- done", "ready in 3s"].join("\n");
+    const c = classifyOutput({ text: consoleLog });
+    expect(c.category).not.toBe("diff");
+    expect(isConfidentClassification(c)).toBe(false);
+  });
+
+  it("does NOT route a markdown bullet list (leading -) to diff", () => {
+    const bullets = ["# Notes", "- first item", "- second item", "- third item"].join("\n");
+    const c = classifyOutput({ text: bullets });
+    expect(c.category).not.toBe("diff");
+  });
+
+  it("does NOT route an ASCII pipe table to diff", () => {
+    const table = [
+      "| name  | count |",
+      "|-------|-------|",
+      "| alpha | 3     |",
+      "| beta  | 7     |",
+    ].join("\n");
+    const c = classifyOutput({ text: table });
+    expect(c.category).not.toBe("diff");
+  });
 });
 
 describe("classifyOutput — mixed stdout/stderr", () => {
