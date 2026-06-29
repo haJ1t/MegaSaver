@@ -9,6 +9,11 @@ import { intParam } from "./_query.js";
 // Read-only context-pack preview over the workspace index blocks. memoryFiles /
 // staleFiles stay empty in Phase 3 (cwd-scoped memory is Phase 4). A missing
 // index → indexed:false; a corrupt index → index_unavailable.
+//
+// ponytail: no coChangeLog here — the workspace is addressed by a one-way FNV
+// hash (encodeWorkspaceKey) with no cwd reverse-lookup, so there is no repo path
+// to run `git log` against. Wire it once the route carries the real cwd (Phase
+// 4 cwd-scoped work, same blocker as memoryFiles).
 export function handleGetWorkspaceContext(ctx: RouteContext, key: WorkspaceKey): void {
   const task = ctx.query.get("task");
   if (task === null || task.trim().length === 0) {

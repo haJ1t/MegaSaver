@@ -3,6 +3,7 @@ import {
   type PackAudit,
   auditPack,
   buildContextPack,
+  readCoChangeLog,
 } from "@megasaver/context-pruner";
 import type { CoreRegistry } from "@megasaver/core";
 import { readBlocks, resolveIndexPaths } from "@megasaver/indexer";
@@ -34,7 +35,8 @@ function packFor(env: ContextToolEnv, rawArgs: unknown): ContextPack {
   if (!projectId.success) {
     throw new McpBridgeError("validation_failed", `invalid projectId: ${parsed.data.projectId}`);
   }
-  if (env.registry.getProject(projectId.data) === null) {
+  const project = env.registry.getProject(projectId.data);
+  if (project === null) {
     throw new McpBridgeError("resource_not_found", `project not found: ${parsed.data.projectId}`);
   }
 
@@ -50,6 +52,7 @@ function packFor(env: ContextToolEnv, rawArgs: unknown): ContextPack {
     failingTests: parsed.data.failingTests ?? [],
     memoryFiles,
     staleFiles,
+    coChangeLog: readCoChangeLog(project.rootPath),
     ...(parsed.data.limit !== undefined ? { limit: parsed.data.limit } : {}),
     ...(parsed.data.maxTokens !== undefined ? { maxTokens: parsed.data.maxTokens } : {}),
   });

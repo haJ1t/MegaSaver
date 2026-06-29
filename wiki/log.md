@@ -3077,3 +3077,27 @@ block's score, unrelated file stays 0, empty history no-op).
 context-pruner suite 54/54 green; typecheck + biome green; downstream
 mcp-bridge/cli typecheck green (optional field, backward compatible).
 minor changeset @megasaver/context-pruner.
+
+## [2026-06-29] fix | wire git co-change into production callers (review)
+
+Review caught the signal was inert end-to-end: the engine was correct
+but no shipped caller passed `coChangeLog`, so `coChangeRelevance` was 0
+in every production path. Added the I/O edge
+`packages/context-pruner/src/read-cochange-log.ts` —
+`readCoChangeLog(cwd)` shells out `git log --max-count=1000 --numstat`
+once per cwd (memoized via a `Map`), returns `""` on any failure (not a
+git repo / git missing / empty history) so the scorer treats it exactly
+like an absent log. Kept out of the scored core (`score.ts` stays pure).
+Wired into the MCP `packFor` (`project.rootPath`) and CLI `loadPack`
+(`ctx.project.rootPath`). GUI `workspace-context` route intentionally
+left unwired with a `ponytail:` note: the workspace key is a one-way
+FNV hash (encodeWorkspaceKey) with no cwd reverse-lookup, so there is no
+repo path to run `git log` against — deferred to Phase 4 cwd-scoped work
+(same blocker as memoryFiles). Integration test added to
+`packages/mcp-bridge/test/tools/context-tools.test.ts`: a real temp git
+repo whose `migrations/001.md` co-changes with `src/auth.ts` across 3
+commits proves the migration's `coChangeRelevance > 0` through
+`handleGetRelevantContext` (the MCP entrypoint), vs 0 for the no-git
+baseline. context-pruner 54/54, mcp-bridge 238/238, typecheck + biome
+green on changed files. changeset updated to note the new
+`readCoChangeLog` export.
