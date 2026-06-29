@@ -53,6 +53,22 @@ const TSC_PRETTY_ANSI = [
   `${ESC}[96mFound 1 error.${ESC}[0m`,
 ].join("\n");
 
+// Unified diff (git diff default), plain.
+const DIFF_PLAIN = [
+  "diff --git a/src/foo.ts b/src/foo.ts",
+  "index 1234567..89abcde 100644",
+  "--- a/src/foo.ts",
+  "+++ b/src/foo.ts",
+  "@@ -1,5 +1,5 @@",
+  " const a = 1;",
+  "-const b = 2;",
+  "+const b = 3;",
+  " const c = 4;",
+].join("\n");
+
+// git status --short style output (no diff --git header).
+const STATUS_PLAIN = [" M src/foo.ts", "?? src/new.ts", " D src/old.ts"].join("\n");
+
 const SHELL_PLAIN = [".", "..", "file1", "file2", "node_modules"].join("\n");
 
 const UNKNOWN_TEXT = ["hello world", "some random log line", "done"].join("\n");
@@ -115,6 +131,27 @@ describe("classifyOutput — generic and unknown fallback (P1 §10.4)", () => {
       isConfidentClassification(classifyOutput({ command: "vitest", text: VITEST_PLAIN })),
     ).toBe(true);
     expect(isConfidentClassification(classifyOutput({ text: UNKNOWN_TEXT }))).toBe(false);
+  });
+});
+
+describe("classifyOutput — diff category", () => {
+  it("git diff command + unified diff output is high confidence diff", () => {
+    const c = classifyOutput({ command: "git diff", text: DIFF_PLAIN });
+    expect(c.category).toBe("diff");
+    expect(c.confidence).toBeGreaterThanOrEqual(0.9);
+  });
+  it("git status command is recognised as diff category", () => {
+    const c = classifyOutput({ command: "git status", text: STATUS_PLAIN });
+    expect(c.category).toBe("diff");
+    expect(c.confidence).toBeGreaterThanOrEqual(0.7);
+  });
+  it("sniffs unified diff output without a command", () => {
+    expect(classifyOutput({ text: DIFF_PLAIN }).category).toBe("diff");
+  });
+  it("isConfidentClassification gates diff dispatch", () => {
+    expect(
+      isConfidentClassification(classifyOutput({ command: "git diff", text: DIFF_PLAIN })),
+    ).toBe(true);
   });
 });
 
