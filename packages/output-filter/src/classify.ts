@@ -87,6 +87,16 @@ export function classifyOutput(input: ClassifyInput): Classification {
   const path = input.path ?? "";
   const text = normalize(input.text);
 
+  // Diff is checked first: a `diff --git`/`@@` anchor (or a git diff/log/show
+  // command) is unambiguous, whereas a diff BODY can legitimately contain
+  // `error TS####` text — checking typescript first would misroute such a diff
+  // to the typescript compressor and mangle it (obs 5561).
+  const diffCmd = DIFF_CMD.test(command);
+  const diffOut = DIFF_OUT.test(text);
+  if (diffCmd || diffOut) {
+    return { category: "diff", confidence: diffCmd && diffOut ? 0.95 : diffCmd ? 0.8 : 0.7 };
+  }
+
   const tsCmd = TS_CMD.test(command);
   const tsOut = TS_OUT.test(text);
   if (tsCmd || tsOut) {
@@ -97,12 +107,6 @@ export function classifyOutput(input: ClassifyInput): Classification {
   const viOut = VITEST_OUT.test(text);
   if (viCmd || viOut) {
     return { category: "vitest", confidence: viCmd && viOut ? 0.95 : viCmd ? 0.8 : 0.7 };
-  }
-
-  const diffCmd = DIFF_CMD.test(command);
-  const diffOut = DIFF_OUT.test(text);
-  if (diffCmd || diffOut) {
-    return { category: "diff", confidence: diffCmd && diffOut ? 0.95 : diffCmd ? 0.8 : 0.7 };
   }
 
   if (structuredArrayMatch(text)) {
