@@ -72,4 +72,19 @@ describe("buildImpactPack (reverse-BFS blast radius)", () => {
     expect(names.has("a")).toBe(true);
     expect(names.has("b")).toBe(true);
   });
+
+  it("never drops a transitive caller reachable only past a budget-cut node", () => {
+    // chain root <- a <- b: with maxTokens too small for 'a', the walk must still
+    // pass through 'a' to reach 'b'. 'b' must land in excluded, not vanish.
+    const blocks = [
+      block({ name: "root", filePath: "src/core.ts", calledBy: ["a"], endLine: 50 }),
+      block({ name: "a", filePath: "src/a.ts", calls: ["root"], calledBy: ["b"], endLine: 50 }),
+      block({ name: "b", filePath: "src/b.ts", calls: ["a"], calledBy: [], endLine: 50 }),
+    ];
+    const pack = buildImpactPack({ symbol: "root", blocks, maxTokens: 1 });
+    expect(pack.included.map((b) => b.name)).toEqual(["root"]);
+    const excludedNames = new Set(pack.excluded.map((b) => b.name));
+    expect(excludedNames.has("a")).toBe(true);
+    expect(excludedNames.has("b")).toBe(true);
+  });
 });

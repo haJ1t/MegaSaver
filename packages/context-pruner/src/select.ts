@@ -164,10 +164,11 @@ export function selectImpact(
   add(root, true);
 
   // BFS over calledBy: a caller is a block affected by changing `current`. A
-  // caller that does not fit the budget is recorded once (reason "budget") so
-  // the blast radius is reported in full; its own callers are not walked further
-  // (it never entered the pack). Only blocks reached by the reverse walk appear
-  // in excluded — blocks outside the blast radius are simply not part of it.
+  // caller that does not fit the budget is recorded once (reason "budget") but
+  // STILL walked, so callers reachable only through it are not silently dropped —
+  // the blast radius is exhaustive within budget. The `reached` set bounds the
+  // walk. Only blocks reached by the reverse walk appear in excluded — blocks
+  // outside the blast radius are simply not part of it.
   const excluded: ExcludedCandidate[] = [];
   const reached = new Set<string>([root.block.id]);
   const queue: ScoredCandidate[] = [root];
@@ -180,10 +181,10 @@ export function selectImpact(
       reached.add(target.block.id);
       if (add(target, false)) {
         target.factors.dependencyRelevance = 1;
-        queue.push(target);
       } else {
         excluded.push({ candidate: target, reason: "budget" });
       }
+      queue.push(target);
     }
   }
 
