@@ -4,6 +4,7 @@ import {
   classifyOutput,
   isConfidentClassification,
 } from "../src/classify.js";
+import { compressByCategory } from "../src/compress/index.js";
 
 const ESC = "\u001b";
 
@@ -178,6 +179,81 @@ describe("classifyOutput — diff category", () => {
     ].join("\n");
     const c = classifyOutput({ text: table });
     expect(c.category).not.toBe("diff");
+  });
+});
+
+describe("classifyOutput — structured category", () => {
+  // A large homogeneous JSON array — the only shape the schematizer fires on.
+  const LARGE_JSON_ARRAY = JSON.stringify(
+    Array.from({ length: 50 }, (_, i) => ({ id: i, name: `n${i}` })),
+  );
+
+  it("sniffs a large homogeneous JSON array as structured", () => {
+    const c = classifyOutput({ text: LARGE_JSON_ARRAY });
+    expect(c.category).toBe("structured");
+    expect(isConfidentClassification(c)).toBe(true);
+  });
+
+  it("recognises a *.json path as structured", () => {
+    const c = classifyOutput({ path: "package-lock.json", text: LARGE_JSON_ARRAY });
+    expect(c.category).toBe("structured");
+  });
+
+  it("recognises cat *.json / jq commands as structured", () => {
+    expect(classifyOutput({ command: "cat data.json", text: LARGE_JSON_ARRAY }).category).toBe(
+      "structured",
+    );
+    expect(classifyOutput({ command: "jq . data.json", text: LARGE_JSON_ARRAY }).category).toBe(
+      "structured",
+    );
+  });
+
+  it("does NOT route a small JSON array to structured (falls through)", () => {
+    const small = JSON.stringify([{ id: 1 }, { id: 2 }]);
+    const c = classifyOutput({ text: small });
+    expect(c.category).not.toBe("structured");
+  });
+
+  it("does NOT route a non-array JSON object to structured", () => {
+    const obj = JSON.stringify({ a: 1, b: 2 });
+    const c = classifyOutput({ text: obj });
+    expect(c.category).not.toBe("structured");
+  });
+
+  it("does NOT route an array of primitives to structured", () => {
+    const prims = JSON.stringify(Array.from({ length: 50 }, (_, i) => i));
+    const c = classifyOutput({ text: prims });
+    expect(c.category).not.toBe("structured");
+  });
+
+  it("does NOT route malformed JSON to structured (no throw)", () => {
+    const bad = '[{"id": 1}, {"id": 2}, ';
+    expect(() => classifyOutput({ text: bad })).not.toThrow();
+    expect(classifyOutput({ text: bad }).category).not.toBe("structured");
+  });
+});
+
+describe("compressByCategory — structured dispatch", () => {
+  const LARGE_JSON_ARRAY = JSON.stringify(
+    Array.from({ length: 100 }, (_, i) => ({ id: i, name: `n${i}` })),
+    null,
+    2,
+  );
+
+  it("routes structured to the json compressor and collapses the array", () => {
+    const r = compressByCategory("structured", LARGE_JSON_ARRAY);
+    expect(r.compressor).toBe("structured");
+    expect(r.text).toMatch(/\[\d+ more of same shape\]/);
+  });
+
+  it("threads intent through to force-keep a key", () => {
+    const arr = JSON.stringify(
+      Array.from({ length: 100 }, (_, i) => ({ id: i, email: `u${i}@x.io` })),
+      null,
+      2,
+    );
+    const r = compressByCategory("structured", arr, "show me the email");
+    expect(r.text).toContain("email");
   });
 });
 
