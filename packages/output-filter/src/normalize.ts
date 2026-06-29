@@ -32,14 +32,18 @@ const DIAGNOSTIC = /\b(error|fail(?:ed|ure)?|exception|warn(?:ing)?|panic|fatal)
 // A file:line:col position is structural evidence, not volatile noise.
 const POSITION = /\b\d+:\d+(?::\d+)?\b/;
 
-// Volatile tokens masked to a placeholder before similarity comparison. Order
-// matters: timestamps before bare ports/durations so the longer match wins.
+// Volatile tokens masked to a placeholder before similarity comparison. Only
+// pure identity noise — timestamps, uuids, hex ids, request-id ports — is
+// masked. Duration/byte/decimal-number masks were removed (review HIGH): those
+// values ARE the distinguishing signal (a 9000ms slow request, a 4096 B write,
+// a distinct account id) and the design's ChunkSet recovery net does not exist
+// in this repo, so folding them is non-recoverable evidence loss. The hex mask
+// requires at least one a-f letter so pure-decimal ids never match. Order
+// matters: timestamps before the rest so the longer match wins.
 const MASKS: Array<[RegExp, string]> = [
   [/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/g, "<ts>"],
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<uuid>"],
-  [/\b[0-9a-f]{12,}\b/gi, "<hex>"],
-  [/\b\d+(?:\.\d+)?(?:ms|s|ns|µs|us|m)\b/g, "<dur>"],
-  [/\b\d+(?:\.\d+)?\s?(?:[KMGT]i?)?B\b/g, "<bytes>"],
+  [/\b(?=[0-9a-f]{12,}\b)[0-9a-f]*[a-f][0-9a-f]*\b/gi, "<hex>"],
   [/\bport\s+\d+\b/gi, "port <port>"],
 ];
 
@@ -80,7 +84,7 @@ export function collapseSimilar(text: string): string {
     }
     if (run >= 3) {
       out.push(line);
-      out.push(`… [${run - 2} similar: ${template}]`);
+      out.push(`… [${run} similar: ${template}]`);
       out.push(lines[i + run - 1] as string);
     } else {
       for (let k = 0; k < run; k += 1) out.push(lines[i + k] as string);
