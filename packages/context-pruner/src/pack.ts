@@ -11,6 +11,7 @@ export const scoreFactorsSchema = z
   .object({
     semanticRelevance: z.number(),
     dependencyRelevance: z.number(),
+    coChangeRelevance: z.number(),
     testFailureRelevance: z.number(),
     recentEditRelevance: z.number(),
     memoryRelevance: z.number(),
@@ -65,6 +66,7 @@ function inclusionReasons(candidate: ScoredCandidate): string[] {
   if (f.userMentionRelevance > 0) reasons.push("named in task");
   if (f.testFailureRelevance > 0) reasons.push("failing test evidence");
   if (f.dependencyRelevance > 0) reasons.push("dependency support");
+  if (f.coChangeRelevance > 0) reasons.push("co-changes with edit site");
   if (f.memoryRelevance > 0) reasons.push("cited by project memory");
   if (f.recentEditRelevance > 0) reasons.push("recently changed");
   if (f.semanticRelevance >= 0.3) reasons.push("direct semantic evidence");

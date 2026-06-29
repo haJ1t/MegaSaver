@@ -4,6 +4,7 @@
 export const WEIGHTS = {
   semantic: 1,
   dependency: 0.6,
+  coChange: 0.5,
   testFailure: 2.5,
   recentEdit: 0.8,
   memory: 0.7,
