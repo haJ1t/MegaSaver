@@ -148,4 +148,50 @@ describe("collapseSimilar (template-line folding)", () => {
     expect(out).toContain("cafebabecafebabe");
     expect(out).not.toMatch(/\[3 similar:/);
   });
+
+  // Bench finding: heartbeat lines whose only variation is a wall-clock
+  // timestamp (with a trailing word boundary) were treated as positional
+  // evidence by the old POSITION guard and never folded.
+  it("folds heartbeat lines varying only by wall-clock timestamp", () => {
+    const input = [
+      "10:00:01 heartbeat ok",
+      "10:00:02 heartbeat ok",
+      "10:00:03 heartbeat ok",
+      "10:00:04 heartbeat ok",
+    ].join("\n");
+    const out = collapseSimilar(input);
+    const lines = out.split("\n");
+    expect(lines[0]).toBe("10:00:01 heartbeat ok");
+    expect(lines).toContain("10:00:04 heartbeat ok");
+    expect(out).toMatch(/\[4 similar:/);
+    expect(lines.length).toBe(3);
+  });
+
+  it("folds date+clock heartbeat lines varying only by timestamp", () => {
+    const input = [
+      "2026-06-29 10:00:01 heartbeat ok",
+      "2026-06-29 10:00:02 heartbeat ok",
+      "2026-06-29 10:00:03 heartbeat ok",
+    ].join("\n");
+    const out = collapseSimilar(input);
+    expect(out).toMatch(/\[3 similar:/);
+  });
+
+  it("does NOT fold two distinct file:line:col position lines (evidence)", () => {
+    const input = ["error at app.ts:10:5", "error at app.ts:20:8"].join("\n");
+    expect(collapseSimilar(input)).toBe(input);
+  });
+
+  it("does NOT fold three distinct file:line:col position lines (evidence)", () => {
+    const input = [
+      "trace src/main.ts:10:5 enter",
+      "trace src/main.ts:20:8 enter",
+      "trace src/main.ts:30:1 enter",
+    ].join("\n");
+    const out = collapseSimilar(input);
+    expect(out).toContain("src/main.ts:10:5");
+    expect(out).toContain("src/main.ts:20:8");
+    expect(out).toContain("src/main.ts:30:1");
+    expect(out).not.toMatch(/similar:/);
+  });
 });
