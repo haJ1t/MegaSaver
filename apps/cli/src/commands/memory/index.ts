@@ -4,6 +4,7 @@ import { memoryCreateCommand } from "./create.js";
 import { memoryDeleteCommand } from "./delete.js";
 import { memoryExplainCommand } from "./explain.js";
 import { memoryGraphCommand } from "./graph.js";
+import { memoryIndexBuildCommand } from "./index-build.js";
 import { memoryListCommand } from "./list.js";
 import { memoryReviewCommand } from "./review.js";
 import { memorySearchCommand } from "./search.js";
@@ -61,6 +62,11 @@ export {
   runMemoryGraph,
   memoryGraphCommand,
 } from "./graph.js";
+export {
+  type RunMemoryIndexBuildInput,
+  runMemoryIndexBuild,
+  memoryIndexBuildCommand,
+} from "./index-build.js";
 
 export const memoryCommand = defineCommand({
   meta: { name: "memory", description: "Manage Mega Saver memory entries." },
@@ -76,5 +82,6 @@ export const memoryCommand = defineCommand({
     explain: memoryExplainCommand,
     review: memoryReviewCommand,
     graph: memoryGraphCommand,
+    index: memoryIndexBuildCommand,
   },
 });
