@@ -10,16 +10,21 @@ export * from "./failed-attempt.js";
 export * from "./init-store.js";
 export * from "./json-directory-registry.js";
 export {
+  DEFAULT_SWEEP_POLICY,
   type MemoryApproval,
   type MemoryConfidence,
   type MemoryEntry,
   type MemoryEntryUpdatePatch,
   type MemoryScope,
   type MemorySource,
+  type MemoryTier,
   type MemoryType,
   type OverlayMemoryEntry,
   type OverlayMemoryEntryUpdatePatch,
+  type SweepPolicy,
   backfillMemoryEntry,
+  effectiveConfidence,
+  isArchived,
   isCurrent,
   isRecallable,
   memoryApprovalSchema,
@@ -28,9 +33,12 @@ export {
   memoryEntryUpdatePatchSchema,
   memoryScopeSchema,
   memorySourceSchema,
+  memoryTierSchema,
   memoryTypeSchema,
   overlayMemoryEntrySchema,
   overlayMemoryEntryUpdatePatchSchema,
+  sweepMemoryTiers,
+  tierOf,
 } from "./memory-entry.js";
 export * from "./memory-search.js";
 export * from "./memory-search-semantic.js";

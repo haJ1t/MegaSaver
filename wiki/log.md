@@ -3313,3 +3313,40 @@ memory still returned on every path except the in-process MCP one.
 
 `pnpm verify` green (46/46). Per-pkg: core 514, daemon 107, mcp-bridge
 252. Changeset now minor: core, mcp-bridge, daemon, cli.
+
+## [2026-06-30] feat | M2: tiered memory + decay (Letta/MemGPT-class)
+
+Built on M1. Deterministic, no LLM, no background timer; additive +
+backward-compatible. Marks superset sub-spec 4 DONE.
+
+- **Schema (`packages/core/src/memory-entry.ts`).** Optional `tier`
+  (`working` | `recall` | `archival`) on `memoryEntrySchema`, the
+  overlay variant, and the update patch. Absent ⇒ `recall` via the one
+  `tierOf` helper, so legacy/normal rows keep their behavior. `tier` is
+  patchable so the sweep can demote it.
+- **Tier rides the centralized predicate.** `isRecallable(memory, asOf,
+  { includeArchival? })` now excludes `archival` by default (sibling
+  `isArchived`). All four isRecallable surfaces (MCP recall,
+  get_relevant_memories, daemon recall, GUI connector-context) inherit it
+  for free — no per-surface drift (the thing M1 fixed). The two search
+  surfaces (`searchMemoryEntries` / `searchMemoryEntriesSemantic`) gained
+  a matching `includeArchival` + archival field-filter.
+- **Decay = read-time pure fn.** `effectiveConfidence(memory, now)` =
+  baseWeight(confidence) × ageDecay(now − updatedAt, 30-day half-life) ×
+  tierWeight(tier, working +10%). Wired into `searchMemoryEntries` as a
+  multiplier on BM25 scores → aged/low ranks below recent/high. ADDITIVE:
+  always > 0, only down-ranks, never drops a current memory.
+- **Sweep = the ONLY mutation.** `mega memory sweep <project>` CLI +
+  `mega_memory_sweep` MCP tool (registered in tool-name.ts/server.ts,
+  bumping the closed tool set 28→29 and its drift guards). Deterministic,
+  lossless policy: closed/superseded OR stale OR (low confidence AND
+  inactive ≥ 90d) → `tier=archival` via `updateMemoryEntry`. Working tier
+  never swept. `--json` ⇒ `{archived, scanned}`; idempotent.
+- **RECALL-SAFETY** test (`memory-tier-decay.test.ts`): a current
+  working/recall memory is recallable, has effectiveConfidence > 0, and is
+  never a sweep candidate — even old + low. All time pinned (no
+  wall-clock), avoiding the M1 flake class.
+
+Per-pkg green: core 67 files / 539 (+2 skip), mcp-bridge 39 / 255,
+daemon 10 / 107, cli 75 / 747. Changeset minor: core, mcp-bridge, cli,
+daemon (daemon re-exports core).

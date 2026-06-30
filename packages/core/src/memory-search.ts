@@ -6,6 +6,8 @@ import {
   type MemoryEntry,
   type MemoryScope,
   type MemoryType,
+  effectiveConfidence,
+  isArchived,
   isCurrent,
   memoryConfidenceSchema,
   memoryScopeSchema,
@@ -22,6 +24,8 @@ export const memorySearchQuerySchema = z
     scope: memoryScopeSchema.optional(),
     includeStale: z.boolean().default(false),
     includeUnapproved: z.boolean().default(false),
+    // M2: archival tier is hidden from search by default (aged-out/low-value).
+    includeArchival: z.boolean().default(false),
     // Bi-temporal time-travel: filter to memories valid AS OF this instant.
     // Absent ⇒ now ⇒ currently-valid memories only.
     asOf: z.string().datetime({ offset: true }).optional(),
@@ -37,6 +41,7 @@ export type MemorySearchQuery = {
   scope?: MemoryScope;
   includeStale?: boolean;
   includeUnapproved?: boolean;
+  includeArchival?: boolean;
   asOf?: string;
   limit?: number;
 };
@@ -59,6 +64,7 @@ export function searchMemoryEntries(
       (q.scope === undefined || entry.scope === q.scope) &&
       (q.includeStale || !entry.stale) &&
       (q.includeUnapproved || entry.approval === "approved") &&
+      (q.includeArchival || !isArchived(entry)) &&
       isCurrent(entry, asOf),
   );
 
@@ -83,8 +89,23 @@ export function searchMemoryEntries(
   // a doc shares no term with the query (score 0). A text search should return
   // only actual matches, so zero-overlap docs are dropped here. (A text-less
   // query takes the newest-first branch above and is not affected.)
-  return ranked
+  //
+  // M2 decay: weight the BM25 score by effectiveConfidence (age + confidence +
+  // tier) so an aged/low-confidence memory ranks BELOW a recent/high one at
+  // equal lexical overlap. ADDITIVE — every BM25 hit is kept (decay never zeroes
+  // a positive score), it only re-orders. Stable tie-break by id.
+  const scored = ranked
     .filter((hit) => hit.score > 0)
-    .map((hit) => byId.get(hit.id as MemoryEntryId))
-    .filter((entry): entry is MemoryEntry => entry !== undefined);
+    .map((hit) => {
+      const entry = byId.get(hit.id as MemoryEntryId);
+      return entry === undefined
+        ? undefined
+        : { entry, weighted: hit.score * effectiveConfidence(entry, asOf) };
+    })
+    .filter((s): s is { entry: MemoryEntry; weighted: number } => s !== undefined);
+  return scored
+    .sort((a, b) =>
+      a.weighted === b.weighted ? a.entry.id.localeCompare(b.entry.id) : b.weighted - a.weighted,
+    )
+    .map((s) => s.entry);
 }

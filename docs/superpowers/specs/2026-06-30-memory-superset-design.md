@@ -28,7 +28,7 @@ ship — plus our moat they lack.
 | Vector / semantic recall                     |  ✓   |      ✓       |      ✓       |   ✓    |   ~    |     ✓      | **✓ (increment 1)** |
 | Entity graph (entities + relations)          |  ✓   |      ~       |      ✓       |   ✓    |   ✓    |     ~      | **✓ (increment 1)** |
 | Temporal / bi-temporal validity             |  ~   |      ~       |    **✓**     |   ✓    |   ~    |     ✗      | **✓ (M1)** |
-| Tiered memory (working/recall/archival)      |  ~   |    **✓**     |      ~       |   ~    |   ~    |     ✗      | ◑ (deferred — sub-spec 4) |
+| Tiered memory (working/recall/archival)      |  ~   |    **✓**     |      ~       |   ~    |   ~    |     ✗      | **✓ (M2, sub-spec 4)** |
 | Self-editing / decay / forgetting            |  ~   |      ✓       |      ~       |   ✓    |   ✗    |     ✗      | ◑ (deferred — sub-spec 4) |
 | Canonicalization / dedup on write            |  ✓   |      ~       |      ✓       |   ✓    |   ~    |     ~      | ◑ (deferred — sub-spec 5) |
 | Transcript → memory summarization            |  ~   |      ~       |      ~       |   ~    |   ~    |   **✓**    | ◑ (deferred — sub-spec 6) |
@@ -73,7 +73,7 @@ our gate onto their store — is what makes the result a strict superset.
    Plus: wire `memoryRelevance` so approved memory actually influences context
    packs. **THIS INCREMENT.**
 3. **Temporal / bi-temporal validity** — **DONE (M1, 2026-06-30).**
-4. **Tiered + decay** — DEFERRED (sub-spec).
+4. **Tiered + decay** — **DONE (M2, 2026-06-30).**
 5. **Canonicalization** — DEFERRED (sub-spec).
 6. **Transcript → memory** — DEFERRED (sub-spec).
 
@@ -184,10 +184,42 @@ Each plugs into a named existing file; each gets its own spec → plan → TDD c
    pre-existing `supersede` edge kind in `memory-graph/model.ts` is now emitted
    from the recorded `supersedesId` by the CLI and GUI graph builders.
 
-4. **Tiered (working / recall / archival) + decay** (matches Letta/MemGPT). Add a
-   `tier` field + a decay scheduler that demotes stale/low-confidence memories
-   across tiers, surfacing the working set first in recall. Plugs into
-   `packages/core/src/memory-entry.ts` + `packages/core/src/memory-search.ts`.
+4. **Tiered (working / recall / archival) + decay** (matches Letta/MemGPT).
+   **DONE — M2, 2026-06-30.** Shipped, deterministic and no background timer:
+
+   - **`tier`** (`working` | `recall` | `archival`) — optional, additive on
+     `MemoryEntry` + the overlay variant + the update patch. Absent ⇒ `recall`
+     (every legacy/normal row reads as recall, back-compat). The patch carries
+     `tier` so the sweep can mutate it.
+   - **Tier-aware recall through the centralized predicate.** `isRecallable`
+     gains an optional `{ includeArchival }` and a sibling `isArchived(memory)`;
+     archival is excluded by default and only an explicit `includeArchival` (or
+     the search `includeArchival` flag) returns it. All four `isRecallable`
+     surfaces (BM25/semantic search via their own gate, MCP `recall`,
+     get_relevant_memories, daemon recall, GUI connector-context) inherit it —
+     no per-surface re-implementation.
+   - **`effectiveConfidence(memory, now)`** — pure, exported, read-time only
+     (never mutates stored confidence): `baseWeight(confidence) ×
+     ageDecay(now − (updatedAt | createdAt)) × tierWeight(tier)`. Monotonically
+     decreasing with age. Wired into `searchMemoryEntries` ranking ADDITIVELY
+     (a tie-aware multiplier on the BM25 hit, working tier a small boost) so an
+     aged memory ranks lower but is never dropped.
+   - **`mega memory sweep <project>` CLI + `mega_memory_sweep` MCP tool** — the
+     ONE mutation. A deterministic, lossless policy: an approved, currently-
+     valid memory that is past an inactivity-age threshold AND low base
+     confidence (or already closed/superseded) is set `tier = "archival"` via
+     `updateMemoryEntry`. Never deletes; archival is reversible. `--json`
+     summary `archived=N scanned=M`; idempotent (a second sweep no-ops because
+     already-archival rows are skipped). Mirrors the `mega memory index` /
+     `mega_index_memory` wiring (project resolution, store env, summary line).
+
+   RECALL-SAFETY: decay only down-ranks; tier only filters `archival`; and only
+   an explicit sweep ever sets `archival`. A current working/recall memory is
+   therefore never silently dropped by tier or decay.
+
+   Plugged into `packages/core/src/memory-entry.ts` (schema + predicate +
+   `effectiveConfidence` + `sweepMemoryTiers` planner) and
+   `packages/core/src/memory-search.ts` (decay ranking).
 
 5. **Semantic canonicalization on approve** (matches mem0/Cognee dedup). At the
    approval gate, detect near-duplicate / superseding memories by cosine over the

@@ -5,6 +5,7 @@ import {
   type MemoryEntry,
   type MemoryScope,
   type MemoryType,
+  isArchived,
   isCurrent,
   memoryConfidenceSchema,
   memoryScopeSchema,
@@ -24,6 +25,8 @@ export const semanticMemorySearchQuerySchema = z
     scope: memoryScopeSchema.optional(),
     includeStale: z.boolean().default(false),
     includeUnapproved: z.boolean().default(false),
+    // M2: archival tier hidden by default, mirroring the BM25 search.
+    includeArchival: z.boolean().default(false),
     asOf: z.string().datetime({ offset: true }).optional(),
     limit: z.number().int().positive().default(DEFAULT_LIMIT),
   })
@@ -37,6 +40,7 @@ export type SemanticMemorySearchQuery = {
   scope?: MemoryScope;
   includeStale?: boolean;
   includeUnapproved?: boolean;
+  includeArchival?: boolean;
   asOf?: string;
   limit?: number;
 };
@@ -58,6 +62,7 @@ export function searchMemoryEntriesSemantic(
     ...(query.includeUnapproved !== undefined
       ? { includeUnapproved: query.includeUnapproved }
       : {}),
+    ...(query.includeArchival !== undefined ? { includeArchival: query.includeArchival } : {}),
     ...(query.asOf !== undefined ? { asOf: query.asOf } : {}),
     ...(query.limit !== undefined ? { limit: query.limit } : {}),
   });
@@ -70,6 +75,7 @@ export function searchMemoryEntriesSemantic(
     if (q.scope !== undefined && entry.scope !== q.scope) continue;
     if (!q.includeStale && entry.stale) continue;
     if (!q.includeUnapproved && entry.approval !== "approved") continue;
+    if (!q.includeArchival && isArchived(entry)) continue;
     if (!isCurrent(entry, asOf)) continue;
     const vector = memoryVectors.get(entry.id);
     if (vector === undefined) continue;

@@ -9,6 +9,7 @@ import { memoryListCommand } from "./list.js";
 import { memoryReviewCommand } from "./review.js";
 import { memorySearchCommand } from "./search.js";
 import { memoryShowCommand } from "./show.js";
+import { memorySweepCommand } from "./sweep.js";
 import { memoryUpdateCommand } from "./update.js";
 
 export {
@@ -67,6 +68,11 @@ export {
   runMemoryIndexBuild,
   memoryIndexBuildCommand,
 } from "./index-build.js";
+export {
+  type RunMemorySweepInput,
+  runMemorySweep,
+  memorySweepCommand,
+} from "./sweep.js";
 
 export const memoryCommand = defineCommand({
   meta: { name: "memory", description: "Manage Mega Saver memory entries." },
@@ -83,5 +89,6 @@ export const memoryCommand = defineCommand({
     review: memoryReviewCommand,
     graph: memoryGraphCommand,
     index: memoryIndexBuildCommand,
+    sweep: memorySweepCommand,
   },
 });
