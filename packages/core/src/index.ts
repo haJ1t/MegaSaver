@@ -68,6 +68,11 @@ export * from "./project-rule.js";
 export * from "./project.js";
 export * from "./registry.js";
 export * from "./session.js";
+export {
+  type ExtractedCandidate,
+  type ExtractSessionMemoriesInput,
+  extractSessionMemories,
+} from "./session-memory.js";
 export * from "./token-saver.js";
 export * from "./workspace-overlay-store.js";
 export { buildPrMemoryComment, type PrMemoryCommentOptions } from "./pr-memory-comment.js";

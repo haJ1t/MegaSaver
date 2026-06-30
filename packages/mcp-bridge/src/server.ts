@@ -24,6 +24,7 @@ import { handleConvertFailureToRule } from "./tools/convert-failure-to-rule.js";
 import { handleRecordFailedAttempt } from "./tools/failed-attempts.js";
 import { handleFetchChunk } from "./tools/fetch-chunk.js";
 import { handleFindSimilarFailures } from "./tools/find-similar-failures.js";
+import { handleFromSessionMemory } from "./tools/from-session-memory.js";
 import { handleGetApplicableRules } from "./tools/get-applicable-rules.js";
 import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
 import { handleGetTaskStatus } from "./tools/get-task-status.js";
@@ -160,6 +161,11 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
     id: "mega_index_memory",
     description:
       "Build/refresh the semantic memory-vector index for a project so get_relevant_memories ranks by meaning. On-demand (loads the embedding model); run after adding/approving memories.",
+  },
+  {
+    id: "mega_memory_from_session",
+    description:
+      "Deterministically distill a session's recorded failures into SUGGESTED memories for the human approval gate (no LLM). Never auto-approves; suggested memories are not recallable until approved. Idempotent — re-running stages no duplicates.",
   },
   {
     id: "mega_memory_sweep",
@@ -302,6 +308,8 @@ export function buildServer(deps: ServerDeps): {
         return handleImpact({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "mega_index_memory":
         return handleIndexMemory({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
+      case "mega_memory_from_session":
+        return handleFromSessionMemory({ registry: deps.registry, now, newId }, args);
       case "mega_memory_sweep":
         return handleSweepMemory({ registry: deps.registry }, args);
       case "mega_recall":
