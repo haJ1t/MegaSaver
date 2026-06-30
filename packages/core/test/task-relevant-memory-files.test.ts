@@ -36,8 +36,9 @@ function entry(over: Partial<MemoryEntry> & { id: string; relatedFiles?: string[
   });
 }
 
-// Pure helper: rank approved+current+non-stale memories by cosine(task, memory)
-// and return the deduped union of the top-K memories' relatedFiles.
+// Pure helper: rank approved+non-stale memories by cosine(task, memory) and
+// return the deduped union of the top-K memories' relatedFiles. Eligibility
+// mirrors approvedMemoryFiles exactly (no validity/tier gating).
 describe("taskRelevantMemoryFiles (pure)", () => {
   const NEAR = "00000000-0000-4000-8000-0000000000a1";
   const FAR = "00000000-0000-4000-8000-0000000000a2";
@@ -56,7 +57,6 @@ describe("taskRelevantMemoryFiles (pure)", () => {
       taskVector,
       memoryVectors,
       topK: 1,
-      asOf: TS,
     });
     expect(files).toContain("src/near.ts");
     expect(files).not.toContain("src/far.ts");
@@ -80,7 +80,6 @@ describe("taskRelevantMemoryFiles (pure)", () => {
       taskVector,
       memoryVectors,
       topK: 2,
-      asOf: TS,
     });
     expect(files.sort()).toEqual(["src/a.ts", "src/b.ts"]);
   });
@@ -100,25 +99,18 @@ describe("taskRelevantMemoryFiles (pure)", () => {
       taskVector,
       memoryVectors,
       topK: 10,
-      asOf: TS,
     });
     expect(files).toEqual(["src/shared.ts"]);
   });
 
-  it("counts only approved, current, non-stale memories (signal safety)", () => {
+  it("counts only approved, non-stale memories (signal safety)", () => {
     const APPROVED = "00000000-0000-4000-8000-0000000000d1";
     const SUGGESTED = "00000000-0000-4000-8000-0000000000d2";
     const STALE = "00000000-0000-4000-8000-0000000000d3";
-    const CLOSED = "00000000-0000-4000-8000-0000000000d4";
     const memories = [
       entry({ id: APPROVED, relatedFiles: ["src/approved.ts"] }),
       entry({ id: SUGGESTED, approval: "suggested", relatedFiles: ["src/suggested.ts"] }),
       entry({ id: STALE, stale: true, relatedFiles: ["src/stale.ts"] }),
-      entry({
-        id: CLOSED,
-        relatedFiles: ["src/closed.ts"],
-        validTo: "2026-06-10T00:00:00.000Z",
-      }),
     ];
     // Every memory's vector is identical to the task vector — only the gating,
     // not the cosine score, can exclude a file here.
@@ -129,9 +121,30 @@ describe("taskRelevantMemoryFiles (pure)", () => {
       taskVector,
       memoryVectors,
       topK: 10,
-      asOf: TS,
     });
     expect(files).toEqual(["src/approved.ts"]);
+  });
+
+  it("includes an approved, non-stale, but bi-temporally EXPIRED memory — eligibility mirrors approvedMemoryFiles, not stricter", () => {
+    // approvedMemoryFiles gates ONLY on approval+non-stale, so an expired (validTo
+    // in the past) approved memory's relatedFiles ARE in the fallback set. The
+    // scoped path must NOT apply stricter (validity/tier) eligibility, else the
+    // memoryRelevance signal would flip based on whether a sidecar exists.
+    const EXPIRED = "00000000-0000-4000-8000-0000000000d5";
+    const memories = [
+      entry({
+        id: EXPIRED,
+        relatedFiles: ["src/expired.ts"],
+        validTo: "2026-06-10T00:00:00.000Z",
+      }),
+    ];
+    const memoryVectors = new Map([[EXPIRED, Float32Array.from([1, 0, 0])]]);
+    const files = taskRelevantMemoryFiles(memories, {
+      taskVector,
+      memoryVectors,
+      topK: 10,
+    });
+    expect(files).toEqual(["src/expired.ts"]);
   });
 
   it("does not DROP a genuinely task-relevant memory's file (recall safety)", () => {
@@ -142,7 +155,6 @@ describe("taskRelevantMemoryFiles (pure)", () => {
       taskVector,
       memoryVectors,
       topK: 10,
-      asOf: TS,
     });
     expect(files).toEqual(["src/keepme.ts"]);
   });
@@ -182,7 +194,6 @@ describe("taskScopedMemoryFiles (best-effort orchestrator)", () => {
       task: "anything",
       taskVector: Float32Array.from([1, 0, 0]),
       topK: 1,
-      asOf: TS,
     });
     expect(files).not.toBeNull();
     expect(files).toContain("src/near.ts");
@@ -196,7 +207,6 @@ describe("taskScopedMemoryFiles (best-effort orchestrator)", () => {
       memories: seed(),
       task: "anything",
       taskVector: Float32Array.from([1, 0, 0]),
-      asOf: TS,
     });
     expect(files).toBeNull();
   });
@@ -213,7 +223,6 @@ describe("taskScopedMemoryFiles (best-effort orchestrator)", () => {
       task: "anything",
       embedFn: async () => [Float32Array.from([1, 0, 0])],
       topK: 1,
-      asOf: TS,
     });
     expect(files).toContain("src/near.ts");
     expect(files).not.toContain("src/far.ts");
@@ -232,7 +241,6 @@ describe("taskScopedMemoryFiles (best-effort orchestrator)", () => {
       embedFn: async () => {
         throw new Error("model unavailable");
       },
-      asOf: TS,
     });
     expect(files).toBeNull();
   });
