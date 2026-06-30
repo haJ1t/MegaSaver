@@ -236,3 +236,18 @@ describe("RECALL-SAFETY: decay/tier never drop a current working/recall memory",
     expect(effectiveConfidence(recall, NOW)).toBeGreaterThan(0);
   });
 });
+
+describe("malformed-now hardening (review)", () => {
+  it("effectiveConfidence never returns NaN for a malformed now (degrades to no decay)", () => {
+    const m = mem({ confidence: "high", updatedAt: RECENT });
+    const v = effectiveConfidence(m, "not-a-date");
+    expect(Number.isNaN(v)).toBe(false);
+    expect(v).toBeGreaterThan(0);
+  });
+
+  it("sweepMemoryTiers throws on a malformed now instead of silently archiving nothing", () => {
+    const oldLow = mem({ id: ID_A, confidence: "low", createdAt: OLD, updatedAt: OLD });
+    // A NaN `at` makes every comparison false → silent no-op. Must fail loud.
+    expect(() => sweepMemoryTiers([oldLow], "not-a-date")).toThrow();
+  });
+});
