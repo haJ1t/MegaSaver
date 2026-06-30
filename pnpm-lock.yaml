@@ -35,6 +35,10 @@ importers:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
+    optionalDependencies:
+      '@huggingface/transformers':
+        specifier: ^3.3.3
+        version: 3.8.1
     devDependencies:
       '@megasaver/agent-office':
         specifier: workspace:*

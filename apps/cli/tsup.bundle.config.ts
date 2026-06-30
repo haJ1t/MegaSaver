@@ -60,10 +60,25 @@ export default defineConfig({
   // literal and esbuild eliminates the createRequire branch. The unbundled
   // dist/cli.js has no such define, so it falls back to reading package.json.
   define: { __MEGA_CLI_VERSION__: JSON.stringify(version) },
-  // Inline everything resolvable, including the TypeScript compiler pulled in
-  // via @megasaver/indexer — the banner's __filename/__dirname shim lets it run
-  // inlined, so the single file stays fully self-contained (no runtime deps for
-  // any command, `mega index` included). esbuild keeps Node builtins (fs, path,
+  // The ONE chain we refuse to inline. @megasaver/embeddings reaches
+  // @huggingface/transformers through a guarded dynamic import (embed.ts), and
+  // transformers drags in onnxruntime-node's platform-specific *.node binaries
+  // (plus sharp). Inlining it copied 6 CI-built (single-OS) natives into the
+  // tarball — dead weight on every other platform, +12MB. Externalized, the
+  // dynamic import resolves from node_modules at runtime: present (the CLI's
+  // optionalDependency, installed for the host platform) → embeddings work;
+  // absent (unsupported platform, or a bare `node mega.mjs` download) → embed()
+  // rejects and every call site already degrades gracefully.
+  external: ["@huggingface/transformers", "onnxruntime-node"],
+  // Inline everything else resolvable, including the TypeScript compiler pulled
+  // in via @megasaver/indexer — the banner's __filename/__dirname shim lets it
+  // run inlined, so the single file stays self-contained for every command,
+  // `mega index` included (it statically imports typescript with no graceful
+  // fallback, so it MUST stay inlined). esbuild keeps Node builtins (fs, path,
   // node:os, …) external automatically under platform:"node".
-  noExternal: [/.*/],
+  //
+  // Why a negative lookahead instead of /.*/: tsup's `noExternal` wins over
+  // esbuild's `external`, so a blanket /.*/ would re-inline the chain above and
+  // silently undo it. Excluding those two specifiers here lets `external` apply.
+  noExternal: [/^(?!@huggingface\/transformers|onnxruntime-node).*/],
 });
