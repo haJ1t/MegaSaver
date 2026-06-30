@@ -75,7 +75,8 @@ our gate onto their store — is what makes the result a strict superset.
 3. **Temporal / bi-temporal validity** — **DONE (M1, 2026-06-30).**
 4. **Tiered + decay** — **DONE (M2, 2026-06-30).**
 5. **Canonicalization** — **DONE (M3, 2026-06-30).**
-6. **Transcript → memory** — DEFERRED (sub-spec).
+6. **Transcript → memory** — **DONE (M4, 2026-06-30, deterministic / no-LLM).**
+   See [2026-06-30-memory-from-session-design.md](./2026-06-30-memory-from-session-design.md).
 
 ---
 

@@ -3389,3 +3389,50 @@ Full `pnpm verify` green (46/46 turbo tasks, model-free) — covers the
 daemon's dist-resolution of core. mcp-bridge 40 files / 260 (+5 new,
 1 E2E skip). Changeset minor: mcp-bridge (only `ApproveMemoryEnv` public
 shape changed).
+
+## [2026-06-30] feat | M4: transcript→memory (claude-mem-class, deterministic)
+
+Realizes the deferred memory-superset roadmap item 6 — session distillation
+— DETERMINISTICALLY, no LLM (overrides the spec's "LLM opt-in" framing for
+this increment). Spec:
+`docs/superpowers/specs/2026-06-30-memory-from-session-design.md`.
+Branch `feat/memory-from-session`.
+
+- **Source = FailedAttempt rows, not raw chunk-sets.** A session's recorded
+  failures already live in the registry as `FailedAttempt` (keyed by
+  sessionId, with structured `task`/`failedStep`/`errorOutput`/`relatedFiles`/
+  `suspectedCause`). The output-filter parsers (`parseTestOutput`,
+  `parseTsDiagnostic`, `parseStacktrace`) return bare `Chunk[]`
+  (`{ text, startLine, endLine }`) — classified TEXT, no structured fields —
+  so re-parsing them would reimplement what FORGE structured at record time.
+  Reuse the structured rows instead.
+- **Extractor** (`packages/core/src/session-memory.ts`, pure):
+  `extractSessionMemories({ sessionId, projectId, failedAttempts })`. Test-
+  shaped failure → `test_behavior`, else `bug` (source `test_failure`);
+  `DECISION:`/`decided to` marker → `decision` (source `session_summary`).
+  Each candidate: `scope:"session"`, `confidence:"low"`, `approval:"suggested"`,
+  title from `failedStep` first-line, content = step + first error line +
+  suspected cause, relatedFiles carried. Dedupe within session by contentHash
+  (sha256 of type+title+content, 16 hex). `dedupeKey = failureId:contentHash`.
+- **CLI** `mega memory from-session <session>` + **MCP** `mega_memory_from_session`
+  ({ sessionId } → { suggested, skipped }). Resolve session→project via
+  `getSession`, filter `listFailedAttempts` to the session, create suggested
+  memories, print `suggested=N skipped=M` (--json). Never auto-approves.
+- **Idempotent.** Each staged memory carries `from-session:<dedupeKey>` in its
+  keywords; the command skips a candidate whose dedupeKey is already staged on
+  the project. Re-run ⇒ `suggested=0 skipped=N`. Lossless (never deletes).
+- **Recall-safe.** Suggested memories fail `isRecallable` and are excluded from
+  `searchMemoryEntries` (only `includeUnapproved` surfaces them) — they don't
+  leak into recall until a human approves. M3 then surfaces semantic dups at
+  the approve gate.
+- **TDD, model-free.** core: 6 tests (classify, dedupe-collapse, decision,
+  empty, NOT-recallable-until-approved). cli: 4 (stage + dup collapse +
+  cross-session filter, idempotent, --json, unknown-session). mcp: 4 (stage,
+  idempotent, unknown-session, malformed). Tool-count regression tests bumped
+  29→30 (+`mega_memory_from_session`, no proxy twin). Time/ids pinned.
+- **Smoke:** built CLI run twice on a seeded store ⇒ `suggested=2 skipped=0`
+  then `{"suggested":0,"skipped":2}`; staged rows are `suggested` test_behavior
+  + bug; `memory search` surfaces neither.
+
+Changeset minor (core + cli + mcp-bridge public surface). Additive — no change
+to the memory data model, approval gate, or FORGE/learn behaviour.
