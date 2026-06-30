@@ -81,6 +81,17 @@ export async function runMemoryGraph(input: RunMemoryGraphInput): Promise<0 | 1>
       }
     }
 
+    // Explicit bi-temporal supersession (M1): a memory's supersedesId names the
+    // older memory it replaces. Emit a directed supersede edge (newer → older).
+    // This is the recorded fact, distinct from checkConflicts' heuristic
+    // supersession detection above; buildGraph dedups identical pairs.
+    const memoryIds = new Set(memories.map((m) => m.id));
+    for (const m of memories) {
+      if (m.supersedesId !== undefined && memoryIds.has(m.supersedesId)) {
+        conflicts.push({ from: m.id, to: m.supersedesId, kind: "supersede" });
+      }
+    }
+
     const wikiPages = await readWikiPages(project.rootPath);
 
     const memoryInputs = memories.map((m) => ({

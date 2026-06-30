@@ -87,6 +87,14 @@ export const memoryEntrySchema = z
     createdAt: z.string().datetime({ offset: true }),
     updatedAt: z.string().datetime({ offset: true }),
     expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    // Bi-temporal valid-time (M1). createdAt/updatedAt are TRANSACTION time (when
+    // we recorded it); validFrom/validTo are VALID time (when the fact is true in
+    // the world). Absent validFrom ⇒ no lower bound; absent/null validTo ⇒ still
+    // valid. A row with neither bound is current — keeps every legacy/normal row
+    // current (back-compat).
+    validFrom: z.string().datetime({ offset: true }).optional(),
+    validTo: z.string().datetime({ offset: true }).nullable().optional(),
+    supersedesId: memoryEntryIdSchema.optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
@@ -108,6 +116,21 @@ export const memoryEntrySchema = z
   });
 
 export type MemoryEntry = z.infer<typeof memoryEntrySchema>;
+
+// Bi-temporal valid-time check (M1): is the memory's fact true at `asOf`?
+// Lower bound inclusive, upper bound exclusive (half-open: [validFrom, validTo)),
+// so a memory closed at T and its successor opened at T do not both read current
+// at exactly T. Absent validFrom ⇒ no lower bound; absent/null validTo ⇒ open.
+// Compared as epoch millis to be offset-agnostic. `asOf` is an ISO-8601 datetime.
+export function isCurrent(
+  memory: Pick<MemoryEntry, "validFrom" | "validTo">,
+  asOf: string,
+): boolean {
+  const at = Date.parse(asOf);
+  if (memory.validFrom !== undefined && at < Date.parse(memory.validFrom)) return false;
+  if (memory.validTo != null && at >= Date.parse(memory.validTo)) return false;
+  return true;
+}
 
 // F4 live-first variant: drops the (projectId, sessionId) FK pair for the
 // cwd-derived workspaceKey + the Claude transcript liveSessionId. The `scope`
@@ -137,6 +160,9 @@ export const overlayMemoryEntrySchema = z
     createdAt: z.string().datetime({ offset: true }),
     updatedAt: z.string().datetime({ offset: true }),
     expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    validFrom: z.string().datetime({ offset: true }).optional(),
+    validTo: z.string().datetime({ offset: true }).nullable().optional(),
+    supersedesId: memoryEntryIdSchema.optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
@@ -180,6 +206,9 @@ export const memoryEntryUpdatePatchSchema = z
     relatedSymbols: z.array(z.string()).optional(),
     stale: z.boolean().optional(),
     expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    // validTo is patchable so the supersede gate can close a memory's validity
+    // (validFrom/supersedesId are set at create and immutable, like the key cols).
+    validTo: z.string().datetime({ offset: true }).nullable().optional(),
     updatedAt: z.string().datetime({ offset: true }),
   })
   .strict();

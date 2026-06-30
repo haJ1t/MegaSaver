@@ -253,6 +253,89 @@ describe("approve_memory validation gate (adversarial)", () => {
 // Verify McpBridgeError is importable at test boundary
 void McpBridgeError;
 
+const OLD_ID = "55555555-5555-4555-8555-555555555555";
+const NEW_ID = "66666666-6666-4666-8666-666666666666";
+
+// A registry with an already-approved, currently-valid OLD memory and a
+// suggested NEW memory that supersedes it (manual source so the approval gate
+// admits it cleanly — the focus here is the validity-closing side effect).
+function supersedeRegistry() {
+  const registry = createInMemoryCoreRegistry();
+  registry.createProject({
+    id: PROJECT_ID,
+    name: "demo",
+    rootPath: "/tmp/demo",
+    createdAt: TS,
+    updatedAt: TS,
+  });
+  registry.createMemoryEntry({
+    id: OLD_ID,
+    projectId: PROJECT_ID,
+    sessionId: null,
+    scope: "project",
+    type: "decision",
+    title: "Deploy region us-east",
+    content: "Primary deploy region is us-east.",
+    keywords: [],
+    confidence: "medium",
+    source: "manual",
+    stale: false,
+    approval: "approved",
+    createdAt: TS,
+    updatedAt: TS,
+  });
+  registry.createMemoryEntry({
+    id: NEW_ID,
+    projectId: PROJECT_ID,
+    sessionId: null,
+    scope: "project",
+    type: "decision",
+    title: "Deploy region eu-west",
+    content: "Primary deploy region is eu-west.",
+    keywords: [],
+    confidence: "medium",
+    source: "manual",
+    stale: false,
+    approval: "suggested",
+    supersedesId: OLD_ID,
+    createdAt: TS,
+    updatedAt: TS,
+  });
+  return registry;
+}
+
+describe("approve_memory closes superseded validity", () => {
+  const SUPERSEDE_AT = "2026-06-25T00:00:00.000Z";
+
+  it("sets the superseded memory's validTo to now when the superseding one is approved", async () => {
+    const registry = supersedeRegistry();
+    const result = await handleApproveMemory(
+      { registry, storeRoot: "", now: () => SUPERSEDE_AT },
+      { memoryEntryId: NEW_ID, approval: "approved" },
+    );
+    expect(result.approval).toBe("approved");
+    expect(registry.getMemoryEntry(OLD_ID as never)?.validTo).toBe(SUPERSEDE_AT);
+  });
+
+  it("keeps the superseded memory (lossless — not deleted)", async () => {
+    const registry = supersedeRegistry();
+    await handleApproveMemory(
+      { registry, storeRoot: "", now: () => SUPERSEDE_AT },
+      { memoryEntryId: NEW_ID, approval: "approved" },
+    );
+    expect(registry.getMemoryEntry(OLD_ID as never)).not.toBeNull();
+  });
+
+  it("does not touch validity on rejection of a superseding memory", async () => {
+    const registry = supersedeRegistry();
+    await handleApproveMemory(
+      { registry, storeRoot: "", now: () => SUPERSEDE_AT },
+      { memoryEntryId: NEW_ID, approval: "rejected" },
+    );
+    expect(registry.getMemoryEntry(OLD_ID as never)?.validTo).toBeUndefined();
+  });
+});
+
 // ── Evidence-port integration tests (slice 3b) ─────────────────────────────
 // These tests require a real on-disk evidence ledger in a tmp dir. They pass
 // `storeRoot` to handleApproveMemory and seed EvidenceRecord fixtures to

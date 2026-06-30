@@ -21,6 +21,8 @@ function entry(over: Partial<MemoryEntry> & { id: string; content: string }): Me
     stale: over.stale ?? false,
     createdAt: over.createdAt ?? "2026-06-11T00:00:00.000Z",
     updatedAt: over.updatedAt ?? "2026-06-11T00:00:00.000Z",
+    ...(over.validFrom !== undefined ? { validFrom: over.validFrom } : {}),
+    ...(over.validTo !== undefined ? { validTo: over.validTo } : {}),
   });
 }
 
@@ -147,5 +149,42 @@ describe("searchMemoryEntries", () => {
     expect(
       searchMemoryEntries(entries, { text: "alpha", includeStale: true, includeUnapproved: true }),
     ).toHaveLength(1);
+  });
+});
+
+describe("searchMemoryEntries bi-temporal (asOf)", () => {
+  // A superseded fact: valid June 1 → June 20, then closed.
+  const closed = entry({
+    id: "00000000-0000-4000-8000-0000000000c1",
+    content: "deploy region us-east",
+    validFrom: "2026-06-01T00:00:00.000Z",
+    validTo: "2026-06-20T00:00:00.000Z",
+  });
+  // The superseding fact: valid from June 20, still open.
+  const current = entry({
+    id: "00000000-0000-4000-8000-0000000000c2",
+    content: "deploy region eu-west",
+    validFrom: "2026-06-20T00:00:00.000Z",
+  });
+
+  it("default recall returns only currently-valid memories", () => {
+    const ids = searchMemoryEntries([closed, current], {}).map((e) => e.id);
+    expect(ids).toEqual(["00000000-0000-4000-8000-0000000000c2"]);
+  });
+
+  it("asOf during the closed window returns the historical (then-current) memory", () => {
+    const ids = searchMemoryEntries([closed, current], {
+      asOf: "2026-06-10T00:00:00.000Z",
+    }).map((e) => e.id);
+    expect(ids).toEqual(["00000000-0000-4000-8000-0000000000c1"]);
+  });
+
+  it("rows without temporal bounds are treated as current (back-compat)", () => {
+    const legacy = entry({
+      id: "00000000-0000-4000-8000-0000000000c3",
+      content: "no bounds memory",
+    });
+    const ids = searchMemoryEntries([legacy], {}).map((e) => e.id);
+    expect(ids).toEqual(["00000000-0000-4000-8000-0000000000c3"]);
   });
 });

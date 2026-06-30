@@ -6,6 +6,7 @@ import {
   type MemoryEntry,
   type MemoryScope,
   type MemoryType,
+  isCurrent,
   memoryConfidenceSchema,
   memoryScopeSchema,
   memoryTypeSchema,
@@ -21,6 +22,9 @@ export const memorySearchQuerySchema = z
     scope: memoryScopeSchema.optional(),
     includeStale: z.boolean().default(false),
     includeUnapproved: z.boolean().default(false),
+    // Bi-temporal time-travel: filter to memories valid AS OF this instant.
+    // Absent ⇒ now ⇒ currently-valid memories only.
+    asOf: z.string().datetime({ offset: true }).optional(),
     limit: z.number().int().positive().default(DEFAULT_LIMIT),
   })
   .strict();
@@ -33,6 +37,7 @@ export type MemorySearchQuery = {
   scope?: MemoryScope;
   includeStale?: boolean;
   includeUnapproved?: boolean;
+  asOf?: string;
   limit?: number;
 };
 
@@ -45,6 +50,7 @@ export function searchMemoryEntries(
   query: MemorySearchQuery,
 ): MemoryEntry[] {
   const q = memorySearchQuerySchema.parse(query);
+  const asOf = q.asOf ?? new Date().toISOString();
 
   const filtered = entries.filter(
     (entry) =>
@@ -52,7 +58,8 @@ export function searchMemoryEntries(
       (q.confidence === undefined || entry.confidence === q.confidence) &&
       (q.scope === undefined || entry.scope === q.scope) &&
       (q.includeStale || !entry.stale) &&
-      (q.includeUnapproved || entry.approval === "approved"),
+      (q.includeUnapproved || entry.approval === "approved") &&
+      isCurrent(entry, asOf),
   );
 
   const text = q.text?.trim();

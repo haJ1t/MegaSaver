@@ -387,4 +387,37 @@ describe("runMemoryGraph", () => {
     );
     expect(leakedNode).toBeUndefined();
   });
+
+  it("emits a supersede edge from a memory's supersedesId", async () => {
+    await seed();
+    const NEWER_ID = "55555555-5555-4555-8555-555555555555";
+    // A newer approved memory that explicitly supersedes the project-note.
+    const newer = JSON.stringify({
+      id: NEWER_ID,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      type: "decision",
+      title: "newer-note",
+      content: "user now prefers Rust",
+      keywords: [],
+      confidence: "medium",
+      source: "manual",
+      approval: "approved",
+      stale: false,
+      supersedesId: MEMORY_ID_PROJECT,
+      createdAt: TS,
+      updatedAt: TS,
+    });
+    await writeFile(join(store, "memory", `${PROJECT_ID}.jsonl`), `${newer}\n`, { flag: "a" });
+
+    const code = await runMemoryGraph(makeInput({ jsonFlag: true }));
+    expect(code).toBe(0);
+    const graph = JSON.parse(lines[0] ?? "") as Graph;
+
+    const supersedeEdge = graph.edges.find(
+      (e) => e.kind === "supersede" && e.from === NEWER_ID && e.to === MEMORY_ID_PROJECT,
+    );
+    expect(supersedeEdge).toBeDefined();
+  });
 });

@@ -1,5 +1,5 @@
 import { type ChunkSetSummary, listChunkSets } from "@megasaver/content-store";
-import type { CoreRegistry, MemoryEntry } from "@megasaver/core";
+import { type CoreRegistry, type MemoryEntry, isCurrent } from "@megasaver/core";
 import type { SessionId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
@@ -12,6 +12,9 @@ const recallInputSchema = z
     sessionId: z.string().min(1),
     intent: z.string(),
     maxBytes: z.number().int().positive().optional(),
+    // Bi-temporal time-travel: recall what we believed as of this instant.
+    // Absent ⇒ now ⇒ currently-valid memories only.
+    asOf: z.string().datetime({ offset: true }).optional(),
   })
   .strict();
 
@@ -28,28 +31,38 @@ export async function handleRecall(
   if (!parsed.success) {
     throw new McpBridgeError("validation_failed", parsed.error.message);
   }
-  const { sessionId, intent } = parsed.data;
+  const { sessionId, intent, asOf } = parsed.data;
 
   if (intent.trim() === "") {
     throw new McpBridgeError("intent_required", "mega_recall requires a non-empty intent");
   }
 
-  return forwardOrFallback(env.storeRoot, "/recall-registry", { sessionId, intent }, async () => {
-    const session = env.registry.getSession(sessionId as SessionId);
-    if (session === null) {
-      throw new McpBridgeError("session_not_found", `session not found: ${sessionId}`);
-    }
+  const at = asOf ?? new Date().toISOString();
 
-    const allMemory = env.registry.listMemoryEntries(session.projectId);
-    const memory = allMemory.filter(
-      (m) => m.approval === "approved" && (m.sessionId === session.id || m.scope === "project"),
-    );
-    const chunkSets = await listChunkSets({
-      storeRoot: env.storeRoot,
-      projectId: session.projectId,
-      sessionId: session.id,
-    });
+  return forwardOrFallback(
+    env.storeRoot,
+    "/recall-registry",
+    { sessionId, intent, ...(asOf !== undefined ? { asOf } : {}) },
+    async () => {
+      const session = env.registry.getSession(sessionId as SessionId);
+      if (session === null) {
+        throw new McpBridgeError("session_not_found", `session not found: ${sessionId}`);
+      }
 
-    return { memory, chunkSets };
-  });
+      const allMemory = env.registry.listMemoryEntries(session.projectId);
+      const memory = allMemory.filter(
+        (m) =>
+          m.approval === "approved" &&
+          (m.sessionId === session.id || m.scope === "project") &&
+          isCurrent(m, at),
+      );
+      const chunkSets = await listChunkSets({
+        storeRoot: env.storeRoot,
+        projectId: session.projectId,
+        sessionId: session.id,
+      });
+
+      return { memory, chunkSets };
+    },
+  );
 }

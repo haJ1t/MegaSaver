@@ -2,6 +2,7 @@ import {
   type CoreRegistry,
   CoreRegistryError,
   type MemoryEntry,
+  isCurrent,
   memoryEmbeddingsSidecarPath,
   searchMemoryEntriesSemantic,
 } from "@megasaver/core";
@@ -25,6 +26,9 @@ const getRelevantMemoriesInputSchema = z
     projectId: z.string().min(1),
     task: z.string().min(1),
     limit: z.number().int().positive().optional(),
+    // Bi-temporal time-travel: rank memories valid AS OF this instant.
+    // Absent ⇒ now ⇒ currently-valid only.
+    asOf: z.string().datetime({ offset: true }).optional(),
   })
   .strict();
 
@@ -48,6 +52,7 @@ async function semanticMemoryRanking(
   projectId: ProjectId,
   task: string,
   limit: number | undefined,
+  asOf: string,
 ): Promise<MemoryEntry[] | null> {
   if (env.storeRoot === undefined) return null;
   try {
@@ -55,14 +60,19 @@ async function semanticMemoryRanking(
     if (memoryVectors.size === 0) return null;
     const entries = env.registry.listMemoryEntries(projectId);
     // The same filter searchMemoryEntriesSemantic applies by default: approved,
-    // non-stale. A candidate missing a vector means partial coverage → BM25.
-    const candidates = entries.filter((e) => e.approval === "approved" && !e.stale);
+    // non-stale, current-as-of. A candidate missing a vector means partial
+    // coverage → BM25. The asOf gate must match so a closed (non-current) memory
+    // without a vector does not force a needless BM25 fallback.
+    const candidates = entries.filter(
+      (e) => e.approval === "approved" && !e.stale && isCurrent(e, asOf),
+    );
     if (candidates.some((e) => !memoryVectors.has(e.id))) return null;
     const [queryVector] = await (env.embedFn ?? embed)([task]);
     if (queryVector === undefined) return null;
     return searchMemoryEntriesSemantic(entries, {
       queryVector,
       memoryVectors,
+      asOf,
       ...(limit !== undefined ? { limit } : {}),
     });
   } catch {
@@ -81,13 +91,15 @@ export async function handleGetRelevantMemories(
   if (!parsed.success) {
     throw new McpBridgeError("validation_failed", parsed.error.message);
   }
-  const { projectId, task, limit } = parsed.data;
+  const { projectId, task, limit, asOf } = parsed.data;
+  const at = asOf ?? new Date().toISOString();
 
   try {
-    const semantic = await semanticMemoryRanking(env, projectId as ProjectId, task, limit);
+    const semantic = await semanticMemoryRanking(env, projectId as ProjectId, task, limit, at);
     if (semantic !== null) return { memory: semantic };
     const memory = env.registry.searchMemoryEntries(projectId as ProjectId, {
       text: task,
+      asOf: at,
       ...(limit !== undefined ? { limit } : {}),
     });
     return { memory };

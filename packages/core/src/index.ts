@@ -20,6 +20,7 @@ export {
   type OverlayMemoryEntry,
   type OverlayMemoryEntryUpdatePatch,
   backfillMemoryEntry,
+  isCurrent,
   memoryApprovalSchema,
   memoryConfidenceSchema,
   memoryEntrySchema,
