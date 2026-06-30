@@ -4,6 +4,16 @@
 
 const RESOLVE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx"];
 
+// NodeNext ESM: a relative import uses the OUTPUT extension (`./m.js`) even
+// though the source is `./m.ts`. Map a JS-ish suffix to its TS-source
+// counterparts so `import { x } from "./m.js"` resolves to the indexed m.ts.
+const JS_TO_TS_SUFFIX: Record<string, string[]> = {
+  ".js": [".ts", ".tsx"],
+  ".jsx": [".tsx"],
+  ".mjs": [".mts"],
+  ".cjs": [".cts"],
+};
+
 function isRelative(specifier: string): boolean {
   return specifier.startsWith("./") || specifier.startsWith("../");
 }
@@ -39,6 +49,14 @@ export function resolveModulePath(
   for (const ext of RESOLVE_EXTENSIONS) {
     const indexPath = `${base}/index${ext}`;
     if (fileExists(indexPath)) return indexPath;
+  }
+  // NodeNext: `./m.js` → the source `./m.ts`/`.tsx`/etc.
+  for (const [jsExt, tsExts] of Object.entries(JS_TO_TS_SUFFIX)) {
+    if (!base.endsWith(jsExt)) continue;
+    const stem = base.slice(0, -jsExt.length);
+    for (const tsExt of tsExts) {
+      if (fileExists(stem + tsExt)) return stem + tsExt;
+    }
   }
   return specifier;
 }

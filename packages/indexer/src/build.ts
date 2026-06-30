@@ -190,10 +190,13 @@ async function buildIndexCore(options: BuildCoreOptions): Promise<BuildResult> {
   // file's import bindings; reused blocks keep the resolvedCalls they were
   // persisted with (source-derived, stable for unchanged content). Then invert
   // to resolvedCalledBy. A relative specifier resolves against scannedPaths.
-  // ponytail: a reused caller can carry stale resolvedCalls if an imported
-  // target file was renamed without the caller changing; the name-based
-  // calledBy fallback still covers that block, and a full ts.Program reresolve
-  // is the deferred full-LSP phase.
+  // A reused caller can carry a STALE resolvedCalls FQN (e.g. its imported
+  // target file was renamed while the caller's content didn't change); the
+  // invert pass below detects such DANGLING edges (no current block owns the
+  // FQN) and buckets them under the "#name" floor, so the read-time per-edge
+  // byName fallback in select.ts still recovers the caller — resolved-mode reach
+  // is never less than name-mode. A full ts.Program reresolve is deferred to the
+  // full-LSP phase.
   const fileExists = (path: string): boolean => scannedPaths.has(path);
   // Defined FQNs in this index — used to upgrade a local (non-imported) call
   // `#name` to the same-file definition `<file>#name` so the forward dependency
@@ -220,15 +223,26 @@ async function buildIndexCore(options: BuildCoreOptions): Promise<BuildResult> {
   }
 
   const resolvedCallersByFqn = new Map<string, Set<string>>();
+  const addCaller = (key: string, callerFqn: string): void => {
+    const callers = resolvedCallersByFqn.get(key) ?? new Set<string>();
+    callers.add(callerFqn);
+    resolvedCallersByFqn.set(key, callers);
+  };
   for (const block of nextBlocks) {
     if (block.name === undefined) continue;
     const callerFqn = blockFqn(block.filePath, block.name);
     const resolvedCalls = resolvedCallsByBlockId.get(block.id) ?? block.resolvedCalls;
     if (resolvedCalls === undefined) continue;
     for (const calleeFqn of resolvedCalls) {
-      const callers = resolvedCallersByFqn.get(calleeFqn) ?? new Set<string>();
-      callers.add(callerFqn);
-      resolvedCallersByFqn.set(calleeFqn, callers);
+      // A DANGLING edge — resolved to <file>#name that no current block owns
+      // (NodeNext .js mismatch, a stale rename on a reused caller, any miss) —
+      // is bucketed under the NAME floor "#name" so the callee's assembly (which
+      // also reads its "#name" bucket) keeps the caller. Recall-safe: this never
+      // re-adds a false same-name edge, because an edge resolved to a REAL other
+      // block (e.g. b.ts#parse) is precise, not dangling, and goes to b only.
+      const calleeName = calleeFqn.slice(calleeFqn.indexOf("#") + 1);
+      const key = definedFqns.has(calleeFqn) ? calleeFqn : `#${calleeName}`;
+      addCaller(key, callerFqn);
     }
   }
 

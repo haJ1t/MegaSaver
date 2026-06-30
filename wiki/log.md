@@ -3137,3 +3137,26 @@ caller edges under `#<name>` and unions that bucket into the callee's
 of name mode (removes false same-name edges only, never true ones).
 New regression tests: indexer namespace end-to-end + pruner per-edge
 fallback. verify green exit 0.
+
+## [2026-06-30] fix | WS2 recall-safe reverse call resolution
+
+Independent critic found 2 CRITICAL recall-loss bugs (true callers
+DROPPED from mega_impact), both reproduced RED end-to-end. Root cause
+(asymmetry): reverse traversal uses build-time-materialized
+`resolvedCalledBy`; an edge resolving to an FQN that owns no current
+block landed in no readable bucket → caller lost once another caller
+populated the bucket. C1: NodeNext `.js` ESM specifiers (`./m.js` for
+source `m.ts`) didn't resolve. C2: incremental staleness — a reused
+caller keeps a stale resolvedCalls FQN after its target file is renamed.
+Fixes: (1) resolveModulePath remaps `.js/.jsx/.mjs/.cjs` → TS-source
+suffix so idiomatic `.js` imports resolve PRECISELY; (2) build invert
+pass buckets any DANGLING edge (FQN owns no current block) under the
+`#name` floor, recovered by select.ts per-edge byName fallback. Precise
+edges stay precise → false same-name cross-file edges still excluded (not
+a blunt name-union, which the critic verified breaks impact-resolved).
+Invariant: resolvedCalledBy ⊇ all true callers. 2 RED→GREEN e2e repros
++ a `.js`-precise disambiguation test in
+packages/context-pruner/test/impact-recall-e2e.test.ts; impact-resolved
+stays green. verify exit 0 (indexer 98+2skip, context-pruner 65,
+mcp-bridge impact 4). Updated build.ts ponytail comment to reflect real
+dangling-edge behavior.

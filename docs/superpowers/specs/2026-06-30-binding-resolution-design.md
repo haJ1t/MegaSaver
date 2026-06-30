@@ -102,3 +102,25 @@ both — the resolved field disambiguates. `selectImpact` on `parse`
 import-binding unit tests (named/aliased/default/namespace; relative →
 file path; bare kept) and back-compat (block without resolved fields →
 name-based path).
+
+## §7 Recall-safety follow-up (critic, two CRITICAL drops)
+
+A reverse-only gap let true callers vanish from `mega_impact` once a
+callee's `resolvedCalledBy` was non-empty: an edge whose FQN matched NO
+current block landed in no readable bucket.
+- C1 — NodeNext `.js` specifiers: `import { x } from "./m.js"` (source is
+  `m.ts`) didn't resolve. Fix: `resolveModulePath` remaps a `.js/.jsx/
+  .mjs/.cjs` suffix to its TS-source counterpart (`.ts/.tsx/.mts/.cts`)
+  before giving up — so idiomatic `.js` imports resolve PRECISELY (real
+  disambiguation fires on this NodeNext repo).
+- C2 — incremental staleness: a reused (unchanged) caller keeps a stale
+  `resolvedCalls` FQN after its target file is renamed.
+Invariant-restoring fix (build invert pass): an edge resolving to a FQN
+that owns no current block (DANGLING — `.js` miss, stale rename, any
+miss) is bucketed under the `#name` floor, recovered by the read-time
+per-edge `byName` fallback. Precise edges to real blocks stay precise, so
+false same-name cross-file edges remain excluded (NOT a blunt name-union).
+Guarantee: `resolvedCalledBy` ⊇ all true callers (precise OR name-floor).
+Two end-to-end RED→GREEN regression tests (`.js` caller kept; incremental
+rename keeps the untouched caller) plus a `.js`-precise disambiguation
+test; the original same-name exclusion test stays green.
