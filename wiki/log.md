@@ -3189,3 +3189,27 @@ injected in tests, real embed() gated `it.skipIf(!MEGA_EMBED_E2E)`;
 488, memory-graph 58, context-pruner 65, mcp-bridge 244, cli 739).
 MEGA_EMBED_E2E=1 smoke passed (real multi-dim vector written). Changeset
 minor: core, memory-graph, mcp-bridge.
+
+## [2026-06-30] fix | WS3 partial-sidecar silent recall loss (critic BLOCKER)
+
+Independent HIGH-risk critic caught a Critical recall-loss bug (same class
+as the WS2 reverse-call bug) in `semanticMemoryRanking`
+(packages/mcp-bridge/src/tools/get-relevant-memories.ts). It fell back to
+BM25 only when the sidecar was ABSENT or empty; a PARTIAL sidecar (vectors
+for some approved memories, not all) proceeded to semantic ranking, which
+drops any memory whose vector is missing → a true approved memory silently
+vanished, reported as success. This is the DEFAULT steady state: no
+production path embeds on write, so any memory created/approved after the
+last manual sidecar build is un-vectored. Fix: a full-coverage guard at
+the existing decision point — if any approved non-stale candidate lacks a
+vector in the loaded map, return null → BM25 fallback (returns all
+matches). Net guarantee: results are full-coverage semantic OR BM25, never
+a silently-truncated mix. Surgical (one filter + one guard, +17/-5 lines,
+no new abstraction). Regression test (RED→GREEN): 3 approved memories all
+matching, sidecar covers 2 → handler returns all 3 (pre-fix returned 2).
+Kept: full-coverage sidecar → semantic ranking; no sidecar → BM25. Attack
+B (all-approved-memory memoryRelevance wiring) ruled acceptable for v1 by
+the critic (binary per file, weight 0.7, bounded) — noted in the spec as a
+known imprecision to re-scope to task-relevant memories in a follow-up.
+`pnpm verify` exit 0 under `TRANSFORMERS_OFFLINE=1` (46/46; mcp-bridge now
+245). Spec 1A + 1B updated with the coverage guard + the imprecision note.
