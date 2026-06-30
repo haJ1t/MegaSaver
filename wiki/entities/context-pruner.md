@@ -48,7 +48,18 @@ relevance is passed in as `memoryFiles`/`staleFiles` data).
   named/failing blocks (the **safety invariant**: never silently
   dropped; a budget overflow is reported via `usedTokens`), fill to
   limit by score under a token budget, then dependency closure over
-  `calls`. Excluded blocks labeled `irrelevant` vs `budget`.
+  `calls`. Excluded blocks labeled `irrelevant` vs `budget`. WS2: the
+  forward closure prefers the indexer's precise `resolvedCalls` FQN edges
+  (looked up via a `byFqn` map) when present, falling back to name-based
+  `calls` otherwise — so a call resolves to the actual imported definition,
+  not a same-named block in another file.
+- `selectImpact(candidates, symbol, opts)` — reverse blast-radius closure.
+  WS2: traverses the precise `resolvedCalledBy` FQN edges when present
+  (else name-based `calledBy`), so `mega_impact` on a symbol no longer
+  pulls in false callers of a same-named function in another file. Root
+  still located by bare name; only edge traversal changed. Exhaustive-
+  within-budget contract preserved.
+  (source: docs/superpowers/specs/2026-06-30-binding-resolution-design.md)
 - `buildContextPack(request)` — orchestrates score → select → assemble
   with per-block reasons. `auditPack(pack)` — files/blocks
   considered-vs-included + tokensBefore/after/percentSaved (feeds

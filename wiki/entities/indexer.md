@@ -42,6 +42,21 @@ incremental index. Leaf package — depends only on `@megasaver/shared`,
   JSON-directory store: `<store>/projects/<projectId>/index/{blocks.jsonl,
   manifest.json}`, atomic temp+fsync+rename; blocks written first,
   manifest (commit pointer) last.
+- `resolveCallFqn` / `resolveModulePath` / `blockFqn` (`resolve-fqn.ts`,
+  WS2) — light import-binding call resolution (no `ts.Program`). `extractTs`
+  attaches a transient per-file `importBindings` map (local name → specifier;
+  named/aliased/default/namespace; type-only skipped) to each block.
+  `buildIndex` resolves each TS/JS call to an FQN `<module>#<name>` (relative
+  specifier → repo file path via `.ts/.tsx/.mts/.cts/.js/.jsx` + `/index.*`;
+  bare npm specifier kept as-is; local call upgraded to same-file
+  `<file>#<name>`) and writes additive optional `resolvedCalls` /
+  `resolvedCalledBy` FQN edges on `CodeBlock`. Two same-named functions in
+  different files get distinct FQNs → no false cross-file `calledBy` edges.
+  Name-based `calls`/`calledBy` unchanged (py/go/rust + back-compat). Reused
+  (incremental) blocks keep persisted `resolvedCalls`. Deferred to full-LSP:
+  re-exports/barrels, dynamic import, namespace-member calls (`ns.parse()`
+  collects `parse`, falls back to name), tsconfig path aliases.
+  (source: docs/superpowers/specs/2026-06-30-binding-resolution-design.md)
 - `searchBlocks(blocks, {text, type?, limit?})` — BM25 over
   name+keywords+filePath (reuses `@megasaver/retrieval`). Lives here so
   the CLI keeps no retrieval edge (§3c). See [[decisions/policy-is-bb3]]

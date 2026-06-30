@@ -76,6 +76,33 @@ function collectImports(sourceFile: ts.SourceFile): string[] {
   return imports;
 }
 
+// Per-FILE import bindings (WS2): local name → module specifier. Covers default
+// (`import d from "m"`), namespace (`import * as ns from "m"`), and named
+// (`import { a, b as c } from "m"`) imports. Type-only imports are skipped (they
+// produce no runtime call). Used by build.ts to resolve calls to FQNs.
+function collectImportBindings(sourceFile: ts.SourceFile): Record<string, string> {
+  const bindings: Record<string, string> = {};
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    const clause = statement.importClause;
+    if (!clause || clause.isTypeOnly) continue;
+    const specifier = statement.moduleSpecifier.text;
+    if (clause.name) bindings[clause.name.text] = specifier;
+    const named = clause.namedBindings;
+    if (named && ts.isNamespaceImport(named)) {
+      bindings[named.name.text] = specifier;
+    } else if (named && ts.isNamedImports(named)) {
+      for (const element of named.elements) {
+        if (element.isTypeOnly) continue;
+        bindings[element.name.text] = specifier;
+      }
+    }
+  }
+  return bindings;
+}
+
 export function extractTs(filePath: string, source: string): ExtractedBlock[] {
   const scriptKind = scriptKindFor(filePath);
   const sourceFile = ts.createSourceFile(
@@ -86,6 +113,7 @@ export function extractTs(filePath: string, source: string): ExtractedBlock[] {
     scriptKind,
   );
   const fileImports = collectImports(sourceFile);
+  const importBindings = collectImportBindings(sourceFile);
   const isTest = TEST_FILE_RE.test(filePath);
   const isRoute = ROUTE_PATH_RE.test(filePath);
   const blocks: ExtractedBlock[] = [];
@@ -112,6 +140,7 @@ export function extractTs(filePath: string, source: string): ExtractedBlock[] {
       calls: collectCalls(positionNode),
       calledBy: [],
       keywords: tokenize(name),
+      importBindings,
     };
     blocks.push(block);
   };

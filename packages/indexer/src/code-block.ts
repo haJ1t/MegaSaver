@@ -30,6 +30,13 @@ export const codeBlockSchema = z
     exports: z.array(z.string()),
     calls: z.array(z.string()),
     calledBy: z.array(z.string()),
+    // FQN call edges (WS2): "<module>#<name>" resolved via the file's import
+    // bindings. Optional + additive — old blocks.jsonl without them still parse;
+    // consumers prefer these over name-based calls/calledBy when present. Only
+    // populated for TS/JS (the binding-resolution extractor); absent for
+    // py/go/rust, which keep the name-based edges.
+    resolvedCalls: z.array(z.string()).optional(),
+    resolvedCalledBy: z.array(z.string()).optional(),
     keywords: z.array(z.string()),
     lastModifiedAt: z.string().datetime({ offset: true }).optional(),
   })
@@ -47,5 +54,10 @@ export const codeBlockSchema = z
 export type CodeBlock = z.infer<typeof codeBlockSchema>;
 
 // What an extractor returns: the block minus identity, which the indexer
-// assigns (id) / injects (projectId) when persisting.
-export type ExtractedBlock = Omit<CodeBlock, "id" | "projectId">;
+// assigns (id) / injects (projectId) when persisting. `importBindings` is a
+// transient per-FILE hint (local name → module specifier) the TS/JS extractor
+// attaches so build.ts can resolve calls to FQNs; it is NOT part of the
+// persisted schema and is stripped before codeBlockSchema.parse.
+export type ExtractedBlock = Omit<CodeBlock, "id" | "projectId"> & {
+  importBindings?: Record<string, string>;
+};
