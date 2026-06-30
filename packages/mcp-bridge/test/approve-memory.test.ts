@@ -336,6 +336,83 @@ describe("approve_memory closes superseded validity", () => {
   });
 });
 
+const OTHER_PROJECT_ID = "77777777-7777-4777-8777-777777777777";
+const OTHER_ID = "88888888-8888-4888-8888-888888888888";
+const SELF_ID = "99999999-9999-4999-8999-999999999999";
+
+describe("approve_memory supersedesId validation (recall-loss / tamper guard)", () => {
+  const SUPERSEDE_AT = "2026-06-25T00:00:00.000Z";
+
+  function project(registry: ReturnType<typeof createInMemoryCoreRegistry>, id: string) {
+    registry.createProject({ id, name: id, rootPath: `/tmp/${id}`, createdAt: TS, updatedAt: TS });
+  }
+  function memory(
+    registry: ReturnType<typeof createInMemoryCoreRegistry>,
+    over: {
+      id: string;
+      projectId: string;
+      approval: "approved" | "suggested";
+      supersedesId?: string;
+    },
+  ) {
+    registry.createMemoryEntry({
+      id: over.id,
+      projectId: over.projectId,
+      sessionId: null,
+      scope: "project",
+      type: "decision",
+      title: over.id,
+      content: `content ${over.id}`,
+      keywords: [],
+      confidence: "medium",
+      source: "manual",
+      stale: false,
+      approval: over.approval,
+      ...(over.supersedesId !== undefined ? { supersedesId: over.supersedesId } : {}),
+      createdAt: TS,
+      updatedAt: TS,
+    });
+  }
+
+  it("does NOT close a target in a different project (cross-workspace tamper)", async () => {
+    const registry = createInMemoryCoreRegistry();
+    project(registry, PROJECT_ID);
+    project(registry, OTHER_PROJECT_ID);
+    // OTHER_ID is current+approved in a different project the agent shouldn't touch.
+    memory(registry, { id: OTHER_ID, projectId: OTHER_PROJECT_ID, approval: "approved" });
+    memory(registry, {
+      id: NEW_ID,
+      projectId: PROJECT_ID,
+      approval: "suggested",
+      supersedesId: OTHER_ID,
+    });
+    await handleApproveMemory(
+      { registry, storeRoot: "", now: () => SUPERSEDE_AT },
+      { memoryEntryId: NEW_ID, approval: "approved" },
+    );
+    expect(registry.getMemoryEntry(OTHER_ID as never)?.validTo).toBeUndefined();
+  });
+
+  it("does NOT close itself on a self-referencing supersedesId (no silent vanish)", async () => {
+    const registry = createInMemoryCoreRegistry();
+    project(registry, PROJECT_ID);
+    memory(registry, {
+      id: SELF_ID,
+      projectId: PROJECT_ID,
+      approval: "suggested",
+      supersedesId: SELF_ID,
+    });
+    const result = await handleApproveMemory(
+      { registry, storeRoot: "", now: () => SUPERSEDE_AT },
+      { memoryEntryId: SELF_ID, approval: "approved" },
+    );
+    expect(result.approval).toBe("approved");
+    // The approved memory must stay current — closing its own validTo would make
+    // it approved-yet-non-current, silently vanishing from default recall.
+    expect(registry.getMemoryEntry(SELF_ID as never)?.validTo).toBeUndefined();
+  });
+});
+
 // ── Evidence-port integration tests (slice 3b) ─────────────────────────────
 // These tests require a real on-disk evidence ledger in a tmp dir. They pass
 // `storeRoot` to handleApproveMemory and seed EvidenceRecord fixtures to

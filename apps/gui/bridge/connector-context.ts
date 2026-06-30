@@ -1,6 +1,6 @@
 import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
 import type { ConnectorContext } from "@megasaver/connectors-shared";
-import type { CoreRegistry, Project } from "@megasaver/core";
+import { type CoreRegistry, type Project, isRecallable } from "@megasaver/core";
 
 // GUI-local mirror of apps/cli connector/shared.ts buildConnectorContext:
 // resolves the latest open session for the target agent plus that
@@ -22,11 +22,15 @@ export function buildBridgeConnectorContext(
           Date.parse(current.startedAt) > Date.parse(latest.startedAt) ? current : latest,
         );
 
+  // isRecallable adds the bi-temporal valid-time gate to the approval check so a
+  // superseded (closed validTo) memory stops being written into connector config
+  // files. now() default = currently-valid only.
+  const now = new Date().toISOString();
   const memoryEntries = registry
     .listMemoryEntries(project.id)
     .filter(
       (e) =>
-        e.approval === "approved" &&
+        isRecallable(e, now) &&
         (e.scope === "project" || (session !== null && e.sessionId === session.id)),
     )
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))

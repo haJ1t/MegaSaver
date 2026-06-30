@@ -5,7 +5,7 @@ import {
   runOutputExecCommand,
   runOutputPipeline,
 } from "@megasaver/context-gate";
-import { createJsonDirectoryCoreRegistry, isSafeKeySegment } from "@megasaver/core";
+import { createJsonDirectoryCoreRegistry, isRecallable, isSafeKeySegment } from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 import type { HandlerResponse } from "./handlers.js";
@@ -54,6 +54,10 @@ const recallRegistryRequestSchema = z
   .object({
     sessionId: sessionIdSchema,
     intent: z.string().min(1),
+    // Bi-temporal time-travel (M1): recall what we believed as of this instant.
+    // Absent ⇒ now ⇒ currently-valid memories only. Must be accepted here so a
+    // forwarded asOf from recall.ts round-trips instead of 400→silent fallback.
+    asOf: z.string().datetime({ offset: true }).optional(),
   })
   .strict();
 
@@ -68,9 +72,10 @@ export async function recallRegistryHandler(
   const session = registry.getSession(parsed.data.sessionId);
   if (session === null) return { status: 404, json: { error: "session_not_found" } };
 
+  const asOf = parsed.data.asOf ?? new Date().toISOString();
   const allMemory = registry.listMemoryEntries(session.projectId);
   const memory = allMemory.filter(
-    (m) => m.approval === "approved" && (m.sessionId === session.id || m.scope === "project"),
+    (m) => isRecallable(m, asOf) && (m.sessionId === session.id || m.scope === "project"),
   );
 
   const chunkSets = await listChunkSets({

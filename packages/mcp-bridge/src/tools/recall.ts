@@ -1,5 +1,5 @@
 import { type ChunkSetSummary, listChunkSets } from "@megasaver/content-store";
-import { type CoreRegistry, type MemoryEntry, isCurrent } from "@megasaver/core";
+import { type CoreRegistry, type MemoryEntry, isRecallable } from "@megasaver/core";
 import type { SessionId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
@@ -51,10 +51,7 @@ export async function handleRecall(
 
       const allMemory = env.registry.listMemoryEntries(session.projectId);
       const memory = allMemory.filter(
-        (m) =>
-          m.approval === "approved" &&
-          (m.sessionId === session.id || m.scope === "project") &&
-          isCurrent(m, at),
+        (m) => isRecallable(m, at) && (m.sessionId === session.id || m.scope === "project"),
       );
       const chunkSets = await listChunkSets({
         storeRoot: env.storeRoot,

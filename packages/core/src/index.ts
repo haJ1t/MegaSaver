@@ -21,6 +21,7 @@ export {
   type OverlayMemoryEntryUpdatePatch,
   backfillMemoryEntry,
   isCurrent,
+  isRecallable,
   memoryApprovalSchema,
   memoryConfidenceSchema,
   memoryEntrySchema,

@@ -8,6 +8,7 @@ import {
   type MemoryType,
   backfillMemoryEntry,
   isCurrent,
+  isRecallable,
   memoryConfidenceSchema,
   memoryEntrySchema,
   memoryEntryUpdatePatchSchema,
@@ -478,5 +479,42 @@ describe("isCurrent", () => {
 
   it("is current when validTo is null", () => {
     expect(isCurrent(withBounds(VALID_FROM, null), "2026-07-01T00:00:00.000Z")).toBe(true);
+  });
+
+  it("compares offset-agnostically: +03:00 and Z forms of the same instant agree", () => {
+    // validTo written with a +03:00 offset is the SAME instant as VALID_TO (Z).
+    // The half-open upper bound must close at that instant regardless of which
+    // offset form was stored — Date.parse normalizes both to the same epoch.
+    const offsetTo = "2026-06-20T03:00:00.000+03:00"; // === 2026-06-20T00:00:00.000Z
+    expect(isCurrent(withBounds(VALID_FROM, offsetTo), VALID_TO)).toBe(false);
+    expect(isCurrent(withBounds(VALID_FROM, offsetTo), "2026-06-19T23:59:59.000Z")).toBe(true);
+  });
+});
+
+describe("isRecallable", () => {
+  const make = (
+    approval: "suggested" | "approved" | "rejected",
+    validTo?: string | null,
+  ): MemoryEntry =>
+    memoryEntrySchema.parse({
+      ...validProjectMemory,
+      approval,
+      ...(validTo !== undefined ? { validTo } : {}),
+    });
+
+  it("is true only for an approved, currently-valid memory", () => {
+    expect(isRecallable(make("approved"), VALID_TO)).toBe(true);
+  });
+
+  it("is false for an unapproved memory even if current", () => {
+    expect(isRecallable(make("suggested"), VALID_TO)).toBe(false);
+    expect(isRecallable(make("rejected"), VALID_TO)).toBe(false);
+  });
+
+  it("is false for an approved but closed (non-current) memory", () => {
+    // validTo in the past relative to asOf → not current → not recallable.
+    expect(
+      isRecallable(make("approved", "2026-06-20T00:00:00.000Z"), "2026-07-01T00:00:00.000Z"),
+    ).toBe(false);
   });
 });

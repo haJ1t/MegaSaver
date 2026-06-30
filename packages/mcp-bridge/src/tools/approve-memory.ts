@@ -166,7 +166,19 @@ export async function handleApproveMemory(
   // (lossless). Only on approve; a reject leaves all validity untouched.
   if (approval === "approved" && updated.supersedesId !== undefined) {
     const superseded = env.registry.getMemoryEntry(updated.supersedesId as MemoryEntryId);
-    if (superseded !== null && superseded.validTo == null) {
+    // supersedesId is agent-controlled (save_memory passes it through; the schema
+    // only checks UUID shape). Validate the target before closing its validity, or
+    // an agent could (a) close a CURRENT memory in another project/scope it should
+    // not touch, or (b) self-reference to close its own validity — approved yet
+    // instantly non-current, silently vanishing from default recall. So close ONLY
+    // a different, same-project, same-scope, still-open target.
+    const targetIsValid =
+      superseded !== null &&
+      superseded.id !== updated.id &&
+      superseded.projectId === updated.projectId &&
+      superseded.scope === updated.scope &&
+      superseded.validTo == null;
+    if (targetIsValid) {
       env.registry.updateMemoryEntry(updated.supersedesId as MemoryEntryId, {
         validTo: env.now(),
         updatedAt: env.now(),
