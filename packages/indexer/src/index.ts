@@ -5,6 +5,7 @@ export * from "./extract/extract-json.js";
 export * from "./extract/extract-py.js";
 export * from "./extract/extract-go.js";
 export * from "./extract/extract-rs.js";
+export * from "./resolve-fqn.js";
 export * from "./scan.js";
 export * from "./store.js";
 export * from "./workspace-store.js";

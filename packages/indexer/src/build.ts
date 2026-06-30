@@ -7,6 +7,7 @@ import { embedBlocks } from "./embed-blocks.js";
 import { extractJson } from "./extract/extract-json.js";
 import { extractMd } from "./extract/extract-md.js";
 import { extractTs } from "./extract/extract-ts.js";
+import { blockFqn, resolveCallFqn } from "./resolve-fqn.js";
 import { scanRepo } from "./scan.js";
 import {
   type IndexStorePaths,
@@ -116,6 +117,11 @@ async function buildIndexCore(options: BuildCoreOptions): Promise<BuildResult> {
   const nextManifest: Manifest = { files: {} };
   const nextBlocks: CodeBlock[] = [];
   const scannedPaths = new Set<string>();
+  // Per-file import bindings (local name → specifier) for freshly-extracted
+  // TS/JS files, used to resolve calls to FQNs (WS2). Reused (unchanged) blocks
+  // already carry their resolvedCalls from a prior build, so missing bindings
+  // here are fine.
+  const bindingsByFile = new Map<string, Record<string, string>>();
   let added = 0;
   let updated = 0;
   let unchanged = 0;
@@ -145,8 +151,10 @@ async function buildIndexCore(options: BuildCoreOptions): Promise<BuildResult> {
 
     const ids: string[] = [];
     for (const extracted of extractor(file.path, content)) {
+      const { importBindings, ...persisted } = extracted;
+      if (importBindings !== undefined) bindingsByFile.set(file.path, importBindings);
       const block = codeBlockSchema.parse({
-        ...extracted,
+        ...persisted,
         id: newId(),
         projectId: options.projectId,
         lastModifiedAt: file.mtimeIso,
@@ -177,10 +185,77 @@ async function buildIndexCore(options: BuildCoreOptions): Promise<BuildResult> {
       callersByCallee.set(callee, callers);
     }
   }
-  const finalBlocks = nextBlocks.map((block) => ({
-    ...block,
-    calledBy: block.name !== undefined ? [...(callersByCallee.get(block.name) ?? [])].sort() : [],
-  }));
+
+  // WS2: resolve each freshly-extracted TS/JS block's `calls` to FQNs via the
+  // file's import bindings; reused blocks keep the resolvedCalls they were
+  // persisted with (source-derived, stable for unchanged content). Then invert
+  // to resolvedCalledBy. A relative specifier resolves against scannedPaths.
+  // ponytail: a reused caller can carry stale resolvedCalls if an imported
+  // target file was renamed without the caller changing; the name-based
+  // calledBy fallback still covers that block, and a full ts.Program reresolve
+  // is the deferred full-LSP phase.
+  const fileExists = (path: string): boolean => scannedPaths.has(path);
+  // Defined FQNs in this index — used to upgrade a local (non-imported) call
+  // `#name` to the same-file definition `<file>#name` so the forward dependency
+  // closure still resolves intra-file edges precisely.
+  const definedFqns = new Set<string>();
+  for (const block of nextBlocks) {
+    if (block.name !== undefined) definedFqns.add(blockFqn(block.filePath, block.name));
+  }
+  const resolvedCallsByBlockId = new Map<string, string[]>();
+  for (const block of nextBlocks) {
+    const bindings = bindingsByFile.get(block.filePath);
+    if (bindings === undefined) continue;
+    resolvedCallsByBlockId.set(
+      block.id,
+      block.calls.map((callee) => {
+        const fqn = resolveCallFqn(block.filePath, callee, bindings, fileExists);
+        if (fqn.startsWith("#")) {
+          const localFqn = blockFqn(block.filePath, callee);
+          if (definedFqns.has(localFqn)) return localFqn;
+        }
+        return fqn;
+      }),
+    );
+  }
+
+  const resolvedCallersByFqn = new Map<string, Set<string>>();
+  for (const block of nextBlocks) {
+    if (block.name === undefined) continue;
+    const callerFqn = blockFqn(block.filePath, block.name);
+    const resolvedCalls = resolvedCallsByBlockId.get(block.id) ?? block.resolvedCalls;
+    if (resolvedCalls === undefined) continue;
+    for (const calleeFqn of resolvedCalls) {
+      const callers = resolvedCallersByFqn.get(calleeFqn) ?? new Set<string>();
+      callers.add(callerFqn);
+      resolvedCallersByFqn.set(calleeFqn, callers);
+    }
+  }
+
+  const finalBlocks = nextBlocks.map((block) => {
+    const calledBy =
+      block.name !== undefined ? [...(callersByCallee.get(block.name) ?? [])].sort() : [];
+    const resolvedCalls = resolvedCallsByBlockId.get(block.id) ?? block.resolvedCalls;
+    // resolvedCalledBy unions precise callers (keyed by this block's FQN) with
+    // callers whose edge stayed unresolved as "#<name>" (namespace-member /
+    // unpinnable calls). The unresolved bucket keeps resolved-mode reach >=
+    // name-mode: a caller the name path had is never dropped, while precise
+    // edges still disambiguate same-named functions across files.
+    let resolvedCalledBy: Set<string> | undefined;
+    if (block.name !== undefined) {
+      const precise = resolvedCallersByFqn.get(blockFqn(block.filePath, block.name));
+      const unresolved = resolvedCallersByFqn.get(`#${block.name}`);
+      if (precise !== undefined || unresolved !== undefined) {
+        resolvedCalledBy = new Set([...(precise ?? []), ...(unresolved ?? [])]);
+      }
+    }
+    return {
+      ...block,
+      calledBy,
+      ...(resolvedCalls !== undefined ? { resolvedCalls } : {}),
+      ...(resolvedCalledBy !== undefined ? { resolvedCalledBy: [...resolvedCalledBy].sort() } : {}),
+    };
+  });
 
   writeIndex(paths, finalBlocks, nextManifest);
 

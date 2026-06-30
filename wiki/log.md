@@ -3101,3 +3101,39 @@ commits proves the migration's `coChangeRelevance > 0` through
 baseline. context-pruner 54/54, mcp-bridge 238/238, typecheck + biome
 green on changed files. changeset updated to note the new
 `readCoChangeLog` export.
+
+## [2026-06-30] feat | WS2 cross-file call resolution (import bindings)
+
+Branch `feat/indexer-binding-resolution`. Added light import-binding
+call resolution to `@megasaver/indexer` (no `ts.Program`): `resolve-fqn.ts`
+(`resolveModulePath`/`resolveCallFqn`/`blockFqn`), `extractTs` now attaches
+a transient per-file `importBindings` map, `buildIndex` writes additive
+optional `resolvedCalls`/`resolvedCalledBy` FQN edges on `CodeBlock`.
+FQN `<module>#<name>`: relative specifier → repo file path
+(`.ts/.tsx/.mts/.cts/.js/.jsx` + `/index.*`), bare npm specifier kept,
+local call upgraded to same-file FQN. Two same-named functions in
+different files now disambiguate → no false cross-file `calledBy`.
+Consumers (context-pruner `selectImpact`, `selectPack`) prefer resolved
+edges via a `byFqn` map, fall back to name-based when absent (py/go/rust
++ old indexes unaffected). Proof test: name-based `calledBy` lists BOTH
+useA+useB on each same-named `parse` (the bug); `resolvedCalledBy` lists
+only the true caller. Incremental rebuild keeps resolved edges on reused
+blocks. `pnpm verify` green (46/46 turbo tasks, exit 0); indexer 97+2skip,
+context-pruner 61, mcp-bridge impact 4. Deferred to full-LSP:
+re-exports/barrels, dynamic import, namespace-member calls, path aliases.
+Spec: docs/superpowers/specs/2026-06-30-binding-resolution-design.md.
+Updated entities/indexer.md + entities/context-pruner.md.
+
+## [2026-06-30] review | WS2 per-edge name fallback fix
+
+Code review (cavecrew-reviewer) caught 2 reds: (1) namespace-member
+calls (`ns.run()`) extract bare `run`, binding is `ns`, so the FQN stays
+unresolved `#run`; (2) a present-but-incomplete `resolvedCalls`/
+`resolvedCalledBy` suppressed the name fallback → lost edges the name
+path had (recall regression). Root-cause fix: build records unresolved
+caller edges under `#<name>` and unions that bucket into the callee's
+`resolvedCalledBy`; select.ts resolves each FQN edge with a PER-EDGE
+`byName(nameFromFqn)` fallback. Invariant: resolved mode is a refinement
+of name mode (removes false same-name edges only, never true ones).
+New regression tests: indexer namespace end-to-end + pruner per-edge
+fallback. verify green exit 0.

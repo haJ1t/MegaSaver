@@ -26,6 +26,30 @@ export function estimateBlockTokens(block: CodeBlock): number {
   return estimateSpanTokens(block.startLine, block.endLine);
 }
 
+// A block's own FQN "<filePath>#<name>" — the key resolvedCalls/resolvedCalledBy
+// edges point at (WS2). Only blocks with a name participate.
+function fqnOf(block: CodeBlock): string | undefined {
+  return block.name === undefined ? undefined : `${block.filePath}#${block.name}`;
+}
+
+// The bare name in an FQN "<module>#<name>" (or "#<name>" for a local/unresolved
+// call). Used for per-edge name fallback.
+function nameFromFqn(fqn: string): string {
+  return fqn.slice(fqn.indexOf("#") + 1);
+}
+
+// Resolve one FQN edge to a block: prefer the precise byFqn match; if it misses
+// (an unresolved "#name" local call, a namespace-member call, or a renamed
+// target a reused block still points at), fall back to the bare name via byName
+// — so a resolved edge never has LESS reach than the name-based edge it replaced.
+function resolveEdge(
+  fqn: string,
+  byFqn: Map<string, ScoredCandidate>,
+  byName: Map<string, ScoredCandidate>,
+): ScoredCandidate | undefined {
+  return byFqn.get(fqn) ?? byName.get(nameFromFqn(fqn));
+}
+
 // A block the pack MUST contain: an explicitly named symbol/file or a
 // failing-test block. These are never dropped for budget or limit (the safety
 // invariant — a forced overflow is reported via usedTokens, never hidden).
@@ -74,6 +98,8 @@ export function selectPack(
   // score-sorted, so a collision resolves to the highest-scoring same-named
   // block (deterministic; names can legitimately collide across files).
   const byName = new Map<string, ScoredCandidate>();
+  // FQN → block, for precise resolvedCalls traversal (WS2).
+  const byFqn = new Map<string, ScoredCandidate>();
   for (const candidate of candidates) {
     if (candidate.block.name && !byName.has(candidate.block.name)) {
       byName.set(candidate.block.name, candidate);
@@ -81,18 +107,35 @@ export function selectPack(
     for (const exported of candidate.block.exports) {
       if (!byName.has(exported)) byName.set(exported, candidate);
     }
+    const fqn = fqnOf(candidate.block);
+    if (fqn && !byFqn.has(fqn)) byFqn.set(fqn, candidate);
   }
 
-  // Transitive dependency closure (BFS over `calls`): A→B→C all land in the
+  // Forward callees of a block: when resolvedCalls is present, resolve each edge
+  // precisely by FQN (so a call hits the actual imported definition, not a
+  // same-named block elsewhere) with a per-edge name fallback for the ones that
+  // don't resolve; else walk name-based calls.
+  const calleesOf = (candidate: ScoredCandidate): ScoredCandidate[] => {
+    const resolved = candidate.block.resolvedCalls;
+    if (resolved !== undefined) {
+      return resolved
+        .map((fqn) => resolveEdge(fqn, byFqn, byName))
+        .filter((c): c is ScoredCandidate => c !== undefined);
+    }
+    return candidate.block.calls
+      .map((name) => byName.get(name))
+      .filter((c): c is ScoredCandidate => c !== undefined);
+  };
+
+  // Transitive dependency closure (BFS over callees): A→B→C all land in the
   // pack so it is self-contained. The visited/includedIds guard bounds the
   // walk; budget/limit still apply via add(), so closure stops at the budget.
   const queue: ScoredCandidate[] = [...included];
   while (queue.length > 0) {
     const current = queue.shift();
     if (!current) continue;
-    for (const call of current.block.calls) {
-      const target = byName.get(call);
-      if (target && !includedIds.has(target.block.id) && add(target, false)) {
+    for (const target of calleesOf(current)) {
+      if (!includedIds.has(target.block.id) && add(target, false)) {
         target.factors.dependencyRelevance = 1;
         queue.push(target);
       }
@@ -131,6 +174,8 @@ export function selectImpact(
 
   // Name → block, first writer wins (candidates are id-stable here, no scoring).
   const byName = new Map<string, ScoredCandidate>();
+  // FQN → block, for precise resolvedCalledBy traversal (WS2).
+  const byFqn = new Map<string, ScoredCandidate>();
   for (const candidate of candidates) {
     if (candidate.block.name && !byName.has(candidate.block.name)) {
       byName.set(candidate.block.name, candidate);
@@ -138,6 +183,8 @@ export function selectImpact(
     for (const exported of candidate.block.exports) {
       if (!byName.has(exported)) byName.set(exported, candidate);
     }
+    const fqn = fqnOf(candidate.block);
+    if (fqn && !byFqn.has(fqn)) byFqn.set(fqn, candidate);
   }
 
   const included: ScoredCandidate[] = [];
@@ -163,7 +210,23 @@ export function selectImpact(
   }
   add(root, true);
 
-  // BFS over calledBy: a caller is a block affected by changing `current`. A
+  // The reverse callers of a block: when resolvedCalledBy is present, resolve
+  // each edge precisely by FQN (so two same-named functions in different files
+  // don't pull in each other's callers) with a per-edge name fallback for the
+  // ones that don't resolve; else walk name-based calledBy.
+  const callersOf = (candidate: ScoredCandidate): ScoredCandidate[] => {
+    const resolved = candidate.block.resolvedCalledBy;
+    if (resolved !== undefined) {
+      return resolved
+        .map((fqn) => resolveEdge(fqn, byFqn, byName))
+        .filter((c): c is ScoredCandidate => c !== undefined);
+    }
+    return candidate.block.calledBy
+      .map((name) => byName.get(name))
+      .filter((c): c is ScoredCandidate => c !== undefined);
+  };
+
+  // BFS over callers: a caller is a block affected by changing `current`. A
   // caller that does not fit the budget is recorded once (reason "budget") but
   // STILL walked, so callers reachable only through it are not silently dropped —
   // the blast radius is exhaustive within budget. The `reached` set bounds the
@@ -175,9 +238,8 @@ export function selectImpact(
   while (queue.length > 0) {
     const current = queue.shift();
     if (!current) continue;
-    for (const caller of current.block.calledBy) {
-      const target = byName.get(caller);
-      if (!target || reached.has(target.block.id)) continue;
+    for (const target of callersOf(current)) {
+      if (reached.has(target.block.id)) continue;
       reached.add(target.block.id);
       if (add(target, false)) {
         target.factors.dependencyRelevance = 1;
