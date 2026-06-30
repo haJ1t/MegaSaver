@@ -30,7 +30,7 @@ ship — plus our moat they lack.
 | Temporal / bi-temporal validity             |  ~   |      ~       |    **✓**     |   ✓    |   ~    |     ✗      | **✓ (M1)** |
 | Tiered memory (working/recall/archival)      |  ~   |    **✓**     |      ~       |   ~    |   ~    |     ✗      | **✓ (M2, sub-spec 4)** |
 | Self-editing / decay / forgetting            |  ~   |      ✓       |      ~       |   ✓    |   ✗    |     ✗      | ◑ (deferred — sub-spec 4) |
-| Canonicalization / dedup on write            |  ✓   |      ~       |      ✓       |   ✓    |   ~    |     ~      | ◑ (deferred — sub-spec 5) |
+| Canonicalization / dedup on write            |  ✓   |      ~       |      ✓       |   ✓    |   ~    |     ~      | **✓ (M3, sub-spec 5)** |
 | Transcript → memory summarization            |  ~   |      ~       |      ~       |   ~    |   ~    |   **✓**    | ◑ (deferred — sub-spec 6) |
 | **Evidence ledger (provenance per memory)**  |  ✗   |      ✗       |      ~       |   ✗    |   ✗    |     ✗      | **✓ (already shipped — moat)** |
 | **Human approval gate before share**         |  ✗   |      ✗       |      ✗       |   ✗    |   ✗    |     ✗      | **✓ (already shipped — moat)** |
@@ -74,7 +74,7 @@ our gate onto their store — is what makes the result a strict superset.
    packs. **THIS INCREMENT.**
 3. **Temporal / bi-temporal validity** — **DONE (M1, 2026-06-30).**
 4. **Tiered + decay** — **DONE (M2, 2026-06-30).**
-5. **Canonicalization** — DEFERRED (sub-spec).
+5. **Canonicalization** — **DONE (M3, 2026-06-30).**
 6. **Transcript → memory** — DEFERRED (sub-spec).
 
 ---
@@ -221,10 +221,25 @@ Each plugs into a named existing file; each gets its own spec → plan → TDD c
    `effectiveConfidence` + `sweepMemoryTiers` planner) and
    `packages/core/src/memory-search.ts` (decay ranking).
 
-5. **Semantic canonicalization on approve** (matches mem0/Cognee dedup). At the
-   approval gate, detect near-duplicate / superseding memories by cosine over the
-   new sidecar and propose merge/supersede edges for human confirmation. Plugs
-   into `packages/mcp-bridge/src/tools/approve-memory.ts` + the entity graph.
+5. **Semantic canonicalization on approve** — **DONE (M3, 2026-06-30).** At the
+   approval gate, detect near-duplicate memories by cosine over the memory-vector
+   sidecar and SURFACE them for the human — never auto-block, never auto-mutate.
+   Implemented in `packages/mcp-bridge/src/tools/approve-memory.ts`:
+   - Runs AFTER the existing exact-dup hard-reject + validation/conflict gate, on
+     the success path only (the memory has already flipped to `approved`). A
+     near-dup therefore SUCCEEDS — it is surfaced, not blocked.
+   - Best-effort, mirroring `get-relevant-memories`' semantic pass: no sidecar /
+     no candidate vector / `embed` throws ⇒ the pass is skipped and the existing
+     behaviour is byte-identical. It never throws and never blocks an approval.
+   - Embeds the candidate's `title+content` (`memoryEmbedText`) via an injectable
+     `EmbedFn` (default real `embed`, so CI stays model-free with injected
+     vectors) and cosine-compares it to the sidecar vectors of the other
+     approved+current (`isRecallable`) memories. Archival / closed / unapproved
+     memories are NOT canonicalization targets.
+   - cosine ≥ `NEAR_DUP_THRESHOLD` (0.95, deterministic const) ⇒ records a
+     `semantic-duplicate` reason + the matched memory id in the validation
+     sidecar's `conflictIds`. The human then re-approves with `supersedesId` to
+     canonicalize, reusing the M1 supersede gate. One threshold, one reason.
 
 6. **Transcript → memory summarizer** (matches claude-mem). Summarize a session
    transcript into candidate `suggested` memories (with evidence) for the human
