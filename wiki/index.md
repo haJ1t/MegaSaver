@@ -14,6 +14,7 @@ updated: 2026-06-16
 - [[decisions/content-store-no-core-edge]] — AA1 §3c: the 5 leaf packages must not import core.
 - [[decisions/context-gate-extraction]] — AA1 §2a folded-vs-extracted outcome (post-BB7b LOC audit).
 - [[decisions/lazy-load-heavy-deps]] — heavy deps (TS compiler via [[entities/indexer]]) must be lazy dynamic-imported, never statically imported, in core hot-path packages; PR #182 root-cause fix + no-eager-load guard test.
+- [[decisions/bundle-externalize-native-chain]] — the standalone `mega.mjs` externalizes the transformers/onnxruntime native chain (optionalDependency) while keeping typescript inlined; PR #209/v1.2.1 fix for the 15.7MB→1.9MB tarball with 0 native binaries.
 
 ## Concepts (cross-cutting ideas)
 

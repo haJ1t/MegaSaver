@@ -3498,3 +3498,25 @@ signal flipped on whether `mega memory index` had run. Fixed: scoped gate now
 mirrors `approvedMemoryFiles` exactly; task ranking (cosine top-K) is the only
 narrowing. `asOf` dropped from both helper signatures (unused after the fix).
 +1 core test (EXPIRED-included). Full `pnpm verify` green (46/46), model-free.
+
+## [2026-07-01] fix | v1.2.1: externalize transformers from CLI bundle
+
+- **Bug (published v1.2.0).** `@megasaver/cli@1.2.0` shipped at 15.7MB:
+  `apps/cli/tsup.bundle.config.ts`'s `noExternal:[/.*/]` inlined
+  `@huggingface/transformers`, so esbuild copied six `onnxruntime_binding-*.node`
+  natives (CI-built for one OS) into the tarball — dead weight off that OS, and
+  embeddings broke on every other platform (the inlined natives were the wrong ABI).
+- **Fix (PR #209).** Externalize the `@huggingface/transformers` + `onnxruntime-node`
+  chain; declare transformers an `optionalDependency` so npm pulls the host-platform
+  native. tsup's `noExternal` beats esbuild's `external`, so the blanket rule became a
+  negative lookahead excluding the chain. typescript stays inlined (static import, no
+  graceful fallback) so standalone `mega index` still runs. See
+  [[decisions/bundle-externalize-native-chain]].
+- **Guard (TDD).** `bundle-smoke.test.ts`: no `.node` files, no `onnxruntime_binding`
+  inline, `mega.mjs` < 12MB. RED (13.2MB/6 natives) → GREEN (11.2MB/0).
+- **Verification.** `pnpm verify` green (756 CLI tests); CI green ubuntu + windows;
+  standalone bundle runs `doctor` with transformers absent; embed paths degrade
+  clean. Adversarial critic verdict SAFE TO PUBLISH; diff review clean.
+- **Shipped.** v1.2.1 published to npm: **3 files, 0 natives**, 1.9MB tarball,
+  `optionalDependencies` present. Install smoke on darwin: `mega memory index` →
+  `embedded=1` — embeddings restored on the platform v1.2.0 broke.
