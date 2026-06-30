@@ -59,5 +59,6 @@ It is priority #1 because most of the rest depends on it.
 ## Related
 
 - [[syntheses/contextops-roadmap]]
+- [[concepts/memory-superset]] (WS3 — semantic recall + entity graph on top of DIMMEM)
 - [[concepts/context-pruning-engine]] (consumes memory relevance)
 - [[entities/core]]

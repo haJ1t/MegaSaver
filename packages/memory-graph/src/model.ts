@@ -9,6 +9,7 @@ export const nodeKindSchema = z.enum([
   "file",
   "symbol",
   "wiki",
+  "entity",
 ]);
 export type NodeKind = z.infer<typeof nodeKindSchema>;
 
@@ -26,6 +27,7 @@ export const edgeKindSchema = z.enum([
   "wiki-link",
   "wiki-source",
   "wiki-cite",
+  "entity-mention",
 ]);
 export type EdgeKind = z.infer<typeof edgeKindSchema>;
 

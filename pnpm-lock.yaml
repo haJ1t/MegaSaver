@@ -371,6 +371,9 @@ importers:
       '@megasaver/context-gate':
         specifier: workspace:*
         version: link:../context-gate
+      '@megasaver/embeddings':
+        specifier: workspace:*
+        version: link:../embeddings
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter

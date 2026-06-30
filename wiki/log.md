@@ -3160,3 +3160,32 @@ packages/context-pruner/test/impact-recall-e2e.test.ts; impact-resolved
 stays green. verify exit 0 (indexer 98+2skip, context-pruner 65,
 mcp-bridge impact 4). Updated build.ts ponytail comment to reflect real
 dangling-edge behavior.
+
+## [2026-06-30] feat | WS3 memory superset increment 1
+
+Built three additive layers on the existing memory stack (DIMMEM +
+memory-graph + embeddings substrate); kept the moat (evidence ledger +
+approval gate + agent-agnostic shared + lossless local). Spec:
+`docs/superpowers/specs/2026-06-30-memory-superset-design.md` (HIGH risk;
+feature matrix vs mem0/Letta/Zep/Cognee/Memori/claude-mem; layers 3-6
+deferred as named sub-specs). New wiki page [[concepts/memory-superset]].
+(1) Semantic recall: per-project sidecar
+`<storeRoot>/memory/<projectId>.embeddings.jsonl` keyed by memory id
+(`embedMemoryEntries` in packages/core/src/embed-memory.ts), incremental
+by a title+content hash, opt-in (no model on import). New
+`searchMemoryEntriesSemantic` ALONGSIDE BM25; `get_relevant_memories`
+boundary-embeds the task best-effort, semantic-ranks when a sidecar
+exists, else falls back to BM25 (never throws). Mirrors the WS1
+embed-blocks / context-pruning pattern. (2) memoryRelevance wiring: CLI
+(apps/cli/.../context/shared.ts) + MCP (context-pruning.ts) now feed the
+pruner factor from ALL approved non-stale memories' relatedFiles
+(`approvedMemoryFiles`) instead of a BM25-narrowed subset that silently
+dropped approved memories whose prose missed the task. (3) Entity layer:
+`entity` node kind + `entity-mention` edge kind in memory-graph;
+deterministic (NO LLM) extraction from relatedSymbols/relatedFiles
+(`entity:symbol:` / `entity:file:` prefixes). CI model-free: vectors
+injected in tests, real embed() gated `it.skipIf(!MEGA_EMBED_E2E)`;
+`pnpm verify` exit 0 under `TRANSFORMERS_OFFLINE=1` (46/46 tasks; core
+488, memory-graph 58, context-pruner 65, mcp-bridge 244, cli 739).
+MEGA_EMBED_E2E=1 smoke passed (real multi-dim vector written). Changeset
+minor: core, memory-graph, mcp-bridge.

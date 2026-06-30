@@ -1,4 +1,5 @@
 import { type ContextPack, buildContextPack, readCoChangeLog } from "@megasaver/context-pruner";
+import { approvedMemoryFiles, staleMemoryFiles } from "@megasaver/core";
 import { readBlocks, resolveIndexPaths } from "@megasaver/indexer";
 import type { ProjectId } from "@megasaver/shared";
 import { mapErrorToCliMessage } from "../../errors.js";
@@ -36,9 +37,12 @@ export async function loadPack(input: ContextRequest): Promise<LoadedPack | null
   if (!ctx) return null;
   try {
     const blocks = readBlocks(resolveIndexPaths(ctx.rootDir, ctx.project.id));
-    const memories = ctx.registry.searchMemoryEntries(ctx.project.id, { text: input.task });
-    const memoryFiles = memories.filter((m) => !m.stale).flatMap((m) => m.relatedFiles ?? []);
-    const staleFiles = memories.filter((m) => m.stale).flatMap((m) => m.relatedFiles ?? []);
+    // ALL approved project memory feeds the memoryRelevance factor — not a
+    // BM25-narrowed subset, which silently dropped approved memories whose prose
+    // does not lexically match the task but whose relatedFiles are in play.
+    const memories = ctx.registry.listMemoryEntries(ctx.project.id);
+    const memoryFiles = approvedMemoryFiles(memories);
+    const staleFiles = staleMemoryFiles(memories);
     const pack = buildContextPack({
       task: input.task,
       blocks,

@@ -164,3 +164,67 @@ describe("context MCP tools — git co-change wiring", () => {
     expect(withGit).toBeGreaterThan(0);
   });
 });
+
+describe("context MCP tools — memoryRelevance wiring", () => {
+  // An approved memory whose relatedFile is in play but whose PROSE shares no
+  // word with the task. The old BM25-narrowed derivation dropped it; the
+  // approvedMemoryFiles wiring must still feed its file to memoryRelevance.
+  async function authFactor(env: {
+    registry: ReturnType<typeof createInMemoryCoreRegistry>;
+    storeRoot: string;
+  }): Promise<number | undefined> {
+    const pack = await handleGetRelevantContext(env, {
+      projectId: PROJECT_ID,
+      task: "zzz unrelated wording",
+    });
+    const block = [...pack.included, ...pack.excluded].find((b) => b.filePath === "src/auth.ts");
+    return block?.factors.memoryRelevance;
+  }
+
+  it("an approved memory's relatedFile gets memoryRelevance even when the task does not match its text", async () => {
+    const { env } = await setup();
+    env.registry.createMemoryEntry({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" as never,
+      projectId: PROJECT_ID as never,
+      sessionId: null,
+      scope: "project",
+      content: "totally different prose with no overlap",
+      type: "decision",
+      title: "an unrelated note",
+      keywords: [],
+      confidence: "medium",
+      source: "manual",
+      approval: "approved",
+      relatedFiles: ["src/auth.ts"],
+      createdAt: TS,
+      updatedAt: TS,
+    });
+    expect(await authFactor(env)).toBe(1);
+  });
+
+  it("no memory → memoryRelevance stays 0 (no-op)", async () => {
+    const { env } = await setup();
+    expect(await authFactor(env)).toBe(0);
+  });
+
+  it("a SUGGESTED (unapproved) memory does not feed memoryRelevance", async () => {
+    const { env } = await setup();
+    env.registry.createMemoryEntry({
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" as never,
+      projectId: PROJECT_ID as never,
+      sessionId: null,
+      scope: "project",
+      content: "not yet approved",
+      type: "decision",
+      title: "pending",
+      keywords: [],
+      confidence: "medium",
+      source: "agent",
+      approval: "suggested",
+      relatedFiles: ["src/auth.ts"],
+      createdAt: TS,
+      updatedAt: TS,
+    });
+    expect(await authFactor(env)).toBe(0);
+  });
+});
