@@ -208,7 +208,9 @@ export function effectiveConfidence(
 ): number {
   const at = Date.parse(now);
   const ref = Date.parse(memory.updatedAt ?? memory.createdAt);
-  const factor = Number.isNaN(ref) ? 1 : ageDecay(at - ref);
+  // A NaN from either parse ⇒ no decay (factor 1) rather than a NaN weight that
+  // would corrupt the ranking sort. Ranking degrades gracefully; it never breaks.
+  const factor = Number.isNaN(at) || Number.isNaN(ref) ? 1 : ageDecay(at - ref);
   return CONFIDENCE_WEIGHT[memory.confidence] * factor * TIER_WEIGHT[tierOf(memory)];
 }
 
@@ -228,6 +230,10 @@ export function sweepMemoryTiers(
   policy: SweepPolicy = DEFAULT_SWEEP_POLICY,
 ): { archiveIds: MemoryEntry["id"][] } {
   const at = Date.parse(now);
+  // Fail loud: a malformed `now` would make every comparison NaN-false and
+  // silently archive nothing. The sweep is the ONLY mutation — a silent no-op on
+  // bad input is the worst outcome, so reject it at this boundary.
+  if (Number.isNaN(at)) throw new TypeError(`sweepMemoryTiers: invalid now: ${now}`);
   const archiveIds: MemoryEntry["id"][] = [];
   for (const entry of entries) {
     const tier = tierOf(entry);
