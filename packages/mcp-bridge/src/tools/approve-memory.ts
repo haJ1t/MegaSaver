@@ -1,22 +1,36 @@
 import {
   type ConflictOutcome,
   type CoreRegistry,
+  type EmbedFn,
   type MemoryApproval,
+  type MemoryEntry,
   type MemoryValidation,
   type ValidationStatus,
   checkConflicts,
+  isRecallable,
+  memoryEmbedText,
+  memoryEmbeddingsSidecarPath,
   validateSave,
 } from "@megasaver/core";
-import type { MemoryEntryId } from "@megasaver/shared";
+import { cosine, embed, readVectors } from "@megasaver/embeddings";
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 import { resolveEvidenceForMemory } from "../evidence-resolver.js";
+
+// M3 canonicalization. A candidate whose embedding is at least this cosine-close
+// to an existing approved+current memory is SURFACED as a near-duplicate (never
+// auto-blocked). Deterministic so re-approve is stable; high so only true
+// paraphrases match. The human then re-approves with supersedesId (M1) to merge.
+const NEAR_DUP_THRESHOLD = 0.95;
 
 export type ApproveMemoryEnv = {
   registry: CoreRegistry;
   storeRoot: string;
   now: () => string;
   policyVersion?: string;
+  // Injectable so the semantic pass is unit-tested with a fake — no model in CI.
+  embedFn?: EmbedFn;
 };
 
 // `suggested` is deliberately NOT an accepted input: a memory cannot be moved
@@ -185,14 +199,67 @@ export async function handleApproveMemory(
       });
     }
   }
-  // Write sidecar: approved path → system valid, reject path → human rejected.
+  // M3: semantic canonicalization runs ONLY on the approve success path, AFTER
+  // the flip — so a near-duplicate is SURFACED on a still-successful approval,
+  // never blocked or auto-mutated. The human canonicalizes by re-approving with
+  // supersedesId (M1). Best-effort: any embedding failure yields no reasons.
+  const semantic =
+    approval === "approved" ? await semanticDuplicates(env, updated) : { conflictIds: [] };
+  const reasons = semantic.conflictIds.length > 0 ? ["semantic-duplicate"] : [];
+
+  // Write sidecar: approved path → system valid (+ surfaced near-dups), reject
+  // path → human rejected.
   writeSidecar(env, updated.id as MemoryEntryId, {
     validationStatus: approval === "rejected" ? "rejected" : "valid",
-    reasons: [],
-    conflictIds: [],
+    reasons,
+    conflictIds: semantic.conflictIds,
     validatedBy: approval === "rejected" ? "human" : "system",
   });
+  if (reasons.length > 0) {
+    return {
+      id: updated.id,
+      approval: updated.approval,
+      validation: { status: "valid", reasons },
+      conflict: { outcome: "unrelated", conflictIds: semantic.conflictIds },
+    };
+  }
   return { id: updated.id, approval: updated.approval };
+}
+
+// Best-effort near-duplicate detection over the memory-vector sidecar. Returns
+// the ids of approved+current (isRecallable) memories whose sidecar vector is at
+// least NEAR_DUP_THRESHOLD cosine-close to the candidate's embedding. Mirrors
+// get-relevant-memories' semantic pass: no sidecar / no candidate vector / embed
+// throws ⇒ no matches. NEVER throws — an embedding failure must not block an
+// approval. Archival/closed/unapproved memories are not canonicalization targets.
+async function semanticDuplicates(
+  env: ApproveMemoryEnv,
+  candidate: MemoryEntry,
+): Promise<{ conflictIds: MemoryEntryId[] }> {
+  try {
+    const vectors = readVectors(
+      memoryEmbeddingsSidecarPath(env.storeRoot, candidate.projectId as ProjectId),
+    );
+    if (vectors.size === 0) return { conflictIds: [] };
+    const at = env.now();
+    const targets = env.registry
+      .listMemoryEntries(candidate.projectId)
+      .filter((m) => m.id !== candidate.id && !m.stale && isRecallable(m, at));
+    if (targets.length === 0) return { conflictIds: [] };
+    const [candidateVector] = await (env.embedFn ?? embed)([memoryEmbedText(candidate)]);
+    if (candidateVector === undefined) return { conflictIds: [] };
+    const conflictIds: MemoryEntryId[] = [];
+    for (const target of targets) {
+      const targetVector = vectors.get(target.id);
+      if (targetVector === undefined) continue;
+      if (cosine(candidateVector, targetVector) >= NEAR_DUP_THRESHOLD) {
+        conflictIds.push(target.id as MemoryEntryId);
+      }
+    }
+    return { conflictIds };
+  } catch {
+    return { conflictIds: [] };
+  }
 }
 
 function writeSidecar(

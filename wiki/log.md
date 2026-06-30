@@ -3350,3 +3350,42 @@ backward-compatible. Marks superset sub-spec 4 DONE.
 Per-pkg green: core 67 files / 539 (+2 skip), mcp-bridge 39 / 255,
 daemon 10 / 107, cli 75 / 747. Changeset minor: core, mcp-bridge, cli,
 daemon (daemon re-exports core).
+
+## [2026-06-30] feat | M3: semantic canonicalization on approve (mem0/Cognee-class)
+
+Sub-spec 5 of the memory-superset design, marked DONE. SURFACE-only
+near-duplicate detection at the approval gate — never auto-block, never
+auto-mutate; the human + the M1 supersede gate do the canonicalizing.
+
+- **Where.** `packages/mcp-bridge/src/tools/approve-memory.ts`, on the
+  approve SUCCESS path only, AFTER the existing exact-dup hard-reject and
+  the validation/conflict gate. The memory has already flipped to
+  `approved`, so a near-dup is SURFACED on a still-successful approval.
+- **Pass.** `semanticDuplicates(env, candidate)`: read the memory-vector
+  sidecar (`memoryEmbeddingsSidecarPath`), embed the candidate's
+  `title+content` (`memoryEmbedText`), cosine-compare to the sidecar
+  vectors of the OTHER approved+current (`isRecallable`) memories.
+  `cosine >= NEAR_DUP_THRESHOLD` (0.95, deterministic const) ⇒ collect id.
+  Archival / closed / unapproved memories are NOT targets.
+- **Surface.** A match writes a `semantic-duplicate` reason + the matched
+  id(s) in the validation sidecar's `conflictIds` (status stays `valid`),
+  and the same is returned in the result so the human sees it. They then
+  re-approve with `supersedesId` (M1) to merge. One threshold, one reason.
+- **Best-effort / graceful.** No sidecar / no candidate vector / `embed`
+  throws ⇒ the pass yields no matches; approval and the exact-dup behaviour
+  stay byte-identical and NEVER throw. Mirrors get-relevant-memories'
+  semantic pass (try/catch-returns-empty). `ApproveMemoryEnv` gains an
+  optional injectable `embedFn` (defaults to real `embed`); the server
+  does not pass it ⇒ production uses the real model, CI uses injected
+  vectors (model-free).
+- **TDD (model-free).** New `approve-memory-canonicalization.test.ts`:
+  near-dup surfaced (approval succeeds + reason + matched id), far ⇒ no
+  reason, no sidecar ⇒ graceful, archival target ignored, embed-throws ⇒
+  approval unaffected. Real-embed E2E gated `MEGA_EMBED_E2E` (verified once
+  manually: model loaded, near-identical memory surfaced end-to-end). Time
+  pinned, no wall-clock.
+
+Full `pnpm verify` green (46/46 turbo tasks, model-free) — covers the
+daemon's dist-resolution of core. mcp-bridge 40 files / 260 (+5 new,
+1 E2E skip). Changeset minor: mcp-bridge (only `ApproveMemoryEnv` public
+shape changed).
