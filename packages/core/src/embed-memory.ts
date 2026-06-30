@@ -1,6 +1,14 @@
-import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  closeSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import { embed, readVectors, writeVectors } from "@megasaver/embeddings";
 import type { ProjectId } from "@megasaver/shared";
 import type { MemoryEntry } from "./memory-entry.js";
@@ -29,6 +37,23 @@ function readHashSidecar(path: string): Map<string, string> {
   }
 }
 
+// tmp + fsync + rename, the same crash-safe write writeVectors uses for the
+// vector sidecar — so the hash manifest can never be left half-written and out
+// of sync with the vectors it tracks.
+function atomicWriteFile(filePath: string, content: string): void {
+  const dir = dirname(filePath);
+  mkdirSync(dir, { recursive: true });
+  const tempPath = join(dir, `.${randomUUID()}.tmp`);
+  const fd = openSync(tempPath, "w");
+  try {
+    writeFileSync(fd, content);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  renameSync(tempPath, filePath);
+}
+
 // The text we embed for a memory: title + content (the recall surface, same as
 // the BM25 surface minus keywords, which are already lexical).
 export function memoryEmbedText(entry: MemoryEntry): string {
@@ -45,19 +70,24 @@ function memoryContentHash(entry: MemoryEntry): string {
 // carry-forward logic can be unit-tested with a counting fake — no model.
 export type EmbedFn = (texts: readonly string[]) => Promise<Float32Array[]>;
 
+export type MemoryEmbedResult = { embedded: number; carried: number };
+
 // Build/refresh the memory-vector sidecar for the current memory set. Incremental:
 // a memory whose id + content hash is unchanged from the prior build carries its
 // existing vector forward (no re-embed); only new/changed memories are embedded,
 // in a single batched embed() call. The sidecar is rebuilt from the current set,
 // so a dropped memory's vector is removed. `priorHashById` is the id→contentHash
 // map captured BEFORE the memory store was overwritten. Mirrors embedBlocks.
+// Returns the actual embed/carry split so callers report counts from the SAME
+// decision made here (the carry-forward also requires the prior vector to exist,
+// which a hash-only check at the call site cannot see).
 export async function embedMemoryEntries(
   storeRoot: string,
   projectId: ProjectId,
   entries: readonly MemoryEntry[],
   priorHashById: ReadonlyMap<string, string>,
   embedFn: EmbedFn = embed,
-): Promise<void> {
+): Promise<MemoryEmbedResult> {
   const sidecarPath = memoryEmbeddingsSidecarPath(storeRoot, projectId);
   const priorVectors = readVectors(sidecarPath);
 
@@ -81,6 +111,7 @@ export async function embedMemoryEntries(
   });
 
   writeVectors(sidecarPath, out);
+  return { embedded: toEmbed.length, carried: carried.size };
 }
 
 export type MemoryIndexBuildResult = { embedded: number; carried: number; total: number };
@@ -100,13 +131,19 @@ export async function buildMemoryIndex(
   const hashPath = memoryHashSidecarPath(storeRoot, projectId);
   const priorHashById = readHashSidecar(hashPath);
 
-  const embedded = entries.filter((e) => priorHashById.get(e.id) !== memoryContentHash(e)).length;
-
-  await embedMemoryEntries(storeRoot, projectId, entries, priorHashById, embedFn);
+  // Counts come straight from the embedder's own carry-forward decision, which
+  // also accounts for a missing prior vector — a hash-only check here could not.
+  const { embedded, carried } = await embedMemoryEntries(
+    storeRoot,
+    projectId,
+    entries,
+    priorHashById,
+    embedFn,
+  );
 
   const nextHashes: Record<string, string> = {};
   for (const e of entries) nextHashes[e.id] = memoryContentHash(e);
-  writeFileSync(hashPath, JSON.stringify(nextHashes));
+  atomicWriteFile(hashPath, JSON.stringify(nextHashes));
 
-  return { embedded, carried: entries.length - embedded, total: entries.length };
+  return { embedded, carried, total: entries.length };
 }

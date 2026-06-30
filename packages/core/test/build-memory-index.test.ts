@@ -142,6 +142,31 @@ describe("buildMemoryIndex — on-demand index build", () => {
   });
 });
 
+describe("buildMemoryIndex — count reflects the embedder's real decision", () => {
+  it("counts a memory as embedded when its vector is missing even though its hash carried", async () => {
+    const r1 = countingEmbed();
+    const memories = [
+      entry({ id: ID_A, content: "alpha decision", title: "Alpha" }),
+      entry({ id: ID_B, content: "bravo decision", title: "Bravo" }),
+    ];
+    await buildMemoryIndex(store, PROJECT, memories, r1.fn);
+
+    // Simulate a vector sidecar that lost A's vector while the hash manifest
+    // still records A (e.g. a partial/older write). A hash-only count would call
+    // A "carried"; the embedder must re-embed it (no prior vector), so the
+    // reported count must say embedded includes A.
+    const writeVectorsModule = await import("@megasaver/embeddings");
+    writeVectorsModule.writeVectors(sidecar, [
+      { id: ID_B, vector: Array.from(readVectors(sidecar).get(ID_B) ?? []) },
+    ]);
+
+    const r2 = countingEmbed();
+    const result = await buildMemoryIndex(store, PROJECT, memories, r2.fn);
+    expect(r2.texts.length).toBe(1); // only A re-embedded
+    expect(result).toEqual({ embedded: 1, carried: 1, total: 2 });
+  });
+});
+
 // Real model path — OFF in CI. Gate with MEGA_EMBED_E2E=1.
 describe("buildMemoryIndex — real embed() E2E", () => {
   it.skipIf(!process.env.MEGA_EMBED_E2E)("builds a real sidecar via the live model", async () => {
