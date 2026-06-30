@@ -1,5 +1,61 @@
 # @megasaver/connector-generic-cli
 
+## 1.1.0
+
+### Minor Changes
+
+- 00bd97e: Phase 9 — Multi-Agent Connectors. `agentIdSchema` widens to eight
+  members (adds `continue`, `gemini`, `windsurf`).
+  `@megasaver/connector-generic-cli` ships three new flat-file targets:
+  `geminiTarget` (`GEMINI.md`), `windsurfTarget` (`.windsurfrules`),
+  `continueTarget` (`.continue/rules/megasaver.md`) — each a frozen
+  target object reusing the existing sync path (no new sync code). The
+  CLI registers them in `KNOWN_TARGETS` and adds two commands:
+  `mega connector list` (known targets + present/absent, exit 0) and
+  `mega connector doctor` (per-target exists/writable/in-sync vs stale,
+  exit 1 on any stale/not-writable/error). Cross-agent shared memory is
+  proven by an integration test (project memory synced to two agents
+  lands byte-identically in both files). `vscode`/`jetbrains` (native IDE
+  plugins) and a `mega connect` alias are out of scope. The four shipped
+  targets (`claude-code`/`codex`/`cursor`/`aider`) are byte-identical.
+
+### Patch Changes
+
+- Updated dependencies [7fcd881]
+- Updated dependencies [8ff3003]
+- Updated dependencies [de4ffb2]
+- Updated dependencies [44931b7]
+- Updated dependencies [0a3256b]
+- Updated dependencies [e2f7867]
+- Updated dependencies [fde8e86]
+- Updated dependencies [fde8e86]
+- Updated dependencies [031f6de]
+- Updated dependencies [391e659]
+- Updated dependencies [31238a3]
+- Updated dependencies [4e8c6e8]
+- Updated dependencies [abfaf3b]
+- Updated dependencies [a2b5643]
+- Updated dependencies [4be82f8]
+- Updated dependencies [900ce56]
+- Updated dependencies [900ce56]
+- Updated dependencies [f1fe1d3]
+- Updated dependencies [f7cbc28]
+- Updated dependencies [12c8e9e]
+- Updated dependencies [27960fb]
+- Updated dependencies [f7bb136]
+- Updated dependencies [ed46198]
+- Updated dependencies [484f243]
+- Updated dependencies [00bd97e]
+- Updated dependencies [1db07df]
+- Updated dependencies [39e5eb6]
+- Updated dependencies [f46ce66]
+- Updated dependencies [4fe5749]
+- Updated dependencies [4c184db]
+- Updated dependencies [38a04c9]
+  - @megasaver/shared@1.1.0
+  - @megasaver/connectors-shared@1.1.0
+  - @megasaver/core@1.1.0
+
 ## 1.0.2
 
 ### Patch Changes

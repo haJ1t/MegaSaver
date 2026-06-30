@@ -1,5 +1,124 @@
 # @megasaver/stats
 
+## 1.1.0
+
+### Minor Changes
+
+- 62b3c65: Add honest token-reduction metrics: token-weighted eligible reduction reported
+  alongside eligible/proxied/passthrough/mediated fractions, a GA gate pairing
+  reduction with an evidence-sufficiency floor, and `mega audit honest`. Passthrough
+  outputs never create positive savings; the headline reduction is reported as
+  eligible-mediated-context-only and cannot be inflated by eligibility-set selection.
+- fde8e86: Live-first Phase 4: session-scoped overlay surface keyed by
+  `(workspaceKey, liveSessionId)` instead of `(projectId, sessionId)`.
+
+  Adds, alongside the existing project-keyed APIs (kept for Phase 5):
+
+  - `@megasaver/core`: `overlay-key` types (`workspaceKeySchema`,
+    `liveSessionIdSchema`, `isSafeKeySegment`), `overlayMemoryEntrySchema`
+    (scope-split: `project` = workspace/cwd-scoped, `session` = conversation),
+    `overlayTaskPlanSchema`, and the overlay store fns
+    (`read/writeOverlayMemory`, `read/writeOverlayTaskPlans`).
+  - `@megasaver/stats`: `overlayTokenSaverEventSchema`,
+    `overlaySessionTokenSaverStatsSchema`, and the overlay store fns
+    (`appendOverlayEvent`, `readOverlaySummary`, `readOverlayEvents`,
+    `resetOverlayOnDisable`).
+  - `@megasaver/content-store`: `overlayChunkSetSchema` plus
+    `saveOverlayChunkSet`/`loadOverlayChunkSet` for the
+    `content/<workspaceKey>/<liveSessionId>/<chunkSetId>.json` layout.
+  - `@megasaver/context-gate`: `runOverlayOutputPipeline`,
+    `runOverlayOutputExecCommand`, and `resolveOverlayEffectiveSettings`
+    — the proxy pipeline re-keyed off the live session (no registry
+    lookup), emitting events/chunks under the overlay keys.
+
+- 484f243: Phase 8 — Context Audit & Token-Savings Dashboard. Extends
+  @megasaver/stats (no new core entity) with an additive AuditEvent
+  discriminated union (context_pack_built, rule_applied, failure_avoided,
+  memory_retrieved, tool_route — scalar-only, no core types so the cycle
+  guard holds), written to a sibling <store>/stats/<projectId>/<sessionId>
+  .audit.jsonl (the byte .events.jsonl is untouched — no duplicate
+  token-saver accounting). New pure summarizeAudit(events, { window, now })
+  folds events in one exhaustive switch with window filtering
+  (session|week|all) and derives tokensSaved/percentageSaved using the
+  same formula as PackAudit; it imports no token estimator — tokensBefore/
+  After arrive already-estimated from Phase 3's auditPack (estimateSpanTokens)
+  carried verbatim into a context_pack_built event. New appendAuditEvent /
+  readAuditEvents JSONL writer+reader (reuses StatsError schema_invalid /
+  store_corrupt — no new codes). Core re-exports the audit surface (CLI/MCP
+  never import @megasaver/stats directly). One read-only MCP tool
+  audit_token_usage (bridge now 24 tools) and a mega audit CLI group
+  (report / last / session / export --format json) returning the dashboard
+  cards and the headline "would've been N tokens, was M, P% saved". Ships
+  the context_pack_built emission on the build path to prove the demo;
+  rule_applied/failure_avoided/memory_retrieved/tool_route emissions are
+  fast-follows (the summarizer already handles all five kinds). No LLM, no
+  new estimator, no GUI changes.
+- 39e5eb6: Proxy Mode v1.2 Phase P5 — adoption + measurement (D7-rest, D8, D9).
+
+  `@megasaver/stats` gains proxy metrics: `readEvents` reads the per-call
+  audit trail, `aggregateAdoption` computes the universal adoption block
+  (adoption rate, call count, calls-by-type, expand rate, proxy-mediated
+  token savings, raw stored output count, average compression ratio),
+  `ingestHookLog` + `computeInterception` derive the hook-based
+  interception rate, and `buildProxyMetrics` assembles the combined shape
+  (adoption always present; interception only when a Claude Code hook log
+  exists, otherwise the verbatim install hint). Zero-denominator cases
+  yield `0.0`; malformed JSONL lines are skipped.
+
+  `@megasaver/cli` gains a `hooks` command group:
+
+  - `mega hooks install claude-code` idempotently writes a `PreToolUse`
+    telemetry hook into an injectable Claude Code `settings.json`,
+    preserving unrelated keys.
+  - `mega hooks log` is the metadata-only, best-effort, always-exit-0
+    logger the hook invokes (never logs file contents, never blocks the
+    tool call).
+  - `mega hooks status <sessionId>` prints proxy adoption metrics always
+    and hook-based interception only when the log exists, with honest
+    wording that never overclaims universal interception.
+
+  `mega doctor` now reports Claude Code hook telemetry as installed or
+  missing (with the install hint). Connector instruction blocks bias
+  agents to `proxy_*` tools and to expanding chunks before assuming
+  omitted content is irrelevant. The README documents Proxy Mode as
+  opt-in with the approved category-comparison framing and no
+  competitor-specific headline.
+
+### Patch Changes
+
+- Updated dependencies [7fcd881]
+- Updated dependencies [c12a575]
+- Updated dependencies [c12a575]
+- Updated dependencies [66ac31e]
+- Updated dependencies [66ae179]
+- Updated dependencies [8580701]
+- Updated dependencies [46dce69]
+- Updated dependencies [42207dd]
+- Updated dependencies [ede092b]
+- Updated dependencies [fde8e86]
+- Updated dependencies [4be82f8]
+- Updated dependencies [b1978fa]
+- Updated dependencies [3b1cf6e]
+- Updated dependencies [f7cbc28]
+- Updated dependencies [12c8e9e]
+- Updated dependencies [f7bb136]
+- Updated dependencies [ed46198]
+- Updated dependencies [00bd97e]
+- Updated dependencies [8b735fb]
+- Updated dependencies [39e5eb6]
+- Updated dependencies [39e5eb6]
+- Updated dependencies [39e5eb6]
+- Updated dependencies [39e5eb6]
+- Updated dependencies [5431672]
+- Updated dependencies [ede092b]
+- Updated dependencies [3a6ed28]
+- Updated dependencies [41751db]
+- Updated dependencies [489d4ac]
+- Updated dependencies [01c10f0]
+- Updated dependencies [38a04c9]
+  - @megasaver/shared@1.1.0
+  - @megasaver/output-filter@1.2.0
+
 ## 1.0.1
 
 ### Patch Changes

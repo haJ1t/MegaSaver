@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/context-pruner",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Task-aware context pruning (LAMR) for Mega Saver — multi-factor block scoring into a context pack.",
   "type": "module",

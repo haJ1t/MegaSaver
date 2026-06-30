@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/llm-proxy",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Opt-in local Anthropic-API proxy: transparent passthrough + token-usage measurement for Mega Saver.",
   "type": "module",
