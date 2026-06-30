@@ -137,12 +137,21 @@ counterpart) lists `relatedFiles` of approved/non-stale entries; both the CLI an
 MCP context paths call it. No scorer change — the factor already exists; this only
 changes what is fed in. Additive and surgical.
 
-**Known imprecision (v1, accepted).** Feeding ALL approved memory means every
-approved memory's `relatedFiles` get the `memoryRelevance` bump regardless of the
-task — a deliberately broad signal. It is bounded (binary per file, weight 0.7,
-below the force-include factors), so it cannot flood a pack on its own. A
-follow-up may re-scope this to task-relevant memories (e.g. semantic/BM25-ranked)
-once the memory-vector sidecar has full coverage; deferred.
+**Known imprecision (v1, accepted) — task-scoping follow-up DONE (M5,
+2026-06-30).** Feeding ALL approved memory means every approved memory's
+`relatedFiles` get the `memoryRelevance` bump regardless of the task — a
+deliberately broad signal. It is bounded (binary per file, weight 0.7, below the
+force-include factors), so it cannot flood a pack on its own. The re-scope
+follow-up shipped: a pure core helper `taskRelevantMemoryFiles(memories, {
+taskVector, memoryVectors, topK, asOf })` ranks approved+current+non-stale
+memories by cosine to the task and feeds only the top-K relevant memories'
+`relatedFiles`; a best-effort orchestrator `taskScopedMemoryFiles` loads the
+memory sidecar, reuses the task vector the context pruner already computes (MCP)
+or embeds the task itself (CLI), and returns null on no-sidecar / no task vector
+/ any failure → both boundaries (`context-pruning.ts`, CLI `shared.ts`) fall back
+to `approvedMemoryFiles` (all approved). Additive, best-effort, recall-safe (the
+fallback keeps today's no-sidecar behavior byte-identical), CI model-free
+(injected vectors in tests; real `embed()` E2E-gated).
 
 The GUI workspace-context route (`apps/gui/bridge/routes/workspace-context.ts`)
 stays out of scope: it addresses workspaces by a one-way hash with no project-id

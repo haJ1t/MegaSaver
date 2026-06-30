@@ -44,6 +44,12 @@ export * from "./memory-search.js";
 export * from "./memory-search-semantic.js";
 export { approvedMemoryFiles, staleMemoryFiles } from "./approved-memory-files.js";
 export {
+  type TaskRelevantMemoryFilesOptions,
+  type TaskScopedMemoryFilesOptions,
+  taskRelevantMemoryFiles,
+  taskScopedMemoryFiles,
+} from "./task-relevant-memory-files.js";
+export {
   type EmbedFn,
   type MemoryIndexBuildResult,
   buildMemoryIndex,

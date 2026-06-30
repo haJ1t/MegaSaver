@@ -3436,3 +3436,49 @@ Branch `feat/memory-from-session`.
 
 Changeset minor (core + cli + mcp-bridge public surface). Additive — no change
 to the memory data model, approval gate, or FORGE/learn behaviour.
+
+## [2026-06-30] feat | M5: task-scope memoryRelevance (final memory-depth layer)
+
+Closes the WS3-inc1 §1B "Known imprecision (v1, accepted)" follow-up. Both
+context-pruning boundaries fed ALL approved+current memory's `relatedFiles` to
+the `memoryRelevance` factor, boosting every memory-touched file on every task
+regardless of task relevance (broad, signal-diluting). Spec follow-up marked
+DONE: `docs/superpowers/specs/2026-06-30-memory-superset-design.md` §1B.
+Branch `feat/memory-relevance-taskscope`.
+
+- **Pure core helper** (`packages/core/src/task-relevant-memory-files.ts`):
+  `taskRelevantMemoryFiles(memories, { taskVector, memoryVectors, topK, floor,
+  asOf })` ranks approved+current+non-stale memories that have a sidecar vector
+  by `cosine(taskVector, memoryVector)`, keeps the top-K (default 10) above a
+  small floor (0.1), returns the deduped, order-stable union of THEIR
+  `relatedFiles`. The narrowed counterpart of `approvedMemoryFiles`. Gate mirrors
+  `searchMemoryEntriesSemantic` (reuses `isRecallable`) so scoping cannot drift
+  from recall. Deterministic: ties break by id.
+- **Best-effort orchestrator** (same file): `taskScopedMemoryFiles({ storeRoot,
+  projectId, memories, task, taskVector?, topK?, asOf?, embedFn? })` loads the
+  memory-vector sidecar via `readVectors(memoryEmbeddingsSidecarPath(...))`, uses
+  the INJECTED task vector (reused) or embeds `task`, calls the pure helper.
+  Returns null on no/empty sidecar, no task vector, or ANY failure → never throws.
+  Mirrors `get-relevant-memories.ts` / `embeddingSignalFor`.
+- **Both boundaries** now `taskScopedMemoryFiles(...) ?? approvedMemoryFiles(...)`:
+  - MCP `context-pruning.ts`: threaded an optional `embedFn` into
+    `ContextToolEnv` + `embeddingSignalFor`; REUSES the task vector the
+    code-block `embeddingRelevance` signal already computes (no double-embed).
+  - CLI `context/shared.ts`: no pre-computed task vector → orchestrator embeds
+    best-effort via core's real `embed` only when a sidecar exists; CLI gains NO
+    new `@megasaver/embeddings` dep edge (the embed lives inside core).
+  - `staleMemoryFiles` unchanged.
+- **Recall-safe.** No-sidecar / no-task-vector / embed-failure all fall back to
+  the all-approved set → today's behavior is byte-identical; a genuinely
+  task-relevant memory's file is never dropped.
+- **TDD, model-free.** core: 9 tests (pure: near-in/far-out, topK, dedupe,
+  approved+current+non-stale gating, recall-safety; orchestrator: scoped with
+  sidecar+injected vector, null no-sidecar, embeds when no vector injected,
+  null/no-throw on embed failure). mcp: +4 (irrelevant-not-boosted with sidecar,
+  relevant-boosted, fallback-identical no-sidecar, fallback-on-embed-failure).
+  cli: +2 (all-approved fallback boost no-sidecar, never-throws). Injected
+  vectors; real `embed()` E2E-gated. Daemon resolves core from dist → core
+  rebuilt before mcp/cli tests.
+
+Changeset minor (core + mcp-bridge + cli public surface). Additive, surgical,
+best-effort, deterministic, CI model-free.

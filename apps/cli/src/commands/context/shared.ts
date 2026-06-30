@@ -1,5 +1,5 @@
 import { type ContextPack, buildContextPack, readCoChangeLog } from "@megasaver/context-pruner";
-import { approvedMemoryFiles, staleMemoryFiles } from "@megasaver/core";
+import { approvedMemoryFiles, staleMemoryFiles, taskScopedMemoryFiles } from "@megasaver/core";
 import { readBlocks, resolveIndexPaths } from "@megasaver/indexer";
 import type { ProjectId } from "@megasaver/shared";
 import { mapErrorToCliMessage } from "../../errors.js";
@@ -37,11 +37,18 @@ export async function loadPack(input: ContextRequest): Promise<LoadedPack | null
   if (!ctx) return null;
   try {
     const blocks = readBlocks(resolveIndexPaths(ctx.rootDir, ctx.project.id));
-    // ALL approved project memory feeds the memoryRelevance factor — not a
-    // BM25-narrowed subset, which silently dropped approved memories whose prose
-    // does not lexically match the task but whose relatedFiles are in play.
     const memories = ctx.registry.listMemoryEntries(ctx.project.id);
-    const memoryFiles = approvedMemoryFiles(memories);
+    // Task-scope the memoryRelevance feed when a memory sidecar exists: the CLI
+    // has no pre-computed task vector, so the orchestrator embeds the task itself
+    // best-effort. Null on no-sidecar / any failure → fall back to ALL approved
+    // memory's relatedFiles (today's recall-safe behavior; never regresses).
+    const scopedFiles = await taskScopedMemoryFiles({
+      storeRoot: ctx.rootDir,
+      projectId: ctx.project.id,
+      memories,
+      task: input.task,
+    });
+    const memoryFiles = scopedFiles ?? approvedMemoryFiles(memories);
     const staleFiles = staleMemoryFiles(memories);
     const pack = buildContextPack({
       task: input.task,

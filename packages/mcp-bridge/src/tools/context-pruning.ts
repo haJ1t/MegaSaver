@@ -5,14 +5,22 @@ import {
   buildContextPack,
   readCoChangeLog,
 } from "@megasaver/context-pruner";
-import { type CoreRegistry, approvedMemoryFiles, staleMemoryFiles } from "@megasaver/core";
+import {
+  type CoreRegistry,
+  approvedMemoryFiles,
+  staleMemoryFiles,
+  taskScopedMemoryFiles,
+} from "@megasaver/core";
 import { embed, readVectors } from "@megasaver/embeddings";
 import { embeddingsSidecarPath, readBlocks, resolveIndexPaths } from "@megasaver/indexer";
 import { projectIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 
-export type ContextToolEnv = { registry: CoreRegistry; storeRoot: string };
+// embedFn is injectable so the boundary can be unit-tested with a fake — no model
+// in CI. Production omits it (the real lazy embed() is used).
+export type EmbedFn = (texts: readonly string[]) => Promise<Float32Array[]>;
+export type ContextToolEnv = { registry: CoreRegistry; storeRoot: string; embedFn?: EmbedFn };
 
 const inputSchema = z
   .object({
@@ -33,11 +41,12 @@ const inputSchema = z
 async function embeddingSignalFor(
   indexPaths: ReturnType<typeof resolveIndexPaths>,
   task: string,
+  embedFn: EmbedFn,
 ): Promise<{ taskVector: Float32Array; blockVectors: Map<string, Float32Array> } | undefined> {
   try {
     const blockVectors = readVectors(embeddingsSidecarPath(indexPaths));
     if (blockVectors.size === 0) return undefined;
-    const [taskVector] = await embed([task]);
+    const [taskVector] = await embedFn([task]);
     if (taskVector === undefined) return undefined;
     return { taskVector, blockVectors };
   } catch {
@@ -64,13 +73,25 @@ async function packFor(env: ContextToolEnv, rawArgs: unknown): Promise<ContextPa
 
   const indexPaths = resolveIndexPaths(env.storeRoot, projectId.data);
   const blocks = readBlocks(indexPaths);
-  // ALL approved project memory feeds the memoryRelevance factor — not a
-  // BM25-narrowed subset, which silently dropped approved memories whose prose
-  // does not lexically match the task but whose relatedFiles are in play.
+  const embedFn = env.embedFn ?? embed;
   const memories = env.registry.listMemoryEntries(projectId.data);
-  const memoryFiles = approvedMemoryFiles(memories);
+  const embedding = await embeddingSignalFor(indexPaths, parsed.data.task, embedFn);
+  // Task-scope the memoryRelevance feed when a memory sidecar + a task vector are
+  // available: rank approved memories by cosine to the task and feed only the
+  // task-relevant ones' relatedFiles. Reuse the task vector the code-block signal
+  // already computed so we never embed the task twice. Best-effort — null on
+  // no-sidecar / no task vector / any failure, falling back to ALL approved
+  // memory's relatedFiles (today's recall-safe behavior; never regresses).
+  const scopedFiles = await taskScopedMemoryFiles({
+    storeRoot: env.storeRoot,
+    projectId: projectId.data,
+    memories,
+    task: parsed.data.task,
+    embedFn,
+    ...(embedding !== undefined ? { taskVector: embedding.taskVector } : {}),
+  });
+  const memoryFiles = scopedFiles ?? approvedMemoryFiles(memories);
   const staleFiles = staleMemoryFiles(memories);
-  const embedding = await embeddingSignalFor(indexPaths, parsed.data.task);
 
   return buildContextPack({
     task: parsed.data.task,
