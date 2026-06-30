@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/embeddings",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Local lazy-loaded text embeddings, cosine similarity, and a JSONL vector sidecar store for Mega Saver.",
   "type": "module",

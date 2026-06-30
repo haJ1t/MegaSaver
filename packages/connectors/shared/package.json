@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/connectors-shared",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "private": true,
   "description": "Shared helpers for Mega Saver connectors (block render, parse, filesystem).",
   "type": "module",
