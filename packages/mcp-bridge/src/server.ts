@@ -40,6 +40,7 @@ import { handleRunCommand } from "./tools/run-command.js";
 import { handleSaveMemory } from "./tools/save-memory.js";
 import { handleSearchCode } from "./tools/search-code.js";
 import { handleSearchMemory } from "./tools/search-memory.js";
+import { handleSweepMemory } from "./tools/sweep-memory.js";
 
 // Maximum number of chunkSetIds the server-owned expansion-guard set may hold.
 // Evicts the oldest entry (FIFO) when the cap is exceeded so a long-lived
@@ -159,6 +160,11 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
     id: "mega_index_memory",
     description:
       "Build/refresh the semantic memory-vector index for a project so get_relevant_memories ranks by meaning. On-demand (loads the embedding model); run after adding/approving memories.",
+  },
+  {
+    id: "mega_memory_sweep",
+    description:
+      "Archive aged-out/low-value memories (demote to the archival tier so they drop out of default recall). On-demand and lossless — never deletes; idempotent. Run periodically to keep recall focused on the working/recall set.",
   },
   { id: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
   { id: "mega_recall", description: "Recall session memory and stored chunk sets." },
@@ -296,6 +302,8 @@ export function buildServer(deps: ServerDeps): {
         return handleImpact({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "mega_index_memory":
         return handleIndexMemory({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
+      case "mega_memory_sweep":
+        return handleSweepMemory({ registry: deps.registry }, args);
       case "mega_recall":
         return handleRecall({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "mega_run_command":

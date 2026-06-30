@@ -31,6 +31,14 @@ export type MemoryType = z.infer<typeof memoryTypeSchema>;
 export const memoryConfidenceSchema = z.enum(["low", "medium", "high"]);
 export type MemoryConfidence = z.infer<typeof memoryConfidenceSchema>;
 
+// Tier (M2, Letta/MemGPT-class working/recall/archival). Order: activity-
+// descending — `working` (active/recent, a small recall boost), `recall` (the
+// normal default), `archival` (aged-out/low-value, excluded from recall unless
+// asked for). Optional + additive: an absent tier reads as `recall`, so every
+// legacy/normal row keeps its current behavior (back-compat).
+export const memoryTierSchema = z.enum(["working", "recall", "archival"]);
+export type MemoryTier = z.infer<typeof memoryTierSchema>;
+
 // Order: where the memory came from, roadmap order.
 export const memorySourceSchema = z.enum([
   "manual",
@@ -95,6 +103,9 @@ export const memoryEntrySchema = z
     validFrom: z.string().datetime({ offset: true }).optional(),
     validTo: z.string().datetime({ offset: true }).nullable().optional(),
     supersedesId: memoryEntryIdSchema.optional(),
+    // M2 tier. Absent ⇒ recall (see memoryTierSchema). Only the explicit sweep
+    // mutates it; recall hides `archival` by default.
+    tier: memoryTierSchema.optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
@@ -132,17 +143,101 @@ export function isCurrent(
   return true;
 }
 
-// The shared recall predicate: a memory is recallable iff it is approved AND
-// currently valid at `asOf`. Every recall surface (BM25/semantic search, the MCP
-// recall tool, the daemon recall handler, connector context) routes its
-// approval+validity gate through this ONE function so the bi-temporal filter
-// cannot silently drift between surfaces. Scope/session matching stays per-caller
-// (it is not the part that drifted). Stale is gated separately by the searches.
+// M2: a memory's tier, defaulting an absent field to `recall`. One place so the
+// "absent ⇒ recall" rule cannot drift.
+export function tierOf(memory: Pick<MemoryEntry, "tier">): MemoryTier {
+  return memory.tier ?? "recall";
+}
+
+// M2: archival is the only tier hidden from default recall.
+export function isArchived(memory: Pick<MemoryEntry, "tier">): boolean {
+  return tierOf(memory) === "archival";
+}
+
+// The shared recall predicate: a memory is recallable iff it is approved, is
+// currently valid at `asOf`, AND (M2) is not archival — unless includeArchival
+// is set. Every recall surface (BM25/semantic search, the MCP recall tool, the
+// daemon recall handler, connector context) routes its approval+validity+tier
+// gate through this ONE function so neither the bi-temporal filter (M1) nor the
+// tier filter (M2) can silently drift between surfaces. Scope/session matching
+// stays per-caller (it is not the part that drifted). Stale is gated separately
+// by the searches.
 export function isRecallable(
-  memory: Pick<MemoryEntry, "approval" | "validFrom" | "validTo">,
+  memory: Pick<MemoryEntry, "approval" | "validFrom" | "validTo" | "tier">,
   asOf: string,
+  options?: { includeArchival?: boolean },
 ): boolean {
-  return memory.approval === "approved" && isCurrent(memory, asOf);
+  if (memory.approval !== "approved") return false;
+  if (!isCurrent(memory, asOf)) return false;
+  if (options?.includeArchival !== true && isArchived(memory)) return false;
+  return true;
+}
+
+// M2 decay weights. baseWeight: ascending trust (low/medium/high). tierWeight:
+// the working set gets a small recall boost; recall/archival are neutral (so a
+// down-ranked archival surfaced via includeArchival still sorts sanely).
+const CONFIDENCE_WEIGHT: Record<MemoryConfidence, number> = {
+  low: 0.34,
+  medium: 0.67,
+  high: 1,
+};
+const TIER_WEIGHT: Record<MemoryTier, number> = {
+  working: 1.1,
+  recall: 1,
+  archival: 1,
+};
+// Exponential age decay with a 30-day half-life. Pure: `now` and the memory's
+// timestamps are passed in, never read from a wall clock — so ranking is
+// deterministic and tests pin time. age ≤ 0 ⇒ factor 1 (a future/just-written
+// memory is not penalized). Floored above 0 so decay only DOWN-RANKS, never
+// drops a memory to a zero weight.
+const DECAY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000;
+function ageDecay(ageMs: number): number {
+  if (ageMs <= 0) return 1;
+  return 2 ** (-ageMs / DECAY_HALF_LIFE_MS);
+}
+
+// M2: effective confidence for RANKING only — a pure read-time function that
+// never mutates the stored `confidence`. effective = baseWeight(confidence) ×
+// ageDecay(now − updatedAt) × tierWeight(tier). Older memories rank lower; the
+// working tier ranks slightly higher. Always > 0, so a current memory is only
+// ever DOWN-RANKED by decay, never dropped. `now` is an ISO-8601 datetime.
+export function effectiveConfidence(
+  memory: Pick<MemoryEntry, "confidence" | "tier" | "createdAt" | "updatedAt">,
+  now: string,
+): number {
+  const at = Date.parse(now);
+  const ref = Date.parse(memory.updatedAt ?? memory.createdAt);
+  const factor = Number.isNaN(ref) ? 1 : ageDecay(at - ref);
+  return CONFIDENCE_WEIGHT[memory.confidence] * factor * TIER_WEIGHT[tierOf(memory)];
+}
+
+// M2 sweep policy. A memory is swept to `archival` when it is currently NOT
+// working/archival and it is past its usefulness: already closed/superseded
+// (validTo before now), OR stale, OR low base confidence AND inactive for at
+// least `maxIdleMs`. The working tier is the active set and is never swept;
+// archival is already there (idempotent). Lossless — the planner only names ids;
+// the caller demotes via tier, never deletes.
+export type SweepPolicy = { maxIdleMs: number };
+const DEFAULT_SWEEP_MAX_IDLE_MS = 90 * 24 * 60 * 60 * 1000;
+export const DEFAULT_SWEEP_POLICY: SweepPolicy = { maxIdleMs: DEFAULT_SWEEP_MAX_IDLE_MS };
+
+export function sweepMemoryTiers(
+  entries: readonly MemoryEntry[],
+  now: string,
+  policy: SweepPolicy = DEFAULT_SWEEP_POLICY,
+): { archiveIds: MemoryEntry["id"][] } {
+  const at = Date.parse(now);
+  const archiveIds: MemoryEntry["id"][] = [];
+  for (const entry of entries) {
+    const tier = tierOf(entry);
+    if (tier === "working" || tier === "archival") continue;
+    const closed = entry.validTo != null && at >= Date.parse(entry.validTo);
+    const idleMs = at - Date.parse(entry.updatedAt ?? entry.createdAt);
+    const idleLowValue = entry.confidence === "low" && idleMs >= policy.maxIdleMs;
+    if (closed || entry.stale || idleLowValue) archiveIds.push(entry.id);
+  }
+  return { archiveIds };
 }
 
 // F4 live-first variant: drops the (projectId, sessionId) FK pair for the
@@ -176,6 +271,9 @@ export const overlayMemoryEntrySchema = z
     validFrom: z.string().datetime({ offset: true }).optional(),
     validTo: z.string().datetime({ offset: true }).nullable().optional(),
     supersedesId: memoryEntryIdSchema.optional(),
+    // M2 tier. Absent ⇒ recall (see memoryTierSchema). Only the explicit sweep
+    // mutates it; recall hides `archival` by default.
+    tier: memoryTierSchema.optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
@@ -222,6 +320,8 @@ export const memoryEntryUpdatePatchSchema = z
     // validTo is patchable so the supersede gate can close a memory's validity
     // (validFrom/supersedesId are set at create and immutable, like the key cols).
     validTo: z.string().datetime({ offset: true }).nullable().optional(),
+    // tier is patchable so `mega memory sweep` can demote a memory to archival.
+    tier: memoryTierSchema.optional(),
     updatedAt: z.string().datetime({ offset: true }),
   })
   .strict();

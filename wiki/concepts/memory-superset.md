@@ -23,8 +23,8 @@ moat is kept: evidence ledger + human approval gate ([[concepts/memory-approval]
 
 1. **Semantic recall** — shipped (increment 1).
 2. **Entity graph** — shipped (increment 1).
-3. temporal/bi-temporal — deferred sub-spec (plugs into `memory-entry.ts` + memory-graph `model.ts`).
-4. tiered (working/recall/archival) + decay — deferred (plugs into `memory-entry.ts` + `memory-search.ts`).
+3. temporal/bi-temporal — shipped (M1, 2026-06-30).
+4. tiered (working/recall/archival) + decay — shipped (M2, 2026-06-30).
 5. canonicalization on approve — deferred (plugs into `approve-memory.ts`).
 6. transcript → memory — deferred (LLM opt-in).
 
@@ -46,6 +46,25 @@ moat is kept: evidence ledger + human approval gate ([[concepts/memory-approval]
   memory-graph; deterministic (NO LLM) extraction from each memory's
   `relatedSymbols`/`relatedFiles` (`entity:symbol:` / `entity:file:`
   prefixes), enabling cross-memory "what do we know about X?" aggregation.
+
+## M2 — tiered memory + decay (shipped 2026-06-30)
+
+- **Tier.** Optional `tier` (`working`|`recall`|`archival`) on
+  `MemoryEntry` + overlay + update patch; absent ⇒ `recall` (`tierOf`).
+  Back-compat: old rows read as recall.
+- **Tier rides the centralized predicate.** `isRecallable(memory, asOf,
+  {includeArchival?})` excludes `archival` by default → all 4 isRecallable
+  surfaces (MCP recall, get_relevant_memories, daemon recall, GUI
+  connector-context) inherit it; the 2 searches add a matching
+  `includeArchival` filter. No per-surface drift.
+- **Decay.** `effectiveConfidence(memory, now)` pure read-time fn
+  (baseWeight × 30-day-half-life ageDecay × tierWeight, working +10%),
+  multiplied into BM25 scores in `searchMemoryEntries` — down-ranks aged
+  memories, never drops them (always > 0).
+- **Sweep = the only mutation.** `mega memory sweep` CLI +
+  `mega_memory_sweep` MCP tool: deterministic, lossless, idempotent — sets
+  `tier=archival` for closed/superseded, stale, or low-confidence-inactive
+  (≥90d) memories via `updateMemoryEntry`. No background timer.
 
 ## CI stays model-free
 
