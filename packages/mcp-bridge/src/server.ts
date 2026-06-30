@@ -28,6 +28,7 @@ import { handleGetApplicableRules } from "./tools/get-applicable-rules.js";
 import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
 import { handleGetTaskStatus } from "./tools/get-task-status.js";
 import { handleImpact } from "./tools/impact.js";
+import { handleIndexMemory } from "./tools/index-memory.js";
 import { handleGetProjectContext } from "./tools/project-context.js";
 import { handleGetProjectRules, handleSaveProjectRule } from "./tools/project-rules.js";
 import { handleReadFile } from "./tools/read-file.js";
@@ -153,6 +154,11 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
     id: "mega_impact",
     description:
       "Reverse call-graph blast radius: given a symbol, return it plus every transitive caller affected by changing it. Prefer this over grepping for 'who calls this' — the closure is exhaustive within budget.",
+  },
+  {
+    id: "mega_index_memory",
+    description:
+      "Build/refresh the semantic memory-vector index for a project so get_relevant_memories ranks by meaning. On-demand (loads the embedding model); run after adding/approving memories.",
   },
   { id: "mega_read_file", description: "Read a file through the redact/filter pipeline." },
   { id: "mega_recall", description: "Recall session memory and stored chunk sets." },
@@ -288,6 +294,8 @@ export function buildServer(deps: ServerDeps): {
         ).then(recordChunkSetId);
       case "mega_impact":
         return handleImpact({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
+      case "mega_index_memory":
+        return handleIndexMemory({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "mega_recall":
         return handleRecall({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "mega_run_command":

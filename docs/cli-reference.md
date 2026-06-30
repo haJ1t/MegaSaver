@@ -211,6 +211,7 @@ Manage Mega Saver memory entries.
 | `graph` | `mega memory graph <project>` | Show the memory graph for a project. |
 | `read-wiki` | `mega memory read-wiki <project>` | Read the project wiki from memory. |
 | `review` | `mega memory review <project>` | Review pending memory entries. |
+| `index` | `mega memory index <project> [--json]` | Build/refresh the semantic memory index (embeds memories so `get_relevant_memories` ranks by meaning). On-demand; loads the embedding model. |
 
 `--scope`: `project | session`. `--type`: `decision | bug | architecture | todo | user_preference | failed_attempt | code_pattern | project_rule | dependency | test_behavior`. `--confidence`: `low | medium | high`. `--source`: `manual | agent | test_failure | git_diff | session_summary`.
 
@@ -220,7 +221,11 @@ Manage Mega Saver memory entries.
 mega memory create my-app --scope project --content "Use Zod for all external boundaries" --type architecture
 mega memory search my-app "auth" --type decision
 mega memory approve <memory-id>
+mega memory index my-app   # embed memories so semantic recall has full coverage
 ```
+
+The MCP bridge exposes the same build as the `mega_index_memory` tool, so an
+agent can refresh a project's memory vectors on demand.
 
 ---
 

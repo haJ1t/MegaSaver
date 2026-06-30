@@ -35,6 +35,8 @@ export * from "./memory-search-semantic.js";
 export { approvedMemoryFiles, staleMemoryFiles } from "./approved-memory-files.js";
 export {
   type EmbedFn,
+  type MemoryIndexBuildResult,
+  buildMemoryIndex,
   embedMemoryEntries,
   memoryEmbeddingsSidecarPath,
   memoryEmbedText,

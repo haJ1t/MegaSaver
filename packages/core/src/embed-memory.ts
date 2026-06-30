@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { embed, readVectors, writeVectors } from "@megasaver/embeddings";
 import type { ProjectId } from "@megasaver/shared";
@@ -9,6 +10,23 @@ import type { MemoryEntry } from "./memory-entry.js";
 // add a vector field to MemoryEntry — the sidecar is the only new artifact.
 export function memoryEmbeddingsSidecarPath(storeRoot: string, projectId: ProjectId): string {
   return join(storeRoot, "memory", `${projectId}.embeddings.jsonl`);
+}
+
+// id→contentHash record, the manifest the vector sidecar lacks. Captured after
+// each build, read back as priorHashById next build so an unchanged memory
+// (vector present AND hash matches) carries forward instead of re-embedding.
+function memoryHashSidecarPath(storeRoot: string, projectId: ProjectId): string {
+  return join(storeRoot, "memory", `${projectId}.embeddings.hashes.json`);
+}
+
+function readHashSidecar(path: string): Map<string, string> {
+  try {
+    return new Map(
+      Object.entries(JSON.parse(readFileSync(path, "utf8")) as Record<string, string>),
+    );
+  } catch {
+    return new Map();
+  }
 }
 
 // The text we embed for a memory: title + content (the recall surface, same as
@@ -63,4 +81,32 @@ export async function embedMemoryEntries(
   });
 
   writeVectors(sidecarPath, out);
+}
+
+export type MemoryIndexBuildResult = { embedded: number; carried: number; total: number };
+
+// On-demand build of the memory-vector sidecar (the missing production caller
+// for embedMemoryEntries) — the memory analog of `mega index build`. Reads the
+// prior id→hash manifest, runs the incremental embedder, then rewrites the
+// manifest from the current set so the next build can carry forward. Heavy
+// (loads the model on a real embed) → an explicit user/agent action, never on
+// the save hot path. `embedFn` is injectable for model-free tests.
+export async function buildMemoryIndex(
+  storeRoot: string,
+  projectId: ProjectId,
+  entries: readonly MemoryEntry[],
+  embedFn: EmbedFn = embed,
+): Promise<MemoryIndexBuildResult> {
+  const hashPath = memoryHashSidecarPath(storeRoot, projectId);
+  const priorHashById = readHashSidecar(hashPath);
+
+  const embedded = entries.filter((e) => priorHashById.get(e.id) !== memoryContentHash(e)).length;
+
+  await embedMemoryEntries(storeRoot, projectId, entries, priorHashById, embedFn);
+
+  const nextHashes: Record<string, string> = {};
+  for (const e of entries) nextHashes[e.id] = memoryContentHash(e);
+  writeFileSync(hashPath, JSON.stringify(nextHashes));
+
+  return { embedded, carried: entries.length - embedded, total: entries.length };
 }

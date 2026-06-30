@@ -3213,3 +3213,31 @@ the critic (binary per file, weight 0.7, bounded) — noted in the spec as a
 known imprecision to re-scope to task-relevant memories in a follow-up.
 `pnpm verify` exit 0 under `TRANSFORMERS_OFFLINE=1` (46/46; mcp-bridge now
 245). Spec 1A + 1B updated with the coverage guard + the imprecision note.
+
+## [2026-06-30] feat | WS3 inc-2: memory index build (semantic recall goes live)
+
+`embedMemoryEntries` had zero production callers, so the memory-vector
+sidecar was never populated and `get_relevant_memories` always tripped its
+full-coverage guard → BM25. Added the missing on-demand build (mirrors
+`mega index build` for code, NOT auto-embed on save — that would load the
+~50MB model on the memory write hot path).
+
+- `@megasaver/core`: `buildMemoryIndex(storeRoot, projectId, entries,
+  embedFn=embed)` (packages/core/src/embed-memory.ts). The vector sidecar
+  stores `{id, vector}` only (no hash), so incrementality needs a manifest
+  the way blocks have one: added a tiny id→hash sidecar
+  `<projectId>.embeddings.hashes.json`, written after each build, read back
+  as `priorHashById` next build. Unchanged memory (vector present AND hash
+  matches) carries forward; only new/changed re-embed. Returns
+  `{ embedded, carried, total }`.
+- CLI `mega memory index <project>` (apps/cli/src/commands/memory/index-build.ts).
+- MCP `mega_index_memory` (packages/mcp-bridge/src/tools/index-memory.ts +
+  server.ts dispatch + tool-name.ts; tool enum 27→28, no proxy twin).
+
+End-to-end gap-closed proof (model-free, fake embed): before a build,
+`handleGetRelevantMemories` returns the BM25 fallback (a lexical-only
+memory); after `handleIndexMemory`, full coverage exists → semantic path
+returns a vector-ranked order BM25 cannot produce. TDD red→green. Per-pkg
+suites green: core 492, cli 742, mcp-bridge 247. `embedFn` injected in
+tests; real embed E2E-gated (MEGA_EMBED_E2E) so CI loads no model.
+Changeset minor: core, cli, mcp-bridge.
