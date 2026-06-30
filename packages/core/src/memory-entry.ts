@@ -132,6 +132,19 @@ export function isCurrent(
   return true;
 }
 
+// The shared recall predicate: a memory is recallable iff it is approved AND
+// currently valid at `asOf`. Every recall surface (BM25/semantic search, the MCP
+// recall tool, the daemon recall handler, connector context) routes its
+// approval+validity gate through this ONE function so the bi-temporal filter
+// cannot silently drift between surfaces. Scope/session matching stays per-caller
+// (it is not the part that drifted). Stale is gated separately by the searches.
+export function isRecallable(
+  memory: Pick<MemoryEntry, "approval" | "validFrom" | "validTo">,
+  asOf: string,
+): boolean {
+  return memory.approval === "approved" && isCurrent(memory, asOf);
+}
+
 // F4 live-first variant: drops the (projectId, sessionId) FK pair for the
 // cwd-derived workspaceKey + the Claude transcript liveSessionId. The `scope`
 // invariant now binds liveSessionId: "session" ⇒ conversation-scoped (non-null),

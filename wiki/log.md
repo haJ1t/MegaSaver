@@ -3273,3 +3273,43 @@ current). `pnpm verify` green (46/46 tasks); per-pkg: core 509, memory-
 graph 58, mcp-bridge 250, cli 743. Changeset minor: core, mcp-bridge,
 cli. Recall-loss check: a CURRENT memory cannot be wrongly dropped —
 absent bounds ⇒ current, so every legacy + normal-new memory stays.
+
+## [2026-06-30] fix | M1 review: centralize current-filter + validate supersedesId
+
+Two independent reviews found the current-by-default filter was
+re-implemented in 4 recall surfaces and 2 were missed — so a superseded
+memory still returned on every path except the in-process MCP one.
+
+- ROOT-CAUSE FIX: added ONE shared predicate `isRecallable(memory, asOf)`
+  = `approval === "approved" && isCurrent(memory, asOf)` in
+  `core/memory-entry.ts`, exported from core. Routed ALL recall surfaces
+  through it: `memory-search.ts`, `memory-search-semantic.ts`, MCP
+  `recall.ts`, daemon `handlers-registry.ts` (recallRegistryHandler), GUI
+  `connector-context.ts`. Surfaces can no longer drift.
+- BLOCKER 1+2 (daemon): `recallRegistryRequestSchema` was `.strict()`
+  without `asOf` (a forwarded asOf → 400 → silent fallback) AND the
+  handler filtered approval+scope only, never isCurrent — so with a
+  daemon running, a closed-validTo memory STILL returned. Added `asOf`
+  to the schema; filter via isRecallable(m, asOf ?? now). New daemon
+  tests: closed memory filtered out of default recall; asOf round-trips
+  (time-travel before the close returns the old fact).
+- BLOCKER 3 (supersedesId tamper): supersedesId is agent-controlled
+  (save_memory passes it; only UUID-shape checked). The approve gate now
+  closes a target ONLY if it is a DIFFERENT memory in the SAME
+  project+scope that exists and is still open. Prevents (a) closing a
+  current memory in another project, (b) self-reference closing its own
+  validity (approved-yet-vanished). New tests: cross-project not closed;
+  self-reference stays current.
+- MAJOR 4 (connector-context): wrote superseded memories into per-agent
+  connector CONFIG FILES; now gated by isRecallable.
+- MINOR 5: get-relevant-memories passed UNFILTERED entries to the
+  semantic search while gating coverage on the filtered candidates; now
+  passes `candidates` so gate and ranked-input are the same set.
+- TEST-GAP: pinned the flaky default-recall test (it relied on wall-clock
+  now > 2026-06-20, the fixture close date — would have failed in CI
+  before that); added a clock-independent default-now case; added an
+  isCurrent offset-format (`+03:00` vs `Z`) equivalence assertion; added
+  isRecallable unit tests.
+
+`pnpm verify` green (46/46). Per-pkg: core 514, daemon 107, mcp-bridge
+252. Changeset now minor: core, mcp-bridge, daemon, cli.

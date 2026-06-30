@@ -313,6 +313,67 @@ describe("recallRegistryHandler", () => {
     expect(contents).not.toContain("rejected note (excluded)");
     expect(memory).toHaveLength(2);
   });
+
+  it("filters a superseded (closed validTo) memory out of default recall", async () => {
+    const registry = seedRegistry();
+    registry.createMemoryEntry({
+      id: "e0000000-0000-4000-8000-0000000000c1",
+      projectId: PROJECT_ID,
+      sessionId: null,
+      content: "closed deploy region",
+      type: "decision",
+      scope: "project",
+      title: "Closed deploy region",
+      keywords: [],
+      approval: "approved",
+      source: "agent",
+      confidence: "high",
+      stale: false,
+      validFrom: "2026-06-01T00:00:00.000Z",
+      validTo: "2026-06-20T00:00:00.000Z",
+      createdAt: TS,
+      updatedAt: TS,
+    });
+
+    const res = await recallRegistryHandler(storeRoot, {
+      sessionId: SESSION_ID,
+      intent: "deploy",
+    });
+    expect(res.status).toBe(200);
+    const contents = (res.json.memory as Array<{ content: string }>).map((m) => m.content);
+    expect(contents).not.toContain("closed deploy region");
+  });
+
+  it("time-travels with asOf: a closed memory is returned for an asOf before its close", async () => {
+    const registry = seedRegistry();
+    registry.createMemoryEntry({
+      id: "e0000000-0000-4000-8000-0000000000c2",
+      projectId: PROJECT_ID,
+      sessionId: null,
+      content: "closed deploy region",
+      type: "decision",
+      scope: "project",
+      title: "Closed deploy region",
+      keywords: [],
+      approval: "approved",
+      source: "agent",
+      confidence: "high",
+      stale: false,
+      validFrom: "2026-06-01T00:00:00.000Z",
+      validTo: "2026-06-20T00:00:00.000Z",
+      createdAt: TS,
+      updatedAt: TS,
+    });
+
+    const res = await recallRegistryHandler(storeRoot, {
+      sessionId: SESSION_ID,
+      intent: "deploy",
+      asOf: "2026-06-10T00:00:00.000Z",
+    });
+    expect(res.status).toBe(200);
+    const contents = (res.json.memory as Array<{ content: string }>).map((m) => m.content);
+    expect(contents).toContain("closed deploy region");
+  });
 });
 
 // ─── execRegistryHandler ─────────────────────────────────────────────────────

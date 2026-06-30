@@ -2,7 +2,7 @@ import {
   type CoreRegistry,
   CoreRegistryError,
   type MemoryEntry,
-  isCurrent,
+  isRecallable,
   memoryEmbeddingsSidecarPath,
   searchMemoryEntriesSemantic,
 } from "@megasaver/core";
@@ -60,16 +60,16 @@ async function semanticMemoryRanking(
     if (memoryVectors.size === 0) return null;
     const entries = env.registry.listMemoryEntries(projectId);
     // The same filter searchMemoryEntriesSemantic applies by default: approved,
-    // non-stale, current-as-of. A candidate missing a vector means partial
-    // coverage → BM25. The asOf gate must match so a closed (non-current) memory
-    // without a vector does not force a needless BM25 fallback.
-    const candidates = entries.filter(
-      (e) => e.approval === "approved" && !e.stale && isCurrent(e, asOf),
-    );
+    // current-as-of (isRecallable), non-stale. A candidate missing a vector means
+    // partial coverage → BM25. The asOf gate must match so a closed (non-current)
+    // memory without a vector does not force a needless BM25 fallback.
+    const candidates = entries.filter((e) => isRecallable(e, asOf) && !e.stale);
     if (candidates.some((e) => !memoryVectors.has(e.id))) return null;
     const [queryVector] = await (env.embedFn ?? embed)([task]);
     if (queryVector === undefined) return null;
-    return searchMemoryEntriesSemantic(entries, {
+    // Pass `candidates` (the gated set the coverage check validated), not the raw
+    // entries, so the coverage gate and the ranked input are the same set.
+    return searchMemoryEntriesSemantic(candidates, {
       queryVector,
       memoryVectors,
       asOf,

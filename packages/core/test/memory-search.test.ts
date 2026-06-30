@@ -167,9 +167,28 @@ describe("searchMemoryEntries bi-temporal (asOf)", () => {
     validFrom: "2026-06-20T00:00:00.000Z",
   });
 
-  it("default recall returns only currently-valid memories", () => {
-    const ids = searchMemoryEntries([closed, current], {}).map((e) => e.id);
+  it("recall as of an instant after the close returns only the currently-valid memory", () => {
+    // Pin asOf explicitly (a moment after the close) so the assertion does not
+    // depend on the wall clock — with a bare {} default-now this would have
+    // failed in CI before 2026-06-20 (the close date).
+    const ids = searchMemoryEntries([closed, current], {
+      asOf: "2026-06-25T00:00:00.000Z",
+    }).map((e) => e.id);
     expect(ids).toEqual(["00000000-0000-4000-8000-0000000000c2"]);
+  });
+
+  it("default (now) recall excludes a long-closed memory", () => {
+    // The `closed` fixture's validTo is in the past relative to any real now, so
+    // default-now recall must never return it — clock-independent in that
+    // direction. (`current` has a future-safe open window: validFrom past, no
+    // validTo.)
+    const openNow = entry({
+      id: "00000000-0000-4000-8000-0000000000c4",
+      content: "always open",
+      validFrom: "2026-06-01T00:00:00.000Z",
+    });
+    const ids = searchMemoryEntries([closed, openNow], {}).map((e) => e.id);
+    expect(ids).toEqual(["00000000-0000-4000-8000-0000000000c4"]);
   });
 
   it("asOf during the closed window returns the historical (then-current) memory", () => {
