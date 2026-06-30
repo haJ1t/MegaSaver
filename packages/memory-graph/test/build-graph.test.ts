@@ -109,7 +109,9 @@ describe("buildGraph", () => {
   it("edgeCount matches edges.length and the base fixture's emitted edge count", () => {
     const g = buildGraph(base());
     expect(g.stats.edgeCount).toBe(g.edges.length);
-    expect(g.stats.edgeCount).toBe(12);
+    // 12 base edges + 2 entity-mention edges (m1's one relatedFile + one
+    // relatedSymbol each become an entity a memory mentions).
+    expect(g.stats.edgeCount).toBe(14);
   });
   it("carries memory meta (type/approval/confidence/stale)", () => {
     const m1 = buildGraph(base()).nodes.find((n) => n.id === "m1");

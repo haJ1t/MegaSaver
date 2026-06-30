@@ -16,6 +16,12 @@ const fileId = (path: string): string => `file:${canonFilePath(path)}`;
 const symbolId = (symbol: string): string => `symbol:${symbol}`;
 const wikiId = (path: string): string => `wiki:${path}`;
 
+// Entity ids share the symbol/file string spaces but are a SEPARATE node kind
+// (aggregation across memories), so they get their own kind-prefix to stay
+// disjoint from the code-link file:/symbol: nodes. Mirrors the prefixing above.
+const symbolEntityId = (symbol: string): string => `entity:symbol:${symbol}`;
+const fileEntityId = (path: string): string => `entity:file:${canonFilePath(path)}`;
+
 export function buildGraph(input: GraphInput): Graph {
   const nodes: GraphNode[] = [];
   const ids = new Set<string>();
@@ -31,7 +37,7 @@ export function buildGraph(input: GraphInput): Graph {
   for (const p of input.projects) add({ id: p.id, kind: "project", label: p.name, meta: {} });
   for (const s of input.sessions)
     add({ id: s.id, kind: "session", label: s.id.slice(0, 8), meta: { projectId: s.projectId } });
-  for (const m of input.memories)
+  for (const m of input.memories) {
     add({
       id: m.id,
       kind: "memory",
@@ -45,6 +51,19 @@ export function buildGraph(input: GraphInput): Graph {
         stale: m.stale,
       },
     });
+    // Deterministic entity extraction (NO LLM): each relatedSymbol/relatedFile is
+    // an entity a memory mentions. Dedup is first-writer-wins via `add`, so an
+    // entity shared by N memories is one node aggregating N entity-mention edges.
+    for (const sym of m.relatedSymbols)
+      add({ id: symbolEntityId(sym), kind: "entity", label: sym, meta: { entityKind: "symbol" } });
+    for (const fp of m.relatedFiles)
+      add({
+        id: fileEntityId(fp),
+        kind: "entity",
+        label: canonFilePath(fp),
+        meta: { entityKind: "file" },
+      });
+  }
   for (const e of input.evidence)
     add({
       id: e.evidenceId,
@@ -120,6 +139,8 @@ export function buildGraph(input: GraphInput): Graph {
     for (const evId of m.evidenceIds) link("cites", m.id, evId);
     for (const fp of m.relatedFiles) link("code-link", m.id, fileId(fp));
     for (const sym of m.relatedSymbols) link("code-link", m.id, symbolId(sym));
+    for (const sym of m.relatedSymbols) link("entity-mention", m.id, symbolEntityId(sym));
+    for (const fp of m.relatedFiles) link("entity-mention", m.id, fileEntityId(fp));
   }
   for (const e of input.evidence) {
     if (e.sessionId) link("from-session", e.evidenceId, e.sessionId);

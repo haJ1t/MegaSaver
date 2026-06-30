@@ -31,6 +31,14 @@ export {
   overlayMemoryEntryUpdatePatchSchema,
 } from "./memory-entry.js";
 export * from "./memory-search.js";
+export * from "./memory-search-semantic.js";
+export { approvedMemoryFiles, staleMemoryFiles } from "./approved-memory-files.js";
+export {
+  type EmbedFn,
+  embedMemoryEntries,
+  memoryEmbeddingsSidecarPath,
+  memoryEmbedText,
+} from "./embed-memory.js";
 export {
   type LiveSessionId,
   type WorkspaceKey,

@@ -25,6 +25,7 @@ updated: 2026-06-16
 - [[concepts/context-gate-pipeline]] — Mega Saver Mode: redact → chunk → rank → fit → summarize; redaction flow; AA1 package roles + cycle direction.
 - [[concepts/windows-support]] — full Windows support (PRs #104–#108): win32 store path, CRLF drift fix, lowercase ids, atomic-write `r+` fsync, `windows-latest` CI matrix.
 - [[concepts/structured-memory-engine]] — DIMMEM, roadmap Phase 1: typed engineering memory (10 MemoryTypes + metadata); reconciles the v0.1 MemoryEntry primitive.
+- [[concepts/memory-superset]] — WS3: superset of mem0/Letta/Zep/Cognee/Memori/claude-mem on our stack. Increment 1 shipped: semantic memory recall (per-project vector sidecar + boundary-embed fallback), `memoryRelevance` wiring (all approved memory's relatedFiles), entity node/edge layer (deterministic, no-LLM); (3)-(6) deferred.
 - [[concepts/semantic-repo-index]] — roadmap Phase 2: parse repo into typed CodeBlocks (AST) so retrieval works on blocks, not files.
 - [[concepts/context-pruning-engine]] — LAMR, roadmap Phase 3: task-aware multi-factor scoring → 6–8-block context pack; repo-side cousin of context-gate-pipeline.
 - [[concepts/failed-run-learning]] — FORGE, roadmap Phase 5: find similar failures, convert a failure to a rule, rank applicable rules; deterministic (BM25 + path overlap).

@@ -305,7 +305,10 @@ export function buildServer(deps: ServerDeps): {
       case "search_memory":
         return handleSearchMemory({ registry: deps.registry }, args);
       case "get_relevant_memories":
-        return handleGetRelevantMemories({ registry: deps.registry }, args);
+        return handleGetRelevantMemories(
+          { registry: deps.registry, storeRoot: deps.storeRoot },
+          args,
+        );
       case "get_task_status":
         return handleGetTaskStatus({ registry: deps.registry }, args);
       case "get_relevant_context":

@@ -5,7 +5,7 @@ import {
   buildContextPack,
   readCoChangeLog,
 } from "@megasaver/context-pruner";
-import type { CoreRegistry } from "@megasaver/core";
+import { type CoreRegistry, approvedMemoryFiles, staleMemoryFiles } from "@megasaver/core";
 import { embed, readVectors } from "@megasaver/embeddings";
 import { embeddingsSidecarPath, readBlocks, resolveIndexPaths } from "@megasaver/indexer";
 import { projectIdSchema } from "@megasaver/shared";
@@ -64,9 +64,12 @@ async function packFor(env: ContextToolEnv, rawArgs: unknown): Promise<ContextPa
 
   const indexPaths = resolveIndexPaths(env.storeRoot, projectId.data);
   const blocks = readBlocks(indexPaths);
-  const memories = env.registry.searchMemoryEntries(projectId.data, { text: parsed.data.task });
-  const memoryFiles = memories.filter((m) => !m.stale).flatMap((m) => m.relatedFiles ?? []);
-  const staleFiles = memories.filter((m) => m.stale).flatMap((m) => m.relatedFiles ?? []);
+  // ALL approved project memory feeds the memoryRelevance factor — not a
+  // BM25-narrowed subset, which silently dropped approved memories whose prose
+  // does not lexically match the task but whose relatedFiles are in play.
+  const memories = env.registry.listMemoryEntries(projectId.data);
+  const memoryFiles = approvedMemoryFiles(memories);
+  const staleFiles = staleMemoryFiles(memories);
   const embedding = await embeddingSignalFor(indexPaths, parsed.data.task);
 
   return buildContextPack({
