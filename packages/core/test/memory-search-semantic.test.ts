@@ -22,6 +22,8 @@ function entry(over: Partial<MemoryEntry> & { id: string; content: string }): Me
     stale: over.stale ?? false,
     createdAt: over.createdAt ?? "2026-06-11T00:00:00.000Z",
     updatedAt: over.updatedAt ?? "2026-06-11T00:00:00.000Z",
+    ...(over.validFrom !== undefined ? { validFrom: over.validFrom } : {}),
+    ...(over.validTo !== undefined ? { validTo: over.validTo } : {}),
   });
 }
 
@@ -99,5 +101,30 @@ describe("searchMemoryEntriesSemantic — injected vectors", () => {
     ).toEqual([]);
     // BM25 still works as the fallback the boundary would use.
     expect(searchMemoryEntries([a], { text: "auth" }).map((m) => m.id)).toEqual([NEAR]);
+  });
+
+  it("filters to currently-valid memories by default and time-travels with asOf", () => {
+    const closed = entry({
+      id: NEAR,
+      content: "x",
+      validFrom: "2026-06-01T00:00:00.000Z",
+      validTo: "2026-06-20T00:00:00.000Z",
+    });
+    const queryVector = Float32Array.from([1, 0]);
+    const memoryVectors = new Map([[NEAR, Float32Array.from([1, 0])]]);
+
+    // Default (now) — closed memory is no longer current, dropped.
+    expect(
+      searchMemoryEntriesSemantic([closed], { queryVector, memoryVectors }).map((m) => m.id),
+    ).toEqual([]);
+
+    // asOf inside the closed window — historical recall returns it.
+    expect(
+      searchMemoryEntriesSemantic([closed], {
+        queryVector,
+        memoryVectors,
+        asOf: "2026-06-10T00:00:00.000Z",
+      }).map((m) => m.id),
+    ).toEqual([NEAR]);
   });
 });

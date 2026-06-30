@@ -3241,3 +3241,35 @@ returns a vector-ranked order BM25 cannot produce. TDD red→green. Per-pkg
 suites green: core 492, cli 742, mcp-bridge 247. `embedFn` injected in
 tests; real embed E2E-gated (MEGA_EMBED_E2E) so CI loads no model.
 Changeset minor: core, cli, mcp-bridge.
+
+## [2026-06-30] feat | M1: bi-temporal memory validity (Zep/Graphiti-class)
+
+Sub-spec 3 of the memory superset, shipped. Two time axes: transaction
+time (`createdAt`/`updatedAt`, already existed) and valid time (new). A
+fact can be superseded by a newer one without deleting the old one — the
+lossless moat (audit / time-travel preserved).
+
+- `@megasaver/core` (memory-entry.ts): additive optional `validFrom`,
+  `validTo` (null/absent = still valid), `supersedesId` on `MemoryEntry`
+  AND `overlayMemoryEntrySchema`; `validTo` added to the update patch.
+  `isCurrent(memory, asOf)` = `validFrom <= asOf && (validTo == null ||
+  asOf < validTo)` (half-open upper bound). Rows without the fields read
+  as current → old stores load unchanged (back-compat).
+- Recall (memory-search.ts + memory-search-semantic.ts): both filter to
+  `isCurrent(entry, asOf ?? now)` alongside the existing approved/non-
+  stale gates; both gained an optional `asOf` time-travel parameter.
+- Supersede gate (mcp-bridge/approve-memory.ts): approving a memory whose
+  `supersedesId` is set closes the superseded memory's `validTo = now`
+  (kept, not deleted). `save_memory` accepts `supersedesId`; `recall` /
+  `get_relevant_memories` thread `asOf`.
+- Graph: the pre-existing `supersede` edge kind is now emitted from the
+  recorded `supersedesId` by the CLI (graph.ts) and GUI overlay
+  (memory-graph route) builders — no change to memory-graph/src.
+
+Deterministic, no LLM, no embeddings for this layer. TDD red→green:
+isCurrent bounds, supersede+time-travel (asOf before the close still
+returns the old fact; supersede edge present), back-compat (no-bounds =
+current). `pnpm verify` green (46/46 tasks); per-pkg: core 509, memory-
+graph 58, mcp-bridge 250, cli 743. Changeset minor: core, mcp-bridge,
+cli. Recall-loss check: a CURRENT memory cannot be wrongly dropped —
+absent bounds ⇒ current, so every legacy + normal-new memory stays.

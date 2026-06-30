@@ -27,7 +27,7 @@ ship — plus our moat they lack.
 | LLM fact extraction / store                  |  ✓   |      ✓       |      ✓       |   ✓    |   ✓    |     ✓      | ✓ (deterministic-first, LLM opt-in) |
 | Vector / semantic recall                     |  ✓   |      ✓       |      ✓       |   ✓    |   ~    |     ✓      | **✓ (increment 1)** |
 | Entity graph (entities + relations)          |  ✓   |      ~       |      ✓       |   ✓    |   ✓    |     ~      | **✓ (increment 1)** |
-| Temporal / bi-temporal validity             |  ~   |      ~       |    **✓**     |   ✓    |   ~    |     ✗      | ◑ (deferred — sub-spec 3) |
+| Temporal / bi-temporal validity             |  ~   |      ~       |    **✓**     |   ✓    |   ~    |     ✗      | **✓ (M1)** |
 | Tiered memory (working/recall/archival)      |  ~   |    **✓**     |      ~       |   ~    |   ~    |     ✗      | ◑ (deferred — sub-spec 4) |
 | Self-editing / decay / forgetting            |  ~   |      ✓       |      ~       |   ✓    |   ✗    |     ✗      | ◑ (deferred — sub-spec 4) |
 | Canonicalization / dedup on write            |  ✓   |      ~       |      ✓       |   ✓    |   ~    |     ~      | ◑ (deferred — sub-spec 5) |
@@ -72,7 +72,7 @@ our gate onto their store — is what makes the result a strict superset.
 2. **Entity graph** — entity nodes + mention edges over memories. **THIS INCREMENT.**
    Plus: wire `memoryRelevance` so approved memory actually influences context
    packs. **THIS INCREMENT.**
-3. **Temporal / bi-temporal validity** — DEFERRED (sub-spec).
+3. **Temporal / bi-temporal validity** — **DONE (M1, 2026-06-30).**
 4. **Tiered + decay** — DEFERRED (sub-spec).
 5. **Canonicalization** — DEFERRED (sub-spec).
 6. **Transcript → memory** — DEFERRED (sub-spec).
@@ -171,11 +171,18 @@ the documented Phase-4 cwd-scoped-memory blocker, unchanged.
 
 Each plugs into a named existing file; each gets its own spec → plan → TDD cycle.
 
-3. **Temporal / bi-temporal validity** (matches Zep/Graphiti). Add `validFrom` /
-   `validTo` (event time) and trust `createdAt`/`updatedAt` as ingestion time to
-   `memory-entry.ts`; a temporal edge kind in `memory-graph/model.ts`; an
-   as-of filter in `memory-search.ts`. Plugs into
-   `packages/core/src/memory-entry.ts` + `packages/memory-graph/src/model.ts`.
+3. **Temporal / bi-temporal validity** (matches Zep/Graphiti). **DONE — M1,
+   2026-06-30.** Shipped: optional `validFrom` / `validTo` (valid time) +
+   `supersedesId` on `MemoryEntry` and the overlay variant (additive,
+   backward-compatible — rows without them read as current); `isCurrent(memory,
+   asOf)` helper in `memory-entry.ts`; current-by-default filtering plus an
+   optional `asOf` time-travel parameter in `memory-search.ts` and
+   `memory-search-semantic.ts`, threaded through MCP `recall` /
+   `get_relevant_memories` (and `supersedesId` accepted by `save_memory`).
+   Approving a memory that supersedes an older one closes the old one's
+   `validTo` (lossless — kept for time-travel) in `approve-memory.ts`. The
+   pre-existing `supersede` edge kind in `memory-graph/model.ts` is now emitted
+   from the recorded `supersedesId` by the CLI and GUI graph builders.
 
 4. **Tiered (working / recall / archival) + decay** (matches Letta/MemGPT). Add a
    `tier` field + a decay scheduler that demotes stale/low-confidence memories

@@ -183,6 +183,16 @@ async function loadGraphInput(
     }
   }
 
+  // Explicit bi-temporal supersession (M1): a memory's supersedesId names the
+  // older memory it replaces. Emit a directed supersede edge (newer → older);
+  // buildGraph dedups identical pairs with the heuristic detection above.
+  const overlayIds = new Set(overlayEntries.map((e) => e.id));
+  for (const e of overlayEntries) {
+    if (e.supersedesId !== undefined && overlayIds.has(e.supersedesId)) {
+      conflicts.push({ from: e.id, to: e.supersedesId, kind: "supersede" });
+    }
+  }
+
   const wikiPages = await readWikiPages(cwd);
 
   // Unique file paths from memory relatedFiles + wiki fileCites.

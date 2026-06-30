@@ -7,12 +7,14 @@ import {
   type MemorySource,
   type MemoryType,
   backfillMemoryEntry,
+  isCurrent,
   memoryConfidenceSchema,
   memoryEntrySchema,
   memoryEntryUpdatePatchSchema,
   memoryScopeSchema,
   memorySourceSchema,
   memoryTypeSchema,
+  overlayMemoryEntrySchema,
 } from "../src/memory-entry.js";
 
 const MEMORY_ENTRY_ID = "33333333-3333-4333-8333-333333333333";
@@ -380,5 +382,101 @@ describe("memoryApprovalSchema", () => {
       updatedAt: CREATED_AT,
     });
     expect(patch.approval).toBe("approved");
+  });
+});
+
+const VALID_FROM = "2026-06-01T00:00:00.000Z";
+const VALID_TO = "2026-06-20T00:00:00.000Z";
+
+describe("bi-temporal validity fields", () => {
+  it("memoryEntrySchema accepts validFrom, validTo, and supersedesId", () => {
+    const parsed = memoryEntrySchema.parse({
+      ...validProjectMemory,
+      validFrom: VALID_FROM,
+      validTo: VALID_TO,
+      supersedesId: "44444444-4444-4444-8444-444444444444",
+    });
+    expect(parsed.validFrom).toBe(VALID_FROM);
+    expect(parsed.validTo).toBe(VALID_TO);
+    expect(parsed.supersedesId).toBe("44444444-4444-4444-8444-444444444444");
+  });
+
+  it("memoryEntrySchema accepts validTo: null (still valid)", () => {
+    const parsed = memoryEntrySchema.parse({ ...validProjectMemory, validTo: null });
+    expect(parsed.validTo).toBeNull();
+  });
+
+  it("memoryEntrySchema still parses rows lacking the temporal fields (back-compat)", () => {
+    const parsed = memoryEntrySchema.parse(validProjectMemory);
+    expect(parsed.validFrom).toBeUndefined();
+    expect(parsed.validTo).toBeUndefined();
+    expect(parsed.supersedesId).toBeUndefined();
+  });
+
+  it("overlayMemoryEntrySchema mirrors the temporal fields", () => {
+    const parsed = overlayMemoryEntrySchema.parse({
+      id: MEMORY_ENTRY_ID,
+      workspaceKey: "ws",
+      liveSessionId: null,
+      scope: "project",
+      type: "decision",
+      title: "t",
+      content: "c",
+      keywords: [],
+      confidence: "high",
+      source: "manual",
+      approval: "approved",
+      stale: false,
+      createdAt: CREATED_AT,
+      updatedAt: CREATED_AT,
+      validFrom: VALID_FROM,
+      validTo: null,
+      supersedesId: "44444444-4444-4444-8444-444444444444",
+    });
+    expect(parsed.validFrom).toBe(VALID_FROM);
+    expect(parsed.validTo).toBeNull();
+    expect(parsed.supersedesId).toBe("44444444-4444-4444-8444-444444444444");
+  });
+
+  it("update patch accepts validTo (closing validity)", () => {
+    const patch = memoryEntryUpdatePatchSchema.parse({ validTo: VALID_TO, updatedAt: CREATED_AT });
+    expect(patch.validTo).toBe(VALID_TO);
+  });
+});
+
+describe("isCurrent", () => {
+  const withBounds = (validFrom?: string, validTo?: string | null): MemoryEntry =>
+    memoryEntrySchema.parse({
+      ...validProjectMemory,
+      ...(validFrom !== undefined ? { validFrom } : {}),
+      ...(validTo !== undefined ? { validTo } : {}),
+    });
+
+  it("treats a row with no bounds as current", () => {
+    expect(isCurrent(withBounds(), VALID_TO)).toBe(true);
+  });
+
+  it("is not current before validFrom", () => {
+    expect(isCurrent(withBounds(VALID_FROM), "2026-05-31T00:00:00.000Z")).toBe(false);
+  });
+
+  it("is current at validFrom", () => {
+    expect(isCurrent(withBounds(VALID_FROM), VALID_FROM)).toBe(true);
+  });
+
+  it("is current strictly within bounds", () => {
+    expect(isCurrent(withBounds(VALID_FROM, VALID_TO), "2026-06-10T00:00:00.000Z")).toBe(true);
+  });
+
+  it("is not current at validTo (half-open upper bound)", () => {
+    expect(isCurrent(withBounds(VALID_FROM, VALID_TO), VALID_TO)).toBe(false);
+  });
+
+  it("is not current after validTo", () => {
+    expect(isCurrent(withBounds(VALID_FROM, VALID_TO), "2026-07-01T00:00:00.000Z")).toBe(false);
+  });
+
+  it("is current when validTo is null", () => {
+    expect(isCurrent(withBounds(VALID_FROM, null), "2026-07-01T00:00:00.000Z")).toBe(true);
   });
 });

@@ -160,6 +160,19 @@ export async function handleApproveMemory(
   // fall through to the existing updateMemoryEntry({ approval, updatedAt }) flip.
 
   const updated = env.registry.updateMemoryEntry(id, { approval, updatedAt: env.now() });
+  // Bi-temporal supersession (M1): approving a memory that supersedes an older
+  // one closes the old one's valid-time (validTo = now) so it drops out of
+  // current-by-default recall. The old row is NOT deleted — kept for time-travel
+  // (lossless). Only on approve; a reject leaves all validity untouched.
+  if (approval === "approved" && updated.supersedesId !== undefined) {
+    const superseded = env.registry.getMemoryEntry(updated.supersedesId as MemoryEntryId);
+    if (superseded !== null && superseded.validTo == null) {
+      env.registry.updateMemoryEntry(updated.supersedesId as MemoryEntryId, {
+        validTo: env.now(),
+        updatedAt: env.now(),
+      });
+    }
+  }
   // Write sidecar: approved path → system valid, reject path → human rejected.
   writeSidecar(env, updated.id as MemoryEntryId, {
     validationStatus: approval === "rejected" ? "rejected" : "valid",

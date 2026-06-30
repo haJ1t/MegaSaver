@@ -34,6 +34,7 @@ const saveMemoryInputSchema = z
     goal: z.string().min(1).optional(),
     relatedFiles: z.array(z.string()).optional(),
     expiresAt: z.string().datetime({ offset: true }).optional(),
+    supersedesId: z.string().min(1).optional(),
   })
   .strict();
 
@@ -81,6 +82,7 @@ export async function handleSaveMemory(
       ...(d.goal !== undefined ? { goal: d.goal } : {}),
       ...(d.relatedFiles !== undefined ? { relatedFiles: d.relatedFiles } : {}),
       ...(d.expiresAt !== undefined ? { expiresAt: d.expiresAt } : {}),
+      ...(d.supersedesId !== undefined ? { supersedesId: d.supersedesId } : {}),
       createdAt: env.now(),
       updatedAt: env.now(),
     });
