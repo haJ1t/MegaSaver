@@ -104,10 +104,18 @@ model-free (a default `pnpm verify` loads no embedding model).
   ranks the survivors by `cosine(queryVector, memoryVector)` descending. BM25
   `searchMemoryEntries` is untouched and remains the default.
 - **Boundary embed, graceful fallback.** The async query-embed happens at the
-  MCP boundary (`recall.ts`, `get-relevant-memories.ts`), best-effort: read the
-  sidecar; if empty → fall back to BM25. Embed the query; if the model is absent
-  or `embed` throws → fall back to BM25. **Never throws.** Mirrors
-  `embeddingSignalFor`.
+  MCP boundary (`get-relevant-memories.ts`), best-effort: read the sidecar; if
+  empty → fall back to BM25. Embed the query; if the model is absent or `embed`
+  throws → fall back to BM25. **Never throws.** Mirrors `embeddingSignalFor`.
+- **Full-coverage guard (no silent recall loss).** Semantic ranking drops any
+  candidate memory whose vector is missing from the sidecar. Because no
+  production path embeds on write, a memory created/approved after the last
+  manual sidecar build is un-vectored — partial coverage is the default steady
+  state, and ranking it would silently omit a true approved memory. So the
+  boundary first checks that EVERY approved non-stale candidate has a vector; if
+  any is missing it falls back to BM25 (which returns all matches). Results are
+  therefore either full-coverage semantic OR BM25, never a silently-truncated
+  mix.
 
 ### 1B. Wire `memoryRelevance` (closes a real gap)
 
@@ -127,6 +135,13 @@ subset. A single shared helper `approvedMemoryFiles(memories)` (and its stale
 counterpart) lists `relatedFiles` of approved/non-stale entries; both the CLI and
 MCP context paths call it. No scorer change — the factor already exists; this only
 changes what is fed in. Additive and surgical.
+
+**Known imprecision (v1, accepted).** Feeding ALL approved memory means every
+approved memory's `relatedFiles` get the `memoryRelevance` bump regardless of the
+task — a deliberately broad signal. It is bounded (binary per file, weight 0.7,
+below the force-include factors), so it cannot flood a pack on its own. A
+follow-up may re-scope this to task-relevant memories (e.g. semantic/BM25-ranked)
+once the memory-vector sidecar has full coverage; deferred.
 
 The GUI workspace-context route (`apps/gui/bridge/routes/workspace-context.ts`)
 stays out of scope: it addresses workspaces by a one-way hash with no project-id

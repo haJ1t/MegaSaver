@@ -31,10 +31,18 @@ const getRelevantMemoriesInputSchema = z
 export type GetRelevantMemoriesResult = { memory: readonly MemoryEntry[] };
 
 // Best-effort semantic ranking: returns vector-ranked memories ONLY when a
-// non-empty sidecar exists for the project AND embedding the task succeeds. Any
-// failure (no storeRoot, no sidecar, model absent, embed throws) returns null so
-// the caller falls back to BM25. Never throws. Mirrors embeddingSignalFor in
-// context-pruning.ts.
+// sidecar with FULL coverage of the candidate memories exists AND embedding the
+// task succeeds. Any failure (no storeRoot, no/partial sidecar, model absent,
+// embed throws) returns null so the caller falls back to BM25. Never throws.
+// Mirrors embeddingSignalFor in context-pruning.ts.
+//
+// Full-coverage guard: searchMemoryEntriesSemantic drops any candidate whose
+// vector is missing. No production path embeds on write, so a memory created or
+// approved after the last manual sidecar build is un-vectored — the default
+// steady state is PARTIAL coverage. Ranking a partial sidecar would silently
+// omit a real approved memory. So if any candidate lacks a vector, fall back to
+// BM25 (which returns all matches): results are either full-coverage semantic OR
+// BM25, never a silently-truncated mix.
 async function semanticMemoryRanking(
   env: GetRelevantMemoriesEnv,
   projectId: ProjectId,
@@ -45,9 +53,13 @@ async function semanticMemoryRanking(
   try {
     const memoryVectors = readVectors(memoryEmbeddingsSidecarPath(env.storeRoot, projectId));
     if (memoryVectors.size === 0) return null;
+    const entries = env.registry.listMemoryEntries(projectId);
+    // The same filter searchMemoryEntriesSemantic applies by default: approved,
+    // non-stale. A candidate missing a vector means partial coverage → BM25.
+    const candidates = entries.filter((e) => e.approval === "approved" && !e.stale);
+    if (candidates.some((e) => !memoryVectors.has(e.id))) return null;
     const [queryVector] = await (env.embedFn ?? embed)([task]);
     if (queryVector === undefined) return null;
-    const entries = env.registry.listMemoryEntries(projectId);
     return searchMemoryEntriesSemantic(entries, {
       queryVector,
       memoryVectors,

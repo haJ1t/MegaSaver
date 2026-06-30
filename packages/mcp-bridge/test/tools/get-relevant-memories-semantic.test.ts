@@ -15,6 +15,7 @@ const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const TS = "2026-06-11T00:00:00.000Z";
 const NEAR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const FAR = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const THIRD = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 function seededRegistry(): CoreRegistry {
   const registry = createInMemoryCoreRegistry();
@@ -102,5 +103,39 @@ describe("handleGetRelevantMemories — semantic boundary signal", () => {
       { projectId: PROJECT_ID, task: "handler" },
     );
     expect(result.memory.map((m) => m.id).sort()).toEqual([NEAR, FAR].sort());
+  });
+
+  it("falls back to BM25 on a PARTIAL sidecar so no approved memory silently vanishes", async () => {
+    // Default steady state: a memory approved after the last manual sidecar build
+    // is un-vectored. Three approved memories all match the query; the sidecar
+    // covers only two. Ranking the partial sidecar would drop THIRD silently —
+    // the coverage guard must instead fall back to BM25, which returns all three.
+    const registry = seededRegistry();
+    registry.createMemoryEntry({
+      id: THIRD,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      content: "handler data io",
+      type: "decision",
+      title: "handler",
+      keywords: [],
+      confidence: "medium",
+      source: "manual",
+      approval: "approved",
+      createdAt: TS,
+      updatedAt: TS,
+    });
+    writeVectors(memoryEmbeddingsSidecarPath(store, PROJECT_ID as ProjectId), [
+      { id: NEAR, vector: [1, 0, 0] },
+      { id: FAR, vector: [0.5, 0.5, 0] },
+    ]);
+    const fakeEmbed = async () => [Float32Array.from([1, 0, 0])];
+
+    const result = await handleGetRelevantMemories(
+      { registry, storeRoot: store, embedFn: fakeEmbed },
+      { projectId: PROJECT_ID, task: "handler" },
+    );
+    expect(result.memory.map((m) => m.id).sort()).toEqual([NEAR, FAR, THIRD].sort());
   });
 });
