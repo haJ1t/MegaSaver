@@ -3,8 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { contextPackSchema } from "@megasaver/context-pruner";
-import { createInMemoryCoreRegistry } from "@megasaver/core";
+import { createInMemoryCoreRegistry, memoryEmbeddingsSidecarPath } from "@megasaver/core";
+import { writeVectors } from "@megasaver/embeddings";
 import { buildIndex } from "@megasaver/indexer";
+import type { ProjectId } from "@megasaver/shared";
 import { afterEach, describe, expect, it } from "vitest";
 import { McpBridgeError } from "../../src/errors.js";
 import {
@@ -226,5 +228,85 @@ describe("context MCP tools — memoryRelevance wiring", () => {
       updatedAt: TS,
     });
     expect(await authFactor(env)).toBe(0);
+  });
+});
+
+describe("context MCP tools — memoryRelevance task-scoping (M5)", () => {
+  const MEM_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  // Injected task vector: any task → [1,0,0]. No model.
+  const fakeEmbed = async () => [Float32Array.from([1, 0, 0])];
+
+  function seedApprovedAuthMemory(env: {
+    registry: ReturnType<typeof createInMemoryCoreRegistry>;
+    storeRoot: string;
+  }): void {
+    env.registry.createMemoryEntry({
+      id: MEM_ID as never,
+      projectId: PROJECT_ID as never,
+      sessionId: null,
+      scope: "project",
+      content: "totally different prose with no overlap",
+      type: "decision",
+      title: "an unrelated note",
+      keywords: [],
+      confidence: "medium",
+      source: "manual",
+      approval: "approved",
+      relatedFiles: ["src/auth.ts"],
+      createdAt: TS,
+      updatedAt: TS,
+    });
+  }
+
+  async function authMemoryFactor(env: {
+    registry: ReturnType<typeof createInMemoryCoreRegistry>;
+    storeRoot: string;
+    embedFn?: (texts: readonly string[]) => Promise<Float32Array[]>;
+  }): Promise<number | undefined> {
+    const pack = await handleGetRelevantContext(env, {
+      projectId: PROJECT_ID,
+      task: "zzz unrelated wording",
+    });
+    const block = [...pack.included, ...pack.excluded].find((b) => b.filePath === "src/auth.ts");
+    return block?.factors.memoryRelevance;
+  }
+
+  it("does NOT boost a task-irrelevant memory's file when a sidecar + task vector scope it", async () => {
+    const { env } = await setup();
+    seedApprovedAuthMemory(env);
+    // Memory vector orthogonal to the [1,0,0] task vector → task-irrelevant.
+    writeVectors(memoryEmbeddingsSidecarPath(env.storeRoot, PROJECT_ID as ProjectId), [
+      { id: MEM_ID, vector: [0, 0, 1] },
+    ]);
+    expect(await authMemoryFactor({ ...env, embedFn: fakeEmbed })).toBe(0);
+  });
+
+  it("DOES boost a task-relevant memory's file when the sidecar vector is near the task", async () => {
+    const { env } = await setup();
+    seedApprovedAuthMemory(env);
+    // Memory vector aligned with the [1,0,0] task vector → task-relevant.
+    writeVectors(memoryEmbeddingsSidecarPath(env.storeRoot, PROJECT_ID as ProjectId), [
+      { id: MEM_ID, vector: [0.95, 0.05, 0] },
+    ]);
+    expect(await authMemoryFactor({ ...env, embedFn: fakeEmbed })).toBe(1);
+  });
+
+  it("falls back to all-approved (factor 1) when no memory sidecar exists — identical to today", async () => {
+    const { env } = await setup();
+    seedApprovedAuthMemory(env);
+    // No sidecar written → taskScopedMemoryFiles returns null → approvedMemoryFiles.
+    expect(await authMemoryFactor({ ...env, embedFn: fakeEmbed })).toBe(1);
+  });
+
+  it("falls back to all-approved when embedding fails — best-effort, never throws", async () => {
+    const { env } = await setup();
+    seedApprovedAuthMemory(env);
+    writeVectors(memoryEmbeddingsSidecarPath(env.storeRoot, PROJECT_ID as ProjectId), [
+      { id: MEM_ID, vector: [0, 0, 1] },
+    ]);
+    const throwingEmbed = async () => {
+      throw new Error("model unavailable");
+    };
+    expect(await authMemoryFactor({ ...env, embedFn: throwingEmbed })).toBe(1);
   });
 });
