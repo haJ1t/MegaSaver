@@ -143,15 +143,19 @@ changes what is fed in. Additive and surgical.
 deliberately broad signal. It is bounded (binary per file, weight 0.7, below the
 force-include factors), so it cannot flood a pack on its own. The re-scope
 follow-up shipped: a pure core helper `taskRelevantMemoryFiles(memories, {
-taskVector, memoryVectors, topK, asOf })` ranks approved+current+non-stale
-memories by cosine to the task and feeds only the top-K relevant memories'
-`relatedFiles`; a best-effort orchestrator `taskScopedMemoryFiles` loads the
-memory sidecar, reuses the task vector the context pruner already computes (MCP)
-or embeds the task itself (CLI), and returns null on no-sidecar / no task vector
-/ any failure → both boundaries (`context-pruning.ts`, CLI `shared.ts`) fall back
-to `approvedMemoryFiles` (all approved). Additive, best-effort, recall-safe (the
-fallback keeps today's no-sidecar behavior byte-identical), CI model-free
-(injected vectors in tests; real `embed()` E2E-gated).
+taskVector, memoryVectors, topK })` ranks approved, non-stale memories by cosine
+to the task and feeds only the top-K relevant memories' `relatedFiles`. Its
+eligibility mirrors `approvedMemoryFiles` EXACTLY (`approval === "approved" &&
+!stale`, no validity/tier gating) so the scoped set is always a task-filtered
+subset of the fallback set — never stricter — and the signal cannot flip on
+whether a sidecar exists. A best-effort orchestrator `taskScopedMemoryFiles`
+loads the memory sidecar, reuses the task vector the context pruner already
+computes (MCP) or embeds the task itself (CLI), and returns null on no-sidecar /
+no task vector / any failure → both boundaries (`context-pruning.ts`, CLI
+`shared.ts`) fall back to `approvedMemoryFiles` (all approved). Additive,
+best-effort, recall-safe (the fallback keeps today's no-sidecar behavior
+byte-identical), CI model-free (injected vectors in tests; real `embed()`
+E2E-gated).
 
 The GUI workspace-context route (`apps/gui/bridge/routes/workspace-context.ts`)
 stays out of scope: it addresses workspaces by a one-way hash with no project-id

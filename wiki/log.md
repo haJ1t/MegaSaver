@@ -3440,22 +3440,26 @@ to the memory data model, approval gate, or FORGE/learn behaviour.
 ## [2026-06-30] feat | M5: task-scope memoryRelevance (final memory-depth layer)
 
 Closes the WS3-inc1 §1B "Known imprecision (v1, accepted)" follow-up. Both
-context-pruning boundaries fed ALL approved+current memory's `relatedFiles` to
-the `memoryRelevance` factor, boosting every memory-touched file on every task
+context-pruning boundaries fed ALL approved memory's `relatedFiles` to the
+`memoryRelevance` factor, boosting every memory-touched file on every task
 regardless of task relevance (broad, signal-diluting). Spec follow-up marked
 DONE: `docs/superpowers/specs/2026-06-30-memory-superset-design.md` §1B.
 Branch `feat/memory-relevance-taskscope`.
 
 - **Pure core helper** (`packages/core/src/task-relevant-memory-files.ts`):
-  `taskRelevantMemoryFiles(memories, { taskVector, memoryVectors, topK, floor,
-  asOf })` ranks approved+current+non-stale memories that have a sidecar vector
-  by `cosine(taskVector, memoryVector)`, keeps the top-K (default 10) above a
-  small floor (0.1), returns the deduped, order-stable union of THEIR
-  `relatedFiles`. The narrowed counterpart of `approvedMemoryFiles`. Gate mirrors
-  `searchMemoryEntriesSemantic` (reuses `isRecallable`) so scoping cannot drift
-  from recall. Deterministic: ties break by id.
+  `taskRelevantMemoryFiles(memories, { taskVector, memoryVectors, topK, floor })`
+  ranks approved, non-stale memories that have a sidecar vector by
+  `cosine(taskVector, memoryVector)`, keeps the top-K (default 10) above a small
+  floor (0.1), returns the deduped, order-stable union of THEIR `relatedFiles`.
+  The narrowed counterpart of `approvedMemoryFiles`. **Eligibility mirrors
+  `approvedMemoryFiles` EXACTLY** (`approval === "approved" && !stale`, no
+  validity/tier gating) so the scoped set is always a task-filtered SUBSET of the
+  fallback — never stricter — and the signal cannot flip on whether a sidecar
+  exists (review fix; the first pass over-gated via `isRecallable`, which excluded
+  expired/archival approved memories the no-sidecar fallback would include).
+  Deterministic: ties break by id.
 - **Best-effort orchestrator** (same file): `taskScopedMemoryFiles({ storeRoot,
-  projectId, memories, task, taskVector?, topK?, asOf?, embedFn? })` loads the
+  projectId, memories, task, taskVector?, topK?, floor?, embedFn? })` loads the
   memory-vector sidecar via `readVectors(memoryEmbeddingsSidecarPath(...))`, uses
   the INJECTED task vector (reused) or embeds `task`, calls the pure helper.
   Returns null on no/empty sidecar, no task vector, or ANY failure → never throws.
@@ -3471,8 +3475,9 @@ Branch `feat/memory-relevance-taskscope`.
 - **Recall-safe.** No-sidecar / no-task-vector / embed-failure all fall back to
   the all-approved set → today's behavior is byte-identical; a genuinely
   task-relevant memory's file is never dropped.
-- **TDD, model-free.** core: 9 tests (pure: near-in/far-out, topK, dedupe,
-  approved+current+non-stale gating, recall-safety; orchestrator: scoped with
+- **TDD, model-free.** core: 10 tests (pure: near-in/far-out, topK, dedupe,
+  approved+non-stale gating, EXPIRED-included [eligibility mirrors
+  `approvedMemoryFiles`, not stricter], recall-safety; orchestrator: scoped with
   sidecar+injected vector, null no-sidecar, embeds when no vector injected,
   null/no-throw on embed failure). mcp: +4 (irrelevant-not-boosted with sidecar,
   relevant-boosted, fallback-identical no-sidecar, fallback-on-embed-failure).
@@ -3482,3 +3487,14 @@ Branch `feat/memory-relevance-taskscope`.
 
 Changeset minor (core + mcp-bridge + cli public surface). Additive, surgical,
 best-effort, deterministic, CI model-free.
+
+**Review fix (2026-06-30, target-set asymmetry).** Both the spawned reviewer and
+the coordinator's independent critic flagged one Important finding: the scoped
+helper's eligibility gate (`isRecallable || stale`) applied bi-temporal validity
++ archival-tier filters that the fallback `approvedMemoryFiles` (`approved &&
+!stale`) does not, so an approved+non-stale-but-EXPIRED/ARCHIVAL memory's files
+were dropped from the scoped set but kept in the fallback — the `memoryRelevance`
+signal flipped on whether `mega memory index` had run. Fixed: scoped gate now
+mirrors `approvedMemoryFiles` exactly; task ranking (cosine top-K) is the only
+narrowing. `asOf` dropped from both helper signatures (unused after the fix).
++1 core test (EXPIRED-included). Full `pnpm verify` green (46/46), model-free.

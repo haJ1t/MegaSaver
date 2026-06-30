@@ -1,7 +1,7 @@
 import { cosine, embed, readVectors } from "@megasaver/embeddings";
 import type { ProjectId } from "@megasaver/shared";
 import { type EmbedFn, memoryEmbeddingsSidecarPath } from "./embed-memory.js";
-import { type MemoryEntry, isRecallable } from "./memory-entry.js";
+import type { MemoryEntry } from "./memory-entry.js";
 
 const DEFAULT_TOP_K = 10;
 // A small cosine floor below which a memory is too far from the task to count.
@@ -14,27 +14,29 @@ export type TaskRelevantMemoryFilesOptions = {
   memoryVectors: Map<string, Float32Array>;
   topK?: number;
   floor?: number;
-  asOf: string;
 };
 
-// Pure: rank the approved, current (as of `asOf`), non-stale memories that have a
-// sidecar vector by cosine(taskVector, memoryVector), keep the top-K above
-// `floor`, and return the deduped, order-stable union of THEIR relatedFiles. The
-// task-scoped feed for the context-pruner's memoryRelevance factor — the narrowed
-// counterpart of approvedMemoryFiles (which returns ALL approved files). The gate
-// mirrors searchMemoryEntriesSemantic so the scoping cannot drift from recall.
-// Deterministic: ties break by id, same as the semantic search sort.
+// Pure: rank the approved, non-stale memories that have a sidecar vector by
+// cosine(taskVector, memoryVector), keep the top-K above `floor`, and return the
+// deduped, order-stable union of THEIR relatedFiles. The task-scoped feed for the
+// context-pruner's memoryRelevance factor — the narrowed counterpart of
+// approvedMemoryFiles (which returns ALL approved files). Eligibility mirrors
+// approvedMemoryFiles EXACTLY so the scoped set is always a task-filtered subset
+// of what the fallback would include — never stricter. Task relevance (cosine
+// top-K above floor) is the ONLY narrowing. Making eligibility current/tier-aware
+// is a future change to approvedMemoryFiles itself, applied uniformly to BOTH
+// paths, not divergently here. Deterministic: ties break by id.
 export function taskRelevantMemoryFiles(
   memories: readonly MemoryEntry[],
   options: TaskRelevantMemoryFilesOptions,
 ): string[] {
-  const { taskVector, memoryVectors, asOf } = options;
+  const { taskVector, memoryVectors } = options;
   const topK = options.topK ?? DEFAULT_TOP_K;
   const floor = options.floor ?? DEFAULT_FLOOR;
 
   const scored: { entry: MemoryEntry; score: number }[] = [];
   for (const entry of memories) {
-    if (!isRecallable(entry, asOf) || entry.stale) continue;
+    if (entry.approval !== "approved" || entry.stale) continue;
     const vector = memoryVectors.get(entry.id);
     if (vector === undefined) continue;
     const score = cosine(taskVector, vector);
@@ -71,7 +73,6 @@ export type TaskScopedMemoryFilesOptions = {
   taskVector?: Float32Array;
   topK?: number;
   floor?: number;
-  asOf?: string;
   embedFn?: EmbedFn;
 };
 
@@ -98,7 +99,6 @@ export async function taskScopedMemoryFiles(
     return taskRelevantMemoryFiles(options.memories, {
       taskVector,
       memoryVectors,
-      asOf: options.asOf ?? new Date().toISOString(),
       ...(options.topK !== undefined ? { topK: options.topK } : {}),
       ...(options.floor !== undefined ? { floor: options.floor } : {}),
     });
