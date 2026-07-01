@@ -34,6 +34,7 @@ import {
   resolveOverlayEffectiveSettings,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
+import type { SessionFailureId } from "@megasaver/shared";
 import { applyShownDedup } from "./shown-index.js";
 import { messageOf, redactedCount } from "./stats-helpers.js";
 
@@ -247,6 +248,20 @@ export async function runOutputExecCommand(
 
   const now = input.now ?? defaultNow;
   const newId = input.newId ?? defaultNewId;
+
+  // Ephemeral failure capture: a non-zero exit or a forced termination records
+  // a session-scoped SessionFailure that later feeds failure-aware ranking.
+  if (outcome.capture.childExitCode !== 0 || outcome.capture.terminated !== undefined) {
+    input.registry.createSessionFailure({
+      id: newId() as SessionFailureId,
+      projectId: settings.projectId,
+      sessionId: input.sessionId,
+      command: [input.command, ...input.args].join(" "),
+      errorOutput: outcome.capture.raw.slice(0, 4000),
+      source: "proxy-classifier",
+      createdAt: now(),
+    });
+  }
 
   // On a forced termination the partial output is still processed; surface the
   // cause both as a warning (alongside any redaction warning) and the typed
