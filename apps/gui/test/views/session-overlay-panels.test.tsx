@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryPanel } from "../../src/views/cockpit/memory-panel.js";
 import { TasksPanel } from "../../src/views/cockpit/tasks-panel.js";
@@ -72,6 +72,50 @@ describe("MemoryPanel", () => {
     await waitFor(() => expect(screen.getByText("first note")).toBeDefined());
     fireEvent.click(screen.getByRole("button", { name: /delete/i }));
     await waitFor(() => expect(screen.queryByText("first note")).toBeNull());
+  });
+
+  it("ignores a stale load after dir/id changes", async () => {
+    let firstResolve: (value: unknown) => void = () => {};
+    let secondResolve: (value: unknown) => void = () => {};
+    let calls = 0;
+
+    const fetchMock = vi.fn(async (_url: string, opts?: { method?: string }) => {
+      if (opts?.method && opts.method !== "GET")
+        return { ok: true, status: 200, json: async () => [] };
+      calls++;
+      if (calls === 1)
+        return new Promise((resolve) => {
+          firstResolve = resolve;
+        });
+      return new Promise((resolve) => {
+        secondResolve = resolve;
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { rerender } = render(<MemoryPanel dir="dir1" id="id1" />);
+    await waitFor(() => expect(calls).toBe(1));
+
+    rerender(<MemoryPanel dir="dir2" id="id2" />);
+    await waitFor(() => expect(calls).toBe(2));
+
+    await act(async () =>
+      secondResolve({
+        ok: true,
+        status: 200,
+        json: async () => [{ ...memoryRow, id: "new", content: "new note" }],
+      }),
+    );
+    expect(screen.getByText("new note")).toBeDefined();
+
+    await act(async () =>
+      firstResolve({
+        ok: true,
+        status: 200,
+        json: async () => [{ ...memoryRow, id: "old", content: "old note" }],
+      }),
+    );
+    expect(screen.queryByText("old note")).toBeNull();
   });
 });
 

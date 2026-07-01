@@ -14,22 +14,30 @@ export function MemoryPanel({ dir, id }: { dir: string; id: string }): JSX.Eleme
   const [error, setError] = useState<BridgeError | null>(null);
   const [draft, setDraft] = useState("");
   const [scope, setScope] = useState<"session" | "project">("session");
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
-  const load = useCallback(async () => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce intentionally re-triggers the load effect
+  useEffect(() => {
+    let live = true;
     setState("loading");
     setError(null);
-    try {
-      setRows(await fetchSessionMemory(dir, id));
-      setState("ready");
-    } catch (err) {
-      setError(err as BridgeError);
-      setState("error");
-    }
-  }, [dir, id]);
+    fetchSessionMemory(dir, id)
+      .then((list) => {
+        if (!live) return;
+        setRows(list);
+        setState("ready");
+      })
+      .catch((err) => {
+        if (!live) return;
+        setError(err as BridgeError);
+        setState("error");
+      });
+    return () => {
+      live = false;
+    };
+  }, [dir, id, refreshNonce]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const retry = (): void => setRefreshNonce((n) => n + 1);
 
   const onCreate = useCallback(
     async (e: FormEvent) => {
@@ -99,7 +107,7 @@ export function MemoryPanel({ dir, id }: { dir: string; id: string }): JSX.Eleme
       </form>
 
       {state === "loading" && <LoadingState label="Loading memory…" />}
-      {state === "error" && error && <ErrorState error={error} onRetry={load} />}
+      {state === "error" && error && <ErrorState error={error} onRetry={retry} />}
       {state === "ready" && rows && rows.length === 0 && (
         <p className="text-xs text-text-muted">No memory yet.</p>
       )}
