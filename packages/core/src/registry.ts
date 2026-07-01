@@ -35,6 +35,7 @@ import {
   projectRuleSchema,
 } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
+import { type SessionFailure, sessionFailureSchema } from "./session-failure.js";
 import {
   type Session,
   type SessionUpdatePatch,
@@ -72,6 +73,8 @@ export interface CoreRegistry {
   getSession(id: SessionId): Session | null;
   listSessions(projectId: ProjectId): Session[];
   endSession(id: SessionId, opts: { endedAt: string }): Session;
+  createSessionFailure(failure: SessionFailure): SessionFailure;
+  listSessionFailures(projectId: ProjectId, sessionId: SessionId): SessionFailure[];
   updateSession(id: SessionId, patch: SessionUpdatePatch): Session;
   // AA1 BB1: write the entire TokenSaverSettings blob onto a session.
   // The CLI / GUI compute the blob (mode, budget, timestamps) and hand
@@ -229,6 +232,7 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
   const memoryValidations = new Map<MemoryEntryId, MemoryValidation>();
   const projectRules = new Map<ProjectRuleId, ProjectRule>();
   const failedAttempts = new Map<FailedAttemptId, FailedAttempt>();
+  const sessionFailures = new Map<SessionId, SessionFailure[]>();
   const taskPlans = new Map<TaskPlanId, TaskPlan>();
   const toolDefinitions = new Map<ToolDefinitionId, ToolDefinition>();
 
@@ -299,7 +303,21 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       }
       const updated = sessionSchema.parse({ ...existing, endedAt: opts.endedAt });
       sessions.set(id, updated);
+      sessionFailures.delete(id);
       return updated;
+    },
+
+    createSessionFailure(failure) {
+      const parsed = sessionFailureSchema.parse(failure);
+      const existing = sessionFailures.get(parsed.sessionId) ?? [];
+      sessionFailures.set(parsed.sessionId, [...existing, parsed]);
+      return sessionFailureSchema.parse(parsed);
+    },
+
+    listSessionFailures(projectId, sessionId) {
+      return (sessionFailures.get(sessionId) ?? [])
+        .filter((f) => f.projectId === projectId)
+        .map((f) => sessionFailureSchema.parse(f));
     },
 
     updateSession(id, patch) {
