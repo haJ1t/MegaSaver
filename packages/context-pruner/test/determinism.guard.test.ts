@@ -39,9 +39,13 @@ describe("buildContextPack determinism guard", () => {
     expect(a.excluded.map((x) => x.name)).toEqual(b.excluded.map((x) => x.name));
   });
 
-  it("keeps every excluded block recoverable (metadata present)", () => {
+  it("keeps every excluded block recoverable (blockId present)", () => {
     const pack = buildContextPack({ task: "jwt auth", blocks, limit: 1 });
+    expect(pack.excluded.length).toBeGreaterThan(0);
     for (const ex of pack.excluded) {
+      // blockId is the real recovery handle on scoredBlockSchema (pack.ts):
+      // the id an agent uses to re-fetch a cut block's full content.
+      expect(ex.blockId.length).toBeGreaterThan(0);
       expect(ex.filePath.length).toBeGreaterThan(0);
       expect((ex.name ?? "").length).toBeGreaterThan(0);
     }
