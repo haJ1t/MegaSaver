@@ -69,6 +69,18 @@ describe("renderContextGateBlock", () => {
     expect(block).toContain("Use native tools only when explicitly required.");
     expect(block).toContain("Expand chunks before assuming omitted content is irrelevant.");
   });
+
+  it("instructs the agent to call get_task_context when enabled", () => {
+    const block = renderContextGateBlock(ctxWithTokenSaver(enabledTokenSaver));
+    expect(block).toContain("get_task_context");
+  });
+
+  it("omits the instruction entirely when token saver is disabled", () => {
+    const block = renderContextGateBlock(
+      ctxWithTokenSaver({ ...enabledTokenSaver, enabled: false }),
+    );
+    expect(block).toBe("");
+  });
 });
 
 describe("upsertBlock — CONTEXT_GATE block management", () => {

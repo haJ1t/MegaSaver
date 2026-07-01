@@ -57,7 +57,7 @@ async function embeddingSignalFor(
 // Shared composition for all four context tools: validate args → read the
 // project's index + relevant memories → (best-effort) load embedding vectors →
 // build the pack.
-async function packFor(env: ContextToolEnv, rawArgs: unknown): Promise<ContextPack> {
+export async function packFor(env: ContextToolEnv, rawArgs: unknown): Promise<ContextPack> {
   const parsed = inputSchema.safeParse(rawArgs);
   if (!parsed.success) {
     throw new McpBridgeError("validation_failed", parsed.error.message);
