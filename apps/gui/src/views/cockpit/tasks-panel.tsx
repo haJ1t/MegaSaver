@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ErrorState, LoadingState } from "../../components/states.js";
 import type { BridgeError } from "../../components/states.js";
 import { type SessionTaskPlanView, fetchSessionTasks } from "../../lib/claude-sessions-client.js";
@@ -7,22 +7,30 @@ export function TasksPanel({ dir, id }: { dir: string; id: string }): JSX.Elemen
   const [plans, setPlans] = useState<SessionTaskPlanView[] | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<BridgeError | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
-  const load = useCallback(async () => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce intentionally re-triggers the load effect
+  useEffect(() => {
+    let live = true;
     setState("loading");
     setError(null);
-    try {
-      setPlans(await fetchSessionTasks(dir, id));
-      setState("ready");
-    } catch (err) {
-      setError(err as BridgeError);
-      setState("error");
-    }
-  }, [dir, id]);
+    fetchSessionTasks(dir, id)
+      .then((list) => {
+        if (!live) return;
+        setPlans(list);
+        setState("ready");
+      })
+      .catch((err) => {
+        if (!live) return;
+        setError(err as BridgeError);
+        setState("error");
+      });
+    return () => {
+      live = false;
+    };
+  }, [dir, id, refreshNonce]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const retry = (): void => setRefreshNonce((n) => n + 1);
 
   return (
     <section
@@ -31,7 +39,7 @@ export function TasksPanel({ dir, id }: { dir: string; id: string }): JSX.Elemen
     >
       <h2 className="text-sm text-text-muted uppercase tracking-widest">Tasks</h2>
       {state === "loading" && <LoadingState label="Loading tasks…" />}
-      {state === "error" && error && <ErrorState error={error} onRetry={load} />}
+      {state === "error" && error && <ErrorState error={error} onRetry={retry} />}
       {state === "ready" && plans && plans.length === 0 && (
         <p className="text-xs text-text-muted">No task plans yet.</p>
       )}
