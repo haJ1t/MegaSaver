@@ -35,6 +35,8 @@ function registry(
           }
         : null,
     getProject: (id) => (id === PROJECT_ID ? { rootPath: projectRoot } : null),
+    createSessionFailure: (f) => f,
+    listSessionFailures: () => [],
   };
 }
 
