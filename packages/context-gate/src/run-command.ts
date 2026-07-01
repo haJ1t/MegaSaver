@@ -36,6 +36,7 @@ import {
   resolveOverlayEffectiveSettings,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
+import { buildSessionHints } from "./session-hints.js";
 import { applyShownDedup } from "./shown-index.js";
 import { messageOf, redactedCount } from "./stats-helpers.js";
 
@@ -229,12 +230,18 @@ export async function runOutputExecCommand(
     settings.maxReturnedBytes !== undefined
       ? Math.min(settings.maxReturnedBytes, MAX_RETURNED_CEILING)
       : undefined;
+  // Failure-aware ranking: the session's prior SessionFailure signatures boost
+  // any chunk that references them, so a fresh command's output surfaces the
+  // lines tied to what recently broke.
+  const sessionHints = buildSessionHints(input.registry, settings.projectId, input.sessionId);
   const filtered = await filterOutput({
     raw: outcome.capture.raw,
     intent: input.intent,
     mode: settings.mode,
     ...(maxReturnedBytes !== undefined ? { maxReturnedBytes } : {}),
     source: { kind: "command", command: input.command, args: input.args },
+    sessionHints,
+    engineRanking: true,
   });
 
   const warnings = filtered.warnings ?? [];

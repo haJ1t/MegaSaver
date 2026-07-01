@@ -46,6 +46,8 @@ function registry(projectRoot: string): OrchestratorRegistry {
           }
         : null,
     getProject: (id) => (id === PROJECT_ID ? { rootPath: projectRoot } : null),
+    createSessionFailure: (failure) => failure,
+    listSessionFailures: () => [],
   };
 }
 
