@@ -63,13 +63,32 @@ export function WorkspaceSessionList({
   }, []);
 
   useEffect(() => {
-    loadList();
-    const t = setInterval(() => {
-      loadList();
-      setNowMs(Date.now());
-    }, LIST_POLL_MS);
-    return () => clearInterval(t);
-  }, [loadList]);
+    let live = true;
+    let latest = 0;
+    const tick = (): void => {
+      const requestId = ++latest;
+      fetchClaudeSessions(50, 0)
+        .then((list) => {
+          if (!live || requestId !== latest) return;
+          setSessions(list);
+          setListState("ready");
+        })
+        .catch((err: unknown) => {
+          if (!live || requestId !== latest) return;
+          setListError(err as BridgeError);
+          setListState("error");
+        })
+        .finally(() => {
+          if (live && requestId === latest) setNowMs(Date.now());
+        });
+    };
+    tick();
+    const t = setInterval(tick, LIST_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
 
   if (listState === "loading") return <LoadingState label="Loading Claude Code sessions…" />;
   if (listState === "error" && listError)

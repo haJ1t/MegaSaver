@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClaudeSessionMeta } from "../../src/lib/claude-sessions-client.js";
 
@@ -124,5 +124,47 @@ describe("WorkspaceSessionList", () => {
     const row = container.querySelector(".row-enter");
     expect(row).not.toBeNull();
     expect((row as HTMLElement).style.animationDelay).toBe("0ms");
+  });
+
+  it("ignores stale responses from earlier polling ticks", async () => {
+    vi.useFakeTimers();
+    let firstResolve: (v: ClaudeSessionMeta[]) => void = () => {};
+    let secondResolve: (v: ClaudeSessionMeta[]) => void = () => {};
+    let calls = 0;
+    const oldSession = meta({ id: "old", title: "Old", projectLabel: "/tmp/alpha" });
+    const newSession = meta({ id: "new", title: "New", projectLabel: "/tmp/alpha" });
+
+    vi.doMock("../../src/lib/claude-sessions-client.js", () => ({
+      fetchClaudeSessions: () => {
+        calls++;
+        if (calls === 1)
+          return new Promise((resolve) => {
+            firstResolve = resolve;
+          });
+        return new Promise((resolve) => {
+          secondResolve = resolve;
+        });
+      },
+    }));
+    vi.resetModules();
+
+    const { WorkspaceSessionList: WorkspaceSessionListFresh } = await import(
+      "../../src/views/workspace-session-list.js"
+    );
+    render(<WorkspaceSessionListFresh onSelect={() => {}} />);
+
+    await act(async () => {});
+    expect(calls).toBe(1);
+
+    await act(async () => vi.advanceTimersByTime(4000));
+    expect(calls).toBe(2);
+
+    await act(async () => secondResolve([newSession]));
+    expect(screen.getByText("New")).toBeDefined();
+
+    await act(async () => firstResolve([oldSession]));
+    expect(screen.queryByText("Old")).toBeNull();
+
+    vi.useRealTimers();
   });
 });
