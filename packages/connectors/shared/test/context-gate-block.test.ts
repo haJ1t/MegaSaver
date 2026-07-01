@@ -76,7 +76,9 @@ describe("renderContextGateBlock", () => {
   });
 
   it("omits the instruction entirely when token saver is disabled", () => {
-    const block = renderContextGateBlock(ctxWithTokenSaver({ ...enabledTokenSaver, enabled: false }));
+    const block = renderContextGateBlock(
+      ctxWithTokenSaver({ ...enabledTokenSaver, enabled: false }),
+    );
     expect(block).toBe("");
   });
 });
