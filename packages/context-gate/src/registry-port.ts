@@ -1,9 +1,4 @@
-import type {
-  ProjectId,
-  SessionFailureId,
-  SessionId,
-  TokenSaverMode,
-} from "@megasaver/shared";
+import type { ProjectId, SessionFailureId, SessionId, TokenSaverMode } from "@megasaver/shared";
 
 // Structural port: the slice of a registry the orchestrator reads.
 // @megasaver/core's CoreRegistry structurally satisfies this interface, so
