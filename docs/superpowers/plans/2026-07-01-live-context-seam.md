@@ -659,7 +659,7 @@ it("omits the instruction entirely when token saver is disabled", () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `pnpm --filter @megasaver/connectors test -- context-gate-block`
+Run: `pnpm --filter @megasaver/connectors-shared test -- context-gate-block`
 Expected: FAIL — block does not contain `get_task_context`.
 
 - [ ] **Step 3: Implement**
@@ -676,7 +676,7 @@ The `enabled !== true` gate already returns `""`, so the disabled-case test pass
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `pnpm --filter @megasaver/connectors test -- context-gate-block`
+Run: `pnpm --filter @megasaver/connectors-shared test -- context-gate-block`
 Expected: PASS.
 
 - [ ] **Step 5: Full verify + commit**
