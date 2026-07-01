@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { BridgeError } from "../components/states.js";
 import { ErrorState, LoadingState } from "../components/states.js";
 import { type ClaudeSessionMeta, fetchClaudeSessions } from "../lib/claude-sessions-client.js";
@@ -36,6 +36,7 @@ export function WorkspaceSessionList({
   const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
   const [listError, setListError] = useState<BridgeError | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
@@ -50,21 +51,13 @@ export function WorkspaceSessionList({
     });
   };
 
-  const loadList = useCallback((): void => {
-    fetchClaudeSessions(50, 0)
-      .then((list) => {
-        setSessions(list);
-        setListState("ready");
-      })
-      .catch((err: unknown) => {
-        setListError(err as BridgeError);
-        setListState("error");
-      });
-  }, []);
+  const retryList = (): void => {
+    setRefreshNonce((n) => n + 1);
+  };
 
   useEffect(() => {
     let live = true;
-    let latest = 0;
+    let latest = refreshNonce;
     const tick = (): void => {
       const requestId = ++latest;
       fetchClaudeSessions(50, 0)
@@ -88,11 +81,11 @@ export function WorkspaceSessionList({
       live = false;
       clearInterval(t);
     };
-  }, []);
+  }, [refreshNonce]);
 
   if (listState === "loading") return <LoadingState label="Loading Claude Code sessions…" />;
   if (listState === "error" && listError)
-    return <ErrorState error={listError} onRetry={loadList} />;
+    return <ErrorState error={listError} onRetry={retryList} />;
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
