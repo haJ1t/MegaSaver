@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type RunCommandSpawn, runOutputExecCommand } from "@megasaver/context-gate";
-import type { SessionId } from "@megasaver/shared";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createJsonDirectoryCoreRegistry } from "../../src/index.js";
 
@@ -247,6 +247,26 @@ describe("runOutputExecCommand (orchestrator)", () => {
       expect(outcome.result.childExitCode).toBe(7);
       expect(outcome.result.chunkSetId).toBe(NEW_ID);
     }
+  });
+
+  // Non-zero exit with EMPTY output: exercises the SessionFailure capture through
+  // the REAL schema-validating registry (the per-package fake never parses, so a
+  // ZodError from an errorOutput non-empty constraint would slip past there).
+  it("child non-zero exit with empty output: does not throw, mirrors code, records one SessionFailure with errorOutput ''", async () => {
+    await seed(store, projectRoot, { storeRawOutput: true });
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
+    const { input, child } = baseInput({ registry });
+
+    const promise = runOutputExecCommand(input);
+    child.emit("close", 3);
+    const outcome = await promise;
+
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.result.childExitCode).toBe(3);
+
+    const failures = registry.listSessionFailures(PROJECT_ID as ProjectId, SESSION_ID as SessionId);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.errorOutput).toBe("");
   });
 
   // ---- redaction applied (filter redacts internally) -------------------

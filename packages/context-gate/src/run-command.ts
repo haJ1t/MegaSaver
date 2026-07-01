@@ -265,6 +265,10 @@ export async function runOutputExecCommand(
         projectId: settings.projectId,
         sessionId: input.sessionId,
         command: [input.command, ...input.args].join(" "),
+        // Cap the stored evidence: a SessionFailure is an ephemeral per-command
+        // record for failure-aware ranking, not the full transcript (the chunkSet
+        // holds that). 4000 chars bounds each record so a chatty failing command
+        // cannot bloat the session-failure store.
         errorOutput: outcome.capture.raw.slice(0, 4000),
         source: "proxy-classifier",
         createdAt: now(),
