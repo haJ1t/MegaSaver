@@ -75,6 +75,10 @@ export {
   readOverlayEvents,
   recordedEventsFromLogs,
   tokensFromBytes,
+  proxyUsageSavings,
+  sumBytesSavedSince,
   type HonestMetrics,
   type OverlayTokenSaverEvent,
+  type ProxyUsageSavings,
+  type ProxyUsageTokenCounts,
 } from "@megasaver/stats";
