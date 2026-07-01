@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ErrorState, LoadingState } from "../../components/states.js";
 import type { BridgeError } from "../../components/states.js";
 import {
@@ -11,16 +11,21 @@ export function WorkspaceContextPanel({ workspaceKey }: { workspaceKey: string }
   const [data, setData] = useState<WorkspaceContextResponse | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [error, setError] = useState<BridgeError | null>(null);
+  const latestId = useRef(0);
 
   async function run(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     if (task.trim().length === 0) return;
+    const requestId = ++latestId.current;
     setState("loading");
     setError(null);
     try {
-      setData(await fetchWorkspaceContext(workspaceKey, task.trim()));
+      const result = await fetchWorkspaceContext(workspaceKey, task.trim());
+      if (requestId !== latestId.current) return;
+      setData(result);
       setState("ready");
     } catch (err) {
+      if (requestId !== latestId.current) return;
       setError(err as BridgeError);
       setState("error");
     }
