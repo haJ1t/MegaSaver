@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ErrorState, LoadingState } from "../../components/states.js";
 import type { BridgeError } from "../../components/states.js";
 import {
@@ -21,32 +21,40 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
   const [stats, setStats] = useState<OverlaySessionTokenSaverStats | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<BridgeError | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
-  const fetchData = useCallback(
-    async (silent: boolean) => {
+  useEffect(() => {
+    let live = true;
+    let latest = refreshNonce;
+    const tick = (silent: boolean): void => {
+      const requestId = ++latest;
       if (!silent) {
         setState("loading");
         setError(null);
       }
-      try {
-        const s = await fetchSessionTokenSaverStats(dir, id);
-        setStats(s);
-        setState("ready");
-      } catch (err) {
-        if (!silent) {
-          setError(err as BridgeError);
-          setState("error");
-        }
-      }
-    },
-    [dir, id],
-  );
+      fetchSessionTokenSaverStats(dir, id)
+        .then((s) => {
+          if (!live || requestId !== latest) return;
+          setStats(s);
+          setState("ready");
+        })
+        .catch((err: unknown) => {
+          if (!live || requestId !== latest) return;
+          if (!silent) {
+            setError(err as BridgeError);
+            setState("error");
+          }
+        });
+    };
+    tick(false);
+    const timer = setInterval(() => tick(true), POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [dir, id, refreshNonce]);
 
-  useEffect(() => {
-    void fetchData(false);
-    const timer = setInterval(() => void fetchData(true), POLL_MS);
-    return () => clearInterval(timer);
-  }, [fetchData]);
+  const retry = (): void => setRefreshNonce((n) => n + 1);
 
   return (
     <section
@@ -65,9 +73,7 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
       </div>
 
       {state === "loading" && <LoadingState label="Loading token-saver stats…" />}
-      {state === "error" && error && (
-        <ErrorState error={error} onRetry={() => void fetchData(false)} />
-      )}
+      {state === "error" && error && <ErrorState error={error} onRetry={retry} />}
       {state === "ready" &&
         (stats === null ? (
           <p className="text-sm text-text-muted">No proxy activity recorded for this session.</p>

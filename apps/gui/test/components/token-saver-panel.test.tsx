@@ -102,4 +102,41 @@ describe("TokenSaverPanel", () => {
       vi.useRealTimers();
     }
   });
+
+  it("ignores stale poll responses", async () => {
+    vi.useFakeTimers();
+    try {
+      let firstResolve: (value: unknown) => void = () => {};
+      let secondResolve: (value: unknown) => void = () => {};
+      let calls = 0;
+      stub.saver = () => Promise.resolve(SAVER);
+      stub.stats = () => {
+        calls++;
+        if (calls === 1)
+          return new Promise((resolve) => {
+            firstResolve = resolve as (value: unknown) => void;
+          });
+        return new Promise((resolve) => {
+          secondResolve = resolve as (value: unknown) => void;
+        });
+      };
+      render(<TokenSaverPanel dir="d" id="s1" />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(calls).toBe(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(calls).toBe(2);
+
+      await act(async () => secondResolve({ ...STATS, returnedBytesTotal: 100 }));
+      expect(screen.getByText("225")).toBeDefined();
+
+      await act(async () => firstResolve({ ...STATS, returnedBytesTotal: 200 }));
+      expect(screen.queryByText("200")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
