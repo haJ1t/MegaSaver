@@ -96,28 +96,38 @@ Files: `packages/context-pruner/test/`, `packages/output-filter/test/`.
 
 ### Slice 1 — automatic failure capture (ephemeral)
 
-New `SessionFailure` type + in-session store in `@megasaver/core`. NOT the durable
-registry.
+New `SessionFailure` type + **session-scoped** store on `CoreRegistry` (persisted
+per-session, NOT project-durable memory), following the existing `scope='session'`
+discipline. Cleared on `endSession` — that is what "ephemeral" means here.
 
 ```
 SessionFailure {
-  text: string            // the failure evidence (compressed first-failure span)
-  category: string        // from classifyOutput: vitest | typescript | pytest | cargo | ...
+  id: SessionFailureId
+  projectId: ProjectId
+  sessionId: SessionId
+  command: string         // the failed step (command + args)
+  errorOutput: string     // captured failure evidence (already redacted/bounded by the pipeline)
   source: 'proxy-classifier'
-  timestamp: string
-  scope: 'session'
-  expires: 'session-end'
+  createdAt: string       // ISO datetime
 }
 ```
 
-In `context-gate/src/run-command.ts`, after `classifyOutput` returns a failure
-category for a proxied command/test output, append a `SessionFailure` to the
-session store. Durable `FailedAttempt` path is untouched. Satisfies §13 ("no
-memory writes without metadata") within session scope, with no durable-memory
-pollution.
+**Trigger = exit code, not classification.** `classifyOutput` lives inside
+`output-filter.filterOutput` and is about output *shape* for compression, not
+whether a command failed. The run-command call site already has `childExitCode` /
+`terminated` in scope, which is the ground-truth failure signal. In
+`runOutputExecCommand` (the **registry path**), when `childExitCode !== 0` or
+`terminated` is set, append a `SessionFailure` via the registry. Durable
+`FailedAttempt` is untouched.
 
-Files: `packages/core/src/` (new `session-failure.ts` + session-store hook),
-`packages/context-gate/src/run-command.ts`.
+**Scope: registry path only.** `runOverlayOutputExecCommand` is registry-less
+(workspaceKey / liveSessionId, no `CoreRegistry`), so it has nowhere to attach an
+ephemeral failure — deferred. `read.ts` / `filterRaw` has no session context and
+carries no failure semantics — untouched.
+
+Files: `packages/core/src/` (new `session-failure.ts` type + registry methods
+`createSessionFailure` / `listSessionFailures(projectId, sessionId)`; clear on
+`endSession`), `packages/context-gate/src/run-command.ts` (`runOutputExecCommand`).
 
 ### Slice 2 — sessionHints builder + wire the call sites
 
@@ -127,16 +137,22 @@ New builder assembles `sessionHints` from live state:
 - `recentMemory` / `projectConventions` ← memory-graph / project metadata
 - `recentFiles` ← current session read log
 
-Pass the built `sessionHints` into the three `filterOutput` call sites that
-currently pass nothing: `run-command.ts:230`, `run-command.ts:380`, `read.ts:164`.
+Pass the built `sessionHints` into the `filterOutput` call in
+`runOutputExecCommand` (`run-command.ts:230`), which currently passes nothing.
 This activates the dormant `failureHistoryBoost` / `memoryBoost` — the true
-"default-on": supply the data, not flip a flag.
+"default-on": supply the data, not flip a flag. `SessionHints` fields
+(`recentFailures`, `recentMemory`, `projectConventions`, `recentFiles`) are all
+`readonly string[]`; `recentFailures` maps from `SessionFailure.errorOutput`.
+
+**Scope: registry path only** (same reason as Slice 1). The overlay call
+(`run-command.ts:380`) and `read.ts:164` lack `registry`/`sessionId` and are
+deferred.
 
 Cost control: session-cache the hints; rebuild on new `SessionFailure` / memory
 change, not per tool call.
 
-Files: `packages/context-gate/src/` (new hints builder), edits to the three call
-sites.
+Files: `packages/context-gate/src/` (new hints builder), edit to
+`runOutputExecCommand`.
 
 ### Slice 3 — proactive seam: `get_task_context`
 
@@ -166,16 +182,17 @@ Files: `packages/connectors/shared/src/context-gate-block.ts`.
 ## Data flow
 
 ```
-proxied command/test output
-  → classifyOutput  ──(failure category)──►  SessionFailure store        [Slice 1]
+runOutputExecCommand (registry path)
+  → childExitCode !== 0 / terminated  ──►  registry.createSessionFailure     [Slice 1]
                                                     │
-task start ──► get_task_context ──► deriveIntent ──► buildContextPack ──► pack to agent   [Slice 3,4]
+task start ──► get_task_context ──► deriveIntent ──► packFor/buildContextPack ──► pack to agent   [Slice 3,4]
                                                     │
-tool output ──► filterOutput(sessionHints ← SessionFailure + memory) ──► ranked output    [Slice 2]
+tool output ──► filterOutput(sessionHints ← SessionFailure + memory) ──► ranked output           [Slice 2]
 ```
 
-Single producer (`SessionFailure`), two consumers (pack scoring at task-start via
-`failingTests`; output ranking at runtime via `recentFailures`).
+Single producer (`SessionFailure`, exit-code triggered on the registry path), two
+consumers (output ranking at runtime via `recentFailures`; pack scoring at
+task-start via `failingTests`, unchanged).
 
 ## Testing strategy
 
@@ -209,4 +226,7 @@ prove the seam reduces re-reads and repeated failures, not just raw bytes.
 ## Out-of-scope confirmation
 
 Slice 5 (impact-pack/edit-time), semantic-type weights, non-TS FQN, LLM planner,
-program-graph service, AST-locking. Revisit only on measured need.
+program-graph service, AST-locking. Also deferred within slices 1–2: the overlay
+(registry-less) command path and the `read.ts` file path — capture + hints land
+on the registry command path (`runOutputExecCommand`) first. Revisit only on
+measured need.
