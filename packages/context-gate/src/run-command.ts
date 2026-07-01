@@ -20,6 +20,7 @@ import {
   type TokenSaverMode,
   modeToBudget,
 } from "@megasaver/shared";
+import type { SessionFailureId } from "@megasaver/shared";
 import {
   type OverlayTokenSaverEvent,
   type TokenSaverEvent,
@@ -34,7 +35,6 @@ import {
   resolveOverlayEffectiveSettings,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
-import type { SessionFailureId } from "@megasaver/shared";
 import { applyShownDedup } from "./shown-index.js";
 import { messageOf, redactedCount } from "./stats-helpers.js";
 
