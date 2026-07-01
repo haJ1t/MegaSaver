@@ -1,5 +1,6 @@
 import type { ChildProcess } from "node:child_process";
 import { spawn as nodeSpawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import {
   type ChunkSet,
@@ -252,15 +253,23 @@ export async function runOutputExecCommand(
   // Ephemeral failure capture: a non-zero exit or a forced termination records
   // a session-scoped SessionFailure that later feeds failure-aware ranking.
   if (outcome.capture.childExitCode !== 0 || outcome.capture.terminated !== undefined) {
-    input.registry.createSessionFailure({
-      id: newId() as SessionFailureId,
-      projectId: settings.projectId,
-      sessionId: input.sessionId,
-      command: [input.command, ...input.args].join(" "),
-      errorOutput: outcome.capture.raw.slice(0, 4000),
-      source: "proxy-classifier",
-      createdAt: now(),
-    });
+    // Best-effort telemetry: capture writes to disk (json-directory registry),
+    // and an auxiliary write must never break command-output delivery. Swallow
+    // capture failures so the command result is still returned. Not a silent
+    // retry — a genuinely degraded auxiliary concern.
+    // SessionFailure ids must be uuids; newId is a caller-injectable determinism
+    // hook that can be non-uuid, so mint the id directly.
+    try {
+      input.registry.createSessionFailure({
+        id: randomUUID() as SessionFailureId,
+        projectId: settings.projectId,
+        sessionId: input.sessionId,
+        command: [input.command, ...input.args].join(" "),
+        errorOutput: outcome.capture.raw.slice(0, 4000),
+        source: "proxy-classifier",
+        createdAt: now(),
+      });
+    } catch {}
   }
 
   // On a forced termination the partial output is still processed; surface the

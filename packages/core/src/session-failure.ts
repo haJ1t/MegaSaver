@@ -8,7 +8,9 @@ export const sessionFailureSchema = z.object({
   projectId: projectIdSchema,
   sessionId: sessionIdSchema,
   command: z.string().trim().min(1),
-  errorOutput: z.string().trim().min(1),
+  // Empty is allowed: a silent non-zero exit (no stdout/stderr) is a real,
+  // capture-worthy failure. Only `command` must be non-empty.
+  errorOutput: z.string(),
   source: z.literal("proxy-classifier"),
   createdAt: z.string().datetime({ offset: true }),
 });

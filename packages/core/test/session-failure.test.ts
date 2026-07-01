@@ -21,4 +21,9 @@ describe("sessionFailureSchema", () => {
   it("rejects an empty command", () => {
     expect(() => sessionFailureSchema.parse({ ...valid, command: "" })).toThrow();
   });
+
+  it("accepts an empty errorOutput (a silent non-zero exit is a real failure)", () => {
+    const parsed: SessionFailure = sessionFailureSchema.parse({ ...valid, errorOutput: "" });
+    expect(parsed.errorOutput).toBe("");
+  });
 });
