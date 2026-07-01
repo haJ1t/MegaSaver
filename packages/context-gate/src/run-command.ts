@@ -259,11 +259,12 @@ export async function runOutputExecCommand(
 
   // Ephemeral failure capture: a non-zero exit or a forced termination records
   // a session-scoped SessionFailure that later feeds failure-aware ranking.
+  const captureWarnings: string[] = [];
   if (outcome.capture.childExitCode !== 0 || outcome.capture.terminated !== undefined) {
     // Best-effort telemetry: capture writes to disk (json-directory registry),
-    // and an auxiliary write must never break command-output delivery. Swallow
-    // capture failures so the command result is still returned. Not a silent
-    // retry — a genuinely degraded auxiliary concern.
+    // and an auxiliary write must never break command-output delivery. On failure
+    // we surface a non-fatal warning (§13: no silent swallow) but never rethrow.
+    // Not a silent retry — a genuinely degraded auxiliary concern.
     // SessionFailure ids must be uuids; newId is a caller-injectable determinism
     // hook that can be non-uuid, so mint the id directly.
     try {
@@ -271,25 +272,35 @@ export async function runOutputExecCommand(
         id: randomUUID() as SessionFailureId,
         projectId: settings.projectId,
         sessionId: input.sessionId,
-        command: [input.command, ...input.args].join(" "),
+        // Redact before persist: the command line is secret-bearing (e.g.
+        // `curl -H "Authorization: Bearer ..."`); reuse the already-redacted
+        // command/args the label was built from so no raw secret hits disk.
+        command: redactedLabel,
         // Cap the stored evidence: a SessionFailure is an ephemeral per-command
         // record for failure-aware ranking, not the full transcript (the chunkSet
         // holds that). 4000 chars bounds each record so a chatty failing command
-        // cannot bloat the session-failure store.
-        errorOutput: outcome.capture.raw.slice(0, 4000),
+        // cannot bloat the session-failure store. Redact first so raw output
+        // secrets never reach the persisted record.
+        errorOutput: redact(outcome.capture.raw.slice(0, 4000)).redacted,
         source: "proxy-classifier",
         createdAt: now(),
       });
-    } catch {}
+    } catch (err) {
+      captureWarnings.push(`session-failure capture skipped: ${messageOf(err)}`);
+    }
   }
 
   // On a forced termination the partial output is still processed; surface the
   // cause both as a warning (alongside any redaction warning) and the typed
-  // `terminated` field (§3.5).
-  const resultWarnings =
-    outcome.capture.terminated !== undefined
-      ? [...warnings, `terminated: ${outcome.capture.terminated}`]
-      : warnings;
+  // `terminated` field (§3.5). A skipped failure capture is folded in as a
+  // non-fatal warning so a systemic capture outage is visible, not silent.
+  const resultWarnings = [
+    ...warnings,
+    ...(outcome.capture.terminated !== undefined
+      ? [`terminated: ${outcome.capture.terminated}`]
+      : []),
+    ...captureWarnings,
+  ];
   let result: ExecResult = {
     ...filtered,
     ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),

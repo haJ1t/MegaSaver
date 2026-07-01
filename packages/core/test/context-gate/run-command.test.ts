@@ -269,6 +269,29 @@ describe("runOutputExecCommand (orchestrator)", () => {
     expect(failures[0]?.errorOutput).toBe("");
   });
 
+  // The persisted SessionFailure must NOT leak secrets: errorOutput is redacted
+  // before it hits disk, exactly like the chunkSet/label paths. Real registry so
+  // the record is actually parsed + stored.
+  it("child non-zero exit with secret-shaped output: stored SessionFailure.errorOutput is redacted, record still created", async () => {
+    await seed(store, projectRoot, { storeRawOutput: true });
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
+    const { input, child } = baseInput({ registry });
+
+    const SECRET = "sk-ABC123SECRETDEADBEEF0123456789";
+    const promise = runOutputExecCommand(input);
+    child.stdout.emit("data", Buffer.from(`Authorization: Bearer ${SECRET}\n`));
+    child.emit("close", 1);
+    const outcome = await promise;
+
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.result.childExitCode).toBe(1);
+
+    const failures = registry.listSessionFailures(PROJECT_ID as ProjectId, SESSION_ID as SessionId);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.errorOutput).not.toContain(SECRET);
+    expect(failures[0]?.errorOutput).toContain("[REDACTED]");
+  });
+
   // ---- redaction applied (filter redacts internally) -------------------
 
   it("redaction applied: secret-shaped output is redacted; warning present; redacted flag true", async () => {
