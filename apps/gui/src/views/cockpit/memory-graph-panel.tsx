@@ -278,7 +278,19 @@ export function MemoryGraphPanel({
 
     cy.layout({ name: "cose", animate: false, padding: 24 }).run();
 
+    // cytoscape sizes its canvas from the container at init, but this panel
+    // mounts on a tab switch and fills asynchronously, so the container is often
+    // 0-sized or stale on that first read — leaving the canvas blank though nodes
+    // exist. Re-sync the renderer to the real box: the observer's initial
+    // delivery fixes first paint; later ones handle tab-show and window resize.
+    const observer = new ResizeObserver(() => {
+      cy.resize();
+      cy.fit(undefined, 24);
+    });
+    observer.observe(container);
+
     return () => {
+      observer.disconnect();
       cy.destroy();
       cyRef.current = null;
     };

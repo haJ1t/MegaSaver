@@ -47,8 +47,11 @@ export function App(): JSX.Element {
         </div>
       </header>
 
-      <main className="flex-1 px-6 pb-8 min-h-0">
-        <div data-testid="page-container" className="max-w-5xl mx-auto h-full">
+      <main className="flex flex-col flex-1 px-6 pb-8 min-h-0">
+        <div
+          data-testid="page-container"
+          className="flex flex-col flex-1 min-h-0 w-full max-w-5xl mx-auto"
+        >
           {view === "agent-setup" ? (
             <AgentSetupDoctor />
           ) : view === "agent-office" ? (

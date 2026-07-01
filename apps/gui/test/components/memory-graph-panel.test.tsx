@@ -16,12 +16,16 @@ vi.mock("../../src/lib/claude-sessions-client.js", () => ({
 // assert that the correct cytoscape elements (by class) are passed.
 const tapHandlers: Array<(evt: { target: { id: () => string } }) => void> = [];
 let capturedElements: Array<{ data?: { id?: string; color?: string }; classes?: string }> = [];
+let capturedResize = vi.fn();
+let capturedFit = vi.fn();
 
 vi.mock("cytoscape", () => ({
   default: (opts: {
     elements?: Array<{ data?: { id?: string; color?: string }; classes?: string }>;
   }) => {
     capturedElements = opts.elements ?? [];
+    capturedResize = vi.fn();
+    capturedFit = vi.fn();
     return {
       on: (
         _event: string,
@@ -31,10 +35,28 @@ vi.mock("cytoscape", () => ({
         tapHandlers.push(handler);
       },
       layout: () => ({ run: () => undefined }),
+      resize: capturedResize,
+      fit: capturedFit,
       destroy: () => undefined,
     };
   },
 }));
+
+// jsdom ships no ResizeObserver; the panel uses one to re-fit cytoscape to the
+// real container box. Fire the callback on observe() to mimic the browser's
+// initial delivery, so tests exercise the resize/fit re-sync.
+class MockResizeObserver {
+  private readonly callback: ResizeObserverCallback;
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+  }
+  observe(): void {
+    this.callback([], this as unknown as ResizeObserver);
+  }
+  unobserve(): void {}
+  disconnect(): void {}
+}
+globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
 import { MemoryGraphPanel } from "../../src/views/cockpit/memory-graph-panel.js";
 
@@ -348,5 +370,18 @@ describe("MemoryGraphPanel", () => {
       expect(afterClasses).not.toContain("wiki");
     });
     expect(screen.getByText("decided to use cose")).toBeDefined();
+  });
+
+  it("re-fits cytoscape to the container box so the canvas is not blank on first paint", async () => {
+    stub.fetch = () => Promise.resolve(FIXTURE_PHASE2);
+    render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
+    await waitForGraph();
+    // cytoscape reads the container size at init; in a tab/flex panel that size
+    // is 0 or stale on first paint, so without an explicit resize+fit the canvas
+    // renders blank though nodes exist. Assert the panel re-syncs the renderer.
+    await waitFor(() => {
+      expect(capturedResize).toHaveBeenCalled();
+      expect(capturedFit).toHaveBeenCalled();
+    });
   });
 });
