@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrchestratorRegistry, SessionFailureRecord } from "../src/registry-port.js";
 import { runOutputExecCommand } from "../src/run-command.js";
 import type { RunCommandSpawn } from "../src/run-command.js";
-import { buildSessionHints } from "../src/session-hints.js";
+import { buildSessionHints, extractFailureSignatures } from "../src/session-hints.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
@@ -24,21 +24,71 @@ function failure(errorOutput: string): SessionFailureRecord {
   };
 }
 
+// A realistic multi-line tsc-style failure blob. The signatures the extractor
+// must surface are the file path (with and without :line) and the TS2322 code.
+const TSC_FAILURE = [
+  "src/auth.ts:42:10 - error TS2322: Type 'string | undefined' is not assignable to type 'string'.",
+  "",
+  "42   const token: string = readToken();",
+  "              ~~~~~",
+  "",
+  "Found 1 error in src/auth.ts:42",
+].join("\n");
+
+describe("extractFailureSignatures", () => {
+  it("pulls short file-path and error-code signatures from a multi-line blob", () => {
+    const sigs = extractFailureSignatures(TSC_FAILURE);
+
+    expect(sigs).toContain("TS2322");
+    expect(sigs).toContain("src/auth.ts");
+    expect(sigs).toContain("src/auth.ts:42");
+    // Every emitted signature is a SHORT token a later chunk could contain —
+    // never the whole blob, and never a sub-4-char fragment.
+    for (const s of sigs) {
+      expect(s.length).toBeGreaterThanOrEqual(4);
+      expect(s).not.toContain("\n");
+    }
+    // Deduped and capped.
+    expect(new Set(sigs).size).toBe(sigs.length);
+    expect(sigs.length).toBeLessThanOrEqual(12);
+  });
+
+  it("returns [] for empty or benign output with no signatures", () => {
+    expect(extractFailureSignatures("")).toEqual([]);
+    expect(extractFailureSignatures("all good, nothing to report here")).toEqual([]);
+  });
+});
+
 describe("buildSessionHints", () => {
-  it("maps each failure's errorOutput into recentFailures in order", () => {
+  it("maps each failure's errorOutput into short signatures, not the whole blob", () => {
     const registry = {
       listSessionFailures: (projectId: ProjectId, sessionId: SessionId) => {
         expect(projectId).toBe(PROJECT_ID);
         expect(sessionId).toBe(SESSION_ID);
-        return [failure("boom one"), failure("boom two")];
+        return [failure(TSC_FAILURE)];
       },
     };
 
     const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
-    expect(hints.recentFailures).toEqual(["boom one", "boom two"]);
+    expect(hints.recentFailures).toContain("TS2322");
+    expect(hints.recentFailures).toContain("src/auth.ts");
+    // The whole blob must NOT leak in as a hint item — that is the dead-boost bug.
+    expect(hints.recentFailures).not.toContain(TSC_FAILURE);
     expect(hints.recentMemory).toBeUndefined();
     expect(hints.recentFiles).toBeUndefined();
+  });
+
+  it("contributes nothing for a benign failure that yields no signature", () => {
+    const registry = {
+      listSessionFailures: () => [failure("process exited"), failure(TSC_FAILURE)],
+    };
+
+    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    // Only the tsc blob's signatures survive; the benign one adds nothing.
+    expect(hints.recentFailures).toContain("TS2322");
+    expect(hints.recentFailures).toContain("src/auth.ts");
   });
 
   it("returns an empty recentFailures list when there are no failures", () => {
@@ -115,8 +165,9 @@ describe("runOutputExecCommand — failure-aware ranking (session hints wired)",
     const created: SessionFailureRecord[] = [];
     const registry = makeSharedRegistry(projectRoot, created);
 
-    // Command 1 fails; Slice-1 capture records a SessionFailure whose errorOutput
-    // is the signature "TS2322". buildSessionHints later maps it into recentFailures.
+    // Command 1 fails with a REALISTIC multi-line tsc failure. Slice-1 capture
+    // records the full redacted blob on the SessionFailure; buildSessionHints
+    // later distills it into SHORT signatures (the file path, the TS2322 code).
     const failChild = makeChild();
     const failPromise = runOutputExecCommand({
       registry,
@@ -133,18 +184,21 @@ describe("runOutputExecCommand — failure-aware ranking (session hints wired)",
       loadPermissions: () => null,
       spawn: spawnMock(failChild),
     });
-    failChild.stdout.emit("data", Buffer.from("TS2322"));
+    failChild.stdout.emit("data", Buffer.from(TSC_FAILURE));
     failChild.emit("close", 1);
     const failOutcome = await failPromise;
     expect(failOutcome.ok).toBe(true);
     expect(created).toHaveLength(1);
-    expect(created[0]?.errorOutput).toBe("TS2322");
+    // The record keeps the FULL redacted blob (schema unchanged); only the
+    // hints emit signatures.
+    expect(created[0]?.errorOutput).toBe(TSC_FAILURE);
 
-    // Command 2 succeeds; its output has a chunk referencing TS2322 plus a
-    // separate noise-only chunk. With sessionHints + engineRanking wired, the
-    // TS2322 chunk must earn a positive failureHistoryBoost and outrank noise.
+    // Command 2 succeeds; one chunk of its output mentions a signature from the
+    // prior failure (the file path src/auth.ts), a separate chunk is pure noise.
+    // With sessionHints + engineRanking wired, the signature chunk must earn a
+    // positive failureHistoryBoost and outrank the noise chunk.
     const noiseTail = Array.from({ length: 45 }, (_, i) => `info detail entry ${i}`).join("\n");
-    const secondBody = `TS2322\n${noiseTail}\n`;
+    const secondBody = `rebuilt module src/auth.ts cleanly\n${noiseTail}\n`;
     const okChild = makeChild();
     const okPromise = runOutputExecCommand({
       registry,
@@ -168,11 +222,11 @@ describe("runOutputExecCommand — failure-aware ranking (session hints wired)",
     if (!okOutcome.ok) return;
 
     const excerpts = okOutcome.result.excerpts;
-    const boostedIndex = excerpts.findIndex((e) => e.text.includes("TS2322"));
-    const noiseIndex = excerpts.findIndex((e) => !e.text.includes("TS2322"));
+    const boostedIndex = excerpts.findIndex((e) => e.text.includes("src/auth.ts"));
+    const noiseIndex = excerpts.findIndex((e) => !e.text.includes("src/auth.ts"));
     expect(boostedIndex).toBeGreaterThanOrEqual(0);
     expect(noiseIndex).toBeGreaterThanOrEqual(0);
-    // Engine ranking is active: the boosted chunk carries a positive
+    // Engine ranking is active: the signature chunk carries a positive
     // failureHistoryBoost and the noise chunk does not.
     expect(excerpts[boostedIndex]?.engine?.failureHistoryBoost).toBeGreaterThan(0);
     expect(excerpts[noiseIndex]?.engine?.failureHistoryBoost).toBe(0);
