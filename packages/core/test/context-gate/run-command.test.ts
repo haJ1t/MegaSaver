@@ -292,6 +292,31 @@ describe("runOutputExecCommand (orchestrator)", () => {
     expect(failures[0]?.errorOutput).toContain("[REDACTED]");
   });
 
+  // Sibling to the errorOutput case: the persisted SessionFailure.command FIELD
+  // must also be redacted. A secret in the ARGS (not stdout) must not survive
+  // onto the stored record, even though the record is still created.
+  it("child non-zero exit with secret-shaped args: stored SessionFailure.command is redacted, record still created", async () => {
+    await seed(store, projectRoot, { storeRawOutput: true });
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
+    const SECRET = "sk-ABC123SECRETDEADBEEF0123456789";
+    const { input, child } = baseInput({
+      registry,
+      args: ["-H", `Authorization: Bearer ${SECRET}`] as readonly string[],
+    });
+
+    const promise = runOutputExecCommand(input);
+    child.emit("close", 1);
+    const outcome = await promise;
+
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.result.childExitCode).toBe(1);
+
+    const failures = registry.listSessionFailures(PROJECT_ID as ProjectId, SESSION_ID as SessionId);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.command).not.toContain(SECRET);
+    expect(failures[0]?.command).toContain("[REDACTED]");
+  });
+
   // ---- redaction applied (filter redacts internally) -------------------
 
   it("redaction applied: secret-shaped output is redacted; warning present; redacted flag true", async () => {
