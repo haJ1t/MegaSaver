@@ -92,6 +92,13 @@ export {
 } from "./honest-metrics.js";
 
 export {
+  proxyUsageSavings,
+  sumBytesSavedSince,
+  type ProxyUsageTokenCounts,
+  type ProxyUsageSavings,
+} from "./proxy-usage-savings.js";
+
+export {
   type SufficiencyFixture,
   type FixtureKind,
   SUFFICIENCY_FIXTURES,
