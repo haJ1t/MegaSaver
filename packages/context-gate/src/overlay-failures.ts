@@ -46,9 +46,13 @@ function isOverlayFailureRecord(value: unknown): value is OverlayFailureRecord {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     typeof v["command"] === "string" &&
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     typeof v["errorOutput"] === "string" &&
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     v["source"] === "proxy-classifier" &&
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     typeof v["createdAt"] === "string"
   );
 }

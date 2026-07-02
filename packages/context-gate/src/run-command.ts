@@ -34,6 +34,7 @@ import {
   appendEvent,
   appendOverlayEvent,
 } from "@megasaver/stats";
+import { appendOverlayFailure, buildOverlayHints } from "./overlay-failures.js";
 import {
   type LoadProjectPermissions,
   defaultNewId,
@@ -41,7 +42,6 @@ import {
   resolveEffectiveSettings,
   resolveOverlayEffectiveSettings,
 } from "./read.js";
-import { appendOverlayFailure, buildOverlayHints } from "./overlay-failures.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
 import { buildSessionHints } from "./session-hints.js";
 import { applyShownDedup } from "./shown-index.js";
