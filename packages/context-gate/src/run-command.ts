@@ -8,7 +8,13 @@ import {
   saveChunkSet,
   saveOverlayChunkSet,
 } from "@megasaver/content-store";
-import { type FilterOutputResult, filterOutput } from "@megasaver/output-filter";
+import {
+  type FilterOutputResult,
+  engineRankingDisabledByEnv,
+  filterOutput,
+  finalizeReplayTrace,
+  writeReplayTrace,
+} from "@megasaver/output-filter";
 import {
   type PolicyDenyCode,
   type ProjectPermissions,
@@ -242,7 +248,10 @@ export async function runOutputExecCommand(
     ...(maxReturnedBytes !== undefined ? { maxReturnedBytes } : {}),
     source: { kind: "command", command: input.command, args: input.args },
     sessionHints,
-    engineRanking: true,
+    // On by default at the seam; MEGASAVER_ENGINE_RANKING=false is the A/B
+    // kill switch, and the recorded trace makes both arms measurable (§P2.6).
+    engineRanking: !engineRankingDisabledByEnv(),
+    recordTrace: true,
   });
 
   const warnings = filtered.warnings ?? [];
@@ -313,8 +322,11 @@ export async function runOutputExecCommand(
       : []),
     ...captureWarnings,
   ];
+  // The trace is measurement data (§P2.6): persisted below, stripped from the
+  // agent-visible result so it never spends the tokens it exists to measure.
+  const { trace: rankingTrace, ...filteredSansTrace } = filtered;
   let result: ExecResult = {
-    ...filtered,
+    ...filteredSansTrace,
     ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),
     childExitCode: outcome.capture.childExitCode,
     ...(outcome.capture.terminated !== undefined ? { terminated: outcome.capture.terminated } : {}),
@@ -346,6 +358,22 @@ export async function runOutputExecCommand(
     result.chunkSetId = chunkSetId;
     const sessionDir = join(input.storeRoot, "content", settings.projectId, input.sessionId);
     result = applyShownDedup({ result, sessionDir, chunkSetId });
+  }
+
+  // Best-effort seam measurement (§P2.6): append the ranking trace to a
+  // per-session stats dir — per-session because writeReplayTrace owns the
+  // fixed replay-traces.jsonl filename inside the dir it is given.
+  if (rankingTrace !== undefined) {
+    await writeReplayTrace(
+      join(input.storeRoot, "stats", settings.projectId, `${input.sessionId}-traces`),
+      finalizeReplayTrace(rankingTrace, {
+        sessionId: input.sessionId,
+        projectId: settings.projectId,
+        toolName: "proxy_run_command",
+        createdAt: now(),
+        ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
+      }),
+    );
   }
 
   const event: TokenSaverEvent = {
@@ -445,7 +473,9 @@ export async function runOverlayOutputExecCommand(
     ...(maxReturnedBytes !== undefined ? { maxReturnedBytes } : {}),
     source: { kind: "command", command: input.command, args: input.args },
     sessionHints,
-    engineRanking: true,
+    // Same A/B kill switch as the registry path; overlay trace recording is
+    // deferred (§P2.6 keeps measurement scope to the registry sites).
+    engineRanking: !engineRankingDisabledByEnv(),
   });
 
   const warnings = filtered.warnings ?? [];

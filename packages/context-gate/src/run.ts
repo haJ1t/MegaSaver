@@ -1,5 +1,9 @@
 import { join } from "node:path";
-import type { FilterOutputResult } from "@megasaver/output-filter";
+import {
+  type FilterOutputResult,
+  finalizeReplayTrace,
+  writeReplayTrace,
+} from "@megasaver/output-filter";
 import { type ProjectPermissions, redact } from "@megasaver/policy";
 import type { SessionId, TokenSaverMode } from "@megasaver/shared";
 import {
@@ -122,10 +126,14 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     mode: settings.mode,
     maxReturnedBytes: settings.maxReturnedBytes,
     sessionHints,
+    recordTrace: true,
     ...(input.outline === true ? { outline: true } : {}),
   });
 
-  let result: FilterOutputResult = { ...filteredResult };
+  // The trace is measurement data (§P2.6): persisted below, stripped from the
+  // agent-visible result so it never spends the tokens it exists to measure.
+  const { trace: rankingTrace, ...filteredSansTrace } = filteredResult;
+  let result: FilterOutputResult = { ...filteredSansTrace };
   if (settings.storeRawOutput) {
     const chunkSetId = newId();
     try {
@@ -144,6 +152,22 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     result.chunkSetId = chunkSetId;
     recordRead(sessionDir, pathHash, { contentHash: newHash, chunkSetId });
     result = applyShownDedup({ result, sessionDir, chunkSetId });
+  }
+
+  // Best-effort seam measurement (§P2.6): append the ranking trace to a
+  // per-session stats dir — per-session because writeReplayTrace owns the
+  // fixed replay-traces.jsonl filename inside the dir it is given.
+  if (rankingTrace !== undefined) {
+    await writeReplayTrace(
+      join(input.storeRoot, "stats", settings.projectId, `${input.sessionId}-traces`),
+      finalizeReplayTrace(rankingTrace, {
+        sessionId: input.sessionId,
+        projectId: settings.projectId,
+        toolName: "proxy_read_file",
+        createdAt: now(),
+        ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
+      }),
+    );
   }
 
   const event: TokenSaverEvent = {
