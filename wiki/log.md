@@ -3622,3 +3622,46 @@ future-skew-resistant hook heartbeats. Independent CRITICAL design passes from
 security-reviewer and tracer evidence-loop returned APPROVE. Implementation
 plans remain blocked until Claude Code repeats its four-lens review and approves
 the amended specs. See wiki/agent-channel.md 2026-07-02 23:08.
+
+## [2026-07-02] review | re-review of 8811bab5 → REVISE round 2 (narrower)
+
+Same 4-lens method (2 fix-verification + 2 fresh new-hole lenses). Result:
+24/26 round-1 findings verified-fixed with concrete testable rules, including
+both BLOCKINGs (fenced owner identity/exit-75/--recover; file-identity +
+caseMode canonicalization). Amendment introduced new findings: 1 BLOCKING
+(transition_incomplete states forbid their own retry — designed deadlock; no
+escape row for journal mismatch), 7 MAJOR (migration rollback crash cuts
+unenumerated; fence CAS unimplementable over atomic-rename with two lock
+authorities; offline_cli lease undecidable after lock release; stale
+client-close confirmation reusable; single transition slot silently
+overwritable in the handoff window; dev:ino family key not durable across
+remount/restore → silent deactivation; dev:ino reuse activates compression in
+the wrong repo) + carried #13 (security-reviewer/tracer APPROVE is
+self-assertion co-committed with the amendment; artifact or pending required;
+re-run needed post-round-2 regardless). Recommendation recorded: consider
+cutting the auto-migration/uninstall transaction subsystem (operator-installed
+plist, one machine) for a documented manual migration — removes the root of
+findings 1/2/5. Full detail: wiki/agent-channel.md 2026-07-02 23:55 entry.
+Plans remain blocked.
+
+## [2026-07-03] amend | round-2 findings resolved in both specs (author: Claude Code)
+
+User-directed (chat, 2026-07-02 evening; confirmation record in
+agent-channel.md 00:15). Proxy: migration/uninstall journal subsystem CUT
+(manual legacy bootout via legacy_service_present; stateless idempotent plist
+ops) — removes the round-2 BLOCKING deadlock and 3 MAJORs at the root; durable
+handoffDeadline decides released-transition liveness; owner rewrites serialized
+under transition.lock (no CAS-over-rename); transition_in_progress guards the
+single slot; --recover is the universal escape; monitor observe-only while a
+transition is retained. Saver: family identity flipped to canonical
+common-directory PATH (caseMode-aware) — durable across reboot/remount/restore,
+inode-recycling wrong-repo activation impossible; no-commondir layouts key to
+the worktree root (hostile .git-file adoption killed); degraded-precedence
+fail-closed, v1 rewrite scope, toggle scope echo, non-mutating status reads,
+telemetry contract pinned. Verification (fresh contexts): security-reviewer
+APPROVE_WITH_NOTES + tracer evidence-loop APPROVE_WITH_NOTES (artifacts
+archived under docs/superpowers/reviews/ — new standing requirement),
+fix-verification APPROVE (all round-2 items closed), fresh-eyes found 3
+amendment-introduced contradictions — fixed same session, all reviewer notes
+incorporated. Pending gate: Codex counter-review of the round-2 amendments
+(author≠reviewer), then plans in fixed order (saver first).

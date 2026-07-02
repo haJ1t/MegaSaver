@@ -7,6 +7,12 @@ design_branch: feat/persistent-proxy-routing
 implementation_branch: feat/saver-activation-inheritance
 implementation_order: "1 of 2 — ships before persistent proxy routing"
 design_reviews_completed: [architect, critic]
+design_reviews_pending_rerun:
+  # Round-2 amendment replaced the family-identity mechanism (file-id →
+  # canonical path) and was authored by the round-1/2 reviewer (Claude Code);
+  # an adversarial counter-review of the amended text by a fresh context
+  # (Codex) is required before the plan.
+  - counter-review-of-round2-amendments
 required_implementation_reviews: [code-reviewer, critic, verifier]
 sources:
   - docs/superpowers/specs/2026-06-15-realized-saver-hook-design.md
@@ -77,6 +83,15 @@ to disabled; corruption never falls through to a more permissive parent.
 Fresh install has no exact, family, or global record and therefore remains
 disabled.
 
+An unversioned (legacy) record at the requested exact key never serves as a
+stage-1 exact override inside a Git context: it is consulted only through the
+verified legacy-root stage. When family identity is definitively `not_git`, the
+unversioned record applies as stage-1 exact — it cannot be a root fallback
+because it *is* the workspace. When family resolution is merely degraded
+(`budget_exceeded`/`metadata_invalid`), the unversioned record is treated as
+`invalid` for that resolution and fails closed: a transient metadata or budget
+failure can never resurrect a legacy enabled record over a family disable.
+
 ## Repository-family identity
 
 The resolver starts from `path.resolve(cwd)` and walks at most 32 lexical
@@ -88,9 +103,14 @@ the hook or spawns Git. It finds the nearest `.git` entry:
 - `.git` file: parse one `gitdir: <path>` line and resolve it relative to the
   file's parent. If the target contains `commondir`, parse that pointer relative
   to the admin directory and validate the reciprocal admin `gitdir` pointer
-  back to the discovered worktree `.git` file. Without `commondir`, a
-  structurally valid Git directory is its own common directory
-  (separate-git-dir and submodule case);
+  back to the discovered worktree `.git` file. Without `commondir`, the layout
+  has exactly one working tree (separate-git-dir and submodule case) and family
+  identity is the canonical **worktree root** — the `.git` file's parent — not
+  the pointed-to directory. Keying by the target would let a hostile `.git`
+  file that points at another repository's primary `.git` directory join that
+  repository's family; keying by the worktree root confines such a file to its
+  own path identity while losing no inheritance (a single-worktree layout has
+  nothing to inherit across);
 - no valid `.git`: repository-family resolution is unavailable.
 
 Pointer files are UTF-8, at most 4 KiB, contain no NUL, and accept only one
@@ -110,23 +130,18 @@ Reciprocal mismatch—for example a moved worktree needing `git worktree repair`
 returns `family_unavailable:reciprocal_mismatch` in status rather than silently
 pretending the workspace is unrelated.
 
-Family identity is based primarily on the canonical common-directory file
-identity, not path spelling:
+Family identity is the canonical common-directory **path**, produced by an
+explicit, platform-aware canonicalization. Durable state never keys on
+`stat.dev`/`stat.ino`: device numbers change across reboots and remounts and
+inodes change on copy-based restore or migration, so a file-id key silently
+orphans activation or — worse — lets a recycled identity activate compression
+in an unrelated repository. Canonical-path identity survives reboot, remount,
+and restore; the intentional consequence is that a different repository
+appearing at the same canonical path inherits that path's activation, which
+matches the product's existing path-keyed workspace semantics and is the safe
+direction to be wrong in.
 
-```text
-git-family:v1:file-id:<platform>:<stat.dev>:<stat.ino>
-```
-
-The domain-separated token is encoded as
-`gf1_<base64url(SHA-256(UTF8(token)))>` through a new `RepositoryFamilyKey`
-type; the security-sensitive family lookup never uses the legacy FNV workspace
-key. This makes casing, `/tmp` ↔ `/private/tmp`, drive-letter, separator, and
-symlink aliases converge while distinct directories retain distinct inode
-identities. Family records also store the full SHA-256 `identityDigest` and the
-reader verifies that it matches the filename key before applying the record.
-
-If a platform returns an unavailable/zero file id, fallback canonicalization is
-explicit. The injected filesystem adapter reports the containing volume's
+The injected filesystem adapter reports the containing volume's
 `caseMode` as `sensitive | insensitive | unknown` from non-mutating platform
 metadata; platform name alone never determines casing:
 
@@ -137,9 +152,18 @@ metadata; platform name alone never determines casing:
   `case_mode_unknown`, accepting a visible false-negative alias split rather
   than conflating distinct repositories.
 
-The fallback token is
-`git-family:v1:path:<platform>:<caseMode>:<canonicalPath>` and is SHA-256 encoded
-the same way. Tests inject case-sensitive and case-insensitive APFS, Windows,
+The identity token is
+`git-family:v1:path:<platform>:<caseMode>:<canonicalPath>`, encoded as
+`gf1_<base64url(SHA-256(UTF8(token)))>` through a new `RepositoryFamilyKey`
+type; the security-sensitive family lookup never uses the legacy FNV workspace
+key. `realpath.native` makes `/tmp` ↔ `/private/tmp`, symlinked-parent,
+drive-letter, and separator aliases converge. Family records store the full
+SHA-256 `identityDigest` plus the canonical `identityPath`; the reader verifies
+the digest matches the filename key before applying the record, and
+`identityPath` gives operators and tests a human-checkable record of what the
+key denotes. Aliases realpath cannot unify (bind mounts, network double-mounts)
+remain distinct identities — a visible limitation, not silent misbehavior.
+Tests inject case-sensitive and case-insensitive APFS, Windows,
 and Linux adapters. They prove aliases converge only where the volume contract
 says they are aliases and prove two case-distinct directories never conflate.
 
@@ -154,8 +178,12 @@ aliases cannot be reversed. The fallback probes deduplicated raw and canonical
 main-root candidates available from the un-realpathed `.git` pointer/ancestor,
 the canonical common-dir parent, and the current nested-worktree ancestry. If
 none matches, status reports `legacy_alias_unresolved` and asks for one explicit
-repository enable; it never claims inheritance succeeded. This covers raw and
-realpath-derived keys without guessing or scanning unrelated store entries.
+repository enable; it never claims inheritance succeeded. This covers the raw
+spellings observable from the current session plus canonical forms; an
+enable-time alias that is no longer observable (for example an external
+worktree added from an already-realpathed shell after enabling under
+`/tmp/...`) is *visible* rather than covered — `legacy_alias_unresolved` names
+the one-command fix. No guessing and no scanning of unrelated store entries.
 
 ## Shared component and storage
 
@@ -177,10 +205,7 @@ type ResolvedWorkspaceTokenSaver = {
     | "reciprocal_mismatch"
     | "legacy_alias_unresolved"
     | null;
-  familyIdentityDiagnostic:
-    | "file_id_unavailable"
-    | "case_mode_unknown"
-    | null;
+  familyIdentityDiagnostic: "case_mode_unknown" | null;
 };
 ```
 
@@ -211,6 +236,7 @@ type FamilySaverRecord = {
   updatedAt: string;
   scope: "repository";
   identityDigest: string;
+  identityPath: string;
 };
 ```
 
@@ -242,6 +268,12 @@ blocking the hook.
 Reading the shipped unversioned shapes is an on-disk migration for currently
 supported user state, not a pre-1.0 API compatibility shim. After any successful
 mutation, that record is rewritten as strict v1; no legacy shape is emitted.
+The rewrite scope is pinned: only an explicit exact-scope mutation (`--exact`
+or the GUI this-checkout-only action) rewrites a legacy record, and it writes
+`scope:"exact"` because that is the operator's stated intent. Repository- and
+global-scope mutations never touch the legacy file; untouched, it stays
+permanently outranked by any family record via the legacy-root stage. No path
+silently promotes a legacy fallback into a stage-1 override.
 
 ## Activation write policy
 
@@ -249,7 +281,10 @@ The existing workspace enable/disable command and GUI toggle become
 repository-aware: at a verified main Git root they write one family record; in
 a linked worktree or non-Git directory they write one exact record. `--exact`
 and the GUI “this checkout only” action explicitly force exact scope. This is a
-public behavior change and requires a changeset.
+public behavior change and requires a changeset. Every enable/disable response
+— CLI text and JSON, and the GUI confirmation — states the scope it actually
+wrote and its coverage: `repository family (covers all worktrees of <root>)` or
+`this workspace only`. Silent family-wide activation is not permitted.
 
 Unversioned settings at a verified main root are reclassified as
 `legacy-root`, not stage-1 exact, so a new family disabled record outranks an
@@ -291,10 +326,13 @@ stored key timestamp. Equal/older input—including wall-clock regression—is a
 no-op with a `clock_regression` diagnostic, so concurrency never moves liveness
 backward. An incoming or stored timestamp more than five minutes ahead of
 `now` is rejected/dropped with `future_skew`; it can never become the comparison
-baseline. Each successful write/status read drops those future entries and
-entries older than 30 days, caps the map to the 256 newest, and recomputes
-`latest` from retained values. This guarantees bounded retention even across a
-wall-clock rollback. Lock contention or write failure skips heartbeat update
+baseline. Status reads are non-mutating: they compute the filtered view (TTL,
+cap, future-skew) in memory and never take the heartbeat lock, so GUI polling
+can never starve hook writers. Pruning — dropping future entries and entries
+older than 30 days, capping the map to the 256 newest, and recomputing
+`latest` — happens only on successful hook writes under the heartbeat lock;
+because every write prunes, retention stays bounded even across a wall-clock
+rollback. Lock contention or write failure skips heartbeat update
 and never blocks or mutates the tool result.
 
 ## Status and liveness
@@ -306,6 +344,8 @@ CLI/GUI status returns:
 - effective source and mode;
 - `familyUnavailableReason` and any exact overrides that still outrank a
   repository action;
+- `familyIdentityDiagnostic` (`case_mode_unknown`) when the volume's case
+  semantics could not be positively established;
 - hook configuration state;
 - requested-workspace `lastSaverHookInvocationAt/AgeMs`, plus separate global
   last-invocation evidence;
@@ -330,9 +370,12 @@ have invoked an eligible tool.
 - Malformed nearest-precedence record: disabled/invalid; do not inherit through
   corruption.
 - Invalid, non-reciprocal, oversized, structurally invalid, or leaf-symlinked
-  `.git` metadata: report a precise family-unavailable reason, skip family and
-  legacy-root stages, then evaluate only explicit global default; parent/cwd
-  symlink aliases remain supported through realpath/file identity.
+  `.git` metadata: report a precise family-unavailable reason and skip the
+  family and legacy-root stages. If an unversioned record exists at the
+  requested exact key, it is treated as `invalid` and resolution fails closed
+  to disabled (see Locked precedence); otherwise only the explicit global
+  default is evaluated. Parent/cwd
+  symlink aliases remain supported through realpath canonicalization.
 - Settings read permission error: fail closed at that precedence level.
 - Heartbeat failure: continue normal saver decision.
 - Compression/event write failure: preserve the hook invariant—emit no
@@ -343,7 +386,10 @@ have invoked an eligible tool.
 | Case | Required result |
 | --- | --- |
 | Exact override | exact enabled/disabled wins over family/global |
-| Platform identity | SHA-256 filename/digest verification; file-id aliases; case-sensitive and insensitive APFS; win32 drive/case/separators; linux case rules; zero-file-id and unknown-case fallback pinned without repository conflation |
+| Platform identity | SHA-256 filename/digest + `identityPath` verification; canonical-path aliases (`/tmp` ↔ `/private/tmp`, symlinked parents); case-sensitive and insensitive APFS; win32 drive/case/separators; linux case rules; unknown-case diagnostic pinned without repository conflation; family records survive simulated dev/inode change (reboot, remount, copy-restore) |
+| Degraded precedence | budget/metadata failure treats an unversioned main-root record as invalid (fail closed), never stage-1 exact; `not_git` applies it as exact |
+| Scope echo | enable/disable CLI/GUI responses state the written scope and coverage |
+| Status reads | non-mutating; no heartbeat lock taken; pruning happens only on write paths |
 | Main + nested worktree | shared common-dir resolves the same family |
 | External worktree | `gitdir` + `commondir` + reciprocal pointer resolve the same family without spawning Git |
 | Separate git dir/submodule/bare | separate identity is deterministic; bare has no worktree family |
@@ -379,9 +425,12 @@ governs that branch. Their implementation branches and plans remain separate.
 
 - Enabling a Git repository activates all worktrees sharing its common-dir
   identity, including external worktrees.
-- Darwin and Windows aliases converge when file identity or positively known
+- Darwin and Windows aliases converge when canonicalization or positively known
   case-insensitive volume semantics establish equivalence; case-sensitive and
   unknown volumes never conflate distinct paths.
+- Family activation survives reboot, remount, and copy-based restore; a
+  different repository at the same canonical path inherits that path's
+  activation by documented design.
 - An explicit worktree disable wins over family/global settings.
 - Repository disable outranks legacy main-root enabled state and reports any
   intentional v1 exact override that still wins.

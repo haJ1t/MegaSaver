@@ -13,8 +13,17 @@ implementation_order: "2 of 2 — after saver activation inheritance"
 design_reviews_completed:
   - architect
   - critic
+  # Re-run against the round-2 amended text on 2026-07-03; archived artifacts:
+  # docs/superpowers/reviews/2026-07-02-persistent-proxy-routing-security-design-review.md
+  # docs/superpowers/reviews/2026-07-02-persistent-proxy-routing-tracer-design-evidence-loop.md
+  # Both APPROVE_WITH_NOTES; every note incorporated (see artifact addenda).
   - security-reviewer
   - tracer-evidence-loop
+design_reviews_pending_rerun:
+  # Round-2 amendments were authored by the round-1/2 reviewer (Claude Code);
+  # author≠reviewer requires the counter-review of the amended text by Codex
+  # (or another fresh context) before the plan.
+  - counter-review-of-round2-amendments
 required_implementation_reviews:
   - code-reviewer
   - critic-implementation
@@ -24,9 +33,11 @@ required_implementation_reviews:
 manual_confirmation:
   date: 2026-07-02
   evidence: >
-    User explicitly selected persistent CLI+GUI routing, manual next-launch
-    restart, and the six safety amendments in chat; mirrored in
-    wiki/agent-channel.md entries dated 2026-07-02.
+    User explicitly selected persistent CLI+GUI routing with manual next-launch
+    restart and the six safety amendments (2026-07-02 chat), and directed the
+    round-2 amendment implementation in chat the same evening; recorded as a
+    dedicated user-confirmation entry in wiki/agent-channel.md dated
+    2026-07-03 00:15.
 sources:
   - docs/conventions/mission.md
   - docs/conventions/risk-modes.md
@@ -163,7 +174,8 @@ type ProxyControlErrorCode =
   | "drain_expired"
   | "lock_unverifiable"
   | "recovery_failed"
-  | "transition_incomplete"
+  | "transition_in_progress"
+  | "legacy_service_present"
   | "shutdown_requires_client_restart"
   | "reconfigure_requires_client_restart"
   | "autostart_failed";
@@ -178,10 +190,18 @@ type ProxySafeErrorDetail =
 
 type TransitionOwner = {
   id: string;
+  ownerKind: "offline_cli" | "supervisor" | "recovery";
   ownerInstanceId: string;
   ownerProcessStartToken: string;
   ownerBootId: string;
   ownerFenceToken: string;
+  // Stamped by an offline_cli owner immediately before it releases
+  // transition.lock for the bootstrap handoff (null until then). Liveness of a
+  // released transition is decided from THIS
+  // durable field, never from the (released) filesystem lock: unexpired ⇒ only
+  // the authenticated replacement supervisor may take over; expired ⇒ the
+  // transition is stale and recoverable. Bounded at 60 seconds.
+  handoffDeadline: string | null;
   startedAt: string;
 };
 
@@ -210,23 +230,6 @@ type ProxyTransition =
   | (TransitionOwner & {
       kind: "drain_complete";
       phase: "confirmation_persisted";
-      expectedUnrouted: true;
-    })
-  | (TransitionOwner & {
-      kind: "migrate_service";
-      phase:
-        | "migration_prepared"
-        | "migration_legacy_stopped"
-        | "migration_plist_installed"
-        | "migration_supervisor_started";
-      expectedUnrouted: true;
-    })
-  | (TransitionOwner & {
-      kind: "uninstall_service";
-      phase:
-        | "intent_persisted"
-        | "uninstall_job_stopped"
-        | "uninstall_plist_moved";
       expectedUnrouted: true;
     });
 
@@ -279,36 +282,6 @@ type ProxyRuntimeState = {
   lastReconciledAt: string;
   lastUsagePersistedAt: string | null;
 };
-
-type ProxyServiceMigrationState = {
-  version: 1;
-  transitionId: string;
-  phase:
-    | "prepared"
-    | "legacy_stopped"
-    | "plist_installed"
-    | "supervisor_started";
-  backupPath: string;
-  legacyPlistDigest: string;
-  legacyPid: number;
-  legacyProcessStartToken: string;
-  legacyBootId: string;
-  adoptedExactRoute: boolean;
-  clientClosureConfirmation: null | {
-    source: "cli" | "gui";
-    confirmedAt: string;
-  };
-  startedAt: string;
-};
-
-type ProxyServiceUninstallState = {
-  version: 1;
-  transitionId: string;
-  phase: "intent_persisted" | "job_stopped" | "plist_moved";
-  managedPlistDigest: string;
-  backupPath: string;
-  startedAt: string;
-};
 ```
 
 Both schemas are strict and versioned. Missing control state means disabled;
@@ -319,36 +292,14 @@ exists. The proxy directory is mode
 `fsync`, and reject symlinks. `upstreamBaseUrl` must be an HTTPS origin or an
 explicit loopback HTTP origin, with no userinfo, path, query, or fragment.
 
-`service-migration.json` and `service-uninstall.json` exist only during their
-LaunchAgent transactions and follow the same strict, owner-only, atomic
-durability rules. Backup paths must be inside the proxy migration-backup
-directory and every digest is verified before restore or idempotent success.
-The migration journal durably records whether the operator supplied the narrow
-client-closure confirmation; a recovered migration never infers or recreates
-that authority.
-
-Service transactions persist the fsynced journal **before** the matching
-`control.transition`, linked by one transition id, and perform no settings or
-`launchctl` mutation between those two writes. An orphan prepared/intent journal
-with no control transition therefore has not changed external runtime state; a
-matching later explicit request may adopt it after digest/identity verification,
-or recovery may clear only that orphan journal. A transition with a missing or
-mismatched journal fails closed with `transition_incomplete` and performs no
-settings, plist, listener, or launchd mutation.
-
-The journal is the sole authoritative fine-grained service phase; the matching
-control phase is a status index. Every phase advance writes/fsyncs the journal
-first and then the control index. On recovery, equal phases continue normally;
-a control index exactly one phase behind is advanced only after the journal's
-required job/plist/digest/route/health observation succeeds. A control phase
-ahead, non-adjacent mismatch, or transition-id mismatch fails closed. The rows
-below named `migrate service` and `uninstall service` refer to the authoritative
-journal phase. At successful completion, recovery verifies the terminal
-observation, clears the control transition first, then removes the journal. A
-terminal orphan journal with no control transition is therefore safe to remove
-only after the same terminal observation; a nonterminal orphan other than the
-initial prepared/intent case is retained as `transition_incomplete`. Tests cut
-between both writes at every phase and between both terminal deletions.
+Service file operations (legacy plist replacement, managed-plist removal) are
+journal-free: MegaSaver never stops a process it did not start, every step is
+an individually atomic filesystem operation (rename to a digest-verified backup,
+atomic install), and recovery is by observation — a re-run inspects
+`launchctl print`, plist presence, and template digests and converges
+idempotently. Backup paths must be inside the proxy migration-backup directory
+and every digest is verified before restore or idempotent success. See
+LaunchAgent lifecycle.
 
 Runtime JSON is discovery, not truth. `running`, `healthy`, and `routed` are
 always re-observed from the process, nonce health endpoint, and route adapter.
@@ -363,34 +314,76 @@ owner-specific:
 - a `supervisor` owner is live only when authenticated discovery returns its
   instance id and the observed boot id, PID, and process-start token all match;
 - an `offline_cli` transition owner, which necessarily predates discovery, is
-  live only while the same-boot PID/start-token tuple matches and its 30-second
-  operation lease is unexpired; it refreshes the lease at least every five
-  seconds and after every durable phase;
+  live while it still holds `transition.lock` with a same-boot PID/start-token
+  match and an unexpired 30-second lock lease (refreshed at least every five
+  seconds and after every durable phase), OR — after it has released the lock
+  for the bootstrap handoff — while the durable transition's `handoffDeadline`
+  is unexpired. A released transition's liveness is decided from the durable
+  deadline alone, never from the released filesystem lock, so a stopped or
+  suspended CLI cannot become an immortal owner;
 - a `recovery` owner uses the same bounded same-boot PID/start-token rule and
   never depends recursively on authenticated discovery.
 
-Prior boot, missing process, start-token mismatch, or an expired bounded lease
-makes the corresponding offline/recovery owner stale. Any failed supervisor
+Prior boot, missing process, start-token mismatch, an expired bounded lease, or
+an expired `handoffDeadline` on a released transition makes the corresponding
+offline/recovery owner stale. Any failed supervisor
 tuple or authenticated-discovery check makes a supervisor owner unverifiable;
 route safety must be established before replacement. These are alternative
 staleness predicates, not an `AND` condition, so PID reuse cannot create a
 permanent veto.
 
+Lock files are created with `wx` (exclusive create). The creating owner keeps
+the descriptor open and refreshes `leaseExpiresAt` by rewriting the fixed-shape
+record in place through that held descriptor plus `fsync`; lock files are never
+renamed except by quarantine. The inode captured at creation is the identity
+reference for every later path/inode validation. The atomic-rename mutation
+rule in Security invariants applies to state files, not lock files.
+
 Every owner re-opens and validates the lock path/inode, unexpired lease,
 `fenceToken`, and matching transition id/`ownerFenceToken` immediately before
-each state write, settings mutation, listener action, or `launchctl` call. A
-takeover changes the fence token through an atomic compare-and-swap of the
-durable transition owner. An expired or suspended former owner that later
-resumes must self-abort before mutation. Bootstrap-to-supervisor handoff uses
-the same compare-and-swap after the CLI authenticates the newly published
-control endpoint; no two owners can act on one transition concurrently.
+each state write, settings mutation, listener action, or `launchctl` call. An
+expired or suspended former owner that later resumes must self-abort before
+mutation.
+
+Owner takeover is serialized by `transition.lock`, not by a read-modify-write
+race on `control.json`: the durable transition owner (including its fence
+token) may be rewritten only while holding `transition.lock`. `recovery.lock`
+exists solely to quarantine and recreate an unverifiable
+`transition.lock`/`supervisor.lock`; after quarantine the contender must
+`wx`-create the fresh `transition.lock` and re-read control state before any
+rewrite, so recovery contenders and the bootstrap handoff contend on one
+exclusive lock. In the handoff, the CLI persists the transition with a fresh
+`handoffDeadline` and releases the lock; the supervisor `wx`-acquires
+`transition.lock`, validates the transition id and unexpired deadline, and
+rewrites the owner to itself with a new fence token under that lock. No two
+owners can act on one transition concurrently.
+
+Any start/stop/recover client that acquires `transition.lock` and finds a
+persisted transition that is still live — owner live by the rules above, or
+`handoffDeadline` unexpired — returns `transition_in_progress` without mutating
+it, with one delivery rule: when the live owner is the authenticated supervisor
+itself, the request is delivered through its control API instead, which resumes
+or clears its own retained transition under the same locks — so a blocked
+rollback held by a live supervisor is still escapable by explicit start/stop.
+During an unexpired handoff a stop is delayed (at most 60 seconds), never
+reversed. A dead or expired transition may be adopted or cleared only through
+the recovery rules (route safety first). The single transition slot can
+therefore never be silently overwritten.
 
 `recovery.lock` uses the bounded recovery identity above. A contender may
 quarantine a stale lock only after re-reading all owner evidence: atomically
 rename the lock to
 `recovery.lock.stale.<random-id>`, verify the moved inode/content matches what
 was inspected, then create a fresh `wx` lock. Concurrent contenders retry after
-`ENOENT/EEXIST`; a matching live owner is never renamed. Before quarantining a
+`ENOENT/EEXIST`. A lock proven live at inspection is never chosen for
+quarantine; if post-rename verification shows the record changed between
+inspection and rename (a live owner refreshed inside the race window), the
+rename stands, the displaced owner self-aborts at its next fenced validation,
+and the contender proceeds only after route safety. Because fenced validation
+and the following syscall are not one atomic step, a displaced owner may land
+at most one already-validated operation after takeover; value-guarded route
+writes and read-back verification bound that residual — documented rather than
+claimed away. Before quarantining a
 stale transition owner that reached any route-affecting phase, recovery makes a
 leased exact route safe and preserves absent, foreign, or unleased values. This
 makes owner death recoverable without a second recovery lock.
@@ -424,7 +417,13 @@ inspection; it does not require a live API.
 by bare PID liveness: under `recovery.lock`, it rechecks authenticated discovery
 and process-start identity, removes only a leased exact route before breaking
 unverifiable locks, preserves foreign values, clears stale runtime state, and
-starts a replacement. A healthy authenticated owner is never force-broken.
+starts a replacement. It is also the universal escape for any retained
+transition whose owner is dead or expired — including blocked enable/disable
+rollback states: after route safety it clears or resumes that transition per
+the recovery matrix. A healthy authenticated owner is never force-broken. No
+retained transition state is unrecoverable: every blocked matrix row is
+escapable through explicit `proxy start --recover`, `proxy stop`, or a new
+explicit enable.
 
 `routeLease` is the durable ownership marker. URL equality alone is never
 treated as ownership. Cleanup requires both a lease and an exact current value.
@@ -469,7 +468,9 @@ because its string matches.
 
 ### Enable
 
-1. Acquire `transition.lock`, create an enable transition id at
+1. Acquire `transition.lock`; a persisted live transition returns
+   `transition_in_progress`, and a dead/expired one goes through recovery
+   first. Create an enable transition id at
    `intent_persisted`, and parse Claude settings under the shared connector
    lock to preflight the
    value plus route lease. `foreign` or `invalid` clears the transition and
@@ -477,8 +478,11 @@ because its string matches.
    because this is an explicit enable.
 2. Persist `desiredEnabled=true`; this is the operator's durable opt-in. Advance
    to `bootstrap_pending` before any LaunchAgent handoff.
-3. Install or upgrade the proxy LaunchAgent, release the transition lock, and
-   wait for authenticated supervisor discovery.
+3. Install or upgrade the proxy LaunchAgent; then stamp a 60-second
+   `handoffDeadline` on the persisted transition, release the transition lock,
+   and wait for authenticated supervisor discovery. The deadline is stamped
+   after the (possibly slow) install so installation time never consumes the
+   handoff window.
 4. The supervisor reacquires the transition lock and binds exactly one listener
    on the configured loopback port.
 5. Verify nonce ownership through the reserved local health endpoint and
@@ -545,9 +549,14 @@ window is documented rather than claimed away.
 
 Reconciliation triggers are fixed: supervisor startup, authenticated
 start/stop/reconfigure requests, listener `error`/unexpected `close`, and a
-five-second ownership monitor. The monitor checks nonce health and route drift;
-it never silently restarts and does not run while a persisted transition is
-owned/resumable. Missing/foreign route outside an `expectedUnrouted` transition
+five-second ownership monitor. The monitor checks nonce health and route drift
+and never silently restarts. While a persisted transition is live (owner live
+or handoff deadline unexpired) the monitor is suspended. While a dead-owner
+transition is retained awaiting explicit recovery, the monitor runs
+observe-only: it refreshes status and diagnostics but performs no lease-clear,
+block, or drain write — drift seen in that mode is recorded as diagnostic only,
+and its resolution flows through the recovery rules for that retained
+transition. Missing/foreign route when no transition is persisted
 clears any stale lease,
 preserves a foreign value, retains `desiredEnabled=true`, persists the matching
 `reconcileBlocked` reason, and transitions the still-healthy owned listener into
@@ -573,7 +582,9 @@ residuals that cannot honor drain.
 
 Disable ordering is safety-critical:
 
-1. Acquire `transition.lock` and persist one disable transition with
+1. Acquire `transition.lock`; a persisted live transition returns
+   `transition_in_progress`, and a dead/expired one goes through recovery
+   first. Persist one disable transition with
    `desiredEnabled=false`, `phase=unroute_expected`, and
    `expectedUnrouted=true` **before** changing Claude settings.
 2. Under the connector lock, remove the route only if `routeLease` exists and
@@ -618,7 +629,8 @@ Startup/recovery handles every non-null transition before normal reconcile:
 
 | Kind / phase | Observed state | Mandatory follow-on |
 | --- | --- | --- |
-| enable / intent or bootstrap pending | no authenticated supervisor | resume bootstrap under recovered transition identity; no route exists yet |
+| enable / intent persisted, `desiredEnabled` still false | dead owner | clear the transition — the durable opt-in was never persisted, so there is nothing to resume and disabled intent is preserved |
+| enable / intent (desired true) or bootstrap pending | no authenticated supervisor | resume bootstrap under recovered transition identity; no route **lease** exists yet — a pre-existing exact unleased route may exist and is preserved until the explicit-enable adoption check |
 | enable / listener healthy | matching nonce health, no lease | persist installing lease and continue; failed health records blocked failure and stops only owned listener |
 | enable / lease installing | exact route + matching health | verify and promote active |
 | enable / lease installing | exact route + failed health | remove leased exact route, clear lease, block, never report ready |
@@ -640,18 +652,6 @@ Startup/recovery handles every non-null transition before normal reconcile:
 | drain complete / confirmation persisted | generation already dead or prior boot | verify route remains absent/foreign, clear drain+transition, never rebind, return idempotent success |
 | recover / route safety | unverifiable owner | make leased exact route safe first and preserve foreign/unleased values, then advance |
 | recover / owner replacement | route safe | quarantine stale locks/runtime and resume from durable desired state |
-| migrate service / migration prepared | matching journal + legacy service | require persisted client-close confirmation iff `adoptedExactRoute=true`; an absent-route journal resumes with null confirmation; make route safe, then boot out only the identity-matched legacy process |
-| migrate service / migration prepared | journaled legacy identity already stopped | verify route remains absent/foreign and the old start-token identity is gone, then advance idempotently to migration legacy stopped |
-| migrate service / migration legacy stopped | matching journal + absent route | install the managed plist or restore the digest-verified backup; never route |
-| migrate service / migration legacy stopped | managed plist already installed after a crash cut | verify exact managed template/digest and absent route, then advance idempotently to migration plist installed |
-| migrate service / migration plist installed | matching journal + managed plist | bootstrap the supervisor or restore the digest-verified legacy service; never route before new health |
-| migrate service / migration plist installed | authenticated replacement supervisor already live | verify matching nonce health, then advance idempotently to migration supervisor started |
-| migrate service / migration supervisor started | matching nonce health | clear migration journal/transition and resume the original enable at listener health; failed health rolls back with route absent |
-| uninstall service / intent persisted | matching dormant managed job | boot out and advance; a foreign/active job blocks without mutation |
-| uninstall service / intent persisted | matching managed job already unloaded | verify plist digest and advance idempotently to uninstall job stopped |
-| uninstall service / uninstall job stopped | unloaded managed plist | move it to the verified backup location and advance; mismatch blocks |
-| uninstall service / uninstall job stopped | plist already moved + digest-matching backup | advance idempotently to uninstall plist moved and complete |
-| uninstall service / uninstall plist moved | missing managed plist + digest-matching backup | clear transition and return idempotent success; any other observation blocks |
 
 Every row advances or clears the transition atomically under `transition.lock`.
 No recovery branch converts disabled intent into enable, applies a route during
@@ -705,44 +705,37 @@ recovery path instead of being killed.
 Installer rules:
 
 - same label with unknown owner or argv: refuse overwrite;
-- known legacy MegaSaver shape: write/fsync exact backup + digest, then persist
-  `service-migration.json` and `migrate_service/migration_prepared` **before**
-  any route or launchd mutation;
-- absent route may migrate directly. An exact unleased route requires proof
-  that the known legacy PID owns port 8787 **and** explicit
-  `--confirm-clients-closed-for-migration` (or GUI equivalent). The controller
-  value-guard removes that route before bootout. Foreign/unproven routes abort
-  without stopping the job;
-- after route safety, boot out the old job, verify its start-token identity
-  exited and the port no longer answers, persist `legacy_stopped`, install the
-  plist and persist `plist_installed`, bootstrap/nonce-health-check and persist
-  `supervisor_started`, then clear the journal and continue enable;
-- bootstrap failure: boot out the failed replacement, restore and reload the
-  prior plist, clear desired state/incomplete lease, persist the error, and do
-  not create a new route;
+- **MegaSaver never stops a process it did not start.** A loaded
+  `com.megasaver.proxy` job with the known legacy `proxy start` argv fails
+  enable with `legacy_service_present`, and the CLI/GUI print the exact manual
+  step (`launchctl bootout gui/$UID/com.megasaver.proxy`). Enable is simply
+  retried after the operator has booted the job out. Because the legacy
+  listener is only ever stopped by the operator, no client-closure confirmation
+  flag, migration journal, or kill-window reasoning exists;
+- unloaded label with a digest-matching known legacy plist file: move it
+  atomically to `<storeRoot>/proxy/migration-backups/`, then atomically install
+  the managed supervisor plist. A crash between the two renames converges on
+  re-run by observation: legacy file gone + backup present + managed plist
+  absent ⇒ install; digest mismatch or an unexpected extra file ⇒ refuse
+  without mutation;
+- a pre-existing exact unleased route is never touched by installation; it is
+  handled solely by the explicit-enable adoption rules (ownership health-check
+  first);
+- bootstrap failure: boot out the failed managed job, restore the
+  digest-verified backup plist file without loading it, clear desired
+  state/incomplete lease, persist the error, and do not create a new route;
 - every `launchctl` failure is returned and persisted;
 - fresh install does not create or load the service before opt-in.
 
-Migration recovery is phase-driven. `prepared` resumes route-safe bootout only
-after the same confirmation; `legacy_stopped` installs the new plist or restores
-the verified backup; `plist_installed` bootstraps or rolls back; and
-`supervisor_started` verifies nonce health before clearing the journal. Once
-legacy stop begins, every rollback keeps the Claude route absent and sets
-desired disabled until a new explicit start. Tests cut the process after backup,
-route removal, bootout, plist replace, bootstrap, and health verification. A
-crash can interrupt old clients only inside the explicitly confirmed migration
-window; the spec does not classify that as drain-safe continuity.
-
 `mega proxy service uninstall --confirm` is the only plist-removal path. It is
-allowed only when desired is disabled, no lease/listener/drain/transition
-exists, and label/argv match the managed template. It boots out the dormant job,
-moves the plist to the migration-backup directory rather than deleting it, and
-reports every failure. Before bootout it persists an `uninstall_service`
-transition and backup digest. Recovery is idempotent: unloaded+managed plist
-resumes the move; unloaded+missing plist+matching backup is success; loaded
-managed job resumes bootout; any foreign/mismatched file blocks without
-mutation. Death after bootout or after move therefore converges on retry.
-Ordinary disable leaves a managed dormant service.
+allowed only when desired is disabled and no lease/listener/drain/live
+transition exists, and label/argv match the managed template. It is stateless
+and idempotent by observation: loaded managed job ⇒ boot out; unloaded +
+digest-matching managed plist ⇒ move it to the migration-backup directory
+(never delete); unloaded + missing plist + digest-matching backup ⇒ idempotent
+success; any foreign or digest-mismatched file blocks without mutation. Death
+after bootout or after the move converges on retry. Ordinary disable leaves a
+managed dormant service.
 
 `com.megasaver.context-daemon` is not edited. Non-macOS desired state can be
 reconciled when the supervisor is explicitly started, but cross-reboot
@@ -754,10 +747,7 @@ CLI surface:
 
 - `mega proxy start` — persist enable, ensure supervisor, wait for ready/error;
 - `mega proxy start --recover` — route-safe recovery from unverifiable stale
-  supervisor/transition ownership;
-- `mega proxy start --confirm-clients-closed-for-migration` — authorize the
-  bounded legacy-listener replacement window only when an exact legacy route
-  is active;
+  supervisor/transition ownership or any retained dead-owner transition;
 - `mega proxy stop` — unroute future clients and enter drain;
 - `mega proxy stop --confirm-clients-restarted` — complete a drain and stop;
 - `mega proxy status [--json]` — observed state and evidence;
@@ -824,7 +814,15 @@ Saver activation inheritance is implementation **1 of 2** and ships first.
 Until its heartbeat registry and compression-event readers exist, proxy status
 returns all saver invocation/compression timestamps and ages as `null` without
 turning proxy readiness red. Persistent routing is implementation **2 of 2** and
-consumes those artifacts only through an optional telemetry reader.
+consumes those artifacts only through an optional telemetry reader. The pinned
+contract: the reader consumes `stats/saver-hook-heartbeats.json` (the strict
+`{version:1,latest,workspaces}` schema owned by the saver spec);
+`lastSaverHookInvocationAt` is the registry's global `latest.ts`
+(requested-workspace scoping is saver-status-only), and `lastCompressionAt` is
+the most recent compression-event timestamp across the store's saver events —
+proxy status is global and takes no workspace/session input; per-workspace
+compression evidence is saver-status-only. A missing, unreadable,
+or version-mismatched registry degrades every saver field to `null`.
 
 The GUI removes its process-local proxy singleton, startup/shutdown route
 clearing, duplicated settings writer, and `osascript` restart route/button. It
@@ -847,7 +845,10 @@ Origin header.
 
 Missing or foreign `Origin`, wrong `Host`, missing/expired session or bridge
 capability, missing/invalid CSRF token, oversized body, and unknown fields are
-all hard rejections before a control request is constructed. Integration tests
+all hard rejections before a control request is constructed. Status reads
+require the same authenticated session as mutations; the enumerated-field
+limitation of status is defense-in-depth, not a substitute for authentication.
+Integration tests
 pin each rejection against both frontend and bridge boundaries.
 
 Proxy routes accept strict Zod bodies with unknown keys rejected and map only
@@ -857,11 +858,14 @@ browser value.
 ## Security invariants
 
 - Control and proxy servers bind literal `127.0.0.1`; no host override exists.
-- Control, health, GUI-bridge, and GUI-session capabilities are independent,
+- Control, health, GUI-bridge, GUI-session, and one-time GUI-launch
+  capabilities are independent,
   have at least 256 random bits, and are compared in constant time. Control and
   health capabilities
   stay only in the mode-0600 runtime file/server memory, and are never returned
-  to browser status or logs.
+  to browser status or logs. The one-time launch capability is single-use,
+  expires 120 seconds after issuance if unexchanged, is removed from the URL at
+  exchange, and is never logged.
 - Control routes use fixed method/path allowlists, strict body schemas, a small
   request-size limit, and transition ids for idempotency.
 - LaunchAgent plists are generated through a structured serializer with a fixed
@@ -874,9 +878,17 @@ browser value.
   settings fragment, capability, upstream URL, or thrown error text.
 - Forwarding never follows an upstream redirect to a different origin with
   credentials attached.
-- Settings/plist/state/lock mutation uses lstat-open-fstat identity checks,
+- Settings/plist/state mutation uses lstat-open-fstat identity checks,
   owner-only parents where supported, symlink refusal at the leaf, atomic
   rename, mode preservation, and file/directory fsync to reduce TOCTOU windows.
+  Lock files are the exception: they are `wx`-created, refreshed in place
+  through the held descriptor, and never renamed except by quarantine.
+- Residual (shared machines): after forced supervisor death, the freed fixed
+  port is bindable by any local user while already-running clients still hold
+  the base URL in memory — local port-hijack credential interception of those
+  in-memory-routed clients is possible until the LaunchAgent restart reclaims
+  the port or the clients restart. Documented, not claimed away; single-user
+  machines are the supported profile.
 - `proxy-usage/` is mode `0700`; usage and rotation files are mode `0600` and
   opened with lstat-open-fstat identity checks plus no-follow semantics where
   available. The strict event schema rejects unknown fields and control
@@ -891,6 +903,14 @@ browser value.
 
 ## Failure handling
 
+- Loaded legacy MegaSaver service at enable: `legacy_service_present`, no
+  mutation, manual bootout instruction shown.
+- Live transition found by another command: `transition_in_progress`, no
+  mutation.
+- Owner evidence that cannot be verified during recovery preflight:
+  `lock_unverifiable`, no mutation until explicit `--recover`.
+- Recovery made the route safe but could not start a replacement:
+  `recovery_failed`, retained for explicit retry.
 - Non-MegaSaver listener on the port: `port_unavailable`, no route write.
 - Health marker/nonce mismatch: `healthcheck_failed`, no adoption or route write.
 - Foreign route: `route_conflict`, no overwrite and no cleanup.
@@ -910,14 +930,14 @@ browser value.
 | --- | --- |
 | Stores | strict schemas and every error literal (including shutdown); missing/invalid disabled; blocked-state persistence; mode/permissions; atomic+fsync; symlink refusal |
 | Route adapter | absent/exact/foreign/invalid matrix; lease+value cleanup guard; foreign never overwritten; unrelated settings preserved |
-| Locking | PID reuse/start-token mismatch; authenticated supervisor owner; live offline-CLI contention; offline owner death/lease expiry; expired suspended owner resumes after fenced takeover and self-aborts; stale supervisor/transition recovery; competing recovery exits 75; explicit `--recover`; concurrent hook/route writers preserve updates |
+| Locking | PID reuse/start-token mismatch; authenticated supervisor owner; live offline-CLI contention; offline owner death/lease expiry; handoff-deadline expiry of a stopped/suspended CLI; `transition_in_progress` on a live transition; wx-create + in-place lease refresh preserves lock inode identity; expired suspended owner resumes after fenced takeover and self-aborts; stale supervisor/transition recovery; competing recovery exits 75; explicit `--recover` clears every retained dead-owner state; concurrent hook/route writers preserve updates |
 | Health | nonce match required; unrelated and stale MegaSaver listeners rejected; health path never forwarded |
 | Supervisor | every installing-lease recovery branch; offline bootstrap; concurrent start/stop; fixed reconcile triggers; SIGTERM leaves state/route untouched; runtime failure unroutes; exact→client launch→absent/readback-failure rollback keeps the healthy listener draining; SIGKILL between drift observation/block write reconstructs block without reroute; no silent retry loop |
 | Disable | crash after every phase resumes disable without reroute; dead-listener offline stop succeeds without drain/rebind; expected-unrouted monitor guard; exact-unleased route inserted before drain/confirmed stop blocks shutdown; old client still forwards; confirmation completes stop; failure keeps listener |
 | Drain | same-instance drain survives; dead instance/reboot expires without rebind; foreign-held port preserved; active drain is never kickstarted/killed |
-| LaunchAgent | fresh install no service; discovery before kickstart; dormant plain kickstart; confirmed legacy-route window; migration/uninstall crash between journal and control transition plus after every external action/phase; digest rollback; foreign plist untouched; uninstall idempotency |
+| LaunchAgent | fresh install no service; discovery before kickstart; dormant plain kickstart; loaded legacy job ⇒ `legacy_service_present` with no mutation; unloaded legacy plist replacement crash-cut converges by observation; digest rollback; foreign plist untouched; uninstall idempotency by observation |
 | CLI/GUI | same control state/API; GUI owns no listener; status fields/errors match |
-| Security | control auth/body/origin limits; token never reaches browser/log; custom-upstream confirmation; cross-origin redirect strips/refuses auth; plist argv/path injection rejected; lstat-open-fstat race fixtures |
+| Security | control auth/body/origin limits; token never reaches browser/log; unexchanged launch capability expires at 120 s and is single-use; custom-upstream confirmation; cross-origin redirect strips/refuses auth; plist argv/path injection rejected; lstat-open-fstat race fixtures |
 | Telemetry | configured, invocation, compression, and proxy usage timestamps stay distinct; missing saver artifacts degrade to null; usage permissions, symlink races, schema/model sanitation, rotation, and retention are pinned |
 | Integration | fake upstream traffic records counts only after health+route; stop removes only owned route |
 
@@ -938,8 +958,14 @@ and the 2026-07-02 agent-channel review. Runtime enable remains a separate local
 CLI/GUI action.
 
 Completed design gates: isolated worktree; architect and adversarial critic
-passes; independent security-reviewer pass; and tracer design evidence-loop
-over every legal persisted transition and specified crash cut. Implementation
+passes; security-reviewer and tracer evidence-loop re-run against the round-2
+amended text with archived artifacts under `docs/superpowers/reviews/`
+(both APPROVE_WITH_NOTES; every note incorporated — see artifact addenda). A
+bare APPROVE assertion is not evidence; artifacts are the standing requirement
+for every future pass. Because the round-2 amendments were authored by the
+round-1/2 reviewer, a counter-review of the amended text by a fresh context
+(Codex) is required before the plan is written.
+Implementation
 still requires TDD; `pnpm verify`; fake-upstream and real-client smoke evidence;
 separate code-reviewer, implementation-critic, and implementation-security
 passes; runtime tracer evidence for every persisted transition/crash cut;
@@ -969,6 +995,9 @@ persists prompts, responses, auth headers, or keys.
 - URL equality without a route lease never authorizes cleanup.
 - A foreign `ANTHROPIC_BASE_URL` or LaunchAgent is never overwritten/removed.
 - Fresh install remains unrouted and installs no supervisor.
+- A loaded legacy service is never stopped by MegaSaver; enable fails with the
+  manual instruction instead.
+- No retained transition state lacks an explicit recovery escape.
 - Ordinary SIGINT/SIGTERM never becomes route drift or kills a live drain;
   reboot/dead-instance drains expire without rebind.
 - Status separates config, route, health, traffic, hook invocation, and
