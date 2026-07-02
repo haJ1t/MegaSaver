@@ -64,14 +64,18 @@ export function fetchHealth(): Promise<HealthResponse> {
   return getJson<HealthResponse>("/api/health");
 }
 
+// ── Projects ──────────────────────────────────────────────────────────────────
+
+export type Project = { id: string; name: string; rootPath: string };
+
+export function fetchProjects(): Promise<Project[]> {
+  return getJson<Project[]>("/api/projects");
+}
+
 // ── MCP setup endpoints (BB11) ──────────────────────────────────────────────
 // Shapes mirror BB8's McpStatusResult (agentId only — no separate `target`
-// field). The live-first GUI is project-free, but the bridge's
-// MEGA_MCP_TARGET_BODY schema still requires a non-empty `project` for
-// install/repair (mcp-bridge is out of scope). Install ignores it backend-side;
-// repair feeds it to connectorSync as a path root, where "." (cwd) is benign.
-
-const MCP_PROJECT_PLACEHOLDER = ".";
+// field). AgentSetupDoctor now selects a real project before install/repair,
+// so the `project` field is the user's chosen project name, not a placeholder.
 
 export type McpAgentStatus = {
   agentId: string;
@@ -86,18 +90,12 @@ export function fetchMcpStatus(): Promise<McpStatusResponse> {
   return getJson<McpStatusResponse>("/api/mcp/status");
 }
 
-export function installMcp(target: string): Promise<McpStatusResponse> {
-  return postJson<McpStatusResponse>("/api/mcp/install", {
-    target,
-    project: MCP_PROJECT_PLACEHOLDER,
-  });
+export function installMcp(target: string, project: string): Promise<McpStatusResponse> {
+  return postJson<McpStatusResponse>("/api/mcp/install", { target, project });
 }
 
-export function repairMcp(target: string): Promise<McpStatusResponse> {
-  return postJson<McpStatusResponse>("/api/mcp/repair", {
-    target,
-    project: MCP_PROJECT_PLACEHOLDER,
-  });
+export function repairMcp(target: string, project: string): Promise<McpStatusResponse> {
+  return postJson<McpStatusResponse>("/api/mcp/repair", { target, project });
 }
 
 export function uninstallMcp(target: string): Promise<McpStatusResponse> {

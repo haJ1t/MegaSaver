@@ -69,18 +69,33 @@ describe("createMcpOps (GUI production facade — F3)", () => {
     expect(raw.mcpServers["megasaver"]).toEqual({ command: "mega", args: ["mcp", "serve"] });
   });
 
-  it("repair() also writes the runnable command + args", async () => {
+  it("repair() flips connectorSynced to true even with no open session", async () => {
     const ops = createMcpOps({
       registry: registryWithProject(),
       home,
       command: DEFAULT_MCP_COMMAND,
       args: [...DEFAULT_MCP_ARGS],
     });
+    const before = await ops.status();
+    expect(before.agents.find((a) => a.agentId === "claude-code")?.connectorSynced).toBe(false);
+
     await ops.repair("claude-code", "demo");
-    const raw = JSON.parse(await readFile(join(home, ".config", "claude", "mcp.json"), "utf8")) as {
-      mcpServers: Record<string, { command: string; args?: string[] }>;
-    };
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    expect(raw.mcpServers["megasaver"]).toEqual({ command: "mega", args: ["mcp", "serve"] });
+
+    const after = await ops.status();
+    expect(after.agents.find((a) => a.agentId === "claude-code")?.connectorSynced).toBe(true);
+  });
+
+  it("install() leaves connectorSynced false until repair writes the block", async () => {
+    const ops = createMcpOps({
+      registry: registryWithProject(),
+      home,
+      command: DEFAULT_MCP_COMMAND,
+      args: [...DEFAULT_MCP_ARGS],
+    });
+    await ops.install("claude-code", "demo");
+    const status = await ops.status();
+    const agent = status.agents.find((a) => a.agentId === "claude-code");
+    expect(agent?.mcpInstalled).toBe(true);
+    expect(agent?.connectorSynced).toBe(false);
   });
 });

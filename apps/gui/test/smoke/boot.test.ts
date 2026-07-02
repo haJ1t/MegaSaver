@@ -5,7 +5,7 @@ import { createBridgeHandler } from "../../bridge/handler.js";
 
 // F5: the live-first bridge boots with no Core registry. This smoke test
 // confirms the surviving surface (health + the live claude-sessions /
-// workspaces listings) serves in-process.
+// workspaces / projects listings) serves in-process.
 describe("Bridge in-process smoke test", () => {
   let server: Server;
   let baseUrl: string;
@@ -39,9 +39,9 @@ describe("Bridge in-process smoke test", () => {
     expect(res.status).toBe(200);
   });
 
-  it("GET /api/projects → 404 route_not_found (legacy surface removed)", async () => {
+  it("GET /api/projects → 200 empty list when no registry is injected", async () => {
     const res = await fetch(`${baseUrl}/api/projects`);
-    expect(res.status).toBe(404);
-    expect(((await res.json()) as { code: string }).code).toBe("route_not_found");
+    expect(res.status).toBe(200);
+    expect((await res.json()) as unknown[]).toEqual([]);
   });
 });

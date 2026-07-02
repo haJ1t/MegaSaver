@@ -727,3 +727,4 @@ Hard "don't" list. Not preferences. Violating any fails review.
 Source: [docs/conventions/anti-patterns.md](docs/conventions/anti-patterns.md)
 
 ---
+

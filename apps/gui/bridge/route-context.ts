@@ -39,6 +39,9 @@ export type RouteContext = {
   // resolved by createBridgeHandler (production = buildMcpSetupOps; tests may
   // inject a fake or fall back to an empty-status ops object).
   mcpOps: McpSetupOps;
+  // Optional registry for routes that need persisted project metadata. Omitted
+  // in tests that exercise routes without a registry (handler-no-registry).
+  registry?: CoreRegistry | undefined;
   origin: string | undefined;
   query: URLSearchParams;
   storeRoot: string;

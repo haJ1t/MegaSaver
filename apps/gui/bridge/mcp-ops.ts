@@ -29,12 +29,14 @@ export function createMcpOps(deps: CreateMcpOpsDeps): McpSetupOps {
     connectorSyncedResolver: async (agentId) => {
       const target = targetFor(agentId);
       if (target === null) return false;
-      // connectorSynced is project-scoped; the GUI resolves the
-      // project root per agent's latest open session's project.
-      const project = resolveProjectRoot(deps.registry, target.agentId);
-      if (project === null) return false;
-      const existing = await readTargetFile(join(project.rootPath, target.relativePath));
-      return existing !== null && parseBlock(existing).block !== null;
+      // The GUI doctor is project-free from the user's point of view, so the
+      // global "connector synced" flag is true if the block exists in any
+      // persisted project. Per-project detail belongs to the CLI.
+      for (const project of deps.registry.listProjects()) {
+        const existing = await readTargetFile(join(project.rootPath, target.relativePath));
+        if (existing !== null && parseBlock(existing).block !== null) return true;
+      }
+      return false;
     },
     connectorSync: async (agentId, projectName) => {
       const target = targetFor(agentId);
@@ -48,13 +50,4 @@ export function createMcpOps(deps: CreateMcpOpsDeps): McpSetupOps {
       });
     },
   });
-}
-
-// Latest project owning an open session for this agent; null if none.
-function resolveProjectRoot(registry: CoreRegistry, agentId: string): { rootPath: string } | null {
-  for (const project of registry.listProjects()) {
-    const hasAgentSession = registry.listSessions(project.id).some((s) => s.agentId === agentId);
-    if (hasAgentSession) return { rootPath: project.rootPath };
-  }
-  return null;
 }

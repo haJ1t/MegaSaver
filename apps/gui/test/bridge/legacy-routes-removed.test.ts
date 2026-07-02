@@ -18,8 +18,6 @@ describe("F5 — legacy project routes removed", () => {
   });
 
   const removedPaths: { method: string; path: string }[] = [
-    { method: "GET", path: "/api/projects" },
-    { method: "POST", path: "/api/projects" },
     { method: "GET", path: `/api/projects/${SOME_ID}/audit` },
     { method: "GET", path: `/api/projects/${SOME_ID}/rules` },
     { method: "GET", path: `/api/projects/${SOME_ID}/context?task=x` },

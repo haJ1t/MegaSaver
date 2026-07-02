@@ -55,6 +55,7 @@ async function main(): Promise<void> {
   });
   const handler = createBridgeHandler({
     storePath: storeDir,
+    registry,
     mcpOps,
     office: { coreRegistry: registry, registry: launcherRegistry, allowFull },
   });

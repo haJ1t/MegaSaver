@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { resolveClaudeCodeSettingsPath } from "@megasaver/connector-claude-code";
+import type { CoreRegistry } from "@megasaver/core";
 import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
 import { applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
@@ -51,6 +52,7 @@ import {
   handleRunAgent,
   handleTranscriptStream,
 } from "./routes/office.js";
+import { handleListProjects } from "./routes/projects.js";
 import { handleProxyRestartClaude, handleProxySet, handleProxyStatus } from "./routes/proxy.js";
 import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
@@ -63,6 +65,8 @@ export interface BridgeHandlerOptions {
   now?: () => string;
   /** Resolved store directory; surfaced on `GET /api/health`. */
   storePath?: string;
+  /** Optional registry for project-aware routes (e.g. `/api/projects`). */
+  registry?: CoreRegistry;
   /** F3: production McpSetupOps; BB11 routes consume it via RouteContext.
    *  Production server.ts passes buildMcpSetupOps(...); omitted only in tests
    *  that exercise non-mcp routes (then an empty-status fallback is used). */
@@ -163,6 +167,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       repair: async () => ({ agents: [] }),
       uninstall: async () => ({ agents: [] }),
     } satisfies McpSetupOps);
+  const registry = opts.registry;
 
   return (req, res) => {
     void handleRequest(req, res).catch((err: unknown) => {
@@ -194,6 +199,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       req,
       res,
       mcpOps,
+      registry,
       origin,
       query,
       storeRoot: storePath,
@@ -244,6 +250,12 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         methodNotAllowed(res, method, origin),
       );
       if (dispatched) return;
+    }
+
+    if (path === "/api/projects") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleListProjects(ctx);
+      return;
     }
 
     if (path === "/api/hooks/claude-code") {
