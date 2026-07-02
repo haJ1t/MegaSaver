@@ -26,6 +26,7 @@ import { handleFetchChunk } from "./tools/fetch-chunk.js";
 import { handleFindSimilarFailures } from "./tools/find-similar-failures.js";
 import { handleFromSessionMemory } from "./tools/from-session-memory.js";
 import { handleGetApplicableRules } from "./tools/get-applicable-rules.js";
+import { handleGetEditImpact } from "./tools/get-edit-impact.js";
 import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
 import { handleGetTaskContext } from "./tools/get-task-context.js";
 import { handleGetTaskStatus } from "./tools/get-task-status.js";
@@ -133,6 +134,11 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
   {
     id: "get_context_budget_report",
     description: "Token-savings audit for a task's context pack.",
+  },
+  {
+    id: "get_edit_impact",
+    description:
+      "Diff-driven blast radius: impacted callers and suggested test files for the changed files (explicit list or git diff).",
   },
   {
     id: "get_project_context",
@@ -362,6 +368,8 @@ export function buildServer(deps: ServerDeps): {
         );
       case "get_task_context":
         return handleGetTaskContext({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
+      case "get_edit_impact":
+        return handleGetEditImpact({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "get_project_context":
         return handleGetProjectContext(
           { registry: deps.registry, storeRoot: deps.storeRoot },
