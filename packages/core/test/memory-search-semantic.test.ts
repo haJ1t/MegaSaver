@@ -6,7 +6,9 @@ import { searchMemoryEntries } from "../src/memory-search.js";
 
 const PROJECT = "00000000-0000-4000-8000-000000000001" as ProjectId;
 
-function entry(over: Partial<MemoryEntry> & { id: string; content: string }): MemoryEntry {
+function entry(
+  over: Omit<Partial<MemoryEntry>, "id"> & { id: string; content: string },
+): MemoryEntry {
   return memoryEntrySchema.parse({
     id: over.id,
     projectId: PROJECT,

@@ -7,15 +7,15 @@ import {
   memoryEmbeddingsSidecarPath,
 } from "@megasaver/core";
 import { writeVectors } from "@megasaver/embeddings";
-import type { ProjectId } from "@megasaver/shared";
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { handleGetRelevantMemories } from "../../src/tools/get-relevant-memories.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const TS = "2026-06-11T00:00:00.000Z";
-const NEAR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const FAR = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const THIRD = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const NEAR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" as MemoryEntryId;
+const FAR = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" as MemoryEntryId;
+const THIRD = "cccccccc-cccc-4ccc-8ccc-cccccccccccc" as MemoryEntryId;
 
 function seededRegistry(): CoreRegistry {
   const registry = createInMemoryCoreRegistry();
@@ -41,6 +41,7 @@ function seededRegistry(): CoreRegistry {
       confidence: "medium",
       source: "manual",
       approval: "approved",
+      stale: false,
       createdAt: TS,
       updatedAt: TS,
     });
@@ -123,6 +124,7 @@ describe("handleGetRelevantMemories — semantic boundary signal", () => {
       confidence: "medium",
       source: "manual",
       approval: "approved",
+      stale: false,
       createdAt: TS,
       updatedAt: TS,
     });

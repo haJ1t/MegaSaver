@@ -7,15 +7,16 @@ import {
   type EvidenceRecordInput,
   appendEvidence,
 } from "@megasaver/evidence-ledger";
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { McpBridgeError } from "../src/errors.js";
 import { handleApproveMemory } from "../src/tools/approve-memory.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const MEMORY_ID = "22222222-2222-4222-8222-222222222222";
-const APPROVED_ID = "33333333-3333-4333-8333-333333333333";
-const DUP_ID = "44444444-4444-4444-8444-444444444444";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const MEMORY_ID = "22222222-2222-4222-8222-222222222222" as MemoryEntryId;
+const APPROVED_ID = "33333333-3333-4333-8333-333333333333" as MemoryEntryId;
+const DUP_ID = "44444444-4444-4444-8444-444444444444" as MemoryEntryId;
 const TS = "2026-06-12T00:00:00.000Z";
 
 function seededRegistry(
@@ -253,8 +254,8 @@ describe("approve_memory validation gate (adversarial)", () => {
 // Verify McpBridgeError is importable at test boundary
 void McpBridgeError;
 
-const OLD_ID = "55555555-5555-4555-8555-555555555555";
-const NEW_ID = "66666666-6666-4666-8666-666666666666";
+const OLD_ID = "55555555-5555-4555-8555-555555555555" as MemoryEntryId;
+const NEW_ID = "66666666-6666-4666-8666-666666666666" as MemoryEntryId;
 
 // A registry with an already-approved, currently-valid OLD memory and a
 // suggested NEW memory that supersedes it (manual source so the approval gate
@@ -336,23 +337,23 @@ describe("approve_memory closes superseded validity", () => {
   });
 });
 
-const OTHER_PROJECT_ID = "77777777-7777-4777-8777-777777777777";
-const OTHER_ID = "88888888-8888-4888-8888-888888888888";
-const SELF_ID = "99999999-9999-4999-8999-999999999999";
+const OTHER_PROJECT_ID = "77777777-7777-4777-8777-777777777777" as ProjectId;
+const OTHER_ID = "88888888-8888-4888-8888-888888888888" as MemoryEntryId;
+const SELF_ID = "99999999-9999-4999-8999-999999999999" as MemoryEntryId;
 
 describe("approve_memory supersedesId validation (recall-loss / tamper guard)", () => {
   const SUPERSEDE_AT = "2026-06-25T00:00:00.000Z";
 
-  function project(registry: ReturnType<typeof createInMemoryCoreRegistry>, id: string) {
+  function project(registry: ReturnType<typeof createInMemoryCoreRegistry>, id: ProjectId) {
     registry.createProject({ id, name: id, rootPath: `/tmp/${id}`, createdAt: TS, updatedAt: TS });
   }
   function memory(
     registry: ReturnType<typeof createInMemoryCoreRegistry>,
     over: {
-      id: string;
-      projectId: string;
+      id: MemoryEntryId;
+      projectId: ProjectId;
       approval: "approved" | "suggested";
-      supersedesId?: string;
+      supersedesId?: MemoryEntryId;
     },
   ) {
     registry.createMemoryEntry({

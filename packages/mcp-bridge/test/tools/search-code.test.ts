@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type SearchCodeMatchGroup,
@@ -31,8 +32,8 @@ describe("assertSafePathScope (path-traversal guard)", () => {
   });
 });
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const SESSION_ID = "22222222-2222-4222-8222-222222222222";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
 const TS = "2026-05-13T00:00:00.000Z";
 
 function seededRegistry(projectRoot: string) {
@@ -274,9 +275,11 @@ describe("handleSearchCode", () => {
     const [method, path, body] = handle.request.mock.calls[0] as [string, string, unknown];
     expect(method).toBe("POST");
     expect(path).toBe("/exec-registry");
-    expect((body as Record<string, unknown>).command).toBe("grep");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect((body as Record<string, unknown>)["command"]).toBe("grep");
     // forwarded maxBytes is the RAW token cap (not 64x-multiplied) — daemon applies its own factor
-    expect((body as Record<string, unknown>).maxBytes).toBe(64_000);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect((body as Record<string, unknown>)["maxBytes"]).toBe(64_000);
   });
 
   it("falls back to in-process on daemon non-2xx", async () => {

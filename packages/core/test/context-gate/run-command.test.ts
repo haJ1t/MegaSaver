@@ -35,7 +35,8 @@ async function seed(store: string, projectRoot: string, opts: SeedOpts = {}): Pr
     endedAt: null,
   };
   if (opts.withTokenSaver !== false) {
-    session.tokenSaver = {
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    session["tokenSaver"] = {
       enabled: true,
       mode: "balanced",
       maxReturnedBytes: opts.maxReturnedBytes ?? 12_000,
@@ -377,7 +378,8 @@ describe("runOutputExecCommand (orchestrator)", () => {
       shell?: boolean;
       env?: Record<string, string>;
     };
-    expect(opts.env?.MEGASAVER_ORIGIN_PID).toBe(ROOT_PID);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(opts.env?.["MEGASAVER_ORIGIN_PID"]).toBe(ROOT_PID);
     expect(opts.cwd).toBe(projectRoot);
     expect(opts.shell).toBe(false);
   });

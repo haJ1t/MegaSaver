@@ -1,9 +1,10 @@
 import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
+import type { ProjectId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { handleRecordFailedAttempt } from "../../src/tools/failed-attempts.js";
 import { handleGetProjectRules, handleSaveProjectRule } from "../../src/tools/project-rules.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const TS = "2026-06-11T00:00:00.000Z";
 
 function seededRegistry(): CoreRegistry {

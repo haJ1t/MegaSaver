@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleFetchChunk } from "../../src/tools/fetch-chunk.js";
 import { handleReadFile } from "../../src/tools/read-file.js";
@@ -10,8 +11,8 @@ vi.mock("@megasaver/daemon", () => ({ getRunningDaemon: vi.fn() }));
 import { getRunningDaemon } from "@megasaver/daemon";
 const mockGetRunningDaemon = vi.mocked(getRunningDaemon);
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const SESSION_ID = "22222222-2222-4222-8222-222222222222";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
 const TS = "2026-05-13T00:00:00.000Z";
 
 function seededRegistry(projectRoot: string) {
@@ -216,8 +217,10 @@ describe("handleReadFile", () => {
     expect(method).toBe("POST");
     expect(path).toBe("/read-registry");
     expect(body).toEqual({ sessionId: SESSION_ID, path: "/any/path.txt", intent: "find errors" });
-    expect((body as Record<string, unknown>).maxBytes).toBeUndefined();
-    expect((body as Record<string, unknown>).outline).toBeUndefined();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect((body as Record<string, unknown>)["maxBytes"]).toBeUndefined();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect((body as Record<string, unknown>)["outline"]).toBeUndefined();
   });
 
   it("forwards outline:true in the daemon body when the caller passes it", async () => {
@@ -251,7 +254,8 @@ describe("handleReadFile", () => {
     );
 
     const [, , body] = handle.request.mock.calls[0] as [string, string, unknown];
-    expect((body as Record<string, unknown>).outline).toBe(true);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect((body as Record<string, unknown>)["outline"]).toBe(true);
   });
 
   it("falls back to in-process on daemon non-2xx", async () => {

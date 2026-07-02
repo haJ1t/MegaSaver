@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projectIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { FailedAttempt } from "../src/failed-attempt.js";
 import {
   readFailedAttemptsForProject,
   readProjectRulesForProject,
@@ -10,12 +11,13 @@ import {
   writeFailedAttemptsForProject,
   writeProjectRulesForProject,
 } from "../src/json-directory-store.js";
+import type { ProjectRule } from "../src/project-rule.js";
 
 const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const TS = "2026-06-11T00:00:00.000Z";
 
-const rule = {
-  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+const rule: ProjectRule = {
+  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" as ProjectRule["id"],
   projectId: PROJECT_ID,
   title: "r",
   rule: "do x",
@@ -26,10 +28,10 @@ const rule = {
   createdFrom: "manual",
   createdAt: TS,
   updatedAt: TS,
-} as const;
+};
 
-const failure = {
-  id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+const failure: FailedAttempt = {
+  id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" as FailedAttempt["id"],
   projectId: PROJECT_ID,
   sessionId: null,
   task: "t",
@@ -37,7 +39,7 @@ const failure = {
   relatedFiles: [],
   convertedToRule: false,
   createdAt: TS,
-} as const;
+};
 
 describe("rule + failed-attempt store helpers", () => {
   let root: string;

@@ -42,7 +42,6 @@ describe("chunkByFormatWithMeta gating (T3)", () => {
     const text = Array.from({ length: 60 }, (_, i) => `log line ${i}`).join("\n");
     const { chunks, semantic } = await chunkByFormatWithMeta(text, {
       kind: "command",
-      path: undefined,
     });
     expect(semantic).toBe(false);
     expect(chunks.length).toBeGreaterThanOrEqual(1);

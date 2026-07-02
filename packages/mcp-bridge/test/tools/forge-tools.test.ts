@@ -1,10 +1,11 @@
 import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
+import type { FailedAttemptId, ProjectId, ProjectRuleId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { handleConvertFailureToRule } from "../../src/tools/convert-failure-to-rule.js";
 import { handleFindSimilarFailures } from "../../src/tools/find-similar-failures.js";
 import { handleGetApplicableRules } from "../../src/tools/get-applicable-rules.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const TS = "2026-06-12T00:00:00.000Z";
 
 function seeded(): CoreRegistry {
@@ -17,7 +18,7 @@ function seeded(): CoreRegistry {
     updatedAt: TS,
   });
   r.createFailedAttempt({
-    id: "a0000000-0000-4000-8000-000000000001",
+    id: "a0000000-0000-4000-8000-000000000001" as FailedAttemptId,
     projectId: PROJECT_ID,
     sessionId: null,
     task: "fix login auth bug",
@@ -65,7 +66,7 @@ describe("get_applicable_rules", () => {
       updatedAt: TS,
     });
     r.createProjectRule({
-      id: "b0000000-0000-4000-8000-000000000001",
+      id: "b0000000-0000-4000-8000-000000000001" as ProjectRuleId,
       projectId: PROJECT_ID,
       title: "Migrate first",
       rule: "create a migration before regenerating",
@@ -95,7 +96,7 @@ describe("get_applicable_rules", () => {
 });
 
 describe("convert_failure_to_rule", () => {
-  const FA_ID = "a0000000-0000-4000-8000-000000000001";
+  const FA_ID = "a0000000-0000-4000-8000-000000000001" as FailedAttemptId;
   const RULE_ID = "c0000000-0000-4000-8000-000000000001";
   function seededWithFailure(): CoreRegistry {
     const r = createInMemoryCoreRegistry();

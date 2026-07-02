@@ -1,8 +1,9 @@
 import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
+import type { FailedAttemptId, MemoryEntryId, ProjectId, ProjectRuleId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { handleGetProjectContext } from "../../src/tools/project-context.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const TS = "2026-06-11T00:00:00.000Z";
 
 function seeded(): CoreRegistry {
@@ -15,7 +16,7 @@ function seeded(): CoreRegistry {
     updatedAt: TS,
   });
   registry.createMemoryEntry({
-    id: "a0000000-0000-4000-8000-000000000001",
+    id: "a0000000-0000-4000-8000-000000000001" as MemoryEntryId,
     projectId: PROJECT_ID,
     sessionId: null,
     scope: "project",
@@ -31,7 +32,7 @@ function seeded(): CoreRegistry {
     updatedAt: TS,
   });
   registry.createMemoryEntry({
-    id: "a0000000-0000-4000-8000-000000000002",
+    id: "a0000000-0000-4000-8000-000000000002" as MemoryEntryId,
     projectId: PROJECT_ID,
     sessionId: null,
     scope: "project",
@@ -47,7 +48,7 @@ function seeded(): CoreRegistry {
     updatedAt: TS,
   });
   registry.createProjectRule({
-    id: "b0000000-0000-4000-8000-000000000001",
+    id: "b0000000-0000-4000-8000-000000000001" as ProjectRuleId,
     projectId: PROJECT_ID,
     title: "Migrate first",
     rule: "Create a migration before regenerating the client.",
@@ -60,7 +61,7 @@ function seeded(): CoreRegistry {
     updatedAt: TS,
   });
   registry.createFailedAttempt({
-    id: "c0000000-0000-4000-8000-000000000001",
+    id: "c0000000-0000-4000-8000-000000000001" as FailedAttemptId,
     projectId: PROJECT_ID,
     sessionId: null,
     task: "schema change",

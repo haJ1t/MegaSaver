@@ -1,16 +1,17 @@
 import { createInMemoryCoreRegistry } from "@megasaver/core";
+import type { MemoryEntryId, ProjectId, SessionId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { handleGetRelevantMemories } from "../src/tools/get-relevant-memories.js";
 import { handleGetProjectContext } from "../src/tools/project-context.js";
 import { handleRecall } from "../src/tools/recall.js";
 import { handleSearchMemory } from "../src/tools/search-memory.js";
 
-const PROJECT_ID = "55555555-5555-4555-8555-555555555555";
-const SESSION_ID = "66666666-6666-4666-8666-666666666666";
+const PROJECT_ID = "55555555-5555-4555-8555-555555555555" as ProjectId;
+const SESSION_ID = "66666666-6666-4666-8666-666666666666" as SessionId;
 const TS = "2026-06-17T00:00:00.000Z";
-const APPROVED_ID = "aaaa0000-0000-4000-8000-000000000001";
-const SUGGESTED_ID = "bbbb0000-0000-4000-8000-000000000002";
-const REJECTED_ID = "cccc0000-0000-4000-8000-000000000003";
+const APPROVED_ID = "aaaa0000-0000-4000-8000-000000000001" as MemoryEntryId;
+const SUGGESTED_ID = "bbbb0000-0000-4000-8000-000000000002" as MemoryEntryId;
+const REJECTED_ID = "cccc0000-0000-4000-8000-000000000003" as MemoryEntryId;
 
 function seededLeakRegistry() {
   const registry = createInMemoryCoreRegistry();

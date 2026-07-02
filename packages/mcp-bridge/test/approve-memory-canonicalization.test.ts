@@ -1,18 +1,15 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  type MemoryEntryId,
-  createInMemoryCoreRegistry,
-  memoryEmbeddingsSidecarPath,
-} from "@megasaver/core";
+import { createInMemoryCoreRegistry, memoryEmbeddingsSidecarPath } from "@megasaver/core";
 import { writeVectors } from "@megasaver/embeddings";
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { handleApproveMemory } from "../src/tools/approve-memory.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const CANDIDATE_ID = "22222222-2222-4222-8222-222222222222";
-const APPROVED_ID = "33333333-3333-4333-8333-333333333333";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const CANDIDATE_ID = "22222222-2222-4222-8222-222222222222" as MemoryEntryId;
+const APPROVED_ID = "33333333-3333-4333-8333-333333333333" as MemoryEntryId;
 const TS = "2026-06-12T00:00:00.000Z";
 
 // Deterministic, model-free vectors. Parallel ⇒ cosine 1.0 (≥ 0.95 near-dup);
@@ -211,7 +208,8 @@ describe("approve_memory semantic canonicalization (M3 — surface, do not block
     expect(validation?.reasons ?? []).not.toContain("semantic-duplicate");
   });
 
-  it.skipIf(!process.env.MEGA_EMBED_E2E)(
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  it.skipIf(!process.env["MEGA_EMBED_E2E"])(
     "real embed: a near-identical approved memory is surfaced as semantic-duplicate",
     async () => {
       const registry = seed();

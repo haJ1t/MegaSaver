@@ -6,6 +6,7 @@ import { memoryEntryIdSchema, projectIdSchema, sessionIdSchema } from "@megasave
 import { afterEach, describe, expect, it } from "vitest";
 import { CoreRegistryError } from "../src/errors.js";
 import { createJsonDirectoryCoreRegistry } from "../src/json-directory-registry.js";
+import type { MemoryEntry } from "../src/memory-entry.js";
 
 const PROJECT_ID_A = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const PROJECT_ID_B = projectIdSchema.parse("44444444-4444-4444-8444-444444444444");
@@ -34,7 +35,7 @@ const sessionA = {
   startedAt: "2026-05-04T12:10:00.000Z",
   endedAt: null,
 } as const;
-const mismatchedSessionMemory = {
+const mismatchedSessionMemory: MemoryEntry = {
   id: MEMORY_ENTRY_ID_A,
   projectId: PROJECT_ID_B,
   sessionId: SESSION_ID_A,
@@ -45,10 +46,11 @@ const mismatchedSessionMemory = {
   keywords: [],
   confidence: "medium",
   source: "manual",
+  approval: "approved",
   stale: false,
   createdAt: "2026-05-04T12:30:00.000Z",
   updatedAt: "2026-05-04T12:30:00.000Z",
-} as const;
+};
 
 afterEach(() => {
   for (const root of roots.splice(0)) {

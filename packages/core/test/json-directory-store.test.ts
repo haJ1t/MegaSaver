@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { projectIdSchema, sessionIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // We must hoist vi.mock before any imports that use the mocked module.
@@ -27,10 +28,10 @@ vi.mock("node:fs", async (importOriginal) => {
 
 // Import the mocked fs AFTER vi.mock so we get the mocked version.
 import * as fsMock from "node:fs";
-import { writeSessions } from "../src/json-directory-store.js";
+import { resolveStorePaths, writeSessions } from "../src/json-directory-store.js";
 
-const SESSION_ID = "22222222-2222-4222-8222-222222222222";
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const SESSION_ID = sessionIdSchema.parse("22222222-2222-4222-8222-222222222222");
+const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const TS = "2026-05-09T00:00:00.000Z";
 
 const VALID_SESSION = {
@@ -76,12 +77,7 @@ describe("atomicWriteFile — partial-write recovery (V2)", () => {
       throw new Error("simulated rename failure");
     });
 
-    const paths = {
-      rootDir,
-      projectsPath: join(rootDir, "projects.json"),
-      sessionsPath,
-      memoryDir: join(rootDir, "memory"),
-    };
+    const paths = { ...resolveStorePaths(rootDir), sessionsPath };
 
     const updatedSession = { ...VALID_SESSION, title: "new title" };
     expect(() => writeSessions(paths, [updatedSession])).toThrow();
@@ -136,12 +132,7 @@ describe("atomicWriteFile — partial-write recovery (V2)", () => {
       return realClose(fd);
     }) as typeof realClose);
 
-    const paths = {
-      rootDir,
-      projectsPath: join(rootDir, "projects.json"),
-      sessionsPath,
-      memoryDir: join(rootDir, "memory"),
-    };
+    const paths = { ...resolveStorePaths(rootDir), sessionsPath };
 
     writeSessions(paths, [VALID_SESSION]);
 
@@ -181,12 +172,7 @@ describe("atomicWriteFile — partial-write recovery (V2)", () => {
       throw new Error("simulated write failure");
     });
 
-    const paths = {
-      rootDir,
-      projectsPath: join(rootDir, "projects.json"),
-      sessionsPath,
-      memoryDir: join(rootDir, "memory"),
-    };
+    const paths = { ...resolveStorePaths(rootDir), sessionsPath };
 
     expect(() => writeSessions(paths, [])).toThrow();
 
@@ -269,12 +255,7 @@ describe("atomicWriteFile — Windows path (GG)", () => {
     const { writeSessions: writeSessionsWin32 } = await import("../src/json-directory-store.js");
 
     const sessionsPath = join(rootDir, "sessions.json");
-    const paths = {
-      rootDir,
-      projectsPath: join(rootDir, "projects.json"),
-      sessionsPath,
-      memoryDir: join(rootDir, "memory"),
-    };
+    const paths = { ...resolveStorePaths(rootDir), sessionsPath };
 
     writeSessionsWin32(paths, [VALID_SESSION]);
 

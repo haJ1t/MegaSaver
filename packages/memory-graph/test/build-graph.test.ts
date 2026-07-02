@@ -9,6 +9,9 @@ const EMPTY: GraphInput = {
   evidence: [],
   chunkSets: [],
   conflicts: [],
+  files: [],
+  symbols: [],
+  wikiPages: [],
 };
 
 function base(): GraphInput {
@@ -115,8 +118,10 @@ describe("buildGraph", () => {
   });
   it("carries memory meta (type/approval/confidence/stale)", () => {
     const m1 = buildGraph(base()).nodes.find((n) => n.id === "m1");
-    expect(m1?.meta.memoryType).toBe("decision");
-    expect(m1?.meta.approval).toBe("approved");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(m1?.meta["memoryType"]).toBe("decision");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(m1?.meta["approval"]).toBe("approved");
   });
   it("collapses a bidirectional undirected conflict/duplicate into one edge", () => {
     const input = base();
@@ -258,7 +263,8 @@ describe("buildGraph — file/symbol/wiki nodes + edges", () => {
     // biome-ignore lint/style/noNonNullAssertion: length asserted above
     const node = wikiTarget[0]!;
     expect(node.label).toBe("Target");
-    expect(node.meta.tags).toEqual(["roadmap"]);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(node.meta["tags"]).toEqual(["roadmap"]);
     expect(has(g, "wiki-cite", "wiki:citer.md", "file:a/b.md")).toBe(true);
   });
   it("collapses ./-prefixed memory relatedFiles with clean wiki fileCites into one file node", () => {
@@ -292,7 +298,8 @@ describe("buildGraph — file/symbol/wiki nodes + edges", () => {
     input.memories[0]!.evidenceIds = [];
     const g = buildGraph(input);
     expect(new Set(g.nodes.map((n) => n.id)).size).toBe(g.nodes.length);
-    expect(g.nodes.filter((n) => n.kind === "file" && n.meta.path === "foo")).toHaveLength(1);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(g.nodes.filter((n) => n.kind === "file" && n.meta["path"] === "foo")).toHaveLength(1);
     expect(g.nodes.filter((n) => n.kind === "symbol" && n.label === "foo")).toHaveLength(1);
     expect(g.edges.filter((e) => e.kind === "code-link" && e.from === "m1")).toHaveLength(2);
   });

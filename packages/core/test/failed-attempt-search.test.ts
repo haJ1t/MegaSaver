@@ -3,9 +3,9 @@ import { searchFailedAttempts } from "../src/failed-attempt-search.js";
 import type { FailedAttempt } from "../src/failed-attempt.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-function fa(over: Partial<FailedAttempt> & { id: string }): FailedAttempt {
+function fa(over: Omit<Partial<FailedAttempt>, "id"> & { id: string }): FailedAttempt {
   return {
-    id: over.id,
+    id: over.id as FailedAttempt["id"],
     projectId: PROJECT_ID as FailedAttempt["projectId"],
     sessionId: null,
     task: over.task ?? "task",
