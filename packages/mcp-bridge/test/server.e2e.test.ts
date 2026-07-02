@@ -6,14 +6,15 @@ import {
   appendAuditEvent,
   createInMemoryCoreRegistry,
 } from "@megasaver/core";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildServer } from "../src/server.js";
 import type { NamingMode } from "../src/tool-naming.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const SESSION_ID = "22222222-2222-4222-8222-222222222222";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
 const TS = "2026-05-13T00:00:00.000Z";
 
 function seededRegistry(projectRoot: string) {
@@ -473,7 +474,7 @@ describe("phase 6 task tools over the bridge", () => {
 
 describe("phase 7 tool router over the bridge", () => {
   const TS7 = "2026-06-12T00:00:00.000Z";
-  const AUDIT_SESSION_ID = "11111111-1111-4111-8111-111111111111";
+  const AUDIT_SESSION_ID = "11111111-1111-4111-8111-111111111111" as SessionId;
   let storeRoot: string;
 
   beforeEach(async () => {

@@ -15,7 +15,9 @@ import { type MemoryEntry, memoryEntrySchema } from "../src/memory-entry.js";
 
 const PROJECT = "00000000-0000-4000-8000-000000000001" as ProjectId;
 
-function entry(over: Partial<MemoryEntry> & { id: string; content: string }): MemoryEntry {
+function entry(
+  over: Omit<Partial<MemoryEntry>, "id"> & { id: string; content: string },
+): MemoryEntry {
   return memoryEntrySchema.parse({
     id: over.id,
     projectId: PROJECT,
@@ -124,7 +126,8 @@ describe("memoryEmbedText", () => {
 
 // Real model path — OFF in CI (downloads ~50MB). Gate with MEGA_EMBED_E2E=1.
 describe("embedMemoryEntries — real embed() E2E", () => {
-  it.skipIf(!process.env.MEGA_EMBED_E2E)(
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  it.skipIf(!process.env["MEGA_EMBED_E2E"])(
     "writes a real, non-trivial vector per memory via the live model",
     async () => {
       await embedMemoryEntries(

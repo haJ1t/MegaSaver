@@ -1,11 +1,12 @@
+import { projectIdSchema, sessionIdSchema } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import type { FailedAttempt } from "../src/failed-attempt.js";
 import { isRecallable, memoryEntrySchema } from "../src/memory-entry.js";
 import { searchMemoryEntries } from "../src/memory-search.js";
 import { extractSessionMemories } from "../src/session-memory.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const SESSION_ID = "22222222-2222-4222-8222-222222222222";
+const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
+const SESSION_ID = sessionIdSchema.parse("22222222-2222-4222-8222-222222222222");
 const TS = "2026-06-30T00:00:00.000Z";
 
 function fa(id: string, over: Partial<FailedAttempt>): FailedAttempt {

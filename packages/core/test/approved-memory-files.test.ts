@@ -5,7 +5,9 @@ import { type MemoryEntry, memoryEntrySchema } from "../src/memory-entry.js";
 
 const PROJECT = "00000000-0000-4000-8000-000000000001" as ProjectId;
 
-function entry(over: Partial<MemoryEntry> & { id: string; relatedFiles?: string[] }): MemoryEntry {
+function entry(
+  over: Omit<Partial<MemoryEntry>, "id"> & { id: string; relatedFiles?: string[] },
+): MemoryEntry {
   return memoryEntrySchema.parse({
     id: over.id,
     projectId: PROJECT,

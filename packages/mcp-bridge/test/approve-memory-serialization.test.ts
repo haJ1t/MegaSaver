@@ -1,10 +1,11 @@
 import { createInMemoryCoreRegistry } from "@megasaver/core";
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { handleApproveMemory } from "../src/tools/approve-memory.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const A_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const B_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const A_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" as MemoryEntryId;
+const B_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" as MemoryEntryId;
 const TS1 = "2026-06-17T10:00:00.000Z";
 const TS2 = "2026-06-17T10:01:00.000Z";
 
@@ -115,9 +116,9 @@ describe("approval serialization — spec §8", () => {
   it("approving non-conflicting memories in sequence both succeed", async () => {
     // Control: two unrelated memories (different files) must both approve fine.
     const registry = createInMemoryCoreRegistry();
-    const P = "22222222-2222-4222-8222-222222222222";
-    const X_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-    const Y_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    const P = "22222222-2222-4222-8222-222222222222" as ProjectId;
+    const X_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc" as MemoryEntryId;
+    const Y_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd" as MemoryEntryId;
     registry.createProject({
       id: P,
       name: "q",

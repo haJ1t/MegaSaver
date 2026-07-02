@@ -1,11 +1,12 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { projectIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildIndex } from "../src/build.js";
 import { readBlocks, resolveIndexPaths } from "../src/store.js";
 
-const PROJECT_ID = "00000000-0000-4000-8000-000000000002";
+const PROJECT_ID = projectIdSchema.parse("00000000-0000-4000-8000-000000000002");
 
 let repo: string;
 let store: string;

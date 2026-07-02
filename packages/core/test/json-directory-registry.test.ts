@@ -6,6 +6,7 @@ import { memoryEntryIdSchema, projectIdSchema, sessionIdSchema } from "@megasave
 import { afterEach, describe, expect, it } from "vitest";
 import { CorePersistenceError, CoreRegistryError } from "../src/errors.js";
 import { createJsonDirectoryCoreRegistry } from "../src/json-directory-registry.js";
+import type { MemoryEntry } from "../src/memory-entry.js";
 
 const PROJECT_ID_A = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const PROJECT_ID_B = projectIdSchema.parse("44444444-4444-4444-8444-444444444444");
@@ -45,7 +46,7 @@ const sessionB = {
   riskLevel: "medium",
   title: null,
 } as const;
-const projectMemory = {
+const projectMemory: MemoryEntry = {
   id: MEMORY_ENTRY_ID_A,
   projectId: PROJECT_ID_A,
   sessionId: null,
@@ -60,20 +61,20 @@ const projectMemory = {
   stale: false,
   createdAt: "2026-05-04T12:30:00.000Z",
   updatedAt: "2026-05-04T12:30:00.000Z",
-} as const;
-const sessionMemory = {
+};
+const sessionMemory: MemoryEntry = {
   ...projectMemory,
   id: MEMORY_ENTRY_ID_B,
   sessionId: SESSION_ID_A,
   scope: "session",
   content: "Core package spec is HIGH risk.",
-} as const;
-const otherProjectMemory = {
+};
+const otherProjectMemory: MemoryEntry = {
   ...projectMemory,
   id: MEMORY_ENTRY_ID_C,
   projectId: PROJECT_ID_B,
   content: "Other project memory.",
-} as const;
+};
 afterEach(() => {
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true });

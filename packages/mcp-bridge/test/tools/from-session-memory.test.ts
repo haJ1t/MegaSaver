@@ -1,9 +1,10 @@
 import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { handleFromSessionMemory } from "../../src/tools/from-session-memory.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const SESSION_ID = "22222222-2222-4222-8222-222222222222";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
 const TS = "2026-06-30T00:00:00.000Z";
 const NOW = "2026-06-30T12:00:00.000Z";
 

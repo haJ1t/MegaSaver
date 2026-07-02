@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type CodeBlock, blockTypeSchema, codeBlockSchema } from "../src/code-block.js";
+import { blockTypeSchema, codeBlockSchema } from "../src/code-block.js";
 
 const PROJECT_ID = "00000000-0000-4000-8000-000000000001";
 const BLOCK_ID = "00000000-0000-4000-8000-0000000000aa";
 
-function valid(over: Partial<CodeBlock> = {}): unknown {
+function valid(over: Record<string, unknown> = {}): unknown {
   return {
     id: BLOCK_ID,
     projectId: PROJECT_ID,
@@ -70,7 +70,8 @@ describe("codeBlockSchema", () => {
   it("allows optional name/summary/lastModifiedAt to be omitted", () => {
     const block = valid();
     // biome-ignore lint/performance/noDelete: test removes optional keys
-    delete (block as Record<string, unknown>).name;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    delete (block as Record<string, unknown>)["name"];
     expect(codeBlockSchema.safeParse(block).success).toBe(true);
   });
 });

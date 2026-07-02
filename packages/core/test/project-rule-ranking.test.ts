@@ -3,7 +3,7 @@ import { rankApplicableRules } from "../src/project-rule-ranking.js";
 import type { ProjectRule } from "../src/project-rule.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-function rule(over: Partial<ProjectRule> & { id: string }): ProjectRule {
+function rule(over: Omit<Partial<ProjectRule>, "id"> & { id: string }): ProjectRule {
   return {
     id: over.id,
     projectId: PROJECT_ID as ProjectRule["projectId"],

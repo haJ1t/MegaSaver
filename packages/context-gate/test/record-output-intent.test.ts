@@ -48,6 +48,7 @@ describe("recordAndFilterOverlayOutput intent threading", () => {
     const calls = vi.mocked(filterOutput).mock.calls;
     expect(calls).toHaveLength(1);
     const arg = calls[0]?.[0];
-    expect("intent" in arg).toBe(false);
+    expect(arg).toBeDefined();
+    expect("intent" in (arg ?? {})).toBe(false);
   });
 });

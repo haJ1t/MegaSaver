@@ -13,7 +13,9 @@ import { type MemoryEntry, memoryEntrySchema } from "../src/memory-entry.js";
 
 const PROJECT = "00000000-0000-4000-8000-000000000001" as ProjectId;
 
-function entry(over: Partial<MemoryEntry> & { id: string; content: string }): MemoryEntry {
+function entry(
+  over: Omit<Partial<MemoryEntry>, "id"> & { id: string; content: string },
+): MemoryEntry {
   return memoryEntrySchema.parse({
     id: over.id,
     projectId: PROJECT,
@@ -169,15 +171,19 @@ describe("buildMemoryIndex — count reflects the embedder's real decision", () 
 
 // Real model path — OFF in CI. Gate with MEGA_EMBED_E2E=1.
 describe("buildMemoryIndex — real embed() E2E", () => {
-  it.skipIf(!process.env.MEGA_EMBED_E2E)("builds a real sidecar via the live model", async () => {
-    const result = await buildMemoryIndex(
-      store,
-      PROJECT,
-      [entry({ id: ID_A, content: "use jwt auth", title: "auth" })],
-      embed,
-    );
-    expect(result).toEqual({ embedded: 1, carried: 0, total: 1 });
-    const vec = readVectors(sidecar).get(ID_A);
-    expect((vec?.length ?? 0) > 1).toBe(true);
-  });
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  it.skipIf(!process.env["MEGA_EMBED_E2E"])(
+    "builds a real sidecar via the live model",
+    async () => {
+      const result = await buildMemoryIndex(
+        store,
+        PROJECT,
+        [entry({ id: ID_A, content: "use jwt auth", title: "auth" })],
+        embed,
+      );
+      expect(result).toEqual({ embedded: 1, carried: 0, total: 1 });
+      const vec = readVectors(sidecar).get(ID_A);
+      expect((vec?.length ?? 0) > 1).toBe(true);
+    },
+  );
 });

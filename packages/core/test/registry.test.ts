@@ -1,6 +1,7 @@
 import { memoryEntryIdSchema, projectIdSchema, sessionIdSchema } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { CoreRegistryError, type CoreRegistryErrorCode } from "../src/errors.js";
+import type { MemoryEntry } from "../src/memory-entry.js";
 import { projectSchema } from "../src/project.js";
 import { createInMemoryCoreRegistry } from "../src/registry.js";
 import { sessionSchema } from "../src/session.js";
@@ -53,7 +54,7 @@ const sessionAInProjectB = {
   projectId: PROJECT_ID_B,
 } as const;
 
-const projectMemory = {
+const projectMemory: MemoryEntry = {
   id: MEMORY_ENTRY_ID_A,
   projectId: PROJECT_ID_A,
   sessionId: null,
@@ -68,15 +69,15 @@ const projectMemory = {
   stale: false,
   createdAt: "2026-05-04T12:30:00.000Z",
   updatedAt: "2026-05-04T12:30:00.000Z",
-} as const;
+};
 
-const sessionMemory = {
+const sessionMemory: MemoryEntry = {
   ...projectMemory,
   id: MEMORY_ENTRY_ID_B,
   sessionId: SESSION_ID_A,
   scope: "session",
   content: "Core package spec is HIGH risk.",
-} as const;
+};
 
 function expectRegistryError(action: () => unknown, code: CoreRegistryErrorCode): void {
   let thrown: unknown;
@@ -377,9 +378,11 @@ describe("updateSession (in-memory)", () => {
 
   it("throws session_not_found for unknown id", () => {
     const { reg } = buildRegistry();
-    expect(() => reg.updateSession("99999999-9999-4999-8999-999999999999", { title: "x" })).toThrow(
-      CoreRegistryError,
-    );
+    expect(() =>
+      reg.updateSession(sessionIdSchema.parse("99999999-9999-4999-8999-999999999999"), {
+        title: "x",
+      }),
+    ).toThrow(CoreRegistryError);
   });
 
   it("throws session_already_ended for ended session", () => {
@@ -448,9 +451,9 @@ describe("updateTokenSaver (in-memory)", () => {
 
   it("throws session_not_found for unknown id", () => {
     const { reg } = buildRegistry();
-    expect(() => reg.updateTokenSaver("99999999-9999-4999-8999-999999999999", settings)).toThrow(
-      CoreRegistryError,
-    );
+    expect(() =>
+      reg.updateTokenSaver(sessionIdSchema.parse("99999999-9999-4999-8999-999999999999"), settings),
+    ).toThrow(CoreRegistryError);
   });
 
   it("throws session_already_ended for ended session", () => {

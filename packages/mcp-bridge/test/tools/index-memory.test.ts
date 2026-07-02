@@ -2,14 +2,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { handleGetRelevantMemories } from "../../src/tools/get-relevant-memories.js";
 import { handleIndexMemory } from "../../src/tools/index-memory.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const TS = "2026-06-11T00:00:00.000Z";
-const LEX = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"; // matches the BM25 query term
-const SEM = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"; // matched only by the vector
+const LEX = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" as MemoryEntryId; // matches the BM25 query term
+const SEM = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" as MemoryEntryId; // matched only by the vector
 
 function seededRegistry(): CoreRegistry {
   const registry = createInMemoryCoreRegistry();
@@ -28,7 +29,7 @@ function seededRegistry(): CoreRegistry {
   return registry;
 }
 
-function add(registry: CoreRegistry, id: string, title: string, content: string): void {
+function add(registry: CoreRegistry, id: MemoryEntryId, title: string, content: string): void {
   registry.createMemoryEntry({
     id,
     projectId: PROJECT_ID,
@@ -41,6 +42,7 @@ function add(registry: CoreRegistry, id: string, title: string, content: string)
     confidence: "medium",
     source: "manual",
     approval: "approved",
+    stale: false,
     createdAt: TS,
     updatedAt: TS,
   });

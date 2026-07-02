@@ -9,7 +9,9 @@ import {
 } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CoreRegistryError } from "../src/errors.js";
+import type { FailedAttempt } from "../src/failed-attempt.js";
 import { createJsonDirectoryCoreRegistry } from "../src/json-directory-registry.js";
+import type { ProjectRule } from "../src/project-rule.js";
 import { type CoreRegistry, createInMemoryCoreRegistry } from "../src/registry.js";
 
 const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
@@ -36,7 +38,7 @@ const secondProject = {
   updatedAt: TS,
 } as const;
 
-const rule = {
+const rule: ProjectRule = {
   id: RULE_ID,
   projectId: PROJECT_ID,
   title: "r",
@@ -48,9 +50,9 @@ const rule = {
   createdFrom: "manual",
   createdAt: TS,
   updatedAt: TS,
-} as const;
+};
 
-const failure = {
+const failure: FailedAttempt = {
   id: FA_ID,
   projectId: PROJECT_ID,
   sessionId: null,
@@ -59,7 +61,7 @@ const failure = {
   relatedFiles: [],
   convertedToRule: false,
   createdAt: TS,
-} as const;
+};
 
 function suite(name: string, make: () => CoreRegistry) {
   describe(`${name}: rules + failed attempts`, () => {

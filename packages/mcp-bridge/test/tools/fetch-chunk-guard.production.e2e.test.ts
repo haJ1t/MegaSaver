@@ -2,14 +2,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createBridge } from "../../src/bridge.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const SESSION_ID = "22222222-2222-4222-8222-222222222222";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
 const TS = "2026-05-13T00:00:00.000Z";
 
 function seededRegistry(projectRoot: string) {
@@ -45,15 +46,19 @@ describe("createBridge expansion guard — production path", () => {
   beforeEach(async () => {
     store = await mkdtemp(join(tmpdir(), "mcp-prod-guard-store-"));
     projectRoot = await mkdtemp(join(tmpdir(), "mcp-prod-guard-root-"));
-    priorNaming = process.env.MEGASAVER_TOOL_NAMING;
-    process.env.MEGASAVER_TOOL_NAMING = "proxy";
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    priorNaming = process.env["MEGASAVER_TOOL_NAMING"];
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    process.env["MEGASAVER_TOOL_NAMING"] = "proxy";
   });
   afterEach(async () => {
     if (priorNaming === undefined) {
       // biome-ignore lint/performance/noDelete: test restores the original env key
-      delete process.env.MEGASAVER_TOOL_NAMING;
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      delete process.env["MEGASAVER_TOOL_NAMING"];
     } else {
-      process.env.MEGASAVER_TOOL_NAMING = priorNaming;
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      process.env["MEGASAVER_TOOL_NAMING"] = priorNaming;
     }
     await rm(store, { recursive: true, force: true });
     await rm(projectRoot, { recursive: true, force: true });

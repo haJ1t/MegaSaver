@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleRunCommand } from "../src/tools/run-command.js";
 
@@ -11,8 +12,8 @@ vi.mock("@megasaver/daemon", () => ({ getRunningDaemon: vi.fn() }));
 import { getRunningDaemon } from "@megasaver/daemon";
 const mockGetRunningDaemon = vi.mocked(getRunningDaemon);
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const SESSION_ID = "22222222-2222-4222-8222-222222222222";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
 const TS = "2026-05-13T00:00:00.000Z";
 
 function seededRegistry(projectRoot: string) {

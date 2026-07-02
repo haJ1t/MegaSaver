@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { AgentId } from "@megasaver/shared";
 import * as fc from "fast-check";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { type Session, sessionSchema } from "../src/session.js";
@@ -117,7 +118,7 @@ describe("sessionSchema", () => {
     expectTypeOf<Session>().toMatchTypeOf<{
       id: string;
       projectId: string;
-      agentId: "claude-code" | "codex" | "generic-cli";
+      agentId: AgentId;
       riskLevel: "low" | "medium" | "high" | "critical";
       title: string | null;
       startedAt: string;

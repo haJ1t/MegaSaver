@@ -2,10 +2,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadChunkSet } from "@megasaver/content-store";
-import type { RankFeatures } from "@megasaver/output-filter";
+import type { FilterOutputResult, RankFeatures } from "@megasaver/output-filter";
 import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { FilterOutputResult } from "../../output-filter/src/types.js";
 import { persistChunkSet } from "../src/read.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
@@ -48,7 +47,7 @@ function normalResult(): FilterOutputResult {
       },
     ],
     classification: { category: "unknown", confidence: 1 },
-    decision: "compress",
+    decision: "compressed",
     compressor: "generic",
     rawBytes: 200,
     returnedBytes: 20,

@@ -13,7 +13,9 @@ const ID_RECENT_HIGH = "00000000-0000-4000-8000-0000000000d1";
 const ID_OLD_LOW = "00000000-0000-4000-8000-0000000000d2";
 const ID_ARCHIVAL = "00000000-0000-4000-8000-0000000000d3";
 
-function entry(over: Partial<MemoryEntry> & { id: string; content: string }): MemoryEntry {
+function entry(
+  over: Omit<Partial<MemoryEntry>, "id"> & { id: string; content: string },
+): MemoryEntry {
   return memoryEntrySchema.parse({
     id: over.id,
     projectId: PROJECT,

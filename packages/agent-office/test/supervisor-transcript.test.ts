@@ -16,6 +16,8 @@ import { saveAgent } from "../src/agent-store.js";
 import { createLauncherRegistry } from "../src/launcher-registry.js";
 import { saveRole } from "../src/role-store.js";
 import { createSupervisor } from "../src/supervisor.js";
+import type { TranscriptSink } from "../src/supervisor.js";
+
 import { loadTask, saveTask } from "../src/task-store.js";
 import type { TranscriptEntry } from "../src/transcript.js";
 
@@ -102,10 +104,7 @@ async function seed(storeRoot: string): Promise<void> {
   });
 }
 
-function makeSupervisor(
-  storeRoot: string,
-  onTranscript: Parameters<typeof createSupervisor>[0]["onTranscript"],
-) {
+function makeSupervisor(storeRoot: string, onTranscript: TranscriptSink) {
   let n = 0;
   const coreRegistry = createInMemoryCoreRegistry();
   coreRegistry.createProject({

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { failedAttemptIdSchema, projectIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CoreRegistryError } from "../src/errors.js";
+import type { FailedAttempt } from "../src/failed-attempt.js";
 import { createJsonDirectoryCoreRegistry } from "../src/json-directory-registry.js";
 import { type CoreRegistry, createInMemoryCoreRegistry } from "../src/registry.js";
 
@@ -19,7 +20,7 @@ const project = {
   createdAt: TS,
   updatedAt: TS,
 } as const;
-const failure = {
+const failure: FailedAttempt = {
   id: FA_ID,
   projectId: PROJECT_ID,
   sessionId: null,
@@ -29,7 +30,7 @@ const failure = {
   relatedFiles: ["src/middleware/auth.ts"],
   convertedToRule: false,
   createdAt: TS,
-} as const;
+};
 const clock = { now: () => TS, newId: () => RULE_ID };
 
 function suite(name: string, make: () => CoreRegistry) {
