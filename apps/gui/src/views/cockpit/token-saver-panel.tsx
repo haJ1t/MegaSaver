@@ -78,13 +78,46 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
         (stats === null ? (
           <p className="text-sm text-text-muted">No proxy activity recorded for this session.</p>
         ) : (
-          <div className="bg-surface border border-border rounded-xl p-6">
-            <HeroMetric stats={stats} />
-            <div className="mt-4 flex flex-wrap gap-2">
-              <HookBadge />
-              <SaverBadge dir={dir} id={id} />
-              <DaemonBadge />
-            </div>
+          <div className="bg-surface border border-border rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <tbody className="divide-y divide-border">
+                <tr>
+                  <th
+                    scope="row"
+                    className="px-4 py-3 text-left font-medium text-text-secondary w-1/2"
+                  >
+                    Tokens saved
+                  </th>
+                  <td className="px-4 py-3 text-text-primary tabular-nums">
+                    <TokenSavedValue stats={stats} />
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row" className="px-4 py-3 text-left font-medium text-text-secondary">
+                    Hook
+                  </th>
+                  <td className="px-4 py-3">
+                    <HookStatusValue />
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row" className="px-4 py-3 text-left font-medium text-text-secondary">
+                    Saver
+                  </th>
+                  <td className="px-4 py-3">
+                    <SaverStatusValue dir={dir} id={id} />
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row" className="px-4 py-3 text-left font-medium text-text-secondary">
+                    Daemon
+                  </th>
+                  <td className="px-4 py-3">
+                    <DaemonStatusValue />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         ))}
 
@@ -102,64 +135,51 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
   );
 }
 
-function HeroMetric({ stats }: { stats: OverlaySessionTokenSaverStats }): JSX.Element {
+function TokenSavedValue({ stats }: { stats: OverlaySessionTokenSaverStats }): JSX.Element {
   const would = tokensFromBytes(stats.rawBytesTotal);
   const used = tokensFromBytes(stats.returnedBytesTotal);
   const saved = Math.max(0, would - used);
   const pct = would === 0 ? 0 : Math.round((saved / would) * 100);
   return (
-    <div>
-      <div className="text-4xl font-semibold tracking-tight text-text-primary tabular-nums">
-        {saved.toLocaleString()}
-      </div>
-      <div className="text-sm text-text-secondary">tokens saved</div>
-      <div className="mt-1 text-xs text-text-muted">
-        {pct}% vs. raw output · {would.toLocaleString()} would-have-used
-      </div>
-    </div>
+    <span className="font-medium">
+      {saved.toLocaleString()}{" "}
+      <span className="text-text-muted font-normal">({pct}% vs. raw output)</span>
+    </span>
   );
 }
 
-function HookBadge(): JSX.Element {
+function HookStatusValue(): JSX.Element {
   const [status, setStatus] = useState<ClaudeHookStatus | null>(null);
   useEffect(() => {
     void fetchClaudeHookStatus().then(setStatus);
   }, []);
   const connected = status?.connected ?? false;
   return (
-    <StatusBadge tone={connected ? "ok" : "muted"}>
-      {connected ? "Hook connected" : "Hook disconnected"}
-    </StatusBadge>
+    <StatusText tone={connected ? "ok" : "muted"}>
+      {connected ? "Connected" : "Disconnected"}
+    </StatusText>
   );
 }
 
-function SaverBadge({ dir, id }: { dir: string; id: string }): JSX.Element {
+function SaverStatusValue({ dir, id }: { dir: string; id: string }): JSX.Element {
   const [status, setStatus] = useState<WorkspaceSaverStatus | null>(null);
   useEffect(() => {
     void fetchWorkspaceSaver(dir, id).then(setStatus);
   }, [dir, id]);
   const enabled = status?.enabled ?? false;
-  return (
-    <StatusBadge tone={enabled ? "active" : "muted"}>
-      {enabled ? "Saver active" : "Saver off"}
-    </StatusBadge>
-  );
+  return <StatusText tone={enabled ? "active" : "muted"}>{enabled ? "Active" : "Off"}</StatusText>;
 }
 
-function DaemonBadge(): JSX.Element {
+function DaemonStatusValue(): JSX.Element {
   const [status, setStatus] = useState<DaemonStatus | null>(null);
   useEffect(() => {
     void fetchDaemonStatus().then(setStatus);
   }, []);
   const running = status?.running ?? false;
-  return (
-    <StatusBadge tone={running ? "ok" : "muted"}>
-      {running ? "Daemon live" : "Daemon stopped"}
-    </StatusBadge>
-  );
+  return <StatusText tone={running ? "ok" : "muted"}>{running ? "Live" : "Stopped"}</StatusText>;
 }
 
-function StatusBadge({
+function StatusText({
   children,
   tone,
 }: {
@@ -167,19 +187,13 @@ function StatusBadge({
   tone: "ok" | "active" | "muted" | "warn" | "danger";
 }): JSX.Element {
   const toneClass = {
-    ok: "badge-status-live",
-    active: "badge-status-active",
-    muted: "badge-status-muted",
-    warn: "badge-status-warn",
-    danger: "badge-status-danger",
+    ok: "text-accent",
+    active: "text-accent",
+    muted: "text-text-muted",
+    warn: "text-danger",
+    danger: "text-danger",
   }[tone];
-  return (
-    <span
-      className={`px-2.5 py-1 rounded-full text-[11px] font-medium uppercase tracking-wide ${toneClass}`}
-    >
-      {children}
-    </span>
-  );
+  return <span className={`font-medium ${toneClass}`}>{children}</span>;
 }
 
 function tokensFromBytes(bytes: number): number {

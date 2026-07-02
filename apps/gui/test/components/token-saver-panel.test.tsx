@@ -57,19 +57,22 @@ afterEach(() => {
 });
 
 describe("TokenSaverPanel", () => {
-  it("shows a hero token-saved metric", async () => {
+  it("shows a token-saved metric in the table", async () => {
     stub.saver = () => Promise.resolve(SAVER);
     stub.stats = () => Promise.resolve(STATS);
     render(<TokenSaverPanel dir="d" id="i" />);
     await waitFor(() => expect(screen.getByText("200")).toBeDefined());
-    expect(screen.getByText("tokens saved")).toBeDefined();
+    expect(screen.getByText("Tokens saved")).toBeDefined();
   });
 
-  it("shows status badges and hides byte-level table labels", async () => {
+  it("shows status rows in a table and hides byte-level labels", async () => {
     stub.saver = () => Promise.resolve(SAVER);
     stub.stats = () => Promise.resolve(STATS);
     render(<TokenSaverPanel dir="d" id="i" />);
-    await waitFor(() => expect(screen.getByText("tokens saved")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Tokens saved")).toBeDefined());
+    expect(screen.getByText("Hook")).toBeDefined();
+    expect(screen.getByText("Saver")).toBeDefined();
+    expect(screen.getByText("Daemon")).toBeDefined();
     expect(screen.queryByText("Would have used")).toBeNull();
     expect(screen.queryByText("Actually used")).toBeNull();
     expect(screen.queryByText("Saved %")).toBeNull();
