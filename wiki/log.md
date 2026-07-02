@@ -3520,3 +3520,19 @@ narrowing. `asOf` dropped from both helper signatures (unused after the fix).
 - **Shipped.** v1.2.1 published to npm: **3 files, 0 natives**, 1.9MB tarball,
   `optionalDependencies` present. Install smoke on darwin: `mega memory index` →
   `embedded=1` — embeddings restored on the platform v1.2.0 broke.
+
+## [2026-07-02] query | frontend GUI bug hunt completed
+
+Fixed stale-response race conditions in `apps/gui` data-fetching components:
+- `WorkspaceSessionList` polling guard + retry via `refreshNonce`.
+- `MemoryPanel`, `TasksPanel` effect guards via `live` flag + `refreshNonce`.
+- `TokenSaverPanel` polling guard + retry via `refreshNonce`.
+- `WorkspaceContextPanel` submit guard via monotonic request ID ref.
+
+Added regression tests for each scenario. `pnpm verify` green (lint, typecheck, test, conventions). Bridge runtime smoke returned `{"ok":true}`.
+
+Spec: `docs/superpowers/specs/2026-07-01-frontend-gui-bug-hunt-design.md` (on `main`).
+Plan: `docs/superpowers/plans/2026-07-01-frontend-gui-bug-hunt-plan.md`.
+Branch: `worktree-frontend-gui-bug-hunt`.
+
+External reviewer agent pass pending; the earlier cross-session review flagged blockers (uncommitted test, missing plan) that are now resolved.
