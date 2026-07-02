@@ -3,6 +3,7 @@ import { auditExportCommand } from "./export.js";
 import { auditHonestCommand } from "./honest.js";
 import { auditLastCommand } from "./last.js";
 import { auditReportCommand } from "./report.js";
+import { auditSeamCommand } from "./seam.js";
 import { auditSessionCommand } from "./session.js";
 import { auditUsageCommand } from "./usage.js";
 
@@ -17,11 +18,19 @@ export {
   renderUsageReport,
   auditUsageCommand,
 } from "./usage.js";
+export {
+  type RunAuditSeamInput,
+  type SeamSummary,
+  runAuditSeam,
+  summarizeSeamTraces,
+  renderSeamReport,
+  auditSeamCommand,
+} from "./seam.js";
 
 export const auditCommand = defineCommand({
   meta: {
     name: "audit",
-    description: "Token-savings dashboard: report, last, session, export, honest, usage.",
+    description: "Token-savings dashboard: report, last, session, export, honest, usage, seam.",
   },
   subCommands: {
     report: auditReportCommand,
@@ -30,5 +39,6 @@ export const auditCommand = defineCommand({
     export: auditExportCommand,
     honest: auditHonestCommand,
     usage: auditUsageCommand,
+    seam: auditSeamCommand,
   },
 });
