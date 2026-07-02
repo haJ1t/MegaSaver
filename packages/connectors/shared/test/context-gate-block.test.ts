@@ -75,6 +75,11 @@ describe("renderContextGateBlock", () => {
     expect(block).toContain("get_task_context");
   });
 
+  it("instructs the agent to call get_edit_impact after editing files", () => {
+    const block = renderContextGateBlock(ctxWithTokenSaver(enabledTokenSaver));
+    expect(block).toContain("get_edit_impact({ projectId })");
+  });
+
   it("omits the instruction entirely when token saver is disabled", () => {
     const block = renderContextGateBlock(
       ctxWithTokenSaver({ ...enabledTokenSaver, enabled: false }),
