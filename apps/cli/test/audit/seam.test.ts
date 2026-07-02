@@ -139,7 +139,7 @@ function seedFixtureTraces(): void {
 }
 
 describe("mega audit seam", () => {
-  it("aggregates fire rates, boosts and token sums across fixture traces", async () => {
+  it("splits fire rates, boosts and token sums by engine-ranking arm", async () => {
     await seedProject();
     seedFixtureTraces();
     const code = await runAuditSeam({
@@ -153,16 +153,23 @@ describe("mega audit seam", () => {
     expect(code).toBe(0);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed.traces).toBe(3);
-    expect(parsed.engineRankingOn).toBe(2);
-    expect(parsed.failureBoostFired).toBe(1);
-    expect(parsed.memoryBoostFired).toBe(1);
-    expect(parsed.meanFailureBoostFired).toBeCloseTo(0.5, 10);
-    expect(parsed.meanMemoryBoostFired).toBeCloseTo(0.5, 10);
-    expect(parsed.rawTokens).toBe(1800);
-    expect(parsed.returnedTokens).toBe(600);
+    expect(parsed.seamOn.traces).toBe(2);
+    expect(parsed.seamOn.failureBoostFired).toBe(1);
+    expect(parsed.seamOn.memoryBoostFired).toBe(1);
+    expect(parsed.seamOn.meanFailureBoostFired).toBeCloseTo(0.5, 10);
+    expect(parsed.seamOn.meanMemoryBoostFired).toBeCloseTo(0.5, 10);
+    expect(parsed.seamOn.rawTokens).toBe(1500);
+    expect(parsed.seamOn.returnedTokens).toBe(300);
+    expect(parsed.seamOff.traces).toBe(1);
+    expect(parsed.seamOff.failureBoostFired).toBe(0);
+    expect(parsed.seamOff.memoryBoostFired).toBe(0);
+    expect(parsed.seamOff.meanFailureBoostFired).toBe(0);
+    expect(parsed.seamOff.meanMemoryBoostFired).toBe(0);
+    expect(parsed.seamOff.rawTokens).toBe(300);
+    expect(parsed.seamOff.returnedTokens).toBe(300);
   });
 
-  it("renders a plain-text report", async () => {
+  it("renders a plain-text report with one section per arm", async () => {
     await seedProject();
     seedFixtureTraces();
     const code = await runAuditSeam({
@@ -176,9 +183,31 @@ describe("mega audit seam", () => {
     const out = lines.join("\n");
     expect(out).toContain("traces analyzed:");
     expect(out).toContain("3");
-    expect(out).toContain("failure boost fired:");
+    expect(out).toContain("seam ON arm:");
+    expect(out).toContain("seam OFF arm:");
+    expect(out).toContain("2/3");
     expect(out).toContain("1/3");
+    expect(out).toContain("failure boost fired:");
+    expect(out).toContain("1/2");
     expect(out).toContain("memory boost fired:");
+  });
+
+  it("marks an empty arm instead of dividing by zero", async () => {
+    await seedProject();
+    seedFixtureTraces();
+    const code = await runAuditSeam({
+      projectName: "demo",
+      sessionFlag: SESSION_A,
+      ...env(),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    const out = lines.join("\n");
+    expect(out).toContain("seam ON arm:");
+    expect(out).toContain("seam OFF arm:");
+    expect(out).toContain("no traces in this arm");
+    expect(out).not.toContain("NaN");
   });
 
   it("filters to one session with --session", async () => {
@@ -195,8 +224,9 @@ describe("mega audit seam", () => {
     expect(code).toBe(0);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed.traces).toBe(1);
-    expect(parsed.engineRankingOn).toBe(0);
-    expect(parsed.failureBoostFired).toBe(0);
+    expect(parsed.seamOn.traces).toBe(0);
+    expect(parsed.seamOff.traces).toBe(1);
+    expect(parsed.seamOff.failureBoostFired).toBe(0);
   });
 
   it("reports the onboarding hint when no traces exist", async () => {
@@ -312,8 +342,9 @@ describe("mega audit seam — end to end over a real exec trace", () => {
     expect(code).toBe(0);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed.traces).toBe(1);
-    expect(parsed.engineRankingOn).toBe(1);
-    expect(parsed.failureBoostFired).toBeGreaterThan(0);
-    expect(parsed.meanFailureBoostFired).toBeGreaterThan(0);
+    expect(parsed.seamOn.traces).toBe(1);
+    expect(parsed.seamOn.failureBoostFired).toBeGreaterThan(0);
+    expect(parsed.seamOn.meanFailureBoostFired).toBeGreaterThan(0);
+    expect(parsed.seamOff.traces).toBe(0);
   });
 });

@@ -20,6 +20,7 @@ export {
 } from "./usage.js";
 export {
   type RunAuditSeamInput,
+  type SeamArmSummary,
   type SeamSummary,
   runAuditSeam,
   summarizeSeamTraces,

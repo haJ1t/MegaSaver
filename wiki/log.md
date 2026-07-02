@@ -3544,3 +3544,26 @@ narrowing. `asOf` dropped from both helper signatures (unused after the fix).
   onboarding hint mentions the env var.
 - **Verification.** All three RED first, then GREEN; `pnpm verify` green
   (46/46 turbo tasks).
+
+## [2026-07-02] fix | seam phase 2 batch C: measurement polish
+
+Fix batch C on `feat/seam-phase-2` (output-filter + cli). Three items:
+
+- **Kill-switch falsy spellings.** `resolveEngineRankingDisabled` accepted only
+  the literal "false"; operators setting `MEGASAVER_ENGINE_RANKING=0/off/no`
+  silently kept the seam on. Now "false", "0", "off", "no" (trimmed,
+  lowercased) all disable (`packages/output-filter/src/rank.ts`). RED first in
+  `rank-engine.test.ts`.
+- **Raw NUL byte in test source.** `replay-trace.test.ts:112` embedded a raw
+  0x00 inside the `/nonexistent/<NUL>/path` literal, so git diffed the file as
+  binary. Replaced with the `\u0000` escape — identical runtime string; `file`
+  now reports UTF-8 text.
+- **Audit seam arm-split.** `mega audit seam` blended seam-on and seam-off
+  traces into one summary. `SeamSummary` is now
+  `{ traces, seamOn, seamOff }` (per-arm `SeamArmSummary`: trace count, fire
+  rates, mean fired boosts, raw/returned token sums), and the text report
+  renders one section per arm for direct A/B comparison. Empty arm renders
+  "(no traces in this arm)" instead of dividing by zero. JSON shape changed —
+  pre-1.0, no compat shim (§13).
+- **Verification.** output-filter 358/358, cli 764 passed | 4 skipped,
+  context-gate 166/166, typecheck clean, `pnpm build` 23/23 turbo tasks.

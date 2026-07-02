@@ -137,11 +137,14 @@ export function engineRankingFromEnv(env: NodeJS.ProcessEnv = process.env): bool
 }
 
 // A/B kill switch for the seam call sites (which pass engineRanking
-// explicitly, so the opt-in resolver above never fires for them): only the
-// literal "false" (trimmed, case-insensitive) disables — unset keeps the
-// seam ON, letting an operator run seam-off sessions for comparison.
+// explicitly, so the opt-in resolver above never fires for them): the falsy
+// spellings "false", "0", "off", "no" (trimmed, case-insensitive) disable —
+// unset keeps the seam ON, letting an operator run seam-off sessions for
+// comparison.
+const ENGINE_RANKING_DISABLED_VALUES = new Set(["false", "0", "off", "no"]);
+
 export function resolveEngineRankingDisabled(raw: string | undefined): boolean {
-  return (raw ?? "").trim().toLowerCase() === "false";
+  return ENGINE_RANKING_DISABLED_VALUES.has((raw ?? "").trim().toLowerCase());
 }
 
 export function engineRankingDisabledByEnv(env: NodeJS.ProcessEnv = process.env): boolean {

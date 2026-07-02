@@ -7,9 +7,8 @@ import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { projectNameSchema } from "../shared/schemas.js";
 
-export type SeamSummary = {
+export type SeamArmSummary = {
   traces: number;
-  engineRankingOn: number;
   failureBoostFired: number;
   memoryBoostFired: number;
   meanFailureBoostFired: number;
@@ -18,8 +17,13 @@ export type SeamSummary = {
   returnedTokens: number;
 };
 
-export function summarizeSeamTraces(traces: readonly ReplayTrace[]): SeamSummary {
-  let engineRankingOn = 0;
+export type SeamSummary = {
+  traces: number;
+  seamOn: SeamArmSummary;
+  seamOff: SeamArmSummary;
+};
+
+function summarizeArm(traces: readonly ReplayTrace[]): SeamArmSummary {
   let failureBoostFired = 0;
   let memoryBoostFired = 0;
   let rawTokens = 0;
@@ -28,7 +32,6 @@ export function summarizeSeamTraces(traces: readonly ReplayTrace[]): SeamSummary
   const firedMemoryBoosts: number[] = [];
 
   for (const trace of traces) {
-    if (trace.ranking.engineRanking) engineRankingOn += 1;
     rawTokens += trace.ranking.rawTokens;
     returnedTokens += trace.ranking.returnedTokens;
     let failureFired = false;
@@ -54,7 +57,6 @@ export function summarizeSeamTraces(traces: readonly ReplayTrace[]): SeamSummary
 
   return {
     traces: traces.length,
-    engineRankingOn,
     failureBoostFired,
     memoryBoostFired,
     meanFailureBoostFired: mean(firedFailureBoosts),
@@ -62,6 +64,37 @@ export function summarizeSeamTraces(traces: readonly ReplayTrace[]): SeamSummary
     rawTokens,
     returnedTokens,
   };
+}
+
+export function summarizeSeamTraces(traces: readonly ReplayTrace[]): SeamSummary {
+  return {
+    traces: traces.length,
+    seamOn: summarizeArm(traces.filter((t) => t.ranking.engineRanking)),
+    seamOff: summarizeArm(traces.filter((t) => !t.ranking.engineRanking)),
+  };
+}
+
+const num = (x: number): string => x.toLocaleString("en-US");
+
+function renderArm(label: string, total: number, a: SeamArmSummary): string[] {
+  const pct = (n: number, of: number): string => `${((n / of) * 100).toFixed(1)}%`;
+  const lines = [
+    `seam ${label} arm:`,
+    `  traces:                      ${a.traces}/${total} (${pct(a.traces, total)})`,
+  ];
+  if (a.traces === 0) {
+    lines.push("  (no traces in this arm)");
+    return lines;
+  }
+  lines.push(
+    `  failure boost fired:         ${a.failureBoostFired}/${a.traces} traces (${pct(a.failureBoostFired, a.traces)})`,
+    `  memory boost fired:          ${a.memoryBoostFired}/${a.traces} traces (${pct(a.memoryBoostFired, a.traces)})`,
+    `  mean failure boost (fired):  ${a.meanFailureBoostFired.toFixed(3)}`,
+    `  mean memory boost (fired):   ${a.meanMemoryBoostFired.toFixed(3)}`,
+    `  raw tokens:                  ${num(a.rawTokens)}`,
+    `  returned tokens:             ${num(a.returnedTokens)}`,
+  );
+  return lines;
 }
 
 export function renderSeamReport(s: SeamSummary): string[] {
@@ -73,17 +106,12 @@ export function renderSeamReport(s: SeamSummary): string[] {
       "then re-run for a seam effectiveness report.",
     ];
   }
-  const pct = (n: number): string => `${((n / s.traces) * 100).toFixed(1)}%`;
-  const num = (x: number): string => x.toLocaleString("en-US");
   return [
     `traces analyzed:             ${num(s.traces)}`,
-    `engine ranking on:           ${s.engineRankingOn}/${s.traces} traces (${pct(s.engineRankingOn)})`,
-    `failure boost fired:         ${s.failureBoostFired}/${s.traces} traces (${pct(s.failureBoostFired)})`,
-    `memory boost fired:          ${s.memoryBoostFired}/${s.traces} traces (${pct(s.memoryBoostFired)})`,
-    `mean failure boost (fired):  ${s.meanFailureBoostFired.toFixed(3)}`,
-    `mean memory boost (fired):   ${s.meanMemoryBoostFired.toFixed(3)}`,
-    `raw tokens:                  ${num(s.rawTokens)}`,
-    `returned tokens:             ${num(s.returnedTokens)}`,
+    "",
+    ...renderArm("ON", s.traces, s.seamOn),
+    "",
+    ...renderArm("OFF", s.traces, s.seamOff),
   ];
 }
 
