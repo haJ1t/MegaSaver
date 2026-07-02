@@ -53,3 +53,10 @@ export {
   recordRead,
   type ReadIndexEntry,
 } from "./read-index.js";
+export {
+  MAX_OVERLAY_FAILURES,
+  appendOverlayFailure,
+  readOverlayFailures,
+  buildOverlayHints,
+  type OverlayFailureRecord,
+} from "./overlay-failures.js";

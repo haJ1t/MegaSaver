@@ -295,7 +295,9 @@ describe("runOutputExecCommand (orchestrator)", () => {
 
   // Sibling to the errorOutput case: the persisted SessionFailure.command FIELD
   // must also be redacted. A secret in the ARGS (not stdout) must not survive
-  // onto the stored record, even though the record is still created.
+  // onto the stored record, even though the record is still created. Exit 3, not
+  // 1: exit 1 with empty output is the benign no-match convention and is not
+  // captured at all.
   it("child non-zero exit with secret-shaped args: stored SessionFailure.command is redacted, record still created", async () => {
     await seed(store, projectRoot, { storeRawOutput: true });
     const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
@@ -306,11 +308,11 @@ describe("runOutputExecCommand (orchestrator)", () => {
     });
 
     const promise = runOutputExecCommand(input);
-    child.emit("close", 1);
+    child.emit("close", 3);
     const outcome = await promise;
 
     expect(outcome.ok).toBe(true);
-    if (outcome.ok) expect(outcome.result.childExitCode).toBe(1);
+    if (outcome.ok) expect(outcome.result.childExitCode).toBe(3);
 
     const failures = registry.listSessionFailures(PROJECT_ID as ProjectId, SESSION_ID as SessionId);
     expect(failures).toHaveLength(1);

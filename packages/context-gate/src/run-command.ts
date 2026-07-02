@@ -8,7 +8,14 @@ import {
   saveChunkSet,
   saveOverlayChunkSet,
 } from "@megasaver/content-store";
-import { type FilterOutputResult, filterOutput } from "@megasaver/output-filter";
+import {
+  type FilterOutputResult,
+  engineRankingDisabledByEnv,
+  filterOutput,
+  finalizeReplayTrace,
+  seamTraceEnabledByEnv,
+  writeReplayTrace,
+} from "@megasaver/output-filter";
 import {
   type PolicyDenyCode,
   type ProjectPermissions,
@@ -28,6 +35,7 @@ import {
   appendEvent,
   appendOverlayEvent,
 } from "@megasaver/stats";
+import { appendOverlayFailure, buildOverlayHints } from "./overlay-failures.js";
 import {
   type LoadProjectPermissions,
   defaultNewId,
@@ -233,7 +241,11 @@ export async function runOutputExecCommand(
   // Failure-aware ranking: the session's prior SessionFailure signatures boost
   // any chunk that references them, so a fresh command's output surfaces the
   // lines tied to what recently broke.
-  const sessionHints = buildSessionHints(input.registry, settings.projectId, input.sessionId);
+  const { hints: sessionHints, warnings: hintWarnings } = buildSessionHints(
+    input.registry,
+    settings.projectId,
+    input.sessionId,
+  );
   const filtered = await filterOutput({
     raw: outcome.capture.raw,
     intent: input.intent,
@@ -241,7 +253,11 @@ export async function runOutputExecCommand(
     ...(maxReturnedBytes !== undefined ? { maxReturnedBytes } : {}),
     source: { kind: "command", command: input.command, args: input.args },
     sessionHints,
-    engineRanking: true,
+    // On by default at the seam; MEGASAVER_ENGINE_RANKING=false is the A/B
+    // kill switch. Trace recording is opt-in (disk cost): MEGASAVER_SEAM_TRACE
+    // gates it, and a recorded trace makes both arms measurable (§P2.6).
+    engineRanking: !engineRankingDisabledByEnv(),
+    recordTrace: seamTraceEnabledByEnv(),
   });
 
   const warnings = filtered.warnings ?? [];
@@ -261,48 +277,64 @@ export async function runOutputExecCommand(
   // a session-scoped SessionFailure that later feeds failure-aware ranking.
   const captureWarnings: string[] = [];
   if (outcome.capture.childExitCode !== 0 || outcome.capture.terminated !== undefined) {
-    // Best-effort telemetry: capture writes to disk (json-directory registry),
-    // and an auxiliary write must never break command-output delivery. On failure
-    // we surface a non-fatal warning (§13: no silent swallow) but never rethrow.
-    // Not a silent retry — a genuinely degraded auxiliary concern.
-    // SessionFailure ids must be uuids; newId is a caller-injectable determinism
-    // hook that can be non-uuid, so mint the id directly.
-    try {
-      input.registry.createSessionFailure({
-        id: randomUUID() as SessionFailureId,
-        projectId: settings.projectId,
-        sessionId: input.sessionId,
-        // Redact before persist: the command line is secret-bearing (e.g.
-        // `curl -H "Authorization: Bearer ..."`); reuse the already-redacted
-        // command/args the label was built from so no raw secret hits disk.
-        command: redactedLabel,
-        // Cap the stored evidence: a SessionFailure is an ephemeral per-command
-        // record for failure-aware ranking, not the full transcript (the chunkSet
-        // holds that). 4000 chars bounds each record so a chatty failing command
-        // cannot bloat the session-failure store. Redact first so raw output
-        // secrets never reach the persisted record.
-        errorOutput: redact(outcome.capture.raw.slice(0, 4000)).redacted,
-        source: "proxy-classifier",
-        createdAt: now(),
-      });
-    } catch (err) {
-      captureWarnings.push(`session-failure capture skipped: ${messageOf(err)}`);
+    // Cap the stored evidence: a SessionFailure is an ephemeral per-command
+    // record for failure-aware ranking, not the full transcript (the chunkSet
+    // holds that). 4000 chars bounds each record so a chatty failing command
+    // cannot bloat the session-failure store. Redact the FULL raw output
+    // BEFORE slicing: slicing first can cut a secret at the 4000 boundary,
+    // leaving a truncated fragment the redactor no longer recognizes.
+    const redactedErrorOutput = redact(outcome.capture.raw).redacted.slice(0, 4000);
+    // Benign-exit filter: grep/rg/diff/test exit 1 with no output by convention
+    // to signal "no match", not a failure. An evidence-free record contributes
+    // zero signatures to failure-aware ranking — skip the disk noise. Any other
+    // exit code, a termination, or exit 1 WITH output still captures.
+    const benignExit =
+      outcome.capture.childExitCode === 1 &&
+      outcome.capture.terminated === undefined &&
+      redactedErrorOutput.trim() === "";
+    if (!benignExit) {
+      // Best-effort telemetry: capture writes to disk (json-directory registry),
+      // and an auxiliary write must never break command-output delivery. On failure
+      // we surface a non-fatal warning (§13: no silent swallow) but never rethrow.
+      // Not a silent retry — a genuinely degraded auxiliary concern.
+      // SessionFailure ids must be uuids; newId is a caller-injectable determinism
+      // hook that can be non-uuid, so mint the id directly.
+      try {
+        input.registry.createSessionFailure({
+          id: randomUUID() as SessionFailureId,
+          projectId: settings.projectId,
+          sessionId: input.sessionId,
+          // Redact before persist: the command line is secret-bearing (e.g.
+          // `curl -H "Authorization: Bearer ..."`); reuse the already-redacted
+          // command/args the label was built from so no raw secret hits disk.
+          command: redactedLabel,
+          errorOutput: redactedErrorOutput,
+          source: "proxy-classifier",
+          createdAt: now(),
+        });
+      } catch (err) {
+        captureWarnings.push(`session-failure capture skipped: ${messageOf(err)}`);
+      }
     }
   }
 
   // On a forced termination the partial output is still processed; surface the
   // cause both as a warning (alongside any redaction warning) and the typed
-  // `terminated` field (§3.5). A skipped failure capture is folded in as a
-  // non-fatal warning so a systemic capture outage is visible, not silent.
+  // `terminated` field (§3.5). A skipped failure capture or hint source is
+  // folded in as a non-fatal warning so a systemic outage is visible, not silent.
   const resultWarnings = [
     ...warnings,
     ...(outcome.capture.terminated !== undefined
       ? [`terminated: ${outcome.capture.terminated}`]
       : []),
     ...captureWarnings,
+    ...hintWarnings,
   ];
+  // The trace is measurement data (§P2.6): persisted below, stripped from the
+  // agent-visible result so it never spends the tokens it exists to measure.
+  const { trace: rankingTrace, ...filteredSansTrace } = filtered;
   let result: ExecResult = {
-    ...filtered,
+    ...filteredSansTrace,
     ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),
     childExitCode: outcome.capture.childExitCode,
     ...(outcome.capture.terminated !== undefined ? { terminated: outcome.capture.terminated } : {}),
@@ -334,6 +366,22 @@ export async function runOutputExecCommand(
     result.chunkSetId = chunkSetId;
     const sessionDir = join(input.storeRoot, "content", settings.projectId, input.sessionId);
     result = applyShownDedup({ result, sessionDir, chunkSetId });
+  }
+
+  // Best-effort seam measurement (§P2.6): append the ranking trace to a
+  // per-session stats dir — per-session because writeReplayTrace owns the
+  // fixed replay-traces.jsonl filename inside the dir it is given.
+  if (rankingTrace !== undefined) {
+    await writeReplayTrace(
+      join(input.storeRoot, "stats", settings.projectId, `${input.sessionId}-traces`),
+      finalizeReplayTrace(rankingTrace, {
+        sessionId: input.sessionId,
+        projectId: settings.projectId,
+        toolName: "proxy_run_command",
+        createdAt: now(),
+        ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
+      }),
+    );
   }
 
   const event: TokenSaverEvent = {
@@ -423,12 +471,23 @@ export async function runOverlayOutputExecCommand(
     settings.maxReturnedBytes !== undefined
       ? Math.min(settings.maxReturnedBytes, MAX_RETURNED_CEILING)
       : undefined;
+  // Failure-aware ranking: prior overlay-store failure signatures boost any
+  // chunk that references them, mirroring the registry exec path.
+  const { hints: sessionHints, warnings: hintWarnings } = buildOverlayHints(
+    input.storeRoot,
+    input.workspaceKey,
+    input.liveSessionId,
+  );
   const filtered = await filterOutput({
     raw: outcome.capture.raw,
     intent: input.intent,
     mode: settings.mode,
     ...(maxReturnedBytes !== undefined ? { maxReturnedBytes } : {}),
     source: { kind: "command", command: input.command, args: input.args },
+    sessionHints,
+    // Same A/B kill switch as the registry path; overlay trace recording is
+    // deferred (§P2.6 keeps measurement scope to the registry sites).
+    engineRanking: !engineRankingDisabledByEnv(),
   });
 
   const warnings = filtered.warnings ?? [];
@@ -444,10 +503,59 @@ export async function runOverlayOutputExecCommand(
   const now = input.now ?? defaultNow;
   const newId = input.newId ?? defaultNewId;
 
-  const resultWarnings =
-    outcome.capture.terminated !== undefined
-      ? [...warnings, `terminated: ${outcome.capture.terminated}`]
-      : warnings;
+  // Ephemeral failure capture: a non-zero exit or a forced termination appends
+  // an overlay failure record that later feeds failure-aware ranking — the
+  // registry-less mirror of the registry path's SessionFailure capture.
+  const captureWarnings: string[] = [];
+  if (outcome.capture.childExitCode !== 0 || outcome.capture.terminated !== undefined) {
+    // Cap the stored evidence: an overlay failure is an ephemeral per-command
+    // record for failure-aware ranking, not the full transcript (the chunkSet
+    // holds that). 4000 chars bounds each record so a chatty failing command
+    // cannot bloat the overlay failure store. Redact the FULL raw output
+    // BEFORE slicing: slicing first can cut a secret at the 4000 boundary,
+    // leaving a truncated fragment the redactor no longer recognizes.
+    const redactedErrorOutput = redact(outcome.capture.raw).redacted.slice(0, 4000);
+    // Benign-exit filter: grep/rg/diff/test exit 1 with no output by convention
+    // to signal "no match", not a failure. An evidence-free record contributes
+    // zero signatures to failure-aware ranking — skip the disk noise. Any other
+    // exit code, a termination, or exit 1 WITH output still captures.
+    const benignExit =
+      outcome.capture.childExitCode === 1 &&
+      outcome.capture.terminated === undefined &&
+      redactedErrorOutput.trim() === "";
+    if (!benignExit) {
+      // Best-effort telemetry: an auxiliary write must never break command-output
+      // delivery. On failure we surface a non-fatal warning (§13: no silent
+      // swallow) but never rethrow. Not a silent retry — a genuinely degraded
+      // auxiliary concern.
+      try {
+        appendOverlayFailure(input.storeRoot, input.workspaceKey, input.liveSessionId, {
+          // Redact before persist: the command line is secret-bearing (e.g.
+          // `curl -H "Authorization: Bearer ..."`); reuse the already-redacted
+          // command/args the label was built from so no raw secret hits disk.
+          command: redactedLabel,
+          errorOutput: redactedErrorOutput,
+          source: "proxy-classifier",
+          createdAt: now(),
+        });
+      } catch (err) {
+        captureWarnings.push(`session-failure capture skipped: ${messageOf(err)}`);
+      }
+    }
+  }
+
+  // On a forced termination the partial output is still processed; surface the
+  // cause both as a warning (alongside any redaction warning) and the typed
+  // `terminated` field (§3.5). A skipped failure capture or hint source is
+  // folded in as a non-fatal warning so a systemic outage is visible, not silent.
+  const resultWarnings = [
+    ...warnings,
+    ...(outcome.capture.terminated !== undefined
+      ? [`terminated: ${outcome.capture.terminated}`]
+      : []),
+    ...captureWarnings,
+    ...hintWarnings,
+  ];
   let result: ExecResult = {
     ...filtered,
     ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),

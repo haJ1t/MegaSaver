@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { OrchestratorRegistry, SessionFailureRecord } from "../src/registry-port.js";
+import type {
+  MemoryEntryView,
+  OrchestratorRegistry,
+  SessionFailureRecord,
+} from "../src/registry-port.js";
 import { runOutputExecCommand } from "../src/run-command.js";
 import type { RunCommandSpawn } from "../src/run-command.js";
 import { buildSessionHints, extractFailureSignatures } from "../src/session-hints.js";
@@ -57,7 +61,45 @@ describe("extractFailureSignatures", () => {
     expect(extractFailureSignatures("")).toEqual([]);
     expect(extractFailureSignatures("all good, nothing to report here")).toEqual([]);
   });
+
+  it("drops dot-tokens whose extension is not a code/config extension", () => {
+    expect(extractFailureSignatures("see README.md for details")).toEqual([]);
+    expect(extractFailureSignatures("fetch failed for example.com")).toEqual([]);
+    expect(extractFailureSignatures("weird token a.b in output")).toEqual([]);
+  });
+
+  it("keeps code and config paths, stripping :line for the bare form", () => {
+    const sigs = extractFailureSignatures("error at src/auth.ts:42 while loading config.yml");
+
+    expect(sigs).toContain("src/auth.ts:42");
+    expect(sigs).toContain("src/auth.ts");
+    expect(sigs).toContain("config.yml");
+  });
+
+  it("matches 5-char code extensions like swift", () => {
+    expect(extractFailureSignatures("crash in Sources/App.swift")).toContain("Sources/App.swift");
+    expect(extractFailureSignatures("resolving host.local failed")).toEqual([]);
+  });
+
+  it("matches mts and cts module extensions", () => {
+    const sigs = extractFailureSignatures("error at src/x.mts:3");
+    expect(sigs).toContain("src/x.mts:3");
+    expect(sigs).toContain("src/x.mts");
+    expect(extractFailureSignatures("error at src/y.cts:7")).toContain("src/y.cts");
+  });
 });
+
+function hintRegistry(over: {
+  failures?: SessionFailureRecord[];
+  memory?: MemoryEntryView[];
+  rules?: { appliesTo: string[] }[];
+}) {
+  return {
+    listSessionFailures: () => over.failures ?? [],
+    listMemoryEntries: () => over.memory ?? [],
+    listProjectRules: () => over.rules ?? [],
+  };
+}
 
 describe("buildSessionHints", () => {
   it("maps each failure's errorOutput into short signatures, not the whole blob", () => {
@@ -67,24 +109,33 @@ describe("buildSessionHints", () => {
         expect(sessionId).toBe(SESSION_ID);
         return [failure(TSC_FAILURE)];
       },
+      listMemoryEntries: (projectId: ProjectId) => {
+        expect(projectId).toBe(PROJECT_ID);
+        return [];
+      },
+      listProjectRules: (projectId: ProjectId) => {
+        expect(projectId).toBe(PROJECT_ID);
+        return [];
+      },
     };
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     expect(hints.recentFailures).toContain("TS2322");
     expect(hints.recentFailures).toContain("src/auth.ts");
     // The whole blob must NOT leak in as a hint item — that is the dead-boost bug.
     expect(hints.recentFailures).not.toContain(TSC_FAILURE);
-    expect(hints.recentMemory).toBeUndefined();
+    expect(hints.recentMemory).toEqual([]);
+    expect(hints.projectConventions).toEqual([]);
     expect(hints.recentFiles).toBeUndefined();
   });
 
   it("contributes nothing for a benign failure that yields no signature", () => {
-    const registry = {
-      listSessionFailures: () => [failure("process exited"), failure(TSC_FAILURE)],
-    };
+    const registry = hintRegistry({
+      failures: [failure("process exited"), failure(TSC_FAILURE)],
+    });
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     // Only the tsc blob's signatures survive; the benign one adds nothing.
     expect(hints.recentFailures).toContain("TS2322");
@@ -92,13 +143,191 @@ describe("buildSessionHints", () => {
   });
 
   it("returns an empty recentFailures list when there are no failures", () => {
-    const registry = {
-      listSessionFailures: () => [],
-    };
-
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(hintRegistry({}), PROJECT_ID, SESSION_ID);
 
     expect(hints.recentFailures).toEqual([]);
+  });
+
+  it("flattens approved memory relatedFiles + relatedSymbols into recentMemory, deduped, newest entry first", () => {
+    const registry = hintRegistry({
+      memory: [
+        {
+          approval: "approved",
+          stale: false,
+          relatedFiles: ["src/auth.ts", "src/db.ts"],
+          relatedSymbols: ["readToken", "src/auth.ts"],
+        },
+        { approval: "approved", stale: false, relatedFiles: ["src/db.ts"] },
+      ],
+    });
+
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentMemory).toEqual(["src/db.ts", "src/auth.ts", "readToken"]);
+  });
+
+  it("drops sub-4-char tokens from recentMemory and projectConventions", () => {
+    const registry = hintRegistry({
+      memory: [{ approval: "approved", stale: false, relatedSymbols: ["x", "validateToken"] }],
+      rules: [{ appliesTo: ["abc", "src/auth.ts"] }],
+    });
+
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentMemory).toEqual(["validateToken"]);
+    expect(hints.projectConventions).toEqual(["src/auth.ts"]);
+  });
+
+  it("keeps the 12 newest failure signatures when the cap overflows", () => {
+    const failures = Array.from({ length: 13 }, (_, i) =>
+      failure(`error in src/f${String(i).padStart(2, "0")}.ts`),
+    );
+    const registry = hintRegistry({ failures });
+
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentFailures).toHaveLength(12);
+    expect(hints.recentFailures).toContain("src/f12.ts");
+    expect(hints.recentFailures).not.toContain("src/f00.ts");
+  });
+
+  it("caps recentMemory at 12 items", () => {
+    const registry = hintRegistry({
+      memory: [
+        {
+          approval: "approved",
+          stale: false,
+          relatedFiles: Array.from({ length: 15 }, (_, i) => `src/file-${i}.ts`),
+        },
+      ],
+    });
+
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentMemory).toHaveLength(12);
+  });
+
+  it("never leaks keywords, content, or title into recentMemory", () => {
+    // Mutation target: an impl that reads keywords/content/title instead of
+    // relatedFiles/relatedSymbols must fail here.
+    const keywordOnly = {
+      approval: "approved",
+      stale: false,
+      keywords: ["src/keyword-leak.ts"],
+      title: "src/title-leak.ts",
+      content: "explains src/content-leak.ts in detail",
+    };
+    const registry = hintRegistry({ memory: [keywordOnly] });
+
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentMemory).toEqual([]);
+  });
+
+  it("excludes unapproved and stale memory", () => {
+    const registry = hintRegistry({
+      memory: [
+        { approval: "suggested", stale: false, relatedFiles: ["src/suggested.ts"] },
+        { approval: "rejected", stale: false, relatedFiles: ["src/rejected.ts"] },
+        { approval: "approved", stale: true, relatedFiles: ["src/stale.ts"] },
+        { approval: "approved", stale: false, relatedFiles: ["src/kept.ts"] },
+      ],
+    });
+
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentMemory).toEqual(["src/kept.ts"]);
+  });
+
+  it("flattens rule appliesTo into projectConventions, deduped and capped at 12 newest", () => {
+    const registry = hintRegistry({
+      rules: [
+        {
+          appliesTo: [
+            "src/auth.ts",
+            ...Array.from({ length: 15 }, (_, i) => `lit-${String(i).padStart(2, "0")}/x.ts`),
+          ],
+        },
+        { appliesTo: ["src/auth.ts", "packages/core/index.ts"] },
+      ],
+    });
+
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    // Newest rule's tokens survive the cap; the oldest rule's overflow is evicted.
+    expect(hints.projectConventions?.slice(0, 2)).toEqual([
+      "src/auth.ts",
+      "packages/core/index.ts",
+    ]);
+    expect(hints.projectConventions).toHaveLength(12);
+    expect(new Set(hints.projectConventions).size).toBe(12);
+  });
+
+  it("drops glob patterns from projectConventions, keeping only literal paths", () => {
+    const registry = hintRegistry({
+      rules: [{ appliesTo: ["src/**/*.ts", "src/auth.ts"] }],
+    });
+
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.projectConventions).toEqual(["src/auth.ts"]);
+  });
+
+  it("drops every glob metachar form (*, ?, [, {)", () => {
+    const registry = hintRegistry({
+      rules: [
+        { appliesTo: ["src/*.ts", "file?.ts", "src/[id].ts", "src/{a,b}.ts", "docs/setup.md"] },
+      ],
+    });
+
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.projectConventions).toEqual(["docs/setup.md"]);
+  });
+
+  it("healthy sources produce no warnings", () => {
+    const { warnings } = buildSessionHints(
+      hintRegistry({ failures: [failure(TSC_FAILURE)] }),
+      PROJECT_ID,
+      SESSION_ID,
+    );
+
+    expect(warnings).toEqual([]);
+  });
+
+  it("a throwing memory source loses only its own hints and surfaces a warning", () => {
+    const registry = {
+      listSessionFailures: () => [failure(TSC_FAILURE)],
+      listMemoryEntries: (): MemoryEntryView[] => {
+        throw new Error("Store JSONL is invalid: memory/p.jsonl");
+      },
+      listProjectRules: () => [{ appliesTo: ["docs/conventions/testing.md"] }],
+    };
+
+    const { hints, warnings } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentFailures).toContain("TS2322");
+    expect(hints.recentMemory).toEqual([]);
+    expect(hints.projectConventions).toEqual(["docs/conventions/testing.md"]);
+    expect(warnings).toEqual(["session hints skipped: Store JSONL is invalid: memory/p.jsonl"]);
+  });
+
+  it("a throwing failures source still yields memory and convention hints", () => {
+    const registry = {
+      listSessionFailures: (): SessionFailureRecord[] => {
+        throw new Error("failures store unreadable");
+      },
+      listMemoryEntries: () => [
+        { approval: "approved", stale: false, relatedFiles: ["src/auth.ts"] },
+      ],
+      listProjectRules: (): { appliesTo: string[] }[] => [],
+    };
+
+    const { hints, warnings } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentFailures).toEqual([]);
+    expect(hints.recentMemory).toEqual(["src/auth.ts"]);
+    expect(warnings).toEqual(["session hints skipped: failures store unreadable"]);
   });
 });
 
@@ -129,6 +358,7 @@ function spawnMock(child: FakeChild): RunCommandSpawn {
 function makeSharedRegistry(
   projectRoot: string,
   created: SessionFailureRecord[],
+  memory: MemoryEntryView[] = [],
 ): OrchestratorRegistry {
   return {
     getSession: (id) =>
@@ -144,6 +374,8 @@ function makeSharedRegistry(
       return failure;
     },
     listSessionFailures: () => [...created],
+    listMemoryEntries: () => [...memory],
+    listProjectRules: () => [],
   };
 }
 
@@ -231,6 +463,47 @@ describe("runOutputExecCommand — failure-aware ranking (session hints wired)",
     expect(excerpts[boostedIndex]?.engine?.failureHistoryBoost).toBeGreaterThan(0);
     expect(excerpts[noiseIndex]?.engine?.failureHistoryBoost).toBe(0);
     // …and it is ranked ahead of the noise chunk.
+    expect(boostedIndex).toBeLessThan(noiseIndex);
+  });
+
+  it("ranks a chunk referencing approved memory relatedFiles above noise (memoryBoost)", async () => {
+    const registry = makeSharedRegistry(
+      projectRoot,
+      [],
+      [{ approval: "approved", stale: false, relatedFiles: ["src/auth.ts"] }],
+    );
+
+    const noiseTail = Array.from({ length: 45 }, (_, i) => `info detail entry ${i}`).join("\n");
+    const body = `rebuilt module src/auth.ts cleanly\n${noiseTail}\n`;
+    const child = makeChild();
+    const promise = runOutputExecCommand({
+      registry,
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      command: "pnpm",
+      args: ["build"],
+      intent: "build the project",
+      originPid: ROOT_PID,
+      timeoutMs: 300_000,
+      maxBytes: 20_000_000,
+      now: () => NOW,
+      newId: () => `cs-${idCounter++}`,
+      loadPermissions: () => null,
+      spawn: spawnMock(child),
+    });
+    child.stdout.emit("data", Buffer.from(body));
+    child.emit("close", 0);
+    const outcome = await promise;
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+
+    const excerpts = outcome.result.excerpts;
+    const boostedIndex = excerpts.findIndex((e) => e.text.includes("src/auth.ts"));
+    const noiseIndex = excerpts.findIndex((e) => !e.text.includes("src/auth.ts"));
+    expect(boostedIndex).toBeGreaterThanOrEqual(0);
+    expect(noiseIndex).toBeGreaterThanOrEqual(0);
+    expect(excerpts[boostedIndex]?.engine?.memoryBoost).toBeGreaterThan(0);
+    expect(excerpts[noiseIndex]?.engine?.memoryBoost).toBe(0);
     expect(boostedIndex).toBeLessThan(noiseIndex);
   });
 });

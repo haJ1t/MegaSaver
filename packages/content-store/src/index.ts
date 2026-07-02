@@ -28,3 +28,5 @@ export {
 } from "./errors.js";
 
 export { atomicWriteFile } from "./atomic-write.js";
+
+export { assertSafeSegment } from "./paths.js";

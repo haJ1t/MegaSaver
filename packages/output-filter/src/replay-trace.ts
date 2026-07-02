@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
@@ -122,6 +123,32 @@ export function finalizeReplayTrace(ranking: RankingTrace, meta: ReplayTraceMeta
     ranking,
     createdAt: meta.createdAt,
   };
+}
+
+// JSONL reader for `mega audit seam`. Tolerant by design: a corrupt or
+// schema-drifted line is skipped (never thrown) and a missing file means no
+// traces yet — observability must not fail the report over one bad record.
+export function readReplayTraces(path: string): ReplayTrace[] {
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    return [];
+  }
+  const traces: ReplayTrace[] = [];
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed === "") continue;
+    let json: unknown;
+    try {
+      json = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    const parsed = replayTraceSchema.safeParse(json);
+    if (parsed.success) traces.push(parsed.data);
+  }
+  return traces;
 }
 
 // Best-effort append. Like the Claude Code hook logger, a replay trace must

@@ -136,6 +136,35 @@ export function engineRankingFromEnv(env: NodeJS.ProcessEnv = process.env): bool
   return resolveEngineRanking(env[ENGINE_RANKING_ENV_KEY]);
 }
 
+// A/B kill switch for the seam call sites (which pass engineRanking
+// explicitly, so the opt-in resolver above never fires for them): the falsy
+// spellings "false", "0", "off", "no" (trimmed, case-insensitive) disable —
+// unset keeps the seam ON, letting an operator run seam-off sessions for
+// comparison.
+const ENGINE_RANKING_DISABLED_VALUES = new Set(["false", "0", "off", "no"]);
+
+export function resolveEngineRankingDisabled(raw: string | undefined): boolean {
+  return ENGINE_RANKING_DISABLED_VALUES.has((raw ?? "").trim().toLowerCase());
+}
+
+export function engineRankingDisabledByEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return resolveEngineRankingDisabled(env[ENGINE_RANKING_ENV_KEY]);
+}
+
+// Replay-trace recording is opt-in (every traced read/exec writes a JSONL row
+// to disk): only "true" or "1" (trimmed, case-insensitive) in
+// MEGASAVER_SEAM_TRACE turns the registry seam sites' trace writes on.
+const SEAM_TRACE_ENV_KEY = "MEGASAVER_SEAM_TRACE";
+
+export function resolveSeamTraceEnabled(raw: string | undefined): boolean {
+  const value = (raw ?? "").trim().toLowerCase();
+  return value === "true" || value === "1";
+}
+
+export function seamTraceEnabledByEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return resolveSeamTraceEnabled(env[SEAM_TRACE_ENV_KEY]);
+}
+
 // Fraction of hint items referenced by the chunk text, clamped to [0,1].
 function fractionMatched(text: string, items: readonly string[] | undefined): number {
   if (items === undefined || items.length === 0) return 0;

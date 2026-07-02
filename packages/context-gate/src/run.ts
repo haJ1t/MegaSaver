@@ -1,5 +1,10 @@
 import { join } from "node:path";
-import type { FilterOutputResult } from "@megasaver/output-filter";
+import {
+  type FilterOutputResult,
+  finalizeReplayTrace,
+  seamTraceEnabledByEnv,
+  writeReplayTrace,
+} from "@megasaver/output-filter";
 import { type ProjectPermissions, redact } from "@megasaver/policy";
 import type { SessionId, TokenSaverMode } from "@megasaver/shared";
 import {
@@ -8,6 +13,7 @@ import {
   appendEvent,
   appendOverlayEvent,
 } from "@megasaver/stats";
+import { buildOverlayHints } from "./overlay-failures.js";
 import { hashContent, hashPath, loadReadIndex, recordRead } from "./read-index.js";
 import {
   type LoadProjectPermissions,
@@ -23,6 +29,7 @@ import {
   runTwoGates,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
+import { buildSessionHints } from "./session-hints.js";
 import { applyShownDedup } from "./shown-index.js";
 import { messageOf, redactedCount } from "./stats-helpers.js";
 
@@ -110,16 +117,32 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     return { ok: true, result: unchangedResult(prior.chunkSetId, read.raw) };
   }
 
+  // Failure-aware ranking: the session's prior SessionFailure signatures boost
+  // any chunk that references them, mirroring the exec-command path.
+  const { hints: sessionHints, warnings: hintWarnings } = buildSessionHints(
+    input.registry,
+    settings.projectId,
+    input.sessionId,
+  );
   const filteredResult = await filterRaw({
     raw: read.raw,
     path: input.path,
     intent: input.intent,
     mode: settings.mode,
     maxReturnedBytes: settings.maxReturnedBytes,
+    sessionHints,
+    // Trace recording is opt-in (disk cost): MEGASAVER_SEAM_TRACE gates it.
+    recordTrace: seamTraceEnabledByEnv(),
     ...(input.outline === true ? { outline: true } : {}),
   });
 
-  let result: FilterOutputResult = { ...filteredResult };
+  // The trace is measurement data (§P2.6): persisted below, stripped from the
+  // agent-visible result so it never spends the tokens it exists to measure.
+  const { trace: rankingTrace, ...filteredSansTrace } = filteredResult;
+  let result: FilterOutputResult = { ...filteredSansTrace };
+  if (hintWarnings.length > 0) {
+    result.warnings = [...(result.warnings ?? []), ...hintWarnings];
+  }
   if (settings.storeRawOutput) {
     const chunkSetId = newId();
     try {
@@ -138,6 +161,22 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     result.chunkSetId = chunkSetId;
     recordRead(sessionDir, pathHash, { contentHash: newHash, chunkSetId });
     result = applyShownDedup({ result, sessionDir, chunkSetId });
+  }
+
+  // Best-effort seam measurement (§P2.6): append the ranking trace to a
+  // per-session stats dir — per-session because writeReplayTrace owns the
+  // fixed replay-traces.jsonl filename inside the dir it is given.
+  if (rankingTrace !== undefined) {
+    await writeReplayTrace(
+      join(input.storeRoot, "stats", settings.projectId, `${input.sessionId}-traces`),
+      finalizeReplayTrace(rankingTrace, {
+        sessionId: input.sessionId,
+        projectId: settings.projectId,
+        toolName: "proxy_read_file",
+        createdAt: now(),
+        ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
+      }),
+    );
   }
 
   const event: TokenSaverEvent = {
@@ -225,15 +264,26 @@ export async function runOverlayOutputPipeline(
     return { ok: true, result: unchangedResult(prior.chunkSetId, read.raw) };
   }
 
+  // Failure-aware ranking: prior overlay failure signatures boost any chunk
+  // that references them, mirroring the registry read path.
+  const { hints: sessionHints, warnings: hintWarnings } = buildOverlayHints(
+    input.storeRoot,
+    input.workspaceKey,
+    input.liveSessionId,
+  );
   const filteredResult = await filterRaw({
     raw: read.raw,
     path: input.path,
     intent: input.intent,
     mode: settings.mode,
     maxReturnedBytes: settings.maxReturnedBytes,
+    sessionHints,
   });
 
   let result: FilterOutputResult = { ...filteredResult };
+  if (hintWarnings.length > 0) {
+    result.warnings = [...(result.warnings ?? []), ...hintWarnings];
+  }
   if (settings.storeRawOutput) {
     const chunkSetId = newId();
     try {
