@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type RunCommandSpawn, runOutputExecCommand } from "@megasaver/context-gate";
-import type { SessionId } from "@megasaver/shared";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createJsonDirectoryCoreRegistry } from "../../src/index.js";
 
@@ -248,6 +248,74 @@ describe("runOutputExecCommand (orchestrator)", () => {
       expect(outcome.result.childExitCode).toBe(7);
       expect(outcome.result.chunkSetId).toBe(NEW_ID);
     }
+  });
+
+  // Non-zero exit with EMPTY output: exercises the SessionFailure capture through
+  // the REAL schema-validating registry (the per-package fake never parses, so a
+  // ZodError from an errorOutput non-empty constraint would slip past there).
+  it("child non-zero exit with empty output: does not throw, mirrors code, records one SessionFailure with errorOutput ''", async () => {
+    await seed(store, projectRoot, { storeRawOutput: true });
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
+    const { input, child } = baseInput({ registry });
+
+    const promise = runOutputExecCommand(input);
+    child.emit("close", 3);
+    const outcome = await promise;
+
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.result.childExitCode).toBe(3);
+
+    const failures = registry.listSessionFailures(PROJECT_ID as ProjectId, SESSION_ID as SessionId);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.errorOutput).toBe("");
+  });
+
+  // The persisted SessionFailure must NOT leak secrets: errorOutput is redacted
+  // before it hits disk, exactly like the chunkSet/label paths. Real registry so
+  // the record is actually parsed + stored.
+  it("child non-zero exit with secret-shaped output: stored SessionFailure.errorOutput is redacted, record still created", async () => {
+    await seed(store, projectRoot, { storeRawOutput: true });
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
+    const { input, child } = baseInput({ registry });
+
+    const SECRET = "sk-ABC123SECRETDEADBEEF0123456789";
+    const promise = runOutputExecCommand(input);
+    child.stdout.emit("data", Buffer.from(`Authorization: Bearer ${SECRET}\n`));
+    child.emit("close", 1);
+    const outcome = await promise;
+
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.result.childExitCode).toBe(1);
+
+    const failures = registry.listSessionFailures(PROJECT_ID as ProjectId, SESSION_ID as SessionId);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.errorOutput).not.toContain(SECRET);
+    expect(failures[0]?.errorOutput).toContain("[REDACTED]");
+  });
+
+  // Sibling to the errorOutput case: the persisted SessionFailure.command FIELD
+  // must also be redacted. A secret in the ARGS (not stdout) must not survive
+  // onto the stored record, even though the record is still created.
+  it("child non-zero exit with secret-shaped args: stored SessionFailure.command is redacted, record still created", async () => {
+    await seed(store, projectRoot, { storeRawOutput: true });
+    const registry = createJsonDirectoryCoreRegistry({ rootDir: store });
+    const SECRET = "sk-ABC123SECRETDEADBEEF0123456789";
+    const { input, child } = baseInput({
+      registry,
+      args: ["-H", `Authorization: Bearer ${SECRET}`] as readonly string[],
+    });
+
+    const promise = runOutputExecCommand(input);
+    child.emit("close", 1);
+    const outcome = await promise;
+
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.result.childExitCode).toBe(1);
+
+    const failures = registry.listSessionFailures(PROJECT_ID as ProjectId, SESSION_ID as SessionId);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.command).not.toContain(SECRET);
+    expect(failures[0]?.command).toContain("[REDACTED]");
   });
 
   // ---- redaction applied (filter redacts internally) -------------------

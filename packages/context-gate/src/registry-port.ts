@@ -1,4 +1,4 @@
-import type { ProjectId, SessionId, TokenSaverMode } from "@megasaver/shared";
+import type { ProjectId, SessionFailureId, SessionId, TokenSaverMode } from "@megasaver/shared";
 
 // Structural port: the slice of a registry the orchestrator reads.
 // @megasaver/core's CoreRegistry structurally satisfies this interface, so
@@ -22,7 +22,22 @@ export interface ProjectView {
   rootPath: string;
 }
 
+// Structural mirror of @megasaver/core's SessionFailure — declared here (not
+// imported) to keep the context-gate -> core edge broken (AA1 §3c). core's
+// SessionFailure is structurally assignable to this record.
+export interface SessionFailureRecord {
+  id: SessionFailureId;
+  projectId: ProjectId;
+  sessionId: SessionId;
+  command: string;
+  errorOutput: string;
+  source: "proxy-classifier";
+  createdAt: string;
+}
+
 export interface OrchestratorRegistry {
   getSession(id: SessionId): SessionView | null;
   getProject(id: ProjectId): ProjectView | null;
+  createSessionFailure(failure: SessionFailureRecord): SessionFailureRecord;
+  listSessionFailures(projectId: ProjectId, sessionId: SessionId): SessionFailureRecord[];
 }

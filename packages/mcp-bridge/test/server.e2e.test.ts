@@ -253,6 +253,7 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
         "get_relevant_code_blocks",
         "get_relevant_context",
         "get_relevant_memories",
+        "get_task_context",
         "get_task_status",
         "mega_impact",
         "mega_index_memory",
@@ -299,6 +300,7 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
         "get_relevant_code_blocks",
         "get_relevant_context",
         "get_relevant_memories",
+        "get_task_context",
         "get_task_status",
         "mega_fetch_chunk",
         "mega_impact",
@@ -528,10 +530,10 @@ describe("phase 7 tool router over the bridge", () => {
     return { client, server };
   }
 
-  it("lists 30 tools", async () => {
+  it("lists 31 tools", async () => {
     const { client, server } = await connectWithTools();
     const { tools } = (await client.listTools()) as { tools: { name: string }[] };
-    expect(tools).toHaveLength(30);
+    expect(tools).toHaveLength(31);
     expect(tools.map((t) => t.name)).toContain("approve_memory");
     expect(tools.map((t) => t.name)).toContain("audit_token_usage");
     expect(tools.map((t) => t.name)).toContain("proxy_search_code");

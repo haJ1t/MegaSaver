@@ -7,6 +7,11 @@ export * from "./failed-attempt-search.js";
 export * from "./project-rule-ranking.js";
 export * from "./errors.js";
 export * from "./failed-attempt.js";
+export {
+  type SessionFailure,
+  type SessionFailureId,
+  sessionFailureSchema,
+} from "./session-failure.js";
 export * from "./init-store.js";
 export * from "./json-directory-registry.js";
 export {

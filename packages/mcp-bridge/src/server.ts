@@ -27,6 +27,7 @@ import { handleFindSimilarFailures } from "./tools/find-similar-failures.js";
 import { handleFromSessionMemory } from "./tools/from-session-memory.js";
 import { handleGetApplicableRules } from "./tools/get-applicable-rules.js";
 import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
+import { handleGetTaskContext } from "./tools/get-task-context.js";
 import { handleGetTaskStatus } from "./tools/get-task-status.js";
 import { handleImpact } from "./tools/impact.js";
 import { handleIndexMemory } from "./tools/index-memory.js";
@@ -150,6 +151,10 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
     description: "Build a task-aware context pack from the project index.",
   },
   { id: "get_relevant_memories", description: "Rank project memories by relevance to a task." },
+  {
+    id: "get_task_context",
+    description: "Build a task-aware context pack from the project index and memories.",
+  },
   { id: "get_task_status", description: "Plan status, per-step state, and ready steps." },
   { id: "mega_fetch_chunk", description: "Fetch one stored chunk from a chunk set." },
   {
@@ -355,6 +360,8 @@ export function buildServer(deps: ServerDeps): {
           { registry: deps.registry, storeRoot: deps.storeRoot },
           args,
         );
+      case "get_task_context":
+        return handleGetTaskContext({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "get_project_context":
         return handleGetProjectContext(
           { registry: deps.registry, storeRoot: deps.storeRoot },
