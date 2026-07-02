@@ -20,10 +20,15 @@ export const MAX_SIGNATURES_PER_SESSION = 12;
 // actionable failure locations — boosting later chunks on them is noise.
 // Only extensions that name code or config files count as signatures.
 const CODE_EXTENSIONS = new Set(
-  "ts tsx js jsx mjs cjs py go rs java rb c h cpp hpp cs swift kt json yml yaml toml sql sh".split(
+  "ts tsx js jsx mjs cjs mts cts py go rs java rb c h cpp hpp cs swift kt json yml yaml toml sql sh".split(
     " ",
   ),
 );
+
+// Glob patterns (src/**/*.ts) never appear verbatim in tool output, so they
+// can never substring-match a later chunk — they only dilute the cap-12
+// hint budget. Only literal path tokens qualify as hints.
+const GLOB_METACHARS = /[*?[{]/;
 
 function hasCodeExtension(token: string): boolean {
   const bare = token.replace(/:\d+$/, "");
@@ -56,9 +61,10 @@ export function buildSessionHints(
   projectId: ProjectId,
   sessionId: SessionId,
 ): SessionHints {
-  const failures = registry.listSessionFailures(projectId, sessionId);
+  // All three sources iterate newest-first: the caps below evict by insertion
+  // order, and when the budget overflows the STALE tokens are the ones to lose.
   const signatures = new Set<string>();
-  for (const f of failures) {
+  for (const f of [...registry.listSessionFailures(projectId, sessionId)].reverse()) {
     for (const sig of extractFailureSignatures(f.errorOutput)) signatures.add(sig);
   }
 
@@ -68,15 +74,22 @@ export function buildSessionHints(
   // mirrors core's recall predicate (the port deliberately does not carry the
   // bi-temporal/tier fields core's fuller isRecallable also checks).
   const memory = new Set<string>();
-  for (const entry of registry.listMemoryEntries(projectId)) {
+  for (const entry of [...registry.listMemoryEntries(projectId)].reverse()) {
     if (entry.approval !== "approved" || entry.stale) continue;
-    for (const file of entry.relatedFiles ?? []) memory.add(file);
-    for (const symbol of entry.relatedSymbols ?? []) memory.add(symbol);
+    for (const file of entry.relatedFiles ?? []) {
+      if (file.length >= MIN_SIGNATURE_LENGTH) memory.add(file);
+    }
+    for (const symbol of entry.relatedSymbols ?? []) {
+      if (symbol.length >= MIN_SIGNATURE_LENGTH) memory.add(symbol);
+    }
   }
 
   const conventions = new Set<string>();
-  for (const rule of registry.listProjectRules(projectId)) {
-    for (const pattern of rule.appliesTo) conventions.add(pattern);
+  for (const rule of [...registry.listProjectRules(projectId)].reverse()) {
+    for (const pattern of rule.appliesTo) {
+      if (GLOB_METACHARS.test(pattern)) continue;
+      if (pattern.length >= MIN_SIGNATURE_LENGTH) conventions.add(pattern);
+    }
   }
 
   return {

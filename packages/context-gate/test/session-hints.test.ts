@@ -80,6 +80,13 @@ describe("extractFailureSignatures", () => {
     expect(extractFailureSignatures("crash in Sources/App.swift")).toContain("Sources/App.swift");
     expect(extractFailureSignatures("resolving host.local failed")).toEqual([]);
   });
+
+  it("matches mts and cts module extensions", () => {
+    const sigs = extractFailureSignatures("error at src/x.mts:3");
+    expect(sigs).toContain("src/x.mts:3");
+    expect(sigs).toContain("src/x.mts");
+    expect(extractFailureSignatures("error at src/y.cts:7")).toContain("src/y.cts");
+  });
 });
 
 function hintRegistry(over: {
@@ -141,7 +148,7 @@ describe("buildSessionHints", () => {
     expect(hints.recentFailures).toEqual([]);
   });
 
-  it("flattens approved memory relatedFiles + relatedSymbols into recentMemory, deduped", () => {
+  it("flattens approved memory relatedFiles + relatedSymbols into recentMemory, deduped, newest entry first", () => {
     const registry = hintRegistry({
       memory: [
         {
@@ -156,7 +163,32 @@ describe("buildSessionHints", () => {
 
     const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
-    expect(hints.recentMemory).toEqual(["src/auth.ts", "src/db.ts", "readToken"]);
+    expect(hints.recentMemory).toEqual(["src/db.ts", "src/auth.ts", "readToken"]);
+  });
+
+  it("drops sub-4-char tokens from recentMemory and projectConventions", () => {
+    const registry = hintRegistry({
+      memory: [{ approval: "approved", stale: false, relatedSymbols: ["x", "validateToken"] }],
+      rules: [{ appliesTo: ["abc", "src/auth.ts"] }],
+    });
+
+    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentMemory).toEqual(["validateToken"]);
+    expect(hints.projectConventions).toEqual(["src/auth.ts"]);
+  });
+
+  it("keeps the 12 newest failure signatures when the cap overflows", () => {
+    const failures = Array.from({ length: 13 }, (_, i) =>
+      failure(`error in src/f${String(i).padStart(2, "0")}.ts`),
+    );
+    const registry = hintRegistry({ failures });
+
+    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentFailures).toHaveLength(12);
+    expect(hints.recentFailures).toContain("src/f12.ts");
+    expect(hints.recentFailures).not.toContain("src/f00.ts");
   });
 
   it("caps recentMemory at 12 items", () => {
@@ -207,19 +239,50 @@ describe("buildSessionHints", () => {
     expect(hints.recentMemory).toEqual(["src/kept.ts"]);
   });
 
-  it("flattens rule appliesTo into projectConventions, deduped and capped at 12", () => {
+  it("flattens rule appliesTo into projectConventions, deduped and capped at 12 newest", () => {
     const registry = hintRegistry({
       rules: [
-        { appliesTo: ["src/**/*.ts", "packages/core/**"] },
-        { appliesTo: ["src/**/*.ts", ...Array.from({ length: 15 }, (_, i) => `glob-${i}/**`)] },
+        {
+          appliesTo: [
+            "src/auth.ts",
+            ...Array.from({ length: 15 }, (_, i) => `lit-${String(i).padStart(2, "0")}/x.ts`),
+          ],
+        },
+        { appliesTo: ["src/auth.ts", "packages/core/index.ts"] },
       ],
     });
 
     const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
-    expect(hints.projectConventions?.slice(0, 2)).toEqual(["src/**/*.ts", "packages/core/**"]);
+    // Newest rule's tokens survive the cap; the oldest rule's overflow is evicted.
+    expect(hints.projectConventions?.slice(0, 2)).toEqual([
+      "src/auth.ts",
+      "packages/core/index.ts",
+    ]);
     expect(hints.projectConventions).toHaveLength(12);
     expect(new Set(hints.projectConventions).size).toBe(12);
+  });
+
+  it("drops glob patterns from projectConventions, keeping only literal paths", () => {
+    const registry = hintRegistry({
+      rules: [{ appliesTo: ["src/**/*.ts", "src/auth.ts"] }],
+    });
+
+    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.projectConventions).toEqual(["src/auth.ts"]);
+  });
+
+  it("drops every glob metachar form (*, ?, [, {)", () => {
+    const registry = hintRegistry({
+      rules: [
+        { appliesTo: ["src/*.ts", "file?.ts", "src/[id].ts", "src/{a,b}.ts", "docs/setup.md"] },
+      ],
+    });
+
+    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.projectConventions).toEqual(["docs/setup.md"]);
   });
 });
 

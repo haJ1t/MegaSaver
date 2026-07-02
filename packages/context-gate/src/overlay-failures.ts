@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { atomicWriteFile } from "@megasaver/content-store";
+import { assertSafeSegment, atomicWriteFile } from "@megasaver/content-store";
 import type { SessionHints } from "@megasaver/output-filter";
 import { MAX_SIGNATURES_PER_SESSION, extractFailureSignatures } from "./session-hints.js";
 
@@ -17,20 +17,6 @@ export type OverlayFailureRecord = {
 // No session-end signal exists on the overlay path, so the store is bounded by
 // count instead of lifecycle: append keeps only the newest records.
 export const MAX_OVERLAY_FAILURES = 50;
-
-// Same traversal guard as content-store's assertSafeSegment — copied because
-// that helper is not exported from the package's public entry.
-function assertSafeSegment(segment: string): void {
-  if (
-    segment.length === 0 ||
-    segment === "." ||
-    segment === ".." ||
-    segment.includes("/") ||
-    segment.includes("\\")
-  ) {
-    throw new Error(`Unsafe overlay failure segment: ${segment}`);
-  }
-}
 
 function overlayFailuresPath(
   storeRoot: string,
@@ -105,7 +91,8 @@ export function buildOverlayHints(
   liveSessionId: string,
 ): SessionHints {
   const signatures = new Set<string>();
-  for (const failure of readOverlayFailures(storeRoot, workspaceKey, liveSessionId)) {
+  // Newest-first so the signature cap evicts the oldest failures' tokens.
+  for (const failure of readOverlayFailures(storeRoot, workspaceKey, liveSessionId).reverse()) {
     for (const sig of extractFailureSignatures(failure.errorOutput)) signatures.add(sig);
   }
   return { recentFailures: [...signatures].slice(0, MAX_SIGNATURES_PER_SESSION) };

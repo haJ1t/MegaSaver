@@ -73,10 +73,11 @@ describe("overlay failure store", () => {
     [WK, "a/b"],
     ["", LSID],
   ])("rejects unsafe segments (%s, %s)", (wk, lsid) => {
+    // Shared guard from @megasaver/content-store — same message as chunk paths.
     expect(() => appendOverlayFailure(store, wk, lsid, record())).toThrow(
-      /Unsafe overlay failure segment/,
+      /Unsafe chunkSetId segment/,
     );
-    expect(() => readOverlayFailures(store, wk, lsid)).toThrow(/Unsafe overlay failure segment/);
+    expect(() => readOverlayFailures(store, wk, lsid)).toThrow(/Unsafe chunkSetId segment/);
   });
 });
 
@@ -99,5 +100,22 @@ describe("buildOverlayHints", () => {
 
   it("missing store yields empty recentFailures", () => {
     expect(buildOverlayHints(store, WK, LSID)).toEqual({ recentFailures: [] });
+  });
+
+  it("keeps the 12 newest signatures when stored failures overflow the cap", () => {
+    for (let i = 0; i < 13; i++) {
+      appendOverlayFailure(
+        store,
+        WK,
+        LSID,
+        record({ errorOutput: `error in src/f${String(i).padStart(2, "0")}.ts` }),
+      );
+    }
+
+    const hints = buildOverlayHints(store, WK, LSID);
+
+    expect(hints.recentFailures).toHaveLength(12);
+    expect(hints.recentFailures).toContain("src/f12.ts");
+    expect(hints.recentFailures).not.toContain("src/f00.ts");
   });
 });
