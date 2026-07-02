@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   type SessionHints,
   applyEngineRanking,
+  engineRankingDisabledByEnv,
   resolveEngineRanking,
+  resolveEngineRankingDisabled,
+  resolveSeamTraceEnabled,
   scoreChunk,
+  seamTraceEnabledByEnv,
 } from "../src/rank.js";
 
 const chunk = (text: string) => ({ text, startLine: 1, endLine: 1 });
@@ -18,6 +22,54 @@ describe("resolveEngineRanking flag (§8.4)", () => {
     expect(resolveEngineRanking("true")).toBe(true);
     expect(resolveEngineRanking("  TRUE ")).toBe(true);
     expect(resolveEngineRanking("1")).toBe(false);
+  });
+});
+
+describe("resolveEngineRankingDisabled — A/B kill switch (seam phase 2 P2.6)", () => {
+  it("'false', '0', 'off', 'no' (trimmed, case-insensitive) disable", () => {
+    expect(resolveEngineRankingDisabled("false")).toBe(true);
+    expect(resolveEngineRankingDisabled("  FALSE ")).toBe(true);
+    expect(resolveEngineRankingDisabled("0")).toBe(true);
+    expect(resolveEngineRankingDisabled(" 0 ")).toBe(true);
+    expect(resolveEngineRankingDisabled("off")).toBe(true);
+    expect(resolveEngineRankingDisabled("  OFF ")).toBe(true);
+    expect(resolveEngineRankingDisabled("no")).toBe(true);
+    expect(resolveEngineRankingDisabled(" No ")).toBe(true);
+  });
+  it("everything else leaves the seam on", () => {
+    expect(resolveEngineRankingDisabled(undefined)).toBe(false);
+    expect(resolveEngineRankingDisabled("")).toBe(false);
+    expect(resolveEngineRankingDisabled("true")).toBe(false);
+    expect(resolveEngineRankingDisabled("1")).toBe(false);
+    expect(resolveEngineRankingDisabled("garbage")).toBe(false);
+  });
+  it("engineRankingDisabledByEnv reads MEGASAVER_ENGINE_RANKING", () => {
+    expect(engineRankingDisabledByEnv({ MEGASAVER_ENGINE_RANKING: "false" })).toBe(true);
+    expect(engineRankingDisabledByEnv({ MEGASAVER_ENGINE_RANKING: "off" })).toBe(true);
+    expect(engineRankingDisabledByEnv({ MEGASAVER_ENGINE_RANKING: "true" })).toBe(false);
+    expect(engineRankingDisabledByEnv({})).toBe(false);
+  });
+});
+
+describe("resolveSeamTraceEnabled — trace recording opt-in (fix batch B)", () => {
+  it("only 'true' or '1' (trimmed, case-insensitive) enables", () => {
+    expect(resolveSeamTraceEnabled("true")).toBe(true);
+    expect(resolveSeamTraceEnabled("  TRUE ")).toBe(true);
+    expect(resolveSeamTraceEnabled("1")).toBe(true);
+    expect(resolveSeamTraceEnabled(" 1 ")).toBe(true);
+  });
+  it("everything else keeps trace recording off", () => {
+    expect(resolveSeamTraceEnabled(undefined)).toBe(false);
+    expect(resolveSeamTraceEnabled("")).toBe(false);
+    expect(resolveSeamTraceEnabled("false")).toBe(false);
+    expect(resolveSeamTraceEnabled("0")).toBe(false);
+    expect(resolveSeamTraceEnabled("yes")).toBe(false);
+  });
+  it("seamTraceEnabledByEnv reads MEGASAVER_SEAM_TRACE", () => {
+    expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "true" })).toBe(true);
+    expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "1" })).toBe(true);
+    expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "false" })).toBe(false);
+    expect(seamTraceEnabledByEnv({})).toBe(false);
   });
 });
 

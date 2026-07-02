@@ -35,9 +35,27 @@ export interface SessionFailureRecord {
   createdAt: string;
 }
 
+// Narrow structural views of core's MemoryEntry / ProjectRule — only the
+// fields the hint builder reads. Declared here (not imported) to keep the
+// context-gate -> core edge broken (AA1 §3c). `approval` is a plain string
+// (not core's literal union) so core stays assignable without coupling to
+// its enum; the builder only compares against "approved".
+export interface MemoryEntryView {
+  approval: string;
+  stale: boolean;
+  relatedFiles?: readonly string[] | undefined;
+  relatedSymbols?: readonly string[] | undefined;
+}
+
+export interface ProjectRuleView {
+  appliesTo: readonly string[];
+}
+
 export interface OrchestratorRegistry {
   getSession(id: SessionId): SessionView | null;
   getProject(id: ProjectId): ProjectView | null;
   createSessionFailure(failure: SessionFailureRecord): SessionFailureRecord;
   listSessionFailures(projectId: ProjectId, sessionId: SessionId): SessionFailureRecord[];
+  listMemoryEntries(projectId: ProjectId): MemoryEntryView[];
+  listProjectRules(projectId: ProjectId): ProjectRuleView[];
 }

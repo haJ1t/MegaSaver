@@ -20,6 +20,7 @@ export const mcpToolNameSchema = z.enum([
   "find_similar_failures",
   "get_applicable_rules",
   "get_context_budget_report",
+  "get_edit_impact",
   "get_project_context",
   "get_project_rules",
   "get_relevant_code_blocks",

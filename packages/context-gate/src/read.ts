@@ -8,6 +8,8 @@ import {
 } from "@megasaver/content-store";
 import {
   type FilterOutputResult,
+  type SessionHints,
+  engineRankingDisabledByEnv,
   filterOutput,
   resolveSafeReadPath,
 } from "@megasaver/output-filter";
@@ -160,6 +162,8 @@ export function filterRaw(input: {
   mode: TokenSaverMode;
   maxReturnedBytes: number | undefined;
   outline?: boolean;
+  sessionHints?: SessionHints;
+  recordTrace?: boolean;
 }): Promise<FilterOutputResult> {
   return filterOutput({
     raw: input.raw,
@@ -167,6 +171,13 @@ export function filterRaw(input: {
     mode: input.mode,
     ...(input.maxReturnedBytes !== undefined ? { maxReturnedBytes: input.maxReturnedBytes } : {}),
     ...(input.outline === true ? { outline: true } : {}),
+    ...(input.recordTrace === true ? { recordTrace: true } : {}),
+    // Engine ranking rides with the hints: callers that pass no hints keep
+    // the pre-seam ranking behavior byte-for-byte. On by default at the seam;
+    // MEGASAVER_ENGINE_RANKING=false is the A/B kill switch (§P2.6).
+    ...(input.sessionHints !== undefined
+      ? { sessionHints: input.sessionHints, engineRanking: !engineRankingDisabledByEnv() }
+      : {}),
     source: { kind: "file", path: input.path },
   });
 }
