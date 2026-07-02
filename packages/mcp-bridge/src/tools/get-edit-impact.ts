@@ -197,15 +197,15 @@ function fileStem(filePath: string): string {
 // Test discovery must survive two structural gaps: (a) real Vitest/Jest files
 // are bare top-level describe() calls — the TS extractor emits no named blocks
 // for them, so they can never appear as callers; (b) indexed test blocks get
-// budget-cut out of pack.included. Union three sources: test-typed blocks in
-// the merged pack (included + excluded), test-typed DIRECT callers of included
-// blocks (edge walk, budget-immune), and a filename heuristic over manifest
-// keys — a test-convention file (*.test.*, *.spec.*, __tests__/) whose stem
-// matches an impacted file's stem or that lives beside one. Deterministic:
+// budget-cut out of pack.included. Union two sources: test-typed blocks in the
+// merged pack — scanning included AND excluded suffices because selectImpact's
+// reverse BFS records every reachable caller in one of the two lists, so
+// budget-cut test callers already surface — and a filename heuristic over
+// manifest keys: a test-convention file (*.test.*, *.spec.*, __tests__/) whose
+// stem matches an impacted file's stem or that lives beside one. Deterministic:
 // pack traversal order first, then sorted heuristic hits; deduped and capped.
 function collectSuggestedTests(
   pack: ContextPack,
-  blocks: readonly CodeBlock[],
   impactedFiles: readonly string[],
   manifest: Manifest,
 ): string[] {
@@ -219,29 +219,6 @@ function collectSuggestedTests(
 
   for (const block of [...pack.included, ...pack.excluded]) {
     if (block.blockType === "test") suggest(block.filePath);
-  }
-
-  const blockById = new Map<string, CodeBlock>(blocks.map((block) => [block.id, block]));
-  const byName = new Map<string, CodeBlock>();
-  const byFqn = new Map<string, CodeBlock>();
-  for (const block of blocks) {
-    if (block.name === undefined) continue;
-    if (!byName.has(block.name)) byName.set(block.name, block);
-    const fqn = `${block.filePath}#${block.name}`;
-    if (!byFqn.has(fqn)) byFqn.set(fqn, block);
-  }
-  for (const includedBlock of pack.included) {
-    const block = blockById.get(includedBlock.blockId);
-    if (block === undefined) continue;
-    const callers =
-      block.resolvedCalledBy !== undefined
-        ? block.resolvedCalledBy.map(
-            (fqn) => byFqn.get(fqn) ?? byName.get(fqn.slice(fqn.indexOf("#") + 1)),
-          )
-        : block.calledBy.map((name) => byName.get(name));
-    for (const caller of callers) {
-      if (caller !== undefined && caller.blockType === "test") suggest(caller.filePath);
-    }
   }
 
   const stems = new Set(impactedFiles.map(fileStem));
@@ -305,7 +282,7 @@ export function handleGetEditImpact(env: EditImpactToolEnv, rawArgs: unknown): E
   const impactedFiles = [
     ...new Set([...matchedFiles, ...pack.included.map((block) => block.filePath)]),
   ];
-  const suggestedTests = collectSuggestedTests(pack, blocks, impactedFiles, manifest);
+  const suggestedTests = collectSuggestedTests(pack, impactedFiles, manifest);
 
   return { changedFiles, unmatchedFiles, seeds, pack, suggestedTests };
 }

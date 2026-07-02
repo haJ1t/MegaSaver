@@ -12,6 +12,15 @@ import { handleGetEditImpact } from "../../src/tools/get-edit-impact.js";
 const PROJECT_ID = "22222222-2222-4222-8222-222222222222";
 const TS = "2026-07-02T00:00:00.000Z";
 
+const GIT_AVAILABLE = (() => {
+  try {
+    execFileSync("git", ["--version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 const dirs: string[] = [];
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -97,7 +106,7 @@ describe("get_edit_impact", () => {
     expect(result.suggestedTests).toEqual(["src/a.test.ts"]);
   });
 
-  it("surfaces a budget-cut test caller via the calledBy walk", async () => {
+  it("surfaces a budget-cut test caller via the pack block-type scan", async () => {
     // Seed with more callers than DEFAULT_LIMIT=8 so the indexed test block is
     // cut from pack.included; it must still be suggested. The test file's stem
     // and directory intentionally match nothing, so the filename heuristic
@@ -254,6 +263,30 @@ describe("get_edit_impact", () => {
     expect(dirty.changedFiles).toEqual(["src/a.ts"]);
     expect(dirty.seeds).toEqual(["alpha"]);
     expect(dirty.reason).toBeUndefined();
+  });
+
+  it.skipIf(!GIT_AVAILABLE)("matches non-ASCII git paths against manifest keys", async () => {
+    // Locks the `-c core.quotePath=off` flag: without it git octal-escapes and
+    // quotes non-ASCII paths ("src/\303\266l\303\247\303\274m.ts"), which never
+    // match manifest keys, so the edit silently derives no seeds.
+    const { store, repo } = makeDirs("edit-impact-unicode");
+    mkdirSync(join(repo, "src"));
+    writeFileSync(join(repo, "src", "ölçüm.ts"), "export function olcum() {\n  return 1;\n}\n");
+    await buildIndex({ rootDir: repo, storeDir: store, projectId: PROJECT_ID as never });
+    const registry = makeProject(repo);
+    const git = (...args: string[]) =>
+      execFileSync("git", args, { cwd: repo, stdio: ["ignore", "pipe", "pipe"] });
+    git("init", "-q");
+    git("add", ".");
+    git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init");
+    writeFileSync(join(repo, "src", "ölçüm.ts"), "export function olcum() {\n  return 2;\n}\n");
+
+    const result = handleGetEditImpact({ registry, storeRoot: store }, { projectId: PROJECT_ID });
+
+    expect(result.changedFiles).toEqual(["src/ölçüm.ts"]);
+    expect(result.unmatchedFiles).toEqual([]);
+    expect(result.seeds).toEqual(["olcum"]);
+    expect(result.reason).toBeUndefined();
   });
 
   it("caps seeds at 8 in deterministic block order", async () => {

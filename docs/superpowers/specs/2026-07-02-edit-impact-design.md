@@ -49,9 +49,9 @@ limit? })`:
 4. **Suggested tests**: union of two strategies, deduped, capped at 10,
    deterministic order (pack traversal order, then sorted heuristic hits):
    - **Block-type scan**: blocks with `blockType === 'test'` among the merged
-     pack's included AND excluded (budget-cut test blocks still surface),
-     plus test-typed DIRECT callers of included blocks via
-     `resolvedCalledBy`/`calledBy` edges (budget-immune).
+     pack's included AND excluded. No separate caller-edge walk is needed:
+     `selectImpact`'s reverse BFS records every reachable caller in one of
+     those two lists, so budget-cut test callers already surface here.
    - **Filename heuristic over manifest keys**: real Vitest/Jest files are
      bare top-level `describe()` calls — the TS extractor emits NO named
      blocks for them, so they can never appear as callers. For each impacted
