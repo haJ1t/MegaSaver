@@ -5,6 +5,7 @@ export type McpAction = "install" | "repair" | "uninstall";
 type AgentSetupRowProps = {
   agent: McpAgentStatus;
   busy: boolean;
+  disabled?: boolean;
   onAction: (action: McpAction) => void;
 };
 
@@ -35,10 +36,16 @@ const TONE: Record<RowState["tone"], string> = {
   ok: "text-accent",
 };
 
-export function AgentSetupRow({ agent, busy, onAction }: AgentSetupRowProps): JSX.Element {
+export function AgentSetupRow({
+  agent,
+  busy,
+  disabled = false,
+  onAction,
+}: AgentSetupRowProps): JSX.Element {
   const state = deriveState(agent);
   const isDestructive = state.action === "uninstall";
-  const disabled = busy;
+  // Uninstall is global and must stay reachable even when no project is selected.
+  const isDisabled = busy || (disabled && state.action !== "uninstall");
 
   return (
     <li className="flex flex-col gap-2 rounded-md border border-border px-4 py-3">
@@ -50,7 +57,7 @@ export function AgentSetupRow({ agent, busy, onAction }: AgentSetupRowProps): JS
         {state.action && (
           <button
             type="button"
-            disabled={disabled}
+            disabled={isDisabled}
             onClick={() => state.action && onAction(state.action)}
             className={[
               "rounded-md px-4 py-1.5 text-sm cursor-pointer transition-colors duration-150",

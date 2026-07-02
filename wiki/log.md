@@ -3535,4 +3535,17 @@ Spec: `docs/superpowers/specs/2026-07-01-frontend-gui-bug-hunt-design.md` (on `m
 Plan: `docs/superpowers/plans/2026-07-01-frontend-gui-bug-hunt-plan.md`.
 Branch: `worktree-frontend-gui-bug-hunt`.
 
-External reviewer agent pass pending; the earlier cross-session review flagged blockers (uncommitted test, missing plan) that are now resolved.
+## [2026-07-02] lint | Agent Setup functional fix
+
+Made the GUI `Agent Setup` view functional end-to-end:
+- Added `GET /api/projects` bridge route so the doctor can list persisted projects.
+- Updated `AgentSetupDoctor` to load projects, auto-select a single project, render a `<select>` for multiple projects, and pass the selected project name to `installMcp`/`repairMcp`.
+- Fixed `createMcpOps.connectorSyncedResolver` to scan all projects for the connector block instead of requiring an open session for the agent.
+- Guarded the doctor's status fetch with a request-id / unmount flag to prevent stale responses.
+- Added/updated regression tests: `projects-route.test.ts`, `mcp-ops.test.ts`, `agent-setup-doctor.test.tsx`, `agent-setup-row.test.tsx`.
+
+Verification: `pnpm verify` green (lint, typecheck, test, conventions). CLI e2e `v1-closeout-flow.test.ts` 5/5 pass. Bridge smoke returned the project list and MCP status correctly.
+
+Spec: `docs/superpowers/specs/2026-07-02-agent-setup-functional-design.md`.
+Plan: `docs/superpowers/plans/2026-07-02-agent-setup-functional-plan.md`.
+Branch: `feat/agent-setup-functional-fix`.

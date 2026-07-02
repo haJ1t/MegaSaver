@@ -4,7 +4,9 @@ import { ErrorState, LoadingState } from "../components/states.js";
 import type { BridgeError } from "../components/states.js";
 import {
   type McpAgentStatus,
+  type Project,
   fetchMcpStatus,
+  fetchProjects,
   installMcp,
   repairMcp,
   uninstallMcp,
@@ -12,6 +14,8 @@ import {
 
 export function AgentSetupDoctor(): JSX.Element {
   const [agents, setAgents] = useState<McpAgentStatus[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string>("");
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<BridgeError | null>(null);
   const [busyAgent, setBusyAgent] = useState<string | null>(null);
@@ -19,35 +23,69 @@ export function AgentSetupDoctor(): JSX.Element {
   // row re-renders silently on load(), so a polite live region announces them.
   const [announcement, setAnnouncement] = useState("");
   const errorRef = useRef<HTMLDivElement>(null);
+  const loadRequestRef = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<void> => {
+    const id = ++loadRequestRef.current;
     setLoadState("loading");
     setError(null);
     try {
-      const status = await fetchMcpStatus();
+      const [status, list] = await Promise.all([fetchMcpStatus(), fetchProjects()]);
+      if (id !== loadRequestRef.current) return;
       setAgents(status.agents);
+      setProjects(list);
+      setSelectedProject((current) =>
+        current.length === 0 && list.length === 1 ? (list[0]?.name ?? current) : current,
+      );
       setLoadState("ready");
     } catch (err) {
+      if (id !== loadRequestRef.current) return;
       setError(err as BridgeError);
       setLoadState("error");
     }
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let live = true;
+    let requestId = 0;
+    const run = async (): Promise<void> => {
+      const id = ++requestId;
+      setLoadState("loading");
+      setError(null);
+      try {
+        const [status, list] = await Promise.all([fetchMcpStatus(), fetchProjects()]);
+        if (!live || id !== requestId) return;
+        setAgents(status.agents);
+        setProjects(list);
+        if (list.length === 1) {
+          const only = list[0];
+          if (only) setSelectedProject(only.name);
+        }
+        setLoadState("ready");
+      } catch (err) {
+        if (!live || id !== requestId) return;
+        setError(err as BridgeError);
+        setLoadState("error");
+      }
+    };
+    void run();
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (error) errorRef.current?.focus();
   }, [error]);
 
   async function runAction(agentId: string, action: McpAction): Promise<void> {
+    if (action !== "uninstall" && selectedProject.length === 0) return;
     setBusyAgent(agentId);
     setError(null);
     setAnnouncement("");
     try {
-      if (action === "install") await installMcp(agentId);
-      else if (action === "repair") await repairMcp(agentId);
+      if (action === "install") await installMcp(agentId, selectedProject);
+      else if (action === "repair") await repairMcp(agentId, selectedProject);
       else await uninstallMcp(agentId);
       await load();
       setAnnouncement(
@@ -61,6 +99,34 @@ export function AgentSetupDoctor(): JSX.Element {
       setBusyAgent(null);
     }
   }
+
+  const canAct = loadState === "ready" && selectedProject.length > 0;
+  const projectChoice =
+    projects.length === 0 ? (
+      loadState === "ready" ? (
+        <p className="text-sm text-text-muted">Create a project first to set up an agent.</p>
+      ) : null
+    ) : projects.length === 1 ? (
+      <p className="text-sm text-text-muted">
+        Project: <span className="text-text-primary">{projects[0]?.name ?? ""}</span>
+      </p>
+    ) : (
+      <label className="flex items-center gap-2 text-sm text-text-muted">
+        Project
+        <select
+          value={selectedProject}
+          onChange={(e) => setSelectedProject(e.target.value)}
+          className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-text-primary"
+        >
+          <option value="">Select a project…</option>
+          {projects.map((p) => (
+            <option key={p.id} value={p.name}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
 
   return (
     <section aria-label="Agent setup" className="flex flex-col gap-6 px-6 py-6 overflow-y-auto">
@@ -77,6 +143,8 @@ export function AgentSetupDoctor(): JSX.Element {
         {announcement}
       </output>
 
+      {projectChoice}
+
       {loadState === "loading" && <LoadingState label="Checking agent setup…" />}
 
       {error && (
@@ -92,6 +160,7 @@ export function AgentSetupDoctor(): JSX.Element {
               key={agent.agentId}
               agent={agent}
               busy={busyAgent === agent.agentId}
+              disabled={!canAct}
               onAction={(action) => void runAction(agent.agentId, action)}
             />
           ))}
