@@ -54,6 +54,8 @@ export {
   engineRankingFromEnv,
   resolveEngineRanking,
   resolveEngineRankingDisabled,
+  resolveSeamTraceEnabled,
+  seamTraceEnabledByEnv,
   type EngineScore,
   type RankFeatures,
   type RankedChunk,

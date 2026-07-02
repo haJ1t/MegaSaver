@@ -119,7 +119,7 @@ describe("buildSessionHints", () => {
       },
     };
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     expect(hints.recentFailures).toContain("TS2322");
     expect(hints.recentFailures).toContain("src/auth.ts");
@@ -135,7 +135,7 @@ describe("buildSessionHints", () => {
       failures: [failure("process exited"), failure(TSC_FAILURE)],
     });
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     // Only the tsc blob's signatures survive; the benign one adds nothing.
     expect(hints.recentFailures).toContain("TS2322");
@@ -143,7 +143,7 @@ describe("buildSessionHints", () => {
   });
 
   it("returns an empty recentFailures list when there are no failures", () => {
-    const hints = buildSessionHints(hintRegistry({}), PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(hintRegistry({}), PROJECT_ID, SESSION_ID);
 
     expect(hints.recentFailures).toEqual([]);
   });
@@ -161,7 +161,7 @@ describe("buildSessionHints", () => {
       ],
     });
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     expect(hints.recentMemory).toEqual(["src/db.ts", "src/auth.ts", "readToken"]);
   });
@@ -172,7 +172,7 @@ describe("buildSessionHints", () => {
       rules: [{ appliesTo: ["abc", "src/auth.ts"] }],
     });
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     expect(hints.recentMemory).toEqual(["validateToken"]);
     expect(hints.projectConventions).toEqual(["src/auth.ts"]);
@@ -184,7 +184,7 @@ describe("buildSessionHints", () => {
     );
     const registry = hintRegistry({ failures });
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     expect(hints.recentFailures).toHaveLength(12);
     expect(hints.recentFailures).toContain("src/f12.ts");
@@ -202,7 +202,7 @@ describe("buildSessionHints", () => {
       ],
     });
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     expect(hints.recentMemory).toHaveLength(12);
   });
@@ -219,7 +219,7 @@ describe("buildSessionHints", () => {
     };
     const registry = hintRegistry({ memory: [keywordOnly] });
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     expect(hints.recentMemory).toEqual([]);
   });
@@ -234,7 +234,7 @@ describe("buildSessionHints", () => {
       ],
     });
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     expect(hints.recentMemory).toEqual(["src/kept.ts"]);
   });
@@ -252,7 +252,7 @@ describe("buildSessionHints", () => {
       ],
     });
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     // Newest rule's tokens survive the cap; the oldest rule's overflow is evicted.
     expect(hints.projectConventions?.slice(0, 2)).toEqual([
@@ -268,7 +268,7 @@ describe("buildSessionHints", () => {
       rules: [{ appliesTo: ["src/**/*.ts", "src/auth.ts"] }],
     });
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     expect(hints.projectConventions).toEqual(["src/auth.ts"]);
   });
@@ -280,9 +280,54 @@ describe("buildSessionHints", () => {
       ],
     });
 
-    const hints = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+    const { hints } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
 
     expect(hints.projectConventions).toEqual(["docs/setup.md"]);
+  });
+
+  it("healthy sources produce no warnings", () => {
+    const { warnings } = buildSessionHints(
+      hintRegistry({ failures: [failure(TSC_FAILURE)] }),
+      PROJECT_ID,
+      SESSION_ID,
+    );
+
+    expect(warnings).toEqual([]);
+  });
+
+  it("a throwing memory source loses only its own hints and surfaces a warning", () => {
+    const registry = {
+      listSessionFailures: () => [failure(TSC_FAILURE)],
+      listMemoryEntries: (): MemoryEntryView[] => {
+        throw new Error("Store JSONL is invalid: memory/p.jsonl");
+      },
+      listProjectRules: () => [{ appliesTo: ["docs/conventions/testing.md"] }],
+    };
+
+    const { hints, warnings } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentFailures).toContain("TS2322");
+    expect(hints.recentMemory).toEqual([]);
+    expect(hints.projectConventions).toEqual(["docs/conventions/testing.md"]);
+    expect(warnings).toEqual(["session hints skipped: Store JSONL is invalid: memory/p.jsonl"]);
+  });
+
+  it("a throwing failures source still yields memory and convention hints", () => {
+    const registry = {
+      listSessionFailures: (): SessionFailureRecord[] => {
+        throw new Error("failures store unreadable");
+      },
+      listMemoryEntries: () => [
+        { approval: "approved", stale: false, relatedFiles: ["src/auth.ts"] },
+      ],
+      listProjectRules: (): { appliesTo: string[] }[] => [],
+    };
+
+    const { hints, warnings } = buildSessionHints(registry, PROJECT_ID, SESSION_ID);
+
+    expect(hints.recentFailures).toEqual([]);
+    expect(hints.recentMemory).toEqual(["src/auth.ts"]);
+    expect(warnings).toEqual(["session hints skipped: failures store unreadable"]);
   });
 });
 

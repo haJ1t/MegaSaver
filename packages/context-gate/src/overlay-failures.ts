@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { assertSafeSegment, atomicWriteFile } from "@megasaver/content-store";
 import type { SessionHints } from "@megasaver/output-filter";
 import { MAX_SIGNATURES_PER_SESSION, extractFailureSignatures } from "./session-hints.js";
+import { messageOf } from "./stats-helpers.js";
 
 // Registry-less mirror of SessionFailure for the overlay path: failures land
 // in a per-live-session JSONL file under the store root instead of a registry.
@@ -89,11 +90,21 @@ export function buildOverlayHints(
   storeRoot: string,
   workspaceKey: string,
   liveSessionId: string,
-): SessionHints {
+): { hints: SessionHints; warnings: string[] } {
+  // Best-effort like buildSessionHints: hints are a ranking boost, never a
+  // delivery dependency — a broken failure store degrades to a warning.
+  const warnings: string[] = [];
   const signatures = new Set<string>();
-  // Newest-first so the signature cap evicts the oldest failures' tokens.
-  for (const failure of readOverlayFailures(storeRoot, workspaceKey, liveSessionId).reverse()) {
-    for (const sig of extractFailureSignatures(failure.errorOutput)) signatures.add(sig);
+  try {
+    // Newest-first so the signature cap evicts the oldest failures' tokens.
+    for (const failure of readOverlayFailures(storeRoot, workspaceKey, liveSessionId).reverse()) {
+      for (const sig of extractFailureSignatures(failure.errorOutput)) signatures.add(sig);
+    }
+  } catch (err) {
+    warnings.push(`session hints skipped: ${messageOf(err)}`);
   }
-  return { recentFailures: [...signatures].slice(0, MAX_SIGNATURES_PER_SESSION) };
+  return {
+    hints: { recentFailures: [...signatures].slice(0, MAX_SIGNATURES_PER_SESSION) },
+    warnings,
+  };
 }

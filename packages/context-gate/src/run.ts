@@ -2,6 +2,7 @@ import { join } from "node:path";
 import {
   type FilterOutputResult,
   finalizeReplayTrace,
+  seamTraceEnabledByEnv,
   writeReplayTrace,
 } from "@megasaver/output-filter";
 import { type ProjectPermissions, redact } from "@megasaver/policy";
@@ -118,7 +119,11 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
 
   // Failure-aware ranking: the session's prior SessionFailure signatures boost
   // any chunk that references them, mirroring the exec-command path.
-  const sessionHints = buildSessionHints(input.registry, settings.projectId, input.sessionId);
+  const { hints: sessionHints, warnings: hintWarnings } = buildSessionHints(
+    input.registry,
+    settings.projectId,
+    input.sessionId,
+  );
   const filteredResult = await filterRaw({
     raw: read.raw,
     path: input.path,
@@ -126,7 +131,8 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     mode: settings.mode,
     maxReturnedBytes: settings.maxReturnedBytes,
     sessionHints,
-    recordTrace: true,
+    // Trace recording is opt-in (disk cost): MEGASAVER_SEAM_TRACE gates it.
+    recordTrace: seamTraceEnabledByEnv(),
     ...(input.outline === true ? { outline: true } : {}),
   });
 
@@ -134,6 +140,9 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
   // agent-visible result so it never spends the tokens it exists to measure.
   const { trace: rankingTrace, ...filteredSansTrace } = filteredResult;
   let result: FilterOutputResult = { ...filteredSansTrace };
+  if (hintWarnings.length > 0) {
+    result.warnings = [...(result.warnings ?? []), ...hintWarnings];
+  }
   if (settings.storeRawOutput) {
     const chunkSetId = newId();
     try {
@@ -257,7 +266,11 @@ export async function runOverlayOutputPipeline(
 
   // Failure-aware ranking: prior overlay failure signatures boost any chunk
   // that references them, mirroring the registry read path.
-  const sessionHints = buildOverlayHints(input.storeRoot, input.workspaceKey, input.liveSessionId);
+  const { hints: sessionHints, warnings: hintWarnings } = buildOverlayHints(
+    input.storeRoot,
+    input.workspaceKey,
+    input.liveSessionId,
+  );
   const filteredResult = await filterRaw({
     raw: read.raw,
     path: input.path,
@@ -268,6 +281,9 @@ export async function runOverlayOutputPipeline(
   });
 
   let result: FilterOutputResult = { ...filteredResult };
+  if (hintWarnings.length > 0) {
+    result.warnings = [...(result.warnings ?? []), ...hintWarnings];
+  }
   if (settings.storeRawOutput) {
     const chunkSetId = newId();
     try {

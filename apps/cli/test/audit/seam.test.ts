@@ -27,7 +27,10 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "megasaver-cli-seam-"));
   lines.length = 0;
 });
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => {
+  vi.unstubAllEnvs();
+  rmSync(root, { recursive: true, force: true });
+});
 
 function env() {
   return {
@@ -207,6 +210,7 @@ describe("mega audit seam", () => {
     });
     expect(code).toBe(0);
     expect(lines.join("\n")).toContain("No seam traces recorded yet");
+    expect(lines.join("\n")).toContain("MEGASAVER_SEAM_TRACE=true");
   });
 
   it("exits 1 for an unknown project", async () => {
@@ -245,6 +249,8 @@ describe("mega audit seam — end to end over a real exec trace", () => {
   }
 
   it("reports a non-zero failure-boost fire rate for a seam-boosted output", async () => {
+    // Trace recording is opt-in since fix batch B — the e2e run must enable it.
+    vi.stubEnv("MEGASAVER_SEAM_TRACE", "true");
     await seedProject();
     const failure = {
       id: "33333333-3333-4333-8333-333333333333" as SessionFailureId,

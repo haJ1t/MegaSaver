@@ -13,6 +13,7 @@ import {
   engineRankingDisabledByEnv,
   filterOutput,
   finalizeReplayTrace,
+  seamTraceEnabledByEnv,
   writeReplayTrace,
 } from "@megasaver/output-filter";
 import {
@@ -240,7 +241,11 @@ export async function runOutputExecCommand(
   // Failure-aware ranking: the session's prior SessionFailure signatures boost
   // any chunk that references them, so a fresh command's output surfaces the
   // lines tied to what recently broke.
-  const sessionHints = buildSessionHints(input.registry, settings.projectId, input.sessionId);
+  const { hints: sessionHints, warnings: hintWarnings } = buildSessionHints(
+    input.registry,
+    settings.projectId,
+    input.sessionId,
+  );
   const filtered = await filterOutput({
     raw: outcome.capture.raw,
     intent: input.intent,
@@ -249,9 +254,10 @@ export async function runOutputExecCommand(
     source: { kind: "command", command: input.command, args: input.args },
     sessionHints,
     // On by default at the seam; MEGASAVER_ENGINE_RANKING=false is the A/B
-    // kill switch, and the recorded trace makes both arms measurable (§P2.6).
+    // kill switch. Trace recording is opt-in (disk cost): MEGASAVER_SEAM_TRACE
+    // gates it, and a recorded trace makes both arms measurable (§P2.6).
     engineRanking: !engineRankingDisabledByEnv(),
-    recordTrace: true,
+    recordTrace: seamTraceEnabledByEnv(),
   });
 
   const warnings = filtered.warnings ?? [];
@@ -274,9 +280,10 @@ export async function runOutputExecCommand(
     // Cap the stored evidence: a SessionFailure is an ephemeral per-command
     // record for failure-aware ranking, not the full transcript (the chunkSet
     // holds that). 4000 chars bounds each record so a chatty failing command
-    // cannot bloat the session-failure store. Redact first so raw output
-    // secrets never reach the persisted record.
-    const redactedErrorOutput = redact(outcome.capture.raw.slice(0, 4000)).redacted;
+    // cannot bloat the session-failure store. Redact the FULL raw output
+    // BEFORE slicing: slicing first can cut a secret at the 4000 boundary,
+    // leaving a truncated fragment the redactor no longer recognizes.
+    const redactedErrorOutput = redact(outcome.capture.raw).redacted.slice(0, 4000);
     // Benign-exit filter: grep/rg/diff/test exit 1 with no output by convention
     // to signal "no match", not a failure. An evidence-free record contributes
     // zero signatures to failure-aware ranking — skip the disk noise. Any other
@@ -313,14 +320,15 @@ export async function runOutputExecCommand(
 
   // On a forced termination the partial output is still processed; surface the
   // cause both as a warning (alongside any redaction warning) and the typed
-  // `terminated` field (§3.5). A skipped failure capture is folded in as a
-  // non-fatal warning so a systemic capture outage is visible, not silent.
+  // `terminated` field (§3.5). A skipped failure capture or hint source is
+  // folded in as a non-fatal warning so a systemic outage is visible, not silent.
   const resultWarnings = [
     ...warnings,
     ...(outcome.capture.terminated !== undefined
       ? [`terminated: ${outcome.capture.terminated}`]
       : []),
     ...captureWarnings,
+    ...hintWarnings,
   ];
   // The trace is measurement data (§P2.6): persisted below, stripped from the
   // agent-visible result so it never spends the tokens it exists to measure.
@@ -465,7 +473,11 @@ export async function runOverlayOutputExecCommand(
       : undefined;
   // Failure-aware ranking: prior overlay-store failure signatures boost any
   // chunk that references them, mirroring the registry exec path.
-  const sessionHints = buildOverlayHints(input.storeRoot, input.workspaceKey, input.liveSessionId);
+  const { hints: sessionHints, warnings: hintWarnings } = buildOverlayHints(
+    input.storeRoot,
+    input.workspaceKey,
+    input.liveSessionId,
+  );
   const filtered = await filterOutput({
     raw: outcome.capture.raw,
     intent: input.intent,
@@ -499,9 +511,10 @@ export async function runOverlayOutputExecCommand(
     // Cap the stored evidence: an overlay failure is an ephemeral per-command
     // record for failure-aware ranking, not the full transcript (the chunkSet
     // holds that). 4000 chars bounds each record so a chatty failing command
-    // cannot bloat the overlay failure store. Redact first so raw output
-    // secrets never reach the persisted record.
-    const redactedErrorOutput = redact(outcome.capture.raw.slice(0, 4000)).redacted;
+    // cannot bloat the overlay failure store. Redact the FULL raw output
+    // BEFORE slicing: slicing first can cut a secret at the 4000 boundary,
+    // leaving a truncated fragment the redactor no longer recognizes.
+    const redactedErrorOutput = redact(outcome.capture.raw).redacted.slice(0, 4000);
     // Benign-exit filter: grep/rg/diff/test exit 1 with no output by convention
     // to signal "no match", not a failure. An evidence-free record contributes
     // zero signatures to failure-aware ranking — skip the disk noise. Any other
@@ -533,14 +546,15 @@ export async function runOverlayOutputExecCommand(
 
   // On a forced termination the partial output is still processed; surface the
   // cause both as a warning (alongside any redaction warning) and the typed
-  // `terminated` field (§3.5). A skipped failure capture is folded in as a
-  // non-fatal warning so a systemic capture outage is visible, not silent.
+  // `terminated` field (§3.5). A skipped failure capture or hint source is
+  // folded in as a non-fatal warning so a systemic outage is visible, not silent.
   const resultWarnings = [
     ...warnings,
     ...(outcome.capture.terminated !== undefined
       ? [`terminated: ${outcome.capture.terminated}`]
       : []),
     ...captureWarnings,
+    ...hintWarnings,
   ];
   let result: ExecResult = {
     ...filtered,

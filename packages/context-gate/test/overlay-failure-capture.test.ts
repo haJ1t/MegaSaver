@@ -113,6 +113,24 @@ describe("runOverlayOutputExecCommand — overlay failure capture", () => {
     expect(records[0]?.errorOutput).not.toContain("abcdefghijklmnopqrstuvwxyz123456");
   });
 
+  it("redacts a secret straddling the 4000-char evidence cap", async () => {
+    const child = makeChild();
+    const p = exec(child);
+    // The secret starts at char 3990, so the 4000-char cap falls mid-secret.
+    // Slicing before redaction would leave a truncated fragment the redactor
+    // no longer recognizes ("sk-" + 7 chars misses the 20-char minimum).
+    const filler = "x".repeat(3990);
+    const secret = `sk-${"A1b2C3d4E5".repeat(4)}`;
+    child.stdout.emit("data", Buffer.from(`${filler}${secret}\n`));
+    child.emit("close", 1);
+    const res = await p;
+    expect(res.ok).toBe(true);
+    const records = readOverlayFailures(store, WK, LSID);
+    expect(records).toHaveLength(1);
+    expect(records[0]?.errorOutput).not.toContain("sk-A1b2");
+    expect(records[0]?.errorOutput.length).toBeLessThanOrEqual(4000);
+  });
+
   it("appends nothing on exit 1 with EMPTY output (benign no-match convention)", async () => {
     const child = makeChild();
     const p = exec(child);

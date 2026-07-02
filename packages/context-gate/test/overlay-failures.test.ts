@@ -92,14 +92,27 @@ describe("buildOverlayHints", () => {
 
   it("distills stored failures into recentFailures signatures", () => {
     appendOverlayFailure(store, WK, LSID, record());
-    const hints = buildOverlayHints(store, WK, LSID);
+    const { hints, warnings } = buildOverlayHints(store, WK, LSID);
     expect(hints.recentFailures).toEqual(
       expect.arrayContaining(["TS2322", "src/x.ts:42", "src/x.ts"]),
     );
+    expect(warnings).toEqual([]);
   });
 
   it("missing store yields empty recentFailures", () => {
-    expect(buildOverlayHints(store, WK, LSID)).toEqual({ recentFailures: [] });
+    expect(buildOverlayHints(store, WK, LSID)).toEqual({
+      hints: { recentFailures: [] },
+      warnings: [],
+    });
+  });
+
+  it("a throwing failures read degrades to empty hints plus a warning", () => {
+    // An unsafe segment makes overlayFailuresPath throw before the tolerant
+    // per-line parsing kicks in — the builder must degrade, not propagate.
+    const { hints, warnings } = buildOverlayHints(store, "../escape", LSID);
+    expect(hints.recentFailures).toEqual([]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/^session hints skipped: /);
   });
 
   it("keeps the 12 newest signatures when stored failures overflow the cap", () => {
@@ -112,7 +125,7 @@ describe("buildOverlayHints", () => {
       );
     }
 
-    const hints = buildOverlayHints(store, WK, LSID);
+    const { hints } = buildOverlayHints(store, WK, LSID);
 
     expect(hints.recentFailures).toHaveLength(12);
     expect(hints.recentFailures).toContain("src/f12.ts");

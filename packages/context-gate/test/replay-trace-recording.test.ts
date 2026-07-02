@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -92,7 +93,8 @@ describe("replay trace recording (seam phase 2 P2.6)", () => {
     return p;
   }
 
-  it("exec appends a per-session replay trace with the seam on by default", async () => {
+  it("exec appends a per-session replay trace when MEGASAVER_SEAM_TRACE=true", async () => {
+    vi.stubEnv("MEGASAVER_SEAM_TRACE", "true");
     const res = await runExec();
     expect(res.ok).toBe(true);
     if (!res.ok) return;
@@ -111,6 +113,7 @@ describe("replay trace recording (seam phase 2 P2.6)", () => {
   });
 
   it("MEGASAVER_ENGINE_RANKING=false records a seam-off trace with no engine scores", async () => {
+    vi.stubEnv("MEGASAVER_SEAM_TRACE", "true");
     vi.stubEnv("MEGASAVER_ENGINE_RANKING", "false");
     const res = await runExec();
     expect(res.ok).toBe(true);
@@ -123,6 +126,7 @@ describe("replay trace recording (seam phase 2 P2.6)", () => {
   });
 
   it("read pipeline appends a replay trace alongside the exec path", async () => {
+    vi.stubEnv("MEGASAVER_SEAM_TRACE", "true");
     const notesPath = join(projectRoot, "notes.log");
     await writeFile(notesPath, "auth token notes referencing src/auth.ts\n");
     const outcome = await runOutputPipeline({
@@ -144,5 +148,40 @@ describe("replay trace recording (seam phase 2 P2.6)", () => {
     expect(traces[0]?.ranking.engineRanking).toBe(true);
     expect(traces[0]?.chunkSetId).toBe(outcome.result.chunkSetId);
     expect(outcome.result).not.toHaveProperty("trace");
+  });
+
+  it("MEGASAVER_SEAM_TRACE unset → exec writes no trace file (opt-in default)", async () => {
+    const res = await runExec();
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    // Delivery is untouched; only the measurement side channel stays off.
+    expect(res.result.excerpts.some((e) => e.engine !== undefined)).toBe(true);
+    expect(existsSync(tracesPath())).toBe(false);
+    expect(existsSync(join(store, "stats", PROJECT_ID, `${SESSION_ID}-traces`))).toBe(false);
+  });
+
+  it("MEGASAVER_SEAM_TRACE unset → read pipeline writes no trace file", async () => {
+    const notesPath = join(projectRoot, "notes.log");
+    await writeFile(notesPath, "auth token notes referencing src/auth.ts\n");
+    const outcome = await runOutputPipeline({
+      registry: makeFakeRegistry(projectRoot),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      path: notesPath,
+      intent: "auth token validation",
+      now: () => NOW,
+      newId: () => "cs-trace-read",
+      loadPermissions: () => null,
+    });
+    expect(outcome.ok).toBe(true);
+    expect(existsSync(tracesPath())).toBe(false);
+  });
+
+  it("MEGASAVER_SEAM_TRACE=1 also enables trace recording", async () => {
+    vi.stubEnv("MEGASAVER_SEAM_TRACE", "1");
+    const res = await runExec();
+    expect(res.ok).toBe(true);
+    expect(readReplayTraces(tracesPath())).toHaveLength(1);
   });
 });

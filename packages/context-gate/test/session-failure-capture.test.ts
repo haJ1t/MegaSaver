@@ -148,6 +148,38 @@ describe("session failure capture", () => {
     expect(created[0]?.errorOutput).toBe("");
   });
 
+  it("redacts a secret straddling the 4000-char evidence cap", async () => {
+    const created: SessionFailureRecord[] = [];
+    const child = makeChild();
+    const p = runOutputExecCommand({
+      registry: makeFakeRegistry(projectRoot, created),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      command: "pnpm",
+      args: ["test"],
+      intent: "run tests",
+      originPid: ROOT_PID,
+      timeoutMs: 300_000,
+      maxBytes: 20_000_000,
+      now: () => NOW,
+      newId: () => "33333333-3333-4333-8333-333333333333",
+      loadPermissions: () => null,
+      spawn: spawnMock(child),
+    });
+    // The secret starts at char 3990, so the 4000-char cap falls mid-secret.
+    // Slicing before redaction would leave a truncated fragment the redactor
+    // no longer recognizes ("sk-" + 7 chars misses the 20-char minimum).
+    const filler = "x".repeat(3990);
+    const secret = `sk-${"A1b2C3d4E5".repeat(4)}`;
+    child.stdout.emit("data", Buffer.from(`${filler}${secret}\n`));
+    child.emit("close", 1);
+    const res = await p;
+    expect(res.ok).toBe(true);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.errorOutput).not.toContain("sk-A1b2");
+    expect(created[0]?.errorOutput.length).toBeLessThanOrEqual(4000);
+  });
+
   it("records nothing when the command exits zero", async () => {
     const created: SessionFailureRecord[] = [];
     const child = makeChild();

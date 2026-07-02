@@ -1,6 +1,7 @@
 import type { SessionHints } from "@megasaver/output-filter";
 import type { ProjectId, SessionId } from "@megasaver/shared";
 import type { MemoryEntryView, ProjectRuleView } from "./registry-port.js";
+import { messageOf } from "./stats-helpers.js";
 
 interface HintSource {
   listSessionFailures(projectId: ProjectId, sessionId: SessionId): { errorOutput: string }[];
@@ -56,17 +57,35 @@ export function extractFailureSignatures(errorOutput: string): string[] {
 
 const MAX_HINT_ITEMS = 12;
 
+export type BuiltSessionHints = { hints: SessionHints; warnings: string[] };
+
 export function buildSessionHints(
   registry: HintSource,
   projectId: ProjectId,
   sessionId: SessionId,
-): SessionHints {
+): BuiltSessionHints {
+  // Best-effort per source: hints are a ranking boost, never a delivery
+  // dependency. A corrupt store file (e.g. one bad memory/<projectId>.jsonl
+  // line) must not fail every read/exec — the broken source loses only its
+  // own hints and surfaces a non-fatal warning, mirroring the
+  // capture-skipped discipline in run-command.ts.
+  const warnings: string[] = [];
+  const guard = (source: () => void): void => {
+    try {
+      source();
+    } catch (err) {
+      warnings.push(`session hints skipped: ${messageOf(err)}`);
+    }
+  };
+
   // All three sources iterate newest-first: the caps below evict by insertion
   // order, and when the budget overflows the STALE tokens are the ones to lose.
   const signatures = new Set<string>();
-  for (const f of [...registry.listSessionFailures(projectId, sessionId)].reverse()) {
-    for (const sig of extractFailureSignatures(f.errorOutput)) signatures.add(sig);
-  }
+  guard(() => {
+    for (const f of [...registry.listSessionFailures(projectId, sessionId)].reverse()) {
+      for (const sig of extractFailureSignatures(f.errorOutput)) signatures.add(sig);
+    }
+  });
 
   // relatedFiles/relatedSymbols ONLY — keywords, title, and content are prose
   // retrieval surfaces; feeding them into the substring-match boost would fire
@@ -74,27 +93,34 @@ export function buildSessionHints(
   // mirrors core's recall predicate (the port deliberately does not carry the
   // bi-temporal/tier fields core's fuller isRecallable also checks).
   const memory = new Set<string>();
-  for (const entry of [...registry.listMemoryEntries(projectId)].reverse()) {
-    if (entry.approval !== "approved" || entry.stale) continue;
-    for (const file of entry.relatedFiles ?? []) {
-      if (file.length >= MIN_SIGNATURE_LENGTH) memory.add(file);
+  guard(() => {
+    for (const entry of [...registry.listMemoryEntries(projectId)].reverse()) {
+      if (entry.approval !== "approved" || entry.stale) continue;
+      for (const file of entry.relatedFiles ?? []) {
+        if (file.length >= MIN_SIGNATURE_LENGTH) memory.add(file);
+      }
+      for (const symbol of entry.relatedSymbols ?? []) {
+        if (symbol.length >= MIN_SIGNATURE_LENGTH) memory.add(symbol);
+      }
     }
-    for (const symbol of entry.relatedSymbols ?? []) {
-      if (symbol.length >= MIN_SIGNATURE_LENGTH) memory.add(symbol);
-    }
-  }
+  });
 
   const conventions = new Set<string>();
-  for (const rule of [...registry.listProjectRules(projectId)].reverse()) {
-    for (const pattern of rule.appliesTo) {
-      if (GLOB_METACHARS.test(pattern)) continue;
-      if (pattern.length >= MIN_SIGNATURE_LENGTH) conventions.add(pattern);
+  guard(() => {
+    for (const rule of [...registry.listProjectRules(projectId)].reverse()) {
+      for (const pattern of rule.appliesTo) {
+        if (GLOB_METACHARS.test(pattern)) continue;
+        if (pattern.length >= MIN_SIGNATURE_LENGTH) conventions.add(pattern);
+      }
     }
-  }
+  });
 
   return {
-    recentFailures: [...signatures].slice(0, MAX_SIGNATURES_PER_SESSION),
-    recentMemory: [...memory].slice(0, MAX_HINT_ITEMS),
-    projectConventions: [...conventions].slice(0, MAX_HINT_ITEMS),
+    hints: {
+      recentFailures: [...signatures].slice(0, MAX_SIGNATURES_PER_SESSION),
+      recentMemory: [...memory].slice(0, MAX_HINT_ITEMS),
+      projectConventions: [...conventions].slice(0, MAX_HINT_ITEMS),
+    },
+    warnings,
   };
 }

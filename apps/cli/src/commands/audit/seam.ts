@@ -68,8 +68,9 @@ export function renderSeamReport(s: SeamSummary): string[] {
   if (s.traces === 0) {
     return [
       "No seam traces recorded yet.",
-      "Run commands or reads through `mega output exec` / `mega output filter`",
-      "for a registry session, then re-run for a seam effectiveness report.",
+      "Set MEGASAVER_SEAM_TRACE=true, then run commands or reads through",
+      "`mega output exec` / `mega output filter` for a registry session,",
+      "then re-run for a seam effectiveness report.",
     ];
   }
   const pct = (n: number): string => `${((n / s.traces) * 100).toFixed(1)}%`;
