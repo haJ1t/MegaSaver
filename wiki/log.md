@@ -3549,3 +3549,26 @@ Verification: `pnpm verify` green (lint, typecheck, test, conventions). CLI e2e 
 Spec: `docs/superpowers/specs/2026-07-02-agent-setup-functional-design.md`.
 Plan: `docs/superpowers/plans/2026-07-02-agent-setup-functional-plan.md`.
 Branch: `feat/agent-setup-functional-fix`.
+
+## [2026-07-02] diagnose | token-saver "savings not increasing" live investigation
+
+Live diagnosis of frozen saved-tokens counter (session 45479c3f). Findings:
+1. Pipeline HEALTHY: synthetic PostToolUse payload through `mega hooks saver`
+   (cwd=MegaSaver, enabled workspace e02b98f66e82b6b9) compressed 138000→89 B
+   and wrote events.jsonl. Daemon (pid 64943) + store + compressor all work.
+2. verifywise worktree session (workspace e7fc032a769ee0a5 =
+   fnv1a("/Users/halitozger/Desktop/verifywise/.claude/worktrees/practical-euler"))
+   has NO workspace-token-saver.json → saver passthrough by design
+   (saver-run.ts readSettings null gate). Per-cwd workspace key means enabling
+   the main repo dir does NOT cover its worktrees — product design gap.
+3. Claude Code hooks stopped executing in Desktop-app MegaSaver sessions after
+   2026-07-01 17:32 local: zero PreToolUse log entries, zero saver events, zero
+   compression markers (main + 144 subagent transcripts) since — despite >4KB
+   eligible outputs and enabled+aggressive settings (updated 2026-07-02 13:20).
+   Session 90550bc0 got 4 user prompts on 07-02 but intent hook never wrote →
+   hooks dead in that live session; ~/.claude/settings.json rewritten 13:19
+   (GUI Connect Saver hook toggle). Restarting the session should reload hooks.
+4. No model dependence in saver (bytes/4 estimator) — claude-fable-5 does not
+   affect savings accounting.
+5. `mega proxy` (pid 83857) up but proxy-usage/usage.jsonl last written
+   06-24: no agent points ANTHROPIC_BASE_URL at it.
