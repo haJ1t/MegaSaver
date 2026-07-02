@@ -3591,3 +3591,34 @@ drain findings were resolved. Baseline `pnpm test`: 46/46 Turbo tasks green.
 Specs:
 `docs/superpowers/specs/2026-07-02-persistent-proxy-routing-design.md` and
 `docs/superpowers/specs/2026-07-02-saver-activation-inheritance-design.md`.
+
+## [2026-07-02] review | spec review: persistent-proxy-routing + saver-inheritance → REVISE
+
+External reviewer pass (Claude Code, fresh 4-lens adversarial verification:
+current-state fact-check, state-machine holes, git-identity edges, governance
+gates). Verdict REVISE: 2 BLOCKING (proxy orphan-route unrecoverable after
+SIGKILL+PID-reuse vs conjunctive stale-lock predicate; saver family-key
+canonicalization lacks case/platform normalization → same repo hashes to
+different families on APFS/NTFS), 12 MAJOR (disable crash-window re-route,
+monitor vs SIGTERM self-unroute, kickstart -k kills draining supervisor,
+drainingGeneration crash/reboot semantics, transition.lock staleness,
+legacy-root key aliasing, repository-disable vs legacy exact precedence,
+symlink-refusal contradiction, missing omc:tracer gate, uncited user
+confirmation, aspirational security-reviewer frontmatter, missing critic
+implementation pass, undefined cross-spec ordering), plus minors. Spec1
+current-state claims all verified TRUE against worktree code. Full findings in
+wiki/agent-channel.md 2026-07-02 19:05 entry. Plans blocked until amended.
+
+## [2026-07-02] design | proxy + saver REVISE amendments submitted
+
+Amended both linked specs against the external 2 BLOCKING + 12 MAJOR review.
+Proxy changes include fenced PID/start-token/boot/instance ownership, strict
+transition unions, route-safe crash recovery, conservative drain preservation,
+journal-authoritative launchd transactions, authenticated GUI boundaries,
+redacted errors, and bounded owner-only usage telemetry. Saver changes include
+volume-case-aware SHA-256 repository identity, verified family schemas, legacy
+precedence/alias rules, descriptor-safe activation storage, and bounded
+future-skew-resistant hook heartbeats. Independent CRITICAL design passes from
+security-reviewer and tracer evidence-loop returned APPROVE. Implementation
+plans remain blocked until Claude Code repeats its four-lens review and approves
+the amended specs. See wiki/agent-channel.md 2026-07-02 23:08.
