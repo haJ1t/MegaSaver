@@ -12,6 +12,7 @@ describe("McpToolName type regression", () => {
       "find_similar_failures",
       "get_applicable_rules",
       "get_context_budget_report",
+      "get_edit_impact",
       "get_project_context",
       "get_project_rules",
       "get_relevant_code_blocks",
@@ -50,7 +51,7 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 31-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context)", () => {
+  it("schema.options preserves the 32-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context + edit-impact get_edit_impact)", () => {
     const _t: readonly [
       "approve_memory",
       "audit_token_usage",
@@ -60,6 +61,7 @@ describe("McpToolName type regression", () => {
       "find_similar_failures",
       "get_applicable_rules",
       "get_context_budget_report",
+      "get_edit_impact",
       "get_project_context",
       "get_project_rules",
       "get_relevant_code_blocks",

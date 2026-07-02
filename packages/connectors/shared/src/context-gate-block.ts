@@ -39,6 +39,7 @@ export function renderContextGateBlockText(fields: ContextGateBlockFields): stri
     `Mode: ${fields.mode}`,
     `Max returned bytes: ${fields.maxReturnedBytes}`,
     "At task start, call get_task_context({ projectId, task }) to fetch a task-scoped context pack before reading files.",
+    "After editing files, call get_edit_impact({ projectId }) to see impacted callers and which tests to run.",
     MEGA_SAVER_CG_BLOCK_END,
     "",
   ].join("\n");
