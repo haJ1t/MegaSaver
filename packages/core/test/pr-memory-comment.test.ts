@@ -1,15 +1,15 @@
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import type { MemoryEntry } from "../src/memory-entry.js";
 import { buildPrMemoryComment } from "../src/pr-memory-comment.js";
 
 const MEMORY_ENTRY_ID_1 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const MEMORY_ENTRY_ID_2 = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const CREATED_AT = "2026-06-12T10:00:00.000Z";
 
-function makeEntry(overrides: Partial<MemoryEntry> & { id: string }): MemoryEntry {
+function makeEntry(overrides: Omit<Partial<MemoryEntry>, "id"> & { id: string }): MemoryEntry {
   return {
-    id: overrides.id,
     projectId: PROJECT_ID,
     sessionId: null,
     scope: "project",
@@ -24,6 +24,7 @@ function makeEntry(overrides: Partial<MemoryEntry> & { id: string }): MemoryEntr
     createdAt: CREATED_AT,
     updatedAt: CREATED_AT,
     ...overrides,
+    id: overrides.id as MemoryEntryId,
   };
 }
 

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { memoryEntryIdSchema } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { type EvidenceRecord, evidenceRecordSchema } from "../src/schema.js";
 import {
@@ -192,7 +193,7 @@ describe("evidenceRecordSchema", () => {
   });
 
   it("INVARIANT pinned => status available AND pinnedByMemoryIds non-empty", () => {
-    const MEM = "00000000-0000-4000-8000-0000000000a1";
+    const MEM = memoryEntryIdSchema.parse("00000000-0000-4000-8000-0000000000a1");
     expect(
       evidenceRecordSchema.safeParse(
         validRecord({ retentionClass: "pinned", pinnedByMemoryIds: [MEM] }),

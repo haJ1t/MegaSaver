@@ -1,10 +1,11 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { projectIdSchema, taskPlanIdSchema } from "@megasaver/shared";
+import { projectIdSchema, sessionIdSchema, taskPlanIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createJsonDirectoryCoreRegistry } from "../src/json-directory-registry.js";
 import { type CoreRegistry, createInMemoryCoreRegistry } from "../src/registry.js";
+import type { TaskPlanInput } from "../src/task-plan.js";
 
 const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const TS = "2026-06-12T00:00:00.000Z";
@@ -25,14 +26,14 @@ const PLAN_ID = "d0000000-0000-4000-8000-000000000001";
 const STEP_A = "d0000000-0000-4000-8000-00000000000a";
 const STEP_B = "d0000000-0000-4000-8000-00000000000b";
 
-const input = {
+const input: TaskPlanInput = {
   task: "fix login bug",
   sessionId: null,
   steps: [
-    { type: "edit", title: "edit auth", key: "a" },
+    { type: "edit", title: "edit auth", key: "a", dependsOnKeys: [] },
     { type: "debug", title: "debug auth", key: "b", dependsOnKeys: ["a"] },
   ],
-} as const;
+};
 
 function suite(name: string, make: () => CoreRegistry) {
   describe(`${name}: task registry`, () => {
@@ -57,9 +58,9 @@ function suite(name: string, make: () => CoreRegistry) {
     it("createTaskPlan throws when sessionId does not exist", () => {
       const r = make();
       r.createProject(project);
-      const withSession = {
+      const withSession: TaskPlanInput = {
         ...input,
-        sessionId: "22222222-2222-4222-8222-222222222222",
+        sessionId: sessionIdSchema.parse("22222222-2222-4222-8222-222222222222"),
       };
       expect(() =>
         r.createTaskPlan(PROJECT_ID, withSession, clockFrom([PLAN_ID, STEP_A, STEP_B])),

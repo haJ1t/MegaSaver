@@ -1,5 +1,5 @@
 import type { CodeBlock } from "@megasaver/indexer";
-import type { ProjectId } from "@megasaver/shared";
+import type { CodeBlockId, ProjectId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { buildImpactPack } from "../src/pack.js";
 
@@ -11,7 +11,7 @@ function block(
 ): CodeBlock {
   n += 1;
   return {
-    id: `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`,
+    id: `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}` as CodeBlockId,
     projectId: PROJECT_ID,
     filePath: over.filePath,
     startLine: over.startLine ?? 1,

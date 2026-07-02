@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { memoryEntryIdSchema } from "@megasaver/shared";
+import { memoryEntryIdSchema, workspaceKeySchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { digestContent } from "../src/digest.js";
 import type { EvidenceRecordInput } from "../src/schema.js";
@@ -22,7 +22,7 @@ import {
 const MEM_ID = memoryEntryIdSchema.parse("00000000-0000-4000-8000-0000000000a1");
 
 let storeRoot: string;
-const workspaceKey = "0123456789abcdef";
+const workspaceKey = workspaceKeySchema.parse("0123456789abcdef");
 
 function input(over: Partial<EvidenceRecordInput> = {}): EvidenceRecordInput {
   return {

@@ -6,14 +6,15 @@ import {
   appendAuditEvent,
   createInMemoryCoreRegistry,
 } from "@megasaver/core";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildServer } from "../src/server.js";
 import type { NamingMode } from "../src/tool-naming.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const SESSION_ID = "22222222-2222-4222-8222-222222222222";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
 const TS = "2026-05-13T00:00:00.000Z";
 
 function seededRegistry(projectRoot: string) {
@@ -252,6 +253,7 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
         "get_relevant_code_blocks",
         "get_relevant_context",
         "get_relevant_memories",
+        "get_task_context",
         "get_task_status",
         "mega_impact",
         "mega_index_memory",
@@ -298,6 +300,7 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
         "get_relevant_code_blocks",
         "get_relevant_context",
         "get_relevant_memories",
+        "get_task_context",
         "get_task_status",
         "mega_fetch_chunk",
         "mega_impact",
@@ -473,7 +476,7 @@ describe("phase 6 task tools over the bridge", () => {
 
 describe("phase 7 tool router over the bridge", () => {
   const TS7 = "2026-06-12T00:00:00.000Z";
-  const AUDIT_SESSION_ID = "11111111-1111-4111-8111-111111111111";
+  const AUDIT_SESSION_ID = "11111111-1111-4111-8111-111111111111" as SessionId;
   let storeRoot: string;
 
   beforeEach(async () => {
@@ -527,10 +530,10 @@ describe("phase 7 tool router over the bridge", () => {
     return { client, server };
   }
 
-  it("lists 30 tools", async () => {
+  it("lists 31 tools", async () => {
     const { client, server } = await connectWithTools();
     const { tools } = (await client.listTools()) as { tools: { name: string }[] };
-    expect(tools).toHaveLength(30);
+    expect(tools).toHaveLength(31);
     expect(tools.map((t) => t.name)).toContain("approve_memory");
     expect(tools.map((t) => t.name)).toContain("audit_token_usage");
     expect(tools.map((t) => t.name)).toContain("proxy_search_code");

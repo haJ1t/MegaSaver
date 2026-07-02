@@ -84,6 +84,7 @@ describe("memory-graph model", () => {
       stats: { nodeCount: 2, edgeCount: 1 },
     });
     expect(g.edges[0]?.kind).toBe("wiki-cite");
-    expect(g.nodes[0]?.meta.status).toBe("active");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(g.nodes[0]?.meta["status"]).toBe("active");
   });
 });

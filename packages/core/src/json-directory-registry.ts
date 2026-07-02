@@ -20,6 +20,7 @@ import {
   readMemoryValidation,
   readProjectRulesForProject,
   readProjects,
+  readSessionFailures,
   readSessions,
   readTaskPlansForProject,
   readToolDefinitionsForProject,
@@ -29,6 +30,7 @@ import {
   writeMemoryValidation,
   writeProjectRulesForProject,
   writeProjects,
+  writeSessionFailures,
   writeSessions,
   writeTaskPlansForProject,
   writeToolDefinitionsForProject,
@@ -45,6 +47,7 @@ import {
   buildTaskPlanFromInput,
   buildToolDefinitionFromInput,
 } from "./registry.js";
+import { sessionFailureSchema } from "./session-failure.js";
 import { type Session, sessionSchema, sessionUpdatePatchSchema } from "./session.js";
 import type { StepOutcome } from "./task-plan-transitions.js";
 import { type TaskPlanInput, taskPlanSchema } from "./task-plan.js";
@@ -216,8 +219,24 @@ export function createJsonDirectoryCoreRegistry(
         const updated = sessionSchema.parse({ ...existing, endedAt: opts.endedAt });
         const next = sessions.map((session) => (session.id === id ? updated : session));
         writeSessions(paths, next);
+        writeSessionFailures(paths, id, []);
         return updated;
       });
+    },
+
+    createSessionFailure(failure) {
+      return withDirLock(options.rootDir, () => {
+        const parsed = sessionFailureSchema.parse(failure);
+        const existing = readSessionFailures(paths, parsed.sessionId);
+        writeSessionFailures(paths, parsed.sessionId, [...existing, parsed]);
+        return sessionFailureSchema.parse(parsed);
+      });
+    },
+
+    listSessionFailures(projectId, sessionId) {
+      return readSessionFailures(paths, sessionId)
+        .filter((f) => f.projectId === projectId)
+        .map((f) => sessionFailureSchema.parse(f));
     },
 
     updateSession(id, patch) {

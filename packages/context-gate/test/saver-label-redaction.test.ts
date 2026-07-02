@@ -59,6 +59,8 @@ function registry(projectRoot: string): OrchestratorRegistry {
           }
         : null,
     getProject: (id) => (id === PROJECT_ID ? { rootPath: projectRoot } : null),
+    createSessionFailure: (failure) => failure,
+    listSessionFailures: () => [],
   };
 }
 
@@ -109,14 +111,17 @@ describe("saver source-label redaction — command paths", () => {
     expect((await promise).ok).toBe(true);
 
     const chunk = await readJson(join(store, "content", WK, LSID, `${NEW_ID}.json`));
-    const source = chunk.source as { command: string; args: string[] };
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const source = chunk["source"] as { command: string; args: string[] };
     expect(JSON.stringify(source.args)).not.toContain(SECRET_BODY);
     expect(source.command).toBe("pnpm");
     expect(JSON.stringify(source.args)).toContain("[REDACTED]");
 
     const event = await readOneEvent(join(store, "stats", WK, `${LSID}.events.jsonl`));
-    expect(event.label as string).not.toContain(SECRET_BODY);
-    expect(event.label as string).toContain("[REDACTED]");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(event["label"] as string).not.toContain(SECRET_BODY);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(event["label"] as string).toContain("[REDACTED]");
   });
 
   it("legacy command: secret in args is redacted in persisted source.args + event label", async () => {
@@ -141,7 +146,8 @@ describe("saver source-label redaction — command paths", () => {
     expect((await promise).ok).toBe(true);
 
     const chunk = await readJson(join(store, "content", PROJECT_ID, SESSION_ID, `${NEW_ID}.json`));
-    const source = chunk.source as { command: string; args: string[] };
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const source = chunk["source"] as { command: string; args: string[] };
     expect(JSON.stringify(source.args)).not.toContain(SECRET_BODY);
     expect(source.command).toBe("pnpm");
     expect(JSON.stringify(source.args)).toContain("[REDACTED]");
@@ -149,8 +155,10 @@ describe("saver source-label redaction — command paths", () => {
     const event = await readOneEvent(
       join(store, "stats", PROJECT_ID, `${SESSION_ID}.events.jsonl`),
     );
-    expect(event.label as string).not.toContain(SECRET_BODY);
-    expect(event.label as string).toContain("[REDACTED]");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(event["label"] as string).not.toContain(SECRET_BODY);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(event["label"] as string).toContain("[REDACTED]");
   });
 });
 
@@ -175,13 +183,16 @@ describe("saver source-label redaction — file paths", () => {
     expect(outcome.ok).toBe(true);
 
     const chunk = await readJson(join(store, "content", WK, LSID, `${NEW_ID}.json`));
-    const source = chunk.source as { path: string };
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const source = chunk["source"] as { path: string };
     expect(source.path).not.toContain(SECRET_BODY);
     expect(source.path).toContain("[REDACTED]");
 
     const event = await readOneEvent(join(store, "stats", WK, `${LSID}.events.jsonl`));
-    expect(event.label as string).not.toContain(SECRET_BODY);
-    expect(event.label as string).toContain("[REDACTED]");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(event["label"] as string).not.toContain(SECRET_BODY);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(event["label"] as string).toContain("[REDACTED]");
   });
 
   it("legacy file: secret in path is redacted in persisted source.path + event label", async () => {
@@ -200,14 +211,17 @@ describe("saver source-label redaction — file paths", () => {
     expect(outcome.ok).toBe(true);
 
     const chunk = await readJson(join(store, "content", PROJECT_ID, SESSION_ID, `${NEW_ID}.json`));
-    const source = chunk.source as { path: string };
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const source = chunk["source"] as { path: string };
     expect(source.path).not.toContain(SECRET_BODY);
     expect(source.path).toContain("[REDACTED]");
 
     const event = await readOneEvent(
       join(store, "stats", PROJECT_ID, `${SESSION_ID}.events.jsonl`),
     );
-    expect(event.label as string).not.toContain(SECRET_BODY);
-    expect(event.label as string).toContain("[REDACTED]");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(event["label"] as string).not.toContain(SECRET_BODY);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(event["label"] as string).toContain("[REDACTED]");
   });
 });

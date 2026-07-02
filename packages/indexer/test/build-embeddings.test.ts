@@ -2,11 +2,12 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readVectors } from "@megasaver/embeddings";
+import { projectIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildIndex } from "../src/build.js";
 import { resolveIndexPaths } from "../src/store.js";
 
-const PROJECT_ID = "00000000-0000-4000-8000-000000000001";
+const PROJECT_ID = projectIdSchema.parse("00000000-0000-4000-8000-000000000001");
 
 let repo: string;
 let store: string;
@@ -62,7 +63,8 @@ describe("buildIndex — embeddings opt-in", () => {
 // Gated: the ONLY build test that calls real embed() (downloads the model on
 // first run). CI never sets MEGA_EMBED_E2E, so it is skipped there.
 // Run locally with: MEGA_EMBED_E2E=1 pnpm --filter @megasaver/indexer test
-describe.skipIf(!process.env.MEGA_EMBED_E2E)("buildIndex — embeddings:true (real model)", () => {
+// biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+describe.skipIf(!process.env["MEGA_EMBED_E2E"])("buildIndex — embeddings:true (real model)", () => {
   it("writes a sidecar keyed by block id with one vector per block", async () => {
     await buildIndex({
       rootDir: repo,

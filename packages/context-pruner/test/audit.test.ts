@@ -1,5 +1,5 @@
 import type { CodeBlock } from "@megasaver/indexer";
-import type { ProjectId } from "@megasaver/shared";
+import type { CodeBlockId, ProjectId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { auditPack } from "../src/audit.js";
 import { type ContextPack, buildContextPack, contextPackSchema } from "../src/pack.js";
@@ -10,7 +10,7 @@ let n = 0;
 function block(over: Partial<CodeBlock> & { name: string; filePath: string }): CodeBlock {
   n += 1;
   return {
-    id: `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`,
+    id: `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}` as CodeBlockId,
     projectId: PROJECT_ID,
     filePath: over.filePath,
     startLine: over.startLine ?? 1,

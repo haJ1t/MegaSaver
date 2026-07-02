@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
+import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleRunCommand } from "../../src/tools/run-command.js";
 
@@ -9,8 +10,8 @@ vi.mock("@megasaver/daemon", () => ({ getRunningDaemon: vi.fn() }));
 import { getRunningDaemon } from "@megasaver/daemon";
 const mockGetRunningDaemon = vi.mocked(getRunningDaemon);
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const SESSION_ID = "22222222-2222-4222-8222-222222222222";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
 const TS = "2026-05-13T00:00:00.000Z";
 
 function seededRegistry(projectRoot: string) {
@@ -174,10 +175,13 @@ describe("handleRunCommand", () => {
     const [method, path, body] = handle.request.mock.calls[0] as [string, string, unknown];
     expect(method).toBe("POST");
     expect(path).toBe("/exec-registry");
-    expect((body as Record<string, unknown>).sessionId).toBe(SESSION_ID);
-    expect((body as Record<string, unknown>).command).toBe("ls");
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect((body as Record<string, unknown>)["sessionId"]).toBe(SESSION_ID);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect((body as Record<string, unknown>)["command"]).toBe("ls");
     // maxBytes is absent when caller didn't specify (daemon uses its own default)
-    expect((body as Record<string, unknown>).maxBytes).toBeUndefined();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect((body as Record<string, unknown>)["maxBytes"]).toBeUndefined();
   });
 
   it("falls back to in-process on daemon non-2xx (command_denied re-derived)", async () => {

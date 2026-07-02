@@ -31,7 +31,8 @@ describe("installMcp / uninstallMcp — idempotent (AA1 §5c)", () => {
     const raw1 = JSON.parse(await readFile(first.configPath, "utf8")) as {
       mcpServers: Record<string, { command: string; args?: string[] }>;
     };
-    expect(raw1.mcpServers.megasaver).toEqual({ command: "mega", args: ["mcp", "serve"] });
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(raw1.mcpServers["megasaver"]).toEqual({ command: "mega", args: ["mcp", "serve"] });
 
     const second = await installMcp({
       agentId: "claude-code",
@@ -63,7 +64,8 @@ describe("installMcp / uninstallMcp — idempotent (AA1 §5c)", () => {
     const raw = JSON.parse(await readFile(changed.configPath, "utf8")) as {
       mcpServers: Record<string, { command: string; args?: string[] }>;
     };
-    expect(raw.mcpServers.megasaver.args).toEqual(["mcp", "serve", "--store", "/tmp/x"]);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(raw.mcpServers["megasaver"]?.args).toEqual(["mcp", "serve", "--store", "/tmp/x"]);
   });
 
   it("uninstall removes the server entry and is a no-op when absent", async () => {
@@ -73,7 +75,8 @@ describe("installMcp / uninstallMcp — idempotent (AA1 §5c)", () => {
     const raw = JSON.parse(await readFile(removed.configPath, "utf8")) as {
       mcpServers: Record<string, unknown>;
     };
-    expect(raw.mcpServers.megasaver).toBeUndefined();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(raw.mcpServers["megasaver"]).toBeUndefined();
 
     const again = await uninstallMcp({ agentId: "claude-code", home });
     expect(again.changed).toBe(false);

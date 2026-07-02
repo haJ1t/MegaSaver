@@ -15,14 +15,14 @@ const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111")
 const TS = "2026-06-12T00:00:00.000Z";
 
 const plan: TaskPlan = {
-  id: "d0000000-0000-4000-8000-000000000001",
+  id: "d0000000-0000-4000-8000-000000000001" as TaskPlan["id"],
   projectId: PROJECT_ID,
   sessionId: null,
   task: "fix login",
   status: "planned",
   steps: [
     {
-      id: "d0000000-0000-4000-8000-00000000000a",
+      id: "d0000000-0000-4000-8000-00000000000a" as TaskPlan["steps"][number]["id"],
       type: "edit",
       title: "edit",
       dependsOn: [],
@@ -33,7 +33,7 @@ const plan: TaskPlan = {
   ],
   createdAt: TS,
   updatedAt: TS,
-} as TaskPlan;
+};
 
 describe("task-plans store", () => {
   let root: string;

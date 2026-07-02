@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
+import type { MemoryEntryId, ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleRecall } from "../../src/tools/recall.js";
 
@@ -9,12 +10,12 @@ vi.mock("@megasaver/daemon", () => ({ getRunningDaemon: vi.fn() }));
 import { getRunningDaemon } from "@megasaver/daemon";
 const mockGetRunningDaemon = vi.mocked(getRunningDaemon);
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const SESSION_ID = "22222222-2222-4222-8222-222222222222";
-const MEM_ID = "44444444-4444-4444-8444-444444444444";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
+const MEM_ID = "44444444-4444-4444-8444-444444444444" as MemoryEntryId;
 const TS = "2026-05-13T00:00:00.000Z";
 
-const MEM_SUGGESTED_ID = "55555555-5555-4555-8555-555555555555";
+const MEM_SUGGESTED_ID = "55555555-5555-4555-8555-555555555555" as MemoryEntryId;
 
 function seededRegistry() {
   const registry = createInMemoryCoreRegistry();
@@ -46,6 +47,7 @@ function seededRegistry() {
     confidence: "medium",
     source: "manual",
     approval: "approved",
+    stale: false,
     createdAt: TS,
     updatedAt: TS,
   });
@@ -61,6 +63,7 @@ function seededRegistry() {
     confidence: "medium",
     source: "agent",
     approval: "suggested",
+    stale: false,
     createdAt: TS,
     updatedAt: TS,
   });

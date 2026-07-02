@@ -6,6 +6,7 @@ import { memoryEntryIdSchema, projectIdSchema } from "@megasaver/shared";
 import { afterEach, expect, it } from "vitest";
 import { CorePersistenceError } from "../src/errors.js";
 import { createJsonDirectoryCoreRegistry } from "../src/json-directory-registry.js";
+import type { MemoryEntry } from "../src/memory-entry.js";
 import { describeUnlessWindows } from "./_platform.js";
 
 const PROJECT_ID_A = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
@@ -18,7 +19,7 @@ const projectA = {
   createdAt: "2026-05-04T12:00:00.000Z",
   updatedAt: "2026-05-04T12:05:00.000Z",
 };
-const projectMemory = {
+const projectMemory: MemoryEntry = {
   id: MEMORY_ENTRY_ID_A,
   projectId: PROJECT_ID_A,
   sessionId: null,
@@ -29,10 +30,11 @@ const projectMemory = {
   keywords: ["esm"],
   confidence: "high",
   source: "manual",
+  approval: "approved",
   stale: false,
   createdAt: "2026-05-04T12:30:00.000Z",
   updatedAt: "2026-05-04T12:30:00.000Z",
-} as const;
+};
 
 afterEach(() => {
   for (const root of roots.splice(0)) {

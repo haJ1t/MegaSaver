@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
+import type { MemoryEntryId, ProjectId, SessionId } from "@megasaver/shared";
 import { z } from "zod";
 import { CorePersistenceError } from "./errors.js";
 import { type FailedAttempt, failedAttemptSchema } from "./failed-attempt.js";
@@ -21,6 +21,7 @@ import { type MemoryEntry, backfillMemoryEntry, memoryEntrySchema } from "./memo
 import { type MemoryValidation, memoryValidationSchema } from "./memory-validation.js";
 import { type ProjectRule, projectRuleSchema } from "./project-rule.js";
 import { type Project, projectSchema } from "./project.js";
+import { type SessionFailure, sessionFailureSchema } from "./session-failure.js";
 import { type Session, sessionSchema } from "./session.js";
 import { type TaskPlan, taskPlanSchema } from "./task-plan.js";
 import { type ToolDefinition, toolDefinitionSchema } from "./tool-definition.js";
@@ -37,6 +38,7 @@ export type StorePaths = {
   memoryValidationsDir: string;
   projectRulesDir: string;
   failedAttemptsDir: string;
+  sessionFailuresDir: string;
   taskPlansDir: string;
   toolDefinitionsDir: string;
 };
@@ -64,6 +66,7 @@ export function resolveStorePaths(rootDir: string): StorePaths {
         memoryValidationsDir: join(resolvedRootDir, "memory-validations"),
         projectRulesDir: join(resolvedRootDir, "project-rules"),
         failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
+        sessionFailuresDir: join(resolvedRootDir, "session-failures"),
         taskPlansDir: join(resolvedRootDir, "task-plans"),
         toolDefinitionsDir: join(resolvedRootDir, "tool-definitions"),
       };
@@ -87,6 +90,7 @@ export function resolveStorePaths(rootDir: string): StorePaths {
     memoryValidationsDir: join(resolvedRootDir, "memory-validations"),
     projectRulesDir: join(resolvedRootDir, "project-rules"),
     failedAttemptsDir: join(resolvedRootDir, "failed-attempts"),
+    sessionFailuresDir: join(resolvedRootDir, "session-failures"),
     taskPlansDir: join(resolvedRootDir, "task-plans"),
     toolDefinitionsDir: join(resolvedRootDir, "tool-definitions"),
   };
@@ -288,6 +292,24 @@ export function writeFailedAttemptsForProject(
     return;
   }
   atomicWriteFile(filePath, `${attempts.map((fa) => JSON.stringify(fa)).join("\n")}\n`);
+}
+
+export function readSessionFailures(paths: StorePaths, sessionId: SessionId): SessionFailure[] {
+  const filePath = join(paths.sessionFailuresDir, `${sessionId}.jsonl`);
+  return readJsonLines(filePath).map((entry) => parseEntity(sessionFailureSchema, entry, filePath));
+}
+
+export function writeSessionFailures(
+  paths: StorePaths,
+  sessionId: SessionId,
+  failures: readonly SessionFailure[],
+): void {
+  const filePath = join(paths.sessionFailuresDir, `${sessionId}.jsonl`);
+  if (failures.length === 0) {
+    removeIfExists(filePath);
+    return;
+  }
+  atomicWriteFile(filePath, `${failures.map((f) => JSON.stringify(f)).join("\n")}\n`);
 }
 
 export function readTaskPlansForProject(paths: StorePaths, projectId: ProjectId): TaskPlan[] {

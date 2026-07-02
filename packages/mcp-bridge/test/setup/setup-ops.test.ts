@@ -55,7 +55,8 @@ describe("buildMcpSetupOps — facade (F2/F4/F6)", () => {
     const raw = JSON.parse(await readFile(join(home, ".config", "claude", "mcp.json"), "utf8")) as {
       mcpServers: Record<string, unknown>;
     };
-    expect(raw.mcpServers.megasaver).toBeDefined();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(raw.mcpServers["megasaver"]).toBeDefined();
   });
 
   it("repair() runs the injected connectorSync and reports connectorSynced true after", async () => {

@@ -1,17 +1,18 @@
 import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { handleSweepMemory } from "../../src/tools/sweep-memory.js";
 
-const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const ID_OLD_LOW = "22222222-2222-4222-8222-222222222222";
-const ID_RECENT_HIGH = "33333333-3333-4333-8333-333333333333";
+const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
+const ID_OLD_LOW = "22222222-2222-4222-8222-222222222222" as MemoryEntryId;
+const ID_RECENT_HIGH = "33333333-3333-4333-8333-333333333333" as MemoryEntryId;
 const OLD = "2026-01-01T00:00:00.000Z";
 const RECENT = "2026-06-29T00:00:00.000Z";
 const NOW = "2026-06-30T00:00:00.000Z";
 
 function add(
   registry: CoreRegistry,
-  id: string,
+  id: MemoryEntryId,
   over: { confidence: "low" | "medium" | "high"; createdAt: string; updatedAt: string },
 ): void {
   registry.createMemoryEntry({
@@ -26,6 +27,7 @@ function add(
     confidence: over.confidence,
     source: "manual",
     approval: "approved",
+    stale: false,
     createdAt: over.createdAt,
     updatedAt: over.updatedAt,
   });
