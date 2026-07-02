@@ -35,6 +35,8 @@ updated: 2026-06-16
 - [[concepts/audit-dashboard]] — roadmap Phase 8: one windowed, persisted token-savings summary; extends @megasaver/stats with an AuditEvent family.
 - [[concepts/memory-approval]] — roadmap Phase 10: agent-suggests → human-approves memory gate; team = shared store + gate; cloud SaaS deferred.
 - [[concepts/proxy-mode]] — Proxy Mode v1.2 (7 phases shipped): public naming mode, output classifier, vitest/tsc compressors + passthrough, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics, replay trace.
+- [[concepts/persistent-proxy-routing]] — proposed dedicated proxy supervisor: persistent CLI/GUI opt-in, nonce/lease route ownership, LaunchAgent lifecycle, drain-safe stop.
+- [[concepts/saver-activation-inheritance]] — proposed exact → Git-family → legacy-root → global Saver activation plus hook heartbeat.
 - [[concepts/context-ledger-architecture]] — proposed next architecture: split specs for ContextGate honest ~90% reduction + reliable save ledger.
 - [[concepts/intent-aware-hook]] — Phase 6b (PR #180): UserPromptSubmit hook captures the prompt → fill-gap ranking intent for PostToolUse-captured output.
 - [[concepts/diff-on-reread]] — PR #181: unchanged re-reads return a lossless `unchanged-marker` (prior chunkSetId) via a per-session sha256 read-index; skips re-filter/re-persist.

@@ -3572,3 +3572,22 @@ Live diagnosis of frozen saved-tokens counter (session 45479c3f). Findings:
    affect savings accounting.
 5. `mega proxy` (pid 83857) up but proxy-usage/usage.jsonl last written
    06-24: no agent points ANTHROPIC_BASE_URL at it.
+
+## [2026-07-02] design | persistent proxy routing + saver inheritance
+
+Opened two linked designs from the live token-saver diagnosis:
+
+- CRITICAL persistent proxy routing: dedicated `proxy supervise` service,
+  shared CLI/GUI control state, nonce health + route lease, foreign-value guard,
+  LaunchAgent migration/rollback, drain-safe stop, and honest traffic/hook
+  status.
+- HIGH Saver activation inheritance: exact → Git common-dir family → verified
+  legacy root → explicit global default, with metadata-only hook heartbeats.
+
+Independent architect and adversarial critic passes returned APPROVE after
+blocking lifecycle, ownership, migration, worktree identity, concurrency, and
+drain findings were resolved. Baseline `pnpm test`: 46/46 Turbo tasks green.
+
+Specs:
+`docs/superpowers/specs/2026-07-02-persistent-proxy-routing-design.md` and
+`docs/superpowers/specs/2026-07-02-saver-activation-inheritance-design.md`.
