@@ -13,6 +13,7 @@ export { compressByCategory, type CompressorName } from "./compress/index.js";
 export {
   buildRankingTrace,
   finalizeReplayTrace,
+  readReplayTraces,
   replayTraceSchema,
   writeReplayTrace,
   type ChunkRef,
@@ -49,8 +50,10 @@ export {
 
 export {
   applyEngineRanking,
+  engineRankingDisabledByEnv,
   engineRankingFromEnv,
   resolveEngineRanking,
+  resolveEngineRankingDisabled,
   type EngineScore,
   type RankFeatures,
   type RankedChunk,

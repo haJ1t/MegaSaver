@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   type SessionHints,
   applyEngineRanking,
+  engineRankingDisabledByEnv,
   resolveEngineRanking,
+  resolveEngineRankingDisabled,
   scoreChunk,
 } from "../src/rank.js";
 
@@ -18,6 +20,25 @@ describe("resolveEngineRanking flag (§8.4)", () => {
     expect(resolveEngineRanking("true")).toBe(true);
     expect(resolveEngineRanking("  TRUE ")).toBe(true);
     expect(resolveEngineRanking("1")).toBe(false);
+  });
+});
+
+describe("resolveEngineRankingDisabled — A/B kill switch (seam phase 2 P2.6)", () => {
+  it("only the literal 'false' (trimmed, case-insensitive) disables", () => {
+    expect(resolveEngineRankingDisabled("false")).toBe(true);
+    expect(resolveEngineRankingDisabled("  FALSE ")).toBe(true);
+  });
+  it("everything else leaves the seam on", () => {
+    expect(resolveEngineRankingDisabled(undefined)).toBe(false);
+    expect(resolveEngineRankingDisabled("")).toBe(false);
+    expect(resolveEngineRankingDisabled("true")).toBe(false);
+    expect(resolveEngineRankingDisabled("0")).toBe(false);
+    expect(resolveEngineRankingDisabled("garbage")).toBe(false);
+  });
+  it("engineRankingDisabledByEnv reads MEGASAVER_ENGINE_RANKING", () => {
+    expect(engineRankingDisabledByEnv({ MEGASAVER_ENGINE_RANKING: "false" })).toBe(true);
+    expect(engineRankingDisabledByEnv({ MEGASAVER_ENGINE_RANKING: "true" })).toBe(false);
+    expect(engineRankingDisabledByEnv({})).toBe(false);
   });
 });
 

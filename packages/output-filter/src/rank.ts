@@ -136,6 +136,18 @@ export function engineRankingFromEnv(env: NodeJS.ProcessEnv = process.env): bool
   return resolveEngineRanking(env[ENGINE_RANKING_ENV_KEY]);
 }
 
+// A/B kill switch for the seam call sites (which pass engineRanking
+// explicitly, so the opt-in resolver above never fires for them): only the
+// literal "false" (trimmed, case-insensitive) disables — unset keeps the
+// seam ON, letting an operator run seam-off sessions for comparison.
+export function resolveEngineRankingDisabled(raw: string | undefined): boolean {
+  return (raw ?? "").trim().toLowerCase() === "false";
+}
+
+export function engineRankingDisabledByEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return resolveEngineRankingDisabled(env[ENGINE_RANKING_ENV_KEY]);
+}
+
 // Fraction of hint items referenced by the chunk text, clamped to [0,1].
 function fractionMatched(text: string, items: readonly string[] | undefined): number {
   if (items === undefined || items.length === 0) return 0;
