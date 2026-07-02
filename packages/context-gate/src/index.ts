@@ -60,3 +60,11 @@ export {
   buildOverlayHints,
   type OverlayFailureRecord,
 } from "./overlay-failures.js";
+export {
+  type CaseMode,
+  type FamilyFsAdapter,
+  type CanonicalFamilyPath,
+  type FamilyKey,
+  canonicalFamilyPath,
+  familyKeyFromPath,
+} from "./family-identity.js";
