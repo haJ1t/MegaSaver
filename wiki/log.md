@@ -3520,3 +3520,27 @@ narrowing. `asOf` dropped from both helper signatures (unused after the fix).
 - **Shipped.** v1.2.1 published to npm: **3 files, 0 natives**, 1.9MB tarball,
   `optionalDependencies` present. Install smoke on darwin: `mega memory index` →
   `embedded=1` — embeddings restored on the platform v1.2.0 broke.
+
+## [2026-07-02] fix | seam phase 2 batch B: hint robustness, redact-before-slice, opt-in traces
+
+- **Best-effort hints (MAJOR, repro'd).** A corrupt `memory/<projectId>.jsonl`
+  line made `buildSessionHints` propagate `CorePersistenceError`, failing EVERY
+  `proxy_read_file`/`proxy_run_command` for the session. Fixed inside the
+  builders per-source: each hint source (failures/memory/rules) is individually
+  guarded; a broken source loses only its own hints and surfaces a non-fatal
+  `session hints skipped: <msg>` warning (mirrors capture-skipped discipline).
+  `buildSessionHints`/`buildOverlayHints` now return `{ hints, warnings }`.
+  RED repro: real json-directory registry + corrupt memory jsonl → pipeline
+  threw; GREEN: ok:true, warning present, failure boost still fires
+  (`packages/core/test/context-gate/hints-robustness.test.ts`).
+- **Redact-before-slice (security).** Both capture paths did
+  `redact(raw.slice(0,4000))` — a secret straddling the 4000 boundary survived
+  truncation-mangled (RED: `sk-A1b2…` fragment persisted). Now
+  `redact(raw).redacted.slice(0,4000)` in registry + overlay capture.
+- **Opt-in seam traces (disk cost).** Replay-trace recording at the two
+  registry seam sites is now gated on `MEGASAVER_SEAM_TRACE` ("true"/"1",
+  trimmed/lowercased) via `seamTraceEnabledByEnv` in `@megasaver/output-filter`
+  (next to the A/B kill switch). Default: no trace files. `mega audit seam`
+  onboarding hint mentions the env var.
+- **Verification.** All three RED first, then GREEN; `pnpm verify` green
+  (46/46 turbo tasks).
