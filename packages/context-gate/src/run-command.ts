@@ -261,32 +261,43 @@ export async function runOutputExecCommand(
   // a session-scoped SessionFailure that later feeds failure-aware ranking.
   const captureWarnings: string[] = [];
   if (outcome.capture.childExitCode !== 0 || outcome.capture.terminated !== undefined) {
-    // Best-effort telemetry: capture writes to disk (json-directory registry),
-    // and an auxiliary write must never break command-output delivery. On failure
-    // we surface a non-fatal warning (§13: no silent swallow) but never rethrow.
-    // Not a silent retry — a genuinely degraded auxiliary concern.
-    // SessionFailure ids must be uuids; newId is a caller-injectable determinism
-    // hook that can be non-uuid, so mint the id directly.
-    try {
-      input.registry.createSessionFailure({
-        id: randomUUID() as SessionFailureId,
-        projectId: settings.projectId,
-        sessionId: input.sessionId,
-        // Redact before persist: the command line is secret-bearing (e.g.
-        // `curl -H "Authorization: Bearer ..."`); reuse the already-redacted
-        // command/args the label was built from so no raw secret hits disk.
-        command: redactedLabel,
-        // Cap the stored evidence: a SessionFailure is an ephemeral per-command
-        // record for failure-aware ranking, not the full transcript (the chunkSet
-        // holds that). 4000 chars bounds each record so a chatty failing command
-        // cannot bloat the session-failure store. Redact first so raw output
-        // secrets never reach the persisted record.
-        errorOutput: redact(outcome.capture.raw.slice(0, 4000)).redacted,
-        source: "proxy-classifier",
-        createdAt: now(),
-      });
-    } catch (err) {
-      captureWarnings.push(`session-failure capture skipped: ${messageOf(err)}`);
+    // Cap the stored evidence: a SessionFailure is an ephemeral per-command
+    // record for failure-aware ranking, not the full transcript (the chunkSet
+    // holds that). 4000 chars bounds each record so a chatty failing command
+    // cannot bloat the session-failure store. Redact first so raw output
+    // secrets never reach the persisted record.
+    const redactedErrorOutput = redact(outcome.capture.raw.slice(0, 4000)).redacted;
+    // Benign-exit filter: grep/rg/diff/test exit 1 with no output by convention
+    // to signal "no match", not a failure. An evidence-free record contributes
+    // zero signatures to failure-aware ranking — skip the disk noise. Any other
+    // exit code, a termination, or exit 1 WITH output still captures.
+    const benignExit =
+      outcome.capture.childExitCode === 1 &&
+      outcome.capture.terminated === undefined &&
+      redactedErrorOutput.trim() === "";
+    if (!benignExit) {
+      // Best-effort telemetry: capture writes to disk (json-directory registry),
+      // and an auxiliary write must never break command-output delivery. On failure
+      // we surface a non-fatal warning (§13: no silent swallow) but never rethrow.
+      // Not a silent retry — a genuinely degraded auxiliary concern.
+      // SessionFailure ids must be uuids; newId is a caller-injectable determinism
+      // hook that can be non-uuid, so mint the id directly.
+      try {
+        input.registry.createSessionFailure({
+          id: randomUUID() as SessionFailureId,
+          projectId: settings.projectId,
+          sessionId: input.sessionId,
+          // Redact before persist: the command line is secret-bearing (e.g.
+          // `curl -H "Authorization: Bearer ..."`); reuse the already-redacted
+          // command/args the label was built from so no raw secret hits disk.
+          command: redactedLabel,
+          errorOutput: redactedErrorOutput,
+          source: "proxy-classifier",
+          createdAt: now(),
+        });
+      } catch (err) {
+        captureWarnings.push(`session-failure capture skipped: ${messageOf(err)}`);
+      }
     }
   }
 

@@ -95,7 +95,7 @@ describe("session failure capture", () => {
     expect(created[0]?.source).toBe("proxy-classifier");
   });
 
-  it("records exactly one SessionFailure on a non-zero exit with EMPTY output and still returns the result", async () => {
+  it("records nothing on exit 1 with EMPTY output (benign no-match convention) and still returns the result", async () => {
     const created: SessionFailureRecord[] = [];
     const child = makeChild();
     const p = runOutputExecCommand({
@@ -117,6 +117,31 @@ describe("session failure capture", () => {
     const res = await p;
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.result.childExitCode).toBe(1);
+    expect(created).toHaveLength(0);
+  });
+
+  it("records a SessionFailure on exit 3 with EMPTY output (benign filter is exit-1-only)", async () => {
+    const created: SessionFailureRecord[] = [];
+    const child = makeChild();
+    const p = runOutputExecCommand({
+      registry: makeFakeRegistry(projectRoot, created),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      command: "pnpm",
+      args: ["test"],
+      intent: "run tests",
+      originPid: ROOT_PID,
+      timeoutMs: 300_000,
+      maxBytes: 20_000_000,
+      now: () => NOW,
+      newId: () => "33333333-3333-4333-8333-333333333333",
+      loadPermissions: () => null,
+      spawn: spawnMock(child),
+    });
+    child.emit("close", 3);
+    const res = await p;
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.result.childExitCode).toBe(3);
     expect(created).toHaveLength(1);
     expect(created[0]?.errorOutput).toBe("");
   });
