@@ -106,16 +106,23 @@ All the data already exists in `RankingTrace` (per-chunk `EngineScore` with
 production and no reader exists.
 
 - The two registry-path seam call sites (`runOutputExecCommand`,
-  `runOutputPipeline`) enable `recordTrace: true` and append the returned trace
-  via the existing `writeReplayTrace` to
-  `store.root/stats/<projectId>/<sessionId>.traces.jsonl` (best-effort, like
-  the existing writer). Overlay sites excluded for now (keep scope bounded).
+  `runOutputPipeline`) record traces **opt-in**: only when
+  `MEGASAVER_SEAM_TRACE` is set (`true`/`1`) — a trace record can exceed the
+  raw output it measures, so always-on recording would tax a token-saver's
+  disk. Traces append via the existing `writeReplayTrace` to
+  `store.root/stats/<projectId>/<sessionId>-traces/replay-traces.jsonl`
+  (`writeReplayTrace` owns the filename; per-session dir layout). Best-effort.
+  Overlay sites excluded (scope bound). Outline-mode reads early-return before
+  trace construction in `filterOutput` and therefore never appear in the
+  report — accepted gap.
 - New reader in `@megasaver/output-filter` (or stats): parse a traces JSONL →
   `ReplayTrace[]`.
 - New CLI command `mega audit seam` (mirror `audit/report.ts` structure):
-  reports per session/project — traces analyzed, % of outputs where
-  `failureHistoryBoost > 0` fired, ditto `memoryBoost`, mean boost when fired,
-  hint counts, session-failure capture count, tokens before/after.
+  reports per session/project, **split by A/B arm** (`trace.engineRanking`
+  on vs off) — traces analyzed, % of outputs where `failureHistoryBoost > 0`
+  fired, ditto `memoryBoost`, mean boost when fired, tokens before/after.
+  Hint counts and capture counts are NOT reported — they are not recorded in
+  `RankingTrace` and thus not derivable from traces (deliberate narrowing).
 - **A/B switch**: the seam call sites stop hardcoding `engineRanking: true` and
   instead pass `engineRanking: !engineRankingDisabledByEnv()` — i.e. on by
   default, but `MEGASAVER_ENGINE_RANKING=false` disables (the env resolver at
@@ -127,6 +134,23 @@ production and no reader exists.
 `recentFiles` hint (no path data), overlay memory hints (no registry), overlay
 trace recording, TTL-based overlay pruning (count cap suffices), any change to
 `fractionMatched` weighting, new stats event kinds (traces suffice).
+
+## Documented accepted risks (review outcomes)
+
+- Overlay 50-cap trim is read-modify-write per file: cross-process concurrent
+  appends to the same `<workspaceKey>/<liveSessionId>` can lose records
+  (last-writer-wins). In-process it is synchronous-safe; multi-process overlay
+  same-session is rare — revisit if observed.
+- Hint recall gate is `approval==='approved' && !stale` — bi-temporal
+  (`validFrom`/`validTo`) and archival-tier checks are omitted because
+  context-gate cannot depend on core's `isRecallable`; impact is a mild
+  ranking mis-boost from expired-but-approved memories.
+- Hint building adds up to 3 per-project store scans per read/exec (JSONL +
+  zod parse each call, no caching). Acceptable at v0.x store sizes; memoize
+  before memory stores grow large.
+- Hint tokens are quality-guarded (min length 4, glob-shaped `appliesTo`
+  tokens dropped) and caps keep the NEWEST tokens; `fractionMatched`'s shared
+  memory+conventions denominator is otherwise unchanged (phase-1 lock).
 
 ## Testing
 
