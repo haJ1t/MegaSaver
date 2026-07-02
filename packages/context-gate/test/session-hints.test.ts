@@ -57,6 +57,25 @@ describe("extractFailureSignatures", () => {
     expect(extractFailureSignatures("")).toEqual([]);
     expect(extractFailureSignatures("all good, nothing to report here")).toEqual([]);
   });
+
+  it("drops dot-tokens whose extension is not a code/config extension", () => {
+    expect(extractFailureSignatures("see README.md for details")).toEqual([]);
+    expect(extractFailureSignatures("fetch failed for example.com")).toEqual([]);
+    expect(extractFailureSignatures("weird token a.b in output")).toEqual([]);
+  });
+
+  it("keeps code and config paths, stripping :line for the bare form", () => {
+    const sigs = extractFailureSignatures("error at src/auth.ts:42 while loading config.yml");
+
+    expect(sigs).toContain("src/auth.ts:42");
+    expect(sigs).toContain("src/auth.ts");
+    expect(sigs).toContain("config.yml");
+  });
+
+  it("matches 5-char code extensions like swift", () => {
+    expect(extractFailureSignatures("crash in Sources/App.swift")).toContain("Sources/App.swift");
+    expect(extractFailureSignatures("resolving host.local failed")).toEqual([]);
+  });
 });
 
 describe("buildSessionHints", () => {

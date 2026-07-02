@@ -10,9 +10,23 @@ interface FailureSource {
 // distill each blob into SHORT signatures likely to recur in related output:
 // diagnostic/error codes (TS2322, E0308) and source paths (src/auth.ts[:42]).
 const ERROR_CODE = /\b[A-Z]{1,5}\d{2,5}\b/g;
-const FILE_PATH = /[\w./\\-]*\w+\.[a-zA-Z]{1,4}(?::\d+)?/g;
+const FILE_PATH = /[\w./\\-]*\w+\.[a-zA-Z]{1,5}(?::\d+)?/g;
 const MIN_SIGNATURE_LENGTH = 4;
 const MAX_SIGNATURES_PER_SESSION = 12;
+// Dot-tokens like README.md, example.com, or a.b are prose/hostnames, not
+// actionable failure locations — boosting later chunks on them is noise.
+// Only extensions that name code or config files count as signatures.
+const CODE_EXTENSIONS = new Set(
+  "ts tsx js jsx mjs cjs py go rs java rb c h cpp hpp cs swift kt json yml yaml toml sql sh".split(
+    " ",
+  ),
+);
+
+function hasCodeExtension(token: string): boolean {
+  const bare = token.replace(/:\d+$/, "");
+  const extension = bare.slice(bare.lastIndexOf(".") + 1).toLowerCase();
+  return CODE_EXTENSIONS.has(extension);
+}
 
 export function extractFailureSignatures(errorOutput: string): string[] {
   const found = new Set<string>();
@@ -22,6 +36,7 @@ export function extractFailureSignatures(errorOutput: string): string[] {
   }
   for (const match of errorOutput.matchAll(FILE_PATH)) {
     const token = match[0];
+    if (!hasCodeExtension(token)) continue;
     if (token.length >= MIN_SIGNATURE_LENGTH) found.add(token);
     // A file:line token also matches on its bare-path form in later output.
     const bare = token.replace(/:\d+$/, "");
