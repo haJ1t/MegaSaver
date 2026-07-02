@@ -23,6 +23,7 @@ import {
   runTwoGates,
 } from "./read.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
+import { buildSessionHints } from "./session-hints.js";
 import { applyShownDedup } from "./shown-index.js";
 import { messageOf, redactedCount } from "./stats-helpers.js";
 
@@ -110,12 +111,16 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     return { ok: true, result: unchangedResult(prior.chunkSetId, read.raw) };
   }
 
+  // Failure-aware ranking: the session's prior SessionFailure signatures boost
+  // any chunk that references them, mirroring the exec-command path.
+  const sessionHints = buildSessionHints(input.registry, settings.projectId, input.sessionId);
   const filteredResult = await filterRaw({
     raw: read.raw,
     path: input.path,
     intent: input.intent,
     mode: settings.mode,
     maxReturnedBytes: settings.maxReturnedBytes,
+    sessionHints,
     ...(input.outline === true ? { outline: true } : {}),
   });
 
