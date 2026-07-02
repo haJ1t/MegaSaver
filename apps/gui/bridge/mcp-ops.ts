@@ -33,8 +33,13 @@ export function createMcpOps(deps: CreateMcpOpsDeps): McpSetupOps {
       // global "connector synced" flag is true if the block exists in any
       // persisted project. Per-project detail belongs to the CLI.
       for (const project of deps.registry.listProjects()) {
-        const existing = await readTargetFile(join(project.rootPath, target.relativePath));
-        if (existing !== null && parseBlock(existing).block !== null) return true;
+        try {
+          const existing = await readTargetFile(join(project.rootPath, target.relativePath));
+          if (existing !== null && parseBlock(existing).block !== null) return true;
+        } catch {
+          // A malformed/unreadable target file in one project should not break
+          // the global status call; treat it as not synced for this project.
+        }
       }
       return false;
     },

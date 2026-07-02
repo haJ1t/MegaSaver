@@ -151,16 +151,41 @@ describe("AgentSetupDoctor", () => {
     });
   });
 
+  it("uninstall works without a selected project", async () => {
+    const fetchMock = makeFetchMock({
+      projects: async () => [DEMO_PROJECT, { id: "p2", name: "other", rootPath: "/tmp/other" }],
+      status: async () => REPAIRED,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AgentSetupDoctor />);
+    const button = await waitFor(() => screen.getByRole("button", { name: /Uninstall/i }));
+    expect(button.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(button);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    const uninstallCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).endsWith("/api/mcp/uninstall"),
+    );
+    expect(uninstallCall).toBeDefined();
+    expect(JSON.parse((uninstallCall?.[1] as RequestInit).body as string)).toEqual({
+      target: "claude-code",
+    });
+  });
+
   it("does not update state after unmount", async () => {
     let resolveSlow: unknown = null;
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: () =>
-        new Promise((resolve) => {
-          resolveSlow = resolve;
-        }),
-    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      return {
+        ok: true,
+        status: 200,
+        json: () =>
+          new Promise((resolve) => {
+            resolveSlow = resolve;
+          }),
+      };
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const { unmount } = render(<AgentSetupDoctor />);

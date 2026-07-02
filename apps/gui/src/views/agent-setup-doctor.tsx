@@ -23,12 +23,15 @@ export function AgentSetupDoctor(): JSX.Element {
   // row re-renders silently on load(), so a polite live region announces them.
   const [announcement, setAnnouncement] = useState("");
   const errorRef = useRef<HTMLDivElement>(null);
+  const loadRequestRef = useRef(0);
 
   const load = useCallback(async (): Promise<void> => {
+    const id = ++loadRequestRef.current;
     setLoadState("loading");
     setError(null);
     try {
       const [status, list] = await Promise.all([fetchMcpStatus(), fetchProjects()]);
+      if (id !== loadRequestRef.current) return;
       setAgents(status.agents);
       setProjects(list);
       setSelectedProject((current) =>
@@ -36,6 +39,7 @@ export function AgentSetupDoctor(): JSX.Element {
       );
       setLoadState("ready");
     } catch (err) {
+      if (id !== loadRequestRef.current) return;
       setError(err as BridgeError);
       setLoadState("error");
     }
@@ -75,7 +79,7 @@ export function AgentSetupDoctor(): JSX.Element {
   }, [error]);
 
   async function runAction(agentId: string, action: McpAction): Promise<void> {
-    if (selectedProject.length === 0) return;
+    if (action !== "uninstall" && selectedProject.length === 0) return;
     setBusyAgent(agentId);
     setError(null);
     setAnnouncement("");
@@ -99,7 +103,9 @@ export function AgentSetupDoctor(): JSX.Element {
   const canAct = loadState === "ready" && selectedProject.length > 0;
   const projectChoice =
     projects.length === 0 ? (
-      <p className="text-sm text-text-muted">Create a project first to set up an agent.</p>
+      loadState === "ready" ? (
+        <p className="text-sm text-text-muted">Create a project first to set up an agent.</p>
+      ) : null
     ) : projects.length === 1 ? (
       <p className="text-sm text-text-muted">
         Project: <span className="text-text-primary">{projects[0]?.name ?? ""}</span>

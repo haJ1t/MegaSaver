@@ -44,7 +44,8 @@ export function AgentSetupRow({
 }: AgentSetupRowProps): JSX.Element {
   const state = deriveState(agent);
   const isDestructive = state.action === "uninstall";
-  const isDisabled = busy || disabled;
+  // Uninstall is global and must stay reachable even when no project is selected.
+  const isDisabled = busy || (disabled && state.action !== "uninstall");
 
   return (
     <li className="flex flex-col gap-2 rounded-md border border-border px-4 py-3">

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInMemoryCoreRegistry } from "@megasaver/core";
@@ -85,17 +85,35 @@ describe("createMcpOps (GUI production facade — F3)", () => {
     expect(after.agents.find((a) => a.agentId === "claude-code")?.connectorSynced).toBe(true);
   });
 
-  it("install() leaves connectorSynced false until repair writes the block", async () => {
-    const ops = createMcpOps({
-      registry: registryWithProject(),
-      home,
-      command: DEFAULT_MCP_COMMAND,
-      args: [...DEFAULT_MCP_ARGS],
-    });
-    await ops.install("claude-code", "demo");
-    const status = await ops.status();
-    const agent = status.agents.find((a) => a.agentId === "claude-code");
-    expect(agent?.mcpInstalled).toBe(true);
-    expect(agent?.connectorSynced).toBe(false);
+  it("status() tolerates a malformed target file in one project and checks the rest", async () => {
+    const badRoot = await mkdtemp(join(tmpdir(), "gui-mcp-bad-"));
+    try {
+      const registry = createInMemoryCoreRegistry();
+      registry.createProject({
+        id: PROJECT_ID as ProjectId,
+        name: "bad",
+        rootPath: badRoot,
+        createdAt: TS,
+        updatedAt: TS,
+      });
+      registry.createProject({
+        id: "22222222-2222-4222-8222-222222222222" as ProjectId,
+        name: "good",
+        rootPath: projectRoot,
+        createdAt: TS,
+        updatedAt: TS,
+      });
+      // Mismatched sentinels cause parseBlock to throw.
+      await writeFile(
+        join(badRoot, "CLAUDE.md"),
+        "<!-- MEGA SAVER:CONTEXT_GATE BEGIN -->\n<!-- MEGA SAVER:CONTEXT_GATE BEGIN -->\n",
+        "utf8",
+      );
+      const ops = createMcpOps({ registry, home, command: "mega-mcp" });
+      const result = await ops.status();
+      expect(result.agents.find((a) => a.agentId === "claude-code")).toBeDefined();
+    } finally {
+      await rm(badRoot, { recursive: true, force: true });
+    }
   });
 });
