@@ -8,6 +8,7 @@ import {
   appendEvent,
   appendOverlayEvent,
 } from "@megasaver/stats";
+import { buildOverlayHints } from "./overlay-failures.js";
 import { hashContent, hashPath, loadReadIndex, recordRead } from "./read-index.js";
 import {
   type LoadProjectPermissions,
@@ -230,12 +231,16 @@ export async function runOverlayOutputPipeline(
     return { ok: true, result: unchangedResult(prior.chunkSetId, read.raw) };
   }
 
+  // Failure-aware ranking: prior overlay failure signatures boost any chunk
+  // that references them, mirroring the registry read path.
+  const sessionHints = buildOverlayHints(input.storeRoot, input.workspaceKey, input.liveSessionId);
   const filteredResult = await filterRaw({
     raw: read.raw,
     path: input.path,
     intent: input.intent,
     mode: settings.mode,
     maxReturnedBytes: settings.maxReturnedBytes,
+    sessionHints,
   });
 
   let result: FilterOutputResult = { ...filteredResult };

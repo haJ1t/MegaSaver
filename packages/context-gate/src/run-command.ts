@@ -35,6 +35,7 @@ import {
   resolveEffectiveSettings,
   resolveOverlayEffectiveSettings,
 } from "./read.js";
+import { appendOverlayFailure, buildOverlayHints } from "./overlay-failures.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
 import { buildSessionHints } from "./session-hints.js";
 import { applyShownDedup } from "./shown-index.js";
@@ -434,12 +435,17 @@ export async function runOverlayOutputExecCommand(
     settings.maxReturnedBytes !== undefined
       ? Math.min(settings.maxReturnedBytes, MAX_RETURNED_CEILING)
       : undefined;
+  // Failure-aware ranking: prior overlay-store failure signatures boost any
+  // chunk that references them, mirroring the registry exec path.
+  const sessionHints = buildOverlayHints(input.storeRoot, input.workspaceKey, input.liveSessionId);
   const filtered = await filterOutput({
     raw: outcome.capture.raw,
     intent: input.intent,
     mode: settings.mode,
     ...(maxReturnedBytes !== undefined ? { maxReturnedBytes } : {}),
     source: { kind: "command", command: input.command, args: input.args },
+    sessionHints,
+    engineRanking: true,
   });
 
   const warnings = filtered.warnings ?? [];
@@ -455,10 +461,57 @@ export async function runOverlayOutputExecCommand(
   const now = input.now ?? defaultNow;
   const newId = input.newId ?? defaultNewId;
 
-  const resultWarnings =
-    outcome.capture.terminated !== undefined
-      ? [...warnings, `terminated: ${outcome.capture.terminated}`]
-      : warnings;
+  // Ephemeral failure capture: a non-zero exit or a forced termination appends
+  // an overlay failure record that later feeds failure-aware ranking — the
+  // registry-less mirror of the registry path's SessionFailure capture.
+  const captureWarnings: string[] = [];
+  if (outcome.capture.childExitCode !== 0 || outcome.capture.terminated !== undefined) {
+    // Cap the stored evidence: an overlay failure is an ephemeral per-command
+    // record for failure-aware ranking, not the full transcript (the chunkSet
+    // holds that). 4000 chars bounds each record so a chatty failing command
+    // cannot bloat the overlay failure store. Redact first so raw output
+    // secrets never reach the persisted record.
+    const redactedErrorOutput = redact(outcome.capture.raw.slice(0, 4000)).redacted;
+    // Benign-exit filter: grep/rg/diff/test exit 1 with no output by convention
+    // to signal "no match", not a failure. An evidence-free record contributes
+    // zero signatures to failure-aware ranking — skip the disk noise. Any other
+    // exit code, a termination, or exit 1 WITH output still captures.
+    const benignExit =
+      outcome.capture.childExitCode === 1 &&
+      outcome.capture.terminated === undefined &&
+      redactedErrorOutput.trim() === "";
+    if (!benignExit) {
+      // Best-effort telemetry: an auxiliary write must never break command-output
+      // delivery. On failure we surface a non-fatal warning (§13: no silent
+      // swallow) but never rethrow. Not a silent retry — a genuinely degraded
+      // auxiliary concern.
+      try {
+        appendOverlayFailure(input.storeRoot, input.workspaceKey, input.liveSessionId, {
+          // Redact before persist: the command line is secret-bearing (e.g.
+          // `curl -H "Authorization: Bearer ..."`); reuse the already-redacted
+          // command/args the label was built from so no raw secret hits disk.
+          command: redactedLabel,
+          errorOutput: redactedErrorOutput,
+          source: "proxy-classifier",
+          createdAt: now(),
+        });
+      } catch (err) {
+        captureWarnings.push(`session-failure capture skipped: ${messageOf(err)}`);
+      }
+    }
+  }
+
+  // On a forced termination the partial output is still processed; surface the
+  // cause both as a warning (alongside any redaction warning) and the typed
+  // `terminated` field (§3.5). A skipped failure capture is folded in as a
+  // non-fatal warning so a systemic capture outage is visible, not silent.
+  const resultWarnings = [
+    ...warnings,
+    ...(outcome.capture.terminated !== undefined
+      ? [`terminated: ${outcome.capture.terminated}`]
+      : []),
+    ...captureWarnings,
+  ];
   let result: ExecResult = {
     ...filtered,
     ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),

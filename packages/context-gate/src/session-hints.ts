@@ -12,7 +12,7 @@ interface FailureSource {
 const ERROR_CODE = /\b[A-Z]{1,5}\d{2,5}\b/g;
 const FILE_PATH = /[\w./\\-]*\w+\.[a-zA-Z]{1,5}(?::\d+)?/g;
 const MIN_SIGNATURE_LENGTH = 4;
-const MAX_SIGNATURES_PER_SESSION = 12;
+export const MAX_SIGNATURES_PER_SESSION = 12;
 // Dot-tokens like README.md, example.com, or a.b are prose/hostnames, not
 // actionable failure locations — boosting later chunks on them is noise.
 // Only extensions that name code or config files count as signatures.
