@@ -14,6 +14,8 @@ function registryWithSession(): OrchestratorRegistry {
     getProject: (id) => (id === PROJECT_ID ? { rootPath: PROJECT_ROOT } : null),
     createSessionFailure: (f) => f,
     listSessionFailures: () => [],
+    listMemoryEntries: () => [],
+    listProjectRules: () => [],
   };
 }
 
@@ -22,6 +24,8 @@ const emptyRegistry: OrchestratorRegistry = {
   getProject: () => null,
   createSessionFailure: (f) => f,
   listSessionFailures: () => [],
+  listMemoryEntries: () => [],
+  listProjectRules: () => [],
 };
 
 describe("resolveEffectiveSettings — discriminated result (permissions-yaml §5.1)", () => {

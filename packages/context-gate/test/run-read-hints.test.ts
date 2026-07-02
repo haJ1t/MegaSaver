@@ -31,6 +31,8 @@ function registry(projectRoot: string, failures: SessionFailureRecord[]): Orches
     getProject: (id) => (id === PROJECT_ID ? { rootPath: projectRoot } : null),
     createSessionFailure: (f) => f,
     listSessionFailures: () => failures,
+    listMemoryEntries: () => [],
+    listProjectRules: () => [],
   };
 }
 

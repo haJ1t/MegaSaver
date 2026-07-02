@@ -1,8 +1,11 @@
 import type { SessionHints } from "@megasaver/output-filter";
 import type { ProjectId, SessionId } from "@megasaver/shared";
+import type { MemoryEntryView, ProjectRuleView } from "./registry-port.js";
 
-interface FailureSource {
+interface HintSource {
   listSessionFailures(projectId: ProjectId, sessionId: SessionId): { errorOutput: string }[];
+  listMemoryEntries(projectId: ProjectId): MemoryEntryView[];
+  listProjectRules(projectId: ProjectId): ProjectRuleView[];
 }
 
 // The whole redacted errorOutput blob is far too long to ever appear verbatim
@@ -46,8 +49,10 @@ export function extractFailureSignatures(errorOutput: string): string[] {
   return [...found].slice(0, MAX_SIGNATURES_PER_SESSION);
 }
 
+const MAX_HINT_ITEMS = 12;
+
 export function buildSessionHints(
-  registry: FailureSource,
+  registry: HintSource,
   projectId: ProjectId,
   sessionId: SessionId,
 ): SessionHints {
@@ -56,7 +61,27 @@ export function buildSessionHints(
   for (const f of failures) {
     for (const sig of extractFailureSignatures(f.errorOutput)) signatures.add(sig);
   }
+
+  // relatedFiles/relatedSymbols ONLY — keywords, title, and content are prose
+  // retrieval surfaces; feeding them into the substring-match boost would fire
+  // on generic words instead of concrete code locations. Approval + stale gate
+  // mirrors core's recall predicate (the port deliberately does not carry the
+  // bi-temporal/tier fields core's fuller isRecallable also checks).
+  const memory = new Set<string>();
+  for (const entry of registry.listMemoryEntries(projectId)) {
+    if (entry.approval !== "approved" || entry.stale) continue;
+    for (const file of entry.relatedFiles ?? []) memory.add(file);
+    for (const symbol of entry.relatedSymbols ?? []) memory.add(symbol);
+  }
+
+  const conventions = new Set<string>();
+  for (const rule of registry.listProjectRules(projectId)) {
+    for (const pattern of rule.appliesTo) conventions.add(pattern);
+  }
+
   return {
     recentFailures: [...signatures].slice(0, MAX_SIGNATURES_PER_SESSION),
+    recentMemory: [...memory].slice(0, MAX_HINT_ITEMS),
+    projectConventions: [...conventions].slice(0, MAX_HINT_ITEMS),
   };
 }

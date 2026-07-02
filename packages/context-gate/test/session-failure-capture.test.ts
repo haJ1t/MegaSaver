@@ -52,6 +52,8 @@ function makeFakeRegistry(
       return failure;
     },
     listSessionFailures: () => [...created],
+    listMemoryEntries: () => [],
+    listProjectRules: () => [],
   };
 }
 
