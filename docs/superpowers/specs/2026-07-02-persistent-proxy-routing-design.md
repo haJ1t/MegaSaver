@@ -19,11 +19,14 @@ design_reviews_completed:
   # Both APPROVE_WITH_NOTES; every note incorporated (see artifact addenda).
   - security-reviewer
   - tracer-evidence-loop
-design_reviews_pending_rerun:
-  # Round-2 amendments were authored by the round-1/2 reviewer (Claude Code);
-  # author≠reviewer requires the counter-review of the amended text by Codex
-  # (or another fresh context) before the plan.
-  - counter-review-of-round2-amendments
+counter_review:
+  # Codex was unavailable (out of credits); counter-review performed by fresh
+  # independent Claude subagent contexts across rounds 2-3. Found and fixed a
+  # separate-git-dir BLOCKING the author introduced in round 2, plus 9 more.
+  # Final: fix-verify + plan-readiness APPROVE, consistency CONSISTENT.
+  # Artifact: docs/superpowers/reviews/2026-07-03-round2-round3-counter-review.md
+  status: approved-fresh-context
+  caveat: no independent non-Claude review line ran; re-bless before merge if available
 required_implementation_reviews:
   - code-reviewer
   - critic-implementation
@@ -150,13 +153,16 @@ interface ProxyRouteAdapter {
   inspect(expectedUrl: string): "absent" | "exact" | "foreign" | "invalid";
   apply(expectedUrl: string): void;
   removeExpected(expectedUrl: string): void;
-  ensureHooks(): { configured: boolean; error?: string };
+  ensureHooks(): { configured: boolean; error?: "settings_invalid" | "lock_unverifiable" | "write_failed" };
 }
 ```
 
 `@megasaver/proxy-control` knows no Claude paths or settings shape. The CLI
 supervisor supplies the Claude implementation; a future agent connector can
-supply another adapter without changing the control package.
+supply another adapter without changing the control package. `ensureHooks`
+returns a bounded reason enum, never free text; it is logged internally only and
+never echoed to browser status (status conveys hook health solely through
+`hooksConfigured`).
 
 ## Persistent and runtime state
 
@@ -165,7 +171,6 @@ supply another adapter without changing the control package.
 ```ts
 type ProxyControlErrorCode =
   | "route_conflict"
-  | "route_removed"
   | "settings_invalid"
   | "port_unavailable"
   | "healthcheck_failed"
@@ -220,11 +225,6 @@ type ProxyTransition =
   | (TransitionOwner & {
       kind: "disable";
       phase: "unroute_expected" | "rollback";
-      expectedUnrouted: true;
-    })
-  | (TransitionOwner & {
-      kind: "recover";
-      phase: "route_safety" | "owner_replacement";
       expectedUnrouted: true;
     })
   | (TransitionOwner & {
@@ -388,6 +388,12 @@ stale transition owner that reached any route-affecting phase, recovery makes a
 leased exact route safe and preserves absent, foreign, or unleased values. This
 makes owner death recoverable without a second recovery lock.
 
+Recovery never persists a distinct transition object: there is exactly one
+transition slot, and route-safety-then-resume operates **in place** on the
+retained `enable`/`disable` transition (clearing it, advancing it, or leaving it
+blocked per the recovery matrix). The route-safe step is an action taken while
+holding the locks, not a separate durable `kind`.
+
 Two locks have distinct roles:
 
 - `supervisor.lock` proves one long-lived supervisor. A second supervisor that
@@ -509,10 +515,21 @@ closed is treated as the unavoidable forced residual. Rollback persists the
 enumerated error and returns failure. Desired state stays enabled so status
 reflects the operator's request.
 
-Bootstrap/migration failure before a supervisor becomes reachable restores the
-prior service, clears incomplete leases, sets `desiredEnabled=false`, and
-persists `autostart_failed` in control state. This prevents a failed migration
-from leaving an enabled state that a legacy listener can never satisfy.
+A bootstrap/install operation that fails **synchronously** — the install or
+LaunchAgent bootstrap call returns an error and is observed while the CLI still
+holds `transition.lock`, before Enable step 3 stamps `handoffDeadline` and
+releases the lock — restores the prior service, clears incomplete leases, sets
+`desiredEnabled=false`, and persists `autostart_failed`. Because the durable
+opt-in and the handoff have not yet been published, giving up here strands
+nothing.
+
+This is distinct from the post-handoff case: once step 3 has stamped
+`handoffDeadline` and released the lock, an expired deadline with no
+authenticated supervisor is governed **solely** by recovery-matrix row
+`enable / intent (desired true) or bootstrap pending` — the transition is
+retained, `desiredEnabled` stays true, and it is escapable via `proxy start
+--recover`, `stop`, or a new enable. Post-handoff timeout never auto-sets
+`desiredEnabled=false`; only a synchronous pre-handoff failure does.
 
 ### Supervisor startup and runtime
 
@@ -650,8 +667,6 @@ Startup/recovery handles every non-null transition before normal reconcile:
 | disable / rollback | exact unleased or invalid route state | preserve settings and listener, retain rollback, and report the enumerated conflict/settings error |
 | drain complete / confirmation persisted | explicit confirmation + matching live generation | re-inspect route; exact unleased or invalid blocks and preserves listener, otherwise stop that generation and clear drain/transition |
 | drain complete / confirmation persisted | generation already dead or prior boot | verify route remains absent/foreign, clear drain+transition, never rebind, return idempotent success |
-| recover / route safety | unverifiable owner | make leased exact route safe first and preserve foreign/unleased values, then advance |
-| recover / owner replacement | route safe | quarantine stale locks/runtime and resume from durable desired state |
 
 Every row advances or clears the transition atomically under `transition.lock`.
 No recovery branch converts disabled intent into enable, applies a route during
@@ -811,18 +826,27 @@ capability protocol exists. Hook configuration, invocation, and actual
 compression remain separate signals.
 
 Saver activation inheritance is implementation **1 of 2** and ships first.
-Until its heartbeat registry and compression-event readers exist, proxy status
-returns all saver invocation/compression timestamps and ages as `null` without
-turning proxy readiness red. Persistent routing is implementation **2 of 2** and
-consumes those artifacts only through an optional telemetry reader. The pinned
-contract: the reader consumes `stats/saver-hook-heartbeats.json` (the strict
-`{version:1,latest,workspaces}` schema owned by the saver spec);
-`lastSaverHookInvocationAt` is the registry's global `latest.ts`
-(requested-workspace scoping is saver-status-only), and `lastCompressionAt` is
-the most recent compression-event timestamp across the store's saver events —
-proxy status is global and takes no workspace/session input; per-workspace
-compression evidence is saver-status-only. A missing, unreadable,
-or version-mismatched registry degrades every saver field to `null`.
+Persistent routing is implementation **2 of 2** and consumes the saver artifact
+only through an optional telemetry reader.
+
+The single saver-produced artifact this depends on is
+`stats/saver-hook-heartbeats.json`, whose authoritative strict schema is owned
+by the saver spec (§Shared component and storage):
+`{version:1, latest:{ts,workspaceKey}|null, latestCompression:{ts,workspaceKey}|null, workspaces:Record<WorkspaceKey,ts>}`.
+The pinned contract:
+`lastSaverHookInvocationAt` = the registry's `latest.ts` (or `null` when
+`latest===null`); `lastCompressionAt` = the registry's `latestCompression.ts`
+(or `null`). Proxy status is global and takes no workspace/session input;
+per-workspace scoping of either field is saver-status-only. A missing,
+unreadable, or version-mismatched registry degrades **all four** proxy saver
+fields (`lastSaverHookInvocationAt/AgeMs`, `lastCompressionAt/AgeMs`) to `null`
+without turning proxy readiness red — which is exactly the state before the
+saver slice ships. `*AgeMs` is `now − ts` when the timestamp is present, else
+`null`.
+
+The telemetry reader lives in the CLI/`@megasaver/stats` status-assembly layer,
+NOT in `@megasaver/proxy-control`: proxy-control stays agent-agnostic and
+saver-agnostic, consistent with the agent-agnostic-core rule.
 
 The GUI removes its process-local proxy singleton, startup/shutdown route
 clearing, duplicated settings writer, and `osascript` restart route/button. It
@@ -923,6 +947,16 @@ browser value.
   `disable_failed`; forced termination remains outside this guarantee.
 - Successful unroute does not stop a listener still needed by already-running
   clients; status remains visibly `draining` until explicit confirmation.
+
+Each error that surfaces to status carries a bounded `detail` (the
+`ProxySafeErrorDetail` enum), never free text: `route_conflict` →
+`foreign_route_present`; drift-observed external removal → `route_removed_externally`
+(carried on the `reconcileBlocked` status, not as a code); `settings_invalid` →
+`invalid_settings_shape`; `healthcheck_failed`/`runtime_failed` →
+`listener_unavailable`; `lock_unverifiable` → `ownership_unverified`;
+`disable_failed`/`recovery_failed` → `operation_incomplete`. A Stores-layer test
+asserts each producing path emits its mapped detail; no path emits a null detail
+where the table names one.
 
 ## Testing strategy (TDD)
 

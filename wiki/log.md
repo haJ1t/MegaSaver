@@ -3665,3 +3665,22 @@ fix-verification APPROVE (all round-2 items closed), fresh-eyes found 3
 amendment-introduced contradictions — fixed same session, all reviewer notes
 incorporated. Pending gate: Codex counter-review of the round-2 amendments
 (author≠reviewer), then plans in fixed order (saver first).
+
+## [2026-07-03] review+amend | round-2/3 counter-review by fresh contexts → APPROVE
+
+Codex out of credits; counter-review run by fresh Claude subagent contexts.
+Round-2 (of the migration-cut + dev:ino-flip amendments): 2 BLOCKING + 8 MAJOR
+— notably a separate-git-dir correctness regression the author's own round-2
+"no-commondir→worktree-root" change introduced (main + linked worktree got
+different family keys; caught against real git). Round-3 fixed all 17: revert to
+common-dir keying + foreign_worktree_admin rejection; global latestCompression
+in the heartbeat registry; bootstrap discriminant; recover-kind removed
+(in-place recovery); executable precedence steps 0-4; v1-exact survives corrupt
+.git; family write from a worktree; exact raw-key documented; full heartbeat
+schema; RepositoryFamilyKey validator; ProxySafeErrorDetail mapped; telemetry
+reader in stats/CLI layer. Round-3 verify: fix-verify + plan-readiness APPROVE;
+fresh-eyes found one degraded-git precedence↔failure-handling contradiction →
+fixed → confirmed CONSISTENT. Security + tracer round-2 artifacts stand for the
+round-3 text (consistency/simplification deltas, foreign_worktree_admin a net
+security gain). Artifact: docs/superpowers/reviews/2026-07-03-round2-round3-counter-review.md.
+Both specs plan-ready. Next: write plans (saver 1 of 2, proxy 2 of 2).
