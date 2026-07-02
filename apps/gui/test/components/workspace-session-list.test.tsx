@@ -126,6 +126,39 @@ describe("WorkspaceSessionList", () => {
     expect((row as HTMLElement).style.animationDelay).toBe("0ms");
   });
 
+  it("retry fetches fresh data after an error", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    vi.doMock("../../src/lib/claude-sessions-client.js", () => ({
+      fetchClaudeSessions: () => {
+        calls++;
+        if (calls === 1) return Promise.reject({ error: "boom", code: "internal_error" });
+        return Promise.resolve([
+          meta({ id: "after-retry", title: "After retry", projectLabel: "/tmp/alpha" }),
+        ]);
+      },
+    }));
+    vi.resetModules();
+
+    const { WorkspaceSessionList: WorkspaceSessionListFresh } = await import(
+      "../../src/views/workspace-session-list.js"
+    );
+    render(<WorkspaceSessionListFresh onSelect={() => {}} />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByRole("button", { name: /retry/i })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText("After retry")).toBeDefined();
+
+    vi.useRealTimers();
+  });
+
   it("ignores stale responses from earlier polling ticks", async () => {
     vi.useFakeTimers();
     let firstResolve: (v: ClaudeSessionMeta[]) => void = () => {};
