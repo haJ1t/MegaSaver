@@ -31,3 +31,9 @@ export {
   releaseLock,
   nodeProcessIdentity,
 } from "./locks.js";
+export {
+  type ReconcileAction,
+  type ReconcileObs,
+  type ReconcileDecision,
+  reconcileTransition,
+} from "./reconcile.js";
