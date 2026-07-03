@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ProjectId, SessionId } from "@megasaver/shared";
 import { atomicWriteFile } from "./atomic-write.js";
@@ -9,7 +9,7 @@ import {
   overlayTokenSaverEventSchema,
   tokenSaverEventSchema,
 } from "./event.js";
-import { assertSafeSegment } from "./safe-segment.js";
+import { assertSafeSegment, isSafeSegment } from "./safe-segment.js";
 import {
   type OverlaySessionTokenSaverStats,
   type SessionTokenSaverStats,
@@ -241,6 +241,42 @@ export function readOverlaySummary(
   liveSessionId: string,
 ): OverlaySessionTokenSaverStats | null {
   return loadOverlaySummary(overlaySummaryPath(store, workspaceKey, liveSessionId));
+}
+
+// A CLI command receives only a liveSessionId (never a workspaceKey), so to
+// resolve an overlay summary it must scan every workspace under stats/. Best-
+// effort: a missing stats/ dir or a corrupt per-workspace file is skipped, not
+// fatal. Returns the lexicographically-smallest workspaceKey match for a
+// deterministic result when the same id somehow appears in two workspaces.
+export function readOverlaySummaryAnyWorkspace(
+  store: StatsStore,
+  liveSessionId: string,
+): { workspaceKey: string; summary: OverlaySessionTokenSaverStats } | null {
+  let entries: string[];
+  try {
+    entries = readdirSync(join(store.root, "stats"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return null;
+  }
+
+  for (const workspaceKey of entries) {
+    if (!isSafeSegment(workspaceKey)) {
+      continue;
+    }
+    let summary: OverlaySessionTokenSaverStats | null;
+    try {
+      summary = readOverlaySummary(store, workspaceKey, liveSessionId);
+    } catch {
+      continue;
+    }
+    if (summary) {
+      return { workspaceKey, summary };
+    }
+  }
+  return null;
 }
 
 export function readOverlayEvents(
