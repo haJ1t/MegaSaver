@@ -82,3 +82,4 @@ scripts/launch-megasaver.sh
 .github/workflows/coverage.yml
 packages/agent-office/test/supervisor-permission-edge.test.ts
 packages/context-pruner/test/score-edge.test.ts
+.superpowers/
