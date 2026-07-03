@@ -59,7 +59,7 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
   return (
     <section
       aria-label="Session token saver"
-      className="flex flex-col gap-6 px-6 py-6 overflow-y-auto flex-1 min-h-0"
+      className="flex flex-col gap-6 py-6 overflow-y-auto flex-1 min-h-0"
     >
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold tracking-tight text-text-primary">Token saver</h2>
