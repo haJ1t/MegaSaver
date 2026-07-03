@@ -1,114 +1,130 @@
-import { randomUUID } from "node:crypto";
+import { basename, dirname } from "node:path";
 import {
-  closeSync,
-  existsSync,
-  fsyncSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, join } from "node:path";
+  canonicalFamilyPath,
+  familyKeyFromPath,
+  nodeResolverDeps,
+  readExactRecord,
+  readFamilyRecord,
+  withActivationLock,
+  writeExactRecord,
+  writeFamilyRecord,
+} from "@megasaver/context-gate";
 import { type TokenSaverMode, encodeWorkspaceKey, tokenSaverModeSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
-import { z } from "zod";
 import { invalidModeMessage, mapErrorToCliMessage } from "../../../errors.js";
 import { type ResolveStorePathInput, readStoreEnv, resolveStorePath } from "../../../store.js";
 
 const DEFAULT_MODE: TokenSaverMode = "balanced";
 
-// EXACT shape the PostToolUse saver hook reads (apps/cli/src/hooks/saver-run.ts).
-const settingsSchema = z.object({ enabled: z.boolean(), mode: tokenSaverModeSchema });
-type WorkspaceSaverSettings = z.infer<typeof settingsSchema>;
-
 export type RunSessionSaverWorkspaceEnableInput = ResolveStorePathInput & {
   modeFlag: string | undefined;
+  exact: boolean;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json?: boolean;
 };
 
 export type RunSessionSaverWorkspaceDisableInput = ResolveStorePathInput & {
+  exact: boolean;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json?: boolean;
 };
 
-function settingsFilePath(rootDir: string, cwd: string): { path: string; workspaceKey: string } {
-  const workspaceKey = encodeWorkspaceKey(cwd);
-  return { workspaceKey, path: join(rootDir, "stats", workspaceKey, "workspace-token-saver.json") };
-}
+type Scope =
+  | { kind: "repository"; key: string; identityDigest: string; identityPath: string; root: string }
+  | { kind: "exact"; workspaceKey: string };
 
-function readWorkspaceSaverSettings(path: string): WorkspaceSaverSettings | null {
-  if (!existsSync(path)) return null;
-  try {
-    const parsed = settingsSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
-
-// Temp-file-plus-rename so a concurrent saver-hook read never sees a partial
-// file. Mirrors the durability dance in @megasaver/core's json-directory store,
-// kept local because that helper is not part of core's public surface.
-function atomicWriteJson(path: string, value: WorkspaceSaverSettings): void {
-  const parentDir = dirname(path);
-  mkdirSync(parentDir, { recursive: true });
-  const tempPath = join(parentDir, `.${randomUUID()}.tmp`);
-  try {
-    writeFileSync(tempPath, JSON.stringify(value));
-    const tempFd = openSync(tempPath, "r+");
-    try {
-      fsyncSync(tempFd);
-    } finally {
-      closeSync(tempFd);
+// A cwd inside a Git repo (main root OR linked worktree) defaults to the family
+// scope so all worktrees inherit it; --exact and non-Git cwds write an exact
+// record. Mirrors the resolver so writes and reads agree.
+function resolveScope(cwd: string, forceExact: boolean): Scope {
+  if (!forceExact) {
+    const deps = nodeResolverDeps();
+    const git = deps.resolveGit(cwd);
+    if (git.kind === "ok") {
+      const canon = canonicalFamilyPath(git.commonDir, deps.platform, {
+        realpathNative: deps.realpath,
+        caseMode: deps.caseModeOf,
+      });
+      const fk = familyKeyFromPath(deps.platform, canon.caseMode, canon.canonicalPath);
+      const root = basename(git.commonDir) === ".git" ? dirname(git.commonDir) : git.commonDir;
+      return {
+        kind: "repository",
+        key: fk.key,
+        identityDigest: fk.digestHex,
+        identityPath: fk.identityPath,
+        root,
+      };
     }
-    renameSync(tempPath, path);
-    if (process.platform !== "win32") {
-      const dirFd = openSync(parentDir, "r");
-      try {
-        fsyncSync(dirFd);
-      } finally {
-        closeSync(dirFd);
-      }
-    }
-  } catch (err) {
-    rmSync(tempPath, { force: true });
-    throw err;
   }
+  return { kind: "exact", workspaceKey: encodeWorkspaceKey(cwd) };
 }
 
 function emit(
   input: { stdout: (line: string) => void; json?: boolean },
-  workspaceKey: string,
-  path: string,
-  settings: WorkspaceSaverSettings,
+  scope: Scope,
+  enabled: boolean,
+  mode: TokenSaverMode,
 ): void {
   if (input.json) {
-    input.stdout(JSON.stringify({ workspaceKey, path, ...settings }));
+    const base = { enabled, mode, scope: scope.kind };
+    input.stdout(
+      JSON.stringify(
+        scope.kind === "repository"
+          ? { ...base, repositoryFamilyKey: scope.key, root: scope.root }
+          : { ...base, workspaceKey: scope.workspaceKey },
+      ),
+    );
     return;
   }
-  input.stdout(
-    `Mega Saver Mode ${settings.enabled ? "enabled" : "disabled"} for workspace ${workspaceKey} (${settings.mode})`,
-  );
-  input.stdout(`  store: ${path}`);
+  const coverage =
+    scope.kind === "repository"
+      ? `repository family (covers all worktrees of ${scope.root})`
+      : "this workspace only";
+  input.stdout(`Mega Saver Mode ${enabled ? "enabled" : "disabled"} — ${coverage} (${mode})`);
+}
+
+function currentMode(store: string, scope: Scope, fallback: TokenSaverMode): TokenSaverMode {
+  if (scope.kind === "repository") {
+    const rec = readFamilyRecord(store, scope.key, scope.identityDigest);
+    return rec !== null && rec !== "invalid" ? rec.mode : fallback;
+  }
+  const rec = readExactRecord(store, scope.workspaceKey);
+  return rec.kind === "v1-exact" || rec.kind === "legacy" ? rec.mode : fallback;
+}
+
+function writeActivation(
+  store: string,
+  scope: Scope,
+  enabled: boolean,
+  mode: TokenSaverMode,
+): void {
+  withActivationLock(store, () => {
+    if (scope.kind === "repository") {
+      writeFamilyRecord(store, scope.key, {
+        enabled,
+        mode,
+        identityDigest: scope.identityDigest,
+        identityPath: scope.identityPath,
+      });
+    } else {
+      writeExactRecord(store, scope.workspaceKey, { enabled, mode, scope: "exact" });
+    }
+  });
 }
 
 export async function runSessionSaverWorkspaceEnable(
   input: RunSessionSaverWorkspaceEnableInput,
 ): Promise<0 | 1> {
-  let rootDir: string;
+  let store: string;
   try {
-    rootDir = resolveStorePath(input);
+    store = resolveStorePath(input);
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
     input.stderr(cli.message);
     return cli.exitCode;
   }
-
   let mode: TokenSaverMode = DEFAULT_MODE;
   if (input.modeFlag !== undefined) {
     const parsed = tokenSaverModeSchema.safeParse(input.modeFlag);
@@ -119,65 +135,68 @@ export async function runSessionSaverWorkspaceEnable(
     }
     mode = parsed.data;
   }
-
-  const { workspaceKey, path } = settingsFilePath(rootDir, input.cwd);
-  const settings: WorkspaceSaverSettings = { enabled: true, mode };
+  const scope = resolveScope(input.cwd, input.exact);
   try {
-    atomicWriteJson(path, settings);
+    writeActivation(store, scope, true, mode);
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
     input.stderr(cli.message);
     return cli.exitCode;
   }
-  emit(input, workspaceKey, path, settings);
+  emit(input, scope, true, mode);
   return 0;
 }
 
 export async function runSessionSaverWorkspaceDisable(
   input: RunSessionSaverWorkspaceDisableInput,
 ): Promise<0 | 1> {
-  let rootDir: string;
+  let store: string;
   try {
-    rootDir = resolveStorePath(input);
+    store = resolveStorePath(input);
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
     input.stderr(cli.message);
     return cli.exitCode;
   }
-
-  const { workspaceKey, path } = settingsFilePath(rootDir, input.cwd);
-  const existing = readWorkspaceSaverSettings(path);
-  const settings: WorkspaceSaverSettings = {
-    enabled: false,
-    mode: existing?.mode ?? DEFAULT_MODE,
-  };
+  const scope = resolveScope(input.cwd, input.exact);
+  const mode = currentMode(store, scope, DEFAULT_MODE);
   try {
-    atomicWriteJson(path, settings);
+    writeActivation(store, scope, false, mode);
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "store" });
     input.stderr(cli.message);
     return cli.exitCode;
   }
-  emit(input, workspaceKey, path, settings);
+  emit(input, scope, false, mode);
   return 0;
 }
+
+const modeArg = {
+  type: "string" as const,
+  description: `Token-saver mode (${tokenSaverModeSchema.options.join(" | ")}). Default ${DEFAULT_MODE}.`,
+};
+const exactArg = {
+  type: "boolean" as const,
+  default: false,
+  description: "Write a this-checkout-only record instead of the repository family.",
+};
 
 export const sessionSaverWorkspaceEnableCommand = defineCommand({
   meta: {
     name: "enable",
-    description: "Enable Mega Saver Mode for the current workspace (writes the saver gate file).",
+    description:
+      "Enable Mega Saver Mode. In a Git repo this activates the whole family (all worktrees); use --exact for this checkout only.",
   },
   args: {
-    mode: {
-      type: "string",
-      description: `Token-saver mode (${tokenSaverModeSchema.options.join(" | ")}). Default ${DEFAULT_MODE}.`,
-    },
+    mode: modeArg,
+    exact: exactArg,
     store: { type: "string", description: "Override store directory." },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const code = await runSessionSaverWorkspaceEnable({
       modeFlag: typeof args.mode === "string" ? args.mode : undefined,
+      exact: !!args.exact,
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
@@ -190,14 +209,17 @@ export const sessionSaverWorkspaceEnableCommand = defineCommand({
 export const sessionSaverWorkspaceDisableCommand = defineCommand({
   meta: {
     name: "disable",
-    description: "Disable Mega Saver Mode for the current workspace (keeps the saver gate file).",
+    description:
+      "Disable Mega Saver Mode. In a Git repo this disables the whole family; use --exact for this checkout only.",
   },
   args: {
+    exact: exactArg,
     store: { type: "string", description: "Override store directory." },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const code = await runSessionSaverWorkspaceDisable({
+      exact: !!args.exact,
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
@@ -208,7 +230,10 @@ export const sessionSaverWorkspaceDisableCommand = defineCommand({
 });
 
 export const sessionSaverWorkspaceCommand = defineCommand({
-  meta: { name: "workspace", description: "Manage Mega Saver Mode for the current workspace." },
+  meta: {
+    name: "workspace",
+    description: "Manage Mega Saver Mode for the current repository/workspace.",
+  },
   subCommands: {
     enable: sessionSaverWorkspaceEnableCommand,
     disable: sessionSaverWorkspaceDisableCommand,

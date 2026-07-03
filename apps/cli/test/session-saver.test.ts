@@ -674,7 +674,15 @@ describe("session saver commands", () => {
 describe("sessionSaverCommand wiring", () => {
   it("exposes the saver subcommands", () => {
     const sub = sessionSaverCommand.subCommands as Record<string, unknown>;
-    expect(Object.keys(sub).sort()).toEqual(["disable", "enable", "stats", "status", "workspace"]);
+    expect(Object.keys(sub).sort()).toEqual([
+      "default",
+      "disable",
+      "enable",
+      "resolve",
+      "stats",
+      "status",
+      "workspace",
+    ]);
   });
 });
 
