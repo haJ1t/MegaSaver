@@ -1,10 +1,9 @@
 import { proxyStatus, startProxy, stopProxy } from "../proxy-control.js";
-import { restartClaude } from "../restart-claude.js";
 import type { RouteContext } from "../route-context.js";
 import { readJsonBody } from "./_body.js";
 
 export async function handleProxyStatus(ctx: RouteContext): Promise<void> {
-  ctx.sendJson(ctx.res, 200, proxyStatus(), ctx.origin);
+  ctx.sendJson(ctx.res, 200, proxyStatus(ctx.storeRoot), ctx.origin);
 }
 
 export async function handleProxySet(ctx: RouteContext): Promise<void> {
@@ -20,16 +19,8 @@ export async function handleProxySet(ctx: RouteContext): Promise<void> {
     ctx.sendError(ctx.res, 400, "validation_failed", "Expected { enabled: boolean }.", ctx.origin);
     return;
   }
-  const status = enabled ? await startProxy(ctx.storeRoot) : await stopProxy();
+  // The persistent supervisor owns routing; the toggle only persists desired
+  // state. The operator restarts Claude manually when convenient (no osascript).
+  const status = enabled ? startProxy(ctx.storeRoot) : stopProxy(ctx.storeRoot);
   ctx.sendJson(ctx.res, 200, status, ctx.origin);
-}
-
-export async function handleProxyRestartClaude(ctx: RouteContext): Promise<void> {
-  const { running, url } = proxyStatus();
-  if (!running || !url) {
-    ctx.sendError(ctx.res, 409, "validation_failed", "Proxy is not running.", ctx.origin);
-    return;
-  }
-  restartClaude(url);
-  ctx.sendJson(ctx.res, 202, { restarting: true }, ctx.origin);
 }

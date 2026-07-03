@@ -53,7 +53,7 @@ import {
   handleTranscriptStream,
 } from "./routes/office.js";
 import { handleListProjects } from "./routes/projects.js";
-import { handleProxyRestartClaude, handleProxySet, handleProxyStatus } from "./routes/proxy.js";
+import { handleProxySet, handleProxyStatus } from "./routes/proxy.js";
 import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
 import { resolveWorkspace } from "./workspace-resolver.js";
@@ -231,12 +231,6 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         return;
       }
       return methodNotAllowed(res, method, origin);
-    }
-
-    if (path === "/api/proxy/restart-claude") {
-      if (method !== "POST") return methodNotAllowed(res, method, origin);
-      await handleProxyRestartClaude(ctx);
-      return;
     }
 
     if (path === "/api/daemon") {
