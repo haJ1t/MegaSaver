@@ -6,9 +6,12 @@ import {
 } from "@megasaver/connector-claude-code";
 import {
   type LaunchctlRunner,
+  type ProcessIdentityAdapter,
   ensureManagedService,
   nodeLaunchctlRunner,
+  nodeProcessIdentity,
   readControlState,
+  withTransitionLock,
   writeControlState,
 } from "@megasaver/proxy-control";
 
@@ -27,6 +30,9 @@ export type ProxyGuiDeps = {
   backupDir: string;
   superviseArgv: string[];
   settingsPath: string;
+  // Optional so tests can pin time/identity and avoid shelling out for the lock.
+  now?: () => number;
+  identity?: ProcessIdentityAdapter;
 };
 
 export function defaultProxyGuiDeps(storeRoot: string): ProxyGuiDeps {
@@ -63,6 +69,19 @@ export function proxyStatus(
   };
 }
 
+function guiTransitionOwner(startedAt: string) {
+  return {
+    id: "gui",
+    ownerKind: "offline_cli" as const,
+    ownerInstanceId: "gui",
+    ownerProcessStartToken: "gui",
+    ownerBootId: "gui",
+    ownerFenceToken: "gui",
+    handoffDeadline: null,
+    startedAt,
+  };
+}
+
 export function startProxy(
   storeRoot: string,
   deps: ProxyGuiDeps = defaultProxyGuiDeps(storeRoot),
@@ -76,12 +95,30 @@ export function startProxy(
   if (service.status === "legacy_service_present")
     return { ...proxyStatus(storeRoot, deps), error: "legacy_service_present" };
   if (service.status === "blocked") return { ...proxyStatus(storeRoot, deps), error: "blocked" };
-  const control = readControlState(storeRoot);
-  writeControlState(storeRoot, {
-    ...control,
-    desiredEnabled: true,
-    updatedAt: new Date().toISOString(),
-  });
+  const now = deps.now?.() ?? Date.now();
+  const locked = withTransitionLock(
+    storeRoot,
+    now,
+    "start",
+    () => {
+      const control = readControlState(storeRoot);
+      const nowIso = new Date(now).toISOString();
+      writeControlState(storeRoot, {
+        ...control,
+        desiredEnabled: true,
+        transition: {
+          ...guiTransitionOwner(nowIso),
+          kind: "enable",
+          phase: "intent_persisted",
+          expectedUnrouted: false,
+        },
+        updatedAt: nowIso,
+      });
+    },
+    deps.identity ?? nodeProcessIdentity,
+  );
+  if (locked.status === "locked")
+    return { ...proxyStatus(storeRoot, deps), error: "transition_in_progress" };
   return proxyStatus(storeRoot, deps);
 }
 
@@ -89,25 +126,29 @@ export function stopProxy(
   storeRoot: string,
   deps: ProxyGuiDeps = defaultProxyGuiDeps(storeRoot),
 ): ProxyStatus {
-  const control = readControlState(storeRoot);
-  const nowIso = new Date().toISOString();
-  writeControlState(storeRoot, {
-    ...control,
-    desiredEnabled: false,
-    transition: {
-      id: "gui-stop",
-      ownerKind: "offline_cli",
-      ownerInstanceId: "gui",
-      ownerProcessStartToken: "gui",
-      ownerBootId: "gui",
-      ownerFenceToken: "gui",
-      handoffDeadline: null,
-      startedAt: nowIso,
-      kind: "disable",
-      phase: "unroute_expected",
-      expectedUnrouted: true,
+  const now = deps.now?.() ?? Date.now();
+  const locked = withTransitionLock(
+    storeRoot,
+    now,
+    "stop",
+    () => {
+      const control = readControlState(storeRoot);
+      const nowIso = new Date(now).toISOString();
+      writeControlState(storeRoot, {
+        ...control,
+        desiredEnabled: false,
+        transition: {
+          ...guiTransitionOwner(nowIso),
+          kind: "disable",
+          phase: "unroute_expected",
+          expectedUnrouted: true,
+        },
+        updatedAt: nowIso,
+      });
     },
-    updatedAt: nowIso,
-  });
+    deps.identity ?? nodeProcessIdentity,
+  );
+  if (locked.status === "locked")
+    return { ...proxyStatus(storeRoot, deps), error: "transition_in_progress" };
   return proxyStatus(storeRoot, deps);
 }

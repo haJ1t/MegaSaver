@@ -49,6 +49,11 @@ export const proxyStartCommand = defineCommand({
   args: { ...storeArg },
   run({ args }) {
     const r = runProxyStart(realDeps(typeof args.store === "string" ? args.store : undefined));
+    if (r.status === "transition_in_progress") {
+      console.error("mega proxy: a proxy transition is already in progress; retry shortly.");
+      process.exitCode = 1;
+      return;
+    }
     if (r.status === "legacy_service_present") {
       console.error(r.instruction);
       process.exitCode = 1;
@@ -70,7 +75,12 @@ export const proxyStopCommand = defineCommand({
   },
   args: { ...storeArg },
   run({ args }) {
-    runProxyStop(realDeps(typeof args.store === "string" ? args.store : undefined));
+    const r = runProxyStop(realDeps(typeof args.store === "string" ? args.store : undefined));
+    if (r.status === "transition_in_progress") {
+      console.error("mega proxy: a proxy transition is already in progress; retry shortly.");
+      process.exitCode = 1;
+      return;
+    }
     console.log("mega proxy: disabled future routing; already-running clients keep draining.");
   },
 });

@@ -1,7 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  fsyncSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
-import { installClaudeCodeHook } from "./hook-settings.js";
+import { installClaudeCodeHook, readClaudeCodeHookStatus } from "./hook-settings.js";
 
 export type RouteInspection = "absent" | "exact" | "foreign" | "invalid";
 export type EnsureHooksError = "settings_invalid" | "lock_unverifiable" | "write_failed";
@@ -15,6 +26,9 @@ export type ClaudeRouteAdapter = {
   apply(expectedUrl: string): void;
   removeExpected(expectedUrl: string): void;
   ensureHooks(): { configured: boolean; error?: EnsureHooksError };
+  // Read-only: reports whether the saver hooks are installed WITHOUT mutating
+  // settings — the status/read path must never install anything.
+  inspectHooks(): boolean;
 };
 
 // ANTHROPIC_BASE_URL is a NAMED field (not an index-signature access) so strict
@@ -42,19 +56,43 @@ function readSettings(path: string): Settings | "absent" | "invalid" {
 }
 
 function writeSettings(path: string, settings: Settings): void {
-  // Refuse to replace a symlink — never follow it out of the settings dir.
+  // Refuse to replace a symlink — never follow it out of the settings dir. Also
+  // capture the existing file's mode so a surgical route edit preserves the
+  // operator's chosen permissions instead of silently reverting to a default.
+  let existingMode: number | undefined;
   try {
-    if (lstatSync(path).isSymbolicLink()) throw new Error("refusing symlinked settings");
+    const st = lstatSync(path);
+    if (st.isSymbolicLink()) throw new Error("refusing symlinked settings");
+    existingMode = st.mode & 0o777;
   } catch (e) {
     if (e instanceof Error && e.message.startsWith("refusing")) throw e;
-    // ENOENT is fine — creating a fresh file.
+    // ENOENT is fine — creating a fresh file (conservative 0600 below).
   }
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true });
   const tmp = join(dir, `.${randomUUID()}.tmp`);
+  const mode = existingMode ?? 0o600;
   try {
-    writeFileSync(tmp, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+    // fsync the tmp file AND the directory before/after the rename so a crash
+    // mid-write can never leave ~/.claude/settings.json truncated or the rename
+    // un-journaled — this is the operator's live agent config.
+    writeFileSync(tmp, `${JSON.stringify(settings, null, 2)}\n`, { mode });
+    chmodSync(tmp, mode);
+    const fd = openSync(tmp, "r+");
+    try {
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
     renameSync(tmp, path);
+    if (process.platform !== "win32") {
+      const dfd = openSync(dir, "r");
+      try {
+        fsyncSync(dfd);
+      } finally {
+        closeSync(dfd);
+      }
+    }
   } catch (error) {
     rmSync(tmp, { force: true });
     throw error;
@@ -95,6 +133,9 @@ export function createClaudeRouteAdapter(settingsPath: string): ClaudeRouteAdapt
       } catch {
         return { configured: false, error: "write_failed" };
       }
+    },
+    inspectHooks() {
+      return readClaudeCodeHookStatus({ settingsPath }).connected;
     },
   };
 }

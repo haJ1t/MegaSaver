@@ -90,6 +90,23 @@ export function tryAcquireLock(
     // Another contender already moved/removed it — retry the create.
     return create(path, owner);
   }
+  // TOCTOU guard: between our staleness read and the rename, a LIVE owner could
+  // have re-acquired the lock — we must not steal it. Re-judge the content we
+  // actually moved; if it is live, restore it and back off. Only a genuinely
+  // stale/corrupt moved owner is safe to reclaim.
+  const moved = readLockOwner(quarantined);
+  if (moved !== null && !isOwnerStale(moved, now, identity)) {
+    try {
+      renameSync(quarantined, path);
+    } catch {
+      try {
+        rmSync(quarantined, { force: true });
+      } catch {
+        /* best-effort */
+      }
+    }
+    return false;
+  }
   try {
     rmSync(quarantined, { force: true });
   } catch {

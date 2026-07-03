@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ProxyControlState, ProxyTransition } from "../src/state.js";
 import { readControlState, writeControlState } from "../src/stores.js";
 import type { RouteAdapter } from "../src/supervisor.js";
-import { monitorTick, observeReality, runStartupRecovery } from "../src/supervisor.js";
+import {
+  monitorTick,
+  observeReality,
+  runStartupRecovery,
+  superviseDrive,
+} from "../src/supervisor.js";
 
 let store: string;
 beforeEach(() => {
@@ -33,6 +38,28 @@ function fakeRoute(initial: string | null): RouteAdapter & { value: string | nul
     },
     removeExpected(expected) {
       if (state.value === expected) state.value = null;
+    },
+  };
+}
+
+// A route whose apply()/removeExpected() SILENTLY do nothing — models a lost
+// write. inspect() keeps reporting the pre-mutation value so verify_route can
+// catch the discrepancy.
+function brokenRoute(initial: string | null): RouteAdapter & { value: string | null } {
+  const state = { value: initial };
+  return {
+    get value() {
+      return state.value;
+    },
+    inspect(expected) {
+      if (state.value === null) return "absent";
+      return state.value === expected ? "exact" : "foreign";
+    },
+    apply() {
+      /* write silently fails */
+    },
+    removeExpected() {
+      /* removal silently fails */
     },
   };
 }
@@ -172,6 +199,56 @@ describe("runStartupRecovery — applies the matrix to real state", () => {
     writeControlState(store, control({ transition: null }));
     runStartupRecovery(deps(route, fakeListener(true, "matching")));
     expect(route.value).toBe("http://127.0.0.1:9999");
+  });
+});
+
+describe("superviseDrive — the live supervisor drives enable to a routed fixpoint", () => {
+  it("intent_persisted + healthy listener + absent route → applies route, active lease, cleared", () => {
+    const route = fakeRoute(null);
+    writeControlState(store, control({ transition: enableT("intent_persisted") }));
+    const r = superviseDrive(deps(route, fakeListener(true, "matching")));
+    expect(r.ready).toBe(true);
+    const s = readControlState(store);
+    expect(route.value).toBe(OWNED); // route actually applied — the whole point
+    expect(s.transition).toBeNull();
+    expect(s.routeLease?.phase).toBe("active");
+  });
+
+  it("intent_persisted but listener not yet healthy → does NOT route or advance", () => {
+    const route = fakeRoute(null);
+    writeControlState(store, control({ transition: enableT("intent_persisted") }));
+    superviseDrive(deps(route, fakeListener(true, "none")));
+    const s = readControlState(store);
+    expect(route.value).toBeNull(); // never routed on an unverified listener
+    expect(s.transition?.kind).toBe("enable");
+  });
+
+  it("foreign route present at enable → never overwrites it, blocks route_conflict", () => {
+    const route = fakeRoute("http://127.0.0.1:9999");
+    writeControlState(store, control({ transition: enableT("intent_persisted") }));
+    superviseDrive(deps(route, fakeListener(true, "matching")));
+    const s = readControlState(store);
+    expect(route.value).toBe("http://127.0.0.1:9999"); // foreign preserved
+    expect(s.reconcileBlocked?.reason).toBe("route_conflict");
+  });
+});
+
+describe("verify_route read-back — a lost write is caught, not reported as done", () => {
+  it("apply that does not stick → transition retained, lease not promoted, blocked", () => {
+    const route = brokenRoute(null); // apply() is a no-op → stays absent
+    writeControlState(
+      store,
+      control({
+        transition: enableT("lease_installing"),
+        routeLease: { url: OWNED, instanceId: "inst", phase: "installing", installedAt: "x" },
+      }),
+    );
+    const r = runStartupRecovery(deps(route, fakeListener(true, "matching")));
+    expect(r.ready).toBe(false); // NOT ready — verify failed
+    const s = readControlState(store);
+    expect(s.transition).not.toBeNull(); // retained for retry, not cleared
+    expect(s.routeLease?.phase).toBe("installing"); // never promoted to active
+    expect(s.reconcileBlocked?.reason).toBe("route_removed");
   });
 });
 

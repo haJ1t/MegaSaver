@@ -47,6 +47,7 @@ function fakeRoute(initial: string | null) {
       if (s.value === u) s.value = null;
     },
     ensureHooks: () => ({ configured: true as const }),
+    inspectHooks: () => true,
   };
 }
 

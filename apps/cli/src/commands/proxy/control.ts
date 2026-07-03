@@ -1,10 +1,13 @@
 import {
   type EnsureServiceResult,
   type LaunchctlRunner,
+  type ProcessIdentityAdapter,
   type UninstallResult,
   ensureManagedService,
+  nodeProcessIdentity,
   readControlState,
   uninstallManagedService,
+  withTransitionLock,
   writeControlState,
 } from "@megasaver/proxy-control";
 import { readSaverTelemetry } from "./saver-telemetry.js";
@@ -17,6 +20,7 @@ export type RouteSurface = {
   apply(url: string): void;
   removeExpected(url: string): void;
   ensureHooks(): { configured: boolean; error?: string };
+  inspectHooks(): boolean;
 };
 
 export type ProxyControlPlaneDeps = {
@@ -28,6 +32,8 @@ export type ProxyControlPlaneDeps = {
   superviseArgv: string[];
   ownedUrl: string;
   now: () => number;
+  // Injected so tests don't shell out to ps/sysctl for the transition lock.
+  identity?: ProcessIdentityAdapter;
 };
 
 function launchAgentDeps(deps: ProxyControlPlaneDeps) {
@@ -39,44 +45,83 @@ function launchAgentDeps(deps: ProxyControlPlaneDeps) {
   };
 }
 
-// `mega proxy start`: persist the operator's durable opt-in and ensure the
-// supervisor LaunchAgent. A loaded legacy service is refused (never stopped); the
-// supervisor completes the routing once it comes up.
-export function runProxyStart(deps: ProxyControlPlaneDeps): EnsureServiceResult {
-  const control = readControlState(deps.storeRoot);
+export type StartResult = EnsureServiceResult | { status: "transition_in_progress" };
+export type StopResult = { status: "ok" } | { status: "transition_in_progress" };
+
+// `mega proxy start`: persist the operator's durable opt-in + a fresh enable
+// intent and ensure the supervisor LaunchAgent. A loaded legacy service is
+// refused (never stopped). The control write is serialized under the transition
+// lock so it can neither race a concurrent writer nor clobber an in-flight
+// transition the supervisor is actively reconciling.
+export function runProxyStart(deps: ProxyControlPlaneDeps): StartResult {
   const service = ensureManagedService(launchAgentDeps(deps));
   if (service.status === "legacy_service_present" || service.status === "blocked") return service;
-  writeControlState(deps.storeRoot, {
-    ...control,
-    desiredEnabled: true,
-    updatedAt: new Date(deps.now()).toISOString(),
-  });
-  return service;
+  const locked = withTransitionLock(
+    deps.storeRoot,
+    deps.now(),
+    "start",
+    () => {
+      const control = readControlState(deps.storeRoot);
+      const nowIso = new Date(deps.now()).toISOString();
+      writeControlState(deps.storeRoot, {
+        ...control,
+        desiredEnabled: true,
+        transition: {
+          ...cliTransitionOwner(nowIso),
+          kind: "enable",
+          phase: "intent_persisted",
+          expectedUnrouted: false,
+        },
+        updatedAt: nowIso,
+      });
+    },
+    deps.identity ?? nodeProcessIdentity,
+  );
+  return locked.status === "locked" ? { status: "transition_in_progress" } : service;
 }
 
 // `mega proxy stop`: disable future routing and enter drain. Persists the disable
-// transition; the supervisor performs the value-guarded unroute + drain.
-export function runProxyStop(deps: ProxyControlPlaneDeps): void {
-  const control = readControlState(deps.storeRoot);
-  const nowIso = new Date(deps.now()).toISOString();
-  writeControlState(deps.storeRoot, {
-    ...control,
-    desiredEnabled: false,
-    transition: {
-      id: "stop",
-      ownerKind: "offline_cli",
-      ownerInstanceId: "cli",
-      ownerProcessStartToken: "cli",
-      ownerBootId: "cli",
-      ownerFenceToken: "cli",
-      handoffDeadline: null,
-      startedAt: nowIso,
-      kind: "disable",
-      phase: "unroute_expected",
-      expectedUnrouted: true,
+// transition under the transition lock; the supervisor performs the value-guarded
+// unroute + drain.
+export function runProxyStop(deps: ProxyControlPlaneDeps): StopResult {
+  const locked = withTransitionLock(
+    deps.storeRoot,
+    deps.now(),
+    "stop",
+    () => {
+      const control = readControlState(deps.storeRoot);
+      const nowIso = new Date(deps.now()).toISOString();
+      writeControlState(deps.storeRoot, {
+        ...control,
+        desiredEnabled: false,
+        transition: {
+          ...cliTransitionOwner(nowIso),
+          kind: "disable",
+          phase: "unroute_expected",
+          expectedUnrouted: true,
+        },
+        updatedAt: nowIso,
+      });
     },
-    updatedAt: nowIso,
-  });
+    deps.identity ?? nodeProcessIdentity,
+  );
+  return locked.status === "locked" ? { status: "transition_in_progress" } : { status: "ok" };
+}
+
+// The transition RECORD owner fields are sentinels: the real single-writer
+// guarantee comes from the transition.lock (fenced, process-identity based), not
+// from these fields.
+function cliTransitionOwner(startedAt: string) {
+  return {
+    id: "cli",
+    ownerKind: "offline_cli" as const,
+    ownerInstanceId: "cli",
+    ownerProcessStartToken: "cli",
+    ownerBootId: "cli",
+    ownerFenceToken: "cli",
+    handoffDeadline: null,
+    startedAt,
+  };
 }
 
 export type ProxyActivationStatus = {
@@ -109,7 +154,7 @@ export function runProxyStatus(deps: ProxyControlPlaneDeps): ProxyActivationStat
     routeConflict: route === "foreign",
     reconcileBlocked: control.reconcileBlocked !== null,
     draining: control.drainingGeneration !== null,
-    hooksConfigured: deps.route.ensureHooks().configured,
+    hooksConfigured: deps.route.inspectHooks(),
     customUpstream: control.upstreamBaseUrl !== DEFAULT_UPSTREAM,
     autostart: job !== null ? "running" : "missing",
     routeCapability: "settings-configured",

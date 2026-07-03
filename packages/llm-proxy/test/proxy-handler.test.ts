@@ -85,6 +85,20 @@ describe("createProxyHandler", () => {
     expect(out.body).toBe('{"usage":{"input_tokens":100,"output_tokens":50}}');
   });
 
+  it("forwards with redirect:manual so a cross-origin 3xx can't re-send the API key", async () => {
+    let seen: RequestInit | null = null;
+    const upstreamFetch = vi.fn(async (_url: string, init: RequestInit) => {
+      seen = init;
+      return new Response("ok", { status: 200, headers: { "content-type": "text/plain" } });
+    });
+    const handler = createProxyHandler(deps({ upstreamFetch }));
+    await handler(
+      makeReq("POST", "/v1/messages", { "x-api-key": "sk-secret" }, "{}"),
+      makeRes().res as never,
+    );
+    expect(seen?.redirect).toBe("manual");
+  });
+
   it("records a usage event for POST /v1/messages (counts only, no auth/content)", async () => {
     const upstreamFetch = async () =>
       new Response(

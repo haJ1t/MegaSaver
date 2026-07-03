@@ -1,4 +1,13 @@
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -69,6 +78,32 @@ describe("apply", () => {
   it("creates a fresh settings file when none exists", () => {
     adapter().apply(URL_OURS);
     expect(readEnv()).toBe(URL_OURS);
+  });
+
+  it("preserves the existing file's mode across a route edit", () => {
+    if (process.platform === "win32") return;
+    writeFileSync(settings, JSON.stringify({ env: { FOO: "1" } }));
+    chmodSync(settings, 0o640);
+    adapter().apply(URL_OURS);
+    expect(statSync(settings).mode & 0o777).toBe(0o640);
+  });
+
+  it("creates a fresh settings file 0600 (conservative default)", () => {
+    if (process.platform === "win32") return;
+    adapter().apply(URL_OURS);
+    expect(statSync(settings).mode & 0o777).toBe(0o600);
+  });
+});
+
+describe("inspectHooks (read-only)", () => {
+  it("reports false without ever creating or mutating the settings file", () => {
+    expect(adapter().inspectHooks()).toBe(false);
+    expect(existsSync(settings)).toBe(false); // a read must not write
+  });
+
+  it("reports true once the hooks are installed", () => {
+    adapter().ensureHooks();
+    expect(adapter().inspectHooks()).toBe(true);
   });
 });
 

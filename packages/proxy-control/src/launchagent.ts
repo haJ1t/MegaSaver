@@ -80,8 +80,15 @@ function classifyArgv(argv: string[]): Kind {
   return "foreign";
 }
 
-// Read a plist file's ProgramArguments (best-effort) to classify it by argv.
-function classifyPlistFile(path: string): "absent" | Kind {
+function expectedManagedPlist(superviseArgv: string[]): string {
+  return renderLaunchAgentPlist({ label: MANAGED_LABEL, programArguments: superviseArgv });
+}
+
+// Classify a plist FILE. An exact byte match against our own rendering is the
+// precise "managed" signal (it is a file we wrote); anything else falls back to
+// argv-tail classification so a legacy plist can still be recognized and backed
+// up while a foreign one is left untouched.
+function classifyPlistFile(path: string, expectedManaged: string): "absent" | Kind {
   if (!existsSync(path)) return "absent";
   let xml: string;
   try {
@@ -89,23 +96,51 @@ function classifyPlistFile(path: string): "absent" | Kind {
   } catch {
     return "foreign";
   }
+  if (xml === expectedManaged) return "managed";
   const argv = [...xml.matchAll(/<string>([^<]*)<\/string>/g)].map((m) => m[1] ?? "");
   return classifyArgv(argv);
 }
 
-function backup(plistPath: string, backupDir: string): void {
+// Move the current plist aside and return a restore closure. The restore is used
+// to undo the move if a subsequent install step fails — a legacy plist must never
+// be silently lost to a failed bootstrap.
+function backup(plistPath: string, backupDir: string): () => void {
   mkdirSync(backupDir, { recursive: true, mode: 0o700 });
-  renameSync(plistPath, join(backupDir, `com.megasaver.proxy.${randomUUID()}.plist`));
+  const dest = join(backupDir, `com.megasaver.proxy.${randomUUID()}.plist`);
+  renameSync(plistPath, dest);
+  return () => {
+    try {
+      renameSync(dest, plistPath);
+    } catch {
+      /* best-effort restore */
+    }
+  };
 }
 
-function install(deps: LaunchAgentDeps): void {
+// Write the managed plist, verify it read back byte-for-byte (a partial write or
+// tamper is caught before we bootstrap), then load it. Any failure is surfaced as
+// `blocked` so the caller can restore a backed-up legacy plist.
+function install(deps: LaunchAgentDeps, expected: string): EnsureServiceResult {
   mkdirSync(join(deps.plistPath, ".."), { recursive: true });
-  writeFileSync(
-    deps.plistPath,
-    renderLaunchAgentPlist({ label: MANAGED_LABEL, programArguments: deps.superviseArgv }),
-    { mode: 0o644 },
-  );
-  deps.runner.bootstrap(deps.plistPath);
+  try {
+    writeFileSync(deps.plistPath, expected, { mode: 0o644 });
+  } catch {
+    return { status: "blocked", reason: "failed to write the managed plist" };
+  }
+  let onDisk: string;
+  try {
+    onDisk = readFileSync(deps.plistPath, "utf8");
+  } catch {
+    onDisk = "";
+  }
+  if (onDisk !== expected)
+    return { status: "blocked", reason: "managed plist failed write verification" };
+  try {
+    deps.runner.bootstrap(deps.plistPath);
+  } catch {
+    return { status: "blocked", reason: "launchd bootstrap failed" };
+  }
+  return { status: "installed" };
 }
 
 export type EnsureServiceResult =
@@ -119,6 +154,7 @@ export type EnsureServiceResult =
 // it. An unloaded legacy plist FILE (not a running process) may be backed up and
 // replaced. A foreign job/plist is never touched.
 export function ensureManagedService(deps: LaunchAgentDeps): EnsureServiceResult {
+  const expected = expectedManagedPlist(deps.superviseArgv);
   const job = deps.runner.print(MANAGED_LABEL);
   if (job !== null) {
     const kind = classifyArgv(job.programArguments);
@@ -131,12 +167,15 @@ export function ensureManagedService(deps: LaunchAgentDeps): EnsureServiceResult
     return { status: "blocked", reason: "foreign launchd job under the managed label" };
   }
   // Not loaded — decide from the on-disk plist file.
-  const file = classifyPlistFile(deps.plistPath);
+  const file = classifyPlistFile(deps.plistPath, expected);
   if (file === "foreign")
     return { status: "blocked", reason: "foreign plist under the managed label" };
-  if (file === "legacy") backup(deps.plistPath, deps.backupDir);
-  install(deps);
-  return { status: "installed" };
+  // Back up a legacy plist, but keep a restore handle: if the install/bootstrap
+  // fails we must put the operator's legacy plist back, not strand them.
+  const restore = file === "legacy" ? backup(deps.plistPath, deps.backupDir) : null;
+  const result = install(deps, expected);
+  if (result.status !== "installed" && restore) restore();
+  return result;
 }
 
 export type UninstallResult = { status: "uninstalled" } | { status: "blocked"; reason: string };
@@ -150,7 +189,7 @@ export function uninstallManagedService(deps: LaunchAgentDeps): UninstallResult 
       return { status: "blocked", reason: "loaded job is not the managed service" };
     deps.runner.bootout(MANAGED_LABEL);
   }
-  const file = classifyPlistFile(deps.plistPath);
+  const file = classifyPlistFile(deps.plistPath, expectedManagedPlist(deps.superviseArgv));
   if (file === "foreign")
     return { status: "blocked", reason: "foreign plist under the managed label" };
   if (file === "managed" || file === "legacy") backup(deps.plistPath, deps.backupDir);

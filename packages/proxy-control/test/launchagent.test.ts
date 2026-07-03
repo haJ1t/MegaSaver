@@ -120,6 +120,25 @@ describe("ensureManagedService", () => {
     expect(r.status).toBe("blocked");
     expect(runner.calls.length).toBe(0);
   });
+
+  it("restores a backed-up legacy plist when the launchd bootstrap fails", () => {
+    const legacyXml = renderLaunchAgentPlist({
+      label: MANAGED_LABEL,
+      programArguments: LEGACY_ARGV,
+    });
+    writeFileSync(plistPath, legacyXml);
+    const runner = fakeRunner();
+    // Bootstrap fails after we've backed up the legacy plist + written ours.
+    runner.bootstrap = () => {
+      runner.calls.push("bootstrap-failed");
+      throw new Error("launchd bootstrap error");
+    };
+    const r = ensureManagedService(deps(runner));
+    expect(r.status).toBe("blocked");
+    // The operator's legacy plist is restored, not stranded in backup.
+    expect(readFileSync(plistPath, "utf8")).toBe(legacyXml);
+    expect(existsSync(backupDir) ? readdirSync(backupDir).length : 0).toBe(0);
+  });
 });
 
 describe("uninstallManagedService", () => {

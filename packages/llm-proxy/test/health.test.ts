@@ -91,7 +91,10 @@ describe("health endpoint on the proxy server", () => {
     }
   });
 
-  it("without a configured capability, the health path is not special (forwards)", async () => {
+  it("without a configured capability, the reserved health path 404s and is NEVER forwarded", async () => {
+    // The reserved path must never leak to the upstream as a normal request, even
+    // when this instance has no ownership capability — otherwise a probe of the
+    // path would be proxied to api.anthropic.com. It 404s locally instead.
     const upstreamFetch = vi.fn(async () => new Response("ok", { status: 200 }));
     const proxy = await startProxyServer({
       port: 0,
@@ -99,8 +102,9 @@ describe("health endpoint on the proxy server", () => {
       upstreamFetch: upstreamFetch as unknown as typeof fetch,
     });
     try {
-      await fetch(`${proxy.url}${HEALTH_PATH}?challenge=xyz`);
-      expect(upstreamFetch).toHaveBeenCalledOnce();
+      const res = await fetch(`${proxy.url}${HEALTH_PATH}?challenge=xyz`);
+      expect(res.status).toBe(404);
+      expect(upstreamFetch).not.toHaveBeenCalled();
     } finally {
       await proxy.close();
     }

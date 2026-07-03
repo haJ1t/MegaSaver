@@ -32,6 +32,11 @@ export {
   nodeProcessIdentity,
 } from "./locks.js";
 export {
+  type TransitionLockResult,
+  transitionLockPath,
+  withTransitionLock,
+} from "./transition-lock.js";
+export {
   type ReconcileAction,
   type ReconcileObs,
   type ReconcileDecision,
@@ -44,6 +49,7 @@ export {
   type RecoveryResult,
   observeReality,
   runStartupRecovery,
+  superviseDrive,
   monitorTick,
 } from "./supervisor.js";
 export {
