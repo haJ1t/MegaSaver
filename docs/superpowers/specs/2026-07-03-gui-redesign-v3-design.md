@@ -89,7 +89,7 @@ motion honoured, no new animation vocabulary.
 
 | # | Page | Content | Source components today |
 |---|------|---------|-------------------------|
-| 1 | **Sessions** (home) | Today-summary stat cards (tokens saved, reduction %, live count) + workspace-grouped session list → selecting a session opens the slim cockpit | `WorkspaceSessionList`, `session-cockpit` |
+| 1 | **Sessions** (home) | A summary strip (Workspaces / Sessions / Live counts) + workspace-grouped session list → selecting a session opens the slim cockpit. (See note on the deferred token-saved aggregate.) | `WorkspaceSessionList`, `session-cockpit` |
 | 2 | **Token Saver** | Global controls: hook connection, proxy activation, daemon status; + saver-mode activation for the active workspace. (Per-session savings *stats* live in the cockpit rail, not here.) | `views/cockpit/{hook-connection,proxy-activation,daemon-status,saver-mode-activation}.tsx` (today nested inside `token-saver-panel.tsx`'s `<details>Advanced`) |
 | 3 | **Memory** | Memory list + graph (+ approve/reject where present) for the active workspace | `views/cockpit/memory-panel`, `memory-graph-panel` (unchanged; take `dir,id`) |
 | 4 | **Workspace** | Rules, permissions, index, tools, context | `Workspace{Rules,Permissions,Index,Tools,Context}CockpitPanel` (`cockpit/panels/workspace-panels.tsx`) |
@@ -264,3 +264,12 @@ verify → code-review). Reviewer: `code-reviewer`. Isolated worktree off
   (a panel that assumed a cockpit-width container may need a width tweak).
 - No new dependency (no component/UI library, no icon package beyond what
   already ships).
+- **No cross-session "tokens saved today" aggregate on the home page.** The
+  bridge exposes savings only per-session (`readOverlaySummary`, keyed by
+  session); there is no aggregate route, and the user-locked "no bridge
+  change" rules out adding one now. The home summary strip therefore shows
+  the cheaply-derivable counts (Workspaces / Sessions / Live) from the
+  already-fetched session list; the flagship token-saved figure lives in the
+  cockpit rail (per session). Upgrade path: a future `/api/stats/overview`
+  that sums the on-disk overlay summaries would let the home page show a real
+  daily total — a small, separate bridge task.
