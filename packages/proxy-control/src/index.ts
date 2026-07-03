@@ -46,3 +46,15 @@ export {
   runStartupRecovery,
   monitorTick,
 } from "./supervisor.js";
+export {
+  MANAGED_LABEL,
+  type LaunchctlJob,
+  type LaunchctlRunner,
+  type LaunchAgentDeps,
+  type EnsureServiceResult,
+  type UninstallResult,
+  renderLaunchAgentPlist,
+  ensureManagedService,
+  uninstallManagedService,
+  nodeLaunchctlRunner,
+} from "./launchagent.js";
