@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { recordCompressionHeartbeat, recordInvocationHeartbeat } from "@megasaver/context-gate";
 import type { LaunchctlRunner } from "@megasaver/proxy-control";
 import { readControlState, writeControlState } from "@megasaver/proxy-control";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -129,6 +130,16 @@ describe("runProxyStatus", () => {
     const st = runProxyStatus(deps(fakeRoute("http://127.0.0.1:9999"), fakeLaunchctl()));
     expect(st.routed).toBe(false);
     expect(st.routeConflict).toBe(true);
+  });
+
+  it("fills saver liveness from the heartbeat registry (cross-spec contract)", () => {
+    const now = Date.UTC(2026, 6, 3);
+    recordInvocationHeartbeat(store, "wk1", new Date(now - 1000).toISOString(), now);
+    recordCompressionHeartbeat(store, "wk1", new Date(now - 2000).toISOString(), now);
+    const st = runProxyStatus(deps(fakeRoute(OWNED), fakeLaunchctl()));
+    expect(st.lastSaverHookInvocationAt).toBe(new Date(now - 1000).toISOString());
+    expect(st.lastCompressionAt).toBe(new Date(now - 2000).toISOString());
+    expect(st.lastCompressionAgeMs).toBe(2000);
   });
 });
 

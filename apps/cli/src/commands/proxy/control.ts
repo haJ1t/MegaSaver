@@ -7,6 +7,7 @@ import {
   uninstallManagedService,
   writeControlState,
 } from "@megasaver/proxy-control";
+import { readSaverTelemetry } from "./saver-telemetry.js";
 
 // The route surface the control plane needs (satisfied by the connector's
 // ClaudeRouteAdapter). Kept minimal so the CLI stays the only place agent-specific
@@ -90,7 +91,9 @@ export type ProxyActivationStatus = {
   routeCapability: "settings-configured";
   desktopSupport: "unverified";
   lastSaverHookInvocationAt: string | null;
+  lastSaverHookInvocationAgeMs: number | null;
   lastCompressionAt: string | null;
+  lastCompressionAgeMs: number | null;
   error: { code: string; detail: string | null; at: string } | null;
 };
 
@@ -111,9 +114,7 @@ export function runProxyStatus(deps: ProxyControlPlaneDeps): ProxyActivationStat
     autostart: job !== null ? "running" : "missing",
     routeCapability: "settings-configured",
     desktopSupport: "unverified",
-    // Wired by the saver telemetry reader (P8); null until then.
-    lastSaverHookInvocationAt: null,
-    lastCompressionAt: null,
+    ...readSaverTelemetry(deps.storeRoot, deps.now()),
     error: control.lastError,
   };
 }
