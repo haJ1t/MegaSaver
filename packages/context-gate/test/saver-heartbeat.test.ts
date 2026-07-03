@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -111,5 +111,16 @@ describe("hardening", () => {
       latestCompression: null,
       workspaces: {},
     });
+  });
+
+  it("drops non-string workspace values from a corrupt registry", () => {
+    mkdirSync(join(store, "stats"), { recursive: true });
+    writeFileSync(
+      join(store, "stats", "saver-hook-heartbeats.json"),
+      JSON.stringify({ version: 1, workspaces: { good: iso(NOW), bad: 12345 } }),
+    );
+    const v = readHeartbeatView(store, NOW);
+    expect(v.workspaces).toHaveProperty("good", iso(NOW));
+    expect(v.workspaces).not.toHaveProperty("bad");
   });
 });

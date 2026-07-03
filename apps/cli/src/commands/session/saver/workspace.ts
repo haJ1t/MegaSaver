@@ -45,7 +45,7 @@ function emit(
   }
   const coverage =
     scope.kind === "repository"
-      ? `repository family (covers all worktrees of ${scope.root})`
+      ? `repository family (covers all worktrees of ${scope.root}; a checkout's own --exact override still wins — see \`mega session saver resolve\`)`
       : "this workspace only";
   input.stdout(`Mega Saver Mode ${enabled ? "enabled" : "disabled"} — ${coverage} (${mode})`);
 }

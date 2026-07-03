@@ -89,6 +89,7 @@ export async function handleWorkspaceSaverStatus(
         source: effective.source,
         repositoryFamilyKey: effective.repositoryFamilyKey,
         familyUnavailableReason: effective.familyUnavailableReason,
+        familyIdentityDiagnostic: effective.familyIdentityDiagnostic,
         blockPresent,
         mcpInstalled,
       },
@@ -162,7 +163,7 @@ export async function handleWorkspaceSaverSet(
     const mcpInstalled = await claudeMcpInstalled(ctx);
     const coverage =
       scope.kind === "repository"
-        ? `repository family (covers all worktrees of ${scope.root})`
+        ? `repository family (covers all worktrees of ${scope.root}; a checkout's own exact override still wins)`
         : "this workspace only";
     ctx.sendJson(
       ctx.res,

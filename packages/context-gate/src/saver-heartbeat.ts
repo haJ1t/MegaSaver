@@ -42,12 +42,22 @@ function readRaw(storeRoot: string): RawRegistry {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<HeartbeatView>;
     return {
       latestCompression: isStamp(parsed.latestCompression) ? parsed.latestCompression : null,
-      workspaces:
-        parsed.workspaces && typeof parsed.workspaces === "object" ? parsed.workspaces : {},
+      workspaces: sanitizeWorkspaces(parsed.workspaces),
     };
   } catch {
     return empty();
   }
+}
+
+// Boundary guard (§8): keep only string-valued entries so a corrupt registry
+// (e.g. numeric values that Date.parse would coerce) cannot survive.
+function sanitizeWorkspaces(v: unknown): Record<string, string> {
+  if (typeof v !== "object" || v === null) return {};
+  const out: Record<string, string> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof val === "string") out[k] = val;
+  }
+  return out;
 }
 const empty = (): RawRegistry => ({ latestCompression: null, workspaces: {} });
 function isStamp(v: unknown): v is HeartbeatStamp {
