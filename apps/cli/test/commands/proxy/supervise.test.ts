@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { listProxyUsage } from "@megasaver/llm-proxy";
 import type { ProxyUsageEvent, RunningProxy, StartProxyOptions } from "@megasaver/llm-proxy";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { runProxyStart } from "../../../src/commands/proxy/start.js";
+import { runProxySupervise } from "../../../src/commands/proxy/supervise.js";
 
 const EVENT: ProxyUsageEvent = {
   id: "33333333-3333-4333-8333-333333333333",
@@ -18,7 +18,7 @@ const EVENT: ProxyUsageEvent = {
   stream: false,
 };
 
-describe("runProxyStart", () => {
+describe("runProxySupervise", () => {
   let store: string;
   beforeEach(() => {
     store = mkdtempSync(join(tmpdir(), "cli-proxy-"));
@@ -39,7 +39,7 @@ describe("runProxyStart", () => {
       });
     };
 
-    await runProxyStart({
+    await runProxySupervise({
       port: 8787,
       upstream: "https://api.anthropic.com",
       storeRoot: store,

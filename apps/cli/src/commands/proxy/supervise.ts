@@ -5,7 +5,7 @@ import { readStoreEnv, resolveStorePath } from "../../store.js";
 const DEFAULT_PORT = 8787;
 const DEFAULT_UPSTREAM = "https://api.anthropic.com";
 
-export type RunProxyStartInput = {
+export type RunProxySuperviseInput = {
   port: number;
   upstream: string;
   storeRoot: string;
@@ -14,7 +14,7 @@ export type RunProxyStartInput = {
   startServer?: typeof startProxyServer;
 };
 
-export async function runProxyStart(input: RunProxyStartInput): Promise<RunningProxy> {
+export async function runProxySupervise(input: RunProxySuperviseInput): Promise<RunningProxy> {
   const start = input.startServer ?? startProxyServer;
   const running = await start({
     port: input.port,
@@ -36,10 +36,11 @@ export async function runProxyStart(input: RunProxyStartInput): Promise<RunningP
   return running;
 }
 
-export const proxyStartCommand = defineCommand({
+export const proxySuperviseCommand = defineCommand({
   meta: {
-    name: "start",
-    description: "Run the local Anthropic-API proxy (transparent + token metering).",
+    name: "supervise",
+    description:
+      "Internal foreground supervisor (LaunchAgent target): bind the listener + meter usage.",
   },
   args: {
     port: { type: "string", description: `Local port (default ${DEFAULT_PORT}).` },
@@ -53,7 +54,7 @@ export const proxyStartCommand = defineCommand({
     const storeRoot = resolveStorePath(
       readStoreEnv(typeof args.store === "string" ? args.store : undefined),
     );
-    await runProxyStart({
+    await runProxySupervise({
       port,
       upstream,
       storeRoot,
