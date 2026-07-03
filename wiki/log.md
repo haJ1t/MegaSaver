@@ -3706,3 +3706,18 @@ CLI: workspace toggle repo-aware (family default, --exact opt-down, scope echo)
 source. Public behavior change: v1 record shape + family-default scope
 (changeset added). Reviewer gate: fresh-context code-reviewer + critic (S10).
 Counts: context-gate 236, cli 765, gui 419. Remaining: proxy plan P0–P9 (2 of 2).
+
+## [2026-07-03] implement | persistent proxy routing P0-P8
+
+Branch feat/persistent-proxy-routing-impl (stacked on saver). TDD; `pnpm verify`
+green 48/48. Delivers the metering fix (proxy healthy but no client routed) +
+removes the GUI boot/shutdown route-clear stranding bug. P0 llm-proxy HMAC health
+endpoint; P1-P5 new @megasaver/proxy-control (state stores, fenced PID-reuse-safe
+locks, pure recovery matrix with exhaustive invariants, supervisor fixpoint+monitor
+wiring, LaunchAgent installer never-stop-foreign); P3 connector value-guarded route
+adapter; P6 CLI proxy start/stop/status/service-uninstall + supervise runtime
+(public break: old foreground start → supervise); P8 saver telemetry into proxy
+status (cross-spec contract); P7 GUI persistent toggle (singleton+osascript+route-clear
+removed). Changeset added. Deferred (flagged): GUI auth bootstrap (launch cap→cookie+CSRF)
++ long-running supervise control server. Next: CRITICAL review gates (security-reviewer
++ tracer + code-reviewer + critic).
