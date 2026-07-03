@@ -3,11 +3,16 @@ import {
   aggregateHonestMetrics,
   observationsFromEvents,
   readOverlayEvents,
+  readOverlaySummaryAnyWorkspace,
   recordedEventsFromLogs,
 } from "@megasaver/core";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
+import { formatOverlaySaverCard } from "./shared.js";
+
+const OVERLAY_FALLBACK_NOTE =
+  "Note: token-weighted honest metrics need a registered/proxy session; overlay bytes are shown instead.";
 
 export function renderHonestReport(m: HonestMetrics): string {
   const pct = (n: number): string => `${(n * 100).toFixed(1)}%`;
@@ -45,6 +50,16 @@ export async function runHonestAudit(input: RunHonestAuditInput): Promise<string
     nativeEligible: [],
   });
   const metrics = aggregateHonestMetrics(observationsFromEvents(recorded));
+  if (metrics.rawTokensEligible === 0) {
+    const overlay = readOverlaySummaryAnyWorkspace({ root: input.storeRoot }, input.liveSessionId);
+    if (overlay) {
+      if (input.json) return JSON.stringify(overlay.summary);
+      return [
+        ...formatOverlaySaverCard(overlay.summary, overlay.workspaceKey),
+        OVERLAY_FALLBACK_NOTE,
+      ].join("\n");
+    }
+  }
   return input.json ? JSON.stringify(metrics) : renderHonestReport(metrics);
 }
 
