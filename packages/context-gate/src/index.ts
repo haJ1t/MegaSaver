@@ -102,3 +102,9 @@ export {
   recordInvocationHeartbeat,
   recordCompressionHeartbeat,
 } from "./saver-heartbeat.js";
+export {
+  type ActivationScope,
+  resolveActivationScope,
+  writeActivation,
+  readActivationMode,
+} from "./activation-scope.js";

@@ -349,6 +349,12 @@ export type WorkspaceSaverStatus = {
   mode: "aggressive" | "balanced" | "safe";
   blockPresent: boolean;
   mcpInstalled: boolean;
+  // Effective-activation metadata (source on GET; scope/coverage on POST).
+  source?: "exact" | "repository" | "legacy-root" | "global" | "missing" | "invalid";
+  repositoryFamilyKey?: string | null;
+  familyUnavailableReason?: string | null;
+  scope?: "repository" | "exact";
+  coverage?: string;
 };
 
 export function fetchWorkspaceSaver(dir: string, id: string): Promise<WorkspaceSaverStatus> {

@@ -82,6 +82,20 @@ export function SaverModeActivation({ dir, id }: { dir: string; id: string }): J
             </select>
           </label>
           <div className="flex flex-wrap gap-2 text-xs">
+            {status.source && (
+              <span className="px-2 py-1 rounded-md border border-border bg-surface-elevated">
+                scope:{" "}
+                {status.source === "repository"
+                  ? "repository family (all worktrees)"
+                  : status.source === "legacy-root"
+                    ? "repository (legacy root)"
+                    : status.source === "global"
+                      ? "global default"
+                      : status.source === "exact"
+                        ? "this workspace only"
+                        : status.source}
+              </span>
+            )}
             <span className="px-2 py-1 rounded-md border border-border bg-surface-elevated">
               CLAUDE.md block: {status.blockPresent ? "present" : "absent"}
             </span>

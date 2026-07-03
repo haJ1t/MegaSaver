@@ -1,15 +1,10 @@
-import { basename, dirname } from "node:path";
 import {
-  canonicalFamilyPath,
-  familyKeyFromPath,
-  nodeResolverDeps,
-  readExactRecord,
-  readFamilyRecord,
-  withActivationLock,
-  writeExactRecord,
-  writeFamilyRecord,
+  type ActivationScope,
+  readActivationMode,
+  resolveActivationScope,
+  writeActivation,
 } from "@megasaver/context-gate";
-import { type TokenSaverMode, encodeWorkspaceKey, tokenSaverModeSchema } from "@megasaver/shared";
+import { type TokenSaverMode, tokenSaverModeSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { invalidModeMessage, mapErrorToCliMessage } from "../../../errors.js";
 import { type ResolveStorePathInput, readStoreEnv, resolveStorePath } from "../../../store.js";
@@ -31,39 +26,9 @@ export type RunSessionSaverWorkspaceDisableInput = ResolveStorePathInput & {
   json?: boolean;
 };
 
-type Scope =
-  | { kind: "repository"; key: string; identityDigest: string; identityPath: string; root: string }
-  | { kind: "exact"; workspaceKey: string };
-
-// A cwd inside a Git repo (main root OR linked worktree) defaults to the family
-// scope so all worktrees inherit it; --exact and non-Git cwds write an exact
-// record. Mirrors the resolver so writes and reads agree.
-function resolveScope(cwd: string, forceExact: boolean): Scope {
-  if (!forceExact) {
-    const deps = nodeResolverDeps();
-    const git = deps.resolveGit(cwd);
-    if (git.kind === "ok") {
-      const canon = canonicalFamilyPath(git.commonDir, deps.platform, {
-        realpathNative: deps.realpath,
-        caseMode: deps.caseModeOf,
-      });
-      const fk = familyKeyFromPath(deps.platform, canon.caseMode, canon.canonicalPath);
-      const root = basename(git.commonDir) === ".git" ? dirname(git.commonDir) : git.commonDir;
-      return {
-        kind: "repository",
-        key: fk.key,
-        identityDigest: fk.digestHex,
-        identityPath: fk.identityPath,
-        root,
-      };
-    }
-  }
-  return { kind: "exact", workspaceKey: encodeWorkspaceKey(cwd) };
-}
-
 function emit(
   input: { stdout: (line: string) => void; json?: boolean },
-  scope: Scope,
+  scope: ActivationScope,
   enabled: boolean,
   mode: TokenSaverMode,
 ): void {
@@ -83,35 +48,6 @@ function emit(
       ? `repository family (covers all worktrees of ${scope.root})`
       : "this workspace only";
   input.stdout(`Mega Saver Mode ${enabled ? "enabled" : "disabled"} — ${coverage} (${mode})`);
-}
-
-function currentMode(store: string, scope: Scope, fallback: TokenSaverMode): TokenSaverMode {
-  if (scope.kind === "repository") {
-    const rec = readFamilyRecord(store, scope.key, scope.identityDigest);
-    return rec !== null && rec !== "invalid" ? rec.mode : fallback;
-  }
-  const rec = readExactRecord(store, scope.workspaceKey);
-  return rec.kind === "v1-exact" || rec.kind === "legacy" ? rec.mode : fallback;
-}
-
-function writeActivation(
-  store: string,
-  scope: Scope,
-  enabled: boolean,
-  mode: TokenSaverMode,
-): void {
-  withActivationLock(store, () => {
-    if (scope.kind === "repository") {
-      writeFamilyRecord(store, scope.key, {
-        enabled,
-        mode,
-        identityDigest: scope.identityDigest,
-        identityPath: scope.identityPath,
-      });
-    } else {
-      writeExactRecord(store, scope.workspaceKey, { enabled, mode, scope: "exact" });
-    }
-  });
 }
 
 export async function runSessionSaverWorkspaceEnable(
@@ -135,7 +71,7 @@ export async function runSessionSaverWorkspaceEnable(
     }
     mode = parsed.data;
   }
-  const scope = resolveScope(input.cwd, input.exact);
+  const scope = resolveActivationScope(input.cwd, input.exact);
   try {
     writeActivation(store, scope, true, mode);
   } catch (err) {
@@ -158,8 +94,8 @@ export async function runSessionSaverWorkspaceDisable(
     input.stderr(cli.message);
     return cli.exitCode;
   }
-  const scope = resolveScope(input.cwd, input.exact);
-  const mode = currentMode(store, scope, DEFAULT_MODE);
+  const scope = resolveActivationScope(input.cwd, input.exact);
+  const mode = readActivationMode(store, scope, DEFAULT_MODE);
   try {
     writeActivation(store, scope, false, mode);
   } catch (err) {
