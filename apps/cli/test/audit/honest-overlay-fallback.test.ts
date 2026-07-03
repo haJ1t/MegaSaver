@@ -1,10 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  type OverlaySessionTokenSaverStats,
-  recordAndFilterOverlayOutput,
-} from "@megasaver/core";
+import { type OverlaySessionTokenSaverStats, recordAndFilterOverlayOutput } from "@megasaver/core";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runHonestAudit } from "../../src/commands/audit/honest.js";
@@ -55,34 +52,37 @@ describe("mega audit honest — overlay fallback", () => {
   it("renders the overlay card + note when only an overlay summary exists (no eligible tokens)", async () => {
     writeOverlaySummary(WORKSPACE_A, overlaySummary(OVERLAY_ID));
 
-    const out = await runHonestAudit({
+    const { output, exitCode } = await runHonestAudit({
       liveSessionId: OVERLAY_ID,
       storeRoot: root,
       cwd: CWD,
       json: false,
     });
 
-    expect(out).toContain("overlay");
-    expect(out).toContain("73493");
-    expect(out).toContain("81");
-    expect(out).toContain(WORKSPACE_A);
+    expect(exitCode).toBe(0);
+    expect(output).toContain("overlay");
+    expect(output).toContain("73493");
+    expect(output).toContain("81");
+    expect(output).toContain(WORKSPACE_A);
     // A one-line note that token-weighted honest metrics need a registered/proxy session.
-    expect(out.toLowerCase()).toContain("registered");
+    expect(output.toLowerCase()).toContain("registered");
     // Must NOT be the plain honest report.
-    expect(out).not.toContain("eligible reduction:");
+    expect(output).not.toContain("eligible reduction:");
   });
 
-  it("--json emits the overlay summary when only an overlay summary exists", async () => {
+  it("--json emits the overlay summary with a source:overlay discriminator", async () => {
     writeOverlaySummary(WORKSPACE_A, overlaySummary(OVERLAY_ID));
 
-    const out = await runHonestAudit({
+    const { output, exitCode } = await runHonestAudit({
       liveSessionId: OVERLAY_ID,
       storeRoot: root,
       cwd: CWD,
       json: true,
     });
 
-    const parsed = JSON.parse(out) as OverlaySessionTokenSaverStats;
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(output) as OverlaySessionTokenSaverStats & { source: string };
+    expect(parsed.source).toBe("overlay");
     expect(parsed.liveSessionId).toBe(OVERLAY_ID);
     expect(parsed.bytesSavedTotal).toBe(73493);
     expect(parsed.savingRatio).toBeCloseTo(0.811, 10);
@@ -92,15 +92,15 @@ describe("mega audit honest — overlay fallback", () => {
     writeOverlaySummary(WORKSPACE_B, overlaySummary(OVERLAY_ID, { bytesSavedTotal: 111 }));
     writeOverlaySummary(WORKSPACE_A, overlaySummary(OVERLAY_ID, { bytesSavedTotal: 73493 }));
 
-    const out = await runHonestAudit({
+    const { output } = await runHonestAudit({
       liveSessionId: OVERLAY_ID,
       storeRoot: root,
       cwd: CWD,
       json: false,
     });
 
-    expect(out).toContain(WORKSPACE_A);
-    expect(out).toContain("73493");
+    expect(output).toContain(WORKSPACE_A);
+    expect(output).toContain("73493");
   });
 
   it("uses the honest report (fallback not taken) when eligible overlay events exist for the cwd", async () => {
@@ -119,28 +119,44 @@ describe("mega audit honest — overlay fallback", () => {
     // once eligible token-weighted events exist for this cwd.
     writeOverlaySummary(WORKSPACE_A, overlaySummary(OVERLAY_ID));
 
-    const out = await runHonestAudit({
+    const { output } = await runHonestAudit({
       liveSessionId: OVERLAY_ID,
       storeRoot: root,
       cwd: CWD,
       json: true,
     });
 
-    const metrics = JSON.parse(out) as { eligibleReduction: number; rawTokensEligible: number };
+    const metrics = JSON.parse(output) as { eligibleReduction: number; rawTokensEligible: number };
     expect(metrics.rawTokensEligible).toBeGreaterThan(0);
     expect(metrics.eligibleReduction).toBeGreaterThan(0);
   });
 
   it("keeps zero honest metrics when neither eligible events nor an overlay summary exist", async () => {
-    const out = await runHonestAudit({
+    const { output } = await runHonestAudit({
       liveSessionId: OVERLAY_ID,
       storeRoot: root,
       cwd: CWD,
       json: true,
     });
 
-    const metrics = JSON.parse(out) as { eligibleReduction: number; rawTokensEligible: number };
+    const metrics = JSON.parse(output) as { eligibleReduction: number; rawTokensEligible: number };
     expect(metrics.eligibleReduction).toBe(0);
     expect(metrics.rawTokensEligible).toBe(0);
+  });
+
+  it("rejects an uppercase/invalid session id with an explicit error (not a zeros report)", async () => {
+    writeOverlaySummary(WORKSPACE_A, overlaySummary(OVERLAY_ID));
+
+    const { output, exitCode } = await runHonestAudit({
+      liveSessionId: OVERLAY_ID.toUpperCase(),
+      storeRoot: root,
+      cwd: CWD,
+      json: true,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(output).toContain("invalid session id");
+    // Must NOT silently degrade to a zeros honest report.
+    expect(output).not.toContain("eligibleReduction");
   });
 });

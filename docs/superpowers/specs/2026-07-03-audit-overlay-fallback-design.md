@@ -69,8 +69,13 @@ A registered session still takes precedence (only fall back when
   different shape, deferred (documented non-goal).
 - **workspaceKey resolution: scan-all-workspaces** (not a new `--cwd`/`--workspace`
   flag) — keeps the "just give an id" UX identical to today.
-- **Overlay card is visually distinct** and labelled `(live token-saver
-  session — overlay stats)` so a user knows it's not registered-audit data.
+- **Overlay card is visually distinct** and labelled `live token-saver
+  session (overlay stats)` so a user knows it's not registered-audit data.
+- **Fallback `--json` carries a `source: "overlay"` discriminator** so a
+  machine consumer can tell it from the registered summary shape.
+- **`honest` validates its session-id positional** the same way `session`
+  does (reject a malformed/non-lowercase id with an explicit error, not a
+  silent all-zeros report).
 - Fallback fires **only** when `getSession` is null.
 
 ## Testing (TDD, non-tautological)

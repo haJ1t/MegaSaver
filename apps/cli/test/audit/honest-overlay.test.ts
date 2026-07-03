@@ -15,7 +15,7 @@ describe("mega audit honest — overlay event loader", () => {
     // Use a deterministic synthetic cwd so encodeWorkspaceKey is stable.
     const cwd = "/synthetic/project/path";
     const workspaceKey = encodeWorkspaceKey(cwd);
-    const liveSessionId = "test-live-session-1";
+    const liveSessionId = "aaaaaaaa-1111-4111-8111-111111111111";
 
     await recordAndFilterOverlayOutput({
       storeRoot,
@@ -28,26 +28,26 @@ describe("mega audit honest — overlay event loader", () => {
       storeRawOutput: false,
     });
 
-    const out = await runHonestAudit({
+    const { output } = await runHonestAudit({
       liveSessionId,
       storeRoot,
       cwd,
       json: true,
     });
-    const metrics = JSON.parse(out) as { eligibleReduction: number; rawTokensEligible: number };
+    const metrics = JSON.parse(output) as { eligibleReduction: number; rawTokensEligible: number };
     expect(metrics.eligibleReduction).toBeGreaterThan(0);
     expect(metrics.rawTokensEligible).toBeGreaterThan(0);
   });
 
   it("returns zero metrics when no overlay events exist for the session", async () => {
     const storeRoot = mkdtempSync(join(tmpdir(), "honest-overlay-empty-"));
-    const out = await runHonestAudit({
-      liveSessionId: "no-events-session",
+    const { output } = await runHonestAudit({
+      liveSessionId: "bbbbbbbb-2222-4222-8222-222222222222",
       storeRoot,
       cwd: "/some/path",
       json: true,
     });
-    const metrics = JSON.parse(out) as { eligibleReduction: number };
+    const metrics = JSON.parse(output) as { eligibleReduction: number };
     expect(metrics.eligibleReduction).toBe(0);
   });
 });

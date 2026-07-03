@@ -119,7 +119,10 @@ describe("mega audit session — overlay fallback", () => {
     });
 
     expect(code).toBe(0);
-    const parsed = JSON.parse(lines.join("\n")) as OverlaySessionTokenSaverStats;
+    const parsed = JSON.parse(lines.join("\n")) as OverlaySessionTokenSaverStats & {
+      source: string;
+    };
+    expect(parsed.source).toBe("overlay");
     expect(parsed.liveSessionId).toBe(OVERLAY_ID);
     expect(parsed.bytesSavedTotal).toBe(73493);
     expect(parsed.savingRatio).toBeCloseTo(0.811, 10);

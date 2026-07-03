@@ -48,7 +48,7 @@ export async function runAuditSession(input: RunAuditSessionInput): Promise<0 | 
     if (!session) {
       const overlay = readOverlaySummaryAnyWorkspace({ root: rootDir }, parsedSessionId);
       if (overlay) {
-        if (input.json) input.stdout(JSON.stringify(overlay.summary));
+        if (input.json) input.stdout(JSON.stringify({ source: "overlay", ...overlay.summary }));
         else
           for (const line of formatOverlaySaverCard(overlay.summary, overlay.workspaceKey))
             input.stdout(line);
