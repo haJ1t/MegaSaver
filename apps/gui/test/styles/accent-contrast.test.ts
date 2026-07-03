@@ -41,6 +41,7 @@ describe("amber accent contrast (WCAG AA ≥ 4.5:1)", () => {
   it("dark: accent text on background, and accent-fg on the accent fill", () => {
     const accent = readVar(dark, "--color-accent");
     expect(contrast(accent, readVar(dark, "--color-background"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(accent, readVar(dark, "--color-surface"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(readVar(dark, "--color-accent-fg"), accent)).toBeGreaterThanOrEqual(4.5);
   });
 });

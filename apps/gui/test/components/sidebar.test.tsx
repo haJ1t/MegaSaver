@@ -1,9 +1,25 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "../../src/components/sidebar.js";
 
-afterEach(cleanup);
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ running: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ),
+  );
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("Sidebar", () => {
   it("renders six nav items in display order and marks the active one", () => {
@@ -22,5 +38,10 @@ describe("Sidebar", () => {
     render(<Sidebar active="sessions" onNavigate={onNavigate} />);
     fireEvent.click(screen.getByRole("button", { name: "Memory" }));
     expect(onNavigate).toHaveBeenCalledWith("memory");
+  });
+
+  it("shows daemon status in the footer", async () => {
+    render(<Sidebar active="sessions" onNavigate={() => {}} />);
+    expect(await screen.findByText(/daemon/i)).toBeTruthy();
   });
 });

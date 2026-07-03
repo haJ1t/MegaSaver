@@ -327,7 +327,7 @@ export function MemoryGraphPanel({
   if (data && data.nodes.length === 0) {
     return (
       <section aria-label="Memory graph" className="flex flex-col flex-1 min-h-0 px-6 py-6">
-        <h2 className="text-sm text-text-muted uppercase tracking-widest">Memory graph</h2>
+        <h3 className="text-sm text-text-muted uppercase tracking-widest">Memory graph</h3>
         <p className="mt-3 text-xs text-text-muted">
           No graph yet. Memory entries, evidence, and chunk sets appear here as nodes once this
           session accumulates context.
@@ -339,7 +339,7 @@ export function MemoryGraphPanel({
   return (
     <section aria-label="Memory graph" className="flex flex-col flex-1 min-h-0">
       <header className="flex items-center justify-between px-6 py-3 border-b border-border">
-        <h2 className="text-sm text-text-muted uppercase tracking-widest">Memory graph</h2>
+        <h3 className="text-sm text-text-muted uppercase tracking-widest">Memory graph</h3>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
             <button

@@ -17,25 +17,31 @@ export function App(): JSX.Element {
   const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
 
-  // Derive the workspace options once for the picker-backed pages.
+  // Derive the workspace options for the picker-backed pages, polling so the
+  // picker self-heals from a transient mount-time fetch failure.
   useEffect(() => {
     let live = true;
-    fetchClaudeSessions(50, 0)
-      .then((list) => {
-        if (!live) return;
-        const opts = deriveWorkspaceOptions(list);
-        setWorkspaces(opts);
-        setActiveKey((k) => k ?? opts[0]?.key ?? null);
-      })
-      .catch(() => {});
+    const tick = (): void => {
+      fetchClaudeSessions(50, 0)
+        .then((list) => {
+          if (!live) return;
+          const opts = deriveWorkspaceOptions(list);
+          setWorkspaces(opts);
+          setActiveKey((k) => k ?? opts[0]?.key ?? null);
+        })
+        .catch(() => {});
+    };
+    tick();
+    const t = setInterval(tick, 4000);
     return () => {
       live = false;
+      clearInterval(t);
     };
   }, []);
 
   const navigate = (next: ViewId): void => {
     setView(next);
-    if (next !== "sessions") setSelected(null);
+    setSelected(null);
   };
 
   return (

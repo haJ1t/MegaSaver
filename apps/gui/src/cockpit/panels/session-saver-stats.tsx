@@ -77,9 +77,8 @@ function tokensFromBytes(bytes: number): number {
   return Math.ceil(bytes / 4);
 }
 function savedTokens(s: OverlaySessionTokenSaverStats): number {
-  return Math.max(0, tokensFromBytes(s.rawBytesTotal) - tokensFromBytes(s.returnedBytesTotal));
+  return tokensFromBytes(s.bytesSavedTotal);
 }
 function savedPct(s: OverlaySessionTokenSaverStats): number {
-  const would = tokensFromBytes(s.rawBytesTotal);
-  return would === 0 ? 0 : Math.round((savedTokens(s) / would) * 100);
+  return Math.round(s.savingRatio * 100);
 }
