@@ -18,3 +18,16 @@ export {
   readRuntimeState,
   writeRuntimeState,
 } from "./stores.js";
+export {
+  type OwnerKind,
+  type LockOwner,
+  type ProcessIdentity,
+  type ProcessIdentityAdapter,
+  lockOwnerSchema,
+  isOwnerStale,
+  readLockOwner,
+  tryAcquireLock,
+  refreshLease,
+  releaseLock,
+  nodeProcessIdentity,
+} from "./locks.js";
