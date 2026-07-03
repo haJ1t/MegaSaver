@@ -3777,3 +3777,35 @@ intent into a live, verified route (the original "healthy but unrouted / zero
 metering" bug is closed) and the disable path reaches a clean terminal idle.
 Deferred (flagged, non-blocking): full GUI auth bootstrap + cross-process
 supervisor discovery.
+
+## [2026-07-03] ship | saver + persistent proxy routing merged to main
+
+Both features are on `main`, green on CI (ubuntu-latest + windows-latest):
+`794be8b7` saver activation inheritance (#216) and `297ebc28` persistent proxy
+routing (#219). The proxy PR #218 was auto-closed when #216's `--delete-branch`
+removed its base branch; it was recreated as #219 (base main).
+
+Integration incident + recovery (recorded honestly for the next agent): the
+#216 squash to main briefly BROKE CI. The saver worktree carried an uncommitted
+`pnpm-lock.yaml` (+`@megasaver/context-gate` in the cli importer) that was
+wrongly judged a stray and excluded from the merge; it was in fact the required
+lockfile sync, so CI's `pnpm install --frozen-lockfile` failed on ubuntu +
+windows. Local `pnpm verify` (macOS) never runs frozen-install, so it wasn't
+caught pre-merge. Recovery via #219: merged main into the proxy branch, ran
+`pnpm install` to sync the lockfile (committed this time), resolved the wiki
+conflicts (union), and fixed a Windows-only failure — the usage-store 0600/0700
+mode assertion reads 0o666 on Windows (no POSIX mode bits), now `win32`-guarded
+like the other perm/symlink tests. #219 CI passed on both platforms → merged →
+main green.
+
+Lessons: (1) never exclude an uncommitted lockfile change without checking it
+against package.json — `pnpm install --frozen-lockfile` is the CI-equivalent
+check to run locally; (2) `--delete-branch` on a merge closes any PR stacked on
+that branch — merge or retarget the child first; (3) POSIX perm/symlink tests
+need a `win32` guard.
+
+Cleanup: merged branches deleted (remote + local); the three feature worktrees
+(`proxy-routing-impl`, `saver-activation-inheritance`, `persistent-proxy-routing`)
+removed; local `main` refreshed to `origin/main`. The unrelated
+`agent-office-skill-roles` worktree and the `refactor/token-saver-fullwidth`
+working branch were left untouched.
