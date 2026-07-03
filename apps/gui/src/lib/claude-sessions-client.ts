@@ -228,6 +228,19 @@ export type OverlaySessionTokenSaverStats = {
   updatedAt: string;
 };
 
+export type WorkspaceTokenSaverTotals = {
+  workspaceKey: string;
+  sessionsCount: number;
+  eventsTotal: number;
+  rawBytesTotal: number;
+  returnedBytesTotal: number;
+  bytesSavedTotal: number;
+  savingRatio: number;
+  secretsRedactedTotal: number;
+  chunksStoredTotal: number;
+  latestUpdatedAt: string | null;
+};
+
 export type OverlayTokenSaverEvent = {
   id: string;
   workspaceKey: string;
@@ -335,6 +348,13 @@ export function fetchSessionTokenSaverStats(
   id: string,
 ): Promise<OverlaySessionTokenSaverStats | null> {
   return getJson<OverlaySessionTokenSaverStats | null>(`${tokenSaverBase(dir, id)}/stats`);
+}
+
+export function fetchWorkspaceTokenSaverStats(
+  dir: string,
+  id: string,
+): Promise<WorkspaceTokenSaverTotals | null> {
+  return getJson<WorkspaceTokenSaverTotals | null>(`${tokenSaverBase(dir, id)}/workspace-stats`);
 }
 
 export function fetchSessionTokenSaverEvents(

@@ -141,3 +141,66 @@ describe("live token-saver routes (read-only)", () => {
     expect((await res.json()).code).toBe("claude_session_not_found");
   });
 });
+
+describe("live token-saver workspace-stats route (read-only)", () => {
+  const OTHER_SUMMARY = {
+    liveSessionId: "wsOther1",
+    eventsTotal: 2,
+    rawBytesTotal: 3000,
+    returnedBytesTotal: 500,
+    bytesSavedTotal: 2500,
+    savingRatio: 0.8333,
+    secretsRedactedTotal: 1,
+    chunksStoredTotal: 2,
+    updatedAt: "2026-06-15T00:00:00.000Z",
+  };
+
+  async function startWithTwoSummaries() {
+    return startTestBridge({
+      claudeProjectsDir: projectsDir,
+      claudeSessionsMetaDir: metaDir,
+      store: {
+        overlaySummaries: [
+          { workspaceKey: WK, liveSessionId: ID, summary },
+          { workspaceKey: WK, liveSessionId: "wsOther1", summary: OTHER_SUMMARY },
+        ],
+      },
+    });
+  }
+
+  it("GET /workspace-stats sums every summary under the workspace", async () => {
+    server = await startWithTwoSummaries();
+    const res = await fetch(`${base()}/workspace-stats`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.workspaceKey).toBe(WK);
+    expect(body.sessionsCount).toBe(2);
+    expect(body.eventsTotal).toBe(3);
+    expect(body.rawBytesTotal).toBe(4000);
+    expect(body.returnedBytesTotal).toBe(700);
+    expect(body.bytesSavedTotal).toBe(3300);
+    expect(body.secretsRedactedTotal).toBe(1);
+    expect(body.chunksStoredTotal).toBe(3);
+    expect(body.savingRatio).toBeCloseTo(3300 / 4000, 10);
+    expect(body.latestUpdatedAt).toBe("2026-06-15T00:00:00.000Z");
+  });
+
+  it("GET /workspace-stats → null when the workspace has no summaries", async () => {
+    server = await startTestBridge({
+      claudeProjectsDir: projectsDir,
+      claudeSessionsMetaDir: metaDir,
+    });
+    const res = await fetch(`${base()}/workspace-stats`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toBeNull();
+  });
+
+  it("unknown session → 404 claude_session_not_found", async () => {
+    server = await startWithTwoSummaries();
+    const res = await fetch(
+      `${server.baseUrl}/api/claude-sessions/${DIR}/unknownid/token-saver/workspace-stats`,
+    );
+    expect(res.status).toBe(404);
+    expect((await res.json()).code).toBe("claude_session_not_found");
+  });
+});

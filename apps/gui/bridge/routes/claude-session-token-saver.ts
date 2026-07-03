@@ -16,7 +16,12 @@ import {
 } from "@megasaver/context-gate";
 import { type TokenSaverSettings, tokenSaverSettingsSchema } from "@megasaver/core";
 import { modeToBudget, tokenSaverModeSchema, workspaceLabel } from "@megasaver/shared";
-import { type StatsStore, readOverlayEvents, readOverlaySummary } from "@megasaver/stats";
+import {
+  type StatsStore,
+  readOverlayEvents,
+  readOverlaySummary,
+  readWorkspaceTokenSaverTotals,
+} from "@megasaver/stats";
 import { z } from "zod";
 import { handleCaughtError } from "../error-mapping.js";
 import type { RouteContext } from "../route-context.js";
@@ -223,6 +228,21 @@ export async function handleSessionTokenSaverStats(
   }
 }
 
+export async function handleWorkspaceTokenSaverStats(
+  ctx: RouteContext,
+  dir: string,
+  id: string,
+): Promise<void> {
+  const resolved = await resolveOr4xx(ctx, dir, id);
+  if (!resolved) return;
+  try {
+    const totals = readWorkspaceTokenSaverTotals(statsStore(ctx), resolved.workspaceKey);
+    ctx.sendJson(ctx.res, 200, totals, ctx.origin);
+  } catch (err) {
+    handleCaughtError(ctx.res, ctx.origin, err, ctx.sendError);
+  }
+}
+
 export async function handleSessionTokenSaverEvents(
   ctx: RouteContext,
   dir: string,
@@ -297,7 +317,7 @@ export async function handleSessionTokenSaverEventBlob(
 }
 
 const SESSION_TOKEN_SAVER_PATH =
-  /^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/token-saver(?:\/(status|stats|events|workspace)(?:\/([^/]+)\/(raw|sent))?)?$/;
+  /^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/token-saver(?:\/(status|stats|events|workspace|workspace-stats)(?:\/([^/]+)\/(raw|sent))?)?$/;
 
 export async function dispatchSessionTokenSaver(
   ctx: RouteContext,
@@ -337,6 +357,10 @@ export async function dispatchSessionTokenSaver(
   }
   if (segment === "stats") {
     await handleSessionTokenSaverStats(ctx, dir, id);
+    return true;
+  }
+  if (segment === "workspace-stats") {
+    await handleWorkspaceTokenSaverStats(ctx, dir, id);
     return true;
   }
   if (segment === "events" && eventId === undefined) {
