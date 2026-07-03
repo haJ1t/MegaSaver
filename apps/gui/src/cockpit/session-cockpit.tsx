@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COCKPIT_TAB_GROUPS, getPanel } from "./panel-registry.js";
+import { SessionSaverStats } from "./panels/session-saver-stats.js";
 
 export function SessionCockpit({
   dir,
@@ -129,9 +130,14 @@ export function SessionCockpit({
         })}
       </nav>
 
-      <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
-        {Body && <Body dir={dir} id={id} cwd={cwd} />}
-      </main>
+      <div className="flex flex-1 min-h-0 overflow-hidden max-lg:flex-col">
+        <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          {Body && <Body dir={dir} id={id} cwd={cwd} />}
+        </main>
+        <aside className="w-[26%] max-lg:w-full shrink-0 border-l max-lg:border-l-0 max-lg:border-t border-border p-4 overflow-y-auto flex flex-col gap-6">
+          <SessionSaverStats dir={dir} id={id} />
+        </aside>
+      </div>
     </div>
   );
 }
