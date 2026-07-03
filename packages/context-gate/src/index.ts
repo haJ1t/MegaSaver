@@ -95,3 +95,10 @@ export {
   resolveWorkspaceTokenSaverSettings,
   nodeResolverDeps,
 } from "./resolve-saver-settings.js";
+export {
+  type HeartbeatView,
+  type HeartbeatStamp,
+  readHeartbeatView,
+  recordInvocationHeartbeat,
+  recordCompressionHeartbeat,
+} from "./saver-heartbeat.js";
