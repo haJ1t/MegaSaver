@@ -68,3 +68,22 @@ export {
   canonicalFamilyPath,
   familyKeyFromPath,
 } from "./family-identity.js";
+export {
+  type GitFamilyFs,
+  type GitFamilyStat,
+  type GitDegradedReason,
+  type GitCommonDirResult,
+  nodeGitFamilyFs,
+  resolveGitCommonDir,
+} from "./git-family.js";
+export {
+  type NormalizedSaver,
+  type ExactClassification,
+  readExactRecord,
+  readFamilyRecord,
+  readGlobalDefault,
+  writeExactRecord,
+  writeFamilyRecord,
+  writeGlobalDefault,
+  withActivationLock,
+} from "./saver-store.js";
