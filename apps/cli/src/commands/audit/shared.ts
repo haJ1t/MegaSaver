@@ -1,4 +1,21 @@
-import type { AuditSummary } from "@megasaver/core";
+import type { AuditSummary, OverlaySessionTokenSaverStats } from "@megasaver/core";
+
+export function formatOverlaySaverCard(
+  summary: OverlaySessionTokenSaverStats,
+  workspaceKey: string,
+): string[] {
+  const savingPct = Math.round(summary.savingRatio * 100);
+  return [
+    "live token-saver session (overlay stats)",
+    `  workspace: ${workspaceKey}`,
+    `  events:  ${summary.eventsTotal}`,
+    `  bytes:   ${summary.rawBytesTotal} -> ${summary.returnedBytesTotal}`,
+    `  saved:   ${summary.bytesSavedTotal} bytes (${savingPct}%)`,
+    `  chunks stored:    ${summary.chunksStoredTotal}`,
+    `  secrets redacted: ${summary.secretsRedactedTotal}`,
+    `  updated: ${summary.updatedAt}`,
+  ];
+}
 
 export function formatAuditCards(summary: AuditSummary): string[] {
   return [

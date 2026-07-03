@@ -1,9 +1,14 @@
-import { StatsError, readAuditEvents, summarizeAudit } from "@megasaver/core";
+import {
+  StatsError,
+  readAuditEvents,
+  readOverlaySummaryAnyWorkspace,
+  summarizeAudit,
+} from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, sessionNotFoundMessage, storeCorruptMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
-import { formatAuditCards } from "./shared.js";
+import { formatAuditCards, formatOverlaySaverCard } from "./shared.js";
 
 export type RunAuditSessionInput = {
   sessionId: string;
@@ -41,6 +46,14 @@ export async function runAuditSession(input: RunAuditSessionInput): Promise<0 | 
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
     const session = registry.getSession(parsedSessionId);
     if (!session) {
+      const overlay = readOverlaySummaryAnyWorkspace({ root: rootDir }, parsedSessionId);
+      if (overlay) {
+        if (input.json) input.stdout(JSON.stringify(overlay.summary));
+        else
+          for (const line of formatOverlaySaverCard(overlay.summary, overlay.workspaceKey))
+            input.stdout(line);
+        return 0;
+      }
       const cli = sessionNotFoundMessage(parsedSessionId);
       input.stderr(cli.message);
       return cli.exitCode;
