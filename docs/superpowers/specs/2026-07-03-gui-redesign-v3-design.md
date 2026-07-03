@@ -81,9 +81,11 @@ updated to the new six-member alphabetic tuple.
 
 Layout: sidebar is a fixed-width left column (`~220px`); main content is the
 right column, still capped for readability but no longer forced to
-`max-w-5xl` on list-heavy pages that benefit from width. Responsive: below a
-breakpoint the sidebar collapses to a top bar (icons + labels) — reduced-
-motion honoured, no new animation vocabulary.
+`max-w-5xl` on list-heavy pages that benefit from width. Responsive collapse
+of the sidebar to a top bar is **deferred** — see Out of scope (this is a
+desktop-first, single-developer localhost tool; the fixed rail degrades
+gracefully by narrowing content, and a top-bar mode would need an icon set we
+do not ship).
 
 ## Pages
 
@@ -264,6 +266,12 @@ verify → code-review). Reviewer: `code-reviewer`. Isolated worktree off
   (a panel that assumed a cockpit-width container may need a width tweak).
 - No new dependency (no component/UI library, no icon package beyond what
   already ships).
+- **No responsive sidebar collapse** (deferred). The sidebar stays a fixed
+  `~220px` column at all widths; on narrow viewports the content column just
+  narrows. A collapse-to-top-bar mode (icons + labels) is future work — it
+  needs an icon set the project does not currently ship, and the target is a
+  desktop-first single-developer tool. Revisit if a mobile/narrow use case
+  appears.
 - **No cross-session "tokens saved today" aggregate on the home page.** The
   bridge exposes savings only per-session (`readOverlaySummary`, keyed by
   session); there is no aggregate route, and the user-locked "no bridge
