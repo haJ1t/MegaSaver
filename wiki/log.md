@@ -3744,3 +3744,36 @@ read-back gate (aborts promote/clear on a lost write); (R10) status is read-only
 (no ensureHooks side-effect). Re-running the CRITICAL gate (3 fresh-context
 reviewers). Still deferred: GUI auth bootstrap + cross-process supervisor
 discovery (single self-driving supervisor needs neither to route).
+
+## [2026-07-03] verify | proxy CRITICAL review converged → APPROVE
+
+The CRITICAL gate ran to convergence across three review rounds (fresh-context
+security + correctness + adversarial-tracer each round; author≠reviewer).
+- Round 1 (commit 37f170c0): 4 BLOCKING + 10 MAJOR fixed (credential gate,
+  redirect:manual, the daemon actually running the state machine, transition
+  lock, store/route/launchagent/lock hardening, verify_route read-back, read-only
+  status).
+- Round 2 (6979472e): correctness + tracer BOTH found one HIGH functional bug —
+  `mega proxy stop` entered a drain that never completed (no drain_complete
+  writer) → key-holding listener never stopped + `service uninstall` blocked
+  forever. Fixed via `stop --confirm-clients-restarted` (+ GUI) writing
+  drain_complete; plus enter_drain idempotency, stale-block clearing, boot
+  recovery wiring, crash-proof tick.
+- Round 3 (e09787f2 + 71201d8c): the round-2 fix opened a new reachable dead-end
+  (drain_complete issued directly on a routed+leased state stopped the listener
+  but stranded the route + lease). Made `reconcileDrain` TOTAL: value-guarded
+  remove-first on a leased-exact route, clear_lease on every terminal. Security
+  also caught the round-2 plist symlink guard using existsSync (follows a
+  dangling link) → switched to a direct lstat.
+- Final convergence review: exhaustive 16-row enumeration of reconcileDrain over
+  (route × hasLease × generationLive) — no stranding, no dead-end, no regression;
+  the five security invariants hold empirically (SSRF concat-defense, no key
+  forward, foreign-route/process untouched, health-path local, tight perms +
+  PID-reuse-safe locks). Verdict APPROVE.
+
+`pnpm verify` green throughout (48/48 tasks; proxy-control 68, cli 777, gui 416).
+Branch feat/persistent-proxy-routing-impl. The enable path now turns a persisted
+intent into a live, verified route (the original "healthy but unrouted / zero
+metering" bug is closed) and the disable path reaches a clean terminal idle.
+Deferred (flagged, non-blocking): full GUI auth bootstrap + cross-process
+supervisor discovery.

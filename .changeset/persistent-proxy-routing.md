@@ -27,8 +27,10 @@ GUI's boot/shutdown route-clearing that could strand a session.
   (inspect/apply/removeExpected/ensureHooks) that owns the `~/.claude/settings.json`
   route and never overwrites/removes a foreign value.
 - `@megasaver/cli`: `mega proxy start` (persist an enable intent + install the
-  supervisor LaunchAgent), `stop`, `status [--json]` (read-only; separated facts
-  + saver liveness from the heartbeat registry), `service uninstall --confirm`,
+  supervisor LaunchAgent), `stop` (enter drain) and `stop
+  --confirm-clients-restarted` (finish drain: stop the listener + reach terminal
+  idle), `status [--json]` (read-only; separated facts + saver liveness from the
+  heartbeat registry), `service uninstall --confirm`,
   and the internal `proxy supervise` daemon. The daemon binds a health-capable
   loopback listener and runs the reconcile state machine on a 5s cadence under a
   fenced transition lock, so a persisted enable intent becomes a live, verified
