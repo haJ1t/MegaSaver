@@ -4,19 +4,20 @@ import tokens from "../../src/styles/tokens.css?raw";
 // Minimal WCAG 2.1 relative-luminance + contrast, no dependency.
 function luminance(hex: string): number {
   const n = hex.replace("#", "");
-  const [r, g, b] = [0, 2, 4].map((i) => Number.parseInt(n.slice(i, i + 2), 16) / 255);
-  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const channel = (i: number): number => Number.parseInt(n.slice(i, i + 2), 16) / 255;
+  const lin = (c: number): number => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(channel(0)) + 0.7152 * lin(channel(2)) + 0.0722 * lin(channel(4));
 }
 function contrast(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
+  const la = luminance(a);
+  const lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 // Pull a hex value out of the CSS for a given variable, scoped to a block.
 function readVar(block: string, name: string): string {
-  const m = block.match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`));
-  if (!m) throw new Error(`missing ${name}`);
-  return m[1];
+  const hex = block.match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`))?.[1];
+  if (hex === undefined) throw new Error(`missing ${name}`);
+  return hex;
 }
 
 const light = tokens.slice(tokens.indexOf(":root"), tokens.indexOf("@media"));
