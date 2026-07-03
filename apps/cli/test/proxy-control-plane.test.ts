@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { recordCompressionHeartbeat, recordInvocationHeartbeat } from "@megasaver/context-gate";
-import type { LaunchctlRunner } from "@megasaver/proxy-control";
-import { readControlState, writeControlState } from "@megasaver/proxy-control";
+import type { LaunchctlRunner, SupervisorDeps } from "@megasaver/proxy-control";
+import { readControlState, superviseDrive, writeControlState } from "@megasaver/proxy-control";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type ProxyControlPlaneDeps,
@@ -107,6 +107,56 @@ describe("runProxyStop", () => {
     const s = readControlState(store);
     expect(s.desiredEnabled).toBe(false);
     expect(s.transition?.kind).toBe("disable");
+  });
+
+  it("--confirm-clients-restarted persists a drain_complete transition", () => {
+    writeControlState(store, { ...readControlState(store), desiredEnabled: false });
+    runProxyStop(deps(fakeRoute(null), fakeLaunchctl()), { confirmClientsRestarted: true });
+    expect(readControlState(store).transition?.kind).toBe("drain_complete");
+  });
+
+  it("full stop → drain → confirm → drain_complete lifecycle reaches idle and unblocks uninstall", () => {
+    // The blind spot the tracer flagged: prove the disable drain actually
+    // terminates instead of parking forever.
+    const route = fakeRoute(OWNED);
+    const sup = (alive: { v: boolean }): SupervisorDeps => ({
+      storeRoot: store,
+      route,
+      listener: {
+        isAlive: () => alive.v,
+        stop: () => {
+          alive.v = false;
+        },
+        healthCheck: () => (alive.v ? "matching" : "none"),
+      },
+      ownedUrl: OWNED,
+      instanceId: "inst",
+      processStartToken: "tok",
+      bootId: "boot",
+      now: () => Date.UTC(2026, 6, 3),
+    });
+    const alive = { v: true };
+    // Steady routed state.
+    writeControlState(store, {
+      ...readControlState(store),
+      desiredEnabled: true,
+      routeLease: { url: OWNED, instanceId: "inst", phase: "active", installedAt: "x" },
+    });
+
+    // 1) plain stop → disable transition; supervisor drives it into drain.
+    runProxyStop(deps(route, fakeLaunchctl()));
+    superviseDrive(sup(alive));
+    expect(route.value).toBeNull(); // route removed
+    expect(readControlState(store).transition).not.toBeNull(); // parked in drain
+    expect(runProxyServiceUninstall(deps(route, fakeLaunchctl())).status).toBe("blocked");
+
+    // 2) confirm clients restarted → drain_complete; supervisor stops + clears.
+    runProxyStop(deps(route, fakeLaunchctl()), { confirmClientsRestarted: true });
+    superviseDrive(sup(alive));
+    const s = readControlState(store);
+    expect(s.transition).toBeNull(); // terminal idle
+    expect(alive.v).toBe(false); // key-holding listener stopped
+    expect(runProxyServiceUninstall(deps(route, fakeLaunchctl())).status).toBe("uninstalled");
   });
 });
 

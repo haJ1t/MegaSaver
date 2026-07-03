@@ -100,6 +100,13 @@ const disableT = (): ProxyTransition => ({
   phase: "unroute_expected",
   expectedUnrouted: true,
 });
+const drainCompleteT = (): ProxyTransition => ({
+  ...owner,
+  ownerKind: "supervisor",
+  kind: "drain_complete",
+  phase: "confirmation_persisted",
+  expectedUnrouted: true,
+});
 
 function control(over: Partial<ProxyControlState>): ProxyControlState {
   return {
@@ -230,6 +237,52 @@ describe("superviseDrive — the live supervisor drives enable to a routed fixpo
     const s = readControlState(store);
     expect(route.value).toBe("http://127.0.0.1:9999"); // foreign preserved
     expect(s.reconcileBlocked?.reason).toBe("route_conflict");
+  });
+});
+
+describe("superviseDrive — disable drain terminates on drain_complete", () => {
+  it("drain_complete + live generation → stops the key-holding listener, clears transition + drain", () => {
+    const route = fakeRoute(null); // route already removed during the disable phase
+    const listener = fakeListener(true, "matching");
+    writeControlState(
+      store,
+      control({
+        desiredEnabled: false,
+        transition: drainCompleteT(),
+        drainingGeneration: {
+          instanceId: "inst",
+          processStartToken: "tok",
+          bootId: "boot",
+          url: OWNED,
+          startedAt: "x",
+        },
+      }),
+    );
+    superviseDrive(deps(route, listener));
+    const s = readControlState(store);
+    expect(s.transition).toBeNull(); // terminal idle — NOT a permanent drain
+    expect(s.drainingGeneration).toBeNull();
+    expect(listener.isAlive()).toBe(false); // listener holding the API key is stopped
+  });
+});
+
+describe("applyDecision — stale block/error cleared on a clean terminal reconcile", () => {
+  it("a clean enable resets a pre-existing reconcileBlocked + lastError", () => {
+    const route = fakeRoute(null);
+    writeControlState(
+      store,
+      control({
+        transition: enableT("lease_installing"),
+        routeLease: { url: OWNED, instanceId: "inst", phase: "installing", installedAt: "x" },
+        reconcileBlocked: { reason: "route_conflict", at: "x" },
+        lastError: { code: "healthcheck_failed", detail: null, at: "x" },
+      }),
+    );
+    runStartupRecovery(deps(route, fakeListener(true, "matching")));
+    const s = readControlState(store);
+    expect(s.transition).toBeNull();
+    expect(s.reconcileBlocked).toBeNull(); // no longer reports a stale conflict
+    expect(s.lastError).toBeNull();
   });
 });
 

@@ -21,6 +21,12 @@ export async function handleProxySet(ctx: RouteContext): Promise<void> {
   }
   // The persistent supervisor owns routing; the toggle only persists desired
   // state. The operator restarts Claude manually when convenient (no osascript).
-  const status = enabled ? startProxy(ctx.storeRoot) : stopProxy(ctx.storeRoot);
+  // `confirmClientsRestarted` on an off-toggle finishes the drain (stops the
+  // supervisor's key-holding listener) once no live client points at the proxy.
+  const confirmClientsRestarted =
+    (body as { confirmClientsRestarted?: unknown })?.confirmClientsRestarted === true;
+  const status = enabled
+    ? startProxy(ctx.storeRoot)
+    : stopProxy(ctx.storeRoot, undefined, { confirmClientsRestarted });
   ctx.sendJson(ctx.res, 200, status, ctx.origin);
 }

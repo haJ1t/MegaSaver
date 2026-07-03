@@ -73,15 +73,29 @@ export const proxyStopCommand = defineCommand({
     name: "stop",
     description: "Disable future proxy routing and enter drain for running clients.",
   },
-  args: { ...storeArg },
+  args: {
+    ...storeArg,
+    "confirm-clients-restarted": {
+      type: "boolean",
+      default: false,
+      description:
+        "Confirm no already-launched client still points at the proxy, so the supervisor can stop its listener and finish draining.",
+    },
+  },
   run({ args }) {
-    const r = runProxyStop(realDeps(typeof args.store === "string" ? args.store : undefined));
+    const r = runProxyStop(realDeps(typeof args.store === "string" ? args.store : undefined), {
+      confirmClientsRestarted: args["confirm-clients-restarted"] === true,
+    });
     if (r.status === "transition_in_progress") {
       console.error("mega proxy: a proxy transition is already in progress; retry shortly.");
       process.exitCode = 1;
       return;
     }
-    console.log("mega proxy: disabled future routing; already-running clients keep draining.");
+    console.log(
+      args["confirm-clients-restarted"]
+        ? "mega proxy: drain confirmed — the supervisor will stop its listener."
+        : "mega proxy: disabled future routing; run `mega proxy stop --confirm-clients-restarted` once you've restarted Claude to finish draining.",
+    );
   },
 });
 

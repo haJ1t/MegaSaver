@@ -2,6 +2,7 @@ import {
   type EnsureServiceResult,
   type LaunchctlRunner,
   type ProcessIdentityAdapter,
+  type ProxyControlState,
   type UninstallResult,
   ensureManagedService,
   nodeProcessIdentity,
@@ -82,8 +83,18 @@ export function runProxyStart(deps: ProxyControlPlaneDeps): StartResult {
 
 // `mega proxy stop`: disable future routing and enter drain. Persists the disable
 // transition under the transition lock; the supervisor performs the value-guarded
-// unroute + drain.
-export function runProxyStop(deps: ProxyControlPlaneDeps): StopResult {
+// unroute + drain. The listener stays up (an already-launched Claude keeps using
+// the proxy until restarted) until the operator confirms clients were restarted.
+//
+// `mega proxy stop --confirm-clients-restarted`: the operator's acknowledgement
+// that no live client still points at the proxy. Persists a drain_complete
+// transition so the supervisor stops its own key-holding listener and clears the
+// transition, reaching the terminal idle state (without this, drain never
+// completes: the listener lingers and `service uninstall` stays blocked).
+export function runProxyStop(
+  deps: ProxyControlPlaneDeps,
+  opts: { confirmClientsRestarted?: boolean } = {},
+): StopResult {
   const locked = withTransitionLock(
     deps.storeRoot,
     deps.now(),
@@ -91,15 +102,23 @@ export function runProxyStop(deps: ProxyControlPlaneDeps): StopResult {
     () => {
       const control = readControlState(deps.storeRoot);
       const nowIso = new Date(deps.now()).toISOString();
+      const transition: ProxyControlState["transition"] = opts.confirmClientsRestarted
+        ? {
+            ...cliTransitionOwner(nowIso),
+            kind: "drain_complete",
+            phase: "confirmation_persisted",
+            expectedUnrouted: true,
+          }
+        : {
+            ...cliTransitionOwner(nowIso),
+            kind: "disable",
+            phase: "unroute_expected",
+            expectedUnrouted: true,
+          };
       writeControlState(deps.storeRoot, {
         ...control,
         desiredEnabled: false,
-        transition: {
-          ...cliTransitionOwner(nowIso),
-          kind: "disable",
-          phase: "unroute_expected",
-          expectedUnrouted: true,
-        },
+        transition,
         updatedAt: nowIso,
       });
     },

@@ -111,7 +111,15 @@ export function createClaudeRouteAdapter(settingsPath: string): ClaudeRouteAdapt
     },
     apply(expectedUrl) {
       const s = readSettings(settingsPath);
-      const settings: Settings = s === "absent" || s === "invalid" ? {} : s;
+      // Never clobber an unparseable file (the matrix only applies on an absent
+      // route; an invalid file is not absent, so this is defense in depth).
+      if (s === "invalid") return;
+      const settings: Settings = s === "absent" ? {} : s;
+      const current = settings.env?.ANTHROPIC_BASE_URL;
+      // Value-guard (defense in depth): never overwrite a FOREIGN route. The
+      // matrix only emits apply on an absent route, but a foreign value slipping
+      // into the read→write window must not clobber the operator's own gateway.
+      if (current !== undefined && current !== expectedUrl) return;
       settings.env = { ...(settings.env ?? {}), ANTHROPIC_BASE_URL: expectedUrl };
       writeSettings(settingsPath, settings);
     },

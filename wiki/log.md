@@ -3721,3 +3721,26 @@ status (cross-spec contract); P7 GUI persistent toggle (singleton+osascript+rout
 removed). Changeset added. Deferred (flagged): GUI auth bootstrap (launch cap→cookie+CSRF)
 + long-running supervise control server. Next: CRITICAL review gates (security-reviewer
 + tracer + code-reviewer + critic).
+
+## [2026-07-03] remediate | proxy CRITICAL review round 1 → fixes
+
+The first CRITICAL gate returned REQUEST_CHANGES from all three reviewers: 4
+BLOCKING + 10 MAJOR real defects (the gate did its job). Root of the worst one:
+`mega proxy supervise` ran a bare listener and never invoked the reconcile state
+machine, so `start` persisted an enable intent but the route was NEVER applied —
+the original zero-metering bug persisted. Fixes (commit 37f170c0, TDD, `pnpm
+verify` 48/48 green): (R1) supervise validates `--upstream` + gates non-default
+origin behind `--confirm-credential-forwarding`; (R2) handler uses
+`redirect:"manual"` and answers the reserved health path locally (never
+forwarded); (R3) new `superviseDrive` daemon binds a health-capable listener and
+drives the enable transition to a verified applied route on a 5s cadence under
+the transition lock; (R4) new fenced `withTransitionLock` serializes
+start/stop/GUI writes (returns transition_in_progress, never clobbers); (R5)
+usage store 0600/0700 + symlink refusal + bounded control-char-stripped model;
+(R6) LaunchAgent byte-exact managed classification + legacy-plist restore on
+bootstrap failure; (R7) lock quarantine re-judges moved content (no live-owner
+steal); (R8) route mutator fsync + mode preservation; (R9) verify_route is a real
+read-back gate (aborts promote/clear on a lost write); (R10) status is read-only
+(no ensureHooks side-effect). Re-running the CRITICAL gate (3 fresh-context
+reviewers). Still deferred: GUI auth bootstrap + cross-process supervisor
+discovery (single self-driving supervisor needs neither to route).

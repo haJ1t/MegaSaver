@@ -80,6 +80,18 @@ describe("apply", () => {
     expect(readEnv()).toBe(URL_OURS);
   });
 
+  it("never overwrites a foreign route value (value-guard, defense in depth)", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_FOREIGN } }));
+    adapter().apply(URL_OURS);
+    expect(readEnv()).toBe(URL_FOREIGN); // preserved
+  });
+
+  it("never clobbers an unparseable settings file", () => {
+    writeFileSync(settings, "{corrupt");
+    adapter().apply(URL_OURS);
+    expect(readFileSync(settings, "utf8")).toBe("{corrupt"); // untouched
+  });
+
   it("preserves the existing file's mode across a route edit", () => {
     if (process.platform === "win32") return;
     writeFileSync(settings, JSON.stringify({ env: { FOO: "1" } }));

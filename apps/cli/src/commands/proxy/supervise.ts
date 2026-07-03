@@ -10,9 +10,12 @@ import {
   type RouteAdapter,
   type SupervisorDeps,
   nodeProcessIdentity,
+  readControlState,
+  runStartupRecovery,
   superviseDrive,
   upstreamBaseUrlSchema,
   withTransitionLock,
+  writeControlState,
 } from "@megasaver/proxy-control";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
@@ -122,10 +125,43 @@ export async function runSupervisor(input: RunSupervisorInput): Promise<Supervis
   };
 
   const tick = (): void => {
-    // A concurrent CLI/GUI writer holding the lock ("locked") just means this
-    // tick is skipped; the next one picks the state up.
-    withTransitionLock(input.storeRoot, now(), "supervisor", () => superviseDrive(deps), identity);
+    try {
+      // A concurrent CLI/GUI writer holding the lock ("locked") just means this
+      // tick is skipped; the next one picks the state up.
+      withTransitionLock(
+        input.storeRoot,
+        now(),
+        "supervisor",
+        () => superviseDrive(deps),
+        identity,
+      );
+    } catch {
+      // A monitor tick must NEVER crash the daemon (e.g. a transient route I/O
+      // error). Record it as a diagnostic and keep the loop alive; the next tick
+      // re-reconciles. Best-effort — a failed record must not throw either.
+      try {
+        const c = readControlState(input.storeRoot);
+        const at = new Date(now()).toISOString();
+        writeControlState(input.storeRoot, {
+          ...c,
+          lastError: { code: "runtime_failed", detail: null, at },
+          updatedAt: at,
+        });
+      } catch {
+        /* best-effort */
+      }
+    }
   };
+  // Boot recovery: drive any transition a crashed predecessor left mid-flight to a
+  // fixpoint via the pure recovery matrix before the first live tick advances a
+  // fresh enable.
+  withTransitionLock(
+    input.storeRoot,
+    now(),
+    "supervisor",
+    () => runStartupRecovery(deps),
+    identity,
+  );
   tick();
   const timer = setInterval(tick, input.monitorMs ?? MONITOR_MS);
   if (typeof timer.unref === "function") timer.unref();
@@ -195,9 +231,12 @@ export const proxySuperviseCommand = defineCommand({
       stdout: (line) => console.log(line),
     });
 
-    // Drain on termination: stop only our own listener; never touch a foreign
-    // route. The LaunchAgent restarts us; the persisted state is the source of
-    // truth on the next boot.
+    // A signal is an intentional stop (operator Ctrl-C, `launchctl bootout` for
+    // uninstall, or logout). Stop ONLY our own listener; never touch the route
+    // (the persisted control state stays authoritative). We exit 0: under the
+    // plist's KeepAlive{SuccessfulExit:false} a clean exit is NOT auto-relaunched,
+    // which is what we want for an intentional stop — launchd re-runs us on the
+    // next RunAtLoad (login) if the service is still installed.
     const shutdown = () => {
       void runtime.stop().then(() => process.exit(0));
     };

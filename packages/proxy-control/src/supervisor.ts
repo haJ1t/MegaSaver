@@ -101,7 +101,10 @@ function applyDecision(
         lease = null;
         break;
       case "enter_drain":
-        drain = {
+        // Idempotent: keep an existing drain's startedAt so a live disable tick
+        // doesn't restamp it every step (which would defeat the fixpoint's
+        // no-progress check and churn control.json on every 5s monitor pass).
+        drain = drain ?? {
           instanceId: deps.instanceId,
           processStartToken: deps.processStartToken,
           bootId: deps.bootId,
@@ -131,13 +134,27 @@ function applyDecision(
       : "runtime_failed"
     : decision.error;
 
+  // A clean terminal reconcile (this step cleared the transition with no new
+  // block/error) resets any stale block/error from an earlier transient conflict —
+  // otherwise status/GUI would report blocked=true forever on a now-healthy route.
+  const clearedCleanly =
+    transition === null && control.transition !== null && block === null && error === null;
+
   return {
     ...control,
     routeLease: lease,
     drainingGeneration: drain,
     transition,
-    reconcileBlocked: block ? { reason: block, at: nowIso } : control.reconcileBlocked,
-    lastError: error ? { code: error, detail: null, at: nowIso } : control.lastError,
+    reconcileBlocked: block
+      ? { reason: block, at: nowIso }
+      : clearedCleanly
+        ? null
+        : control.reconcileBlocked,
+    lastError: error
+      ? { code: error, detail: null, at: nowIso }
+      : clearedCleanly
+        ? null
+        : control.lastError,
     updatedAt: nowIso,
   };
 }
@@ -205,6 +222,7 @@ export function superviseDrive(deps: SupervisorDeps): { ready: boolean } {
 
     if (
       t.kind === "enable" &&
+      control.desiredEnabled &&
       (t.phase === "intent_persisted" || t.phase === "bootstrap_pending")
     ) {
       const healthy = deps.listener.isAlive() && deps.listener.healthCheck() === "matching";

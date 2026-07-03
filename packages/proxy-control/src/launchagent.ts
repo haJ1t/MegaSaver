@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const MANAGED_LABEL = "com.megasaver.proxy";
@@ -122,6 +122,14 @@ function backup(plistPath: string, backupDir: string): () => void {
 // `blocked` so the caller can restore a backed-up legacy plist.
 function install(deps: LaunchAgentDeps, expected: string): EnsureServiceResult {
   mkdirSync(join(deps.plistPath, ".."), { recursive: true });
+  // Refuse to write THROUGH a symlink at the plist path (consistency with the
+  // store/settings writers) — a planted link must not redirect the write.
+  try {
+    if (existsSync(deps.plistPath) && lstatSync(deps.plistPath).isSymbolicLink())
+      return { status: "blocked", reason: "refusing symlinked plist path" };
+  } catch {
+    /* lstat race — fall through to the guarded write */
+  }
   try {
     writeFileSync(deps.plistPath, expected, { mode: 0o644 });
   } catch {

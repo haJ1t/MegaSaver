@@ -7,6 +7,7 @@ import {
 import {
   type LaunchctlRunner,
   type ProcessIdentityAdapter,
+  type ProxyControlState,
   ensureManagedService,
   nodeLaunchctlRunner,
   nodeProcessIdentity,
@@ -125,6 +126,7 @@ export function startProxy(
 export function stopProxy(
   storeRoot: string,
   deps: ProxyGuiDeps = defaultProxyGuiDeps(storeRoot),
+  opts: { confirmClientsRestarted?: boolean } = {},
 ): ProxyStatus {
   const now = deps.now?.() ?? Date.now();
   const locked = withTransitionLock(
@@ -134,15 +136,27 @@ export function stopProxy(
     () => {
       const control = readControlState(storeRoot);
       const nowIso = new Date(now).toISOString();
+      // A plain toggle-off enters drain (the listener stays up for an
+      // already-launched client). A confirm-restarted call persists a
+      // drain_complete transition so the supervisor stops its own listener and
+      // reaches the terminal idle state — otherwise drain never completes.
+      const transition: ProxyControlState["transition"] = opts.confirmClientsRestarted
+        ? {
+            ...guiTransitionOwner(nowIso),
+            kind: "drain_complete",
+            phase: "confirmation_persisted",
+            expectedUnrouted: true,
+          }
+        : {
+            ...guiTransitionOwner(nowIso),
+            kind: "disable",
+            phase: "unroute_expected",
+            expectedUnrouted: true,
+          };
       writeControlState(storeRoot, {
         ...control,
         desiredEnabled: false,
-        transition: {
-          ...guiTransitionOwner(nowIso),
-          kind: "disable",
-          phase: "unroute_expected",
-          expectedUnrouted: true,
-        },
+        transition,
         updatedAt: nowIso,
       });
     },

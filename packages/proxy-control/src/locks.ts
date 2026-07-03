@@ -171,6 +171,11 @@ export const nodeProcessIdentity: ProcessIdentityAdapter = {
   isLiveSameBoot(pid, token, boot) {
     if (boot !== bootId()) return false;
     const current = processStartToken(pid);
+    // A transient liveness-tool failure must NOT be read as "dead" — that would
+    // let a contender steal a still-live owner's lock. Only a CONFIRMED-absent
+    // read (empty token) declares the owner dead; on UNKNOWN we assume live and
+    // fall back to the lease as the reclaim authority.
+    if (current === UNKNOWN_TOKEN) return true;
     return current !== "" && current === token;
   },
 };
@@ -186,6 +191,22 @@ function bootId(): string {
   }
 }
 
+// Sentinel: the liveness tool failed (not "process absent"). Distinct from a real
+// token and from "" (confirmed absent) so callers can fall back to lease authority
+// instead of wrongly declaring a live owner dead. `\0` can't occur in real output.
+const UNKNOWN_TOKEN = "\0unknown";
+
+// True when the error proves the process is ABSENT (vs a transient tool failure):
+// linux `/proc/<pid>/stat` → ENOENT; macOS `ps` RAN and exited non-zero (numeric
+// status). A spawn failure (missing binary / EAGAIN) has no numeric status / a
+// non-ENOENT code and is treated as UNKNOWN.
+function isConfirmedAbsent(e: unknown): boolean {
+  if (process.platform === "linux") {
+    return e instanceof Error && "code" in e && (e as NodeJS.ErrnoException).code === "ENOENT";
+  }
+  return typeof (e as { status?: unknown } | null)?.status === "number";
+}
+
 function processStartToken(pid: number): string {
   try {
     if (process.platform === "linux") {
@@ -196,7 +217,7 @@ function processStartToken(pid: number): string {
     }
     // macOS/BSD: elapsed-since-start is stable enough for same-boot identity.
     return execFileSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" }).trim();
-  } catch {
-    return "";
+  } catch (e) {
+    return isConfirmedAbsent(e) ? "" : UNKNOWN_TOKEN;
   }
 }

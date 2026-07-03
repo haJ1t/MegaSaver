@@ -40,7 +40,9 @@ export const upstreamBaseUrlSchema = z.string().refine((raw) => {
   if (u.search !== "" || u.hash !== "") return false;
   if (u.pathname !== "" && u.pathname !== "/") return false;
   if (u.protocol === "https:") return true;
-  if (u.protocol === "http:") return u.hostname === "127.0.0.1" || u.hostname === "::1";
+  // URL.hostname returns IPv6 literals bracketed ("[::1]"), so match that form.
+  if (u.protocol === "http:")
+    return u.hostname === "127.0.0.1" || u.hostname === "[::1]" || u.hostname === "::1";
   return false;
 }, "upstream must be an https origin or an explicit loopback http origin, no userinfo/path/query/fragment");
 
