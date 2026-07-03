@@ -23,14 +23,14 @@ describe("invocation heartbeat", () => {
   it("records a workspace and derives latest", () => {
     recordInvocationHeartbeat(store, "aaaa", iso(NOW), NOW);
     const v = readHeartbeatView(store, NOW);
-    expect(v.workspaces.aaaa).toBe(iso(NOW));
+    expect(v.workspaces).toHaveProperty("aaaa", iso(NOW));
     expect(v.latest).toEqual({ ts: iso(NOW), workspaceKey: "aaaa" });
   });
 
   it("is strict-newer per key (older is a no-op)", () => {
     recordInvocationHeartbeat(store, "aaaa", iso(NOW), NOW);
     recordInvocationHeartbeat(store, "aaaa", iso(NOW - 5000), NOW);
-    expect(readHeartbeatView(store, NOW).workspaces.aaaa).toBe(iso(NOW));
+    expect(readHeartbeatView(store, NOW).workspaces).toHaveProperty("aaaa", iso(NOW));
   });
 
   it("never moves latest backward on clock regression", () => {
@@ -41,7 +41,7 @@ describe("invocation heartbeat", () => {
 
   it("rejects a >5-minute future skew", () => {
     recordInvocationHeartbeat(store, "aaaa", iso(NOW + 6 * 60_000), NOW);
-    expect(readHeartbeatView(store, NOW).workspaces.aaaa).toBeUndefined();
+    expect(readHeartbeatView(store, NOW).workspaces).not.toHaveProperty("aaaa");
     expect(readHeartbeatView(store, NOW).latest).toBeNull();
   });
 
@@ -49,8 +49,8 @@ describe("invocation heartbeat", () => {
     recordInvocationHeartbeat(store, "old", iso(NOW - 31 * 86_400_000), NOW - 31 * 86_400_000);
     recordInvocationHeartbeat(store, "new", iso(NOW), NOW);
     const v = readHeartbeatView(store, NOW);
-    expect(v.workspaces.old).toBeUndefined();
-    expect(v.workspaces.new).toBe(iso(NOW));
+    expect(v.workspaces).not.toHaveProperty("old");
+    expect(v.workspaces).toHaveProperty("new", iso(NOW));
   });
 
   it("caps at 256 newest workspaces", () => {
@@ -58,8 +58,8 @@ describe("invocation heartbeat", () => {
       recordInvocationHeartbeat(store, `w${i}`, iso(NOW - (260 - i)), NOW);
     const v = readHeartbeatView(store, NOW);
     expect(Object.keys(v.workspaces).length).toBe(256);
-    expect(v.workspaces.w0).toBeUndefined(); // oldest evicted
-    expect(v.workspaces.w259).toBe(iso(NOW - 1));
+    expect(v.workspaces).not.toHaveProperty("w0"); // oldest evicted
+    expect(v.workspaces).toHaveProperty("w259", iso(NOW - 1));
   });
 });
 

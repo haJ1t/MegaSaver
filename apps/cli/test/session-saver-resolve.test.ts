@@ -29,7 +29,7 @@ describe("session saver resolve", () => {
       stdout: (l) => out.push(l),
       stderr: () => {},
       json,
-      now,
+      ...(now !== undefined ? { now } : {}),
     });
     return { out, code };
   };

@@ -3684,3 +3684,25 @@ fixed → confirmed CONSISTENT. Security + tracer round-2 artifacts stand for th
 round-3 text (consistency/simplification deltas, foreign_worktree_admin a net
 security gain). Artifact: docs/superpowers/reviews/2026-07-03-round2-round3-counter-review.md.
 Both specs plan-ready. Next: write plans (saver 1 of 2, proxy 2 of 2).
+
+## [2026-07-03] implement | saver activation inheritance S1–S10 shipped
+
+Branch feat/saver-activation-inheritance. Full TDD (red→green→commit per task),
+`pnpm verify` green 46/46 tasks. Delivers the fix for the 2026-07-02 live
+finding (worktree sessions uncompressed under an enabled main repo). New
+context-gate modules: family-identity (canonical-path key, durable across
+reboot/remount/restore), git-family (bounded ≤32-ancestor/≤40-syscall common-dir
+resolver, no git subprocess; separate-git-dir main+worktrees converge;
+foreign_worktree_admin rejected), saver-store (v1 exact/family/global records +
+legacy normalize, atomic 0600/0700, digest fail-closed, activation lock),
+resolve-saver-settings (precedence steps 0–4; degraded git → global default,
+legacy-under-degraded fail-closed), saver-heartbeat (256/30d/future-skew,
+derived latest+latestCompression, non-mutating reads; feeds proxy status),
+activation-scope (shared CLI/GUI/hook writer — no drift). shared:
+RepositoryFamilyKey. Hook (saver-run.ts) resolves via family precedence +
+liveness heartbeats; integration test proves worktree inheritance + compression.
+CLI: workspace toggle repo-aware (family default, --exact opt-down, scope echo)
++ new `default` + `resolve`. GUI bridge + toggle repo-aware, reports effective
+source. Public behavior change: v1 record shape + family-default scope
+(changeset added). Reviewer gate: fresh-context code-reviewer + critic (S10).
+Counts: context-gate 236, cli 765, gui 419. Remaining: proxy plan P0–P9 (2 of 2).
