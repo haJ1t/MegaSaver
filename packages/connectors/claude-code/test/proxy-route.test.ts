@@ -1,0 +1,97 @@
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createClaudeRouteAdapter } from "../src/proxy-route.js";
+
+let dir: string;
+let settings: string;
+const URL_OURS = "http://127.0.0.1:8787";
+const URL_FOREIGN = "http://127.0.0.1:9999";
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "mega-route-"));
+  settings = join(dir, "settings.json");
+});
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true });
+});
+
+const adapter = () => createClaudeRouteAdapter(settings);
+const readEnv = () =>
+  (JSON.parse(readFileSync(settings, "utf8")) as { env?: { ANTHROPIC_BASE_URL?: string } }).env
+    ?.ANTHROPIC_BASE_URL;
+
+describe("inspect", () => {
+  it("absent when the file or env is missing", () => {
+    expect(adapter().inspect(URL_OURS)).toBe("absent");
+    writeFileSync(settings, JSON.stringify({ other: 1 }));
+    expect(adapter().inspect(URL_OURS)).toBe("absent");
+  });
+
+  it("exact when env matches the expected url", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS } }));
+    expect(adapter().inspect(URL_OURS)).toBe("exact");
+  });
+
+  it("foreign when env holds a different url", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_FOREIGN } }));
+    expect(adapter().inspect(URL_OURS)).toBe("foreign");
+  });
+
+  it("invalid on a corrupt file", () => {
+    writeFileSync(settings, "{corrupt");
+    expect(adapter().inspect(URL_OURS)).toBe("invalid");
+  });
+
+  it("invalid on a symlinked settings file", () => {
+    if (process.platform === "win32") return;
+    writeFileSync(
+      join(dir, "real.json"),
+      JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS } }),
+    );
+    symlinkSync(join(dir, "real.json"), settings);
+    expect(adapter().inspect(URL_OURS)).toBe("invalid");
+  });
+});
+
+describe("apply", () => {
+  it("writes the route and preserves other keys", () => {
+    writeFileSync(settings, JSON.stringify({ env: { FOO: "1" }, model: "x" }));
+    adapter().apply(URL_OURS);
+    expect(readEnv()).toBe(URL_OURS);
+    const s = JSON.parse(readFileSync(settings, "utf8"));
+    expect(s.env.FOO).toBe("1");
+    expect(s.model).toBe("x");
+    expect(adapter().inspect(URL_OURS)).toBe("exact");
+  });
+
+  it("creates a fresh settings file when none exists", () => {
+    adapter().apply(URL_OURS);
+    expect(readEnv()).toBe(URL_OURS);
+  });
+});
+
+describe("removeExpected (value-guard)", () => {
+  it("removes ONLY the exact owned url", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS, FOO: "1" } }));
+    adapter().removeExpected(URL_OURS);
+    expect(readEnv()).toBeUndefined();
+    expect(JSON.parse(readFileSync(settings, "utf8")).env.FOO).toBe("1");
+  });
+
+  it("never removes a foreign url", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_FOREIGN } }));
+    adapter().removeExpected(URL_OURS);
+    expect(readEnv()).toBe(URL_FOREIGN); // preserved
+  });
+});
+
+describe("ensureHooks", () => {
+  it("installs the MegaSaver hooks and reports configured", () => {
+    const r = adapter().ensureHooks();
+    expect(r.configured).toBe(true);
+    const s = JSON.parse(readFileSync(settings, "utf8"));
+    expect(JSON.stringify(s)).toContain("mega hooks saver");
+  });
+});
