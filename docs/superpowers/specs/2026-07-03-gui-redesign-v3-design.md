@@ -90,8 +90,8 @@ motion honoured, no new animation vocabulary.
 | # | Page | Content | Source components today |
 |---|------|---------|-------------------------|
 | 1 | **Sessions** (home) | Today-summary stat cards (tokens saved, reduction %, live count) + workspace-grouped session list → selecting a session opens the slim cockpit | `WorkspaceSessionList`, `session-cockpit` |
-| 2 | **Token Saver** | Hook connection, proxy activation, saver-mode activation, daemon status, savings chart (workspace-scoped controls) | sub-components of `views/cockpit/token-saver-panel.tsx`: `hook-connection`, `proxy-activation`, `saver-mode-activation`, `daemon-status` |
-| 3 | **Memory** | Memory list + graph + approve/reject | `views/cockpit/memory-panel`, `memory-graph-panel` (wrapped today as `MemoryCockpitPanel` / `MemoryGraphCockpitPanel`) |
+| 2 | **Token Saver** | Global controls: hook connection, proxy activation, daemon status; + saver-mode activation for the active workspace. (Per-session savings *stats* live in the cockpit rail, not here.) | `views/cockpit/{hook-connection,proxy-activation,daemon-status,saver-mode-activation}.tsx` (today nested inside `token-saver-panel.tsx`'s `<details>Advanced`) |
+| 3 | **Memory** | Memory list + graph (+ approve/reject where present) for the active workspace | `views/cockpit/memory-panel`, `memory-graph-panel` (unchanged; take `dir,id`) |
 | 4 | **Workspace** | Rules, permissions, index, tools, context | `Workspace{Rules,Permissions,Index,Tools,Context}CockpitPanel` (`cockpit/panels/workspace-panels.tsx`) |
 | 5 | **Agent Office** | Existing view, moved into sidebar | `agent-office-view` |
 | 6 | **Setup** | Existing agent-setup doctor, moved into sidebar | `agent-setup-doctor` |
@@ -99,9 +99,51 @@ motion honoured, no new animation vocabulary.
 The panels already exist as standalone components. The redesign
 **relocates** them out of the cockpit `panel-registry` into their own page
 shells; it does not rewrite their internals. Each fetches its own data via
-existing clients (`api-client`, `claude-sessions-client`,
-`workspaces-client`, `office-client`), so relocation is composition, not a
-data-flow change.
+existing clients (`claude-sessions-client`, `workspaces-client`,
+`office-client`).
+
+For the five **Workspace** panels this is pure composition: their bridge
+routes are `GET /api/workspaces/:key/*` (session-independent, keyed only by
+`workspaceKey`). But **Memory** and **saver activation** are *session-
+anchored* at the bridge (`/api/claude-sessions/:dir/:id/…`) even though their
+underlying data is workspace-scoped — there is no `/api/workspaces/:key/memory`
+or `/api/workspaces/:key/token-saver` route. Moving them onto session-less
+sidebar pages therefore needs a small **workspace-context seam** (next
+section), not a route change.
+
+### Session-anchored data seam (workspace context)
+
+The three workspace/global sidebar pages (Token Saver, Memory, Workspace)
+share one lifted **active-workspace** selection, resolved entirely on the
+frontend — **no bridge route is added** (decision locked with the user,
+2026-07-03; option: workspace picker, frontend-only).
+
+- **Source**: the same session list the home page already fetches
+  (`fetchClaudeSessions` → `groupSessionsByCwd`). Each group yields
+  `{ key: encodeWorkspaceKey(cwd), cwd, label, rep: sessions[0] }` where
+  `rep` is the most-recent session in that workspace.
+  <!-- ponytail: single-sourced from the recent-session list; a workspace
+  with zero sessions in the recent window won't appear. Fine for a
+  single-dev tool; widen to fetchWorkspaces() only if that gap bites. -->
+- **State**: `activeWorkspace` is lifted into `app.tsx` (a `useState`
+  alongside `view`/`selected`), defaulting to the most-recent group. A shared
+  `WorkspacePicker` component (a `<select>`/listbox of `label`s) sets it.
+- **Consumption**:
+  - **Workspace page** → passes `activeWorkspace.key` to the five workspace
+    panels (they already take `workspaceKey`; the cockpit adapter wrappers
+    that derived the key from a session `cwd` are replaced by direct
+    `workspaceKey` props on the page).
+  - **Memory page** → passes `activeWorkspace.rep.{dir,id}` to `MemoryPanel`
+    + `MemoryGraphPanel` (unchanged components; they already take `dir,id`).
+    Project-scoped memory is what surfaces, which is the intent.
+  - **Token Saver page** → hook / proxy / daemon controls are global (no
+    args); `SaverModeActivation` takes `activeWorkspace.rep.{dir,id}` (its
+    route resolves cwd server-side, so any session in the workspace is
+    equivalent).
+
+The "representative session" is a deliberate, documented indirection: the
+bridge keys these overlays by session id, but the *effect* is per-workspace,
+so picking the workspace's latest session is correct and stable.
 
 ### Scope reconciliation (registry truth vs redesign)
 
@@ -172,13 +214,23 @@ are removed because those are now sidebar pages. `panel-registry.ts` and
 
 ## Files touched (anticipated)
 
-- `src/app.tsx` — top-nav → sidebar shell; view switch grows to six.
+- `src/app.tsx` — top-nav → sidebar shell; view switch grows to six; holds
+  the lifted `activeWorkspace` state + derives the workspace list from the
+  session groups.
 - `src/view-id.ts` + `src/view-id.test-d.ts` — enum + label + tuple pin.
+- New: `src/components/sidebar.tsx` — the persistent nav (six items + daemon
+  footer).
+- New: `src/components/workspace-picker.tsx` — shared active-workspace
+  `<select>` used by the three workspace/global pages.
+- New: `src/lib/workspace-context.ts` — `WorkspaceOption` type +
+  `deriveWorkspaceOptions(sessions)` (groups → `{key,cwd,label,rep}` via
+  `groupSessionsByCwd` + `encodeWorkspaceKey`).
 - New: `src/views/token-saver-page.tsx`, `src/views/memory-page.tsx`,
   `src/views/workspace-page.tsx` — thin shells composing existing
-  `views/cockpit/*` panels.
-- `src/cockpit/session-cockpit.tsx` + `src/cockpit/panel-registry.ts` —
-  reduce to session-scoped panels; add right-rail layout.
+  `views/cockpit/*` panels against the active workspace.
+- `src/cockpit/session-cockpit.tsx` + `src/cockpit/panel-registry.ts` +
+  `src/cockpit/panels/*` — reduce to the session-scoped set (transcript,
+  telemetry, tasks, session token-stats slice); add right-rail layout.
 - `src/styles/tokens.css` — amber accent values (light + dark).
 - `apps/gui/DESIGN.md` — v3 update (accent, sidebar, IA, cockpit).
 - Component tests under `apps/gui/test/**` updated for moved panels and the
