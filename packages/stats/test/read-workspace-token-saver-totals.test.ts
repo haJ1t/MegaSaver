@@ -87,16 +87,10 @@ describe("readWorkspaceTokenSaverTotals", () => {
       "44444444-4444-4444-8444-444444444444.settings.json",
       JSON.stringify({ mode: "balanced", enabled: true }),
     );
-    writeFile(
-      "workspace-token-saver.json",
-      JSON.stringify({ workspaceKey: WK, enabled: true }),
-    );
+    writeFile("workspace-token-saver.json", JSON.stringify({ workspaceKey: WK, enabled: true }));
     writeFile("session-intent.json", JSON.stringify({ intent: "refactor stats" }));
     // Not a .json file — must be ignored.
-    writeFile(
-      "55555555-5555-4555-8555-555555555555.events.jsonl",
-      '{"id":"e1"}\n',
-    );
+    writeFile("55555555-5555-4555-8555-555555555555.events.jsonl", '{"id":"e1"}\n');
 
     const totals = readWorkspaceTokenSaverTotals(store, WK);
 
@@ -163,5 +157,23 @@ describe("readWorkspaceTokenSaverTotals", () => {
     });
     const totals = readWorkspaceTokenSaverTotals(store, WK);
     expect(totals?.savingRatio).toBe(0);
+  });
+
+  it("picks latestUpdatedAt by chronology when the later summary sorts lexically smaller", () => {
+    // 13:00+02:00 == 11:00Z (earlier), but lexically GREATER than 12:00Z.
+    writeSummary("11111111-1111-4111-8111-111111111111", {
+      ...summary(),
+      liveSessionId: "11111111-1111-4111-8111-111111111111",
+      updatedAt: "2026-07-03T13:00:00.000+02:00",
+    });
+    // 12:00Z is chronologically later but lexically SMALLER than the string above.
+    writeSummary("22222222-2222-4222-8222-222222222222", {
+      ...summary(),
+      liveSessionId: "22222222-2222-4222-8222-222222222222",
+      updatedAt: "2026-07-03T12:00:00.000Z",
+    });
+
+    const totals = readWorkspaceTokenSaverTotals(store, WK);
+    expect(totals?.latestUpdatedAt).toBe("2026-07-03T12:00:00.000Z");
   });
 });

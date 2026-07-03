@@ -344,7 +344,13 @@ export function readWorkspaceTokenSaverTotals(
     totals.bytesSavedTotal += summary.bytesSavedTotal;
     totals.secretsRedactedTotal += summary.secretsRedactedTotal;
     totals.chunksStoredTotal += summary.chunksStoredTotal;
-    if (totals.latestUpdatedAt === null || summary.updatedAt > totals.latestUpdatedAt) {
+    // Compare parsed epoch ms, not raw ISO strings: an ISO timestamp with a
+    // non-UTC offset (e.g. +02:00) can sort lexically opposite to its true
+    // chronology. Store the original ISO string, pick by chronological order.
+    if (
+      totals.latestUpdatedAt === null ||
+      Date.parse(summary.updatedAt) > Date.parse(totals.latestUpdatedAt)
+    ) {
       totals.latestUpdatedAt = summary.updatedAt;
     }
   }

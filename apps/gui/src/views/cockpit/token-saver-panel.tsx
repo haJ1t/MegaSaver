@@ -118,33 +118,33 @@ export function TokenSaverPanel({ dir, id }: { dir: string; id: string }): JSX.E
                   <TokenSavedValue stats={stats} />
                 </td>
               </tr>
-                <tr>
-                  <th scope="row" className="px-4 py-3 text-left font-medium text-text-secondary">
-                    Hook
-                  </th>
-                  <td className="px-4 py-3">
-                    <HookStatusValue />
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row" className="px-4 py-3 text-left font-medium text-text-secondary">
-                    Saver
-                  </th>
-                  <td className="px-4 py-3">
-                    <SaverStatusValue dir={dir} id={id} />
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row" className="px-4 py-3 text-left font-medium text-text-secondary">
-                    Daemon
-                  </th>
-                  <td className="px-4 py-3">
-                    <DaemonStatusValue />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+              <tr>
+                <th scope="row" className="px-4 py-3 text-left font-medium text-text-secondary">
+                  Hook
+                </th>
+                <td className="px-4 py-3">
+                  <HookStatusValue />
+                </td>
+              </tr>
+              <tr>
+                <th scope="row" className="px-4 py-3 text-left font-medium text-text-secondary">
+                  Saver
+                </th>
+                <td className="px-4 py-3">
+                  <SaverStatusValue dir={dir} id={id} />
+                </td>
+              </tr>
+              <tr>
+                <th scope="row" className="px-4 py-3 text-left font-medium text-text-secondary">
+                  Daemon
+                </th>
+                <td className="px-4 py-3">
+                  <DaemonStatusValue />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       )}
 
       <details className="group">
