@@ -1,5 +1,6 @@
 import { once } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { HEALTH_PATH, buildHealthResponse } from "./health.js";
 import { countRequestMessages, createSseUsageScanner, parseUsageFromJson } from "./parse-usage.js";
 import type { ProxyUsageEvent } from "./usage-event.js";
 
@@ -8,6 +9,9 @@ export type ProxyHandlerDeps = {
   /** Injectable for tests; defaults to global fetch. */
   upstreamFetch?: typeof fetch;
   onUsage?: (event: ProxyUsageEvent) => void;
+  // Ownership health: when set, the reserved health path answers locally with a
+  // nonce-bound proof and is never forwarded upstream.
+  health?: { capability: string; instanceId: string };
   now: () => string;
   newId: () => string;
 };
@@ -54,6 +58,11 @@ async function readBody(req: IncomingMessage): Promise<Buffer | null> {
   return Buffer.concat(chunks);
 }
 
+function pathnameOf(target: string): string {
+  const q = target.indexOf("?");
+  return q === -1 ? target : target.slice(0, q);
+}
+
 function filterRequestHeaders(headers: IncomingMessage["headers"]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
@@ -79,12 +88,26 @@ function responseHeaders(headers: Headers): Record<string, string> {
 export function createProxyHandler(
   deps: ProxyHandlerDeps,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  const { upstreamBaseUrl, onUsage, now, newId } = deps;
+  const { upstreamBaseUrl, onUsage, health, now, newId } = deps;
   const doFetch = deps.upstreamFetch ?? fetch;
 
   return async (req, res) => {
     const path = req.url ?? "/";
     const method = req.method ?? "GET";
+
+    // Ownership health-check: answered locally, never forwarded. The pathname is
+    // matched exactly (ignoring the query) so a hostile request-target cannot
+    // reach it and it never becomes an upstream path.
+    if (health && pathnameOf(path) === HEALTH_PATH) {
+      const challenge = new URLSearchParams(path.split("?")[1] ?? "").get("challenge") ?? "";
+      const payload = JSON.stringify(
+        buildHealthResponse(health.capability, health.instanceId, challenge),
+      );
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(payload);
+      return;
+    }
+
     const bodyBuf = await readBody(req);
     if (bodyBuf === null) {
       res.writeHead(413, { "content-type": "text/plain; charset=utf-8" });

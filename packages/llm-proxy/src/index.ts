@@ -12,3 +12,11 @@ export {
   type RunningProxy,
 } from "./server.js";
 export { appendProxyUsage, listProxyUsage } from "./store.js";
+export {
+  HEALTH_PATH,
+  HEALTH_SERVICE,
+  type HealthResponse,
+  computeHealthProof,
+  buildHealthResponse,
+  verifyHealth,
+} from "./health.js";
