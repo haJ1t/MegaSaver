@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   MEGA_SAVER_CG_BLOCK_START,
   readTargetFile,
@@ -8,6 +8,12 @@ import {
   writeTargetFile,
 } from "@megasaver/connectors-shared";
 import { ContentStoreError, loadOverlayChunkSet } from "@megasaver/content-store";
+import {
+  nodeResolverDeps,
+  resolveActivationScope,
+  resolveWorkspaceTokenSaverSettings,
+  writeActivation,
+} from "@megasaver/context-gate";
 import { type TokenSaverSettings, tokenSaverSettingsSchema } from "@megasaver/core";
 import { modeToBudget, tokenSaverModeSchema, workspaceLabel } from "@megasaver/shared";
 import { type StatsStore, readOverlayEvents, readOverlaySummary } from "@megasaver/stats";
@@ -43,39 +49,9 @@ function readOverlaySettings(
   return parsed.success ? parsed.data : null;
 }
 
-const workspaceSaverSettingsSchema = z.object({
-  enabled: z.boolean(),
-  mode: tokenSaverModeSchema,
-  updatedAt: z.string(),
-});
-type WorkspaceSaverSettings = z.infer<typeof workspaceSaverSettingsSchema>;
-
 const WORKSPACE_SAVER_BODY = z
-  .object({ enabled: z.boolean(), mode: tokenSaverModeSchema })
+  .object({ enabled: z.boolean(), mode: tokenSaverModeSchema, exact: z.boolean().optional() })
   .strict();
-
-const DISABLED_DEFAULT: WorkspaceSaverSettings = {
-  enabled: false,
-  mode: "balanced",
-  updatedAt: "",
-};
-
-function workspaceSaverSettingsPath(ctx: RouteContext, wk: string): string {
-  return join(ctx.storeRoot, "stats", wk, "workspace-token-saver.json");
-}
-
-// Boundary read (§8): a missing or malformed settings file reads as disabled
-// rather than crashing.
-function readWorkspaceSaverSettings(ctx: RouteContext, wk: string): WorkspaceSaverSettings {
-  const path = workspaceSaverSettingsPath(ctx, wk);
-  if (!existsSync(path)) return DISABLED_DEFAULT;
-  try {
-    const parsed = workspaceSaverSettingsSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
-    return parsed.success ? parsed.data : DISABLED_DEFAULT;
-  } catch {
-    return DISABLED_DEFAULT;
-  }
-}
 
 async function claudeMcpInstalled(ctx: RouteContext): Promise<boolean> {
   const status = await ctx.mcpOps.status();
@@ -95,13 +71,28 @@ export async function handleWorkspaceSaverStatus(
   const resolved = await resolveOr4xx(ctx, dir, id);
   if (!resolved) return;
   try {
-    const settings = readWorkspaceSaverSettings(ctx, resolved.workspaceKey);
+    // Report the EFFECTIVE activation the saver hook resolves (repository family
+    // inheritance included), not just the exact-cwd record.
+    const effective = resolveWorkspaceTokenSaverSettings(
+      ctx.storeRoot,
+      resolved.cwd,
+      nodeResolverDeps(),
+    );
     const blockPresent = await claudeMdHasBlock(resolved.cwd);
     const mcpInstalled = await claudeMcpInstalled(ctx);
     ctx.sendJson(
       ctx.res,
       200,
-      { enabled: settings.enabled, mode: settings.mode, blockPresent, mcpInstalled },
+      {
+        enabled: effective.enabled,
+        mode: effective.mode,
+        source: effective.source,
+        repositoryFamilyKey: effective.repositoryFamilyKey,
+        familyUnavailableReason: effective.familyUnavailableReason,
+        familyIdentityDiagnostic: effective.familyIdentityDiagnostic,
+        blockPresent,
+        mcpInstalled,
+      },
       ctx.origin,
     );
   } catch (err) {
@@ -138,15 +129,13 @@ export async function handleWorkspaceSaverSet(
   }
 
   try {
-    const { enabled, mode } = parsed.data;
+    const { enabled, mode, exact } = parsed.data;
 
-    // 1) Persist cwd-keyed settings in the store (never in the user repo).
-    const settingsPath = workspaceSaverSettingsPath(ctx, resolved.workspaceKey);
-    mkdirSync(dirname(settingsPath), { recursive: true });
-    await writeTargetFile({
-      absPath: settingsPath,
-      content: JSON.stringify({ enabled, mode, updatedAt: ctx.now() }),
-    });
+    // 1) Persist activation scope-aware: inside a Git repo this writes a family
+    //    record (covers all worktrees); --exact and non-Git cwds write an exact
+    //    record. Same shared writer the CLI + hook use, so they never drift.
+    const scope = resolveActivationScope(resolved.cwd, exact ?? false);
+    writeActivation(ctx.storeRoot, scope, enabled, mode);
 
     // 2) Upsert the CONTEXT_GATE block into <cwd>/CLAUDE.md (sentinel-bounded,
     //    atomic, symlink-refusing). Skip writing when disabling and no file
@@ -172,7 +161,16 @@ export async function handleWorkspaceSaverSet(
 
     const blockPresent = await claudeMdHasBlock(resolved.cwd);
     const mcpInstalled = await claudeMcpInstalled(ctx);
-    ctx.sendJson(ctx.res, 200, { enabled, mode, blockPresent, mcpInstalled }, ctx.origin);
+    const coverage =
+      scope.kind === "repository"
+        ? `repository family (covers all worktrees of ${scope.root}; a checkout's own exact override still wins)`
+        : "this workspace only";
+    ctx.sendJson(
+      ctx.res,
+      200,
+      { enabled, mode, scope: scope.kind, coverage, blockPresent, mcpInstalled },
+      ctx.origin,
+    );
   } catch (err) {
     handleCaughtError(ctx.res, ctx.origin, err, ctx.sendError);
   }

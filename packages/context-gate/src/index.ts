@@ -60,3 +60,51 @@ export {
   buildOverlayHints,
   type OverlayFailureRecord,
 } from "./overlay-failures.js";
+export {
+  type CaseMode,
+  type FamilyFsAdapter,
+  type CanonicalFamilyPath,
+  type FamilyKey,
+  canonicalFamilyPath,
+  familyKeyFromPath,
+} from "./family-identity.js";
+export {
+  type GitFamilyFs,
+  type GitFamilyStat,
+  type GitDegradedReason,
+  type GitCommonDirResult,
+  nodeGitFamilyFs,
+  resolveGitCommonDir,
+} from "./git-family.js";
+export {
+  type NormalizedSaver,
+  type ExactClassification,
+  readExactRecord,
+  readFamilyRecord,
+  readGlobalDefault,
+  writeExactRecord,
+  writeFamilyRecord,
+  writeGlobalDefault,
+  withActivationLock,
+} from "./saver-store.js";
+export {
+  type ResolvedWorkspaceTokenSaver,
+  type ResolverDeps,
+  type SaverSource,
+  type FamilyUnavailableReason,
+  resolveWorkspaceTokenSaverSettings,
+  nodeResolverDeps,
+} from "./resolve-saver-settings.js";
+export {
+  type HeartbeatView,
+  type HeartbeatStamp,
+  readHeartbeatView,
+  recordInvocationHeartbeat,
+  recordCompressionHeartbeat,
+} from "./saver-heartbeat.js";
+export {
+  type ActivationScope,
+  resolveActivationScope,
+  writeActivation,
+  readActivationMode,
+} from "./activation-scope.js";

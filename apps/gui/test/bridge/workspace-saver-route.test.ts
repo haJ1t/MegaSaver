@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -55,6 +55,26 @@ describe("workspace token-saver activation route", () => {
     const claudeMd = readFileSync(join(cwd, "CLAUDE.md"), "utf8");
     expect(claudeMd).toContain(CG_START);
     expect(claudeMd).toContain("Mode: aggressive");
+  });
+
+  it("POST inside a Git repo writes a repository-family record (covers all worktrees)", async () => {
+    // Make the workspace cwd a real Git main checkout.
+    mkdirSync(join(cwd, ".git", "objects"), { recursive: true });
+    writeFileSync(join(cwd, ".git", "HEAD"), "ref: refs/heads/main\n");
+    server = await start();
+    const res = await fetch(url(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: true, mode: "safe" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scope).toBe("repository");
+    expect(body.coverage.toLowerCase()).toContain("repository family");
+    // Status reflects the inherited family activation.
+    const status = await (await fetch(url())).json();
+    expect(status.enabled).toBe(true);
+    expect(status.source).toBe("repository");
   });
 
   it("POST enabled=false removes the block again", async () => {

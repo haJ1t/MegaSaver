@@ -1,6 +1,8 @@
 import { defineCommand } from "citty";
+import { sessionSaverDefaultCommand } from "./default.js";
 import { sessionSaverDisableCommand } from "./disable.js";
 import { sessionSaverEnableCommand } from "./enable.js";
+import { sessionSaverResolveCommand } from "./resolve.js";
 import { sessionSaverStatsCommand } from "./stats.js";
 import { sessionSaverStatusCommand } from "./status.js";
 import { sessionSaverWorkspaceCommand } from "./workspace.js";
@@ -15,6 +17,18 @@ export {
   runSessionSaverEnable,
   sessionSaverEnableCommand,
 } from "./enable.js";
+export {
+  type RunSessionSaverDefaultEnableInput,
+  type RunSessionSaverDefaultDisableInput,
+  runSessionSaverDefaultEnable,
+  runSessionSaverDefaultDisable,
+  sessionSaverDefaultCommand,
+} from "./default.js";
+export {
+  type RunSessionSaverResolveInput,
+  runSessionSaverResolve,
+  sessionSaverResolveCommand,
+} from "./resolve.js";
 export {
   type RunSessionSaverStatsInput,
   runSessionSaverStats,
@@ -41,5 +55,7 @@ export const sessionSaverCommand = defineCommand({
     status: sessionSaverStatusCommand,
     stats: sessionSaverStatsCommand,
     workspace: sessionSaverWorkspaceCommand,
+    default: sessionSaverDefaultCommand,
+    resolve: sessionSaverResolveCommand,
   },
 });

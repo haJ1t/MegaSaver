@@ -20,9 +20,11 @@ const RECORDED = {
 function deps(overrides: Partial<Parameters<typeof buildSaverDecision>[1]> = {}) {
   return {
     storeRoot: "/store",
-    readSettings: () => ({ enabled: true, mode: "balanced" as const }),
+    resolveSettings: () => ({ enabled: true, mode: "balanced" as const }),
     readSessionIntent: () => undefined,
     record: vi.fn().mockResolvedValue(RECORDED),
+    recordInvocation: vi.fn(),
+    recordCompression: vi.fn(),
     ...overrides,
   };
 }
@@ -75,7 +77,7 @@ describe("buildSaverDecision", () => {
   it("passes through when Saver Mode is disabled", async () => {
     const out = await buildSaverDecision(
       bigBash("X".repeat(50_000)),
-      deps({ readSettings: () => ({ enabled: false, mode: "balanced" }) }),
+      deps({ resolveSettings: () => null }),
     );
     expect(out).toEqual({ passthrough: true });
   });
@@ -322,9 +324,11 @@ describe("buildSaverDecision", () => {
 describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
   const realDeps = (storeRoot: string) => ({
     storeRoot,
-    readSettings: () => ({ enabled: true, mode: "balanced" as const }),
+    resolveSettings: () => ({ enabled: true, mode: "balanced" as const }),
     readSessionIntent: () => undefined,
     record: recordAndFilterOverlayOutput,
+    recordInvocation: () => {},
+    recordCompression: () => {},
   });
 
   function evidenceRecords(storeRoot: string, cwd: string): unknown[] {
@@ -345,7 +349,7 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
     const cwd = "/Users/x/proj";
     const out = await buildSaverDecision(bigBash("X".repeat(50_000)), {
       ...realDeps(storeRoot),
-      readSettings: () => ({ enabled: true, mode: "balanced" }),
+      resolveSettings: () => ({ enabled: true, mode: "balanced" }),
     });
     expect("updatedToolOutput" in out).toBe(true);
     const records = evidenceRecords(storeRoot, cwd) as Array<{
@@ -378,9 +382,11 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
     });
     const out = await buildSaverDecision(bigBash("X".repeat(50_000)), {
       storeRoot,
-      readSettings: () => ({ enabled: true, mode: "balanced" }),
+      resolveSettings: () => ({ enabled: true, mode: "balanced" }),
       readSessionIntent: () => undefined,
       record,
+      recordInvocation: () => {},
+      recordCompression: () => {},
     });
     expect("updatedToolOutput" in out).toBe(true);
     if ("updatedToolOutput" in out) {
@@ -449,8 +455,10 @@ describe("buildSaverDecision intent fill-gap", () => {
     let captured: { intent?: string } | undefined;
     const d = {
       storeRoot: "/store",
-      readSettings: () => ({ enabled: true, mode: "safe" as const }),
+      resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
       readSessionIntent: () => "refactor the auth module",
+      recordInvocation: () => {},
+      recordCompression: () => {},
       record: async (input: { intent?: string }) => {
         captured = input;
         return {
@@ -473,8 +481,10 @@ describe("buildSaverDecision intent fill-gap", () => {
     let captured: Record<string, unknown> | undefined;
     const d = {
       storeRoot: "/store",
-      readSettings: () => ({ enabled: true, mode: "safe" as const }),
+      resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
       readSessionIntent: () => undefined,
+      recordInvocation: () => {},
+      recordCompression: () => {},
       record: async (input: Record<string, unknown>) => {
         captured = input;
         return {

@@ -3572,3 +3572,137 @@ Live diagnosis of frozen saved-tokens counter (session 45479c3f). Findings:
    affect savings accounting.
 5. `mega proxy` (pid 83857) up but proxy-usage/usage.jsonl last written
    06-24: no agent points ANTHROPIC_BASE_URL at it.
+
+## [2026-07-02] design | persistent proxy routing + saver inheritance
+
+Opened two linked designs from the live token-saver diagnosis:
+
+- CRITICAL persistent proxy routing: dedicated `proxy supervise` service,
+  shared CLI/GUI control state, nonce health + route lease, foreign-value guard,
+  LaunchAgent migration/rollback, drain-safe stop, and honest traffic/hook
+  status.
+- HIGH Saver activation inheritance: exact → Git common-dir family → verified
+  legacy root → explicit global default, with metadata-only hook heartbeats.
+
+Independent architect and adversarial critic passes returned APPROVE after
+blocking lifecycle, ownership, migration, worktree identity, concurrency, and
+drain findings were resolved. Baseline `pnpm test`: 46/46 Turbo tasks green.
+
+Specs:
+`docs/superpowers/specs/2026-07-02-persistent-proxy-routing-design.md` and
+`docs/superpowers/specs/2026-07-02-saver-activation-inheritance-design.md`.
+
+## [2026-07-02] review | spec review: persistent-proxy-routing + saver-inheritance → REVISE
+
+External reviewer pass (Claude Code, fresh 4-lens adversarial verification:
+current-state fact-check, state-machine holes, git-identity edges, governance
+gates). Verdict REVISE: 2 BLOCKING (proxy orphan-route unrecoverable after
+SIGKILL+PID-reuse vs conjunctive stale-lock predicate; saver family-key
+canonicalization lacks case/platform normalization → same repo hashes to
+different families on APFS/NTFS), 12 MAJOR (disable crash-window re-route,
+monitor vs SIGTERM self-unroute, kickstart -k kills draining supervisor,
+drainingGeneration crash/reboot semantics, transition.lock staleness,
+legacy-root key aliasing, repository-disable vs legacy exact precedence,
+symlink-refusal contradiction, missing omc:tracer gate, uncited user
+confirmation, aspirational security-reviewer frontmatter, missing critic
+implementation pass, undefined cross-spec ordering), plus minors. Spec1
+current-state claims all verified TRUE against worktree code. Full findings in
+wiki/agent-channel.md 2026-07-02 19:05 entry. Plans blocked until amended.
+
+## [2026-07-02] design | proxy + saver REVISE amendments submitted
+
+Amended both linked specs against the external 2 BLOCKING + 12 MAJOR review.
+Proxy changes include fenced PID/start-token/boot/instance ownership, strict
+transition unions, route-safe crash recovery, conservative drain preservation,
+journal-authoritative launchd transactions, authenticated GUI boundaries,
+redacted errors, and bounded owner-only usage telemetry. Saver changes include
+volume-case-aware SHA-256 repository identity, verified family schemas, legacy
+precedence/alias rules, descriptor-safe activation storage, and bounded
+future-skew-resistant hook heartbeats. Independent CRITICAL design passes from
+security-reviewer and tracer evidence-loop returned APPROVE. Implementation
+plans remain blocked until Claude Code repeats its four-lens review and approves
+the amended specs. See wiki/agent-channel.md 2026-07-02 23:08.
+
+## [2026-07-02] review | re-review of 8811bab5 → REVISE round 2 (narrower)
+
+Same 4-lens method (2 fix-verification + 2 fresh new-hole lenses). Result:
+24/26 round-1 findings verified-fixed with concrete testable rules, including
+both BLOCKINGs (fenced owner identity/exit-75/--recover; file-identity +
+caseMode canonicalization). Amendment introduced new findings: 1 BLOCKING
+(transition_incomplete states forbid their own retry — designed deadlock; no
+escape row for journal mismatch), 7 MAJOR (migration rollback crash cuts
+unenumerated; fence CAS unimplementable over atomic-rename with two lock
+authorities; offline_cli lease undecidable after lock release; stale
+client-close confirmation reusable; single transition slot silently
+overwritable in the handoff window; dev:ino family key not durable across
+remount/restore → silent deactivation; dev:ino reuse activates compression in
+the wrong repo) + carried #13 (security-reviewer/tracer APPROVE is
+self-assertion co-committed with the amendment; artifact or pending required;
+re-run needed post-round-2 regardless). Recommendation recorded: consider
+cutting the auto-migration/uninstall transaction subsystem (operator-installed
+plist, one machine) for a documented manual migration — removes the root of
+findings 1/2/5. Full detail: wiki/agent-channel.md 2026-07-02 23:55 entry.
+Plans remain blocked.
+
+## [2026-07-03] amend | round-2 findings resolved in both specs (author: Claude Code)
+
+User-directed (chat, 2026-07-02 evening; confirmation record in
+agent-channel.md 00:15). Proxy: migration/uninstall journal subsystem CUT
+(manual legacy bootout via legacy_service_present; stateless idempotent plist
+ops) — removes the round-2 BLOCKING deadlock and 3 MAJORs at the root; durable
+handoffDeadline decides released-transition liveness; owner rewrites serialized
+under transition.lock (no CAS-over-rename); transition_in_progress guards the
+single slot; --recover is the universal escape; monitor observe-only while a
+transition is retained. Saver: family identity flipped to canonical
+common-directory PATH (caseMode-aware) — durable across reboot/remount/restore,
+inode-recycling wrong-repo activation impossible; no-commondir layouts key to
+the worktree root (hostile .git-file adoption killed); degraded-precedence
+fail-closed, v1 rewrite scope, toggle scope echo, non-mutating status reads,
+telemetry contract pinned. Verification (fresh contexts): security-reviewer
+APPROVE_WITH_NOTES + tracer evidence-loop APPROVE_WITH_NOTES (artifacts
+archived under docs/superpowers/reviews/ — new standing requirement),
+fix-verification APPROVE (all round-2 items closed), fresh-eyes found 3
+amendment-introduced contradictions — fixed same session, all reviewer notes
+incorporated. Pending gate: Codex counter-review of the round-2 amendments
+(author≠reviewer), then plans in fixed order (saver first).
+
+## [2026-07-03] review+amend | round-2/3 counter-review by fresh contexts → APPROVE
+
+Codex out of credits; counter-review run by fresh Claude subagent contexts.
+Round-2 (of the migration-cut + dev:ino-flip amendments): 2 BLOCKING + 8 MAJOR
+— notably a separate-git-dir correctness regression the author's own round-2
+"no-commondir→worktree-root" change introduced (main + linked worktree got
+different family keys; caught against real git). Round-3 fixed all 17: revert to
+common-dir keying + foreign_worktree_admin rejection; global latestCompression
+in the heartbeat registry; bootstrap discriminant; recover-kind removed
+(in-place recovery); executable precedence steps 0-4; v1-exact survives corrupt
+.git; family write from a worktree; exact raw-key documented; full heartbeat
+schema; RepositoryFamilyKey validator; ProxySafeErrorDetail mapped; telemetry
+reader in stats/CLI layer. Round-3 verify: fix-verify + plan-readiness APPROVE;
+fresh-eyes found one degraded-git precedence↔failure-handling contradiction →
+fixed → confirmed CONSISTENT. Security + tracer round-2 artifacts stand for the
+round-3 text (consistency/simplification deltas, foreign_worktree_admin a net
+security gain). Artifact: docs/superpowers/reviews/2026-07-03-round2-round3-counter-review.md.
+Both specs plan-ready. Next: write plans (saver 1 of 2, proxy 2 of 2).
+
+## [2026-07-03] implement | saver activation inheritance S1–S10 shipped
+
+Branch feat/saver-activation-inheritance. Full TDD (red→green→commit per task),
+`pnpm verify` green 46/46 tasks. Delivers the fix for the 2026-07-02 live
+finding (worktree sessions uncompressed under an enabled main repo). New
+context-gate modules: family-identity (canonical-path key, durable across
+reboot/remount/restore), git-family (bounded ≤32-ancestor/≤40-syscall common-dir
+resolver, no git subprocess; separate-git-dir main+worktrees converge;
+foreign_worktree_admin rejected), saver-store (v1 exact/family/global records +
+legacy normalize, atomic 0600/0700, digest fail-closed, activation lock),
+resolve-saver-settings (precedence steps 0–4; degraded git → global default,
+legacy-under-degraded fail-closed), saver-heartbeat (256/30d/future-skew,
+derived latest+latestCompression, non-mutating reads; feeds proxy status),
+activation-scope (shared CLI/GUI/hook writer — no drift). shared:
+RepositoryFamilyKey. Hook (saver-run.ts) resolves via family precedence +
+liveness heartbeats; integration test proves worktree inheritance + compression.
+CLI: workspace toggle repo-aware (family default, --exact opt-down, scope echo)
++ new `default` + `resolve`. GUI bridge + toggle repo-aware, reports effective
+source. Public behavior change: v1 record shape + family-default scope
+(changeset added). Reviewer gate: fresh-context code-reviewer + critic (S10).
+Counts: context-gate 236, cli 765, gui 419. Remaining: proxy plan P0–P9 (2 of 2).

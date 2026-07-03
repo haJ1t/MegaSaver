@@ -4,3 +4,4 @@ export * from "./ids.js";
 export * from "./title.js";
 export * from "./token-saver-mode.js";
 export * from "./workspace-key.js";
+export * from "./repository-family-key.js";

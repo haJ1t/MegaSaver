@@ -1,13 +1,16 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import {
+  nodeResolverDeps,
+  recordCompressionHeartbeat,
+  recordInvocationHeartbeat,
+  resolveWorkspaceTokenSaverSettings,
+} from "@megasaver/context-gate";
 import {
   type RecordOverlayOutputInput,
   type RecordOverlayOutputResult,
   recordAndFilterOverlayOutput,
 } from "@megasaver/core";
 import { getRunningDaemon } from "@megasaver/daemon";
-import { tokenSaverModeSchema } from "@megasaver/shared";
-import { z } from "zod";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import { readSessionIntent } from "./intent-run.js";
 import {
@@ -17,17 +20,26 @@ import {
   buildSaverDecision,
 } from "./saver.js";
 
-const settingsSchema = z.object({ enabled: z.boolean(), mode: tokenSaverModeSchema });
+// Resolves activation from the cwd through the repository-family precedence, so
+// a worktree inherits its repository's enable. null ⇒ disabled/passthrough.
+function resolveSettings(storeRoot: string, cwd: string): SaverSettings | null {
+  const r = resolveWorkspaceTokenSaverSettings(storeRoot, cwd, nodeResolverDeps());
+  return r.enabled ? { enabled: true, mode: r.mode } : null;
+}
 
-// Reads the GUI-written activation file: <storeRoot>/stats/<wk>/workspace-token-saver.json.
-function readSettings(storeRoot: string, workspaceKey: string): SaverSettings | null {
-  const path = join(storeRoot, "stats", workspaceKey, "workspace-token-saver.json");
-  if (!existsSync(path)) return null;
+// Best-effort metadata-only heartbeats; a failure never blocks the tool call.
+function recordInvocation(storeRoot: string, workspaceKey: string): void {
   try {
-    const parsed = settingsSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
-    return parsed.success ? { enabled: parsed.data.enabled, mode: parsed.data.mode } : null;
+    recordInvocationHeartbeat(storeRoot, workspaceKey, new Date().toISOString());
   } catch {
-    return null;
+    /* liveness is best-effort */
+  }
+}
+function recordCompression(storeRoot: string, workspaceKey: string): void {
+  try {
+    recordCompressionHeartbeat(storeRoot, workspaceKey, new Date().toISOString());
+  } catch {
+    /* liveness is best-effort */
   }
 }
 
@@ -99,9 +111,11 @@ export async function runSaverHookFromProcess(): Promise<void> {
     const storeRoot = resolveStorePath(readStoreEnv(undefined));
     const deps: SaverDeps = {
       storeRoot,
-      readSettings,
+      resolveSettings,
       readSessionIntent,
       record: makeRecord(storeRoot),
+      recordInvocation,
+      recordCompression,
     };
     const decision = await buildSaverDecision(payload, deps);
     const s = renderSaverStdout(decision);
