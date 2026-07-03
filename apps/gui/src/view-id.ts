@@ -1,11 +1,21 @@
-// Order: alphabetic (matches AA3 convention for human-facing closed enums).
-// Nav rendering order is defined separately (see NAV_VIEWS in app.tsx) so the
-// header can order destinations logically without breaking the pinned enum.
-export const VIEW_IDS = ["agent-office", "agent-setup", "claude-sessions"] as const;
+// Order: alphabetic (AA3 convention for human-facing closed enums).
+// Nav display order lives in NAV_ORDER (components/sidebar.tsx), decoupled
+// from this pinned tuple.
+export const VIEW_IDS = [
+  "agent-office",
+  "agent-setup",
+  "memory",
+  "sessions",
+  "token-saver",
+  "workspace",
+] as const;
 export type ViewId = (typeof VIEW_IDS)[number];
 
 export const VIEW_LABELS: Record<ViewId, string> = {
   "agent-office": "Agent office",
   "agent-setup": "Agent setup",
-  "claude-sessions": "Claude sessions",
+  memory: "Memory",
+  sessions: "Sessions",
+  "token-saver": "Token saver",
+  workspace: "Workspace",
 };
