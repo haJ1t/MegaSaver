@@ -37,3 +37,12 @@ export {
   type ReconcileDecision,
   reconcileTransition,
 } from "./reconcile.js";
+export {
+  type RouteAdapter,
+  type ListenerControl,
+  type SupervisorDeps,
+  type RecoveryResult,
+  observeReality,
+  runStartupRecovery,
+  monitorTick,
+} from "./supervisor.js";
