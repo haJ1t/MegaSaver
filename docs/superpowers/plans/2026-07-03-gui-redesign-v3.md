@@ -799,6 +799,20 @@ git commit -m "feat(gui): session saver-stats rail component"
 
 ## Task H: Sidebar component
 
+> **EXECUTION CORRECTION (2026-07-03):** the gui Vitest run evaluates runtime
+> values — the sidebar renders `VIEW_LABELS[id]`, and `VIEW_LABELS` only has
+> the six entries after Task J's enum change. So the sidebar's own test cannot
+> be green standalone (missing labels → empty button text → assertion fails),
+> and Task J's `claude-sessions`→`sessions` rename breaks the current
+> `app.tsx`. **Implement Task H and Task J TOGETHER as ONE atomic task with a
+> single commit**, in this order: (1) expand the enum + labels (Task J Steps 1–4),
+> (2) create the sidebar (this task), (3) rewrite `app.tsx` + `app.test.tsx`
+> (Task J Steps 5–6), (4) run the full suite once — expect GREEN, (5) commit
+> once (`feat(gui): live sidebar shell + six-view routing`). Ignore this task's
+> Step 3 note about a deliberate typecheck gap — there is no green intermediate
+> state, so do not commit between H and J. Run Task I (cockpit slim) BEFORE
+> this merged task; it is independent of the enum.
+
 **Files:**
 - Create: `apps/gui/src/components/sidebar.tsx`
 - Test: `apps/gui/test/components/sidebar.test.tsx` (new)
@@ -1035,6 +1049,11 @@ git commit -m "refactor(gui): slim cockpit to session scope + savings rail"
 ---
 
 ## Task J: Flip the shell — sidebar + six-view enum
+
+> **FOLDED INTO TASK H (2026-07-03):** implement this together with Task H as
+> one atomic commit — see the correction note under Task H. The steps below
+> are still the source for the enum + `app.tsx` + `app.test.tsx` code; execute
+> them as part of the merged task, not as a separate commit.
 
 The live flip: expand `ViewId`, swap the top-nav header for `Sidebar`, wire `activeWorkspace` + the three pages. Closes the typecheck gap from Tasks H–I.
 
