@@ -123,12 +123,14 @@ function backup(plistPath: string, backupDir: string): () => void {
 function install(deps: LaunchAgentDeps, expected: string): EnsureServiceResult {
   mkdirSync(join(deps.plistPath, ".."), { recursive: true });
   // Refuse to write THROUGH a symlink at the plist path (consistency with the
-  // store/settings writers) — a planted link must not redirect the write.
+  // store/settings writers) — a planted link must not redirect the write. Use
+  // lstat DIRECTLY (never existsSync, which follows the link and would miss a
+  // DANGLING symlink pointing outside the dir); ENOENT just means a fresh create.
   try {
-    if (existsSync(deps.plistPath) && lstatSync(deps.plistPath).isSymbolicLink())
+    if (lstatSync(deps.plistPath).isSymbolicLink())
       return { status: "blocked", reason: "refusing symlinked plist path" };
   } catch {
-    /* lstat race — fall through to the guarded write */
+    /* ENOENT (no file) → safe to create; any lstat error → fall through to the write */
   }
   try {
     writeFileSync(deps.plistPath, expected, { mode: 0o644 });

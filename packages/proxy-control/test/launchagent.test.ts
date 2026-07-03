@@ -1,4 +1,12 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -119,6 +127,15 @@ describe("ensureManagedService", () => {
     const r = ensureManagedService(deps(runner));
     expect(r.status).toBe("blocked");
     expect(runner.calls.length).toBe(0);
+  });
+
+  it("refuses to write through a DANGLING symlink at the plist path", () => {
+    if (process.platform === "win32") return;
+    const target = join(dir, "nonexistent-target.plist");
+    symlinkSync(target, plistPath); // dangling: target does not exist
+    const r = ensureManagedService(deps(fakeRunner()));
+    expect(r.status).toBe("blocked");
+    expect(existsSync(target)).toBe(false); // write never followed the link out of the dir
   });
 
   it("restores a backed-up legacy plist when the launchd bootstrap fails", () => {
