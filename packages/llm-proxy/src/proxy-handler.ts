@@ -1,5 +1,6 @@
 import { once } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { HEALTH_PATH, buildHealthResponse } from "./health.js";
 import { countRequestMessages, createSseUsageScanner, parseUsageFromJson } from "./parse-usage.js";
 import type { ProxyUsageEvent } from "./usage-event.js";
 
@@ -8,6 +9,9 @@ export type ProxyHandlerDeps = {
   /** Injectable for tests; defaults to global fetch. */
   upstreamFetch?: typeof fetch;
   onUsage?: (event: ProxyUsageEvent) => void;
+  // Ownership health: when set, the reserved health path answers locally with a
+  // nonce-bound proof and is never forwarded upstream.
+  health?: { capability: string; instanceId: string };
   now: () => string;
   newId: () => string;
 };
@@ -54,6 +58,11 @@ async function readBody(req: IncomingMessage): Promise<Buffer | null> {
   return Buffer.concat(chunks);
 }
 
+function pathnameOf(target: string): string {
+  const q = target.indexOf("?");
+  return q === -1 ? target : target.slice(0, q);
+}
+
 function filterRequestHeaders(headers: IncomingMessage["headers"]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
@@ -79,12 +88,34 @@ function responseHeaders(headers: Headers): Record<string, string> {
 export function createProxyHandler(
   deps: ProxyHandlerDeps,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  const { upstreamBaseUrl, onUsage, now, newId } = deps;
+  const { upstreamBaseUrl, onUsage, health, now, newId } = deps;
   const doFetch = deps.upstreamFetch ?? fetch;
 
   return async (req, res) => {
     const path = req.url ?? "/";
     const method = req.method ?? "GET";
+
+    // Ownership health-check: the reserved path is answered locally and is NEVER
+    // forwarded upstream — even when this instance has no ownership capability
+    // configured (then it 404s). Intercepting unconditionally guarantees a probe
+    // of the reserved path can never leak to the upstream as a normal request.
+    // The pathname is matched exactly (ignoring the query) so a hostile
+    // request-target cannot reach it and it never becomes an upstream path.
+    if (pathnameOf(path) === HEALTH_PATH) {
+      if (!health) {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+        res.end("mega proxy: not found");
+        return;
+      }
+      const challenge = new URLSearchParams(path.split("?")[1] ?? "").get("challenge") ?? "";
+      const payload = JSON.stringify(
+        buildHealthResponse(health.capability, health.instanceId, challenge),
+      );
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(payload);
+      return;
+    }
+
     const bodyBuf = await readBody(req);
     if (bodyBuf === null) {
       res.writeHead(413, { "content-type": "text/plain; charset=utf-8" });
@@ -92,8 +123,14 @@ export function createProxyHandler(
       return;
     }
     const headers = filterRequestHeaders(req.headers);
-    const init: RequestInit =
-      bodyBuf.length > 0 ? { method, headers, body: bodyBuf } : { method, headers };
+    // redirect:"manual" is a security invariant, not a preference: the default
+    // (follow) would re-send the client's auth headers (x-api-key /
+    // authorization) to whatever origin a 3xx Location points at — a hostile or
+    // misconfigured upstream could exfiltrate the operator's key by redirecting
+    // to an attacker host. Instead we hand the raw 3xx back to the client and
+    // never auto-follow across origins.
+    const base: RequestInit = { method, headers, redirect: "manual" };
+    const init: RequestInit = bodyBuf.length > 0 ? { ...base, body: bodyBuf } : base;
 
     let upstream: Response;
     try {

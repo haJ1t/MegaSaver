@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, chmodSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { type ProxyUsageEvent, proxyUsageEventSchema } from "./usage-event.js";
 
@@ -19,8 +19,18 @@ export async function appendProxyUsage(input: {
 }): Promise<void> {
   const event = proxyUsageEventSchema.parse(input.event);
   const path = usagePath(input.storeRoot);
-  mkdirSync(dirname(path), { recursive: true });
-  appendFileSync(path, `${JSON.stringify(event)}\n`);
+  const dir = dirname(path);
+  // The metering log lives under the operator's store: keep the dir 0700 and the
+  // file 0600, and refuse to append through a symlink so a planted link cannot
+  // redirect writes out of the store.
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  try {
+    if (lstatSync(path).isSymbolicLink()) throw new Error("refusing symlinked usage log");
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("refusing")) throw e;
+    // ENOENT is fine — the file is created below.
+  }
+  appendFileSync(path, `${JSON.stringify(event)}\n`, { mode: 0o600 });
 }
 
 export async function listProxyUsage(input: {

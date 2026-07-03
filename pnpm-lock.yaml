@@ -32,6 +32,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@megasaver/proxy-control':
+        specifier: workspace:*
+        version: link:../../packages/proxy-control
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -55,6 +58,9 @@ importers:
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../../packages/content-store
+      '@megasaver/context-gate':
+        specifier: workspace:*
+        version: link:../../packages/context-gate
       '@megasaver/context-pruner':
         specifier: workspace:*
         version: link:../../packages/context-pruner
@@ -148,6 +154,9 @@ importers:
       '@megasaver/policy':
         specifier: workspace:*
         version: link:../../packages/policy
+      '@megasaver/proxy-control':
+        specifier: workspace:*
+        version: link:../../packages/proxy-control
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -602,6 +611,19 @@ importers:
       fast-check:
         specifier: ^3.23.2
         version: 3.23.2
+
+  packages/proxy-control:
+    dependencies:
+      '@megasaver/llm-proxy':
+        specifier: workspace:*
+        version: link:../llm-proxy
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
 
   packages/retrieval:
     dependencies:

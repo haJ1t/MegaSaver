@@ -1,0 +1,32 @@
+{
+  "name": "@megasaver/proxy-control",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persistent proxy routing control: desired-state stores, supervisor state machine, and authenticated control client. Agent-agnostic (no Claude paths).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@megasaver/llm-proxy": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17"
+  }
+}

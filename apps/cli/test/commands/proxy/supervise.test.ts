@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { listProxyUsage } from "@megasaver/llm-proxy";
 import type { ProxyUsageEvent, RunningProxy, StartProxyOptions } from "@megasaver/llm-proxy";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { runProxyStart } from "../../../src/commands/proxy/start.js";
+import { proxySuperviseCommand, runProxySupervise } from "../../../src/commands/proxy/supervise.js";
 
 const EVENT: ProxyUsageEvent = {
   id: "33333333-3333-4333-8333-333333333333",
@@ -18,7 +18,7 @@ const EVENT: ProxyUsageEvent = {
   stream: false,
 };
 
-describe("runProxyStart", () => {
+describe("runProxySupervise", () => {
   let store: string;
   beforeEach(() => {
     store = mkdtempSync(join(tmpdir(), "cli-proxy-"));
@@ -39,7 +39,7 @@ describe("runProxyStart", () => {
       });
     };
 
-    await runProxyStart({
+    await runProxySupervise({
       port: 8787,
       upstream: "https://api.anthropic.com",
       storeRoot: store,
@@ -58,5 +58,31 @@ describe("runProxyStart", () => {
     await new Promise((r) => setTimeout(r, 10)); // let the best-effort persist flush
     const persisted = await listProxyUsage({ storeRoot: store });
     expect(persisted.map((e) => e.id)).toContain(EVENT.id);
+  });
+});
+
+describe("proxy supervise — credential-forwarding gate", () => {
+  let prevExit: typeof process.exitCode;
+  beforeEach(() => {
+    prevExit = process.exitCode;
+    process.exitCode = 0;
+  });
+  afterEach(() => {
+    process.exitCode = prevExit;
+  });
+
+  it("refuses a non-default --upstream without --confirm-credential-forwarding", async () => {
+    await proxySuperviseCommand.run?.({
+      args: { upstream: "https://evil.example.com", "confirm-credential-forwarding": false },
+    } as never);
+    // Rejected before binding any listener; the operator's key is never forwarded.
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("refuses a malformed --upstream (userinfo/non-https)", async () => {
+    await proxySuperviseCommand.run?.({
+      args: { upstream: "https://user:pass@example.com", "confirm-credential-forwarding": true },
+    } as never);
+    expect(process.exitCode).toBe(1);
   });
 });

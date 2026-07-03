@@ -4,10 +4,24 @@ tags: [proxy, lifecycle, launchd, claude-code]
 sources:
   - docs/superpowers/specs/2026-07-02-persistent-proxy-routing-design.md
   - wiki/log.md
-status: proposed
+status: active
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-07-03
 ---
+
+
+## Implementation (P0-P8 on `feat/persistent-proxy-routing-impl`, 2026-07-03)
+
+TDD; `pnpm verify` green (48/48 tasks). llm-proxy: nonce-bound HMAC health
+endpoint. New `@megasaver/proxy-control` (agent-agnostic): versioned state
+stores, fenced PID-reuse-safe locks, the pure recovery matrix (foreign never
+removed, no route during disable, remove only leased-exact), supervisor wiring
+(startup fixpoint + 5s monitor), macOS LaunchAgent adapter (legacy manual
+bootout, idempotent-by-observation). connector-claude-code: value-guarded route
+adapter. CLI: `proxy start/stop/status/service uninstall` + internal
+`supervise`; old foreground start → supervise (public break). GUI: persistent
+toggle, singleton + osascript + boot/shutdown route-clear removed (the stranding
+bug). Deferred: GUI auth bootstrap + the long-running supervise control server.
 
 ## Purpose
 

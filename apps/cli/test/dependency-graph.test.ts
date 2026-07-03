@@ -29,6 +29,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/memory-graph",
   "@megasaver/output-filter",
   "@megasaver/policy",
+  "@megasaver/proxy-control",
   "@megasaver/shared",
   "@megasaver/skill-packs",
 ];

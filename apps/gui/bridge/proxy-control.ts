@@ -1,60 +1,170 @@
-import { randomUUID } from "node:crypto";
-import { type RunningProxy, appendProxyUsage, startProxyServer } from "@megasaver/llm-proxy";
-import { applyProxyEnv } from "./proxy-settings.js";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import {
+  createClaudeRouteAdapter,
+  resolveClaudeCodeSettingsPath,
+} from "@megasaver/connector-claude-code";
+import {
+  type LaunchctlRunner,
+  type ProcessIdentityAdapter,
+  type ProxyControlState,
+  ensureManagedService,
+  nodeLaunchctlRunner,
+  nodeProcessIdentity,
+  readControlState,
+  withTransitionLock,
+  writeControlState,
+} from "@megasaver/proxy-control";
 
-// ponytail: one bridge-process-wide proxy instance, managed by the GUI toggle.
-// Single-developer, single-bridge — no need for a registry.
-let running: RunningProxy | null = null;
-let lastError: string | null = null;
+// The GUI no longer owns a listener or writes the route: the persistent
+// supervisor (mega proxy supervise) owns routing. The toggle persists the
+// operator's desired state and ensures the managed LaunchAgent, exactly like the
+// CLI. It NEVER clears the route on bridge boot/shutdown — that stranding bug is
+// gone; a persisted route survives the GUI process.
+const OWNED_URL = "http://127.0.0.1:8787";
 
-const { MEGA_PROXY_PORT, MEGA_PROXY_UPSTREAM } = process.env;
-const PARSED_PORT = Number.parseInt(MEGA_PROXY_PORT ?? "8787", 10);
-const PORT = Number.isFinite(PARSED_PORT) ? PARSED_PORT : 8787; // allow 0 (random)
-const UPSTREAM = MEGA_PROXY_UPSTREAM ?? "https://api.anthropic.com";
+// Injectable so tests never touch real launchd or ~/.claude; the bridge uses the
+// real defaults.
+export type ProxyGuiDeps = {
+  launchctl: LaunchctlRunner;
+  plistPath: string;
+  backupDir: string;
+  superviseArgv: string[];
+  settingsPath: string;
+  // Optional so tests can pin time/identity and avoid shelling out for the lock.
+  now?: () => number;
+  identity?: ProcessIdentityAdapter;
+};
+
+export function defaultProxyGuiDeps(storeRoot: string): ProxyGuiDeps {
+  const { MEGA_PROXY_SETTINGS_PATH } = process.env;
+  return {
+    launchctl: nodeLaunchctlRunner,
+    plistPath: join(homedir(), "Library", "LaunchAgents", "com.megasaver.proxy.plist"),
+    backupDir: join(storeRoot, "proxy", "migration-backups"),
+    superviseArgv: [process.execPath, "mega", "proxy", "supervise", "--store", storeRoot],
+    settingsPath: MEGA_PROXY_SETTINGS_PATH ?? resolveClaudeCodeSettingsPath(),
+  };
+}
 
 export type ProxyStatus = {
-  running: boolean;
-  url?: string;
-  port?: number;
+  enabled: boolean;
+  routed: boolean;
+  routeConflict: boolean;
+  reconcileBlocked: boolean;
   error?: string;
 };
 
-export function proxyStatus(): ProxyStatus {
-  if (running) return { running: true, url: running.url, port: running.port };
-  return lastError ? { running: false, error: lastError } : { running: false };
+export function proxyStatus(
+  storeRoot: string,
+  deps: ProxyGuiDeps = defaultProxyGuiDeps(storeRoot),
+): ProxyStatus {
+  const control = readControlState(storeRoot);
+  const route = createClaudeRouteAdapter(deps.settingsPath).inspect(OWNED_URL);
+  return {
+    enabled: control.desiredEnabled,
+    routed: route === "exact",
+    routeConflict: route === "foreign",
+    reconcileBlocked: control.reconcileBlocked !== null,
+    ...(control.lastError ? { error: control.lastError.code } : {}),
+  };
 }
 
-export async function startProxy(storeRoot: string): Promise<ProxyStatus> {
-  if (running) return proxyStatus();
-  try {
-    running = await startProxyServer({
-      port: PORT,
-      upstreamBaseUrl: UPSTREAM,
-      onUsage: (event) => {
-        void appendProxyUsage({ storeRoot, event }).catch(() => {});
-      },
-      newId: () => randomUUID(),
-    });
-    lastError = null;
-    // Auto-route: new claude sessions + MegaSaver-spawned agents pick up the
-    // proxy with no manual export.
-    applyProxyEnv(running.url);
-  } catch (err) {
-    lastError = err instanceof Error ? err.message : String(err);
-  }
-  return proxyStatus();
+function guiTransitionOwner(startedAt: string) {
+  return {
+    id: "gui",
+    ownerKind: "offline_cli" as const,
+    ownerInstanceId: "gui",
+    ownerProcessStartToken: "gui",
+    ownerBootId: "gui",
+    ownerFenceToken: "gui",
+    handoffDeadline: null,
+    startedAt,
+  };
 }
 
-export async function stopProxy(): Promise<ProxyStatus> {
-  await running?.close();
-  running = null;
-  lastError = null;
-  applyProxyEnv(null);
-  return proxyStatus();
+export function startProxy(
+  storeRoot: string,
+  deps: ProxyGuiDeps = defaultProxyGuiDeps(storeRoot),
+): ProxyStatus {
+  const service = ensureManagedService({
+    plistPath: deps.plistPath,
+    backupDir: deps.backupDir,
+    runner: deps.launchctl,
+    superviseArgv: deps.superviseArgv,
+  });
+  if (service.status === "legacy_service_present")
+    return { ...proxyStatus(storeRoot, deps), error: "legacy_service_present" };
+  if (service.status === "blocked") return { ...proxyStatus(storeRoot, deps), error: "blocked" };
+  const now = deps.now?.() ?? Date.now();
+  const locked = withTransitionLock(
+    storeRoot,
+    now,
+    "start",
+    () => {
+      const control = readControlState(storeRoot);
+      const nowIso = new Date(now).toISOString();
+      writeControlState(storeRoot, {
+        ...control,
+        desiredEnabled: true,
+        // Re-enabling supersedes any in-flight disable drain; drop the stale marker.
+        drainingGeneration: null,
+        transition: {
+          ...guiTransitionOwner(nowIso),
+          kind: "enable",
+          phase: "intent_persisted",
+          expectedUnrouted: false,
+        },
+        updatedAt: nowIso,
+      });
+    },
+    deps.identity ?? nodeProcessIdentity,
+  );
+  if (locked.status === "locked")
+    return { ...proxyStatus(storeRoot, deps), error: "transition_in_progress" };
+  return proxyStatus(storeRoot, deps);
 }
 
-// Clear any ANTHROPIC_BASE_URL we left in local settings (bridge boot / shutdown)
-// so a crashed-with-proxy-on bridge can't strand claude pointing at a dead port.
-export function clearProxyEnv(): void {
-  applyProxyEnv(null);
+export function stopProxy(
+  storeRoot: string,
+  deps: ProxyGuiDeps = defaultProxyGuiDeps(storeRoot),
+  opts: { confirmClientsRestarted?: boolean } = {},
+): ProxyStatus {
+  const now = deps.now?.() ?? Date.now();
+  const locked = withTransitionLock(
+    storeRoot,
+    now,
+    "stop",
+    () => {
+      const control = readControlState(storeRoot);
+      const nowIso = new Date(now).toISOString();
+      // A plain toggle-off enters drain (the listener stays up for an
+      // already-launched client). A confirm-restarted call persists a
+      // drain_complete transition so the supervisor stops its own listener and
+      // reaches the terminal idle state — otherwise drain never completes.
+      const transition: ProxyControlState["transition"] = opts.confirmClientsRestarted
+        ? {
+            ...guiTransitionOwner(nowIso),
+            kind: "drain_complete",
+            phase: "confirmation_persisted",
+            expectedUnrouted: true,
+          }
+        : {
+            ...guiTransitionOwner(nowIso),
+            kind: "disable",
+            phase: "unroute_expected",
+            expectedUnrouted: true,
+          };
+      writeControlState(storeRoot, {
+        ...control,
+        desiredEnabled: false,
+        transition,
+        updatedAt: nowIso,
+      });
+    },
+    deps.identity ?? nodeProcessIdentity,
+  );
+  if (locked.status === "locked")
+    return { ...proxyStatus(storeRoot, deps), error: "transition_in_progress" };
+  return proxyStatus(storeRoot, deps);
 }

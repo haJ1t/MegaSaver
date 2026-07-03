@@ -24,6 +24,7 @@ describe("public exports", () => {
       "buildClaudeArgs",
       "claudeCodeConnectorErrorCodeSchema",
       "createClaudeCodeLauncher",
+      "createClaudeRouteAdapter",
       "hasPostToolUseHook",
       "hasPreToolUseHook",
       "installClaudeCodeHook",

@@ -6,7 +6,6 @@ import { createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
 import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "@megasaver/mcp-bridge";
 import { createBridgeHandler } from "./handler.js";
 import { createMcpOps } from "./mcp-ops.js";
-import { clearProxyEnv } from "./proxy-control.js";
 import { ensureOfficeProject } from "./routes/office.js";
 import { resolveBridgeStorePath } from "./store-path.js";
 
@@ -27,9 +26,6 @@ async function main(): Promise<void> {
   });
 
   await initStore(storeDir);
-  // Clear any stale proxy env from a previous (possibly crashed) run before
-  // serving — the proxy starts off, so nothing should point at it yet.
-  clearProxyEnv();
   const registry = createJsonDirectoryCoreRegistry({ rootDir: storeDir });
 
   const mcpOps = createMcpOps({
@@ -70,8 +66,6 @@ async function main(): Promise<void> {
 
   const shutdown = (signal: string): void => {
     process.stdout.write(`\nbridge: received ${signal}, shutting down\n`);
-    // Don't leave claude pointed at a proxy that's about to die.
-    clearProxyEnv();
     server.close(() => {
       process.exit(0);
     });

@@ -47,3 +47,9 @@ export {
   type SpawnFn,
   type SpawnedChild,
 } from "./launcher.js";
+export {
+  type ClaudeRouteAdapter,
+  type RouteInspection,
+  type EnsureHooksError,
+  createClaudeRouteAdapter,
+} from "./proxy-route.js";

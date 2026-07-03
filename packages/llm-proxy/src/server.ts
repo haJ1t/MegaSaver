@@ -8,6 +8,7 @@ export type StartProxyOptions = {
   upstreamBaseUrl: string;
   upstreamFetch?: typeof fetch;
   onUsage?: (event: ProxyUsageEvent) => void;
+  health?: { capability: string; instanceId: string };
   now?: () => string;
   newId?: () => string;
 };
@@ -28,6 +29,7 @@ export function startProxyServer(opts: StartProxyOptions): Promise<RunningProxy>
     upstreamBaseUrl: opts.upstreamBaseUrl,
     ...(opts.upstreamFetch ? { upstreamFetch: opts.upstreamFetch } : {}),
     ...(opts.onUsage ? { onUsage: opts.onUsage } : {}),
+    ...(opts.health ? { health: opts.health } : {}),
     now: opts.now ?? (() => new Date().toISOString()),
     newId: opts.newId ?? (() => randomUUID()),
   });
