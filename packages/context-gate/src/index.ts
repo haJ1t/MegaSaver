@@ -87,3 +87,11 @@ export {
   writeGlobalDefault,
   withActivationLock,
 } from "./saver-store.js";
+export {
+  type ResolvedWorkspaceTokenSaver,
+  type ResolverDeps,
+  type SaverSource,
+  type FamilyUnavailableReason,
+  resolveWorkspaceTokenSaverSettings,
+  nodeResolverDeps,
+} from "./resolve-saver-settings.js";
