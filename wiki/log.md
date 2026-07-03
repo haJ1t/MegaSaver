@@ -3809,3 +3809,29 @@ Cleanup: merged branches deleted (remote + local); the three feature worktrees
 removed; local `main` refreshed to `origin/main`. The unrelated
 `agent-office-skill-roles` worktree and the `refactor/token-saver-fullwidth`
 working branch were left untouched.
+
+---
+
+## [2026-07-03] ingest | audit overlay-fallback review nits addressed
+
+Branch `fix/audit-session-overlay-fallback` (worktree `MegaSaver-audit-overlay`).
+Three code-review nits, sanctioned by the spec
+`docs/superpowers/specs/2026-07-03-audit-overlay-fallback-design.md`:
+
+1. Biome format-only fix: `honest-overlay-fallback.test.ts` multi-line import
+   collapsed to one line.
+2. `--json` discriminator on the overlay-fallback path: both `audit session`
+   and `audit honest` now emit `{ source: "overlay", ...summary }` instead of a
+   bare `OverlaySessionTokenSaverStats`, so a machine consumer can tell the
+   overlay shape from the registered summary. Human card output unchanged.
+3. `audit honest` now validates its positional session id via `sessionIdSchema`
+   (same lowercase-UUID contract `audit session` uses — overlay files are keyed
+   by the lowercase-UUID the hook writes) BEFORE reading. A malformed/uppercase
+   id now yields `error: invalid session id` + exit 1 instead of a silent
+   all-zeros report. `runHonestAudit` return changed `string` →
+   `{ output, exitCode }` to carry the exit code; the citty handler routes the
+   error to stderr and sets `process.exitCode`.
+
+`pnpm verify` green (788 tests). Smoke: `audit honest <UPPERCASE-UUID>` → exit 1,
+matching `audit session`; valid lowercase id on an empty store still yields the
+zeros report at exit 0.

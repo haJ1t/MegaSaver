@@ -23,6 +23,7 @@ export {
   type AppendOverlayEventInput,
   readOverlayEvents,
   readOverlaySummary,
+  readOverlaySummaryAnyWorkspace,
   resetOverlayOnDisable,
 } from "./store.js";
 

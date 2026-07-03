@@ -3,11 +3,17 @@ import {
   aggregateHonestMetrics,
   observationsFromEvents,
   readOverlayEvents,
+  readOverlaySummaryAnyWorkspace,
   recordedEventsFromLogs,
 } from "@megasaver/core";
-import { encodeWorkspaceKey } from "@megasaver/shared";
+import { encodeWorkspaceKey, sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
+import { mapErrorToCliMessage } from "../../errors.js";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
+import { formatOverlaySaverCard } from "./shared.js";
+
+const OVERLAY_FALLBACK_NOTE =
+  "Note: token-weighted honest metrics need a registered/proxy session; overlay bytes are shown instead.";
 
 export function renderHonestReport(m: HonestMetrics): string {
   const pct = (n: number): string => `${(n * 100).toFixed(1)}%`;
@@ -31,11 +37,24 @@ export type RunHonestAuditInput = {
   json: boolean;
 };
 
-export async function runHonestAudit(input: RunHonestAuditInput): Promise<string> {
+export type HonestAuditResult = { output: string; exitCode: 0 | 1 };
+
+export async function runHonestAudit(input: RunHonestAuditInput): Promise<HonestAuditResult> {
+  // Overlay files are keyed by the lowercase-UUID the hook writes, so the same
+  // lowercase-UUID validation `session` uses is correct here too. Mirror
+  // `session`'s parse + kind:'sessionId' error path so a malformed/uppercase id
+  // is a loud error, not a silent all-zeros report.
+  let liveSessionId: string;
+  try {
+    liveSessionId = sessionIdSchema.parse(input.liveSessionId);
+  } catch (err) {
+    const cli = mapErrorToCliMessage(err, { kind: "sessionId" });
+    return { output: cli.message, exitCode: cli.exitCode };
+  }
   const workspaceKey = encodeWorkspaceKey(input.cwd);
   let overlayEvents: readonly { rawBytes: number; returnedBytes: number }[] = [];
   try {
-    overlayEvents = readOverlayEvents({ root: input.storeRoot }, workspaceKey, input.liveSessionId);
+    overlayEvents = readOverlayEvents({ root: input.storeRoot }, workspaceKey, liveSessionId);
   } catch {
     // Store not initialized or no events for this session — report zeros.
   }
@@ -45,7 +64,24 @@ export async function runHonestAudit(input: RunHonestAuditInput): Promise<string
     nativeEligible: [],
   });
   const metrics = aggregateHonestMetrics(observationsFromEvents(recorded));
-  return input.json ? JSON.stringify(metrics) : renderHonestReport(metrics);
+  if (metrics.rawTokensEligible === 0) {
+    const overlay = readOverlaySummaryAnyWorkspace({ root: input.storeRoot }, liveSessionId);
+    if (overlay) {
+      if (input.json)
+        return { output: JSON.stringify({ source: "overlay", ...overlay.summary }), exitCode: 0 };
+      return {
+        output: [
+          ...formatOverlaySaverCard(overlay.summary, overlay.workspaceKey),
+          OVERLAY_FALLBACK_NOTE,
+        ].join("\n"),
+        exitCode: 0,
+      };
+    }
+  }
+  return {
+    output: input.json ? JSON.stringify(metrics) : renderHonestReport(metrics),
+    exitCode: 0,
+  };
 }
 
 export const auditHonestCommand = defineCommand({
@@ -67,12 +103,17 @@ export const auditHonestCommand = defineCommand({
       // Store path unresolvable — return zeros rather than crashing.
       storeRoot = "";
     }
-    const out = await runHonestAudit({
-      liveSessionId: args.sessionId,
+    const result = await runHonestAudit({
+      liveSessionId: typeof args.sessionId === "string" ? args.sessionId : "",
       storeRoot,
       cwd: process.cwd(),
       json: args.json ?? false,
     });
-    process.stdout.write(out);
+    if (result.exitCode !== 0) {
+      process.stderr.write(`${result.output}\n`);
+      process.exitCode = result.exitCode;
+      return;
+    }
+    process.stdout.write(result.output);
   },
 });
