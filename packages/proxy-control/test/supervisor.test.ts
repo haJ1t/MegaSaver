@@ -264,6 +264,27 @@ describe("superviseDrive — disable drain terminates on drain_complete", () => 
     expect(s.drainingGeneration).toBeNull();
     expect(listener.isAlive()).toBe(false); // listener holding the API key is stopped
   });
+
+  it("drain_complete issued DIRECTLY on a routed+leased state → removes route + lease, then stops", () => {
+    // Regression: a confirm issued without a prior plain stop must not stop the
+    // listener while leaving the owned route dangling + the lease blocking uninstall.
+    const route = fakeRoute(OWNED); // still routed
+    const listener = fakeListener(true, "matching");
+    writeControlState(
+      store,
+      control({
+        desiredEnabled: false,
+        transition: drainCompleteT(),
+        routeLease: { url: OWNED, instanceId: "inst", phase: "active", installedAt: "x" },
+      }),
+    );
+    superviseDrive(deps(route, listener));
+    const s = readControlState(store);
+    expect(route.value).toBeNull(); // owned route removed, not stranded at a dead listener
+    expect(s.routeLease).toBeNull(); // lease cleared → `service uninstall` unblocks
+    expect(s.transition).toBeNull();
+    expect(listener.isAlive()).toBe(false);
+  });
 });
 
 describe("applyDecision — stale block/error cleared on a clean terminal reconcile", () => {

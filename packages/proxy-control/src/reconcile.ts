@@ -186,7 +186,18 @@ function reconcileDrain(o: ReconcileObs): ReconcileDecision {
     return decide({ retainTransition: true, error: "route_conflict" });
   if (o.route === "invalid") return decide({ retainTransition: true, error: "settings_invalid" });
   if (!o.confirmed) return decide({ retainTransition: true });
-  if (o.generationLive) return decide({ actions: ["stop_listener", "clear_transition"] });
-  // Dead generation / prior boot: clear drain, never rebind.
-  return decide({ actions: ["clear_transition"] });
+  // A drain_complete can be issued directly on a still-owned, still-routed state
+  // (not only after a plain disable). Remove our leased-exact route FIRST — value-
+  // guarded — and re-observe, so we never stop the listener while the route still
+  // points at it (which would strand a dead route + a live lease that blocks
+  // uninstall). Only once the owned route is gone do we stop + clear.
+  if (leasedExact(o))
+    return decide({ actions: ["remove_route", "verify_route"], retainTransition: true });
+  // Owned route gone (absent/foreign-preserved): clear our lease, stop the live
+  // generation if any, and finish. clear_lease is a no-op when a prior disable
+  // already cleared it.
+  if (o.generationLive)
+    return decide({ actions: ["clear_lease", "stop_listener", "clear_transition"] });
+  // Dead generation / prior boot: clear lease + drain, never rebind.
+  return decide({ actions: ["clear_lease", "clear_transition"] });
 }

@@ -236,6 +236,38 @@ describe("drain_complete", () => {
     expect(d.actions).not.toContain("stop_listener");
     expect(d.retainTransition).toBe(true);
   });
+
+  it("confirmed + leased-exact route → value-guard remove FIRST, retain, don't strand the route", () => {
+    // Reachable when `stop --confirm-clients-restarted` is issued directly on a
+    // still-routed+leased state. Must remove the owned route before stopping so
+    // the listener never dies while the route still points at it.
+    const d = reconcileTransition(
+      drain(),
+      obs({
+        route: "exact",
+        hasLease: true,
+        leasePhase: "active",
+        generationLive: true,
+        confirmed: true,
+      }),
+      false,
+    );
+    expect(d.actions).toContain("remove_route");
+    expect(d.actions).toContain("verify_route");
+    expect(d.actions).not.toContain("stop_listener"); // listener stays up until the route is gone
+    expect(d.retainTransition).toBe(true);
+  });
+
+  it("confirmed + live generation + absent route → clears lease, stops, and clears", () => {
+    const d = reconcileTransition(
+      drain(),
+      obs({ route: "absent", hasLease: true, generationLive: true, confirmed: true }),
+      false,
+    );
+    expect(d.actions).toContain("clear_lease"); // lease cleared so uninstall unblocks
+    expect(d.actions).toContain("stop_listener");
+    expect(d.actions).toContain("clear_transition");
+  });
 });
 
 describe("global invariants across every enumerated row", () => {

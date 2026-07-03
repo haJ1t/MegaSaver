@@ -107,6 +107,8 @@ export function startProxy(
       writeControlState(storeRoot, {
         ...control,
         desiredEnabled: true,
+        // Re-enabling supersedes any in-flight disable drain; drop the stale marker.
+        drainingGeneration: null,
         transition: {
           ...guiTransitionOwner(nowIso),
           kind: "enable",

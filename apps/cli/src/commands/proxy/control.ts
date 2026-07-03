@@ -67,6 +67,9 @@ export function runProxyStart(deps: ProxyControlPlaneDeps): StartResult {
       writeControlState(deps.storeRoot, {
         ...control,
         desiredEnabled: true,
+        // Re-enabling supersedes any in-flight disable drain; drop the stale
+        // draining marker so status doesn't report draining + routed at once.
+        drainingGeneration: null,
         transition: {
           ...cliTransitionOwner(nowIso),
           kind: "enable",
