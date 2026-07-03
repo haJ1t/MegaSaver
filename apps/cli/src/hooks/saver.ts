@@ -21,9 +21,14 @@ export type SaverSettings = { enabled: boolean; mode: TokenSaverMode };
 
 export type SaverDeps = {
   storeRoot: string;
-  readSettings: (storeRoot: string, workspaceKey: string) => SaverSettings | null;
+  // Resolves activation from the cwd through the repository-family precedence
+  // (exact → family → legacy-root → global). null ⇒ disabled/passthrough.
+  resolveSettings: (storeRoot: string, cwd: string) => SaverSettings | null;
   readSessionIntent: (storeRoot: string, workspaceKey: string) => string | undefined;
   record: (input: RecordOverlayOutputInput) => Promise<RecordOverlayOutputResult>;
+  // Metadata-only liveness heartbeats (best-effort; never block the tool call).
+  recordInvocation: (storeRoot: string, workspaceKey: string) => void;
+  recordCompression: (storeRoot: string, workspaceKey: string) => void;
 };
 
 export type SaverDecision = { updatedToolOutput: unknown } | { passthrough: true };
@@ -149,7 +154,11 @@ export async function buildSaverDecision(
     if (sourceKind === undefined) return PASSTHROUGH;
 
     const workspaceKey = encodeWorkspaceKey(cwd);
-    const settings = deps.readSettings(deps.storeRoot, workspaceKey);
+    // Step 1: liveness heartbeat for every valid payload, before activation and
+    // size gates (so a healthy hook is observable even on passthrough).
+    deps.recordInvocation(deps.storeRoot, workspaceKey);
+
+    const settings = deps.resolveSettings(deps.storeRoot, cwd);
     if (settings === null || !settings.enabled) return PASSTHROUGH;
     const sessionIntent = deps.readSessionIntent(deps.storeRoot, workspaceKey);
 
@@ -175,6 +184,9 @@ export async function buildSaverDecision(
       ...(sessionIntent !== undefined ? { intent: sessionIntent } : {}),
     });
     if (recorded.decision !== "compressed") return PASSTHROUGH;
+
+    // Step 5: a qualifying compression updates the global latestCompression.
+    deps.recordCompression(deps.storeRoot, workspaceKey);
 
     const rawTokens = tokensFromBytes(recorded.rawBytes);
     const returnedTokens = tokensFromBytes(recorded.returnedBytes);
