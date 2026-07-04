@@ -31,6 +31,10 @@ import {
   handleStreamClaudeSession,
 } from "./routes/claude-sessions.js";
 import { handleDaemonStatus } from "./routes/daemon.js";
+import {
+  handleGetDecisionTrace,
+  handleListDecisionTraceSessions,
+} from "./routes/decision-trace.js";
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
 import { handleGetMemoryGraph } from "./routes/memory-graph.js";
@@ -276,6 +280,31 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         methodNotAllowed(res, method, origin),
       );
       if (dispatched) return;
+    }
+
+    // /decision-trace/sessions and /decision-trace/graph have disjoint suffixes,
+    // so their order relative to each other is immaterial; both must precede the
+    // broad claudeMatch below (and neither is reachable by the memory routes).
+    const decisionTraceSessionsMatch = path.match(
+      /^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/decision-trace\/sessions$/,
+    );
+    if (decisionTraceSessionsMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      const dir = decodeURIComponent(decisionTraceSessionsMatch[1] as string);
+      const id = decodeURIComponent(decisionTraceSessionsMatch[2] as string);
+      await handleListDecisionTraceSessions(ctx, dir, id);
+      return;
+    }
+
+    const decisionTraceMatch = path.match(
+      /^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/decision-trace\/graph$/,
+    );
+    if (decisionTraceMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      const dir = decodeURIComponent(decisionTraceMatch[1] as string);
+      const id = decodeURIComponent(decisionTraceMatch[2] as string);
+      await handleGetDecisionTrace(ctx, dir, id);
+      return;
     }
 
     const memoryGraphMatch = path.match(

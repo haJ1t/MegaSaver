@@ -2,7 +2,9 @@ import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { RankedChunk } from "../src/rank.js";
 import {
+  buildRankingTrace,
   finalizeReplayTrace,
   readReplayTraces,
   replayTraceSchema,
@@ -69,6 +71,72 @@ describe("filterOutput ranking trace (Proxy Mode v1.2 §12)", () => {
   });
 });
 
+describe("buildRankingTrace rankedByMemoryIds (Slice B) — union across selected", () => {
+  const rankedChunk = (startLine: number, matchedMemoryIds?: string[]): RankedChunk => ({
+    text: "x",
+    startLine,
+    endLine: startLine,
+    score: 1,
+    features: {
+      diagnosticScore: 0,
+      duplicatePenalty: 0,
+      errorScore: 0,
+      filePathScore: 0,
+      keywordScore: 0,
+      noisePenalty: 0,
+      recentFileScore: 0,
+      stackTraceScore: 0,
+      testFailureScore: 0,
+    },
+    ...(matchedMemoryIds !== undefined ? { matchedMemoryIds } : {}),
+  });
+
+  it("unions the per-chunk matched ids across the selected chunks, deduped", () => {
+    const trace = buildRankingTrace({
+      classification: { category: "unknown", confidence: 0 },
+      decision: "compressed",
+      compressor: "generic",
+      engineRanking: true,
+      rawTokens: 100,
+      returnedTokens: 10,
+      selected: [rankedChunk(1, ["m1"]), rankedChunk(2, ["m2", "m1"])],
+      omitted: [rankedChunk(3, ["m3"])],
+    });
+    // Order-insensitive union of the SELECTED chunks only; omitted m3 excluded.
+    expect(new Set(trace.rankedByMemoryIds)).toEqual(new Set(["m1", "m2"]));
+    expect(trace.rankedByMemoryIds?.length).toBe(2);
+    expect(trace.rankedByMemoryIds).not.toContain("m3");
+  });
+
+  it("omits rankedByMemoryIds when no selected chunk carries matched ids (legacy trace still parses)", () => {
+    const trace = buildRankingTrace({
+      classification: { category: "unknown", confidence: 0 },
+      decision: "passthrough",
+      compressor: "generic",
+      engineRanking: false,
+      rawTokens: 5,
+      returnedTokens: 5,
+      selected: [rankedChunk(1)],
+      omitted: [],
+    });
+    expect(trace.rankedByMemoryIds).toBeUndefined();
+
+    const finalized = finalizeReplayTrace(trace, META);
+    expect(replayTraceSchema.safeParse(finalized).success).toBe(true);
+
+    // A legacy trace (no rankedByMemoryIds on the ranking) still parses.
+    const legacy = JSON.stringify({
+      sessionId: META.sessionId,
+      projectId: META.projectId,
+      toolName: META.toolName,
+      chunkSetId: META.chunkSetId,
+      ranking: finalized.ranking,
+      createdAt: META.createdAt,
+    });
+    expect(replayTraceSchema.safeParse(JSON.parse(legacy)).success).toBe(true);
+  });
+});
+
 describe("finalizeReplayTrace", () => {
   it("references the content-store chunkSetId and carries session/project/tool", async () => {
     const result = await filterOutput(base("hello\n"));
@@ -82,6 +150,55 @@ describe("finalizeReplayTrace", () => {
     expect(trace.toolName).toBe("proxy_run_command");
     expect(trace.task).toBe("find the failure");
     expect(replayTraceSchema.safeParse(trace).success).toBe(true);
+  });
+});
+
+describe("finalizeReplayTrace redaction (Slice A inline seam fact)", () => {
+  it("stamps a redaction meta onto the trace and round-trips through the reader", async () => {
+    const ranking = (await filterOutput(base("hello\n"))).trace;
+    if (ranking === undefined) throw new Error("expected trace");
+    const trace = finalizeReplayTrace(ranking, {
+      ...META,
+      redaction: { redacted: true, secretsRedacted: 2 },
+    });
+    expect(trace.redaction).toEqual({ redacted: true, secretsRedacted: 2 });
+    expect(replayTraceSchema.safeParse(trace).success).toBe(true);
+
+    const dir = await mkdtemp(join(tmpdir(), "replay-trace-redaction-"));
+    try {
+      await writeReplayTrace(dir, trace);
+      const [parsed] = readReplayTraces(join(dir, "replay-traces.jsonl"));
+      expect(parsed?.redaction).toEqual({ redacted: true, secretsRedacted: 2 });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("omits redaction when the meta has none (legacy trace still parses)", async () => {
+    const ranking = (await filterOutput(base("hello\n"))).trace;
+    if (ranking === undefined) throw new Error("expected trace");
+    const trace = finalizeReplayTrace(ranking, META);
+    expect(trace).not.toHaveProperty("redaction");
+    expect(replayTraceSchema.safeParse(trace).success).toBe(true);
+
+    const legacy = JSON.stringify({
+      sessionId: META.sessionId,
+      projectId: META.projectId,
+      toolName: META.toolName,
+      chunkSetId: META.chunkSetId,
+      ranking: trace.ranking,
+      createdAt: META.createdAt,
+    });
+    const dir = await mkdtemp(join(tmpdir(), "replay-trace-legacy-"));
+    try {
+      const path = join(dir, "replay-traces.jsonl");
+      await appendFile(path, `${legacy}\n`, "utf8");
+      const [parsed] = readReplayTraces(path);
+      expect(parsed?.chunkSetId).toBe(META.chunkSetId);
+      expect(parsed?.redaction).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 

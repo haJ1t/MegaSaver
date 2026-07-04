@@ -51,25 +51,33 @@ describe("resolveEngineRankingDisabled — A/B kill switch (seam phase 2 P2.6)",
   });
 });
 
-describe("resolveSeamTraceEnabled — trace recording opt-in (fix batch B)", () => {
-  it("only 'true' or '1' (trimmed, case-insensitive) enables", () => {
-    expect(resolveSeamTraceEnabled("true")).toBe(true);
-    expect(resolveSeamTraceEnabled("  TRUE ")).toBe(true);
-    expect(resolveSeamTraceEnabled("1")).toBe(true);
-    expect(resolveSeamTraceEnabled(" 1 ")).toBe(true);
-  });
-  it("everything else keeps trace recording off", () => {
-    expect(resolveSeamTraceEnabled(undefined)).toBe(false);
-    expect(resolveSeamTraceEnabled("")).toBe(false);
+describe("resolveSeamTraceEnabled — trace recording on by default (decision-trace slice 2)", () => {
+  it("only 'false', '0', 'off', 'no' (trimmed, case-insensitive) disable", () => {
     expect(resolveSeamTraceEnabled("false")).toBe(false);
+    expect(resolveSeamTraceEnabled("  FALSE ")).toBe(false);
     expect(resolveSeamTraceEnabled("0")).toBe(false);
-    expect(resolveSeamTraceEnabled("yes")).toBe(false);
+    expect(resolveSeamTraceEnabled(" 0 ")).toBe(false);
+    expect(resolveSeamTraceEnabled("off")).toBe(false);
+    expect(resolveSeamTraceEnabled("  OFF ")).toBe(false);
+    expect(resolveSeamTraceEnabled("no")).toBe(false);
+    expect(resolveSeamTraceEnabled(" No ")).toBe(false);
+  });
+  it("everything else keeps trace recording on", () => {
+    expect(resolveSeamTraceEnabled(undefined)).toBe(true);
+    expect(resolveSeamTraceEnabled("")).toBe(true);
+    expect(resolveSeamTraceEnabled("true")).toBe(true);
+    expect(resolveSeamTraceEnabled("1")).toBe(true);
+    expect(resolveSeamTraceEnabled("yes")).toBe(true);
+    expect(resolveSeamTraceEnabled("garbage")).toBe(true);
   });
   it("seamTraceEnabledByEnv reads MEGASAVER_SEAM_TRACE", () => {
     expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "true" })).toBe(true);
     expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "1" })).toBe(true);
     expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "false" })).toBe(false);
-    expect(seamTraceEnabledByEnv({})).toBe(false);
+    expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "0" })).toBe(false);
+    expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "off" })).toBe(false);
+    expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "no" })).toBe(false);
+    expect(seamTraceEnabledByEnv({})).toBe(true);
   });
 });
 
@@ -135,5 +143,71 @@ describe("applyEngineRanking (Deliverable 6)", () => {
       failureHistoryBoost: expect.any(Number),
       finalScore: expect.any(Number),
     });
+  });
+});
+
+describe("applyEngineRanking memory-id attribution (Slice B) — attribution-only, score parity", () => {
+  const TERM = "useAuthToken";
+
+  it("surfaces the matched memory id AND keeps memoryBoost + finalScore byte-identical to the recentMemory-only run", () => {
+    // Non-saturating, discriminating fixture: recentMemory carries TWO terms of
+    // which only ONE substring-matches the chunk, so memoryBoost is a strict
+    // fraction (1/2 = 0.5), NOT the saturated 1.0. memoryTerms carries a THIRD,
+    // distinct term that also matches the chunk and is absent from recentMemory.
+    // If that term leaked into scoring it would move the numerator/denominator
+    // and shift memoryBoost off 0.5 — so the parity assertions below now bite.
+    const ABSENT = "zzz_absent_term";
+    const ATTRIBUTED_TERM = "setSessionCookie";
+    const chunkText = `this line calls ${TERM} and ${ATTRIBUTED_TERM} directly`;
+    const withoutTerms: SessionHints = { recentMemory: [TERM, ABSENT] };
+    const withTerms: SessionHints = {
+      recentMemory: [TERM, ABSENT],
+      memoryTerms: [{ id: "m1", text: ATTRIBUTED_TERM }],
+    };
+
+    const [a] = applyEngineRanking([scoreChunk("x", chunk(chunkText), withoutTerms)], withoutTerms);
+    const [b] = applyEngineRanking([scoreChunk("x", chunk(chunkText), withTerms)], withTerms);
+
+    // (a) the memoryTerms run exposes the matched id on the ranked chunk.
+    expect(b?.matchedMemoryIds).toEqual(["m1"]);
+    // The no-memoryTerms run exposes no matched ids.
+    expect(a?.matchedMemoryIds ?? []).toEqual([]);
+
+    // The fixture is genuinely non-saturating: memoryBoost is the strict 0.5
+    // (only TERM of [TERM, ABSENT] matches), so a leak would be detectable.
+    expect(a?.engine?.memoryBoost).toBe(0.5);
+
+    // (b) SCORE PARITY — memoryBoost and finalScore identical with/without
+    // memoryTerms. A mutation that routes memoryTerms into scoring (adding a
+    // third matching item -> 2/3, or replacing memoryItems -> 1/1) shifts
+    // memoryBoost off 0.5 and fails here.
+    expect(b?.engine?.memoryBoost).toBe(a?.engine?.memoryBoost);
+    expect(b?.engine?.finalScore).toBe(a?.engine?.finalScore);
+    expect(b?.score).toBe(a?.score);
+  });
+
+  it("records every id whose text matched, when two memories share the same term text", () => {
+    const chunkText = `mentions ${TERM} once`;
+    const withTerms: SessionHints = {
+      recentMemory: [TERM],
+      memoryTerms: [
+        { id: "m1", text: TERM },
+        { id: "m2", text: TERM },
+      ],
+    };
+    const [c] = applyEngineRanking([scoreChunk("x", chunk(chunkText), withTerms)], withTerms);
+    expect(new Set(c?.matchedMemoryIds)).toEqual(new Set(["m1", "m2"]));
+  });
+
+  it("surfaces no ids for a chunk that references none of the memory terms", () => {
+    const withTerms: SessionHints = {
+      recentMemory: [TERM],
+      memoryTerms: [{ id: "m1", text: TERM }],
+    };
+    const [c] = applyEngineRanking(
+      [scoreChunk("x", chunk("unrelated plain noise"), withTerms)],
+      withTerms,
+    );
+    expect(c?.matchedMemoryIds ?? []).toEqual([]);
   });
 });

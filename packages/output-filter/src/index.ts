@@ -22,6 +22,13 @@ export {
   type ReplayTraceMeta,
 } from "./replay-trace.js";
 export {
+  readSessionDecisionTrace,
+  type DecisionOutput,
+  type RankedChunkView,
+  type SessionDecisionTrace,
+} from "./decision-trace.js";
+export { MAX_TRACE_SESSIONS, pruneTraceSessions } from "./prune-traces.js";
+export {
   estimateTokens,
   HARD_WRAP_THRESHOLD_TOKENS,
   PASSTHROUGH_THRESHOLD_TOKENS,

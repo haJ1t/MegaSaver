@@ -2,6 +2,7 @@ import { join } from "node:path";
 import {
   type FilterOutputResult,
   finalizeReplayTrace,
+  pruneTraceSessions,
   seamTraceEnabledByEnv,
   writeReplayTrace,
 } from "@megasaver/output-filter";
@@ -131,7 +132,8 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     mode: settings.mode,
     maxReturnedBytes: settings.maxReturnedBytes,
     sessionHints,
-    // Trace recording is opt-in (disk cost): MEGASAVER_SEAM_TRACE gates it.
+    // Trace recording is ON by default; MEGASAVER_SEAM_TRACE={false,0,off,no}
+    // is the kill switch (retention prune bounds the resulting disk cost).
     recordTrace: seamTraceEnabledByEnv(),
     ...(input.outline === true ? { outline: true } : {}),
   });
@@ -175,8 +177,20 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
         toolName: "proxy_read_file",
         createdAt: now(),
         ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
+        redaction: {
+          redacted: (filteredResult.warnings ?? []).some((w) => w.startsWith("redacted")),
+          secretsRedacted: redactedCount(filteredResult.warnings ?? []),
+        },
       }),
     );
+    // Bounds the only always-on new disk (tracing is on by default): cap the
+    // retained trace-session dirs. Best-effort — never block or throw into the
+    // response path (pruneTraceSessions swallows fs errors, but guard anyway).
+    try {
+      pruneTraceSessions(input.storeRoot, settings.projectId);
+    } catch {
+      // swallow — retention is housekeeping, not correctness
+    }
   }
 
   const event: TokenSaverEvent = {

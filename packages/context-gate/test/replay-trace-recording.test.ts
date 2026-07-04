@@ -150,18 +150,51 @@ describe("replay trace recording (seam phase 2 P2.6)", () => {
     expect(outcome.result).not.toHaveProperty("trace");
   });
 
-  it("MEGASAVER_SEAM_TRACE unset → exec writes no trace file (opt-in default)", async () => {
+  it("MEGASAVER_SEAM_TRACE unset → exec writes a trace (on by default)", async () => {
     const res = await runExec();
     expect(res.ok).toBe(true);
     if (!res.ok) return;
 
-    // Delivery is untouched; only the measurement side channel stays off.
+    // Tracing is on by default now: an unset env still records the causal trace.
+    expect(res.result.excerpts.some((e) => e.engine !== undefined)).toBe(true);
+    const traces = readReplayTraces(tracesPath());
+    expect(traces).toHaveLength(1);
+    expect(traces[0]?.toolName).toBe("proxy_run_command");
+  });
+
+  it("MEGASAVER_SEAM_TRACE=false → exec writes no trace file (kill switch)", async () => {
+    vi.stubEnv("MEGASAVER_SEAM_TRACE", "false");
+    const res = await runExec();
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    // Delivery is untouched; only the measurement side channel is disabled.
     expect(res.result.excerpts.some((e) => e.engine !== undefined)).toBe(true);
     expect(existsSync(tracesPath())).toBe(false);
     expect(existsSync(join(store, "stats", PROJECT_ID, `${SESSION_ID}-traces`))).toBe(false);
   });
 
-  it("MEGASAVER_SEAM_TRACE unset → read pipeline writes no trace file", async () => {
+  it("MEGASAVER_SEAM_TRACE unset → read pipeline writes a trace (on by default)", async () => {
+    const notesPath = join(projectRoot, "notes.log");
+    await writeFile(notesPath, "auth token notes referencing src/auth.ts\n");
+    const outcome = await runOutputPipeline({
+      registry: makeFakeRegistry(projectRoot),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      path: notesPath,
+      intent: "auth token validation",
+      now: () => NOW,
+      newId: () => "cs-trace-read",
+      loadPermissions: () => null,
+    });
+    expect(outcome.ok).toBe(true);
+    const traces = readReplayTraces(tracesPath());
+    expect(traces).toHaveLength(1);
+    expect(traces[0]?.toolName).toBe("proxy_read_file");
+  });
+
+  it("MEGASAVER_SEAM_TRACE=false → read pipeline writes no trace file (kill switch)", async () => {
+    vi.stubEnv("MEGASAVER_SEAM_TRACE", "false");
     const notesPath = join(projectRoot, "notes.log");
     await writeFile(notesPath, "auth token notes referencing src/auth.ts\n");
     const outcome = await runOutputPipeline({
@@ -183,5 +216,61 @@ describe("replay trace recording (seam phase 2 P2.6)", () => {
     const res = await runExec();
     expect(res.ok).toBe(true);
     expect(readReplayTraces(tracesPath())).toHaveLength(1);
+  });
+
+  // Slice A: redaction is stamped inline on the registry trace at BOTH seams.
+  // The copy-paste-twin risk is that only one seam gets it — assert exec AND
+  // read each carry the redaction fact for a secret-bearing output.
+  const SECRET = "ghp_0123456789abcdefghijABCDEFGHIJ0123456789";
+
+  it("exec seam stamps redaction inline when the output carries a secret", async () => {
+    vi.stubEnv("MEGASAVER_SEAM_TRACE", "true");
+    const child = makeChild();
+    const p = runOutputExecCommand({
+      registry: makeFakeRegistry(projectRoot),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      command: "pnpm",
+      args: ["test"],
+      intent: "run tests",
+      originPid: ROOT_PID,
+      timeoutMs: 300_000,
+      maxBytes: 20_000_000,
+      now: () => NOW,
+      newId: () => "cs-trace-exec-secret",
+      loadPermissions: () => null,
+      spawn: spawnMock(child),
+    });
+    child.stdout.emit("data", Buffer.from(`export TOKEN=${SECRET}\n`));
+    child.emit("close", 0);
+    const res = await p;
+    expect(res.ok).toBe(true);
+
+    const traces = readReplayTraces(tracesPath());
+    expect(traces).toHaveLength(1);
+    expect(traces[0]?.redaction?.redacted).toBe(true);
+    expect(traces[0]?.redaction?.secretsRedacted).toBeGreaterThan(0);
+  });
+
+  it("read seam stamps redaction inline when the file carries a secret", async () => {
+    vi.stubEnv("MEGASAVER_SEAM_TRACE", "true");
+    const notesPath = join(projectRoot, "secret.log");
+    await writeFile(notesPath, `api key ${SECRET} for the service\n`);
+    const outcome = await runOutputPipeline({
+      registry: makeFakeRegistry(projectRoot),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      path: notesPath,
+      intent: "api key",
+      now: () => NOW,
+      newId: () => "cs-trace-read-secret",
+      loadPermissions: () => null,
+    });
+    expect(outcome.ok).toBe(true);
+
+    const traces = readReplayTraces(tracesPath());
+    expect(traces).toHaveLength(1);
+    expect(traces[0]?.redaction?.redacted).toBe(true);
+    expect(traces[0]?.redaction?.secretsRedacted).toBeGreaterThan(0);
   });
 });

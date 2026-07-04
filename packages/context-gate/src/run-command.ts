@@ -13,6 +13,7 @@ import {
   engineRankingDisabledByEnv,
   filterOutput,
   finalizeReplayTrace,
+  pruneTraceSessions,
   seamTraceEnabledByEnv,
   writeReplayTrace,
 } from "@megasaver/output-filter";
@@ -254,8 +255,9 @@ export async function runOutputExecCommand(
     source: { kind: "command", command: input.command, args: input.args },
     sessionHints,
     // On by default at the seam; MEGASAVER_ENGINE_RANKING=false is the A/B
-    // kill switch. Trace recording is opt-in (disk cost): MEGASAVER_SEAM_TRACE
-    // gates it, and a recorded trace makes both arms measurable (§P2.6).
+    // kill switch. Trace recording is also ON by default (MEGASAVER_SEAM_TRACE=
+    // {false,0,off,no} disables it), and a recorded trace makes both arms
+    // measurable (§P2.6).
     engineRanking: !engineRankingDisabledByEnv(),
     recordTrace: seamTraceEnabledByEnv(),
   });
@@ -380,8 +382,17 @@ export async function runOutputExecCommand(
         toolName: "proxy_run_command",
         createdAt: now(),
         ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
+        redaction: { redacted, secretsRedacted },
       }),
     );
+    // Bounds the only always-on new disk (tracing is on by default): cap the
+    // retained trace-session dirs. Best-effort — never block or throw into the
+    // response path (pruneTraceSessions swallows fs errors, but guard anyway).
+    try {
+      pruneTraceSessions(input.storeRoot, settings.projectId);
+    } catch {
+      // swallow — retention is housekeeping, not correctness
+    }
   }
 
   const event: TokenSaverEvent = {

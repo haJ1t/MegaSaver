@@ -42,6 +42,10 @@ export const filterOutputInputSchema = z
         recentMemory: z.array(z.string()).readonly().optional(),
         projectConventions: z.array(z.string()).readonly().optional(),
         recentFailures: z.array(z.string()).readonly().optional(),
+        memoryTerms: z
+          .array(z.object({ id: z.string(), text: z.string() }))
+          .readonly()
+          .optional(),
         risk: riskLevelSchema.optional(),
       })
       .optional(),
