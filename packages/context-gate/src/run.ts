@@ -177,6 +177,10 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
         toolName: "proxy_read_file",
         createdAt: now(),
         ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
+        redaction: {
+          redacted: (filteredResult.warnings ?? []).some((w) => w.startsWith("redacted")),
+          secretsRedacted: redactedCount(filteredResult.warnings ?? []),
+        },
       }),
     );
     // Bounds the only always-on new disk (tracing is on by default): cap the

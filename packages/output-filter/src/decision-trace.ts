@@ -113,6 +113,14 @@ export function readSessionDecisionTrace(
 
   const outputs: DecisionOutput[] = traces.map((t) => {
     const ev = t.chunkSetId !== undefined ? evidenceByChunkSet.get(t.chunkSetId) : undefined;
+    // Prefer the redaction stamped inline on the registry trace (the seam that
+    // actually has it); fall back to the evidence join for overlay-only traces.
+    // secretsRedacted maps to highRiskFindings (spec addendum decision 2).
+    const redaction = t.redaction
+      ? { redacted: t.redaction.redacted, highRiskFindings: t.redaction.secretsRedacted }
+      : ev
+        ? ev.redaction
+        : null;
     return {
       chunkSetId: t.chunkSetId ?? null,
       toolName: t.toolName,
@@ -122,8 +130,8 @@ export function readSessionDecisionTrace(
       selected: t.ranking.selected.map(toView),
       omitted: t.ranking.omitted.map(toView),
       memory: ev ? { pinnedByMemoryIds: ev.pinnedByMemoryIds } : null,
-      redaction: ev ? ev.redaction : null,
-      evidencePresent: ev !== undefined,
+      redaction,
+      evidencePresent: ev !== undefined || t.redaction !== undefined,
     };
   });
 

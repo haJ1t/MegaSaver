@@ -85,6 +85,55 @@ describe("finalizeReplayTrace", () => {
   });
 });
 
+describe("finalizeReplayTrace redaction (Slice A inline seam fact)", () => {
+  it("stamps a redaction meta onto the trace and round-trips through the reader", async () => {
+    const ranking = (await filterOutput(base("hello\n"))).trace;
+    if (ranking === undefined) throw new Error("expected trace");
+    const trace = finalizeReplayTrace(ranking, {
+      ...META,
+      redaction: { redacted: true, secretsRedacted: 2 },
+    });
+    expect(trace.redaction).toEqual({ redacted: true, secretsRedacted: 2 });
+    expect(replayTraceSchema.safeParse(trace).success).toBe(true);
+
+    const dir = await mkdtemp(join(tmpdir(), "replay-trace-redaction-"));
+    try {
+      await writeReplayTrace(dir, trace);
+      const [parsed] = readReplayTraces(join(dir, "replay-traces.jsonl"));
+      expect(parsed?.redaction).toEqual({ redacted: true, secretsRedacted: 2 });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("omits redaction when the meta has none (legacy trace still parses)", async () => {
+    const ranking = (await filterOutput(base("hello\n"))).trace;
+    if (ranking === undefined) throw new Error("expected trace");
+    const trace = finalizeReplayTrace(ranking, META);
+    expect(trace).not.toHaveProperty("redaction");
+    expect(replayTraceSchema.safeParse(trace).success).toBe(true);
+
+    const legacy = JSON.stringify({
+      sessionId: META.sessionId,
+      projectId: META.projectId,
+      toolName: META.toolName,
+      chunkSetId: META.chunkSetId,
+      ranking: trace.ranking,
+      createdAt: META.createdAt,
+    });
+    const dir = await mkdtemp(join(tmpdir(), "replay-trace-legacy-"));
+    try {
+      const path = join(dir, "replay-traces.jsonl");
+      await appendFile(path, `${legacy}\n`, "utf8");
+      const [parsed] = readReplayTraces(path);
+      expect(parsed?.chunkSetId).toBe(META.chunkSetId);
+      expect(parsed?.redaction).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("writeReplayTrace (best-effort persistence)", () => {
   let dir: string;
   beforeEach(async () => {

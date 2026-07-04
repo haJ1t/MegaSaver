@@ -11,13 +11,18 @@ const MEM_A = "33333333-3333-4333-8333-333333333333";
 const MEM_B = "44444444-4444-4444-8444-444444444444";
 const DIGEST = "a".repeat(64);
 
-function traceLine(chunkSetId: string, memoryBoost: number): string {
+function traceLine(
+  chunkSetId: string,
+  memoryBoost: number,
+  redaction?: { redacted: boolean; secretsRedacted: number },
+): string {
   return JSON.stringify({
     sessionId: SESSION,
     projectId: PROJECT,
     toolName: "Read",
     createdAt: "2026-07-04T00:00:00.000Z",
     chunkSetId,
+    ...(redaction !== undefined ? { redaction } : {}),
     ranking: {
       classification: { category: "typescript", confidence: 0.7 },
       decision: "compressed",
@@ -126,6 +131,26 @@ describe("readSessionDecisionTrace", () => {
     expect(o2?.memory?.pinnedByMemoryIds).toEqual([MEM_B]);
     expect(o2?.selected[0]?.engine.memoryBoost).toBe(0.5);
     expect(o2?.redaction?.highRiskFindings).toBe(0);
+  });
+
+  it("surfaces inline redaction from a registry-only trace with no evidence dir (Slice A)", () => {
+    const root = mkdtempSync(join(tmpdir(), "dtv-inline-"));
+    const traceDir = join(root, "stats", PROJECT, `${SESSION}-traces`);
+    mkdirSync(traceDir, { recursive: true });
+    writeFileSync(
+      join(traceDir, "replay-traces.jsonl"),
+      `${traceLine("cs1", 0.2, { redacted: true, secretsRedacted: 2 })}\n`,
+    );
+
+    const t = readSessionDecisionTrace(
+      { root },
+      { projectId: PROJECT, sessionId: SESSION, workspaceKey: WK },
+    );
+    expect(t.outputs).toHaveLength(1);
+    const o = t.outputs[0];
+    expect(o?.redaction?.redacted).toBe(true);
+    expect(o?.redaction?.highRiskFindings).toBe(2);
+    expect(o?.evidencePresent).toBe(true);
   });
 
   it("marks evidencePresent false when no evidence matches (orphan trace, not dropped)", () => {

@@ -382,6 +382,7 @@ export async function runOutputExecCommand(
         toolName: "proxy_run_command",
         createdAt: now(),
         ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
+        redaction: { redacted, secretsRedacted },
       }),
     );
     // Bounds the only always-on new disk (tracing is on by default): cap the

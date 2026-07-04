@@ -217,4 +217,60 @@ describe("replay trace recording (seam phase 2 P2.6)", () => {
     expect(res.ok).toBe(true);
     expect(readReplayTraces(tracesPath())).toHaveLength(1);
   });
+
+  // Slice A: redaction is stamped inline on the registry trace at BOTH seams.
+  // The copy-paste-twin risk is that only one seam gets it — assert exec AND
+  // read each carry the redaction fact for a secret-bearing output.
+  const SECRET = "ghp_0123456789abcdefghijABCDEFGHIJ0123456789";
+
+  it("exec seam stamps redaction inline when the output carries a secret", async () => {
+    vi.stubEnv("MEGASAVER_SEAM_TRACE", "true");
+    const child = makeChild();
+    const p = runOutputExecCommand({
+      registry: makeFakeRegistry(projectRoot),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      command: "pnpm",
+      args: ["test"],
+      intent: "run tests",
+      originPid: ROOT_PID,
+      timeoutMs: 300_000,
+      maxBytes: 20_000_000,
+      now: () => NOW,
+      newId: () => "cs-trace-exec-secret",
+      loadPermissions: () => null,
+      spawn: spawnMock(child),
+    });
+    child.stdout.emit("data", Buffer.from(`export TOKEN=${SECRET}\n`));
+    child.emit("close", 0);
+    const res = await p;
+    expect(res.ok).toBe(true);
+
+    const traces = readReplayTraces(tracesPath());
+    expect(traces).toHaveLength(1);
+    expect(traces[0]?.redaction?.redacted).toBe(true);
+    expect(traces[0]?.redaction?.secretsRedacted).toBeGreaterThan(0);
+  });
+
+  it("read seam stamps redaction inline when the file carries a secret", async () => {
+    vi.stubEnv("MEGASAVER_SEAM_TRACE", "true");
+    const notesPath = join(projectRoot, "secret.log");
+    await writeFile(notesPath, `api key ${SECRET} for the service\n`);
+    const outcome = await runOutputPipeline({
+      registry: makeFakeRegistry(projectRoot),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      path: notesPath,
+      intent: "api key",
+      now: () => NOW,
+      newId: () => "cs-trace-read-secret",
+      loadPermissions: () => null,
+    });
+    expect(outcome.ok).toBe(true);
+
+    const traces = readReplayTraces(tracesPath());
+    expect(traces).toHaveLength(1);
+    expect(traces[0]?.redaction?.redacted).toBe(true);
+    expect(traces[0]?.redaction?.secretsRedacted).toBeGreaterThan(0);
+  });
 });

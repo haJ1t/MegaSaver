@@ -89,6 +89,14 @@ const rankingTraceSchema = z.object({
 // Full replay trace (spec §12.2). References the content-store chunkSetId for
 // raw expansion rather than duplicating output, so v1.4 can replay ranking
 // offline over the stored chunks.
+// A seam fact, not a ranking fact: whether the registry seam redacted secrets
+// from this output and how many. Top-level (parallel to chunkSetId) so the
+// decision-trace reader surfaces it without the cross-store evidence join.
+const redactionSchema = z.object({
+  redacted: z.boolean(),
+  secretsRedacted: z.number(),
+});
+
 export const replayTraceSchema = z.object({
   sessionId: z.string(),
   projectId: z.string(),
@@ -96,6 +104,7 @@ export const replayTraceSchema = z.object({
   toolName: z.string(),
   query: z.string().optional(),
   chunkSetId: z.string().optional(),
+  redaction: redactionSchema.optional(),
   ranking: rankingTraceSchema,
   createdAt: z.string(),
 });
@@ -110,6 +119,7 @@ export type ReplayTraceMeta = {
   task?: string;
   query?: string;
   chunkSetId?: string;
+  redaction?: { redacted: boolean; secretsRedacted: number };
 };
 
 export function finalizeReplayTrace(ranking: RankingTrace, meta: ReplayTraceMeta): ReplayTrace {
@@ -120,6 +130,7 @@ export function finalizeReplayTrace(ranking: RankingTrace, meta: ReplayTraceMeta
     ...(meta.task !== undefined ? { task: meta.task } : {}),
     ...(meta.query !== undefined ? { query: meta.query } : {}),
     ...(meta.chunkSetId !== undefined ? { chunkSetId: meta.chunkSetId } : {}),
+    ...(meta.redaction !== undefined ? { redaction: meta.redaction } : {}),
     ranking,
     createdAt: meta.createdAt,
   };
