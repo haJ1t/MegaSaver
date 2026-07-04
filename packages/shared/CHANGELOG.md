@@ -1,5 +1,57 @@
 # @megasaver/shared
 
+## 1.2.0
+
+### Minor Changes
+
+- 26106bc: Live Context Seam: capture agent failures as first-class evidence and feed them
+  back into the next task's context selection, closing the loop between what an
+  agent got wrong and what it sees on the retry.
+
+  - `@megasaver/shared`: new `sessionFailureIdSchema` — the branded id boundary for
+    a persisted failure record, so a failure id is validated once at the edge and
+    trusted internally thereafter.
+  - `@megasaver/core`: new `SessionFailure` type plus registry methods
+    `createSessionFailure(input)` and `listSessionFailures(query)`. Failures are
+    stored alongside sessions with the same metadata discipline as memory
+    (source, timestamp, scope), and `listSessionFailures` is the read side the
+    ranking path consumes.
+  - `@megasaver/context-gate`: failure capture wires recorded `SessionFailure`
+    rows into the gate, and failure-aware ranking boosts files/blocks implicated
+    in recent failures so a retry surfaces the evidence the last attempt missed.
+    Additive — with no recorded failures the ranking is byte-identical to today.
+  - `@megasaver/mcp-bridge`: new `get_task_context` MCP tool exposes the
+    failure-aware context selection to connected agents, returning the ranked
+    context for a task including any failure-boosted evidence.
+
+- 794be8b: Saver activation inheritance across Git worktrees: a repository-family setting is
+  inherited by every worktree sharing the same canonical Git common directory, so an
+  enabled repo covers its `.claude/worktrees/...` sessions. Fixes the live case where
+  an enabled main repo left its worktree sessions uncompressed.
+
+  - `@megasaver/shared`: new `RepositoryFamilyKey` branded type (`gf1_` + base64url
+    SHA-256), browser-safe validator.
+  - `@megasaver/context-gate`: canonical-path family identity (platform/volume-aware,
+    durable across reboot/remount/restore), a bounded Git common-directory resolver
+    (no subprocess; separate-git-dir main + worktrees converge; foreign worktree-admin
+    pointers rejected), a hardened v1 activation store (exact/family/global records +
+    legacy-shape normalization, atomic 0600/0700 writes, digest fail-closed, activation
+    lock), the `resolveWorkspaceTokenSaverSettings` precedence (exact → repository →
+    legacy-root → global → disabled; degraded git never resurrects a legacy record but
+    the global default still applies), a bounded heartbeat registry (256/30d/future-skew,
+    derived `latest`/`latestCompression`, non-mutating reads) that also feeds proxy
+    status, and the shared `resolveActivationScope`/`writeActivation` helpers.
+  - `@megasaver/cli`: the PostToolUse saver hook now resolves activation through the
+    repository-family precedence (a worktree inherits its repo's enable) and writes
+    invocation/compression liveness heartbeats. `mega session saver workspace
+{enable,disable}` is repository-aware (family record by default in a repo, `--exact`
+    for this checkout only, scope echo); new `default {enable,disable}` writes the global
+    default; new `resolve` shows the resolved activation + liveness. **Public behavior
+    change:** the activation record shape is now strict v1 and the workspace toggle
+    defaults to family scope inside a repo.
+  - `@megasaver/gui`: the workspace saver toggle writes through the same shared scope
+    helper (family inside a repo) and reports the effective inherited activation + source.
+
 ## 1.1.0
 
 ### Minor Changes

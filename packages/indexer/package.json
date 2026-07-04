@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/indexer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Semantic repo indexer for Mega Saver — typed CodeBlock extraction (AST + structural) and incremental build.",
   "type": "module",

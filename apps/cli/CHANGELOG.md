@@ -1,5 +1,134 @@
 # @megasaver/cli
 
+## 1.4.0
+
+### Minor Changes
+
+- 69ce82f: Audit overlay fallback: when a session has no recorded audit overlay, fall back
+  to the last known good overlay instead of rendering an empty panel, so the audit
+  view stays useful across sessions that predate overlay capture.
+
+  - `@megasaver/stats`: overlay resolution degrades gracefully — a missing
+    per-session overlay resolves to the most recent available overlay rather than
+    returning nothing.
+  - `@megasaver/cli`: the audit command surfaces the fallback overlay and flags it
+    as inherited so the operator knows the data is not session-specific.
+
+- 297ebc2: Persistent proxy routing: one explicit CLI/GUI action persistently enables the
+  local proxy for future supported Claude launches, owned by a dedicated
+  supervisor LaunchAgent that reconciles desired↔actual state and never touches a
+  foreign route or a process it did not start. Fixes the 2026-07-02 finding where
+  the proxy was healthy but no client was routed (zero metering), and removes the
+  GUI's boot/shutdown route-clearing that could strand a session.
+
+  - `@megasaver/llm-proxy`: a nonce-bound ownership health endpoint (HMAC
+    challenge-response) answered in-process and never forwarded upstream.
+  - `@megasaver/proxy-control` (NEW, agent-agnostic): strict versioned control/
+    runtime state stores; fenced owner identity + locks (pid + start-token +
+    boot-id, PID-reuse-safe); the reconciliation recovery matrix as a pure,
+    exhaustively-tested decision (a foreign route is never removed, no route is
+    applied in a disable/drain transition, remove targets only a leased exact
+    owned url); supervisor wiring (startup fixpoint + 5s monitor); and a macOS
+    LaunchAgent adapter (structured plist, legacy-service-present manual bootout,
+    idempotent-by-observation, foreign untouched).
+  - `@megasaver/connector-claude-code`: a value-guarded Claude route adapter
+    (inspect/apply/removeExpected/ensureHooks) that owns the `~/.claude/settings.json`
+    route and never overwrites/removes a foreign value.
+  - `@megasaver/cli`: `mega proxy start` (persist an enable intent + install the
+    supervisor LaunchAgent), `stop` (enter drain) and `stop
+--confirm-clients-restarted` (finish drain: stop the listener + reach terminal
+    idle), `status [--json]` (read-only; separated facts + saver liveness from the
+    heartbeat registry), `service uninstall --confirm`,
+    and the internal `proxy supervise` daemon. The daemon binds a health-capable
+    loopback listener and runs the reconcile state machine on a 5s cadence under a
+    fenced transition lock, so a persisted enable intent becomes a live, verified
+    route (closing the "healthy but unrouted" gap). `--upstream` is schema-
+    validated and a non-default origin requires `--confirm-credential-forwarding`.
+    **Public behavior break:** the old foreground `mega proxy start` is now
+    `mega proxy supervise`.
+  - `@megasaver/gui`: the proxy toggle persists desired state through the shared
+    control plane (also under the transition lock) and no longer owns a listener,
+    clears the route, or runs osascript.
+
+  Security hardening (CRITICAL review): the handler forwards with
+  `redirect:"manual"` (a cross-origin 3xx can't re-send the API key) and answers
+  the reserved health path locally (never forwarded); the route mutator fsyncs and
+  preserves file mode; the usage log is 0600/0700, symlink-refusing, with a bounded
+  control-char-stripped model label; the lock re-judges quarantined content so a
+  live owner is never stolen; the LaunchAgent verifies the managed plist byte-exact
+  and restores a backed-up legacy plist on bootstrap failure.
+
+  Deferred (flagged): the full GUI auth bootstrap (launch capability → HttpOnly
+  SameSite cookie + CSRF) and cross-process supervisor discovery (runtime.json +
+  control server). The single self-driving supervisor needs neither to route.
+
+- b956259: Idempotent proxy start: a redundant `mega proxy supervise` bind no longer
+  crashes on `EADDRINUSE`. Fixes the launchd crash-loop where a respawn (or a
+  second `mega proxy start`) hit `listen EADDRINUSE 127.0.0.1:8787`, rejected the
+  bind promise uncaught, and let the KeepAlive LaunchAgent respawn on repeat.
+
+  `mega proxy supervise` binds through `bindWithRetry`. On `EADDRINUSE` it retries
+  the bind a bounded number of times (~300 ms apart) to absorb the launchd respawn
+  release-race; if a retry succeeds it starts normally. When `EADDRINUSE` persists
+  across every attempt, another instance/process owns the port on a KeepAlive
+  singleton, so the supervisor prints one clear stderr line and exits 0 —
+  `KeepAlive{SuccessfulExit:false}` does not respawn a clean exit, which stops the
+  crash-loop. A non-`EADDRINUSE` bind error still surfaces (non-zero exit); no raw
+  stack trace, no unhandled rejection. The port holder is never killed — launchd
+  owns lifecycle and the plist is unchanged.
+
+- 794be8b: Saver activation inheritance across Git worktrees: a repository-family setting is
+  inherited by every worktree sharing the same canonical Git common directory, so an
+  enabled repo covers its `.claude/worktrees/...` sessions. Fixes the live case where
+  an enabled main repo left its worktree sessions uncompressed.
+
+  - `@megasaver/shared`: new `RepositoryFamilyKey` branded type (`gf1_` + base64url
+    SHA-256), browser-safe validator.
+  - `@megasaver/context-gate`: canonical-path family identity (platform/volume-aware,
+    durable across reboot/remount/restore), a bounded Git common-directory resolver
+    (no subprocess; separate-git-dir main + worktrees converge; foreign worktree-admin
+    pointers rejected), a hardened v1 activation store (exact/family/global records +
+    legacy-shape normalization, atomic 0600/0700 writes, digest fail-closed, activation
+    lock), the `resolveWorkspaceTokenSaverSettings` precedence (exact → repository →
+    legacy-root → global → disabled; degraded git never resurrects a legacy record but
+    the global default still applies), a bounded heartbeat registry (256/30d/future-skew,
+    derived `latest`/`latestCompression`, non-mutating reads) that also feeds proxy
+    status, and the shared `resolveActivationScope`/`writeActivation` helpers.
+  - `@megasaver/cli`: the PostToolUse saver hook now resolves activation through the
+    repository-family precedence (a worktree inherits its repo's enable) and writes
+    invocation/compression liveness heartbeats. `mega session saver workspace
+{enable,disable}` is repository-aware (family record by default in a repo, `--exact`
+    for this checkout only, scope echo); new `default {enable,disable}` writes the global
+    default; new `resolve` shows the resolved activation + liveness. **Public behavior
+    change:** the activation record shape is now strict v1 and the workspace toggle
+    defaults to family scope inside a repo.
+  - `@megasaver/gui`: the workspace saver toggle writes through the same shared scope
+    helper (family inside a repo) and reports the effective inherited activation + source.
+
+- 4269f42: Live Context Seam phase 2: harden failure capture, feed failures back through
+  every read path, and make the seam observable and switchable end to end.
+
+  - `@megasaver/context-gate`: overlay failure store persists captured failures
+    through the registry; failure-aware ranking now applies on registry read
+    paths, with new memory and conventions hint sources feeding the gate.
+    Hint building is best-effort per source — a corrupt store file degrades to
+    a non-fatal `session hints skipped` warning instead of failing the read.
+    Capture filtering skips evidence-free exit-1 runs, redacts the full raw
+    output before the 4000-char evidence cap, and failure signatures are
+    restricted to a code-extension allowlist so non-code noise never becomes a
+    signature. Seam replay traces are recorded with an A/B switch, gated behind
+    opt-in `MEGASAVER_SEAM_TRACE=true`.
+  - `@megasaver/output-filter`: new kill switch resolver disables the seam per
+    scope, `seamTraceEnabledByEnv` gates trace recording, and
+    `readReplayTraces` exposes recorded replay traces to consumers.
+  - `@megasaver/cli`: new `mega audit seam` command reports seam effectiveness
+    from recorded replay traces.
+
+### Patch Changes
+
+- Updated dependencies [297ebc2]
+  - @megasaver/proxy-control@0.2.0
+
 ## 1.3.0
 
 ### Minor Changes

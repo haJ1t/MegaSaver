@@ -1,5 +1,28 @@
 # @megasaver/connectors-shared
 
+## 1.2.0
+
+### Minor Changes
+
+- 326ed5a: Edit impact: surface the blast radius of an edit — impacted callers and the
+  tests to run — directly to connected agents, without manual dependency lookup.
+
+  - `@megasaver/mcp-bridge`: new `get_edit_impact` MCP tool. Seeds from
+    `changedFiles` (or `git diff --name-only HEAD`, degrading gracefully to an
+    empty set on non-git roots), merges per-seed impact packs deduped by block
+    id, and returns the impacted callers plus `suggestedTests` — the test-typed
+    blocks inside the merged radius.
+  - `@megasaver/connectors-shared`: the context-gate block now instructs the
+    agent to call `get_edit_impact({ projectId })` after editing files so
+    impacted callers and suggested tests surface automatically.
+
+### Patch Changes
+
+- Updated dependencies [26106bc]
+- Updated dependencies [794be8b]
+  - @megasaver/core@1.2.0
+  - @megasaver/shared@1.2.0
+
 ## 1.1.0
 
 ### Minor Changes

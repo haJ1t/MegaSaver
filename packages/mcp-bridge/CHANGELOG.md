@@ -1,5 +1,57 @@
 # @megasaver/mcp-bridge
 
+## 1.2.0
+
+### Minor Changes
+
+- 326ed5a: Edit impact: surface the blast radius of an edit — impacted callers and the
+  tests to run — directly to connected agents, without manual dependency lookup.
+
+  - `@megasaver/mcp-bridge`: new `get_edit_impact` MCP tool. Seeds from
+    `changedFiles` (or `git diff --name-only HEAD`, degrading gracefully to an
+    empty set on non-git roots), merges per-seed impact packs deduped by block
+    id, and returns the impacted callers plus `suggestedTests` — the test-typed
+    blocks inside the merged radius.
+  - `@megasaver/connectors-shared`: the context-gate block now instructs the
+    agent to call `get_edit_impact({ projectId })` after editing files so
+    impacted callers and suggested tests surface automatically.
+
+- 26106bc: Live Context Seam: capture agent failures as first-class evidence and feed them
+  back into the next task's context selection, closing the loop between what an
+  agent got wrong and what it sees on the retry.
+
+  - `@megasaver/shared`: new `sessionFailureIdSchema` — the branded id boundary for
+    a persisted failure record, so a failure id is validated once at the edge and
+    trusted internally thereafter.
+  - `@megasaver/core`: new `SessionFailure` type plus registry methods
+    `createSessionFailure(input)` and `listSessionFailures(query)`. Failures are
+    stored alongside sessions with the same metadata discipline as memory
+    (source, timestamp, scope), and `listSessionFailures` is the read side the
+    ranking path consumes.
+  - `@megasaver/context-gate`: failure capture wires recorded `SessionFailure`
+    rows into the gate, and failure-aware ranking boosts files/blocks implicated
+    in recent failures so a retry surfaces the evidence the last attempt missed.
+    Additive — with no recorded failures the ranking is byte-identical to today.
+  - `@megasaver/mcp-bridge`: new `get_task_context` MCP tool exposes the
+    failure-aware context selection to connected agents, returning the ranked
+    context for a task including any failure-boosted evidence.
+
+### Patch Changes
+
+- Updated dependencies [26106bc]
+- Updated dependencies [794be8b]
+- Updated dependencies [4269f42]
+  - @megasaver/core@1.2.0
+  - @megasaver/shared@1.2.0
+  - @megasaver/output-filter@1.3.0
+  - @megasaver/daemon@0.1.1
+  - @megasaver/content-store@1.1.1
+  - @megasaver/context-pruner@0.2.1
+  - @megasaver/evidence-ledger@0.2.1
+  - @megasaver/indexer@0.2.1
+  - @megasaver/policy@1.2.1
+  - @megasaver/retrieval@1.0.2
+
 ## 1.1.0
 
 ### Minor Changes

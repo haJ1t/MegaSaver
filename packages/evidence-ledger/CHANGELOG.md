@@ -1,5 +1,13 @@
 # @megasaver/evidence-ledger
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [26106bc]
+- Updated dependencies [794be8b]
+  - @megasaver/shared@1.2.0
+
 ## 0.2.0
 
 ### Minor Changes

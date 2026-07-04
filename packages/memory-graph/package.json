@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/memory-graph",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "Pure memory-graph model + projection for Mega Saver.",
   "type": "module",

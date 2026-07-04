@@ -1,5 +1,90 @@
 # @megasaver/context-gate
 
+## 0.4.0
+
+### Minor Changes
+
+- 26106bc: Live Context Seam: capture agent failures as first-class evidence and feed them
+  back into the next task's context selection, closing the loop between what an
+  agent got wrong and what it sees on the retry.
+
+  - `@megasaver/shared`: new `sessionFailureIdSchema` — the branded id boundary for
+    a persisted failure record, so a failure id is validated once at the edge and
+    trusted internally thereafter.
+  - `@megasaver/core`: new `SessionFailure` type plus registry methods
+    `createSessionFailure(input)` and `listSessionFailures(query)`. Failures are
+    stored alongside sessions with the same metadata discipline as memory
+    (source, timestamp, scope), and `listSessionFailures` is the read side the
+    ranking path consumes.
+  - `@megasaver/context-gate`: failure capture wires recorded `SessionFailure`
+    rows into the gate, and failure-aware ranking boosts files/blocks implicated
+    in recent failures so a retry surfaces the evidence the last attempt missed.
+    Additive — with no recorded failures the ranking is byte-identical to today.
+  - `@megasaver/mcp-bridge`: new `get_task_context` MCP tool exposes the
+    failure-aware context selection to connected agents, returning the ranked
+    context for a task including any failure-boosted evidence.
+
+- 794be8b: Saver activation inheritance across Git worktrees: a repository-family setting is
+  inherited by every worktree sharing the same canonical Git common directory, so an
+  enabled repo covers its `.claude/worktrees/...` sessions. Fixes the live case where
+  an enabled main repo left its worktree sessions uncompressed.
+
+  - `@megasaver/shared`: new `RepositoryFamilyKey` branded type (`gf1_` + base64url
+    SHA-256), browser-safe validator.
+  - `@megasaver/context-gate`: canonical-path family identity (platform/volume-aware,
+    durable across reboot/remount/restore), a bounded Git common-directory resolver
+    (no subprocess; separate-git-dir main + worktrees converge; foreign worktree-admin
+    pointers rejected), a hardened v1 activation store (exact/family/global records +
+    legacy-shape normalization, atomic 0600/0700 writes, digest fail-closed, activation
+    lock), the `resolveWorkspaceTokenSaverSettings` precedence (exact → repository →
+    legacy-root → global → disabled; degraded git never resurrects a legacy record but
+    the global default still applies), a bounded heartbeat registry (256/30d/future-skew,
+    derived `latest`/`latestCompression`, non-mutating reads) that also feeds proxy
+    status, and the shared `resolveActivationScope`/`writeActivation` helpers.
+  - `@megasaver/cli`: the PostToolUse saver hook now resolves activation through the
+    repository-family precedence (a worktree inherits its repo's enable) and writes
+    invocation/compression liveness heartbeats. `mega session saver workspace
+{enable,disable}` is repository-aware (family record by default in a repo, `--exact`
+    for this checkout only, scope echo); new `default {enable,disable}` writes the global
+    default; new `resolve` shows the resolved activation + liveness. **Public behavior
+    change:** the activation record shape is now strict v1 and the workspace toggle
+    defaults to family scope inside a repo.
+  - `@megasaver/gui`: the workspace saver toggle writes through the same shared scope
+    helper (family inside a repo) and reports the effective inherited activation + source.
+
+- 4269f42: Live Context Seam phase 2: harden failure capture, feed failures back through
+  every read path, and make the seam observable and switchable end to end.
+
+  - `@megasaver/context-gate`: overlay failure store persists captured failures
+    through the registry; failure-aware ranking now applies on registry read
+    paths, with new memory and conventions hint sources feeding the gate.
+    Hint building is best-effort per source — a corrupt store file degrades to
+    a non-fatal `session hints skipped` warning instead of failing the read.
+    Capture filtering skips evidence-free exit-1 runs, redacts the full raw
+    output before the 4000-char evidence cap, and failure signatures are
+    restricted to a code-extension allowlist so non-code noise never becomes a
+    signature. Seam replay traces are recorded with an A/B switch, gated behind
+    opt-in `MEGASAVER_SEAM_TRACE=true`.
+  - `@megasaver/output-filter`: new kill switch resolver disables the seam per
+    scope, `seamTraceEnabledByEnv` gates trace recording, and
+    `readReplayTraces` exposes recorded replay traces to consumers.
+  - `@megasaver/cli`: new `mega audit seam` command reports seam effectiveness
+    from recorded replay traces.
+
+### Patch Changes
+
+- Updated dependencies [69ce82f]
+- Updated dependencies [26106bc]
+- Updated dependencies [794be8b]
+- Updated dependencies [4269f42]
+- Updated dependencies [b5c6c0d]
+  - @megasaver/stats@1.2.0
+  - @megasaver/shared@1.2.0
+  - @megasaver/output-filter@1.3.0
+  - @megasaver/content-store@1.1.1
+  - @megasaver/evidence-ledger@0.2.1
+  - @megasaver/policy@1.2.1
+
 ## 0.3.0
 
 ### Minor Changes
