@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/cli",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Mega Saver CLI - the `mega` command.",
   "type": "module",
   "bin": {
@@ -12,7 +12,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@megasaver/proxy-control": "workspace:*",
     "typescript": "^5.7.3"
   },
   "optionalDependencies": {
@@ -32,7 +31,6 @@
   "devDependencies": {
     "@megasaver/agent-office": "workspace:*",
     "@megasaver/connector-claude-code": "workspace:*",
-    "@megasaver/memory-graph": "workspace:*",
     "@megasaver/connector-generic-cli": "workspace:*",
     "@megasaver/connectors-shared": "workspace:*",
     "@megasaver/content-store": "workspace:*",
@@ -43,8 +41,10 @@
     "@megasaver/indexer": "workspace:*",
     "@megasaver/llm-proxy": "workspace:*",
     "@megasaver/mcp-bridge": "workspace:*",
+    "@megasaver/memory-graph": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",
+    "@megasaver/proxy-control": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "@megasaver/skill-packs": "workspace:*",
     "@types/node": "^22.0.0",

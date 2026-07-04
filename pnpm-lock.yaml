@@ -32,9 +32,6 @@ importers:
 
   apps/cli:
     dependencies:
-      '@megasaver/proxy-control':
-        specifier: workspace:*
-        version: link:../../packages/proxy-control
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -88,6 +85,9 @@ importers:
       '@megasaver/policy':
         specifier: workspace:*
         version: link:../../packages/policy
+      '@megasaver/proxy-control':
+        specifier: workspace:*
+        version: link:../../packages/proxy-control
       '@megasaver/shared':
         specifier: workspace:*
         version: link:../../packages/shared
