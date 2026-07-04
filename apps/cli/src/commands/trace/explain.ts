@@ -55,7 +55,7 @@ function renderOutput(o: DecisionOutput): string[] {
 
 export function renderDecisionTrace(
   trace: SessionDecisionTrace,
-  evidenceResolved: boolean,
+  workspaceResolved: boolean,
 ): string[] {
   if (trace.outputs.length === 0) {
     return [
@@ -64,7 +64,13 @@ export function renderDecisionTrace(
     ];
   }
   const lines: string[] = [];
-  if (!evidenceResolved) lines.push(EVIDENCE_NOT_RESOLVED_NOTE, "");
+  // Real traces carry memory/redaction inline, independent of --workspace. Only
+  // the vestigial evidence-only fallback needs --workspace; print the note just
+  // when it would genuinely add missing data (no inline data present), else it
+  // contradicts the rendered memory/redaction.
+  const anyInline = trace.outputs.some((o) => o.memory !== null || o.redaction !== null);
+  const showNote = !workspaceResolved && !anyInline;
+  if (showNote) lines.push(EVIDENCE_NOT_RESOLVED_NOTE, "");
   for (const o of trace.outputs) lines.push(...renderOutput(o));
   return lines;
 }
@@ -96,7 +102,7 @@ export async function runTraceExplain(input: RunTraceExplainInput): Promise<0 | 
   const sessionId = parsedSession.data;
 
   let workspaceKey = UNRESOLVED_WORKSPACE_KEY;
-  let evidenceResolved = false;
+  let workspaceResolved = false;
   if (input.workspaceFlag !== undefined) {
     const parsedWorkspace = workspaceKeySchema.safeParse(input.workspaceFlag);
     if (!parsedWorkspace.success) {
@@ -104,7 +110,7 @@ export async function runTraceExplain(input: RunTraceExplainInput): Promise<0 | 
       return 1;
     }
     workspaceKey = parsedWorkspace.data;
-    evidenceResolved = true;
+    workspaceResolved = true;
   }
 
   try {
@@ -123,7 +129,7 @@ export async function runTraceExplain(input: RunTraceExplainInput): Promise<0 | 
     if (input.json) {
       input.stdout(JSON.stringify(trace));
     } else {
-      for (const line of renderDecisionTrace(trace, evidenceResolved)) input.stdout(line);
+      for (const line of renderDecisionTrace(trace, workspaceResolved)) input.stdout(line);
     }
     return 0;
   } catch (err) {
@@ -136,7 +142,8 @@ export async function runTraceExplain(input: RunTraceExplainInput): Promise<0 | 
 export const traceExplainCommand = defineCommand({
   meta: {
     name: "explain",
-    description: "Explain a session's recorded decision chain (ranking + memory pins + redaction).",
+    description:
+      "Explain a session's recorded decision chain (ranking + memory attribution + redaction).",
   },
   args: {
     sessionId: { type: "positional", required: true, description: "Session id to explain." },

@@ -139,6 +139,22 @@ function seedTrace(): void {
   writeFileSync(join(evDir, `${MEM_A}.json`), JSON.stringify(evidenceRecord("cs1", [MEM_A], 1)));
 }
 
+// A real (post-join-real-pivot) trace: memory ids and redaction are stamped
+// INLINE on the trace line, independent of --workspace. No evidence dir is
+// written — this is what real writes produce.
+function inlineTraceLine(): string {
+  const parsed = JSON.parse(traceLine("cs1", 0.2));
+  parsed.ranking.rankedByMemoryIds = [MEM_A];
+  parsed.redaction = { redacted: true, secretsRedacted: 2 };
+  return JSON.stringify(parsed);
+}
+
+function seedInlineTrace(): void {
+  const traceDir = join(root, "stats", PROJECT_ID, `${SESSION}-traces`);
+  mkdirSync(traceDir, { recursive: true });
+  writeFileSync(join(traceDir, "replay-traces.jsonl"), `${inlineTraceLine()}\n`);
+}
+
 describe("mega trace explain", () => {
   it("renders the causal chain for a session", async () => {
     seedTrace();
@@ -207,5 +223,24 @@ describe("mega trace explain", () => {
     // render memory/redaction as "none" when the truth is "not resolved".
     expect(out).toMatch(/evidence workspace not resolved/i);
     expect(out).not.toMatch(new RegExp(MEM_A));
+  });
+
+  it("renders inline memory/redaction and omits the note when --workspace is absent", async () => {
+    // Real traces carry memory ids + redaction INLINE, independent of --workspace.
+    // The note would contradict the rendered data, so it must not appear.
+    seedInlineTrace();
+    const code = await runTraceExplain({
+      sessionId: SESSION,
+      projectName: "demo",
+      workspaceFlag: undefined,
+      ...env(),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    const out = lines.join("\n");
+    expect(out).toMatch(new RegExp(MEM_A)); // inline memory id rendered
+    expect(out).toMatch(/redaction: yes \(2 high-risk\)/); // inline redaction rendered
+    expect(out).not.toMatch(/evidence workspace not resolved/i); // no contradiction
   });
 });
