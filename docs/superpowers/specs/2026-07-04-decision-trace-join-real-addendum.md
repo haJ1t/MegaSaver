@@ -59,7 +59,7 @@ selected chunks — per-chunk is deferred):
   capped by `MAX_HINT_ITEMS`.
 - `rank.ts` — a `matchedMemoryIds(text, terms)` collector (no score effect);
   attach matched ids per ranked chunk.
-- `replay-trace.ts` — `RankingTrace.pinnedByMemoryIds?: string[]` (optional),
+- `replay-trace.ts` — `RankingTrace.rankedByMemoryIds?: string[]` (optional),
   unioned across `selected` chunks in `buildRankingTrace`.
 - `output-filter/types.ts` + `context-gate/read.ts` — thread `memoryTerms`
   through the `filterOutput` zod input (`.strict()` requires it declared).
@@ -75,15 +75,16 @@ optional/additive; legacy traces and seam-off runs parse unchanged.
   (top-level — redaction is a seam fact). Threaded via `ReplayTraceMeta` +
   `finalizeReplayTrace`; both seams pass `{ redacted, secretsRedacted:
   redactedCount(warnings) }`.
-- `RankingTrace.pinnedByMemoryIds?: string[]` (§1).
+- `RankingTrace.rankedByMemoryIds?: string[]` (§1).
 - **Reader** (`decision-trace.ts`) prefers inline, falls back to the evidence
-  join so Slice-1's evidence-only fixtures still pass:
+  join so Slice-1's evidence-only fixtures still pass (surfaced field renamed to
+  `rankedByMemoryIds` in Slice C):
   ```
-  memory      = inline.pinnedByMemoryIds?.length ? {pinnedByMemoryIds: inline...}
-              : ev ? {pinnedByMemoryIds: ev.pinnedByMemoryIds} : null
+  memory      = inline.rankedByMemoryIds?.length ? {rankedByMemoryIds: inline...}
+              : ev ? {rankedByMemoryIds: ev.pinnedByMemoryIds} : null
   redaction   = inline.redaction ? {redacted, highRiskFindings: secretsRedacted}
               : ev ? ev.redaction : null
-  evidencePresent = ev !== undefined || inline.pinnedByMemoryIds !== undefined
+  evidencePresent = ev !== undefined || inline.rankedByMemoryIds !== undefined
                   || inline.redaction !== undefined
   ```
 
@@ -101,13 +102,19 @@ the registry `sessionId` positionally and works once §1-§2 land.
 
 ## Three honesty decisions (require sign-off)
 
-1. **`pinnedByMemoryIds` semantics.** In the evidence ledger this means a manual
-   *retention pin*. Our inline value means *"memories whose hint terms boosted
-   this output's ranking"* — ranking-causal, a different concept. **Decision:
-   keep the surfaced field name `pinnedByMemoryIds` (no CLI/GUI/test churn) and
-   document the honest meaning** (inline = ranking-causal; evidence-join =
-   retention pin). Alternative if preferred: rename to `rankedByMemoryIds`
-   end-to-end (pre-1.0, allowed) — more churn, clearer name.
+1. **`pinnedByMemoryIds` semantics — RESOLVED: rename to `rankedByMemoryIds`.**
+   In the evidence ledger `pinnedByMemoryIds` means a manual *retention pin*. Our
+   inline value means *"memories whose hint terms boosted this output's
+   ranking"* — ranking-causal, a different concept. **Decision (user-approved):
+   RENAME end-to-end to `rankedByMemoryIds`** — the surfaced
+   `DecisionOutput.memory.rankedByMemoryIds` AND the inline trace field
+   `RankingTrace.rankedByMemoryIds`. Pre-1.0, so the churn (CLI + GUI graph/panel
+   + Slice-1/3/4 tests) is allowed and is the honest name for a trust flagship.
+   The evidence-ledger's OWN `pinnedByMemoryIds` field stays unchanged in that
+   package (it is genuinely a retention concept); the reader's legacy
+   evidence-join fallback maps `ev.pinnedByMemoryIds → rankedByMemoryIds` only as
+   a vestigial path (real `appendEvidence` writes `[]`, so it is empty in
+   practice). The surfaced-field rename lands in Slice C alongside the reader change.
 2. **`highRiskFindings` has no true seam source** — only `secretsRedacted`
    (a count). **Decision: map `highRiskFindings := secretsRedacted`** with a doc
    note (truthful as "N secrets redacted"; NOT the evidence ledger's high-risk
@@ -141,14 +148,18 @@ persistence path; ranking score bytes unchanged.
   `outputs[0].redaction.redacted===true`, `evidencePresent===true`. Critic:
   drop the field from one seam only → both `read` and `exec` traces must carry it.
 - **Slice B — memory-id threading**: registry-port `id`, `SessionHints.
-  memoryTerms`, `matchedMemoryIds`, `RankingTrace.pinnedByMemoryIds` union,
+  memoryTerms`, `matchedMemoryIds`, `RankingTrace.rankedByMemoryIds` union,
   zod threading. Test (rank-level): matched id surfaces AND `memoryBoost` equals
   the `recentMemory`-only value (parity). Critic: swap scoring input → parity fails.
-- **Slice C — reader prefers inline + e2e proof**: seam integration test — run
-  `runOutputPipeline` with an approved memory whose term appears in the file,
-  ranking+tracing on → `readSessionDecisionTrace` populates
-  `memory.pinnedByMemoryIds` with NO evidence dir written. Critic: legacy
-  evidence-only fixture still joins (fallback ordering).
+- **Slice C — reader prefers inline + surfaced rename + e2e proof**: rename the
+  surfaced `DecisionOutput.memory.pinnedByMemoryIds → rankedByMemoryIds` across
+  the reader + `mega trace explain` (CLI) + GUI `decision-trace-graph.ts`/panel
+  + the Slice-1/3/4 tests. Seam integration test — run `runOutputPipeline` with
+  an approved memory whose term appears in the file, ranking+tracing on →
+  `readSessionDecisionTrace` populates `memory.rankedByMemoryIds` with NO
+  evidence dir written. Critic: legacy evidence-only fixture still joins
+  (fallback ordering); grep proves no stray `pinnedByMemoryIds` remains on the
+  surfaced/CLI/GUI side.
 - **Slice D — GUI picker**: bridge list route + panel wiring. Test: `cwd`
   matches a project with two `*-traces/` dirs → both listed with counts;
   selecting one → populated graph. Critic: no matching project → empty list +
