@@ -1,4 +1,4 @@
-# @megasaver/llm-proxy
+# @megasaver/proxy-control
 
 ## 0.2.0
 
@@ -52,14 +52,7 @@
   SameSite cookie + CSRF) and cross-process supervisor discovery (runtime.json +
   control server). The single self-driving supervisor needs neither to route.
 
-## 0.1.0
+### Patch Changes
 
-### Minor Changes
-
-- f674fdd: Add an opt-in local Anthropic-API proxy (Phase 0): `@megasaver/llm-proxy` +
-  `mega proxy start`. It binds 127.0.0.1, forwards `/v1/messages` (and all paths)
-  to the upstream **unchanged** (transparent passthrough, streaming preserved),
-  and records each round-trip's real token usage from Anthropic's `usage` —
-  counts + model only, never prompts, responses, or auth keys. This is the
-  measurement foundation for conversation-token saving (compression is a later
-  phase). Relaxes mission §1 "not a model proxy" to permit this opt-in proxy.
+- Updated dependencies [297ebc2]
+  - @megasaver/llm-proxy@0.2.0

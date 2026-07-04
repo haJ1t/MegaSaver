@@ -1,5 +1,37 @@
 # @megasaver/stats
 
+## 1.2.0
+
+### Minor Changes
+
+- 69ce82f: Audit overlay fallback: when a session has no recorded audit overlay, fall back
+  to the last known good overlay instead of rendering an empty panel, so the audit
+  view stays useful across sessions that predate overlay capture.
+
+  - `@megasaver/stats`: overlay resolution degrades gracefully — a missing
+    per-session overlay resolves to the most recent available overlay rather than
+    returning nothing.
+  - `@megasaver/cli`: the audit command surfaces the fallback overlay and flags it
+    as inherited so the operator knows the data is not session-specific.
+
+- b5c6c0d: Workspace token-saver totals: aggregate per-session token-saver stats into a
+  workspace-wide total so the GUI can report savings across every session in a
+  repository, not just the active one.
+
+  - `@megasaver/stats`: totals aggregation over the session set — sums input,
+    output, and saved tokens across sessions and derives the workspace savings
+    rate from the aggregate rather than averaging per-session rates.
+  - `@megasaver/gui`: the token-saver panel reports the workspace-wide totals
+    alongside the active session's figures.
+
+### Patch Changes
+
+- Updated dependencies [26106bc]
+- Updated dependencies [794be8b]
+- Updated dependencies [4269f42]
+  - @megasaver/shared@1.2.0
+  - @megasaver/output-filter@1.3.0
+
 ## 1.1.0
 
 ### Minor Changes

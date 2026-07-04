@@ -1,5 +1,22 @@
 # @megasaver/daemon
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [69ce82f]
+- Updated dependencies [26106bc]
+- Updated dependencies [794be8b]
+- Updated dependencies [4269f42]
+- Updated dependencies [b5c6c0d]
+  - @megasaver/stats@1.2.0
+  - @megasaver/core@1.2.0
+  - @megasaver/shared@1.2.0
+  - @megasaver/context-gate@0.4.0
+  - @megasaver/output-filter@1.3.0
+  - @megasaver/content-store@1.1.1
+  - @megasaver/retrieval@1.0.2
+
 ## 0.1.0
 
 ### Minor Changes

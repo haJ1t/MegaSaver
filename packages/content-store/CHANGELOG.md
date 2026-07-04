@@ -1,5 +1,15 @@
 # @megasaver/content-store
 
+## 1.1.1
+
+### Patch Changes
+
+- Updated dependencies [26106bc]
+- Updated dependencies [794be8b]
+- Updated dependencies [4269f42]
+  - @megasaver/shared@1.2.0
+  - @megasaver/output-filter@1.3.0
+
 ## 1.1.0
 
 ### Minor Changes

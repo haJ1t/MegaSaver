@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/proxy-control",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Persistent proxy routing control: desired-state stores, supervisor state machine, and authenticated control client. Agent-agnostic (no Claude paths).",
   "type": "module",
