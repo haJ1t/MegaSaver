@@ -20,13 +20,18 @@ function seed(count: number): { root: string; sessions: string[] } {
     sessions.push(sess);
     const traceDir = join(statsDir, `${sess}-traces`);
     mkdirSync(traceDir, { recursive: true });
-    writeFileSync(join(traceDir, "replay-traces.jsonl"), "{}\n");
+    const jsonl = join(traceDir, "replay-traces.jsonl");
+    writeFileSync(jsonl, "{}\n");
     // Sibling token-saver stat files the GUI reads — must survive prune.
     writeFileSync(join(statsDir, `${sess}.events.jsonl`), "{}\n");
     writeFileSync(join(statsDir, `${sess}.json`), "{}\n");
-    // Session i is `i` hours newer than session 0.
+    // Session i is `i` hours newer than session 0. pruneTraceSessions ranks by
+    // the replay-traces.jsonl FILE mtime, so set the file's mtime (not just the
+    // dir's) — otherwise ordering falls back to write-time ties and is flaky on
+    // coarse-granularity filesystems (e.g. ubuntu ext4 in CI).
     const t = base + i * 3600;
     utimesSync(traceDir, t, t);
+    utimesSync(jsonl, t, t);
   }
   return { root, sessions };
 }
