@@ -4,16 +4,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   OverlaySessionTokenSaverStats,
   WorkspaceSaverStatus,
+  WorkspaceTokenSaverTotals,
 } from "../../src/lib/claude-sessions-client.js";
 
 const stub: {
   saver: () => Promise<WorkspaceSaverStatus>;
   stats: () => Promise<OverlaySessionTokenSaverStats | null>;
+  workspace: () => Promise<WorkspaceTokenSaverTotals | null>;
   hook: () => Promise<{ connected: boolean; preInstalled: boolean; postInstalled: boolean }>;
   daemon: () => Promise<{ running: boolean }>;
 } = {
   saver: () => Promise.reject(new Error("not set")),
   stats: () => Promise.reject(new Error("not set")),
+  workspace: () => Promise.resolve(null),
   hook: () => Promise.resolve({ connected: false, preInstalled: false, postInstalled: false }),
   daemon: () => Promise.resolve({ running: false }),
 };
@@ -22,6 +25,7 @@ vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchWorkspaceSaver: () => stub.saver(),
   setWorkspaceSaver: () => stub.saver(),
   fetchSessionTokenSaverStats: () => stub.stats(),
+  fetchWorkspaceTokenSaverStats: () => stub.workspace(),
   fetchClaudeHookStatus: () => stub.hook(),
   fetchDaemonStatus: () => stub.daemon(),
 }));
@@ -47,10 +51,24 @@ const STATS: OverlaySessionTokenSaverStats = {
   updatedAt: "2026-06-15T00:00:00.000Z",
 };
 
+const WORKSPACE_TOTALS: WorkspaceTokenSaverTotals = {
+  workspaceKey: "wk",
+  sessionsCount: 8,
+  eventsTotal: 40,
+  rawBytesTotal: 1000,
+  returnedBytesTotal: 200,
+  bytesSavedTotal: 800,
+  savingRatio: 0.8,
+  secretsRedactedTotal: 0,
+  chunksStoredTotal: 5,
+  latestUpdatedAt: "2026-06-15T00:00:00.000Z",
+};
+
 afterEach(() => {
   cleanup();
   stub.saver = () => Promise.reject(new Error("not set"));
   stub.stats = () => Promise.reject(new Error("not set"));
+  stub.workspace = () => Promise.resolve(null);
   stub.hook = () =>
     Promise.resolve({ connected: false, preInstalled: false, postInstalled: false });
   stub.daemon = () => Promise.resolve({ running: false });
@@ -79,11 +97,35 @@ describe("TokenSaverPanel", () => {
     expect(screen.queryByText("Bytes saved")).toBeNull();
   });
 
-  it("shows the empty message when no proxy activity", async () => {
+  it("shows the empty message when neither session nor workspace has activity", async () => {
     stub.saver = () => Promise.resolve({ ...SAVER, enabled: false });
     stub.stats = () => Promise.resolve(null);
+    stub.workspace = () => Promise.resolve(null);
     render(<TokenSaverPanel dir="d" id="i" />);
-    await waitFor(() => expect(screen.getByText(/No proxy activity/i)).toBeDefined());
+    await waitFor(() =>
+      expect(screen.getByText(/No token-saver activity in this workspace yet/i)).toBeDefined(),
+    );
+    expect(screen.queryByText(/No proxy activity/i)).toBeNull();
+  });
+
+  it("renders the workspace-total card when the session has no stats but the workspace does", async () => {
+    stub.saver = () => Promise.resolve({ ...SAVER, enabled: false });
+    stub.stats = () => Promise.resolve(null);
+    stub.workspace = () => Promise.resolve(WORKSPACE_TOTALS);
+    render(<TokenSaverPanel dir="d" id="i" />);
+    await waitFor(() => expect(screen.getByText(/workspace total \(8 sessions\)/i)).toBeDefined());
+    // reuses the same saved-tokens math as the session card: 250 - 50 = 200
+    expect(screen.getByText("200")).toBeDefined();
+    expect(screen.queryByText(/No token-saver activity/i)).toBeNull();
+  });
+
+  it("prefers the session card over the workspace total when session stats exist", async () => {
+    stub.saver = () => Promise.resolve(SAVER);
+    stub.stats = () => Promise.resolve(STATS);
+    stub.workspace = () => Promise.resolve(WORKSPACE_TOTALS);
+    render(<TokenSaverPanel dir="d" id="i" />);
+    await waitFor(() => expect(screen.getByText("Tokens saved")).toBeDefined());
+    expect(screen.queryByText(/workspace total/i)).toBeNull();
   });
 
   it("live-updates the saved tokens on the poll interval", async () => {

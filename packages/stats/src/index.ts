@@ -24,6 +24,8 @@ export {
   readOverlayEvents,
   readOverlaySummary,
   readOverlaySummaryAnyWorkspace,
+  readWorkspaceTokenSaverTotals,
+  type WorkspaceTokenSaverTotals,
   resetOverlayOnDisable,
 } from "./store.js";
 

@@ -279,6 +279,91 @@ export function readOverlaySummaryAnyWorkspace(
   return null;
 }
 
+export type WorkspaceTokenSaverTotals = {
+  workspaceKey: string;
+  sessionsCount: number;
+  eventsTotal: number;
+  rawBytesTotal: number;
+  returnedBytesTotal: number;
+  bytesSavedTotal: number;
+  savingRatio: number;
+  secretsRedactedTotal: number;
+  chunksStoredTotal: number;
+  latestUpdatedAt: string | null;
+};
+
+// Overlay stats are keyed per rotated liveSessionId, so one conversation
+// scatters across many summary files. Sum every valid summary under a
+// workspace. Files are schema-validated (not filename-globbed): sibling
+// settings/intent/workspace files and *.events.jsonl parse-fail and are
+// dropped. Best-effort: a missing dir or a corrupt file is skipped, not fatal.
+export function readWorkspaceTokenSaverTotals(
+  store: StatsStore,
+  workspaceKey: string,
+): WorkspaceTokenSaverTotals | null {
+  assertSafeSegment(workspaceKey);
+  let entries: string[];
+  try {
+    entries = readdirSync(join(store.root, "stats", workspaceKey));
+  } catch {
+    return null;
+  }
+
+  const totals: WorkspaceTokenSaverTotals = {
+    workspaceKey,
+    sessionsCount: 0,
+    eventsTotal: 0,
+    rawBytesTotal: 0,
+    returnedBytesTotal: 0,
+    bytesSavedTotal: 0,
+    savingRatio: 0,
+    secretsRedactedTotal: 0,
+    chunksStoredTotal: 0,
+    latestUpdatedAt: null,
+  };
+
+  for (const entry of entries) {
+    if (!entry.endsWith(".json")) {
+      continue;
+    }
+    let raw: unknown;
+    try {
+      raw = JSON.parse(readFileSync(join(store.root, "stats", workspaceKey, entry), "utf8"));
+    } catch {
+      continue;
+    }
+    const parsed = overlaySessionTokenSaverStatsSchema.safeParse(raw);
+    if (!parsed.success) {
+      continue;
+    }
+    const summary = parsed.data;
+    totals.sessionsCount += 1;
+    totals.eventsTotal += summary.eventsTotal;
+    totals.rawBytesTotal += summary.rawBytesTotal;
+    totals.returnedBytesTotal += summary.returnedBytesTotal;
+    totals.bytesSavedTotal += summary.bytesSavedTotal;
+    totals.secretsRedactedTotal += summary.secretsRedactedTotal;
+    totals.chunksStoredTotal += summary.chunksStoredTotal;
+    // Compare parsed epoch ms, not raw ISO strings: an ISO timestamp with a
+    // non-UTC offset (e.g. +02:00) can sort lexically opposite to its true
+    // chronology. Store the original ISO string, pick by chronological order.
+    if (
+      totals.latestUpdatedAt === null ||
+      Date.parse(summary.updatedAt) > Date.parse(totals.latestUpdatedAt)
+    ) {
+      totals.latestUpdatedAt = summary.updatedAt;
+    }
+  }
+
+  if (totals.sessionsCount === 0) {
+    return null;
+  }
+
+  totals.savingRatio =
+    totals.rawBytesTotal === 0 ? 0 : totals.bytesSavedTotal / totals.rawBytesTotal;
+  return totals;
+}
+
 export function readOverlayEvents(
   store: StatsStore,
   workspaceKey: string,
