@@ -51,3 +51,11 @@ Source: `docs/superpowers/specs/2026-07-02-persistent-proxy-routing-design.md`.
 CRITICAL: the proxy carries credentials and complete API traffic. Architect and
 critic approved the design; security review remains mandatory before merge.
 
+## Related
+
+- [[entities/llm-proxy]] — the listener this supervisor owns; nonce-bound HMAC
+  health endpoint gates every leased route.
+- [[concepts/proxy-mode]] — the Proxy Mode surface (`proxy_*` tools, output
+  classifier) that persistent routing keeps pointed at a live listener.
+- [[syntheses/post-v1.1-roadmap]] — where this proposed next-arc item is tracked.
+

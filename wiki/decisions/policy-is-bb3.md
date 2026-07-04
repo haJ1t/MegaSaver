@@ -10,6 +10,11 @@ updated: 2026-05-11
 
 # Policy is a v0.5 package (BB3), not v0.9 Advanced
 
+**Canonical target version: `@megasaver/policy` ships at BB3 = v0.5.** The
+"v0.9" figure in this page refers only to the *rejected* original plan; it is
+never a target for policy. Wherever v0.5 and v0.9 both appear, v0.5 is the ship
+version and v0.9 is the superseded proposal (source: AA1 §2b).
+
 **Locked (AA1 §2b).** `@megasaver/policy` ships as the third sub-PR of
 the AA1 epic (BB3, PR #69, `61efb28`) — a real v0.5 package, NOT the
 v0.9 Advanced-roadmap item the source plan (L1180–L1247) filed it

@@ -206,9 +206,14 @@ No `visibility` field (YAGNI). No server/auth/hosting added.
 
 The `packages/core/src/context-gate/` directory (553 LOC, measured
 post-BB7b) was moved to the new `@megasaver/context-gate` package.
-Core now **re-exports** the full context-gate surface from
-`packages/context-gate/src/index.ts` — all existing callers that
-`import … from "@megasaver/core"` continue to work without change.
+
+**Canonical ownership statement (reconciled with
+[[decisions/context-gate-extraction]]):** post-BB12, core does **NOT** own
+the Context Gate pipeline — `@megasaver/context-gate` does. Core keeps only a
+**backward-compat re-export** of that package's public surface so existing
+callers that `import … from "@megasaver/core"` continue to work without change.
+The re-export is a compatibility shim, not ownership: the orchestrator code
+lives entirely in `packages/context-gate/src/`.
 
 The `CoreRegistry` interface is unchanged; `context-gate` uses its own
 structural `OrchestratorRegistry` duck-type to avoid importing core.

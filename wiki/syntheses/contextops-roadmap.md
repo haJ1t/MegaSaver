@@ -22,6 +22,16 @@ on branch `docs/contextops-roadmap-phases`). Source: the Phase 0–10 roadmap
 ingested at [[sources/roadmap-phases-v2]] (Desktop
 `MegaSaver_Roadmap.txt`, 2026-06-11).
 
+**Phase-count reconciliation (11 vs 10):** [[sources/roadmap-phases-v2]]
+describes an **11-phase arc** because it counts **Phase 0 (Foundation)** as a
+phase (Phase 0 → Phase 10 inclusive = 11). This synthesis counts the **ten
+numbered delivery phases (1–10)**; Phase 0 is pre-existing foundation
+groundwork, not a numbered feature delivery. Same arc, different base. The one
+genuinely **future / out-of-scope** slice is the **Team/Cloud SaaS** portion of
+Phase 10 (hosted sync, auth service, org rules, web approval UI): only the
+local-deterministic approval slice shipped; all cloud SaaS items are explicitly
+deferred (see Phase 10 detail below).
+
 **All ten phases are now shipped on `main`** (PRs #114–#123,
 2026-06-12). The table below shows two columns: the **shipped** status
 (every phase `done`) and the original **pre-build audit** status — the
@@ -61,7 +71,7 @@ extended with three borrowed patterns:
 | 7 | Tool Router | done | #120 | gap | [[concepts/tool-router]] |
 | 8 | Audit Dashboard | done | #121 | partial | [[concepts/audit-dashboard]] |
 | 9 | Multi-Agent Connectors | done (vscode/jetbrains deferred) | #122 | done | — (see [[entities/connectors-generic-cli]]) |
-| 10 | Team/Cloud | done (local slice; cloud SaaS deferred) | #123 | — | [[concepts/memory-approval]] |
+| 10 | Team/Cloud | done (local slice; cloud SaaS deferred) | #123 | — | [[concepts/structured-memory-engine#approval-gate]] |
 
 **Roadmap complete through all 10 phases** (2026-06-12). Phase 10 shipped the
 local-deterministic slice: memory approval workflow + team-shared store pattern.

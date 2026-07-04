@@ -15,7 +15,7 @@ updated: 2026-06-30
 Deepen Mega Saver's memory into a **superset** of mem0 / Letta / Zep /
 Cognee / Memori / claude-mem, built ON the existing stack ([[concepts/structured-memory-engine]]
 DIMMEM + `@megasaver/memory-graph` + [[entities/retrieval]] embeddings). Additive; the
-moat is kept: evidence ledger + human approval gate ([[concepts/memory-approval]])
+moat is kept: evidence ledger + human approval gate ([[concepts/structured-memory-engine#approval-gate]])
 + agent-agnostic shared memory + lossless local-first. Spec:
 `docs/superpowers/specs/2026-06-30-memory-superset-design.md` (risk HIGH).
 
@@ -74,6 +74,6 @@ model (verified under `TRANSFORMERS_OFFLINE=1`).
 
 ## Related
 
-- [[concepts/structured-memory-engine]] · [[concepts/memory-approval]]
+- [[concepts/structured-memory-engine]] · [[concepts/structured-memory-engine#approval-gate]]
 - [[concepts/context-pruning-engine]] (consumes `memoryRelevance`)
 - [[entities/retrieval]] (the WS1 embeddings substrate)

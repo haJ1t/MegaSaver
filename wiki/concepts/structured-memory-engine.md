@@ -1,13 +1,14 @@
 ---
 title: Structured Memory Engine (DIMMEM)
-tags: [concept, memory, dimmem, phase-1]
+tags: [concept, memory, dimmem, phase-1, approval, team, phase-10]
 sources:
   - sources/roadmap-phases-v2.md
   - syntheses/contextops-roadmap.md
   - entities/core.md
+  - docs/superpowers/specs/2026-06-12-phase10-team-cloud-design.md
 status: active
 created: 2026-06-11
-updated: 2026-06-11
+updated: 2026-07-04
 ---
 
 # Structured Memory Engine (DIMMEM)
@@ -55,6 +56,66 @@ never specced before Phase 1. Status: **partial**. Spec:
 DIMMEM unblocks FORGE (a `ProjectRule` is a `MemoryType`), the Task
 Engine (steps `save_memory`), and the Audit metric `memoriesRetrieved`.
 It is priority #1 because most of the rest depends on it.
+
+## Approval gate
+
+Folded in 2026-07-04 from the retired `concepts/memory-approval.md`
+(roadmap Phase 10, "Team/Cloud" — the final phase). The roadmap block
+describes a full cloud SaaS (team shared memory, permissions, approval
+flow, cloud sync, org rules, audit logs, private deployment). Most of
+that needs servers, auth, and hosting — none of it deterministically
+testable here, all of it against `mega`'s local-first, single-binary
+design. The whole phase is **scope discipline**: ship the deterministic
+local slice that delivers the governance *intent*, and explicitly defer
+genuine cloud (source: [[syntheses/contextops-roadmap]]).
+
+### The local slice: an approval workflow
+
+1. **Schema.** `MemoryEntry` gains one closed-enum field
+   `approval: "suggested" | "approved" | "rejected"`.
+   `backfillMemoryEntry` defaults **every** pre-Phase-10 row to
+   `approved` so nothing disappears from live stores (backward compat,
+   no migration script).
+2. **Default by author.** An **agent** writing via `save_memory`
+   defaults to `suggested` (a machine proposes); a **human** running
+   `mega memory create` defaults to `approved` (a person asserts). The
+   agent-suggests → human-approves flow, done with defaults, no UI.
+3. **The gate (the exit mechanism).** Only `approved` memory is shared.
+   `suggested` / `rejected` is excluded at every chokepoint:
+   - Gate point 1 — `searchMemoryEntries` gains `includeUnapproved`
+     (default `false`), the single transitive chokepoint for
+     `search_memory` / `get_relevant_memories` / context pack.
+   - Gate point 2 — four explicit `approval === "approved"` filters on
+     list-consumers: connector sync (`buildConnectorContext`, CLI +
+     GUI mirror), `get_project_context`, and `mega_recall`.
+
+A `--all` / `includeUnapproved: true` opt-in surfaces pending
+suggestions for human review.
+
+### Team = shared store + gate
+
+Multiple agents share one `--store` path; only approved memory reaches
+agents' config files. That **is** "everyone on the team uses the same
+project memory," with no server.
+
+### Approval gate — reconciliation with shipped code
+
+**Done** (PR #123): the `approval` field + backfill, both gate points,
+`mega memory approve|reject` + `mega memory search --all` + an
+`approval` column, the `approve_memory` MCP tool (the **25th** tool,
+24 → 25), and `buildPrMemoryComment` (a pure Markdown builder) behind
+`mega github pr-comment`.
+
+### Approval gate — explicitly deferred (cloud SaaS — no infra built)
+
+Hosted sync, auth service, private deployment, org-level rules, hosted
+audit service, web approval UI, and a memory `visibility` field. Spec
+§8, plan §SCOPE. Approval-gate spec:
+`docs/superpowers/specs/2026-06-12-phase10-team-cloud-design.md`.
+
+Approval-gate related pages: [[entities/mcp-bridge]] (the `approve_memory`
+tool), [[entities/cli]] (`mega memory approve|reject|search --all`),
+[[entities/core]], [[syntheses/contextops-roadmap]].
 
 ## Related
 

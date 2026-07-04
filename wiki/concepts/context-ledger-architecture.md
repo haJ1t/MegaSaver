@@ -10,7 +10,6 @@ sources:
   - concepts/context-gate-pipeline.md
   - concepts/proxy-mode.md
   - concepts/structured-memory-engine.md
-  - concepts/memory-approval.md
 status: draft
 created: 2026-06-16
 updated: 2026-06-16
@@ -79,4 +78,4 @@ evidence-sufficiency counters so MegaSaver cannot win by blinding the model.
 - [[concepts/context-gate-pipeline]]
 - [[concepts/proxy-mode]]
 - [[concepts/structured-memory-engine]]
-- [[concepts/memory-approval]]
+- [[concepts/structured-memory-engine#approval-gate]]

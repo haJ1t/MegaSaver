@@ -1,11 +1,18 @@
 ---
 title: Post-v1.1 Features — Spec/Plan Index
-tags: [sources, specs, plans, output-filter, context-gate, hooks]
+tags: [sources, specs, plans, output-filter, context-gate, hooks, archive]
 sources: [docs/superpowers/specs/2026-06-25-intent-aware-hook-design.md, docs/superpowers/plans/2026-06-26-semantic-ast-read.md]
-status: active
+status: archived
 created: 2026-06-26
 updated: 2026-06-26
+archived: 2026-07-04
+redirect: syntheses/post-v1.1-roadmap.md
 ---
+
+> **ARCHIVED 2026-07-04 — merged into [[syntheses/post-v1.1-roadmap]].**
+> All content below was folded verbatim into the "3-feature spec index"
+> subsection of the roadmap synthesis. Nothing was deleted; this page is kept
+> for grep and history. Update the roadmap page, not this one.
 
 ## What
 

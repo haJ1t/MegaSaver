@@ -4,7 +4,7 @@ tags: [roadmap, backlog, mvp]
 sources: [index.md, decisions/bootstrap-matrix.md, syntheses/mega-saver-product.md, sources/fikri-original.md, log.md, docs/superpowers/specs/2026-06-25-intent-aware-hook-design.md, docs/superpowers/specs/2026-06-25-diff-on-reread-design.md, docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md]
 status: active
 created: 2026-06-10
-updated: 2026-06-26
+updated: 2026-07-04
 ---
 
 # Post-v1.1 Roadmap — Remaining Work
@@ -72,6 +72,37 @@ Build order **#2 → #1 → #3** (per spec frontmatter) was followed.
 
 > Phase-level tracking of these lives at [[syntheses/contextops-roadmap]].
 
+### 3-feature spec index
+
+Index of the six spec/plan docs for the three token-saving features shipped
+after v1.1 (folded in 2026-07-04 from the retired `sources/post-v1.1-features.md`).
+Build order: **#2 intent-aware-hook → #1 diff-on-reread → #3 semantic-ast-read**.
+Concept pages: [[intent-aware-hook]], [[diff-on-reread]], [[semantic-ast-read]].
+
+**Specs**
+
+- **intent-aware-hook** (PR #180, risk MEDIUM, phase 6b) — `UserPromptSubmit`
+  hook captures latest prompt to `session-intent.json`; saver hook threads it as
+  FILL-GAP ranking intent (spec: docs/superpowers/specs/2026-06-25-intent-aware-hook-design.md).
+- **diff-on-reread** (PR #181, risk HIGH) — re-reading an unchanged file returns
+  a tiny lossless `unchanged-marker` instead of re-filtering/re-persisting;
+  sha256 + per-session read-index (spec: docs/superpowers/specs/2026-06-25-diff-on-reread-design.md).
+- **semantic-ast-read** (PR #182, risk HIGH) — large source files chunked along
+  AST boundaries (functions/classes/headings/JSON keys) so ranking scores
+  coherent declarations; lazy indexer import keeps the hot path off the TS
+  compiler (spec: docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md).
+
+**Plans**
+
+- intent-aware-hook step plan (plan: docs/superpowers/plans/2026-06-25-intent-aware-hook.md).
+- diff-on-reread step plan (plan: docs/superpowers/plans/2026-06-25-diff-on-reread.md).
+- semantic-ast-read step plan (plan: docs/superpowers/plans/2026-06-26-semantic-ast-read.md).
+
+**See also (for these 3 features)**
+
+- [[output-filter]], [[context-gate]], [[content-store]] — packages touched.
+- [[context-gate-pipeline]] — where these hook into the read/filter flow.
+
 ## Remaining, by priority
 
 1. ~~**npm publish**~~ — **SHIPPED 2026-06-18. `@megasaver/cli@1.0.2` is live on
@@ -118,6 +149,11 @@ Build order **#2 → #1 → #3** (per spec frontmatter) was followed.
    Conversation Compactor, Memory Vault. Already covered by Context Gate: Tool
    Output Compressor (output-filter), Smart Retrieval (retrieval BM25),
    Evidence-Preserving Compression (pipeline). (source: syntheses/mega-saver-product.md)
+6. **Persistent proxy routing** (proposed, CRITICAL) — a dedicated
+   `mega proxy supervise` process + LaunchAgent that persists the operator's
+   proxy opt-in across GUI/terminal lifetimes with nonce/lease route ownership
+   and drain-safe stop. Design locked, security review pending before merge. See
+   [[concepts/persistent-proxy-routing]].
 
 ## Deferred follow-ups (tracked, non-blocking)
 
