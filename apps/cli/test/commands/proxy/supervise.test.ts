@@ -3,13 +3,9 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listProxyUsage, startProxyServer } from "@megasaver/llm-proxy";
+import { listProxyUsage } from "@megasaver/llm-proxy";
 import type { ProxyUsageEvent, RunningProxy, StartProxyOptions } from "@megasaver/llm-proxy";
-import {
-  type ProxyRuntimeState,
-  type RouteAdapter,
-  writeRuntimeState,
-} from "@megasaver/proxy-control";
+import type { RouteAdapter } from "@megasaver/proxy-control";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   proxySuperviseCommand,
@@ -123,7 +119,6 @@ describe("runSupervisor — idempotent bind", () => {
     rmSync(store, { recursive: true, force: true });
   });
 
-  // Bind always reports the port taken; the monitor must never run for a no-op.
   const base = () =>
     ({
       port: 8787,
@@ -132,39 +127,28 @@ describe("runSupervisor — idempotent bind", () => {
       ownedUrl: "http://127.0.0.1:8787",
       settingsPath: join(store, "settings.json"),
       stdout: () => {},
-      startServer: () => Promise.reject(eaddrinuse()),
       sleep: () => Promise.resolve(),
     }) as const;
 
-  it("returns already-running and never starts the monitor when the holder is ours", async () => {
+  it("returns already-in-use and never starts the monitor when EADDRINUSE persists", async () => {
     const { route, inspect } = spyRoute();
     const result = await runSupervisor({
       ...base(),
       route,
-      readRuntime: () =>
-        ({ instanceId: "inst-42", healthCapability: "cap" }) as unknown as ProxyRuntimeState,
-      probeOurs: () => Promise.resolve(true),
-      isLiveOwner: () => false,
+      startServer: () => Promise.reject(eaddrinuse()),
     });
-    expect(result).toEqual({ kind: "already-running", instanceId: "inst-42" });
+    expect(result).toEqual({ kind: "already-in-use" });
     // Monitor never observed reality → no risk of stomping the live owner's route.
     expect(inspect).not.toHaveBeenCalled();
   });
 
-  it("returns foreign (with message) and never starts the monitor for a non-megasaver holder", async () => {
-    const { route, inspect } = spyRoute();
-    const result = await runSupervisor({
-      ...base(),
-      route,
-      readRuntime: () => null,
-      probeOurs: () => Promise.resolve(false),
-      isLiveOwner: () => false,
-    });
-    expect(result.kind).toBe("foreign");
-    if (result.kind !== "foreign") throw new Error("expected foreign");
-    expect(result.message).toContain("8787");
-    expect(result.message).toContain("non-megasaver");
-    expect(inspect).not.toHaveBeenCalled();
+  it("rethrows a non-EADDRINUSE bind error (never swallowed as already-in-use)", async () => {
+    const boom = new Error("EACCES: permission denied");
+    (boom as NodeJS.ErrnoException).code = "EACCES";
+    const { route } = spyRoute();
+    await expect(
+      runSupervisor({ ...base(), route, startServer: () => Promise.reject(boom) }),
+    ).rejects.toBe(boom);
   });
 });
 
@@ -195,54 +179,24 @@ describe("proxy supervise command — idempotent terminal outcomes", () => {
     return port;
   }
 
-  it("exits non-zero with a clear message when a foreign process holds the port (no unhandled rejection)", async () => {
+  it("exits 0 with a clear message and no monitor when the port is already in use (no unhandled rejection)", async () => {
     const port = await freePort();
-    // A non-megasaver listener squats the port; there is no runtime.json claiming it.
+    const errs: string[] = [];
+    const errSpy = vi.spyOn(console, "error").mockImplementation((...a) => errs.push(a.join(" ")));
+    // A process already owns the port; the bind persistently sees EADDRINUSE.
     const squatter = createServer((_req, res) => res.end());
     await new Promise<void>((res) => squatter.listen(port, "127.0.0.1", res));
     try {
       await proxySuperviseCommand.run?.({ args: { port: String(port), store } } as never);
-      expect(process.exitCode).toBe(1);
+      // Idempotent no-op on a KeepAlive singleton: clean exit 0 so launchd does not
+      // treat it as a crash and respawn.
+      expect(process.exitCode).toBe(0);
+      expect(errs.some((l) => l.includes(String(port)))).toBe(true);
     } finally {
+      errSpy.mockRestore();
       await new Promise<void>((res) => squatter.close(() => res()));
     }
     // let any stray microtask settle before asserting no rejection escaped
-    await new Promise((r) => setTimeout(r, 20));
-    expect(rejections).toEqual([]);
-  });
-
-  it("exits 0 without starting a monitor when our own live proxy already owns the port", async () => {
-    const port = await freePort();
-    const capability = "cap-int-secret";
-    const instanceId = "inst-int-1";
-    // A REAL megasaver proxy (answers the health probe) already owns the port.
-    const held = await startProxyServer({
-      port,
-      upstreamBaseUrl: "https://api.anthropic.com",
-      health: { capability, instanceId },
-    });
-    // runtime.json advertises the holder so the command's probe can verify it.
-    writeRuntimeState(store, {
-      version: 1,
-      pid: process.pid,
-      processStartToken: "tok",
-      bootId: "boot",
-      instanceId,
-      controlUrl: `http://127.0.0.1:${port}`,
-      controlToken: "ctl",
-      healthCapability: capability,
-      proxyUrl: `http://127.0.0.1:${port}`,
-      startedAt: "2026-07-03T00:00:00.000Z",
-      lastReconciledAt: "2026-07-03T00:00:00.000Z",
-      lastUsagePersistedAt: null,
-    });
-    try {
-      await proxySuperviseCommand.run?.({ args: { port: String(port), store } } as never);
-      // Idempotent no-op: clean exit 0, the existing proxy keeps the port.
-      expect(process.exitCode).toBe(0);
-    } finally {
-      await held.close();
-    }
     await new Promise((r) => setTimeout(r, 20));
     expect(rejections).toEqual([]);
   });

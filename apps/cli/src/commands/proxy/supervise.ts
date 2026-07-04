@@ -3,21 +3,14 @@ import {
   createClaudeRouteAdapter,
   resolveClaudeCodeSettingsPath,
 } from "@megasaver/connector-claude-code";
-import {
-  type RunningProxy,
-  appendProxyUsage,
-  probeIsMegasaverProxy,
-  startProxyServer,
-} from "@megasaver/llm-proxy";
+import { type RunningProxy, appendProxyUsage, startProxyServer } from "@megasaver/llm-proxy";
 import {
   type ListenerControl,
   type ProcessIdentityAdapter,
-  type ProxyRuntimeState,
   type RouteAdapter,
   type SupervisorDeps,
   nodeProcessIdentity,
   readControlState,
-  readRuntimeState,
   runStartupRecovery,
   superviseDrive,
   upstreamBaseUrlSchema,
@@ -26,7 +19,7 @@ import {
 } from "@megasaver/proxy-control";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
-import { type BindOrDetectDeps, bindOrDetectRunning } from "./bind-or-detect.js";
+import { type BindWithRetryDeps, bindWithRetry } from "./bind-with-retry.js";
 
 const DEFAULT_PORT = 8787;
 const DEFAULT_UPSTREAM = "https://api.anthropic.com";
@@ -41,8 +34,7 @@ export type SuperviseHandle = {
 
 export type SuperviseResult =
   | { kind: "listening"; handle: SuperviseHandle }
-  | { kind: "already-running"; instanceId: string }
-  | { kind: "foreign"; message: string };
+  | { kind: "already-in-use" };
 
 export type RunProxySuperviseInput = {
   port: number;
@@ -51,12 +43,8 @@ export type RunProxySuperviseInput = {
   stdout: (line: string) => void;
   /** Injectable for tests; defaults to the real server. */
   startServer?: typeof startProxyServer;
-  /** Injectable ownership-detection deps for the idempotent bind (tests only). */
-  readRuntime?: BindOrDetectDeps["readRuntime"];
-  probeOurs?: BindOrDetectDeps["probeOurs"];
-  isLiveOwner?: BindOrDetectDeps["isLiveOwner"];
-  sleep?: BindOrDetectDeps["sleep"];
-  identity?: ProcessIdentityAdapter;
+  /** Injectable for tests so the bounded retry does not really wait. */
+  sleep?: BindWithRetryDeps["sleep"];
 };
 
 function defaultSleep(ms: number): Promise<void> {
@@ -65,15 +53,15 @@ function defaultSleep(ms: number): Promise<void> {
 
 // Bind the loopback listener WITH an ownership health capability + usage metering,
 // and expose a ListenerControl the supervisor drives. The health capability is a
-// fresh in-process secret; the self-check trusts our own live listener (the HMAC
-// endpoint exists so a DIFFERENT supervisor can verify this one, not for a
-// self-probe). The URL shape is re-validated (defense in depth) so no caller can
-// bind a listener that forwards the client's auth headers to a hostile origin.
+// fresh in-process secret answered locally and never forwarded upstream. The URL
+// shape is re-validated (defense in depth) so no caller can bind a listener that
+// forwards the client's auth headers to a hostile origin.
 //
-// The bind is idempotent: if the port is already held by our own live proxy the
-// result is `already-running` (the redundant spawn/start no-ops); a foreign holder
-// yields `foreign` with a clear message. Only a genuine `listening` result carries
-// a handle the supervisor drives.
+// The bind is idempotent for a KeepAlive launchd singleton: a persistent
+// EADDRINUSE (another instance/process already owns the port) yields
+// `already-in-use` and the redundant spawn/start no-ops; only a genuine
+// `listening` result carries a handle the supervisor drives. A non-EADDRINUSE bind
+// error is rethrown so it surfaces.
 export async function runProxySupervise(input: RunProxySuperviseInput): Promise<SuperviseResult> {
   const start = input.startServer ?? startProxyServer;
   const upstream = upstreamBaseUrlSchema.parse(input.upstream);
@@ -81,7 +69,6 @@ export async function runProxySupervise(input: RunProxySuperviseInput): Promise<
   const instanceId = randomUUID();
   let alive = true;
 
-  const identity = input.identity ?? nodeProcessIdentity;
   const startServer = (port: number): Promise<RunningProxy> =>
     start({
       port,
@@ -97,33 +84,14 @@ export async function runProxySupervise(input: RunProxySuperviseInput): Promise<
       },
     });
 
-  const outcome = await bindOrDetectRunning({
+  const outcome = await bindWithRetry({
     startServer,
-    readRuntime: input.readRuntime ?? (() => readRuntimeState(input.storeRoot)),
-    probeOurs:
-      input.probeOurs ??
-      ((rt: ProxyRuntimeState) =>
-        probeIsMegasaverProxy({
-          url: rt.proxyUrl,
-          instanceId: rt.instanceId,
-          capability: rt.healthCapability,
-          challenge: randomUUID(),
-        })),
-    isLiveOwner:
-      input.isLiveOwner ??
-      ((rt: ProxyRuntimeState) => identity.isLiveSameBoot(rt.pid, rt.processStartToken, rt.bootId)),
     sleep: input.sleep ?? defaultSleep,
     port: input.port,
   });
 
-  if (outcome.kind === "already-running") {
-    input.stdout(
-      `proxy already running (instance ${outcome.instanceId}) on :${input.port} — nothing to do`,
-    );
-    return { kind: "already-running", instanceId: outcome.instanceId };
-  }
-  if (outcome.kind === "foreign") {
-    return { kind: "foreign", message: outcome.message };
+  if (outcome.kind === "already-in-use") {
+    return { kind: "already-in-use" };
   }
 
   const running = outcome.running;
@@ -155,22 +123,17 @@ export type RunSupervisorInput = {
   identity?: ProcessIdentityAdapter;
   now?: () => number;
   monitorMs?: number;
-  readRuntime?: BindOrDetectDeps["readRuntime"];
-  probeOurs?: BindOrDetectDeps["probeOurs"];
-  isLiveOwner?: BindOrDetectDeps["isLiveOwner"];
-  sleep?: BindOrDetectDeps["sleep"];
+  sleep?: BindWithRetryDeps["sleep"];
 };
 
 export type SupervisorRuntime = { stop: () => Promise<void> };
 
-// A live listener started + monitor running, or a terminal no-op: `already-running`
-// (our proxy already owns the port) / `foreign` (someone else holds it). The caller
-// exits 0 on `already-running`, non-zero on `foreign`, and keeps the event loop
-// alive only for `listening`.
+// A live listener started + monitor running, or a terminal no-op: `already-in-use`
+// (another instance/process already owns the port). The caller exits 0 on
+// `already-in-use` and keeps the event loop alive only for `listening`.
 export type SupervisorStartResult =
   | { kind: "listening"; runtime: SupervisorRuntime }
-  | { kind: "already-running"; instanceId: string }
-  | { kind: "foreign"; message: string };
+  | { kind: "already-in-use" };
 
 // The long-running supervisor: bind the listener, then reconcile desired↔actual
 // on a fixed cadence. Each tick runs the state machine under the transition lock
@@ -184,19 +147,12 @@ export async function runSupervisor(input: RunSupervisorInput): Promise<Supervis
     storeRoot: input.storeRoot,
     stdout: input.stdout,
     ...(input.startServer ? { startServer: input.startServer } : {}),
-    ...(input.identity ? { identity: input.identity } : {}),
-    ...(input.readRuntime ? { readRuntime: input.readRuntime } : {}),
-    ...(input.probeOurs ? { probeOurs: input.probeOurs } : {}),
-    ...(input.isLiveOwner ? { isLiveOwner: input.isLiveOwner } : {}),
     ...(input.sleep ? { sleep: input.sleep } : {}),
   });
   // A second binder is a no-op, not a monitor: never drive the state machine when
   // we did not bind the port, so we cannot stomp the live owner's route/lease.
-  if (result.kind === "already-running") {
-    return { kind: "already-running", instanceId: result.instanceId };
-  }
-  if (result.kind === "foreign") {
-    return { kind: "foreign", message: result.message };
+  if (result.kind === "already-in-use") {
+    return { kind: "already-in-use" };
   }
   const handle = result.handle;
   const identity = input.identity ?? nodeProcessIdentity;
@@ -315,9 +271,10 @@ export const proxySuperviseCommand = defineCommand({
       readStoreEnv(typeof args.store === "string" ? args.store : undefined),
     );
 
-    // The idempotent bind can fail terminally (port held); catching here is what
-    // turns launchd's EADDRINUSE crash-loop into a clean decision — never a raw
-    // stack / unhandled rejection.
+    // The idempotent bind can fail terminally (port persistently in use); catching
+    // here is what turns launchd's EADDRINUSE crash-loop into a clean decision —
+    // never a raw stack / unhandled rejection. A non-EADDRINUSE fault still
+    // surfaces here as a non-zero exit.
     let result: SupervisorStartResult;
     try {
       result = await runSupervisor({
@@ -336,17 +293,15 @@ export const proxySuperviseCommand = defineCommand({
       return;
     }
 
-    // Our proxy already owns the port: the redundant spawn/start is a no-op. Exit 0
-    // so the plist's KeepAlive does not treat this as a crash and respawn us.
-    if (result.kind === "already-running") {
+    // Another instance/process already owns the port. On a KeepAlive launchd
+    // singleton a persistent EADDRINUSE means respawning is futile, so exit 0 —
+    // the plist's KeepAlive{SuccessfulExit:false} does NOT respawn a clean exit,
+    // which stops the crash-loop. One clear line, no retry loop, no stack trace.
+    if (result.kind === "already-in-use") {
+      console.error(
+        `mega proxy supervise: port ${port} already in use — another instance or process owns it; this supervisor is exiting. If the proxy is unexpectedly down, check what holds :${port}.`,
+      );
       process.exitCode = 0;
-      return;
-    }
-    // A foreign process holds the port. One clear line, non-zero exit — no retry
-    // loop, no stack trace. The operator frees it or sets MEGASAVER_PROXY_PORT.
-    if (result.kind === "foreign") {
-      console.error(`mega proxy supervise: ${result.message}`);
-      process.exitCode = 1;
       return;
     }
 

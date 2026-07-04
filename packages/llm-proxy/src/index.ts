@@ -20,4 +20,3 @@ export {
   buildHealthResponse,
   verifyHealth,
 } from "./health.js";
-export { probeIsMegasaverProxy, type ProbeInput } from "./verify-health.js";
