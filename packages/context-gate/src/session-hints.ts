@@ -92,16 +92,22 @@ export function buildSessionHints(
   // on generic words instead of concrete code locations. Approval + stale gate
   // mirrors core's recall predicate (the port deliberately does not carry the
   // bi-temporal/tier fields core's fuller isRecallable also checks).
+  // recentMemory is the deduped scoring input (unchanged). memoryTerms is the
+  // parallel id-carrying attribution list: the SAME id for an entry's files and
+  // symbols, and a term text seen from two entries records both ids. Attribution
+  // only — never fed into scoring.
   const memory = new Set<string>();
+  const memoryTerms: { id: string; text: string }[] = [];
   guard(() => {
     for (const entry of [...registry.listMemoryEntries(projectId)].reverse()) {
       if (entry.approval !== "approved" || entry.stale) continue;
-      for (const file of entry.relatedFiles ?? []) {
-        if (file.length >= MIN_SIGNATURE_LENGTH) memory.add(file);
-      }
-      for (const symbol of entry.relatedSymbols ?? []) {
-        if (symbol.length >= MIN_SIGNATURE_LENGTH) memory.add(symbol);
-      }
+      const collect = (token: string): void => {
+        if (token.length < MIN_SIGNATURE_LENGTH) return;
+        memory.add(token);
+        if (entry.id !== undefined) memoryTerms.push({ id: entry.id, text: token });
+      };
+      for (const file of entry.relatedFiles ?? []) collect(file);
+      for (const symbol of entry.relatedSymbols ?? []) collect(symbol);
     }
   });
 
@@ -115,11 +121,13 @@ export function buildSessionHints(
     }
   });
 
+  const cappedTerms = memoryTerms.slice(0, MAX_HINT_ITEMS);
   return {
     hints: {
       recentFailures: [...signatures].slice(0, MAX_SIGNATURES_PER_SESSION),
       recentMemory: [...memory].slice(0, MAX_HINT_ITEMS),
       projectConventions: [...conventions].slice(0, MAX_HINT_ITEMS),
+      ...(cappedTerms.length > 0 ? { memoryTerms: cappedTerms } : {}),
     },
     warnings,
   };

@@ -145,3 +145,55 @@ describe("applyEngineRanking (Deliverable 6)", () => {
     });
   });
 });
+
+describe("applyEngineRanking memory-id attribution (Slice B) — attribution-only, score parity", () => {
+  const TERM = "useAuthToken";
+
+  it("surfaces the matched memory id AND keeps memoryBoost + finalScore byte-identical to the recentMemory-only run", () => {
+    const chunkText = `this line calls ${TERM} directly`;
+    const withoutTerms: SessionHints = { recentMemory: [TERM] };
+    const withTerms: SessionHints = {
+      recentMemory: [TERM],
+      memoryTerms: [{ id: "m1", text: TERM }],
+    };
+
+    const [a] = applyEngineRanking([scoreChunk("x", chunk(chunkText), withoutTerms)], withoutTerms);
+    const [b] = applyEngineRanking([scoreChunk("x", chunk(chunkText), withTerms)], withTerms);
+
+    // (a) the memoryTerms run exposes the matched id on the ranked chunk.
+    expect(b?.matchedMemoryIds).toEqual(["m1"]);
+    // The no-memoryTerms run exposes no matched ids.
+    expect(a?.matchedMemoryIds ?? []).toEqual([]);
+
+    // (b) SCORE PARITY — memoryBoost and finalScore identical with/without
+    // memoryTerms. A mutation that routes memoryTerms into scoring must fail here.
+    expect(b?.engine?.memoryBoost).toBe(a?.engine?.memoryBoost);
+    expect(b?.engine?.finalScore).toBe(a?.engine?.finalScore);
+    expect(b?.score).toBe(a?.score);
+  });
+
+  it("records every id whose text matched, when two memories share the same term text", () => {
+    const chunkText = `mentions ${TERM} once`;
+    const withTerms: SessionHints = {
+      recentMemory: [TERM],
+      memoryTerms: [
+        { id: "m1", text: TERM },
+        { id: "m2", text: TERM },
+      ],
+    };
+    const [c] = applyEngineRanking([scoreChunk("x", chunk(chunkText), withTerms)], withTerms);
+    expect(new Set(c?.matchedMemoryIds)).toEqual(new Set(["m1", "m2"]));
+  });
+
+  it("surfaces no ids for a chunk that references none of the memory terms", () => {
+    const withTerms: SessionHints = {
+      recentMemory: [TERM],
+      memoryTerms: [{ id: "m1", text: TERM }],
+    };
+    const [c] = applyEngineRanking(
+      [scoreChunk("x", chunk("unrelated plain noise"), withTerms)],
+      withTerms,
+    );
+    expect(c?.matchedMemoryIds ?? []).toEqual([]);
+  });
+});

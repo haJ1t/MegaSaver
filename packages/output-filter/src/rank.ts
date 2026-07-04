@@ -20,6 +20,10 @@ export type RankedChunk = {
   score: number;
   features: RankFeatures;
   engine?: EngineScore;
+  // Ids of the memories whose hint term substring-matched this chunk. Pure
+  // attribution — never read by scoring; the trace builder unions it across the
+  // selected chunks into RankingTrace.rankedByMemoryIds.
+  matchedMemoryIds?: string[];
 };
 
 export type SessionHints = {
@@ -30,6 +34,10 @@ export type SessionHints = {
   // Signatures of prior failures (test names, error codes, …) for the
   // failure-history boost. Plumbed by the caller; the scorer only consumes it.
   recentFailures?: readonly string[] | undefined;
+  // Parallel to recentMemory, carrying the memory id alongside each term for
+  // ranking-causal attribution. NOT a scoring input — recentMemory remains the
+  // sole memoryBoost source, so scores are byte-identical with or without this.
+  memoryTerms?: readonly { id: string; text: string }[] | undefined;
 };
 
 export type Chunk = {
@@ -175,6 +183,24 @@ function fractionMatched(text: string, items: readonly string[] | undefined): nu
   return Math.min(1, hits / items.length);
 }
 
+// Ids of the memory terms whose text substring-matches the chunk. Mirrors
+// fractionMatched's includes loop but collects ids instead of counting —
+// attribution ONLY, never fed back into any score. Two terms with the same
+// text but different ids each record their id.
+function matchedMemoryIds(
+  text: string,
+  terms: readonly { id: string; text: string }[] | undefined,
+): string[] {
+  if (terms === undefined || terms.length === 0) return [];
+  const ids: string[] = [];
+  for (const term of terms) {
+    if (term.text.length > 0 && text.includes(term.text) && !ids.includes(term.id)) {
+      ids.push(term.id);
+    }
+  }
+  return ids;
+}
+
 // Re-weight already-scored chunks using the shared base relevance plus the
 // memory and failure-history boosts. This is NOT a second scorer: it consumes
 // scoreChunk's output as base_output_relevance and only normalizes + combines.
@@ -195,10 +221,14 @@ export function applyEngineRanking(
       BASE_WEIGHT * baseRelevance +
       MEMORY_WEIGHT * memoryBoost +
       FAILURE_WEIGHT * failureHistoryBoost;
+    // Attribution runs off memoryTerms (the id-carrying parallel field), NOT
+    // memoryItems — so it cannot influence any score above.
+    const attributed = matchedMemoryIds(c.text, hints?.memoryTerms);
     return {
       ...c,
       score: finalScore,
       engine: { baseRelevance, memoryBoost, failureHistoryBoost, finalScore },
+      ...(attributed.length > 0 ? { matchedMemoryIds: attributed } : {}),
     };
   });
 }

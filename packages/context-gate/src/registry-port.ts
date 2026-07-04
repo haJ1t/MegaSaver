@@ -41,6 +41,11 @@ export interface SessionFailureRecord {
 // (not core's literal union) so core stays assignable without coupling to
 // its enum; the builder only compares against "approved".
 export interface MemoryEntryView {
+  // Core's branded MemoryEntry.id is structurally a string, so a real
+  // CoreRegistry supplies it with no cast. Optional because the hint builder's
+  // test doubles construct MemoryEntryView literals without an id — a term
+  // whose entry has no id is still ranked, it just carries no attribution.
+  id?: string | undefined;
   approval: string;
   stale: boolean;
   relatedFiles?: readonly string[] | undefined;
