@@ -1,5 +1,6 @@
 import { WorkspacePicker } from "../components/workspace-picker.js";
 import type { WorkspaceOption } from "../lib/workspace-context.js";
+import { DecisionTracePanel } from "./cockpit/decision-trace-panel.js";
 import { MemoryGraphPanel } from "./cockpit/memory-graph-panel.js";
 import { MemoryPanel } from "./cockpit/memory-panel.js";
 
@@ -26,6 +27,7 @@ export function MemoryPage({
         <div className="flex flex-col gap-6 overflow-y-auto min-h-0">
           <MemoryPanel dir={active.rep.dir} id={active.rep.id} />
           <MemoryGraphPanel dir={active.rep.dir} id={active.rep.id} />
+          <DecisionTracePanel dir={active.rep.dir} id={active.rep.id} />
         </div>
       )}
     </div>
