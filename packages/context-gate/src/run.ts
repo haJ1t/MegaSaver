@@ -132,7 +132,8 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     mode: settings.mode,
     maxReturnedBytes: settings.maxReturnedBytes,
     sessionHints,
-    // Trace recording is opt-in (disk cost): MEGASAVER_SEAM_TRACE gates it.
+    // Trace recording is ON by default; MEGASAVER_SEAM_TRACE={false,0,off,no}
+    // is the kill switch (retention prune bounds the resulting disk cost).
     recordTrace: seamTraceEnabledByEnv(),
     ...(input.outline === true ? { outline: true } : {}),
   });

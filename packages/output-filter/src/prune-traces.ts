@@ -7,6 +7,7 @@ import { join } from "node:path";
 export const MAX_TRACE_SESSIONS = 20;
 
 const TRACE_DIR_SUFFIX = "-traces";
+const TRACE_FILE_NAME = "replay-traces.jsonl";
 
 // Best-effort retention prune for `stats/<projectId>/<sessionId>-traces/` dirs.
 // It ONLY ever removes directory entries whose name ends with `-traces` inside
@@ -27,7 +28,17 @@ export function pruneTraceSessions(
       .filter((entry) => entry.isDirectory() && entry.name.endsWith(TRACE_DIR_SUFFIX))
       .map((entry) => {
         const path = join(projectStatsDir, entry.name);
-        return { path, mtimeMs: statSync(path).mtimeMs };
+        // Rank by the jsonl FILE mtime: appends advance the file, never the
+        // parent dir (whose mtime freezes at first write). A still-appending
+        // session would otherwise rank "oldest" and be pruned mid-flight. Fall
+        // back to the dir mtime only when the jsonl is absent (empty/partial dir).
+        let mtimeMs: number;
+        try {
+          mtimeMs = statSync(join(path, TRACE_FILE_NAME)).mtimeMs;
+        } catch {
+          mtimeMs = statSync(path).mtimeMs;
+        }
+        return { path, mtimeMs };
       });
   } catch {
     return; // missing / unreadable stats dir → nothing to prune
