@@ -68,8 +68,30 @@ async function getJson<T>(path: string): Promise<T> {
   throw body;
 }
 
-export function fetchDecisionTraceGraph(dir: string, id: string): Promise<DecisionTraceData> {
-  return getJson<DecisionTraceData>(
-    `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/decision-trace/graph`,
+// One selectable registry trace session for the project-scoped picker. `sessionId`
+// is the `mega session create` randomUUID (the trace-dir name minus `-traces`),
+// which the reader keys off — distinct from the cockpit transcript UUID.
+export type DecisionTraceSessionSummary = {
+  sessionId: string;
+  outputs: number;
+  latestCreatedAt: string | null;
+};
+
+export function fetchDecisionTraceSessions(
+  dir: string,
+  id: string,
+): Promise<{ sessions: DecisionTraceSessionSummary[] }> {
+  return getJson<{ sessions: DecisionTraceSessionSummary[] }>(
+    `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/decision-trace/sessions`,
   );
+}
+
+export function fetchDecisionTraceGraph(
+  dir: string,
+  id: string,
+  sessionId?: string,
+): Promise<DecisionTraceData> {
+  const base = `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/decision-trace/graph`;
+  const path = sessionId !== undefined ? `${base}?session=${encodeURIComponent(sessionId)}` : base;
+  return getJson<DecisionTraceData>(path);
 }

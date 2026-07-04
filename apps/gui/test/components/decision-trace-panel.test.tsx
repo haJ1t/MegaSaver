@@ -1,14 +1,30 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DecisionTraceData } from "../../src/lib/decision-trace-client.js";
+import type {
+  DecisionTraceData,
+  DecisionTraceSessionSummary,
+} from "../../src/lib/decision-trace-client.js";
 
-const stub: { fetch: (dir: string, id: string) => Promise<DecisionTraceData> } = {
+const SESS_NEW = "sess-new";
+const SESS_OLD = "sess-old";
+
+const stub: {
+  fetch: (dir: string, id: string, sessionId?: string) => Promise<DecisionTraceData>;
+  sessions: (dir: string, id: string) => Promise<{ sessions: DecisionTraceSessionSummary[] }>;
+} = {
   fetch: () => Promise.reject(new Error("not set")),
+  sessions: () => Promise.resolve({ sessions: [] }),
 };
 
+const graphCalls: (string | undefined)[] = [];
+
 vi.mock("../../src/lib/decision-trace-client.js", () => ({
-  fetchDecisionTraceGraph: (dir: string, id: string) => stub.fetch(dir, id),
+  fetchDecisionTraceGraph: (dir: string, id: string, sessionId?: string) => {
+    graphCalls.push(sessionId);
+    return stub.fetch(dir, id, sessionId);
+  },
+  fetchDecisionTraceSessions: (dir: string, id: string) => stub.sessions(dir, id),
 }));
 
 let capturedElements: Array<{ data?: { id?: string; color?: string }; classes?: string }> = [];
@@ -64,12 +80,6 @@ const FIXTURE: DecisionTraceData = {
   stats: { outputs: 1, chunks: 1, memoriesPinned: 1 },
 };
 
-const EMPTY: DecisionTraceData = {
-  nodes: [],
-  edges: [],
-  stats: { outputs: 0, chunks: 0, memoriesPinned: 0 },
-};
-
 async function waitForGraph(): Promise<void> {
   await waitFor(() => {
     expect(screen.getByTestId("decision-trace-canvas")).toBeDefined();
@@ -77,26 +87,32 @@ async function waitForGraph(): Promise<void> {
   });
 }
 
+// A single-session list so the panel auto-selects it and fetches its graph. The
+// picker/auto-select behavior is exercised on its own further below.
+const ONE_SESSION: DecisionTraceSessionSummary[] = [
+  { sessionId: SESS_NEW, outputs: 1, latestCreatedAt: "2026-07-04T01:00:00.000Z" },
+];
+
 afterEach(() => {
   cleanup();
   capturedElements = [];
+  graphCalls.length = 0;
   stub.fetch = () => Promise.reject(new Error("not set"));
+  stub.sessions = () => Promise.resolve({ sessions: [] });
 });
 
 describe("DecisionTracePanel", () => {
   it("shows the loading state then mounts the graph canvas", async () => {
-    let resolve: (data: DecisionTraceData) => void = () => undefined;
-    stub.fetch = () =>
-      new Promise<DecisionTraceData>((r) => {
-        resolve = r;
-      });
+    stub.sessions = () => Promise.resolve({ sessions: ONE_SESSION });
+    stub.fetch = () => Promise.resolve(FIXTURE);
     render(<DecisionTracePanel dir="d" id="i" />);
+    // Session + graph fetches are both async, so the first paint is the loader.
     expect(screen.getByLabelText(/Loading decision trace/i)).toBeDefined();
-    resolve(FIXTURE);
     await waitForGraph();
   });
 
   it("passes output, chunk, memory, redaction node classes and edge classes to cytoscape", async () => {
+    stub.sessions = () => Promise.resolve({ sessions: ONE_SESSION });
     stub.fetch = () => Promise.resolve(FIXTURE);
     render(<DecisionTracePanel dir="d" id="i" />);
     await waitForGraph();
@@ -112,6 +128,7 @@ describe("DecisionTracePanel", () => {
   });
 
   it("paints each node kind a distinct color", async () => {
+    stub.sessions = () => Promise.resolve({ sessions: ONE_SESSION });
     stub.fetch = () => Promise.resolve(FIXTURE);
     render(<DecisionTracePanel dir="d" id="i" />);
     await waitForGraph();
@@ -125,8 +142,9 @@ describe("DecisionTracePanel", () => {
     expect(colors.size).toBe(4);
   });
 
-  it("renders the honest empty-state copy for a zero-output trace", async () => {
-    stub.fetch = () => Promise.resolve(EMPTY);
+  it("renders the honest empty-state copy when no registry sessions exist", async () => {
+    // Empty session list — the picker has nothing to select → honest empty state.
+    stub.sessions = () => Promise.resolve({ sessions: [] });
     render(<DecisionTracePanel dir="d" id="i" />);
     await waitFor(() =>
       expect(
@@ -135,15 +153,18 @@ describe("DecisionTracePanel", () => {
         ),
       ).toBeDefined(),
     );
+    // And the note that traces come from proxy/registry sessions for this workspace.
+    expect(screen.getByText(/proxy\/registry sessions/i)).toBeDefined();
   });
 
-  it("renders an error state when the fetch fails", async () => {
-    stub.fetch = () => Promise.reject({ error: "boom", code: "internal_error" });
+  it("renders an error state when the session fetch fails", async () => {
+    stub.sessions = () => Promise.reject({ error: "boom", code: "internal_error" });
     render(<DecisionTracePanel dir="d" id="i" />);
     await waitFor(() => expect(screen.getByRole("alert")).toBeDefined());
   });
 
   it("re-fits cytoscape to the container box on first paint", async () => {
+    stub.sessions = () => Promise.resolve({ sessions: ONE_SESSION });
     stub.fetch = () => Promise.resolve(FIXTURE);
     render(<DecisionTracePanel dir="d" id="i" />);
     await waitForGraph();
@@ -151,5 +172,33 @@ describe("DecisionTracePanel", () => {
       expect(capturedResize).toHaveBeenCalled();
       expect(capturedFit).toHaveBeenCalled();
     });
+  });
+
+  it("auto-selects the newest session and fetches its graph by sessionId", async () => {
+    const sessions: DecisionTraceSessionSummary[] = [
+      { sessionId: SESS_NEW, outputs: 2, latestCreatedAt: "2026-07-04T02:00:00.000Z" },
+      { sessionId: SESS_OLD, outputs: 1, latestCreatedAt: "2026-07-04T01:00:00.000Z" },
+    ];
+    stub.sessions = () => Promise.resolve({ sessions });
+    stub.fetch = () => Promise.resolve(FIXTURE);
+    render(<DecisionTracePanel dir="d" id="i" />);
+    await waitForGraph();
+    // Newest (first, already sorted server-side) is auto-selected for the fetch.
+    expect(graphCalls).toContain(SESS_NEW);
+    expect(graphCalls).not.toContain(SESS_OLD);
+  });
+
+  it("renders a picker listing every registry session with its output count", async () => {
+    const sessions: DecisionTraceSessionSummary[] = [
+      { sessionId: SESS_NEW, outputs: 2, latestCreatedAt: "2026-07-04T02:00:00.000Z" },
+      { sessionId: SESS_OLD, outputs: 1, latestCreatedAt: "2026-07-04T01:00:00.000Z" },
+    ];
+    stub.sessions = () => Promise.resolve({ sessions });
+    stub.fetch = () => Promise.resolve(FIXTURE);
+    render(<DecisionTracePanel dir="d" id="i" />);
+    await waitForGraph();
+    const picker = screen.getByLabelText(/trace session/i) as HTMLSelectElement;
+    expect(picker.querySelectorAll("option").length).toBe(2);
+    expect(screen.getByRole("option", { name: new RegExp(SESS_OLD) })).toBeDefined();
   });
 });

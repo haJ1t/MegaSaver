@@ -110,7 +110,12 @@ function seedTraceAndEvidence(): void {
   writeFileSync(join(evDir, `${MEM_A}.json`), JSON.stringify(evidenceRecord("cs1")));
 }
 
-const graphUrl = () => `${baseUrl}/api/claude-sessions/${DIR}/${ID}/decision-trace/graph`;
+// The picked registry sessionId equals the trace-dir name (`${ID}-traces`) in
+// this fixture; the graph route now keys off the ?session picker, not liveSessionId.
+const graphUrl = (session?: string) =>
+  `${baseUrl}/api/claude-sessions/${DIR}/${ID}/decision-trace/graph${
+    session ? `?session=${encodeURIComponent(session)}` : ""
+  }`;
 
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), "dtv-cwd-"));
@@ -133,7 +138,7 @@ describe("decision-trace graph route", () => {
     seedTraceAndEvidence();
     await startWithRegistry(true);
 
-    const res = await fetch(graphUrl());
+    const res = await fetch(graphUrl(ID));
     expect(res.status).toBe(200);
     const graph = await res.json();
 

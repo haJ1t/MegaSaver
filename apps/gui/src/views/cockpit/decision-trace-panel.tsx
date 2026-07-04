@@ -6,7 +6,9 @@ import type { BridgeError } from "../../components/states.js";
 import {
   type DecisionTraceData,
   type DecisionTraceNode,
+  type DecisionTraceSessionSummary,
   fetchDecisionTraceGraph,
+  fetchDecisionTraceSessions,
 } from "../../lib/decision-trace-client.js";
 
 // One color per node kind. Read a matching CSS variable first (so the graph
@@ -20,6 +22,8 @@ const PALETTE: Record<DecisionTraceNode["kind"], { cssVar: string; fallback: str
 
 const EMPTY_COPY =
   "No decision traces for this session yet — tracing is on by default; set MEGASAVER_SEAM_TRACE=false to disable.";
+const EMPTY_NOTE =
+  "Traces come from the proxy/registry sessions run for this workspace, not the cockpit transcript.";
 
 function readColor(cssVar: string, fallback: string): string {
   if (typeof window === "undefined") return fallback;
@@ -115,7 +119,15 @@ function metaEntries(meta: Record<string, unknown>): [string, string][] {
     .filter(([, value]) => value.length > 0);
 }
 
+function sessionLabel(s: DecisionTraceSessionSummary): string {
+  const count = `${s.outputs} ${s.outputs === 1 ? "output" : "outputs"}`;
+  const when = s.latestCreatedAt ? ` · ${s.latestCreatedAt}` : "";
+  return `${s.sessionId} — ${count}${when}`;
+}
+
 export function DecisionTracePanel({ dir, id }: { dir: string; id: string }): JSX.Element {
+  const [sessions, setSessions] = useState<DecisionTraceSessionSummary[] | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
   const [data, setData] = useState<DecisionTraceData | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<BridgeError | null>(null);
@@ -126,22 +138,50 @@ export function DecisionTracePanel({ dir, id }: { dir: string; id: string }): JS
 
   const elements = useMemo(() => (data === null ? [] : toElements(data)), [data]);
 
-  const load = useCallback(async () => {
+  // The cockpit transcript UUID never keys a registry trace, so the panel can't
+  // auto-map: it lists this workspace's registry trace sessions and lets the
+  // operator pick one (newest auto-selected). Fetch the list first; the graph
+  // fetch is keyed by the picked registry sessionId.
+  const loadSessions = useCallback(async () => {
     setState("loading");
     setError(null);
     setSelected(null);
+    setData(null);
     try {
-      setData(await fetchDecisionTraceGraph(dir, id));
-      setState("ready");
+      const { sessions: list } = await fetchDecisionTraceSessions(dir, id);
+      setSessions(list);
+      // Server sorts newest-first; auto-select the first so data shows at once.
+      setPicked(list[0]?.sessionId ?? null);
+      if (list.length === 0) setState("ready");
     } catch (err) {
       setError(err as BridgeError);
       setState("error");
     }
   }, [dir, id]);
 
+  const loadGraph = useCallback(
+    async (sessionId: string) => {
+      setState("loading");
+      setError(null);
+      setSelected(null);
+      try {
+        setData(await fetchDecisionTraceGraph(dir, id, sessionId));
+        setState("ready");
+      } catch (err) {
+        setError(err as BridgeError);
+        setState("error");
+      }
+    },
+    [dir, id],
+  );
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadSessions();
+  }, [loadSessions]);
+
+  useEffect(() => {
+    if (picked !== null) void loadGraph(picked);
+  }, [picked, loadGraph]);
 
   useEffect(() => {
     if (state !== "ready" || data === null || data.nodes.length === 0) return;
@@ -187,26 +227,48 @@ export function DecisionTracePanel({ dir, id }: { dir: string; id: string }): JS
   if (state === "error" && error) {
     return (
       <section aria-label="Decision trace" className="flex flex-col flex-1 min-h-0 px-6 py-6">
-        <ErrorState error={error} onRetry={load} />
+        <ErrorState error={error} onRetry={loadSessions} />
       </section>
     );
   }
 
-  if (data && data.nodes.length === 0) {
+  // No registry trace session maps this workspace → honest empty state; the
+  // picker has nothing to select and we never fabricate a transcript↔registry map.
+  if (sessions !== null && sessions.length === 0) {
     return (
       <section aria-label="Decision trace" className="flex flex-col flex-1 min-h-0 px-6 py-6">
         <h3 className="text-sm text-text-muted uppercase tracking-widest">Trace</h3>
         <p className="mt-3 text-xs text-text-muted">{EMPTY_COPY}</p>
+        <p className="mt-2 text-xs text-text-muted">{EMPTY_NOTE}</p>
       </section>
     );
   }
 
   return (
     <section aria-label="Decision trace" className="flex flex-col flex-1 min-h-0">
-      <header className="flex items-center justify-between px-6 py-3 border-b border-border">
-        <h3 className="text-sm text-text-muted uppercase tracking-widest">Trace</h3>
+      <header className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border">
+        <div className="flex items-center gap-3 min-w-0">
+          <h3 className="text-sm text-text-muted uppercase tracking-widest">Trace</h3>
+          {sessions && sessions.length > 0 && (
+            <label className="flex items-center gap-2 text-xs text-text-muted min-w-0">
+              <span className="sr-only">Trace session</span>
+              <select
+                aria-label="Trace session"
+                className="max-w-xs truncate bg-surface border border-border rounded px-2 py-1 text-xs text-text-primary"
+                value={picked ?? ""}
+                onChange={(e) => setPicked(e.target.value)}
+              >
+                {sessions.map((s) => (
+                  <option key={s.sessionId} value={s.sessionId}>
+                    {sessionLabel(s)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
         {data && (
-          <p className="text-xs text-text-muted">
+          <p className="text-xs text-text-muted shrink-0">
             {data.stats.outputs} {data.stats.outputs === 1 ? "output" : "outputs"} ·{" "}
             {data.stats.chunks} {data.stats.chunks === 1 ? "chunk" : "chunks"} ·{" "}
             {data.stats.memoriesPinned} pinned
