@@ -27,6 +27,7 @@ vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   },
   fetchClaudeSessionTelemetry: () => Promise.resolve(TELEMETRY),
   fetchSessionTokenSaverStats: () => Promise.resolve(null),
+  fetchWorkspaceTokenSaverStats: () => Promise.resolve(null),
 }));
 
 import { SessionCockpit } from "../../src/cockpit/session-cockpit.js";
