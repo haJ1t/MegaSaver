@@ -34,6 +34,7 @@
     "@megasaver/llm-proxy": "workspace:*",
     "@megasaver/mcp-bridge": "workspace:*",
     "@megasaver/memory-graph": "workspace:*",
+    "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",
     "@megasaver/proxy-control": "workspace:*",
     "@megasaver/shared": "workspace:*",

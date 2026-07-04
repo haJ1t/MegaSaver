@@ -151,6 +151,9 @@ importers:
       '@megasaver/memory-graph':
         specifier: workspace:*
         version: link:../../packages/memory-graph
+      '@megasaver/output-filter':
+        specifier: workspace:*
+        version: link:../../packages/output-filter
       '@megasaver/policy':
         specifier: workspace:*
         version: link:../../packages/policy

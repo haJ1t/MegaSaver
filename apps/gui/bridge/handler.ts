@@ -31,6 +31,7 @@ import {
   handleStreamClaudeSession,
 } from "./routes/claude-sessions.js";
 import { handleDaemonStatus } from "./routes/daemon.js";
+import { handleGetDecisionTrace } from "./routes/decision-trace.js";
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
 import { handleGetMemoryGraph } from "./routes/memory-graph.js";
@@ -276,6 +277,17 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
         methodNotAllowed(res, method, origin),
       );
       if (dispatched) return;
+    }
+
+    const decisionTraceMatch = path.match(
+      /^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/decision-trace\/graph$/,
+    );
+    if (decisionTraceMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      const dir = decodeURIComponent(decisionTraceMatch[1] as string);
+      const id = decodeURIComponent(decisionTraceMatch[2] as string);
+      await handleGetDecisionTrace(ctx, dir, id);
+      return;
     }
 
     const memoryGraphMatch = path.match(
