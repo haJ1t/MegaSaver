@@ -3835,3 +3835,13 @@ Three code-review nits, sanctioned by the spec
 `pnpm verify` green (788 tests). Smoke: `audit honest <UPPERCASE-UUID>` → exit 1,
 matching `audit session`; valid lowercase id on an empty store still yields the
 zeros report at exit 0.
+
+---
+
+## [2026-07-03] feature | gui-redesign-v3
+Sidebar shell + amber editorial redesign. Six pages (Sessions/Token Saver/
+Memory/Workspace/Agent Office/Setup). Frontend-only workspace-context seam
+resolves active workspace → representative session for the session-anchored
+Memory/saver routes (no bridge change). Slim cockpit: transcript + savings
+rail. Spec: docs/superpowers/specs/2026-07-03-gui-redesign-v3-design.md.
+Plan: docs/superpowers/plans/2026-07-03-gui-redesign-v3.md.

@@ -4,9 +4,11 @@ tags: [entity, app, gui, v0.4]
 sources:
   - docs/superpowers/specs/2026-05-10-ii-gui-app-design.md
   - docs/superpowers/specs/2026-05-10-ll-gui-v1-design.md
+  - docs/superpowers/specs/2026-07-03-gui-redesign-v3-design.md
+  - docs/superpowers/plans/2026-07-03-gui-redesign-v3.md
 status: published
 created: 2026-05-10
-updated: 2026-06-15
+updated: 2026-07-03
 ---
 
 # `@megasaver/gui`
@@ -222,3 +224,45 @@ with confirm-on-disconnect.
   at CC **session start** → mid-session connect needs `/hooks` review or a new
   session.
 - Source: `docs/superpowers/specs/2026-06-15-gui-connect-saver-hook-design.md`.
+
+## GUI Redesign v3 (2026-07-03)
+
+Rebuilds the app shell as a six-page amber-accented sidebar console with a
+slim session cockpit, moving workspace/global panels out of the previously
+overloaded cockpit. Frontend-only — no bridge/Core change.
+
+- **Sidebar shell:** a persistent left `Sidebar`
+  (`apps/gui/src/components/sidebar.tsx`) replaces the top-nav. Six items,
+  amber active pill (`bg-accent text-accent-fg`). Display order lives in a
+  local `NAV_ORDER` constant (Sessions, Token Saver, Memory, Workspace, Agent
+  Office, Agent Setup), decoupled from the alphabetic `VIEW_IDS` tuple pinned
+  in `apps/gui/src/view-id.ts` (`agent-office`, `agent-setup`, `memory`,
+  `sessions`, `token-saver`, `workspace`). The `claude-sessions` view id is
+  renamed to `sessions`.
+- **Amber accent:** `--color-accent`/`--color-accent-fg` flip from black/white
+  to amber — light `#b45309`/`#fff7ed`, dark `#f59e0b`/`#0c0d0f`. Contrast
+  ≥4.5:1 pinned by `apps/gui/test/styles/accent-contrast.test.ts`.
+- **Six pages:** Sessions (home — summary strip of Workspaces/Sessions/Live
+  counts over the grouped session list, feeding the slim cockpit), Token
+  Saver, Memory, Workspace, Agent Office, Setup.
+- **Workspace-context seam:** Memory and the Token Saver page's per-workspace
+  saver-activation stay session-anchored at the bridge (routes take
+  `dir`/`id`, not a workspace key). `apps/gui/src/lib/workspace-context.ts`
+  (`deriveWorkspaceOptions`) derives one option per `cwd` from the fetched
+  session list, each carrying a representative `(dir, id)` (its newest
+  session); `apps/gui/src/components/workspace-picker.tsx` is the shared
+  selector consumed by all workspace-scoped pages. Entirely frontend — **no
+  bridge route was added** for this seam.
+- **Slim cockpit:** `apps/gui/src/cockpit/session-cockpit.tsx` reduces to the
+  active panel beside a right rail carrying `SessionSaverStats`
+  (`apps/gui/src/cockpit/panels/session-saver-stats.tsx`, the per-session
+  tokens-saved figure). The panel registry
+  (`apps/gui/src/cockpit/panel-registry.ts`) shrinks to `transcript` /
+  `telemetry` / `tasks`; the former workspace/memory/token-saver cockpit
+  adapters and the composite token-saver panel are deleted (their underlying
+  panels now compose directly into the Workspace/Memory/Token-Saver pages).
+- **Deferred:** a cross-session, cross-workspace daily token-saved aggregate
+  has no bridge route yet and is not shown on the home page; only the
+  per-session figure (cockpit rail) is live.
+- Source: `docs/superpowers/specs/2026-07-03-gui-redesign-v3-design.md`,
+  `docs/superpowers/plans/2026-07-03-gui-redesign-v3.md`.

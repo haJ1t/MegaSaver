@@ -26,6 +26,8 @@ vi.mock("../../src/lib/claude-sessions-client.js", () => ({
     return () => {};
   },
   fetchClaudeSessionTelemetry: () => Promise.resolve(TELEMETRY),
+  fetchSessionTokenSaverStats: () => Promise.resolve(null),
+  fetchWorkspaceTokenSaverStats: () => Promise.resolve(null),
 }));
 
 import { SessionCockpit } from "../../src/cockpit/session-cockpit.js";
@@ -35,12 +37,14 @@ afterEach(() => {
 });
 
 describe("SessionCockpit", () => {
-  it("renders top-level groups with Transcript active by default", () => {
+  it("renders the three-group nav with Transcript active by default", () => {
     render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);
     const transcriptTab = screen.getByRole("button", { name: "Transcript" });
-    const workspaceTab = screen.getByRole("button", { name: /Workspace/ });
+    const telemetryTab = screen.getByRole("button", { name: "Telemetry" });
+    const tasksTab = screen.getByRole("button", { name: "Tasks" });
     expect(transcriptTab).toBeDefined();
-    expect(workspaceTab).toBeDefined();
+    expect(telemetryTab).toBeDefined();
+    expect(tasksTab).toBeDefined();
     expect(transcriptTab.getAttribute("aria-current")).toBe("page");
   });
 
@@ -63,19 +67,8 @@ describe("SessionCockpit", () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it("closes grouped workspace panels on Escape", () => {
+  it("renders the savings rail alongside the active panel", async () => {
     render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: /Workspace/ }));
-    expect(screen.getByRole("menuitem", { name: "Rules" })).toBeDefined();
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("menuitem", { name: "Rules" })).toBeNull();
-  });
-
-  it("links grouped tab button to its menu with aria-controls", () => {
-    render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={() => {}} />);
-    const workspaceTab = screen.getByRole("button", { name: /Workspace/ });
-    fireEvent.click(workspaceTab);
-    const menu = screen.getByRole("menu", { name: /Workspace panels/ });
-    expect(workspaceTab.getAttribute("aria-controls")).toBe(menu.id);
+    await waitFor(() => expect(screen.getByRole("region", { name: /savings/i })).toBeDefined());
   });
 });

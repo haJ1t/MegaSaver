@@ -74,7 +74,7 @@ export function MemoryPanel({ dir, id }: { dir: string; id: string }): JSX.Eleme
       aria-label="Session memory"
       className="flex flex-col gap-3 px-6 py-6 overflow-y-auto flex-1 min-h-0"
     >
-      <h2 className="text-sm text-text-muted uppercase tracking-widest">Memory</h2>
+      <h3 className="text-sm text-text-muted uppercase tracking-widest">Memory</h3>
 
       <form onSubmit={onCreate} className="flex flex-col gap-2">
         <label htmlFor="memory-draft" className="text-xs text-text-muted">

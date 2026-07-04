@@ -1,59 +1,17 @@
 import type { CockpitPanel, CockpitTabGroup } from "./panel.js";
-import {
-  MemoryCockpitPanel,
-  MemoryGraphCockpitPanel,
-  TasksCockpitPanel,
-  TokenSaverCockpitPanel,
-} from "./panels/session-overlay-panels.js";
+import { TasksCockpitPanel } from "./panels/session-overlay-panels.js";
 import { TelemetryPanel } from "./panels/telemetry-panel.js";
 import { TranscriptPanel } from "./panels/transcript-panel.js";
-import {
-  WorkspaceContextCockpitPanel,
-  WorkspaceIndexCockpitPanel,
-  WorkspacePermissionsCockpitPanel,
-  WorkspaceRulesCockpitPanel,
-  WorkspaceToolsCockpitPanel,
-} from "./panels/workspace-panels.js";
 
 export const COCKPIT_PANELS: readonly CockpitPanel[] = [
   { id: "transcript", label: "Transcript", scope: "session", component: TranscriptPanel },
   { id: "telemetry", label: "Telemetry", scope: "session", component: TelemetryPanel },
-  { id: "memory", label: "Memory", scope: "session", component: MemoryCockpitPanel },
-  {
-    id: "memory-graph",
-    label: "Memory Graph",
-    scope: "session",
-    component: MemoryGraphCockpitPanel,
-  },
   { id: "tasks", label: "Tasks", scope: "session", component: TasksCockpitPanel },
-  { id: "token-saver", label: "Saver", scope: "session", component: TokenSaverCockpitPanel },
-  { id: "ws-index", label: "Index", scope: "workspace", component: WorkspaceIndexCockpitPanel },
-  {
-    id: "ws-context",
-    label: "Context",
-    scope: "workspace",
-    component: WorkspaceContextCockpitPanel,
-  },
-  { id: "ws-rules", label: "Rules", scope: "workspace", component: WorkspaceRulesCockpitPanel },
-  { id: "ws-tools", label: "Tools", scope: "workspace", component: WorkspaceToolsCockpitPanel },
-  {
-    id: "ws-permissions",
-    label: "Permissions",
-    scope: "workspace",
-    component: WorkspacePermissionsCockpitPanel,
-  },
 ];
 
 export const COCKPIT_TAB_GROUPS: readonly CockpitTabGroup[] = [
   { id: "transcript", label: "Transcript", panelIds: ["transcript"] },
   { id: "telemetry", label: "Telemetry", panelIds: ["telemetry"] },
-  { id: "memory", label: "Memory", panelIds: ["memory", "memory-graph"] },
-  {
-    id: "workspace",
-    label: "Workspace",
-    panelIds: ["ws-index", "ws-context", "ws-rules", "ws-tools", "ws-permissions"],
-  },
-  { id: "saver", label: "Saver", panelIds: ["token-saver"] },
   { id: "tasks", label: "Tasks", panelIds: ["tasks"] },
 ];
 

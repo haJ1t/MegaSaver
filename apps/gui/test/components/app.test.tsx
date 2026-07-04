@@ -1,23 +1,39 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../src/app.js";
 
 afterEach(cleanup);
 
 describe("App shell", () => {
-  it("renders a centered page surface", () => {
+  it("defaults to the Sessions view with a six-item sidebar", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("[]", { status: 200, headers: { "content-type": "application/json" } }),
+      ),
+    );
     render(<App />);
-    const container = screen.getByTestId("page-container");
-    expect(container.className).toMatch(/max-w-5xl/);
-    expect(container.className).toMatch(/mx-auto/);
+    const nav = screen.getByRole("navigation", { name: /main/i });
+    expect(nav.querySelectorAll("button").length).toBe(6);
+    expect(screen.getByRole("button", { name: "Sessions" }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+    vi.unstubAllGlobals();
   });
 
-  it("marks the active nav item with aria-current and solid styling", () => {
+  it("navigates to Token saver", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("[]", { status: 200, headers: { "content-type": "application/json" } }),
+      ),
+    );
     render(<App />);
-    const active = screen.getByRole("button", { name: "Claude sessions" });
-    expect(active.getAttribute("aria-current")).toBe("page");
-    expect(active.className).toMatch(/bg-text-primary/);
-    expect(active.className).toMatch(/text-surface/);
+    fireEvent.click(screen.getByRole("button", { name: "Token saver" }));
+    expect(await screen.findByRole("heading", { name: /token saver/i })).toBeTruthy();
+    vi.unstubAllGlobals();
   });
 });

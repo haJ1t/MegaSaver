@@ -28,9 +28,9 @@
   /* Borders */
   --color-border: #eaeaea;
 
-  /* Accent — near-black for primary actions; high contrast without color noise */
-  --color-accent: #111111;
-  --color-accent-fg: #ffffff;
+  /* Accent — amber; warm-palette primary. Contrast-pinned ≥4.5:1 (accent-contrast.test.ts). */
+  --color-accent: #b45309;
+  --color-accent-fg: #fff7ed;
 
   /* Danger — destructive actions (End session) */
   --color-danger: #9f2f2d;
@@ -111,8 +111,8 @@
     /* Borders */
     --color-border: #2a2d35;
 
-    /* Accent */
-    --color-accent: #f0f1f3;
+    /* Accent — brightened amber for the dark canvas. */
+    --color-accent: #f59e0b;
     --color-accent-fg: #0c0d0f;
 
     /* Danger */

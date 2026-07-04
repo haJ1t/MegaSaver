@@ -6,12 +6,15 @@ import type { ClaudeSessionMeta, Workspace } from "../../src/lib/claude-sessions
 const fetchClaudeSessions = vi.fn();
 const fetchWorkspaces = vi.fn();
 const fetchClaudeSessionTelemetry = vi.fn();
+const fetchSessionTokenSaverStats = vi.fn();
 const openClaudeSessionStream = vi.fn();
 
 vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchClaudeSessions: (...a: unknown[]) => fetchClaudeSessions(...a),
   fetchWorkspaces: (...a: unknown[]) => fetchWorkspaces(...a),
   fetchClaudeSessionTelemetry: (...a: unknown[]) => fetchClaudeSessionTelemetry(...a),
+  fetchSessionTokenSaverStats: (...a: unknown[]) => fetchSessionTokenSaverStats(...a),
+  fetchWorkspaceTokenSaverStats: () => Promise.resolve(null),
   openClaudeSessionStream: (...a: unknown[]) => openClaudeSessionStream(...a),
 }));
 
@@ -46,6 +49,7 @@ beforeEach(async () => {
   fetchClaudeSessions.mockResolvedValue(SESSIONS);
   fetchWorkspaces.mockResolvedValue(WORKSPACES);
   fetchClaudeSessionTelemetry.mockResolvedValue(null);
+  fetchSessionTokenSaverStats.mockResolvedValue(null);
   openClaudeSessionStream.mockReturnValue(() => undefined);
   ({ ClaudeSessionsView } = await import("../../src/views/claude-sessions-view.js"));
 });

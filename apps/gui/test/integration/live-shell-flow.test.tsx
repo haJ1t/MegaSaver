@@ -41,6 +41,9 @@ const TELEMETRY: SessionTelemetry = {
 vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchClaudeSessions: () => Promise.resolve([SESSION]),
   fetchClaudeSessionTelemetry: () => Promise.resolve(TELEMETRY),
+  fetchSessionTokenSaverStats: () => Promise.resolve(null),
+  fetchWorkspaceTokenSaverStats: () => Promise.resolve(null),
+  fetchDaemonStatus: () => Promise.resolve({ running: true }),
   openClaudeSessionStream: (_dir: string, _id: string, handlers: StreamHandlers) => {
     handlers.onSnapshot({
       projectLabel: "/tmp/alpha",

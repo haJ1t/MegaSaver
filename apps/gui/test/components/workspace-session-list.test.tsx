@@ -159,6 +159,14 @@ describe("WorkspaceSessionList", () => {
     vi.useRealTimers();
   });
 
+  it("shows a Workspaces / Sessions / Live summary strip", async () => {
+    stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
+    render(<WorkspaceSessionList onSelect={() => {}} />);
+    expect(await screen.findByText("Workspaces")).toBeTruthy();
+    expect(screen.getAllByText("Sessions").length).toBeGreaterThan(0);
+    expect(screen.getByText("Live")).toBeTruthy();
+  });
+
   it("ignores stale responses from earlier polling ticks", async () => {
     vi.useFakeTimers();
     let firstResolve: (v: ClaudeSessionMeta[]) => void = () => {};

@@ -41,6 +41,7 @@ export function WorkspaceSessionList({
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
   const groups = groupSessionsByCwd(sessions);
+  const liveCount = sessions.filter((s) => nowMs - s.mtimeMs < LIVE_WINDOW_MS).length;
 
   const toggleGroup = (cwd: string): void => {
     setCollapsed((prev) => {
@@ -89,12 +90,11 @@ export function WorkspaceSessionList({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      <div className="flex items-baseline justify-between mb-4">
-        <h2 className="text-xl font-semibold tracking-tight text-text-primary">Claude sessions</h2>
-        <span className="text-xs text-text-muted">
-          {groups.length} workspace{groups.length === 1 ? "" : "s"} · {sessions.length} session
-          {sessions.length === 1 ? "" : "s"}
-        </span>
+      <h2 className="text-xl font-semibold tracking-tight text-text-primary mb-4">Sessions</h2>
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <SummaryCard label="Workspaces" value={groups.length} />
+        <SummaryCard label="Sessions" value={sessions.length} />
+        <SummaryCard label="Live" value={liveCount} />
       </div>
 
       {groups.length === 0 ? (
@@ -176,6 +176,15 @@ export function WorkspaceSessionList({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function SummaryCard({ label, value }: { label: string; value: number }): JSX.Element {
+  return (
+    <div className="bg-surface border border-border rounded-xl px-4 py-3">
+      <div className="text-[10px] uppercase tracking-widest text-text-muted">{label}</div>
+      <div className="text-2xl font-semibold tabular-nums text-text-primary">{value}</div>
     </div>
   );
 }

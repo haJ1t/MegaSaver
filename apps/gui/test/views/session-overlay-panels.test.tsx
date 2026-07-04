@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryPanel } from "../../src/views/cockpit/memory-panel.js";
 import { TasksPanel } from "../../src/views/cockpit/tasks-panel.js";
-import { TokenSaverPanel as SessionTokenSaverPanel } from "../../src/views/cockpit/token-saver-panel.js";
 
 const DIR = "ws-dir";
 const ID = "wssess01";
@@ -12,111 +10,6 @@ const WK = "0123456789abcdef";
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-});
-
-const memoryRow = {
-  id: "00000000-0000-4000-8000-000000000001",
-  workspaceKey: WK,
-  liveSessionId: ID,
-  scope: "session",
-  type: "decision",
-  title: "first note",
-  content: "first note",
-  keywords: [],
-  confidence: "medium",
-  source: "manual",
-  approval: "approved",
-  stale: false,
-  createdAt: "2026-06-14T00:00:00.000Z",
-  updatedAt: "2026-06-14T00:00:00.000Z",
-};
-
-describe("MemoryPanel", () => {
-  it("renders the list, then a create POSTs and prepends the new row", async () => {
-    const created = {
-      ...memoryRow,
-      id: "00000000-0000-4000-8000-000000000002",
-      content: "new note",
-    };
-    const fetchMock = vi.fn(async (url: string, opts?: { method?: string }) => {
-      if (opts?.method === "POST") {
-        return { ok: true, status: 201, json: async () => created };
-      }
-      return { ok: true, status: 200, json: async () => [memoryRow] };
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(<MemoryPanel dir={DIR} id={ID} />);
-    await waitFor(() => expect(screen.getByText("first note")).toBeDefined());
-
-    fireEvent.change(screen.getByLabelText(/new note/i), { target: { value: "new note" } });
-    fireEvent.click(screen.getByRole("button", { name: /add note/i }));
-
-    await waitFor(() => expect(screen.getByText("new note")).toBeDefined());
-    const postCall = fetchMock.mock.calls.find(
-      (c) => (c[1] as { method?: string })?.method === "POST",
-    );
-    expect(postCall).toBeDefined();
-  });
-
-  it("delete removes the row", async () => {
-    const fetchMock = vi.fn(async (_url: string, opts?: { method?: string }) => {
-      if (opts?.method === "DELETE") {
-        return { ok: true, status: 200, json: async () => ({ id: memoryRow.id }) };
-      }
-      return { ok: true, status: 200, json: async () => [memoryRow] };
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(<MemoryPanel dir={DIR} id={ID} />);
-    await waitFor(() => expect(screen.getByText("first note")).toBeDefined());
-    fireEvent.click(screen.getByRole("button", { name: /delete/i }));
-    await waitFor(() => expect(screen.queryByText("first note")).toBeNull());
-  });
-
-  it("ignores a stale load after dir/id changes", async () => {
-    let firstResolve: (value: unknown) => void = () => {};
-    let secondResolve: (value: unknown) => void = () => {};
-    let calls = 0;
-
-    const fetchMock = vi.fn(async (_url: string, opts?: { method?: string }) => {
-      if (opts?.method && opts.method !== "GET")
-        return { ok: true, status: 200, json: async () => [] };
-      calls++;
-      if (calls === 1)
-        return new Promise((resolve) => {
-          firstResolve = resolve;
-        });
-      return new Promise((resolve) => {
-        secondResolve = resolve;
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { rerender } = render(<MemoryPanel dir="dir1" id="id1" />);
-    await waitFor(() => expect(calls).toBe(1));
-
-    rerender(<MemoryPanel dir="dir2" id="id2" />);
-    await waitFor(() => expect(calls).toBe(2));
-
-    await act(async () =>
-      secondResolve({
-        ok: true,
-        status: 200,
-        json: async () => [{ ...memoryRow, id: "new", content: "new note" }],
-      }),
-    );
-    expect(screen.getByText("new note")).toBeDefined();
-
-    await act(async () =>
-      firstResolve({
-        ok: true,
-        status: 200,
-        json: async () => [{ ...memoryRow, id: "old", content: "old note" }],
-      }),
-    );
-    expect(screen.queryByText("old note")).toBeNull();
-  });
 });
 
 describe("TasksPanel", () => {
@@ -199,35 +92,5 @@ describe("TasksPanel", () => {
       }),
     );
     expect(screen.queryByText("old plan")).toBeNull();
-  });
-});
-
-describe("Session TokenSaverPanel (read-only)", () => {
-  it("renders the tokens-saved hero metric with no write controls", async () => {
-    const stats = {
-      liveSessionId: ID,
-      eventsTotal: 1,
-      rawBytesTotal: 1000,
-      returnedBytesTotal: 200,
-      bytesSavedTotal: 800,
-      savingRatio: 0.8,
-      secretsRedactedTotal: 0,
-      chunksStoredTotal: 1,
-      updatedAt: "2026-06-14T00:00:00.000Z",
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => {
-        if (url.includes("/stats")) return { ok: true, status: 200, json: async () => stats };
-        return { ok: true, status: 200, json: async () => ({ enabled: false, settings: null }) };
-      }),
-    );
-    render(<SessionTokenSaverPanel dir={DIR} id={ID} />);
-    // raw 1000 B -> 250 tok, returned 200 B -> 50 tok, saved 200 tok
-    await waitFor(() => expect(screen.getByText("Tokens saved")).toBeDefined());
-    expect(screen.getByText("200")).toBeDefined();
-    expect(screen.getByText(/80%/)).toBeDefined();
-    expect(screen.queryByRole("button", { name: /enable/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /disable/i })).toBeNull();
   });
 });
