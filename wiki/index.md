@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-07-04
+updated: 2026-07-05
 ---
 
 # Wiki Index — Mega Saver
@@ -15,6 +15,7 @@ updated: 2026-07-04
 - [[decisions/context-gate-extraction]] — AA1 §2a folded-vs-extracted outcome (post-BB7b LOC audit).
 - [[decisions/lazy-load-heavy-deps]] — heavy deps (TS compiler via [[entities/indexer]]) must be lazy dynamic-imported, never statically imported, in core hot-path packages; PR #182 root-cause fix + no-eager-load guard test.
 - [[decisions/bundle-externalize-native-chain]] — the standalone `mega.mjs` externalizes the transformers/onnxruntime native chain (optionalDependency) while keeping typescript inlined; PR #209/v1.2.1 fix for the 15.7MB→1.9MB tarball with 0 native binaries.
+- [[decisions/decision-trace-inline-not-join]] — Decision-Trace Viewer records memory ids + redaction INLINE on the registry trace, not via the (inert) replay-trace↔evidence chunkSetId join; the two stores are populated by disjoint seams. PR #227.
 
 ## Concepts (cross-cutting ideas)
 

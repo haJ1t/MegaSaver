@@ -2124,3 +2124,19 @@ Catalog finalization (this entry's writes): added an `## Archive` section to
 `[[syntheses/release-history]]` entry under Syntheses. Every origin page absent
 from the active tree (`memory-approval`, `post-v1.1-features`) is confirmed in
 `archive/`; nothing merely vanished.
+
+## [2026-07-05] ingest | Decision-Trace Viewer shipped (PR #227)
+
+Flagship: surface the causal chain behind each context decision (ranking →
+which memory boosted it → chunks + scores → redaction → output). CLI
+`mega trace explain` + GUI Cytoscape panel + `readSessionDecisionTrace` reader.
+
+**Key learning (see [[decisions/decision-trace-inline-not-join]]):** the original
+chunkSetId join between replay-trace and evidence-ledger is INERT with real data
+— the two stores are populated by disjoint seams (registry writes only trace,
+overlay only evidence; independent ids). Fixed by recording memory ids +
+redaction INLINE on the registry trace. Ranking score unchanged (parity-guarded).
+Tracing now on by default (`MEGASAVER_SEAM_TRACE=false` disables) + retention
+prune. Built across 8 TDD slices; holistic branch review (code+critic+security)
+caught & fixed 3 surface defects incl. a `?session` path-traversal. `pnpm verify`
+green; changeset added.
