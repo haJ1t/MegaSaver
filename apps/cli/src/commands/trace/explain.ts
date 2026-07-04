@@ -37,7 +37,7 @@ const n = (x: number): string => x.toFixed(2);
 
 function renderOutput(o: DecisionOutput): string[] {
   const memory =
-    o.memory && o.memory.pinnedByMemoryIds.length > 0 ? o.memory.pinnedByMemoryIds.join(", ") : "—";
+    o.memory && o.memory.rankedByMemoryIds.length > 0 ? o.memory.rankedByMemoryIds.join(", ") : "—";
   const redaction = o.redaction?.redacted ? `yes (${o.redaction.highRiskFindings} high-risk)` : "—";
   const lines = [
     `${o.toolName} → decision=${o.decision} | memory: ${memory} | redaction: ${redaction}`,

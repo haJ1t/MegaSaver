@@ -19,7 +19,7 @@ export type DecisionOutput = {
   decision: string;
   selected: RankedChunkView[];
   omitted: RankedChunkView[];
-  memory: { pinnedByMemoryIds: string[] } | null;
+  memory: { rankedByMemoryIds: string[] } | null;
   redaction: { redacted: boolean; highRiskFindings: number } | null;
   evidencePresent: boolean;
 };
@@ -121,6 +121,17 @@ export function readSessionDecisionTrace(
       : ev
         ? ev.redaction
         : null;
+    // Prefer the ranking-causal memory ids stamped inline on the registry trace
+    // (the seam that actually has them); fall back to the legacy evidence join,
+    // mapping ev.pinnedByMemoryIds → the surfaced rankedByMemoryIds so Slice-1's
+    // evidence-only fixtures still join.
+    const inlineMemoryIds = t.ranking.rankedByMemoryIds;
+    const memory =
+      inlineMemoryIds !== undefined && inlineMemoryIds.length > 0
+        ? { rankedByMemoryIds: inlineMemoryIds }
+        : ev
+          ? { rankedByMemoryIds: ev.pinnedByMemoryIds }
+          : null;
     return {
       chunkSetId: t.chunkSetId ?? null,
       toolName: t.toolName,
@@ -129,9 +140,10 @@ export function readSessionDecisionTrace(
       decision: t.ranking.decision,
       selected: t.ranking.selected.map(toView),
       omitted: t.ranking.omitted.map(toView),
-      memory: ev ? { pinnedByMemoryIds: ev.pinnedByMemoryIds } : null,
+      memory,
       redaction,
-      evidencePresent: ev !== undefined || t.redaction !== undefined,
+      evidencePresent:
+        ev !== undefined || t.redaction !== undefined || t.ranking.rankedByMemoryIds !== undefined,
     };
   });
 

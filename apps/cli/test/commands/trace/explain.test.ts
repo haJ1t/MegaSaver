@@ -174,7 +174,7 @@ describe("mega trace explain", () => {
     expect(code).toBe(0);
     const parsed = JSON.parse(lines.join("\n"));
     expect(parsed.outputs[0].decision).toBe("compressed");
-    expect(parsed.outputs[0].memory.pinnedByMemoryIds).toEqual([MEM_A]);
+    expect(parsed.outputs[0].memory.rankedByMemoryIds).toEqual([MEM_A]);
   });
 
   it("prints an honest message and exits 0 when the session has no traces", async () => {

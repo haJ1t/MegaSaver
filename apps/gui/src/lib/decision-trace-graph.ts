@@ -50,7 +50,7 @@ export function toDecisionGraph(trace: SessionDecisionTrace): DecisionTraceData 
       chunkCount += 1;
     });
 
-    for (const memoryId of output.memory?.pinnedByMemoryIds ?? []) {
+    for (const memoryId of output.memory?.rankedByMemoryIds ?? []) {
       if (!memoryIds.has(memoryId)) {
         memoryIds.add(memoryId);
         nodes.push({ id: memoryId, kind: "memory", label: memoryId, meta: {} });

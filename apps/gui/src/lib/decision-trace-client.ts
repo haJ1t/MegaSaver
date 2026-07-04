@@ -23,7 +23,7 @@ export type DecisionOutput = {
   decision: string;
   selected: RankedChunkView[];
   omitted: RankedChunkView[];
-  memory: { pinnedByMemoryIds: string[] } | null;
+  memory: { rankedByMemoryIds: string[] } | null;
   redaction: { redacted: boolean; highRiskFindings: number } | null;
   evidencePresent: boolean;
 };

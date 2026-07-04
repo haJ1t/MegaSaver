@@ -14,7 +14,10 @@ const DIGEST = "a".repeat(64);
 function traceLine(
   chunkSetId: string,
   memoryBoost: number,
-  redaction?: { redacted: boolean; secretsRedacted: number },
+  extra?: {
+    redaction?: { redacted: boolean; secretsRedacted: number };
+    rankedByMemoryIds?: string[];
+  },
 ): string {
   return JSON.stringify({
     sessionId: SESSION,
@@ -22,7 +25,7 @@ function traceLine(
     toolName: "Read",
     createdAt: "2026-07-04T00:00:00.000Z",
     chunkSetId,
-    ...(redaction !== undefined ? { redaction } : {}),
+    ...(extra?.redaction !== undefined ? { redaction: extra.redaction } : {}),
     ranking: {
       classification: { category: "typescript", confidence: 0.7 },
       decision: "compressed",
@@ -45,6 +48,9 @@ function traceLine(
         },
       ],
       omitted: [],
+      ...(extra?.rankedByMemoryIds !== undefined
+        ? { rankedByMemoryIds: extra.rankedByMemoryIds }
+        : {}),
     },
   });
 }
@@ -123,12 +129,12 @@ describe("readSessionDecisionTrace", () => {
 
     expect(o1?.decision).toBe("compressed");
     expect(o1?.selected[0]?.engine.memoryBoost).toBe(0.2);
-    expect(o1?.memory?.pinnedByMemoryIds).toEqual([MEM_A]);
+    expect(o1?.memory?.rankedByMemoryIds).toEqual([MEM_A]);
     expect(o1?.redaction?.highRiskFindings).toBe(1);
     expect(o1?.evidencePresent).toBe(true);
 
     // Right memory on the right output — the sessionId-only-join killer.
-    expect(o2?.memory?.pinnedByMemoryIds).toEqual([MEM_B]);
+    expect(o2?.memory?.rankedByMemoryIds).toEqual([MEM_B]);
     expect(o2?.selected[0]?.engine.memoryBoost).toBe(0.5);
     expect(o2?.redaction?.highRiskFindings).toBe(0);
   });
@@ -139,7 +145,7 @@ describe("readSessionDecisionTrace", () => {
     mkdirSync(traceDir, { recursive: true });
     writeFileSync(
       join(traceDir, "replay-traces.jsonl"),
-      `${traceLine("cs1", 0.2, { redacted: true, secretsRedacted: 2 })}\n`,
+      `${traceLine("cs1", 0.2, { redaction: { redacted: true, secretsRedacted: 2 } })}\n`,
     );
 
     const t = readSessionDecisionTrace(
@@ -151,6 +157,63 @@ describe("readSessionDecisionTrace", () => {
     expect(o?.redaction?.redacted).toBe(true);
     expect(o?.redaction?.highRiskFindings).toBe(2);
     expect(o?.evidencePresent).toBe(true);
+  });
+
+  it("surfaces inline rankedByMemoryIds from a registry-only trace with no evidence dir (Slice C)", () => {
+    const root = mkdtempSync(join(tmpdir(), "dtv-inline-mem-"));
+    const traceDir = join(root, "stats", PROJECT, `${SESSION}-traces`);
+    mkdirSync(traceDir, { recursive: true });
+    writeFileSync(
+      join(traceDir, "replay-traces.jsonl"),
+      `${traceLine("cs1", 0.2, { rankedByMemoryIds: [MEM_A] })}\n`,
+    );
+
+    const t = readSessionDecisionTrace(
+      { root },
+      { projectId: PROJECT, sessionId: SESSION, workspaceKey: WK },
+    );
+    expect(t.outputs).toHaveLength(1);
+    expect(t.outputs[0]?.memory?.rankedByMemoryIds).toEqual([MEM_A]);
+    expect(t.outputs[0]?.evidencePresent).toBe(true);
+  });
+
+  it("prefers inline rankedByMemoryIds over a legacy evidence record for the same chunkSet", () => {
+    // Both a legacy evidence pin (MEM_B, keyed by cs1) AND an inline id (MEM_A)
+    // exist for the same output. Inline is the ranking-causal truth and wins.
+    const root = mkdtempSync(join(tmpdir(), "dtv-inline-wins-"));
+    const traceDir = join(root, "stats", PROJECT, `${SESSION}-traces`);
+    mkdirSync(traceDir, { recursive: true });
+    writeFileSync(
+      join(traceDir, "replay-traces.jsonl"),
+      `${traceLine("cs1", 0.2, { rankedByMemoryIds: [MEM_A] })}\n`,
+    );
+    const evDir = join(root, "evidence", WK);
+    mkdirSync(evDir, { recursive: true });
+    writeFileSync(
+      join(evDir, `${MEM_B}.json`),
+      JSON.stringify(evidenceRecord(MEM_B, "cs1", [MEM_B], 0)),
+    );
+
+    const t = readSessionDecisionTrace(
+      { root },
+      { projectId: PROJECT, sessionId: SESSION, workspaceKey: WK },
+    );
+    expect(t.outputs).toHaveLength(1);
+    expect(t.outputs[0]?.memory?.rankedByMemoryIds).toEqual([MEM_A]);
+    expect(t.outputs[0]?.evidencePresent).toBe(true);
+  });
+
+  it("falls back to the legacy evidence pin when only an evidence record exists (Slice-1 fixture)", () => {
+    // No inline rankedByMemoryIds on the trace → the reader still joins the
+    // evidence pin, mapping ev.pinnedByMemoryIds → the surfaced rankedByMemoryIds.
+    const root = seed();
+    const t = readSessionDecisionTrace(
+      { root },
+      { projectId: PROJECT, sessionId: SESSION, workspaceKey: WK },
+    );
+    const byChunkSet = new Map(t.outputs.map((o) => [o.chunkSetId, o]));
+    expect(byChunkSet.get("cs1")?.memory?.rankedByMemoryIds).toEqual([MEM_A]);
+    expect(byChunkSet.get("cs2")?.memory?.rankedByMemoryIds).toEqual([MEM_B]);
   });
 
   it("marks evidencePresent false when no evidence matches (orphan trace, not dropped)", () => {
