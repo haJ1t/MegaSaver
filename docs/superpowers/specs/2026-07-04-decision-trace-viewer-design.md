@@ -48,7 +48,11 @@ chain**: *intent → which memory drove this output's context → ranking decisi
 ### 1. Join reader — `@megasaver/output-filter` (or a small new consumer)
 
 New pure reader producing the causal record. Reuses `readReplayTraces`
-(exists, from the seam Phase-2 work) + an evidence-ledger read.
+(exists, from the seam Phase-2 work) + a synchronous evidence read. NB:
+`listEvidenceByWorkspace` is async (object-arg); the reader stays synchronous
+(`: SessionDecisionTrace`, tests call it without `await`), so it replicates that
+fn's fs body inline (`readdirSync`/`readFileSync` + `evidenceRecordSchema.safeParse`,
+best-effort) rather than awaiting it.
 
 Note the two stores key differently — traces by `projectId` (`stats/<projectId>/…`),
 evidence by `workspaceKey` (`evidence/<workspaceKey>/…`) — so the reader takes
@@ -65,7 +69,7 @@ DecisionOutput = {
   selected: RankedChunkView[],       // startLine,endLine,score,engine(baseRelevance,memoryBoost,failureHistoryBoost,finalScore)
   omitted:  RankedChunkView[],
   memory:   { pinnedByMemoryIds: string[] } | null,   // from the joined evidence record
-  redaction: { secretsRedacted: number, categories: string[] } | null,  // from evidence redactionReport
+  redaction: { redacted: boolean, highRiskFindings: number } | null,  // from evidence redactionReport (real fields; sub-schemas.ts:41)
   evidencePresent: boolean,          // false ⇒ orphan trace (evidence write failed) — render trace-only
 }
 ```

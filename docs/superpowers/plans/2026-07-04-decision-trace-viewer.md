@@ -207,7 +207,7 @@ it("emits SessionDecisionTrace under --json", async () => {
 });
 ```
 
-- [ ] **Step 3: Implement** `runTraceExplain(input)`: resolve store + projectId (mirror seam) + workspaceKey → `readSessionDecisionTrace(store, {projectId, sessionId, workspaceKey})` → if `--json` print JSON; else render per output: `«toolName» → decision=«decision» | memory: «pinnedByMemoryIds or —» | redacted «n»` then a small table of selected chunks (`lines a-b  score=..  base/mem/fail`) and a dimmed omitted count. Empty → message + exit 0. Wire `trace explain` command + register the `trace` group.
+- [ ] **Step 3: Implement** `runTraceExplain(input)`: resolve store + projectId (mirror seam) + workspaceKey → `readSessionDecisionTrace(store, {projectId, sessionId, workspaceKey})` → if `--json` print JSON; else render per output: `«toolName» → decision=«decision» | memory: «pinnedByMemoryIds or —» | redaction: «redacted ? "yes (N high-risk)" : —»` (real fields `redaction.redacted`/`redaction.highRiskFindings` per shipped Slice 1) then a small table of selected chunks (`lines a-b  score=..  base/mem/fail`) and a dimmed omitted count. Empty → message + exit 0. Wire `trace explain` command + register the `trace` group.
 - [ ] **Step 4: Run — PASS.** Registry parity/help tests if any.
 - [ ] **Step 5: Full verify, commit** `feat(cli): mega trace explain — session decision chain`.
 
@@ -233,7 +233,7 @@ it("returns a decision graph for a session with traces", async () => {
 });
 ```
 
-- [ ] **Step 3: Implement** `toDecisionGraph(trace)`: per `DecisionOutput`, emit nodes `{id, kind, label, meta}` — `output` (tool+decision), `chunk` per selected (label `lines a-b`, meta.score/engine), `memory` per `pinnedByMemoryIds` (kind `memory`), `redaction` if `secretsRedacted>0` — and edges output→chunk (`ranked`), memory→output (`pinned`), output→redaction (`redacted`); `stats {outputs, chunks, memoriesPinned}`. Then `handleGetDecisionTrace(ctx, dir, id)`: `resolveSessionWorkspace(dir,id)` → `readSessionDecisionTrace(store, {projectId, sessionId: liveSessionId, workspaceKey})` → `toDecisionGraph` → `ctx.sendJson(ctx.res, 200, graph, ctx.origin)`. Add the regex `^/api/claude-sessions/([^/]+)/([^/]+?)/decision-trace/graph$` in `handler.ts` BEFORE the memory-graph match + the import.
+- [ ] **Step 3: Implement** `toDecisionGraph(trace)`: per `DecisionOutput`, emit nodes `{id, kind, label, meta}` — `output` (tool+decision), `chunk` per selected (label `lines a-b`, meta.score/engine), `memory` per `pinnedByMemoryIds` (kind `memory`), `redaction` if `redaction?.redacted` (real field, label `n high-risk` from `highRiskFindings`) — and edges output→chunk (`ranked`), memory→output (`pinned`), output→redaction (`redacted`); `stats {outputs, chunks, memoriesPinned}`. Then `handleGetDecisionTrace(ctx, dir, id)`: `resolveSessionWorkspace(dir,id)` → `readSessionDecisionTrace(store, {projectId, sessionId: liveSessionId, workspaceKey})` → `toDecisionGraph` → `ctx.sendJson(ctx.res, 200, graph, ctx.origin)`. Add the regex `^/api/claude-sessions/([^/]+)/([^/]+?)/decision-trace/graph$` in `handler.ts` BEFORE the memory-graph match + the import.
 - [ ] **Step 4: Run — PASS**, commit `feat(gui): decision-trace bridge route + graph projection`.
 
 ### Task 4.2: client + Cytoscape panel + cockpit wiring
