@@ -1,14 +1,23 @@
 ---
 title: Memory Approval (Team/Cloud local slice)
-tags: [concept, memory, approval, team, phase-10]
+tags: [concept, memory, approval, team, phase-10, archive]
 sources:
   - docs/superpowers/specs/2026-06-12-phase10-team-cloud-design.md
   - syntheses/contextops-roadmap.md
   - entities/core.md
-status: active
+status: archived
 created: 2026-06-12
 updated: 2026-06-12
+archived: 2026-07-04
+redirect: concepts/structured-memory-engine.md
 ---
+
+> **ARCHIVED 2026-07-04 — merged into [[concepts/structured-memory-engine]].**
+> The full agent-suggests → human-approves policy, both gate points, the team
+> = shared-store-+-gate model, the shipped-code reconciliation, and the
+> mcp-bridge / cli / core links now live in the "## Approval gate" subsection
+> of that page. Nothing was deleted; this page is kept for grep and history.
+> Update structured-memory-engine, not this one.
 
 # Memory Approval (Team/Cloud local slice)
 

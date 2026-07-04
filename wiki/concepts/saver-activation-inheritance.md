@@ -42,3 +42,10 @@ hooks, observed invocation, and actual compression.
 
 Source: `docs/superpowers/specs/2026-07-02-saver-activation-inheritance-design.md`.
 
+## Related
+
+- [[entities/gui]] — the repository-aware Saver toggle (workspace/default) that
+  shares the `activation-scope` writer with the CLI and hook.
+- [[entities/stats]] — the compression-event metrics the heartbeat separates from
+  mere hook invocation (configured vs observed vs actually-compressed).
+
