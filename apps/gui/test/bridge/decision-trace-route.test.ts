@@ -189,6 +189,32 @@ describe("decision-trace graph route", () => {
     expect((await res.json()).code).toBe("validation_failed");
   });
 
+  it("returns a 200 empty graph for a traversal ?session and never reads outside the store", async () => {
+    // Seed a decoy trace OUTSIDE the project stats dir, reachable only if the
+    // session param is joined unvalidated: stats/<projectId>/../<decoy>-traces.
+    const decoyId = "decoy-outside";
+    const decoyDir = join(storePath, "stats", `${decoyId}-traces`);
+    mkdirSync(decoyDir, { recursive: true });
+    writeFileSync(join(decoyDir, "replay-traces.jsonl"), `${traceLine("cs1")}\n`);
+    await startWithRegistry(true);
+
+    // `../decoy-outside` would resolve into the decoy dir if joined raw.
+    const res = await fetch(graphUrl("../decoy-outside"));
+    expect(res.status).toBe(200);
+    const graph = await res.json();
+    expect(graph.nodes).toEqual([]);
+    expect(graph.stats.outputs).toBe(0);
+  });
+
+  it("returns a 200 empty graph for a non-UUID ?session", async () => {
+    await startWithRegistry(true);
+    const res = await fetch(graphUrl("not-a-uuid"));
+    expect(res.status).toBe(200);
+    const graph = await res.json();
+    expect(graph.nodes).toEqual([]);
+    expect(graph.stats.outputs).toBe(0);
+  });
+
   it("unknown (dir,id) → 404 claude_session_not_found", async () => {
     await startWithRegistry(true);
     const res = await fetch(`${baseUrl}/api/claude-sessions/${DIR}/unknownid/decision-trace/graph`);

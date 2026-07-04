@@ -5,6 +5,7 @@ import {
   readReplayTraces,
   readSessionDecisionTrace,
 } from "@megasaver/output-filter";
+import { sessionIdSchema } from "@megasaver/shared";
 import { toDecisionGraph } from "../../src/lib/decision-trace-graph.js";
 import { handleCaughtError } from "../error-mapping.js";
 import type { RouteContext } from "../route-context.js";
@@ -97,15 +98,20 @@ export async function handleGetDecisionTrace(
     // The reader is keyed by the REGISTRY sessionId, which the cockpit transcript
     // UUID never matches. The picked session id from the project-scoped picker is
     // the only sound key; without it we do NOT auto-map — return an empty graph.
-    const pickedSessionId = ctx.query.get("session");
+    // The param is attacker-controlled and joined into stats/<projectId>/
+    // <sessionId>-traces, so a non-UUID (e.g. "../..") would traverse out of the
+    // store. Validate it as a registry sessionId before any read; on failure we
+    // return an empty graph, never touching disk.
+    const rawSessionId = ctx.query.get("session");
+    const pickedSessionId = rawSessionId === null ? null : sessionIdSchema.safeParse(rawSessionId);
     const trace: SessionDecisionTrace =
-      projectId === null || pickedSessionId === null || pickedSessionId.length === 0
-        ? { projectId: projectId ?? "", sessionId: pickedSessionId ?? "", outputs: [] }
+      projectId === null || pickedSessionId === null || !pickedSessionId.success
+        ? { projectId: projectId ?? "", sessionId: rawSessionId ?? "", outputs: [] }
         : readSessionDecisionTrace(
             { root: ctx.storeRoot },
             {
               projectId,
-              sessionId: pickedSessionId,
+              sessionId: pickedSessionId.data,
               workspaceKey: resolved.workspaceKey,
             },
           );

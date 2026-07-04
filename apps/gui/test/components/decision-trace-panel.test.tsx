@@ -188,6 +188,16 @@ describe("DecisionTracePanel", () => {
     expect(graphCalls).not.toContain(SESS_OLD);
   });
 
+  it("labels the memory stat 'ranked', not the retention word 'pinned'", async () => {
+    stub.sessions = () => Promise.resolve({ sessions: ONE_SESSION });
+    stub.fetch = () => Promise.resolve(FIXTURE);
+    render(<DecisionTracePanel dir="d" id="i" />);
+    await waitForGraph();
+    // Header stat is ranking-causal: "1 ranked", never the ledger word "pinned".
+    expect(screen.getByText(/\branked\b/)).toBeDefined();
+    expect(screen.queryByText(/\bpinned\b/)).toBeNull();
+  });
+
   it("renders a picker listing every registry session with its output count", async () => {
     const sessions: DecisionTraceSessionSummary[] = [
       { sessionId: SESS_NEW, outputs: 2, latestCreatedAt: "2026-07-04T02:00:00.000Z" },

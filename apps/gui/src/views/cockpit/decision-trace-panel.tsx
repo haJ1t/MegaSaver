@@ -271,7 +271,7 @@ export function DecisionTracePanel({ dir, id }: { dir: string; id: string }): JS
           <p className="text-xs text-text-muted shrink-0">
             {data.stats.outputs} {data.stats.outputs === 1 ? "output" : "outputs"} ·{" "}
             {data.stats.chunks} {data.stats.chunks === 1 ? "chunk" : "chunks"} ·{" "}
-            {data.stats.memoriesPinned} pinned
+            {data.stats.memoriesPinned} ranked
           </p>
         )}
       </header>
