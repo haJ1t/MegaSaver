@@ -2,6 +2,7 @@ import { join } from "node:path";
 import {
   type FilterOutputResult,
   finalizeReplayTrace,
+  pruneTraceSessions,
   seamTraceEnabledByEnv,
   writeReplayTrace,
 } from "@megasaver/output-filter";
@@ -177,6 +178,14 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
         ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
       }),
     );
+    // Bounds the only always-on new disk (tracing is on by default): cap the
+    // retained trace-session dirs. Best-effort — never block or throw into the
+    // response path (pruneTraceSessions swallows fs errors, but guard anyway).
+    try {
+      pruneTraceSessions(input.storeRoot, settings.projectId);
+    } catch {
+      // swallow — retention is housekeeping, not correctness
+    }
   }
 
   const event: TokenSaverEvent = {

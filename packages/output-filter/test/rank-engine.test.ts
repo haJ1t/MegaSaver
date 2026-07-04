@@ -51,25 +51,33 @@ describe("resolveEngineRankingDisabled — A/B kill switch (seam phase 2 P2.6)",
   });
 });
 
-describe("resolveSeamTraceEnabled — trace recording opt-in (fix batch B)", () => {
-  it("only 'true' or '1' (trimmed, case-insensitive) enables", () => {
-    expect(resolveSeamTraceEnabled("true")).toBe(true);
-    expect(resolveSeamTraceEnabled("  TRUE ")).toBe(true);
-    expect(resolveSeamTraceEnabled("1")).toBe(true);
-    expect(resolveSeamTraceEnabled(" 1 ")).toBe(true);
-  });
-  it("everything else keeps trace recording off", () => {
-    expect(resolveSeamTraceEnabled(undefined)).toBe(false);
-    expect(resolveSeamTraceEnabled("")).toBe(false);
+describe("resolveSeamTraceEnabled — trace recording on by default (decision-trace slice 2)", () => {
+  it("only 'false', '0', 'off', 'no' (trimmed, case-insensitive) disable", () => {
     expect(resolveSeamTraceEnabled("false")).toBe(false);
+    expect(resolveSeamTraceEnabled("  FALSE ")).toBe(false);
     expect(resolveSeamTraceEnabled("0")).toBe(false);
-    expect(resolveSeamTraceEnabled("yes")).toBe(false);
+    expect(resolveSeamTraceEnabled(" 0 ")).toBe(false);
+    expect(resolveSeamTraceEnabled("off")).toBe(false);
+    expect(resolveSeamTraceEnabled("  OFF ")).toBe(false);
+    expect(resolveSeamTraceEnabled("no")).toBe(false);
+    expect(resolveSeamTraceEnabled(" No ")).toBe(false);
+  });
+  it("everything else keeps trace recording on", () => {
+    expect(resolveSeamTraceEnabled(undefined)).toBe(true);
+    expect(resolveSeamTraceEnabled("")).toBe(true);
+    expect(resolveSeamTraceEnabled("true")).toBe(true);
+    expect(resolveSeamTraceEnabled("1")).toBe(true);
+    expect(resolveSeamTraceEnabled("yes")).toBe(true);
+    expect(resolveSeamTraceEnabled("garbage")).toBe(true);
   });
   it("seamTraceEnabledByEnv reads MEGASAVER_SEAM_TRACE", () => {
     expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "true" })).toBe(true);
     expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "1" })).toBe(true);
     expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "false" })).toBe(false);
-    expect(seamTraceEnabledByEnv({})).toBe(false);
+    expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "0" })).toBe(false);
+    expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "off" })).toBe(false);
+    expect(seamTraceEnabledByEnv({ MEGASAVER_SEAM_TRACE: "no" })).toBe(false);
+    expect(seamTraceEnabledByEnv({})).toBe(true);
   });
 });
 
