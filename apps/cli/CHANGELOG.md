@@ -1,5 +1,16 @@
 # @megasaver/cli
 
+## 1.4.1
+
+### Patch Changes
+
+- Fix `npm i -g @megasaver/cli` failing with a 404. `@megasaver/proxy-control`
+  was the only workspace package left in the CLI's `dependencies` (added with the
+  persistent-proxy-routing work), so `changeset version` rewrote it to a concrete
+  version that is never published. Move it to `devDependencies` like every other
+  `@megasaver/*` package so tsup inlines it into the bundle and the publish-manifest
+  strip removes it — the published package no longer references an unpublished dep.
+
 ## 1.4.0
 
 ### Minor Changes
