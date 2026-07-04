@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const ALLOWED_DEPENDENCIES = [
+  "@megasaver/evidence-ledger",
   "@megasaver/indexer",
   "@megasaver/policy",
   "@megasaver/shared",
