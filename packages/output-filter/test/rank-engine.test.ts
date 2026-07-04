@@ -150,11 +150,19 @@ describe("applyEngineRanking memory-id attribution (Slice B) — attribution-onl
   const TERM = "useAuthToken";
 
   it("surfaces the matched memory id AND keeps memoryBoost + finalScore byte-identical to the recentMemory-only run", () => {
-    const chunkText = `this line calls ${TERM} directly`;
-    const withoutTerms: SessionHints = { recentMemory: [TERM] };
+    // Non-saturating, discriminating fixture: recentMemory carries TWO terms of
+    // which only ONE substring-matches the chunk, so memoryBoost is a strict
+    // fraction (1/2 = 0.5), NOT the saturated 1.0. memoryTerms carries a THIRD,
+    // distinct term that also matches the chunk and is absent from recentMemory.
+    // If that term leaked into scoring it would move the numerator/denominator
+    // and shift memoryBoost off 0.5 — so the parity assertions below now bite.
+    const ABSENT = "zzz_absent_term";
+    const ATTRIBUTED_TERM = "setSessionCookie";
+    const chunkText = `this line calls ${TERM} and ${ATTRIBUTED_TERM} directly`;
+    const withoutTerms: SessionHints = { recentMemory: [TERM, ABSENT] };
     const withTerms: SessionHints = {
-      recentMemory: [TERM],
-      memoryTerms: [{ id: "m1", text: TERM }],
+      recentMemory: [TERM, ABSENT],
+      memoryTerms: [{ id: "m1", text: ATTRIBUTED_TERM }],
     };
 
     const [a] = applyEngineRanking([scoreChunk("x", chunk(chunkText), withoutTerms)], withoutTerms);
@@ -165,8 +173,14 @@ describe("applyEngineRanking memory-id attribution (Slice B) — attribution-onl
     // The no-memoryTerms run exposes no matched ids.
     expect(a?.matchedMemoryIds ?? []).toEqual([]);
 
+    // The fixture is genuinely non-saturating: memoryBoost is the strict 0.5
+    // (only TERM of [TERM, ABSENT] matches), so a leak would be detectable.
+    expect(a?.engine?.memoryBoost).toBe(0.5);
+
     // (b) SCORE PARITY — memoryBoost and finalScore identical with/without
-    // memoryTerms. A mutation that routes memoryTerms into scoring must fail here.
+    // memoryTerms. A mutation that routes memoryTerms into scoring (adding a
+    // third matching item -> 2/3, or replacing memoryItems -> 1/1) shifts
+    // memoryBoost off 0.5 and fails here.
     expect(b?.engine?.memoryBoost).toBe(a?.engine?.memoryBoost);
     expect(b?.engine?.finalScore).toBe(a?.engine?.finalScore);
     expect(b?.score).toBe(a?.score);

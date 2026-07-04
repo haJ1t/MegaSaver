@@ -62,7 +62,10 @@ selected chunks — per-chunk is deferred):
 - `replay-trace.ts` — `RankingTrace.rankedByMemoryIds?: string[]` (optional),
   unioned across `selected` chunks in `buildRankingTrace`.
 - `output-filter/types.ts` + `context-gate/read.ts` — thread `memoryTerms`
-  through the `filterOutput` zod input (`.strict()` requires it declared).
+  through the `filterOutput` zod input. Only the OUTER schema is `.strict()`; the
+  inner `sessionHints` object is not, so `memoryTerms` must be declared there to
+  SURVIVE the (non-strict) parse and reach the ranker — an undeclared field is
+  silently stripped, not thrown.
 
 ### 2. Persistence: INLINE in the trace (not a co-keyed evidence record)
 
@@ -137,7 +140,10 @@ persistence path; ranking score bytes unchanged.
   with the new optional fields still summarizes.
 - Slice-1 `decision-trace.test.ts` (evidence-only join) must stay green
   untouched (inline `undefined` → falls through to evidence).
-- `filterOutput` zod is `.strict()` — `memoryTerms` must be declared or it throws.
+- `filterOutput` zod: only the OUTER schema is `.strict()`; the inner
+  `sessionHints` object is not, so `memoryTerms` must be declared there to SURVIVE
+  the (non-strict) `sessionHints` parse and reach the ranker — an undeclared field
+  is silently stripped, not thrown.
 - `MemoryEntryView.id` required-vs-optional: grep test doubles first.
 
 ## Slice breakdown (TDD, dependency order)
