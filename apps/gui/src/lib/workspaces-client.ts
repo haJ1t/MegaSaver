@@ -1,5 +1,6 @@
 import type { EvaluateCommandResult, EvaluatePathReadResult } from "@megasaver/policy";
 import type { BridgeError } from "../components/states.js";
+import { authHeaders } from "./auth.js";
 
 // Mirrors the bridge response shapes (§4.3). Kept structural so the client does
 // not couple the GUI to every overlay-store package's deep types.
@@ -49,7 +50,7 @@ export type WorkspacePermissionsResponse = {
 };
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+  const response = await fetch(path, { headers: authHeaders() });
   if (response.ok) return (await response.json()) as T;
   let body: BridgeError;
   try {

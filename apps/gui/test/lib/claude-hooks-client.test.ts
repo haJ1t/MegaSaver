@@ -19,7 +19,7 @@ describe("claude hook client", () => {
     mockFetch({ connected: true, preInstalled: true, postInstalled: true });
     const status = await fetchClaudeHookStatus();
     expect(status.connected).toBe(true);
-    expect(fetch).toHaveBeenCalledWith("/api/hooks/claude-code");
+    expect(fetch).toHaveBeenCalledWith("/api/hooks/claude-code", { headers: {} });
   });
 
   it("connectClaudeHook POSTs", async () => {

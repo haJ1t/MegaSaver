@@ -72,6 +72,7 @@ export type CreateAgentInput = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 import { deleteJson, getJson, postJson } from "./api-client.js";
+import { withToken } from "./auth.js";
 
 // ── Roles ─────────────────────────────────────────────────────────────────────
 
@@ -158,7 +159,7 @@ export type OfficeStreamHandlers = {
 // returned disposer (close()) when switching workspaces or unmounting.
 export function openOfficeStream(wk: string, handlers: OfficeStreamHandlers): () => void {
   const url = `/api/office/${encodeURIComponent(wk)}/stream`;
-  const source = new EventSource(url);
+  const source = new EventSource(withToken(url));
   source.addEventListener("snapshot", (e) => {
     handlers.onStatus(JSON.parse((e as MessageEvent).data) as OfficeStatus);
   });
@@ -209,7 +210,7 @@ export function openTranscriptStream(
   handlers: TranscriptStreamHandlers,
 ): () => void {
   const url = `/api/office/${encodeURIComponent(wk)}/agents/${encodeURIComponent(agentId)}/transcript/stream`;
-  const source = new EventSource(url);
+  const source = new EventSource(withToken(url));
   source.addEventListener("transcript", (e) => {
     handlers.onEntry(JSON.parse((e as MessageEvent).data) as TranscriptEntry);
   });
