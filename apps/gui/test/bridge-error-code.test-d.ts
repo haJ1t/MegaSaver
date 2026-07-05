@@ -24,6 +24,7 @@ describe("BridgeErrorCode tuple ordering", () => {
         "session_not_found",
         "session_project_mismatch",
         "store_write_failed",
+        "unauthorized",
         "validation_failed",
       ]
     >();
@@ -50,6 +51,7 @@ describe("BridgeErrorCode tuple ordering", () => {
       | "session_not_found"
       | "session_project_mismatch"
       | "store_write_failed"
+      | "unauthorized"
       | "validation_failed"
     >();
   });

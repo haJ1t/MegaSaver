@@ -83,6 +83,9 @@ export interface BridgeHandlerOptions {
   claudeSettingsPath?: string;
   /** Office supervisor deps. Populated by production server.ts; injected in tests. */
   office?: OfficeContext;
+  /** Bearer token guarding `/api/*`. When set, every /api request must present
+   *  it (Authorization header or ?token=). Omitted → no auth (dev/test). */
+  token?: string;
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -197,6 +200,21 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     if (method === "OPTIONS") {
       handleOptionsPreflight(res, origin);
       return;
+    }
+
+    // Token wall — gates ONLY /api/* (static assets carry no data and stay
+    // open). Enforced only when a token is configured, so token-less handlers
+    // (all existing route tests, dev without a token) keep working unchanged.
+    if (opts.token !== undefined && path.startsWith("/api/")) {
+      const bearer = (req.headers.authorization ?? "").replace(/^Bearer /, "");
+      // SSE/EventSource cannot set headers → fall back to ?token=.
+      const supplied = bearer.length > 0 ? bearer : (query.get("token") ?? "");
+      // Plain !== is fine: the token is a per-process random UUID served only to
+      // localhost; there is no timing oracle worth a constant-time compare here.
+      if (supplied !== opts.token) {
+        sendError(res, 401, "unauthorized", "Missing or invalid bridge token.", origin);
+        return;
+      }
     }
 
     const ctx: RouteContext = {
