@@ -390,9 +390,11 @@ export function setWorkspaceSaver(
 }
 
 export type ProxyStatus = {
-  running: boolean;
-  url?: string;
-  port?: number;
+  enabled: boolean;
+  routed: boolean;
+  routeConflict: boolean;
+  reconcileBlocked: boolean;
+  url: string;
   error?: string;
 };
 

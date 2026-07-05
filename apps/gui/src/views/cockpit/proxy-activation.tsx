@@ -40,7 +40,10 @@ export function ProxyActivation(): JSX.Element {
     }
   }, []);
 
-  const running = status?.running ?? false;
+  const running = status?.enabled ?? false;
+  const url = status?.url ?? "";
+  const routeConflict = status?.routeConflict ?? false;
+  const reconcileBlocked = status?.reconcileBlocked ?? false;
 
   const restart = useCallback(async (): Promise<void> => {
     // Quitting the desktop app ends this conversation — confirm before doing it.
@@ -60,6 +63,10 @@ export function ProxyActivation(): JSX.Element {
         Opt-in local proxy that meters your conversation token usage. Turning it on auto-routes new
         claude sessions through it (no export needed).
       </p>
+      <p className="text-xs text-text-muted">
+        Separate from the context daemon below — the token-saver hook uses the daemon, not this
+        proxy.
+      </p>
       <label className="flex items-center gap-2 text-sm text-text-primary">
         <input
           type="checkbox"
@@ -76,10 +83,21 @@ export function ProxyActivation(): JSX.Element {
           aria-hidden="true"
         />
         <span className="text-text-secondary">
-          {running ? `live · ${status?.url ?? ""}` : "not running"}
+          {running && url ? `live · ${url}` : running ? "running" : "not running"}
         </span>
       </div>
-      {running && (
+      {routeConflict && (
+        <p className="text-xs text-warn">
+          Route conflict — another base URL is set in your Claude settings, so sessions are not
+          routed through this proxy.
+        </p>
+      )}
+      {reconcileBlocked && (
+        <p className="text-xs text-warn">
+          Reconcile blocked — a previous transition needs to finish before the proxy can settle.
+        </p>
+      )}
+      {running && url && (
         <output className="flex flex-col items-start gap-1.5 text-xs text-warn">
           A session already open keeps using the direct API. Restart claude to route a fresh session
           through the proxy.
