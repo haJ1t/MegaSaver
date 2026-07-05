@@ -35,14 +35,12 @@ export function resolveGuiToken(env: NodeJS.ProcessEnv): string {
   return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : randomUUID();
 }
 
-// The token actually handed to the handler. `MEGASAVER_GUI_DEV=1` (set by the
-// `pnpm dev` script) relaxes the wall to `undefined` so the dev frontend — which
-// does not yet attach a token (Slice B) — can reach /api through the vite proxy.
-// Loopback bind + CORS still protect the dev bridge. Packaged `mega gui` never
-// sets this flag, so the wall is always on in distribution.
-export function resolveGuiAuthToken(env: NodeJS.ProcessEnv): string | undefined {
-  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-  return env["MEGASAVER_GUI_DEV"] === "1" ? undefined : resolveGuiToken(env);
+// The token handed to the handler — the /api wall is ALWAYS armed, in dev and
+// distribution alike. No env disables it: the dev script exports a shared
+// MEGASAVER_GUI_TOKEN so the frontend (which now attaches it) still reaches /api,
+// and a bare bridge start mints a per-process random token.
+export function resolveGuiAuthToken(env: NodeJS.ProcessEnv): string {
+  return resolveGuiToken(env);
 }
 
 // Superset allowlist: the bridge's own serving origins PLUS the vite dev origins
@@ -94,14 +92,13 @@ async function main(): Promise<void> {
     registry,
     mcpOps,
     office: { coreRegistry: registry, registry: launcherRegistry, allowFull },
-    ...(token !== undefined ? { token } : {}),
+    token,
     origins: deriveGuiOrigins(port),
   });
 
   const server = createBridgeServer(handler, port);
   server.once("listening", () => {
-    const url =
-      token !== undefined ? `http://127.0.0.1:${port}/?token=${token}` : `http://127.0.0.1:${port}`;
+    const url = `http://127.0.0.1:${port}/?token=${token}`;
     process.stdout.write(`mega-saver bridge listening on ${url}\n`);
     process.stdout.write(`store: ${storeDir}\n`);
   });

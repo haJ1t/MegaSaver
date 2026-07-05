@@ -21,18 +21,24 @@ describe("resolveGuiToken", () => {
   });
 });
 
-describe("resolveGuiAuthToken (dev-relax wall control)", () => {
-  it("returns undefined (wall off) when MEGASAVER_GUI_DEV=1", () => {
-    expect(resolveGuiAuthToken({ MEGASAVER_GUI_DEV: "1" })).toBeUndefined();
+describe("resolveGuiAuthToken (wall is ALWAYS on)", () => {
+  it("always returns a token — no env disables the wall", () => {
+    // The retired MEGASAVER_GUI_DEV=1 escape hatch must not resurrect: even
+    // with it set, a real token is returned so the /api wall stays armed.
+    const token = resolveGuiAuthToken({ MEGASAVER_GUI_DEV: "1" });
+    expect(token).toBeDefined();
+    expect(token.length).toBeGreaterThanOrEqual(32);
   });
 
-  it("returns a token (wall on) when MEGASAVER_GUI_DEV is absent", () => {
+  it("returns a token when the env is empty", () => {
     const token = resolveGuiAuthToken({});
     expect(token).toBeDefined();
-    expect((token as string).length).toBeGreaterThanOrEqual(32);
+    expect(token.length).toBeGreaterThanOrEqual(32);
   });
 
-  it("honours an explicit MEGASAVER_GUI_TOKEN when not in dev-relax", () => {
-    expect(resolveGuiAuthToken({ MEGASAVER_GUI_TOKEN: "shared" })).toBe("shared");
+  it("honours an explicit MEGASAVER_GUI_TOKEN", () => {
+    expect(resolveGuiAuthToken({ MEGASAVER_GUI_TOKEN: "shared-dev-token-value-000000000000" })).toBe(
+      "shared-dev-token-value-000000000000",
+    );
   });
 });

@@ -7,8 +7,8 @@
   "files": ["dist"],
   "sideEffects": false,
   "scripts": {
-    "dev": "MEGASAVER_GUI_DEV=1 concurrently --kill-others-on-fail --names vite,bridge -c blue,magenta \"pnpm dev:vite\" \"pnpm dev:bridge\"",
-    "app": "MEGASAVER_GUI_DEV=1 concurrently --kill-others-on-fail --names vite,bridge,electron -c blue,magenta,cyan \"pnpm dev:vite\" \"pnpm dev:bridge\" \"wait-on tcp:5173 && electron electron/main.cjs\"",
+    "dev": "MEGASAVER_GUI_TOKEN=dev-shared-token-000000000000000000 VITE_MEGASAVER_GUI_TOKEN=dev-shared-token-000000000000000000 concurrently --kill-others-on-fail --names vite,bridge -c blue,magenta \"pnpm dev:vite\" \"pnpm dev:bridge\"",
+    "app": "MEGASAVER_GUI_TOKEN=dev-shared-token-000000000000000000 VITE_MEGASAVER_GUI_TOKEN=dev-shared-token-000000000000000000 concurrently --kill-others-on-fail --names vite,bridge,electron -c blue,magenta,cyan \"pnpm dev:vite\" \"pnpm dev:bridge\" \"wait-on tcp:5173 && electron electron/main.cjs\"",
     "dev:vite": "vite",
     "dev:bridge": "node --import tsx bridge/server.ts",
     "bridge": "node --import tsx bridge/server.ts",

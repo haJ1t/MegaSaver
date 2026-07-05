@@ -38,6 +38,26 @@ describe("bridge token wall on /api", () => {
     expect(body.code).toBe("unauthorized");
   });
 
+  it("walls EVERY /api prefix without a token (no route escapes the wall)", async () => {
+    h = await startHandler("SECRET");
+    // Probe disjoint /api sub-trees: a mutation that excludes any one prefix
+    // from the wall (e.g. leaving /api/proxy open) is caught here.
+    const paths = [
+      "/api/health",
+      "/api/projects",
+      "/api/proxy",
+      "/api/daemon",
+      "/api/workspaces",
+      "/api/office/roles",
+      "/api/mcp/status",
+      "/api/claude-sessions",
+    ];
+    for (const p of paths) {
+      const res = await fetch(`${h.baseUrl}${p}`);
+      expect(res.status, `${p} must be walled`).toBe(401);
+    }
+  });
+
   it("rejects /api with a wrong Bearer token → 401", async () => {
     h = await startHandler("SECRET");
     const res = await fetch(`${h.baseUrl}/api/health`, {
