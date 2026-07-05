@@ -83,6 +83,20 @@ describe("mega gui — runGui", () => {
     expect(res.status).toBe(401);
   });
 
+  it("derives the CORS allowlist from the BOUND port (not the requested port 0)", async () => {
+    // With port:0 the bound port is only known after listen. A browser served
+    // same-origin sends Origin: http://127.0.0.1:<boundPort> on its writes; if
+    // the allowlist was derived from the requested port (0), that write is
+    // wrongly 403'd. Assert the real serving origin is accepted.
+    started = await runGui(baseInput());
+    const origin = `http://127.0.0.1:${started.port}`;
+    const res = await fetch(`http://127.0.0.1:${started.port}/api/health?token=${started.token}`, {
+      headers: { origin },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBe(origin);
+  });
+
   it("does NOT open a browser when open:false", async () => {
     const openBrowser = vi.fn();
     started = await runGui(baseInput({ openBrowser }));

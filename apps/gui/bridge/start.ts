@@ -86,19 +86,26 @@ export async function startGuiBridge(opts: StartGuiBridgeOptions): Promise<Start
     newId: () => randomUUID(),
   });
 
+  // Bind FIRST, then learn the real port so the CORS allowlist matches the
+  // origin the browser is actually served from. Deriving origins from opts.port
+  // would produce `http://127.0.0.1:0` under `--port 0` and 403 every same-origin
+  // write. The request listener is attached after the port is known.
+  const server = createServer();
+  server.listen(opts.port, "127.0.0.1");
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+  const boundPort = (server.address() as AddressInfo).port;
+
   const handler = createBridgeHandler({
     storePath: opts.storeDir,
     registry,
     mcpOps,
     office: { coreRegistry: registry, registry: launcherRegistry, allowFull },
     token,
-    origins: opts.origins ?? deriveGuiOrigins(opts.port),
+    origins: opts.origins ?? deriveGuiOrigins(boundPort),
     ...(opts.distDir !== undefined ? { distDir: opts.distDir } : {}),
   });
+  server.on("request", handler);
 
-  const server = createBridgeServer(handler, opts.port);
-  await new Promise<void>((resolve) => server.once("listening", resolve));
-  const boundPort = (server.address() as AddressInfo).port;
   const url = `http://127.0.0.1:${boundPort}/?token=${token}`;
   return { server, url, port: boundPort, token };
 }
