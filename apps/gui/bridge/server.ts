@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { createServer } from "node:http";
+import { type Server, createServer } from "node:http";
+import { argv } from "node:process";
+import { fileURLToPath } from "node:url";
 import { createLauncherRegistry, ensurePredefinedRoles } from "@megasaver/agent-office";
 import { createClaudeCodeLauncher } from "@megasaver/connector-claude-code";
 import { createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
 import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "@megasaver/mcp-bridge";
-import { createBridgeHandler } from "./handler.js";
+import { type BridgeHandler, createBridgeHandler } from "./handler.js";
 import { createMcpOps } from "./mcp-ops.js";
 import { ensureOfficeProject } from "./routes/office.js";
 import { resolveBridgeStorePath } from "./store-path.js";
@@ -14,6 +16,14 @@ const DEFAULT_PORT = 5174;
 function readEnv(key: string): string | undefined {
   const value = process.env[key];
   return value === undefined || value.length === 0 ? undefined : value;
+}
+
+// Loopback-only bind: the bridge is a local control plane, never exposed on the
+// LAN. Reused by `mega gui` (Slice C) to start the packaged server the same way.
+export function createBridgeServer(handler: BridgeHandler, port: number): Server {
+  const server = createServer(handler);
+  server.listen(port, "127.0.0.1");
+  return server;
 }
 
 async function main(): Promise<void> {
@@ -55,12 +65,12 @@ async function main(): Promise<void> {
     mcpOps,
     office: { coreRegistry: registry, registry: launcherRegistry, allowFull },
   });
-  const server = createServer(handler);
 
   const portRaw = readEnv("MEGASAVER_GUI_BRIDGE_PORT");
   const port = portRaw ? Number.parseInt(portRaw, 10) : DEFAULT_PORT;
-  server.listen(port, () => {
-    process.stdout.write(`mega-saver bridge listening on http://localhost:${port}\n`);
+  const server = createBridgeServer(handler, port);
+  server.once("listening", () => {
+    process.stdout.write(`mega-saver bridge listening on http://127.0.0.1:${port}\n`);
     process.stdout.write(`store: ${storeDir}\n`);
   });
 
@@ -80,7 +90,12 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
-main().catch((err: unknown) => {
-  process.stderr.write(`bridge failed: ${err instanceof Error ? err.message : String(err)}\n`);
-  process.exit(1);
-});
+// Only boot when run as the entrypoint; importing this module (tests, the
+// `mega gui` command reusing createBridgeServer) must not start a server.
+const isEntrypoint = argv[1] !== undefined && fileURLToPath(import.meta.url) === argv[1];
+if (isEntrypoint) {
+  main().catch((err: unknown) => {
+    process.stderr.write(`bridge failed: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  });
+}
