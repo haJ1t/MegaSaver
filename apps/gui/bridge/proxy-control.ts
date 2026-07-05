@@ -52,6 +52,7 @@ export type ProxyStatus = {
   routed: boolean;
   routeConflict: boolean;
   reconcileBlocked: boolean;
+  draining: boolean;
   url: string;
   error?: string;
 };
@@ -67,6 +68,7 @@ export function proxyStatus(
     routed: route === "exact",
     routeConflict: route === "foreign",
     reconcileBlocked: control.reconcileBlocked !== null,
+    draining: control.drainingGeneration !== null,
     url: OWNED_URL,
     ...(control.lastError ? { error: control.lastError.code } : {}),
   };

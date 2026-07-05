@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { BridgeError } from "../../components/states.js";
-import { type ProxyStatus, fetchProxyStatus, setProxy } from "../../lib/claude-sessions-client.js";
+import {
+  type ProxyStatus,
+  fetchProxyStatus,
+  finishProxyDrain,
+  setProxy,
+} from "../../lib/claude-sessions-client.js";
 
 const POLL_MS = 2_000;
 
@@ -35,10 +40,23 @@ export function ProxyActivation(): JSX.Element {
     }
   }, []);
 
+  const finishDrain = useCallback(async (): Promise<void> => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      setStatus(await finishProxyDrain());
+    } catch (err) {
+      setActionError((err as BridgeError).error ?? "Could not finish stopping the proxy");
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   const running = status?.enabled ?? false;
   const url = status?.url ?? "";
   const routeConflict = status?.routeConflict ?? false;
   const reconcileBlocked = status?.reconcileBlocked ?? false;
+  const draining = !running && (status?.draining ?? false);
 
   return (
     <section className="flex flex-col gap-2">
@@ -80,6 +98,24 @@ export function ProxyActivation(): JSX.Element {
         <p className="text-xs text-warn">
           Reconcile blocked — a previous transition needs to finish before the proxy can settle.
         </p>
+      )}
+      {draining && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-warn">
+            Still stopping — the proxy listener stays up so a Claude session you already launched
+            keeps working, and it still holds your API key. Restart Claude first, then finish
+            stopping. Confirming while a session still points at the proxy would break that session
+            on its next request.
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void finishDrain()}
+            className="self-start rounded border border-warn px-2 py-1 text-xs text-warn"
+          >
+            Finish stopping
+          </button>
+        </div>
       )}
       {running && url && (
         <output className="text-xs text-warn">

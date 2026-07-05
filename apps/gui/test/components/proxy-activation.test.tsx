@@ -9,6 +9,7 @@ const OFF: ProxyStatus = {
   routed: false,
   routeConflict: false,
   reconcileBlocked: false,
+  draining: false,
   url: "http://127.0.0.1:8787",
 };
 const ON: ProxyStatus = {
@@ -16,20 +17,32 @@ const ON: ProxyStatus = {
   routed: true,
   routeConflict: false,
   reconcileBlocked: false,
+  draining: false,
+  url: "http://127.0.0.1:8787",
+};
+const DRAINING: ProxyStatus = {
+  enabled: false,
+  routed: false,
+  routeConflict: false,
+  reconcileBlocked: false,
+  draining: true,
   url: "http://127.0.0.1:8787",
 };
 
 const stub: {
   fetchProxyStatus: () => Promise<ProxyStatus>;
   setProxy: (enabled: boolean) => Promise<ProxyStatus>;
+  finishProxyDrain: () => Promise<ProxyStatus>;
 } = {
   fetchProxyStatus: () => Promise.resolve(OFF),
   setProxy: () => Promise.resolve(ON),
+  finishProxyDrain: () => Promise.resolve(OFF),
 };
 
 vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchProxyStatus: () => stub.fetchProxyStatus(),
   setProxy: (enabled: boolean) => stub.setProxy(enabled),
+  finishProxyDrain: () => stub.finishProxyDrain(),
 }));
 
 import { ProxyActivation } from "../../src/views/cockpit/proxy-activation.js";
@@ -38,6 +51,7 @@ afterEach(() => {
   cleanup();
   stub.fetchProxyStatus = () => Promise.resolve(OFF);
   stub.setProxy = () => Promise.resolve(ON);
+  stub.finishProxyDrain = () => Promise.resolve(OFF);
 });
 
 describe("ProxyActivation", () => {
@@ -91,6 +105,7 @@ describe("ProxyActivation", () => {
         routed: false,
         routeConflict: true,
         reconcileBlocked: false,
+        draining: false,
         url: "http://127.0.0.1:8787",
       });
     render(<ProxyActivation />);
@@ -104,6 +119,7 @@ describe("ProxyActivation", () => {
         routed: false,
         routeConflict: false,
         reconcileBlocked: true,
+        draining: false,
         url: "http://127.0.0.1:8787",
       });
     render(<ProxyActivation />);
@@ -117,6 +133,7 @@ describe("ProxyActivation", () => {
         routed: false,
         routeConflict: false,
         reconcileBlocked: false,
+        draining: false,
         url: "http://127.0.0.1:8787",
         error: "legacy_service_present",
       });
@@ -129,5 +146,45 @@ describe("ProxyActivation", () => {
     await waitFor(() =>
       expect(screen.getByText(/separate from the context daemon/i)).toBeDefined(),
     );
+  });
+
+  it("renders a drain-finish prompt and button when draining after an off-toggle", async () => {
+    stub.fetchProxyStatus = () => Promise.resolve(DRAINING);
+    render(<ProxyActivation />);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /finish stopping/i })).toBeDefined(),
+    );
+    expect(screen.getByText(/restart claude first/i)).toBeDefined();
+  });
+
+  it("finish button calls finishProxyDrain and updates status to fully stopped", async () => {
+    let finished = false;
+    stub.fetchProxyStatus = () => Promise.resolve(DRAINING);
+    stub.finishProxyDrain = () => {
+      finished = true;
+      return Promise.resolve(OFF);
+    };
+    render(<ProxyActivation />);
+    const button = await waitFor(() => screen.getByRole("button", { name: /finish stopping/i }));
+    fireEvent.click(button);
+    await waitFor(() => expect(finished).toBe(true));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /finish stopping/i })).toBeNull(),
+    );
+  });
+
+  it("shows no finish button when off and not draining (plain proxy off)", async () => {
+    render(<ProxyActivation />);
+    await waitFor(() => expect(screen.getByText(/Proxy off/)).toBeDefined());
+    expect(screen.queryByRole("button", { name: /finish stopping/i })).toBeNull();
+  });
+
+  it("shows no finish button while the proxy is enabled", async () => {
+    stub.fetchProxyStatus = () => Promise.resolve(ON);
+    render(<ProxyActivation />);
+    await waitFor(() =>
+      expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true),
+    );
+    expect(screen.queryByRole("button", { name: /finish stopping/i })).toBeNull();
   });
 });
