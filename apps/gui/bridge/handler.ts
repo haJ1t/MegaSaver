@@ -8,6 +8,7 @@ import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
 import { DEFAULT_DEV_ORIGINS, applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
 import { handleCaughtError } from "./error-mapping.js";
+import { serveStatic } from "./static.js";
 import type {
   OfficeContext,
   RouteContext,
@@ -89,6 +90,9 @@ export interface BridgeHandlerOptions {
   /** CORS allowlist. Defaults to the vite dev origins (5173) to preserve dev;
    *  server.ts passes a superset that also covers the packaged serving port. */
   origins?: readonly string[];
+  /** Built GUI dist to serve for non-/api GETs. Absent (dev, tests) → the
+   *  bridge stays JSON-only and non-/api paths 404 as before. */
+  distDir?: string;
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -532,6 +536,13 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       await handleOfficeStream(ctx, decodeURIComponent(officeStreamMatch[1] as string));
       return;
+    }
+
+    // No /api route matched. Serve the built GUI (packaged mode) for GETs before
+    // the 404 tail; the token wall above never gated non-/api paths, so static
+    // stays open by construction.
+    if (method === "GET" && opts.distDir !== undefined) {
+      if (await serveStatic(res, opts.distDir, path)) return;
     }
 
     sendError(res, 404, "route_not_found", `Route not found: ${method} ${path}`, origin);
