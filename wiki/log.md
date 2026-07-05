@@ -2140,3 +2140,17 @@ Tracing now on by default (`MEGASAVER_SEAM_TRACE=false` disables) + retention
 prune. Built across 8 TDD slices; holistic branch review (code+critic+security)
 caught & fixed 3 surface defects incl. a `?session` path-traversal. `pnpm verify`
 green; changeset added.
+
+## [2026-07-05] ingest | GTM & monetization plan (3-element framework)
+
+Applied the @Techburhan 3-element framework (sticky app / content / marketing)
+to MegaSaver, grounded in dual research: internal product facts (wiki+repo) +
+external market scan (mid-2026). New page: [[syntheses/gtm-plan-2026-07]].
+Key findings: NOT a blue ocean (every pillar has free OSS; claude-mem ~72k★)
+but the integrated bundle is unclaimed; demand proven (cost volatility = #1
+2026 concern, $81k bill-shock viral); biggest gap is product-VISIBILITY (GUI
+unpackaged, savings on-demand); largest segment (Pro/Max) feels LIMITS not
+bills → "same plan, 2x sessions" framing. DECISIONS (user-approved):
+open-core, Pro $10–15/mo; TR beachhead + EN parallel. Phase 0 (sellability:
+Tauri GUI packaging, $/limit headline, `mega init`, landing, license metadata
+fix, share card) awaits kickoff approval.
