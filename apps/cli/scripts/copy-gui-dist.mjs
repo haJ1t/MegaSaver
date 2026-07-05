@@ -3,6 +3,11 @@
 // tsup (it resolves @megasaver/gui/bridge); this script handles the static
 // assets, which tsup does not bundle. Runs at prepack, after the GUI build.
 //
+// MUST run AFTER the tsup bundle (`pnpm run bundle`): tsup's bundle config has
+// clean:true on outDir dist-bundle, so it wipes dist-bundle/gui. The prepack
+// chain orders bundle-then-copy for exactly this reason; never move the copy
+// before the bundle.
+//
 // Source: apps/gui/dist (vite output: index.html + assets/). Destination:
 // apps/cli/dist-bundle/gui — the path resolveShippedGuiDistDir points at,
 // relative to the bundle. dist-bundle is in the published `files`.
@@ -24,5 +29,10 @@ if (!existsSync(join(GUI_DIST, "index.html"))) {
 }
 
 rmSync(DEST, { recursive: true, force: true });
-cpSync(GUI_DIST, DEST, { recursive: true });
+// Exclude build artifacts (TypeScript's incremental *.tsbuildinfo, stray
+// *.map) — only real runtime assets (index.html + hashed JS/CSS/fonts) ship.
+cpSync(GUI_DIST, DEST, {
+  recursive: true,
+  filter: (src) => !src.endsWith(".tsbuildinfo") && !src.endsWith(".map"),
+});
 console.log(`copy-gui-dist: copied ${GUI_DIST} -> ${DEST}`);
