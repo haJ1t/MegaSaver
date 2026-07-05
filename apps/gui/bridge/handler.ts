@@ -6,7 +6,7 @@ import { resolveClaudeCodeSettingsPath } from "@megasaver/connector-claude-code"
 import type { CoreRegistry } from "@megasaver/core";
 import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
-import { applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
+import { DEFAULT_DEV_ORIGINS, applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
 import { handleCaughtError } from "./error-mapping.js";
 import type {
   OfficeContext,
@@ -86,6 +86,9 @@ export interface BridgeHandlerOptions {
   /** Bearer token guarding `/api/*`. When set, every /api request must present
    *  it (Authorization header or ?token=). Omitted → no auth (dev/test). */
   token?: string;
+  /** CORS allowlist. Defaults to the vite dev origins (5173) to preserve dev;
+   *  server.ts passes a superset that also covers the packaged serving port. */
+  origins?: readonly string[];
 }
 
 export type BridgeHandler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -175,6 +178,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       uninstall: async () => ({ agents: [] }),
     } satisfies McpSetupOps);
   const registry = opts.registry;
+  const allowedOrigins = opts.origins ?? DEFAULT_DEV_ORIGINS;
 
   return (req, res) => {
     void handleRequest(req, res).catch((err: unknown) => {
@@ -191,7 +195,7 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
   };
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const cors = applyCorsPolicy(req, res, sendError);
+    const cors = applyCorsPolicy(req, res, sendError, allowedOrigins);
     if (!cors.allowed) return;
     const { origin } = cors;
 

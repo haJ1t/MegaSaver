@@ -6,6 +6,7 @@ import { createLauncherRegistry, ensurePredefinedRoles } from "@megasaver/agent-
 import { createClaudeCodeLauncher } from "@megasaver/connector-claude-code";
 import { createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
 import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "@megasaver/mcp-bridge";
+import { DEFAULT_DEV_ORIGINS } from "./cors.js";
 import { type BridgeHandler, createBridgeHandler } from "./handler.js";
 import { createMcpOps } from "./mcp-ops.js";
 import { ensureOfficeProject } from "./routes/office.js";
@@ -24,6 +25,30 @@ export function createBridgeServer(handler: BridgeHandler, port: number): Server
   const server = createServer(handler);
   server.listen(port, "127.0.0.1");
   return server;
+}
+
+// The dev script exports MEGASAVER_GUI_TOKEN so vite and the bridge share one
+// token; absent that (a bare bridge start), mint a per-process random one.
+export function resolveGuiToken(env: NodeJS.ProcessEnv): string {
+  const fromEnv = env.MEGASAVER_GUI_TOKEN;
+  return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : randomUUID();
+}
+
+// The token actually handed to the handler. `MEGASAVER_GUI_DEV=1` (set by the
+// `pnpm dev` script) relaxes the wall to `undefined` so the dev frontend — which
+// does not yet attach a token (Slice B) — can reach /api through the vite proxy.
+// Loopback bind + CORS still protect the dev bridge. Packaged `mega gui` never
+// sets this flag, so the wall is always on in distribution.
+export function resolveGuiAuthToken(env: NodeJS.ProcessEnv): string | undefined {
+  return env.MEGASAVER_GUI_DEV === "1" ? undefined : resolveGuiToken(env);
+}
+
+// Superset allowlist: the bridge's own serving origins PLUS the vite dev origins
+// (5173). One list works in both modes — packaged (same-origin on `port`) and
+// dev (vite on 5173 proxying to the bridge) — so there is no mode flag to keep
+// in sync.
+export function deriveGuiOrigins(port: number): readonly string[] {
+  return [`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...DEFAULT_DEV_ORIGINS];
 }
 
 async function main(): Promise<void> {
@@ -59,18 +84,25 @@ async function main(): Promise<void> {
     now: () => new Date().toISOString(),
     newId: () => randomUUID(),
   });
+  const portRaw = readEnv("MEGASAVER_GUI_BRIDGE_PORT");
+  const port = portRaw ? Number.parseInt(portRaw, 10) : DEFAULT_PORT;
+  const token = resolveGuiAuthToken(process.env);
   const handler = createBridgeHandler({
     storePath: storeDir,
     registry,
     mcpOps,
     office: { coreRegistry: registry, registry: launcherRegistry, allowFull },
+    ...(token !== undefined ? { token } : {}),
+    origins: deriveGuiOrigins(port),
   });
 
-  const portRaw = readEnv("MEGASAVER_GUI_BRIDGE_PORT");
-  const port = portRaw ? Number.parseInt(portRaw, 10) : DEFAULT_PORT;
   const server = createBridgeServer(handler, port);
   server.once("listening", () => {
-    process.stdout.write(`mega-saver bridge listening on http://127.0.0.1:${port}\n`);
+    const url =
+      token !== undefined
+        ? `http://127.0.0.1:${port}/?token=${token}`
+        : `http://127.0.0.1:${port}`;
+    process.stdout.write(`mega-saver bridge listening on ${url}\n`);
     process.stdout.write(`store: ${storeDir}\n`);
   });
 

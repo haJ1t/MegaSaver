@@ -1,7 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { BridgeErrorCode } from "../src/bridge-error-code.js";
 
-const ALLOWED_ORIGINS = ["http://127.0.0.1:5173", "http://localhost:5173"];
+// Vite dev origins — the default when a handler is built without an explicit
+// allowlist, preserving `pnpm dev` (frontend on 5173, bridge on 5174).
+export const DEFAULT_DEV_ORIGINS = ["http://127.0.0.1:5173", "http://localhost:5173"] as const;
 
 export type SendError = (
   res: ServerResponse,
@@ -20,12 +22,13 @@ export function applyCorsPolicy(
   req: IncomingMessage,
   res: ServerResponse,
   sendError: SendError,
+  allowedOrigins: readonly string[],
 ): CorsDecision {
   const originHeader = req.headers.origin;
   if (typeof originHeader !== "string" || originHeader.length === 0) {
     return { allowed: true, origin: undefined };
   }
-  if (!ALLOWED_ORIGINS.includes(originHeader)) {
+  if (!allowedOrigins.includes(originHeader)) {
     sendError(
       res,
       403,
