@@ -30,7 +30,6 @@ const stub: {
 vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchProxyStatus: () => stub.fetchProxyStatus(),
   setProxy: (enabled: boolean) => stub.setProxy(enabled),
-  restartClaudeThroughProxy: () => Promise.resolve({ restarting: true }),
 }));
 
 import { ProxyActivation } from "../../src/views/cockpit/proxy-activation.js";
@@ -71,11 +70,12 @@ describe("ProxyActivation", () => {
     await waitFor(() => expect(screen.getByText(/live ·/)).toBeDefined());
   });
 
-  it("warns that already-open sessions bypass the proxy while running", async () => {
+  it("instructs a manual restart but renders no clickable restart button while running", async () => {
     stub.fetchProxyStatus = () => Promise.resolve(ON);
     render(<ProxyActivation />);
     await waitFor(() => expect(screen.getByRole("status")).toBeDefined());
-    expect(screen.getByRole("status").textContent).toMatch(/restart/i);
+    expect(screen.getByRole("status").textContent).toMatch(/restart claude/i);
+    expect(screen.queryByRole("button", { name: /restart claude/i })).toBeNull();
   });
 
   it("hides the bypass warning while the proxy is off", async () => {

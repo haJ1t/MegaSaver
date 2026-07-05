@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { BridgeError } from "../../components/states.js";
-import {
-  type ProxyStatus,
-  fetchProxyStatus,
-  restartClaudeThroughProxy,
-  setProxy,
-} from "../../lib/claude-sessions-client.js";
+import { type ProxyStatus, fetchProxyStatus, setProxy } from "../../lib/claude-sessions-client.js";
 
 const POLL_MS = 2_000;
 
@@ -44,17 +39,6 @@ export function ProxyActivation(): JSX.Element {
   const url = status?.url ?? "";
   const routeConflict = status?.routeConflict ?? false;
   const reconcileBlocked = status?.reconcileBlocked ?? false;
-
-  const restart = useCallback(async (): Promise<void> => {
-    // Quitting the desktop app ends this conversation — confirm before doing it.
-    if (!window.confirm("Quit and relaunch Claude? This ends the current conversation.")) return;
-    setActionError(null);
-    try {
-      await restartClaudeThroughProxy();
-    } catch (err) {
-      setActionError((err as BridgeError).error ?? "Could not restart Claude");
-    }
-  }, []);
 
   return (
     <section className="flex flex-col gap-2">
@@ -98,16 +82,9 @@ export function ProxyActivation(): JSX.Element {
         </p>
       )}
       {running && url && (
-        <output className="flex flex-col items-start gap-1.5 text-xs text-warn">
-          A session already open keeps using the direct API. Restart claude to route a fresh session
-          through the proxy.
-          <button
-            type="button"
-            onClick={() => void restart()}
-            className="border border-warn px-2 py-0.5 text-warn hover:bg-warn hover:text-warn-fg"
-          >
-            Restart claude
-          </button>
+        <output className="text-xs text-warn">
+          A session already open keeps using the direct API — restart Claude to route a fresh
+          session through the proxy.
         </output>
       )}
       {status?.error && (
