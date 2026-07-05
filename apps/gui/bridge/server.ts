@@ -30,7 +30,8 @@ export function createBridgeServer(handler: BridgeHandler, port: number): Server
 // The dev script exports MEGASAVER_GUI_TOKEN so vite and the bridge share one
 // token; absent that (a bare bridge start), mint a per-process random one.
 export function resolveGuiToken(env: NodeJS.ProcessEnv): string {
-  const fromEnv = env.MEGASAVER_GUI_TOKEN;
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const fromEnv = env["MEGASAVER_GUI_TOKEN"];
   return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : randomUUID();
 }
 
@@ -40,7 +41,8 @@ export function resolveGuiToken(env: NodeJS.ProcessEnv): string {
 // Loopback bind + CORS still protect the dev bridge. Packaged `mega gui` never
 // sets this flag, so the wall is always on in distribution.
 export function resolveGuiAuthToken(env: NodeJS.ProcessEnv): string | undefined {
-  return env.MEGASAVER_GUI_DEV === "1" ? undefined : resolveGuiToken(env);
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  return env["MEGASAVER_GUI_DEV"] === "1" ? undefined : resolveGuiToken(env);
 }
 
 // Superset allowlist: the bridge's own serving origins PLUS the vite dev origins
@@ -99,9 +101,7 @@ async function main(): Promise<void> {
   const server = createBridgeServer(handler, port);
   server.once("listening", () => {
     const url =
-      token !== undefined
-        ? `http://127.0.0.1:${port}/?token=${token}`
-        : `http://127.0.0.1:${port}`;
+      token !== undefined ? `http://127.0.0.1:${port}/?token=${token}` : `http://127.0.0.1:${port}`;
     process.stdout.write(`mega-saver bridge listening on ${url}\n`);
     process.stdout.write(`store: ${storeDir}\n`);
   });
