@@ -2,14 +2,9 @@ import { randomUUID } from "node:crypto";
 import { type Server, createServer } from "node:http";
 import { argv } from "node:process";
 import { fileURLToPath } from "node:url";
-import { createLauncherRegistry, ensurePredefinedRoles } from "@megasaver/agent-office";
-import { createClaudeCodeLauncher } from "@megasaver/connector-claude-code";
-import { createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
-import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "@megasaver/mcp-bridge";
 import { DEFAULT_DEV_ORIGINS } from "./cors.js";
-import { type BridgeHandler, createBridgeHandler } from "./handler.js";
-import { createMcpOps } from "./mcp-ops.js";
-import { ensureOfficeProject } from "./routes/office.js";
+import type { BridgeHandler } from "./handler.js";
+import { startGuiBridge } from "./start.js";
 import { resolveBridgeStorePath } from "./store-path.js";
 
 const DEFAULT_PORT = 5174;
@@ -60,48 +55,15 @@ async function main(): Promise<void> {
     localAppData: readEnv("LOCALAPPDATA"),
   });
 
-  await initStore(storeDir);
-  const registry = createJsonDirectoryCoreRegistry({ rootDir: storeDir });
-
-  const mcpOps = createMcpOps({
-    registry,
-    home: readEnv("HOME") ?? readEnv("USERPROFILE") ?? "",
-    // Runnable launch entry so a GUI-initiated install writes a config the
-    // agent can actually spawn (`mega mcp serve`), reusing the CLI defaults
-    // hoisted to @megasaver/mcp-bridge (no apps/gui → apps/cli import).
-    command: DEFAULT_MCP_COMMAND,
-    args: [...DEFAULT_MCP_ARGS],
-  });
-  const launcherRegistry = createLauncherRegistry([createClaudeCodeLauncher()]);
-  const allowFull = readEnv("MEGA_OFFICE_ALLOW_FULL") === "1";
-  // Seed the office Core project before serving: supervisor-created sessions
-  // require it to exist, else every office task fails with project_not_found.
-  ensureOfficeProject(registry, () => new Date().toISOString());
-  // Seed the predefined role roster (idempotent) so the office shows ready-made
-  // roles on first run; a no-op once any role exists.
-  await ensurePredefinedRoles({
-    storeRoot: storeDir,
-    now: () => new Date().toISOString(),
-    newId: () => randomUUID(),
-  });
   const portRaw = readEnv("MEGASAVER_GUI_BRIDGE_PORT");
   const port = portRaw ? Number.parseInt(portRaw, 10) : DEFAULT_PORT;
+  // The dev script exports MEGASAVER_GUI_TOKEN so vite + bridge share one token;
+  // resolveGuiAuthToken preserves that (and the wall stays always-on).
   const token = resolveGuiAuthToken(process.env);
-  const handler = createBridgeHandler({
-    storePath: storeDir,
-    registry,
-    mcpOps,
-    office: { coreRegistry: registry, registry: launcherRegistry, allowFull },
-    token,
-    origins: deriveGuiOrigins(port),
-  });
 
-  const server = createBridgeServer(handler, port);
-  server.once("listening", () => {
-    const url = `http://127.0.0.1:${port}/?token=${token}`;
-    process.stdout.write(`mega-saver bridge listening on ${url}\n`);
-    process.stdout.write(`store: ${storeDir}\n`);
-  });
+  const { server, url } = await startGuiBridge({ storeDir, port, token });
+  process.stdout.write(`mega-saver bridge listening on ${url}\n`);
+  process.stdout.write(`store: ${storeDir}\n`);
 
   const shutdown = (signal: string): void => {
     process.stdout.write(`\nbridge: received ${signal}, shutting down\n`);

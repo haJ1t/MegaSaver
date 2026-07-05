@@ -11,7 +11,10 @@ import { describe, expect, it } from "vitest";
 // can drive the Claude Code connector's saver hook directly; it stays
 // acyclic — the connector depends only on connectors-shared/core/shared/zod,
 // never on the CLI. The arrow stays acyclic — skill-packs
-// depends only on zod, never on the CLI.
+// depends only on zod, never on the CLI. mega-gui adds @megasaver/gui: the
+// `mega gui` command boots the bridge via @megasaver/gui/bridge (startGuiBridge)
+// and ships its built dist. Acyclic — the GUI never imports the CLI (its bridge
+// carries GUI-local mirrors of the CLI's store/known-targets, not imports).
 // The non-Mega deps (citty, zod) are ignored by the @megasaver/ filter.
 const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/agent-office",
@@ -23,6 +26,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/context-pruner",
   "@megasaver/core",
   "@megasaver/daemon",
+  "@megasaver/gui",
   "@megasaver/indexer",
   "@megasaver/llm-proxy",
   "@megasaver/mcp-bridge",

@@ -6,6 +6,7 @@ node_modules/
 # Build artifacts
 dist/
 dist-bundle/
+dist-bridge/
 build/
 .turbo/
 .worktrees/

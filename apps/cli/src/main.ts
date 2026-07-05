@@ -7,6 +7,7 @@ import { daemonCommand } from "./commands/daemon/index.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { failCommand } from "./commands/fail/index.js";
 import { githubCommand } from "./commands/github/index.js";
+import { guiCommand } from "./commands/gui.js";
 import { hooksCommand } from "./commands/hooks/index.js";
 import { indexCommand } from "./commands/index/index.js";
 import { learnCommand } from "./commands/learn.js";
@@ -46,6 +47,7 @@ export const mainCommand = defineCommand({
     audit: auditCommand,
     doctor: doctorCommand,
     github: githubCommand,
+    gui: guiCommand,
     fail: failCommand,
     learn: learnCommand,
     project: projectCommand,
