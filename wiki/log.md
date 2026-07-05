@@ -2154,3 +2154,28 @@ bills → "same plan, 2x sessions" framing. DECISIONS (user-approved):
 open-core, Pro $10–15/mo; TR beachhead + EN parallel. Phase 0 (sellability:
 Tauri GUI packaging, $/limit headline, `mega init`, landing, license metadata
 fix, share card) awaits kickoff approval.
+
+## 2026-07-06 — `mega gui` Slice C (command + packaging + bundle smoke) — Claude Code
+
+Implemented Slice C (final) of `feat/mega-gui-command` on top of the already-landed
+Slices A (bridge hardening: loopback + token wall + CORS + argv) and B (static
+serving + frontend token). HIGH-risk (new public CLI command + npm packaging).
+
+- Extracted `server.ts main()`'s boot into `startGuiBridge` (`apps/gui/bridge/start.ts`);
+  dev `server.ts` delegates to it. Moved `createBridgeServer`/`deriveGuiOrigins` there
+  so the inlined bridge never pulls `server.ts`'s entrypoint guard (fixed a real
+  EADDRINUSE-on-:5174-every-command bug the bundle would have shipped).
+- New `mega gui [--port <n>] [--no-open] [--store <dir>]` (`apps/cli/src/commands/gui.ts`,
+  `runGui`); ALWAYS token-gated; registered in `main.ts`. Exposed `@megasaver/gui/bridge`
+  (tsup `dist-bridge` entry) for `startGuiBridge` + `resolveShippedGuiDistDir`.
+- Packaging: CLI prepack builds the GUI, tsup inlines the bridge, `copy-gui-dist.mjs`
+  ships `apps/gui/dist` → `apps/cli/dist-bundle/gui`. Added `@megasaver/gui` to the CLI
+  dependency-graph allow-list (acyclic — GUI never imports CLI).
+- Fixed a CORS bug: derive origins from the BOUND port (else `--port 0` 403'd browser
+  writes). Regression test added.
+- README + `docs/getting-started.md` lead with `mega gui`; changeset `.changeset/mega-gui.md`
+  (`@megasaver/cli` + `@megasaver/gui` minor).
+- Evidence: `pnpm verify` green; real `npm pack` → global temp install → installed
+  `mega gui` curl proof — `/` 200 html, `/api/health` no-token 401 / `?token=` 200 /
+  Bearer 200 / same-origin 200 / foreign-origin 403 / bound addr 127.0.0.1.
+- Reviewers pending (HIGH): code-reviewer + critic + security-reviewer (not yet run).

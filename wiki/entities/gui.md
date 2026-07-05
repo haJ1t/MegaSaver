@@ -266,3 +266,46 @@ overloaded cockpit. Frontend-only — no bridge/Core change.
   per-session figure (cockpit rail) is live.
 - Source: `docs/superpowers/specs/2026-07-03-gui-redesign-v3-design.md`,
   `docs/superpowers/plans/2026-07-03-gui-redesign-v3.md`.
+
+## `mega gui` — packaged GUI served by the bridge (Slice A–C, feat/mega-gui-command)
+
+The GUI now ships inside `@megasaver/cli`: `npm i -g @megasaver/cli && mega gui`
+starts the bridge (serving `/api` AND the built GUI, loopback-bound,
+token-gated) and opens the browser — no clone, no `pnpm dev`.
+
+- **Shared boot factory** — `apps/gui/bridge/start.ts`
+  `startGuiBridge({storeDir,port,token?,distDir?,origins?})` is the single
+  source of truth for booting: registry/office setup → handler (token + distDir)
+  → loopback bind → returns `{server,url,port,token}`. `server.ts main()` (dev)
+  and `mega gui` (packaged) both call it. `createBridgeServer` + `deriveGuiOrigins`
+  live here (not `server.ts`) so the inlined bridge never pulls `server.ts`'s
+  entrypoint boot guard — under the bundle `import.meta.url` collapses to
+  `mega.mjs`, so that guard misfired and started the dev bridge on :5174 on
+  EVERY `mega` command (EADDRINUSE); moving the helpers fixed it.
+- **Public entry** — `@megasaver/gui` `exports` map exposes `./bridge`
+  (`apps/gui/bridge/public.ts` → `startGuiBridge` + `resolveShippedGuiDistDir`),
+  built by `tsup.bridge.config.ts` into `dist-bridge/{index.js,index.d.ts}`
+  (workspace deps external). Building a real dist entry (not raw `.ts`) keeps the
+  GUI's frontend source graph — `auth.ts`'s `import.meta.env`, `.tsx` reached via
+  type-only imports — out of the CLI's `tsc` and bundle.
+- **CLI command** — `apps/cli/src/commands/gui.ts` `runGui(input)`: resolve store
+  (`resolveStorePath`, `--store`), ALWAYS mint a token (`crypto.randomUUID`),
+  resolve the shipped distDir, `startGuiBridge(...)`, print
+  `http://127.0.0.1:<port>/?token=<t>`, open the browser best-effort
+  (`open`/`start`/`xdg-open`) unless `--no-open`, foreground (Ctrl-C stops).
+  Registered `mega gui [--port <n>] [--no-open] [--store <dir>]` like `trace`.
+  CRITICAL: there is no code path that starts the packaged GUI without the token
+  wall.
+- **Packaging** — `apps/cli` prepack: `pnpm --filter @megasaver/gui build` →
+  `tsup` bundle (inlines the bridge via `@megasaver/gui/bridge`) →
+  `scripts/copy-gui-dist.mjs` copies `apps/gui/dist` → `apps/cli/dist-bundle/gui`
+  (inside published `files`) → strip manifest. `resolveShippedGuiDistDir(callerUrl)`
+  resolves `dist-bundle/gui` beside the bundle, dev-fallback `apps/gui/dist`.
+- **CORS from the BOUND port** — `startGuiBridge` binds first, reads the real
+  ephemeral port, then derives origins from it (a `--port 0` default otherwise
+  allowlisted `http://127.0.0.1:0` and 403'd every same-origin browser write).
+- **Bundle smoke (proof)** — real `npm pack` → temp-prefix install → installed
+  `mega gui --no-open`: `/` 200 html, `/api/health` no-token 401, `?token=` 200,
+  Bearer 200, same-origin Origin 200, foreign Origin 403, bound addr 127.0.0.1.
+- Source: `docs/superpowers/specs/2026-07-05-mega-gui-command-design.md`,
+  `docs/superpowers/plans/2026-07-05-mega-gui-command.md`.
