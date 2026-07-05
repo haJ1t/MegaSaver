@@ -87,6 +87,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 ## Syntheses (cross-page answers)
 
 - [[syntheses/mega-saver-product]] — what the product is, six subsystems, v0.1 slice.
+- [[syntheses/gtm-plan-2026-07]] — GTM & monetization plan (3-element framework applied; decisions locked 2026-07-05: open-core Pro $10–15/mo, TR+EN parallel; Phase 0 = sellability).
 - [[syntheses/post-v1.1-roadmap]] — post-v1.1 arc (PRs #102–#110 resolved: stats, skill-packs, Windows port + follow-ups) + remaining work, priority-ordered (npm publish gap, conventions:sync, GUI packaging, i18n, fikri §16 backlog).
 - [[syntheses/contextops-roadmap]] — **strategic Phase 0–10 roadmap** (DIMMEM/LAMR/FORGE), **all 10 phases shipped** on `main` (PRs #114–#123, 2026-06-12); MCP surface 4 → 25 tools (26 with the v1.2 `proxy_search_code`). Keeps the original 22-agent-audit done/partial/gap framing for the historical record.
 - [[syntheses/release-history]] — full chronological release/status narrative (every PR, critic round, process metric, open-backlog note) for Phase 9/10, v1.1.0, v1.0, AA1 BB1–BB7a, v0.3, v0.2. Split out of `index.md` on 2026-07-04 to keep the catalog lean; the `## Status` section below is the one-line-per-release digest.
