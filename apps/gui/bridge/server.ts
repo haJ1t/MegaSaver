@@ -67,8 +67,9 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
-// Only boot when run as the entrypoint; importing this module (tests, the
-// `mega gui` command reusing createBridgeServer) must not start a server.
+// Only boot when run as the direct entrypoint (`node bridge/server.ts`, the dev
+// bridge). Importing this module (tests) must not start a server. `mega gui`
+// never reaches here — it boots via startGuiBridge from ./start directly.
 const isEntrypoint = argv[1] !== undefined && fileURLToPath(import.meta.url) === argv[1];
 if (isEntrypoint) {
   main().catch((err: unknown) => {
