@@ -4,12 +4,13 @@ import type { ServerResponse } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 
 // Extension → content-type for the assets the vite build actually emits
-// (html shell, hashed js/css chunks, self-hosted woff2 fonts, inline svg/json).
+// (html shell, hashed js/css chunks, self-hosted woff2/woff fonts, inline svg/json).
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".woff2": "font/woff2",
+  ".woff": "font/woff",
   ".svg": "image/svg+xml",
   ".json": "application/json; charset=utf-8",
 };

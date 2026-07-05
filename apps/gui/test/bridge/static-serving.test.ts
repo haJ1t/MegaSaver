@@ -111,4 +111,20 @@ describe("bridge static serving", () => {
     const body = await res.text();
     expect(body).not.toContain("root:");
   });
+
+  it("GET /assets/x.woff → 200 font/woff", async () => {
+    writeFileSync(join(distDir, "assets", "font.woff"), "woff-bytes");
+    h = await startHandler({ distDir });
+    const res = await fetch(`${h.baseUrl}/assets/font.woff`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("font/woff");
+  });
+
+  it("GET /assets/x.woff2 → 200 font/woff2", async () => {
+    writeFileSync(join(distDir, "assets", "font.woff2"), "woff2-bytes");
+    h = await startHandler({ distDir });
+    const res = await fetch(`${h.baseUrl}/assets/font.woff2`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("font/woff2");
+  });
 });
