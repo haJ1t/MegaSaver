@@ -25,7 +25,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
     "clean": "rm -rf dist dist-bundle .turbo",
-    "prepack": "pnpm run bundle && node scripts/strip-publish-manifest.mjs prepack",
+    "prepack": "pnpm --filter @megasaver/gui build && pnpm run bundle && node scripts/copy-gui-dist.mjs && node scripts/strip-publish-manifest.mjs prepack",
     "postpack": "node scripts/strip-publish-manifest.mjs postpack"
   },
   "devDependencies": {

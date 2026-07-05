@@ -1,14 +1,31 @@
 import { randomUUID } from "node:crypto";
-import type { Server } from "node:http";
+import { type Server, createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { createLauncherRegistry, ensurePredefinedRoles } from "@megasaver/agent-office";
 import { createClaudeCodeLauncher } from "@megasaver/connector-claude-code";
 import { createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
 import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "@megasaver/mcp-bridge";
-import { createBridgeHandler } from "./handler.js";
+import { DEFAULT_DEV_ORIGINS } from "./cors.js";
+import { type BridgeHandler, createBridgeHandler } from "./handler.js";
 import { createMcpOps } from "./mcp-ops.js";
 import { ensureOfficeProject } from "./routes/office.js";
-import { createBridgeServer, deriveGuiOrigins } from "./server.js";
+
+// Loopback-only bind: the bridge is a local control plane, never exposed on the
+// LAN. Lives here (not server.ts) so this module — the one `mega gui` inlines —
+// never pulls server.ts's entrypoint boot guard into the CLI bundle.
+export function createBridgeServer(handler: BridgeHandler, port: number): Server {
+  const server = createServer(handler);
+  server.listen(port, "127.0.0.1");
+  return server;
+}
+
+// Superset allowlist: the bridge's own serving origins PLUS the vite dev origins
+// (5173). One list works in both modes — packaged (same-origin on `port`) and
+// dev (vite on 5173 proxying to the bridge) — so there is no mode flag to keep
+// in sync.
+export function deriveGuiOrigins(port: number): readonly string[] {
+  return [`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...DEFAULT_DEV_ORIGINS];
+}
 
 export interface StartGuiBridgeOptions {
   /** Resolved store directory (the caller — CLI or dev server.ts — owns store resolution). */

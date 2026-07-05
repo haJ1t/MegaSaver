@@ -1,25 +1,19 @@
 import { randomUUID } from "node:crypto";
-import { type Server, createServer } from "node:http";
 import { argv } from "node:process";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_DEV_ORIGINS } from "./cors.js";
-import type { BridgeHandler } from "./handler.js";
 import { startGuiBridge } from "./start.js";
 import { resolveBridgeStorePath } from "./store-path.js";
+
+// Re-export the boot helpers so existing bridge consumers (tests, dev tooling)
+// keep importing them from ./server; the canonical definitions moved to
+// ./start so the `mega gui` bundle never pulls this module's entrypoint guard.
+export { createBridgeServer, deriveGuiOrigins } from "./start.js";
 
 const DEFAULT_PORT = 5174;
 
 function readEnv(key: string): string | undefined {
   const value = process.env[key];
   return value === undefined || value.length === 0 ? undefined : value;
-}
-
-// Loopback-only bind: the bridge is a local control plane, never exposed on the
-// LAN. Reused by `mega gui` (Slice C) to start the packaged server the same way.
-export function createBridgeServer(handler: BridgeHandler, port: number): Server {
-  const server = createServer(handler);
-  server.listen(port, "127.0.0.1");
-  return server;
 }
 
 // The dev script exports MEGASAVER_GUI_TOKEN so vite and the bridge share one
@@ -36,14 +30,6 @@ export function resolveGuiToken(env: NodeJS.ProcessEnv): string {
 // and a bare bridge start mints a per-process random token.
 export function resolveGuiAuthToken(env: NodeJS.ProcessEnv): string {
   return resolveGuiToken(env);
-}
-
-// Superset allowlist: the bridge's own serving origins PLUS the vite dev origins
-// (5173). One list works in both modes — packaged (same-origin on `port`) and
-// dev (vite on 5173 proxying to the bridge) — so there is no mode flag to keep
-// in sync.
-export function deriveGuiOrigins(port: number): readonly string[] {
-  return [`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...DEFAULT_DEV_ORIGINS];
 }
 
 async function main(): Promise<void> {

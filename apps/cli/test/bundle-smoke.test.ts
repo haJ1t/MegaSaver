@@ -52,4 +52,18 @@ describe("standalone CLI bundle", () => {
     const mb = statSync(bundle).size / (1024 * 1024);
     expect(mb).toBeLessThan(MAX_BUNDLE_MB);
   });
+
+  // `mega gui` boots the bridge from the bundle and serves the copied dist.
+  // Both must ship: the bridge inlined into mega.mjs (startGuiBridge symbol) and
+  // the frontend copied to dist-bundle/gui by the prepack copy step.
+  it.skipIf(!hasBundle)("inlines the GUI bridge (startGuiBridge in mega.mjs)", () => {
+    const src = readFileSync(bundle, "utf8");
+    expect(src).toContain("startGuiBridge");
+  });
+
+  it.skipIf(!hasBundle)("ships the built GUI at dist-bundle/gui/index.html", () => {
+    const indexHtml = join(bundleDir, "gui", "index.html");
+    expect(existsSync(indexHtml)).toBe(true);
+    expect(readFileSync(indexHtml, "utf8")).toContain('<div id="root">');
+  });
 });
