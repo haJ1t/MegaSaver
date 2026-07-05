@@ -6,6 +6,7 @@ import { readControlState, writeControlState } from "@megasaver/proxy-control";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type ProxyGuiDeps,
+  defaultProxyGuiDeps,
   proxyStatus,
   startProxy,
   stopProxy,
@@ -100,5 +101,12 @@ describe("GUI proxy toggle (persistent model)", () => {
       drainingGeneration: null,
     });
     expect(proxyStatus(store, d).draining).toBe(false);
+  });
+
+  it("resolves superviseArgv from the running script path (process.argv[1]), not a literal", () => {
+    const argv = defaultProxyGuiDeps(store).superviseArgv;
+    expect(argv[0]).toBe(process.execPath);
+    expect(argv[1]).toBe(process.argv[1]);
+    expect(argv.slice(2)).toEqual(["proxy", "supervise", "--store", store]);
   });
 });
