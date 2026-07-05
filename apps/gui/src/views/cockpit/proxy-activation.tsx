@@ -3,7 +3,7 @@ import type { BridgeError } from "../../components/states.js";
 import {
   type ProxyStatus,
   fetchProxyStatus,
-  restartClaudeThroughProxy,
+  finishProxyDrain,
   setProxy,
 } from "../../lib/claude-sessions-client.js";
 
@@ -40,18 +40,23 @@ export function ProxyActivation(): JSX.Element {
     }
   }, []);
 
-  const running = status?.running ?? false;
-
-  const restart = useCallback(async (): Promise<void> => {
-    // Quitting the desktop app ends this conversation — confirm before doing it.
-    if (!window.confirm("Quit and relaunch Claude? This ends the current conversation.")) return;
+  const finishDrain = useCallback(async (): Promise<void> => {
+    setBusy(true);
     setActionError(null);
     try {
-      await restartClaudeThroughProxy();
+      setStatus(await finishProxyDrain());
     } catch (err) {
-      setActionError((err as BridgeError).error ?? "Could not restart Claude");
+      setActionError((err as BridgeError).error ?? "Could not finish stopping the proxy");
+    } finally {
+      setBusy(false);
     }
   }, []);
+
+  const running = status?.enabled ?? false;
+  const url = status?.url ?? "";
+  const routeConflict = status?.routeConflict ?? false;
+  const reconcileBlocked = status?.reconcileBlocked ?? false;
+  const draining = !running && (status?.draining ?? false);
 
   return (
     <section className="flex flex-col gap-2">
@@ -59,6 +64,10 @@ export function ProxyActivation(): JSX.Element {
       <p className="text-xs text-text-muted">
         Opt-in local proxy that meters your conversation token usage. Turning it on auto-routes new
         claude sessions through it (no export needed).
+      </p>
+      <p className="text-xs text-text-muted">
+        Separate from the context daemon below — the token-saver hook uses the daemon, not this
+        proxy.
       </p>
       <label className="flex items-center gap-2 text-sm text-text-primary">
         <input
@@ -76,20 +85,42 @@ export function ProxyActivation(): JSX.Element {
           aria-hidden="true"
         />
         <span className="text-text-secondary">
-          {running ? `live · ${status?.url ?? ""}` : "not running"}
+          {running && url ? `live · ${url}` : running ? "running" : "not running"}
         </span>
       </div>
-      {running && (
-        <output className="flex flex-col items-start gap-1.5 text-xs text-warn">
-          A session already open keeps using the direct API. Restart claude to route a fresh session
-          through the proxy.
+      {routeConflict && (
+        <p className="text-xs text-warn">
+          Route conflict — another base URL is set in your Claude settings, so sessions are not
+          routed through this proxy.
+        </p>
+      )}
+      {reconcileBlocked && (
+        <p className="text-xs text-warn">
+          Reconcile blocked — a previous transition needs to finish before the proxy can settle.
+        </p>
+      )}
+      {draining && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-warn">
+            Still stopping — the proxy listener stays up so a Claude session you already launched
+            keeps working, and it still holds your API key. Restart Claude first, then finish
+            stopping. Confirming while a session still points at the proxy would break that session
+            on its next request.
+          </p>
           <button
             type="button"
-            onClick={() => void restart()}
-            className="border border-warn px-2 py-0.5 text-warn hover:bg-warn hover:text-warn-fg"
+            disabled={busy}
+            onClick={() => void finishDrain()}
+            className="self-start rounded border border-warn px-2 py-1 text-xs text-warn"
           >
-            Restart claude
+            Finish stopping
           </button>
+        </div>
+      )}
+      {running && url && (
+        <output className="text-xs text-warn">
+          A session already open keeps using the direct API — restart Claude to route a fresh
+          session through the proxy.
         </output>
       )}
       {status?.error && (

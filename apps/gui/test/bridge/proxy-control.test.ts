@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LaunchctlRunner } from "@megasaver/proxy-control";
-import { readControlState } from "@megasaver/proxy-control";
+import { readControlState, writeControlState } from "@megasaver/proxy-control";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type ProxyGuiDeps,
@@ -74,5 +74,31 @@ describe("GUI proxy toggle (persistent model)", () => {
     expect(st.enabled).toBe(true);
     expect(st.routed).toBe(false);
     expect(st.routeConflict).toBe(true);
+  });
+
+  it("status reports draining:true when a draining generation is set", () => {
+    const d = deps();
+    writeControlState(store, {
+      ...readControlState(store),
+      desiredEnabled: false,
+      drainingGeneration: {
+        instanceId: "old",
+        processStartToken: "tok",
+        bootId: "boot",
+        url: "http://127.0.0.1:8787",
+        startedAt: "2026-07-05T00:00:00.000Z",
+      },
+    });
+    expect(proxyStatus(store, d).draining).toBe(true);
+  });
+
+  it("status reports draining:false when no draining generation is set", () => {
+    const d = deps();
+    writeControlState(store, {
+      ...readControlState(store),
+      desiredEnabled: false,
+      drainingGeneration: null,
+    });
+    expect(proxyStatus(store, d).draining).toBe(false);
   });
 });

@@ -390,9 +390,12 @@ export function setWorkspaceSaver(
 }
 
 export type ProxyStatus = {
-  running: boolean;
-  url?: string;
-  port?: number;
+  enabled: boolean;
+  routed: boolean;
+  routeConflict: boolean;
+  reconcileBlocked: boolean;
+  draining: boolean;
+  url: string;
   error?: string;
 };
 
@@ -410,8 +413,14 @@ export function setProxy(enabled: boolean): Promise<ProxyStatus> {
   return mutateJson<ProxyStatus>("/api/proxy", "POST", { enabled });
 }
 
-export function restartClaudeThroughProxy(): Promise<{ restarting: boolean }> {
-  return mutateJson<{ restarting: boolean }>("/api/proxy/restart-claude", "POST", {});
+// Finishes an in-flight drain: an off-toggle keeps the supervisor's key-holding
+// listener alive so an already-launched Claude session is not broken mid-flight.
+// This confirms clients are restarted so the supervisor stops that listener.
+export function finishProxyDrain(): Promise<ProxyStatus> {
+  return mutateJson<ProxyStatus>("/api/proxy", "POST", {
+    enabled: false,
+    confirmClientsRestarted: true,
+  });
 }
 
 export type ClaudeHookStatus = {
