@@ -187,4 +187,22 @@ describe("ProxyActivation", () => {
     );
     expect(screen.queryByRole("button", { name: /finish stopping/i })).toBeNull();
   });
+
+  it("shows the normal on state and no finish button when enabled with a lingering drain marker", async () => {
+    stub.fetchProxyStatus = () =>
+      Promise.resolve({
+        enabled: true,
+        routed: true,
+        routeConflict: false,
+        reconcileBlocked: false,
+        draining: true,
+        url: "http://127.0.0.1:8787",
+      });
+    render(<ProxyActivation />);
+    await waitFor(() =>
+      expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true),
+    );
+    expect(screen.getByText(/live · http:\/\/127\.0\.0\.1:8787/)).toBeDefined();
+    expect(screen.queryByRole("button", { name: /finish stopping/i })).toBeNull();
+  });
 });
