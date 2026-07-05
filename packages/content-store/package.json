@@ -1,6 +1,7 @@
 {
   "name": "@megasaver/content-store",
   "version": "1.1.1",
+  "license": "MIT",
   "private": true,
   "description": "ChunkSet persistence store for the Mega Saver context-gate pipeline.",
   "type": "module",

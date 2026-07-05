@@ -1,6 +1,7 @@
 {
   "name": "@megasaver/output-filter",
   "version": "1.3.0",
+  "license": "MIT",
   "private": true,
   "description": "Evidence-preserving output filter pipeline + safe-read-path sandbox gate for Mega Saver.",
   "type": "module",

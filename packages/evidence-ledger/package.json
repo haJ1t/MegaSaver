@@ -1,6 +1,7 @@
 {
   "name": "@megasaver/evidence-ledger",
   "version": "0.2.1",
+  "license": "MIT",
   "private": true,
   "description": "Canonical evidence ledger: schema, retention, revocation, and audit trail for Mega Saver context + save.",
   "type": "module",

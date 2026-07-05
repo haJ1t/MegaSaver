@@ -1,6 +1,7 @@
 {
   "name": "@megasaver/policy",
   "version": "1.2.1",
+  "license": "MIT",
   "private": true,
   "description": "Command, path-read, and redaction policy gate for Mega Saver.",
   "type": "module",

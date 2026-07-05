@@ -1,6 +1,7 @@
 {
   "name": "@megasaver/skill-packs",
   "version": "1.1.0",
+  "license": "MIT",
   "private": true,
   "description": "Placeholder for Mega-Saver-native skill pack bundles (v0.3 scaffold).",
   "type": "module",
