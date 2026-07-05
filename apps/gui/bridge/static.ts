@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import type { ServerResponse } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 
@@ -38,11 +38,17 @@ export async function serveStatic(
   try {
     const info = await stat(target);
     if (!info.isFile()) return false;
+    // The lexical check above is defeated by a symlink that sits inside distDir
+    // but points out of tree (target is lexically inside root, physically not).
+    // Resolve symlinks on BOTH root and target and re-check containment; realpath
+    // throws ENOENT for a missing file, which the catch turns into a normal 404.
+    const [realRoot, realTarget] = await Promise.all([realpath(root), realpath(target)]);
+    if (realTarget !== realRoot && !realTarget.startsWith(realRoot + sep)) return false;
     res.writeHead(200, {
       "content-type": contentType,
       "cache-control": "no-store",
     });
-    createReadStream(target).pipe(res);
+    createReadStream(realTarget).pipe(res);
     return true;
   } catch {
     return false;
