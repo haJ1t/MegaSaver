@@ -1,6 +1,7 @@
 {
   "name": "@megasaver/llm-proxy",
   "version": "0.2.0",
+  "license": "MIT",
   "private": true,
   "description": "Opt-in local Anthropic-API proxy: transparent passthrough + token-usage measurement for Mega Saver.",
   "type": "module",

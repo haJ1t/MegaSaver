@@ -1,6 +1,7 @@
 {
   "name": "@megasaver/connector-claude-code",
   "version": "1.2.0",
+  "license": "MIT",
   "private": true,
   "description": "Claude Code connector for Mega Saver.",
   "type": "module",

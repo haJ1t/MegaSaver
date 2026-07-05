@@ -1,6 +1,7 @@
 {
   "name": "@megasaver/connectors-shared",
   "version": "1.2.0",
+  "license": "MIT",
   "private": true,
   "description": "Shared helpers for Mega Saver connectors (block render, parse, filesystem).",
   "type": "module",

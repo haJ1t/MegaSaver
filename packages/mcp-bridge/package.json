@@ -1,6 +1,7 @@
 {
   "name": "@megasaver/mcp-bridge",
   "version": "1.2.0",
+  "license": "MIT",
   "private": true,
   "description": "Mega Saver MCP server bridge — stdio transport, four context-gate tools.",
   "type": "module",
