@@ -37,8 +37,8 @@ describe("resolveGuiAuthToken (wall is ALWAYS on)", () => {
   });
 
   it("honours an explicit MEGASAVER_GUI_TOKEN", () => {
-    expect(resolveGuiAuthToken({ MEGASAVER_GUI_TOKEN: "shared-dev-token-value-000000000000" })).toBe(
-      "shared-dev-token-value-000000000000",
-    );
+    expect(
+      resolveGuiAuthToken({ MEGASAVER_GUI_TOKEN: "shared-dev-token-value-000000000000" }),
+    ).toBe("shared-dev-token-value-000000000000");
   });
 });

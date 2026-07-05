@@ -8,7 +8,6 @@ import type { McpSetupOps } from "@megasaver/mcp-bridge";
 import { BRIDGE_ERROR_CODES, type BridgeErrorCode } from "../src/bridge-error-code.js";
 import { DEFAULT_DEV_ORIGINS, applyCorsPolicy, handleOptionsPreflight } from "./cors.js";
 import { handleCaughtError } from "./error-mapping.js";
-import { serveStatic } from "./static.js";
 import type {
   OfficeContext,
   RouteContext,
@@ -61,6 +60,7 @@ import { handleListProjects } from "./routes/projects.js";
 import { handleProxySet, handleProxyStatus } from "./routes/proxy.js";
 import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
+import { serveStatic } from "./static.js";
 import { resolveWorkspace } from "./workspace-resolver.js";
 
 export interface BridgeHandlerOptions {

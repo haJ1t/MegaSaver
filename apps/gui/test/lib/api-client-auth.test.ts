@@ -9,9 +9,11 @@ function stubFetch(): ReturnType<typeof vi.fn> {
   return f;
 }
 
-function headerOf(f: ReturnType<typeof vi.fn>, call = 0): Record<string, string> {
+type CapturedHeaders = { Authorization?: string; "content-type"?: string };
+
+function headerOf(f: ReturnType<typeof vi.fn>, call = 0): CapturedHeaders {
   const init = f.mock.calls[call]?.[1] as RequestInit | undefined;
-  return (init?.headers ?? {}) as Record<string, string>;
+  return (init?.headers ?? {}) as CapturedHeaders;
 }
 
 describe("api-client attaches the bridge token", () => {
@@ -27,14 +29,14 @@ describe("api-client attaches the bridge token", () => {
   it("getJson sends the Authorization header", async () => {
     const f = stubFetch();
     await getJson("/api/health");
-    expect(headerOf(f)["Authorization"]).toBe("Bearer TKN");
+    expect(headerOf(f).Authorization).toBe("Bearer TKN");
   });
 
   it("postJson keeps content-type AND adds Authorization", async () => {
     const f = stubFetch();
     await postJson("/api/mcp/install", { target: "x", project: "p" });
     const h = headerOf(f);
-    expect(h["Authorization"]).toBe("Bearer TKN");
+    expect(h.Authorization).toBe("Bearer TKN");
     expect(h["content-type"]).toBe("application/json");
   });
 
@@ -42,13 +44,13 @@ describe("api-client attaches the bridge token", () => {
     const f = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", f);
     await deleteJson("/api/office/w/roles/r");
-    expect(headerOf(f)["Authorization"]).toBe("Bearer TKN");
+    expect(headerOf(f).Authorization).toBe("Bearer TKN");
   });
 
   it("omits Authorization when no token is stored", async () => {
     sessionStorage.clear();
     const f = stubFetch();
     await getJson("/api/health");
-    expect(headerOf(f)["Authorization"]).toBeUndefined();
+    expect(headerOf(f).Authorization).toBeUndefined();
   });
 });

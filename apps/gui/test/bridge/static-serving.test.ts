@@ -96,10 +96,9 @@ describe("bridge static serving", () => {
 
   it("rejects encoded ../ path traversal (%2e%2e) → blocked", async () => {
     h = await startHandler({ distDir });
-    const res = await fetch(
-      `${h.baseUrl}/%2e%2e/%2e%2e/%2e%2e/%2e%2e/etc/passwd`,
-      { redirect: "manual" },
-    );
+    const res = await fetch(`${h.baseUrl}/%2e%2e/%2e%2e/%2e%2e/%2e%2e/etc/passwd`, {
+      redirect: "manual",
+    });
     expect(res.status).toBe(404);
     const body = await res.text();
     expect(body).not.toContain("root:");
