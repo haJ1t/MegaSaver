@@ -11,3 +11,5 @@ export {
   type SavingsHeadline,
   type SavingsHeadlineTotals,
 } from "./savings-headline.js";
+
+export { renderSavingsCardSvg } from "./savings-card.js";

@@ -114,6 +114,8 @@ export {
   type SavingsHeadlineTotals,
 } from "./savings-headline.js";
 
+export { renderSavingsCardSvg } from "./savings-card.js";
+
 export {
   type SufficiencyFixture,
   type FixtureKind,
