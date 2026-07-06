@@ -12,6 +12,7 @@ import { hooksCommand } from "./commands/hooks/index.js";
 import { indexCommand } from "./commands/index/index.js";
 import { initCommand } from "./commands/init.js";
 import { learnCommand } from "./commands/learn.js";
+import { licenseCommand } from "./commands/license.js";
 import { mcpCommand } from "./commands/mcp/index.js";
 import { memoryCommand } from "./commands/memory/index.js";
 import { officeCommand } from "./commands/office/index.js";
@@ -20,6 +21,7 @@ import { packCommand } from "./commands/pack/index.js";
 import { projectCommand } from "./commands/project.js";
 import { proxyCommand } from "./commands/proxy/index.js";
 import { rulesCommand } from "./commands/rules/index.js";
+import { savingsCommand } from "./commands/savings/index.js";
 import { scanCommand } from "./commands/scan.js";
 import { sessionCommand } from "./commands/session/index.js";
 import { taskCommand } from "./commands/task/index.js";
@@ -52,10 +54,12 @@ export const mainCommand = defineCommand({
     gui: guiCommand,
     fail: failCommand,
     learn: learnCommand,
+    license: licenseCommand,
     project: projectCommand,
     proxy: proxyCommand,
     daemon: daemonCommand,
     rules: rulesCommand,
+    savings: savingsCommand,
     session: sessionCommand,
     connector: connectorCommand,
     memory: memoryCommand,

@@ -1,0 +1,32 @@
+{
+  "name": "@megasaver/pro-analytics",
+  "version": "0.1.0",
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
+  "description": "Mega Saver Pro — proprietary historical savings analytics and export. Use requires a valid Mega Saver Pro license.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "LICENSE"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@megasaver/stats": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17"
+  }
+}

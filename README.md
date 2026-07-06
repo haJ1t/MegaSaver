@@ -67,6 +67,7 @@ See **[docs/benchmarks.md](docs/benchmarks.md)** for the full table.
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
 - [Project layout](#project-layout)
+- [Pro](#pro)
 - [License](#license)
 
 ---
@@ -497,6 +498,8 @@ mega <command> [subcommand] [flags]
 | `mega proxy` | start the opt-in local token-metering proxy |
 | `mega memory` | view & write structured project memory |
 | `mega audit` | windowed token-savings summary |
+| `mega license` | activate / status / deactivate a Mega Saver Pro license |
+| `mega savings` | historical savings analytics + export (Pro) |
 | `mega doctor` | diagnose bridge / hooks / connector setup |
 
 Run `mega <command> --help` for subcommands and flags. Closed-enum flags
@@ -623,6 +626,61 @@ pnpm + Turborepo monorepo.
 
 ---
 
+## Pro
+
+The core CLI is free and MIT — the whole compression, memory, and audit pipeline
+above works with no account and no key. **Mega Saver Pro** unlocks new features
+that were never part of the free tier, starting with **historical savings
+analytics**: time-series savings trends, a per-project breakdown, and CSV/JSON
+export.
+
+```sh
+mega license activate <key>       # activate a Pro key
+mega license status               # Pro (active) or no license (free)
+
+mega savings history              # savings per day (Pro)
+mega savings history --by week    # or per ISO week
+mega savings history --by project # per-project breakdown
+mega savings history --json       # or --csv, or --out <file>
+mega savings export --format csv --out savings.csv
+```
+
+Without a license, `mega savings` prints a one-line note that the feature is Pro
+and exits cleanly — it never errors, and the free CLI is unaffected. Keys are
+issued manually until billing lands (the Sublime / Obsidian model).
+
+### Honesty disclosure
+
+We are open about what the license does and does not do:
+
+- **The gate is bypassable.** The entitlement check (`checkEntitlement`) lives in
+  MIT/open-source code, so anyone can edit the source to remove it. That is
+  inherent to open-core, and we do not pretend otherwise or ship security
+  theater.
+- **The license is not forgeable.** Keys are Ed25519-signed by a private key held
+  offline by the vendor and verified against a public key baked into the CLI. The
+  signature makes fake keys impossible; verification is fully offline (no network,
+  no telemetry) and **fail-closed** — anything tampered, expired, or wrong-key
+  resolves to "not entitled".
+
+Honest users pay for a real key; the gate makes piracy a deliberate license
+violation rather than an accident. The proprietary Pro logic lives in
+`@megasaver/pro-analytics` (see [License](#license)).
+
+---
+
 ## License
 
-[MIT](LICENSE) © 2026 Halit Ozger
+The CLI and every package it is built from are [MIT](LICENSE) © 2026 Halit Ozger,
+**except** the Pro module `@megasaver/pro-analytics`, which is proprietary and
+source-available under its own [`packages/pro-analytics/LICENSE`](packages/pro-analytics/LICENSE):
+use requires a valid Mega Saver Pro license; no redistribution.
+
+> **Packaging note (mixed license).** The published `@megasaver/cli` bundle is
+> built with `tsup --config tsup.bundle.config.ts` (`noExternal: [/.*/]`), which
+> inlines every workspace dependency — including `@megasaver/pro-analytics` — into
+> the single-file `mega.mjs`. So the proprietary Pro logic ships inside the
+> otherwise-MIT tarball. This is a deliberate, disclosed trade-off for the initial
+> release: the gate is bypassable anyway (see [Pro](#pro)), and shipping one bundle
+> keeps install trivial. A clean split (externalizing `@megasaver/pro-analytics`
+> into its own paid package, or a Pro-only bundle) is a **deferred refinement**.

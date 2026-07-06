@@ -7,7 +7,7 @@
   "bin": {
     "mega": "./dist-bundle/mega.mjs"
   },
-  "files": ["dist-bundle"],
+  "files": ["dist-bundle", "NOTICE"],
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
@@ -39,6 +39,7 @@
     "@megasaver/context-pruner": "workspace:*",
     "@megasaver/core": "workspace:*",
     "@megasaver/daemon": "workspace:*",
+    "@megasaver/entitlement": "workspace:*",
     "@megasaver/gui": "workspace:*",
     "@megasaver/indexer": "workspace:*",
     "@megasaver/llm-proxy": "workspace:*",
@@ -46,6 +47,7 @@
     "@megasaver/memory-graph": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",
+    "@megasaver/pro-analytics": "workspace:*",
     "@megasaver/proxy-control": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "@megasaver/skill-packs": "workspace:*",
