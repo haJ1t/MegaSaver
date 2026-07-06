@@ -1,5 +1,6 @@
 import type { KeyObject } from "node:crypto";
 import { writeFileSync } from "node:fs";
+import { formatDollarsSaved } from "@megasaver/core";
 import { checkEntitlement } from "@megasaver/entitlement";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
@@ -24,12 +25,19 @@ export type RunSavingsHistoryInput = {
   stderr: (line: string) => void;
 };
 
+// The $ column is floored to the shared display string (formatDollarsSaved) so
+// the history table agrees with `mega audit report` / the GUI strip; every other
+// column stringifies as-is.
 function renderTable(
   rows: readonly Record<string, unknown>[],
   columns: readonly string[],
 ): string[] {
   const header = columns.join("  ");
-  const lines = rows.map((row) => columns.map((c) => String(row[c])).join("  "));
+  const lines = rows.map((row) =>
+    columns
+      .map((c) => (c === "dollarsSaved" ? formatDollarsSaved(row[c] as number) : String(row[c])))
+      .join("  "),
+  );
   return [header, ...lines];
 }
 

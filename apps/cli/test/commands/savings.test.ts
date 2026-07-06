@@ -11,6 +11,29 @@ import {
   runSavingsHistory,
 } from "../../src/commands/savings/index.js";
 
+// Spy on the proprietary Pro compute while delegating to the real implementation.
+// The entitled tests exercise real analytics; the gating tests assert these are
+// NEVER invoked on the upsell path — so moving the lazy `await import(...)` (or
+// the compute) above the entitlement gate would fail a test, not just slip by.
+const proSpies = vi.hoisted(() => ({
+  computeSavingsHistory: vi.fn(),
+  computeSavingsByProject: vi.fn(),
+  exportSavings: vi.fn(),
+}));
+
+vi.mock("@megasaver/pro-analytics", async (importActual) => {
+  const actual = await importActual<typeof import("@megasaver/pro-analytics")>();
+  proSpies.computeSavingsHistory.mockImplementation(actual.computeSavingsHistory);
+  proSpies.computeSavingsByProject.mockImplementation(actual.computeSavingsByProject);
+  proSpies.exportSavings.mockImplementation(actual.exportSavings);
+  return {
+    ...actual,
+    computeSavingsHistory: proSpies.computeSavingsHistory,
+    computeSavingsByProject: proSpies.computeSavingsByProject,
+    exportSavings: proSpies.exportSavings,
+  };
+});
+
 type Payload = { v: number; tier: string; id: string; iat: number; exp: number | null };
 
 const b64url = (buf: Buffer): string => buf.toString("base64url");
@@ -69,6 +92,9 @@ beforeEach(() => {
   keys = generateKeyPairSync("ed25519");
   out = [];
   err = [];
+  proSpies.computeSavingsHistory.mockClear();
+  proSpies.computeSavingsByProject.mockClear();
+  proSpies.exportSavings.mockClear();
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -102,8 +128,12 @@ describe("runSavingsHistory — gating", () => {
     expect(text).toContain("Mega Saver Pro");
     expect(text).toContain("mega license activate");
     expect(text.toLowerCase()).toContain("learn more");
-    // The gate ran FIRST — the Pro compute path was never entered.
+    // The gate ran FIRST — the Pro compute path was never entered: no events
+    // read AND no pro-analytics compute invoked (guards the lazy import too).
     expect(readAllEvents).not.toHaveBeenCalled();
+    expect(proSpies.computeSavingsHistory).not.toHaveBeenCalled();
+    expect(proSpies.computeSavingsByProject).not.toHaveBeenCalled();
+    expect(proSpies.exportSavings).not.toHaveBeenCalled();
   });
 
   it("with a valid Pro license: reads events and renders the day history table", async () => {
@@ -176,6 +206,50 @@ describe("runSavingsHistory — render variants (entitled)", () => {
     expect(parsed[0]?.project).toBe("proj-1");
   });
 
+  it("floors the table $ column via formatDollarsSaved (matches the free headline)", async () => {
+    // 49_380_000 saved bytes → 12_345_000 tokens → raw $37.035, which toFixed(2)
+    // would round UP to 37.04; the table must show the floored "$37.03" so it
+    // agrees with `mega audit report` / the GUI strip.
+    const bigDay: SavingsEventReader = () => ({
+      events: [event("2026-03-01T00:00:00.000Z", 49_380_000)],
+      eventsByProject: {},
+    });
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: bigDay,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("$37.03");
+    expect(text).not.toContain("37.035");
+    expect(text).not.toContain("37.04");
+  });
+
+  it("keeps the raw lossless dollarsSaved number in JSON output", async () => {
+    const bigDay: SavingsEventReader = () => ({
+      events: [event("2026-03-01T00:00:00.000Z", 49_380_000)],
+      eventsByProject: {},
+    });
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: bigDay,
+      json: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(out.join("\n")) as Array<{ dollarsSaved: number }>;
+    // Lossless raw number (12_345_000 / 1e6 * 3), NOT the floored display string.
+    expect(parsed[0]?.dollarsSaved).toBe((12_345_000 / 1_000_000) * 3);
+    expect(parsed[0]?.dollarsSaved).toBeCloseTo(37.035, 10);
+  });
+
   it("--out writes the rendered output to a file", async () => {
     const outFile = join(root, "history.csv");
     const code = await runSavingsHistory({
@@ -209,6 +283,9 @@ describe("runSavingsExport — gating", () => {
     expect(code).toBe(0);
     expect(out.join("\n")).toContain("Mega Saver Pro");
     expect(readAllEvents).not.toHaveBeenCalled();
+    // No Pro compute on the upsell path — guards the lazy import + compute.
+    expect(proSpies.computeSavingsHistory).not.toHaveBeenCalled();
+    expect(proSpies.exportSavings).not.toHaveBeenCalled();
   });
 
   it("with a valid license: exports CSV", async () => {
