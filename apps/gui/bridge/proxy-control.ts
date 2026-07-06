@@ -42,7 +42,17 @@ export function defaultProxyGuiDeps(storeRoot: string): ProxyGuiDeps {
     launchctl: nodeLaunchctlRunner,
     plistPath: join(homedir(), "Library", "LaunchAgents", "com.megasaver.proxy.plist"),
     backupDir: join(storeRoot, "proxy", "migration-backups"),
-    superviseArgv: [process.execPath, "mega", "proxy", "supervise", "--store", storeRoot],
+    // Resolve the actual running script (process.argv[1]) so the LaunchAgent
+    // re-invokes THIS binary, not a literal "mega" that need not be on PATH.
+    // Mirrors apps/cli/src/commands/proxy/commands.ts. Fallback keeps dev-tsx.
+    superviseArgv: [
+      process.execPath,
+      process.argv[1] ?? "mega",
+      "proxy",
+      "supervise",
+      "--store",
+      storeRoot,
+    ],
     settingsPath: MEGA_PROXY_SETTINGS_PATH ?? resolveClaudeCodeSettingsPath(),
   };
 }

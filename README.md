@@ -27,6 +27,16 @@ never leave your machine.
 npm install -g @megasaver/cli
 ```
 
+Then see your savings in the browser:
+
+```sh
+mega gui
+```
+
+`mega gui` serves the console on a loopback-only port and opens it in your
+browser with a one-time access token — no clone, no `pnpm`, no build. Add
+`--no-open` to just print the URL, `--port <n>` to pin the port.
+
 Or download the self-contained `mega.mjs` bundle from
 [GitHub Releases](https://github.com/haJ1t/MegaSaver/releases/latest).
 Full setup guide (prerequisites, hooks, first session): **[docs/getting-started.md](docs/getting-started.md)**.
@@ -478,6 +488,7 @@ mega <command> [subcommand] [flags]
 
 | Command | What it does |
 |---------|--------------|
+| `mega gui` | serve the desktop console locally (loopback + token) and open it |
 | `mega mcp` | install / repair / status / serve the MCP bridge for an agent |
 | `mega hooks` | install / status / uninstall Claude Code hooks (telemetry, saver, intent) |
 | `mega connector` | write & sync the per-agent instruction block; report drift |
@@ -522,10 +533,18 @@ mega connector status myapp --target claude-code   # in-sync | drift | no-block 
 A localhost web console over the same on-disk store — no terminal required:
 
 ```bash
-pnpm --filter @megasaver/gui dev   # UI on :5173, bridge on :5174
+mega gui   # serves the console + opens it with a one-time token
 ```
 
-Open <http://localhost:5173>. It shows your **sessions** and **memory entries**
+`mega gui` binds loopback-only and gates every `/api` call behind a per-run
+bearer token (handed to the browser once via the opened URL, then stripped
+from the address bar). Use `--no-open` to print the URL instead, `--port <n>`
+to pin the port, `--store <dir>` to point at a non-default store.
+
+Contributors working on the console itself run the split dev servers instead
+(`pnpm --filter @megasaver/gui dev` — UI on :5173, bridge on :5174).
+
+The console shows your **sessions** and **memory entries**
 with write actions, an **Agent Setup Doctor** that installs/repairs the bridge
 and connector blocks in one click, and a per-session **Token Saver panel** with a
 mode picker, savings ratio, a savings-history chart, a recent-events feed, a

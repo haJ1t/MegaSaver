@@ -26,7 +26,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
     "clean": "rm -rf dist dist-bundle .turbo",
-    "prepack": "pnpm run bundle && node scripts/strip-publish-manifest.mjs prepack",
+    "prepack": "pnpm --filter @megasaver/gui build && pnpm run bundle && node scripts/copy-gui-dist.mjs && node scripts/strip-publish-manifest.mjs prepack",
     "postpack": "node scripts/strip-publish-manifest.mjs postpack"
   },
   "devDependencies": {
@@ -39,6 +39,7 @@
     "@megasaver/context-pruner": "workspace:*",
     "@megasaver/core": "workspace:*",
     "@megasaver/daemon": "workspace:*",
+    "@megasaver/gui": "workspace:*",
     "@megasaver/indexer": "workspace:*",
     "@megasaver/llm-proxy": "workspace:*",
     "@megasaver/mcp-bridge": "workspace:*",

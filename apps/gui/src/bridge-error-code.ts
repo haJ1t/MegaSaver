@@ -21,6 +21,7 @@ export const BRIDGE_ERROR_CODES = [
   "session_not_found",
   "session_project_mismatch",
   "store_write_failed",
+  "unauthorized",
   "validation_failed",
 ] as const;
 export type BridgeErrorCode = (typeof BRIDGE_ERROR_CODES)[number];
@@ -50,5 +51,6 @@ export const BRIDGE_ERROR_COPY: Record<BridgeErrorCode, string> = {
   session_not_found: "Session not found. It may have been removed.",
   session_project_mismatch: "Session does not belong to this project.",
   store_write_failed: "Store write failed. Check disk space and permissions.",
+  unauthorized: "Missing or invalid bridge token.",
   validation_failed: "Invalid input. Check the highlighted fields and try again.",
 };

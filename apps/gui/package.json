@@ -5,19 +5,26 @@
   "private": true,
   "description": "Mega Saver GUI app - localhost web shell over the core registry.",
   "type": "module",
-  "files": ["dist"],
+  "files": ["dist", "dist-bridge"],
+  "exports": {
+    "./bridge": {
+      "types": "./dist-bridge/index.d.ts",
+      "import": "./dist-bridge/index.js"
+    }
+  },
   "sideEffects": false,
   "scripts": {
-    "dev": "concurrently --kill-others-on-fail --names vite,bridge -c blue,magenta \"pnpm dev:vite\" \"pnpm dev:bridge\"",
-    "app": "concurrently --kill-others-on-fail --names vite,bridge,electron -c blue,magenta,cyan \"pnpm dev:vite\" \"pnpm dev:bridge\" \"wait-on tcp:5173 && electron electron/main.cjs\"",
+    "dev": "MEGASAVER_GUI_TOKEN=dev-shared-token-000000000000000000 VITE_MEGASAVER_GUI_TOKEN=dev-shared-token-000000000000000000 concurrently --kill-others-on-fail --names vite,bridge -c blue,magenta \"pnpm dev:vite\" \"pnpm dev:bridge\"",
+    "app": "MEGASAVER_GUI_TOKEN=dev-shared-token-000000000000000000 VITE_MEGASAVER_GUI_TOKEN=dev-shared-token-000000000000000000 concurrently --kill-others-on-fail --names vite,bridge,electron -c blue,magenta,cyan \"pnpm dev:vite\" \"pnpm dev:bridge\" \"wait-on tcp:5173 && electron electron/main.cjs\"",
     "dev:vite": "vite",
     "dev:bridge": "node --import tsx bridge/server.ts",
     "bridge": "node --import tsx bridge/server.ts",
-    "build": "vite build",
+    "build": "vite build && pnpm build:bridge",
+    "build:bridge": "tsup --config tsup.bridge.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist dist-bridge .turbo"
   },
   "dependencies": {
     "@fontsource/dm-mono": "^5.0.0",

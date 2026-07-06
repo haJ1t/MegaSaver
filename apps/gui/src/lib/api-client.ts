@@ -1,4 +1,5 @@
 import type { BridgeError } from "../components/states.js";
+import { authHeaders } from "./auth.js";
 
 export type HealthResponse = {
   ok: true;
@@ -25,14 +26,14 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+  const response = await fetch(path, { headers: authHeaders() });
   return handleResponse<T>(response);
 }
 
 export async function postJson<T>(path: string, body?: unknown): Promise<T> {
   const init: RequestInit = {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...authHeaders() },
   };
   if (body !== undefined) {
     init.body = JSON.stringify(body);
@@ -42,7 +43,7 @@ export async function postJson<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export async function deleteJson(path: string): Promise<void> {
-  const response = await fetch(path, { method: "DELETE" });
+  const response = await fetch(path, { method: "DELETE", headers: authHeaders() });
   if (response.status === 204) return;
   // Non-204 success codes: still ok
   if (response.ok) return;

@@ -1,4 +1,5 @@
 import type { BridgeError } from "../components/states.js";
+import { authHeaders, withToken } from "./auth.js";
 
 export type Block = {
   kind: "text" | "thinking" | "tool_use" | "tool_result";
@@ -63,7 +64,7 @@ export type SessionTelemetry = {
 };
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+  const response = await fetch(path, { headers: authHeaders() });
   if (response.ok) return (await response.json()) as T;
   let body: BridgeError;
   try {
@@ -81,8 +82,11 @@ async function mutateJson<T>(path: string, method: string, body?: unknown): Prom
   const response = await fetch(path, {
     method,
     ...(body !== undefined
-      ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
-      : {}),
+      ? {
+          headers: { "content-type": "application/json", ...authHeaders() },
+          body: JSON.stringify(body),
+        }
+      : { headers: authHeaders() }),
   });
   if (response.ok) return (await response.json()) as T;
   let err: BridgeError;
@@ -132,7 +136,7 @@ export function openClaudeSessionStream(
   handlers: StreamHandlers,
 ): () => void {
   const url = `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/stream`;
-  const source = new EventSource(url);
+  const source = new EventSource(withToken(url));
   source.addEventListener("snapshot", (e) => {
     handlers.onSnapshot(JSON.parse((e as MessageEvent).data) as ClaudeTranscriptSnapshot);
   });

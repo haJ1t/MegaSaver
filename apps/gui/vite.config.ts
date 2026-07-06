@@ -14,9 +14,20 @@ export default defineConfig({
       },
     },
   },
+  // Expose the dev-only shared bridge token to the frontend. VITE_-prefixed env
+  // vars are read from process.env at build time; defining it explicitly keeps
+  // the packaged build (where it is unset) inlining an empty string, so the app
+  // falls through to the ?token= bootstrap instead of a stale value.
+  define: {
+    "import.meta.env.VITE_MEGASAVER_GUI_TOKEN": JSON.stringify(
+      process.env.VITE_MEGASAVER_GUI_TOKEN ?? "",
+    ),
+  },
   build: {
     outDir: "dist",
-    sourcemap: true,
+    // No sourcemaps in the shipped bundle: dev debugging uses the vite dev
+    // server, and the 2.7 MB .map would bloat the published CLI tarball.
+    sourcemap: false,
     target: "es2023",
   },
 });

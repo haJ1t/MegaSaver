@@ -1,19 +1,35 @@
 import { randomUUID } from "node:crypto";
-import { createServer } from "node:http";
-import { createLauncherRegistry, ensurePredefinedRoles } from "@megasaver/agent-office";
-import { createClaudeCodeLauncher } from "@megasaver/connector-claude-code";
-import { createJsonDirectoryCoreRegistry, initStore } from "@megasaver/core";
-import { DEFAULT_MCP_ARGS, DEFAULT_MCP_COMMAND } from "@megasaver/mcp-bridge";
-import { createBridgeHandler } from "./handler.js";
-import { createMcpOps } from "./mcp-ops.js";
-import { ensureOfficeProject } from "./routes/office.js";
+import { argv } from "node:process";
+import { fileURLToPath } from "node:url";
+import { startGuiBridge } from "./start.js";
 import { resolveBridgeStorePath } from "./store-path.js";
+
+// Re-export the boot helpers so existing bridge consumers (tests, dev tooling)
+// keep importing them from ./server; the canonical definitions moved to
+// ./start so the `mega gui` bundle never pulls this module's entrypoint guard.
+export { createBridgeServer, deriveGuiOrigins } from "./start.js";
 
 const DEFAULT_PORT = 5174;
 
 function readEnv(key: string): string | undefined {
   const value = process.env[key];
   return value === undefined || value.length === 0 ? undefined : value;
+}
+
+// The dev script exports MEGASAVER_GUI_TOKEN so vite and the bridge share one
+// token; absent that (a bare bridge start), mint a per-process random one.
+export function resolveGuiToken(env: NodeJS.ProcessEnv): string {
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const fromEnv = env["MEGASAVER_GUI_TOKEN"];
+  return fromEnv !== undefined && fromEnv.length > 0 ? fromEnv : randomUUID();
+}
+
+// The token handed to the handler — the /api wall is ALWAYS armed, in dev and
+// distribution alike. No env disables it: the dev script exports a shared
+// MEGASAVER_GUI_TOKEN so the frontend (which now attaches it) still reaches /api,
+// and a bare bridge start mints a per-process random token.
+export function resolveGuiAuthToken(env: NodeJS.ProcessEnv): string {
+  return resolveGuiToken(env);
 }
 
 async function main(): Promise<void> {
@@ -25,44 +41,15 @@ async function main(): Promise<void> {
     localAppData: readEnv("LOCALAPPDATA"),
   });
 
-  await initStore(storeDir);
-  const registry = createJsonDirectoryCoreRegistry({ rootDir: storeDir });
-
-  const mcpOps = createMcpOps({
-    registry,
-    home: readEnv("HOME") ?? readEnv("USERPROFILE") ?? "",
-    // Runnable launch entry so a GUI-initiated install writes a config the
-    // agent can actually spawn (`mega mcp serve`), reusing the CLI defaults
-    // hoisted to @megasaver/mcp-bridge (no apps/gui → apps/cli import).
-    command: DEFAULT_MCP_COMMAND,
-    args: [...DEFAULT_MCP_ARGS],
-  });
-  const launcherRegistry = createLauncherRegistry([createClaudeCodeLauncher()]);
-  const allowFull = readEnv("MEGA_OFFICE_ALLOW_FULL") === "1";
-  // Seed the office Core project before serving: supervisor-created sessions
-  // require it to exist, else every office task fails with project_not_found.
-  ensureOfficeProject(registry, () => new Date().toISOString());
-  // Seed the predefined role roster (idempotent) so the office shows ready-made
-  // roles on first run; a no-op once any role exists.
-  await ensurePredefinedRoles({
-    storeRoot: storeDir,
-    now: () => new Date().toISOString(),
-    newId: () => randomUUID(),
-  });
-  const handler = createBridgeHandler({
-    storePath: storeDir,
-    registry,
-    mcpOps,
-    office: { coreRegistry: registry, registry: launcherRegistry, allowFull },
-  });
-  const server = createServer(handler);
-
   const portRaw = readEnv("MEGASAVER_GUI_BRIDGE_PORT");
   const port = portRaw ? Number.parseInt(portRaw, 10) : DEFAULT_PORT;
-  server.listen(port, () => {
-    process.stdout.write(`mega-saver bridge listening on http://localhost:${port}\n`);
-    process.stdout.write(`store: ${storeDir}\n`);
-  });
+  // The dev script exports MEGASAVER_GUI_TOKEN so vite + bridge share one token;
+  // resolveGuiAuthToken preserves that (and the wall stays always-on).
+  const token = resolveGuiAuthToken(process.env);
+
+  const { server, url } = await startGuiBridge({ storeDir, port, token });
+  process.stdout.write(`mega-saver bridge listening on ${url}\n`);
+  process.stdout.write(`store: ${storeDir}\n`);
 
   const shutdown = (signal: string): void => {
     process.stdout.write(`\nbridge: received ${signal}, shutting down\n`);
@@ -80,7 +67,13 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
-main().catch((err: unknown) => {
-  process.stderr.write(`bridge failed: ${err instanceof Error ? err.message : String(err)}\n`);
-  process.exit(1);
-});
+// Only boot when run as the direct entrypoint (`node bridge/server.ts`, the dev
+// bridge). Importing this module (tests) must not start a server. `mega gui`
+// never reaches here — it boots via startGuiBridge from ./start directly.
+const isEntrypoint = argv[1] !== undefined && fileURLToPath(import.meta.url) === argv[1];
+if (isEntrypoint) {
+  main().catch((err: unknown) => {
+    process.stderr.write(`bridge failed: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  });
+}

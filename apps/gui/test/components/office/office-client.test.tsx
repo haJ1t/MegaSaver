@@ -37,7 +37,7 @@ describe("office-client", () => {
       stubFetch(200, roles);
       const result = await fetchRoles();
       expect(result).toEqual(roles);
-      expect(global.fetch).toHaveBeenCalledWith("/api/office/roles");
+      expect(global.fetch).toHaveBeenCalledWith("/api/office/roles", { headers: {} });
     });
   });
 
@@ -76,7 +76,9 @@ describe("office-client", () => {
       const agents = [{ id: "a1" }];
       stubFetch(200, agents);
       await fetchAgents("my/workspace");
-      expect(global.fetch).toHaveBeenCalledWith("/api/office/my%2Fworkspace/agents");
+      expect(global.fetch).toHaveBeenCalledWith("/api/office/my%2Fworkspace/agents", {
+        headers: {},
+      });
     });
   });
 
@@ -109,7 +111,7 @@ describe("office-client", () => {
     it("GETs /api/office/:wk/agents/:agentId/tasks", async () => {
       stubFetch(200, []);
       await fetchTasks("wk1", "a1");
-      expect(global.fetch).toHaveBeenCalledWith("/api/office/wk1/agents/a1/tasks");
+      expect(global.fetch).toHaveBeenCalledWith("/api/office/wk1/agents/a1/tasks", { headers: {} });
     });
   });
 
@@ -156,7 +158,7 @@ describe("office-client", () => {
     it("GETs /api/office/:wk/audit", async () => {
       stubFetch(200, []);
       await fetchAudit("wk1");
-      expect(global.fetch).toHaveBeenCalledWith("/api/office/wk1/audit");
+      expect(global.fetch).toHaveBeenCalledWith("/api/office/wk1/audit", { headers: {} });
     });
   });
 
@@ -166,7 +168,7 @@ describe("office-client", () => {
       stubFetch(200, status);
       const result = await fetchOfficeStatus("wk1");
       expect(result).toEqual(status);
-      expect(global.fetch).toHaveBeenCalledWith("/api/office/wk1/status");
+      expect(global.fetch).toHaveBeenCalledWith("/api/office/wk1/status", { headers: {} });
     });
   });
 

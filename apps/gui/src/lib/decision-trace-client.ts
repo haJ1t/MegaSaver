@@ -1,4 +1,5 @@
 import type { BridgeError } from "../components/states.js";
+import { authHeaders } from "./auth.js";
 
 // Mirror of `@megasaver/output-filter`'s SessionDecisionTrace, re-declared on the
 // client so the browser bundle never imports the Node reader. Kept structurally
@@ -54,7 +55,7 @@ export type DecisionTraceData = {
 };
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+  const response = await fetch(path, { headers: authHeaders() });
   if (response.ok) return (await response.json()) as T;
   let body: BridgeError;
   try {

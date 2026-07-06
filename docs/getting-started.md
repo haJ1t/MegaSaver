@@ -37,6 +37,19 @@ Or put it somewhere on your `$PATH` and alias it:
 alias mega="node /path/to/mega.mjs"
 ```
 
+## See your savings
+
+```sh
+mega gui
+```
+
+`mega gui` serves the desktop console (sessions, memory, the Token Saver
+panel with the savings chart) on a loopback-only port and opens it in your
+browser with a one-time access token — no clone, no `pnpm`, no build. It
+runs in the foreground; press Ctrl-C to stop. Flags: `--no-open` prints the
+URL instead of opening a browser, `--port <n>` pins the port, `--store <dir>`
+points at a non-default store.
+
 ## First run
 
 ### 1. Install hooks (Claude Code)
