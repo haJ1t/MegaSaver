@@ -1,5 +1,136 @@
 # @megasaver/gui
 
+## 1.4.0
+
+### Minor Changes
+
+- 20977aa: Decision-Trace Viewer: surface the causal chain behind each context decision.
+
+  Registry/proxy outputs now record their ranking decision inline on the replay
+  trace — the classification, the selected/omitted chunks with their EngineScore
+  breakdown, the memory ids that boosted the ranking (`rankedByMemoryIds`), and the
+  redaction summary. Replay tracing is now **on by default** (disable with
+  `MEGASAVER_SEAM_TRACE=false`), bounded by a retention cap on trace-session dirs.
+
+  - New `readSessionDecisionTrace` reader joins the trace's inline attribution into
+    a per-output `SessionDecisionTrace` (output granularity).
+  - New CLI: `mega trace explain <sessionId> --project <name> [--workspace <key>]
+[--json]` renders the causal chain for a registry session.
+  - New GUI: a Cytoscape decision-flow panel with a project-scoped session picker
+    (traces come from proxy/registry sessions for the workspace).
+
+  Note: the memory attribution is _ranking-causal_ (which memory boosted the
+  output's ranking), distinct from the evidence ledger's retention `pinnedByMemoryIds`.
+  `highRiskFindings` is the seam's redaction count. Traces exist only for
+  registry/proxy sessions; pure cockpit/overlay sessions show an honest empty state.
+
+- f66d02b: `mega gui`: serve the packaged desktop console from the published CLI.
+
+  `npm install -g @megasaver/cli && mega gui` now starts the GUI bridge and opens
+  the console in your browser — no clone, no `pnpm`, no build. The command binds
+  loopback-only, mints a per-run bearer token, serves the bundled GUI dist plus
+  the `/api` bridge same-origin, prints the tokenized URL, and opens the browser
+  (skip with `--no-open`). It runs in the foreground; Ctrl-C stops it.
+  `--port <n>` pins the port, `--store <dir>` selects the store.
+
+  - **@megasaver/cli**: new `mega gui [--port <n>] [--no-open] [--store <dir>]`
+    command. The build now inlines the GUI bridge into the standalone bundle and
+    ships the built frontend at `dist-bundle/gui`, resolved relative to the bundle
+    at runtime.
+  - **@megasaver/gui**: the bridge is hardened for distribution — loopback bind, an
+    always-on bearer-token wall on every `/api` route (query token accepted for
+    SSE), origin-derived CORS, and static serving of the built GUI. A new
+    `@megasaver/gui/bridge` entry exposes `startGuiBridge` + `resolveShippedGuiDistDir`
+    as the single boot path shared by the dev server and `mega gui`.
+
+  Security: there is no code path where `mega gui` starts the packaged GUI without
+  the token wall — no flag and no env disables `/api` auth.
+
+- c70c912: Fix the conversation-proxy toggle in the Token saver view. The GUI read a stale
+  `ProxyStatus` shape (`running`/`url`/`port`) after the server contract changed to
+  `enabled`/`routed`/`routeConflict`/`reconcileBlocked`, so the toggle looked dead
+  (clicking it silently enabled the proxy server-side but the UI never reflected
+  it). The client type + view now read the real server fields, the bridge emits the
+  loopback `url`, a compile-time contract test guards future client/server drift,
+  and a helper line clarifies the conversation proxy is separate from the context
+  daemon. Also removes the dead "Restart claude" button (it POSTed to a
+  non-existent `/api/proxy/restart-claude` route — 404); the documented design is a
+  manual restart (no osascript), so the panel now shows plain guidance instead.
+
+  Adds a **Finish stopping** action: turning the proxy off only un-routes it while
+  the supervisor drains its listener (to not break an in-flight session). The panel
+  now surfaces the `draining` state and a "Finish stopping" button that POSTs
+  `{ enabled:false, confirmClientsRestarted:true }` so the operator can fully stop
+  the listener (freeing port 8787 / releasing the API key) without dropping to the
+  CLI — previously only `mega proxy stop --confirm-clients-restarted` could finish
+  the drain. The copy warns to restart Claude first.
+
+- 14b2c6c: Savings headline: surface saved tokens as a visible, defensible value.
+
+  MegaSaver already computed tokens saved but showed them only as raw bytes/tokens
+  buried in an audit command. This turns that number into a value a person feels:
+  a cumulative `≈$X saved (est.) · ≈Z sessions' worth of context reclaimed` on the
+  GUI home strip and the `mega audit report` output.
+
+  - **@megasaver/stats**: new pure `computeSavingsHeadline` (byte entry) +
+    `savingsHeadlineFromTokens` (token entry) share one price/window model —
+    `INPUT_PRICE_PER_MTOK_USD = 3.0` and `CONTEXT_WINDOW_TOKENS = 200_000`. Tokens
+    reuse the existing `tokensFromBytes` (bytes/4) model. New
+    `readAllWorkspaceTokenSaverTotals` aggregates every workspace with a blended
+    ratio for the cumulative headline. A browser-safe `@megasaver/stats/headline`
+    subpath lets the GUI client import the const without pulling the node store.
+  - **@megasaver/cli**: `mega audit report` renders a `$` headline line + a
+    one-line footnote after the summary, and carries the `SavingsHeadline` object
+    under `--json`. Zero savings renders an honest
+    `No savings recorded in this window yet.` — never a fake `$0.00` flex.
+  - **@megasaver/gui**: a new `GET /api/token-saver/all-workspaces` bridge route
+    returns the summed totals; the home strip renders
+    `≈$X saved (est.) · ≈Z sessions reclaimed` with the estimate assumption in a
+    hover footnote, and an honest `No savings recorded yet — enable the saver to
+start.` empty state.
+
+  Honesty: the `$` is always labeled `(est.)` because the one modeled assumption is
+  the per-model input price. Saved tokens were compressed away and never sent, so —
+  unlike the conversation proxy's `$` — they carry no prompt-cache discount to
+  double-count. The 200K-per-session divisor deliberately UNDER-counts real
+  sessions (a session rarely fills 200K), so reclaim is never overstated.
+
+- 223fa0a: Savings share card: the product generates its own shareable savings image.
+
+  The savings screenshot is the niche's native currency, so MegaSaver becomes its
+  own ad creative. A new pure `renderSavingsCardSvg(headline, { windowLabel })`
+  turns a `SavingsHeadline` into a 1200×630 direction-B card (minimal editorial:
+  light `#f6f5f2` ground, dark `#17181a` ink, one big `$` number, "Mega Saver"
+  mark, three sub-stats, footer "Less tokens. More signal."). It lives in the
+  browser-safe `@megasaver/stats/headline` barrel so the GUI and a future
+  `mega share` reuse one renderer; all text derives from the real headline (no
+  invented numbers), carries `(est.)`, and untrusted window labels are escaped.
+
+  - New GUI **Share** button beside the savings strip, shown only when
+    `bytesSavedTotal > 0`. It opens a modal previewing the card and exporting it:
+    **Download PNG** (zero-dep SVG→canvas→`toBlob`), best-effort **Copy image**
+    (guarded when the clipboard API is missing), and **Share on X** (a tweet-intent
+    whose honest, `(est.)`-carrying text comes from the same `computeSavingsHeadline`
+    — one source, no overstatement). X can't auto-attach the image, so the modal
+    tells the user to download the card then attach it.
+
+### Patch Changes
+
+- Updated dependencies [20977aa]
+- Updated dependencies [14b2c6c]
+- Updated dependencies [223fa0a]
+  - @megasaver/output-filter@1.4.0
+  - @megasaver/context-gate@0.5.0
+  - @megasaver/stats@1.3.0
+  - @megasaver/content-store@1.1.2
+  - @megasaver/core@1.2.1
+  - @megasaver/daemon@0.1.2
+  - @megasaver/mcp-bridge@1.2.1
+  - @megasaver/agent-office@0.1.2
+  - @megasaver/connector-claude-code@1.2.1
+  - @megasaver/connector-generic-cli@1.1.2
+  - @megasaver/connectors-shared@1.2.1
+
 ## 1.3.0
 
 ### Minor Changes
