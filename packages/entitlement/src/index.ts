@@ -11,3 +11,14 @@ export {
   checkEntitlement,
 } from "./entitlement.js";
 export { MEGASAVER_PUBLIC_KEY } from "./public-key.js";
+export {
+  type StoredLicense,
+  type ActivateLicenseDeps,
+  type ActivateLicenseResult,
+  type LicenseStatusDeps,
+  type LicenseStatusResult,
+  activateLicense,
+  readLicense,
+  deactivateLicense,
+  licenseStatus,
+} from "./store.js";
