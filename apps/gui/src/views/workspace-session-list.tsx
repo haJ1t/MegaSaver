@@ -1,4 +1,4 @@
-import { computeSavingsHeadline } from "@megasaver/stats/headline";
+import { SAVINGS_FOOTNOTE, computeSavingsHeadline } from "@megasaver/stats/headline";
 import { useEffect, useState } from "react";
 import type { BridgeError } from "../components/states.js";
 import { ErrorState, LoadingState } from "../components/states.js";
@@ -9,9 +9,6 @@ import {
   fetchClaudeSessions,
 } from "../lib/claude-sessions-client.js";
 import { groupSessionsByCwd } from "../lib/workspace-grouping.js";
-
-const SAVINGS_FOOTNOTE =
-  "Est. at $3/M input tokens. Saved tokens were compressed away and never sent, so they carry no prompt-cache discount — the only assumption is the per-model input price.";
 
 const LIST_POLL_MS = 4000;
 const LIVE_WINDOW_MS = 8000;
@@ -241,7 +238,9 @@ function SavingsHeadlineStrip({
 
   const headline = computeSavingsHeadline(totals);
   const dollars = headline.dollarsSaved.toFixed(2);
-  const reclaimed = Math.round(headline.contextWindowsReclaimed);
+  // One decimal, matching the CLI — the reclaim metric under-counts on purpose,
+  // so it must never round UP (0.6 -> "0.6", never "1").
+  const reclaimed = headline.contextWindowsReclaimed.toFixed(1);
   return (
     <div
       data-testid="savings-headline"

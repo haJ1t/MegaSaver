@@ -187,7 +187,7 @@ describe("WorkspaceSessionList", () => {
 
   it("renders the cumulative savings headline when savings exist", async () => {
     stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
-    // 4_000_000 saved bytes -> 1_000_000 tokens -> $3.00 (est.) at $3/M; 5 reclaimed.
+    // 4_000_000 saved bytes -> 1_000_000 tokens -> $3.00 (est.) at the input price; 5 reclaimed.
     stub.totals = {
       bytesSavedTotal: 4_000_000,
       sessionsCount: 10,
@@ -197,7 +197,23 @@ describe("WorkspaceSessionList", () => {
     render(<WorkspaceSessionList onSelect={() => {}} />);
     const headline = await screen.findByTestId("savings-headline");
     expect(headline.textContent).toContain("$3.00 saved (est.)");
-    expect(headline.textContent).toContain("5 sessions reclaimed");
+    expect(headline.textContent).toContain("5.0 sessions reclaimed");
+  });
+
+  it("shows the fractional reclaim count without rounding up (conservative)", async () => {
+    stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
+    // 480_000 saved bytes -> 120_000 tokens -> 120_000 / 200_000 = 0.6 windows.
+    // The metric under-counts on purpose: 0.6 must render as "0.6", never "1".
+    stub.totals = {
+      bytesSavedTotal: 480_000,
+      sessionsCount: 4,
+      savingRatio: 0.3,
+      workspaceCount: 1,
+    };
+    render(<WorkspaceSessionList onSelect={() => {}} />);
+    const headline = await screen.findByTestId("savings-headline");
+    expect(headline.textContent).toContain("0.6 sessions reclaimed");
+    expect(headline.textContent).not.toContain("1 sessions reclaimed");
   });
 
   it("renders an honest empty copy when there are no savings yet", async () => {
