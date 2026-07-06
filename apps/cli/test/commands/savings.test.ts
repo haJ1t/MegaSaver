@@ -9,6 +9,7 @@ import {
   type SavingsEventReader,
   runSavingsExport,
   runSavingsHistory,
+  runSavingsInsights,
 } from "../../src/commands/savings/index.js";
 
 // Spy on the proprietary Pro compute while delegating to the real implementation.
@@ -19,6 +20,8 @@ const proSpies = vi.hoisted(() => ({
   computeSavingsHistory: vi.fn(),
   computeSavingsByProject: vi.fn(),
   exportSavings: vi.fn(),
+  computeWasteBreakdown: vi.fn(),
+  computeWasteHeadline: vi.fn(),
 }));
 
 vi.mock("@megasaver/pro-analytics", async (importActual) => {
@@ -26,11 +29,15 @@ vi.mock("@megasaver/pro-analytics", async (importActual) => {
   proSpies.computeSavingsHistory.mockImplementation(actual.computeSavingsHistory);
   proSpies.computeSavingsByProject.mockImplementation(actual.computeSavingsByProject);
   proSpies.exportSavings.mockImplementation(actual.exportSavings);
+  proSpies.computeWasteBreakdown.mockImplementation(actual.computeWasteBreakdown);
+  proSpies.computeWasteHeadline.mockImplementation(actual.computeWasteHeadline);
   return {
     ...actual,
     computeSavingsHistory: proSpies.computeSavingsHistory,
     computeSavingsByProject: proSpies.computeSavingsByProject,
     exportSavings: proSpies.exportSavings,
+    computeWasteBreakdown: proSpies.computeWasteBreakdown,
+    computeWasteHeadline: proSpies.computeWasteHeadline,
   };
 });
 
@@ -95,6 +102,8 @@ beforeEach(() => {
   proSpies.computeSavingsHistory.mockClear();
   proSpies.computeSavingsByProject.mockClear();
   proSpies.exportSavings.mockClear();
+  proSpies.computeWasteBreakdown.mockClear();
+  proSpies.computeWasteHeadline.mockClear();
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -320,5 +329,220 @@ describe("runSavingsExport — gating", () => {
     expect(existsSync(outFile)).toBe(true);
     const parsed = JSON.parse(readFileSync(outFile, "utf8")) as unknown[];
     expect(Array.isArray(parsed)).toBe(true);
+  });
+});
+
+function insightsEvent(
+  sourceKind: TokenSaverEvent["sourceKind"],
+  label: string,
+  rawBytes: number,
+  returnedBytes: number,
+  bytesSaved: number,
+  i: number,
+): TokenSaverEvent {
+  return {
+    id: `ie-${i}`,
+    sessionId: "sess-1" as TokenSaverEvent["sessionId"],
+    projectId: "proj-1" as TokenSaverEvent["projectId"],
+    createdAt: "2026-07-01T00:00:00.000Z",
+    sourceKind,
+    label,
+    rawBytes,
+    returnedBytes,
+    bytesSaved,
+    savingRatio: rawBytes === 0 ? 0 : bytesSaved / rawBytes,
+    summary: "s",
+    mode: "safe",
+  };
+}
+
+// Two sources with distinct returnedBytes so the sort order is observable:
+// command still sends 1800 returned bytes (biggest ongoing cost), file 100.
+const insightsEvents: TokenSaverEvent[] = [
+  insightsEvent("command", "test", 1000, 900, 100, 0),
+  insightsEvent("command", "test", 1000, 900, 100, 1),
+  insightsEvent("file", "read", 1000, 100, 900, 2),
+];
+
+function insightsReader(): SavingsEventReader {
+  return () => ({
+    events: insightsEvents,
+    eventsByProject: { "proj-1": insightsEvents },
+  });
+}
+
+describe("runSavingsInsights — gating", () => {
+  it("with NO license: prints the upsell, exit 0, reads NO events, computes nothing", async () => {
+    const readAllEvents = vi.fn(insightsReader());
+
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents,
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("Mega Saver Pro");
+    expect(text).toContain("mega license activate");
+    // The gate ran FIRST — no events read AND no pro-analytics compute invoked
+    // (guards the lazy import too: the Pro compute never half-runs for a free user).
+    expect(readAllEvents).not.toHaveBeenCalled();
+    expect(proSpies.computeWasteBreakdown).not.toHaveBeenCalled();
+    expect(proSpies.computeWasteHeadline).not.toHaveBeenCalled();
+  });
+
+  it("with a valid Pro license: reads events and renders the top source + table header", async () => {
+    activatePro();
+    const readAllEvents = vi.fn(insightsReader());
+
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents,
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(0);
+    expect(readAllEvents).toHaveBeenCalledTimes(1);
+    const text = out.join("\n");
+    // Biggest source by returnedBytes is "command"; the table header lists columns.
+    expect(text).toContain("command");
+    expect(text).toContain("key  events");
+  });
+});
+
+describe("runSavingsInsights — render variants (entitled)", () => {
+  beforeEach(() => activatePro());
+
+  it("--json emits { headline, rows } with rows an array", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      json: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(out.join("\n")) as {
+      headline: { topKey: string };
+      rows: Array<{ key: string }>;
+    };
+    expect(Array.isArray(parsed.rows)).toBe(true);
+    expect(parsed.headline.topKey).toBe("command");
+    expect(parsed.rows.map((r) => r.key)).toEqual(["command", "file"]);
+  });
+
+  it("--csv emits a CSV with the insights header row from exportSavings", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      csv: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("key,events,rawBytes,returnedBytes,bytesSaved");
+  });
+
+  it("floors both CSV $ columns (dollarsReturned + dollarsSaved) like the table", async () => {
+    // returnedBytes and bytesSaved both 49_380_000 → each $37.035 raw; the CSV
+    // must floor BOTH to "$37.03" (matching the table), never leak the raw float.
+    const bigReader: SavingsEventReader = () => ({
+      events: [insightsEvent("command", "test", 98_760_000, 49_380_000, 49_380_000, 0)],
+      eventsByProject: {},
+    });
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: bigReader,
+      csv: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("$37.03");
+    expect(text).not.toContain("37.035");
+  });
+
+  it("--by label groups by label", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      by: "label",
+      json: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(out.join("\n")) as { rows: Array<{ key: string }> };
+    // "test" returned 1800 > "read" 100.
+    expect(parsed.rows.map((r) => r.key)).toEqual(["test", "read"]);
+  });
+
+  it("floors the table $ columns via formatDollarsSaved", async () => {
+    // 49_380_000 saved bytes → 12_345_000 tokens → raw $37.035; the table must
+    // show the floored "$37.03", agreeing with `mega audit report` / the GUI strip.
+    const bigReader: SavingsEventReader = () => ({
+      events: [insightsEvent("command", "test", 98_760_000, 0, 49_380_000, 0)],
+      eventsByProject: {},
+    });
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: bigReader,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("$37.03");
+    expect(text).not.toContain("37.035");
+    expect(text).not.toContain("37.04");
+  });
+
+  it("--out writes the rendered output to a file", async () => {
+    const outFile = join(root, "insights.txt");
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      out: outFile,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(existsSync(outFile)).toBe(true);
+    expect(readFileSync(outFile, "utf8")).toContain("command");
+    expect(out.join("\n")).toContain(`Wrote savings insights to ${outFile}`);
+  });
+
+  it("no events → No savings recorded yet., exit 0", async () => {
+    const emptyReader: SavingsEventReader = () => ({ events: [], eventsByProject: {} });
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: emptyReader,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("No savings recorded yet.");
   });
 });
