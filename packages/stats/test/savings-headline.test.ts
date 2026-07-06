@@ -3,6 +3,7 @@ import {
   INPUT_PRICE_PER_MTOK_USD,
   SAVINGS_FOOTNOTE,
   computeSavingsHeadline,
+  formatDollarsSaved,
   savingsFootnote,
   savingsHeadlineFromTokens,
 } from "../src/savings-headline.js";
@@ -66,6 +67,22 @@ describe("savingsHeadlineFromTokens", () => {
     });
     const fromTokens = savingsHeadlineFromTokens(1_000_000, 0.5);
     expect(fromTokens).toEqual(fromBytes);
+  });
+});
+
+describe("formatDollarsSaved", () => {
+  it("floors the half-cent so the public $ never overstates", () => {
+    // 37.035 rounds UP to "$37.04" under toFixed(2); the conservative display
+    // must floor the cents to "$37.03" and never overstate the shared number.
+    expect(formatDollarsSaved(37.035)).toBe("$37.03");
+  });
+
+  it("keeps exact cent values unchanged", () => {
+    expect(formatDollarsSaved(12.4)).toBe("$12.40");
+  });
+
+  it("renders zero as $0.00", () => {
+    expect(formatDollarsSaved(0)).toBe("$0.00");
   });
 });
 

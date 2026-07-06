@@ -3,6 +3,7 @@ import {
   type OverlaySessionTokenSaverStats,
   SAVINGS_FOOTNOTE,
   type SavingsHeadline,
+  formatDollarsSaved,
   savingsHeadlineFromTokens,
 } from "@megasaver/core";
 
@@ -55,7 +56,7 @@ export function formatSavingsHeadlineLines(headline: SavingsHeadline): string[] 
     return ["No savings recorded in this window yet."];
   }
   return [
-    `Saved ≈${headline.tokensSaved} tokens ≈ $${headline.dollarsSaved.toFixed(2)} (est.) · ≈${headline.contextWindowsReclaimed.toFixed(1)} sessions' worth of context (200K each).`,
+    `Saved ≈${headline.tokensSaved} tokens ≈ ${formatDollarsSaved(headline.dollarsSaved)} (est.) · ≈${headline.contextWindowsReclaimed.toFixed(1)} sessions' worth of context (200K each).`,
     SAVINGS_FOOTNOTE,
   ];
 }

@@ -1,4 +1,4 @@
-import type { SavingsHeadline } from "./savings-headline.js";
+import { type SavingsHeadline, formatDollarsSaved } from "./savings-headline.js";
 
 // Direction B — minimal editorial. Light ground, dark ink, one big $ number.
 const GROUND = "#f6f5f2";
@@ -29,7 +29,7 @@ export function renderSavingsCardSvg(
   headline: SavingsHeadline,
   opts: { windowLabel: string },
 ): string {
-  const dollars = headline.dollarsSaved.toFixed(2);
+  const dollars = formatDollarsSaved(headline.dollarsSaved);
   const tokens = compactTokens(headline.tokensSaved);
   const reductionPct = Math.round(headline.savingRatio * 100);
   // toFixed(1): the reclaim metric under-counts on purpose, so mirror the
@@ -50,7 +50,7 @@ export function renderSavingsCardSvg(
       <rect x="0" y="-18" width="22" height="22" fill="${INK}"/>
       <text x="38" y="0" font-size="30" font-weight="600" letter-spacing="0.2">Mega Saver</text>
     </g>
-    <text x="96" y="300" font-size="164" font-weight="800" letter-spacing="-6">$${dollars}</text>
+    <text x="96" y="300" font-size="164" font-weight="800" letter-spacing="-6">${dollars}</text>
     <text x="100" y="360" font-size="26" font-weight="500" fill="${MUTED}">saved ${windowLabel} <tspan font-style="italic">(est.)</tspan></text>
     <g transform="translate(96 434)" font-size="24" font-weight="500">
       <text x="0" y="0">${subStats[0]}</text>

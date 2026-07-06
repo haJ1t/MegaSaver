@@ -1,4 +1,8 @@
-import { computeSavingsHeadline, renderSavingsCardSvg } from "@megasaver/stats/headline";
+import {
+  computeSavingsHeadline,
+  formatDollarsSaved,
+  renderSavingsCardSvg,
+} from "@megasaver/stats/headline";
 import { useCallback, useMemo, useState } from "react";
 import { copyBlob, downloadBlob, svgToPngBlob } from "../lib/card-export.js";
 import type { AllWorkspaceTokenSaverTotals } from "../lib/claude-sessions-client.js";
@@ -7,7 +11,7 @@ const PNG_NAME = "megasaver-savings.png";
 
 function tweetText(dollars: string): string {
   // Honest: the (est.) qualifier rides along, same discipline as the card.
-  return `Saved ≈$${dollars} of tokens with Mega Saver — less tokens, more signal. (est.)`;
+  return `Saved ≈${dollars} of tokens with Mega Saver — less tokens, more signal. (est.)`;
 }
 
 export function SavingsShareModal({
@@ -26,7 +30,7 @@ export function SavingsShareModal({
     () => renderSavingsCardSvg(headline, { windowLabel }),
     [headline, windowLabel],
   );
-  const dollars = headline.dollarsSaved.toFixed(2);
+  const dollars = formatDollarsSaved(headline.dollarsSaved);
   const [copied, setCopied] = useState(false);
 
   const onDownload = useCallback(async () => {

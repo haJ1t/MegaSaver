@@ -1,4 +1,8 @@
-import { SAVINGS_FOOTNOTE, computeSavingsHeadline } from "@megasaver/stats/headline";
+import {
+  SAVINGS_FOOTNOTE,
+  computeSavingsHeadline,
+  formatDollarsSaved,
+} from "@megasaver/stats/headline";
 import { useEffect, useState } from "react";
 import type { BridgeError } from "../components/states.js";
 import { ErrorState, LoadingState } from "../components/states.js";
@@ -261,7 +265,7 @@ function SavingsHeadlineStrip({
   }
 
   const headline = computeSavingsHeadline(totals);
-  const dollars = headline.dollarsSaved.toFixed(2);
+  const dollars = formatDollarsSaved(headline.dollarsSaved);
   // One decimal, matching the CLI — the reclaim metric under-counts on purpose,
   // so it must never round UP (0.6 -> "0.6", never "1").
   const reclaimed = headline.contextWindowsReclaimed.toFixed(1);
@@ -271,7 +275,7 @@ function SavingsHeadlineStrip({
       title={SAVINGS_FOOTNOTE}
       className="mb-6 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text-primary"
     >
-      <span className="font-semibold tabular-nums">≈${dollars} saved (est.)</span>
+      <span className="font-semibold tabular-nums">≈{dollars} saved (est.)</span>
       <span className="text-text-muted"> · </span>
       <span className="tabular-nums">≈{reclaimed} sessions reclaimed</span>
     </div>

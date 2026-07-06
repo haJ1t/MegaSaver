@@ -90,6 +90,7 @@ export {
   CONTEXT_WINDOW_TOKENS,
   SAVINGS_FOOTNOTE,
   savingsFootnote,
+  formatDollarsSaved,
   computeSavingsHeadline,
   savingsHeadlineFromTokens,
   type SavingsHeadline,
