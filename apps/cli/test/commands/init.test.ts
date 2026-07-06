@@ -39,8 +39,6 @@ function harness(overrides: Overrides = {}) {
     prompt,
     run: () =>
       runInit({
-        storeRoot: "/tmp/store",
-        cwd: "/tmp/repo",
         mode: overrides.mode ?? "balanced",
         yes: overrides.yes ?? false,
         openGui: overrides.openGui ?? true,
@@ -101,6 +99,27 @@ describe("mega init — runInit", () => {
     const code = await h.run();
     expect(code).toBe(1);
     expect(h.gui).toHaveBeenCalledTimes(1);
+  });
+
+  it("a THROWING step is treated like a failure: rest still run, summary marks it ✗, resolves 1", async () => {
+    const mcpInstall = vi.fn(async () => {
+      throw new Error("EACCES: permission denied");
+    });
+    const h = harness({ yes: true, mcpInstall });
+    // runInit must resolve 1, not reject
+    const code = await h.run();
+    expect(code).toBe(1);
+    // continue-and-report: hooks + saver still ran after mcp threw
+    expect(h.hooksInstall).toHaveBeenCalledTimes(1);
+    expect(mcpInstall).toHaveBeenCalledTimes(1);
+    expect(h.saverEnable).toHaveBeenCalledTimes(1);
+    const summary = h.lines.join("\n");
+    // the throwing step is marked with ✗, the others with ✓
+    expect(summary).toMatch(/✗.*mcp/);
+    expect(summary).toMatch(/✓.*hooks/);
+    expect(summary).toMatch(/✓.*saver/);
+    // the summary was still printed even though a step threw
+    expect(summary).toContain("Summary:");
   });
 
   it("interactive + declined prompt runs nothing and resolves 0", async () => {

@@ -22,8 +22,6 @@ export type RunInitDeps = {
 };
 
 export type RunInitInput = {
-  storeRoot: string;
-  cwd: string;
   mode?: TokenSaverMode;
   yes?: boolean;
   openGui?: boolean;
@@ -31,6 +29,17 @@ export type RunInitInput = {
 };
 
 type StepResult = { label: string; ok: boolean };
+
+// Run one onboarding step, treating a thrown I/O error (unwritable path,
+// permission denied) exactly like a returned exit code 1: the failure is
+// recorded and the orchestrator continues to the remaining steps.
+async function runStep(label: string, step: () => Promise<0 | 1> | 0 | 1): Promise<StepResult> {
+  try {
+    return { label, ok: (await step()) === 0 };
+  } catch {
+    return { label, ok: false };
+  }
+}
 
 export async function runInit(input: RunInitInput): Promise<0 | 1> {
   const { deps } = input;
@@ -55,11 +64,12 @@ export async function runInit(input: RunInitInput): Promise<0 | 1> {
   }
 
   // Continue-and-report: each step runs regardless of a prior failure so the
-  // user still gets everything that worked.
+  // user still gets everything that worked. A step that throws is recorded as
+  // failed and never escapes the orchestrator (see runStep).
   const steps: StepResult[] = [];
-  steps.push({ label: "hooks installed", ok: (await deps.hooksInstall()) === 0 });
-  steps.push({ label: `mcp bridge (${MCP_TARGET})`, ok: (await deps.mcpInstall()) === 0 });
-  steps.push({ label: `saver on (${mode})`, ok: (await deps.saverEnable(mode)) === 0 });
+  steps.push(await runStep("hooks installed", () => deps.hooksInstall()));
+  steps.push(await runStep(`mcp bridge (${MCP_TARGET})`, () => deps.mcpInstall()));
+  steps.push(await runStep(`saver on (${mode})`, () => deps.saverEnable(mode)));
 
   deps.stdout("");
   deps.stdout("Summary:");
@@ -73,8 +83,15 @@ export async function runInit(input: RunInitInput): Promise<0 | 1> {
   );
 
   // GUI is the terminal handoff: it blocks on the server, so the full summary is
-  // already printed above before we hand off.
-  if (openGui) await deps.gui();
+  // already printed above before we hand off. A throw here must not swallow that
+  // summary or the step exit code.
+  if (openGui) {
+    try {
+      await deps.gui();
+    } catch {
+      // handoff failure is non-fatal: the summary is already printed above.
+    }
+  }
 
   return failed ? 1 : 0;
 }
@@ -171,8 +188,6 @@ export const initCommand = defineCommand({
     };
 
     const code = await runInit({
-      storeRoot: storeEnv.storeFlag ?? storeEnv.cwd,
-      cwd: storeEnv.cwd,
       mode,
       yes: !!args.yes,
       openGui: args.gui !== false,
