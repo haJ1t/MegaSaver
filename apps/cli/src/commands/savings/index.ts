@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { savingsExportCommand } from "./export.js";
 import { savingsHistoryCommand } from "./history.js";
+import { savingsInsightsCommand } from "./insights.js";
 
 export {
   type HistoryBy,
@@ -14,6 +15,12 @@ export {
   runSavingsExport,
   savingsExportCommand,
 } from "./export.js";
+export {
+  type InsightsBy,
+  type RunSavingsInsightsInput,
+  runSavingsInsights,
+  savingsInsightsCommand,
+} from "./insights.js";
 export {
   type SavingsEventReader,
   type SavingsSnapshot,
@@ -30,5 +37,6 @@ export const savingsCommand = defineCommand({
   subCommands: {
     history: savingsHistoryCommand,
     export: savingsExportCommand,
+    insights: savingsInsightsCommand,
   },
 });
