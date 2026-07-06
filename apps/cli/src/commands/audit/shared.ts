@@ -1,4 +1,10 @@
-import type { AuditSummary, OverlaySessionTokenSaverStats } from "@megasaver/core";
+import {
+  type AuditSummary,
+  type OverlaySessionTokenSaverStats,
+  SAVINGS_FOOTNOTE,
+  type SavingsHeadline,
+  savingsHeadlineFromTokens,
+} from "@megasaver/core";
 
 export function formatOverlaySaverCard(
   summary: OverlaySessionTokenSaverStats,
@@ -33,5 +39,23 @@ export function formatAuditCards(summary: AuditSummary): string[] {
     "Tools:",
     `  tool schemas reduced: ${summary.toolSchemasReduced}`,
     `would've been ${summary.tokensBefore} tokens, was ${summary.tokensAfter}, ${summary.percentageSaved}% saved`,
+    ...formatSavingsHeadlineLines(auditSavingsHeadline(summary)),
+  ];
+}
+
+// The audit summary already holds a saved-TOKEN count, so price it directly
+// (no byte round-trip). percentageSaved is an integer 0-100 -> pass the ratio.
+export function auditSavingsHeadline(summary: AuditSummary): SavingsHeadline {
+  return savingsHeadlineFromTokens(summary.tokensSaved, summary.percentageSaved / 100);
+}
+
+// Zero savings must not flex a fake "$0.00 saved!" — render an honest line.
+export function formatSavingsHeadlineLines(headline: SavingsHeadline): string[] {
+  if (headline.tokensSaved === 0) {
+    return ["No savings recorded in this window yet."];
+  }
+  return [
+    `Saved ≈${headline.tokensSaved} tokens ≈ $${headline.dollarsSaved.toFixed(2)} (est.) · ≈${headline.contextWindowsReclaimed.toFixed(1)} sessions' worth of context (200K each).`,
+    SAVINGS_FOOTNOTE,
   ];
 }

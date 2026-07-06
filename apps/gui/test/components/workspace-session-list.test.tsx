@@ -1,12 +1,22 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ClaudeSessionMeta } from "../../src/lib/claude-sessions-client.js";
+import type {
+  AllWorkspaceTokenSaverTotals,
+  ClaudeSessionMeta,
+} from "../../src/lib/claude-sessions-client.js";
 
-const stub: { sessions: ClaudeSessionMeta[] } = { sessions: [] };
+const stub: {
+  sessions: ClaudeSessionMeta[];
+  totals: AllWorkspaceTokenSaverTotals;
+} = {
+  sessions: [],
+  totals: { bytesSavedTotal: 0, sessionsCount: 0, savingRatio: 0, workspaceCount: 0 },
+};
 
 vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchClaudeSessions: () => Promise.resolve(stub.sessions),
+  fetchAllWorkspaceTotals: () => Promise.resolve(stub.totals),
 }));
 
 import { WorkspaceSessionList } from "../../src/views/workspace-session-list.js";
@@ -30,6 +40,7 @@ function meta(over: Partial<ClaudeSessionMeta>): ClaudeSessionMeta {
 afterEach(() => {
   cleanup();
   stub.sessions = [];
+  stub.totals = { bytesSavedTotal: 0, sessionsCount: 0, savingRatio: 0, workspaceCount: 0 };
 });
 
 describe("WorkspaceSessionList", () => {
@@ -137,6 +148,13 @@ describe("WorkspaceSessionList", () => {
           meta({ id: "after-retry", title: "After retry", projectLabel: "/tmp/alpha" }),
         ]);
       },
+      fetchAllWorkspaceTotals: () =>
+        Promise.resolve({
+          bytesSavedTotal: 0,
+          sessionsCount: 0,
+          savingRatio: 0,
+          workspaceCount: 0,
+        }),
     }));
     vi.resetModules();
 
@@ -167,6 +185,46 @@ describe("WorkspaceSessionList", () => {
     expect(screen.getByText("Live")).toBeTruthy();
   });
 
+  it("renders the cumulative savings headline when savings exist", async () => {
+    stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
+    // 4_000_000 saved bytes -> 1_000_000 tokens -> $3.00 (est.) at the input price; 5 reclaimed.
+    stub.totals = {
+      bytesSavedTotal: 4_000_000,
+      sessionsCount: 10,
+      savingRatio: 0.4,
+      workspaceCount: 2,
+    };
+    render(<WorkspaceSessionList onSelect={() => {}} />);
+    const headline = await screen.findByTestId("savings-headline");
+    expect(headline.textContent).toContain("$3.00 saved (est.)");
+    expect(headline.textContent).toContain("5.0 sessions reclaimed");
+  });
+
+  it("shows the fractional reclaim count without rounding up (conservative)", async () => {
+    stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
+    // 480_000 saved bytes -> 120_000 tokens -> 120_000 / 200_000 = 0.6 windows.
+    // The metric under-counts on purpose: 0.6 must render as "0.6", never "1".
+    stub.totals = {
+      bytesSavedTotal: 480_000,
+      sessionsCount: 4,
+      savingRatio: 0.3,
+      workspaceCount: 1,
+    };
+    render(<WorkspaceSessionList onSelect={() => {}} />);
+    const headline = await screen.findByTestId("savings-headline");
+    expect(headline.textContent).toContain("0.6 sessions reclaimed");
+    expect(headline.textContent).not.toContain("1 sessions reclaimed");
+  });
+
+  it("renders an honest empty copy when there are no savings yet", async () => {
+    stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
+    stub.totals = { bytesSavedTotal: 0, sessionsCount: 0, savingRatio: 0, workspaceCount: 0 };
+    render(<WorkspaceSessionList onSelect={() => {}} />);
+    const headline = await screen.findByTestId("savings-headline");
+    expect(headline.textContent).toContain("No savings recorded yet");
+    expect(headline.textContent).not.toContain("$0.00");
+  });
+
   it("ignores stale responses from earlier polling ticks", async () => {
     vi.useFakeTimers();
     let firstResolve: (v: ClaudeSessionMeta[]) => void = () => {};
@@ -186,6 +244,13 @@ describe("WorkspaceSessionList", () => {
           secondResolve = resolve;
         });
       },
+      fetchAllWorkspaceTotals: () =>
+        Promise.resolve({
+          bytesSavedTotal: 0,
+          sessionsCount: 0,
+          savingRatio: 0,
+          workspaceCount: 0,
+        }),
     }));
     vi.resetModules();
 

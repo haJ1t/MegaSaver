@@ -1,7 +1,13 @@
+import { SAVINGS_FOOTNOTE, computeSavingsHeadline } from "@megasaver/stats/headline";
 import { useEffect, useState } from "react";
 import type { BridgeError } from "../components/states.js";
 import { ErrorState, LoadingState } from "../components/states.js";
-import { type ClaudeSessionMeta, fetchClaudeSessions } from "../lib/claude-sessions-client.js";
+import {
+  type AllWorkspaceTokenSaverTotals,
+  type ClaudeSessionMeta,
+  fetchAllWorkspaceTotals,
+  fetchClaudeSessions,
+} from "../lib/claude-sessions-client.js";
 import { groupSessionsByCwd } from "../lib/workspace-grouping.js";
 
 const LIST_POLL_MS = 4000;
@@ -39,6 +45,7 @@ export function WorkspaceSessionList({
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const [savingsTotals, setSavingsTotals] = useState<AllWorkspaceTokenSaverTotals | null>(null);
 
   const groups = groupSessionsByCwd(sessions);
   const liveCount = sessions.filter((s) => nowMs - s.mtimeMs < LIVE_WINDOW_MS).length;
@@ -84,6 +91,28 @@ export function WorkspaceSessionList({
     };
   }, [refreshNonce]);
 
+  // Cumulative savings are informational, not load-bearing: a failed fetch must
+  // not error the session list. On failure the strip falls back to the honest
+  // empty copy rather than surfacing a scary error.
+  useEffect(() => {
+    let live = true;
+    const load = (): void => {
+      fetchAllWorkspaceTotals()
+        .then((totals) => {
+          if (live) setSavingsTotals(totals);
+        })
+        .catch(() => {
+          if (live) setSavingsTotals(null);
+        });
+    };
+    load();
+    const t = setInterval(load, LIST_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
+
   if (listState === "loading") return <LoadingState label="Loading Claude Code sessions…" />;
   if (listState === "error" && listError)
     return <ErrorState error={listError} onRetry={retryList} />;
@@ -91,11 +120,12 @@ export function WorkspaceSessionList({
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <h2 className="text-xl font-semibold tracking-tight text-text-primary mb-4">Sessions</h2>
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-3 gap-3 mb-3">
         <SummaryCard label="Workspaces" value={groups.length} />
         <SummaryCard label="Sessions" value={sessions.length} />
         <SummaryCard label="Live" value={liveCount} />
       </div>
+      <SavingsHeadlineStrip totals={savingsTotals} />
 
       {groups.length === 0 ? (
         <p className="text-sm text-text-muted">
@@ -185,6 +215,41 @@ function SummaryCard({ label, value }: { label: string; value: number }): JSX.El
     <div className="bg-surface border border-border rounded-xl px-4 py-3">
       <div className="text-[10px] uppercase tracking-widest text-text-muted">{label}</div>
       <div className="text-2xl font-semibold tabular-nums text-text-primary">{value}</div>
+    </div>
+  );
+}
+
+function SavingsHeadlineStrip({
+  totals,
+}: {
+  totals: AllWorkspaceTokenSaverTotals | null;
+}): JSX.Element {
+  // No savings yet (or totals unavailable) -> an honest prompt, never a fake $0.
+  if (!totals || totals.bytesSavedTotal === 0) {
+    return (
+      <div
+        data-testid="savings-headline"
+        className="mb-6 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text-muted"
+      >
+        No savings recorded yet — enable the saver to start.
+      </div>
+    );
+  }
+
+  const headline = computeSavingsHeadline(totals);
+  const dollars = headline.dollarsSaved.toFixed(2);
+  // One decimal, matching the CLI — the reclaim metric under-counts on purpose,
+  // so it must never round UP (0.6 -> "0.6", never "1").
+  const reclaimed = headline.contextWindowsReclaimed.toFixed(1);
+  return (
+    <div
+      data-testid="savings-headline"
+      title={SAVINGS_FOOTNOTE}
+      className="mb-6 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text-primary"
+    >
+      <span className="font-semibold tabular-nums">≈${dollars} saved (est.)</span>
+      <span className="text-text-muted"> · </span>
+      <span className="tabular-nums">≈{reclaimed} sessions reclaimed</span>
     </div>
   );
 }

@@ -11,6 +11,13 @@ const openClaudeSessionStream = vi.fn();
 
 vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchClaudeSessions: (...a: unknown[]) => fetchClaudeSessions(...a),
+  fetchAllWorkspaceTotals: () =>
+    Promise.resolve({
+      bytesSavedTotal: 0,
+      sessionsCount: 0,
+      savingRatio: 0,
+      workspaceCount: 0,
+    }),
   fetchWorkspaces: (...a: unknown[]) => fetchWorkspaces(...a),
   fetchClaudeSessionTelemetry: (...a: unknown[]) => fetchClaudeSessionTelemetry(...a),
   fetchSessionTokenSaverStats: (...a: unknown[]) => fetchSessionTokenSaverStats(...a),

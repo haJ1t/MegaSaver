@@ -364,6 +364,60 @@ export function readWorkspaceTokenSaverTotals(
   return totals;
 }
 
+export type AllWorkspaceTokenSaverTotals = {
+  bytesSavedTotal: number;
+  sessionsCount: number;
+  savingRatio: number;
+  workspaceCount: number;
+};
+
+// Cumulative token-saver totals across EVERY workspace under the stats store —
+// the source for the GUI home headline. Reuses readWorkspaceTokenSaverTotals
+// per workspace, then blends the ratio from summed raw+saved bytes (both are
+// retained per workspace) rather than averaging per-workspace ratios. Best-
+// effort: a missing stats/ dir yields zeros; an unreadable workspace is skipped.
+export function readAllWorkspaceTokenSaverTotals(store: StatsStore): AllWorkspaceTokenSaverTotals {
+  let entries: string[];
+  try {
+    entries = readdirSync(join(store.root, "stats"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return { bytesSavedTotal: 0, sessionsCount: 0, savingRatio: 0, workspaceCount: 0 };
+  }
+
+  let bytesSavedTotal = 0;
+  let rawBytesTotal = 0;
+  let sessionsCount = 0;
+  let workspaceCount = 0;
+
+  for (const workspaceKey of entries) {
+    if (!isSafeSegment(workspaceKey)) {
+      continue;
+    }
+    let totals: WorkspaceTokenSaverTotals | null;
+    try {
+      totals = readWorkspaceTokenSaverTotals(store, workspaceKey);
+    } catch {
+      continue;
+    }
+    if (totals === null) {
+      continue;
+    }
+    workspaceCount += 1;
+    sessionsCount += totals.sessionsCount;
+    bytesSavedTotal += totals.bytesSavedTotal;
+    rawBytesTotal += totals.rawBytesTotal;
+  }
+
+  return {
+    bytesSavedTotal,
+    sessionsCount,
+    savingRatio: rawBytesTotal === 0 ? 0 : bytesSavedTotal / rawBytesTotal,
+    workspaceCount,
+  };
+}
+
 export function readOverlayEvents(
   store: StatsStore,
   workspaceKey: string,
