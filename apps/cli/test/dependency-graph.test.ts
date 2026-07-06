@@ -16,6 +16,9 @@ import { describe, expect, it } from "vitest";
 // and ships its built dist. Acyclic — the GUI never imports the CLI (its bridge
 // carries GUI-local mirrors of the CLI's store/known-targets, not imports).
 // The non-Mega deps (citty, zod) are ignored by the @megasaver/ filter.
+// pro-entitlement adds @megasaver/entitlement: the `mega license` command drives
+// the fail-closed entitlement seam (Ed25519 verify + license storage). Acyclic —
+// entitlement depends only on node:crypto, never on the CLI.
 const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/agent-office",
   "@megasaver/connector-claude-code",
@@ -26,6 +29,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/context-pruner",
   "@megasaver/core",
   "@megasaver/daemon",
+  "@megasaver/entitlement",
   "@megasaver/gui",
   "@megasaver/indexer",
   "@megasaver/llm-proxy",

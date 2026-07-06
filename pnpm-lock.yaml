@@ -67,6 +67,9 @@ importers:
       '@megasaver/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
+      '@megasaver/entitlement':
+        specifier: workspace:*
+        version: link:../../packages/entitlement
       '@megasaver/gui':
         specifier: workspace:*
         version: link:../gui

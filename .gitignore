@@ -78,6 +78,11 @@ GEMINI.md
 # Personal local dev helpers (machine-specific launchers, scratch)
 scripts/launch-megasaver.sh
 
+# Pro license signing key — the vendor's OFFLINE Ed25519 private key. Generated
+# by scripts/license/gen-keypair.mjs, kept off the repo forever. Only the public
+# key is committed (baked into packages/entitlement/src/public-key.ts).
+scripts/license/.private-key.pem
+
 # Local WIP — not part of the published repo
 .github/workflows/changeset-check.yml
 .github/workflows/coverage.yml

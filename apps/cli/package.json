@@ -39,6 +39,7 @@
     "@megasaver/context-pruner": "workspace:*",
     "@megasaver/core": "workspace:*",
     "@megasaver/daemon": "workspace:*",
+    "@megasaver/entitlement": "workspace:*",
     "@megasaver/gui": "workspace:*",
     "@megasaver/indexer": "workspace:*",
     "@megasaver/llm-proxy": "workspace:*",

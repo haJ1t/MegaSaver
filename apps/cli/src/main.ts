@@ -12,6 +12,7 @@ import { hooksCommand } from "./commands/hooks/index.js";
 import { indexCommand } from "./commands/index/index.js";
 import { initCommand } from "./commands/init.js";
 import { learnCommand } from "./commands/learn.js";
+import { licenseCommand } from "./commands/license.js";
 import { mcpCommand } from "./commands/mcp/index.js";
 import { memoryCommand } from "./commands/memory/index.js";
 import { officeCommand } from "./commands/office/index.js";
@@ -52,6 +53,7 @@ export const mainCommand = defineCommand({
     gui: guiCommand,
     fail: failCommand,
     learn: learnCommand,
+    license: licenseCommand,
     project: projectCommand,
     proxy: proxyCommand,
     daemon: daemonCommand,
