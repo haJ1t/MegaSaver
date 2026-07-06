@@ -74,3 +74,47 @@ describe("forecastSavings — week", () => {
     expect(f.projectedEnd.tokens).toBeGreaterThan(f.savedSoFar.tokens);
   });
 });
+
+import { type SavingsForecast, budgetPace } from "../src/forecast.js";
+
+function fc(overrides: Partial<SavingsForecast> = {}): SavingsForecast {
+  return {
+    period: "month",
+    periodStart: "2026-07-01T00:00:00.000Z",
+    periodEnd: "2026-08-01T00:00:00.000Z",
+    elapsedDays: 14,
+    totalDays: 31,
+    daysLeft: 17,
+    savedSoFar: { bytes: 16_000_000, tokens: 4_000_000, dollars: 12 },
+    dailyRate: { tokens: 0, dollars: 0 },
+    projectedEnd: { tokens: 8_000_000, dollars: 24 },
+    ...overrides,
+  };
+}
+
+describe("budgetPace", () => {
+  it("dollars goal — pct + onTrack", () => {
+    const p = budgetPace(fc(), { kind: "dollars", amount: 20 });
+    expect(p.pctOfGoalSoFar).toBeCloseTo(12 / 20);
+    expect(p.pctOfGoalProjected).toBeCloseTo(24 / 20);
+    expect(p.onTrack).toBe(true); // projected 24 >= 20
+  });
+
+  it("dollars goal — behind when projected < goal", () => {
+    const p = budgetPace(fc(), { kind: "dollars", amount: 30 });
+    expect(p.onTrack).toBe(false);
+  });
+
+  it("tokens goal uses token fields", () => {
+    const p = budgetPace(fc(), { kind: "tokens", amount: 10_000_000 });
+    expect(p.pctOfGoalProjected).toBeCloseTo(8_000_000 / 10_000_000);
+    expect(p.onTrack).toBe(false);
+  });
+
+  it("amount<=0 → 0, no NaN", () => {
+    const p = budgetPace(fc(), { kind: "dollars", amount: 0 });
+    expect(p.pctOfGoalSoFar).toBe(0);
+    expect(p.pctOfGoalProjected).toBe(0);
+    expect(Number.isNaN(p.pctOfGoalProjected)).toBe(false);
+  });
+});

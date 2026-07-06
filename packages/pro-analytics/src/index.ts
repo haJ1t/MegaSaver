@@ -13,3 +13,11 @@ export {
   computeWasteBreakdown,
   computeWasteHeadline,
 } from "./insights.js";
+export {
+  type ForecastPeriod,
+  type SavingsForecast,
+  type BudgetGoal,
+  type BudgetPace,
+  forecastSavings,
+  budgetPace,
+} from "./forecast.js";

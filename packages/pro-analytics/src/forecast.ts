@@ -63,3 +63,33 @@ export function forecastSavings(
     projectedEnd: { tokens: projectedTokens, dollars: dollarsFromTokens(projectedTokens) },
   };
 }
+
+export interface BudgetGoal {
+  kind: "tokens" | "dollars";
+  amount: number;
+}
+
+export interface BudgetPace {
+  goal: BudgetGoal;
+  savedUnit: number;
+  projectedUnit: number;
+  pctOfGoalSoFar: number;
+  pctOfGoalProjected: number;
+  onTrack: boolean;
+}
+
+export function budgetPace(forecast: SavingsForecast, goal: BudgetGoal): BudgetPace {
+  const savedUnit =
+    goal.kind === "dollars" ? forecast.savedSoFar.dollars : forecast.savedSoFar.tokens;
+  const projectedUnit =
+    goal.kind === "dollars" ? forecast.projectedEnd.dollars : forecast.projectedEnd.tokens;
+  const pct = (v: number) => (goal.amount <= 0 ? 0 : v / goal.amount);
+  return {
+    goal,
+    savedUnit,
+    projectedUnit,
+    pctOfGoalSoFar: pct(savedUnit),
+    pctOfGoalProjected: pct(projectedUnit),
+    onTrack: projectedUnit >= goal.amount,
+  };
+}
