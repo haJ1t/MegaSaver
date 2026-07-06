@@ -646,10 +646,15 @@ mega savings export --format csv --out savings.csv
 
 mega savings insights             # where tokens are still spent (Pro)
 mega savings insights --by label  # or break down by tool/label
+
+mega savings forecast             # project this period's savings (Pro)
+mega savings forecast --goal $15  # pace it against a savings goal
 ```
 
 - `mega savings insights [--by source|label]` — where your tokens are still
   going: a waste breakdown by source/tool, with per-source saving ratios.
+- `mega savings forecast [--goal $15]` — projects this period's savings by
+  run-rate (labeled an estimate) and paces it against an optional goal.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
 and exits cleanly — it never errors, and the free CLI is unaffected. Keys are
