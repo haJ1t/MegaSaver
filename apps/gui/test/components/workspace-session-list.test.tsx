@@ -225,6 +225,41 @@ describe("WorkspaceSessionList", () => {
     expect(headline.textContent).not.toContain("$0.00");
   });
 
+  it("shows a Share button only when there are savings", async () => {
+    stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
+    stub.totals = {
+      bytesSavedTotal: 4_000_000,
+      sessionsCount: 10,
+      savingRatio: 0.4,
+      workspaceCount: 2,
+    };
+    render(<WorkspaceSessionList onSelect={() => {}} />);
+    expect(await screen.findByRole("button", { name: /share/i })).toBeDefined();
+  });
+
+  it("hides the Share button at zero savings", async () => {
+    stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
+    stub.totals = { bytesSavedTotal: 0, sessionsCount: 0, savingRatio: 0, workspaceCount: 0 };
+    render(<WorkspaceSessionList onSelect={() => {}} />);
+    await screen.findByTestId("savings-headline");
+    expect(screen.queryByRole("button", { name: /share/i })).toBeNull();
+  });
+
+  it("opens the share modal with the card svg when Share is clicked", async () => {
+    stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
+    stub.totals = {
+      bytesSavedTotal: 4_000_000,
+      sessionsCount: 10,
+      savingRatio: 0.4,
+      workspaceCount: 2,
+    };
+    const { container } = render(<WorkspaceSessionList onSelect={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /share/i }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeDefined();
+    expect(container.querySelector("[role='dialog'] svg")).not.toBeNull();
+  });
+
   it("ignores stale responses from earlier polling ticks", async () => {
     vi.useFakeTimers();
     let firstResolve: (v: ClaudeSessionMeta[]) => void = () => {};

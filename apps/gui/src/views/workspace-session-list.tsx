@@ -9,6 +9,7 @@ import {
   fetchClaudeSessions,
 } from "../lib/claude-sessions-client.js";
 import { groupSessionsByCwd } from "../lib/workspace-grouping.js";
+import { SavingsShareModal } from "./savings-share-modal.js";
 
 const LIST_POLL_MS = 4000;
 const LIVE_WINDOW_MS = 8000;
@@ -46,6 +47,9 @@ export function WorkspaceSessionList({
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [savingsTotals, setSavingsTotals] = useState<AllWorkspaceTokenSaverTotals | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+
+  const hasSavings = savingsTotals !== null && savingsTotals.bytesSavedTotal > 0;
 
   const groups = groupSessionsByCwd(sessions);
   const liveCount = sessions.filter((s) => nowMs - s.mtimeMs < LIVE_WINDOW_MS).length;
@@ -125,7 +129,27 @@ export function WorkspaceSessionList({
         <SummaryCard label="Sessions" value={sessions.length} />
         <SummaryCard label="Live" value={liveCount} />
       </div>
-      <SavingsHeadlineStrip totals={savingsTotals} />
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <SavingsHeadlineStrip totals={savingsTotals} />
+        </div>
+        {hasSavings && (
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            className="mb-6 shrink-0 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-text-primary hover:bg-surface-elevated cursor-pointer transition-colors"
+          >
+            Share
+          </button>
+        )}
+      </div>
+      {shareOpen && savingsTotals && (
+        <SavingsShareModal
+          totals={savingsTotals}
+          windowLabel="all time"
+          onClose={() => setShareOpen(false)}
+        />
+      )}
 
       {groups.length === 0 ? (
         <p className="text-sm text-text-muted">
