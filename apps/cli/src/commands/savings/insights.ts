@@ -88,10 +88,9 @@ export async function runSavingsInsights(input: RunSavingsInsightsInput): Promis
   } else if (input.csv) {
     rendered = exportSavings(rows as unknown as Parameters<typeof exportSavings>[0], "csv");
   } else {
-    const headlineLine =
-      headline.topKey === null
-        ? "No returned bytes."
-        : `Still sending ${headline.tokensReturned} tokens (${formatDollarsSaved(headline.dollarsReturned)}) to the model. Biggest source: ${headline.topKey} (${(headline.topReturnedShare * 100).toFixed(0)}% of returned bytes, ${(headline.overallSavingRatio * 100).toFixed(0)}% overall saved).`;
+    // rows.length > 0 here, so the source breakdown is non-empty and topKey is
+    // non-null (topKey is null only for empty events, handled by the return above).
+    const headlineLine = `Still sending ${headline.tokensReturned} tokens (${formatDollarsSaved(headline.dollarsReturned)}) to the model. Biggest source: ${headline.topKey} (${(headline.topReturnedShare * 100).toFixed(0)}% of returned bytes, ${(headline.overallSavingRatio * 100).toFixed(0)}% overall saved).`;
     rendered = [
       headlineLine,
       "",

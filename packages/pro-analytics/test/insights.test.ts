@@ -97,13 +97,15 @@ describe("computeWasteBreakdown", () => {
     ]);
   });
 
-  it("rawBytes 0 -> savingRatio 0, no NaN", () => {
+  it("rawBytes/returnedBytes 0 -> savingRatio + returnedShare 0, no NaN", () => {
     const rows = computeWasteBreakdown(
       [ev({ sourceKind: "x", label: "x", rawBytes: 0, returnedBytes: 0, bytesSaved: 0 }, 0)],
       { by: "source" },
     );
     expect(rows[0]?.savingRatio).toBe(0);
     expect(Number.isNaN(rows[0]?.savingRatio ?? Number.NaN)).toBe(false);
+    expect(rows[0]?.returnedShare).toBe(0);
+    expect(Number.isNaN(rows[0]?.returnedShare ?? Number.NaN)).toBe(false);
   });
 
   it("empty -> []", () => {

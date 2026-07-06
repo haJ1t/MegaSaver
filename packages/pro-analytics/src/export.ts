@@ -24,11 +24,12 @@ function escapeCsvField(value: string): string {
   return neutralized;
 }
 
-// The CSV is a savings *report*, so its dollarsSaved column shows the same
-// floored display string as the free headline / audit report (formatDollarsSaved)
-// — never the raw lossless number. Only JSON keeps the raw numeric field.
+// The CSV is a savings *report*, so every dollar column (dollarsSaved and the
+// insights dollarsReturned) shows the same floored display string as the free
+// headline / audit report (formatDollarsSaved) — never the raw lossless number.
+// Only JSON keeps the raw numeric fields.
 function cell(col: string, value: unknown): string {
-  if (col === "dollarsSaved") return formatDollarsSaved(value as number);
+  if (col.startsWith("dollars")) return formatDollarsSaved(value as number);
   return String(value);
 }
 

@@ -454,6 +454,28 @@ describe("runSavingsInsights — render variants (entitled)", () => {
     expect(out.join("\n")).toContain("key,events,rawBytes,returnedBytes,bytesSaved");
   });
 
+  it("floors both CSV $ columns (dollarsReturned + dollarsSaved) like the table", async () => {
+    // returnedBytes and bytesSaved both 49_380_000 → each $37.035 raw; the CSV
+    // must floor BOTH to "$37.03" (matching the table), never leak the raw float.
+    const bigReader: SavingsEventReader = () => ({
+      events: [insightsEvent("command", "test", 98_760_000, 49_380_000, 49_380_000, 0)],
+      eventsByProject: {},
+    });
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: bigReader,
+      csv: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("$37.03");
+    expect(text).not.toContain("37.035");
+  });
+
   it("--by label groups by label", async () => {
     const code = await runSavingsInsights({
       storeRoot: root,
