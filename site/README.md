@@ -17,8 +17,9 @@ host.
 1. **Domain** — set the real domain in `index.html`: `<link rel="canonical">`,
    `og:url`, `twitter` + `og:image` absolute URLs (currently
    `https://megasaver.dev/`, a placeholder). Buy + point DNS at the host.
-2. **`site/og.png`** — add a 1200×630 share image (the savings share card render
-   is a natural fit) so links unfurl with a card on X / Slack / etc.
+2. **`site/og.png`** — a 1200×630 brand share image ships here already
+   (direction-B, no fake numbers). Swap in a real savings-card screenshot later
+   if you want the link to unfurl with live numbers.
 
 ## Design
 
