@@ -1,8 +1,7 @@
 import type { KeyObject } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { verifyLicense } from "./license.js";
 import { MEGASAVER_PUBLIC_KEY } from "./public-key.js";
+import { readLicenseFile } from "./store.js";
 
 export type ProFeature = "savings-analytics";
 
@@ -19,15 +18,9 @@ export type EntitlementResult =
       reason: "no_license" | "expired" | "invalid_signature" | "malformed";
     };
 
-const LICENSE_FILE = "license.json";
-
 function readStoredKey(storeRoot: string): { key: string } | null | "corrupt" {
-  let raw: string;
-  try {
-    raw = readFileSync(join(storeRoot, LICENSE_FILE), "utf8");
-  } catch {
-    return null;
-  }
+  const raw = readLicenseFile(storeRoot);
+  if (raw === null) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (parsed === null || typeof parsed !== "object") return "corrupt";

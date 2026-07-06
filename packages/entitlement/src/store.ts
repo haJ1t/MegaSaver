@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node
 import { dirname, join } from "node:path";
 import { verifyLicense } from "./license.js";
 
-const LICENSE_FILE = "license.json";
+export const LICENSE_FILE = "license.json";
 
 export type StoredLicense = {
   key: string;
@@ -36,6 +36,16 @@ function licensePath(storeRoot: string): string {
   return join(storeRoot, LICENSE_FILE);
 }
 
+// Single source of the license-file read: a missing file resolves to null; the
+// raw string is returned otherwise. Callers own their own JSON parsing.
+export function readLicenseFile(storeRoot: string): string | null {
+  try {
+    return readFileSync(licensePath(storeRoot), "utf8");
+  } catch {
+    return null;
+  }
+}
+
 function atomicWrite(filePath: string, content: string): void {
   const tempPath = join(dirname(filePath), `.${randomUUID()}.tmp`);
   writeFileSync(tempPath, content);
@@ -66,12 +76,8 @@ export function activateLicense(
 // Best-effort read: a missing or corrupt license file resolves to null rather
 // than throwing.
 export function readLicense(storeRoot: string): StoredLicense | null {
-  let raw: string;
-  try {
-    raw = readFileSync(licensePath(storeRoot), "utf8");
-  } catch {
-    return null;
-  }
+  const raw = readLicenseFile(storeRoot);
+  if (raw === null) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (parsed === null || typeof parsed !== "object") return null;
