@@ -1,5 +1,6 @@
+import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { type RunInitDeps, runInit } from "../../src/commands/init.js";
+import { type RunInitDeps, confirmYesNo, runInit } from "../../src/commands/init.js";
 
 type Overrides = {
   mode?: "safe" | "balanced" | "aggressive";
@@ -166,5 +167,32 @@ describe("mega init — runInit", () => {
     expect(out).toContain("mcp");
     expect(out).toContain("saver");
     expect(out).toContain("gui");
+  });
+});
+
+describe("mega init — confirmYesNo", () => {
+  it("resolves false (declined) on EOF: stdin ends with no data, no hang", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const answered = confirmYesNo("Proceed? [y/N] ", { input, output });
+    // simulate EOF / closed stdin: end the stream with no data written
+    input.end();
+    await expect(answered).resolves.toBe(false);
+  });
+
+  it("resolves true when the user types 'y'", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const answered = confirmYesNo("Proceed? [y/N] ", { input, output });
+    input.write("y\n");
+    await expect(answered).resolves.toBe(true);
+  });
+
+  it("resolves false when the user types 'n'", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const answered = confirmYesNo("Proceed? [y/N] ", { input, output });
+    input.write("n\n");
+    await expect(answered).resolves.toBe(false);
   });
 });

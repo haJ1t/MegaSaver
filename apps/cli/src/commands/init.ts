@@ -96,13 +96,31 @@ export async function runInit(input: RunInitInput): Promise<0 | 1> {
   return failed ? 1 : 0;
 }
 
-function confirmYesNo(question: string): Promise<boolean> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
+type ConfirmStreams = {
+  input: NodeJS.ReadableStream;
+  output: NodeJS.WritableStream;
+};
+
+// Resolves to the user's yes/no answer. EOF or a closed stdin (no data, stream
+// 'close') resolves DECLINE — the safe default: nothing installed, exit 0 — so
+// the prompt never hangs when stdin is not a live TTY.
+export function confirmYesNo(
+  question: string,
+  streams: ConfirmStreams = { input: process.stdin, output: process.stdout },
+): Promise<boolean> {
+  const rl = createInterface({ input: streams.input, output: streams.output });
   return new Promise<boolean>((resolve) => {
-    rl.question(question, (answer) => {
+    let settled = false;
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      rl.removeListener("close", onClose);
       rl.close();
-      resolve(/^y(es)?$/i.test(answer.trim()));
-    });
+      resolve(value);
+    };
+    const onClose = () => finish(false);
+    rl.on("close", onClose);
+    rl.question(question, (answer) => finish(/^y(es)?$/i.test(answer.trim())));
   });
 }
 
