@@ -688,10 +688,14 @@ source-available under its own [`packages/pro-analytics/LICENSE`](packages/pro-a
 use requires a valid Mega Saver Pro license; no redistribution.
 
 > **Packaging note (mixed license).** The published `@megasaver/cli` bundle is
-> built with `tsup --config tsup.bundle.config.ts` (`noExternal: [/.*/]`), which
-> inlines every workspace dependency — including `@megasaver/pro-analytics` — into
-> the single-file `mega.mjs`. So the proprietary Pro logic ships inside the
-> otherwise-MIT tarball. This is a deliberate, disclosed trade-off for the initial
-> release: the gate is bypassable anyway (see [Pro](#pro)), and shipping one bundle
-> keeps install trivial. A clean split (externalizing `@megasaver/pro-analytics`
-> into its own paid package, or a Pro-only bundle) is a **deferred refinement**.
+> built with `tsup --config tsup.bundle.config.ts`, whose `noExternal` rule
+> inlines every workspace dependency — including `@megasaver/pro-analytics`, but
+> not the native transformers/onnxruntime chain — into the single-file `mega.mjs`.
+> So the proprietary Pro logic ships inside the otherwise-MIT tarball; because the
+> tarball is therefore mixed-license, its `package.json` declares
+> `"license": "SEE LICENSE IN NOTICE"` (the shipped `NOTICE` carves out the Pro
+> module, and `LICENSE` + `PRO-LICENSE` ship alongside it). This is a deliberate,
+> disclosed trade-off for the initial release: the gate is bypassable anyway (see
+> [Pro](#pro)), and shipping one bundle keeps install trivial. A clean split
+> (externalizing `@megasaver/pro-analytics` into its own paid package, or a
+> Pro-only bundle) is a **deferred refinement**.
