@@ -1,0 +1,29 @@
+{
+  "name": "@megasaver/entitlement",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "description": "Offline Ed25519 license verification and fail-closed entitlement checks for Mega Saver Pro.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17"
+  }
+}

@@ -467,6 +467,12 @@ importers:
         specifier: ^22.19.17
         version: 22.19.17
 
+  packages/entitlement:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+
   packages/evidence-ledger:
     dependencies:
       '@megasaver/shared':
