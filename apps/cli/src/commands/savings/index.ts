@@ -1,5 +1,6 @@
 import { defineCommand } from "citty";
 import { savingsExportCommand } from "./export.js";
+import { savingsForecastCommand } from "./forecast.js";
 import { savingsHistoryCommand } from "./history.js";
 import { savingsInsightsCommand } from "./insights.js";
 
@@ -22,6 +23,14 @@ export {
   savingsInsightsCommand,
 } from "./insights.js";
 export {
+  type ForecastPeriodArg,
+  type ParsedGoal,
+  type RunSavingsForecastInput,
+  parseGoal,
+  runSavingsForecast,
+  savingsForecastCommand,
+} from "./forecast.js";
+export {
   type SavingsEventReader,
   type SavingsSnapshot,
   PRO_ANALYTICS_UPSELL,
@@ -38,5 +47,6 @@ export const savingsCommand = defineCommand({
     history: savingsHistoryCommand,
     export: savingsExportCommand,
     insights: savingsInsightsCommand,
+    forecast: savingsForecastCommand,
   },
 });
