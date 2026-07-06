@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type SavingsEventReader,
   runSavingsExport,
+  runSavingsForecast,
   runSavingsHistory,
   runSavingsInsights,
 } from "../../src/commands/savings/index.js";
@@ -22,6 +23,8 @@ const proSpies = vi.hoisted(() => ({
   exportSavings: vi.fn(),
   computeWasteBreakdown: vi.fn(),
   computeWasteHeadline: vi.fn(),
+  forecastSavings: vi.fn(),
+  budgetPace: vi.fn(),
 }));
 
 vi.mock("@megasaver/pro-analytics", async (importActual) => {
@@ -31,6 +34,8 @@ vi.mock("@megasaver/pro-analytics", async (importActual) => {
   proSpies.exportSavings.mockImplementation(actual.exportSavings);
   proSpies.computeWasteBreakdown.mockImplementation(actual.computeWasteBreakdown);
   proSpies.computeWasteHeadline.mockImplementation(actual.computeWasteHeadline);
+  proSpies.forecastSavings.mockImplementation(actual.forecastSavings);
+  proSpies.budgetPace.mockImplementation(actual.budgetPace);
   return {
     ...actual,
     computeSavingsHistory: proSpies.computeSavingsHistory,
@@ -38,6 +43,8 @@ vi.mock("@megasaver/pro-analytics", async (importActual) => {
     exportSavings: proSpies.exportSavings,
     computeWasteBreakdown: proSpies.computeWasteBreakdown,
     computeWasteHeadline: proSpies.computeWasteHeadline,
+    forecastSavings: proSpies.forecastSavings,
+    budgetPace: proSpies.budgetPace,
   };
 });
 
@@ -104,6 +111,8 @@ beforeEach(() => {
   proSpies.exportSavings.mockClear();
   proSpies.computeWasteBreakdown.mockClear();
   proSpies.computeWasteHeadline.mockClear();
+  proSpies.forecastSavings.mockClear();
+  proSpies.budgetPace.mockClear();
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -544,5 +553,182 @@ describe("runSavingsInsights — render variants (entitled)", () => {
     });
     expect(code).toBe(0);
     expect(out.join("\n")).toContain("No savings recorded yet.");
+  });
+});
+
+// NOW_MS is 2023-11-14T22:13:20Z, so these two in-period events fall in the
+// current UTC month (Nov 2023) before `now`, yielding a non-zero projection.
+const forecastEvents: TokenSaverEvent[] = [
+  event("2023-11-05T00:00:00.000Z", 4_000_000),
+  event("2023-11-10T00:00:00.000Z", 4_000_000),
+];
+
+function forecastReader(): SavingsEventReader {
+  return () => ({
+    events: forecastEvents,
+    eventsByProject: { "proj-1": forecastEvents },
+  });
+}
+
+describe("runSavingsForecast — gating", () => {
+  it("with NO license: prints the upsell, exit 0, reads NO events, computes nothing", async () => {
+    const readAllEvents = vi.fn(forecastReader());
+
+    const code = await runSavingsForecast({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents,
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("Mega Saver Pro");
+    expect(text).toContain("mega license activate");
+    // The gate ran FIRST — no events read AND no pro-analytics compute invoked
+    // (guards the lazy import too: the Pro compute never half-runs for a free user).
+    expect(readAllEvents).not.toHaveBeenCalled();
+    expect(proSpies.forecastSavings).not.toHaveBeenCalled();
+    expect(proSpies.budgetPace).not.toHaveBeenCalled();
+  });
+
+  it("bad --goal is rejected BEFORE any compute (stderr + exit 1, nothing read)", async () => {
+    activatePro();
+    const readAllEvents = vi.fn(forecastReader());
+
+    const code = await runSavingsForecast({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents,
+      goal: "abc",
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("--goal");
+    // The bad flag is caught at the boundary, before events are read or projected.
+    expect(readAllEvents).not.toHaveBeenCalled();
+    expect(proSpies.forecastSavings).not.toHaveBeenCalled();
+    expect(proSpies.budgetPace).not.toHaveBeenCalled();
+  });
+});
+
+describe("runSavingsForecast — render variants (entitled)", () => {
+  beforeEach(() => activatePro());
+
+  it("with a valid Pro license: prints a projected $ estimate labeled (est.)", async () => {
+    const readAllEvents = vi.fn(forecastReader());
+
+    const code = await runSavingsForecast({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents,
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(0);
+    expect(readAllEvents).toHaveBeenCalledTimes(1);
+    expect(proSpies.forecastSavings).toHaveBeenCalledTimes(1);
+    const text = out.join("\n");
+    expect(text.toLowerCase()).toContain("on pace");
+    expect(text).toContain("(est.)");
+    expect(text).toContain("$");
+  });
+
+  it("--goal $10 shows a % pace figure and calls budgetPace once", async () => {
+    const code = await runSavingsForecast({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: forecastReader(),
+      goal: "$10",
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(0);
+    expect(proSpies.budgetPace).toHaveBeenCalledTimes(1);
+    expect(out.join("\n")).toContain("%");
+  });
+
+  it("--json emits { forecast, pace } when a goal is set", async () => {
+    const code = await runSavingsForecast({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: forecastReader(),
+      goal: "$10",
+      json: true,
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(0);
+    const parsed = JSON.parse(out.join("\n")) as {
+      forecast: { period: string; projectedEnd: { dollars: number } };
+      pace: { pctOfGoalProjected: number };
+    };
+    expect(parsed.forecast.period).toBe("month");
+    expect(parsed.pace.pctOfGoalProjected).toBeGreaterThan(0);
+  });
+
+  it("--json without a goal emits { forecast } and no pace", async () => {
+    const code = await runSavingsForecast({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: forecastReader(),
+      json: true,
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(0);
+    const parsed = JSON.parse(out.join("\n")) as { forecast: unknown; pace?: unknown };
+    expect(parsed.forecast).toBeDefined();
+    expect(parsed.pace).toBeUndefined();
+    expect(proSpies.budgetPace).not.toHaveBeenCalled();
+  });
+
+  it.each(["abc", "0", "-5"])("--goal %s → stderr error, exit 1, no render", async (bad) => {
+    const code = await runSavingsForecast({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: forecastReader(),
+      goal: bad,
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("--goal");
+    expect(out.join("\n")).toBe("");
+    expect(proSpies.forecastSavings).not.toHaveBeenCalled();
+    expect(proSpies.budgetPace).not.toHaveBeenCalled();
+  });
+
+  it("no in-period events → 'No savings recorded this month yet.', exit 0", async () => {
+    const staleReader: SavingsEventReader = () => ({
+      events: [event("2022-11-05T00:00:00.000Z", 4_000_000)],
+      eventsByProject: {},
+    });
+    const code = await runSavingsForecast({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: staleReader,
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("No savings recorded this month yet.");
   });
 });
