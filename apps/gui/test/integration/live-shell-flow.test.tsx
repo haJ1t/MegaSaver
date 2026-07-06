@@ -40,6 +40,13 @@ const TELEMETRY: SessionTelemetry = {
 
 vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchClaudeSessions: () => Promise.resolve([SESSION]),
+  fetchAllWorkspaceTotals: () =>
+    Promise.resolve({
+      bytesSavedTotal: 0,
+      sessionsCount: 0,
+      savingRatio: 0,
+      workspaceCount: 0,
+    }),
   fetchClaudeSessionTelemetry: () => Promise.resolve(TELEMETRY),
   fetchSessionTokenSaverStats: () => Promise.resolve(null),
   fetchWorkspaceTokenSaverStats: () => Promise.resolve(null),

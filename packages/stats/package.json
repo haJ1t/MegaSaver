@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./headline": {
+      "types": "./dist/headline.d.ts",
+      "import": "./dist/headline.js"
     }
   },
   "files": ["dist"],

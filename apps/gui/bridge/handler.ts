@@ -15,6 +15,7 @@ import type {
   SendJson,
   SendText,
 } from "./route-context.js";
+import { handleAllWorkspacesTokenSaverStats } from "./routes/all-workspaces-token-saver.js";
 import { dispatchClaudeHooks } from "./routes/claude-hooks.js";
 import {
   handleDeleteSessionMemory,
@@ -279,6 +280,12 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
     if (path === "/api/projects") {
       if (method !== "GET") return methodNotAllowed(res, method, origin);
       await handleListProjects(ctx);
+      return;
+    }
+
+    if (path === "/api/token-saver/all-workspaces") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleAllWorkspacesTokenSaverStats(ctx);
       return;
     }
 

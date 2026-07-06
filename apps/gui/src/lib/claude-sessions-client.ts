@@ -245,6 +245,13 @@ export type WorkspaceTokenSaverTotals = {
   latestUpdatedAt: string | null;
 };
 
+export type AllWorkspaceTokenSaverTotals = {
+  bytesSavedTotal: number;
+  sessionsCount: number;
+  savingRatio: number;
+  workspaceCount: number;
+};
+
 export type OverlayTokenSaverEvent = {
   id: string;
   workspaceKey: string;
@@ -359,6 +366,10 @@ export function fetchWorkspaceTokenSaverStats(
   id: string,
 ): Promise<WorkspaceTokenSaverTotals | null> {
   return getJson<WorkspaceTokenSaverTotals | null>(`${tokenSaverBase(dir, id)}/workspace-stats`);
+}
+
+export function fetchAllWorkspaceTotals(): Promise<AllWorkspaceTokenSaverTotals> {
+  return getJson<AllWorkspaceTokenSaverTotals>("/api/token-saver/all-workspaces");
 }
 
 export function fetchSessionTokenSaverEvents(
