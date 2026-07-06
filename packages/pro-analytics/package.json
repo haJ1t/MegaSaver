@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/pro-analytics",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "SEE LICENSE IN LICENSE",
   "private": true,
   "description": "Mega Saver Pro — proprietary historical savings analytics and export. Use requires a valid Mega Saver Pro license.",

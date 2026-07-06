@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/entitlement",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "private": true,
   "description": "Offline Ed25519 license verification and fail-closed entitlement checks for Mega Saver Pro.",

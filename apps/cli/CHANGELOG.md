@@ -1,5 +1,130 @@
 # @megasaver/cli
 
+## 1.5.0
+
+### Minor Changes
+
+- 20977aa: Decision-Trace Viewer: surface the causal chain behind each context decision.
+
+  Registry/proxy outputs now record their ranking decision inline on the replay
+  trace — the classification, the selected/omitted chunks with their EngineScore
+  breakdown, the memory ids that boosted the ranking (`rankedByMemoryIds`), and the
+  redaction summary. Replay tracing is now **on by default** (disable with
+  `MEGASAVER_SEAM_TRACE=false`), bounded by a retention cap on trace-session dirs.
+
+  - New `readSessionDecisionTrace` reader joins the trace's inline attribution into
+    a per-output `SessionDecisionTrace` (output granularity).
+  - New CLI: `mega trace explain <sessionId> --project <name> [--workspace <key>]
+[--json]` renders the causal chain for a registry session.
+  - New GUI: a Cytoscape decision-flow panel with a project-scoped session picker
+    (traces come from proxy/registry sessions for the workspace).
+
+  Note: the memory attribution is _ranking-causal_ (which memory boosted the
+  output's ranking), distinct from the evidence ledger's retention `pinnedByMemoryIds`.
+  `highRiskFindings` is the seam's redaction count. Traces exist only for
+  registry/proxy sessions; pure cockpit/overlay sessions show an honest empty state.
+
+- f66d02b: `mega gui`: serve the packaged desktop console from the published CLI.
+
+  `npm install -g @megasaver/cli && mega gui` now starts the GUI bridge and opens
+  the console in your browser — no clone, no `pnpm`, no build. The command binds
+  loopback-only, mints a per-run bearer token, serves the bundled GUI dist plus
+  the `/api` bridge same-origin, prints the tokenized URL, and opens the browser
+  (skip with `--no-open`). It runs in the foreground; Ctrl-C stops it.
+  `--port <n>` pins the port, `--store <dir>` selects the store.
+
+  - **@megasaver/cli**: new `mega gui [--port <n>] [--no-open] [--store <dir>]`
+    command. The build now inlines the GUI bridge into the standalone bundle and
+    ships the built frontend at `dist-bundle/gui`, resolved relative to the bundle
+    at runtime.
+  - **@megasaver/gui**: the bridge is hardened for distribution — loopback bind, an
+    always-on bearer-token wall on every `/api` route (query token accepted for
+    SSE), origin-derived CORS, and static serving of the built GUI. A new
+    `@megasaver/gui/bridge` entry exposes `startGuiBridge` + `resolveShippedGuiDistDir`
+    as the single boot path shared by the dev server and `mega gui`.
+
+  Security: there is no code path where `mega gui` starts the packaged GUI without
+  the token wall — no flag and no env disables `/api` auth.
+
+- 2fe01eb: Add `mega init` — one-command onboarding that installs the Claude Code hooks
+  and MCP bridge, enables the workspace saver (default mode `balanced`), and opens
+  the GUI. Auto-runs with a per-step summary; `--yes` skips the confirmation
+  prompt, `--no-gui` keeps it headless, and `--mode`/`--store` override the
+  defaults. A failed step never aborts the rest and the exit code reflects any
+  failure.
+- 3ebc27d: Pro entitlement + historical savings analytics (open-core).
+
+  The CLI core stays MIT and fully functional with no license. A new offline,
+  Ed25519-signed license gates NEW Pro features; the first is historical savings
+  analytics.
+
+  - **@megasaver/entitlement** (new, MIT): fail-closed `checkEntitlement` +
+    offline Ed25519 `verifyLicense` + license storage (`activateLicense`,
+    `licenseStatus`, `deactivateLicense`). Anything tampered, expired, wrong-key,
+    or malformed resolves to "not entitled" — never propagates a throw. Powers the
+    new `mega license activate | status | deactivate` command.
+  - **@megasaver/cli**: new `mega savings history [--by day|week|project]
+[--json|--csv|--out]` and `mega savings export --format csv|json [--out]`.
+    `checkEntitlement` gates FIRST: with no license each command prints an honest
+    one-line upsell and exits 0, importing and computing nothing; only an entitled
+    run lazily imports the Pro module, reads events (through `@megasaver/core`), and
+    renders. The free CLI is unaffected.
+
+  The proprietary Pro compute lives in `@megasaver/pro-analytics` (private,
+  source-available, not MIT — see `packages/pro-analytics/LICENSE`), so it is not
+  part of this changeset's published surface.
+
+  Honesty: the gate is MIT/open-source and therefore bypassable by editing the
+  source — inherent to open-core, stated plainly, no security theater. What is not
+  forgeable is the license itself: keys are Ed25519-signed by an offline private
+  key and verified against a public key baked into the CLI, fully offline.
+
+- 1d448ee: Add `mega savings forecast` — a Pro-gated run-rate savings projection with an
+  optional `--goal` pace, on the existing offline license.
+- 9a47aaf: Add `mega savings insights` — a Pro-gated waste/efficiency breakdown (where
+  tokens are still spent, by source/label) on the existing offline license.
+- 14b2c6c: Savings headline: surface saved tokens as a visible, defensible value.
+
+  MegaSaver already computed tokens saved but showed them only as raw bytes/tokens
+  buried in an audit command. This turns that number into a value a person feels:
+  a cumulative `≈$X saved (est.) · ≈Z sessions' worth of context reclaimed` on the
+  GUI home strip and the `mega audit report` output.
+
+  - **@megasaver/stats**: new pure `computeSavingsHeadline` (byte entry) +
+    `savingsHeadlineFromTokens` (token entry) share one price/window model —
+    `INPUT_PRICE_PER_MTOK_USD = 3.0` and `CONTEXT_WINDOW_TOKENS = 200_000`. Tokens
+    reuse the existing `tokensFromBytes` (bytes/4) model. New
+    `readAllWorkspaceTokenSaverTotals` aggregates every workspace with a blended
+    ratio for the cumulative headline. A browser-safe `@megasaver/stats/headline`
+    subpath lets the GUI client import the const without pulling the node store.
+  - **@megasaver/cli**: `mega audit report` renders a `$` headline line + a
+    one-line footnote after the summary, and carries the `SavingsHeadline` object
+    under `--json`. Zero savings renders an honest
+    `No savings recorded in this window yet.` — never a fake `$0.00` flex.
+  - **@megasaver/gui**: a new `GET /api/token-saver/all-workspaces` bridge route
+    returns the summed totals; the home strip renders
+    `≈$X saved (est.) · ≈Z sessions reclaimed` with the estimate assumption in a
+    hover footnote, and an honest `No savings recorded yet — enable the saver to
+start.` empty state.
+
+  Honesty: the `$` is always labeled `(est.)` because the one modeled assumption is
+  the per-model input price. Saved tokens were compressed away and never sent, so —
+  unlike the conversation proxy's `$` — they carry no prompt-cache discount to
+  double-count. The 200K-per-session divisor deliberately UNDER-counts real
+  sessions (a session rarely fills 200K), so reclaim is never overstated.
+
+### Patch Changes
+
+- 019af14: Bake the production Ed25519 license-verification public key into the CLI. Real
+  Pro license keys now validate; the placeholder (whose private half was discarded)
+  is replaced. The matching private key is held offline by the vendor and is never
+  committed.
+- 21eaac5: Harden the published license disclosure for the bundled-Pro tarball. The
+  `license` field is now `SEE LICENSE IN NOTICE` (the tarball inlines the
+  proprietary `@megasaver/pro-analytics`, so a bare `MIT` overclaimed the whole
+  package), and both the MIT `LICENSE` and the proprietary `PRO-LICENSE` now ship
+  in the tarball alongside `NOTICE` so every referenced license text is present.
+
 ## 1.4.1
 
 ### Patch Changes

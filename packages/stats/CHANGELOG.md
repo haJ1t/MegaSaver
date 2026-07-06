@@ -1,5 +1,63 @@
 # @megasaver/stats
 
+## 1.3.0
+
+### Minor Changes
+
+- 14b2c6c: Savings headline: surface saved tokens as a visible, defensible value.
+
+  MegaSaver already computed tokens saved but showed them only as raw bytes/tokens
+  buried in an audit command. This turns that number into a value a person feels:
+  a cumulative `≈$X saved (est.) · ≈Z sessions' worth of context reclaimed` on the
+  GUI home strip and the `mega audit report` output.
+
+  - **@megasaver/stats**: new pure `computeSavingsHeadline` (byte entry) +
+    `savingsHeadlineFromTokens` (token entry) share one price/window model —
+    `INPUT_PRICE_PER_MTOK_USD = 3.0` and `CONTEXT_WINDOW_TOKENS = 200_000`. Tokens
+    reuse the existing `tokensFromBytes` (bytes/4) model. New
+    `readAllWorkspaceTokenSaverTotals` aggregates every workspace with a blended
+    ratio for the cumulative headline. A browser-safe `@megasaver/stats/headline`
+    subpath lets the GUI client import the const without pulling the node store.
+  - **@megasaver/cli**: `mega audit report` renders a `$` headline line + a
+    one-line footnote after the summary, and carries the `SavingsHeadline` object
+    under `--json`. Zero savings renders an honest
+    `No savings recorded in this window yet.` — never a fake `$0.00` flex.
+  - **@megasaver/gui**: a new `GET /api/token-saver/all-workspaces` bridge route
+    returns the summed totals; the home strip renders
+    `≈$X saved (est.) · ≈Z sessions reclaimed` with the estimate assumption in a
+    hover footnote, and an honest `No savings recorded yet — enable the saver to
+start.` empty state.
+
+  Honesty: the `$` is always labeled `(est.)` because the one modeled assumption is
+  the per-model input price. Saved tokens were compressed away and never sent, so —
+  unlike the conversation proxy's `$` — they carry no prompt-cache discount to
+  double-count. The 200K-per-session divisor deliberately UNDER-counts real
+  sessions (a session rarely fills 200K), so reclaim is never overstated.
+
+- 223fa0a: Savings share card: the product generates its own shareable savings image.
+
+  The savings screenshot is the niche's native currency, so MegaSaver becomes its
+  own ad creative. A new pure `renderSavingsCardSvg(headline, { windowLabel })`
+  turns a `SavingsHeadline` into a 1200×630 direction-B card (minimal editorial:
+  light `#f6f5f2` ground, dark `#17181a` ink, one big `$` number, "Mega Saver"
+  mark, three sub-stats, footer "Less tokens. More signal."). It lives in the
+  browser-safe `@megasaver/stats/headline` barrel so the GUI and a future
+  `mega share` reuse one renderer; all text derives from the real headline (no
+  invented numbers), carries `(est.)`, and untrusted window labels are escaped.
+
+  - New GUI **Share** button beside the savings strip, shown only when
+    `bytesSavedTotal > 0`. It opens a modal previewing the card and exporting it:
+    **Download PNG** (zero-dep SVG→canvas→`toBlob`), best-effort **Copy image**
+    (guarded when the clipboard API is missing), and **Share on X** (a tweet-intent
+    whose honest, `(est.)`-carrying text comes from the same `computeSavingsHeadline`
+    — one source, no overstatement). X can't auto-attach the image, so the modal
+    tells the user to download the card then attach it.
+
+### Patch Changes
+
+- Updated dependencies [20977aa]
+  - @megasaver/output-filter@1.4.0
+
 ## 1.2.0
 
 ### Minor Changes

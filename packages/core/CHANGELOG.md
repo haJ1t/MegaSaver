@@ -1,5 +1,17 @@
 # @megasaver/core
 
+## 1.2.1
+
+### Patch Changes
+
+- Updated dependencies [20977aa]
+- Updated dependencies [14b2c6c]
+- Updated dependencies [223fa0a]
+  - @megasaver/output-filter@1.4.0
+  - @megasaver/context-gate@0.5.0
+  - @megasaver/stats@1.3.0
+  - @megasaver/content-store@1.1.2
+
 ## 1.2.0
 
 ### Minor Changes
