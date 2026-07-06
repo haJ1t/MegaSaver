@@ -1,3 +1,4 @@
+import { formatDollarsSaved } from "@megasaver/stats";
 import type { HistoryPoint, ProjectRow } from "./history.js";
 
 export type ExportFormat = "csv" | "json";
@@ -10,11 +11,25 @@ export type SavingsRow = HistoryPoint | ProjectRow;
 // the history point is the primary export shape.
 const DEFAULT_CSV_HEADER = ["bucket", "tokensSaved", "dollarsSaved", "events"];
 
+// A field whose first char is = + - @ (or a tab/CR that a spreadsheet strips
+// before the trigger) is executed as a formula when the CSV is opened in
+// Excel/Sheets — an injection vector for attacker-controlled names. Prefix a
+// single quote so the cell renders as literal text, then apply the normal
+// comma/quote/newline quoting.
 function escapeCsvField(value: string): string {
-  if (/[",\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
+  const neutralized = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  if (/[",\n]/.test(neutralized)) {
+    return `"${neutralized.replace(/"/g, '""')}"`;
   }
-  return value;
+  return neutralized;
+}
+
+// The CSV is a savings *report*, so its dollarsSaved column shows the same
+// floored display string as the free headline / audit report (formatDollarsSaved)
+// — never the raw lossless number. Only JSON keeps the raw numeric field.
+function cell(col: string, value: unknown): string {
+  if (col === "dollarsSaved") return formatDollarsSaved(value as number);
+  return String(value);
 }
 
 function toCsv(rows: readonly SavingsRow[]): string {
@@ -22,7 +37,7 @@ function toCsv(rows: readonly SavingsRow[]): string {
   const header = columns.map(escapeCsvField).join(",");
   const lines = rows.map((row) =>
     columns
-      .map((col) => escapeCsvField(String((row as unknown as Record<string, unknown>)[col])))
+      .map((col) => escapeCsvField(cell(col, (row as unknown as Record<string, unknown>)[col])))
       .join(","),
   );
   return [header, ...lines].join("\n");
