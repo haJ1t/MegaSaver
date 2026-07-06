@@ -23,9 +23,10 @@ export function svgToPngBlob(svg: string): Promise<Blob> {
       }, "image/png");
     };
     img.onerror = () => reject(new Error("Failed to decode the card SVG"));
-    // btoa needs Latin-1; the SVG is ASCII (numbers + escaped text), so a plain
-    // base64 data-URL is safe and avoids a fetch the CSP might block.
-    img.src = `data:image/svg+xml;base64,${btoa(svg)}`;
+    // The real card SVG carries non-Latin-1 glyphs (≈, U+2248), so btoa() would
+    // throw InvalidCharacterError. encodeURIComponent yields a UTF-8-safe
+    // data-URL directly — no base64, and no fetch the CSP might block.
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   });
 }
 

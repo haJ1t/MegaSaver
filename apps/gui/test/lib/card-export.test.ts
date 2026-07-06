@@ -1,3 +1,8 @@
+import {
+  type SavingsHeadline,
+  renderSavingsCardSvg,
+  savingsHeadlineFromTokens,
+} from "@megasaver/stats/headline";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { copyBlob, downloadBlob, svgToPngBlob } from "../../src/lib/card-export.js";
 
@@ -33,6 +38,20 @@ describe("svgToPngBlob", () => {
   it("resolves a PNG blob rasterized from the svg string", async () => {
     stubRasterPipeline();
     const blob = await svgToPngBlob("<svg></svg>");
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe("image/png");
+  });
+
+  it("rasterizes the REAL card svg without throwing on its non-Latin-1 chars", async () => {
+    stubRasterPipeline();
+    // The real renderer always emits ≈ (U+2248). btoa() throws
+    // InvalidCharacterError on any code point > 255, so the data-URL step must
+    // be UTF-8 safe — a trivial "<svg></svg>" fixture would never catch this.
+    const headline: SavingsHeadline = savingsHeadlineFromTokens(4_100_000, 0.68);
+    const svg = renderSavingsCardSvg(headline, { windowLabel: "this week" });
+    expect(svg).toContain("≈");
+
+    const blob = await svgToPngBlob(svg);
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.type).toBe("image/png");
   });
