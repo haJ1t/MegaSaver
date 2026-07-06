@@ -114,7 +114,7 @@ export function WorkspaceSessionList({
       live = false;
       clearInterval(t);
     };
-  }, [refreshNonce]);
+  }, []);
 
   if (listState === "loading") return <LoadingState label="Loading Claude Code sessions…" />;
   if (listState === "error" && listError)

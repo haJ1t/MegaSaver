@@ -34,7 +34,11 @@ function summary(
   };
 }
 
-function writeSummary(workspaceKey: string, liveSessionId: string, data: OverlaySessionTokenSaverStats): void {
+function writeSummary(
+  workspaceKey: string,
+  liveSessionId: string,
+  data: OverlaySessionTokenSaverStats,
+): void {
   const dir = join(root, "stats", workspaceKey);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, `${liveSessionId}.json`), JSON.stringify(data));

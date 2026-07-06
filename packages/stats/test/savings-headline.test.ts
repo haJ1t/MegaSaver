@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  computeSavingsHeadline,
-  savingsHeadlineFromTokens,
-} from "../src/savings-headline.js";
+import { computeSavingsHeadline, savingsHeadlineFromTokens } from "../src/savings-headline.js";
 
 describe("computeSavingsHeadline", () => {
   it("derives tokens, dollars, and reclaimed context windows from saved bytes", () => {

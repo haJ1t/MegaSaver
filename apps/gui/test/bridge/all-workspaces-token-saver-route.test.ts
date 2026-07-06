@@ -21,7 +21,12 @@ function overlaySummary(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function writeSummary(root: string, workspaceKey: string, liveSessionId: string, data: unknown): void {
+function writeSummary(
+  root: string,
+  workspaceKey: string,
+  liveSessionId: string,
+  data: unknown,
+): void {
   const dir = join(root, "stats", workspaceKey);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, `${liveSessionId}.json`), JSON.stringify(data));

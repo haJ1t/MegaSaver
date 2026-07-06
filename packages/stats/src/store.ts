@@ -376,9 +376,7 @@ export type AllWorkspaceTokenSaverTotals = {
 // per workspace, then blends the ratio from summed raw+saved bytes (both are
 // retained per workspace) rather than averaging per-workspace ratios. Best-
 // effort: a missing stats/ dir yields zeros; an unreadable workspace is skipped.
-export function readAllWorkspaceTokenSaverTotals(
-  store: StatsStore,
-): AllWorkspaceTokenSaverTotals {
+export function readAllWorkspaceTokenSaverTotals(store: StatsStore): AllWorkspaceTokenSaverTotals {
   let entries: string[];
   try {
     entries = readdirSync(join(store.root, "stats"), { withFileTypes: true })
