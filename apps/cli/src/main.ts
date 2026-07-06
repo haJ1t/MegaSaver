@@ -10,6 +10,7 @@ import { githubCommand } from "./commands/github/index.js";
 import { guiCommand } from "./commands/gui.js";
 import { hooksCommand } from "./commands/hooks/index.js";
 import { indexCommand } from "./commands/index/index.js";
+import { initCommand } from "./commands/init.js";
 import { learnCommand } from "./commands/learn.js";
 import { mcpCommand } from "./commands/mcp/index.js";
 import { memoryCommand } from "./commands/memory/index.js";
@@ -44,6 +45,7 @@ export const mainCommand = defineCommand({
     description: "Mega Saver - ContextOps platform CLI.",
   },
   subCommands: {
+    init: initCommand,
     audit: auditCommand,
     doctor: doctorCommand,
     github: githubCommand,
