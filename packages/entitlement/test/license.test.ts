@@ -186,4 +186,23 @@ describe("verifyLicense", () => {
       reason: "malformed",
     });
   });
+
+  it("fails closed (not entitled) when the verify body throws", () => {
+    // A well-formed msp_ token clears every pre-verify guard and reaches
+    // createPublicKey, which throws on this non-PEM key string. The load-bearing
+    // catch must swallow the throw and resolve to NOT entitled — never fail open.
+    const { privateKey } = keypair();
+    const key = signTestLicense(privateKey, {
+      v: 1,
+      tier: "pro",
+      id: "x",
+      iat: 0,
+      exp: null,
+    });
+    const brokenPublicKey = "-----BEGIN PUBLIC KEY-----\nnotbase64\n-----END PUBLIC KEY-----";
+
+    const result = verifyLicense(key, { publicKey: brokenPublicKey, now });
+
+    expect(result.valid).toBe(false);
+  });
 });

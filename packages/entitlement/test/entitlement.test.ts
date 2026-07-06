@@ -84,4 +84,20 @@ describe("checkEntitlement", () => {
       reason: "malformed",
     });
   });
+
+  it("fails closed (not entitled) when verify throws on a stored key", () => {
+    // A signature-valid stored key reaches verifyLicense, which throws while
+    // building the (broken) public key. The seam must stay fail-closed.
+    const { privateKey } = generateKeyPairSync("ed25519");
+    writeLicense(signTestLicense(privateKey, { v: 1, tier: "pro", id: "x", iat: 0, exp: null }));
+    const brokenPublicKey = "-----BEGIN PUBLIC KEY-----\nnotbase64\n-----END PUBLIC KEY-----";
+
+    const result = checkEntitlement("savings-analytics", {
+      storeRoot: root,
+      now,
+      publicKey: brokenPublicKey,
+    });
+
+    expect(result.entitled).toBe(false);
+  });
 });

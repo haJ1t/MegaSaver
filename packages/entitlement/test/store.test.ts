@@ -1,5 +1,5 @@
 import { type KeyObject, generateKeyPairSync, sign } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -116,12 +116,7 @@ describe("readLicense", () => {
   });
 
   it("returns null when the license file is corrupt", () => {
-    activateLicense(root, validKey(), {
-      publicKey: keys.publicKey,
-      now,
-      activatedAt: () => ACTIVATED_AT,
-    });
-    rmSync(join(root, "license.json"));
+    writeFileSync(join(root, "license.json"), "{ not json");
     expect(readLicense(root)).toBeNull();
   });
 });
