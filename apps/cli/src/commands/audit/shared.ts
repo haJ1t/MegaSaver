@@ -1,6 +1,7 @@
 import {
   type AuditSummary,
   type OverlaySessionTokenSaverStats,
+  SAVINGS_FOOTNOTE,
   type SavingsHeadline,
   savingsHeadlineFromTokens,
 } from "@megasaver/core";
@@ -55,6 +56,6 @@ export function formatSavingsHeadlineLines(headline: SavingsHeadline): string[] 
   }
   return [
     `Saved ≈${headline.tokensSaved} tokens ≈ $${headline.dollarsSaved.toFixed(2)} (est.) · ≈${headline.contextWindowsReclaimed.toFixed(1)} sessions' worth of context (200K each).`,
-    "(est. at $3/M input; saved tokens were never sent, so not cache-discounted.)",
+    SAVINGS_FOOTNOTE,
   ];
 }

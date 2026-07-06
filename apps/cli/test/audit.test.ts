@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type AuditEvent,
+  SAVINGS_FOOTNOTE,
   appendAuditEvent,
   createJsonDirectoryCoreRegistry,
   initStore,
@@ -116,12 +117,10 @@ describe("mega audit report", () => {
     });
     expect(code).toBe(0);
     const text = lines.join("\n");
-    // 4700 tokens saved -> $0.01 at $3/M; 4700/200000 = 0.0 sessions' worth.
+    // 4700 tokens saved -> $0.01 at the modeled input price; 4700/200000 = 0.0 sessions' worth.
     expect(text).toContain("Saved ≈4700 tokens ≈ $0.01 (est.)");
     expect(text).toContain("sessions' worth of context (200K each)");
-    expect(text).toContain(
-      "(est. at $3/M input; saved tokens were never sent, so not cache-discounted.)",
-    );
+    expect(text).toContain(SAVINGS_FOOTNOTE);
   });
 
   it("emits the SavingsHeadline object under --json", async () => {

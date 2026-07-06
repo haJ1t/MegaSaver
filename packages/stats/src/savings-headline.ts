@@ -12,6 +12,16 @@ export const INPUT_PRICE_PER_MTOK_USD = 3.0;
 // fills 200K), which is the honest direction — we never overstate reclaim.
 export const CONTEXT_WINDOW_TOKENS = 200_000;
 
+// Single source of truth for the human-readable price footnote. The displayed
+// "$N/M" is derived from the price argument, so it can never drift from the
+// constant the way a hardcoded "$3/M" string literal would. Both the CLI audit
+// line and the GUI tooltip render SAVINGS_FOOTNOTE, so they never disagree.
+export function savingsFootnote(inputPricePerMTok: number): string {
+  return `(est. at $${inputPricePerMTok}/M input; saved tokens were never sent, so not cache-discounted.)`;
+}
+
+export const SAVINGS_FOOTNOTE = savingsFootnote(INPUT_PRICE_PER_MTOK_USD);
+
 export interface SavingsHeadlineTotals {
   bytesSavedTotal: number;
   sessionsCount: number;

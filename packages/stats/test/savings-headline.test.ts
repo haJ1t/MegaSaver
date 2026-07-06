@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { computeSavingsHeadline, savingsHeadlineFromTokens } from "../src/savings-headline.js";
+import {
+  INPUT_PRICE_PER_MTOK_USD,
+  SAVINGS_FOOTNOTE,
+  computeSavingsHeadline,
+  savingsFootnote,
+  savingsHeadlineFromTokens,
+} from "../src/savings-headline.js";
 
 describe("computeSavingsHeadline", () => {
   it("derives tokens, dollars, and reclaimed context windows from saved bytes", () => {
@@ -60,5 +66,20 @@ describe("savingsHeadlineFromTokens", () => {
     });
     const fromTokens = savingsHeadlineFromTokens(1_000_000, 0.5);
     expect(fromTokens).toEqual(fromBytes);
+  });
+});
+
+describe("savings footnote", () => {
+  it("embeds the current price constant, not a hardcoded literal", () => {
+    // Proves the displayed price is derived from INPUT_PRICE_PER_MTOK_USD:
+    // change the const and the footnote follows.
+    expect(SAVINGS_FOOTNOTE).toContain(`$${INPUT_PRICE_PER_MTOK_USD}/M`);
+  });
+
+  it("reformats the price so a different constant renders a different price", () => {
+    // If the const were bumped to 5, the footnote must say $5/M — not $3/M.
+    expect(savingsFootnote(5)).toContain("$5/M");
+    expect(savingsFootnote(5)).not.toContain("$3/M");
+    expect(savingsFootnote(3)).toContain("$3/M");
   });
 });
