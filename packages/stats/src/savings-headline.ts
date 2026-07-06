@@ -26,17 +26,34 @@ export interface SavingsHeadline {
   isEstimate: true;
 }
 
+// Byte-based entry: the token-saver retains saved BYTES, so convert with the
+// shared bytes/4 model before pricing. Used by the GUI home headline and any
+// all-workspace aggregation.
 export function computeSavingsHeadline(
   totals: SavingsHeadlineTotals,
   opts?: { inputPricePerMTok?: number },
 ): SavingsHeadline {
+  return savingsHeadlineFromTokens(
+    tokensFromBytes(totals.bytesSavedTotal),
+    totals.savingRatio,
+    opts,
+  );
+}
+
+// Token-based entry: the audit summary already yields a saved-TOKEN count
+// (tokensBefore - tokensAfter), so it prices directly without a byte round-trip.
+// Both entries share the one price/window model so the CLI and GUI never drift.
+export function savingsHeadlineFromTokens(
+  tokensSaved: number,
+  savingRatio: number,
+  opts?: { inputPricePerMTok?: number },
+): SavingsHeadline {
   const inputPricePerMTok = opts?.inputPricePerMTok ?? INPUT_PRICE_PER_MTOK_USD;
-  const tokensSaved = tokensFromBytes(totals.bytesSavedTotal);
   return {
     tokensSaved,
     dollarsSaved: (tokensSaved / 1_000_000) * inputPricePerMTok,
     contextWindowsReclaimed: tokensSaved / CONTEXT_WINDOW_TOKENS,
-    savingRatio: totals.savingRatio,
+    savingRatio,
     isEstimate: true,
   };
 }

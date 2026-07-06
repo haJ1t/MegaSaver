@@ -101,6 +101,71 @@ describe("mega audit report", () => {
     expect(lines.join("\n")).toContain("would've been 7000 tokens, was 2300, 67% saved");
   });
 
+  it("renders the $ savings headline and footnote for a seeded pack event", async () => {
+    await seedProject();
+    appendAuditEvent({ store: { root }, event: packEvent() });
+    const code = await runAuditReport({
+      projectName: "demo",
+      windowFlag: undefined,
+      sessionFlag: undefined,
+      ...env(),
+      stdout,
+      stderr,
+      json: false,
+      now: () => TS,
+    });
+    expect(code).toBe(0);
+    const text = lines.join("\n");
+    // 4700 tokens saved -> $0.01 at $3/M; 4700/200000 = 0.0 sessions' worth.
+    expect(text).toContain("Saved ≈4700 tokens ≈ $0.01 (est.)");
+    expect(text).toContain("sessions' worth of context (200K each)");
+    expect(text).toContain(
+      "(est. at $3/M input; saved tokens were never sent, so not cache-discounted.)",
+    );
+  });
+
+  it("emits the SavingsHeadline object under --json", async () => {
+    await seedProject();
+    appendAuditEvent({ store: { root }, event: packEvent() });
+    const code = await runAuditReport({
+      projectName: "demo",
+      windowFlag: undefined,
+      sessionFlag: undefined,
+      ...env(),
+      stdout,
+      stderr,
+      json: true,
+      now: () => TS,
+    });
+    expect(code).toBe(0);
+    const payload = JSON.parse(lines.join("\n"));
+    expect(payload.savingsHeadline).toEqual({
+      tokensSaved: 4700,
+      dollarsSaved: (4700 / 1_000_000) * 3.0,
+      contextWindowsReclaimed: 4700 / 200_000,
+      savingRatio: 67 / 100,
+      isEstimate: true,
+    });
+  });
+
+  it("shows an honest empty line when there are no savings", async () => {
+    await seedProject();
+    const code = await runAuditReport({
+      projectName: "demo",
+      windowFlag: undefined,
+      sessionFlag: undefined,
+      ...env(),
+      stdout,
+      stderr,
+      json: false,
+      now: () => TS,
+    });
+    expect(code).toBe(0);
+    const text = lines.join("\n");
+    expect(text).toContain("No savings recorded in this window yet.");
+    expect(text).not.toContain("$0.00 (est.)");
+  });
+
   it("rejects a bad --window with exit 1", async () => {
     const code = await runAuditReport({
       projectName: "demo",

@@ -10,7 +10,7 @@ import { defineCommand } from "citty";
 import { mapErrorToCliMessage, projectNotFoundMessage, storeCorruptMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { projectNameSchema } from "../shared/schemas.js";
-import { formatAuditCards } from "./shared.js";
+import { auditSavingsHeadline, formatAuditCards } from "./shared.js";
 
 export type RunAuditReportInput = {
   projectName: string;
@@ -82,7 +82,7 @@ export async function runAuditReport(input: RunAuditReportInput): Promise<0 | 1>
     const events = readAuditEvents({ root: rootDir }, project.id, sessionId);
     const summary = summarizeAudit(events, { window: resolvedWindow, now });
     if (input.json) {
-      input.stdout(JSON.stringify(summary));
+      input.stdout(JSON.stringify({ ...summary, savingsHeadline: auditSavingsHeadline(summary) }));
     } else {
       for (const line of formatAuditCards(summary)) input.stdout(line);
     }

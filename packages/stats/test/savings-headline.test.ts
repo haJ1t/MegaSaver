@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeSavingsHeadline } from "../src/savings-headline.js";
+import {
+  computeSavingsHeadline,
+  savingsHeadlineFromTokens,
+} from "../src/savings-headline.js";
 
 describe("computeSavingsHeadline", () => {
   it("derives tokens, dollars, and reclaimed context windows from saved bytes", () => {
@@ -38,5 +41,27 @@ describe("computeSavingsHeadline", () => {
     expect(headline.contextWindowsReclaimed).toBe(0);
     expect(headline.savingRatio).toBe(0);
     expect(headline.isEstimate).toBe(true);
+  });
+});
+
+describe("savingsHeadlineFromTokens", () => {
+  it("prices a saved-token count directly without a byte round-trip", () => {
+    const headline = savingsHeadlineFromTokens(4700, 0.67);
+    expect(headline.tokensSaved).toBe(4700);
+    expect(headline.dollarsSaved).toBe((4700 / 1_000_000) * 3.0);
+    expect(headline.contextWindowsReclaimed).toBe(4700 / 200_000);
+    expect(headline.savingRatio).toBe(0.67);
+    expect(headline.isEstimate).toBe(true);
+  });
+
+  it("agrees with computeSavingsHeadline for the same underlying tokens", () => {
+    // 4_000_000 bytes / 4 = 1_000_000 tokens; both entries must match.
+    const fromBytes = computeSavingsHeadline({
+      bytesSavedTotal: 4_000_000,
+      sessionsCount: 3,
+      savingRatio: 0.5,
+    });
+    const fromTokens = savingsHeadlineFromTokens(1_000_000, 0.5);
+    expect(fromTokens).toEqual(fromBytes);
   });
 });
