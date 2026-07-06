@@ -6,8 +6,11 @@ export {
   CONTEXT_WINDOW_TOKENS,
   SAVINGS_FOOTNOTE,
   savingsFootnote,
+  formatDollarsSaved,
   computeSavingsHeadline,
   savingsHeadlineFromTokens,
   type SavingsHeadline,
   type SavingsHeadlineTotals,
 } from "./savings-headline.js";
+
+export { renderSavingsCardSvg } from "./savings-card.js";

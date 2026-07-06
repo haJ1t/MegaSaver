@@ -22,6 +22,15 @@ export function savingsFootnote(inputPricePerMTok: number): string {
 
 export const SAVINGS_FOOTNOTE = savingsFootnote(INPUT_PRICE_PER_MTOK_USD);
 
+// Display-only formatter for the public shared $. Floors the cents so a
+// half-cent (e.g. raw $37.035) shows "$37.03", never rounding up — this
+// feature under-counts on purpose (the reclaim count and the 200K divisor
+// already do), so the headline $ must not overstate. The numeric
+// dollarsSaved field stays lossless; only this display formatter floors.
+export function formatDollarsSaved(dollarsSaved: number): string {
+  return `$${(Math.floor(dollarsSaved * 100) / 100).toFixed(2)}`;
+}
+
 export interface SavingsHeadlineTotals {
   bytesSavedTotal: number;
   sessionsCount: number;
