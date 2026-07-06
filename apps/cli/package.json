@@ -1,13 +1,13 @@
 {
   "name": "@megasaver/cli",
   "version": "1.4.1",
-  "license": "MIT",
+  "license": "SEE LICENSE IN NOTICE",
   "description": "Mega Saver CLI - the `mega` command.",
   "type": "module",
   "bin": {
     "mega": "./dist-bundle/mega.mjs"
   },
-  "files": ["dist-bundle", "NOTICE"],
+  "files": ["dist-bundle", "LICENSE", "PRO-LICENSE", "NOTICE"],
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
