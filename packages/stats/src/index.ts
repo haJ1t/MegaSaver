@@ -26,6 +26,8 @@ export {
   readOverlaySummaryAnyWorkspace,
   readWorkspaceTokenSaverTotals,
   type WorkspaceTokenSaverTotals,
+  readAllWorkspaceTokenSaverTotals,
+  type AllWorkspaceTokenSaverTotals,
   resetOverlayOnDisable,
 } from "./store.js";
 
@@ -100,6 +102,14 @@ export {
   type ProxyUsageTokenCounts,
   type ProxyUsageSavings,
 } from "./proxy-usage-savings.js";
+
+export {
+  INPUT_PRICE_PER_MTOK_USD,
+  CONTEXT_WINDOW_TOKENS,
+  computeSavingsHeadline,
+  type SavingsHeadline,
+  type SavingsHeadlineTotals,
+} from "./savings-headline.js";
 
 export {
   type SufficiencyFixture,
