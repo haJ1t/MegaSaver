@@ -27,7 +27,8 @@ export function computeWasteBreakdown(
   events: readonly TokenSaverEvent[],
   opts: { by: WasteBy },
 ): WasteRow[] {
-  const keyOf = opts.by === "label" ? (e: TokenSaverEvent) => e.label : (e: TokenSaverEvent) => e.sourceKind;
+  const keyOf =
+    opts.by === "label" ? (e: TokenSaverEvent) => e.label : (e: TokenSaverEvent) => e.sourceKind;
   const byKey = new Map<string, Acc>();
   let totalReturned = 0;
   for (const e of events) {
@@ -58,5 +59,37 @@ export function computeWasteBreakdown(
         returnedShare: totalReturned === 0 ? 0 : a.returnedBytes / totalReturned,
       };
     })
-    .sort((x, y) => y.returnedBytes - x.returnedBytes || (x.key < y.key ? -1 : x.key > y.key ? 1 : 0));
+    .sort(
+      (x, y) => y.returnedBytes - x.returnedBytes || (x.key < y.key ? -1 : x.key > y.key ? 1 : 0),
+    );
+}
+
+export interface WasteHeadline {
+  totalRawBytes: number;
+  totalReturnedBytes: number;
+  totalBytesSaved: number;
+  tokensReturned: number;
+  dollarsReturned: number;
+  overallSavingRatio: number;
+  topKey: string | null;
+  topReturnedShare: number;
+}
+
+export function computeWasteHeadline(events: readonly TokenSaverEvent[]): WasteHeadline {
+  const bySource = computeWasteBreakdown(events, { by: "source" });
+  const totalRawBytes = events.reduce((s, e) => s + e.rawBytes, 0);
+  const totalReturnedBytes = events.reduce((s, e) => s + e.returnedBytes, 0);
+  const totalBytesSaved = events.reduce((s, e) => s + e.bytesSaved, 0);
+  const tokensReturned = tokensFromBytes(totalReturnedBytes);
+  const top = bySource[0] ?? null;
+  return {
+    totalRawBytes,
+    totalReturnedBytes,
+    totalBytesSaved,
+    tokensReturned,
+    dollarsReturned: dollarsFromTokens(tokensReturned),
+    overallSavingRatio: totalRawBytes === 0 ? 0 : totalBytesSaved / totalRawBytes,
+    topKey: top ? top.key : null,
+    topReturnedShare: top ? top.returnedShare : 0,
+  };
 }
