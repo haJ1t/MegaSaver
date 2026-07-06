@@ -91,6 +91,9 @@ importers:
       '@megasaver/policy':
         specifier: workspace:*
         version: link:../../packages/policy
+      '@megasaver/pro-analytics':
+        specifier: workspace:*
+        version: link:../../packages/pro-analytics
       '@megasaver/proxy-control':
         specifier: workspace:*
         version: link:../../packages/proxy-control

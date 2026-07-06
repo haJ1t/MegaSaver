@@ -21,6 +21,7 @@ import { packCommand } from "./commands/pack/index.js";
 import { projectCommand } from "./commands/project.js";
 import { proxyCommand } from "./commands/proxy/index.js";
 import { rulesCommand } from "./commands/rules/index.js";
+import { savingsCommand } from "./commands/savings/index.js";
 import { scanCommand } from "./commands/scan.js";
 import { sessionCommand } from "./commands/session/index.js";
 import { taskCommand } from "./commands/task/index.js";
@@ -58,6 +59,7 @@ export const mainCommand = defineCommand({
     proxy: proxyCommand,
     daemon: daemonCommand,
     rules: rulesCommand,
+    savings: savingsCommand,
     session: sessionCommand,
     connector: connectorCommand,
     memory: memoryCommand,

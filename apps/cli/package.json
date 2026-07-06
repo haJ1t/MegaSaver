@@ -47,6 +47,7 @@
     "@megasaver/memory-graph": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",
+    "@megasaver/pro-analytics": "workspace:*",
     "@megasaver/proxy-control": "workspace:*",
     "@megasaver/shared": "workspace:*",
     "@megasaver/skill-packs": "workspace:*",

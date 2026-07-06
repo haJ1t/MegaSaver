@@ -18,7 +18,11 @@ import { describe, expect, it } from "vitest";
 // The non-Mega deps (citty, zod) are ignored by the @megasaver/ filter.
 // pro-entitlement adds @megasaver/entitlement: the `mega license` command drives
 // the fail-closed entitlement seam (Ed25519 verify + license storage). Acyclic —
-// entitlement depends only on node:crypto, never on the CLI.
+// entitlement depends only on node:crypto, never on the CLI. It also adds
+// @megasaver/pro-analytics: the Pro-gated `mega savings history/export` commands
+// lazily import it after checkEntitlement passes. Acyclic — pro-analytics depends
+// only on @megasaver/stats, never on the CLI. The CLI still reads events through
+// @megasaver/core (never @megasaver/stats directly), so stats stays forbidden.
 const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/agent-office",
   "@megasaver/connector-claude-code",
@@ -37,6 +41,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/memory-graph",
   "@megasaver/output-filter",
   "@megasaver/policy",
+  "@megasaver/pro-analytics",
   "@megasaver/proxy-control",
   "@megasaver/shared",
   "@megasaver/skill-packs",
