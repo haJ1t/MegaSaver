@@ -50,10 +50,13 @@ if source protection later matters.
 
 ### Decision 2 — Domain
 
-`megasaver.dev` is hardcoded in the shipped CLI. Recommended: **buy
-megasaver.dev** (lowest friction, matches what's already out). If you want a
-different name, decide NOW — before more installs — and republish the CLI with
-the new URL.
+`megasaver.dev` is hardcoded in the shipped CLI's upsell.
+
+**✅ DECIDED (2026-07-06): buy megasaver.dev via Vercel** (Vercel is registrar +
+host + DNS + SSL in one). Keeping the name that's already published simplifies
+everything: the canonical/OG tags already say `megasaver.dev` (no meta change),
+and the shipped CLI already points there (no republish needed for the domain).
+See Phase 2 for the Vercel specifics.
 
 ---
 
@@ -78,13 +81,19 @@ the new URL.
 
 ## Phase 2 — Make the funnel convert (commerce + site)
 
-4. **[BLOCKER · M] Buy megasaver.dev + point DNS** at your chosen static host.
-5. **[BLOCKER · S] Deploy `site/`** to a static host (GitHub Pages / Netlify /
-   Vercel / Cloudflare Pages), no build step. `/pro` resolves automatically
-   (it's `site/pro/index.html`, a directory index). Verify `og.png` unfurls in a
+4. **[BLOCKER · M] Buy megasaver.dev in Vercel + assign it.** Vercel → Domains →
+   register `megasaver.dev`, then add it to the site project. Vercel provisions
+   DNS + SSL automatically (it's the registrar), so there are no manual records.
+5. **[BLOCKER · S] Deploy `site/` on Vercel.** Import the repo, then — this is the
+   one setting that matters — set **Root Directory = `site`** (the repo is a
+   pnpm/turbo monorepo; without this Vercel tries to build the whole workspace and
+   fails). `site/` has no `package.json`, so Vercel serves it as static: Framework
+   = Other, no build/install. `/pro` resolves (it's `site/pro/index.html`), and
+   `site/vercel.json` pins `cleanUrls` + `trailingSlash:false` so the canonical
+   `/pro` (no slash, no `.html`) is deterministic. Verify `og.png` unfurls in a
    real X/Slack preview.
-6. **[REC · S] Set the real domain** in the canonical/OG/Twitter tags of
-   `site/index.html` + `site/pro/index.html` (skip if you keep megasaver.dev).
+6. **[✅ N/A] Domain in meta tags** — no-op. The canonical/OG/Twitter tags on both
+   pages already point at `megasaver.dev` (Decision 2), so nothing to change.
 7. **[BLOCKER · M] Create the Gumroad product** ($7.99/mo) and swap the
    placeholder URL in **both** CTAs (`site/pro/index.html:168` and `:247`). Wire
    the post-purchase email to deliver the key (or trigger your manual issue
