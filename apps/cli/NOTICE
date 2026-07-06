@@ -1,0 +1,15 @@
+Mega Saver CLI (`mega`)
+Copyright (c) 2026 Halit Ozger
+
+The Mega Saver CLI is licensed under the MIT License (see the root LICENSE),
+EXCEPT for the bundled Pro module `@megasaver/pro-analytics`.
+
+Packaging note (mixed license): the published `@megasaver/cli` tarball ships a
+single self-contained bundle (`dist-bundle/mega.mjs`) that inlines every
+workspace dependency, INCLUDING the proprietary `@megasaver/pro-analytics`
+module. That module is NOT MIT: it is proprietary and source-available under its
+own license (`packages/pro-analytics/LICENSE`). Its use requires a valid Mega
+Saver Pro license, and it may not be redistributed.
+
+So while the bulk of this package is MIT (hence `"license": "MIT"` in
+package.json), the tarball contains proprietary Pro logic under the terms above.
