@@ -163,6 +163,14 @@ describe("licenseStatus", () => {
     });
   });
 
+  it("distinguishes a corrupt license file from an absent one", () => {
+    writeFileSync(join(root, "license.json"), "{ not json");
+    expect(licenseStatus(root, { publicKey: keys.publicKey, now })).toEqual({
+      active: false,
+      reason: "corrupt",
+    });
+  });
+
   it("reports none with the reason for a stored expired license", () => {
     const expSec = Math.floor(NOW_MS / 1000) - 1;
     // Store the expired key directly (activation would reject it), then check status.

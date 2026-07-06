@@ -50,6 +50,10 @@ export function runLicenseStatus(input: RunLicenseStatusInput): 0 | 1 {
     input.stdout("no license (free).");
     return 0;
   }
+  if (status.reason === "corrupt") {
+    input.stdout("license present but invalid — re-activate: mega license activate <key>.");
+    return 0;
+  }
   input.stdout(`no license (free) — stored key ${status.reason}.`);
   return 0;
 }

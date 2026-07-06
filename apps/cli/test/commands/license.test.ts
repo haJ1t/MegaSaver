@@ -1,5 +1,5 @@
 import { type KeyObject, generateKeyPairSync, sign } from "node:crypto";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -148,6 +148,24 @@ describe("runLicenseStatus", () => {
 
     expect(code).toBe(0);
     expect(out.join("\n")).toContain("no license (free)");
+  });
+
+  it("reports a corrupt license distinctly (present but invalid — re-activate)", () => {
+    writeFileSync(join(root, "license.json"), "{ not json");
+
+    const code = runLicenseStatus({
+      storeRoot: root,
+      publicKey: keys.publicKey,
+      now,
+      stdout,
+      stderr,
+    });
+
+    const text = out.join("\n");
+    expect(code).toBe(0);
+    // A broken license must NOT be hidden as "no license".
+    expect(text).not.toContain("no license");
+    expect(text).toContain("re-activate");
   });
 });
 

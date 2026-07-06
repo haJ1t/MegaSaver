@@ -29,7 +29,7 @@ export type LicenseStatusResult =
   | { active: true; tier: "pro"; expiresAt: string | null }
   | {
       active: false;
-      reason: "no_license" | "expired" | "invalid_signature" | "malformed";
+      reason: "no_license" | "corrupt" | "expired" | "invalid_signature" | "malformed";
     };
 
 function licensePath(storeRoot: string): string {
@@ -94,9 +94,15 @@ export function deactivateLicense(storeRoot: string): void {
   rmSync(licensePath(storeRoot), { force: true });
 }
 
+// A corrupt file (present but unreadable/invalid) is reported distinctly from a
+// truly absent one, so `mega license status` surfaces "present but invalid"
+// instead of hiding a broken license as "no license". checkEntitlement stays
+// fail-closed independently — this only affects the human-facing status.
 export function licenseStatus(storeRoot: string, deps: LicenseStatusDeps): LicenseStatusResult {
+  const raw = readLicenseFile(storeRoot);
+  if (raw === null) return { active: false, reason: "no_license" };
   const stored = readLicense(storeRoot);
-  if (stored === null) return { active: false, reason: "no_license" };
+  if (stored === null) return { active: false, reason: "corrupt" };
   const verified = verifyLicense(stored.key, { publicKey: deps.publicKey, now: deps.now });
   if (verified.valid) {
     return { active: true, tier: verified.tier, expiresAt: verified.expiresAt };
