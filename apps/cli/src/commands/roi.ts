@@ -88,8 +88,8 @@ export async function runRoi(input: RunRoiInput): Promise<0 | 1> {
   const daysLeft = Math.round(report.daysLeft);
 
   const headline = report.paidForItself
-    ? `Pro ${price}/mo → saved ${saved} this month (est.) = ${roiSo} · on pace for ${roiProj} by month end · +${sessions} sessions' worth of context`
-    : `ROI ${roiSo} so far — hasn't paid for itself yet · on pace for ${roiProj} by month end · ${daysLeft} days left`;
+    ? `Pro ${price}/mo → saved ${saved} this month (est.) = ${roiSo} · on pace for ${roiProj} by month end (est.) · +${sessions} sessions' worth of context`
+    : `ROI ${roiSo} so far — hasn't paid for itself yet · on pace for ${roiProj} by month end (est.) · ${daysLeft} days left`;
   input.stdout(headline);
   input.stdout("");
   input.stdout(`price          ${price}/mo`);
