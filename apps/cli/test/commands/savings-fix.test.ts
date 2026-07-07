@@ -183,3 +183,104 @@ describe("runSavingsFix — propose mode (entitled)", () => {
     expect(parsed.applied).toBeUndefined();
   });
 });
+
+describe("runSavingsFix — apply mode (entitled)", () => {
+  beforeEach(() => activatePro());
+
+  it("--apply calls writeSaver once with enabled/balanced and prints was→now", async () => {
+    const writeSaver = vi.fn();
+    const code = await runSavingsFix(baseInput({ apply: true, writeSaver }));
+
+    expect(code).toBe(0);
+    expect(writeSaver).toHaveBeenCalledTimes(1);
+    expect(writeSaver).toHaveBeenCalledWith({ enabled: true, mode: "balanced" });
+    const text = out.join("\n");
+    expect(text).toContain("applied: enable-saver");
+    expect(text).toContain("was: absent");
+    expect(text).toContain("now: enabled/balanced");
+  });
+
+  it("--apply round-trips through the REAL saver store (default reader+writer)", async () => {
+    const { defaultSaverReader, defaultSaverWriter } = await import(
+      "../../src/commands/savings/fix.js"
+    );
+    const { readExactRecord } = await import("@megasaver/context-gate");
+    const { encodeWorkspaceKey } = await import("@megasaver/shared");
+    const cwd = "/tmp/fix-workspace";
+
+    const code = await runSavingsFix(
+      baseInput({
+        apply: true,
+        readSaver: defaultSaverReader(root, cwd),
+        writeSaver: defaultSaverWriter(root, cwd),
+      }),
+    );
+
+    expect(code).toBe(0);
+    const rec = readExactRecord(root, encodeWorkspaceKey(cwd));
+    expect(rec).toEqual({ kind: "v1-exact", enabled: true, mode: "balanced" });
+  });
+
+  it("--apply with an advice-only plan writes nothing and says so", async () => {
+    const writeSaver = vi.fn();
+    const code = await runSavingsFix(
+      baseInput({
+        apply: true,
+        writeSaver,
+        readSaver: () => ({ enabled: true, mode: "balanced" }),
+        readMemoryFileSizes: () => [{ path: "CLAUDE.md", bytes: 20_000 }],
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(writeSaver).not.toHaveBeenCalled();
+    // Default fixEvents (25 "file"/"read" events, no savings) also trigger
+    // R3 advise-tool-route and R4 advise-outline alongside R5 for CLAUDE.md,
+    // so the advice-only plan here has 3 items, not 1.
+    expect(out.join("\n")).toContain("Nothing to apply — 3 advice item(s) above.");
+  });
+
+  it("--apply --json emits { plan, applied }", async () => {
+    const code = await runSavingsFix(baseInput({ apply: true, json: true, writeSaver: vi.fn() }));
+
+    expect(code).toBe(0);
+    const parsed = JSON.parse(out.join("\n")) as {
+      plan: unknown;
+      applied: { kind: string; was: string; now: string }[];
+    };
+    expect(parsed.applied).toEqual([
+      { kind: "enable-saver", was: "absent", now: "enabled/balanced" },
+    ]);
+  });
+
+  it("bump path reports was: safe", async () => {
+    // 1 event, 4_000_000 returned bytes → 1M tokens, ratio ≈ 0.09 → R2 fires at safe.
+    const weakEvents = [event(0, "file", 4_000_000)];
+    const writeSaver = vi.fn();
+    const code = await runSavingsFix(
+      baseInput({
+        apply: true,
+        writeSaver,
+        readAllEvents: () => ({ events: weakEvents, eventsByProject: {} }),
+        readSaver: () => ({ enabled: true, mode: "safe" }),
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(writeSaver).toHaveBeenCalledWith({ enabled: true, mode: "balanced" });
+    expect(out.join("\n")).toContain("was: safe");
+  });
+});
+
+describe("defaultMemoryFileReader", () => {
+  it("stats only existing files, size only", async () => {
+    const { defaultMemoryFileReader } = await import("../../src/commands/savings/fix.js");
+    const { mkdtempSync: mkTmp, writeFileSync } = await import("node:fs");
+    const dir = mkTmp(join(tmpdir(), "megasaver-fix-md-"));
+    writeFileSync(join(dir, "CLAUDE.md"), "x".repeat(1_000));
+
+    const files = defaultMemoryFileReader(dir)();
+    expect(files).toEqual([{ path: "CLAUDE.md", bytes: 1_000 }]);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

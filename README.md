@@ -673,6 +673,9 @@ mega savings forecast --goal $15  # pace it against a savings goal
 
 mega roi                          # is Pro worth its price? (Pro)
 mega roi --price $5               # compare against a custom price
+
+mega savings fix                  # turn waste findings into fixes (Pro)
+mega savings fix --apply          # apply the safe ones (saver settings only)
 ```
 
 - `mega savings insights [--by source|label]` — where your tokens are still
@@ -682,6 +685,10 @@ mega roi --price $5               # compare against a custom price
 - `mega roi [--price $7.99]` — the month's measured savings divided by your Pro
   price: "saved $49.60 this month (est.) = 6.2×", plus an on-pace month-end
   projection. Honest when it hasn't paid for itself yet.
+- `mega savings fix [--apply]` — maps each waste finding to a remediation:
+  applies the safe ones itself (workspace saver enable/bump — Mega Saver's
+  own settings, never your repo files) and prints ready-to-run advice for
+  the rest.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
 and exits cleanly — it never errors, and the free CLI is unaffected. Keys are

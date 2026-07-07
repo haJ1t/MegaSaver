@@ -1,5 +1,6 @@
 import { defineCommand } from "citty";
 import { savingsExportCommand } from "./export.js";
+import { savingsFixCommand } from "./fix.js";
 import { savingsForecastCommand } from "./forecast.js";
 import { savingsHistoryCommand } from "./history.js";
 import { savingsInsightsCommand } from "./insights.js";
@@ -37,6 +38,18 @@ export {
   PRO_ANALYTICS_URL,
   defaultSavingsEventReader,
 } from "./shared.js";
+export {
+  type FixMemoryFileReader,
+  type FixSaverReader,
+  type FixSaverWriter,
+  type RunSavingsFixInput,
+  FIX_UPSELL,
+  defaultMemoryFileReader,
+  defaultSaverReader,
+  defaultSaverWriter,
+  runSavingsFix,
+  savingsFixCommand,
+} from "./fix.js";
 
 export const savingsCommand = defineCommand({
   meta: {
@@ -48,5 +61,6 @@ export const savingsCommand = defineCommand({
     export: savingsExportCommand,
     insights: savingsInsightsCommand,
     forecast: savingsForecastCommand,
+    fix: savingsFixCommand,
   },
 });
