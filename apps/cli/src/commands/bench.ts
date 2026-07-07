@@ -3,10 +3,18 @@ import type { KeyObject } from "node:crypto";
 import { existsSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
-import { loadProjectPermissions, runChild } from "@megasaver/context-gate";
+import {
+  type LoadProjectPermissions,
+  loadProjectPermissions,
+  runChild,
+} from "@megasaver/context-gate";
 import { checkEntitlement } from "@megasaver/entitlement";
 import { classifyOutput, filterOutput, isConfidentClassification } from "@megasaver/output-filter";
-import { type EvaluateCommandResult, evaluateCommand } from "@megasaver/policy";
+import {
+  type EvaluateCommandResult,
+  type ProjectPermissions,
+  evaluateCommand,
+} from "@megasaver/policy";
 import {
   type ProjectId,
   type TokenSaverMode,
@@ -68,18 +76,35 @@ export type BenchEvaluate = (input: {
   originPid: string;
 }) => EvaluateCommandResult;
 
-export function defaultBenchEvaluate(cwd: string): BenchEvaluate {
+export function defaultBenchEvaluate(
+  cwd: string,
+  loadPermissions: LoadProjectPermissions = loadProjectPermissions,
+): BenchEvaluate {
   // Mirrors run-command.ts's gate: tighten-only project permissions plus the
   // global allow-list; the recursive_megasaver conjunct rides on originPid.
-  const permissions = loadProjectPermissions(cwd);
-  return ({ command, args, originPid }) =>
-    evaluateCommand({
+  // Lazy + memoized: policy IO happens on the FIRST evaluate, never at
+  // construction — the free path must reach the upsell without touching
+  // permissions.yaml. A throwing loader (present-but-malformed yaml) fails
+  // closed as policy_load_failed — the same PolicyDenyCode exec surfaces on
+  // its command_denied line (exec.ts maps it identically).
+  let loaded: { permissions: ProjectPermissions | null } | "load_failed" | undefined;
+  return ({ command, args, originPid }) => {
+    if (loaded === undefined) {
+      try {
+        loaded = { permissions: loadPermissions(cwd) };
+      } catch {
+        loaded = "load_failed";
+      }
+    }
+    if (loaded === "load_failed") return { allowed: false, reason: "policy_load_failed" };
+    return evaluateCommand({
       command,
       args,
       project: "bench" as unknown as ProjectId,
       env: { MEGASAVER_ORIGIN_PID: originPid },
-      ...(permissions !== null ? { permissions } : {}),
+      ...(loaded.permissions !== null ? { permissions: loaded.permissions } : {}),
     });
+  };
 }
 
 export type RunBenchInput = {
@@ -218,7 +243,9 @@ export async function runBench(input: RunBenchInput): Promise<0 | 1> {
       return 1;
     }
     input.writeFile(mdPath, renderBenchMarkdown(report));
-    input.stdout(`wrote ${mdPath}`);
+    // Under --json, stdout is a single JSON document — confirmations go to
+    // stderr so machine consumers can parse stdout verbatim.
+    (input.json ? input.stderr : input.stdout)(`wrote ${mdPath}`);
   }
 
   if (input.assert === true && !report.parity.ok) return 1;

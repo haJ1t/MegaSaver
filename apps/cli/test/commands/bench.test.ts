@@ -1,10 +1,10 @@
 import { type KeyObject, generateKeyPairSync, sign } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activateLicense } from "@megasaver/entitlement";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type BenchPassResult, runBench } from "../../src/commands/bench.js";
+import { type BenchPassResult, defaultBenchEvaluate, runBench } from "../../src/commands/bench.js";
 
 const proSpies = vi.hoisted(() => ({ composeBenchReport: vi.fn() }));
 
@@ -130,6 +130,28 @@ describe("runBench — gating", () => {
       expect(proSpies.composeBenchReport).not.toHaveBeenCalled();
     },
   );
+
+  it("free path + malformed permissions.yaml → upsell, exit 0, no crash", async () => {
+    // Reproduces the eager-load crash: constructing the default evaluator
+    // must not touch policy IO — a broken yaml is only a Pro-path concern.
+    mkdirSync(join(root, ".megasaver"), { recursive: true });
+    writeFileSync(join(root, ".megasaver", "permissions.yaml"), "{{{{");
+    const { input } = baseInput({ evaluate: defaultBenchEvaluate(root) });
+    const code = await runBench(input);
+
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("Mega Saver Pro");
+  });
+
+  it("free path never invokes the permissions loader (lazy)", async () => {
+    const loader = vi.fn(() => {
+      throw new Error("boom");
+    });
+    const { input } = baseInput({ evaluate: defaultBenchEvaluate(root, loader) });
+
+    expect(await runBench(input)).toBe(0);
+    expect(loader).not.toHaveBeenCalled();
+  });
 });
 
 describe("runBench — policy gate (entitled)", () => {
@@ -155,6 +177,19 @@ describe("runBench — policy gate (entitled)", () => {
     expect(code).toBe(1);
     expect(err.join("\n")).toContain("usage: mega bench");
     expect(calls).toHaveLength(0);
+  });
+
+  it("throwing permissions loader → fail-closed policy_load_failed, exit 1, no spawn", async () => {
+    const loader = vi.fn(() => {
+      throw new Error("boom");
+    });
+    const { input, calls } = baseInput({ evaluate: defaultBenchEvaluate(root, loader) });
+    const code = await runBench(input);
+
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("policy_load_failed");
+    expect(calls).toHaveLength(0);
+    expect(proSpies.composeBenchReport).not.toHaveBeenCalled();
   });
 });
 
@@ -220,6 +255,16 @@ describe("runBench — paired run (entitled)", () => {
   it("--assert with parity ok → exit 0", async () => {
     const { input } = baseInput({ assert: true });
     expect(await runBench(input)).toBe(0);
+  });
+
+  it("--json --md keeps stdout a single JSON document; wrote goes to stderr", async () => {
+    const { input, writeFile } = baseInput({ json: true, md: "bench.md" });
+    expect(await runBench(input)).toBe(0);
+
+    const parsed = JSON.parse(out.join("\n")) as { parity: { ok: boolean } };
+    expect(parsed.parity.ok).toBe(true);
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    expect(err.join("\n")).toContain("wrote");
   });
 
   it("--md writes behind the exists-guard; --force overwrites", async () => {

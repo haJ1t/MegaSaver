@@ -703,13 +703,14 @@ mega bench --assert --md bench.md -- pnpm test
   construction — generic source names and numbers only, never paths or
   project names. Refuses to overwrite existing files without `--force`.
   `--json` prints the share-safe report to stdout and writes no files.
-- `mega bench [--mode m] [--assert] [--md <file>] [--json] -- <cmd>` — runs
+- `mega bench [--mode m] [--assert] [--md <file>] [--force] [--json] -- <cmd>` — runs
   the command twice (raw, then through the saver pipeline) and reports
   tokens kept out of context, wall-time overhead, and an outcome-parity
   verdict (exit code + classified output signal). Records nothing — bench
   runs never touch your savings analytics. The command must pass the same
   policy allow-list as `mega output exec`, and it DOES run twice — avoid
   side-effecting commands. `--assert` exits 1 on broken parity (CI gate).
+  An existing `--md` file is never overwritten without `--force`.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
 and exits cleanly — it never errors, and the free CLI is unaffected. Keys are
