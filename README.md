@@ -680,7 +680,7 @@ mega roi --price $5               # compare against a custom price
 - `mega savings forecast [--goal $15]` — projects this period's savings by
   run-rate (labeled an estimate) and paces it against an optional goal.
 - `mega roi [--price $7.99]` — the month's measured savings divided by your Pro
-  price: "saved $49 this month (est.) = 6.2×", plus an on-pace month-end
+  price: "saved $49.60 this month (est.) = 6.2×", plus an on-pace month-end
   projection. Honest when it hasn't paid for itself yet.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
