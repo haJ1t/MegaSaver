@@ -2265,4 +2265,9 @@ honesty/docs), 3/3 approve, 0 confirmed findings, 2 minors fixed. Evidence:
 TURBO_FORCE `pnpm verify` green; binary e2e smoke with a prod-key-signed
 short-expiry test license (upsell → activate → honest empty state → valid
 --json RoiReport → bad --price exit 1). [[entities/cli]] Pro-tier section
-added. Pending: final verify re-run + merge decision.
+added. Closure: final TURBO_FORCE verify green after the last code commit;
+user chose push+PR → branch renamed `feat/cli-mega-roi`, **PR #252** opened
+(https://github.com/haJ1t/MegaSaver/pull/252). Worktree preserved for PR
+iteration. Note: local main carries the 3 pre-branch docs commits
+(8c7bc9c/5d0af28/10f37e1) unpushed — content ships via #252; after merge,
+realign local main to origin.
