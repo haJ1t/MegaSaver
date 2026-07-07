@@ -1,7 +1,13 @@
 # Mega Saver
 
+[![npm](https://img.shields.io/npm/v/@megasaver/cli?color=0e7a54&label=%40megasaver%2Fcli)](https://www.npmjs.com/package/@megasaver/cli)
+[![core license: MIT](https://img.shields.io/badge/core-MIT-0e7a54)](LICENSE)
+[![local-first · no cloud](https://img.shields.io/badge/local--first-no%20cloud-17181a)](#where-your-data-lives)
+
 > **A local context engine for AI coding agents.**
 > Less tokens. More signal. Same or better agent performance.
+
+**[megasaver.dev](https://megasaver.dev)** &middot; install: `npm i -g @megasaver/cli`
 
 Mega Saver sits between your coding agent (Claude Code, Codex, Cursor, Aider, or
 any CLI agent) and its tools. When the agent reads a big file, runs a command, or
@@ -12,9 +18,22 @@ relevant excerpts. The full raw output stays on your disk, one call away.
 The result: a 60 KB file read or a 300 KB test log reaches the model as a few
 hundred tokens of the parts that actually matter — not the whole wall of text.
 
-**Others prune output. MegaSaver prunes with your project’s memory.** It uses
+```text
+Read src/server.ts   →   3,981 tokens of imports, types, handlers, tests…
+
+Mega Saver sends:
+  createServer(opts) → binds 127.0.0.1:opts.port, returns the http server.
+  Imports: http, fs (readFileSync, watchFile), url.parse.
+  Full output recoverable — proxy_expand_chunk("cs_9f2", "0").
+                                            ~214 tokens · 94% lighter
+```
+
+**Others prune output. Mega Saver prunes with your project's memory.** It uses
 your structured memory and past failures to decide what's relevant, so the
-excerpts it keeps are the ones your current task needs.
+excerpts it keeps are the ones your current task needs. And it's
+**evidence-preserving**: every compressed result expands back to the complete
+original, and re-reading an unchanged file returns a lossless pointer, not a
+re-summary — it never blinds the model.
 
 Everything runs locally. No database, no account, no cloud. Your code and outputs
 never leave your machine.
@@ -25,6 +44,7 @@ never leave your machine.
 
 ```sh
 npm install -g @megasaver/cli
+mega init          # hooks, MCP bridge, and the dashboard in one command
 ```
 
 Then see your savings in the browser:
@@ -37,16 +57,16 @@ mega gui
 browser with a one-time access token — no clone, no `pnpm`, no build. Add
 `--no-open` to just print the URL, `--port <n>` to pin the port.
 
-Or download the self-contained `mega.mjs` bundle from
-[GitHub Releases](https://github.com/haJ1t/MegaSaver/releases/latest).
 Full setup guide (prerequisites, hooks, first session): **[docs/getting-started.md](docs/getting-started.md)**.
 
 ## Benchmarks
 
-90–99% token reduction on common agent workloads — re-reads of unchanged
-files, large JSON, noisy logs, outline-first reads, and session context replay —
-all lossless via ChunkSet (full raw output recoverable on demand).
-See **[docs/benchmarks.md](docs/benchmarks.md)** for the full table.
+**90–99% token reduction** on the compression-heavy workloads — re-reads of
+unchanged files, large JSON, noisy logs, outline-first reads, semantic index
+search, and session-context replay — all **lossless** via ChunkSet (full raw
+output recoverable on demand). Other workloads save less (e.g. blast-radius
+reads land around ~47%); the full measured table is in
+**[docs/benchmarks.md](docs/benchmarks.md)**.
 
 ---
 
