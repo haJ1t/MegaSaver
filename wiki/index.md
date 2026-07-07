@@ -165,7 +165,8 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 > [[syntheses/release-history]] on 2026-07-04. One line per release below;
 > follow the link for the complete history.
 
-- **v1.5.0 — Pro launch wave** — versioned 2026-07-06 (#231–#251; npm publish pending, owner blocker): entitlement seam + 3 Pro analytics modules (`savings history/insights/forecast`), free proof surface (headline, GUI share card, `mega init`, `mega gui`), landing + /pro + Gumroad checkout live at megasaver.dev ($7.99/mo).
+- **v1.6.1 — mega roi + bundle fix** — PUBLISHED to npm 2026-07-07 (`latest`): Pro module 4 `mega roi` (PR #252) + prepack dependency-closure fix; 1.6.0 deprecated (broken bundle — stale pro-analytics dist inlined). Published-tarball activation e2e-verified. Tag `v1.6.1`.
+- **v1.5.0 — Pro launch wave** — versioned 2026-07-06 (#231–#251), PUBLISHED to npm 2026-07-07 08:19Z: entitlement seam + 3 Pro analytics modules (`savings history/insights/forecast`), free proof surface (headline, GUI share card, `mega init`, `mega gui`), landing + /pro + Gumroad checkout live at megasaver.dev ($7.99/mo).
 - **Phase 10 — Team/Cloud (local approval slice)** — SHIPPED 2026-06-12. Agent-suggests → human-approves memory gate; `approve_memory` (24 → 25 MCP tools); cloud SaaS deferred. Roadmap complete through all 10 phases.
 - **Phase 9 — Multi-Agent Connectors** — SHIPPED 2026-06-12. `agentIdSchema` 5→8 (continue/gemini/windsurf); 3 new flat-file targets; `mega connector list`/`doctor`.
 - **v1.1.0** — SHIPPED 2026-06-04. Advanced-roadmap release; post-v1.0 arc PRs #80–#100 (context-gate extract, CI pipeline, output-filter parsers, policy permissions, GUI chart).

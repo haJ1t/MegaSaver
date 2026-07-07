@@ -28,8 +28,10 @@ The ONE remaining blocker:
   PUBLISHED tarball the same day: free upsell → `mega license activate` with
   a prod-key-signed short-expiry test license → "Pro activated" → gated
   `mega savings history` runs. Buyers' `msp_` keys now work.
-  (`mega roi`, merged in #252 AFTER the publish, is not in 1.5.0 — it ships
-  with the next release via the pending `.changeset/pro-roi.md` minor → 1.6.0.)
+  (`mega roi` shipped later the same day in **1.6.1** — note 1.6.0 is
+  npm-deprecated: its tarball inlined a stale pro-analytics build and the
+  entitled `mega roi` path crashed; fixed by the prepack dependency-closure
+  build, e2e-verified on the published 1.6.1.)
 
 ---
 

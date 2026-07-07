@@ -2,7 +2,7 @@
 title: Pro Differentiation Portfolio — subscription moat ideas
 tags: [synthesis, business, product, pro, ideas]
 sources: [syntheses/gtm-plan-2026-07.md, syntheses/contextops-roadmap.md, docs/superpowers/specs/2026-07-06-pro-entitlement-design.md, docs/superpowers/specs/2026-07-06-pro-insights-design.md, docs/superpowers/specs/2026-07-06-pro-forecast-design.md, docs/launch/owner-pre-launch-checklist.md, git PRs 231-251, user sessions 2026-07-06/07]
-status: active — module 4 (mega roi) BUILT, PR #252 open; price resolved $7.99/mo (2026-07-07)
+status: active — module 4 (mega roi) LIVE on npm (1.6.1); price resolved $7.99/mo (2026-07-07)
 created: 2026-07-06
 updated: 2026-07-07
 ---
@@ -96,8 +96,10 @@ Dropped from the old list: "GUI packaging (Tauri)" — need met by `mega gui`
 ## Status
 
 Realigned 2026-07-07 to the shipped launch wave. **Module 4 `mega roi` (E1)
-BUILT same day** — full superpowers chain, 16 TDD tests, 3-lens final review
-3/3 approve; **PR #252 open** (branch `feat/cli-mega-roi`). Price resolved:
-$7.99/mo canonical (GTM page updated). Remaining owner actions: merge #252,
-npm publish 1.5.0 (activation blocker). Next module candidates: E2
-`savings fix` → E4 teardown → N1 bench (see sequence above).
+SHIPPED same day**: built (full superpowers chain, 16 TDD tests, 3-lens final
+review 3/3 approve), merged as #252, and **LIVE on npm in `@megasaver/cli`
+1.6.1** (1.6.0 deprecated — broken bundle incident, see log 2026-07-07).
+Activation verified end-to-end against the published tarball. Price resolved:
+$7.99/mo canonical (GTM page updated). Sellable Pro surface = m1–m4. Next
+module candidates: E2 `savings fix` → E4 teardown → N1 bench (see sequence
+above).

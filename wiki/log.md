@@ -2295,3 +2295,24 @@ issued keys); gated `mega savings history` runs; `mega roi` correctly absent
 (merged 12:05Z, after the publish). Checklist blocker section updated to
 RESOLVED (docs/launch/owner-pre-launch-checklist.md). `mega roi` awaits the
 next release: pending `.changeset/pro-roi.md` → 1.6.0.
+
+## [2026-07-07] incident+release | 1.6.0 broken bundle → 1.6.1 live with mega roi
+
+**Incident:** 1.6.0 (owner-published after `changeset version` 15aff29) shipped
+a broken tarball — entitled `mega roi` crashed with "computeRoi is not a
+function". Root cause: `prepack` built ONLY the GUI before bundling; tsup's
+inline-everything bundle baked whatever workspace `dist/` existed on the dev
+machine, and `packages/pro-analytics/dist` there was pre-roi (the exact stale-
+dist trap the Task-2 implementer flagged; sibling of the #225 proxy-control
+bundle miss). Artifact-level red→green: local stale bundle reproduced the
+crash; fix = prepack now runs `turbo build --filter=@megasaver/cli...` (full
+dependency closure) before `bundle` (2b4668f). Gotcha logged: running
+`pnpm run prepack` manually leaves package.json STRIPPED (strip-publish-
+manifest) — restore with the `postpack` arg.
+**Release:** 1.6.1 published (owner, OTP) + **1.6.0 npm-deprecated** ("Broken
+bundle… Use 1.6.1."). Published-tarball e2e verified: upsell → real-key
+activate → `mega roi` honest empty state → valid RoiReport `--json` → bad
+`--price` exit 1. `latest` = 1.6.1; tag `v1.6.1` pushed (release.yml
+standalone-bundle release). `mega roi` is now LIVE on npm — Pro surface
+m1–m4 sellable end-to-end. Known gap: no `v1.5.0`/`v1.6.0` tags exist
+(no GitHub bundle releases for those versions; intentional for broken 1.6.0).
