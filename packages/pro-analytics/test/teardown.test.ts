@@ -165,6 +165,17 @@ describe("privacy sweep — hostile inputs never leak", () => {
     expect(md).toContain("CLAUDE.md");
   });
 
+  it("renders the R5 compress command with basename only (no path leak)", () => {
+    const report = composeTeardown([], {
+      saver: { enabled: true, mode: "balanced" },
+      memoryFiles: [{ path: "/abs/secret-project/AGENTS.md", bytes: 50_000 }],
+    });
+    const md = renderTeardownMarkdown(report);
+    expect(md).toContain("mega compress AGENTS.md");
+    expect(md).not.toContain("secret-project");
+    expect(md).not.toContain("/abs/");
+  });
+
   it("a hostile sourceKind is XML-escaped in the SVG (defense in depth)", () => {
     const report = composeTeardown(events(3, { sourceKind: '<x>&"evil"' }), {
       saver: SAVER_ON,

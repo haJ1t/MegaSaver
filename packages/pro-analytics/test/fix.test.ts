@@ -324,6 +324,20 @@ describe("computeFixPlan — R5 advise-compress-memory-file", () => {
   });
 });
 
+describe("R5 memory-file advice points at mega compress", () => {
+  it("emits a runnable basename command, stays non-appliable", () => {
+    const plan = computeFixPlan([], {
+      saver: { enabled: true, mode: "balanced" },
+      memoryFiles: [{ path: "/home/u/secret-project/CLAUDE.md", bytes: 40_000 }],
+    });
+    const r5 = plan.actions.find((a) => a.kind === "advise-compress-memory-file");
+    expect(r5).toBeDefined();
+    expect(r5?.appliable).toBe(false);
+    expect(r5?.command).toBe("mega compress CLAUDE.md");
+    expect(r5?.detail).toContain("mega compress");
+  });
+});
+
 describe("computeFixPlan — plan shape", () => {
   it("sorts actions by estDollarsReturned desc (title tiebreak) and never yields NaN", () => {
     const plan = computeFixPlan(events(25, { returnedBytes: 100_000 }), {
