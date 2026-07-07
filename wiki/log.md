@@ -2348,3 +2348,14 @@ verdict **dry** (2 cosmetic minors, both deliberate). [[entities/cli]]
 Pro-tier section updated. Closure: branch renamed `feat/cli-savings-fix`,
 **PR #253** opened (https://github.com/haJ1t/MegaSaver/pull/253); worktree
 preserved for PR iteration.
+
+## [2026-07-07] merge | PR #253 squash-merged — mega savings fix on main
+
+CI green (verify ubuntu 5m57s + windows 7m51s + Vercel), squash-merged as
+aa52164d. Remote + local feature branch deleted; worktree removed; local
+main fast-forwarded (clean — no superseded pre-branch commits this time).
+Pro surface on main is now **m1–m5**. Pending owner action: npm publish —
+`.changeset/savings-fix.md` (minor) is unconsumed, so the next release is
+1.7.0; the prepack dependency-closure fix from the 1.6.1 incident is in
+place, publish flow is `pnpm changeset version` → commit → `npm publish
+--access public` (OTP) from apps/cli.
