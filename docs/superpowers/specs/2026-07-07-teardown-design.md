@@ -141,8 +141,8 @@ the SVG escape helper; the sweep test's completeness).
 
 - **teardown engine (pure)**:
   - culprit math: avgTokensPerTurn = round(tokensReturned/events); sort by
-    returnedShare desc; top-5 cap (6 sources → 5 rows); zero-event rows
-    excluded.
+    returnedShare desc; top-5 cap (6 sources → 5 rows). (Zero-event rows
+    cannot exist — breakdown rows are built from events; no test needed.)
   - advice mapping: R3 command passthrough; R1 appliable → literal
     `mega savings fix --apply`; advice-only plan keeps commands.
   - empty events → honest "No recorded events yet" markdown; zeros; no NaN.
