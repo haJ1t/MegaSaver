@@ -5,7 +5,7 @@
   "description": "Mega Saver CLI - the `mega` command.",
   "type": "module",
   "bin": {
-    "mega": "./dist-bundle/mega.mjs"
+    "mega": "dist-bundle/mega.mjs"
   },
   "files": ["dist-bundle", "LICENSE", "PRO-LICENSE", "NOTICE"],
   "sideEffects": false,
