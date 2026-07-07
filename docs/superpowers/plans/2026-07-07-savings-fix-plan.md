@@ -22,6 +22,7 @@
 - Create: `packages/pro-analytics/test/fix.test.ts`
 - Create: `packages/pro-analytics/src/fix.ts`
 - Modify: `packages/pro-analytics/src/index.ts`
+- Modify: `packages/pro-analytics/package.json` (add `"@megasaver/shared": "workspace:*"` to `dependencies` — `fix.ts` imports `TokenSaverMode` from it; without the declaration `tsc -b --noEmit` fails TS2307 even though vitest passes, because esbuild elides type-only imports) + `pnpm install`
 
 - [ ] **Step 1: Write the failing test**
 
