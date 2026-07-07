@@ -97,9 +97,13 @@ Rules (evaluated over `computeWasteBreakdown` by `source` and by `label`):
   `mega tools add <project> --name "<key>" --description "high-volume
   source flagged by mega savings fix" --category <mapped> --risk medium`
   with category derived from the sourceKind key (`file → filesystem`,
-  `grep → search`, `fetch → browser`, `command → dangerous`, fallback
-  `filesystem`). (+ `mega tools route` pointer in detail). One action per
-  qualifying key.
+  `grep → search`, `fetch → browser`, `command → filesystem`, fallback
+  `filesystem`) — NEVER a router-blocked category (critic amendment: the
+  tool router hard-blocks `dangerous`/`deploy`/`database` from every route
+  pre-relevance, which would contradict this advice's relevance-exclusion
+  promise; a sweep test pins all real sourceKinds to
+  `filesystem|search|browser`). (+ `mega tools route` pointer in detail).
+  One action per qualifying key.
 - **R4 advise-outline** (advice): the `read` label row has
   `returnedShare ≥ FIX_READ_SHARE` AND `events ≥ FIX_MIN_EVENTS` → outline-
   first guidance (per-call `outline: true` via proxy read / MCP; note that
@@ -143,8 +147,15 @@ from `src/index.ts`.
      family-scoped disable): `writeActivation(storeRoot,
      resolveActivationScope(cwd, false), true, "balanced")` — the same
      resolve→write pair `saver workspace enable` and the GUI bridge use;
-     the activation lock lives INSIDE `writeActivation`. Print
-     `applied: <title> (was: <old-state> → now: enabled/balanced)`. Advice
+     the activation lock lives INSIDE `writeActivation`. After the write,
+     READ BACK the effective state (critic amendment — a pre-existing
+     exact-scope record shadows the family write, so asserting success
+     blindly would lie): effective `{enabled:true, mode:"balanced"}` →
+     `now: enabled/balanced`; anything else →
+     `now: "unchanged — an exact override wins"` (text + `--json
+     applied[].now`) plus a text-mode hint quoting the real
+     `mega session saver workspace enable --exact` command. Print
+     `applied: <title> (was: <old-state> → now: <read-back>)`. Advice
      actions are re-printed unchanged. Nothing appliable →
      `Nothing to apply — N advice item(s) above.`, exit 0.
    - `--json`: `JSON.stringify({ plan, applied })` — `applied` only present

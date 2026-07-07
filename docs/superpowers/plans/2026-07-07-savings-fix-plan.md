@@ -1069,3 +1069,24 @@ AND critic as separate fresh-context passes (the critic mutation-tests the
 gate spies and the propose-mode-never-writes invariant), then the 3-lens
 holistic final review (code-reviewer + adversarial critic + honesty/docs)
 used for module 4, then `superpowers:finishing-a-development-branch`.
+
+---
+
+### Final-review amendments (as-built record)
+
+The HIGH review rounds confirmed four findings, each fixed TDD (RED first)
+with the spec amended to match:
+
+1. `8a35f724` — R3 advice command was not runnable (`--category mcp` /
+   `--risk caution` invalid enums; `--description` missing).
+2. `a7bf7f3b` — `defaultSaverWriter` wrote an exact record directly,
+   bypassing `resolveActivationScope`/`writeActivation` (un-clearable
+   override in Git repos); now routes canonically (family in repos; the
+   activation lock lives INSIDE `writeActivation`).
+3. `53ca958b` — R3's `command → dangerous` category mapping advised a
+   router-hard-blocked category; the map now emits only non-blocked
+   categories (sweep-tested: `filesystem|search|browser`).
+4. `c4a33d98` — `--apply` asserted success blindly; it now READS BACK the
+   effective state and reports `unchanged — an exact override wins` (+ a
+   hint quoting `mega session saver workspace enable --exact`) when a
+   pre-existing exact record shadows the family write.
