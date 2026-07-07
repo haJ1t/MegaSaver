@@ -511,7 +511,7 @@ now pre-filters `entry.approval !== "approved"` before scope/session checks.
 Only approved memory flows into agent config files. GUI mirror
 (`apps/gui/bridge/connector-context.ts`) carries the same filter.
 
-## Pro tier — `mega license`, `mega savings`, `mega roi`, `mega teardown`, `mega bench` (modules 1–7)
+## Pro tier — `mega license`, `mega savings`, `mega roi`, `mega teardown`, `mega bench`, `mega compress` (modules 1–8)
 
 Entitlement-gated Pro analytics: offline Ed25519 license via
 `mega license {activate,status}`; every Pro command gates FIRST on
@@ -575,6 +575,30 @@ zero events read), then lazy-imports the proprietary
   side-effect disclosure in methodology + README; raw-vs-saver
   attribution pinned. 31 TDD tests (15 engine + 16 CLI). `--json` stdout
   is a single JSON document (`wrote` line → stderr).
+- `mega compress <file> [--apply] [--force] [--json] [--store <dir>]` —
+  module 8 (2026-07-08, spec `2026-07-08-compress-design.md`, risk
+  **CRITICAL** — first module to MUTATE user repo files): runs the EXISTING
+  `compressProse` extractive engine (exposed from output-filter's public
+  entry — no new dep, no new bundle path) over ONE `.md`/`.txt`/`.mdc`
+  file. **Dry-run DEFAULT** (preview of what collapses + tokens/$ (est.)
+  saved, zero writes); `--apply` writes `<file>.bak` then atomically
+  (temp-in-same-dir + rename) overwrites, prints `mv <file>.bak <file>`
+  restore hint. Metrics are a pure pro-analytics composer
+  (`composeCompressionReport`; marker-count regexes coupled to the engine's
+  exact `… [N paragraphs]` output — verified byte-for-byte via hexdump).
+  **Write-once backup — the review CAUGHT a CONFIRMED critical**:
+  `compressProse` is NOT idempotent (its own markers re-parse as paragraphs
+  on a 2nd pass), so a guided `--force` re-run would have read the already-
+  compressed file and clobbered the pristine `.bak` with degraded content,
+  destroying the original. Fix: the backup is never overwritten; `--force`
+  overrides the git-dirty guard ONLY; an existing `.bak` always refuses
+  ("restore or remove it"). git-dirty guard blocks tracked+modified files
+  (fail-open to write on `unknown` — `.bak` is the net); execFileSync argv
+  (no shell). savings-fix R5 advice now emits `mega compress <basename>`
+  (basename-only, teardown privacy preserved). 6 engine + 19 CLI TDD tests
+  (incl. the write-once regression) + tarball e2e (bundle resolves the lazy
+  pro-analytics import AND compressProse; 591B→571B non-idempotent skeleton
+  refused under `--force`, `.bak` intact).
 
 ## Related
 
