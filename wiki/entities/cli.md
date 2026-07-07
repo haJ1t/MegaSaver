@@ -511,7 +511,7 @@ now pre-filters `entry.approval !== "approved"` before scope/session checks.
 Only approved memory flows into agent config files. GUI mirror
 (`apps/gui/bridge/connector-context.ts`) carries the same filter.
 
-## Pro tier — `mega license`, `mega savings`, `mega roi` (launch wave + modules 4–5)
+## Pro tier — `mega license`, `mega savings`, `mega roi`, `mega teardown` (modules 1–6)
 
 Entitlement-gated Pro analytics: offline Ed25519 license via
 `mega license {activate,status}`; every Pro command gates FIRST on
@@ -544,6 +544,21 @@ zero events read), then lazy-imports the proprietary
   by construction (real enums, `--description`, never a router-blocked
   category). User repo files are stat'd for SIZE only. 39 TDD tests
   (23 pure + 16 CLI incl. gate spies, git-family round-trip, shadow case).
+- `mega teardown [--out <dir>] [--force] [--json] [--store <dir>]` —
+  module 6 (2026-07-07, spec `2026-07-07-teardown-design.md`, risk MEDIUM):
+  composes a publish-ready waste exposé — `teardown.md` (six fixed
+  sections: bill, per-source per-turn culprits, clawed-back story,
+  treatments = module-5 advice with appliable actions collapsed to
+  `mega savings fix --apply`, methodology) + `teardown.svg` (direction-B
+  card). **Share-safe by construction**: only the closed `sourceKind`
+  union, basenamed memory-file names (enforced in the ENGINE — fix.ts
+  `baseName`), numbers, and fixed copy render; hostile-input privacy
+  sweeps pin it. Exists-guard refuses to overwrite without `--force`
+  (checks BOTH files before writing EITHER); `--json` emits the report,
+  no files. md and SVG share one empty-state signal
+  (`totalReturnedBytes === 0`). 21 TDD tests (13 pure + 8 CLI). Accepted
+  minors (deliberate): non-atomic double write + raw ENOENT on missing
+  `--out` (both match the savings-export sibling convention).
 
 ## Related
 
