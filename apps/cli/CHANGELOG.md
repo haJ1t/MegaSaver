@@ -1,5 +1,12 @@
 # @megasaver/cli
 
+## 1.6.0
+
+### Minor Changes
+
+- 5c6a60f: `mega roi` — the month's measured savings divided by the Pro
+  price, as an honest ROI multiple (saved-so-far + on-pace projection).
+
 ## 1.5.0
 
 ### Minor Changes
