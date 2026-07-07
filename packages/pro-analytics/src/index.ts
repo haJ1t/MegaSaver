@@ -52,3 +52,8 @@ export {
   composeBenchReport,
   renderBenchMarkdown,
 } from "./bench.js";
+export {
+  type CompressionReport,
+  composeCompressionReport,
+  renderCompressionSummary,
+} from "./compress-file.js";
