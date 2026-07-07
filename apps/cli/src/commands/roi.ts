@@ -74,13 +74,16 @@ export async function runRoi(input: RunRoiInput): Promise<0 | 1> {
     return 0;
   }
 
-  // The PRICE renders verbatim with two decimals — flooring it through
-  // formatDollarsSaved would misstate $7.99 as $7.
+  // The price is an exact known amount, not an estimate — render it with fixed
+  // cents instead of the floor-for-honesty savings formatter.
   const price = `$${report.priceUsd.toFixed(2)}`;
   const saved = formatDollarsSaved(report.savedSoFar.dollars);
   const proj = formatDollarsSaved(report.projectedEnd.dollars);
-  const roiSo = `${report.roiSoFar.toFixed(1)}×`;
-  const roiProj = `${report.roiProjected.toFixed(1)}×`;
+  // Floor displayed multiples (like formatDollarsSaved): rounding roiSoFar in
+  // [0.95, 1) up to "1.0×" would contradict the "hasn't paid for itself" prose.
+  const fmtRoi = (r: number) => `${(Math.floor(r * 10) / 10).toFixed(1)}×`;
+  const roiSo = fmtRoi(report.roiSoFar);
+  const roiProj = fmtRoi(report.roiProjected);
   const sessions = report.contextWindowsReclaimed.toFixed(1);
   const daysLeft = Math.round(report.daysLeft);
 

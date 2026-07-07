@@ -193,6 +193,26 @@ describe("runRoi — render variants (entitled)", () => {
     expect(out.join("\n")).toContain("Pro $5.00/mo");
   });
 
+  it("near break-even (roiSoFar ≈ 0.97) never displays 1.0× on the not-paid branch", async () => {
+    // saved $6.00 this month; price $6.20 → roiSoFar ≈ 0.9677 — toFixed(1) would
+    // round this UP to "1.0×" and contradict the "hasn't paid for itself" prose.
+    const code = await runRoi({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: roiReader(),
+      price: "$6.20",
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("hasn't paid for itself yet");
+    expect(text).toContain("0.9×");
+    expect(text).not.toContain("1.0×");
+  });
+
   it("--json emits the RoiReport", async () => {
     const code = await runRoi({
       storeRoot: root,
