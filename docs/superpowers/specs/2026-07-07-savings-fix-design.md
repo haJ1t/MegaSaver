@@ -91,9 +91,15 @@ Rules (evaluated over `computeWasteBreakdown` by `source` and by `label`):
   inside `detail`, not an action).
 - **R3 advise-tool-route** (advice): any source row with
   `returnedShare ≥ FIX_CHATTY_SHARE` AND `savingRatio < FIX_CHATTY_RATIO`
-  AND `events ≥ FIX_MIN_EVENTS` → command
-  `mega tools add <project> --name "<key>" --category mcp --risk caution`
-  (+ `mega tools route` pointer in detail). One action per qualifying key.
+  AND `events ≥ FIX_MIN_EVENTS` → a RUNNABLE command (final-review
+  amendment — the original `--category mcp --risk caution` template failed
+  the real closed enums and omitted the required `--description`):
+  `mega tools add <project> --name "<key>" --description "high-volume
+  source flagged by mega savings fix" --category <mapped> --risk medium`
+  with category derived from the sourceKind key (`file → filesystem`,
+  `grep → search`, `fetch → browser`, `command → dangerous`, fallback
+  `filesystem`). (+ `mega tools route` pointer in detail). One action per
+  qualifying key.
 - **R4 advise-outline** (advice): the `read` label row has
   `returnedShare ≥ FIX_READ_SHARE` AND `events ≥ FIX_MIN_EVENTS` → outline-
   first guidance (per-call `outline: true` via proxy read / MCP; note that
@@ -131,9 +137,13 @@ from `src/index.ts`.
      advice commands verbatim. Footer when any `[apply]` exists:
      `Run with --apply to apply N fix(es).` **Zero writes in this mode**
      (spy-enforced).
-   - `--apply`: execute appliable actions inside `withActivationLock`:
-     `writeExactRecord(storeRoot, workspaceKey, { enabled: true, mode:
-     "balanced", scope: "exact" })`, printing
+   - `--apply`: execute appliable actions through the CANONICAL activation
+     path (final-review amendment — a direct `writeExactRecord` created an
+     un-clearable exact override inside Git repos, shadowing the normal
+     family-scoped disable): `writeActivation(storeRoot,
+     resolveActivationScope(cwd, false), true, "balanced")` — the same
+     resolve→write pair `saver workspace enable` and the GUI bridge use;
+     the activation lock lives INSIDE `writeActivation`. Print
      `applied: <title> (was: <old-state> → now: enabled/balanced)`. Advice
      actions are re-printed unchanged. Nothing appliable →
      `Nothing to apply — N advice item(s) above.`, exit 0.
@@ -159,9 +169,10 @@ forecast.
 ## Security / risk (HIGH)
 
 Writes to the shared saver activation surface (the same record the saver
-hook and GUI read) — via the EXISTING `withActivationLock` + atomic
-`writeExactRecord` only; no new storage schema, no crypto, no user-repo
-writes, no file content reads. §12 HIGH gates: worktree, code-reviewer AND
+hook and GUI read) — via the EXISTING canonical
+`resolveActivationScope` + `writeActivation` pair only (internally locked
++ atomic; family scope inside Git repos, exact otherwise); no new storage
+schema, no crypto, no user-repo writes, no file content reads. §12 HIGH gates: worktree, code-reviewer AND
 critic as separate passes, plus the 3-lens holistic final review used for
 module 4. The critic must mutation-test the gate spies and the
 propose-mode-never-writes invariant.

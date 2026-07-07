@@ -355,7 +355,7 @@ export function computeFixPlan(
         title: `"${row.key}" returns ${(row.returnedShare * 100).toFixed(0)}% of context bytes and compresses poorly`,
         detail:
           "Register it with the tool router so task routing can exclude it when irrelevant (advisor; nothing is blocked silently).",
-        command: `mega tools add <project> --name "${row.key}" --category mcp --risk caution`,
+        command: `mega tools add <project> --name "${row.key}" --description "high-volume source flagged by mega savings fix" --category ${toolCategoryForSource(row.key)} --risk medium`,
         target: row.key,
         estDollarsReturned: row.dollarsReturned,
       });
@@ -703,10 +703,12 @@ export function defaultMemoryFileReader(cwd: string): FixMemoryFileReader {
 }
 
 export function defaultSaverWriter(storeRoot: string, cwd: string): FixSaverWriter {
+  // Final-review amendment: a direct writeExactRecord created an un-clearable
+  // exact override inside Git repos (shadowing the family-scoped disable that
+  // `saver workspace disable` and the GUI write). Route through the canonical
+  // pair instead — the activation lock lives INSIDE writeActivation.
   return (rec) =>
-    withActivationLock(storeRoot, () =>
-      writeExactRecord(storeRoot, encodeWorkspaceKey(cwd), { ...rec, scope: "exact" }),
-    );
+    writeActivation(storeRoot, resolveActivationScope(cwd, false), rec.enabled, rec.mode);
 }
 
 export type RunSavingsFixInput = {
