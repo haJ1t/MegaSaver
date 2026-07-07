@@ -22,12 +22,14 @@ Done:
   replaced with the vendor's real one (`#243`); the private key is held offline.
 
 The ONE remaining blocker:
-- **⏳ `@megasaver/cli` on npm is still v1.4.1 (PRE-Pro + placeholder key).** The
-  1.5.0 release (Pro commands + real key) is versioned and merged but **not
-  published yet**. Until `pnpm changeset publish` runs, a buyer's `npm i` installs
-  a CLI with no `savings` commands and the old placeholder key — so an issued
-  `msp_` key would be **rejected** by `mega license activate`. Publishing 1.5.0
-  is what makes activation actually work end-to-end.
+- **✅ RESOLVED (2026-07-07): `@megasaver/cli` 1.5.0 is live on npm** —
+  published 08:19Z, dist-tag `latest`, access public, npm `license` field
+  `SEE LICENSE IN NOTICE`. End-to-end activation verified against the
+  PUBLISHED tarball the same day: free upsell → `mega license activate` with
+  a prod-key-signed short-expiry test license → "Pro activated" → gated
+  `mega savings history` runs. Buyers' `msp_` keys now work.
+  (`mega roi`, merged in #252 AFTER the publish, is not in 1.5.0 — it ships
+  with the next release via the pending `.changeset/pro-roi.md` minor → 1.6.0.)
 
 ---
 

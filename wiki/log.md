@@ -2281,3 +2281,17 @@ realigned to origin (the 3 superseded pre-branch docs commits dropped via
 rebase-skip — their amended content shipped inside the squash). Pro surface
 on main is now m1–m4. Remaining owner action unchanged: npm publish
 (changesets: next release includes `mega roi` as a minor).
+
+## [2026-07-07] verify | npm 1.5.0 already live — activation blocker CLOSED
+
+User asked "npm publish 1.5.0"; registry check showed **1.5.0 was already
+published 2026-07-07T08:19Z** (dist-tag latest, access public via
+publishConfig, npm license field `SEE LICENSE IN NOTICE`) — the checklist's
+"npm still 1.4.1" blocker note was stale. Verified the PUBLISHED tarball
+end-to-end via `npm exec --package=@megasaver/cli@1.5.0`: version 1.5.0;
+free upsell; `mega license activate` with a prod-key-signed short-expiry
+test license → "Pro activated" (baked production public key verifies real
+issued keys); gated `mega savings history` runs; `mega roi` correctly absent
+(merged 12:05Z, after the publish). Checklist blocker section updated to
+RESOLVED (docs/launch/owner-pre-launch-checklist.md). `mega roi` awaits the
+next release: pending `.changeset/pro-roi.md` → 1.6.0.
