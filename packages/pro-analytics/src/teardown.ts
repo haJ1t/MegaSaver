@@ -98,7 +98,9 @@ export function renderTeardownMarkdown(report: TeardownReport): string {
   lines.push("");
   lines.push("## The culprits");
   lines.push("");
-  if (report.culprits.length === 0) {
+  // Keyed to the same signal as "The bill": an all-zero-returned event set
+  // would otherwise render a noise table of 0% shares under an empty bill.
+  if (report.culprits.length === 0 || report.headline.totalReturnedBytes === 0) {
     lines.push("No recorded events yet.");
   } else {
     lines.push("| source | events | avg tokens/turn | share | $ (est.) |");

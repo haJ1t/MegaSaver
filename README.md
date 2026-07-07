@@ -693,11 +693,12 @@ mega teardown --out ./posts --force
   applies the safe ones itself (workspace saver enable/bump — Mega Saver's
   own settings, never your repo files) and prints ready-to-run advice for
   the rest.
-- `mega teardown [--out <dir>] [--force]` — composes a publish-ready exposé
+- `mega teardown [--out <dir>] [--force] [--json]` — composes a publish-ready exposé
   (`teardown.md` + `teardown.svg`): the bill, per-source per-turn averages,
   what Mega Saver clawed back, and the treatments. Share-safe by
   construction — generic source names and numbers only, never paths or
   project names. Refuses to overwrite existing files without `--force`.
+  `--json` prints the share-safe report to stdout and writes no files.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
 and exits cleanly — it never errors, and the free CLI is unaffected. Keys are

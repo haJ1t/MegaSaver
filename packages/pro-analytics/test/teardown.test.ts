@@ -123,6 +123,17 @@ describe("renderTeardownMarkdown", () => {
     expect(md).toContain("No recorded events yet");
     expect(md).not.toContain("| file |");
   });
+
+  it("all-zero-returned events → bill and culprits agree on the empty state", () => {
+    const md = renderTeardownMarkdown(
+      composeTeardown(events(5, { returnedBytes: 0, rawBytes: 5_000, bytesSaved: 5_000 }), {
+        saver: SAVER_ON,
+        memoryFiles: [],
+      }),
+    );
+    expect(md).toContain("No recorded events yet");
+    expect(md).not.toContain("| source |");
+  });
 });
 
 describe("privacy sweep — hostile inputs never leak", () => {
