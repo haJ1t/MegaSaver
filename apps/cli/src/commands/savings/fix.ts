@@ -18,6 +18,10 @@ import { PRO_ANALYTICS_URL, type SavingsEventReader, defaultSavingsEventReader }
 // which would misname this feature. Same activation mechanics.
 export const FIX_UPSELL = `Waste remediation is a Mega Saver Pro feature. Activate a key: mega license activate <key>. Learn more: ${PRO_ANALYTICS_URL}.`;
 
+const SHADOWED_NOW = "unchanged — an exact override wins";
+const EXACT_OVERRIDE_HINT =
+  "hint: this checkout has an --exact override that outranks the applied record — run `mega session saver workspace enable --exact` to update it.";
+
 export type FixSaverReader = () => { enabled: boolean; mode: TokenSaverMode } | null;
 export type FixMemoryFileReader = () => { path: string; bytes: number }[];
 export type FixSaverWriter = (rec: { enabled: boolean; mode: TokenSaverMode }) => void;
@@ -97,7 +101,13 @@ export async function runSavingsFix(input: RunSavingsFixInput): Promise<0 | 1> {
     for (const action of plan.actions) {
       if (!action.appliable) continue;
       input.writeSaver({ enabled: true, mode: "balanced" });
-      applied.push({ kind: action.kind, was, now: "enabled/balanced" });
+      // `now` comes from a post-write read-back, not from the write itself: in
+      // a Git repo the resolver gives a checkout's own --exact record precedence
+      // over the family record this apply writes, so the write can be shadowed
+      // and claiming enabled/balanced would be a false success.
+      const after = input.readSaver();
+      const effective = after?.enabled === true && after.mode === "balanced";
+      applied.push({ kind: action.kind, was, now: effective ? "enabled/balanced" : SHADOWED_NOW });
     }
   }
 
@@ -132,6 +142,9 @@ export async function runSavingsFix(input: RunSavingsFixInput): Promise<0 | 1> {
     } else {
       for (const ap of applied) {
         input.stdout(`applied: ${ap.kind} (was: ${ap.was} → now: ${ap.now})`);
+      }
+      if (applied.some((ap) => ap.now === SHADOWED_NOW)) {
+        input.stdout(EXACT_OVERRIDE_HINT);
       }
     }
   } else if (appliableCount > 0) {

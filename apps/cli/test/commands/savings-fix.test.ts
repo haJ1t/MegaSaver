@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { TokenSaverEvent } from "@megasaver/core";
 import { activateLicense } from "@megasaver/entitlement";
+import type { TokenSaverMode } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runSavingsFix } from "../../src/commands/savings/fix.js";
 import type { SavingsEventReader } from "../../src/commands/savings/index.js";
@@ -101,6 +102,16 @@ function baseInput(over: Partial<Parameters<typeof runSavingsFix>[0]> = {}) {
   };
 }
 
+// Fake reader/writer pair that behaves like the real store: a write is visible
+// on the post-apply read-back, so `now` reflects success (not shadowing).
+function linkedSaverStore(initial: { enabled: boolean; mode: TokenSaverMode } | null = null) {
+  let state = initial;
+  const writeSaver = vi.fn((rec: { enabled: boolean; mode: TokenSaverMode }) => {
+    state = rec;
+  });
+  return { readSaver: () => state, writeSaver };
+}
+
 describe("runSavingsFix — gating", () => {
   it.each([{}, { apply: true }, { json: true }])(
     "with NO license (%o): upsell, exit 0, nothing read/computed/written",
@@ -188,8 +199,8 @@ describe("runSavingsFix — apply mode (entitled)", () => {
   beforeEach(() => activatePro());
 
   it("--apply calls writeSaver once with enabled/balanced and prints was→now", async () => {
-    const writeSaver = vi.fn();
-    const code = await runSavingsFix(baseInput({ apply: true, writeSaver }));
+    const { readSaver, writeSaver } = linkedSaverStore();
+    const code = await runSavingsFix(baseInput({ apply: true, readSaver, writeSaver }));
 
     expect(code).toBe(0);
     expect(writeSaver).toHaveBeenCalledTimes(1);
@@ -263,6 +274,52 @@ describe("runSavingsFix — apply mode (entitled)", () => {
     rmSync(gitDir, { recursive: true, force: true });
   });
 
+  it("apply shadowed by a pre-existing exact override reports honestly, not false success", async () => {
+    const { execFileSync } = await import("node:child_process");
+    const { mkdtempSync: mkTmp } = await import("node:fs");
+    const { defaultSaverReader, defaultSaverWriter } = await import(
+      "../../src/commands/savings/fix.js"
+    );
+    const { resolveActivationScope, writeActivation } = await import("@megasaver/context-gate");
+
+    const gitDir = mkTmp(join(tmpdir(), "megasaver-fix-shadow-"));
+    execFileSync("git", ["init"], { cwd: gitDir, stdio: "ignore" });
+    // Canonical `--exact` disable: the checkout-own record the resolver prefers
+    // over any later family write.
+    writeActivation(root, resolveActivationScope(gitDir, true), false, "safe");
+
+    const code = await runSavingsFix(
+      baseInput({
+        apply: true,
+        readSaver: defaultSaverReader(root, gitDir),
+        writeSaver: defaultSaverWriter(root, gitDir),
+      }),
+    );
+
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).not.toContain("now: enabled/balanced");
+    expect(text).toContain("exact override");
+    expect(text).toContain("mega session saver workspace enable --exact");
+    // The family write was shadowed — the resolver still reports the exact disable.
+    expect(defaultSaverReader(root, gitDir)()).toEqual({ enabled: false, mode: "safe" });
+
+    out.length = 0;
+    const jsonCode = await runSavingsFix(
+      baseInput({
+        apply: true,
+        json: true,
+        readSaver: defaultSaverReader(root, gitDir),
+        writeSaver: defaultSaverWriter(root, gitDir),
+      }),
+    );
+    expect(jsonCode).toBe(0);
+    const parsed = JSON.parse(out.join("\n")) as { applied: { now: string }[] };
+    expect(parsed.applied[0]?.now).toBe("unchanged — an exact override wins");
+
+    rmSync(gitDir, { recursive: true, force: true });
+  });
+
   it("--apply with an advice-only plan writes nothing and says so", async () => {
     const writeSaver = vi.fn();
     const code = await runSavingsFix(
@@ -283,7 +340,8 @@ describe("runSavingsFix — apply mode (entitled)", () => {
   });
 
   it("--apply --json emits { plan, applied }", async () => {
-    const code = await runSavingsFix(baseInput({ apply: true, json: true, writeSaver: vi.fn() }));
+    const { readSaver, writeSaver } = linkedSaverStore();
+    const code = await runSavingsFix(baseInput({ apply: true, json: true, readSaver, writeSaver }));
 
     expect(code).toBe(0);
     const parsed = JSON.parse(out.join("\n")) as {
@@ -298,13 +356,13 @@ describe("runSavingsFix — apply mode (entitled)", () => {
   it("bump path reports was: safe", async () => {
     // 1 event, 4_000_000 returned bytes → 1M tokens, ratio ≈ 0.09 → R2 fires at safe.
     const weakEvents = [event(0, "file", 4_000_000)];
-    const writeSaver = vi.fn();
+    const { readSaver, writeSaver } = linkedSaverStore({ enabled: true, mode: "safe" });
     const code = await runSavingsFix(
       baseInput({
         apply: true,
         writeSaver,
         readAllEvents: () => ({ events: weakEvents, eventsByProject: {} }),
-        readSaver: () => ({ enabled: true, mode: "safe" }),
+        readSaver,
       }),
     );
 
@@ -314,14 +372,8 @@ describe("runSavingsFix — apply mode (entitled)", () => {
   });
 
   it("disabled saver applies with was: disabled", async () => {
-    const writeSaver = vi.fn();
-    const code = await runSavingsFix(
-      baseInput({
-        apply: true,
-        writeSaver,
-        readSaver: () => ({ enabled: false, mode: "balanced" }),
-      }),
-    );
+    const { readSaver, writeSaver } = linkedSaverStore({ enabled: false, mode: "balanced" });
+    const code = await runSavingsFix(baseInput({ apply: true, readSaver, writeSaver }));
 
     expect(code).toBe(0);
     expect(writeSaver).toHaveBeenCalledWith({ enabled: true, mode: "balanced" });
