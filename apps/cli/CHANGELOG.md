@@ -1,5 +1,13 @@
 # @megasaver/cli
 
+## 1.8.0
+
+### Minor Changes
+
+- e853984: `mega teardown` — composes a publish-ready, share-safe waste exposé
+  (markdown + SVG card) from the workspace's recorded events: the bill,
+  per-source per-turn averages, what was clawed back, and the treatments.
+
 ## 1.7.0
 
 ### Minor Changes
