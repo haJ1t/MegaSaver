@@ -2179,3 +2179,58 @@ serving + frontend token). HIGH-risk (new public CLI command + npm packaging).
   `mega gui` curl proof — `/` 200 html, `/api/health` no-token 401 / `?token=` 200 /
   Bearer 200 / same-origin 200 / foreign-origin 403 / bound addr 127.0.0.1.
 - Reviewers pending (HIGH): code-reviewer + critic + security-reviewer (not yet run).
+
+## [2026-07-06] query | pro-differentiation-portfolio
+
+User asked for world-class differentiation ideas for the paid subscription
+(new features + evolving shipped ones). Read gtm-plan-2026-07,
+mega-saver-product, contextops-roadmap + the two 2026-07-06 Pro specs.
+Filed the answer as [[syntheses/pro-differentiation-portfolio]] (6 feature
+evolutions E1–E6, 6 new module candidates N1–N6, Free/Pro/Team packaging
+rule, GTM-Faz-0-compatible sequence). Brainstorm stage only — no spec, no
+code. Next: user picks item → superpowers spec cycle. Index updated.
+
+## [2026-07-07] update | pro-differentiation-portfolio realigned to launch wave
+
+User: "Pro'ya ekledik; koda göre planı düzelt." Re-checked repo: PRs #231–#251
+shipped AFTER the portfolio was written — `mega gui` (npm), savings headline,
+GUI share card, `mega init`, landing, entitlement seam, Pro m1 history, m2
+insights, m3 **forecast** (#240 — the slot the portfolio had pitched `mega
+roi` into; the forecast spec explicitly deferred ROI + anomaly alerts), /pro
+pricing, prod Ed25519 key, v1.5.0 versioned, site + Gumroad checkout live.
+Rewrote [[syntheses/pro-differentiation-portfolio]]: reality-check section;
+`mega roi` re-slotted as module-4 top pick ($7.99 math → 10.9×); E4 share-card
+half marked done (teardown remains); N7 added (anomaly alerts + persistent
+budgets, from forecast-spec non-goals); sequence rewritten (step 0 = owner npm
+publish blocker; Tauri item dropped — `mega gui` covers it). Flagged price
+drift ($7.99 live vs locked $10–15) in the portfolio AND
+[[syntheses/gtm-plan-2026-07]] (needs user decision). Index: portfolio line
+updated + v1.5.0 status line added. Gap noted: [[syntheses/release-history]]
+lacks the full v1.5.0 narrative (follow-up candidate).
+
+## [2026-07-07] feature | gumroad-custom-landing-page
+
+Built + published a custom Gumroad landing page for Mega Saver Pro
+(product `txsikq` → https://megasaver.gumroad.com/l/pro). File:
+`landing.html` at repo root (self-contained; "token ledger" design,
+light+dark themes, mono-display type, animated token-statement hero).
+Copy strictly limited to the shipped Pro surface: `mega savings
+history/insights/forecast`, CSV/JSON export, offline Ed25519 license,
+MIT core free (source: live product description; GTM Faz-0 "landing"
+item in [[syntheses/gtm-plan-2026-07]]). Buy elements carry
+`data-gumroad-option="Pro"` + `data-gumroad-recurrence="monthly"`;
+live fields (name/price/description) server-interpolated. Verified:
+sanitizer report clean (only inert meta/title strips), live render
+both themes + FAQ/toggle/reveals, true-390px mobile emulation shows
+zero horizontal overflow (CDP probe), and buy click reaches Gumroad
+checkout preselected Pro/Monthly/US$7.99 (creator test-purchase
+notice; Pay not clicked). Page replaces the native product page —
+`gumroad products page clear txsikq --yes` restores the default.
+
+## [2026-07-07] decision | price = site price ($7.99/mo) + module-4 pick = mega roi
+
+User locked two decisions: (1) Pro price stays as published on the site —
+$7.99/mo (Gumroad) canonical; the GTM $10–15 band revised
+([[syntheses/gtm-plan-2026-07]] drift flag resolved in place). (2) Module 4 =
+**mega roi** (portfolio E1). Portfolio status updated; superpowers
+brainstorming started for the roi spec same session.

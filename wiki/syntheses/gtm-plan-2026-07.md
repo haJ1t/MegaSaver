@@ -118,6 +118,11 @@ CLI çekirdeği MIT/ücretsiz (yıldız + dağıtım; claude-mem 72k★ tavanı 
 gelir); ödeme isteği metering/kontrol + team'de yoğunlaşıyor; Packmind/Repo
 Prompt şablonu kanıtlı.
 
+> ✅ **Fiyat kararı ÇÖZÜLDÜ (2026-07-07, user-approved):** fiyat sitede
+> yazan şekilde — **$7.99/mo (Gumroad)** kanonik. Yukarıdaki $10–15 bandı
+> tarihsel karar; güncel karar bu satır (source: user session 2026-07-07;
+> docs/launch/owner-pre-launch-checklist.md).
+
 **Dil/market — KARAR (2026-07-05, user-approved): TR beachhead + EN paralel.**
 TR dev sahnesinde erken görünürlük + feedback; eş zamanlı EN launch dizisi
 (HN/PH global). İçerik iki dilde üretilir (kart/landing çift dilli).
@@ -137,7 +142,12 @@ tweet'in 2. ve 3. elementi — bu plan tam o boşluğu kapatıyor.
 
 ## Karar durumu
 
-1. ✅ Monetizasyon: open-core, Pro $10–15/mo (2026-07-05).
+1. ✅ Monetizasyon: open-core (2026-07-05); Pro fiyat **$7.99/mo** — site/
+   Gumroad kanonik (user revizyonu 2026-07-07; eski $10–15 bandı tarihsel).
 2. ✅ Market: TR beachhead + EN paralel (2026-07-05).
-3. ⏳ Faz 0 kapsam onayı + başlatma (özellikle GUI-paketleme/Tauri — en büyük
-   iş kalemi; her Faz-0 maddesi kendi superpowers döngüsüyle spec'lenir).
+3. ✅ Faz 0 fiilen kapandı (launch dalgası #231–#251, 2026-07-06): GUI
+   paketleme Tauri yerine `mega gui` (npm) ile çözüldü; headline, `mega init`,
+   landing + domain (megasaver.dev), license fix, share kartı shipped.
+4. ✅ Faz 2 çekirdeği ERKEN shipped: entitlement + 3 Pro modül
+   (history/insights/forecast) + /pro pricing + Gumroad checkout canlı.
+   Kalan tek aktivasyon blocker'ı: npm publish 1.5.0 (owner).
