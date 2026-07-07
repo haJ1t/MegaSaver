@@ -1,5 +1,5 @@
 import { type KeyObject, generateKeyPairSync, sign } from "node:crypto";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activateLicense } from "@megasaver/entitlement";
@@ -225,18 +225,26 @@ describe("runCompress — entitled", () => {
     expect(writes).toHaveLength(2);
   });
 
-  it("--apply refuses to clobber an existing .bak without --force", async () => {
-    const path = join(root, "CLAUDE.md");
-    const { inp, writes } = scenario({
-      apply: true,
-      path,
-      fsOver: { fileExists: (p) => p === `${path}.bak` || p === path },
-    });
-    const code = await runCompress(inp);
-    expect(code).toBe(1);
-    expect(err.join("\n")).toContain("backup already exists");
-    expect(writes).toHaveLength(0);
-  });
+  // The backup is write-once: an existing .bak is NEVER overwritten, even with
+  // --force. compressProse is not idempotent, so a --force re-run would otherwise
+  // read the already-compressed file and clobber the pristine .bak with degraded
+  // content — permanently destroying the original (regression guard).
+  it.each([{ force: false }, { force: true }])(
+    "--apply refuses to touch an existing .bak (force=%o)",
+    async ({ force }) => {
+      const path = join(root, "CLAUDE.md");
+      const { inp, writes } = scenario({
+        apply: true,
+        force,
+        path,
+        fsOver: { fileExists: (p) => p === `${path}.bak` || p === path },
+      });
+      const code = await runCompress(inp);
+      expect(code).toBe(1);
+      expect(err.join("\n")).toContain("backup already exists");
+      expect(writes).toHaveLength(0);
+    },
+  );
 
   it("--apply on an already-tight file writes nothing", async () => {
     const { inp, writes } = scenario({ apply: true, fsOver: { readFile: () => "# Tiny\nshort" } });
@@ -291,5 +299,48 @@ describe("runCompress — entitled", () => {
     expect(readdirSync(root).some((f) => f.endsWith(".tmp"))).toBe(false);
     // restore works
     expect(readFileSync(`${path}.bak`, "utf8")).toBe(BIG_DOC);
+  });
+
+  // Reproduces the review's CONFIRMED critical end-to-end: compressProse is not
+  // idempotent, so a --force re-run must never overwrite the pristine .bak. Whichever
+  // guard bails (already-tight if the skeleton is a fixed point, or the write-once
+  // backup guard otherwise), the pristine backup must survive and still restore.
+  it("real-fs: a --force re-run never destroys the pristine backup", async () => {
+    const { defaultCompressFs } = await import("../../src/commands/compress.js");
+    const path = join(root, "CLAUDE.md");
+    writeFileSync(path, BIG_DOC);
+    const fs = defaultCompressFs();
+    const first = await runCompress({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      path,
+      apply: true,
+      fs,
+      stdout,
+      stderr,
+    });
+    expect(first).toBe(0);
+    const skeleton = readFileSync(path, "utf8");
+    expect(readFileSync(`${path}.bak`, "utf8")).toBe(BIG_DOC);
+    // second --apply --force: bails safely without touching the pristine backup
+    const second = await runCompress({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      path,
+      apply: true,
+      force: true,
+      fs,
+      stdout,
+      stderr,
+    });
+    expect([0, 1]).toContain(second);
+    // The pristine backup was NEVER overwritten and the file was not degraded further.
+    expect(readFileSync(`${path}.bak`, "utf8")).toBe(BIG_DOC);
+    expect(readFileSync(path, "utf8")).toBe(skeleton);
+    // and mv restore still yields the true original
+    renameSync(`${path}.bak`, path);
+    expect(readFileSync(path, "utf8")).toBe(BIG_DOC);
   });
 });
