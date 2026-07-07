@@ -95,7 +95,11 @@ describe("computeFixPlan — R2 bump-saver-mode", () => {
   it("does not fire at exactly ratio 0.5 (strict <)", () => {
     // returned 2_000_000 + saved 2_000_000 of raw 4_000_000 → ratio exactly 0.5;
     // returned tokens 500_000 — bump the volume with 8 events to clear the token floor.
-    const half = events(8, { returnedBytes: 2_000_000, bytesSaved: 2_000_000, rawBytes: 4_000_000 });
+    const half = events(8, {
+      returnedBytes: 2_000_000,
+      bytesSaved: 2_000_000,
+      rawBytes: 4_000_000,
+    });
     const plan = computeFixPlan(half, { saver: { enabled: true, mode: "safe" }, memoryFiles: [] });
     expect(plan.actions.map((a) => a.kind)).not.toContain("bump-saver-mode");
   });
@@ -111,6 +115,13 @@ describe("computeFixPlan — R2 bump-saver-mode", () => {
     const kinds = plan.actions.map((a) => a.kind);
     expect(kinds).toContain("enable-saver");
     expect(kinds).not.toContain("bump-saver-mode");
+  });
+
+  it("R2 sizes by the uncompressed remainder: dollarsReturned × (1 − ratio)", () => {
+    const plan = computeFixPlan(weak, { saver: { enabled: true, mode: "safe" }, memoryFiles: [] });
+    const r2 = plan.actions.find((a) => a.kind === "bump-saver-mode");
+    // weak: returned 4_000_000 bytes → 1_000_000 tokens → $3.00; ratio 400_000/4_400_000.
+    expect(r2?.estDollarsReturned).toBeCloseTo(3 * (1 - 400_000 / 4_400_000));
   });
 });
 
@@ -134,7 +145,7 @@ describe("computeFixPlan — R3 advise-tool-route", () => {
     expect(r3).toHaveLength(1);
     expect(r3[0]?.appliable).toBe(false);
     expect(r3[0]?.target).toBe("mcp-noisy");
-    expect(r3[0]?.command).toContain('mega tools add');
+    expect(r3[0]?.command).toContain("mega tools add");
     expect(r3[0]?.command).toContain("mcp-noisy");
   });
 
@@ -151,6 +162,13 @@ describe("computeFixPlan — R3 advise-tool-route", () => {
     ];
     const plan = computeFixPlan(few, { saver: SAVER_ON, memoryFiles: [] });
     expect(plan.actions.map((a) => a.kind)).not.toContain("advise-tool-route");
+  });
+
+  it("R3 sizes by the row's returned dollars", () => {
+    const plan = computeFixPlan(mixed, { saver: SAVER_ON, memoryFiles: [] });
+    const r3 = plan.actions.find((a) => a.kind === "advise-tool-route");
+    // noisy returned 200_000 bytes → 50_000 tokens → $0.15.
+    expect(r3?.estDollarsReturned).toBeCloseTo(0.15);
   });
 });
 
@@ -175,6 +193,57 @@ describe("computeFixPlan — R4 advise-outline", () => {
     ];
     const plan = computeFixPlan(balanced, { saver: SAVER_ON, memoryFiles: [] });
     expect(plan.actions.map((a) => a.kind)).not.toContain("advise-outline");
+  });
+
+  it("does not fire below the event floor even when reads dominate", () => {
+    // read: 19 × 20_000 = 380k of 480k → share ≈ 0.79 ≥ 0.4, but events 19 < 20.
+    const fewReads = [
+      ...events(19, { sourceKind: "file", label: "read", returnedBytes: 20_000 }),
+      ...events(20, { sourceKind: "proc", label: "exec", returnedBytes: 5_000 }),
+    ];
+    const plan = computeFixPlan(fewReads, { saver: SAVER_ON, memoryFiles: [] });
+    expect(plan.actions.map((a) => a.kind)).not.toContain("advise-outline");
+  });
+});
+
+describe("computeFixPlan — exact threshold boundaries", () => {
+  it("R3 fires at returnedShare exactly 0.25 (inclusive)", () => {
+    // noisy 20 × 5_000 = 100k; file 20 × 15_000 = 300k → share exactly 0.25, ratio 0 < 0.3.
+    const mixed = [
+      ...events(20, { sourceKind: "mcp-noisy", label: "call", returnedBytes: 5_000 }),
+      ...events(20, { sourceKind: "file", label: "read", returnedBytes: 15_000 }),
+    ];
+    const plan = computeFixPlan(mixed, { saver: SAVER_ON, memoryFiles: [] });
+    expect(
+      plan.actions.some((a) => a.kind === "advise-tool-route" && a.target === "mcp-noisy"),
+    ).toBe(true);
+  });
+
+  it("R3 does not fire at savingRatio exactly 0.3 (strict <)", () => {
+    // noisy: raw 10_000, saved 3_000, returned 7_000 → ratio exactly 0.3;
+    // share 140k/160k = 0.875 ≥ 0.25; events 20.
+    const mixed = [
+      ...events(20, {
+        sourceKind: "mcp-noisy",
+        label: "call",
+        rawBytes: 10_000,
+        bytesSaved: 3_000,
+        returnedBytes: 7_000,
+      }),
+      ...events(20, { sourceKind: "file", label: "read", returnedBytes: 1_000 }),
+    ];
+    const plan = computeFixPlan(mixed, { saver: SAVER_ON, memoryFiles: [] });
+    expect(plan.actions.map((a) => a.kind)).not.toContain("advise-tool-route");
+  });
+
+  it("R4 fires at read returnedShare exactly 0.4 (inclusive)", () => {
+    // read 20 × 10_000 = 200k of 500k → share exactly 0.4.
+    const mixed = [
+      ...events(20, { sourceKind: "file", label: "read", returnedBytes: 10_000 }),
+      ...events(20, { sourceKind: "proc", label: "exec", returnedBytes: 15_000 }),
+    ];
+    const plan = computeFixPlan(mixed, { saver: SAVER_ON, memoryFiles: [] });
+    expect(plan.actions.map((a) => a.kind)).toContain("advise-outline");
   });
 });
 

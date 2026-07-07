@@ -121,8 +121,7 @@ export function computeFixPlan(
         kind: "advise-compress-memory-file",
         appliable: false,
         title: `${f.path} is ${Math.round(f.bytes / 1024)}KB — loaded into every session`,
-        detail:
-          "Compress or split it; a product memory-file compressor ships as its own module.",
+        detail: "Compress or split it; a product memory-file compressor ships as its own module.",
         command: null,
         target: f.path,
         estDollarsReturned: dollarsFromTokens(tokensFromBytes(f.bytes)),
