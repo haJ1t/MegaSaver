@@ -13,6 +13,9 @@ export {
   type ExecResult,
   runOverlayOutputExecCommand,
   type RunOverlayOutputExecInput,
+  runChild,
+  type Capture,
+  type SpawnOutcome,
 } from "./run-command.js";
 export { fetchChunk, type FetchChunkResult } from "./fetch-chunk.js";
 export { fetchOverlayChunk, type FetchOverlayChunkResult } from "./fetch-overlay-chunk.js";

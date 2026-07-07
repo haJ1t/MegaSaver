@@ -94,21 +94,24 @@ const KILL_GRACE_MS = 2_000;
 // Hard ceiling on the filter budget: 2 * modeToBudget("safe") (§5).
 const MAX_RETURNED_CEILING = 2 * modeToBudget("safe");
 
-type Capture = {
+export type Capture = {
   raw: string;
   terminated?: "timeout" | "max_bytes";
   childExitCode: number | null;
 };
 
-type SpawnOutcome =
+export type SpawnOutcome =
   | { ok: true; capture: Capture }
   | { ok: false; reason: "command_failed"; detail: string };
 
+// Exported for `mega bench` (module 7): the paired benchmark reuses this exact
+// capture (timeout/max-bytes/kill-grace) instead of replicating it.
+// Callers MUST gate via evaluateCommand BEFORE invoking — runChild itself performs no policy check.
 // Spawn the child, combine stdout+stderr in arrival order, and enforce the two
 // caller bounds (timeout, max-bytes). On either bound the child is killed but
 // the partial capture is returned (a partial chunkSet beats none, §3.5). The
 // manual timer is used (not spawn's `timeout` option) so we own the signal.
-function runChild(input: {
+export function runChild(input: {
   spawn: RunCommandSpawn;
   command: string;
   args: readonly string[];

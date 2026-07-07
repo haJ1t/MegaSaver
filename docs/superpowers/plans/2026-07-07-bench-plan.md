@@ -415,18 +415,16 @@ vi.mock("@megasaver/pro-analytics", async (importActual) => {
 
 // The no-recording invariant, pinned: bench must NEVER persist chunk sets or
 // append events, on any path.
-const persistSpies = vi.hoisted(() => ({ saveChunkSet: vi.fn(), appendEvent: vi.fn() }));
+// As-built delta: @megasaver/stats is a FORBIDDEN CLI dependency (the
+// dependency-graph guard test enforces it), so an appendEvent spy is
+// unshippable here — the chunk-persist spy plus recordTrace:false carry the
+// no-record invariant at this boundary.
+const persistSpies = vi.hoisted(() => ({ saveChunkSet: vi.fn() }));
 
 vi.mock("@megasaver/content-store", async (importActual) => {
   const actual = await importActual<typeof import("@megasaver/content-store")>();
   persistSpies.saveChunkSet.mockImplementation(actual.saveChunkSet);
   return { ...actual, saveChunkSet: persistSpies.saveChunkSet };
-});
-
-vi.mock("@megasaver/stats", async (importActual) => {
-  const actual = await importActual<typeof import("@megasaver/stats")>();
-  persistSpies.appendEvent.mockImplementation(actual.appendEvent);
-  return { ...actual, appendEvent: persistSpies.appendEvent };
 });
 
 type Payload = { v: number; tier: string; id: string; iat: number; exp: number | null };
@@ -791,7 +789,9 @@ export async function runBench(input: RunBenchInput): Promise<0 | 1> {
   const rawBytesSaver = Buffer.byteLength(saverRun.output, "utf8");
   // Step-1 note applies here: use FilterOutputResult's real returned-size field
   // if it exists; the ratio derivation below is the documented fallback.
-  const returnedBytes = Math.round(rawBytesSaver * (1 - filtered.savingRatio));
+  // As-built delta: FilterOutputResult carries a real returnedBytes field —
+  // used directly (the ratio derivation below was the documented fallback).
+  const returnedBytes = filtered.returnedBytes;
 
   const report = composeBenchReport(
     [input.command, ...input.commandArgs].join(" "),
@@ -876,7 +876,8 @@ export const benchCommand = defineCommand({
       process.exitCode = 1;
       return;
     }
-    const originPid = process.env.MEGASAVER_ORIGIN_PID ?? String(process.pid);
+    // biome-ignore lint/complexity/useLiteralKeys: TS4111 under noPropertyAccessFromIndexSignature (store.ts precedent)
+    const originPid = process.env["MEGASAVER_ORIGIN_PID"] ?? String(process.pid);
     const code = await runBench({
       storeRoot: resolveStorePath(storeInput),
       now: () => Date.now(),

@@ -521,6 +521,7 @@ mega <command> [subcommand] [flags]
 | `mega license` | activate / status / deactivate a Mega Saver Pro license |
 | `mega savings` | historical savings analytics + export (Pro) |
 | `mega teardown` | share-safe waste exposé — md + SVG card (Pro) |
+| `mega bench` | paired saver on/off run — tokens, time, outcome parity (Pro) |
 | `mega roi` | monthly savings vs Pro price — ROI multiple (Pro) |
 | `mega doctor` | diagnose bridge / hooks / connector setup |
 
@@ -680,6 +681,9 @@ mega savings fix --apply          # apply the safe ones (saver settings only)
 
 mega teardown                     # publish-ready waste exposé (Pro)
 mega teardown --out ./posts --force
+
+mega bench -- pnpm test           # same command, raw vs saver (Pro)
+mega bench --assert --md bench.md -- pnpm test
 ```
 
 - `mega savings insights [--by source|label]` — where your tokens are still
@@ -699,6 +703,14 @@ mega teardown --out ./posts --force
   construction — generic source names and numbers only, never paths or
   project names. Refuses to overwrite existing files without `--force`.
   `--json` prints the share-safe report to stdout and writes no files.
+- `mega bench [--mode m] [--assert] [--md <file>] [--force] [--json] -- <cmd>` — runs
+  the command twice (raw, then through the saver pipeline) and reports
+  tokens kept out of context, wall-time overhead, and an outcome-parity
+  verdict (exit code + classified output signal). Records nothing — bench
+  runs never touch your savings analytics. The command must pass the same
+  policy allow-list as `mega output exec`, and it DOES run twice — avoid
+  side-effecting commands. `--assert` exits 1 on broken parity (CI gate).
+  An existing `--md` file is never overwritten without `--force`.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
 and exits cleanly — it never errors, and the free CLI is unaffected. Keys are
