@@ -4,13 +4,21 @@ Copy-paste-ready launch copy for Mega Saver. All numbers here are **illustrative
 examples**, not universal claims — real savings vary and the product labels every
 dollar `(est.)`. Keep that honesty in every post; it's the brand.
 
-**Before posting:** replace `github.com/haJ1t/MegaSaver` with the final repo URL
-if it changes, and the landing URL once the domain is live. Attach `site/og.png`
-(or a real savings-card screenshot) where an image is called for.
+**Live URLs (2026-07-07):** landing `https://megasaver.dev` · pricing
+`https://megasaver.dev/pro` · repo `github.com/haJ1t/MegaSaver` (public, MIT) ·
+npm `@megasaver/cli@1.5.0`. Both pages are indexable and `og.png` unfurls from
+`megasaver.dev/og.png`. Attach `site/og.png` (or a real savings-card screenshot)
+where an image is called for.
+
+**Open-core, one honest line (reuse verbatim):** *the whole compression / memory /
+decision-trace core is free and MIT; an optional Pro tier adds historical savings
+analytics, but nothing in the core is ever paywalled.*
 
 ---
 
 ## 1. Show HN (the primary launch for this audience)
+
+**URL (the submission link):** `https://megasaver.dev`
 
 **Title:**
 `Show HN: Mega Saver – cut coding-agent token usage without blinding the model`
@@ -35,14 +43,21 @@ if it changes, and the landing URL once the domain is live. Attach `site/og.png`
 > on loopback.
 >
 > `npm i -g @megasaver/cli && mega init`
-> Repo: github.com/haJ1t/MegaSaver (MIT)
+> Site: https://megasaver.dev · Repo: github.com/haJ1t/MegaSaver (MIT)
+>
+> It's open-core: the whole compression / memory / decision-trace core is free
+> and MIT. There's an optional paid Pro tier for historical savings analytics,
+> but nothing in the core is paywalled — and I'm candid that the license check
+> lives in the open source (bypassable by design); the Ed25519 signature is what
+> isn't forgeable.
 >
 > Honest caveat: the dashboard's dollar figure is an estimate at a representative
 > input rate, floored — never rounded up. I'd genuinely like feedback on the
 > evidence-preserving compression approach and where it breaks.
 
 *(HN tone: humble, technical, no marketing adjectives, invite critique. Post
-Tue–Thu ~8–10am ET. Reply to every comment.)*
+Tue–Thu ~8–10am ET. Reply to every comment. Keep the Pro mention to that one
+honest line — HN punishes monetization-forward launches.)*
 
 ---
 
@@ -68,8 +83,12 @@ keys, your machine. The metering proxy (opt-in) records token counts only.
 
 **6/** Free, open source (MIT):
 `npm i -g @megasaver/cli && mega init`
-→ github.com/haJ1t/MegaSaver
+→ megasaver.dev · github.com/haJ1t/MegaSaver
 (honest note: the $ figure is an estimate, floored — never rounded up.)
+
+**7/** Open-core: the whole core is free & MIT. An optional Pro tier ($7.99/mo)
+adds historical savings analytics + a per-source waste breakdown — but nothing in
+the core is paywalled. → megasaver.dev/pro
 
 ---
 
@@ -95,8 +114,12 @@ Kendi makinen, kendi key'in.
 
 **6/** Ücretsiz, açık kaynak (MIT):
 `npm i -g @megasaver/cli && mega init`
-→ github.com/haJ1t/MegaSaver
+→ megasaver.dev · github.com/haJ1t/MegaSaver
 (dürüst not: $ rakamı bir tahmin, yukarı değil aşağı yuvarlanıyor.)
+
+**7/** Open-core: çekirdek tamamen ücretsiz & MIT. Opsiyonel Pro tier ($7.99/ay)
+tarihsel tasarruf analitiği + kaynak-bazlı waste breakdown ekler — ama çekirdekte
+hiçbir şey paywall'da değil. → megasaver.dev/pro
 
 ---
 
@@ -104,6 +127,7 @@ Kendi makinen, kendi key'in.
 
 **Name:** Mega Saver
 **Tagline:** `Cut coding-agent token usage — without hiding what the model needs`
+**Link:** `https://megasaver.dev`
 
 **Description:**
 > Mega Saver is a local-first ContextOps tool for coding agents (Claude Code,
@@ -111,6 +135,8 @@ Kendi makinen, kendi key'in.
 > evidence-preserving, so every result expands back to the full original — ranks
 > what to keep with your project's shared memory, and shows a decision-trace of
 > why each context happened. No cloud, no account, secrets redacted. Free & MIT.
+> Open-core: an optional Pro tier ($7.99/mo) adds historical savings analytics;
+> the core is never paywalled.
 
 **First comment (maker):**
 > Hi PH 👋 I built this because my coding agents kept burning tokens on context
@@ -120,18 +146,22 @@ Kendi makinen, kendi key'in.
 > project's memory. It's local-first and open source. The dashboard turns saved
 > tokens into a number (labeled an estimate, floored). Would love your feedback —
 > especially where the compression is too aggressive or not enough.
-> `npm i -g @megasaver/cli && mega init`
+> `npm i -g @megasaver/cli && mega init` · megasaver.dev
 
 ---
 
 ## Posting checklist
 
-- [ ] Domain live + landing deployed (`site/`), `og.png` unfurls correctly (test
-      the link in a Slack/X preview).
+- [x] Domain live (`megasaver.dev` + `/pro`), both indexable (no `noindex`);
+      `og.png` served (200, image/png). **Still do:** eyeball the actual unfurl
+      once in a real X/Slack preview before posting.
 - [ ] A real savings-card screenshot ready (run the saver a while, `mega gui` →
       Share) — more credible than the sample og.png for the thread's tweet 2.
-- [ ] GitHub repo README polished, `mega init` verified on a clean machine.
+- [x] `@megasaver/cli@1.5.0` published; `mega` / `mega init` /
+      `mega license activate` verified working end-to-end. **Still do:** polish
+      the GitHub README's first screen.
 - [ ] Post order: Show HN first (weekday morning ET) → X threads (TR + EN) same
       day → Product Hunt (its own 12:01am PT slot).
 - [ ] Every claim honest: savings are estimates, floored; "without hiding what
-      the model needs" is the differentiator — never overstate the $.
+      the model needs" is the differentiator — never overstate the $. Keep the
+      Pro mention to one honest open-core line.
