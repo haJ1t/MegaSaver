@@ -11,7 +11,7 @@
 **Execution notes:**
 - Work in a feature worktree, branch `feat/cli-savings-fix`.
 - Money math baseline: `tokensFromBytes = ceil(bytes/4)`; `INPUT_PRICE_PER_MTOK_USD = 3.0`.
-- Pinned APIs: `resolveWorkspaceTokenSaverSettings(storeRoot, cwd, deps: ResolverDeps): ResolvedWorkspaceTokenSaver` + `nodeResolverDeps` + `withActivationLock(storeRoot, fn)` + `writeExactRecord(storeRoot, workspaceKey, { enabled, mode, scope: "exact" })` + `readExactRecord` (all exported from `@megasaver/context-gate`); `encodeWorkspaceKey(cwd)` from `@megasaver/shared`.
+- Pinned APIs: `resolveWorkspaceTokenSaverSettings(storeRoot, cwd, deps: ResolverDeps): ResolvedWorkspaceTokenSaver` + `nodeResolverDeps()` (a FACTORY — call it; passing the function itself is a TS2345 vitest won't catch) + `withActivationLock(storeRoot, fn)` + `writeExactRecord(storeRoot, workspaceKey, { enabled, mode, scope: "exact" })` + `readExactRecord` (all exported from `@megasaver/context-gate`); `encodeWorkspaceKey(cwd)` from `@megasaver/shared`.
 - Store errors surfacing as stderr + exit ≠0 is citty `runMain` default behavior (same as m1–m4 siblings) — no defensive catch, no unit test for it.
 
 ---
@@ -677,7 +677,7 @@ export type FixSaverWriter = (rec: { enabled: boolean; mode: TokenSaverMode }) =
 
 export function defaultSaverReader(storeRoot: string, cwd: string): FixSaverReader {
   return () => {
-    const r = resolveWorkspaceTokenSaverSettings(storeRoot, cwd, nodeResolverDeps);
+    const r = resolveWorkspaceTokenSaverSettings(storeRoot, cwd, nodeResolverDeps());
     if (r.source === "missing" || r.source === "invalid") return null;
     return { enabled: r.enabled, mode: r.mode };
   };
