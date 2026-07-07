@@ -79,27 +79,32 @@ against your subscription, (c) never exports your brain to a rival agent.
   next: roi, fix, teardown, bench, firewall, cache doctor.
 - **Team** SHARES — shared brain + approval gate + org rules.
 
-## Recommended sequence (post-launch rewrite)
+## LOCKED 1.x → 2.0 program (user-approved 2026-07-07)
 
-0. **(owner, not code) publish `@megasaver/cli` 1.5.0 to npm** — sole
-   activation blocker; every module below waits behind it.
-1. **`mega roi` (module 4)** — top pick; the pro-analytics pure-fn +
-   gated-command pattern is proven cheap (3 modules landed in one day).
-2. `mega savings fix` (module 5) — insights → action.
-3. `mega teardown` — share card done; exposé generator remains.
-4. `mega bench` — trust moat; first big post-launch build.
-5. Cache doctor / firewall / anomaly+budgets (N7) — Pro depth.
+Items 0–2 of the earlier sequence are DONE (1.5.0 published; roi shipped in
+1.6.1; savings fix shipped in 1.7.0). The road to 2.0, each with its own
+full superpowers chain:
 
-Dropped from the old list: "GUI packaging (Tauri)" — need met by `mega gui`
-(#231); revisit a native shell only if distribution feedback demands it.
+| Release | Item | One-liner |
+|---|---|---|
+| 1.8 | **E4 `mega teardown`** | auto-generated waste exposé (md/image) — content engine as product |
+| 1.9 | **N1 `mega bench`** | paired saver on/off runs → token+time+outcome parity report |
+| 1.10 | **prose-compressor** | ships the engine; upgrades savings-fix R5 from advice to real `[apply]` |
+| 1.11 | **N2 cache doctor** | cache-miss detection + $ burned + fixes |
+| 1.12 | **N3 context firewall** | .env/keys/PII ingress guard + blocked-leak log |
+| 1.13 | **N7 anomaly alerts + persistent budgets** | m3 forecast's deferred extensions |
+| **2.0** | **E5 portable project brain** | signed `.megabrain` export/import — anti lock-in flagship |
+
+Deliberately EXCLUDED from 1.x: N5 leaderboard (needs backend; GTM Faz 2+),
+N6 Team tier (Faz 3; natural post-2.0 arc), E6 budgeted multi-agent
+(CRITICAL; needs agent-office Phases 1–2), i18n `tr` (v2.x).
+Dropped earlier: "GUI packaging (Tauri)" — need met by `mega gui` (#231).
 
 ## Status
 
-Realigned 2026-07-07 to the shipped launch wave. **Module 4 `mega roi` (E1)
-SHIPPED same day**: built (full superpowers chain, 16 TDD tests, 3-lens final
-review 3/3 approve), merged as #252, and **LIVE on npm in `@megasaver/cli`
-1.6.1** (1.6.0 deprecated — broken bundle incident, see log 2026-07-07).
-Activation verified end-to-end against the published tarball. Price resolved:
-$7.99/mo canonical (GTM page updated). Sellable Pro surface = m1–m4. Next
-module candidates: E2 `savings fix` → E4 teardown → N1 bench (see sequence
-above).
+Realigned 2026-07-07 to the shipped launch wave; same day: **module 4
+`mega roi` SHIPPED** (#252, live in 1.6.1; 1.6.0 deprecated — bundle
+incident, see log) and **module 5 `mega savings fix` SHIPPED** (#253, HIGH
+chain, 4 confirmed review catches fixed RED-first, in 1.7.0). Price
+resolved: $7.99/mo canonical. Sellable Pro surface = m1–m5. The 1.x → 2.0
+program above is LOCKED (user, 2026-07-07); next up: 1.8 `mega teardown`.

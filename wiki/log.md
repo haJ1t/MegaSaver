@@ -2359,3 +2359,17 @@ Pro surface on main is now **m1–m5**. Pending owner action: npm publish —
 1.7.0; the prepack dependency-closure fix from the 1.6.1 incident is in
 place, publish flow is `pnpm changeset version` → commit → `npm publish
 --access public` (OTP) from apps/cli.
+
+## [2026-07-07] decision | 1.x → 2.0 program LOCKED + 1.7.0 versioned
+
+User: "1.7.0 yayınla ve kalan her şeyi 2.0'a gelmeden bitirelim."
+(1) 1.7.0 versioned (9d413f8, savings-fix minor consumed); owner publishing
+via OTP; registry poller + published-tarball verification queued.
+(2) Program LOCKED (user-approved, all 7): 1.8 teardown → 1.9 bench →
+1.10 prose-compressor (upgrades savings-fix R5 to real apply) → 1.11 cache
+doctor → 1.12 context firewall → 1.13 anomaly+persistent budgets → **2.0
+portable project brain**. Excluded from 1.x: leaderboard (backend),
+Team tier (post-2.0), budgeted multi-agent (CRITICAL), i18n tr. Table in
+[[syntheses/pro-differentiation-portfolio]]. Stale-note fix en route:
+post-v1.1-roadmap's "persistent proxy routing pending review" is outdated
+(#219 merged). Next: `mega teardown` brainstorm.
