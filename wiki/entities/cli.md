@@ -511,7 +511,7 @@ now pre-filters `entry.approval !== "approved"` before scope/session checks.
 Only approved memory flows into agent config files. GUI mirror
 (`apps/gui/bridge/connector-context.ts`) carries the same filter.
 
-## Pro tier — `mega license`, `mega savings`, `mega roi` (launch wave + module 4)
+## Pro tier — `mega license`, `mega savings`, `mega roi` (launch wave + modules 4–5)
 
 Entitlement-gated Pro analytics: offline Ed25519 license via
 `mega license {activate,status}`; every Pro command gates FIRST on
@@ -530,6 +530,20 @@ zero events read), then lazy-imports the proprietary
   not-paid state never renders "1.0×"), on-pace projection labeled `(est.)`,
   `paidForItself = roiSoFar >= 1`, honest empty/ROI<1 lines. 16 TDD tests
   (6 pure + 10 CLI incl. gate spies + near-break-even regression).
+- `mega savings fix [--apply] [--json] [--store <dir>]` — module 5
+  (2026-07-07, spec `2026-07-07-savings-fix-design.md`, risk HIGH):
+  deterministic fix plan over waste findings (`computeFixPlan`, fixed
+  thresholds, no LLM). R1 enable-saver / R2 safe→balanced bump are the ONLY
+  appliable writes — routed through the CANONICAL
+  `resolveActivationScope(cwd,false)` + `writeActivation` pair (family
+  record in Git repos; lock inside `writeActivation`); after each write the
+  effective state is READ BACK — a pre-existing exact override yields the
+  honest `now: unchanged — an exact override wins` + a hint quoting
+  `mega session saver workspace enable --exact`. R3 tool-route / R4
+  outline / R5 memory-file-bloat are advice-only; R3's command is runnable
+  by construction (real enums, `--description`, never a router-blocked
+  category). User repo files are stat'd for SIZE only. 39 TDD tests
+  (23 pure + 16 CLI incl. gate spies, git-family round-trip, shadow case).
 
 ## Related
 
