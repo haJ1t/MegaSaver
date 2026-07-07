@@ -438,6 +438,26 @@ describe("runRoi — render variants (entitled)", () => {
     expect(code).toBe(0);
     expect(out.join("\n")).toContain("No savings recorded this month yet.");
   });
+
+  it("near break-even (roiSoFar ≈ 0.97) never displays 1.0× on the not-paid branch", async () => {
+    // saved $6.00 this month; price $6.20 → roiSoFar ≈ 0.9677 — toFixed(1) would
+    // round this UP to "1.0×" and contradict the "hasn't paid for itself" prose.
+    const code = await runRoi({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: roiReader(),
+      price: "$6.20",
+      stdout,
+      stderr,
+    });
+
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("hasn't paid for itself yet");
+    expect(text).toContain("0.9×");
+    expect(text).not.toContain("1.0×");
+  });
 });
 ```
 
@@ -527,13 +547,16 @@ export async function runRoi(input: RunRoiInput): Promise<0 | 1> {
     return 0;
   }
 
-  // The PRICE renders verbatim with two decimals — flooring it through
-  // formatDollarsSaved would misstate $7.99 as $7.
+  // The price is an exact known amount, not an estimate — render it with fixed
+  // cents instead of the floor-for-honesty savings formatter.
   const price = `$${report.priceUsd.toFixed(2)}`;
   const saved = formatDollarsSaved(report.savedSoFar.dollars);
   const proj = formatDollarsSaved(report.projectedEnd.dollars);
-  const roiSo = `${report.roiSoFar.toFixed(1)}×`;
-  const roiProj = `${report.roiProjected.toFixed(1)}×`;
+  // Floor displayed multiples: [0.95, 1) must never round up to "1.0×" while
+  // the prose says "hasn't paid for itself yet".
+  const fmtRoi = (r: number) => `${(Math.floor(r * 10) / 10).toFixed(1)}×`;
+  const roiSo = fmtRoi(report.roiSoFar);
+  const roiProj = fmtRoi(report.roiProjected);
   const sessions = report.contextWindowsReclaimed.toFixed(1);
   const daysLeft = Math.round(report.daysLeft);
 
@@ -586,7 +609,7 @@ export const roiCommand = defineCommand({
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @megasaver/cli exec vitest run test/commands/roi.test.ts`
-Expected: PASS (9 tests: 1 gating + 3 bad-price + 5 render).
+Expected: PASS (10 tests: 1 gating + 3 bad-price + 6 render).
 
 - [ ] **Step 5: Commit**
 

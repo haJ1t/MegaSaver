@@ -110,9 +110,10 @@ wiki/syntheses/pro-differentiation-portfolio.md E1).
      ($ + tokens), `roi so far`, `projected end` ($ + ×), `sessions
      reclaimed`, `days left`.
    - saved/projected `$` via `formatDollarsSaved` (from `@megasaver/core`);
-     the PRICE renders verbatim with two decimals (`$7.99`) — flooring it
-     through `formatDollarsSaved` would misstate the price as `$7`. ROI
-     multiples one decimal (`6.2×`); days rounded as in forecast.
+     the PRICE renders with fixed cents (`$7.99`) — an exact amount, not an
+     estimate. ROI multiples display FLOORED to one decimal
+     (`Math.floor(r*10)/10`) so a not-paid state (roiSoFar in [0.95, 1))
+     never rounds up to a contradictory "1.0×"; days rounded as in forecast.
    - `--json`: `JSON.stringify(report)` (the `RoiReport`, nothing else).
 
 **`--price` parsing (boundary, §8 parse-on-handoff):** optional `$` prefix,
@@ -156,7 +157,8 @@ Security-reviewer not required (no crypto/secrets/user-data surface).
   - valid license → headline contains `×` + `(est.)`; `--price $5` changes
     the multiple; `--price 5` ≡ `--price $5`; bad `--price` (`abc`, `0`,
     `-5`) → stderr + exit 1.
-  - ROI<1 fixture → "hasn't paid for itself yet" phrasing.
+  - ROI<1 fixture → "hasn't paid for itself yet" phrasing; near-break-even
+    fixture (roiSoFar ≈ 0.97) displays "0.9×", never "1.0×" (floored display).
   - no in-month events → "No savings recorded this month yet.", exit 0.
   - `--json` shape == `RoiReport`.
 - `pnpm verify` green. E2E smoke: test key → activate → `mega roi` prints a
