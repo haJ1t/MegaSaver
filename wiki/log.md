@@ -2245,3 +2245,24 @@ written (`docs/superpowers/plans/2026-07-07-pro-roi-plan.md`): 4 TDD tasks —
 pure `computeRoi` (wraps forecastSavings) → gated `runRoi` CLI → register +
 README + changeset → `pnpm verify` + e2e smoke. Execution next in worktree
 `feat/cli-mega-roi`; reviewers code-reviewer + critic (MEDIUM, m3 bar).
+
+## [2026-07-07] feature | mega roi (Pro module 4) built — worktree-feat-cli-mega-roi
+
+Subagent-driven execution of the 4-task plan (fresh implementer + spec
+reviewer + quality reviewer per task; fix loops re-reviewed): computeRoi
+pure fn (2644ef03) → gated runRoi CLI (e9e8f21 + floor-display fix
+a36193c) → registration/README/changeset (2adf7b51) → copy fixes
+(d1fe09a/f283faa) + "(est.)" headline label (21ac77e/3e21a20). Review
+catches worth remembering: (1) toFixed(1) rounded roiSoFar∈[0.95,1) up to
+"1.0×" NEXT TO "hasn't paid for itself yet" — display now floors (repo
+under-count convention), near-break-even regression test added; (2) README
+example "$49 = 6.2×" failed its own floored division — all doc examples now
+derive from one consistent set; (3) pre-existing main bug fixed en route:
+readme-proxy-mode.test.ts asserted pre-#251 copy (42f94f8) — masked on main
+by turbo cache replay (README not in the test task's turbo inputs). Final
+holistic review: 3-lens workflow (code-reviewer + adversarial critic +
+honesty/docs), 3/3 approve, 0 confirmed findings, 2 minors fixed. Evidence:
+TURBO_FORCE `pnpm verify` green; binary e2e smoke with a prod-key-signed
+short-expiry test license (upsell → activate → honest empty state → valid
+--json RoiReport → bad --price exit 1). [[entities/cli]] Pro-tier section
+added. Pending: final verify re-run + merge decision.
