@@ -561,8 +561,8 @@ export async function runRoi(input: RunRoiInput): Promise<0 | 1> {
   const daysLeft = Math.round(report.daysLeft);
 
   const headline = report.paidForItself
-    ? `Pro ${price}/mo → saved ${saved} this month (est.) = ${roiSo} · on pace for ${roiProj} by month end · +${sessions} sessions' worth of context`
-    : `ROI ${roiSo} so far — hasn't paid for itself yet · on pace for ${roiProj} by month end · ${daysLeft} days left`;
+    ? `Pro ${price}/mo → saved ${saved} this month (est.) = ${roiSo} · on pace for ${roiProj} by month end (est.) · +${sessions} sessions' worth of context`
+    : `ROI ${roiSo} so far — hasn't paid for itself yet · on pace for ${roiProj} by month end (est.) · ${daysLeft} days left`;
   input.stdout(headline);
   input.stdout("");
   input.stdout(`price          ${price}/mo`);
@@ -668,7 +668,7 @@ After the forecast bullet (~line 677):
 
 ```md
 - `mega roi [--price $7.99]` — the month's measured savings divided by your Pro
-  price: "saved $49 this month (est.) = 6.2×", plus an on-pace month-end
+  price: "saved $49.60 this month (est.) = 6.2×", plus an on-pace month-end
   projection. Honest when it hasn't paid for itself yet.
 ```
 

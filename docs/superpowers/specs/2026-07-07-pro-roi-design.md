@@ -36,7 +36,7 @@ wiki/syntheses/pro-differentiation-portfolio.md E1).
    same number. Cache-aware pricing is a separate future feature (portfolio
    N2, cache doctor) — NOT bolted onto roi alone.
 4. **ROI < 1× → honest message + pace hint** ("hasn't paid for itself yet ·
-   on pace for 1.8× by month end · 19 days left"). No coupon/guarantee
+   on pace for 1.8× by month end (est.) · 19 days left"). No coupon/guarantee
    mechanics in the CLI — Gumroad discounts and refund policy are owner/site
    territory.
 5. **Price source**: `PRO_PRICE_USD_PER_MONTH = 7.99` constant (site price is
@@ -104,10 +104,10 @@ wiki/syntheses/pro-differentiation-portfolio.md E1).
      $48.00/$7.99 → 6.0×; 16M tokens/200K → 80.0 sessions; 2× run-rate →
      12.0×):
      `Pro $7.99/mo → saved $48.00 this month (est.) = 6.0× · on pace for
-     12.0× by month end · +80.0 sessions' worth of context`
+     12.0× by month end (est.) · +80.0 sessions' worth of context`
    - `roiSoFar < 1` headline (0.7 × 31/12 elapsed → 1.8×, 19 days left):
      `ROI 0.7× so far — hasn't paid for itself yet · on pace for 1.8× by
-     month end · 19 days left`
+     month end (est.) · 19 days left`
    - then a labeled breakdown (forecast style): `price`, `saved so far`
      ($ + tokens), `roi so far`, `projected end` ($ + ×), `sessions
      reclaimed`, `days left`.
