@@ -21,3 +21,4 @@ export {
   forecastSavings,
   budgetPace,
 } from "./forecast.js";
+export { type RoiReport, PRO_PRICE_USD_PER_MONTH, computeRoi } from "./roi.js";
