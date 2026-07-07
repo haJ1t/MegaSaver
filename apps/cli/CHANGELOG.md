@@ -1,5 +1,13 @@
 # @megasaver/cli
 
+## 1.9.0
+
+### Minor Changes
+
+- 057eb11: `mega bench` — runs a command twice (raw vs saver pipeline) and reports
+  tokens kept out of context, wall-time overhead, and an outcome-parity
+  verdict; `--assert` turns it into a CI regression gate. Records nothing.
+
 ## 1.8.0
 
 ### Minor Changes
