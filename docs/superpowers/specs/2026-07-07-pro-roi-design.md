@@ -17,7 +17,7 @@ Modules 1–3 answer "what happened" (history), "where it leaks" (insights),
 and "where you're heading" (forecast). None answers the one question that
 converts and retains a subscriber: **"is Pro worth its price?"** `mega roi`
 divides the month's measured savings by the subscription price and says it
-plainly: "Pro $7.99/mo → saved $49 this month (est.) = 6.2×". It is the
+plainly: "Pro $7.99/mo → saved $48.00 this month (est.) = 6.0×". It is the
 conversion command — one word, shareable output (source:
 wiki/syntheses/pro-differentiation-portfolio.md E1).
 
@@ -100,11 +100,13 @@ wiki/syntheses/pro-differentiation-portfolio.md E1).
    `savings/shared.js`), `computeRoi(events, { now, priceUsd })`. Render:
    - no in-month events (`savedSoFar.bytes === 0`, mirroring forecast) →
      `"No savings recorded this month yet."`, `return 0`.
-   - `roiSoFar >= 1` headline:
-     `Pro $7.99/mo → saved $49.32 this month (est.) = 6.2× · on pace for
-     10.9× by month end · +24.7 sessions' worth of context`
-   - `roiSoFar < 1` headline:
-     `ROI 0.4× so far — hasn't paid for itself yet · on pace for 1.8× by
+   - `roiSoFar >= 1` headline (example numbers are mutually consistent:
+     $48.00/$7.99 → 6.0×; 16M tokens/200K → 80.0 sessions; 2× run-rate →
+     12.0×):
+     `Pro $7.99/mo → saved $48.00 this month (est.) = 6.0× · on pace for
+     12.0× by month end · +80.0 sessions' worth of context`
+   - `roiSoFar < 1` headline (0.7 × 31/12 elapsed → 1.8×, 19 days left):
+     `ROI 0.7× so far — hasn't paid for itself yet · on pace for 1.8× by
      month end · 19 days left`
    - then a labeled breakdown (forecast style): `price`, `saved so far`
      ($ + tokens), `roi so far`, `projected end` ($ + ×), `sessions
