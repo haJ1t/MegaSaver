@@ -523,6 +523,7 @@ mega <command> [subcommand] [flags]
 | `mega teardown` | share-safe waste exposé — md + SVG card (Pro) |
 | `mega bench` | paired saver on/off run — tokens, time, outcome parity (Pro) |
 | `mega roi` | monthly savings vs Pro price — ROI multiple (Pro) |
+| `mega compress <file>` | reversible extractive compression of a memory/doc file — dry-run or `--apply` (Pro) |
 | `mega doctor` | diagnose bridge / hooks / connector setup |
 
 Run `mega <command> --help` for subcommands and flags. Closed-enum flags
@@ -684,6 +685,9 @@ mega teardown --out ./posts --force
 
 mega bench -- pnpm test           # same command, raw vs saver (Pro)
 mega bench --assert --md bench.md -- pnpm test
+
+mega compress CLAUDE.md            # dry-run: preview what collapses + tokens/$ saved (Pro)
+mega compress CLAUDE.md --apply    # overwrite (writes CLAUDE.md.bak; restore with mv)
 ```
 
 - `mega savings insights [--by source|label]` — where your tokens are still
@@ -711,6 +715,9 @@ mega bench --assert --md bench.md -- pnpm test
   policy allow-list as `mega output exec`, and it DOES run twice — avoid
   side-effecting commands. `--assert` exits 1 on broken parity (CI gate).
   An existing `--md` file is never overwritten without `--force`.
+- `mega compress <file> [--apply] [--force] [--json]` — dry-run by default;
+  `--apply` is lossy but writes a `<file>.bak` you restore with `mv`. Only
+  `.md`/`.txt`/`.mdc`.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
 and exits cleanly — it never errors, and the free CLI is unaffected. Keys are
