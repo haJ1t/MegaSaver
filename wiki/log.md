@@ -2448,3 +2448,12 @@ byte-compare on real dist). Evidence: TURBO_FORCE verify green ×2; binary
 smoke incl. live savingsNote on tiny `ls` output and dangerous_pattern
 denial. [[entities/cli]] module-7 bullet added. Pending: merge decision +
 1.9.0.
+
+## [2026-07-07] merge+release | PR #255 merged — 1.9.0 versioned
+
+CI green (verify ubuntu 5m23s + windows 7m12s + Vercel) → squash 057eb119.
+Remote+local branch deleted; worktree removed; local main realigned
+(clean). Pro surface on main = **m1–m7** — the 1.x program's 1.9 milestone
+done. 1.9.0 versioned (abda413) with the full release ritual (changeset
+deletion staged, lint:fix applied, repo lint green). Owner action: publish
+1.9.0 (OTP) — ships `mega bench`.
