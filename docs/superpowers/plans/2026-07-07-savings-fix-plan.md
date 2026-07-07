@@ -483,7 +483,11 @@ function signTestLicense(privateKey: KeyObject, payload: Payload): string {
 const NOW_MS = 1_700_000_000_000;
 const now = () => NOW_MS;
 
-function event(i: number, sourceKind: string, returnedBytes: number): TokenSaverEvent {
+function event(
+  i: number,
+  sourceKind: TokenSaverEvent["sourceKind"],
+  returnedBytes: number,
+): TokenSaverEvent {
   return {
     id: `e-${i}`,
     sessionId: "sess-1" as TokenSaverEvent["sessionId"],
