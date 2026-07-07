@@ -89,6 +89,10 @@ BenchReport = {
   overheadMs: number;           // saver.wallMs - raw.wallMs (may be negative)
   overheadPct: number;          // vs raw.wallMs; 0 when raw.wallMs === 0
   parity: BenchParity;
+  savingsNote: string | null;   // review amendment: when the saver pass
+                                // returned MORE than raw, tokensSaved clamps
+                                // to 0 AND this note says so — a silent
+                                // "$0.00 saved" would mislead by omission
 };
 ```
 
