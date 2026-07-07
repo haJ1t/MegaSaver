@@ -2477,3 +2477,48 @@ savingsNote, `mega bench -- rm -rf` → dangerous_pattern denial. Tag
 EXPECTED — security-key 2FA can't run headless; the GitHub Release + bundle
 asset succeed regardless, confirmed on v1.8.0). Pro surface m1–m7 sellable.
 Next: 1.10 prose-compressor.
+
+## [2026-07-08] build+review | module 8 `mega compress` (1.10) — review caught a CRITICAL
+
+Feature branch `feat/cli-mega-compress` (worktree, off 461cebe2).
+Subagent-driven TDD, 5 slices: **(A)** expose the EXISTING `compressProse`
+from output-filter's public entry — no new dep, no new bundle path
+(sidesteps the 1.6.0 bundle-resolution class); pure
+`composeCompressionReport` + `renderCompressionSummary` in pro-analytics,
+marker-count regexes byte-verified against the engine's `… [N paragraphs]`
+output via hexdump. **(B)** gated `runCompress` — entitlement FIRST, then
+`.md`/`.txt`/`.mdc` guard, **dry-run DEFAULT** (zero writes; `--json`
+read-only even with `--apply`), `--apply` writes `<file>.bak` then atomic
+temp-in-same-dir+rename; injected fs/git (`execFileSync` argv, no shell).
+**(C)** savings-fix R5 `command: null` → `mega compress <basename>`
+(basename-only so teardown stays share-safe; `appliable:false` kept).
+**(D)** register + README + changeset + verify + tarball e2e.
+
+**The review earned its keep — 1 CONFIRMED CRITICAL (2 findings, same root
+cause).** `compressProse` is NOT idempotent: its own `… [N paragraphs]`
+markers re-parse as paragraphs on a 2nd pass, so re-running `--apply` on an
+already-compressed file has `changed=true`. The ORIGINAL spec let `--force`
+override the existing-`.bak` guard → a guided re-run (the tool's own error
+text said "re-run with --force") would read the already-degraded file and
+`writeFile(bak, <degraded>)`, clobbering the pristine backup and DESTROYING
+the original — defeating the whole reversibility premise. My per-slice
+reviews MISSED it (accepted "--force overwrites .bak" as by-design). **Fix:
+the backup is WRITE-ONCE** — `--force` overrides the git-dirty guard ONLY;
+an existing `.bak` always refuses ("restore it (mv) or remove it"). A
+fresh-context verifier confirmed CLOSED — no tool-initiated clobber path
+remains; the only residual is the user manually deleting their own backup.
+Spec amended (decision #2 + a Security note record the non-idempotency +
+the write-once fix). **Lesson: for lossy/marker-based transforms, test
+idempotency of re-runs explicitly — "reversible" dies if the backup can be
+overwritten by degraded content.**
+
+Evidence: `pnpm verify` green (cli **936** tests, tsc 18 pkgs, biome 1321
+files, conventions ok); tarball e2e 14/14 (bundle resolves the lazy
+pro-analytics import AND compressProse; apply 2665→106B, `.bak`==original,
+`mv` restores exact, free path upsells); fix repro on the SHIPPED binary —
+a 591B→571B non-idempotent skeleton REFUSED under `--apply --force`,
+pristine `.bak` intact. 6 commits (c5223bbc..6a764381).
+[[entities/cli]] module-8 bullet added. Pending: PR + merge + 1.10.0
+release (release ritual: changeset version → stage consumed changeset
+deletion → `biome check --write apps/cli/package.json` → commit → push →
+owner OTP publish; `bin` must stay `./`-free).
