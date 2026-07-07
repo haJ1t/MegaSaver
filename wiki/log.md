@@ -2412,3 +2412,12 @@ deletions too, or the next changelog duplicates them). 1.8.0 versioned
 skips 1.7.0** — it was never published (OTP pending when #254 landed);
 one publish ships 1.8.0 directly, CHANGELOG carries both sections; npm
 versions need not be contiguous. Owner action: publish 1.8.0 (OTP).
+
+## [2026-07-07] release | 1.8.0 LIVE on npm — Pro m1–m6 sellable
+
+Owner published (OTP); `latest` = 1.8.0. Published-tarball e2e verified
+with a prod-key-signed test license: `mega savings fix` renders the plan;
+`mega teardown` writes both artifacts (md title + svg), exists-guard exit 1
+on rerun. Tag `v1.8.0` pushed → release.yml standalone bundle. The 1.x
+program's first post-lock milestone is done: 1.8 teardown SHIPPED same day
+as modules 4–5. Next per locked program: **1.9 `mega bench`**.
