@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "echo 'static marketing site — no dependencies to install'",
-  "buildCommand": "SRC=site; [ -d site ] || SRC=.; rm -rf .out && mkdir -p .out && cp -a \"$SRC\"/index.html \"$SRC\"/pro \"$SRC\"/og.png .out/",
+  "buildCommand": "ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); rm -rf .out && mkdir -p .out && tar -C \"$ROOT/site\" --exclude=.out -cf - . | tar -C .out -xf -",
   "outputDirectory": ".out",
   "cleanUrls": true,
   "trailingSlash": false
