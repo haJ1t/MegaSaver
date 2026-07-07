@@ -155,7 +155,9 @@ const MUTED = "#6b6c70";
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
 export function renderTeardownCardSvg(report: TeardownReport): string {
-  const top = report.culprits[0];
+  // Same empty-state signal as the markdown sections: an all-zero-returned
+  // event set must not name a "top culprit" at ~0 tokens/turn.
+  const top = report.headline.totalReturnedBytes === 0 ? undefined : report.culprits[0];
   const topLine = top
     ? `${top.key} · ~${compactTokens(top.avgTokensPerTurn)} tokens/turn`
     : "no recorded events yet";

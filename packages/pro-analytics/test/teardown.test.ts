@@ -124,15 +124,17 @@ describe("renderTeardownMarkdown", () => {
     expect(md).not.toContain("| file |");
   });
 
-  it("all-zero-returned events → bill and culprits agree on the empty state", () => {
-    const md = renderTeardownMarkdown(
-      composeTeardown(events(5, { returnedBytes: 0, rawBytes: 5_000, bytesSaved: 5_000 }), {
-        saver: SAVER_ON,
-        memoryFiles: [],
-      }),
+  it("all-zero-returned events → bill, culprits, and svg card agree on the empty state", () => {
+    const report = composeTeardown(
+      events(5, { returnedBytes: 0, rawBytes: 5_000, bytesSaved: 5_000 }),
+      { saver: SAVER_ON, memoryFiles: [] },
     );
+    const md = renderTeardownMarkdown(report);
     expect(md).toContain("No recorded events yet");
     expect(md).not.toContain("| source |");
+    const svg = renderTeardownCardSvg(report);
+    expect(svg).toContain("no recorded events yet");
+    expect(svg).not.toContain("tokens/turn");
   });
 });
 
