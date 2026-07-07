@@ -47,16 +47,17 @@ function dollarsFromTokens(tokens: number): number {
 }
 
 // Map a source key (the closed `sourceKind` union) onto a `mega tools add`
-// category so the advice command is runnable. Unknown keys fall back to
-// filesystem — the advice is a hint, never a silent block.
+// category so the advice command is runnable. The tool router hard-blocks the
+// dangerous/deploy/database categories from every route regardless of risk,
+// and this advice promises relevance-based exclusion ("nothing is blocked
+// silently") — so only non-blocked categories may ever be emitted; `command`
+// and unknown keys fall back to filesystem.
 function toolCategoryForSource(key: string): string {
   switch (key) {
     case "grep":
       return "search";
     case "fetch":
       return "browser";
-    case "command":
-      return "dangerous";
     default:
       return "filesystem";
   }
