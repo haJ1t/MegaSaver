@@ -2234,3 +2234,14 @@ $7.99/mo (Gumroad) canonical; the GTM $10–15 band revised
 ([[syntheses/gtm-plan-2026-07]] drift flag resolved in place). (2) Module 4 =
 **mega roi** (portfolio E1). Portfolio status updated; superpowers
 brainstorming started for the roi spec same session.
+
+## [2026-07-07] plan | mega roi spec + implementation plan written
+
+Brainstormed (4 user decisions: top-level `mega roi`, saved-so-far +
+month-end projection scope, m1–m3 dollar model + "(est.)", honest ROI<1
+message / no coupon mechanics in CLI), spec committed
+(`docs/superpowers/specs/2026-07-07-pro-roi-design.md`, 8c7bc9c), plan
+written (`docs/superpowers/plans/2026-07-07-pro-roi-plan.md`): 4 TDD tasks —
+pure `computeRoi` (wraps forecastSavings) → gated `runRoi` CLI → register +
+README + changeset → `pnpm verify` + e2e smoke. Execution next in worktree
+`feat/cli-mega-roi`; reviewers code-reviewer + critic (MEDIUM, m3 bar).
