@@ -43,7 +43,7 @@ export function composeBenchReport(command: string, raw: BenchPass, saver: Bench
   const ok = !incomplete && exitMatch && signalMatch !== false;
   let note: string | null = null;
   if (incomplete) {
-    note = "a run did not complete (spawn failure or timeout) — no parity claim";
+    note = "a run did not complete (spawn failure, timeout, or output cap) — no parity claim";
   } else if (!ok) {
     note = "parity broken — the command may be nondeterministic; re-run to confirm";
   } else if (signalMatch === null) {
@@ -52,11 +52,15 @@ export function composeBenchReport(command: string, raw: BenchPass, saver: Bench
 
   const tokensRaw = tokensFromBytes(raw.rawBytes);
   const tokensReturned = tokensFromBytes(saver.returnedBytes ?? saver.rawBytes);
-  // Clamped to 0, but never silently: a saver pass that ADDED bytes gets an
-  // explicit note so "0 saved" reads as "no net savings", not "no effect".
-  const tokensSaved = Math.max(0, tokensRaw - tokensReturned);
-  const savingsNote =
-    tokensReturned > tokensRaw
+  // An incomplete pass has a truncated (often empty) capture — comparing its
+  // bytes would report maximal savings next to "did not complete". Savings are
+  // only claimed on a complete pair; otherwise clamped to 0, but never
+  // silently: a saver pass that ADDED bytes gets an explicit note so "0 saved"
+  // reads as "no net savings", not "no effect".
+  const tokensSaved = incomplete ? 0 : Math.max(0, tokensRaw - tokensReturned);
+  const savingsNote = incomplete
+    ? "a run did not complete — savings not measured on this pair"
+    : tokensReturned > tokensRaw
       ? "saver returned more than raw on this pair — no net savings"
       : null;
   const overheadMs = saver.wallMs - raw.wallMs;
@@ -143,7 +147,7 @@ export function renderBenchMarkdown(report: BenchReport): string {
   lines.push("## Methodology");
   lines.push("");
   lines.push(
-    `Dollar figures use a flat $${INPUT_PRICE_PER_MTOK_USD}/MTok input price and are estimates; tokens are byte-derived (≈4 bytes/token). Measured, not modeled — a single pair on this machine, raw first, then saver. Tool output content never appears in this report.`,
+    `Dollar figures use a flat $${INPUT_PRICE_PER_MTOK_USD}/MTok input price and are estimates; tokens are byte-derived (≈4 bytes/token). Measured, not modeled — a single pair on this machine, raw first, then saver. Tool output content never appears in this report. The command ran twice — do not bench commands with side effects (deploys, migrations, publishes).`,
   );
   lines.push("");
   return lines.join("\n");

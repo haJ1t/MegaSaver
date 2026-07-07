@@ -62,6 +62,7 @@ describe("composeBenchReport — parity matrix", () => {
     const r = composeBenchReport("pnpm test", pass({ exitCode: null }), SAVER);
     expect(r.parity.ok).toBe(false);
     expect(r.parity.note).toContain("did not complete");
+    expect(r.parity.note).toContain("output cap");
   });
 });
 
@@ -104,6 +105,22 @@ describe("composeBenchReport — math", () => {
     const r = composeBenchReport("x", RAW, SAVER);
     expect(r.savingsNote).toBeNull();
   });
+
+  it("incomplete saver pass → zero savings claim with honest savingsNote", () => {
+    const crashed = pass({ kind: "saver", exitCode: null, rawBytes: 0, returnedBytes: 0 });
+    const r = composeBenchReport("x", RAW, crashed);
+    expect(r.tokensSaved).toBe(0);
+    expect(r.dollarsSaved).toBe(0);
+    expect(r.savingsNote).toContain("savings not measured");
+    expect(renderBenchMarkdown(r)).toContain("savings not measured on this pair");
+  });
+
+  it("incomplete raw pass → zero savings claim, incomplete note wins over more-than-raw", () => {
+    const r = composeBenchReport("x", pass({ exitCode: null, rawBytes: 0 }), SAVER);
+    expect(r.tokensSaved).toBe(0);
+    expect(r.dollarsSaved).toBe(0);
+    expect(r.savingsNote).toContain("did not complete");
+  });
 });
 
 describe("renderBenchMarkdown", () => {
@@ -125,6 +142,7 @@ describe("renderBenchMarkdown", () => {
     expect(md).toContain("$3");
     expect(md).toContain("raw first, then saver");
     expect(md).toContain("single pair");
+    expect(md).toContain("ran twice");
     expect(md).toContain("900.0k");
     expect(md).toContain("$2.70 (est.)");
     expect(md).toContain("(20%)");
