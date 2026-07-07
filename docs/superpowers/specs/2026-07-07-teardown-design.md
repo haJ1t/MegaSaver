@@ -43,6 +43,11 @@ wiki/syntheses/gtm-plan-2026-07.md Element 2).
    rendered at all — culprits key by source, advice titles are fixed
    templates. Paths, project names, workspace labels, and file contents
    NEVER appear. Pinned by a privacy sweep test with hostile label strings.
+   Review amendment (Task-1 quality lens): the guarantee is enforced in the
+   ENGINE, not just the CLI wiring — module 5's R5 titles render only the
+   BASENAME of a memory-file path (`baseName` helper in fix.ts), so even a
+   library caller passing a full path cannot leak it into the exposé; a
+   hostile-path sweep case pins this in both fix and teardown tests.
 
 ## Design
 
