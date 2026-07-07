@@ -87,6 +87,10 @@ export async function runSavingsFix(input: RunSavingsFixInput): Promise<0 | 1> {
 
   const applied: { kind: string; was: string; now: string }[] = [];
   if (input.apply === true) {
+    // R1/R2 are mutually exclusive and both resolve to the same write, so a
+    // single pre-loop `was` and a fixed enabled/balanced record are correct.
+    // A future rule with a different appliable write must derive it from the
+    // action instead.
     const was = saver === null ? "absent" : saver.enabled ? saver.mode : "disabled";
     for (const action of plan.actions) {
       if (!action.appliable) continue;
