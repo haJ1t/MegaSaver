@@ -2345,4 +2345,6 @@ test. Evidence: TURBO_FORCE `pnpm verify` green at head; binary e2e smoke
 incl. git-repo family write (`saver-families/gf1_*.json`, no exact leaf)
 and the shadow scenario (honest message + hint + truthful JSON); dry-check
 verdict **dry** (2 cosmetic minors, both deliberate). [[entities/cli]]
-Pro-tier section updated. Pending: merge decision.
+Pro-tier section updated. Closure: branch renamed `feat/cli-savings-fix`,
+**PR #253** opened (https://github.com/haJ1t/MegaSaver/pull/253); worktree
+preserved for PR iteration.
