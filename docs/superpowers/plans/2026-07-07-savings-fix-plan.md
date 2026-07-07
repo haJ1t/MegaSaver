@@ -11,7 +11,7 @@
 **Execution notes:**
 - Work in a feature worktree, branch `feat/cli-savings-fix`.
 - Money math baseline: `tokensFromBytes = ceil(bytes/4)`; `INPUT_PRICE_PER_MTOK_USD = 3.0`.
-- Pinned APIs: `resolveWorkspaceTokenSaverSettings(storeRoot, cwd, deps: ResolverDeps): ResolvedWorkspaceTokenSaver` + `nodeResolverDeps` + `withActivationLock(storeRoot, fn)` + `writeExactRecord(storeRoot, workspaceKey, { enabled, mode, scope: "exact" })` + `readExactRecord` (all exported from `@megasaver/context-gate`); `encodeWorkspaceKey(cwd)` from `@megasaver/shared`.
+- Pinned APIs: `resolveWorkspaceTokenSaverSettings(storeRoot, cwd, deps: ResolverDeps): ResolvedWorkspaceTokenSaver` + `nodeResolverDeps()` (a FACTORY — call it; passing the function itself is a TS2345 vitest won't catch) + `withActivationLock(storeRoot, fn)` + `writeExactRecord(storeRoot, workspaceKey, { enabled, mode, scope: "exact" })` + `readExactRecord` (all exported from `@megasaver/context-gate`); `encodeWorkspaceKey(cwd)` from `@megasaver/shared`.
 - Store errors surfacing as stderr + exit ≠0 is citty `runMain` default behavior (same as m1–m4 siblings) — no defensive catch, no unit test for it.
 
 ---
@@ -22,6 +22,7 @@
 - Create: `packages/pro-analytics/test/fix.test.ts`
 - Create: `packages/pro-analytics/src/fix.ts`
 - Modify: `packages/pro-analytics/src/index.ts`
+- Modify: `packages/pro-analytics/package.json` (add `"@megasaver/shared": "workspace:*"` to `dependencies` — `fix.ts` imports `TokenSaverMode` from it; without the declaration `tsc -b --noEmit` fails TS2307 even though vitest passes, because esbuild elides type-only imports) + `pnpm install`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -354,7 +355,7 @@ export function computeFixPlan(
         title: `"${row.key}" returns ${(row.returnedShare * 100).toFixed(0)}% of context bytes and compresses poorly`,
         detail:
           "Register it with the tool router so task routing can exclude it when irrelevant (advisor; nothing is blocked silently).",
-        command: `mega tools add <project> --name "${row.key}" --category mcp --risk caution`,
+        command: `mega tools add <project> --name "${row.key}" --description "high-volume source flagged by mega savings fix" --category ${toolCategoryForSource(row.key)} --risk medium`,
         target: row.key,
         estDollarsReturned: row.dollarsReturned,
       });
@@ -482,7 +483,11 @@ function signTestLicense(privateKey: KeyObject, payload: Payload): string {
 const NOW_MS = 1_700_000_000_000;
 const now = () => NOW_MS;
 
-function event(i: number, sourceKind: string, returnedBytes: number): TokenSaverEvent {
+function event(
+  i: number,
+  sourceKind: TokenSaverEvent["sourceKind"],
+  returnedBytes: number,
+): TokenSaverEvent {
   return {
     id: `e-${i}`,
     sessionId: "sess-1" as TokenSaverEvent["sessionId"],
@@ -676,7 +681,7 @@ export type FixSaverWriter = (rec: { enabled: boolean; mode: TokenSaverMode }) =
 
 export function defaultSaverReader(storeRoot: string, cwd: string): FixSaverReader {
   return () => {
-    const r = resolveWorkspaceTokenSaverSettings(storeRoot, cwd, nodeResolverDeps);
+    const r = resolveWorkspaceTokenSaverSettings(storeRoot, cwd, nodeResolverDeps());
     if (r.source === "missing" || r.source === "invalid") return null;
     return { enabled: r.enabled, mode: r.mode };
   };
@@ -698,10 +703,12 @@ export function defaultMemoryFileReader(cwd: string): FixMemoryFileReader {
 }
 
 export function defaultSaverWriter(storeRoot: string, cwd: string): FixSaverWriter {
+  // Final-review amendment: a direct writeExactRecord created an un-clearable
+  // exact override inside Git repos (shadowing the family-scoped disable that
+  // `saver workspace disable` and the GUI write). Route through the canonical
+  // pair instead — the activation lock lives INSIDE writeActivation.
   return (rec) =>
-    withActivationLock(storeRoot, () =>
-      writeExactRecord(storeRoot, encodeWorkspaceKey(cwd), { ...rec, scope: "exact" }),
-    );
+    writeActivation(storeRoot, resolveActivationScope(cwd, false), rec.enabled, rec.mode);
 }
 
 export type RunSavingsFixInput = {
@@ -901,7 +908,9 @@ describe("runSavingsFix — apply mode (entitled)", () => {
 
     expect(code).toBe(0);
     expect(writeSaver).not.toHaveBeenCalled();
-    expect(out.join("\n")).toContain("Nothing to apply — 1 advice item(s) above.");
+    // The shared fixEvents fixture also fires R3 (file source, share 1.0) and
+    // R4 (read label) — 3 advice items total with the injected CLAUDE.md.
+    expect(out.join("\n")).toContain("Nothing to apply — 3 advice item(s) above.");
   });
 
   it("--apply --json emits { plan, applied }", async () => {
@@ -1060,3 +1069,24 @@ AND critic as separate fresh-context passes (the critic mutation-tests the
 gate spies and the propose-mode-never-writes invariant), then the 3-lens
 holistic final review (code-reviewer + adversarial critic + honesty/docs)
 used for module 4, then `superpowers:finishing-a-development-branch`.
+
+---
+
+### Final-review amendments (as-built record)
+
+The HIGH review rounds confirmed four findings, each fixed TDD (RED first)
+with the spec amended to match:
+
+1. `8a35f724` — R3 advice command was not runnable (`--category mcp` /
+   `--risk caution` invalid enums; `--description` missing).
+2. `a7bf7f3b` — `defaultSaverWriter` wrote an exact record directly,
+   bypassing `resolveActivationScope`/`writeActivation` (un-clearable
+   override in Git repos); now routes canonically (family in repos; the
+   activation lock lives INSIDE `writeActivation`).
+3. `53ca958b` — R3's `command → dangerous` category mapping advised a
+   router-hard-blocked category; the map now emits only non-blocked
+   categories (sweep-tested: `filesystem|search|browser`).
+4. `c4a33d98` — `--apply` asserted success blindly; it now READS BACK the
+   effective state and reports `unchanged — an exact override wins` (+ a
+   hint quoting `mega session saver workspace enable --exact`) when a
+   pre-existing exact record shadows the family write.

@@ -2316,3 +2316,35 @@ activate → `mega roi` honest empty state → valid RoiReport `--json` → bad
 standalone-bundle release). `mega roi` is now LIVE on npm — Pro surface
 m1–m4 sellable end-to-end. Known gap: no `v1.5.0`/`v1.6.0` tags exist
 (no GitHub bundle releases for those versions; intentional for broken 1.6.0).
+
+## [2026-07-07] feature | mega savings fix (Pro module 5) built — worktree-feat-cli-savings-fix
+
+HIGH-risk module built via subagent-driven TDD (4 plan tasks, per-task
+spec+quality review workflows, then a 3-lens holistic final + a fresh critic
+re-run + a targeted dry-check). **Four CONFIRMED review catches, all fixed
+RED-first — textbook case for why the HIGH chain exists:**
+1. R3 advice command failed the real closed enums (`--category mcp`,
+   `--risk caution`) and omitted required `--description` (8a35f724).
+2. `defaultSaverWriter` wrote an exact record directly → un-clearable
+   override shadowing the family-scoped disable in Git repos; now routes
+   through canonical `resolveActivationScope`+`writeActivation`
+   (a7bf7f3b; the activation lock lives INSIDE `writeActivation` —
+   wrapping it again would deadlock).
+3. R3 mapped `command → dangerous`, a category the tool router hard-blocks
+   from EVERY route pre-relevance — contradicting the advice's
+   relevance-exclusion promise (53ca958b; sweep test pins all sourceKinds
+   to non-blocked categories).
+4. `--apply` asserted success blindly; a pre-existing exact override
+   shadows the family write → now READS BACK effective state and prints
+   `unchanged — an exact override wins` + an `--exact` hint (c4a33d98).
+Plan-authoring lessons logged en route: `@megasaver/shared` dep must be
+declared for type-only imports (tsc catches, vitest doesn't);
+`nodeResolverDeps` is a factory (call it); `tsconfig.test.json` is the
+second typecheck half; a shared fixture fires MORE rules than the one under
+test. Evidence: TURBO_FORCE `pnpm verify` green at head; binary e2e smoke
+incl. git-repo family write (`saver-families/gf1_*.json`, no exact leaf)
+and the shadow scenario (honest message + hint + truthful JSON); dry-check
+verdict **dry** (2 cosmetic minors, both deliberate). [[entities/cli]]
+Pro-tier section updated. Closure: branch renamed `feat/cli-savings-fix`,
+**PR #253** opened (https://github.com/haJ1t/MegaSaver/pull/253); worktree
+preserved for PR iteration.

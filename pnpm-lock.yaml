@@ -635,6 +635,9 @@ importers:
 
   packages/pro-analytics:
     dependencies:
+      '@megasaver/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@megasaver/stats':
         specifier: workspace:*
         version: link:../stats

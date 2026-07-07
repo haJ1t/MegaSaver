@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 // entitlement depends only on node:crypto, never on the CLI. It also adds
 // @megasaver/pro-analytics: the Pro-gated `mega savings history/export` commands
 // lazily import it after checkEntitlement passes. Acyclic — pro-analytics depends
-// only on @megasaver/stats, never on the CLI. The CLI still reads events through
+// only on @megasaver/stats + @megasaver/shared (types), never on the CLI. The CLI still reads events through
 // @megasaver/core (never @megasaver/stats directly), so stats stays forbidden.
 const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/agent-office",
