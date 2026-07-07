@@ -39,10 +39,18 @@ program item 1.10).
      an explicit lossiness warning. **Zero writes.**
    - `--apply`: (1) if the target is git-*tracked* and *dirty* (uncommitted
      modifications) → refuse without `--force`; (2) if `<path>.bak` already
-     exists → refuse without `--force` (never silently clobber a prior backup);
+     exists → refuse — **write-once, even with `--force`** (the backup holds the
+     one pristine copy; `compressProse` is not idempotent, so a `--force` re-run
+     would otherwise read the already-compressed file and clobber the pristine
+     backup with degraded content — permanent loss. The message tells the user to
+     restore or remove the backup deliberately, never to `--force` past it);
      (3) write `<path>.bak` = original; (4) atomically overwrite the target
      (temp file in the same dir + `rename`); (5) print the restore hint
-     `mv <path>.bak <path>`.
+     `mv <path>.bak <path>`. `--force` overrides the git-dirty guard ONLY.
+
+     *(Review amendment 2026-07-08 — CONFIRMED critical: the original decision let
+     `--force` override the backup guard, opening a data-loss path via
+     `compressProse`'s non-idempotency. The backup is now strictly write-once.)*
 3. **Any path argument, guarded to `.md` / `.txt` / `.mdc` extensions.** The
    extension is validated (case-insensitive) at the CLI boundary; anything else is
    rejected with a clear stderr line and exit 1, before any read. Flexible target
@@ -164,9 +172,10 @@ Control flow (order is the security contract):
      --force")`, `return 1`. **No write.** (`clean` / `untracked` / `unknown`
      proceed: the `.bak` is the universal safety net; the git guard adds protection
      specifically for tracked work the user has not yet committed.)
-   - `bak = path + ".bak"`; `fileExists(bak)` && `!force` →
-     `stderr("backup already exists: <path>.bak — remove it or re-run with
-     --force")`, `return 1`. **No write.**
+   - `bak = path + ".bak"`; `fileExists(bak)` (write-once — `--force` does NOT
+     override) → `stderr("backup already exists: <path>.bak — restore it (mv
+     <path>.bak <path>) or remove it before compressing again")`, `return 1`.
+     **No write.**
    - `writeFile(bak, original)` — backup the ORIGINAL first.
    - `writeFile(path, report.compressed)` — atomic overwrite (temp+rename).
    - `stdout` the savings line + `"backed up to <path>.bak"` +
@@ -208,7 +217,17 @@ critic, security-reviewer, and tracer must attack:
 - **No write without `--apply`.** Dry-run is default; every non-apply path is
   spy-proven to leave `writeFile` uncalled (incl. `--json`).
 - **No overwrite without a recoverable backup.** `.bak` is written before the
-  target, always; a pre-existing `.bak` is never clobbered without `--force`.
+  target, always; a pre-existing `.bak` is **never** clobbered — the backup is
+  write-once (`--force` does not override it). See the non-idempotency note below.
+- **`compressProse` non-idempotency (review-confirmed critical, fixed).** The engine
+  is not idempotent — its own `… [N paragraphs]` markers re-parse as paragraphs on a
+  second pass, so `compressProse(compressed) !== compressed`. That means re-running
+  `--apply` on an already-compressed file has `changed === true`. If `--force` could
+  overwrite the backup, the second run would read the already-degraded file and
+  replace the pristine `.bak` with it — destroying the original. The write-once
+  backup closes this: the pristine copy is never overwritten by the tool; to
+  re-compress, the user must first restore (`mv <path>.bak <path>`) or remove the
+  backup deliberately. The reversibility guarantee holds as long as the `.bak` exists.
 - **Atomicity.** temp-in-same-dir + `rename` — no half-written/truncated file if the
   process dies mid-write; no leftover `.tmp` on success.
 - **git-dirty guard** protects tracked-and-modified files; `.bak` protects
@@ -257,8 +276,10 @@ critic, security-reviewer, and tracer must attack:
     `mv <path>.bak <path>`; exit 0.
   - `--apply` git `dirty` + no `--force` → stderr "--force", `writeFile` UNCALLED,
     exit 1.  `--apply` git `dirty` + `--force` → both writes, exit 0.
-  - `--apply` `.bak` exists + no `--force` → stderr "backup already exists",
-    `writeFile` UNCALLED, exit 1.  + `--force` → both writes, exit 0.
+  - `--apply` `.bak` exists → stderr "backup already exists", `writeFile` UNCALLED,
+    exit 1 — **for BOTH `--force` false and true** (write-once regression guard).
+  - real-fs: a `--apply --force` re-run after a first apply leaves the pristine
+    `.bak` byte-identical to the original (non-idempotency data-loss guard).
   - `--apply` already-tight → "not writing", `writeFile` UNCALLED, exit 0.
   - `--apply` git `untracked` / `unknown` → both writes, exit 0 (`.bak` is the net).
   - **real-fs round-trip + coupling guard** (temp dir, real `compressProse` + real

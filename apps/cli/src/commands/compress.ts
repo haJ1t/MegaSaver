@@ -119,8 +119,15 @@ export async function runCompress(input: RunCompressInput): Promise<0 | 1> {
   }
 
   const bak = `${input.path}.bak`;
-  if (input.fs.fileExists(bak) && input.force !== true) {
-    input.stderr(`backup already exists: ${bak} — remove it or re-run with --force`);
+  // Write-once: never overwrite an existing backup, even with --force. It holds the
+  // one pristine pre-compress copy, and compressProse is NOT idempotent — a --force
+  // re-run would read the already-compressed file and clobber the pristine .bak with
+  // degraded content, destroying the original. Refuse; make the user restore or
+  // remove the backup deliberately instead.
+  if (input.fs.fileExists(bak)) {
+    input.stderr(
+      `backup already exists: ${bak} — restore it (mv ${bak} ${input.path}) or remove it before compressing again`,
+    );
     return 1;
   }
 
@@ -154,7 +161,7 @@ export const compressCommand = defineCommand({
     force: {
       type: "boolean",
       default: false,
-      description: "Override the git-dirty and existing-backup guards.",
+      description: "Override the git-dirty guard (the write-once backup is never overwritten).",
     },
     json: {
       type: "boolean",
