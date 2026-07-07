@@ -11,20 +11,23 @@ you.
 
 ---
 
-## Where things actually stand (verified)
+## Where things actually stand (verified 2026-07-07)
 
-- **`@megasaver/cli` IS on npm — but at v1.4.1, which is PRE-Pro.** That build
-  (Jul 1) has no `savings` commands and carries the **placeholder** license key.
-  `npm i -g @megasaver/cli` works, but installs a CLI that can't run Pro and
-  can't validate any key. **Shipping Pro needs a version bump + republish.**
-- **`megasaver.dev` is not registered** (NXDOMAIN). The published CLI hardcodes
-  `https://megasaver.dev/pro` in its upsell, so the domain is effectively
-  **locked** — buy megasaver.dev, or accept that already-installed CLIs point at
-  a dead link.
-- **No checkout exists.** The pricing page's "Get Mega Saver Pro" button is a
-  placeholder Gumroad URL.
-- **No license can validate.** The baked Ed25519 public key is a placeholder
-  whose private half was discarded at generation.
+Done:
+- **✅ Site is live.** `https://megasaver.dev/` and `/pro` serve (200, valid SSL,
+  apex-primary, clean URLs) from Vercel. Bought via GoDaddy; A record → Vercel.
+- **✅ Checkout is live.** The "Get Mega Saver Pro" CTAs point at the real Gumroad
+  membership `https://megasaver.gumroad.com/l/pro` ($7.99/mo).
+- **✅ Real license key is in the repo.** The placeholder Ed25519 public key was
+  replaced with the vendor's real one (`#243`); the private key is held offline.
+
+The ONE remaining blocker:
+- **⏳ `@megasaver/cli` on npm is still v1.4.1 (PRE-Pro + placeholder key).** The
+  1.5.0 release (Pro commands + real key) is versioned and merged but **not
+  published yet**. Until `pnpm changeset publish` runs, a buyer's `npm i` installs
+  a CLI with no `savings` commands and the old placeholder key — so an issued
+  `msp_` key would be **rejected** by `mega license activate`. Publishing 1.5.0
+  is what makes activation actually work end-to-end.
 
 ---
 
