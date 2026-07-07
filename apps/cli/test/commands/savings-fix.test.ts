@@ -219,6 +219,8 @@ describe("runSavingsFix — apply mode (entitled)", () => {
     expect(code).toBe(0);
     const rec = readExactRecord(root, encodeWorkspaceKey(cwd));
     expect(rec).toEqual({ kind: "v1-exact", enabled: true, mode: "balanced" });
+    // The wrapper reads back what the writer wrote — full reader/writer agreement.
+    expect(defaultSaverReader(root, cwd)()).toEqual({ enabled: true, mode: "balanced" });
   });
 
   it("--apply with an advice-only plan writes nothing and says so", async () => {
@@ -269,6 +271,21 @@ describe("runSavingsFix — apply mode (entitled)", () => {
     expect(code).toBe(0);
     expect(writeSaver).toHaveBeenCalledWith({ enabled: true, mode: "balanced" });
     expect(out.join("\n")).toContain("was: safe");
+  });
+
+  it("disabled saver applies with was: disabled", async () => {
+    const writeSaver = vi.fn();
+    const code = await runSavingsFix(
+      baseInput({
+        apply: true,
+        writeSaver,
+        readSaver: () => ({ enabled: false, mode: "balanced" }),
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(writeSaver).toHaveBeenCalledWith({ enabled: true, mode: "balanced" });
+    expect(out.join("\n")).toContain("was: disabled");
   });
 });
 
