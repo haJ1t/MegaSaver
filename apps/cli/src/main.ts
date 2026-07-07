@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { defineCommand } from "citty";
 import { auditCommand } from "./commands/audit/index.js";
 import { benchCommand } from "./commands/bench.js";
+import { compressCommand } from "./commands/compress.js";
 import { connectorCommand } from "./commands/connector/index.js";
 import { contextCommand } from "./commands/context/index.js";
 import { daemonCommand } from "./commands/daemon/index.js";
@@ -66,6 +67,7 @@ export const mainCommand = defineCommand({
     rules: rulesCommand,
     savings: savingsCommand,
     session: sessionCommand,
+    compress: compressCommand,
     connector: connectorCommand,
     memory: memoryCommand,
     office: officeCommand,
