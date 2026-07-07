@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/cli",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "license": "SEE LICENSE IN NOTICE",
   "description": "Mega Saver CLI - the `mega` command.",
   "type": "module",
@@ -31,7 +31,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
     "clean": "rm -rf dist dist-bundle .turbo",
-    "prepack": "pnpm --filter @megasaver/gui build && pnpm run bundle && node scripts/copy-gui-dist.mjs && node scripts/strip-publish-manifest.mjs prepack",
+    "prepack": "pnpm turbo build --filter=@megasaver/cli... && pnpm run bundle && node scripts/copy-gui-dist.mjs && node scripts/strip-publish-manifest.mjs prepack",
     "postpack": "node scripts/strip-publish-manifest.mjs postpack"
   },
   "devDependencies": {

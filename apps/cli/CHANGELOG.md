@@ -1,5 +1,16 @@
 # @megasaver/cli
 
+## 1.6.1
+
+### Patch Changes
+
+- Fix the published bundle inlining stale workspace builds: `prepack` now
+  builds the CLI's full workspace dependency closure (`turbo build
+--filter=@megasaver/cli...`) before bundling. The 1.6.0 tarball had baked a
+  pre-roi `@megasaver/pro-analytics` dist, so the entitled `mega roi` path
+  crashed with "computeRoi is not a function"; 1.6.0 is deprecated in favor of
+  this release.
+
 ## 1.6.0
 
 ### Minor Changes
