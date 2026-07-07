@@ -906,7 +906,9 @@ describe("runSavingsFix — apply mode (entitled)", () => {
 
     expect(code).toBe(0);
     expect(writeSaver).not.toHaveBeenCalled();
-    expect(out.join("\n")).toContain("Nothing to apply — 1 advice item(s) above.");
+    // The shared fixEvents fixture also fires R3 (file source, share 1.0) and
+    // R4 (read label) — 3 advice items total with the injected CLAUDE.md.
+    expect(out.join("\n")).toContain("Nothing to apply — 3 advice item(s) above.");
   });
 
   it("--apply --json emits { plan, applied }", async () => {
