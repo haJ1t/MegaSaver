@@ -81,8 +81,12 @@ function fakeRunner(results: [BenchPassResult, BenchPassResult]): {
   };
 }
 
-const RAW_OK: BenchPassResult = { exitCode: 0, wallMs: 100, output: "3 passed (3)" };
-const SAVER_OK: BenchPassResult = { exitCode: 0, wallMs: 120, output: "3 passed (3)" };
+// DISTINCT sizes pin raw/saver attribution: a swapped assignment or
+// filtering-the-wrong-pass mutation dies on the byte assertions below.
+// Outputs AND command are classify-neutral (no vitest/ts/diff anchors —
+// classifyOutput matches the command string too), so parity is exit-code-only.
+const RAW_OK: BenchPassResult = { exitCode: 0, wallMs: 100, output: "x".repeat(40_000) };
+const SAVER_OK: BenchPassResult = { exitCode: 0, wallMs: 120, output: "ok" };
 
 function baseInput(over: Partial<Parameters<typeof runBench>[0]> = {}) {
   const { runner, calls } = fakeRunner([RAW_OK, SAVER_OK]);
@@ -94,7 +98,7 @@ function baseInput(over: Partial<Parameters<typeof runBench>[0]> = {}) {
       storeRoot: root,
       now,
       publicKey: keys.publicKey,
-      command: "vitest",
+      command: "sometool",
       commandArgs: ["run"] as readonly string[],
       cwd: root,
       originPid: "1",
@@ -131,23 +135,33 @@ describe("runBench — gating", () => {
 describe("runBench — policy gate (entitled)", () => {
   beforeEach(() => activatePro());
 
-  it("denied command → honest message, exit 1, spawner never called", async () => {
+  it("denied command → shared denial message, exit 1, spawner never called", async () => {
     const { input, calls } = baseInput({
       evaluate: () => ({ allowed: false, reason: "command_not_allowed" }) as const,
     });
     const code = await runBench(input);
 
     expect(code).toBe(1);
+    expect(err.join("\n")).toContain("command_denied");
     expect(err.join("\n")).toContain("command_not_allowed");
     expect(calls).toHaveLength(0);
     expect(proSpies.composeBenchReport).not.toHaveBeenCalled();
+  });
+
+  it("empty command → usage, exit 1, nothing run", async () => {
+    const { input, calls } = baseInput({ command: "" });
+    const code = await runBench(input);
+
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("usage: mega bench");
+    expect(calls).toHaveLength(0);
   });
 });
 
 describe("runBench — paired run (entitled)", () => {
   beforeEach(() => activatePro());
 
-  it("runs raw then saver, prints the parity table, exit 0", async () => {
+  it("runs raw then saver, prints the parity table with positive savings, exit 0", async () => {
     const { input, calls } = baseInput();
     const code = await runBench(input);
 
@@ -155,12 +169,14 @@ describe("runBench — paired run (entitled)", () => {
     expect(calls).toHaveLength(2);
     const text = out.join("\n");
     expect(text).toContain("PARITY OK");
+    expect(text).toContain("exit code only"); // neutral outputs → exit-code-only honesty note
     expect(text).toContain("(est.)");
+    expect(text).toMatch(/saved [1-9]/); // 40k raw vs tiny filtered return → real savings
     // No-recording invariant: nothing persisted on the full happy path.
     expect(persistSpies.saveChunkSet).not.toHaveBeenCalled();
   });
 
-  it("--json emits a BenchReport", async () => {
+  it("--json emits a BenchReport with per-pass attribution pinned", async () => {
     const { input } = baseInput({ json: true });
     const code = await runBench(input);
 
@@ -168,9 +184,28 @@ describe("runBench — paired run (entitled)", () => {
     const parsed = JSON.parse(out.join("\n")) as {
       parity: { ok: boolean };
       tokensRaw: number;
+      raw: { rawBytes: number };
+      saver: { rawBytes: number };
     };
     expect(parsed.parity.ok).toBe(true);
     expect(parsed.tokensRaw).toBeGreaterThan(0);
+    // Swapped raw/saver assignment (or filtering the wrong pass) dies here.
+    expect(parsed.raw.rawBytes).toBe(40_000);
+    expect(parsed.saver.rawBytes).toBe(2);
+  });
+
+  it("saver returning more than raw → terminal prints the honest savingsNote", async () => {
+    // Multi-line (a single 40k line costs seconds in the filter): the filtered
+    // return (summary + excerpt) still exceeds the 2-byte raw capture.
+    const { runner } = fakeRunner([
+      { exitCode: 0, wallMs: 100, output: "ok" },
+      { exitCode: 0, wallMs: 120, output: "some tool output line\n".repeat(2_000) },
+    ]);
+    const { input } = baseInput({ runPass: runner });
+    const code = await runBench(input);
+
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("note: saver returned more than raw");
   });
 
   it("--assert with parity broken → exit 1 (report still printed)", async () => {

@@ -7,8 +7,14 @@ import { loadProjectPermissions, runChild } from "@megasaver/context-gate";
 import { checkEntitlement } from "@megasaver/entitlement";
 import { classifyOutput, filterOutput, isConfidentClassification } from "@megasaver/output-filter";
 import { type EvaluateCommandResult, evaluateCommand } from "@megasaver/policy";
-import { type TokenSaverMode, modeToBudget, tokenSaverModeSchema } from "@megasaver/shared";
+import {
+  type ProjectId,
+  type TokenSaverMode,
+  modeToBudget,
+  tokenSaverModeSchema,
+} from "@megasaver/shared";
 import { defineCommand } from "citty";
+import { commandDeniedMessage } from "../errors.js";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import { PRO_ANALYTICS_URL } from "./savings/index.js";
 
@@ -23,7 +29,6 @@ export type BenchPassResult = {
   exitCode: number | null;
   wallMs: number;
   output: string;
-  terminated?: "timeout" | "max_bytes";
 };
 
 export type BenchPassRunner = (opts: {
@@ -47,13 +52,12 @@ export function defaultBenchPassRunner(): BenchPassRunner {
     });
     const wallMs = performance.now() - started;
     if (!outcome.ok) return { exitCode: null, wallMs, output: "" };
+    // A bound-killed capture (timeout/max_bytes) surfaces as childExitCode
+    // null — the engine's incomplete-pass handling covers it generically.
     return {
       exitCode: outcome.capture.childExitCode,
       wallMs,
       output: outcome.capture.raw,
-      ...(outcome.capture.terminated !== undefined
-        ? { terminated: outcome.capture.terminated }
-        : {}),
     };
   };
 }
@@ -72,7 +76,7 @@ export function defaultBenchEvaluate(cwd: string): BenchEvaluate {
     evaluateCommand({
       command,
       args,
-      project: "bench" as never,
+      project: "bench" as unknown as ProjectId,
       env: { MEGASAVER_ORIGIN_PID: originPid },
       ...(permissions !== null ? { permissions } : {}),
     });
@@ -129,7 +133,7 @@ export async function runBench(input: RunBenchInput): Promise<0 | 1> {
     originPid: input.originPid,
   });
   if (!verdict.allowed) {
-    input.stderr(`command denied: ${verdict.reason}`);
+    input.stderr(commandDeniedMessage(verdict.reason).message);
     return 1;
   }
 
