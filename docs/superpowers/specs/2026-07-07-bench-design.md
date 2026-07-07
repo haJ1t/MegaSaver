@@ -89,10 +89,16 @@ BenchReport = {
   overheadMs: number;           // saver.wallMs - raw.wallMs (may be negative)
   overheadPct: number;          // vs raw.wallMs; 0 when raw.wallMs === 0
   parity: BenchParity;
-  savingsNote: string | null;   // review amendment: when the saver pass
+  savingsNote: string | null;   // review amendments: (a) when the saver pass
                                 // returned MORE than raw, tokensSaved clamps
-                                // to 0 AND this note says so — a silent
-                                // "$0.00 saved" would mislead by omission
+                                // to 0 AND this note says so; (b) when either
+                                // pass is INCOMPLETE (exitCode null), savings
+                                // are FORCED to 0 with "savings not measured"
+                                // — a crashed saver pass would otherwise
+                                // report maximal savings (critical catch).
+                                // The incomplete parity note covers
+                                // "spawn failure, timeout, or output cap";
+                                // the methodology discloses the double run.
 };
 ```
 
