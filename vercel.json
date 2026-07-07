@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "echo 'static marketing site — no dependencies to install'",
-  "buildCommand": "mkdir -p public && cp -a site/. public/",
-  "outputDirectory": "public",
+  "buildCommand": "SRC=site; [ -d site ] || SRC=.; rm -rf .out && mkdir -p .out && cp -a \"$SRC\"/index.html \"$SRC\"/pro \"$SRC\"/og.png .out/",
+  "outputDirectory": ".out",
   "cleanUrls": true,
   "trailingSlash": false
 }
