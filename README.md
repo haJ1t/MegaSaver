@@ -520,6 +520,7 @@ mega <command> [subcommand] [flags]
 | `mega audit` | windowed token-savings summary |
 | `mega license` | activate / status / deactivate a Mega Saver Pro license |
 | `mega savings` | historical savings analytics + export (Pro) |
+| `mega roi` | monthly savings vs Pro price — ROI multiple (Pro) |
 | `mega doctor` | diagnose bridge / hooks / connector setup |
 
 Run `mega <command> --help` for subcommands and flags. Closed-enum flags
@@ -669,12 +670,18 @@ mega savings insights --by label  # or break down by tool/label
 
 mega savings forecast             # project this period's savings (Pro)
 mega savings forecast --goal $15  # pace it against a savings goal
+
+mega roi                          # is Pro worth its price? (Pro)
+mega roi --price $5               # compare against a custom price
 ```
 
 - `mega savings insights [--by source|label]` — where your tokens are still
   going: a waste breakdown by source/tool, with per-source saving ratios.
 - `mega savings forecast [--goal $15]` — projects this period's savings by
   run-rate (labeled an estimate) and paces it against an optional goal.
+- `mega roi [--price $7.99]` — the month's measured savings divided by your Pro
+  price: "saved $49 this month (est.) = 6.2×", plus an on-pace month-end
+  projection. Honest when it hasn't paid for itself yet.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
 and exits cleanly — it never errors, and the free CLI is unaffected. Keys are
