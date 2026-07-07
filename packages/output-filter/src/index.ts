@@ -10,6 +10,7 @@ export {
   type OutputCategory,
 } from "./classify.js";
 export { compressByCategory, type CompressorName } from "./compress/index.js";
+export { compressProse } from "./compress/prose.js";
 export {
   buildRankingTrace,
   finalizeReplayTrace,
