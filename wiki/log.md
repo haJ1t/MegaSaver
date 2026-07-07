@@ -2457,3 +2457,23 @@ Remote+local branch deleted; worktree removed; local main realigned
 done. 1.9.0 versioned (abda413) with the full release ritual (changeset
 deletion staged, lint:fix applied, repo lint green). Owner action: publish
 1.9.0 (OTP) — ships `mega bench`.
+
+## [2026-07-08] release | 1.9.0 LIVE — npm 11.11 `bin` gotcha fixed mid-publish
+
+Owner's first 1.9.0 publish attempt hit TWO issues: (1) npm session
+expired → PUT 404 (npm returns 404 not 401 for unauthorized publish);
+`npm login` fixes. (2) **npm 11.11.1 dropped the `bin[mega]` entry as
+"invalid"** because it was `"./dist-bundle/mega.mjs"` — older npm silently
+normalized the `./` prefix at publish (the live 1.8.0 manifest shows the
+normalized form), 11.11 instead REMOVES it, which would have shipped a
+package with NO `mega` binary. Fixed at the source via `npm pkg fix` →
+canonical `"dist-bundle/mega.mjs"` (03b5705). **Add to the release ritual:
+the bin field must be `./`-free; watch publish output for the
+"bin[...] was invalid and removed" warning.** Republished clean; `latest`
+= 1.9.0, `bin` present, verified end-to-end on the published tarball:
+`mega --version` 1.9.0, `mega bench -- ls` paired run with live
+savingsNote, `mega bench -- rm -rf` → dangerous_pattern denial. Tag
+`v1.9.0` → release.yml bundle (the npm-publish CI leg's 2FA failure is
+EXPECTED — security-key 2FA can't run headless; the GitHub Release + bundle
+asset succeed regardless, confirmed on v1.8.0). Pro surface m1–m7 sellable.
+Next: 1.10 prose-compressor.
