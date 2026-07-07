@@ -2399,3 +2399,16 @@ apps/cli/package.json off-format → repo lint red until `lint:fix`
 verify green; binary smoke (upsell → both files → 5 headings → exists-guard
 listing both paths → --force → valid --json). [[entities/cli]] module-6
 bullet added. Pending: final verify re-run + merge decision.
+
+## [2026-07-07] merge+release | PR #254 merged — 1.8.0 versioned; npm skips 1.7.0
+
+CI green (verify ubuntu 5m50s + windows 7m45s + Vercel) → squash e8539843;
+remote+local branch deleted; worktree removed; local main realigned. Pro
+surface on main = **m1–m6**. Release housekeeping: the 1.7.0 versioning had
+left `.changeset/savings-fix.md`'s on-disk deletion UNSTAGED (bf69da2 fixes
+— lesson: `changeset version` commits must stage the consumed .changeset/*
+deletions too, or the next changelog duplicates them). 1.8.0 versioned
+(4e07288) WITH the lint:fix ritual applied proactively. **Decision: npm
+skips 1.7.0** — it was never published (OTP pending when #254 landed);
+one publish ships 1.8.0 directly, CHANGELOG carries both sections; npm
+versions need not be contiguous. Owner action: publish 1.8.0 (OTP).
