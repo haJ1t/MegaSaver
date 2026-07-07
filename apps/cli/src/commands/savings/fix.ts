@@ -3,13 +3,13 @@ import { statSync } from "node:fs";
 import { join } from "node:path";
 import {
   nodeResolverDeps,
+  resolveActivationScope,
   resolveWorkspaceTokenSaverSettings,
-  withActivationLock,
-  writeExactRecord,
+  writeActivation,
 } from "@megasaver/context-gate";
 import { formatDollarsSaved } from "@megasaver/core";
 import { checkEntitlement } from "@megasaver/entitlement";
-import { type TokenSaverMode, encodeWorkspaceKey } from "@megasaver/shared";
+import type { TokenSaverMode } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
 import { PRO_ANALYTICS_URL, type SavingsEventReader, defaultSavingsEventReader } from "./shared.js";
@@ -46,10 +46,12 @@ export function defaultMemoryFileReader(cwd: string): FixMemoryFileReader {
 }
 
 export function defaultSaverWriter(storeRoot: string, cwd: string): FixSaverWriter {
+  // Route through the same canonical path `saver workspace enable` uses: in a Git
+  // repo this writes the repository-family record (forceExact=false), not an exact
+  // override that a later normal `saver workspace disable` (a family write) could
+  // never clear. writeActivation holds the activation lock internally.
   return (rec) =>
-    withActivationLock(storeRoot, () =>
-      writeExactRecord(storeRoot, encodeWorkspaceKey(cwd), { ...rec, scope: "exact" }),
-    );
+    writeActivation(storeRoot, resolveActivationScope(cwd, false), rec.enabled, rec.mode);
 }
 
 export type RunSavingsFixInput = {

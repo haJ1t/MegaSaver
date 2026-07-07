@@ -223,6 +223,46 @@ describe("runSavingsFix — apply mode (entitled)", () => {
     expect(defaultSaverReader(root, cwd)()).toEqual({ enabled: true, mode: "balanced" });
   });
 
+  it("apply inside a Git repo writes the FAMILY scope and a normal disable turns it off", async () => {
+    const { execFileSync } = await import("node:child_process");
+    const { mkdtempSync: mkTmp } = await import("node:fs");
+    const { defaultSaverReader, defaultSaverWriter } = await import(
+      "../../src/commands/savings/fix.js"
+    );
+    const { readExactRecord, resolveActivationScope, readActivationMode, writeActivation } =
+      await import("@megasaver/context-gate");
+    const { encodeWorkspaceKey } = await import("@megasaver/shared");
+
+    const gitDir = mkTmp(join(tmpdir(), "megasaver-fix-git-"));
+    // Bare `git init` (no commit) is enough: the resolver reads .git/HEAD +
+    // objects/ directly, it never spawns git. If git is missing this throws and
+    // the run is BLOCKED — we do not silently pass.
+    execFileSync("git", ["init"], { cwd: gitDir, stdio: "ignore" });
+
+    const code = await runSavingsFix(
+      baseInput({
+        apply: true,
+        readSaver: defaultSaverReader(root, gitDir),
+        writeSaver: defaultSaverWriter(root, gitDir),
+      }),
+    );
+
+    expect(code).toBe(0);
+    // No exact override was written — a later family disable can still clear it.
+    expect(readExactRecord(root, encodeWorkspaceKey(gitDir))).toEqual({ kind: "absent" });
+    // The resolver reports the family activation the apply wrote.
+    expect(defaultSaverReader(root, gitDir)()).toEqual({ enabled: true, mode: "balanced" });
+
+    // Mirror the canonical `saver workspace disable` (non-exact) path exactly.
+    const scope = resolveActivationScope(gitDir, false);
+    const mode = readActivationMode(root, scope, "balanced");
+    writeActivation(root, scope, false, mode);
+
+    expect(defaultSaverReader(root, gitDir)()?.enabled).toBe(false);
+
+    rmSync(gitDir, { recursive: true, force: true });
+  });
+
   it("--apply with an advice-only plan writes nothing and says so", async () => {
     const writeSaver = vi.fn();
     const code = await runSavingsFix(
