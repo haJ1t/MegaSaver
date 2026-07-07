@@ -45,3 +45,10 @@ export {
   renderTeardownCardSvg,
   renderTeardownMarkdown,
 } from "./teardown.js";
+export {
+  type BenchParity,
+  type BenchPass,
+  type BenchReport,
+  composeBenchReport,
+  renderBenchMarkdown,
+} from "./bench.js";
