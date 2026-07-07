@@ -2271,3 +2271,13 @@ user chose push+PR → branch renamed `feat/cli-mega-roi`, **PR #252** opened
 iteration. Note: local main carries the 3 pre-branch docs commits
 (8c7bc9c/5d0af28/10f37e1) unpushed — content ships via #252; after merge,
 realign local main to origin.
+
+## [2026-07-07] merge | PR #252 squash-merged — mega roi on main
+
+User approved merge. CI green (verify ubuntu 5m56s + windows 8m6s + Vercel),
+squash-merged as 5c6a60f1 `feat: Pro module 4 — subscription ROI (mega roi)
+(#252)`. Remote + local feature branch deleted; worktree removed; local main
+realigned to origin (the 3 superseded pre-branch docs commits dropped via
+rebase-skip — their amended content shipped inside the squash). Pro surface
+on main is now m1–m4. Remaining owner action unchanged: npm publish
+(changesets: next release includes `mega roi` as a minor).
