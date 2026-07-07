@@ -46,6 +46,22 @@ function dollarsFromTokens(tokens: number): number {
   return (tokens / 1_000_000) * INPUT_PRICE_PER_MTOK_USD;
 }
 
+// Map a source key (the closed `sourceKind` union) onto a `mega tools add`
+// category so the advice command is runnable. Unknown keys fall back to
+// filesystem — the advice is a hint, never a silent block.
+function toolCategoryForSource(key: string): string {
+  switch (key) {
+    case "grep":
+      return "search";
+    case "fetch":
+      return "browser";
+    case "command":
+      return "dangerous";
+    default:
+      return "filesystem";
+  }
+}
+
 export function computeFixPlan(
   events: readonly TokenSaverEvent[],
   opts: { saver: FixSaverState | null; memoryFiles: readonly FixMemoryFile[] },
@@ -94,7 +110,7 @@ export function computeFixPlan(
         title: `"${row.key}" returns ${(row.returnedShare * 100).toFixed(0)}% of context bytes and compresses poorly`,
         detail:
           "Register it with the tool router so task routing can exclude it when irrelevant (advisor; nothing is blocked silently).",
-        command: `mega tools add <project> --name "${row.key}" --category mcp --risk caution`,
+        command: `mega tools add <project> --name "${row.key}" --description "high-volume source flagged by mega savings fix" --category ${toolCategoryForSource(row.key)} --risk medium`,
         target: row.key,
         estDollarsReturned: row.dollarsReturned,
       });

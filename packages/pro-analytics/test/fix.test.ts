@@ -147,6 +147,32 @@ describe("computeFixPlan — R3 advise-tool-route", () => {
     expect(r3[0]?.target).toBe("mcp-noisy");
     expect(r3[0]?.command).toContain("mega tools add");
     expect(r3[0]?.command).toContain("mcp-noisy");
+    // The command must be runnable against `mega tools add`: real flags, a
+    // description, a valid risk, and a category from the closed schema. The
+    // "mcp-noisy" key is not a real sourceKind, so it falls back to filesystem.
+    expect(r3[0]?.command).toContain("--risk medium");
+    expect(r3[0]?.command).toContain("--description");
+    expect(r3[0]?.command).toContain("--category filesystem");
+    expect(r3[0]?.command).not.toContain("--category mcp");
+    expect(r3[0]?.command).not.toContain("--risk caution");
+  });
+
+  it("maps a real sourceKind to a valid tools category (command → dangerous)", () => {
+    const chatty = [
+      ...events(20, { sourceKind: "command", label: "exec", returnedBytes: 10_000 }),
+      ...events(20, {
+        sourceKind: "file",
+        label: "read",
+        returnedBytes: 10_000,
+        bytesSaved: 90_000,
+        rawBytes: 100_000,
+      }),
+    ];
+    const plan = computeFixPlan(chatty, { saver: SAVER_ON, memoryFiles: [] });
+    const r3 = plan.actions.find((a) => a.kind === "advise-tool-route" && a.target === "command");
+    expect(r3?.command).toContain('--name "command"');
+    expect(r3?.command).toContain("--category dangerous");
+    expect(r3?.command).toContain("--risk medium");
   });
 
   it("does not fire below the event floor", () => {
