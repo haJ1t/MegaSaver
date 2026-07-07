@@ -2421,3 +2421,30 @@ with a prod-key-signed test license: `mega savings fix` renders the plan;
 on rerun. Tag `v1.8.0` pushed → release.yml standalone bundle. The 1.x
 program's first post-lock milestone is done: 1.8 teardown SHIPPED same day
 as modules 4–5. Next per locked program: **1.9 `mega bench`**.
+
+## [2026-07-07] feature | mega bench (Pro module 7) built — worktree-feat-cli-bench
+
+HIGH-risk module (double child spawn) via subagent-driven TDD. **The review
+machine caught TWO criticals before merge:**
+1. A crashed saver pass reported MAXIMAL savings next to "did not complete"
+   — incomplete passes now FORCE savings to 0 + "not measured" note
+   (1960c78e; the honesty promise breaks exactly at crash time otherwise).
+2. Eager permission loading in run()'s argument list crashed the FREE path
+   on a malformed permissions.yaml (uncaught PolicyLoadError, reproduced on
+   dist) — now lazy/memoized/fail-closed; `policy_load_failed` IS a
+   PolicyDenyCode (deny-code.ts documents it for exactly this), so bench
+   renders exec's byte-identical denial line (d7429bd4).
+Also fixed en route: spec-mandated double-run disclosure was missing from
+the methodology; raw-vs-saver attribution + savings math were unpinned
+(swap mutants survived); `--json --md` polluted stdout; "vitest" as a test
+fixture command self-classifies confidently from the command string alone
+(classify.ts regex) — fixtures must use neutral commands. Architecture
+notes: `runChild` exported from context-gate (90 subtle lines, reuse over
+replication; comment carries "callers MUST gate first"); @megasaver/stats
+is a FORBIDDEN CLI dep so the no-record invariant is pinned via
+chunk-persist spy + upstream no-trace guard + structural unreachability.
+Dry-check verdict **dry** (revert-based pin checks; bench/exec denial
+byte-compare on real dist). Evidence: TURBO_FORCE verify green ×2; binary
+smoke incl. live savingsNote on tiny `ls` output and dangerous_pattern
+denial. [[entities/cli]] module-7 bullet added. Pending: merge decision +
+1.9.0.

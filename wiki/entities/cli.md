@@ -511,7 +511,7 @@ now pre-filters `entry.approval !== "approved"` before scope/session checks.
 Only approved memory flows into agent config files. GUI mirror
 (`apps/gui/bridge/connector-context.ts`) carries the same filter.
 
-## Pro tier — `mega license`, `mega savings`, `mega roi`, `mega teardown` (modules 1–6)
+## Pro tier — `mega license`, `mega savings`, `mega roi`, `mega teardown`, `mega bench` (modules 1–7)
 
 Entitlement-gated Pro analytics: offline Ed25519 license via
 `mega license {activate,status}`; every Pro command gates FIRST on
@@ -559,6 +559,22 @@ zero events read), then lazy-imports the proprietary
   (`totalReturnedBytes === 0`). 21 TDD tests (13 pure + 8 CLI). Accepted
   minors (deliberate): non-atomic double write + raw ENOENT on missing
   `--out` (both match the savings-export sibling convention).
+- `mega bench [--mode m] [--assert] [--md <file>] [--force] [--json] --
+  <cmd>` — module 7 (2026-07-07, spec `2026-07-07-bench-design.md`, risk
+  HIGH): runs the command TWICE (raw, then through an unpersisted
+  `filterOutput`) and reports tokens kept out of context, wall-time
+  overhead, and an exit+classified-signal parity verdict; `--assert` = CI
+  gate. Composes the SAME `evaluateCommand` allow-list as exec (lazy,
+  memoized, fail-closed permission load — a malformed permissions.yaml
+  yields exec's byte-identical `command_denied: policy_load_failed`, never
+  a crash); spawn/capture reuses context-gate's now-exported `runChild`.
+  **Records NOTHING** (no events/chunks/traces — bench never skews m1–m6
+  analytics; persist-spy + upstream no-trace guard + stats structurally
+  unreachable). Honesty invariants: incomplete pass → savings FORCED 0 +
+  "not measured"; saver>raw → "no net savings" note; double-run
+  side-effect disclosure in methodology + README; raw-vs-saver
+  attribution pinned. 31 TDD tests (15 engine + 16 CLI). `--json` stdout
+  is a single JSON document (`wrote` line → stderr).
 
 ## Related
 
