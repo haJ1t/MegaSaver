@@ -37,7 +37,9 @@ export function composeTeardown(
   const headline = computeWasteHeadline(events);
   const savedTokens = tokensFromBytes(headline.totalBytesSaved);
   const culprits = computeWasteBreakdown(events, { by: "source" })
-    .sort((a, b) => b.returnedShare - a.returnedShare || (a.key < b.key ? -1 : 1))
+    .sort(
+      (a, b) => b.returnedShare - a.returnedShare || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
+    )
     .slice(0, TOP_CULPRITS)
     .map((r) => ({
       key: r.key,
@@ -127,7 +129,7 @@ export function renderTeardownMarkdown(report: TeardownReport): string {
   lines.push("## Methodology");
   lines.push("");
   lines.push(
-    `Dollar figures use a flat $${INPUT_PRICE_PER_MTOK_USD}/MTok input price and are estimates. Token counts are byte-derived (≈4 bytes/token) from locally recorded events. Sources are generic kinds — no paths, project names, or file contents appear in this document.`,
+    `Dollar figures use a flat $${INPUT_PRICE_PER_MTOK_USD}/MTok input price and are estimates. Token counts are byte-derived (≈4 bytes/token) from locally recorded events. Sources are generic kinds — no project paths, project names, or file contents appear in this document (memory-file advice shows generic filenames only).`,
   );
   lines.push("");
   return lines.join("\n");

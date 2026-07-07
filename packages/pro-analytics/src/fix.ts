@@ -46,6 +46,10 @@ function dollarsFromTokens(tokens: number): number {
   return (tokens / 1_000_000) * INPUT_PRICE_PER_MTOK_USD;
 }
 
+// Titles flow into shareable teardown output; a caller-supplied path must
+// never leak beyond its basename.
+const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
+
 // Map a source key (the closed `sourceKind` union) onto a `mega tools add`
 // category so the advice command is runnable. The tool router hard-blocks the
 // dangerous/deploy/database categories from every route regardless of risk,
@@ -137,7 +141,7 @@ export function computeFixPlan(
       actions.push({
         kind: "advise-compress-memory-file",
         appliable: false,
-        title: `${f.path} is ${Math.round(f.bytes / 1024)}KB — loaded into every session`,
+        title: `${baseName(f.path)} is ${Math.round(f.bytes / 1024)}KB — loaded into every session`,
         detail: "Compress or split it; a product memory-file compressor ships as its own module.",
         command: null,
         target: f.path,

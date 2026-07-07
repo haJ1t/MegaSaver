@@ -60,6 +60,15 @@ describe("composeTeardown — culprits", () => {
     expect(r.culprits.map((c) => c.key)).not.toContain("a"); // smallest share dropped
   });
 
+  it("ties in returned share break alphabetically by key", () => {
+    const tied = [
+      ...events(2, { sourceKind: "zeta", returnedBytes: 5_000 }),
+      ...events(2, { sourceKind: "alpha", returnedBytes: 5_000 }),
+    ];
+    const r = composeTeardown(tied, { saver: SAVER_ON, memoryFiles: [] });
+    expect(r.culprits.map((c) => c.key)).toEqual(["alpha", "zeta"]);
+  });
+
   it("empty events → zero headline, no culprits, no NaN", () => {
     const r = composeTeardown([], { saver: SAVER_ON, memoryFiles: [] });
     expect(r.culprits).toHaveLength(0);
@@ -131,6 +140,16 @@ describe("privacy sweep — hostile inputs never leak", () => {
       expect(out).not.toContain("passwords");
       expect(out).not.toContain("<script>");
     }
+  });
+
+  it("a memory-file advice title shows only the basename, never the directory", () => {
+    const report = composeTeardown(events(3), {
+      saver: SAVER_ON,
+      memoryFiles: [{ path: "/Users/victim/secret-proj/CLAUDE.md", bytes: 20_000 }],
+    });
+    const md = renderTeardownMarkdown(report);
+    expect(md).not.toContain("secret-proj");
+    expect(md).toContain("CLAUDE.md");
   });
 
   it("a hostile sourceKind is XML-escaped in the SVG (defense in depth)", () => {
