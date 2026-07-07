@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { compressProse } from "../src/compress/prose.js";
+import { compressProse as compressProseFromIndex } from "../src/index.js";
 
 // ─── fixtures ────────────────────────────────────────────────────────────────
 
@@ -140,5 +141,14 @@ describe("compressProse", () => {
       expect(out).toContain("This is a short doc");
       expect(out).not.toMatch(/… \[/);
     });
+  });
+});
+
+describe("compressProse public export", () => {
+  it("is reachable from the package entry and compresses", () => {
+    const doc = `${"# H\n"}${"para one\n\npara two\n\npara three\n\npara four\n\npara five\n\npara six\n"}`;
+    const out = compressProseFromIndex(doc);
+    expect(out).toContain("# H");
+    expect(out).toContain("… [");
   });
 });
