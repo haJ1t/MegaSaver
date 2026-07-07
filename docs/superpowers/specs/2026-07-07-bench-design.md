@@ -32,10 +32,17 @@ verdict. Shareable report; `--assert` turns it into a CI regression gate
    `runOutputExecCommand`; it composes the gate + spawn/capture +
    `filterOutput` (no persistence) directly.
 3. **Parity = exit code AND classified signal.** Pass A/B exit codes must
-   match AND the output-filter classification/parser summary of both
-   outputs must match. If BOTH classify as unknown → exit-code-only parity
-   with an explicit honesty note in the report. Broken parity is reported
-   as possibly-nondeterministic, never hidden.
+   match AND the classified signal of both outputs must match. v1 signal
+   (plan-time precision): the CONFIDENT `classifyOutput` category
+   (`isConfidentClassification`; below the 0.5 floor → null/unknown) —
+   exit codes carry the real pass/fail outcome (test tools exit non-zero
+   on failure), the category guards tool-output identity. Parser-level
+   count parity (e.g. identical vitest pass/fail counts) is a v2
+   refinement, noted in Non-goals. If BOTH signals are unknown →
+   exit-code-only parity with an explicit honesty note. If EITHER pass
+   ended in a spawn failure or timeout (`exitCode === null`) → parity is
+   NOT claimed (`ok = false`, "run did not complete" note). Broken parity
+   is reported as possibly-nondeterministic, never hidden.
 4. **Fixed order B (raw) then A (saver), disclosed.** The methodology
    section states the ordering and the warm-cache bias it may introduce.
    Single pair only (no N-repeat statistics in v1).
@@ -132,11 +139,17 @@ BenchReport = {
 6. NO store writes anywhere: no events, no chunk sets, no saver records.
    Spy-enforced.
 
-Flags: `--md <file>`, `--force`, `--assert`, `--json`, `--store <dir>`
-(the store is used ONLY for the entitlement check and project
-permissions). No `--intent` flag and no sessionId positional — bench
-never enters the ranking pipeline and records nothing. Positionals after
-`--` = the command. Register `bench` in `main.ts` (alphabetical).
+Flags: `--mode safe|balanced|aggressive` (the saver settings the A pass
+filters with; default `balanced`; closed-enum validated via
+`tokenSaverModeSchema` like `session saver enable`), `--md <file>`,
+`--force`, `--assert`, `--json`, `--store <dir>` (the store is used ONLY
+for the entitlement check and project permissions). No `--intent` flag
+and no sessionId positional — bench never enters the ranking pipeline and
+records nothing. Positionals after `--` = the command. Register `bench`
+in `main.ts` (alphabetical). Reuse note: the child spawn/capture semantics
+come from EXPORTING context-gate's existing `runChild` (currently private
+in run-command.ts) rather than replicating its 90 lines of
+timeout/max-bytes/kill-grace handling.
 
 ### 3. Docs + changeset
 
@@ -181,7 +194,8 @@ persistence on any path).
 ## Non-goals (deferred)
 
 Agent-session benchmarking; N-repeat statistical runs; savings/overhead
-threshold asserts; SVG card; recording bench history; GUI surface;
+threshold asserts; parser-count-level parity (identical vitest pass/fail
+counts — v2); SVG card; recording bench history; GUI surface;
 Windows-specific timing calibration.
 
 ## Slices
