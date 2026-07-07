@@ -19,7 +19,7 @@ describe("README Proxy Mode compliance (D8)", () => {
   });
 
   it("uses the approved category-comparison one-liner", () => {
-    expect(readme).toContain("Others prune output. MegaSaver prunes with your project’s memory.");
+    expect(readme).toContain("Others prune output. Mega Saver prunes with your project's memory.");
   });
 
   it("explains Proxy Mode is opt-in", () => {

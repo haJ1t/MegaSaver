@@ -20,6 +20,7 @@ import { outputCommand } from "./commands/output/index.js";
 import { packCommand } from "./commands/pack/index.js";
 import { projectCommand } from "./commands/project.js";
 import { proxyCommand } from "./commands/proxy/index.js";
+import { roiCommand } from "./commands/roi.js";
 import { rulesCommand } from "./commands/rules/index.js";
 import { savingsCommand } from "./commands/savings/index.js";
 import { scanCommand } from "./commands/scan.js";
@@ -58,6 +59,7 @@ export const mainCommand = defineCommand({
     project: projectCommand,
     proxy: proxyCommand,
     daemon: daemonCommand,
+    roi: roiCommand,
     rules: rulesCommand,
     savings: savingsCommand,
     session: sessionCommand,

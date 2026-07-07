@@ -11,9 +11,11 @@ sources:
   - docs/superpowers/specs/2026-06-12-phase9-connectors-design.md
   - docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design.md
   - docs/superpowers/specs/2026-06-25-intent-aware-hook-design.md
+  - docs/superpowers/specs/2026-07-06-pro-entitlement-design.md
+  - docs/superpowers/specs/2026-07-07-pro-roi-design.md
 status: published
 created: 2026-05-05
-updated: 2026-06-26
+updated: 2026-07-07
 ---
 
 # `@megasaver/cli`
@@ -508,6 +510,26 @@ wrapper; missing/non-zero `gh` → exit 1). Print-only path is unit-tested.
 now pre-filters `entry.approval !== "approved"` before scope/session checks.
 Only approved memory flows into agent config files. GUI mirror
 (`apps/gui/bridge/connector-context.ts`) carries the same filter.
+
+## Pro tier — `mega license`, `mega savings`, `mega roi` (launch wave + module 4)
+
+Entitlement-gated Pro analytics: offline Ed25519 license via
+`mega license {activate,status}`; every Pro command gates FIRST on
+`checkEntitlement("savings-analytics")` (free → honest upsell + exit 0,
+zero events read), then lazy-imports the proprietary
+`@megasaver/pro-analytics` (source: specs/2026-07-06-pro-entitlement-design.md).
+
+- `mega savings {history,export,insights,forecast}` — modules 1–3
+  (PRs #237/#238/#240, launch wave 2026-07-06).
+- `mega roi [--price <n|$n>] [--json] [--store <dir>]` — module 4
+  (2026-07-07, spec `2026-07-07-pro-roi-design.md`): top-level conversion
+  command; current UTC month's measured savings ÷ Pro price
+  (`PRO_PRICE_USD_PER_MONTH = 7.99`, site-canonical; `--price` boundary-parsed)
+  as an ROI multiple. `computeRoi` wraps m3's `forecastSavings` (same dollar
+  model). Honesty invariants: displayed multiples FLOOR to one decimal (a
+  not-paid state never renders "1.0×"), on-pace projection labeled `(est.)`,
+  `paidForItself = roiSoFar >= 1`, honest empty/ROI<1 lines. 16 TDD tests
+  (6 pure + 10 CLI incl. gate spies + near-break-even regression).
 
 ## Related
 

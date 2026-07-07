@@ -88,6 +88,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 
 - [[syntheses/mega-saver-product]] — what the product is, six subsystems, v0.1 slice.
 - [[syntheses/gtm-plan-2026-07]] — GTM & monetization plan (3-element framework applied; decisions locked 2026-07-05: open-core Pro $10–15/mo, TR+EN parallel; Phase 0 = sellability).
+- [[syntheses/pro-differentiation-portfolio]] — subscription differentiation portfolio, realigned 2026-07-07 to the shipped launch wave (#231–#251): Pro m1–m3 live (history/insights/forecast), free proof surface live; next sequence roi → fix → teardown → bench; $7.99-vs-$10–15 price-drift flag. Awaiting module-4 pick → spec cycle.
 - [[syntheses/post-v1.1-roadmap]] — post-v1.1 arc (PRs #102–#110 resolved: stats, skill-packs, Windows port + follow-ups) + remaining work, priority-ordered (npm publish gap, conventions:sync, GUI packaging, i18n, fikri §16 backlog).
 - [[syntheses/contextops-roadmap]] — **strategic Phase 0–10 roadmap** (DIMMEM/LAMR/FORGE), **all 10 phases shipped** on `main` (PRs #114–#123, 2026-06-12); MCP surface 4 → 25 tools (26 with the v1.2 `proxy_search_code`). Keeps the original 22-agent-audit done/partial/gap framing for the historical record.
 - [[syntheses/release-history]] — full chronological release/status narrative (every PR, critic round, process metric, open-backlog note) for Phase 9/10, v1.1.0, v1.0, AA1 BB1–BB7a, v0.3, v0.2. Split out of `index.md` on 2026-07-04 to keep the catalog lean; the `## Status` section below is the one-line-per-release digest.
@@ -164,6 +165,7 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 > [[syntheses/release-history]] on 2026-07-04. One line per release below;
 > follow the link for the complete history.
 
+- **v1.5.0 — Pro launch wave** — versioned 2026-07-06 (#231–#251; npm publish pending, owner blocker): entitlement seam + 3 Pro analytics modules (`savings history/insights/forecast`), free proof surface (headline, GUI share card, `mega init`, `mega gui`), landing + /pro + Gumroad checkout live at megasaver.dev ($7.99/mo).
 - **Phase 10 — Team/Cloud (local approval slice)** — SHIPPED 2026-06-12. Agent-suggests → human-approves memory gate; `approve_memory` (24 → 25 MCP tools); cloud SaaS deferred. Roadmap complete through all 10 phases.
 - **Phase 9 — Multi-Agent Connectors** — SHIPPED 2026-06-12. `agentIdSchema` 5→8 (continue/gemini/windsurf); 3 new flat-file targets; `mega connector list`/`doctor`.
 - **v1.1.0** — SHIPPED 2026-06-04. Advanced-roadmap release; post-v1.0 arc PRs #80–#100 (context-gate extract, CI pipeline, output-filter parsers, policy permissions, GUI chart).

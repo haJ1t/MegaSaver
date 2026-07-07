@@ -2179,3 +2179,95 @@ serving + frontend token). HIGH-risk (new public CLI command + npm packaging).
   `mega gui` curl proof — `/` 200 html, `/api/health` no-token 401 / `?token=` 200 /
   Bearer 200 / same-origin 200 / foreign-origin 403 / bound addr 127.0.0.1.
 - Reviewers pending (HIGH): code-reviewer + critic + security-reviewer (not yet run).
+
+## [2026-07-06] query | pro-differentiation-portfolio
+
+User asked for world-class differentiation ideas for the paid subscription
+(new features + evolving shipped ones). Read gtm-plan-2026-07,
+mega-saver-product, contextops-roadmap + the two 2026-07-06 Pro specs.
+Filed the answer as [[syntheses/pro-differentiation-portfolio]] (6 feature
+evolutions E1–E6, 6 new module candidates N1–N6, Free/Pro/Team packaging
+rule, GTM-Faz-0-compatible sequence). Brainstorm stage only — no spec, no
+code. Next: user picks item → superpowers spec cycle. Index updated.
+
+## [2026-07-07] update | pro-differentiation-portfolio realigned to launch wave
+
+User: "Pro'ya ekledik; koda göre planı düzelt." Re-checked repo: PRs #231–#251
+shipped AFTER the portfolio was written — `mega gui` (npm), savings headline,
+GUI share card, `mega init`, landing, entitlement seam, Pro m1 history, m2
+insights, m3 **forecast** (#240 — the slot the portfolio had pitched `mega
+roi` into; the forecast spec explicitly deferred ROI + anomaly alerts), /pro
+pricing, prod Ed25519 key, v1.5.0 versioned, site + Gumroad checkout live.
+Rewrote [[syntheses/pro-differentiation-portfolio]]: reality-check section;
+`mega roi` re-slotted as module-4 top pick ($7.99 math → 10.9×); E4 share-card
+half marked done (teardown remains); N7 added (anomaly alerts + persistent
+budgets, from forecast-spec non-goals); sequence rewritten (step 0 = owner npm
+publish blocker; Tauri item dropped — `mega gui` covers it). Flagged price
+drift ($7.99 live vs locked $10–15) in the portfolio AND
+[[syntheses/gtm-plan-2026-07]] (needs user decision). Index: portfolio line
+updated + v1.5.0 status line added. Gap noted: [[syntheses/release-history]]
+lacks the full v1.5.0 narrative (follow-up candidate).
+
+## [2026-07-07] feature | gumroad-custom-landing-page
+
+Built + published a custom Gumroad landing page for Mega Saver Pro
+(product `txsikq` → https://megasaver.gumroad.com/l/pro). File:
+`landing.html` at repo root (self-contained; "token ledger" design,
+light+dark themes, mono-display type, animated token-statement hero).
+Copy strictly limited to the shipped Pro surface: `mega savings
+history/insights/forecast`, CSV/JSON export, offline Ed25519 license,
+MIT core free (source: live product description; GTM Faz-0 "landing"
+item in [[syntheses/gtm-plan-2026-07]]). Buy elements carry
+`data-gumroad-option="Pro"` + `data-gumroad-recurrence="monthly"`;
+live fields (name/price/description) server-interpolated. Verified:
+sanitizer report clean (only inert meta/title strips), live render
+both themes + FAQ/toggle/reveals, true-390px mobile emulation shows
+zero horizontal overflow (CDP probe), and buy click reaches Gumroad
+checkout preselected Pro/Monthly/US$7.99 (creator test-purchase
+notice; Pay not clicked). Page replaces the native product page —
+`gumroad products page clear txsikq --yes` restores the default.
+
+## [2026-07-07] decision | price = site price ($7.99/mo) + module-4 pick = mega roi
+
+User locked two decisions: (1) Pro price stays as published on the site —
+$7.99/mo (Gumroad) canonical; the GTM $10–15 band revised
+([[syntheses/gtm-plan-2026-07]] drift flag resolved in place). (2) Module 4 =
+**mega roi** (portfolio E1). Portfolio status updated; superpowers
+brainstorming started for the roi spec same session.
+
+## [2026-07-07] plan | mega roi spec + implementation plan written
+
+Brainstormed (4 user decisions: top-level `mega roi`, saved-so-far +
+month-end projection scope, m1–m3 dollar model + "(est.)", honest ROI<1
+message / no coupon mechanics in CLI), spec committed
+(`docs/superpowers/specs/2026-07-07-pro-roi-design.md`, 8c7bc9c), plan
+written (`docs/superpowers/plans/2026-07-07-pro-roi-plan.md`): 4 TDD tasks —
+pure `computeRoi` (wraps forecastSavings) → gated `runRoi` CLI → register +
+README + changeset → `pnpm verify` + e2e smoke. Execution next in worktree
+`feat/cli-mega-roi`; reviewers code-reviewer + critic (MEDIUM, m3 bar).
+
+## [2026-07-07] feature | mega roi (Pro module 4) built — worktree-feat-cli-mega-roi
+
+Subagent-driven execution of the 4-task plan (fresh implementer + spec
+reviewer + quality reviewer per task; fix loops re-reviewed): computeRoi
+pure fn (2644ef03) → gated runRoi CLI (e9e8f21 + floor-display fix
+a36193c) → registration/README/changeset (2adf7b51) → copy fixes
+(d1fe09a/f283faa) + "(est.)" headline label (21ac77e/3e21a20). Review
+catches worth remembering: (1) toFixed(1) rounded roiSoFar∈[0.95,1) up to
+"1.0×" NEXT TO "hasn't paid for itself yet" — display now floors (repo
+under-count convention), near-break-even regression test added; (2) README
+example "$49 = 6.2×" failed its own floored division — all doc examples now
+derive from one consistent set; (3) pre-existing main bug fixed en route:
+readme-proxy-mode.test.ts asserted pre-#251 copy (42f94f8) — masked on main
+by turbo cache replay (README not in the test task's turbo inputs). Final
+holistic review: 3-lens workflow (code-reviewer + adversarial critic +
+honesty/docs), 3/3 approve, 0 confirmed findings, 2 minors fixed. Evidence:
+TURBO_FORCE `pnpm verify` green; binary e2e smoke with a prod-key-signed
+short-expiry test license (upsell → activate → honest empty state → valid
+--json RoiReport → bad --price exit 1). [[entities/cli]] Pro-tier section
+added. Closure: final TURBO_FORCE verify green after the last code commit;
+user chose push+PR → branch renamed `feat/cli-mega-roi`, **PR #252** opened
+(https://github.com/haJ1t/MegaSaver/pull/252). Worktree preserved for PR
+iteration. Note: local main carries the 3 pre-branch docs commits
+(8c7bc9c/5d0af28/10f37e1) unpushed — content ships via #252; after merge,
+realign local main to origin.
