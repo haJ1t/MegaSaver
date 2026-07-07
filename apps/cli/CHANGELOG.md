@@ -1,5 +1,13 @@
 # @megasaver/cli
 
+## 1.7.0
+
+### Minor Changes
+
+- aa52164: `mega savings fix` — turns waste findings into a deterministic fix plan;
+  `--apply` executes the safe fixes (workspace saver settings only) and the
+  rest ship as ready-to-run advice.
+
 ## 1.6.1
 
 ### Patch Changes
