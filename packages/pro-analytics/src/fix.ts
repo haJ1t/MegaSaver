@@ -142,8 +142,8 @@ export function computeFixPlan(
         kind: "advise-compress-memory-file",
         appliable: false,
         title: `${baseName(f.path)} is ${Math.round(f.bytes / 1024)}KB — loaded into every session`,
-        detail: "Compress or split it; a product memory-file compressor ships as its own module.",
-        command: null,
+        detail: "Run mega compress <file> to preview a reversible, backed-up compression.",
+        command: `mega compress ${baseName(f.path)}`,
         target: f.path,
         estDollarsReturned: dollarsFromTokens(tokensFromBytes(f.bytes)),
       });
