@@ -520,6 +520,7 @@ mega <command> [subcommand] [flags]
 | `mega audit` | windowed token-savings summary |
 | `mega license` | activate / status / deactivate a Mega Saver Pro license |
 | `mega savings` | historical savings analytics + export (Pro) |
+| `mega teardown` | share-safe waste exposé — md + SVG card (Pro) |
 | `mega roi` | monthly savings vs Pro price — ROI multiple (Pro) |
 | `mega doctor` | diagnose bridge / hooks / connector setup |
 
@@ -676,6 +677,9 @@ mega roi --price $5               # compare against a custom price
 
 mega savings fix                  # turn waste findings into fixes (Pro)
 mega savings fix --apply          # apply the safe ones (saver settings only)
+
+mega teardown                     # publish-ready waste exposé (Pro)
+mega teardown --out ./posts --force
 ```
 
 - `mega savings insights [--by source|label]` — where your tokens are still
@@ -689,6 +693,12 @@ mega savings fix --apply          # apply the safe ones (saver settings only)
   applies the safe ones itself (workspace saver enable/bump — Mega Saver's
   own settings, never your repo files) and prints ready-to-run advice for
   the rest.
+- `mega teardown [--out <dir>] [--force] [--json]` — composes a publish-ready exposé
+  (`teardown.md` + `teardown.svg`): the bill, per-source per-turn averages,
+  what Mega Saver clawed back, and the treatments. Share-safe by
+  construction — generic source names and numbers only, never paths or
+  project names. Refuses to overwrite existing files without `--force`.
+  `--json` prints the share-safe report to stdout and writes no files.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
 and exits cleanly — it never errors, and the free CLI is unaffected. Keys are

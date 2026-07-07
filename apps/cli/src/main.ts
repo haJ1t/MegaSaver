@@ -26,6 +26,7 @@ import { savingsCommand } from "./commands/savings/index.js";
 import { scanCommand } from "./commands/scan.js";
 import { sessionCommand } from "./commands/session/index.js";
 import { taskCommand } from "./commands/task/index.js";
+import { teardownCommand } from "./commands/teardown.js";
 import { toolsCommand } from "./commands/tools/index.js";
 import { traceCommand } from "./commands/trace/index.js";
 
@@ -74,6 +75,7 @@ export const mainCommand = defineCommand({
     index: indexCommand,
     context: contextCommand,
     task: taskCommand,
+    teardown: teardownCommand,
     tools: toolsCommand,
     trace: traceCommand,
   },

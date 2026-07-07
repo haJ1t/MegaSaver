@@ -2373,3 +2373,29 @@ Team tier (post-2.0), budgeted multi-agent (CRITICAL), i18n tr. Table in
 [[syntheses/pro-differentiation-portfolio]]. Stale-note fix en route:
 post-v1.1-roadmap's "persistent proxy routing pending review" is outdated
 (#219 merged). Next: `mega teardown` brainstorm.
+
+## [2026-07-07] feature | mega teardown (Pro module 6) built — worktree-feat-cli-teardown
+
+Subagent-driven TDD (4 plan tasks; Task-3's 18-line copy diff was folded
+into the final 3-lens review instead of its own round). **Privacy was the
+headline promise and the review machine earned its keep again:**
+- Task-1 quality lens EMPIRICALLY proved the one real leak vector —
+  `FixMemoryFile.path` reached shareable markdown verbatim via module-5 R5
+  titles; fixed AT THE SOURCE (fix.ts `baseName`, 1e825419) so the
+  guarantee is engine-level, not wiring-level. Hostile-path sweeps pin it
+  in both fix and teardown tests.
+- Final 3-lens review: 3/3 approve, 0 confirmed findings; all three lenses
+  independently traced every rendered field to the closed `sourceKind`
+  enum + basenamed literals + numbers (readEvents safeParse drops
+  non-conforming lines, so hostile keys can't even enter).
+- Post-approve polish: md/svg empty states unified on one signal
+  (`totalReturnedBytes === 0`, 4064eacd + f6085fdc — the implementer
+  itself flagged the SVG half); README documents `--json`.
+- Accepted minors (deliberate, sibling-convention): non-atomic double
+  write; raw ENOENT on missing `--out`; compactTokens 999_999 → "1000.0k".
+Recurring gotcha logged AGAIN: `changeset version` reserializes
+apps/cli/package.json off-format → repo lint red until `lint:fix`
+(c351c68). **Add lint:fix to the release ritual.** Evidence: TURBO_FORCE
+verify green; binary smoke (upsell → both files → 5 headings → exists-guard
+listing both paths → --force → valid --json). [[entities/cli]] module-6
+bullet added. Pending: final verify re-run + merge decision.

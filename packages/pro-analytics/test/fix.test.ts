@@ -311,6 +311,17 @@ describe("computeFixPlan — R5 advise-compress-memory-file", () => {
     expect(r5[0]?.appliable).toBe(false);
     expect(r5[0]?.estDollarsReturned).toBeGreaterThan(0);
   });
+
+  it("titles show only the basename of a caller-supplied path", () => {
+    const plan = computeFixPlan([], {
+      saver: SAVER_ON,
+      memoryFiles: [{ path: "/Users/victim/secret-proj/CLAUDE.md", bytes: 20_000 }],
+    });
+    const r5 = plan.actions.filter((a) => a.kind === "advise-compress-memory-file");
+    expect(r5[0]?.title).toContain("CLAUDE.md");
+    expect(r5[0]?.title).not.toContain("secret-proj");
+    expect(r5[0]?.target).toBe("/Users/victim/secret-proj/CLAUDE.md");
+  });
 });
 
 describe("computeFixPlan — plan shape", () => {

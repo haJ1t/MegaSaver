@@ -37,3 +37,11 @@ export {
   FIX_WEAK_RATIO,
   computeFixPlan,
 } from "./fix.js";
+export {
+  type TeardownAdvice,
+  type TeardownCulprit,
+  type TeardownReport,
+  composeTeardown,
+  renderTeardownCardSvg,
+  renderTeardownMarkdown,
+} from "./teardown.js";
