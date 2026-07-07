@@ -106,6 +106,7 @@ export type SpawnOutcome =
 
 // Exported for `mega bench` (module 7): the paired benchmark reuses this exact
 // capture (timeout/max-bytes/kill-grace) instead of replicating it.
+// Callers MUST gate via evaluateCommand BEFORE invoking — runChild itself performs no policy check.
 // Spawn the child, combine stdout+stderr in arrival order, and enforce the two
 // caller bounds (timeout, max-bytes). On either bound the child is killed but
 // the partial capture is returned (a partial chunkSet beats none, §3.5). The

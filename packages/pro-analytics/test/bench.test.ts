@@ -90,6 +90,20 @@ describe("composeBenchReport — math", () => {
     expect(r.tokensReturned).toBe(r.tokensRaw);
     expect(r.tokensSaved).toBe(0);
   });
+
+  it("saver returned MORE than raw → clamped to 0 with an honest savingsNote", () => {
+    const r = composeBenchReport("x", RAW, pass({ ...SAVER, returnedBytes: 5_000_000 }));
+    expect(r.tokensSaved).toBe(0);
+    expect(r.savingsNote).toContain("more than raw");
+    expect(renderBenchMarkdown(r)).toContain(
+      "saver returned more than raw on this pair — no net savings",
+    );
+  });
+
+  it("normal saving pair → savingsNote is null", () => {
+    const r = composeBenchReport("x", RAW, SAVER);
+    expect(r.savingsNote).toBeNull();
+  });
 });
 
 describe("renderBenchMarkdown", () => {
@@ -111,6 +125,9 @@ describe("renderBenchMarkdown", () => {
     expect(md).toContain("$3");
     expect(md).toContain("raw first, then saver");
     expect(md).toContain("single pair");
+    expect(md).toContain("900.0k");
+    expect(md).toContain("$2.70 (est.)");
+    expect(md).toContain("(20%)");
   });
 
   it("a signal with markdown metacharacters renders inside inline code", () => {

@@ -27,6 +27,7 @@ export interface BenchReport {
   dollarsSaved: number;
   overheadMs: number;
   overheadPct: number;
+  savingsNote: string | null;
   parity: BenchParity;
 }
 
@@ -51,7 +52,13 @@ export function composeBenchReport(command: string, raw: BenchPass, saver: Bench
 
   const tokensRaw = tokensFromBytes(raw.rawBytes);
   const tokensReturned = tokensFromBytes(saver.returnedBytes ?? saver.rawBytes);
+  // Clamped to 0, but never silently: a saver pass that ADDED bytes gets an
+  // explicit note so "0 saved" reads as "no net savings", not "no effect".
   const tokensSaved = Math.max(0, tokensRaw - tokensReturned);
+  const savingsNote =
+    tokensReturned > tokensRaw
+      ? "saver returned more than raw on this pair — no net savings"
+      : null;
   const overheadMs = saver.wallMs - raw.wallMs;
   return {
     command,
@@ -63,6 +70,7 @@ export function composeBenchReport(command: string, raw: BenchPass, saver: Bench
     dollarsSaved: dollarsFromTokens(tokensSaved),
     overheadMs,
     overheadPct: raw.wallMs === 0 ? 0 : overheadMs / raw.wallMs,
+    savingsNote,
     parity: { exitMatch, signalMatch, ok, note },
   };
 }
@@ -81,8 +89,8 @@ function ms(n: number): string {
   return `${Math.round(n)}ms`;
 }
 
-// Signals are classifier labels (closed vocabulary), but render them inside
-// inline code with pipe-safe spacing so a future label can't break the table.
+// Signals render inside inline code; backticks are replaced so a label can
+// never break the code span.
 function sig(s: string | null): string {
   return s === null ? "unknown" : `\`${s.replace(/`/g, "'")}\``;
 }
@@ -111,6 +119,10 @@ export function renderBenchMarkdown(report: BenchReport): string {
   lines.push(
     `Kept out of context: **${compactTokens(report.tokensSaved)} tokens ≈ ${money(report.dollarsSaved)}** per run.`,
   );
+  if (report.savingsNote !== null) {
+    lines.push("");
+    lines.push(`Note: ${report.savingsNote}`);
+  }
   lines.push("");
   lines.push("## Time");
   lines.push("");
