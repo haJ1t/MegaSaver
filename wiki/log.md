@@ -2542,3 +2542,33 @@ stack trace when the path is a dir/unreadable; 3 test-coverage gaps —
 atomic-mechanism pin, uppercase-extension accept, real mv-restore assertion).
 **Lesson: a "byte-exact backup" needs a raw file copy, never a decode→encode
 round-trip — the JS string is lossy for any non-UTF-8 input.** [[entities/cli]]
+
+## [2026-07-08] harden | mega compress — 7 review follow-ups + regression caught
+
+Cleared the 7 non-blocking follow-ups from the #256 review of `mega compress`
+(all in apps/cli/src/commands/compress.ts + tests), TDD throughout: (1) **fsync
+durability** — new `fsyncedRename` helper (fsync temp fd → rename → POSIX
+parent-dir fsync, Win-aware, post-rename dir-fsync swallowed, orphan temp
+rmSync'd on pre-rename throw) used by both the target write and the byte-exact
+backup copy; (2) skip the write when there are **no byte savings** (`worthwhile`
+guard, was writing a larger file while printing "0 saved"); (3) a dir/unreadable
+path now returns a **typed error**, not an EISDIR/EACCES stack trace; (4) new
+`compress-atomic-write.test.ts` pins temp+rename atomicity (mocked renameSync)
+and the dir-fsync swallow; write-failure recoverability test; (5) uppercase-ext
+accept; (6) the bogus "restore works" assertion now performs a real mv-restore.
+
+A **code-reviewer+critic+test-quality** pass then caught a HIGH regression the
+diff itself introduced: `fsyncedRename`'s `openSync(tmp,"r+")` **crashed EACCES
+on a read-only (0o444) source**, because `backupFile`'s `copyFileSync` gave the
+temp the source's read-only mode — reintroducing the exact stack-trace #3 killed.
+Fixed: chmod the temp writable for the fsync, then restore the source mode so the
+`.bak` is byte- AND mode-exact. A follow-up adversarial recheck flagged that the
+now-reachable path let `writeFile` **widen a private (0o600/0o400) memory file to
+0o644** on `--apply`; fixed by preserving the target's mode too (both mode
+restores best-effort, so a chmod-hostile FS never wedges after the bytes land).
+
+Evidence: `pnpm verify` green (cli tests incl. 6 new compress cases + 3 atomic;
+tsc, biome, conventions ok); each fix landed red→green. **Lesson: copyFileSync
+preserves source mode — a durable rewrite that reopens the temp "r+" or restores
+perms must handle read-only sources, and a content-only edit must never widen a
+sensitive file's permissions.** [[entities/cli]]
