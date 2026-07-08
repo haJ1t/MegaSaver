@@ -2621,3 +2621,29 @@ tsc, biome, conventions ok); each fix landed red→green. **Lesson: copyFileSync
 preserves source mode — a durable rewrite that reopens the temp "r+" or restores
 perms must handle read-only sources, and a content-only edit must never widen a
 sensitive file's permissions.** [[entities/cli]]
+
+## [2026-07-08] release | 1.10.0 live — `mega compress` (Pro module 8)
+
+`@megasaver/cli` 1.10.0 published. Ritual run: `pnpm changeset version`
+(consumed `.changeset/compress.md`, CHANGELOG entry written), staged
+deletion, `biome check --write apps/cli/package.json` (`bin` stays
+`./`-free: `"mega": "dist-bundle/mega.mjs"`), release PR #261
+(`chore(release): version packages — @megasaver/cli 1.10.0`, merge
+`c632b531`), tag `v1.10.0` pushed → `release.yml` run 28952691963
+**fully green**: GitHub Release created (`mega.mjs` +
+`mega-1.10.0.mjs` assets) AND npm publish succeeded automatically.
+
+**Ritual correction: the "owner OTP publish" step is obsolete.** The
+1.9.0 release-run failure was `E403 cannot publish over previously
+published versions: 1.9.0` — a *duplicate* publish (owner had already
+published manually before tagging), NOT a token/2FA failure. The
+`NPM_TOKEN` automation token publishes fine on its own. New ritual:
+changeset version → biome bin check → release PR → merge → push tag —
+CI does the rest. Do NOT publish manually first; that's what caused
+the 1.9.0 red run.
+
+Smoke on the published artifact: `npx @megasaver/cli@1.10.0 --version`
+→ `1.10.0`; `compress notes.md` dry-run on a real file → `Savings:
+906→81 bytes · ~206 tokens`, `--apply`/`.bak` guidance printed, exit 0.
+Next: 1.11 cache (Pro module 9) — no spec yet. [[entities/cli]]
+[[syntheses/release-history]]
