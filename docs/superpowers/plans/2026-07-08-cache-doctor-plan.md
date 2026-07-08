@@ -325,15 +325,19 @@ describe("diagnoseConversation — D1 no-cache", () => {
     expect(diagnoseConversation(cached, PER_TOKEN).d1).toBeNull();
   });
 
-  it("clamps burnedUsd at zero", () => {
-    // missed·0.9 (9000·P·0.9) < premium (10000·P·0.25) → clamp, not negative.
+  it("D1 burn is structurally non-negative (write-premium credit never exceeds read savings)", () => {
     const convo = [
       ev({ atMs: T0, messageCount: 1, inputTokens: 41_000 }),
       ev({ atMs: T0 + 60_000, messageCount: 3, inputTokens: 10_000 }),
     ];
     const r = diagnoseConversation(convo, PER_TOKEN);
+    // missed = min(10000,41000) = 10000; premium base = min(10000,41000) = 10000.
+    // burned = 10000·P·0.9 − 10000·P·0.25 = 10000·P·0.65. The premium base can
+    // never exceed `missed` and 0.9 > 0.25, so burnedUsd is always ≥ 0 — the
+    // max(0,…) is a display-contract guard, not a reachable branch.
     expect(r.d1?.missedTokens).toBe(10_000);
-    expect(r.d1?.burnedUsd).toBe(0);
+    expect(r.d1?.burnedUsd).toBeCloseTo(10_000 * PER_TOKEN * 0.65, 10);
+    expect(r.d1?.burnedUsd).toBeGreaterThan(0);
   });
 });
 
@@ -451,6 +455,10 @@ export function diagnoseConversation(
       missed += Math.min(cur.inputTokens, prevTurn.inputTokens);
       prevTurn = cur;
     }
+    // Credit the one-time cache-write premium the client never paid. `missed`
+    // always ≥ this premium base and 0.9 > 0.25, so the result is already
+    // non-negative; the max(0,…) is a display-contract guard on a user-facing
+    // dollar figure, not a reachable branch.
     const premium =
       Math.min(second.inputTokens, first.inputTokens) * perTokenUsd * (CACHE_WRITE_MULTIPLIER - 1);
     const burnedUsd = Math.max(0, missed * perTokenUsd * (1 - CACHE_READ_MULTIPLIER) - premium);
