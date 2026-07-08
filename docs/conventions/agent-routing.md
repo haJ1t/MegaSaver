@@ -35,6 +35,17 @@ Choose the lightest path that preserves quality.
 - `sonnet` — standard implementation.
 - `opus`   — architecture, deep analysis, security, complex review.
 
+## Session model by phase (Claude Code)
+
+Switch the interactive model to match the phase of work:
+
+- Planning, preparation, and thinking (brainstorming, writing plans,
+  design, exploration, review reasoning) → Fable (`claude-fable-5`).
+  Switch with `/model claude-fable-5`.
+- Implementation (writing code, tests, and edits) → Opus 4.8 in fast
+  mode (`claude-opus-4-8` with `/fast` on). Switch with
+  `/model claude-opus-4-8`, then `/fast`.
+
 ## Parallel rules
 
 - 2+ independent tasks → dispatch in single message
