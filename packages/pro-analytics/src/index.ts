@@ -67,3 +67,7 @@ export {
   MIN_CACHEABLE_TOKENS,
   diagnoseCache,
 } from "./cache-doctor.js";
+// Re-exported so the CLI's cache-doctor footer can print the house rate without
+// importing @megasaver/stats directly — stats stays a forbidden CLI dep (§3c
+// cycle guard); pro-analytics is the boundary that owns the stats edge.
+export { INPUT_PRICE_PER_MTOK_USD } from "@megasaver/stats";
