@@ -967,7 +967,9 @@ export interface FirewallEventInput {
   kind: "blocked-read" | "redacted" | "observed";
   detector: string;
   count: number;
-  sourcePath?: string;
+  // `| undefined`: callers pass zod-inferred events (absent field is
+  // `string | undefined`); exactOptionalPropertyTypes rejects `?: string`.
+  sourcePath?: string | undefined;
 }
 
 export interface FirewallReport {

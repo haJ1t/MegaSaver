@@ -7,7 +7,10 @@ export interface FirewallEventInput {
   kind: "blocked-read" | "redacted" | "observed";
   detector: string;
   count: number;
-  sourcePath?: string;
+  // `| undefined` (not just optional): callers pass zod-inferred events where
+  // an absent field is `string | undefined`, which exactOptionalPropertyTypes
+  // rejects against a plain `?: string`. The reducer already handles undefined.
+  sourcePath?: string | undefined;
 }
 
 export interface FirewallReport {
