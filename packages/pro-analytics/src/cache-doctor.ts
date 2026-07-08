@@ -85,3 +85,76 @@ export function groupConversations(events: readonly CacheUsageEvent[]): CacheUsa
   if (current.length > 0) groups.push(current);
   return groups;
 }
+
+export interface TurnMiss {
+  detector: Exclude<CacheDetector, "no-cache">;
+  rePaidTokens: number;
+  burnedUsd: number;
+}
+
+export interface ConversationDiagnosis {
+  d1: { missedTokens: number; burnedUsd: number } | null;
+  turnMisses: TurnMiss[];
+}
+
+// Turn 1 is exempt everywhere: the first cache write is the legitimate price
+// of admission, and priorWritten is 0 there anyway.
+export function diagnoseConversation(
+  convo: readonly CacheUsageEvent[],
+  perTokenUsd: number,
+): ConversationDiagnosis {
+  const first = convo[0];
+  const second = convo[1];
+  if (first === undefined || second === undefined) return { d1: null, turnMisses: [] };
+
+  const zeroCache = convo.every((e) => e.cacheReadTokens === 0 && e.cacheCreationTokens === 0);
+  const totalInput = convo.reduce((sum, e) => sum + e.inputTokens, 0);
+
+  if (zeroCache && totalInput >= D1_MIN_TOTAL_INPUT) {
+    // Counts-only cannot see the true shared prefix; min() of consecutive
+    // input loads is a conservative floor for what caching would have reused.
+    let missed = 0;
+    let prevTurn = first;
+    for (const cur of convo.slice(1)) {
+      missed += Math.min(cur.inputTokens, prevTurn.inputTokens);
+      prevTurn = cur;
+    }
+    // Credit the one-time cache-write premium the client never paid. `missed`
+    // always ≥ this premium base and 0.9 > 0.25, so the result is already
+    // non-negative; the max(0,…) is a display-contract guard on a user-facing
+    // dollar figure, not a reachable branch.
+    const premium =
+      Math.min(second.inputTokens, first.inputTokens) * perTokenUsd * (CACHE_WRITE_MULTIPLIER - 1);
+    const burnedUsd = Math.max(0, missed * perTokenUsd * (1 - CACHE_READ_MULTIPLIER) - premium);
+    return { d1: { missedTokens: missed, burnedUsd }, turnMisses: [] };
+  }
+
+  const turnMisses: TurnMiss[] = [];
+  let priorWritten = first.cacheCreationTokens;
+  let prevTurn = first;
+  for (const cur of convo.slice(1)) {
+    const triggered =
+      priorWritten >= MIN_CACHEABLE_TOKENS &&
+      cur.cacheReadTokens < MIN_CACHEABLE_TOKENS &&
+      cur.cacheCreationTokens >= MIN_CACHEABLE_TOKENS;
+    if (triggered) {
+      // Only the re-paid portion is waste: writing NEW content to cache is
+      // normal, so cap at what the conversation had already written.
+      const rePaidTokens = Math.min(cur.cacheCreationTokens, priorWritten);
+      const detector: TurnMiss["detector"] =
+        cur.model !== prevTurn.model
+          ? "model-switch"
+          : Date.parse(cur.ts) - Date.parse(prevTurn.ts) > CACHE_TTL_MS
+            ? "ttl-expiry"
+            : "unstable-prefix";
+      turnMisses.push({
+        detector,
+        rePaidTokens,
+        burnedUsd: rePaidTokens * perTokenUsd * (CACHE_WRITE_MULTIPLIER - CACHE_READ_MULTIPLIER),
+      });
+    }
+    priorWritten += cur.cacheCreationTokens;
+    prevTurn = cur;
+  }
+  return { d1: null, turnMisses };
+}
