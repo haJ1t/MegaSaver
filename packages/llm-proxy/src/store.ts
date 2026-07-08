@@ -2,10 +2,10 @@ import { appendFileSync, chmodSync, lstatSync, mkdirSync, readFileSync } from "n
 import { dirname, join } from "node:path";
 import { type ProxyUsageEvent, proxyUsageEventSchema } from "./usage-event.js";
 
-// Append-only JSONL of usage events (counts only). One line per round-trip; a
-// single-process line append is atomic enough and keeps the on-disk shape
-// greppable. Mirrors the stats overlay store's JSONL convention.
-function usagePath(storeRoot: string): string {
+// The usage log's canonical location. Exported so read-only consumers (the
+// cache doctor) can do their own tolerant per-line parse — listProxyUsage is
+// strict by design and throws on a corrupt line.
+export function proxyUsageLogPath(storeRoot: string): string {
   return join(storeRoot, "proxy-usage", "usage.jsonl");
 }
 
@@ -18,7 +18,7 @@ export async function appendProxyUsage(input: {
   event: ProxyUsageEvent;
 }): Promise<void> {
   const event = proxyUsageEventSchema.parse(input.event);
-  const path = usagePath(input.storeRoot);
+  const path = proxyUsageLogPath(input.storeRoot);
   const dir = dirname(path);
   // The metering log lives under the operator's store: keep the dir 0700 and the
   // file 0600, and refuse to append through a symlink so a planted link cannot
@@ -38,7 +38,7 @@ export async function listProxyUsage(input: {
 }): Promise<readonly ProxyUsageEvent[]> {
   let raw: string;
   try {
-    raw = readFileSync(usagePath(input.storeRoot), "utf8");
+    raw = readFileSync(proxyUsageLogPath(input.storeRoot), "utf8");
   } catch (e) {
     if (isErrno(e) && e.code === "ENOENT") return [];
     throw e;
