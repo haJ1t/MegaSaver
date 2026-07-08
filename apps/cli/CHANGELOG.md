@@ -1,5 +1,14 @@
 # @megasaver/cli
 
+## 1.10.0
+
+### Minor Changes
+
+- 79d8269: mega compress: reversible extractive compression of memory/doc files. Dry-run by
+  default (preview + token/$ savings); --apply overwrites after writing a mandatory
+  <file>.bak, atomically, behind a git-dirty guard. savings-fix R5 advice now points
+  at the command.
+
 ## 1.9.0
 
 ### Minor Changes
