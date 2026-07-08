@@ -99,6 +99,9 @@ importers:
       '@megasaver/skill-packs':
         specifier: workspace:*
         version: link:../../packages/skill-packs
+      '@megasaver/stats':
+        specifier: workspace:*
+        version: link:../../packages/stats
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17

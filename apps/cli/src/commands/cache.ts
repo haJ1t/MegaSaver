@@ -7,6 +7,7 @@ import {
   proxyUsageEventSchema,
   proxyUsageLogPath,
 } from "@megasaver/llm-proxy";
+import { INPUT_PRICE_PER_MTOK_USD } from "@megasaver/stats";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import { PRO_ANALYTICS_URL } from "./savings/index.js";
@@ -84,7 +85,7 @@ export async function runCache(input: RunCacheInput): Promise<0 | 1> {
     if (result.success) events.push(result.data);
   }
 
-  const { diagnoseCache, INPUT_PRICE_PER_MTOK_USD } = await import("@megasaver/pro-analytics");
+  const { diagnoseCache } = await import("@megasaver/pro-analytics");
   const report = diagnoseCache(events, {
     now: input.now(),
     ...(days === undefined ? {} : { days }),
