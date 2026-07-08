@@ -1,4 +1,4 @@
-import { redact } from "@megasaver/policy";
+import { redactWithFindings } from "@megasaver/policy";
 import { modeToBudget, riskLevelSchema, tokenSaverModeSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { chunkByLines } from "./chunk.js";
@@ -102,6 +102,10 @@ export type FilterOutputResult = {
   warnings?: readonly string[];
   unchanged?: { priorChunkSetId: string };
   deduped?: { suppressed: number; priorChunkSetIds: string[] };
+  firewall?: {
+    findings: ReadonlyArray<{ name: string; count: number }>;
+    observed: ReadonlyArray<{ name: string; count: number }>;
+  };
 };
 
 // Generic line grouping for the no-blind fallback; matches the default
@@ -171,8 +175,15 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
 
   const warnings: string[] = [];
 
-  const { redacted, count } = redact(raw);
-  if (count > 0) warnings.push(`redacted ${count} secret(s) before processing`);
+  const redaction = redactWithFindings(raw);
+  const { redacted } = redaction;
+  if (redaction.count > 0) {
+    warnings.push(`redacted ${redaction.count} secret(s) before processing`);
+  }
+  const firewall =
+    redaction.findings.length > 0 || redaction.observed.length > 0
+      ? { findings: redaction.findings, observed: redaction.observed }
+      : undefined;
 
   const normalized = collapseSimilar(collapseRepeatedLines(normalize(redacted)));
   // Classify after ANSI strip, before compressor dispatch (§10.2).
@@ -218,6 +229,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
         returnedTokens,
         bytesSaved,
         savingRatio: rawBytes === 0 ? 0 : bytesSaved / rawBytes,
+        ...(firewall !== undefined ? { firewall } : {}),
       };
       return warnings.length > 0 ? { ...base, warnings } : base;
     }
@@ -359,6 +371,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
     bytesSaved,
     savingRatio,
     ...(trace !== undefined ? { trace } : {}),
+    ...(firewall !== undefined ? { firewall } : {}),
   };
   if (warnings.length > 0) return { ...result, warnings };
   return result;
