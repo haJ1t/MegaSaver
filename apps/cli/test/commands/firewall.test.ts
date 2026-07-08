@@ -168,3 +168,12 @@ describe("runFirewall — entitled", () => {
     expect(out.join("\n")).toContain("Context firewall — last");
   });
 });
+
+describe("firewall command registration", () => {
+  it("is registered as a `mega firewall` subcommand", async () => {
+    const { mainCommand } = await import("../../src/main.js");
+    const sub = (mainCommand as { subCommands?: Record<string, unknown> }).subCommands;
+    expect(sub).toBeDefined();
+    expect(Object.keys(sub ?? {})).toContain("firewall");
+  });
+});
