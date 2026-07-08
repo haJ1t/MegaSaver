@@ -2707,3 +2707,31 @@ Sellable Pro surface now m1–m9. Next in the LOCKED 1.x→2.0 program: **1.12 =
 N3 context firewall** (.env/keys/PII ingress guard + blocked-leak log), then
 1.13 anomaly+budgets → 2.0 portable project brain. [[entities/cli]]
 [[syntheses/release-history]] [[syntheses/pro-differentiation-portfolio]]
+
+## [2026-07-08] build | module 10 — context firewall (1.12)
+
+Implemented per docs/superpowers/plans/2026-07-08-context-firewall-plan.md
+(subagent-driven, TDD per task): policy PII validators (Luhn/mod-97/TCKN) +
+validate-gated patterns + email observer; `redact()` kept its 2-field public
+contract, new `redactWithFindings()` for the firewall path;
+`FilterOutputResult.firewall` carries counts out of the pure filter;
+context-gate value-free ledger (schema `.strict()`, F-FW-1; best-effort writes,
+F-FW-3) wired at 6 orchestrator ingress sites; pro-analytics `diagnoseFirewall`
+(7-day window, top-10 blocked, pinned advice); `mega firewall` CLI (gate-first,
+`--days` 1..3650, `--json` always JSON, ingress-surface footer). Detection +
+ledger free/always-on; report Pro.
+
+**The two-stage gate caught FOUR plan defects before any reached a commit or
+main**: (1) the `redact()` shape change broke ~20 `.toEqual` tests → split into
+`redactWithFindings`; (2) the F-FW-3 write-failure test never triggered a
+failure (recursive mkdir on a writable temp root succeeds) → assert against a
+pre-created firewall FILE; (3) a Luhn-invalid "valid" 19-digit test constant →
+recomputed the check digit; (4) an `exactOptionalPropertyTypes` mismatch
+(zod-inferred `string | undefined` vs analyzer `?: string`) that only `tsc`
+surfaced at the full-suite level → widened `FirewallEventInput.sourcePath`.
+Evidence: per-package suites green (policy 162, output-filter 380, context-gate
+250, pro-analytics 124, cli 961 + 9 firewall); `pnpm verify` green. **Lesson:
+a vitest-only per-task gate misses type errors — full `tsc` only runs at the
+suite level, so a verbatim-passing file can still be type-unsound across a
+package boundary.** Pending: HIGH review (code-reviewer + critic + privacy lens
+on F-FW-1) + PR + merge + 1.12.0 release. [[entities/cli]]

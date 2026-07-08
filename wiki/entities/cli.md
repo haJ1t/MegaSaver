@@ -511,7 +511,7 @@ now pre-filters `entry.approval !== "approved"` before scope/session checks.
 Only approved memory flows into agent config files. GUI mirror
 (`apps/gui/bridge/connector-context.ts`) carries the same filter.
 
-## Pro tier — `mega license`, `mega savings`, `mega roi`, `mega teardown`, `mega bench`, `mega compress`, `mega cache` (modules 1–9)
+## Pro tier — `mega license`, `mega savings`, `mega roi`, `mega teardown`, `mega bench`, `mega compress`, `mega cache`, `mega firewall` (modules 1–10)
 
 Entitlement-gated Pro analytics: offline Ed25519 license via
 `mega license {activate,status}`; every Pro command gates FIRST on
@@ -621,6 +621,28 @@ zero events read), then lazy-imports the proprietary
   caught a `--json` no-data contract break (printed prose on the empty-window
   path — now always emits JSON) and an unbounded `--days` RangeError (capped at
   3650). 21 analyzer + 12 CLI TDD tests.
+
+- `mega firewall [--days <n>] [--json] [--store <dir>]` — module 10 (2026-07-08,
+  spec `2026-07-08-context-firewall-design.md`, risk **HIGH** — security
+  claim + policy core): the context-firewall audit. `policy` gained
+  validate-gated PII patterns (credit_card/Luhn, iban/mod-97,
+  tr_national_id/TCKN checksum) + an email count-only observer; `redact()`
+  keeps its 2-field contract while a new `redactWithFindings()` feeds the
+  firewall path. The context-gate orchestrator emits **value-free** events
+  (`<store>/firewall/events.jsonl`, schema `.strict()` with no value field —
+  F-FW-1) at 6 ingress sites (pipeline + overlay deny/post-filter, 2 exec
+  post-filter); writes are best-effort (F-FW-3: auditing never breaks the
+  pipeline). Pure `diagnoseFirewall` in pro-analytics (7-day window, top-10
+  blocked, per-detector redactions, observed emails, pinned advice). CLI is
+  Pro-gated (`savings-analytics`), `--days` 1..3650, `--json` always JSON,
+  footer states the ingress-surface limit (guards proxy tools + hooks, not
+  native reads). Detection + ledger are FREE/always-on; only the report is
+  Pro. **Review CAUGHT four plan defects at the gate**: a self-contradictory
+  redact-shape change (broke ~20 `.toEqual` tests → split into
+  `redactWithFindings`), a no-op F-FW-3 write-failure test, a Luhn-invalid
+  test constant, and an `exactOptionalPropertyTypes` mismatch tsc caught only
+  at the full-suite level. TDD tests: 10 validators + 9 redact-pii + 2 filter
+  + 5 ledger + 3 wiring (incl. F-FW-1 e2e) + 7 analyzer + 9 CLI.
 
 ## Related
 
