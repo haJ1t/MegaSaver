@@ -111,3 +111,12 @@ export {
   writeActivation,
   readActivationMode,
 } from "./activation-scope.js";
+export {
+  appendFirewallEvent,
+  appendFirewallEventsFromFilter,
+  firewallEventSchema,
+  firewallLogPath,
+  type FirewallEvent,
+  type FirewallScope,
+  type FilterFirewallCounts,
+} from "./firewall-ledger.js";
