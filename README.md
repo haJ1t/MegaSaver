@@ -524,6 +524,7 @@ mega <command> [subcommand] [flags]
 | `mega bench` | paired saver on/off run — tokens, time, outcome parity (Pro) |
 | `mega roi` | monthly savings vs Pro price — ROI multiple (Pro) |
 | `mega compress <file>` | reversible extractive compression of a memory/doc file — dry-run or `--apply` (Pro) |
+| `mega cache` | prompt-cache doctor — miss detection, dollars burned, one-line fixes (Pro) |
 | `mega doctor` | diagnose bridge / hooks / connector setup |
 
 Run `mega <command> --help` for subcommands and flags. Closed-enum flags
@@ -718,6 +719,10 @@ mega compress CLAUDE.md --apply    # overwrite (writes CLAUDE.md.bak; restore wi
 - `mega compress <file> [--apply] [--force] [--json]` — dry-run by default;
   `--apply` is lossy but writes a `<file>.bak` you restore with `mv`. Only
   `.md`/`.txt`/`.mdc`.
+- `mega cache [--days <n>] [--json]` — prompt-cache doctor: reads the metering
+  proxy's counts-only usage log, detects cache misses (no-cache,
+  unstable-prefix, ttl-expiry, model-switch), prices what they burned, and
+  prints a one-line fix per finding. Read-only; needs `mega proxy` metering.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
 and exits cleanly — it never errors, and the free CLI is unaffected. Keys are

@@ -2647,3 +2647,40 @@ Smoke on the published artifact: `npx @megasaver/cli@1.10.0 --version`
 906→81 bytes · ~206 tokens`, `--apply`/`.bak` guidance printed, exit 0.
 Next: 1.11 cache (Pro module 9) — no spec yet. [[entities/cli]]
 [[syntheses/release-history]]
+
+## [2026-07-08] feature | mega cache (Pro module 9) built — worktree feat/cli-mega-cache
+
+Spec `2026-07-08-cache-doctor-design.md` (HIGH) → plan → subagent-driven TDD
+build. `mega cache` = the prompt-cache doctor: reads the metering proxy's
+counts-only `usage.jsonl`, groups calls into conversations (messageCount+time
+heuristic), detects four cache-miss signatures (D1 no-cache conversation-level;
+D2 unstable-prefix / D3 ttl-expiry / D4 model-switch turn-level, one shared
+trigger, priority D4>D3>D2), prices the re-paid burn (`rePaid × P × 1.15`,
+capped at `priorWritten`) against the house rate, and prints a one-line fix per
+finding. `reliable` flag (≥20 events ∧ ≥3 conversations) suppresses the burn
+headline on thin data. Read-only, advice-only, never reads content. Pure
+`diagnoseCache` in pro-analytics; CLI owns I/O behind `savings-analytics` gate;
+new `proxyUsageLogPath` export in llm-proxy for a tolerant per-line read.
+
+**Two plan defects the review gate caught before merge (both good catches by
+the implementer subagents, not workarounds):** (1) a self-contradictory D1
+"clamp" test — with `missed ≥ premium base` and `0.9 > 0.25`, D1 burn is
+structurally positive, so the `max(0,…)` is a display-contract guard, not a
+reachable branch; test corrected. (2) the plan's CLI code imported
+`INPUT_PRICE_PER_MTOK_USD` directly from `@megasaver/stats`, a
+dependency-graph-guard-forbidden `apps/cli→stats` edge; fixed by re-exporting
+the const through `@megasaver/pro-analytics` (already a stats consumer + an
+allowed CLI dep) and taking it via the existing post-gate lazy import.
+
+Evidence: pro-analytics cache-doctor 21 tests, cli cache 12 tests,
+dependency-graph guard green, `pnpm verify` green, biome+tsc clean. HIGH review
+(4 lenses incl. a numerical-correctness pass, findings adversarially verified):
+**merge-with-followups, 0 blockers** — the financial core is sound and the
+confident `$X burned` headline is gated behind the reliability threshold, so a
+paying user is never shown a confident wrong figure. Fixed pre-merge anyway (2
+functional + coverage): the `--json` no-data contract break and the unbounded
+`--days` RangeError, plus firing-boundary/reliable-headline/pinned-dollar tests.
+Pending: PR + merge + 1.11.0 release.
+**Lesson: a detailed plan still ships bugs — a self-inconsistent test and a
+hidden dependency-edge violation both survived plan self-review but died at the
+implementer/spec gate. The two-stage gate earns its cost.** [[entities/cli]]

@@ -511,7 +511,7 @@ now pre-filters `entry.approval !== "approved"` before scope/session checks.
 Only approved memory flows into agent config files. GUI mirror
 (`apps/gui/bridge/connector-context.ts`) carries the same filter.
 
-## Pro tier — `mega license`, `mega savings`, `mega roi`, `mega teardown`, `mega bench`, `mega compress` (modules 1–8)
+## Pro tier — `mega license`, `mega savings`, `mega roi`, `mega teardown`, `mega bench`, `mega compress`, `mega cache` (modules 1–9)
 
 Entitlement-gated Pro analytics: offline Ed25519 license via
 `mega license {activate,status}`; every Pro command gates FIRST on
@@ -599,6 +599,28 @@ zero events read), then lazy-imports the proprietary
   (incl. the write-once regression) + tarball e2e (bundle resolves the lazy
   pro-analytics import AND compressProse; 591B→571B non-idempotent skeleton
   refused under `--force`, `.bak` intact).
+- `mega cache [--days <n>] [--json] [--store <dir>]` — module 9 (2026-07-08,
+  spec `2026-07-08-cache-doctor-design.md`, risk **HIGH** — token-audit
+  logic): the prompt-cache doctor. Reads the metering proxy's counts-only
+  `usage.jsonl` (never message content), groups calls into conversations by a
+  messageCount+time heuristic, and detects four cache-miss signatures —
+  **D1 no-cache** (conversation-level: zero cache over the input floor),
+  **D2 unstable-prefix / D3 ttl-expiry / D4 model-switch** (turn-level, one
+  shared trigger `cacheRead<1024 ∧ cacheCreation≥1024 ∧ priorWritten≥1024`,
+  priority D4>D3>D2). Prices the burn (`rePaid × P × (1.25−0.1)`; only the
+  RE-paid portion, capped at `priorWritten` — new-content writes never
+  counted) against the house `INPUT_PRICE_PER_MTOK_USD`. A `reliable` flag
+  (≥20 events ∧ ≥3 conversations) suppresses the burn headline on thin data
+  (suppress-don't-bluff). Read-only, advice-only. Pure analyzer
+  `diagnoseCache` in pro-analytics; CLI owns I/O behind the
+  `savings-analytics` gate. **Review CAUGHT two plan defects at the gate**: a
+  self-contradictory D1-clamp test (unreachable — `missed ≥ premium base`,
+  `0.9>0.25`, so D1 burn is structurally positive) and a forbidden
+  `apps/cli→@megasaver/stats` edge (the dependency-graph guard forbids it;
+  fixed by re-exporting the price const through pro-analytics). Review also
+  caught a `--json` no-data contract break (printed prose on the empty-window
+  path — now always emits JSON) and an unbounded `--days` RangeError (capped at
+  3650). 21 analyzer + 12 CLI TDD tests.
 
 ## Related
 
