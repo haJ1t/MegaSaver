@@ -504,7 +504,7 @@ git commit -m "feat(output-filter): firewall counts on filter result"
 
 ```ts
 // packages/context-gate/test/firewall-ledger.test.ts
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -538,10 +538,14 @@ describe("firewall ledger", () => {
   });
 
   it("swallows write failures (F-FW-3: auditing never breaks the pipeline)", () => {
-    // Point the store at a path whose parent is a FILE so mkdir fails.
-    appendFirewallEvent(join(root, "not-a-dir"), { at: AT, kind: "redacted", detector: "iban", count: 1 });
-    // no throw is the assertion; and nothing was created
-    expect(existsSync(join(root, "not-a-dir"))).toBe(false);
+    // Pre-create <root>/firewall as a FILE so mkdirSync(<root>/firewall) throws
+    // ENOTDIR — a genuine, deterministic write failure that must be swallowed.
+    writeFileSync(join(root, "firewall"), "x");
+    expect(() =>
+      appendFirewallEvent(root, { at: AT, kind: "redacted", detector: "iban", count: 1 }),
+    ).not.toThrow();
+    // The log was never written (its dir could not be created).
+    expect(existsSync(firewallLogPath(root))).toBe(false);
   });
 
   it("maps filter firewall counts to one event per detector", () => {
