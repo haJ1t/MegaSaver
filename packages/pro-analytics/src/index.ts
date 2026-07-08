@@ -57,3 +57,13 @@ export {
   composeCompressionReport,
   renderCompressionSummary,
 } from "./compress-file.js";
+export {
+  type CacheDetector,
+  type CacheDoctorReport,
+  type CacheFinding,
+  type CacheUsageEvent,
+  CACHE_ADVICE,
+  CACHE_TTL_MS,
+  MIN_CACHEABLE_TOKENS,
+  diagnoseCache,
+} from "./cache-doctor.js";

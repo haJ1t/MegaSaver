@@ -1,11 +1,15 @@
 // packages/pro-analytics/test/cache-doctor.test.ts
 import { describe, expect, it } from "vitest";
 import {
+  CACHE_ADVICE,
   CACHE_TTL_MS,
   CHAIN_GAP_MAX_MS,
   type CacheUsageEvent,
   D1_MIN_TOTAL_INPUT,
   MIN_CACHEABLE_TOKENS,
+  RELIABLE_MIN_CONVERSATIONS,
+  RELIABLE_MIN_EVENTS,
+  diagnoseCache,
   diagnoseConversation,
   groupConversations,
 } from "../src/cache-doctor.js";
@@ -204,5 +208,102 @@ describe("diagnoseConversation — D2/D3/D4 turn misses", () => {
       ev({ atMs: T0 + 60_000, messageCount: 3, cacheReadTokens: 8_000, cacheCreationTokens: 600 }),
     ];
     expect(diagnoseConversation(healthy, PER_TOKEN).turnMisses).toEqual([]);
+  });
+});
+
+describe("diagnoseCache", () => {
+  const NOW = T0 + 3 * 86_400_000;
+
+  it("filters the window, totals, and computes hitRate", () => {
+    const events = [
+      ev({ atMs: NOW - 8 * 86_400_000, messageCount: 1, inputTokens: 999_999 }), // outside 7d
+      ev({ atMs: T0, messageCount: 1, inputTokens: 1_000, cacheCreationTokens: 4_000 }),
+      ev({
+        atMs: T0 + 60_000,
+        messageCount: 3,
+        inputTokens: 500,
+        cacheReadTokens: 4_000,
+        cacheCreationTokens: 500,
+      }),
+    ];
+    const r = diagnoseCache(events, { now: NOW });
+    expect(r.calls).toBe(2);
+    expect(r.conversations).toBe(1);
+    expect(r.inputTokens).toBe(1_500);
+    expect(r.cacheReadTokens).toBe(4_000);
+    expect(r.cacheCreationTokens).toBe(4_500);
+    // hitRate = 4000 / (1500 + 4000 + 4500)
+    expect(r.hitRate).toBeCloseTo(0.4, 6);
+    expect(r.windowDays).toBe(7);
+    expect(r.findings).toEqual([]);
+    expect(r.burnedUsdTotal).toBe(0);
+  });
+
+  it("hitRate is 0 on an empty window (no NaN)", () => {
+    const r = diagnoseCache([], { now: NOW });
+    expect(r.calls).toBe(0);
+    expect(r.hitRate).toBe(0);
+    expect(r.reliable).toBe(false);
+  });
+
+  it("aggregates findings per detector in D1..D4 order with advice", () => {
+    // Convo A: D1 (2 turns, zero cache, 20K input). Convo B: one
+    // unstable-prefix turn. Convo C: one model-switch turn.
+    const events = [
+      ev({ atMs: T0, messageCount: 1, inputTokens: 10_000 }),
+      ev({ atMs: T0 + 60_000, messageCount: 3, inputTokens: 10_000 }),
+      ev({ atMs: T0 + 7_200_000, messageCount: 1, cacheCreationTokens: 5_000 }),
+      ev({ atMs: T0 + 7_260_000, messageCount: 3, cacheCreationTokens: 5_000 }),
+      ev({ atMs: T0 + 14_400_000, messageCount: 1, cacheCreationTokens: 2_000, model: "a" }),
+      ev({ atMs: T0 + 14_460_000, messageCount: 3, cacheCreationTokens: 2_000, model: "b" }),
+    ];
+    const r = diagnoseCache(events, { now: NOW });
+    expect(r.conversations).toBe(3);
+    expect(r.findings.map((f) => f.detector)).toEqual([
+      "no-cache",
+      "unstable-prefix",
+      "model-switch",
+    ]);
+    const d1 = r.findings[0];
+    expect(d1?.conversations).toBe(1);
+    expect(d1?.occurrences).toBe(1);
+    expect(d1?.missedTokens).toBe(10_000);
+    expect(d1?.advice).toBe(CACHE_ADVICE["no-cache"]);
+    const d2 = r.findings[1];
+    expect(d2?.occurrences).toBe(1);
+    expect(d2?.missedTokens).toBe(5_000);
+    expect(r.burnedUsdTotal).toBeCloseTo(
+      (r.findings[0]?.burnedUsd ?? 0) +
+        (r.findings[1]?.burnedUsd ?? 0) +
+        (r.findings[2]?.burnedUsd ?? 0),
+      10,
+    );
+  });
+
+  it("reliable needs ≥20 windowed events AND ≥3 conversations", () => {
+    // 20 events in 3 conversations → reliable.
+    const many: CacheUsageEvent[] = [];
+    for (let c = 0; c < 3; c++) {
+      for (let i = 0; i < (c === 0 ? 18 : 1); i++) {
+        many.push(ev({ atMs: T0 + c * 7_200_000 + i * 60_000, messageCount: i + 1 }));
+      }
+    }
+    expect(many).toHaveLength(20);
+    expect(diagnoseCache(many, { now: NOW }).reliable).toBe(true);
+    expect(diagnoseCache(many.slice(1), { now: NOW }).reliable).toBe(false); // 19 events
+    // 20 events but 2 conversations → false.
+    const twoConvos: CacheUsageEvent[] = [];
+    for (let i = 0; i < 19; i++) twoConvos.push(ev({ atMs: T0 + i * 60_000, messageCount: i + 1 }));
+    twoConvos.push(ev({ atMs: T0 + 7_200_000, messageCount: 1 }));
+    expect(diagnoseCache(twoConvos, { now: NOW }).reliable).toBe(false);
+  });
+
+  it("respects a priceUsd override in the burn math", () => {
+    const events = [
+      ev({ atMs: T0, messageCount: 1, cacheCreationTokens: 5_000 }),
+      ev({ atMs: T0 + 60_000, messageCount: 3, cacheCreationTokens: 5_000 }),
+    ];
+    const r = diagnoseCache(events, { now: NOW, priceUsd: 30 });
+    expect(r.findings[0]?.burnedUsd).toBeCloseTo(5_000 * (30 / 1e6) * 1.15, 10);
   });
 });

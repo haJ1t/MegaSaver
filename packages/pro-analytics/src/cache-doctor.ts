@@ -158,3 +158,85 @@ export function diagnoseConversation(
   }
   return { d1: null, turnMisses };
 }
+
+const DETECTOR_ORDER: readonly CacheDetector[] = [
+  "no-cache",
+  "unstable-prefix",
+  "ttl-expiry",
+  "model-switch",
+];
+
+export function diagnoseCache(
+  events: readonly CacheUsageEvent[],
+  opts: { now: number; days?: number; priceUsd?: number },
+): CacheDoctorReport {
+  const windowDays = opts.days ?? 7;
+  const perTokenUsd = (opts.priceUsd ?? INPUT_PRICE_PER_MTOK_USD) / 1e6;
+  const sinceMs = opts.now - windowDays * 86_400_000;
+  const windowed = events.filter((e) => Date.parse(e.ts) >= sinceMs);
+  const groups = groupConversations(windowed);
+
+  const inputTokens = windowed.reduce((s, e) => s + e.inputTokens, 0);
+  const cacheReadTokens = windowed.reduce((s, e) => s + e.cacheReadTokens, 0);
+  const cacheCreationTokens = windowed.reduce((s, e) => s + e.cacheCreationTokens, 0);
+  const totalLoad = inputTokens + cacheReadTokens + cacheCreationTokens;
+
+  // Accumulate per detector across conversations. `conversations` counts
+  // distinct convos affected; `occurrences` counts convos (D1) or turns (D2–4).
+  const acc = new Map<
+    CacheDetector,
+    { convos: number; occ: number; missed: number; usd: number }
+  >();
+  const bump = (d: CacheDetector, occ: number, missed: number, usd: number) => {
+    const row = acc.get(d) ?? { convos: 0, occ: 0, missed: 0, usd: 0 };
+    row.convos += 1;
+    row.occ += occ;
+    row.missed += missed;
+    row.usd += usd;
+    acc.set(d, row);
+  };
+  for (const convo of groups) {
+    const diag = diagnoseConversation(convo, perTokenUsd);
+    if (diag.d1 !== null) bump("no-cache", 1, diag.d1.missedTokens, diag.d1.burnedUsd);
+    for (const d of ["unstable-prefix", "ttl-expiry", "model-switch"] as const) {
+      const misses = diag.turnMisses.filter((m) => m.detector === d);
+      if (misses.length > 0)
+        bump(
+          d,
+          misses.length,
+          misses.reduce((s, m) => s + m.rePaidTokens, 0),
+          misses.reduce((s, m) => s + m.burnedUsd, 0),
+        );
+    }
+  }
+  const findings: CacheFinding[] = DETECTOR_ORDER.flatMap((d) => {
+    const row = acc.get(d);
+    return row
+      ? [
+          {
+            detector: d,
+            conversations: row.convos,
+            occurrences: row.occ,
+            missedTokens: row.missed,
+            burnedUsd: row.usd,
+            advice: CACHE_ADVICE[d],
+          },
+        ]
+      : [];
+  });
+
+  return {
+    windowDays,
+    since: new Date(sinceMs).toISOString(),
+    until: new Date(opts.now).toISOString(),
+    calls: windowed.length,
+    conversations: groups.length,
+    inputTokens,
+    cacheReadTokens,
+    cacheCreationTokens,
+    hitRate: totalLoad === 0 ? 0 : cacheReadTokens / totalLoad,
+    findings,
+    burnedUsdTotal: findings.reduce((s, f) => s + f.burnedUsd, 0),
+    reliable: windowed.length >= RELIABLE_MIN_EVENTS && groups.length >= RELIABLE_MIN_CONVERSATIONS,
+  };
+}
