@@ -2522,3 +2522,23 @@ pristine `.bak` intact. 6 commits (c5223bbc..6a764381).
 release (release ritual: changeset version → stage consumed changeset
 deletion → `biome check --write apps/cli/package.json` → commit → push →
 owner OTP publish; `bin` must stay `./`-free).
+
+## [2026-07-08] review | PR #256 pre-merge — `.bak` byte-fidelity blocker
+
+Adversarial review of PR #256 (`feat/cli-mega-compress`) before merge (4
+dimensions × verify). All CI was green, but the review surfaced a CONFIRMED
+**data-safety blocker**: `mega compress --apply` wrote the `.bak` via a utf8
+read→write of the decoded string (`writeFile(bak, original)`), so a
+**non-UTF-8 source** (latin-1, UTF-16, stray bytes) got a U+FFFD-corrupted
+backup and `mv`-restore yielded mojibake — silently breaking the reversibility
+guarantee on a CRITICAL file-mutating command. Fix: a new `backupFile(src,
+dest)` fs seam does a **byte-exact copy straight from disk** (atomic
+tmp+rename), replacing the string round-trip. TDD: a red real-fs test
+(BIG_DOC + invalid trailing bytes → `.bak` must byte-equal source) drove it.
+Evidence: `pnpm verify` green (cli **937** tests, tsc, biome, conventions ok).
+7 non-blocking follow-ups logged for later (fsync durability on the atomic
+writer; `--apply` writes a LARGER file while printing "0 saved"; EISDIR/EACCES
+stack trace when the path is a dir/unreadable; 3 test-coverage gaps —
+atomic-mechanism pin, uppercase-extension accept, real mv-restore assertion).
+**Lesson: a "byte-exact backup" needs a raw file copy, never a decode→encode
+round-trip — the JS string is lossy for any non-UTF-8 input.** [[entities/cli]]
