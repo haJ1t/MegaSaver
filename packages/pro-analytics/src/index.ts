@@ -67,3 +67,7 @@ export {
   MIN_CACHEABLE_TOKENS,
   diagnoseCache,
 } from "./cache-doctor.js";
+// Re-export the input price so CLI consumers can render the "(est. at $N/M)"
+// footnote without importing @megasaver/stats directly (that edge is forbidden
+// for apps/cli; pro-analytics already depends on stats).
+export { INPUT_PRICE_PER_MTOK_USD } from "@megasaver/stats";

@@ -7,7 +7,6 @@ import {
   proxyUsageEventSchema,
   proxyUsageLogPath,
 } from "@megasaver/llm-proxy";
-import { INPUT_PRICE_PER_MTOK_USD } from "@megasaver/stats";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import { PRO_ANALYTICS_URL } from "./savings/index.js";
@@ -85,7 +84,10 @@ export async function runCache(input: RunCacheInput): Promise<0 | 1> {
     if (result.success) events.push(result.data);
   }
 
-  const { diagnoseCache } = await import("@megasaver/pro-analytics");
+  // Lazy import after the gate (never load the Pro compute on the free path);
+  // the price const is re-exported here so the CLI never depends on @megasaver/stats
+  // directly (forbidden edge — see apps/cli/test/dependency-graph.test.ts).
+  const { diagnoseCache, INPUT_PRICE_PER_MTOK_USD } = await import("@megasaver/pro-analytics");
   const report = diagnoseCache(events, {
     now: input.now(),
     ...(days === undefined ? {} : { days }),
