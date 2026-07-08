@@ -2,3 +2,13 @@ packages:
   - "apps/*"
   - "packages/*"
   - "packages/connectors/*"
+
+# pnpm 10+ ignores dependency build scripts unless allow-listed here. These
+# need their native/binary postinstall to run (biome/esbuild/sharp binaries,
+# onnxruntime native addon, protobufjs codegen); without them the build fails.
+allowBuilds:
+  '@biomejs/biome': true
+  esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true
