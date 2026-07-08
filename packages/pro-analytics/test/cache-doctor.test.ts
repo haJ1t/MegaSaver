@@ -194,6 +194,21 @@ describe("diagnoseConversation — D2/D3/D4 turn misses", () => {
     expect(diagnoseConversation(priorLow, PER_TOKEN).turnMisses).toEqual([]);
   });
 
+  it("fires at exactly the 1024 boundaries (>= not >): read 1023, creation 1024, priorWritten 1024", () => {
+    const convo = [
+      ev({ atMs: T0, messageCount: 1, cacheCreationTokens: 1_024 }),
+      ev({
+        atMs: T0 + 60_000,
+        messageCount: 3,
+        cacheReadTokens: 1_023,
+        cacheCreationTokens: 1_024,
+      }),
+    ];
+    expect(diagnoseConversation(convo, PER_TOKEN).turnMisses).toEqual([
+      { detector: "unstable-prefix", rePaidTokens: 1_024, burnedUsd: 1_024 * PER_TOKEN * 1.15 },
+    ]);
+  });
+
   it("caps rePaid at priorWritten — new-content writes are never counted", () => {
     const convo = [
       ev({ atMs: T0, messageCount: 1, cacheCreationTokens: 2_000 }),
@@ -272,6 +287,11 @@ describe("diagnoseCache", () => {
     const d2 = r.findings[1];
     expect(d2?.occurrences).toBe(1);
     expect(d2?.missedTokens).toBe(5_000);
+    // Pin the exact per-finding dollars (the total assertion below is otherwise
+    // tautological — burnedUsdTotal is the sum of these by construction).
+    expect(r.findings[0]?.burnedUsd).toBeCloseTo(10_000 * PER_TOKEN * 0.65, 10); // D1 no-cache
+    expect(r.findings[1]?.burnedUsd).toBeCloseTo(5_000 * PER_TOKEN * 1.15, 10); // unstable-prefix
+    expect(r.findings[2]?.burnedUsd).toBeCloseTo(2_000 * PER_TOKEN * 1.15, 10); // model-switch
     expect(r.burnedUsdTotal).toBeCloseTo(
       (r.findings[0]?.burnedUsd ?? 0) +
         (r.findings[1]?.burnedUsd ?? 0) +

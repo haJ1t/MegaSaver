@@ -104,12 +104,68 @@ describe("runCache — entitled", () => {
   });
 
   it("rejects invalid --days at the boundary", async () => {
-    for (const bad of ["0", "-3", "x", "1.5"]) {
+    // Includes an over-cap value (> 3650): unbounded days would push the window
+    // start past the JS Date range and throw a RangeError in diagnoseCache.
+    for (const bad of ["0", "-3", "x", "1.5", "10000000"]) {
       err = [];
       const { code } = run({ log: "", days: bad });
       expect(await code).toBe(1);
       expect(err.join("\n")).toContain("--days");
     }
+  });
+
+  it("--json always emits JSON, even with no usage log (contract for jq consumers)", async () => {
+    const noLog = run({ log: null, json: true });
+    expect(await noLog.code).toBe(0);
+    expect((JSON.parse(out.join("\n")) as { calls: number }).calls).toBe(0);
+    out = [];
+    const old = usageLine({ atMs: NOW_MS - 9 * 24 * HOUR });
+    const emptyWindow = run({ log: `${old}\n`, json: true });
+    expect(await emptyWindow.code).toBe(0);
+    expect((JSON.parse(out.join("\n")) as { calls: number }).calls).toBe(0);
+  });
+
+  it("--days widens the window (a 20-day-old miss: excluded at default 7, included at 30)", async () => {
+    const DAY = 24 * HOUR;
+    const lines = [
+      usageLine({ atMs: NOW_MS - 20 * DAY, messageCount: 1, cacheCreationTokens: 5_000 }),
+      usageLine({ atMs: NOW_MS - 20 * DAY + 60_000, messageCount: 3, cacheCreationTokens: 5_000 }),
+    ];
+    const log = `${lines.join("\n")}\n`;
+    const def = run({ log, json: true });
+    expect(await def.code).toBe(0);
+    expect((JSON.parse(out.join("\n")) as { calls: number }).calls).toBe(0);
+    out = [];
+    const wide = run({ log, days: "30", json: true });
+    expect(await wide.code).toBe(0);
+    const r = JSON.parse(out.join("\n")) as { calls: number; windowDays: number };
+    expect(r.windowDays).toBe(30);
+    expect(r.calls).toBe(2);
+  });
+
+  it("renders the $ burned headline on reliable data (>=20 events, >=3 conversations)", async () => {
+    const lines: string[] = [];
+    // Conversation 1: 18 events, each turn after the first re-writes the cache
+    // (unstable-prefix miss). 18 events / mc 1..18.
+    lines.push(usageLine({ atMs: NOW_MS - 3 * HOUR, messageCount: 1, cacheCreationTokens: 5_000 }));
+    for (let i = 1; i < 18; i++) {
+      lines.push(
+        usageLine({
+          atMs: NOW_MS - 3 * HOUR + i * 60_000,
+          messageCount: i + 1,
+          cacheCreationTokens: 5_000,
+        }),
+      );
+    }
+    // Conversations 2 and 3: one event each (messageCount reset starts a new one).
+    lines.push(usageLine({ atMs: NOW_MS - 2 * HOUR, messageCount: 1 }));
+    lines.push(usageLine({ atMs: NOW_MS - 1 * HOUR, messageCount: 1 }));
+    const { code } = run({ log: `${lines.join("\n")}\n` });
+    expect(await code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("burned on cache misses");
+    expect(text).toMatch(/\$\d+\.\d{2} burned/);
+    expect(text).not.toContain("not enough data");
   });
 
   it("--json emits the raw report", async () => {

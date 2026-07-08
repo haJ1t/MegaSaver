@@ -16,10 +16,13 @@ export const CACHE_UPSELL = `The prompt-cache doctor is a Mega Saver Pro feature
 export const NO_USAGE_NOTE =
   "no proxy usage recorded — enable metering with `mega proxy` and route your agent through it";
 
-// Boundary parse (§8): the window drives date arithmetic downstream.
+// Boundary parse (§8): the window drives date arithmetic downstream. Cap the
+// upper bound — a pathological value would push `since` past the JS Date range,
+// and new Date(sinceMs).toISOString() throws a RangeError. No real usage log
+// spans 10 years.
 export function parseDays(raw: string): number | null {
   const n = Number(raw);
-  return Number.isInteger(n) && n >= 1 ? n : null;
+  return Number.isInteger(n) && n >= 1 && n <= 3650 ? n : null;
 }
 
 export type RunCacheInput = {
@@ -65,13 +68,8 @@ export async function runCache(input: RunCacheInput): Promise<0 | 1> {
   }
 
   const raw = input.readUsageLog(input.storeRoot);
-  if (raw === null) {
-    input.stdout(NO_USAGE_NOTE);
-    return 0;
-  }
-
   const events: ProxyUsageEvent[] = [];
-  for (const line of raw.split("\n")) {
+  for (const line of raw === null ? [] : raw.split("\n")) {
     const trimmed = line.trim();
     if (trimmed.length === 0) continue;
     let parsedLine: unknown;
@@ -93,13 +91,16 @@ export async function runCache(input: RunCacheInput): Promise<0 | 1> {
     ...(days === undefined ? {} : { days }),
   });
 
-  if (report.calls === 0) {
-    input.stdout(NO_USAGE_NOTE);
+  // --json is a stable contract: ALWAYS emit the report as JSON, including the
+  // empty-window / no-log case (calls: 0). Printing the prose note on those
+  // paths would break jq / JSON.parse consumers.
+  if (input.json) {
+    input.stdout(JSON.stringify(report));
     return 0;
   }
 
-  if (input.json) {
-    input.stdout(JSON.stringify(report));
+  if (report.calls === 0) {
+    input.stdout(NO_USAGE_NOTE);
     return 0;
   }
 
