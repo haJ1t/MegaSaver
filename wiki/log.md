@@ -2672,9 +2672,15 @@ dependency-graph-guard-forbidden `apps/cli→stats` edge; fixed by re-exporting
 the const through `@megasaver/pro-analytics` (already a stats consumer + an
 allowed CLI dep) and taking it via the existing post-gate lazy import.
 
-Evidence: pro-analytics 116 tests (20 new cache-doctor), cli cache 9 tests,
-dependency-graph guard green, biome+tsc clean. Pending: full `pnpm verify` +
-HIGH review (code-reviewer + critic) + PR + merge + 1.11.0 release.
+Evidence: pro-analytics cache-doctor 21 tests, cli cache 12 tests,
+dependency-graph guard green, `pnpm verify` green, biome+tsc clean. HIGH review
+(4 lenses incl. a numerical-correctness pass, findings adversarially verified):
+**merge-with-followups, 0 blockers** — the financial core is sound and the
+confident `$X burned` headline is gated behind the reliability threshold, so a
+paying user is never shown a confident wrong figure. Fixed pre-merge anyway (2
+functional + coverage): the `--json` no-data contract break and the unbounded
+`--days` RangeError, plus firing-boundary/reliable-headline/pinned-dollar tests.
+Pending: PR + merge + 1.11.0 release.
 **Lesson: a detailed plan still ships bugs — a self-inconsistent test and a
 hidden dependency-edge violation both survived plan self-review but died at the
 implementer/spec gate. The two-stage gate earns its cost.** [[entities/cli]]

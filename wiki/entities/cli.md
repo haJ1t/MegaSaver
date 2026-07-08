@@ -617,8 +617,10 @@ zero events read), then lazy-imports the proprietary
   self-contradictory D1-clamp test (unreachable — `missed ≥ premium base`,
   `0.9>0.25`, so D1 burn is structurally positive) and a forbidden
   `apps/cli→@megasaver/stats` edge (the dependency-graph guard forbids it;
-  fixed by re-exporting the price const through pro-analytics). 20 analyzer +
-  9 CLI TDD tests.
+  fixed by re-exporting the price const through pro-analytics). Review also
+  caught a `--json` no-data contract break (printed prose on the empty-window
+  path — now always emits JSON) and an unbounded `--days` RangeError (capped at
+  3650). 21 analyzer + 12 CLI TDD tests.
 
 ## Related
 
