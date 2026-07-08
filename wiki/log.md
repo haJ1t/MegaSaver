@@ -2684,3 +2684,26 @@ Pending: PR + merge + 1.11.0 release.
 **Lesson: a detailed plan still ships bugs — a self-inconsistent test and a
 hidden dependency-edge violation both survived plan self-review but died at the
 implementer/spec gate. The two-stage gate earns its cost.** [[entities/cli]]
+
+## [2026-07-08] release | 1.11.0 live — `mega cache` (Pro module 9)
+
+`@megasaver/cli` 1.11.0 published. Ritual (unchanged from the 1.10.0 lesson —
+NO manual publish): `pnpm changeset version` (consumed `cache-doctor.md`,
+CHANGELOG written), staged deletion, `biome check --write apps/cli/package.json`
+(`bin` stays `./`-free), release PR #265 (rebase-merge `9f04b54e`), tag
+`v1.11.0` → `release.yml` run 28963925937 **fully green**: GitHub Release
+(`mega.mjs` + `mega-1.11.0.mjs`) AND npm publish automatic.
+
+Feature PR #264 **squash-merged** (`91f1d460`) — the branch carried a
+`fix→revert→refix` churn from resolving the dependency-edge defect, so it was
+squashed per §10 (no wip pollution on main); the atomic per-slice commits stay
+in the PR history.
+
+Smoke on the published artifact: `npx @megasaver/cli@1.11.0 --version` →
+`1.11.0`; `mega cache --store <empty>` → the free-tier upsell line, exit 0
+(command wired end-to-end in the shipped binary).
+
+Sellable Pro surface now m1–m9. Next in the LOCKED 1.x→2.0 program: **1.12 =
+N3 context firewall** (.env/keys/PII ingress guard + blocked-leak log), then
+1.13 anomaly+budgets → 2.0 portable project brain. [[entities/cli]]
+[[syntheses/release-history]] [[syntheses/pro-differentiation-portfolio]]
