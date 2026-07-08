@@ -1,6 +1,18 @@
 import { execFileSync } from "node:child_process";
 import type { KeyObject } from "node:crypto";
-import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  copyFileSync,
+  existsSync,
+  fsyncSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { checkEntitlement } from "@megasaver/entitlement";
 import { compressProse } from "@megasaver/output-filter";
@@ -11,6 +23,8 @@ import { PRO_ANALYTICS_URL } from "./savings/index.js";
 export const COMPRESS_UPSELL = `Reversible memory-file compression is a Mega Saver Pro feature. Activate a key: mega license activate <key>. Learn more: ${PRO_ANALYTICS_URL}.`;
 
 const ALLOWED_EXTENSIONS = new Set([".md", ".txt", ".mdc"]);
+
+const IS_WIN32 = process.platform === "win32";
 
 export type GitFileStatus = "clean" | "dirty" | "untracked" | "unknown";
 
@@ -37,25 +51,83 @@ function defaultGitFileStatus(path: string): GitFileStatus {
   }
 }
 
+// Durability for the temp→rename atomic write: fsync the temp file's bytes to
+// disk, rename it over the destination, then fsync the parent directory so the
+// rename link survives power-loss (POSIX ext4/xfs/APFS). Windows/NTFS journals
+// the rename and a directory flush is a documented no-op (opening a dir for
+// fsync also fails there), so the dir fsync is POSIX-only. A dir fsync that
+// fails AFTER a successful rename is a durability hint, not a correctness gate —
+// the file already landed, so swallow it. Open the temp "r+" because Windows
+// FlushFileBuffers needs a write-capable handle. Mirrors content-store's
+// atomicWriteFile.
+function fsyncedRename(tempPath: string, destPath: string): void {
+  try {
+    const tempFd = openSync(tempPath, "r+");
+    try {
+      fsyncSync(tempFd);
+    } finally {
+      closeSync(tempFd);
+    }
+    renameSync(tempPath, destPath);
+  } catch (error) {
+    // Pre-rename failure — dest and the original are untouched. Drop the orphan
+    // temp so a failed run leaves no hidden .tmp behind (matches content-store).
+    rmSync(tempPath, { force: true });
+    throw error;
+  }
+  if (IS_WIN32) return;
+  try {
+    const dirFd = openSync(dirname(destPath), "r");
+    try {
+      fsyncSync(dirFd);
+    } finally {
+      closeSync(dirFd);
+    }
+  } catch {
+    // Rename already committed the file; the parent-dir fsync is a durability
+    // hint only, so a failure here must not fail the write.
+  }
+}
+
 export function defaultCompressFs(): CompressFs {
   return {
     readFile: (path) => readFileSync(path, "utf8"),
     fileExists: (path) => existsSync(path),
-    // Atomic: temp file in the SAME directory (rename is only atomic within a
-    // filesystem), then rename over the target. Mirrors hooks/intent-run.ts.
+    // Atomic + durable: write a temp in the SAME directory (rename is only
+    // atomic within a filesystem), then fsync + rename over the target. Preserve
+    // the target's existing mode — --apply changes content, not permissions, so a
+    // private (0o600/0o400) memory file stays private.
     writeFile: (path, content) => {
+      const mode = existsSync(path) ? statSync(path).mode : undefined;
       const tmp = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`);
       writeFileSync(tmp, content);
-      renameSync(tmp, path);
+      fsyncedRename(tmp, path);
+      if (mode !== undefined) {
+        try {
+          chmodSync(path, mode);
+        } catch {
+          // Best-effort: bytes already committed; the mode restore is cosmetic.
+        }
+      }
     },
     // Byte-exact copy of the ORIGINAL file — NOT a utf8 decode→encode round trip,
     // which replaces invalid bytes with U+FFFD and corrupts the backup of any
-    // non-UTF-8 source, breaking mv-restore. Atomic: copy into a same-dir temp,
-    // then rename over the backup path.
+    // non-UTF-8 source, breaking mv-restore. Same atomic + durable temp→rename.
     backupFile: (src, dest) => {
       const tmp = join(dirname(dest), `.${basename(dest)}.${process.pid}.tmp`);
       copyFileSync(src, tmp);
-      renameSync(tmp, dest);
+      // copyFileSync preserves the source mode; a read-only source would make the
+      // temp read-only and fail fsync's "r+" open. Make the temp writable for the
+      // fsync, then restore the source mode so the .bak stays a byte- AND
+      // mode-exact pristine copy.
+      const srcMode = statSync(src).mode;
+      chmodSync(tmp, 0o600);
+      fsyncedRename(tmp, dest);
+      try {
+        chmodSync(dest, srcMode);
+      } catch {
+        // Best-effort: the byte-exact backup already committed; mode is cosmetic.
+      }
     },
     gitFileStatus: (path) => defaultGitFileStatus(path),
   };
@@ -95,12 +167,21 @@ export async function runCompress(input: RunCompressInput): Promise<0 | 1> {
     return 1;
   }
 
-  const original = input.fs.readFile(input.path);
+  let original: string;
+  try {
+    original = input.fs.readFile(input.path);
+  } catch {
+    input.stderr(`cannot read ${input.path}: not a readable file`);
+    return 1;
+  }
   const compressed = compressProse(original);
   const { composeCompressionReport, renderCompressionSummary } = await import(
     "@megasaver/pro-analytics"
   );
   const report = composeCompressionReport(original, compressed);
+  // Only a real byte reduction is worth writing: the engine can emit markers
+  // longer than a short body, so report.changed can be true with no savings.
+  const worthwhile = report.changed && report.compressedBytes < report.originalBytes;
 
   if (input.json) {
     input.stdout(JSON.stringify(report));
@@ -108,7 +189,7 @@ export async function runCompress(input: RunCompressInput): Promise<0 | 1> {
   }
 
   if (input.apply !== true) {
-    if (!report.changed) {
+    if (!worthwhile) {
       input.stdout("already tight — nothing to compress");
       return 0;
     }
@@ -118,7 +199,7 @@ export async function runCompress(input: RunCompressInput): Promise<0 | 1> {
     return 0;
   }
 
-  if (!report.changed) {
+  if (!worthwhile) {
     input.stdout("already tight — nothing to compress; not writing");
     return 0;
   }
