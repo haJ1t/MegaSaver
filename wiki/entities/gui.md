@@ -174,6 +174,22 @@ routes; each agent row carries a `restartHint`. The `connectors-shared`
 - `<output>` element gains `aria-live="polite"` for screen-reader
   announcements on savings updates.
 
+## GUI coverage audit (2026-06-14)
+
+Source-backed review of `/Users/halitozger/Desktop/MegaSaver_GUI_Analiz.md`
+against the current code confirmed the main diagnosis: the GUI remains a
+thin shell over three views (`agent-setup`, `memory`, `sessions`) while
+the CLI/core surface now includes project create, typed memory mutation
+and approval, rules, failures, index, context packs, task plans, tools,
+and audit summaries.
+
+Implementation caveat for future GUI expansion: new surfaces are not only
+"bridge route + api-client + view". The bridge has a closed
+`BridgeErrorCode` enum, Zod boundary schemas, type-pin tests, CORS/error
+contracts, and store-root concerns for file-backed features such as audit,
+index, and context. Mutating flows should preserve the existing boundary
+style and add bridge/integration/component tests with each route.
+
 ## Workspace Saver Mode activation (live-first, 2026-06-14)
 
 The live-first pivot (PR #134) left token-saver activation orphaned: the

@@ -456,6 +456,55 @@ other name through in both modes. CLI registers all Phase 0–10 subcommands plu
 the hooks group. stats exports both the v1.2 proxy metrics and the Phase 8
 AuditEvent family. README kept at the v1.2 version.
 
+<!-- back-filled 2026-07-08 during stash triage from an uncommitted stash on the
+     deleted branch feat/live-first-architecture; entries authored 2026-06-14 -->
+
+## [2026-06-14] analysis | GUI gap audit
+
+Reviewed `/Users/halitozger/Desktop/MegaSaver_GUI_Analiz.md` against the GUI,
+bridge, CLI, and core sources. Confirmed the analysis' main claim: GUI exposes
+agent setup, memory list/create, sessions, token-saver status/events/stats, and
+retention, but not project create, memory approve/update/delete/search/explain,
+rules, failures, index, context, task plans, tools, or audit dashboard. Added a
+coverage-audit note to `wiki/entities/gui.md`, including the implementation
+caveat that new GUI features must carry bridge enum/schema/test/store-root
+work, not just a route and React view.
+
+## [2026-06-14] analysis | GUI rev2 recheck
+
+Rechecked revised `/Users/halitozger/Desktop/MegaSaver_GUI_Analiz.md`. Rev.2
+now captures bridge contract cost, store-root/file-backed concerns,
+typed-memory, long-running actions, and mutation safety classes. Remaining
+corrections: do not cite `CoreRegistry` for index/context/audit (they live in
+`@megasaver/indexer`, `@megasaver/context-pruner`, and `@megasaver/stats`);
+avoid saying "doctor view yok" without distinguishing general health doctor
+from the existing AgentSetupDoctor; add version/permission and data-volume
+sections before implementation.
+
+## [2026-06-14] analysis | GUI rev3 recheck
+
+Rechecked rev.3 of `/Users/halitozger/Desktop/MegaSaver_GUI_Analiz.md`. Prior
+corrections are incorporated: package ownership, AgentSetupDoctor wording,
+project `rootPath`, audit-empty fallback, context-build classification,
+pagination/data caps, and version/permission/unreadable-root file-backed
+errors. Remaining notes are narrow: project `rootPath` validation should say
+exist/readable instead of writable for create (writes happen later in
+connector/index flows), index store currently self-heals some corrupt reads
+instead of surfacing every corruption, and implementation should separate
+design-time desired bridge errors from existing bridge mappings.
+
+## [2026-06-14] analysis | External roadmap architecture correction
+
+Reviewed and revised `/Users/halitozger/Desktop/MegaSaver_Detayli_Roadmap_ve_Mimari.txt`.
+Main corrections: keep current Node 22/TypeScript/pnpm/`mega` CLI foundation;
+treat Rust as a benchmark-gated future dataplane option, not a rewrite; preserve
+the agent-agnostic Core boundary by keeping proxy/provider/agent logic in
+connectors, MCP bridge, or gateway packages; reframe P0 as a gateway extension
+on top of shipped ContextOps Phase 0-10 rather than a greenfield build; split
+OSS, Team/Cloud, and Enterprise scope; add missing decision gates for
+license/open-core, privacy/KVKK/GDPR, threat model, protocol conformance,
+benchmark provenance, migration/rollback, and kill criteria.
+
 ## [2026-06-15] feature | GUI workspace-scoped Saver Mode activation
 
 Re-hosted token-saver activation after the live-first pivot (PR #134) orphaned
