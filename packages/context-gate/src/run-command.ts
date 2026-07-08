@@ -36,6 +36,7 @@ import {
   appendEvent,
   appendOverlayEvent,
 } from "@megasaver/stats";
+import { appendFirewallEventsFromFilter } from "./firewall-ledger.js";
 import { appendOverlayFailure, buildOverlayHints } from "./overlay-failures.js";
 import {
   type LoadProjectPermissions,
@@ -264,6 +265,17 @@ export async function runOutputExecCommand(
     engineRanking: !engineRankingDisabledByEnv(),
     recordTrace: seamTraceEnabledByEnv(),
   });
+
+  appendFirewallEventsFromFilter(
+    input.storeRoot,
+    {
+      at: new Date((input.now ?? defaultNow)()).toISOString(),
+      sourcePath: redact(`${input.command} ${input.args.join(" ")}`.trim()).redacted,
+      projectId: settings.projectId,
+      sessionId: input.sessionId,
+    },
+    filtered.firewall,
+  );
 
   const warnings = filtered.warnings ?? [];
   const redacted = warnings.some((w) => w.startsWith("redacted"));
@@ -503,6 +515,17 @@ export async function runOverlayOutputExecCommand(
     // deferred (§P2.6 keeps measurement scope to the registry sites).
     engineRanking: !engineRankingDisabledByEnv(),
   });
+
+  appendFirewallEventsFromFilter(
+    input.storeRoot,
+    {
+      at: new Date((input.now ?? defaultNow)()).toISOString(),
+      sourcePath: redact(`${input.command} ${input.args.join(" ")}`.trim()).redacted,
+      projectId: input.workspaceKey,
+      sessionId: input.liveSessionId,
+    },
+    filtered.firewall,
+  );
 
   const warnings = filtered.warnings ?? [];
   const redacted = warnings.some((w) => w.startsWith("redacted"));

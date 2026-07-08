@@ -14,6 +14,7 @@ import {
   appendEvent,
   appendOverlayEvent,
 } from "@megasaver/stats";
+import { appendFirewallEvent, appendFirewallEventsFromFilter } from "./firewall-ledger.js";
 import { buildOverlayHints } from "./overlay-failures.js";
 import { hashContent, hashPath, loadReadIndex, recordRead } from "./read-index.js";
 import {
@@ -95,9 +96,19 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     permissions: settings.permissions,
   });
   if (!gate.ok) {
-    return gate.code === "path_denied"
-      ? { ok: false, reason: "path_denied", detail: gate.reason }
-      : { ok: false, reason: "path_unsafe", detail: gate.message };
+    if (gate.code === "path_denied") {
+      appendFirewallEvent(input.storeRoot, {
+        at: new Date((input.now ?? defaultNow)()).toISOString(),
+        kind: "blocked-read",
+        detector: "secret-path",
+        count: 1,
+        sourcePath: redact(input.path).redacted,
+        projectId: settings.projectId,
+        sessionId: input.sessionId,
+      });
+      return { ok: false, reason: "path_denied", detail: gate.reason };
+    }
+    return { ok: false, reason: "path_unsafe", detail: gate.message };
   }
 
   const now = input.now ?? defaultNow;
@@ -141,6 +152,16 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
   // The trace is measurement data (§P2.6): persisted below, stripped from the
   // agent-visible result so it never spends the tokens it exists to measure.
   const { trace: rankingTrace, ...filteredSansTrace } = filteredResult;
+  appendFirewallEventsFromFilter(
+    input.storeRoot,
+    {
+      at: new Date(now()).toISOString(),
+      sourcePath: redact(input.path).redacted,
+      projectId: settings.projectId,
+      sessionId: input.sessionId,
+    },
+    filteredResult.firewall,
+  );
   let result: FilterOutputResult = { ...filteredSansTrace };
   if (hintWarnings.length > 0) {
     result.warnings = [...(result.warnings ?? []), ...hintWarnings];
@@ -259,9 +280,19 @@ export async function runOverlayOutputPipeline(
     permissions: settings.permissions,
   });
   if (!gate.ok) {
-    return gate.code === "path_denied"
-      ? { ok: false, reason: "path_denied", detail: gate.reason }
-      : { ok: false, reason: "path_unsafe", detail: gate.message };
+    if (gate.code === "path_denied") {
+      appendFirewallEvent(input.storeRoot, {
+        at: new Date((input.now ?? defaultNow)()).toISOString(),
+        kind: "blocked-read",
+        detector: "secret-path",
+        count: 1,
+        sourcePath: redact(input.path).redacted,
+        projectId: input.workspaceKey,
+        sessionId: input.liveSessionId,
+      });
+      return { ok: false, reason: "path_denied", detail: gate.reason };
+    }
+    return { ok: false, reason: "path_unsafe", detail: gate.message };
   }
 
   const now = input.now ?? defaultNow;
@@ -293,6 +324,17 @@ export async function runOverlayOutputPipeline(
     maxReturnedBytes: settings.maxReturnedBytes,
     sessionHints,
   });
+
+  appendFirewallEventsFromFilter(
+    input.storeRoot,
+    {
+      at: new Date(now()).toISOString(),
+      sourcePath: redact(input.path).redacted,
+      projectId: input.workspaceKey,
+      sessionId: input.liveSessionId,
+    },
+    filteredResult.firewall,
+  );
 
   let result: FilterOutputResult = { ...filteredResult };
   if (hintWarnings.length > 0) {
