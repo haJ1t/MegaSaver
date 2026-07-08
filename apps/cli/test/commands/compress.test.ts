@@ -1,5 +1,15 @@
 import { type KeyObject, generateKeyPairSync, sign } from "node:crypto";
-import { mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activateLicense } from "@megasaver/entitlement";
@@ -23,6 +33,9 @@ function signTestLicense(privateKey: KeyObject, payload: Payload): string {
 
 const NOW_MS = 1_700_000_000_000;
 const now = () => NOW_MS;
+
+// chmod 0o444 is only meaningful on POSIX; Windows maps modes differently.
+const itPosix = process.platform === "win32" ? it.skip : it;
 
 // An oversized doc the engine WILL compress (many paragraphs + a long list).
 const BIG_DOC = [
@@ -300,8 +313,9 @@ describe("runCompress — entitled", () => {
     expect(readFileSync(`${path}.bak`, "utf8")).toBe(BIG_DOC);
     // no leftover temp files
     expect(readdirSync(root).some((f) => f.endsWith(".tmp"))).toBe(false);
-    // restore works
-    expect(readFileSync(`${path}.bak`, "utf8")).toBe(BIG_DOC);
+    // restore works: mv the .bak back over the compressed target, assert original
+    renameSync(`${path}.bak`, path);
+    expect(readFileSync(path, "utf8")).toBe(BIG_DOC);
   });
 
   // Reproduces the review's CONFIRMED critical end-to-end: compressProse is not
@@ -372,5 +386,132 @@ describe("runCompress — entitled", () => {
     // mv-restore yields the exact original bytes back
     renameSync(`${path}.bak`, path);
     expect(readFileSync(path).equals(rawBytes)).toBe(true);
+  });
+
+  // Never overwrite when the "compressed" output is not actually smaller — the
+  // engine can emit markers longer than a short body, so report.changed is true
+  // but there are no byte savings. Writing would grow the file while printing
+  // "0 bytes saved". Skip the write.
+  it("--apply does not write when there are no byte savings", async () => {
+    proSpies.compose.mockReturnValueOnce({
+      originalBytes: 100,
+      compressedBytes: 130,
+      bytesSaved: 0,
+      tokensOriginal: 25,
+      tokensCompressed: 33,
+      tokensSaved: 0,
+      dollarsSaved: 0,
+      paragraphsCollapsed: 1,
+      listItemsDropped: 0,
+      changed: true,
+      compressed: "y".repeat(130),
+    });
+    const { inp, writes } = scenario({ apply: true });
+    const code = await runCompress(inp);
+    expect(code).toBe(0);
+    expect(writes).toHaveLength(0);
+    expect(out.join("\n")).toContain("already tight");
+  });
+
+  it("errors cleanly when the path is a directory (no stack trace)", async () => {
+    const { defaultCompressFs } = await import("../../src/commands/compress.js");
+    const dir = join(root, "adir.md");
+    mkdirSync(dir);
+    const code = await runCompress({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      path: dir,
+      apply: true,
+      fs: defaultCompressFs(),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("cannot read");
+  });
+
+  it("accepts an uppercase extension (case-insensitive)", async () => {
+    const { inp } = scenario({ path: join(root, "NOTES.MD") });
+    const code = await runCompress(inp);
+    expect(code).toBe(0);
+    expect(err.join("\n")).not.toContain("only accepts");
+    expect(out.join("\n")).toContain("Savings:");
+  });
+
+  it("real-fs: a failed target write leaves the original recoverable via .bak", async () => {
+    const { defaultCompressFs } = await import("../../src/commands/compress.js");
+    const path = join(root, "CLAUDE.md");
+    writeFileSync(path, BIG_DOC);
+    const base = defaultCompressFs();
+    const fs: CompressFs = {
+      ...base,
+      writeFile: () => {
+        throw new Error("disk full");
+      },
+    };
+    await expect(
+      runCompress({
+        storeRoot: root,
+        now,
+        publicKey: keys.publicKey,
+        path,
+        apply: true,
+        fs,
+        stdout,
+        stderr,
+      }),
+    ).rejects.toThrow("disk full");
+    // The byte-exact .bak was written BEFORE the failed target overwrite, and the
+    // target is never renamed on failure — so the original is fully recoverable.
+    expect(readFileSync(`${path}.bak`, "utf8")).toBe(BIG_DOC);
+    expect(readFileSync(path, "utf8")).toBe(BIG_DOC);
+    renameSync(`${path}.bak`, path);
+    expect(readFileSync(path, "utf8")).toBe(BIG_DOC);
+  });
+
+  itPosix("real-fs: compresses a read-only (0o444) source; .bak keeps bytes + mode", async () => {
+    const { defaultCompressFs } = await import("../../src/commands/compress.js");
+    const path = join(root, "CLAUDE.md");
+    writeFileSync(path, BIG_DOC);
+    chmodSync(path, 0o444);
+    const code = await runCompress({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      path,
+      apply: true,
+      fs: defaultCompressFs(),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    // Byte-exact backup that also preserves the source's read-only mode.
+    expect(readFileSync(`${path}.bak`, "utf8")).toBe(BIG_DOC);
+    expect(statSync(`${path}.bak`).mode & 0o777).toBe(0o444);
+    // Target was compressed.
+    expect(Buffer.byteLength(readFileSync(path, "utf8"))).toBeLessThan(Buffer.byteLength(BIG_DOC));
+  });
+
+  itPosix("real-fs: --apply preserves the source mode (a private file stays private)", async () => {
+    const { defaultCompressFs } = await import("../../src/commands/compress.js");
+    const path = join(root, "CLAUDE.md");
+    writeFileSync(path, BIG_DOC);
+    chmodSync(path, 0o600);
+    const code = await runCompress({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      path,
+      apply: true,
+      fs: defaultCompressFs(),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    // --apply must not widen permissions: the compressed live file and its .bak
+    // both keep the original restrictive mode.
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    expect(statSync(`${path}.bak`).mode & 0o777).toBe(0o600);
   });
 });
