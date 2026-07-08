@@ -15,5 +15,11 @@ export {
   projectPermissionsSchema,
   type ProjectPermissions,
 } from "./parse-project-permissions.js";
-export { redact, type RedactResult } from "./redact.js";
+export {
+  redact,
+  redactWithFindings,
+  type RedactResult,
+  type RedactFindings,
+  type DetectorCount,
+} from "./redact.js";
 export { compileGlob } from "./secret-paths.js";
