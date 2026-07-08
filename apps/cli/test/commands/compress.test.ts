@@ -80,6 +80,9 @@ function fakeFs(over: Partial<CompressFs> = {}): {
     // existing .bak override fileExists explicitly.
     fileExists: (p) => !p.endsWith(".bak"),
     writeFile: (p, c) => void writes.push([p, c]),
+    // Mirror the real byte-copy: record (dest, source-content) so the backup-first
+    // ordering and write-once assertions still hold on the fake.
+    backupFile: (src, dest) => void writes.push([dest, fs.readFile(src)]),
     gitFileStatus: (): GitFileStatus => "clean",
     ...over,
   };
@@ -342,5 +345,32 @@ describe("runCompress — entitled", () => {
     // and mv restore still yields the true original
     renameSync(`${path}.bak`, path);
     expect(readFileSync(path, "utf8")).toBe(BIG_DOC);
+  });
+
+  // Reversibility guarantee: the .bak must be a BYTE-EXACT copy of the source, so a
+  // non-UTF-8 file (latin-1, UTF-16, stray bytes) survives a compress→restore round
+  // trip. A utf8 read→write backup replaces invalid bytes with U+FFFD, so the
+  // mv-restore yields mojibake — silent data loss (review #256 blocker).
+  it("real-fs: backup is byte-exact for a non-UTF-8 file", async () => {
+    const { defaultCompressFs } = await import("../../src/commands/compress.js");
+    const path = join(root, "notes.md");
+    // BIG_DOC (the engine compresses it) + a trailing sequence that is invalid UTF-8.
+    const rawBytes = Buffer.concat([Buffer.from(BIG_DOC, "utf8"), Buffer.from([0xe9, 0xff, 0xfe])]);
+    writeFileSync(path, rawBytes);
+    const code = await runCompress({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      path,
+      apply: true,
+      fs: defaultCompressFs(),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(readFileSync(`${path}.bak`).equals(rawBytes)).toBe(true);
+    // mv-restore yields the exact original bytes back
+    renameSync(`${path}.bak`, path);
+    expect(readFileSync(path).equals(rawBytes)).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import type { KeyObject } from "node:crypto";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { checkEntitlement } from "@megasaver/entitlement";
 import { compressProse } from "@megasaver/output-filter";
@@ -18,6 +18,7 @@ export type CompressFs = {
   readFile: (path: string) => string;
   fileExists: (path: string) => boolean;
   writeFile: (path: string, content: string) => void;
+  backupFile: (src: string, dest: string) => void;
   gitFileStatus: (path: string) => GitFileStatus;
 };
 
@@ -46,6 +47,15 @@ export function defaultCompressFs(): CompressFs {
       const tmp = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`);
       writeFileSync(tmp, content);
       renameSync(tmp, path);
+    },
+    // Byte-exact copy of the ORIGINAL file — NOT a utf8 decode→encode round trip,
+    // which replaces invalid bytes with U+FFFD and corrupts the backup of any
+    // non-UTF-8 source, breaking mv-restore. Atomic: copy into a same-dir temp,
+    // then rename over the backup path.
+    backupFile: (src, dest) => {
+      const tmp = join(dirname(dest), `.${basename(dest)}.${process.pid}.tmp`);
+      copyFileSync(src, tmp);
+      renameSync(tmp, dest);
     },
     gitFileStatus: (path) => defaultGitFileStatus(path),
   };
@@ -131,7 +141,7 @@ export async function runCompress(input: RunCompressInput): Promise<0 | 1> {
     return 1;
   }
 
-  input.fs.writeFile(bak, original);
+  input.fs.backupFile(input.path, bak);
   input.fs.writeFile(input.path, report.compressed);
   input.stdout(
     `compressed ${input.path}: ${report.bytesSaved} bytes (~${report.tokensSaved} tokens, ~$${report.dollarsSaved.toFixed(2)} est.) saved`,
