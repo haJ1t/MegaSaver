@@ -1,6 +1,6 @@
 // apps/cli/test/commands/cache.test.ts
 import { type KeyObject, generateKeyPairSync, sign } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activateLicense } from "@megasaver/entitlement";
@@ -156,5 +156,36 @@ describe("runCache — entitled", () => {
     // 2 calls / 1 conversation → unreliable → headline suppressed, caveat shown.
     expect(text).not.toContain("burned on cache misses");
     expect(text).toContain("not enough data for a confident diagnosis");
+  });
+
+  it("real-fs smoke: default reader finds the store log and prices a known miss", async () => {
+    const { defaultReadUsageLog } = await import("../../src/commands/cache.js");
+    const dir = join(root, "proxy-usage");
+    mkdirSync(dir, { recursive: true });
+    const lines = [
+      usageLine({ atMs: NOW_MS - 2 * HOUR, messageCount: 1, cacheCreationTokens: 10_000 }),
+      usageLine({
+        atMs: NOW_MS - 2 * HOUR + 60_000,
+        messageCount: 3,
+        cacheCreationTokens: 10_000,
+      }),
+    ];
+    writeFileSync(join(dir, "usage.jsonl"), `${lines.join("\n")}\n`);
+    const code = await runCache({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readUsageLog: defaultReadUsageLog,
+      json: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    const report = JSON.parse(out.join("\n")) as {
+      findings: Array<{ detector: string; burnedUsd: number }>;
+    };
+    expect(report.findings[0]?.detector).toBe("unstable-prefix");
+    // 10000 re-paid × $3/MTok × 1.15
+    expect(report.findings[0]?.burnedUsd).toBeCloseTo(0.0345, 6);
   });
 });
