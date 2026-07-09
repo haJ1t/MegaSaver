@@ -197,37 +197,19 @@ describe("buildSaverDecision", () => {
     }
   });
 
-  it("passes through a Glob filenames list (high-signal, never compressed)", async () => {
-    // Real Claude Code Glob payload exposes a `filenames` array — every entry is a
-    // distinct path the model may need, so it is evidence (§1), not compressible text.
-    const out = await buildSaverDecision(
-      {
-        tool_name: "Glob",
-        tool_input: { pattern: "**/*.ts" },
-        tool_response: {
-          filenames: Array.from({ length: 2_000 }, (_, i) => `src/file-${i}.ts`),
-          durationMs: 12,
-          numFiles: 2_000,
-          truncated: false,
-        },
-        session_id: "live-1",
-        cwd: "/p",
-      },
-      deps(),
-    );
-    expect(out).toEqual({ passthrough: true });
-  });
+  // Wave 1 (spec 2026-07-09) reverses Glob filenames passthrough — see the
+  // "wave-1 shapes" describe block below for the rewritten test.
 
-  it("passes through a multi-modal content array (never drops image blocks)", async () => {
+  it("compresses the text block in a multi-modal content array, keeps the image block intact", async () => {
+    // Wave 1 (spec 2026-07-09) reverses mixed-array passthrough: the text
+    // block is compressible signal, the image block passes through untouched.
+    const image = { type: "image", source: { data: "..." } };
     const out = await buildSaverDecision(
       {
         tool_name: "Read",
         tool_input: { file_path: "/p/doc.pdf" },
         tool_response: {
-          content: [
-            { type: "text", text: "Z".repeat(50_000) },
-            { type: "image", source: { data: "..." } },
-          ],
+          content: [{ type: "text", text: "Z".repeat(50_000) }, image],
           isError: false,
         },
         session_id: "live-1",
@@ -235,7 +217,13 @@ describe("buildSaverDecision", () => {
       },
       deps(),
     );
-    expect(out).toEqual({ passthrough: true });
+    expect("updatedToolOutput" in out).toBe(true);
+    if ("updatedToolOutput" in out) {
+      const u = out.updatedToolOutput as { content: unknown[] };
+      expect(u.content).toHaveLength(2);
+      expect(u.content[0]).toEqual({ type: "text", text: expect.stringContaining("SHORT") });
+      expect(u.content[1]).toEqual(image);
+    }
   });
 
   it("compresses a pure-text content array", async () => {
@@ -665,5 +653,116 @@ describe("wave-1 tool coverage", () => {
     expect(d.record).toHaveBeenCalledWith(
       expect.objectContaining({ label: "explore auth", sourceKind: "command" }),
     );
+  });
+});
+
+describe("wave-1 shapes", () => {
+  it("compresses a Glob filenames array and rebuilds it as string[] (spec 2026-07-09 reverses the v1 passthrough)", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Glob",
+        tool_input: { pattern: "**/*.ts" },
+        tool_response: {
+          filenames: Array.from({ length: 2_000 }, (_, i) => `src/file-${i}.ts`),
+          durationMs: 12,
+          numFiles: 2_000,
+          truncated: false,
+        },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    const u = (out as { updatedToolOutput: { filenames: string[]; numFiles: number } })
+      .updatedToolOutput;
+    expect(Array.isArray(u.filenames)).toBe(true);
+    expect(u.filenames.join("\n")).toContain("SHORT");
+    expect(u.filenames.every((f) => f.length > 0)).toBe(true);
+    expect(u.numFiles).toBe(2_000);
+  });
+
+  it("compresses Grep files_with_matches filenames", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Grep",
+        tool_input: { pattern: "TODO" },
+        tool_response: {
+          mode: "files_with_matches",
+          filenames: Array.from({ length: 2_000 }, (_, i) => `src/f-${i}.ts`),
+          numFiles: 2_000,
+        },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+  });
+
+  it("compresses the LARGER of stdout/stderr and leaves the other untouched", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Bash",
+        tool_input: { command: "pnpm build" },
+        tool_response: {
+          stdout: "ok",
+          stderr: "E".repeat(50_000),
+          interrupted: false,
+          isImage: false,
+        },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    const u = (out as { updatedToolOutput: { stdout: string; stderr: string } }).updatedToolOutput;
+    expect(u.stdout).toBe("ok");
+    expect(u.stderr).toContain("SHORT");
+  });
+
+  it("compresses text blocks in a mixed content array and preserves non-text blocks byte-identical", async () => {
+    const d = deps();
+    const image = { type: "image", source: { type: "base64", data: "AAAA" } };
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Read",
+        tool_input: { file_path: "/x/doc.pdf" },
+        tool_response: {
+          content: [
+            { type: "text", text: "T".repeat(50_000) },
+            image,
+            { type: "text", text: "tail" },
+          ],
+        },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    const u = (out as { updatedToolOutput: { content: unknown[] } }).updatedToolOutput;
+    expect(u.content).toHaveLength(2);
+    expect(u.content[0]).toEqual({ type: "text", text: expect.stringContaining("SHORT") });
+    expect(u.content[1]).toEqual(image);
+  });
+
+  it("still passes through an all-non-text content array", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Read",
+        tool_input: { file_path: "/x/img.png" },
+        tool_response: { content: [{ type: "image", source: { data: "AAAA" } }] },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect(out).toEqual({ passthrough: true });
   });
 });

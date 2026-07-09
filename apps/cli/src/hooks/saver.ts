@@ -80,9 +80,16 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     return { raw: o["result"], rebuild: (t) => ({ ...o, result: t }) };
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-  if (typeof o["stdout"] === "string")
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    return { raw: o["stdout"], rebuild: (t) => ({ ...o, stdout: t }) };
+  const stdout = typeof o["stdout"] === "string" ? o["stdout"] : undefined;
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const stderr = typeof o["stderr"] === "string" ? o["stderr"] : undefined;
+  if (stdout !== undefined || stderr !== undefined) {
+    // Wave 1 (A6): pnpm/cargo/webpack put their bulk on stderr — compress the
+    // larger stream, keep the other untouched so the stdout/stderr split survives.
+    const slot = (stderr?.length ?? 0) > (stdout?.length ?? 0) ? "stderr" : "stdout";
+    const raw = slot === "stderr" ? (stderr as string) : (stdout ?? "");
+    return { raw, rebuild: (t) => ({ ...o, [slot]: t }) };
+  }
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   if (typeof o["content"] === "string") {
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
@@ -92,23 +99,49 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
   if (Array.isArray(o["content"])) {
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     const blocks = o["content"] as unknown[];
-    // Evidence-preserving (§1): never collapse a multi-modal array — if ANY
-    // block is non-text (image, etc.) pass through verbatim. Only pure-text
-    // arrays are safe to compress.
-    const allText = blocks.every(
-      (b) =>
-        typeof b === "object" &&
-        b !== null &&
-        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-        (b as { type?: unknown })["type"] === "text" &&
-        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-        typeof (b as { text?: unknown })["text"] === "string",
-    );
-    if (!allText || blocks.length === 0) return null;
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    const raw = blocks.map((b) => (b as { text: string })["text"]).join("\n");
+    if (blocks.length === 0) return null;
+    const isText = (b: unknown): b is { type: "text"; text: string } =>
+      typeof b === "object" &&
+      b !== null &&
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      (b as { type?: unknown })["type"] === "text" &&
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      typeof (b as { text?: unknown })["text"] === "string";
+    const textBlocks = blocks.filter(isText);
+    if (textBlocks.length === 0) return null;
+    const raw = textBlocks.map((b) => b.text).join("\n");
     if (raw.length === 0) return null;
-    return { raw, rebuild: (t) => ({ ...o, content: [{ type: "text", text: t }] }) };
+    // Wave 1 (A7): compressed text lands at the FIRST text block's position;
+    // non-text blocks (images, …) pass through byte-identical, order held.
+    const rebuild = (t: string) => {
+      const firstTextIdx = blocks.findIndex(isText);
+      const next: unknown[] = [];
+      blocks.forEach((b, i) => {
+        if (i === firstTextIdx) next.push({ type: "text", text: t });
+        else if (!isText(b)) next.push(b);
+      });
+      return { ...o, content: next };
+    };
+    return { raw, rebuild };
+  }
+  // Wave 1 (A5): Grep files_with_matches / Glob expose a filenames array —
+  // uncapped 30KB+ leaks in a monorepo. Compress as newline-joined paths;
+  // rebuild keeps the string[] schema (fewer, ranked paths + footer).
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const filenames = o["filenames"];
+  if (
+    Array.isArray(filenames) &&
+    filenames.length > 0 &&
+    filenames.every((f) => typeof f === "string")
+  ) {
+    const raw = (filenames as string[]).join("\n");
+    if (raw.length === 0) return null;
+    // Drop empties so the appended footer's blank lines don't become bogus
+    // ""-entries; numFiles (preserved via ...o) stays the authoritative count.
+    return {
+      raw,
+      rebuild: (t) => ({ ...o, filenames: t.split("\n").filter((s) => s.length > 0) }),
+    };
   }
   // Real Claude Code Read payload: the file body is nested at `file.content`, not
   // top-level `content`. Swap it while preserving the surrounding file metadata.
