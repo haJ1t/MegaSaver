@@ -45,7 +45,7 @@ const rule: ProjectRule = {
   createdFrom: "manual",
   createdAt: NOW,
   updatedAt: NOW,
-} as ProjectRule;
+} as unknown as ProjectRule;
 
 const failure: FailedAttempt = {
   id: "33333333-3333-4333-8333-333333333333",
@@ -56,7 +56,7 @@ const failure: FailedAttempt = {
   relatedFiles: [],
   convertedToRule: false,
   createdAt: NOW,
-} as FailedAttempt;
+} as unknown as FailedAttempt;
 
 const payload: BrainPayload = { memories: [memory], rules: [rule], failures: [failure] };
 

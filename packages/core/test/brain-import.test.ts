@@ -37,7 +37,7 @@ function seedSource() {
     createdAt: NOW,
     updatedAt: NOW,
     supersedesId: "11111111-1111-4111-8111-111111111110",
-  } as MemoryEntry);
+  } as unknown as MemoryEntry);
   registry.createProjectRule({
     id: "22222222-2222-4222-8222-222222222222",
     projectId: project.id,
