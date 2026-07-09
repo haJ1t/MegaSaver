@@ -3,6 +3,7 @@ import { outputChunkCommand } from "./chunk.js";
 import { outputExecCommand } from "./exec.js";
 import { outputFileCommand } from "./file.js";
 import { outputFilterCommand } from "./filter.js";
+import { outputGcCommand } from "./gc.js";
 
 export {
   type RunOutputFileInput,
@@ -24,6 +25,11 @@ export {
   runOutputExec,
   outputExecCommand,
 } from "./exec.js";
+export {
+  type RunOutputGcInput,
+  runOutputGc,
+  outputGcCommand,
+} from "./gc.js";
 
 export const outputCommand = defineCommand({
   meta: { name: "output", description: "Filter and chunk tool output." },
@@ -32,5 +38,6 @@ export const outputCommand = defineCommand({
     filter: outputFilterCommand,
     chunk: outputChunkCommand,
     exec: outputExecCommand,
+    gc: outputGcCommand,
   },
 });
