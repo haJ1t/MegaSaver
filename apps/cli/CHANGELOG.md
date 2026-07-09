@@ -1,5 +1,31 @@
 # @megasaver/cli
 
+## 1.13.0
+
+### Minor Changes
+
+- fd4d88f: `mega alerts` — deterministic anomaly alerts over the savings + firewall
+  streams (median+MAD spike detection: daily traffic, per-source, saving-ratio
+  collapse, firewall-event surge, plus budget pace) — and `mega savings budget
+set|show|clear`, a persistent stats/budget.json savings goal.
+  `mega savings forecast` now auto-loads the stored budget (explicit flags win;
+  the pace line says "stored budget"; `--json` adds `goalSource`).
+
+### Patch Changes
+
+- f1ef345: context-gate: strip the value-free `firewall` counts (and, on the overlay
+  paths, `trace`) from the agent-visible tool result. These are measurement
+  data consumed only by the firewall ledger / replay-trace writer (§P2.6) and
+  were needlessly spending agent tokens on every redaction-bearing read or
+  command. The ledger still records every event.
+- 5e1a024: policy: fix `url_basic_auth` redaction leaving a password FRAGMENT when the
+  password contains `@`. `curl https://user:p@ss@host` previously redacted to
+  `https://[REDACTED]@ss@host`, leaking `@ss@host` — a gap that reached every
+  redaction sink (agent-visible output AND the value-free firewall ledger). The
+  password now spans `@`/`/`/`:` and anchors to the first `@` followed by a real
+  host + delimiter, scrubbing the full credential without over-matching a later
+  `@` in the path (e.g. `/@2x.png`).
+
 ## 1.12.0
 
 ### Minor Changes
