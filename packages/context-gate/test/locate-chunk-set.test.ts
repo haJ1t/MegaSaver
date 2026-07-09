@@ -19,13 +19,13 @@ describe("locateChunkSet", () => {
     await rm(store, { recursive: true, force: true });
   });
 
-  it("returns { projectId, sessionId } for a stored chunk-set id", async () => {
+  it("returns { layout: 'registry', projectId, sessionId } for a stored chunk-set id", async () => {
     const dir = join(store, "content", PROJECT_ID, SESSION_ID);
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, `${CHUNK_SET_ID}.json`), "{}");
 
     const located = locateChunkSet({ storeRoot: store, chunkSetId: CHUNK_SET_ID });
-    expect(located).toEqual({ projectId: PROJECT_ID, sessionId: SESSION_ID });
+    expect(located).toEqual({ layout: "registry", projectId: PROJECT_ID, sessionId: SESSION_ID });
   });
 
   it("returns null for an unknown chunk-set id", async () => {
