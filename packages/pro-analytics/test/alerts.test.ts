@@ -396,3 +396,71 @@ describe("detectAnomalies — history + status + shape", () => {
     expect(report.findings.some((f) => f.axis === "traffic")).toBe(false);
   });
 });
+
+// The absolute floors and the strict `>` boundary are the anti-noise guards.
+// Every axis test above uses a FLAT (MAD=0) baseline, where upperStats' own
+// `max(4×median, floor)` fallback already forces threshold ≥ floor — so the
+// `&& today >= floor` conjunct and the strict `>` are never the deciding
+// factor. These cases put the decision squarely on those guards (MAD>0 with
+// threshold < floor), so removing the conjunct or flipping `>`→`>=` flips the
+// verdict and fails a test.
+describe("detectAnomalies — floor + boundary guards (mutation coverage)", () => {
+  it("traffic: today clears the MAD threshold but is below the token floor → no finding", () => {
+    // Alternating 5k/8k token days → median 6500, MAD 1500, threshold ~11750.
+    // Today 20k tokens > 11750 but < 50k floor → suppressed by the floor conjunct.
+    const events = [];
+    for (let i = 1; i <= 14; i++) {
+      events.push(
+        ev({
+          createdAt: new Date(NOW - i * DAY).toISOString(),
+          rawBytes: i % 2 === 0 ? 20_000 : 32_000,
+        }),
+      );
+    }
+    events.push(ev({ createdAt: new Date(NOW).toISOString(), rawBytes: 80_000 })); // 20k tokens
+    const report = detectAnomalies(events, [], null, { now: NOW, windowDays: 14 });
+    expect(report.findings.some((f) => f.axis === "traffic")).toBe(false);
+  });
+
+  it("firewall: today clears the MAD threshold but is below the event floor → no finding", () => {
+    // Counts alternating 1/2 → median 1.5, MAD 0.5, threshold 3.25.
+    // Today 4 > 3.25 but < 5-event floor → suppressed by the floor conjunct.
+    const fwEvents: FirewallEventInput[] = [];
+    for (let i = 1; i <= 14; i++) fwEvents.push(fw(i, i % 2 === 0 ? 1 : 2));
+    fwEvents.push(fw(0, 4));
+    const report = detectAnomalies([], fwEvents, null, { now: NOW, windowDays: 14 });
+    expect(report.findings.some((f) => f.axis === "firewall")).toBe(false);
+  });
+
+  it("today exactly at the threshold does not fire (strict >, not >=)", () => {
+    // All-zero baseline (one tiny 8-day-old event unlocks history) → threshold
+    // = floor = 50k. Today exactly 50k tokens: 50000 > 50000 is false.
+    const events = [
+      ev({ createdAt: new Date(NOW - 8 * DAY).toISOString(), rawBytes: 4_000 }),
+      ev({ createdAt: new Date(NOW).toISOString(), rawBytes: 200_000 }), // exactly 50k tokens
+    ];
+    const report = detectAnomalies(events, [], null, { now: NOW });
+    expect(report.findings.some((f) => f.axis === "traffic")).toBe(false);
+  });
+
+  it("today is excluded from its own baseline even when inclusion would flip the verdict", () => {
+    // Alternating 100k/300k token baseline → median 200k, MAD 100k, threshold 550k.
+    // Today 600k fires. If today LEAKED into the baseline, median→300k and
+    // threshold→1M, suppressing the spike — so this pins the exclusion for real,
+    // not incidentally over a zero-dominated baseline.
+    const events = [];
+    for (let i = 1; i <= 14; i++) {
+      events.push(
+        ev({
+          createdAt: new Date(NOW - i * DAY).toISOString(),
+          rawBytes: i % 2 === 0 ? 400_000 : 1_200_000,
+        }),
+      );
+    }
+    events.push(ev({ createdAt: new Date(NOW).toISOString(), rawBytes: 2_400_000 })); // 600k tokens
+    const report = detectAnomalies(events, [], null, { now: NOW, windowDays: 14 });
+    const traffic = report.findings.find((f) => f.axis === "traffic");
+    expect(traffic).toBeDefined();
+    expect(traffic?.baselineMedian).toBe(200_000);
+  });
+});
