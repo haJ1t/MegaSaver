@@ -9,6 +9,7 @@ import { contextCommand } from "./commands/context/index.js";
 import { daemonCommand } from "./commands/daemon/index.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { failCommand } from "./commands/fail/index.js";
+import { firewallCommand } from "./commands/firewall.js";
 import { githubCommand } from "./commands/github/index.js";
 import { guiCommand } from "./commands/gui.js";
 import { hooksCommand } from "./commands/hooks/index.js";
@@ -60,6 +61,7 @@ export const mainCommand = defineCommand({
     github: githubCommand,
     gui: guiCommand,
     fail: failCommand,
+    firewall: firewallCommand,
     learn: learnCommand,
     license: licenseCommand,
     project: projectCommand,

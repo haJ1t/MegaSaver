@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ibanValid, luhnValid, tcknValid } from "./pii-validators.js";
 
 // epic §9d — LOCKED baseline. Validated at module load (boundary, §8).
 // Application order matters: anthropic_key MUST run before openai_key
@@ -9,6 +10,7 @@ const redactionPatternSchema = z.object({
   name: z.string(),
   pattern: z.instanceof(RegExp),
   replacement: z.string(),
+  validate: z.custom<(match: string) => boolean>((v) => typeof v === "function").optional(),
 });
 
 export type RedactionPattern = z.infer<typeof redactionPatternSchema>;
@@ -124,8 +126,45 @@ const baseline: RedactionPattern[] = [
     pattern: /(?<=authorization\s*[:=]\s*basic\s+)[A-Za-z0-9+/=]{8,}/gi,
     replacement: "[REDACTED]",
   },
+  {
+    // 13–19 digits with optional single space/dash separators. The regex is
+    // deliberately broad; the Luhn validate gate is what makes it precise.
+    name: "credit_card",
+    pattern: /\b(?:\d[ -]?){12,18}\d\b/g,
+    replacement: "[REDACTED:credit_card]",
+    validate: (match: string) => luhnValid(match.replace(/[ -]/g, "")),
+  },
+  {
+    // `i` flag: IBANs appear lower/mixed-case in prose, and ibanValid upcases
+    // before checking — without it a valid lowercase IBAN never reaches the
+    // validator and leaks unredacted.
+    name: "iban",
+    pattern: /\b[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}\b/gi,
+    replacement: "[REDACTED:iban]",
+    validate: (match: string) => ibanValid(match),
+  },
+  {
+    name: "tr_national_id",
+    pattern: /\b[1-9][0-9]{10}\b/g,
+    replacement: "[REDACTED:tr_national_id]",
+    validate: (match: string) => tcknValid(match),
+  },
 ];
 
 export const REDACTION_PATTERNS: readonly RedactionPattern[] = z
   .array(redactionPatternSchema)
   .parse(baseline);
+
+// Count-only observers: matches are COUNTED into RedactResult.observed but the
+// text is never modified (spec: email redaction corrupts git/package metadata
+// the agent legitimately needs).
+const observedBaseline: RedactionPattern[] = [
+  {
+    name: "email",
+    pattern: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
+    replacement: "",
+  },
+];
+export const OBSERVED_PATTERNS: readonly RedactionPattern[] = z
+  .array(redactionPatternSchema)
+  .parse(observedBaseline);

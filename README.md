@@ -525,6 +525,7 @@ mega <command> [subcommand] [flags]
 | `mega roi` | monthly savings vs Pro price — ROI multiple (Pro) |
 | `mega compress <file>` | reversible extractive compression of a memory/doc file — dry-run or `--apply` (Pro) |
 | `mega cache` | prompt-cache doctor — miss detection, dollars burned, one-line fixes (Pro) |
+| `mega firewall` | context-firewall audit — blocked secret reads, PII/secret redactions, value-free leak ledger (Pro) |
 | `mega doctor` | diagnose bridge / hooks / connector setup |
 
 Run `mega <command> --help` for subcommands and flags. Closed-enum flags
@@ -723,6 +724,12 @@ mega compress CLAUDE.md --apply    # overwrite (writes CLAUDE.md.bak; restore wi
   proxy's counts-only usage log, detects cache misses (no-cache,
   unstable-prefix, ttl-expiry, model-switch), prices what they burned, and
   prints a one-line fix per finding. Read-only; needs `mega proxy` metering.
+- `mega firewall [--days <n>] [--json]` — context-firewall audit: reports
+  blocked secret-path reads, secret/PII redactions (credit card, IBAN,
+  TR national id — all checksum-verified), and observed emails from an
+  always-on, value-free ledger. Detection + ledger run for everyone; the
+  audit report is Pro. Guards the Mega Saver ingress surface (proxy tools +
+  hooks), not native agent reads.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
 and exits cleanly — it never errors, and the free CLI is unaffected. Keys are

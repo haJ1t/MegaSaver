@@ -161,52 +161,66 @@ git commit -m "feat(policy): PII checksum validators"
 ```ts
 // packages/policy/test/redact-pii.test.ts
 import { describe, expect, it } from "vitest";
-import { redact } from "../src/redact.js";
+import { redact, redactWithFindings } from "../src/redact.js";
 
-describe("redact — PII patterns (validate-gated)", () => {
+describe("redactWithFindings — PII patterns (validate-gated)", () => {
   it("redacts a Luhn-valid card, including separator forms", () => {
-    const r = redact("card 4111111111111111 and 4111 1111 1111 1111 and 4111-1111-1111-1111");
+    const r = redactWithFindings("card 4111111111111111 and 4111 1111 1111 1111 and 4111-1111-1111-1111");
     expect(r.redacted).not.toContain("4111111111111111");
     expect(r.redacted).toContain("[REDACTED:credit_card]");
     expect(r.findings).toContainEqual({ name: "credit_card", count: 3 });
   });
 
   it("leaves a checksum-broken 16-digit run alone", () => {
-    const r = redact("not a card: 4111111111111112");
+    const r = redactWithFindings("not a card: 4111111111111112");
     expect(r.redacted).toContain("4111111111111112");
     expect(r.findings.some((f) => f.name === "credit_card")).toBe(false);
   });
 
   it("redacts a valid IBAN and rejects a broken one", () => {
-    const r = redact("pay GB82WEST12345698765432 not GB82WEST12345698765431");
+    const r = redactWithFindings("pay GB82WEST12345698765432 not GB82WEST12345698765431");
     expect(r.redacted).toContain("[REDACTED:iban]");
     expect(r.redacted).toContain("GB82WEST12345698765431");
     expect(r.findings).toContainEqual({ name: "iban", count: 1 });
   });
 
   it("redacts a valid TCKN and rejects a broken one", () => {
-    const r = redact("tckn 10000000146 vs 10000000147");
+    const r = redactWithFindings("tckn 10000000146 vs 10000000147");
     expect(r.redacted).toContain("[REDACTED:tr_national_id]");
     expect(r.redacted).toContain("10000000147");
     expect(r.findings).toContainEqual({ name: "tr_national_id", count: 1 });
   });
 
   it("observes emails without redacting them", () => {
-    const r = redact("author a@example.com reviewer b@test.org");
+    const r = redactWithFindings("author a@example.com reviewer b@test.org");
     expect(r.redacted).toContain("a@example.com");
     expect(r.redacted).toContain("b@test.org");
     expect(r.observed).toEqual([{ name: "email", count: 2 }]);
   });
 
   it("keeps the aggregate count in sync and reports secrets in findings too", () => {
-    const r = redact("token ghp_0123456789abcdef0123456789abcdef0123 card 4111111111111111");
+    const r = redactWithFindings("token ghp_0123456789abcdef0123456789abcdef0123 card 4111111111111111");
     expect(r.count).toBe(2);
     expect(r.findings.map((f) => f.name).sort()).toEqual(["credit_card", "github_token"]);
   });
 
-  it("returns empty findings/observed on clean text (back-compat shape)", () => {
-    const r = redact("nothing sensitive here");
+  it("returns empty findings/observed on clean text", () => {
+    const r = redactWithFindings("nothing sensitive here");
     expect(r).toEqual({ redacted: "nothing sensitive here", count: 0, findings: [], observed: [] });
+  });
+});
+
+describe("redact — 2-field public contract preserved (non-breaking)", () => {
+  it("still returns exactly {redacted, count} — no findings/observed keys", () => {
+    const r = redact("nothing sensitive here");
+    expect(r).toEqual({ redacted: "nothing sensitive here", count: 0 });
+    expect(Object.keys(r).sort()).toEqual(["count", "redacted"]);
+  });
+
+  it("also catches the new PII patterns (behavior change, not shape change)", () => {
+    const r = redact("card 4111111111111111");
+    expect(r.redacted).toContain("[REDACTED:credit_card]");
+    expect(r.count).toBe(1);
   });
 });
 ```
@@ -280,20 +294,31 @@ export const OBSERVED_PATTERNS: readonly RedactionPattern[] = z
 
 - [ ] **Step 3b: Replace `redact.ts` (full file)**
 
+CRITICAL: `redact()` keeps its EXACT 2-field return (`{redacted, count}`) — 9
+call sites and ~20 existing tests assert that exact shape via `.toEqual`, so
+adding fields to it breaks them. The firewall detail lives in a SEPARATE
+`redactWithFindings()`; `redact()` strips to two fields. Both apply the new PII
+patterns (behavior is compatible for the existing corpus, which has no
+checksum-valid PII).
+
 ```ts
 // packages/policy/src/redact.ts
 import { OBSERVED_PATTERNS, REDACTION_PATTERNS } from "./redaction-patterns.js";
 
 export type DetectorCount = { name: string; count: number };
 
-export type RedactResult = {
+// Unchanged public contract — do NOT add fields here.
+export type RedactResult = { redacted: string; count: number };
+
+// Richer variant for the firewall path (filterOutput only).
+export type RedactFindings = {
   redacted: string;
   count: number;
   findings: DetectorCount[];
   observed: DetectorCount[];
 };
 
-export function redact(text: string): RedactResult {
+export function redactWithFindings(text: string): RedactFindings {
   let redacted = text;
   let count = 0;
   const findings: DetectorCount[] = [];
@@ -318,6 +343,12 @@ export function redact(text: string): RedactResult {
   }
   return { redacted, count, findings, observed };
 }
+
+// Existing signature preserved: strip the richer result to {redacted, count}.
+export function redact(text: string): RedactResult {
+  const { redacted, count } = redactWithFindings(text);
+  return { redacted, count };
+}
 ```
 
 - [ ] **Step 3c: Export from `packages/policy/src/index.ts`**
@@ -325,7 +356,13 @@ export function redact(text: string): RedactResult {
 Find the existing line exporting from `./redact.js` and extend it to also export the new type; add `OBSERVED_PATTERNS` to the redaction-patterns export line:
 
 ```ts
-export { redact, type RedactResult, type DetectorCount } from "./redact.js";
+export {
+  redact,
+  redactWithFindings,
+  type RedactResult,
+  type RedactFindings,
+  type DetectorCount,
+} from "./redact.js";
 ```
 
 (Keep whatever else those lines already export.)
@@ -333,7 +370,11 @@ export { redact, type RedactResult, type DetectorCount } from "./redact.js";
 - [ ] **Step 4: Run the FULL policy suite (regression gate)**
 
 Run: `cd packages/policy && npx vitest run`
-Expected: PASS — the new file AND every pre-existing test (the existing redact fixtures are the regression corpus; if any existing test fails, the PII patterns changed old behavior → report BLOCKED, do not adjust the old tests).
+Expected: PASS — the new file AND every pre-existing test. Because `redact()`'s
+2-field shape is preserved, the existing `.toEqual({redacted, count})` tests
+pass untouched. If any existing test fails on the redacted STRING or COUNT (not
+shape), a PII pattern changed old behavior → report BLOCKED, do not adjust the
+old tests.
 
 - [ ] **Step 5: Biome + commit**
 
@@ -407,7 +448,10 @@ Expected: FAIL — `firewall` undefined on the result.
   };
 ```
 
-(2) In `filterOutput`, replace the current redact lines:
+(2) Change the import at the top of `types.ts` from `redact` to
+`redactWithFindings` (the `@megasaver/policy` import line — swap the named
+import; `redact` is no longer used in this file), then replace the current
+redact lines:
 
 ```ts
   const { redacted, count } = redact(raw);
@@ -417,7 +461,7 @@ Expected: FAIL — `firewall` undefined on the result.
 with:
 
 ```ts
-  const redaction = redact(raw);
+  const redaction = redactWithFindings(raw);
   const { redacted } = redaction;
   if (redaction.count > 0) {
     warnings.push(`redacted ${redaction.count} secret(s) before processing`);
@@ -460,7 +504,7 @@ git commit -m "feat(output-filter): firewall counts on filter result"
 
 ```ts
 // packages/context-gate/test/firewall-ledger.test.ts
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -494,10 +538,14 @@ describe("firewall ledger", () => {
   });
 
   it("swallows write failures (F-FW-3: auditing never breaks the pipeline)", () => {
-    // Point the store at a path whose parent is a FILE so mkdir fails.
-    appendFirewallEvent(join(root, "not-a-dir"), { at: AT, kind: "redacted", detector: "iban", count: 1 });
-    // no throw is the assertion; and nothing was created
-    expect(existsSync(join(root, "not-a-dir"))).toBe(false);
+    // Pre-create <root>/firewall as a FILE so mkdirSync(<root>/firewall) throws
+    // ENOTDIR — a genuine, deterministic write failure that must be swallowed.
+    writeFileSync(join(root, "firewall"), "x");
+    expect(() =>
+      appendFirewallEvent(root, { at: AT, kind: "redacted", detector: "iban", count: 1 }),
+    ).not.toThrow();
+    // The log was never written (its dir could not be created).
+    expect(existsSync(firewallLogPath(root))).toBe(false);
   });
 
   it("maps filter firewall counts to one event per detector", () => {
@@ -919,7 +967,9 @@ export interface FirewallEventInput {
   kind: "blocked-read" | "redacted" | "observed";
   detector: string;
   count: number;
-  sourcePath?: string;
+  // `| undefined`: callers pass zod-inferred events (absent field is
+  // `string | undefined`); exactOptionalPropertyTypes rejects `?: string`.
+  sourcePath?: string | undefined;
 }
 
 export interface FirewallReport {

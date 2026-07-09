@@ -2707,3 +2707,49 @@ Sellable Pro surface now m1–m9. Next in the LOCKED 1.x→2.0 program: **1.12 =
 N3 context firewall** (.env/keys/PII ingress guard + blocked-leak log), then
 1.13 anomaly+budgets → 2.0 portable project brain. [[entities/cli]]
 [[syntheses/release-history]] [[syntheses/pro-differentiation-portfolio]]
+
+## [2026-07-08] build | module 10 — context firewall (1.12)
+
+Implemented per docs/superpowers/plans/2026-07-08-context-firewall-plan.md
+(subagent-driven, TDD per task): policy PII validators (Luhn/mod-97/TCKN) +
+validate-gated patterns + email observer; `redact()` kept its 2-field public
+contract, new `redactWithFindings()` for the firewall path;
+`FilterOutputResult.firewall` carries counts out of the pure filter;
+context-gate value-free ledger (schema `.strict()`, F-FW-1; best-effort writes,
+F-FW-3) wired at 6 orchestrator ingress sites; pro-analytics `diagnoseFirewall`
+(7-day window, top-10 blocked, pinned advice); `mega firewall` CLI (gate-first,
+`--days` 1..3650, `--json` always JSON, ingress-surface footer). Detection +
+ledger free/always-on; report Pro.
+
+**The two-stage gate caught FOUR plan defects before any reached a commit or
+main**: (1) the `redact()` shape change broke ~20 `.toEqual` tests → split into
+`redactWithFindings`; (2) the F-FW-3 write-failure test never triggered a
+failure (recursive mkdir on a writable temp root succeeds) → assert against a
+pre-created firewall FILE; (3) a Luhn-invalid "valid" 19-digit test constant →
+recomputed the check digit; (4) an `exactOptionalPropertyTypes` mismatch
+(zod-inferred `string | undefined` vs analyzer `?: string`) that only `tsc`
+surfaced at the full-suite level → widened `FirewallEventInput.sourcePath`.
+Evidence: per-package suites green (policy 162, output-filter 380, context-gate
+250, pro-analytics 124, cli 961 + 9 firewall); `pnpm verify` green. **Lesson:
+a vitest-only per-task gate misses type errors — full `tsc` only runs at the
+suite level, so a verbatim-passing file can still be type-unsound across a
+package boundary.**
+
+HIGH review (4 lenses: privacy/F-FW-1, checksum correctness, code, tests;
+findings adversarially verified) returned **do-not-merge with 2 blockers** —
+both real privacy defects the gate exists to catch: (1) **F-FW-1 breach** — the
+exec ledger `sourcePath` used `redact()`, which only OBSERVES emails, so an
+email in a command line (`mega run git log --author=x@y.com`) persisted
+verbatim into the "value-free" ledger; fixed with a new `redactForLedger()`
+(scrubs secrets + PII + emails) at all 6 sourcePath sites. (2) **IBAN
+false-negative** — the gate regex was case-sensitive while `ibanValid` upcases,
+so a valid lowercase IBAN leaked unredacted; fixed with the `i` flag. Both
+fixed red-first (policy 166 tests incl. lowercase-IBAN + redactForLedger email
+scrub), `pnpm verify` green, re-verified by a fresh privacy pass. Two
+non-blocking follow-ups: the value-free `firewall` field leaks into
+agent-visible output (token waste — deferred to a task chip) and one untested
+CLI prose branch (fixed inline). **Lesson: an email is PII the feature itself
+classifies, yet the output path only OBSERVES it (redacting emails corrupts
+git/package metadata the agent needs) — so a value-free LEDGER label needs a
+STRICTER scrub than agent-visible output. Two different redaction policies for
+two different sinks.** Pending: PR + merge + 1.12.0 release. [[entities/cli]]
