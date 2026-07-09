@@ -149,7 +149,10 @@ succeeding on the fixed build.
 
 ## Non-goals (later waves)
 
-Per-chunk (non-all-or-nothing) recovery model, GC/retention (Wave 2);
+Combined stdout+stderr gating + both-slot compression (wave 1 gates on and
+compresses only the larger stream — a review-found leak when both streams are
+comparably large and each below floor; documented in code);
+per-chunk (non-all-or-nothing) recovery model, GC/retention (Wave 2);
 elision markers, intent scope/tokenizer, dead band, source→AST plumbing
 (Wave 3); fail-open telemetry, doctor-verifies-fire, PATH-absolute hooks
 (Wave 4); stats attribution for new kinds, footer bytes in savings math

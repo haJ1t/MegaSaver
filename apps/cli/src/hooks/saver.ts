@@ -86,6 +86,10 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
   if (stdout !== undefined || stderr !== undefined) {
     // Wave 1 (A6): pnpm/cargo/webpack put their bulk on stderr — compress the
     // larger stream, keep the other untouched so the stdout/stderr split survives.
+    // ponytail: the size gate below only sees the chosen slot; two comparably
+    // large streams (each below floor, combined above) still pass through raw.
+    // Handles the dominant "bulk on one stream" case; combined-stream gating +
+    // both-slot compression is a follow-up wave if that leak proves real.
     const slot = (stderr?.length ?? 0) > (stdout?.length ?? 0) ? "stderr" : "stdout";
     const raw = slot === "stderr" ? (stderr as string) : (stdout ?? "");
     return { raw, rebuild: (t) => ({ ...o, [slot]: t }) };
