@@ -31,9 +31,16 @@ function redactMemory(entry: MemoryEntry, r: Redactor): MemoryEntry {
     ...entry,
     title: r.text(entry.title),
     content: r.text(entry.content),
+    keywords: entry.keywords.map((k) => r.text(k)),
     ...(entry.reason === undefined ? {} : { reason: r.text(entry.reason) }),
     ...(entry.goal === undefined ? {} : { goal: r.text(entry.goal) }),
     ...(entry.evidence === undefined ? {} : { evidence: entry.evidence.map((e) => r.text(e)) }),
+    ...(entry.relatedFiles === undefined
+      ? {}
+      : { relatedFiles: entry.relatedFiles.map((f) => r.text(f)) }),
+    ...(entry.relatedSymbols === undefined
+      ? {}
+      : { relatedSymbols: entry.relatedSymbols.map((s) => r.text(s)) }),
   };
 }
 
@@ -42,6 +49,7 @@ function redactRule(rule: ProjectRule, r: Redactor): ProjectRule {
     ...rule,
     title: r.text(rule.title),
     rule: r.text(rule.rule),
+    appliesTo: rule.appliesTo.map((a) => r.text(a)),
     evidence: rule.evidence.map((e) => r.text(e)),
   };
 }
@@ -51,6 +59,7 @@ function redactFailure(failure: FailedAttempt, r: Redactor): FailedAttempt {
     ...failure,
     task: r.text(failure.task),
     failedStep: r.text(failure.failedStep),
+    relatedFiles: failure.relatedFiles.map((f) => r.text(f)),
     ...(failure.errorOutput === undefined ? {} : { errorOutput: r.text(failure.errorOutput) }),
     ...(failure.suspectedCause === undefined
       ? {}

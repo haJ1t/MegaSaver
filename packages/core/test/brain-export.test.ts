@@ -150,6 +150,55 @@ describe("exportBrain", () => {
     expect(manifest.counts.failures).toBe(1);
   });
 
+  it("redacts secrets hidden in free-text array fields", () => {
+    const { registry, project } = seed();
+    registry.createMemoryEntry({
+      id: "11111111-1111-4111-8111-111111111115",
+      projectId: project.id,
+      scope: "project",
+      sessionId: null,
+      type: "decision",
+      title: "t",
+      content: "plain knowledge",
+      keywords: [SECRET],
+      relatedFiles: [`src/${SECRET}.ts`],
+      relatedSymbols: [`fn_${SECRET}`],
+      confidence: "high",
+      source: "manual",
+      approval: "approved",
+      stale: false,
+      createdAt: NOW,
+      updatedAt: NOW,
+    } as never);
+    registry.createProjectRule({
+      id: "22222222-2222-4222-8222-222222222222",
+      projectId: project.id,
+      title: "rule",
+      rule: "never commit keys",
+      appliesTo: [`glob/${SECRET}`],
+      evidence: [],
+      severity: "critical",
+      confidence: "high",
+      createdFrom: "manual",
+      createdAt: NOW,
+      updatedAt: NOW,
+    } as never);
+    registry.createFailedAttempt({
+      id: "33333333-3333-4333-8333-333333333332",
+      projectId: project.id,
+      sessionId: null,
+      task: "deploy",
+      failedStep: "auth",
+      relatedFiles: [`log/${SECRET}.txt`],
+      convertedToRule: false,
+      createdAt: NOW,
+    } as never);
+    const text = exportBrain({ registry, projectId: project.id, createdAt: NOW });
+    const { manifest } = parseBrainBundle(text);
+    expect(text.includes(SECRET)).toBe(false);
+    expect(manifest.redactionFindings).toBeGreaterThan(1);
+  });
+
   it("throws project_not_found for an unknown project", () => {
     const { registry } = seed();
     let thrown: unknown;
