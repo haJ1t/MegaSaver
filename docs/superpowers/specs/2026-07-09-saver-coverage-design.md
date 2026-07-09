@@ -147,6 +147,22 @@ Integration: hook-compressed output (real `recordAndFilterOverlayOutput`)
 green). Smoke evidence: live repro of this session's failing chunk fetch
 succeeding on the fixed build.
 
+## Review sign-offs (2026-07-09, both APPROVE-WITH-NITS)
+
+- **Live-shape follow-up (critic):** wave-1 tests use synthetic `tool_response`
+  shapes. `mcp__*` (MCP content-block standard) and Bash-like shapes are
+  confirmed matched; the REAL WebSearch/ToolSearch/Task runtime shapes are
+  unverified against a live capture — if one is a structured object with no
+  recognized text slot, that surface silently stays passthrough (safe: no
+  corruption, just no compression). A live smoke capturing real payloads is
+  the follow-up before claiming those surfaces are actually compressed.
+- **Daemon surface (critic F4, consciously accepted):** `fetchChunk` becoming
+  overlay-aware broadens the ungated daemon `/expand-registry` path from
+  registry-only to overlay chunk sets. Not exploitable (chunkSetIds are random
+  UUIDv4; the local user already has fs access to the store; the MCP-bridge
+  per-response `allowedChunkSetIds` guard is layout-agnostic and still gates
+  that path). Accepted as an extension of a pre-existing architectural property.
+
 ## Non-goals (later waves)
 
 Combined stdout+stderr gating + both-slot compression (wave 1 gates on and

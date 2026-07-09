@@ -221,6 +221,9 @@ export async function buildSaverDecision(
     if (sourceKind === undefined) return PASSTHROUGH;
 
     // C13: a recovery expansion must arrive whole — never re-compress it.
+    // Foreground Bash only (the footer advertises a foreground run); a
+    // backgrounded expansion read via BashOutput has no command in its input
+    // to match — its re-compression is itself recoverable, so it's tolerated.
     if (tool === "Bash") {
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
       const ti = p["tool_input"];
