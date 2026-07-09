@@ -528,3 +528,125 @@ describe("recovery footer + expansion guard", () => {
     expect(d.record).not.toHaveBeenCalled();
   });
 });
+
+describe("wave-1 tool coverage", () => {
+  const big = "Z".repeat(50_000);
+  const cases: Array<{ tool: string; input: Record<string, unknown>; response: unknown }> = [
+    {
+      tool: "Task",
+      input: { description: "explore auth" },
+      response: { content: [{ type: "text", text: big }] },
+    },
+    { tool: "BashOutput", input: {}, response: { stdout: big, stderr: "" } },
+    { tool: "WebSearch", input: { query: "vitest flaky" }, response: big },
+    { tool: "ToolSearch", input: { query: "select:Read" }, response: big },
+    {
+      tool: "mcp__somevendor__get_page",
+      input: {},
+      response: { content: [{ type: "text", text: big }] },
+    },
+  ];
+
+  it.each(cases)(
+    "compresses $tool above the new-surface floor",
+    async ({ tool, input, response }) => {
+      const d = deps();
+      const out = await buildSaverDecision(
+        {
+          tool_name: tool,
+          tool_input: input,
+          tool_response: response,
+          session_id: "live-1",
+          cwd: "/Users/x/proj",
+        },
+        d,
+      );
+      expect("updatedToolOutput" in out).toBe(true);
+      expect(d.record).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("gates new surfaces at max(modeBudget, 16384): 16384 bytes passes through", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(
+      {
+        tool_name: "WebSearch",
+        tool_input: { query: "q" },
+        tool_response: "W".repeat(16_384),
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect(out).toEqual({ passthrough: true });
+    expect(d.record).not.toHaveBeenCalled();
+  });
+
+  it("compresses a new surface at 16385 bytes", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(
+      {
+        tool_name: "WebSearch",
+        tool_input: { query: "q" },
+        tool_response: "W".repeat(16_385),
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+  });
+
+  it("existing tools keep the plain mode budget (13000 B on Bash compresses in balanced)", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(bigBash("B".repeat(13_000)), d);
+    expect("updatedToolOutput" in out).toBe(true);
+  });
+
+  it("mega's own MCP tools pass through (no self-compression)", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(
+      {
+        tool_name: "mcp__megasaver__proxy_read_file",
+        tool_input: {},
+        tool_response: "M".repeat(50_000),
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect(out).toEqual({ passthrough: true });
+    expect(d.record).not.toHaveBeenCalled();
+  });
+
+  it("labels WebSearch by query (grep kind) and Task by description (command kind)", async () => {
+    const d = deps();
+    await buildSaverDecision(
+      {
+        tool_name: "WebSearch",
+        tool_input: { query: "vitest flaky" },
+        tool_response: "Q".repeat(50_000),
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect(d.record).toHaveBeenCalledWith(
+      expect.objectContaining({ label: "vitest flaky", sourceKind: "grep" }),
+    );
+    vi.mocked(d.record).mockClear();
+    await buildSaverDecision(
+      {
+        tool_name: "Task",
+        tool_input: { description: "explore auth" },
+        tool_response: { content: [{ type: "text", text: "T".repeat(50_000) }] },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect(d.record).toHaveBeenCalledWith(
+      expect.objectContaining({ label: "explore auth", sourceKind: "command" }),
+    );
+  });
+});

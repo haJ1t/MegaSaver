@@ -15,7 +15,33 @@ const TOOL_SOURCE: Record<string, OutputSourceKind> = {
   Grep: "grep",
   Glob: "grep",
   WebFetch: "fetch",
+  // Wave 1 (spec 2026-07-09): agent/search surfaces. "fetch" is off-limits for
+  // these — its chunk-set label is URL-validated and would fail persistence.
+  Task: "command",
+  BashOutput: "command",
+  Monitor: "command",
+  WebSearch: "grep",
+  ToolSearch: "grep",
 };
+
+// Mega's own bridge tools are already compressed upstream — never re-compress.
+const MEGA_MCP_TOOL = /^mcp__mega/i;
+const NEW_SURFACE_TOOLS = new Set(["Task", "BashOutput", "Monitor", "WebSearch", "ToolSearch"]);
+export const NEW_SURFACE_MIN_BYTES = 16_384;
+
+function resolveSourceKind(tool: string): OutputSourceKind | undefined {
+  const mapped = TOOL_SOURCE[tool];
+  if (mapped !== undefined) return mapped;
+  if (tool.startsWith("mcp__") && !MEGA_MCP_TOOL.test(tool)) return "command";
+  return undefined;
+}
+
+function minBytesFor(tool: string, mode: TokenSaverMode): number {
+  const budget = modeToBudget(mode);
+  return NEW_SURFACE_TOOLS.has(tool) || tool.startsWith("mcp__")
+    ? Math.max(budget, NEW_SURFACE_MIN_BYTES)
+    : budget;
+}
 
 export type SaverSettings = { enabled: boolean; mode: TokenSaverMode };
 
@@ -125,6 +151,10 @@ function labelOf(toolInput: unknown, fallback: string): string {
     asStr(i["command"]) ??
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     asStr(i["pattern"]) ??
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    asStr(i["description"]) ??
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    asStr(i["query"]) ??
     // WebFetch labels by url; the fetch chunk-set source validates it as a URL,
     // so a bad fallback ("WebFetch") would fail persistence and blank the save.
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
@@ -150,7 +180,7 @@ export async function buildSaverDecision(
     const cwd = asStr(p["cwd"]);
     if (tool === undefined || sessionId === undefined || cwd === undefined) return PASSTHROUGH;
 
-    const sourceKind = TOOL_SOURCE[tool];
+    const sourceKind = resolveSourceKind(tool);
     if (sourceKind === undefined) return PASSTHROUGH;
 
     // C13: a recovery expansion must arrive whole — never re-compress it.
@@ -175,7 +205,8 @@ export async function buildSaverDecision(
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     const shape = readOutputShape(p["tool_response"]);
     if (shape === null) return PASSTHROUGH;
-    if (Buffer.byteLength(shape.raw, "utf8") <= modeToBudget(settings.mode)) return PASSTHROUGH;
+    if (Buffer.byteLength(shape.raw, "utf8") <= minBytesFor(tool, settings.mode))
+      return PASSTHROUGH;
 
     const recorded = await deps.record({
       storeRoot: deps.storeRoot,
