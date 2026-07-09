@@ -3,6 +3,7 @@ import { defineCommand } from "citty";
 import { alertsCommand } from "./commands/alerts.js";
 import { auditCommand } from "./commands/audit/index.js";
 import { benchCommand } from "./commands/bench.js";
+import { brainCommand } from "./commands/brain/index.js";
 import { cacheCommand } from "./commands/cache.js";
 import { compressCommand } from "./commands/compress.js";
 import { connectorCommand } from "./commands/connector/index.js";
@@ -57,6 +58,7 @@ export const mainCommand = defineCommand({
     init: initCommand,
     audit: auditCommand,
     bench: benchCommand,
+    brain: brainCommand,
     alerts: alertsCommand,
     cache: cacheCommand,
     doctor: doctorCommand,
