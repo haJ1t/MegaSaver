@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, rmSync, rmdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
   type ProjectId,
@@ -222,41 +222,74 @@ export async function loadOverlayChunkSet(input: {
   }
 }
 
+function isDir(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+// Reads createdAt from either chunk-set layout; null = not a chunk set (leave it).
+function readChunkSetCreatedAt(path: string): string | null {
+  let json: unknown;
+  try {
+    json = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+  const registry = chunkSetSchema.safeParse(json);
+  if (registry.success) return registry.data.createdAt;
+  const overlay = overlayChunkSetSchema.safeParse(json);
+  if (overlay.success) return overlay.data.createdAt;
+  return null;
+}
+
 export async function pruneOlderThan(input: {
   storeRoot: string;
   olderThan: Date;
 }): Promise<{ removed: number }> {
   const contentRoot = join(input.storeRoot, "content");
 
-  let projectDirs: string[];
+  let topDirs: string[];
   try {
-    projectDirs = readdirSync(contentRoot);
+    topDirs = readdirSync(contentRoot);
   } catch (error) {
     if (isErrno(error) && error.code === "ENOENT") return { removed: 0 };
     throw error;
   }
 
   let removed = 0;
-  for (const projectDir of projectDirs) {
-    const projectPath = join(contentRoot, projectDir);
-    for (const sessionDirName of readdirSync(projectPath)) {
-      const sessionPath = join(projectPath, sessionDirName);
+  for (const topDir of topDirs) {
+    const topPath = join(contentRoot, topDir);
+    if (!isDir(topPath)) continue; // .last-gc marker, .DS_Store
+    for (const sessionDirName of readdirSync(topPath)) {
+      const sessionPath = join(topPath, sessionDirName);
+      if (!isDir(sessionPath)) continue;
       for (const name of readdirSync(sessionPath)) {
         if (!name.endsWith(".json")) continue;
         if (name === READ_INDEX_FILENAME) continue; // sibling index, not a chunk-set
         if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
         const path = join(sessionPath, name);
-        let chunkSet: ChunkSet;
-        try {
-          chunkSet = chunkSetSchema.parse(JSON.parse(readFileSync(path, "utf8")));
-        } catch {
-          continue;
-        }
-        if (new Date(chunkSet.createdAt) < input.olderThan) {
+        const createdAt = readChunkSetCreatedAt(path);
+        if (createdAt === null) continue;
+        if (new Date(createdAt) < input.olderThan) {
           rmSync(path, { force: true });
           removed += 1;
         }
       }
+      // Housekeeping: drop dirs the prune emptied. rmdir refuses non-empty dirs
+      // (read-index survivors, young sets) — that refusal IS the guard.
+      try {
+        rmdirSync(sessionPath);
+      } catch (error) {
+        if (!isErrno(error) || (error.code !== "ENOTEMPTY" && error.code !== "ENOENT")) throw error;
+      }
+    }
+    try {
+      rmdirSync(topPath);
+    } catch (error) {
+      if (!isErrno(error) || (error.code !== "ENOTEMPTY" && error.code !== "ENOENT")) throw error;
     }
   }
   return { removed };
