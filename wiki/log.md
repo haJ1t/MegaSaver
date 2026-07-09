@@ -2845,6 +2845,35 @@ falls through to the stored period (pre-existing forecast coercion).
 project brain** (signed `.megabrain` export/import) remains — the anti-lock-in
 flagship. [[entities/cli]] [[syntheses/pro-differentiation-portfolio]]
 
+## [2026-07-09] feat | 2.0 E5 brain portability implemented (feat/brain-portability)
+
+Full superpowers chain: spec → plan → subagent-driven TDD (10 tasks, fresh
+implementer + spec-review + code-quality-review per task). New entity page
+[[entities/brain-portability]]; portfolio status flipped E5 → IMPLEMENTED.
+
+**Shipped** (branch, awaiting review+merge): `@megasaver/core` `brain-bundle.ts`
+(2-line NDJSON, SHA-256 payload integrity, version/hash/schema error taxonomy) +
+`brain-export.ts` (approved+project-scope filter, firewall `redactWithFindings`
+over every free-text field, atomic serialize) + `brain-import.ts` (verify-before-
+write, merge-only, `approval: suggested`, new ids, `supersedesId` dropped,
+provenance→`evidence[]`, `source` preserved, project-scope+`\0`-key dedupe);
+public API `exportBrain`/`importBrain`/`parse`/`serializeBrainBundle`. CLI
+`mega brain export|import` gate-first (entitlement key `brain-portability`; free
+path never opens store/file), atomic tmp+rename write, 100MB import cap, `--json`.
+Changeset: cli **major** (2.0), core minor, entitlement patch.
+
+**Review catches fixed RED-first** (per-task code-quality): null-manifest crash →
+typed error; export not-found `Error`→`CoreRegistryError`; import dedupe scope leak
+(session-content wrongly skipping project import) + space-join key collision → `\0`;
+export missing atomic write + unwritable-`--out` handling; import untested size-cap →
+injectable + tamper "nothing-written" assertion. Test-tsconfig branded-cast fixups.
+
+**Evidence:** `pnpm verify` green (52/52 turbo). Entitled e2e smoke (real license
+copied to temp store): export alpha → bundle w/ manifest+sha256 → import beta →
+entry `approval:"suggested"`, new id, `evidence:["brain-import:alpha"]`, source
+preserved. Free-path smoke: both commands upsell + exit 0, file never read.
+Pending: reviewer+critic (HIGH §12) → PR → 2.0 release.
+
 ## [2026-07-09] feat | saver coverage wave 1 SHIPPED (feat/saver-coverage)
 
 First of five gap-fix waves for the saver-savings-gaps audit (2.0 scope).
@@ -3151,3 +3180,4 @@ heartbeat test — noPropertyAccessFromIndexSignature vs useLiteralKeys — so t
 full gate passes: biome, tsc, 52-package vitest, conventions:check). Plan:
 docs/superpowers/plans/2026-07-10-saver-observability-plan.md. Spec:
 docs/superpowers/specs/2026-07-10-saver-observability-design.md.
+

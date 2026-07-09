@@ -112,6 +112,9 @@ program above is LOCKED (user, 2026-07-07); next up: 1.8 `mega teardown`.
 Update 2026-07-09: the LOCKED program has run to its 1.x end. **1.12 N3
 context firewall SHIPPED** (module 10, live 1.12.0) and **1.13 N7 anomaly
 alerts + persistent budgets SHIPPED** (module 11: `mega alerts` +
-`mega savings budget`, `mega savings forecast` auto-load). Next and final:
+`mega savings budget`, `mega savings forecast` auto-load). Final:
 **2.0 E5 portable project brain** — the signed `.megabrain` export/import
-anti-lock-in flagship.
+anti-lock-in flagship — **IMPLEMENTED on `feat/brain-portability`** (awaiting
+review + merge): `mega brain export/import`, SHA-256 integrity-hashed knowledge
+bundle (approved project-scoped memories + rules + failures), firewall-redacted
+export, suggested-gate merge on import. See [[entities/brain-portability]].
