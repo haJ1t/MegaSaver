@@ -98,6 +98,11 @@ describe("parseBrainBundle", () => {
     expect(parsed.payload.memories[0]?.title).toBe("Use NDJSON bundles");
   });
 
+  it("tolerates a benign trailing newline appended after transfer", () => {
+    const parsed = parseBrainBundle(`${text}\n`);
+    expect(parsed.payload.memories[0]?.title).toBe("Use NDJSON bundles");
+  });
+
   it("rejects a tampered payload byte with hash_mismatch", () => {
     const tampered = text.replace("byte-exact", "byte-exalt");
     expect(() => parseBrainBundle(tampered)).toThrowError(BrainBundleError);

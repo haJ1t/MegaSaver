@@ -84,7 +84,9 @@ export function parseBrainBundle(text: string): BrainBundle {
     );
   }
   const manifestRaw = text.slice(0, idx);
-  const payloadRaw = text.slice(idx + 1);
+  // Serialize never appends a trailing newline; strip one a transfer/editor may
+  // have added so a benign final newline isn't misread as corruption.
+  const payloadRaw = text.slice(idx + 1).replace(/\r?\n$/, "");
 
   let manifestJson: unknown;
   try {
