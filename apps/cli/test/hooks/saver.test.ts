@@ -774,15 +774,17 @@ describe("N-aware recovery footer (C12)", () => {
     const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
     const u = (out as { updatedToolOutput: { stdout: string } }).updatedToolOutput;
     expect(u.stdout).toContain('run: mega output chunk "cs-1" "0"');
-    expect(u.stdout).not.toContain("chunks of 40 lines");
+    expect(u.stdout).not.toContain("chunks of");
   });
 
-  it("multi chunk advertises N and the line formula", async () => {
+  it("multi chunk advertises N and the id range (no line->id formula)", async () => {
     const d = deps({ record: vi.fn().mockResolvedValue({ ...RECORDED, chunkCount: 5 }) });
     const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
     const u = (out as { updatedToolOutput: { stdout: string } }).updatedToolOutput;
-    expect(u.stdout).toContain("in 5 chunks of 40 lines");
-    expect(u.stdout).toContain("chunk i covers lines 40*i+1..40*i+40");
-    expect(u.stdout).toContain('run: mega output chunk "cs-1" "<i>"');
+    expect(u.stdout).toContain("stored in 5 chunks of ~40 lines each");
+    expect(u.stdout).toContain('mega output chunk "cs-1" "<i>" (i = 0..4)');
+    // Must NOT advertise a line->id formula (chunks index redacted space, the
+    // agent sees original line numbers — they diverge on multi-line redaction).
+    expect(u.stdout).not.toContain("covers lines");
   });
 });

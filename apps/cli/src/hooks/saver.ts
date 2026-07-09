@@ -275,9 +275,13 @@ export async function buildSaverDecision(
     const tokenPct = rawTokens === 0 ? "0.0" : ((1 - returnedTokens / rawTokens) * 100).toFixed(1);
     const n = recorded.chunkCount ?? 1;
     const L = OVERLAY_CHUNK_LINES;
+    // Advertise chunk IDS, never a line->id formula: chunks index the REDACTED
+    // stored text, while the agent sees the original tool output's line numbers
+    // (a multi-line secret redacts to one line, shifting the two spaces apart).
+    // Fetch by id 0..n-1 is correct regardless.
     const expandCmd =
       n > 1
-        ? `— stored in ${n} chunks of ${L} lines (chunk i covers lines ${L}*i+1..${L}*i+${L}) — run: mega output chunk "${recorded.chunkSetId}" "<i>"`
+        ? `— stored in ${n} chunks of ~${L} lines each; fetch any with: mega output chunk "${recorded.chunkSetId}" "<i>" (i = 0..${n - 1})`
         : `— run: mega output chunk "${recorded.chunkSetId}" "0"`;
     const partialNoun = n > 1 ? "recovered chunks are" : "recovered chunk is";
     const recovery = looksPreTruncated(shape.raw)

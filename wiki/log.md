@@ -2890,10 +2890,12 @@ raw into uniform 40-line chunks (`chunkByLines`, `id: String(i)`, contiguous
 line ranges, byte-exact recovery — `chunks.join("\n") === raw` verified incl.
 trailing newline). `OVERLAY_CHUNK_LINES = 40` single-sourced. Result gains
 `chunkCount`; evidence `returnedChunkRefs` enumerates every chunk. Saver footer
-N-aware: `Full output recoverable — stored in N chunks of 40 lines (chunk i
-covers lines 40*i+1..40*i+40) — run: mega output chunk "<set>" "<i>"`. Single-
-chunk wording byte-identical to wave 1. Agent expands only the needed slice
-instead of re-paying for the whole raw.
+N-aware, fetch-BY-ID: `Full output recoverable — stored in N chunks of ~40
+lines each; fetch any with: mega output chunk "<set>" "<i>" (i = 0..N-1)`.
+Deliberately NO line→id formula: chunks index the REDACTED stored text while
+the agent reads original line numbers — a multi-line secret (PEM key) redacts
+to one line, shifting the spaces apart (critic-caught; fetch-by-id is
+redaction-agnostic). Single-chunk wording byte-identical to wave 1.
 
 **C14 (no GC):** `pruneOlderThan` (content-store) now parses BOTH registry and
 overlay schemas (overlay sets previously leaked forever — strict registry parse
