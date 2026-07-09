@@ -1,3 +1,4 @@
+export { chunkByLines } from "./chunk.js";
 export { rankFeatureNameSchema, type RankFeatureName } from "./rank-features.js";
 export { outputSourceKindSchema, type OutputSourceKind } from "./output-source.js";
 export {

@@ -334,3 +334,83 @@ describe("recordAndFilterOverlayOutput", () => {
     expect(src.path).toContain("[REDACTED]");
   });
 });
+
+describe("multi-chunk overlay write (C12)", () => {
+  it("splits a large raw into 40-line chunks with contiguous ranges and real ids", async () => {
+    const storeRoot = store();
+    // Padded so total bytes clear the hard-wrap token threshold (decision
+    // must be "compressed", not "passthrough"/"light") while keeping exactly
+    // 200 lines so the 40-line chunker produces exactly 5 chunks.
+    const PAD = "x".repeat(40);
+    const raw = Array.from({ length: 200 }, (_, i) => `line ${i + 1} content ${PAD}`).join("\n");
+    const result = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw,
+      sourceKind: "command",
+      label: "pnpm verify",
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    expect(result.decision).toBe("compressed");
+    expect(result.chunkCount).toBe(5);
+    const set = await loadOverlayChunkSet({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      // biome-ignore lint/style/noNonNullAssertion: decision === "compressed" guarantees chunkSetId
+      chunkSetId: result.chunkSetId!,
+    });
+    expect(set.chunks).toHaveLength(5);
+    expect(set.chunks.map((c) => c.id)).toEqual(["0", "1", "2", "3", "4"]);
+    expect(set.chunks[0]).toMatchObject({ startLine: 1, endLine: 40 });
+    expect(set.chunks[4]).toMatchObject({ startLine: 161, endLine: 200 });
+    expect(set.chunks[2]?.text).toContain("line 81 content");
+    expect(set.chunks[2]?.text).toContain("line 120 content");
+    // Byte-exact recovery: concatenating all chunk texts with "\n" reproduces the raw.
+    expect(set.chunks.map((c) => c.text).join("\n")).toBe(raw);
+  });
+
+  it("keeps a <=40-line raw as the single chunk 0 (regression)", async () => {
+    const storeRoot = store();
+    const raw = `${"x".repeat(6000)}\n${"y".repeat(6000)}`; // 2 lines, big bytes
+    const result = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw,
+      sourceKind: "command",
+      label: "l",
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    expect(result.chunkCount).toBe(1);
+    const set = await loadOverlayChunkSet({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      // biome-ignore lint/style/noNonNullAssertion: decision === "compressed" guarantees chunkSetId
+      chunkSetId: result.chunkSetId!,
+    });
+    expect(set.chunks.map((c) => c.id)).toEqual(["0"]);
+  });
+
+  it("omits chunkCount (and chunkSetId) on a compressed result when storeRawOutput is false", async () => {
+    const storeRoot = store();
+    const raw = `line ${"x".repeat(40)}\n`.repeat(2000);
+    const result = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw,
+      sourceKind: "command",
+      label: "echo big",
+      mode: "aggressive",
+      storeRawOutput: false,
+    });
+    expect(result.decision).toBe("compressed");
+    expect(result.chunkSetId).toBeUndefined();
+    expect(result.chunkCount).toBeUndefined();
+  });
+});

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type OverlayChunkSet, saveOverlayChunkSet } from "@megasaver/content-store";
 import {
   type EvidenceRecordInput,
+  type ReturnedChunkRef,
   type SourceKind,
   type SourceRef,
   type SourceRefRedactor,
@@ -11,11 +12,16 @@ import {
   type FilterDecision,
   type FilterOutputResult,
   type OutputSourceKind,
+  chunkByLines,
   filterOutput,
 } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
 import { type TokenSaverMode, type WorkspaceKey, modeToBudget } from "@megasaver/shared";
 import { appendOverlayEvent } from "@megasaver/stats";
+
+// Matches the generic chunker default; the saver footer's line->id formula
+// mirrors this.
+export const OVERLAY_CHUNK_LINES = 40;
 
 // Redacts every secret-bearing string field in a SourceRef using the policy
 // redactor. hookTool is a tool name (not secret-bearing) and is left as-is.
@@ -61,6 +67,7 @@ export type RecordOverlayOutputResult = {
   bytesSaved: number;
   savingRatio: number;
   chunkSetId?: string;
+  chunkCount?: number;
 };
 
 function returnedTextOf(result: FilterOutputResult): string {
@@ -122,9 +129,21 @@ export async function recordAndFilterOverlayOutput(
   // write (chunk saved, event throws) is acceptable — no evidence is lost.
   let chunkSetId: string | undefined;
   let chunksStored = 0;
+  let chunkRefs: ReturnedChunkRef[] = [];
   if (input.storeRawOutput) {
     chunkSetId = newId();
-    const lineCount = redactedText.length === 0 ? 1 : redactedText.split("\n").length;
+    const csid = chunkSetId;
+    const pieces =
+      redactedText === ""
+        ? [{ text: "", startLine: 1, endLine: 1 }]
+        : chunkByLines(redactedText, OVERLAY_CHUNK_LINES);
+    const chunks = pieces.map((piece, i) => ({
+      id: String(i),
+      startLine: piece.startLine,
+      endLine: piece.endLine,
+      bytes: Buffer.byteLength(piece.text, "utf8"),
+      text: piece.text,
+    }));
     const chunkSet: OverlayChunkSet = {
       chunkSetId,
       workspaceKey: input.workspaceKey,
@@ -133,21 +152,14 @@ export async function recordAndFilterOverlayOutput(
       source: chunkSetSource(input.sourceKind, redactedLabel),
       rawBytes: filtered.rawBytes,
       redacted: secretCount > 0,
-      chunks: [
-        {
-          id: "0",
-          startLine: 1,
-          endLine: lineCount,
-          bytes: Buffer.byteLength(redactedText, "utf8"),
-          text: redactedText,
-        },
-      ],
+      chunks,
     };
-    // Store the full redacted output (not just the kept excerpts) so the agent
-    // can recover EVERYTHING via expand — the hook auto-replaces output, so
-    // dropped content must stay recoverable (evidence-preserving, §1/§12).
+    // Store the full redacted output (not just kept excerpts) so the agent can
+    // recover EVERYTHING via expand — split into fixed 40-line chunks so an
+    // expansion fetches only the needed slice (C12), not the whole raw again.
     await saveOverlayChunkSet({ storeRoot: input.storeRoot, chunkSet });
-    chunksStored = 1;
+    chunksStored = chunks.length;
+    chunkRefs = chunks.map((c) => ({ chunkSetId: csid, chunkId: c.id }));
   }
 
   appendOverlayEvent({
@@ -197,7 +209,7 @@ export async function recordAndFilterOverlayOutput(
       redactedRawContent: redactedText,
       redactedReturnedContent: redactedReturnedText,
       redactedRawChunkSetId: chunkSetId,
-      returnedChunkRefs: [{ chunkSetId, chunkId: "0" }],
+      returnedChunkRefs: chunkRefs,
       createdAt,
       expiresAt: null,
       retentionClass: "session",
@@ -215,5 +227,8 @@ export async function recordAndFilterOverlayOutput(
     }
   }
 
-  return { ...base, ...(chunkSetId !== undefined ? { chunkSetId } : {}) };
+  return {
+    ...base,
+    ...(chunkSetId !== undefined ? { chunkSetId, chunkCount: chunksStored } : {}),
+  };
 }
