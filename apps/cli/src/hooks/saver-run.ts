@@ -12,6 +12,7 @@ import {
 } from "@megasaver/core";
 import { getRunningDaemon } from "@megasaver/daemon";
 import { readStoreEnv, resolveStorePath } from "../store.js";
+import { maybeRunOverlayGc } from "./gc.js";
 import { readSessionIntent } from "./intent-run.js";
 import {
   type SaverDecision,
@@ -120,6 +121,11 @@ export async function runSaverHookFromProcess(): Promise<void> {
     const decision = await buildSaverDecision(payload, deps);
     const s = renderSaverStdout(decision);
     if (s !== "") process.stdout.write(s);
+    // C14: opportunistic store GC, at most once/day, only on the compression
+    // path. Placed after the stdout write so the model's output is not
+    // delayed by it; adds ≤~100ms once a day. Every failure is swallowed
+    // inside.
+    if ("updatedToolOutput" in decision) await maybeRunOverlayGc(storeRoot);
   } catch {
     // Swallow — best-effort; original output reaches the model.
   }
