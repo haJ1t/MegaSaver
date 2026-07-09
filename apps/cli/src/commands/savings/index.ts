@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { savingsBudgetCommand } from "./budget.js";
 import { savingsExportCommand } from "./export.js";
 import { savingsFixCommand } from "./fix.js";
 import { savingsForecastCommand } from "./forecast.js";
@@ -50,6 +51,15 @@ export {
   runSavingsFix,
   savingsFixCommand,
 } from "./fix.js";
+export {
+  type RunBudgetClearInput,
+  type RunBudgetSetInput,
+  type RunBudgetShowInput,
+  runBudgetClear,
+  runBudgetSet,
+  runBudgetShow,
+  savingsBudgetCommand,
+} from "./budget.js";
 
 export const savingsCommand = defineCommand({
   meta: {
@@ -62,5 +72,6 @@ export const savingsCommand = defineCommand({
     insights: savingsInsightsCommand,
     forecast: savingsForecastCommand,
     fix: savingsFixCommand,
+    budget: savingsBudgetCommand,
   },
 });
