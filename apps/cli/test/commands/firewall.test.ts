@@ -127,6 +127,7 @@ describe("runFirewall — entitled", () => {
     expect(text).toContain("blocked reads");
     expect(text).toContain("/repo/.env");
     expect(text).toContain("credit_card");
+    expect(text).toContain("observed (not redacted): 1 email");
     expect(text).toContain(FIREWALL_ADVICE.blocked);
     expect(text).toContain(FIREWALL_ADVICE.secrets);
     expect(text).toContain(FIREWALL_ADVICE.pii);

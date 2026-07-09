@@ -45,3 +45,15 @@ export function redact(text: string): RedactResult {
   const { redacted, count } = redactWithFindings(text);
   return { redacted, count };
 }
+
+// For the value-free firewall ledger ONLY. Scrubs secrets + PII like redact(),
+// AND emails — which the agent-visible output path deliberately only observes
+// (redacting them there corrupts git/package metadata), but which must NEVER
+// persist into a ledger sourcePath label (F-FW-1). Returns the scrubbed string.
+export function redactForLedger(text: string): string {
+  let out = redactWithFindings(text).redacted;
+  for (const { name, pattern } of OBSERVED_PATTERNS) {
+    out = out.replace(pattern, `[REDACTED:${name}]`);
+  }
+  return out;
+}

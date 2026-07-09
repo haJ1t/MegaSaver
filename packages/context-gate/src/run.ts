@@ -6,7 +6,7 @@ import {
   seamTraceEnabledByEnv,
   writeReplayTrace,
 } from "@megasaver/output-filter";
-import { type ProjectPermissions, redact } from "@megasaver/policy";
+import { type ProjectPermissions, redact, redactForLedger } from "@megasaver/policy";
 import type { SessionId, TokenSaverMode } from "@megasaver/shared";
 import {
   type OverlayTokenSaverEvent,
@@ -102,7 +102,7 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
         kind: "blocked-read",
         detector: "secret-path",
         count: 1,
-        sourcePath: redact(input.path).redacted,
+        sourcePath: redactForLedger(input.path),
         projectId: settings.projectId,
         sessionId: input.sessionId,
       });
@@ -156,7 +156,7 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     input.storeRoot,
     {
       at: new Date(now()).toISOString(),
-      sourcePath: redact(input.path).redacted,
+      sourcePath: redactForLedger(input.path),
       projectId: settings.projectId,
       sessionId: input.sessionId,
     },
@@ -286,7 +286,7 @@ export async function runOverlayOutputPipeline(
         kind: "blocked-read",
         detector: "secret-path",
         count: 1,
-        sourcePath: redact(input.path).redacted,
+        sourcePath: redactForLedger(input.path),
         projectId: input.workspaceKey,
         sessionId: input.liveSessionId,
       });
@@ -329,7 +329,7 @@ export async function runOverlayOutputPipeline(
     input.storeRoot,
     {
       at: new Date(now()).toISOString(),
-      sourcePath: redact(input.path).redacted,
+      sourcePath: redactForLedger(input.path),
       projectId: input.workspaceKey,
       sessionId: input.liveSessionId,
     },

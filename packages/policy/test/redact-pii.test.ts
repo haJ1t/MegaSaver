@@ -1,6 +1,6 @@
 // packages/policy/test/redact-pii.test.ts
 import { describe, expect, it } from "vitest";
-import { redact, redactWithFindings } from "../src/redact.js";
+import { redact, redactForLedger, redactWithFindings } from "../src/redact.js";
 
 describe("redactWithFindings — PII patterns (validate-gated)", () => {
   it("redacts a Luhn-valid card, including separator forms", () => {
@@ -64,5 +64,34 @@ describe("redact — 2-field public contract preserved (non-breaking)", () => {
     const r = redact("card 4111111111111111");
     expect(r.redacted).toContain("[REDACTED:credit_card]");
     expect(r.count).toBe(1);
+  });
+
+  it("redacts a valid lowercase IBAN (case-insensitive gate)", () => {
+    // Regression: a case-sensitive gate skipped lowercase IBANs entirely, so a
+    // valid one leaked unredacted (the validator upper-cases before checking).
+    const r = redactWithFindings("iban gb82west12345698765432 done");
+    expect(r.redacted).toContain("[REDACTED:iban]");
+    expect(r.redacted).not.toContain("gb82west12345698765432");
+    expect(r.findings).toContainEqual({ name: "iban", count: 1 });
+  });
+});
+
+describe("redactForLedger — value-free ledger label (scrubs emails too)", () => {
+  it("scrubs an email that redact() only observes", () => {
+    // F-FW-1: a command line / path used as a ledger sourcePath must never
+    // carry a raw value — including emails, which the output path only counts.
+    const out = redactForLedger("git log --author=jane@corp.com");
+    expect(out).not.toContain("jane@corp.com");
+    expect(out).toContain("[REDACTED:email]");
+  });
+
+  it("still scrubs secrets and PII", () => {
+    const out = redactForLedger("card 4111111111111111");
+    expect(out).not.toContain("4111111111111111");
+    expect(out).toContain("[REDACTED:credit_card]");
+  });
+
+  it("leaves clean text untouched", () => {
+    expect(redactForLedger("cat notes.md")).toBe("cat notes.md");
   });
 });

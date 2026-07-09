@@ -22,6 +22,7 @@ import {
   type ProjectPermissions,
   evaluateCommand,
   redact,
+  redactForLedger,
 } from "@megasaver/policy";
 import {
   type ProjectId,
@@ -270,7 +271,7 @@ export async function runOutputExecCommand(
     input.storeRoot,
     {
       at: new Date((input.now ?? defaultNow)()).toISOString(),
-      sourcePath: redact(`${input.command} ${input.args.join(" ")}`.trim()).redacted,
+      sourcePath: redactForLedger(`${input.command} ${input.args.join(" ")}`.trim()),
       projectId: settings.projectId,
       sessionId: input.sessionId,
     },
@@ -520,7 +521,7 @@ export async function runOverlayOutputExecCommand(
     input.storeRoot,
     {
       at: new Date((input.now ?? defaultNow)()).toISOString(),
-      sourcePath: redact(`${input.command} ${input.args.join(" ")}`.trim()).redacted,
+      sourcePath: redactForLedger(`${input.command} ${input.args.join(" ")}`.trim()),
       projectId: input.workspaceKey,
       sessionId: input.liveSessionId,
     },

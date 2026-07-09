@@ -135,8 +135,11 @@ const baseline: RedactionPattern[] = [
     validate: (match: string) => luhnValid(match.replace(/[ -]/g, "")),
   },
   {
+    // `i` flag: IBANs appear lower/mixed-case in prose, and ibanValid upcases
+    // before checking — without it a valid lowercase IBAN never reaches the
+    // validator and leaks unredacted.
     name: "iban",
-    pattern: /\b[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}\b/g,
+    pattern: /\b[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}\b/gi,
     replacement: "[REDACTED:iban]",
     validate: (match: string) => ibanValid(match),
   },

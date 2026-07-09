@@ -17,6 +17,7 @@ export {
 } from "./parse-project-permissions.js";
 export {
   redact,
+  redactForLedger,
   redactWithFindings,
   type RedactResult,
   type RedactFindings,
