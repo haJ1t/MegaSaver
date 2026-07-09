@@ -4,8 +4,11 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_HOOK_COMMAND,
+  HOOK_MATCHER,
   INTENT_HOOK_COMMAND,
   SAVER_HOOK_COMMAND,
+  SAVER_HOOK_MATCHER,
+  addPostToolUseHook,
   addUserPromptSubmitHook,
   hasUserPromptSubmitHook,
   installClaudeCodeHook,
@@ -28,6 +31,43 @@ function tmpSettings(initial?: unknown): string {
 }
 
 describe("hook-settings", () => {
+  it("HOOK_MATCHER and SAVER_HOOK_MATCHER cover the wave-1 tool surface (drift pin)", () => {
+    expect(HOOK_MATCHER).toBe(
+      "^(?:Read|Bash|Grep|Glob|LS|WebFetch|Task|BashOutput|Monitor|WebSearch|ToolSearch|mcp__.*)$",
+    );
+    expect(SAVER_HOOK_MATCHER).toBe(HOOK_MATCHER);
+  });
+
+  it("matcher is anchored: matches exact eligible tools, not substrings", () => {
+    const re = new RegExp(HOOK_MATCHER);
+    expect(re.test("Read")).toBe(true);
+    expect(re.test("Task")).toBe(true);
+    expect(re.test("mcp__vendor__get_page")).toBe(true);
+    expect(re.test("TaskCreate")).toBe(false);
+    expect(re.test("ReadMcpResourceTool")).toBe(false);
+    expect(re.test("Xmcp__y")).toBe(false);
+  });
+
+  it("repairs a stale saver matcher in place on the add path (wave-1 upgrade)", () => {
+    const stale = {
+      hooks: {
+        PostToolUse: [
+          {
+            matcher: "Read|Bash|Grep|Glob|LS|WebFetch",
+            hooks: [{ type: "command", command: "mega hooks saver" }],
+          },
+          { matcher: "Write", hooks: [{ type: "command", command: "other-tool run" }] },
+        ],
+      },
+    };
+    const next = addPostToolUseHook(stale, "mega hooks saver");
+    const post = (next.hooks as { PostToolUse: Array<{ matcher?: string; hooks: unknown }> })
+      .PostToolUse;
+    expect(post).toHaveLength(2);
+    expect(post[0]?.matcher).toBe(SAVER_HOOK_MATCHER);
+    expect(post[1]).toEqual(stale.hooks.PostToolUse[1]); // foreign entry untouched
+  });
+
   it("install adds both Pre+Post entries and is idempotent", () => {
     const p = tmpSettings();
     expect(installClaudeCodeHook({ settingsPath: p }).changed).toBe(true);

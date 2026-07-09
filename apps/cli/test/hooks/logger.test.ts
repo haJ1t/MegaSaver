@@ -75,7 +75,37 @@ describe("buildHookLine", () => {
   });
 
   it("exposes the eligible tool set", () => {
-    expect([...ELIGIBLE_HOOK_TOOLS].sort()).toEqual(["Bash", "Glob", "Grep", "LS", "Read"]);
+    expect([...ELIGIBLE_HOOK_TOOLS].sort()).toEqual([
+      "Bash",
+      "BashOutput",
+      "Glob",
+      "Grep",
+      "LS",
+      "Monitor",
+      "Read",
+      "Task",
+      "ToolSearch",
+      "WebFetch",
+      "WebSearch",
+    ]);
+  });
+
+  it("maps wave-1 agent/search tools to their eligibility categories", () => {
+    expect(JSON.parse(buildHookLine({ tool_name: "Task" }, NOW) as string).category).toBe(
+      "eligible_command",
+    );
+    expect(JSON.parse(buildHookLine({ tool_name: "WebSearch" }, NOW) as string).category).toBe(
+      "eligible_search",
+    );
+  });
+
+  it("categorizes any non-Mega mcp__ tool as eligible_mcp", () => {
+    const parsed = JSON.parse(buildHookLine({ tool_name: "mcp__somevendor__x" }, NOW) as string);
+    expect(parsed.category).toBe("eligible_mcp");
+  });
+
+  it("drops Mega's own mcp bridge tools (never self-log)", () => {
+    expect(buildHookLine({ tool_name: "mcp__megasaver__x" }, NOW)).toBeNull();
   });
 });
 

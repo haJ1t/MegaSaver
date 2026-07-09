@@ -9,15 +9,33 @@ import { dirname, join } from "node:path";
 // swallows its own errors; the runnable wrapper (logger-run.ts) always
 // exits 0.
 
-// §13.3: the five native tools whose calls are eligible to log, mapped to
-// their eligibility category tag. Anything else (Write, Edit, …) is skipped.
+// §13.3 (wave 1, spec 2026-07-09): native tools whose calls are eligible to
+// log, mapped to their eligibility category tag. Anything else (Write,
+// Edit, …) is skipped. Any mcp__* tool (other than Mega's own bridge) is
+// also eligible, via categoryFor below — it can't be enumerated statically.
 const TOOL_CATEGORY: Record<string, string> = {
   Read: "eligible_read",
   Bash: "eligible_command",
   Grep: "eligible_search",
   Glob: "eligible_search",
   LS: "eligible_read",
+  WebFetch: "eligible_read",
+  Task: "eligible_command",
+  BashOutput: "eligible_command",
+  Monitor: "eligible_command",
+  WebSearch: "eligible_search",
+  ToolSearch: "eligible_search",
 };
+
+// Mega's own bridge tools are never self-logged.
+const MEGA_MCP_TOOL = /^mcp__megasaver__/i;
+
+function categoryFor(tool: string): string | undefined {
+  const mapped = TOOL_CATEGORY[tool];
+  if (mapped !== undefined) return mapped;
+  if (tool.startsWith("mcp__") && !MEGA_MCP_TOOL.test(tool)) return "eligible_mcp";
+  return undefined;
+}
 
 export const ELIGIBLE_HOOK_TOOLS: ReadonlySet<string> = new Set(Object.keys(TOOL_CATEGORY));
 
@@ -60,7 +78,7 @@ export function buildHookLine(payload: unknown, now: () => string): string | nul
 
   const tool = asString(record.tool_name);
   if (tool === undefined) return null;
-  const category = TOOL_CATEGORY[tool];
+  const category = categoryFor(tool);
   if (category === undefined) return null;
 
   const input = asObject<ToolInput>(record.tool_input);

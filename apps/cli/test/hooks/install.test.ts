@@ -163,4 +163,29 @@ describe("installClaudeCodeHook (file)", () => {
     expect(result.changed).toBe(false);
     expect(readFileSync(settingsPath, "utf8")).toBe(first);
   });
+
+  it("repairs a stale matcher in place and reports changed (wave-1 upgrade)", () => {
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            { matcher: "Read|Bash|Grep|Glob|LS", hooks: [{ type: "command", command: COMMAND }] },
+          ],
+          PostToolUse: [
+            {
+              matcher: "Read|Bash|Grep|Glob|LS|WebFetch",
+              hooks: [{ type: "command", command: SAVER_HOOK_COMMAND }],
+            },
+          ],
+          UserPromptSubmit: [{ hooks: [{ type: "command", command: "mega hooks intent" }] }],
+        },
+      }),
+    );
+    const result = installClaudeCodeHook({ settingsPath, command: COMMAND });
+    expect(result.changed).toBe(true);
+    const written = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(written.hooks.PreToolUse[0].matcher).toBe(HOOK_MATCHER);
+    expect(written.hooks.PostToolUse[0].matcher).toBe(SAVER_HOOK_MATCHER);
+  });
 });

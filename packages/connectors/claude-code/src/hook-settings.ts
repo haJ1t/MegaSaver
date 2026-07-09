@@ -2,10 +2,17 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-export const HOOK_MATCHER = "Read|Bash|Grep|Glob|LS";
+// Wave 1 (spec 2026-07-09): PreToolUse telemetry and the PostToolUse saver
+// now cover the same tool surface — agent/search tools plus any MCP tool —
+// so the two matchers are unified into one constant. Anchored with ^(?:…)$:
+// the `mcp__.*` alternative makes Claude Code compile the string as an
+// unanchored RegExp, so without the anchors "TaskCreate"/"ReadMcpResourceTool"
+// would match as substrings and fire the hook on ineligible tools.
+export const HOOK_MATCHER =
+  "^(?:Read|Bash|Grep|Glob|LS|WebFetch|Task|BashOutput|Monitor|WebSearch|ToolSearch|mcp__.*)$";
 export const DEFAULT_HOOK_COMMAND = "mega hooks log";
 export const SAVER_HOOK_COMMAND = "mega hooks saver";
-export const SAVER_HOOK_MATCHER = "Read|Bash|Grep|Glob|LS|WebFetch";
+export const SAVER_HOOK_MATCHER = HOOK_MATCHER;
 export const INTENT_HOOK_COMMAND = "mega hooks intent";
 
 type CommandHook = { type: "command"; command: string };
@@ -30,6 +37,24 @@ function entryReferencesCommand(entry: unknown, command: string): boolean {
   return Array.isArray(hooks) && hooks.some((h) => h?.command === command);
 }
 
+// Rewrites the matcher on the entry (if any) that already references
+// `command`, leaving every other entry untouched and never mutating the
+// input array or its entries. Returns null when no entry references the
+// command, so the caller falls through to appending a new one.
+function repairMatcher(
+  entries: ToolUseEntry[],
+  command: string,
+  matcher: string,
+): ToolUseEntry[] | null {
+  let found = false;
+  const next = entries.map((entry) => {
+    if (!entryReferencesCommand(entry, command)) return entry;
+    found = true;
+    return entry.matcher === matcher ? entry : { ...entry, matcher };
+  });
+  return found ? next : null;
+}
+
 export function hasPreToolUseHook(settings: unknown, command: string): boolean {
   if (typeof settings !== "object" || settings === null) return false;
   const pre = (settings as SettingsObject).hooks?.PreToolUse;
@@ -38,9 +63,15 @@ export function hasPreToolUseHook(settings: unknown, command: string): boolean {
 
 export function addPreToolUseHook(settings: unknown, command: string): SettingsObject {
   const next = asSettings(settings);
-  if (hasPreToolUseHook(next, command)) return next;
+  const existingPre = next.hooks?.PreToolUse;
+  if (Array.isArray(existingPre)) {
+    const repaired = repairMatcher(existingPre as ToolUseEntry[], command, HOOK_MATCHER);
+    if (repaired !== null) {
+      next.hooks = { ...next.hooks, PreToolUse: repaired };
+      return next;
+    }
+  }
   const hooks = next.hooks ? { ...next.hooks } : {};
-  const existingPre = hooks.PreToolUse;
   const pre = Array.isArray(existingPre) ? [...(existingPre as ToolUseEntry[])] : [];
   pre.push({ matcher: HOOK_MATCHER, hooks: [{ type: "command", command }] });
   next.hooks = { ...hooks, PreToolUse: pre };
@@ -55,9 +86,15 @@ export function hasPostToolUseHook(settings: unknown, command: string): boolean 
 
 export function addPostToolUseHook(settings: unknown, command: string): SettingsObject {
   const next = asSettings(settings);
-  if (hasPostToolUseHook(next, command)) return next;
+  const existingPost = next.hooks?.PostToolUse;
+  if (Array.isArray(existingPost)) {
+    const repaired = repairMatcher(existingPost as ToolUseEntry[], command, SAVER_HOOK_MATCHER);
+    if (repaired !== null) {
+      next.hooks = { ...next.hooks, PostToolUse: repaired };
+      return next;
+    }
+  }
   const hooks = next.hooks ? { ...next.hooks } : {};
-  const existingPost = (hooks as { PostToolUse?: unknown }).PostToolUse;
   const post = Array.isArray(existingPost) ? [...(existingPost as ToolUseEntry[])] : [];
   post.push({ matcher: SAVER_HOOK_MATCHER, hooks: [{ type: "command", command }] });
   next.hooks = { ...hooks, PostToolUse: post };
@@ -176,16 +213,15 @@ function writeSettings(settingsPath: string, settings: SettingsObject): void {
 export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): ClaudeCodeHookResult {
   const command = input.command ?? DEFAULT_HOOK_COMMAND;
   const existing = readSettings(input.settingsPath);
-  if (
-    hasPreToolUseHook(existing, command) &&
-    hasPostToolUseHook(existing, SAVER_HOOK_COMMAND) &&
-    hasUserPromptSubmitHook(existing, INTENT_HOOK_COMMAND)
-  ) {
-    return { settingsPath: input.settingsPath, changed: false };
-  }
   let next = addPreToolUseHook(existing, command);
   next = addPostToolUseHook(next, SAVER_HOOK_COMMAND);
   next = addUserPromptSubmitHook(next, INTENT_HOOK_COMMAND);
+  // Presence alone isn't enough to no-op: a matcher can drift (wave-1 tool
+  // additions) while the command entry stays present. Diff by value so a
+  // drifted matcher is repaired in place and reported as changed.
+  if (JSON.stringify(next) === JSON.stringify(existing)) {
+    return { settingsPath: input.settingsPath, changed: false };
+  }
   writeSettings(input.settingsPath, next);
   return { settingsPath: input.settingsPath, changed: true };
 }
