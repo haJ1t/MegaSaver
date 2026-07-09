@@ -91,3 +91,22 @@ export { validationStatusSchema, type ValidationStatus } from "./validation-stat
 export { validateSave, type ValidateSaveInput, type ValidateSaveResult } from "./save-validator.js";
 export { checkConflicts, type ConflictOutcome, type ConflictResult } from "./conflict-checker.js";
 export { memoryValidationSchema, type MemoryValidation } from "./memory-validation.js";
+export {
+  BRAIN_SCHEMA_VERSION,
+  BrainBundleError,
+  type BrainBundle,
+  type BrainBundleErrorCode,
+  type BrainManifest,
+  type BrainPayload,
+  brainManifestSchema,
+  brainPayloadSchema,
+  parseBrainBundle,
+  serializeBrainBundle,
+} from "./brain-bundle.js";
+export { type ExportBrainInput, exportBrain } from "./brain-export.js";
+export {
+  type ImportBrainInput,
+  type ImportBrainReport,
+  type ImportCounts,
+  importBrain,
+} from "./brain-import.js";
