@@ -732,3 +732,161 @@ describe("runSavingsForecast — render variants (entitled)", () => {
     expect(out.join("\n")).toContain("No savings recorded this month yet.");
   });
 });
+
+describe("runSavingsForecast — stored budget auto-load (1.13)", () => {
+  const stored = {
+    status: "ok" as const,
+    budget: {
+      version: 1 as const,
+      period: "week" as const,
+      kind: "dollars" as const,
+      amount: 20,
+    },
+  };
+  const absent = { status: "absent" as const, budget: null };
+
+  // NOW_MS is Tue 2023-11-14T22:13:20Z; the current Monday-based week starts
+  // Mon 2023-11-13. The suite's forecastEvents (Nov 5/10) fall BEFORE that
+  // week — with the stored "week" period they'd yield savedSoFar 0 and the
+  // early "No savings recorded" return, never the pace line. The stored-budget
+  // tests therefore use a week-fresh event.
+  const weekEvents: TokenSaverEvent[] = [event("2023-11-14T00:00:00.000Z", 4_000_000)];
+  const weekReader: SavingsEventReader = () => ({
+    events: weekEvents,
+    eventsByProject: { "proj-1": weekEvents },
+  });
+
+  it("free tier: readStoredBudget is never invoked (gate first)", async () => {
+    const readStoredBudget = vi.fn(() => stored);
+    const code = await runSavingsForecast({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: vi.fn(forecastReader()),
+      readStoredBudget,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("Mega Saver Pro");
+    expect(readStoredBudget).not.toHaveBeenCalled();
+  });
+
+  describe("entitled", () => {
+    beforeEach(() => activatePro());
+
+    it("no flags → stored budget supplies goal AND period, marker shown", async () => {
+      const code = await runSavingsForecast({
+        storeRoot: root,
+        now,
+        publicKey: keys.publicKey,
+        readAllEvents: weekReader,
+        readStoredBudget: () => stored,
+        stdout,
+        stderr,
+      });
+      expect(code).toBe(0);
+      const text = out.join("\n");
+      expect(text).toContain("this week"); // period came from the store
+      expect(text).toContain("stored budget"); // marker replaces the word "goal"
+      expect(proSpies.budgetPace).toHaveBeenCalledTimes(1);
+    });
+
+    it("explicit --goal wins over the stored budget", async () => {
+      // period still auto-loads from the store ("week") → needs in-week savings
+      const code = await runSavingsForecast({
+        storeRoot: root,
+        now,
+        publicKey: keys.publicKey,
+        readAllEvents: weekReader,
+        readStoredBudget: () => stored,
+        goal: "$50",
+        stdout,
+        stderr,
+      });
+      expect(code).toBe(0);
+      const text = out.join("\n");
+      expect(text).toContain("$50");
+      expect(text).toContain("goal");
+      expect(text).not.toContain("stored budget");
+    });
+
+    it("explicit --period wins over the stored period", async () => {
+      const code = await runSavingsForecast({
+        storeRoot: root,
+        now,
+        publicKey: keys.publicKey,
+        readAllEvents: forecastReader(),
+        readStoredBudget: () => stored,
+        period: "month",
+        stdout,
+        stderr,
+      });
+      expect(code).toBe(0);
+      expect(out.join("\n")).toContain("this month");
+    });
+
+    it("--json gains goalSource ('stored' vs 'flag') when a pace exists", async () => {
+      const code = await runSavingsForecast({
+        storeRoot: root,
+        now,
+        publicKey: keys.publicKey,
+        readAllEvents: weekReader,
+        readStoredBudget: () => stored,
+        json: true,
+        stdout,
+        stderr,
+      });
+      expect(code).toBe(0);
+      const parsed = JSON.parse(out.join("\n")) as { goalSource: string; pace: unknown };
+      expect(parsed.goalSource).toBe("stored");
+      expect(parsed.pace).toBeDefined();
+
+      out.length = 0;
+      await runSavingsForecast({
+        storeRoot: root,
+        now,
+        publicKey: keys.publicKey,
+        readAllEvents: forecastReader(),
+        readStoredBudget: () => absent,
+        goal: "$50",
+        json: true,
+        stdout,
+        stderr,
+      });
+      expect((JSON.parse(out.join("\n")) as { goalSource: string }).goalSource).toBe("flag");
+    });
+
+    it("no flags + absent stored budget → plain forecast, unchanged behavior", async () => {
+      const code = await runSavingsForecast({
+        storeRoot: root,
+        now,
+        publicKey: keys.publicKey,
+        readAllEvents: forecastReader(),
+        readStoredBudget: () => absent,
+        stdout,
+        stderr,
+      });
+      expect(code).toBe(0);
+      const text = out.join("\n");
+      expect(text).toContain("this month");
+      expect(text).not.toContain("% of your");
+      expect(proSpies.budgetPace).not.toHaveBeenCalled();
+    });
+
+    it("corrupt stored budget → stderr note, forecast proceeds without a pace", async () => {
+      const code = await runSavingsForecast({
+        storeRoot: root,
+        now,
+        publicKey: keys.publicKey,
+        readAllEvents: forecastReader(),
+        readStoredBudget: () => ({ status: "corrupt" as const, budget: null }),
+        stdout,
+        stderr,
+      });
+      expect(code).toBe(0);
+      expect(err.join("\n")).toContain("corrupt");
+      expect(out.join("\n")).not.toContain("% of your");
+    });
+  });
+});
