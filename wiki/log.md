@@ -2753,3 +2753,25 @@ classifies, yet the output path only OBSERVES it (redacting emails corrupts
 git/package metadata the agent needs) — so a value-free LEDGER label needs a
 STRICTER scrub than agent-visible output. Two different redaction policies for
 two different sinks.** Pending: PR + merge + 1.12.0 release. [[entities/cli]]
+
+## [2026-07-09] release | 1.12.0 live — `mega firewall` (Pro module 10)
+
+`@megasaver/cli` 1.12.0 published. Ritual unchanged (NO manual publish): feature
+PR #269 **squash-merged** (`3080a4ae` — branch carried plan-fix + review-fix
+churn); `pnpm changeset version` (consumed `context-firewall.md`), release PR
+#270 (rebase-merge `c59dbd4b`), tag `v1.12.0` → `release.yml` run 28991816503
+**fully green**: GitHub Release (`mega.mjs` + `mega-1.12.0.mjs`) AND npm publish
+automatic. Note: the first watch-then-merge job exited early on a `gh pr checks
+--watch` quirk (ubuntu passed, windows still pending) — re-armed, no failure.
+
+Smoke on the published artifact: `npx @megasaver/cli@1.12.0 --version` →
+`1.12.0`; `mega firewall --store <empty>` → the free-tier upsell line, exit 0.
+
+Sellable Pro surface now m1–m10. Two follow-up chips left open: strip the
+value-free `firewall` field from agent-visible output (token waste), and fix the
+pre-existing `url_basic_auth` `@`-in-password fragment (shared with `redact()`).
+Next in the LOCKED 1.x→2.0 program: **1.13 = N7 anomaly alerts + persistent
+budgets** (m3 forecast's deferred extensions), then **2.0 = E5 portable project
+brain** (signed `.megabrain` export/import — the anti-lock-in flagship).
+[[entities/cli]] [[syntheses/release-history]]
+[[syntheses/pro-differentiation-portfolio]]
