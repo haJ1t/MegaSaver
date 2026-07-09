@@ -503,3 +503,28 @@ describe("buildSaverDecision intent fill-gap", () => {
     expect(captured && "intent" in captured).toBe(false);
   });
 });
+
+describe("recovery footer + expansion guard", () => {
+  it("footer points at the Bash-callable mega output chunk", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
+    expect("updatedToolOutput" in out).toBe(true);
+    const u = (out as { updatedToolOutput: { stdout: string } }).updatedToolOutput;
+    expect(u.stdout).toContain('run: mega output chunk "cs-1" "0"');
+    expect(u.stdout).toContain("proxy_expand_chunk");
+  });
+
+  it("never re-compresses a mega output chunk expansion (C13)", async () => {
+    const d = deps();
+    const payload = {
+      tool_name: "Bash",
+      tool_input: { command: 'mega output chunk "cs-1" "0"' },
+      tool_response: { stdout: "Y".repeat(50_000), stderr: "", interrupted: false, isImage: false },
+      session_id: "live-1",
+      cwd: "/Users/x/proj",
+    };
+    const out = await buildSaverDecision(payload, d);
+    expect(out).toEqual({ passthrough: true });
+    expect(d.record).not.toHaveBeenCalled();
+  });
+});

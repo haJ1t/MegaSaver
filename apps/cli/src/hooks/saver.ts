@@ -153,6 +153,16 @@ export async function buildSaverDecision(
     const sourceKind = TOOL_SOURCE[tool];
     if (sourceKind === undefined) return PASSTHROUGH;
 
+    // C13: a recovery expansion must arrive whole — never re-compress it.
+    if (tool === "Bash") {
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      const ti = p["tool_input"];
+      const i = typeof ti === "object" && ti !== null ? (ti as Record<string, unknown>) : {};
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+      const cmd = asStr(i["command"]) ?? "";
+      if (/\bmega\s+output\s+chunk\b/.test(cmd)) return PASSTHROUGH;
+    }
+
     const workspaceKey = encodeWorkspaceKey(cwd);
     // Step 1: liveness heartbeat for every valid payload, before activation and
     // size gates (so a healthy hook is observable even on passthrough).
@@ -191,9 +201,10 @@ export async function buildSaverDecision(
     const rawTokens = tokensFromBytes(recorded.rawBytes);
     const returnedTokens = tokensFromBytes(recorded.returnedBytes);
     const tokenPct = rawTokens === 0 ? "0.0" : ((1 - returnedTokens / rawTokens) * 100).toFixed(1);
+    const expandCmd = `run: mega output chunk "${recorded.chunkSetId}" "0"`;
     const recovery = looksPreTruncated(shape.raw)
-      ? `NOTE: upstream output appears truncated, recovered chunk is PARTIAL, not complete — call proxy_expand_chunk("${recorded.chunkSetId}", "0") (or mega_fetch_chunk)`
-      : `Full output recoverable — call proxy_expand_chunk("${recorded.chunkSetId}", "0") (or mega_fetch_chunk)`;
+      ? `NOTE: upstream output appears truncated, recovered chunk is PARTIAL, not complete — ${expandCmd} (or MCP proxy_expand_chunk if connected)`
+      : `Full output recoverable — ${expandCmd} (or MCP proxy_expand_chunk if connected)`;
     const pointer = recorded.chunkSetId
       ? `\n\n[Mega Saver: compressed ${recorded.rawBytes}→${recorded.returnedBytes} B (~${rawTokens}→${returnedTokens} tokens, ${tokenPct}%). ${recovery}.]`
       : "";
