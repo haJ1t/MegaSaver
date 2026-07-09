@@ -73,6 +73,23 @@ export {
   type FirewallEventInput,
   type FirewallReport,
 } from "./firewall-report.js";
+export {
+  type AlertAxis,
+  type AlertsReport,
+  type AnomalyFinding,
+  type StoredBudgetInput,
+  ALERT_ADVICE,
+  ALERT_FALLBACK_MULTIPLE,
+  ALERT_FIREWALL_FLOOR_EVENTS,
+  ALERT_K_MAD,
+  ALERT_MIN_HISTORY_DAYS,
+  ALERT_RATIO_FLOOR_BYTES,
+  ALERT_RATIO_MIN_DROP,
+  ALERT_SOURCE_FLOOR_TOKENS,
+  ALERT_TRAFFIC_FLOOR_TOKENS,
+  ALERT_WINDOW_DAYS_DEFAULT,
+  detectAnomalies,
+} from "./alerts.js";
 // Re-export the input price so CLI consumers can render the "(est. at $N/M)"
 // footnote without importing @megasaver/stats directly (that edge is forbidden
 // for apps/cli; pro-analytics already depends on stats).
