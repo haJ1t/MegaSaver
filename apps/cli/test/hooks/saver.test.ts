@@ -15,6 +15,7 @@ const RECORDED = {
   bytesSaved: 99_800,
   savingRatio: 0.998,
   chunkSetId: "cs-1",
+  chunkCount: 1,
 };
 
 function deps(overrides: Partial<Parameters<typeof buildSaverDecision>[1]> = {}) {
@@ -764,5 +765,24 @@ describe("wave-1 shapes", () => {
       d,
     );
     expect(out).toEqual({ passthrough: true });
+  });
+});
+
+describe("N-aware recovery footer (C12)", () => {
+  it("single chunk keeps today's wording (regression)", async () => {
+    const d = deps(); // RECORDED now has chunkCount: 1
+    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
+    const u = (out as { updatedToolOutput: { stdout: string } }).updatedToolOutput;
+    expect(u.stdout).toContain('run: mega output chunk "cs-1" "0"');
+    expect(u.stdout).not.toContain("chunks of 40 lines");
+  });
+
+  it("multi chunk advertises N and the line formula", async () => {
+    const d = deps({ record: vi.fn().mockResolvedValue({ ...RECORDED, chunkCount: 5 }) });
+    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
+    const u = (out as { updatedToolOutput: { stdout: string } }).updatedToolOutput;
+    expect(u.stdout).toContain("in 5 chunks of 40 lines");
+    expect(u.stdout).toContain("chunk i covers lines 40*i+1..40*i+40");
+    expect(u.stdout).toContain('run: mega output chunk "cs-1" "<i>"');
   });
 });

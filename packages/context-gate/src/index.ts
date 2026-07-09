@@ -47,6 +47,7 @@ export {
   recordAndFilterOverlayOutput,
   type RecordOverlayOutputInput,
   type RecordOverlayOutputResult,
+  OVERLAY_CHUNK_LINES,
 } from "./record-output.js";
 export {
   hashContent,

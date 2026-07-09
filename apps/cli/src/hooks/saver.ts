@@ -1,3 +1,4 @@
+import { OVERLAY_CHUNK_LINES } from "@megasaver/context-gate";
 import {
   type RecordOverlayOutputInput,
   type RecordOverlayOutputResult,
@@ -272,10 +273,16 @@ export async function buildSaverDecision(
     const rawTokens = tokensFromBytes(recorded.rawBytes);
     const returnedTokens = tokensFromBytes(recorded.returnedBytes);
     const tokenPct = rawTokens === 0 ? "0.0" : ((1 - returnedTokens / rawTokens) * 100).toFixed(1);
-    const expandCmd = `run: mega output chunk "${recorded.chunkSetId}" "0"`;
+    const n = recorded.chunkCount ?? 1;
+    const L = OVERLAY_CHUNK_LINES;
+    const expandCmd =
+      n > 1
+        ? `— stored in ${n} chunks of ${L} lines (chunk i covers lines ${L}*i+1..${L}*i+${L}) — run: mega output chunk "${recorded.chunkSetId}" "<i>"`
+        : `— run: mega output chunk "${recorded.chunkSetId}" "0"`;
+    const partialNoun = n > 1 ? "recovered chunks are" : "recovered chunk is";
     const recovery = looksPreTruncated(shape.raw)
-      ? `NOTE: upstream output appears truncated, recovered chunk is PARTIAL, not complete — ${expandCmd} (or MCP proxy_expand_chunk if connected)`
-      : `Full output recoverable — ${expandCmd} (or MCP proxy_expand_chunk if connected)`;
+      ? `NOTE: upstream output appears truncated, ${partialNoun} PARTIAL, not complete ${expandCmd} (or MCP proxy_expand_chunk if connected)`
+      : `Full output recoverable ${expandCmd} (or MCP proxy_expand_chunk if connected)`;
     const pointer = recorded.chunkSetId
       ? `\n\n[Mega Saver: compressed ${recorded.rawBytes}→${recorded.returnedBytes} B (~${rawTokens}→${returnedTokens} tokens, ${tokenPct}%). ${recovery}.]`
       : "";
