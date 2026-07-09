@@ -73,22 +73,24 @@ Single UTF-8 file, two-line NDJSON:
   the §13 metadata rule.
 - Default filename: `<projectName>-<YYYYMMDD>.megabrain`.
 
-## §2 Export — `mega brain export [--out <file>] [--json]`
+## §2 Export — `mega brain export <projectName> [--out <file>] [--json]`
 
 1. Pro gate FIRST (1.13 pattern: checkEntitlement → upsell exit 0 →
    lazy import of everything else). Entitlement key: `brain-portability`
-   (exact key pinned in the plan after reading @megasaver/entitlement).
-2. Resolve project from cwd; unregistered → exit 1 with actionable
-   message (`mega project create` hint).
-3. Collect: memories with `approval === "approved"` ONLY (Phase-10
-   semantics: approval answers "shareable?"); all rules; all failures.
+   (new `ProFeature` union member in @megasaver/entitlement).
+2. Project resolved by NAME (codebase convention — no cwd→project
+   mapping exists); unknown → exit 1 `projectNotFoundMessage`.
+3. Collect: memories with `approval === "approved"` AND
+   `scope === "project"` ONLY (session-scoped entries reference
+   sessions that do not exist in the target store); all rules; all
+   failures.
 4. `redactWithFindings` over every content field; any redaction error
    aborts (fail-closed). Findings count → manifest + stdout.
 5. Atomic write (tmp + rename). Output: path, counts, redaction summary.
 
-## §3 Import — `mega brain import <file> [--json]`
+## §3 Import — `mega brain import <projectName> <file> [--json]`
 
-1. Pro gate first, then resolve target project (as export).
+1. Pro gate first, then resolve target project by name (as export).
 2. Read file (size cap 100 MB → exit 1 above it), split on first
    newline, hash-verify raw payload bytes. Mismatch → exit 1
    "bundle corrupted or tampered".
@@ -96,7 +98,11 @@ Single UTF-8 file, two-line NDJSON:
    `schemaVersion !== "1"` → exit 1 with upgrade hint.
 4. Merge-only, never delete/overwrite:
    - memory → `createMemoryEntry` with `approval: "suggested"`, NEW id,
-     `source: "brain-import:<sourceProject.name>"`.
+     target projectId, `sessionId: null`. Original `source` enum value
+     is PRESERVED (knowledge fidelity — `memorySourceSchema` is a
+     closed enum); provenance recorded by appending
+     `"brain-import:<sourceProject.name>"` to `evidence[]`.
+     `supersedesId` dropped (would dangle in the target store).
    - rules/failures → existing core create APIs, NEW ids.
    - Dedupe v1, exact-match per type: memories on content+scope; rules
      on rule text; failures on their identity fields (exact fields
