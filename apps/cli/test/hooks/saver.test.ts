@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { recordAndFilterOverlayOutput } from "@megasaver/core";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { describe, expect, it, vi } from "vitest";
-import { buildSaverDecision } from "../../src/hooks/saver.js";
+import { NEW_SURFACE_MIN_BYTES, buildSaverDecision } from "../../src/hooks/saver.js";
 
 const RECORDED = {
   decision: "compressed" as const,
@@ -567,13 +567,13 @@ describe("wave-1 tool coverage", () => {
     },
   );
 
-  it("gates new surfaces at max(modeBudget, 16384): 16384 bytes passes through", async () => {
+  it("gates new surfaces at max(modeBudget, floor): NEW_SURFACE_MIN_BYTES passes through", async () => {
     const d = deps();
     const out = await buildSaverDecision(
       {
         tool_name: "WebSearch",
         tool_input: { query: "q" },
-        tool_response: "W".repeat(16_384),
+        tool_response: "W".repeat(NEW_SURFACE_MIN_BYTES),
         session_id: "live-1",
         cwd: "/Users/x/proj",
       },
@@ -583,13 +583,13 @@ describe("wave-1 tool coverage", () => {
     expect(d.record).not.toHaveBeenCalled();
   });
 
-  it("compresses a new surface at 16385 bytes", async () => {
+  it("compresses a new surface one byte over the floor", async () => {
     const d = deps();
     const out = await buildSaverDecision(
       {
         tool_name: "WebSearch",
         tool_input: { query: "q" },
-        tool_response: "W".repeat(16_385),
+        tool_response: "W".repeat(NEW_SURFACE_MIN_BYTES + 1),
         session_id: "live-1",
         cwd: "/Users/x/proj",
       },
@@ -618,6 +618,22 @@ describe("wave-1 tool coverage", () => {
     );
     expect(out).toEqual({ passthrough: true });
     expect(d.record).not.toHaveBeenCalled();
+  });
+
+  it("compresses a third-party mega-prefixed MCP tool (not self-excluded)", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(
+      {
+        tool_name: "mcp__megatools__get",
+        tool_input: {},
+        tool_response: "M".repeat(50_000),
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    expect(d.record).toHaveBeenCalledOnce();
   });
 
   it("labels WebSearch by query (grep kind) and Task by description (command kind)", async () => {

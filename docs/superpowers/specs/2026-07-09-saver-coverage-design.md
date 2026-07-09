@@ -50,7 +50,7 @@ tool whose label is not a URL must NOT map to `fetch`):
 | `mcp__*` (dynamic) | `command` | fallback tool name |
 
 - `mcp__*` resolution is a code branch (prefix match), not a map entry.
-  **Exclusion:** tool names matching `/^mcp__mega/i` (Mega Saver's own
+  **Exclusion:** tool names matching `/^mcp__megasaver__/i` (Mega Saver's own
   bridge) pass through — their outputs are already compressed.
 - `labelOf` gains `description` and `query` lookups (after `pattern`,
   before `url`).

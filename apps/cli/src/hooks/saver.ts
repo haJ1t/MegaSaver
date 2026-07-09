@@ -25,8 +25,10 @@ const TOOL_SOURCE: Record<string, OutputSourceKind> = {
 };
 
 // Mega's own bridge tools are already compressed upstream — never re-compress.
-const MEGA_MCP_TOOL = /^mcp__mega/i;
-const NEW_SURFACE_TOOLS = new Set(["Task", "BashOutput", "Monitor", "WebSearch", "ToolSearch"]);
+const MEGA_MCP_TOOL = /^mcp__megasaver__/i;
+// The six native tools that predate wave-1 keep their plain mode budget;
+// every newer/coarser surface (Task/background/search/mcp__*) gets the floor.
+const ORIGINAL_TOOLS = new Set(["Read", "LS", "Bash", "Grep", "Glob", "WebFetch"]);
 export const NEW_SURFACE_MIN_BYTES = 16_384;
 
 function resolveSourceKind(tool: string): OutputSourceKind | undefined {
@@ -38,9 +40,7 @@ function resolveSourceKind(tool: string): OutputSourceKind | undefined {
 
 function minBytesFor(tool: string, mode: TokenSaverMode): number {
   const budget = modeToBudget(mode);
-  return NEW_SURFACE_TOOLS.has(tool) || tool.startsWith("mcp__")
-    ? Math.max(budget, NEW_SURFACE_MIN_BYTES)
-    : budget;
+  return ORIGINAL_TOOLS.has(tool) ? budget : Math.max(budget, NEW_SURFACE_MIN_BYTES);
 }
 
 export type SaverSettings = { enabled: boolean; mode: TokenSaverMode };
