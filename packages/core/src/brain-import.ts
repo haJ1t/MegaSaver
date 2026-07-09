@@ -30,12 +30,16 @@ export function importBrain(input: ImportBrainInput): ImportBrainReport {
   const existingMemories = input.registry.listMemoryEntries(input.projectId);
   const existingRules = input.registry.listProjectRules(input.projectId);
   const existingFailures = input.registry.listFailedAttempts(input.projectId);
-  const memoryKeys = new Set(existingMemories.map((m) => m.content));
+  const memoryKeys = new Set(
+    existingMemories.filter((m) => m.scope === "project").map((m) => m.content),
+  );
   const ruleKeys = new Set(existingRules.map((r) => r.rule));
-  const failureKeys = new Set(existingFailures.map((f) => `${f.task} ${f.failedStep}`));
+  const failureKeys = new Set(existingFailures.map((f) => `${f.task}\0${f.failedStep}`));
 
   const imported: ImportCounts = { memories: 0, rules: 0, failures: 0 };
   const skipped: ImportCounts = { memories: 0, rules: 0, failures: 0 };
+
+  // ponytail: writes are per-call and non-transactional; merge-only + content dedupe makes a re-run self-healing, so partial writes on a mid-loop throw are acceptable for v1.
 
   for (const entry of bundle.payload.memories) {
     if (memoryKeys.has(entry.content)) {
@@ -71,7 +75,7 @@ export function importBrain(input: ImportBrainInput): ImportBrainReport {
   }
 
   for (const failure of bundle.payload.failures) {
-    const key = `${failure.task} ${failure.failedStep}`;
+    const key = `${failure.task}\0${failure.failedStep}`;
     if (failureKeys.has(key)) {
       skipped.failures += 1;
       continue;

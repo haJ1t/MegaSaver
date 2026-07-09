@@ -108,6 +108,38 @@ describe("importBrain", () => {
     expect(registry.listMemoryEntries(project.id)).toHaveLength(0);
   });
 
+  it("dedupes memories with identical content within one bundle", () => {
+    const source = createInMemoryCoreRegistry();
+    const src = makeProject(source, "0f0e0d0c-0b0a-4900-8807-0605040302aa", "gamma");
+    for (const id of [
+      "44444444-4444-4444-8444-444444444444",
+      "55555555-5555-4555-8555-555555555555",
+    ]) {
+      source.createMemoryEntry({
+        id,
+        projectId: src.id,
+        sessionId: null,
+        scope: "project",
+        type: "decision",
+        title: `title ${id}`,
+        content: "same content",
+        keywords: [],
+        confidence: "high",
+        source: "agent",
+        approval: "approved",
+        stale: false,
+        createdAt: NOW,
+        updatedAt: NOW,
+      } as unknown as MemoryEntry);
+    }
+    const bundleText = exportBrain({ registry: source, projectId: src.id, createdAt: NOW });
+    const { registry, project } = targetRegistry();
+    const report = importBrain({ registry, projectId: project.id, bundleText, newId });
+    expect(report.imported.memories).toBe(1);
+    expect(report.skipped.memories).toBe(1);
+    expect(registry.listMemoryEntries(project.id)).toHaveLength(1);
+  });
+
   it("throws on unknown target project", () => {
     const bundleText = seedSource();
     const registry = createInMemoryCoreRegistry();
