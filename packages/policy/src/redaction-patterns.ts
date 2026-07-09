@@ -78,11 +78,18 @@ const baseline: RedactionPattern[] = [
     // first; this catches http(s)/ftp/etc.). Username may be empty (password-only
     // / token-as-password) and the password may contain '/' — matching db_url's
     // strength. Scheme + host are kept, so the URL stays valid:
-    // scheme://user:pass@host -> scheme://[REDACTED]@host. (A literal '@' inside
-    // the password — which RFC 3986 requires percent-encoded — leaves a tail; the
-    // first-'@' anchor is deliberate to avoid over-matching host/path.)
+    // scheme://user:pass@host -> scheme://[REDACTED]@host. The password is LAZY
+    // and may contain `@`, `/`, `:` (tools like curl accept unencoded ones); it
+    // stops at the FIRST `@` that is followed by a real host (host chars, then a
+    // `/?#:` delimiter or end-of-string) OR by end-of-string/whitespace (a
+    // host-less userinfo, e.g. `redis://:pw@` at a truncated line boundary — no
+    // host to connect to, but the credential is still a secret to scrub). That
+    // anchor scrubs a whole `@`-bearing password (`user:p@ss@host` ->
+    // `[REDACTED]@host`) without over-matching a later `@` in the path
+    // (`.../@2x.png`). User stops at the first `:` (the user:password split).
     name: "url_basic_auth",
-    pattern: /(?<=[a-z][a-z0-9+.-]*:\/\/)[^\s/@]*:[^\s@]+(?=@)/gi,
+    pattern:
+      /(?<=[a-z][a-z0-9+.-]*:\/\/)[^\s/?#:]*:[^\s?#]+?(?=@(?:[^\s/?#@:]+(?:[/?#:]|$)|\s|$))/gi,
     replacement: "[REDACTED]",
   },
   {

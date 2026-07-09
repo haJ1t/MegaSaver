@@ -44,6 +44,51 @@ describe("redact — unstructured/contextual secrets (positives)", () => {
   });
 });
 
+describe("redact — url basic auth with @ / special chars in the password (no fragment leak)", () => {
+  it("scrubs the FULL credential when the password contains @", () => {
+    const { redacted, count } = redact("curl https://user:p@ss@host");
+    expect(redacted).toBe("curl https://[REDACTED]@host");
+    expect(count).toBe(1);
+    expect(redacted).not.toContain("@ss");
+    expect(redacted).not.toContain("p@ss");
+  });
+
+  it("handles : and @ in the password, with port + path", () => {
+    const { redacted } = redact("https://user:p:w@rd@host:8080/path");
+    expect(redacted).toBe("https://[REDACTED]@host:8080/path");
+    expect(redacted).not.toContain("w@rd");
+  });
+
+  it("scrubs an email-style username plus password (userinfo runs to the LAST @)", () => {
+    const { redacted } = redact("https://user@corp.com:secret@host/x");
+    expect(redacted).toBe("https://[REDACTED]@host/x");
+    expect(redacted).not.toContain("corp.com");
+    expect(redacted).not.toContain("secret");
+  });
+
+  it("does not false-positive on a path/query that merely contains : and @", () => {
+    // No userinfo (no `user:pass@` before the authority delimiter).
+    expect(redact("https://example.com/a:b@c").redacted).toBe("https://example.com/a:b@c");
+  });
+
+  it("does not over-match a later @ in the PATH (e.g. retina @2x asset)", () => {
+    const { redacted } = redact("https://user:pass@host.io/img/@2x.png");
+    expect(redacted).toBe("https://[REDACTED]@host.io/img/@2x.png");
+  });
+
+  it("url_query_secret has no @-fragment gap (value class already spans @)", () => {
+    const { redacted } = redact("https://x/y?token=ab@cd@ef&page=2");
+    expect(redacted).toBe("https://x/y?token=[REDACTED]&page=2");
+  });
+
+  it("scrubs a host-less userinfo (credential at end-of-string, no host to anchor)", () => {
+    // db_url requires `@\S+` (host present) and skips redis; url_basic_auth is the
+    // only guard for a truncated `redis://:pw@` line — the credential is still a secret.
+    expect(redact("redis://:s3cr3tPW@").redacted).toBe("redis://[REDACTED]@");
+    expect(redact("https://user:p@ss@").redacted).toBe("https://[REDACTED]@");
+  });
+});
+
 describe("redact — redacted URLs stay schema-valid (z.string().url())", () => {
   const url = z.string().url();
   it("redacted query-secret URL still parses as a URL", () => {
