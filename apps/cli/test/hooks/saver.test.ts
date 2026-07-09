@@ -538,6 +538,7 @@ describe("wave-1 tool coverage", () => {
       response: { content: [{ type: "text", text: big }] },
     },
     { tool: "BashOutput", input: {}, response: { stdout: big, stderr: "" } },
+    { tool: "Monitor", input: {}, response: { stdout: big, stderr: "" } },
     { tool: "WebSearch", input: { query: "vitest flaky" }, response: big },
     { tool: "ToolSearch", input: { query: "select:Read" }, response: big },
     {
