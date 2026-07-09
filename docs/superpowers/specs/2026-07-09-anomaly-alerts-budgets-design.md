@@ -74,12 +74,20 @@ export function detectAnomalies(
   events: readonly TokenSaverEvent[],
   firewallEvents: readonly FirewallEventInput[],
   budget: { period: ForecastPeriod; goal: BudgetGoal } | null,
-  opts: { now: number; windowDays: number },
+  opts: { now: number; windowDays?: number },
 ): AlertsReport;
 ```
 
-**Bucketing.** UTC day = `createdAt.slice(0, 10)` (the `history.ts` idiom;
-`Date.parse` NaN rows skipped). "Today" = the UTC day of `opts.now`. Baseline
+`windowDays` is optional, defaulting to `ALERT_WINDOW_DAYS_DEFAULT` inside the
+detector (the `diagnoseFirewall` `days?` precedent) — the CLI free path must
+not import the constant just to supply a default (plan amendment 2026-07-09).
+
+**Bucketing.** UTC day = `new Date(Date.parse(createdAt)).toISOString().slice(0, 10)`
+(NaN rows skipped). This deliberately re-derives the UTC day from the parsed
+timestamp instead of `history.ts`'s raw `createdAt.slice(0, 10)`: an
+offset-bearing timestamp (`…T01:00:00+03:00`) belongs to the previous UTC day,
+and the in-window filter already parses (plan amendment 2026-07-09). "Today" =
+the UTC day of `opts.now`. Baseline
 series = the trailing `windowDays` calendar days **ending yesterday** (today
 never contributes to its own baseline). Calendar days with no events count
 as 0.
@@ -93,10 +101,14 @@ A finding requires BOTH `todayValue > threshold` AND `todayValue ≥ floor`
 baseline and tiny-median jitter).
 
 **Ratio axis (lower tail).** Daily ratio = `Σ bytesSaved / Σ rawBytes` for the
-day (0-guarded). Threshold = `median − max(ALERT_K_MAD × MAD,
+day (0-guarded). Unlike the volume axes, the ratio baseline uses **active days
+only** (days in the window with `rawBytes > 0`) — a zero-traffic day has no
+ratio, and counting it as 0 would drag the median down and blind the lower
+tail (plan amendment 2026-07-09). Threshold = `median − max(ALERT_K_MAD × MAD,
 ALERT_RATIO_MIN_DROP)`. A finding requires `todayRatio < threshold` AND
 `todayRawBytes ≥ ALERT_RATIO_FLOOR_BYTES` (the ratio is meaningless on thin
-traffic).
+traffic). The ratio axis needs `≥ ALERT_MIN_HISTORY_DAYS` **active** baseline
+days; fewer → `insufficientAxes`.
 
 **History guards (per axis family).** Event-based axes (traffic, source,
 ratio) need `today − firstEventDay ≥ ALERT_MIN_HISTORY_DAYS`; the firewall
@@ -149,7 +161,7 @@ All exports re-exported from `src/index.ts`.
 per-project budget is a non-goal).
 
 ```
-budgetSchema = z.object({
+storedBudgetSchema = z.object({
   version: z.literal(1),
   period:  z.enum(["month", "week"]),
   kind:    z.enum(["tokens", "dollars"]),
@@ -211,8 +223,11 @@ ledger read (the `firewall.ts:38` pattern) + `readBudget` → `detectAnomalies`
 only — the pure functions are untouched): explicit flags always win; the
 stored budget fills gaps. No `--goal` → stored `kind`/`amount` becomes the
 goal; no explicit `--period` → stored `period`. The pace segment gains a
-`(stored budget)` marker when the goal came from disk. Corrupt file → stderr
-note, behave as if absent, exit unchanged.
+`(stored budget)` marker when the goal came from disk (rendered as "X% of
+your $N stored budget" vs "...goal"), and `--json` gains a top-level
+`goalSource: "flag" | "stored"` field when a pace is present (additive to the
+JSON contract; plan amendment 2026-07-09). Corrupt file → stderr note, behave
+as if absent, exit unchanged.
 
 ### 4. Docs + changeset + wiki
 
@@ -242,14 +257,23 @@ with real synthetic series). Worktree; full superpowers chain.
   spike; today excluded from its own baseline; ratio lower-tail + volume
   floor; firewall Σcount (not line count) + independent history guard;
   budget behind/on-track/absent; `insufficient-history` under 7 days;
-  empty-everything → ok with zero findings, never NaN/Infinity; determinism
-  (fixed `now`); constants exported with spec-locked values.
+  empty-everything → `insufficient-history` with zero findings and zero
+  historyDays, never NaN/Infinity (all four applicable axes lack history —
+  plan amendment 2026-07-09); determinism (fixed `now`); constants exported
+  with spec-locked values.
 - **Budget store:** roundtrip; absent → null/"absent"; corrupt JSON + wrong
-  schema → null/"corrupt"; atomic write (no partial file on simulated
-  failure); clear idempotent; symlink-parent guard inherited from
-  `atomicWriteFile`.
-- **CLI:** no license → upsell + zero reads/imports (spies) for all three
-  surfaces; `budget set → show → clear` roundtrip on a real temp store; bad
+  schema → null/"corrupt"; clear idempotent; symlink-parent write guard
+  exercised at the budget surface; overwrite of a corrupt file repairs it.
+  Write atomicity (temp+fsync+rename, no partial file) is delegated to the
+  shared `atomicWriteFile` and its existing suite
+  (`packages/stats/test/atomic-write.test.ts`) — not re-simulated per store
+  (plan amendment 2026-07-09).
+- **CLI:** no license → upsell + spy-enforced zero reads/computes on every
+  surface with a DI reader (`alerts`: events/ledger/budget readers;
+  `forecast`: events reader, pro spies, and the new stored-budget reader);
+  the budget commands have no DI reader — their free-path tests assert the
+  upsell and that nothing is written; `budget set → show → clear` roundtrip
+  on a real temp store; bad
   `set` values (`abc`, `0`, `-5`, `$0`); `alerts` on a synthetic store with a
   planted spike day → finding rendered + `--json` shape; `--days` bounds;
   forecast auto-load (stored used when flags absent, flags override, marker
