@@ -131,3 +131,13 @@ export {
   scoreActionabilityPassRate,
   scoreFirstExpansionSuccessRate,
 } from "./sufficiency-metrics.js";
+
+export {
+  budgetPath,
+  budgetStatus,
+  clearBudget,
+  readBudget,
+  storedBudgetSchema,
+  type StoredBudget,
+  writeBudget,
+} from "./budget.js";
