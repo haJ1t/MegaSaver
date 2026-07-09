@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { defineCommand } from "citty";
+import { alertsCommand } from "./commands/alerts.js";
 import { auditCommand } from "./commands/audit/index.js";
 import { benchCommand } from "./commands/bench.js";
 import { cacheCommand } from "./commands/cache.js";
@@ -56,6 +57,7 @@ export const mainCommand = defineCommand({
     init: initCommand,
     audit: auditCommand,
     bench: benchCommand,
+    alerts: alertsCommand,
     cache: cacheCommand,
     doctor: doctorCommand,
     github: githubCommand,
