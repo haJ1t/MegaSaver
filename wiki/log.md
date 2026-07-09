@@ -2733,5 +2733,23 @@ Evidence: per-package suites green (policy 162, output-filter 380, context-gate
 250, pro-analytics 124, cli 961 + 9 firewall); `pnpm verify` green. **Lesson:
 a vitest-only per-task gate misses type errors — full `tsc` only runs at the
 suite level, so a verbatim-passing file can still be type-unsound across a
-package boundary.** Pending: HIGH review (code-reviewer + critic + privacy lens
-on F-FW-1) + PR + merge + 1.12.0 release. [[entities/cli]]
+package boundary.**
+
+HIGH review (4 lenses: privacy/F-FW-1, checksum correctness, code, tests;
+findings adversarially verified) returned **do-not-merge with 2 blockers** —
+both real privacy defects the gate exists to catch: (1) **F-FW-1 breach** — the
+exec ledger `sourcePath` used `redact()`, which only OBSERVES emails, so an
+email in a command line (`mega run git log --author=x@y.com`) persisted
+verbatim into the "value-free" ledger; fixed with a new `redactForLedger()`
+(scrubs secrets + PII + emails) at all 6 sourcePath sites. (2) **IBAN
+false-negative** — the gate regex was case-sensitive while `ibanValid` upcases,
+so a valid lowercase IBAN leaked unredacted; fixed with the `i` flag. Both
+fixed red-first (policy 166 tests incl. lowercase-IBAN + redactForLedger email
+scrub), `pnpm verify` green, re-verified by a fresh privacy pass. Two
+non-blocking follow-ups: the value-free `firewall` field leaks into
+agent-visible output (token waste — deferred to a task chip) and one untested
+CLI prose branch (fixed inline). **Lesson: an email is PII the feature itself
+classifies, yet the output path only OBSERVES it (redacting emails corrupts
+git/package metadata the agent needs) — so a value-free LEDGER label needs a
+STRICTER scrub than agent-visible output. Two different redaction policies for
+two different sinks.** Pending: PR + merge + 1.12.0 release. [[entities/cli]]
