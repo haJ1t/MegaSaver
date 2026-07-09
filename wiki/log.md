@@ -2806,3 +2806,41 @@ green. Pending: PR #271 → CI (ubuntu+windows) → rebase-merge → 1.13.0 rele
 Next and final in the LOCKED 1.x→2.0 program: **2.0 = E5 portable project
 brain** (signed `.megabrain` export/import). [[entities/cli]]
 [[syntheses/pro-differentiation-portfolio]]
+
+## [2026-07-09] release | 1.13.0 live — anomaly alerts + persistent budgets
+
+Shipped to npm as `@megasaver/cli@1.13.0` (`latest`), tag `v1.13.0`,
+release.yml auto-publish green (GitHub Release + npm publish, no manual
+publish). PR [#274](https://github.com/haJ1t/MegaSaver/pull/274) rebase-merged
+(CI ubuntu+windows green). The release bundles two earlier patch changesets:
+#272 (firewall-field-strip) + #273 (url_basic_auth fragment).
+
+**Review (§9.6, MEDIUM — separate fresh contexts):**
+- code-reviewer **APPROVE** — detector math correct, F-FW-1 (value-free
+  firewall axis) preserved, gate pattern correct on both new commands
+  (checkEntitlement first, upsell exit 0, lazy import after gate; spy-enforced
+  no free-path reads/compute), conventions clean, tests non-tautological.
+- critic **REQUEST-CHANGES → resolved.** Mutation-tested the 7 detector guards;
+  found the `>=floor` conjunct + strict-`>` boundary untested (every fixture used
+  a flat MAD=0 baseline where `upperStats`' own fallback already forced
+  threshold ≥ floor). Added 4 regression cases (traffic+firewall MAD>0
+  sub-floor, `today==threshold`, non-trivial today-exclusion) — **proved they
+  kill the exact surviving mutations** (M2→2 fails, M1→1 fail; commit e720073 /
+  merged 50995986). All 6 construction probes (timezone/DST, determinism,
+  overflow, prototype-key labels, week-boundary budget) already clean.
+
+**Evidence:** `pnpm verify` green independently (52/52 turbo tasks, 985 CLI +
+530 GUI + 251 context-gate tests). Entitled E2E smoke on a planted store:
+forecast rendered "76% of your $20.00 stored budget (behind)"; alerts fired all
+four axes ([traffic]/[source]/[firewall]/[budget]) with per-axis fix: advice.
+Published-tarball smoke: `npx @megasaver/cli@1.13.0 mega alerts` runs the
+entitled path (no crash). npm serves 1.13.0.
+
+Consciously-accepted review nits (non-blocking): `writeBudget` fails loud on a
+symlinked store dir (fail-closed is correct for the security guard); `parseDays`
+`Number()` laxity verbatim from firewall.ts/cache.ts per §8; invalid `--period`
+falls through to the stored period (pre-existing forecast coercion).
+
+**LOCKED 1.x→2.0 program COMPLETE through 1.13.** Only **2.0 = E5 portable
+project brain** (signed `.megabrain` export/import) remains — the anti-lock-in
+flagship. [[entities/cli]] [[syntheses/pro-differentiation-portfolio]]
