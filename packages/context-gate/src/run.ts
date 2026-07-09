@@ -149,9 +149,10 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     ...(input.outline === true ? { outline: true } : {}),
   });
 
-  // The trace is measurement data (§P2.6): persisted below, stripped from the
-  // agent-visible result so it never spends the tokens it exists to measure.
-  const { trace: rankingTrace, ...filteredSansTrace } = filteredResult;
+  // trace + firewall are measurement data (§P2.6): trace is persisted below,
+  // firewall feeds only the ledger call — both stripped from the agent-visible
+  // result so they never spend the tokens they exist to measure.
+  const { trace: rankingTrace, firewall: _firewall, ...filteredSansTrace } = filteredResult;
   appendFirewallEventsFromFilter(
     input.storeRoot,
     {
@@ -336,7 +337,11 @@ export async function runOverlayOutputPipeline(
     filteredResult.firewall,
   );
 
-  let result: FilterOutputResult = { ...filteredResult };
+  // Strip measurement-only fields (trace + firewall) from the agent-visible
+  // result — §P2.6, matching the non-overlay path. The ledger already read
+  // filteredResult.firewall above.
+  const { trace: _overlayTrace, firewall: _overlayFirewall, ...filteredSansMeta } = filteredResult;
+  let result: FilterOutputResult = { ...filteredSansMeta };
   if (hintWarnings.length > 0) {
     result.warnings = [...(result.warnings ?? []), ...hintWarnings];
   }
