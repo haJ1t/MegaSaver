@@ -39,7 +39,7 @@ function ev(daysAgo: number, rawBytes: number, label = "read") {
 
 // 14 quiet days + a 2M-token spike today (same series the detector tests use).
 function spikeEvents() {
-  const events = [];
+  const events: unknown[] = [];
   for (let i = 1; i <= 14; i++) events.push(ev(i, 400_000));
   events.push(ev(0, 8_000_000));
   return events;
@@ -142,7 +142,7 @@ describe("runAlerts — entitled", () => {
     // zero-padded (16 empty days), median 0, floor threshold 50k — and a steady
     // 100k-token day would "spike". With a 14-day window the baseline is flat
     // 100k, fallback threshold max(4×100k, 50k) = 400k, today 100k is quiet.
-    const events = [];
+    const events: unknown[] = [];
     for (let i = 1; i <= 14; i++) events.push(ev(i, 400_000));
     events.push(ev(0, 400_000));
     const { code } = run({ events, days: "14" });
@@ -179,7 +179,7 @@ describe("runAlerts — entitled", () => {
   });
 
   it("stored budget behind pace → budget finding", async () => {
-    const events = [];
+    const events: unknown[] = [];
     for (let i = 1; i <= 14; i++) events.push(ev(i, 8_000_000)); // 1M saved tokens/day
     const { code } = run({
       events,
