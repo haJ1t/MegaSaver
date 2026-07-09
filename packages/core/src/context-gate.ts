@@ -85,6 +85,18 @@ export {
   type ProxyUsageTokenCounts,
 } from "@megasaver/stats";
 
+// 1.13 persistent budget: the CLI reads/writes stats/budget.json through core
+// (same §3c allow-list rule as readEvents above).
+export {
+  budgetPath,
+  budgetStatus,
+  clearBudget,
+  readBudget,
+  storedBudgetSchema,
+  type StoredBudget,
+  writeBudget,
+} from "@megasaver/stats";
+
 export {
   INPUT_PRICE_PER_MTOK_USD,
   CONTEXT_WINDOW_TOKENS,
