@@ -11,10 +11,12 @@ export type GcDeps = {
 };
 
 // Throttled, best-effort content-store GC (C14). The marker is touched BEFORE
-// pruning so concurrent hook processes cannot stampede the content/ walk. Every
-// failure path returns false without throwing — housekeeping, not correctness
-// (pruneTraceSessions precedent). Returns true only when a prune ran to
-// completion.
+// pruning so a hook arriving AFTER the touch skips the walk. A simultaneous
+// check-then-claim race (two hooks in the statSync→write window) can still both
+// prune the same day — benign: pruneOlderThan is force/ENOENT-tolerant and any
+// cross-process fs race is swallowed here, so the worst case is redundant work.
+// Every failure path returns false without throwing — housekeeping, not
+// correctness (pruneTraceSessions precedent). True only when a prune completed.
 export async function maybeRunOverlayGc(storeRoot: string, deps: GcDeps = {}): Promise<boolean> {
   const now = deps.now ?? Date.now;
   const prune = deps.prune ?? pruneOlderThan;

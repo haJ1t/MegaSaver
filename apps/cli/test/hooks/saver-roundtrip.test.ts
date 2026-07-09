@@ -12,7 +12,7 @@ beforeEach(() => {
 afterEach(() => rmSync(store, { recursive: true, force: true }));
 
 describe("C11 roundtrip: hook compression → mega output chunk recovery path", () => {
-  it("fetchChunk returns the full raw for a hook-written overlay set", async () => {
+  it("recovers any line via its 40-line chunk (multi-chunk model, C12)", async () => {
     const raw = Array.from({ length: 3_000 }, (_, i) => `line ${i}: some build output text`).join(
       "\n",
     );
@@ -27,12 +27,26 @@ describe("C11 roundtrip: hook compression → mega output chunk recovery path", 
       storeRawOutput: true,
     });
     expect(recorded.decision).toBe("compressed");
-    const out = await fetchChunk({
+    // Chunk "0" is now the FIRST 40 lines, not the whole raw.
+    const first = await fetchChunk({
       storeRoot: store,
       chunkSetId: recorded.chunkSetId as string,
       chunkId: "0",
     });
-    expect(out.ok).toBe(true);
-    if (out.ok) expect(out.chunk.text).toContain("line 2999");
+    expect(first.ok).toBe(true);
+    if (first.ok) {
+      expect(first.chunk.startLine).toBe(1);
+      expect(first.chunk.endLine).toBe(40);
+      expect(first.chunk.text).toContain("line 0: some build output text");
+      expect(first.chunk.text).not.toContain("line 2999");
+    }
+    // "line 2999" is the 3000th line → chunk floor((3000-1)/40) = 74.
+    const last = await fetchChunk({
+      storeRoot: store,
+      chunkSetId: recorded.chunkSetId as string,
+      chunkId: "74",
+    });
+    expect(last.ok).toBe(true);
+    if (last.ok) expect(last.chunk.text).toContain("line 2999");
   });
 });
