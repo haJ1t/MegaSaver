@@ -511,7 +511,7 @@ now pre-filters `entry.approval !== "approved"` before scope/session checks.
 Only approved memory flows into agent config files. GUI mirror
 (`apps/gui/bridge/connector-context.ts`) carries the same filter.
 
-## Pro tier — `mega license`, `mega savings`, `mega roi`, `mega teardown`, `mega bench`, `mega compress`, `mega cache`, `mega firewall` (modules 1–10)
+## Pro tier — `mega license`, `mega savings`, `mega roi`, `mega teardown`, `mega bench`, `mega compress`, `mega cache`, `mega firewall`, `mega alerts`, `mega savings budget` (modules 1–11)
 
 Entitlement-gated Pro analytics: offline Ed25519 license via
 `mega license {activate,status}`; every Pro command gates FIRST on
@@ -643,6 +643,24 @@ zero events read), then lazy-imports the proprietary
   test constant, and an `exactOptionalPropertyTypes` mismatch tsc caught only
   at the full-suite level. TDD tests: 10 validators + 9 redact-pii + 2 filter
   + 5 ledger + 3 wiring (incl. F-FW-1 e2e) + 7 analyzer + 9 CLI.
+- `mega alerts [--days <n>] [--json] [--store <dir>]` — module 11 (2026-07-09,
+  spec `2026-07-09-anomaly-alerts-budgets-design.md`, risk MEDIUM): deterministic
+  anomaly alerts over the savings + firewall streams. Pure `detectAnomalies` in
+  pro-analytics — median+MAD robust statistics over trailing UTC-day baselines
+  that NEVER include today, across five axes: daily traffic, per-source volume,
+  saving-ratio collapse (lower-tail, active-day baseline), firewall-event surge,
+  and budget pace (reuses `forecastSavings`+`budgetPace`). MAD=0 flat baselines
+  fall back to a multiple-of-median with per-axis absolute floors (traffic 50k,
+  source 25k, firewall 5, ratio min-drop 0.15 + 256KiB). CLI Pro-gated
+  (`savings-analytics`), `--days` 1..3650 default 30, `--json` = stable
+  `AlertsReport`; reads the same value-free firewall ledger + savings events.
+- `mega savings budget {set,show,clear}` — module 11 companion: persistent
+  savings goal at `stats/budget.json` (Zod v1 schema `{version,period,kind,
+  amount}` in `@megasaver/stats`, re-exported through core per the §3c
+  allow-list; atomic write, corrupt-vs-absent distinguished). Pro-gated end to
+  end (even set/show/clear gate first). `mega savings forecast` now AUTO-LOADS
+  the stored budget — explicit `--goal`/`--period` flags win; the pace line
+  reads "stored budget"; `--json` gains `goalSource` (`stored` | `flag`).
 
 ## Related
 
