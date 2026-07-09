@@ -1,5 +1,5 @@
 import type { KeyObject } from "node:crypto";
-import { formatDollarsSaved } from "@megasaver/core";
+import { type StoredBudget, budgetStatus, formatDollarsSaved, readBudget } from "@megasaver/core";
 import { checkEntitlement } from "@megasaver/entitlement";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
@@ -30,6 +30,10 @@ export type RunSavingsForecastInput = {
   period?: ForecastPeriodArg;
   goal?: string;
   json?: boolean;
+  readStoredBudget?: (storeRoot: string) => {
+    status: "absent" | "ok" | "corrupt";
+    budget: StoredBudget | null;
+  };
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
@@ -59,14 +63,38 @@ export async function runSavingsForecast(input: RunSavingsForecastInput): Promis
     }
   }
 
+  // Stored-budget auto-load (1.13): explicit flags always win; the stored
+  // budget only fills the gaps. Corrupt file → honest note, treated as absent.
+  let goalSource: "flag" | "stored" | null = goal === null ? null : "flag";
+  let storedPeriod: ForecastPeriodArg | undefined;
+  if (goal === null || input.period === undefined) {
+    const readStored =
+      input.readStoredBudget ??
+      ((root: string) => ({ status: budgetStatus(root), budget: readBudget(root) }));
+    const storedRead = readStored(input.storeRoot);
+    if (storedRead.status === "corrupt") {
+      input.stderr(
+        "stored budget unreadable (corrupt budget.json) — ignoring; run `mega savings budget clear`.",
+      );
+    } else if (storedRead.budget !== null) {
+      if (goal === null) {
+        goal = { kind: storedRead.budget.kind, amount: storedRead.budget.amount };
+        goalSource = "stored";
+      }
+      if (input.period === undefined) {
+        storedPeriod = storedRead.budget.period;
+      }
+    }
+  }
+
   const { forecastSavings, budgetPace } = await import("@megasaver/pro-analytics");
   const { events } = await input.readAllEvents();
-  const period: ForecastPeriodArg = input.period ?? "month";
+  const period: ForecastPeriodArg = input.period ?? storedPeriod ?? "month";
   const forecast = forecastSavings(events, { now: input.now(), period });
   const pace = goal ? budgetPace(forecast, goal) : null;
 
   if (input.json) {
-    input.stdout(JSON.stringify(pace ? { forecast, pace } : { forecast }));
+    input.stdout(JSON.stringify(pace ? { forecast, pace, goalSource } : { forecast }));
     return 0;
   }
 
@@ -83,7 +111,7 @@ export async function runSavingsForecast(input: RunSavingsForecastInput): Promis
     const goalStr =
       goal?.kind === "dollars" ? formatDollarsSaved(goal.amount) : `${goal?.amount} tokens`;
     const pct = Math.round(pace.pctOfGoalProjected * 100);
-    headline += ` — ${pct}% of your ${goalStr} goal (${pace.onTrack ? "on track" : "behind"})`;
+    headline += ` — ${pct}% of your ${goalStr} ${goalSource === "stored" ? "stored budget" : "goal"} (${pace.onTrack ? "on track" : "behind"})`;
   }
   input.stdout(headline);
   input.stdout("");
