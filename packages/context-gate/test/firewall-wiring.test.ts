@@ -123,6 +123,20 @@ describe("firewall wiring — pipeline emits events", () => {
     expect(ledgerText).not.toContain(CARD);
   });
 
+  it("agent-visible result omits the value-free firewall field (stripped like trace)", async () => {
+    const notes = join(projectRoot, "notes.md");
+    await writeFile(notes, NOTES_BODY);
+    const outcome = await run(notes);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    // The firewall counts are measurement data consumed only by the ledger; they
+    // must never spend agent tokens (§P2.6, same as `trace`).
+    expect("firewall" in outcome.result).toBe(false);
+    expect("trace" in outcome.result).toBe(false);
+    // ...while the ledger still recorded the redaction/observation events.
+    expect(existsSync(firewallLogPath(store))).toBe(true);
+  });
+
   it("ledger write failure never breaks the pipeline", async () => {
     // Pre-create <store>/firewall as a FILE so mkdir/append fails.
     writeFileSync(join(store, "firewall"), "x");

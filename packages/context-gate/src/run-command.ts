@@ -348,9 +348,10 @@ export async function runOutputExecCommand(
     ...captureWarnings,
     ...hintWarnings,
   ];
-  // The trace is measurement data (§P2.6): persisted below, stripped from the
-  // agent-visible result so it never spends the tokens it exists to measure.
-  const { trace: rankingTrace, ...filteredSansTrace } = filtered;
+  // trace + firewall are measurement data (§P2.6): trace is persisted below,
+  // firewall feeds only the ledger call — both stripped from the agent-visible
+  // result so they never spend the tokens they exist to measure.
+  const { trace: rankingTrace, firewall: _firewall, ...filteredSansTrace } = filtered;
   let result: ExecResult = {
     ...filteredSansTrace,
     ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),
@@ -594,8 +595,11 @@ export async function runOverlayOutputExecCommand(
     ...captureWarnings,
     ...hintWarnings,
   ];
+  // Strip measurement-only fields (trace + firewall) — §P2.6, matching the
+  // non-overlay exec path. The ledger already read filtered.firewall above.
+  const { trace: _overlayTrace, firewall: _overlayFirewall, ...filteredSansMeta } = filtered;
   let result: ExecResult = {
-    ...filtered,
+    ...filteredSansMeta,
     ...(resultWarnings.length > 0 ? { warnings: resultWarnings } : {}),
     childExitCode: outcome.capture.childExitCode,
     ...(outcome.capture.terminated !== undefined ? { terminated: outcome.capture.terminated } : {}),
