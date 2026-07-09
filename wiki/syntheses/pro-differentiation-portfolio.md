@@ -108,3 +108,10 @@ incident, see log) and **module 5 `mega savings fix` SHIPPED** (#253, HIGH
 chain, 4 confirmed review catches fixed RED-first, in 1.7.0). Price
 resolved: $7.99/mo canonical. Sellable Pro surface = m1–m5. The 1.x → 2.0
 program above is LOCKED (user, 2026-07-07); next up: 1.8 `mega teardown`.
+
+Update 2026-07-09: the LOCKED program has run to its 1.x end. **1.12 N3
+context firewall SHIPPED** (module 10, live 1.12.0) and **1.13 N7 anomaly
+alerts + persistent budgets SHIPPED** (module 11: `mega alerts` +
+`mega savings budget`, `mega savings forecast` auto-load). Next and final:
+**2.0 E5 portable project brain** — the signed `.megabrain` export/import
+anti-lock-in flagship.

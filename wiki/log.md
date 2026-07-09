@@ -2775,3 +2775,34 @@ budgets** (m3 forecast's deferred extensions), then **2.0 = E5 portable project
 brain** (signed `.megabrain` export/import — the anti-lock-in flagship).
 [[entities/cli]] [[syntheses/release-history]]
 [[syntheses/pro-differentiation-portfolio]]
+
+## [2026-07-09] feat | 1.13 anomaly alerts + persistent budgets (module 11)
+
+`mega alerts` + `mega savings budget set|show|clear` implemented on branch
+`feat/cli-anomaly-alerts`. Spec `docs/superpowers/specs/2026-07-09-anomaly-alerts-budgets-design.md`
+(approved, risk MEDIUM); plan `docs/superpowers/plans/2026-07-09-anomaly-alerts-budgets-plan.md`
+(6 tasks). Key decisions/facts:
+
+- **Detector** (`@megasaver/pro-analytics` `detectAnomalies`, pure, no I/O):
+  median+MAD robust statistics over trailing UTC-day baselines that NEVER
+  include today, five axes — traffic, per-source, saving-ratio collapse
+  (lower-tail, ACTIVE-day baseline so zero-days don't blind it), firewall-event
+  surge, and budget pace (reuses `forecastSavings`+`budgetPace`). MAD=0 flat
+  baselines fall back to `4×median` with per-axis absolute floors (traffic
+  50k tok, source 25k tok, firewall 5 events, ratio min-drop 0.15 + 256KiB).
+  Constants spec-locked (window 30, min-history 7, k-MAD 3.5).
+- **Budget store** (`@megasaver/stats` `budget.ts`, re-exported through core
+  per §3c allow-list): `stats/budget.json`, Zod v1 schema, atomic write,
+  corrupt-vs-absent distinguished (license.json precedent).
+- **Forecast auto-load**: `mega savings forecast` reads the stored budget when
+  `--goal`/`--period` are absent (explicit flags win); pace line reads "stored
+  budget"; `--json` gains `goalSource` (`stored` | `flag`).
+- CLI Pro-gated end to end on `savings-analytics` (even budget set/show/clear
+  gate FIRST); `mega alerts` registered in `main.ts` before `cache`.
+
+TDD throughout: budget store 8, detector suite, `savings-budget` CLI 8,
+`alerts` CLI 9, forecast stored-budget block 7 (savings suite 37). `pnpm verify`
+green. Pending: PR #271 → CI (ubuntu+windows) → rebase-merge → 1.13.0 release.
+Next and final in the LOCKED 1.x→2.0 program: **2.0 = E5 portable project
+brain** (signed `.megabrain` export/import). [[entities/cli]]
+[[syntheses/pro-differentiation-portfolio]]

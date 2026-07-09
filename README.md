@@ -526,6 +526,7 @@ mega <command> [subcommand] [flags]
 | `mega compress <file>` | reversible extractive compression of a memory/doc file — dry-run or `--apply` (Pro) |
 | `mega cache` | prompt-cache doctor — miss detection, dollars burned, one-line fixes (Pro) |
 | `mega firewall` | context-firewall audit — blocked secret reads, PII/secret redactions, value-free leak ledger (Pro) |
+| `mega alerts` | anomaly alerts — traffic/source/ratio/firewall spikes + budget pace (Pro) |
 | `mega doctor` | diagnose bridge / hooks / connector setup |
 
 Run `mega <command> --help` for subcommands and flags. Closed-enum flags
@@ -676,6 +677,11 @@ mega savings insights --by label  # or break down by tool/label
 mega savings forecast             # project this period's savings (Pro)
 mega savings forecast --goal $15  # pace it against a savings goal
 
+mega savings budget set $20 --period month  # persist a savings goal (Pro)
+mega savings budget show          # show the stored budget (or clear)
+mega alerts                       # anomaly alerts over savings + firewall (Pro)
+mega alerts --days 14 --json      # windowed AlertsReport as JSON
+
 mega roi                          # is Pro worth its price? (Pro)
 mega roi --price $5               # compare against a custom price
 
@@ -730,6 +736,16 @@ mega compress CLAUDE.md --apply    # overwrite (writes CLAUDE.md.bak; restore wi
   always-on, value-free ledger. Detection + ledger run for everyone; the
   audit report is Pro. Guards the Mega Saver ingress surface (proxy tools +
   hooks), not native agent reads.
+- `mega alerts [--days <n>] [--json]` — deterministic anomaly alerts over the
+  savings + firewall streams: median+MAD spike detection across daily traffic,
+  per-source volume, saving-ratio collapse, and firewall-event surges, plus
+  budget pace. Robust statistics with per-axis floors so quiet stores stay
+  quiet; today never enters its own baseline. Pro; reads only local ledgers.
+- `mega savings budget set|show|clear` — persist a savings goal to
+  `stats/budget.json` (`<tokens>` or `$<dollars>`, `--period month|week`).
+  `mega savings forecast` then auto-loads it (explicit `--goal`/`--period`
+  flags still win; the pace line reads "stored budget" and `--json` adds
+  `goalSource`), and `mega alerts` paces against it.
 
 Without a license, `mega savings` prints a one-line note that the feature is Pro
 and exits cleanly — it never errors, and the free CLI is unaffected. Keys are
