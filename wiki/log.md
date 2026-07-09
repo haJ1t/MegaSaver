@@ -2844,3 +2844,36 @@ falls through to the stored period (pre-existing forecast coercion).
 **LOCKED 1.x→2.0 program COMPLETE through 1.13.** Only **2.0 = E5 portable
 project brain** (signed `.megabrain` export/import) remains — the anti-lock-in
 flagship. [[entities/cli]] [[syntheses/pro-differentiation-portfolio]]
+
+## [2026-07-09] feat | saver coverage wave 1 SHIPPED (feat/saver-coverage)
+
+First of five gap-fix waves for the saver-savings-gaps audit (2.0 scope).
+Full superpowers chain: spec → plan → subagent-driven TDD (7 tasks, fresh
+implementer + spec + code-quality review each) + code-reviewer/critic gate.
+
+**FIXED** (mark in [[syntheses/saver-savings-gaps]] on merge — page is main
+working-tree only): A1 Task/subagent reports, A2 BashOutput/Monitor, A3
+third-party `mcp__*` (mega's own bridge excluded via `/^mcp__megasaver__/i`),
+A4 WebSearch/ToolSearch, A5 Grep files-mode/Glob filename arrays, A6 Bash
+stderr (larger-stream slot), A7 mixed text/non-text content arrays; C11 dead
+recovery path (`fetchChunk` now reads overlay chunk sets — CLI/daemon/bridge
+all route through it), C13 no-recompress guard on `mega output chunk`, C15
+`.DS_Store` scan guard. New surfaces gate at a 16 KiB conservative floor;
+matchers anchored `^(?:...)$` (regression: `mcp__.*` had flipped CC to
+unanchored regex, matching TaskCreate/ReadMcpResourceTool); `mega hooks
+install` repairs a stale matcher in place.
+
+**Review catches fixed RED-first**: fetchChunk DRY-delegated to fetchOverlayChunk;
+export→CoreRegistryError parity; floor derived from a frozen ORIGINAL_TOOLS set
+(drift trap) + tightened mega regex (`/^mcp__mega/i` false-excluded third parties);
+filenames-rebuild empty-entry filter; combined stdout+stderr gate ceiling
+documented as a follow-up; **matcher anchoring regression** (the load-bearing catch).
+
+**Evidence**: `pnpm verify` EXIT=0. C11 integration roundtrip green. LIVE C11
+repro: this session's own compressed chunk `a9c9e447-…` (previously
+`error: store_corrupt: Invalid id.`) now recovers via
+`mega output chunk a9c9e447-… 0` → "Chunk 0 … (lines 1-205, 10464 B)" + full raw.
+
+Still open (later waves): C12 all-or-nothing chunk model, C14 GC, B8-10
+eligibility, D16-20 ranking, E21-29 silent-failure, F30-34 metrics.
+Deliberate v1 ceiling: combined stdout+stderr gating (spec non-goal).
