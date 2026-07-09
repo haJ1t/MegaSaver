@@ -2877,3 +2877,47 @@ repro: this session's own compressed chunk `a9c9e447-…` (previously
 Still open (later waves): C12 all-or-nothing chunk model, C14 GC, B8-10
 eligibility, D16-20 ranking, E21-29 silent-failure, F30-34 metrics.
 Deliberate v1 ceiling: combined stdout+stderr gating (spec non-goal).
+
+## [2026-07-10] feat | saver recovery wave 2 SHIPPED (feat/saver-recovery)
+
+Second gap-fix wave, STACKED on wave 1 (feat/saver-coverage). Full superpowers
+chain: spec → plan → subagent-driven TDD (7 tasks, fresh implementer + review
+each). C12 + C14 FIXED (mark in [[syntheses/saver-savings-gaps]] on merge —
+page is main working-tree only).
+
+**C12 (all-or-nothing chunk):** `record-output.ts` now splits the full redacted
+raw into uniform 40-line chunks (`chunkByLines`, `id: String(i)`, contiguous
+line ranges, byte-exact recovery — `chunks.join("\n") === raw` verified incl.
+trailing newline). `OVERLAY_CHUNK_LINES = 40` single-sourced. Result gains
+`chunkCount`; evidence `returnedChunkRefs` enumerates every chunk. Saver footer
+N-aware: `Full output recoverable — stored in N chunks of 40 lines (chunk i
+covers lines 40*i+1..40*i+40) — run: mega output chunk "<set>" "<i>"`. Single-
+chunk wording byte-identical to wave 1. Agent expands only the needed slice
+instead of re-paying for the whole raw.
+
+**C14 (no GC):** `pruneOlderThan` (content-store) now parses BOTH registry and
+overlay schemas (overlay sets previously leaked forever — strict registry parse
+rejected them), removes emptied dirs (rmdir-as-guard, isDir race-safe, rmdir
+catch narrowed to ENOTEMPTY/ENOENT), `.DS_Store`/marker-file safe. Throttled
+hook trigger `apps/cli/src/hooks/gc.ts maybeRunOverlayGc` — best-effort, ≤1/day
+via `content/.last-gc` marker (touched before prune), swallow-all. Manual
+`mega output gc [--days N]` (ungated housekeeping; 1-3650 day floor — CLI can
+never nuke today's cache; deletes only schema-validating chunk-set json under
+`content/`).
+
+**Review catches fixed RED-first:** rmdir catch narrowed + isDir race-safe +
+neither-schema/mixed-store tests (Task 1); ReturnedChunkRef type reuse + cast
+drop (Task 2); footer readability "— stored in" separator (Task 3); GC stampede
+comment softened to admit the benign simultaneous-check race (Task 4); citty
+`resolveStorePath` guarded via mapErrorToCliMessage — was crashing raw on
+`--store ""` (Task 5). Wave-1 C11 roundtrip test updated for the multi-chunk
+model (chunk 0 = first slice, line 2999 recovered via chunk 74).
+
+**Evidence:** `pnpm verify` EXIT=0 (52/52 turbo). C12+C14 integration roundtrip
+green (200/3000-line → multi-chunk fetch → prune removes → cold). CLI smoke:
+`mega output gc` help/--json/--days/bad-days-exit-1 all clean, registered in the
+`output` group. Pending: code-reviewer + critic → stacked PR.
+
+Still open (later waves): B8-10 eligibility, D16-20 ranking, E21-29 silent-
+failure, F30-34 metrics. Deferred v1 ceiling: `around`/line-window fetch, size/
+count-based retention, daemon periodic GC (spec non-goals).
