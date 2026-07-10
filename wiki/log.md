@@ -2993,3 +2993,18 @@ Pending: code-reviewer + critic → stacked PR.
 
 Still open (later waves): E21-29 silent-failure/observability, F30-34 metrics
 honesty.
+
+## [2026-07-10] fix | B9 follow-up — BashOutput/Monitor share Bash's ceiling
+
+Extended wave-3 B9 (commit 5c171b54) beyond the literal `Bash` tool:
+`BashOutput`/`Monitor` retrieve background-shell output that shares Claude
+Code's ~30000-char truncation ceiling (undocumented — confirmed via
+claude-code-guide that BashOutput/Monitor/Task limits aren't published; Bash's
+30000 is). Their safe-mode floor (32000) sat above the ceiling → never
+compressed (same dead zone B9 fixed for Bash). `minBytesFor` now caps
+`BACKGROUND_SHELL_TOOLS = {BashOutput, Monitor}` at 24000 for safe mode while
+keeping the 16384 new-surface floor for aggressive/balanced. Task is left
+uncapped: subagent reports aren't shell-truncated (GitHub #12054 suggests
+unbounded), so large reports already clear 32000. Closes the final code-review
+Minor. Safe-direction: if the ceiling assumption is wrong it only compresses
+smaller background logs, fully recoverable.
