@@ -150,8 +150,13 @@ Returns whether `fn` ran (callers stay best-effort).
 `mega doctor` gains saver checks (exit non-zero on FAIL-level findings;
 warnings don't fail; no auto-fix — each finding prints the repair command):
 
-1. **Registration:** all three hooks present in settings.json; command form
-   flagged if bare (pre-E23) or store-mismatched (E29).
+1. **Registration:** all three hooks present in settings.json. An entirely-
+   absent saver hook is a WARN with the repair hint ("not installed" ≠
+   "broken"; a clean machine — e.g. a fresh CI runner — still exits 0);
+   command form is flagged if bare (pre-E23) or store-mismatched (E29).
+   Registered-but-broken FAILs (bad binary, failed self-test, invocation-
+   without-completion) live in the checks below and only fire once a saver
+   command is registered.
 2. **Binary:** the registered command's binary path exists and is
    executable; its `--version` matches the running CLI's version (warn on
    mismatch).
@@ -198,7 +203,7 @@ no bug found, this guards the only prior-content path in the codebase.
 | Finding | Failing test before code |
 |---|---|
 | E21 | Unit: `buildSaverDecision` with a throwing `record` dep → failure heartbeat written with kind `record`; successful run → `lastCompletionAt` set. `makeRecord` with daemon handle + failing POST → `daemonFallbacks` bump + in-process result. |
-| E22 | doctor with registered hooks but empty heartbeat → warning "never fired"; invocations>0 ∧ completions=0 → FAIL; self-test against a temp settings+store fixture spawning a stub command → pass/fail propagates to exit code. |
+| E22 | absent saver hook → WARN with repair hint, exit 0 (not installed ≠ broken); doctor with registered hooks but empty heartbeat → warning "never fired"; invocations>0 ∧ completions=0 → FAIL; self-test against a temp settings+store fixture spawning a stub command → pass/fail propagates to exit code. |
 | E23 | `installClaudeCodeHook` writes absolute invoked path + timeout; re-install over a bare-`mega` settings file migrates it; uninstall removes both forms. |
 | E24 | Corrupt summary JSON + valid events.jsonl → `loadOverlaySummary` returns rebuilt summary (with `rebuiltAt`), `appendOverlayEvent` succeeds; today: throws `store_corrupt`. |
 | E25 | Stale lock file (old mtime) present → heartbeat write succeeds (today: skipped); fresh lock → still skips (contention semantics kept). |

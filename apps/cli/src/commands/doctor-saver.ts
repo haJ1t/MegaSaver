@@ -122,14 +122,16 @@ export function runSaverChecks(deps: DoctorSaverDeps = {}): Check[] {
   const saverCmd = registeredCommand(settings, "PostToolUse", "saver");
   const intentCmd = registeredCommand(settings, "UserPromptSubmit", "intent");
 
-  // E22.1 registration — a missing saver is a FAIL; a missing telemetry/intent
-  // hook or a bare PATH-dependent command is a warning.
+  // E22.1 registration — an entirely-absent saver is a WARN (not installed, not
+  // broken): a clean machine with no hook must still exit 0. A registered-but-
+  // broken saver FAILs in the checks below (binary / self-test / liveness gap).
+  // A missing telemetry/intent hook or a bare PATH-dependent command is a warn.
   if (saverCmd === null) {
     checks.push({
       key: "saver-hooks-registered",
-      value: "saver hook missing",
-      pass: false,
-      reason: REPAIR_HINT,
+      value: "saver hook not installed",
+      pass: true,
+      reason: `warn: saver hook not installed — ${REPAIR_HINT}`,
     });
   } else {
     const present = [logCmd, saverCmd, intentCmd].filter((c) => c !== null).length;

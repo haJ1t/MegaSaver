@@ -119,7 +119,7 @@ describe("runSaverChecks", () => {
     expect(selfTest?.reason).toBe("run: mega hooks install");
   });
 
-  it("FAILs registration when the saver hook is missing (and skips the dependent checks)", () => {
+  it("WARNs (pass) registration when the saver hook is absent, and skips the dependent checks", () => {
     const p = join(dir, "settings.json");
     writeFileSync(p, JSON.stringify({ hooks: {} }));
     const checks = runSaverChecks({
@@ -129,10 +129,12 @@ describe("runSaverChecks", () => {
       now: () => NOW,
     });
     const reg = find(checks, "saver-hooks-registered");
-    expect(reg?.pass).toBe(false);
-    expect(reg?.reason).toBe("run: mega hooks install");
+    expect(reg?.pass).toBe(true);
+    expect(reg?.reason).toContain("mega hooks install");
     expect(find(checks, "saver-hook-binary")).toBeUndefined();
     expect(find(checks, "saver-self-test")).toBeUndefined();
+    // Absent (not broken) saver → all-WARN/pass → doctor exits 0 on a clean CI machine.
+    expect(checks.every((c) => c.pass)).toBe(true);
   });
 
   it("WARNs (pass) when the hook never fired", () => {
