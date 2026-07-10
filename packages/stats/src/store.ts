@@ -191,14 +191,17 @@ function loadOverlaySummaryStrict(path: string): OverlaySessionTokenSaverStats |
 
 // E24 self-heal: rebuild the summary from the corruption-tolerant JSONL reader
 // and persist it. secretsRedactedTotal / chunksStoredTotal cannot be recovered
-// from events — events carry neither — so the repair trades those two counters
-// for liveness (rebuilt as 0). A missing events file rebuilds to an empty
-// summary (readOverlayEvents returns []), never a throw.
+// from events — events carry neither. When the prior summary is still loadable
+// (the normal lock-skip lag path), the caller passes carryForward so those two
+// counters survive; only a genuinely unreadable summary loses them (rebuilt as
+// 0 — no source). A missing events file rebuilds to an empty summary
+// (readOverlayEvents returns []), never a throw.
 export function rebuildOverlaySummaryFromEvents(
   store: StatsStore,
   workspaceKey: string,
   liveSessionId: string,
   nowIso: string = new Date().toISOString(),
+  carryForward?: { secretsRedactedTotal: number; chunksStoredTotal: number },
 ): OverlaySessionTokenSaverStats {
   const events = readOverlayEvents(store, workspaceKey, liveSessionId);
   let eventsTotal = 0;
@@ -218,8 +221,8 @@ export function rebuildOverlaySummaryFromEvents(
     returnedBytesTotal,
     bytesSavedTotal,
     savingRatio: rawBytesTotal === 0 ? 0 : bytesSavedTotal / rawBytesTotal,
-    secretsRedactedTotal: 0,
-    chunksStoredTotal: 0,
+    secretsRedactedTotal: carryForward?.secretsRedactedTotal ?? 0,
+    chunksStoredTotal: carryForward?.chunksStoredTotal ?? 0,
     updatedAt: nowIso,
     rebuiltAt: nowIso,
   };
@@ -270,7 +273,22 @@ export function reconcileOverlaySummaries(store: StatsStore): number {
           corrupt = true;
         }
         if (corrupt || summary === null || summary.eventsTotal < lineCount) {
-          rebuildOverlaySummaryFromEvents(store, workspaceKey, liveSessionId);
+          // A loadable-but-lagging summary still holds the event-less counters;
+          // preserve them. A corrupt summary (summary === null) has no source.
+          const carryForward =
+            summary !== null
+              ? {
+                  secretsRedactedTotal: summary.secretsRedactedTotal,
+                  chunksStoredTotal: summary.chunksStoredTotal,
+                }
+              : undefined;
+          rebuildOverlaySummaryFromEvents(
+            store,
+            workspaceKey,
+            liveSessionId,
+            undefined,
+            carryForward,
+          );
           rebuilt += 1;
         }
       } catch {

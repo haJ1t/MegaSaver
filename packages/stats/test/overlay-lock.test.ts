@@ -74,6 +74,39 @@ describe("E26 summary lock + reconciliation", () => {
     expect(after.bytesSavedTotal).toBe(1800);
   });
 
+  it("reconcile preserves secrets/chunks counters when the lagging summary is loadable", () => {
+    appendOverlayEvent({
+      store: { root },
+      event: event("e1"),
+      secretsRedacted: 20,
+      chunksStored: 40,
+    });
+    // two more lines land (lost summary updates) — the summary now lags at 1
+    appendFileSync(eventsPath(), `${JSON.stringify(event("e2"))}\n`);
+    appendFileSync(eventsPath(), `${JSON.stringify(event("e3"))}\n`);
+    expect(reconcileOverlaySummaries({ root })).toBe(1);
+    const after = JSON.parse(readFileSync(summaryPath(), "utf8"));
+    expect(after.eventsTotal).toBe(3);
+    // events carry no secrets/chunks; the loadable prior summary must be reused
+    expect(after.secretsRedactedTotal).toBe(20);
+    expect(after.chunksStoredTotal).toBe(40);
+  });
+
+  it("reconcile resets secrets/chunks to 0 when the summary is corrupt (no source)", () => {
+    appendOverlayEvent({
+      store: { root },
+      event: event("e1"),
+      secretsRedacted: 7,
+      chunksStored: 9,
+    });
+    writeFileSync(summaryPath(), "{{{ corrupt");
+    expect(reconcileOverlaySummaries({ root })).toBe(1);
+    const after = JSON.parse(readFileSync(summaryPath(), "utf8"));
+    expect(after.eventsTotal).toBe(1);
+    expect(after.secretsRedactedTotal).toBe(0);
+    expect(after.chunksStoredTotal).toBe(0);
+  });
+
   it("reconcile repairs a corrupt summary and leaves healthy ones alone", () => {
     appendOverlayEvent({
       store: { root },
