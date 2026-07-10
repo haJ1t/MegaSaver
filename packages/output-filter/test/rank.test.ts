@@ -269,10 +269,13 @@ describe("fitBudget pins the top intent match under budget pressure", () => {
 });
 
 describe("D18: Unicode-aware tokenizer", () => {
-  it("Turkish intent tokens match Turkish chunk text", () => {
-    const chunk = { text: "işçi kaydını günceller ve derler", startLine: 1, endLine: 1 };
-    const scored = scoreChunk("işçi kaydı neden bozuk", chunk);
-    expect(scored.features.keywordScore).toBeGreaterThan(0);
+  it("Turkish intent matches across dotless-i case (fails on ASCII split)", () => {
+    // Lowercase "ışık" vs uppercase "IŞIK" fold to the same token "isik". The
+    // old [^a-z0-9] split fragmented them to DISJOINT ASCII pieces ({k} vs
+    // {i,ik}) -> 0 hits, so this discriminates the fix; the fold gives 1.
+    const chunk = { text: "IŞIK yandı", startLine: 1, endLine: 1 };
+    const scored = scoreChunk("mavi ışık", chunk);
+    expect(scored.features.keywordScore).toBe(1);
   });
 
   it("accent folding is symmetric across case (İ/ı/ç/ş)", () => {

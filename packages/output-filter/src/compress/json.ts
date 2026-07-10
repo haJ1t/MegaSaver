@@ -5,15 +5,11 @@
 // raw JSON is still persisted to the ChunkSet and recoverable via
 // mega_fetch_chunk — this only changes what is RETURNED.
 
+import { tokenizeForMatch } from "../tokenize.js";
+
 const MIN_ARRAY_LEN = 20;
 const SAMPLE_FROM_FIRST = 3;
 const SCHEMA_SAMPLE_DEPTH = 10;
-
-const tokenize = (s: string): string[] =>
-  s
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 0);
 
 function valueType(v: unknown): string {
   if (v === null) return "null";
@@ -55,8 +51,8 @@ export function compressJson(text: string, intent: string | undefined): string {
   const keys = homogeneousKeys(parsed);
   if (keys === null) return text;
 
-  const intentTokens = new Set(intent === undefined ? [] : tokenize(intent));
-  const intentKeys = keys.filter((k) => tokenize(k).some((t) => intentTokens.has(t)));
+  const intentTokens = new Set(intent === undefined ? [] : tokenizeForMatch(intent));
+  const intentKeys = keys.filter((k) => tokenizeForMatch(k).some((t) => intentTokens.has(t)));
 
   const typesFromSample = new Map<string, Set<string>>(keys.map((k) => [k, new Set<string>()]));
   for (const el of parsed.slice(0, SCHEMA_SAMPLE_DEPTH) as Record<string, unknown>[]) {

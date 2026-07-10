@@ -1,4 +1,5 @@
 import type { RankFeatureName } from "./rank-features.js";
+import { tokenizeForMatch } from "./tokenize.js";
 
 export type RankFeatures = Record<RankFeatureName, number>;
 
@@ -61,25 +62,11 @@ const TEST_FAILURE = /^(?:FAIL|\s*[✗×])\s|\b\d+\s+failed\b/im;
 const FILE_PATH = /[\w./-]+\.\w{1,5}(?::\d+)?/;
 const NOISE = /^[\s.\-=*#]*$/;
 
-// Matching normalization, not linguistic correctness: lowercase, strip
-// combining marks after NFD (ç→c, ş→s, JS-lowercased İ→i̇→i), fold dotless
-// ı→i (no NFD decomposition exists for it). Both sides of keywordScore run
-// the same fold, so matching stays symmetric for any script; ASCII input
-// tokenizes exactly as before.
-const tokenize = (text: string): string[] =>
-  text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}+/gu, "")
-    .replace(/ı/g, "i")
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((t) => t.length > 0);
-
 function keywordScore(intent: string | undefined, text: string): number {
   if (intent === undefined) return 0;
-  const wanted = new Set(tokenize(intent));
+  const wanted = new Set(tokenizeForMatch(intent));
   if (wanted.size === 0) return 0;
-  const present = new Set(tokenize(text));
+  const present = new Set(tokenizeForMatch(text));
   let hits = 0;
   for (const w of wanted) if (present.has(w)) hits += 1;
   return hits;

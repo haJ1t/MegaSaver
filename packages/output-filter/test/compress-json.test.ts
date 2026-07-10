@@ -107,5 +107,16 @@ describe("compressJson (structured-data schematizer)", () => {
       const out = compressJson(arr, "find the email column");
       expect(out).toContain("email");
     });
+
+    it("matches a Turkish key against a Turkish intent across dotless-i (D18 twin)", () => {
+      // Key "ışık" and intent "IŞIK" fold to "isik"; the old ASCII split
+      // fragmented them to disjoint pieces ({k} vs {i,ik}) and never matched,
+      // so this key would not be force-kept before the shared tokenizer.
+      const arr = JSON.stringify(
+        Array.from({ length: 30 }, (_, i) => ({ id: i, ışık: i % 2 === 0 })),
+      );
+      const out = compressJson(arr, "IŞIK durumu");
+      expect(out).toMatch(/ışık:[^\n]*\(kept: intent\)/);
+    });
   });
 });
