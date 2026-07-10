@@ -1,6 +1,17 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { type ProxyMetrics, StatsError, buildProxyMetrics, readEvents } from "@megasaver/core";
+import { readHeartbeatView } from "@megasaver/context-gate";
+import {
+  type OverlaySessionTokenSaverStats,
+  type ProxyMetrics,
+  StatsError,
+  type WorkspaceTokenSaverTotals,
+  buildProxyMetrics,
+  readAllWorkspaceTokenSaverTotals,
+  readEvents,
+  readOverlaySummaryAnyWorkspace,
+  readWorkspaceTokenSaverTotals,
+} from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, sessionNotFoundMessage, storeCorruptMessage } from "../../errors.js";
@@ -8,7 +19,7 @@ import { HOOK_LOG_RELATIVE_PATH } from "../../hooks/logger.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 
 export type RunHooksStatusInput = {
-  sessionId: string;
+  sessionId?: string; // absent → cross-workspace aggregate view (E28)
   storeFlag: string | undefined;
   cwd: string;
   home: string;
@@ -54,6 +65,80 @@ function renderText(metrics: ProxyMetrics): string[] {
   return lines;
 }
 
+// E27: an overlay session (keyed by Claude transcript UUID) is registered
+// nowhere — the overlay files ARE the registration; label it explicitly.
+function renderOverlayStatus(
+  overlay: { workspaceKey: string; summary: OverlaySessionTokenSaverStats },
+  input: RunHooksStatusInput,
+): void {
+  const s = overlay.summary;
+  if (input.json) {
+    input.stdout(JSON.stringify({ source: "overlay", workspaceKey: overlay.workspaceKey, ...s }));
+    return;
+  }
+  const pct =
+    s.rawBytesTotal === 0 ? "0.0" : ((s.bytesSavedTotal / s.rawBytesTotal) * 100).toFixed(1);
+  input.stdout("Live hook session (overlay):");
+  input.stdout(`  workspace: ${overlay.workspaceKey}`);
+  input.stdout(`  events: ${s.eventsTotal}`);
+  input.stdout(
+    `  bytes: ${s.rawBytesTotal} raw -> ${s.returnedBytesTotal} returned (saved ${pct}%)`,
+  );
+  input.stdout(`  updated: ${s.updatedAt}`);
+}
+
+// E28: no-arg form — per-workspace totals + TOTAL + heartbeat recency. Reads
+// only the stats tree and the heartbeat registry; needs no session registry.
+function runAggregateStatus(rootDir: string, input: RunHooksStatusInput): 0 {
+  const store = { root: rootDir };
+  let workspaceKeys: string[];
+  try {
+    workspaceKeys = readdirSync(join(rootDir, "stats"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    workspaceKeys = [];
+  }
+  const perWorkspace: WorkspaceTokenSaverTotals[] = [];
+  for (const wk of workspaceKeys) {
+    try {
+      const totals = readWorkspaceTokenSaverTotals(store, wk);
+      if (totals !== null) perWorkspace.push(totals);
+    } catch {
+      // unsafe segment or unreadable dir — skip, mirroring the stats readers
+    }
+  }
+  const total = readAllWorkspaceTokenSaverTotals(store);
+  const hb = readHeartbeatView(rootDir);
+
+  if (input.json) {
+    input.stdout(JSON.stringify({ workspaces: perWorkspace, total, heartbeat: hb }));
+    return 0;
+  }
+  const pct = (ratio: number) => `${(ratio * 100).toFixed(1)}%`;
+  input.stdout("Hook savings by workspace:");
+  if (perWorkspace.length === 0) input.stdout("  (no hook sessions recorded)");
+  for (const t of perWorkspace) {
+    input.stdout(
+      `  ${t.workspaceKey}: ${t.sessionsCount} sessions, ${t.eventsTotal} events, saved ${t.bytesSavedTotal} B (${pct(t.savingRatio)})`,
+    );
+  }
+  input.stdout(
+    `  TOTAL: ${total.sessionsCount} sessions across ${total.workspaceCount} workspaces, saved ${total.bytesSavedTotal} B (${pct(total.savingRatio)})`,
+  );
+  input.stdout("");
+  input.stdout("Hook liveness by workspace:");
+  const wks = Object.keys(hb.workspaces).sort();
+  if (wks.length === 0) input.stdout("  (no heartbeats recorded)");
+  for (const wk of wks) {
+    input.stdout(
+      `  ${wk}: invoked ${hb.workspaces[wk] ?? "?"}, completed ${hb.completions?.[wk] ?? "never"}, failures ${hb.failures?.[wk]?.count ?? 0}`,
+    );
+  }
+  return 0;
+}
+
 export async function runHooksStatus(input: RunHooksStatusInput): Promise<0 | 1> {
   let rootDir: string;
   try {
@@ -69,6 +154,10 @@ export async function runHooksStatus(input: RunHooksStatusInput): Promise<0 | 1>
     const cli = mapErrorToCliMessage(err, { kind: "store" });
     input.stderr(cli.message);
     return cli.exitCode;
+  }
+
+  if (input.sessionId === undefined) {
+    return runAggregateStatus(rootDir, input);
   }
 
   let parsedSessionId: ReturnType<typeof sessionIdSchema.parse>;
@@ -87,6 +176,14 @@ export async function runHooksStatus(input: RunHooksStatusInput): Promise<0 | 1>
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
     const session = registry.getSession(parsedSessionId);
     if (!session) {
+      // E27 keyspace union: the hook writes the overlay keyspace (Claude
+      // transcript UUIDs), the registry holds memory sessions — try the
+      // second keyspace before declaring the id unknown.
+      const overlay = readOverlaySummaryAnyWorkspace({ root: rootDir }, parsedSessionId);
+      if (overlay !== null) {
+        renderOverlayStatus(overlay, input);
+        return 0;
+      }
       const cli = sessionNotFoundMessage(parsedSessionId);
       input.stderr(cli.message);
       return cli.exitCode;
@@ -112,17 +209,22 @@ export async function runHooksStatus(input: RunHooksStatusInput): Promise<0 | 1>
 export const hooksStatusCommand = defineCommand({
   meta: {
     name: "status",
-    description: "Show proxy adoption metrics and (if a hook log exists) hook-based interception.",
+    description:
+      "Show proxy adoption metrics for a session, resolve live hook (overlay) sessions, or — with no id — aggregate hook savings across workspaces.",
   },
   args: {
-    sessionId: { type: "positional", required: true, description: "Session id (UUID)." },
+    sessionId: {
+      type: "positional",
+      required: false,
+      description: "Session id (UUID). Omit for the cross-workspace aggregate view.",
+    },
     store: { type: "string", description: "Override store directory." },
     "hook-log": { type: "string", description: "Override Claude Code hook log path." },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
     const code = await runHooksStatus({
-      sessionId: typeof args.sessionId === "string" ? args.sessionId : "",
+      ...(typeof args.sessionId === "string" ? { sessionId: args.sessionId } : {}),
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       ...(typeof args["hook-log"] === "string" ? { hookLogPath: args["hook-log"] } : {}),
       stdout: (line) => console.log(line),

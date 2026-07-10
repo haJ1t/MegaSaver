@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { recordInvocationHeartbeat } from "@megasaver/context-gate";
 import { type TokenSaverEvent, appendEvent } from "@megasaver/core";
 import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -154,5 +155,105 @@ describe("runHooksStatus — honest metrics wording", () => {
     // paired with interception, and no interception number may appear.
     expect(text).not.toMatch(/universal interception/);
     expect(text).not.toMatch(/interception rate: \d/);
+  });
+});
+
+const OVERLAY_ID = "33333333-3333-4333-8333-333333333333";
+const WK1 = "wk-alpha";
+const WK2 = "wk-beta";
+
+async function seedOverlaySummary(
+  wk: string,
+  id: string,
+  eventsTotal: number,
+  bytesSaved: number,
+): Promise<void> {
+  await mkdir(join(store, "stats", wk), { recursive: true });
+  await writeFile(
+    join(store, "stats", wk, `${id}.json`),
+    JSON.stringify({
+      liveSessionId: id,
+      eventsTotal,
+      rawBytesTotal: bytesSaved + 100,
+      returnedBytesTotal: 100,
+      bytesSavedTotal: bytesSaved,
+      savingRatio: bytesSaved / (bytesSaved + 100),
+      secretsRedactedTotal: 0,
+      chunksStoredTotal: 1,
+      updatedAt: "2026-07-10T00:00:00.000Z",
+    }),
+  );
+}
+
+type StatusOverrides = { sessionId?: string; json?: boolean };
+async function runStatus(overrides: StatusOverrides = {}): Promise<RunResult> {
+  const out: string[] = [];
+  const err: string[] = [];
+  const code = await runHooksStatus({
+    ...(overrides.sessionId !== undefined ? { sessionId: overrides.sessionId } : {}),
+    storeFlag: store,
+    cwd: store,
+    home: "/tmp",
+    xdgDataHome: undefined,
+    platform: "linux",
+    localAppData: undefined,
+    hookLogPath: join(store, "none.jsonl"),
+    stdout: (line) => out.push(line),
+    stderr: (line) => err.push(line),
+    json: overrides.json ?? false,
+  });
+  return { out, err, code };
+}
+
+describe("runHooksStatus — overlay keyspace union (E27)", () => {
+  it("renders an overlay-backed block for a hook-only session id", async () => {
+    await seedOverlaySummary(WK1, OVERLAY_ID, 2, 900);
+    const { out, err, code } = await runStatus({ sessionId: OVERLAY_ID });
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("Live hook session (overlay)");
+    expect(text).toContain(WK1);
+    expect(text).toContain("events: 2");
+    expect(err).toHaveLength(0);
+  });
+
+  it("emits the overlay summary as JSON with its source label", async () => {
+    await seedOverlaySummary(WK1, OVERLAY_ID, 2, 900);
+    const { out, code } = await runStatus({ sessionId: OVERLAY_ID, json: true });
+    expect(code).toBe(0);
+    const p = JSON.parse(out.join("\n"));
+    expect(p.source).toBe("overlay");
+    expect(p.workspaceKey).toBe(WK1);
+    expect(p.eventsTotal).toBe(2);
+  });
+
+  it("still reports session not found when BOTH keyspaces miss", async () => {
+    const { err, code } = await runStatus({
+      sessionId: "44444444-4444-4444-8444-444444444444",
+    });
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("not found");
+  });
+});
+
+describe("runHooksStatus — cross-workspace aggregate (E28, no-arg form)", () => {
+  it("sums totals across workspace keys and prints heartbeat recency", async () => {
+    await seedOverlaySummary(WK1, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 2, 900);
+    await seedOverlaySummary(WK2, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 3, 100);
+    const ts = new Date(Date.now() - 1000).toISOString();
+    recordInvocationHeartbeat(store, WK1, ts);
+    const { out, code } = await runStatus();
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain(`${WK1}: 1 sessions, 2 events, saved 900 B`);
+    expect(text).toContain(`${WK2}: 1 sessions, 3 events, saved 100 B`);
+    expect(text).toContain("TOTAL: 2 sessions across 2 workspaces, saved 1000 B");
+    expect(text).toContain(`${WK1}: invoked ${ts}, completed never, failures 0`);
+  });
+
+  it("renders an empty store without erroring", async () => {
+    const { out, code } = await runStatus();
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("no hook sessions recorded");
   });
 });
