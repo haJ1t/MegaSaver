@@ -46,7 +46,8 @@ yarn-debug.log*
 yarn-error.log*
 
 # Mega Saver runtime store (project-local state) — never committed
-**/.megasaver/
+**/.megasaver/*
+!**/.megasaver/policy.json
 
 # Wiki raw sources — local-only.
 # Per the wiki schema (wiki/CLAUDE.md), raw/ contents are read by the

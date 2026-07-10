@@ -1,6 +1,8 @@
 import {
   type ActivationScope,
+  clampModeToFloor,
   readActivationMode,
+  readPolicyModeFloor,
   resolveActivationScope,
   writeActivation,
 } from "@megasaver/context-gate";
@@ -78,6 +80,12 @@ export async function runSessionSaverWorkspaceEnable(
     const cli = mapErrorToCliMessage(err, { kind: "store" });
     input.stderr(cli.message);
     return cli.exitCode;
+  }
+  const floor = readPolicyModeFloor(input.cwd);
+  if (floor !== null && clampModeToFloor(mode, floor) !== mode) {
+    input.stderr(
+      `note: .megasaver/policy.json floors this repository at "${floor}" — the "${mode}" record is written but resolves as "${floor}"`,
+    );
   }
   emit(input, scope, true, mode);
   return 0;

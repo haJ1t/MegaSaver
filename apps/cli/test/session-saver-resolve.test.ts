@@ -1,7 +1,11 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { recordInvocationHeartbeat, writeGlobalDefault } from "@megasaver/context-gate";
+import {
+  recordInvocationHeartbeat,
+  writeExactRecord,
+  writeGlobalDefault,
+} from "@megasaver/context-gate";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runSessionSaverResolve } from "../src/commands/session/saver/index.js";
@@ -62,5 +66,33 @@ describe("session saver resolve", () => {
     expect(joined).toContain("saver mode");
     expect(joined).toContain("source missing");
     expect(joined).toContain("none observed");
+  });
+
+  it("D19: reports the policy clamp for a floored aggressive record", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "megasaver-resolve-floored-"));
+    mkdirSync(join(cwd, ".megasaver"), { recursive: true });
+    writeFileSync(join(cwd, ".megasaver", "policy.json"), JSON.stringify({ modeFloor: "balanced" }));
+    writeExactRecord(store, encodeWorkspaceKey(cwd), {
+      enabled: true,
+      mode: "aggressive",
+      scope: "exact",
+    });
+    const out: string[] = [];
+    const code = await runSessionSaverResolve({
+      storeFlag: store,
+      cwd,
+      home: "/tmp",
+      xdgDataHome: undefined,
+      platform: "linux",
+      localAppData: undefined,
+      stdout: (l) => out.push(l),
+      stderr: () => {},
+      json: true,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(out.join(""));
+    expect(parsed.mode).toBe("balanced");
+    expect(parsed.policyClamp).toEqual({ floor: "balanced", original: "aggressive" });
+    rmSync(cwd, { recursive: true, force: true });
   });
 });

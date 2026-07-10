@@ -97,6 +97,16 @@ describe("workspace toggle — non-Git cwd → exact scope", () => {
     expect(payload.enabled).toBe(true);
     expect(payload.workspaceKey).toBe(encodeWorkspaceKey(NON_GIT_CWD));
   });
+
+  it("D19: enabling aggressive in a floored repo prints a clamp notice", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "megasaver-floored-"));
+    mkdirSync(join(cwd, ".megasaver"), { recursive: true });
+    writeFileSync(join(cwd, ".megasaver", "policy.json"), JSON.stringify({ modeFloor: "balanced" }));
+    const { code, err } = await enable({ mode: "aggressive", cwd });
+    expect(code).toBe(0); // record still written; resolver clamps at read time
+    expect(err.join("\n")).toContain('floors this repository at "balanced"');
+    rmSync(cwd, { recursive: true, force: true });
+  });
 });
 
 describe("workspace toggle — repository cwd → family scope", () => {
@@ -222,6 +232,7 @@ describe("session saver default", () => {
       resolveGit: () => ({ kind: "not_git" }),
       caseModeOf: () => "sensitive",
       realpath: (p) => p,
+      readPolicyFloor: () => null,
     });
     expect(r.enabled).toBe(true);
     expect(r.source).toBe("global");

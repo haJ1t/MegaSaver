@@ -43,6 +43,7 @@ export async function runSessionSaverResolve(input: RunSessionSaverResolveInput)
         repositoryFamilyKey: resolved.repositoryFamilyKey,
         familyUnavailableReason: resolved.familyUnavailableReason,
         familyIdentityDiagnostic: resolved.familyIdentityDiagnostic,
+        policyClamp: resolved.policyClamp,
         lastInvocationAt: lastInvocation?.ts ?? null,
         lastInvocationHereAt: invokedHere,
         lastCompressionAt: lastCompression?.ts ?? null,
@@ -57,6 +58,11 @@ export async function runSessionSaverResolve(input: RunSessionSaverResolveInput)
   input.stdout(`  workspace: ${requested}`);
   if (resolved.repositoryFamilyKey !== null) {
     input.stdout(`  repository family: ${resolved.repositoryFamilyKey}`);
+  }
+  if (resolved.policyClamp !== null) {
+    input.stdout(
+      `  policy floor: ${resolved.policyClamp.floor} (record mode ${resolved.policyClamp.original} clamped by .megasaver/policy.json)`,
+    );
   }
   if (resolved.familyUnavailableReason !== null) {
     input.stdout(
