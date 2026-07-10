@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { type ProjectId, type SessionId, withFileLock } from "@megasaver/shared";
+import type { ProjectId, SessionId } from "@megasaver/shared";
+import { withFileLock } from "@megasaver/shared/node";
 import { atomicWriteFile } from "./atomic-write.js";
 import { StatsError } from "./errors.js";
 import {

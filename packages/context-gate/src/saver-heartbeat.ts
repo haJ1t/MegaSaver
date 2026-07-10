@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { withFileLock } from "@megasaver/shared";
+import { withFileLock } from "@megasaver/shared/node";
 
 export type HeartbeatStamp = { ts: string; workspaceKey: string };
 export type FailureKind = "payload" | "resolve" | "record" | "unknown";
