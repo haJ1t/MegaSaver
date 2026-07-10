@@ -50,3 +50,37 @@ describe("clampModeToFloor", () => {
     expect(clampModeToFloor("balanced", "safe")).toBe("safe");
   });
 });
+
+describe("readPolicyModeFloor — strictest-wins across the tree (D19 evidence-loss fix)", () => {
+  it("an empty nested {} policy does NOT disable an ancestor floor", () => {
+    writePolicy(root, JSON.stringify({ modeFloor: "balanced" }));
+    const nested = join(root, "packages", "pkg");
+    mkdirSync(nested, { recursive: true });
+    writePolicy(nested, JSON.stringify({})); // floorless nested file
+    expect(readPolicyModeFloor(nested)).toBe("balanced");
+  });
+
+  it("a weaker nested floor does NOT relax a stricter ancestor floor", () => {
+    writePolicy(root, JSON.stringify({ modeFloor: "safe" }));
+    const nested = join(root, "sub");
+    mkdirSync(nested, { recursive: true });
+    writePolicy(nested, JSON.stringify({ modeFloor: "balanced" }));
+    expect(readPolicyModeFloor(nested)).toBe("safe");
+  });
+
+  it("a stricter nested floor DOES raise a weaker ancestor floor (safe direction)", () => {
+    writePolicy(root, JSON.stringify({ modeFloor: "balanced" }));
+    const nested = join(root, "sub");
+    mkdirSync(nested, { recursive: true });
+    writePolicy(nested, JSON.stringify({ modeFloor: "safe" }));
+    expect(readPolicyModeFloor(nested)).toBe("safe");
+  });
+
+  it("a malformed nested file does NOT disable an ancestor floor", () => {
+    writePolicy(root, JSON.stringify({ modeFloor: "balanced" }));
+    const nested = join(root, "sub");
+    mkdirSync(nested, { recursive: true });
+    writePolicy(nested, "{not json");
+    expect(readPolicyModeFloor(nested)).toBe("balanced");
+  });
+});
