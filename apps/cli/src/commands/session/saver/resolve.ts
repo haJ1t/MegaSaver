@@ -47,6 +47,9 @@ export async function runSessionSaverResolve(input: RunSessionSaverResolveInput)
         lastInvocationAt: lastInvocation?.ts ?? null,
         lastInvocationHereAt: invokedHere,
         lastCompressionAt: lastCompression?.ts ?? null,
+        completions: hb.completions?.[requested] ?? null,
+        failures: hb.failures?.[requested] ?? null,
+        daemonFallbacks: hb.daemonFallbacks?.[requested] ?? null,
       }),
     );
     return 0;
@@ -78,6 +81,18 @@ export async function runSessionSaverResolve(input: RunSessionSaverResolveInput)
     }`,
   );
   input.stdout(`  last compression (global): ${lastCompression?.ts ?? "none observed"}`);
+  const fail = hb.failures?.[requested];
+  input.stdout(
+    fail !== undefined
+      ? `  hook failures (this workspace): ${fail.count} (last ${fail.lastAt}, ${fail.lastKind})`
+      : "  hook failures (this workspace): none observed",
+  );
+  const fallback = hb.daemonFallbacks?.[requested];
+  input.stdout(
+    fallback !== undefined
+      ? `  daemon fallbacks (this workspace): ${fallback.count} (last ${fallback.lastAt})`
+      : "  daemon fallbacks (this workspace): none observed",
+  );
   return 0;
 }
 

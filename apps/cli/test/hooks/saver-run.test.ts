@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readHeartbeatView } from "@megasaver/context-gate";
 import { startDaemonServer, writeDiscovery } from "@megasaver/daemon";
 import type { RunningDaemon } from "@megasaver/daemon";
 import { encodeWorkspaceKey } from "@megasaver/shared";
@@ -221,4 +222,32 @@ describe("makeRecord", () => {
     expect(existsSync(chunkDir(daemonStore))).toBe(true);
     expect(existsSync(chunkDir(clientStore))).toBe(false);
   }, 30_000);
+
+  it("records a daemon fallback when the POST fails and falls back in-process (E21)", async () => {
+    const clientStore = tempStore();
+    const stub = await startStub({
+      storeRoot: clientStore,
+      excerptResponse: { status: 500, body: { error: "boom" } },
+    });
+    servers.push(stub);
+
+    const record = makeRecord(clientStore);
+    const result = await record(baseInput(clientStore));
+
+    // fell back in-process: local chunks written, daemon sentinel absent
+    expect(result.decision).toBe("compressed");
+    expect(result.chunkSetId).not.toBe(DAEMON_CHUNK_SET_ID);
+    expect(existsSync(chunkDir(clientStore))).toBe(true);
+
+    const hb = readHeartbeatView(clientStore);
+    expect(hb.daemonFallbacks?.[WS_KEY]?.count).toBe(1);
+  });
+
+  it("does NOT count a fallback when no daemon is advertised", async () => {
+    const store = tempStore();
+    const record = makeRecord(store);
+    const result = await record(baseInput(store));
+    expect(result.decision).toBe("compressed");
+    expect(readHeartbeatView(store).daemonFallbacks).toBeUndefined();
+  });
 });

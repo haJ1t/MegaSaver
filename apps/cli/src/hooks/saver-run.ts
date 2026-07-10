@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import {
+  type FailureKind,
   nodeResolverDeps,
+  recordCompletionHeartbeat,
   recordCompressionHeartbeat,
+  recordDaemonFallbackHeartbeat,
+  recordFailureHeartbeat,
   recordInvocationHeartbeat,
   resolveWorkspaceTokenSaverSettings,
 } from "@megasaver/context-gate";
@@ -43,6 +47,32 @@ function recordCompression(storeRoot: string, workspaceKey: string): void {
     /* liveness is best-effort */
   }
 }
+function recordFailure(
+  storeRoot: string,
+  workspaceKey: string,
+  kind: FailureKind,
+  tsIso: string,
+): void {
+  try {
+    recordFailureHeartbeat(storeRoot, workspaceKey, kind, tsIso);
+  } catch {
+    /* liveness is best-effort */
+  }
+}
+function recordCompletion(storeRoot: string, workspaceKey: string, tsIso: string): void {
+  try {
+    recordCompletionHeartbeat(storeRoot, workspaceKey, tsIso);
+  } catch {
+    /* liveness is best-effort */
+  }
+}
+function recordDaemonFallback(storeRoot: string, workspaceKey: string): void {
+  try {
+    recordDaemonFallbackHeartbeat(storeRoot, workspaceKey, new Date().toISOString());
+  } catch {
+    /* liveness is best-effort */
+  }
+}
 
 function readStdinSync(): string {
   try {
@@ -55,9 +85,12 @@ function readStdinSync(): string {
 const DAEMON_TIMEOUT_MS = 1500; // ponytail: short timeout; a hung socket must not stall the hook
 
 /** Try to forward to the running daemon's /excerpt; fall back to in-process on any failure.
- *  Exported for tests. Never throws — every failure mode returns in-process result. */
+ *  Exported for tests. Never throws — every failure mode returns in-process result.
+ *  E21: a daemon that EXISTED but whose POST failed/timed out counts one
+ *  daemonFallbacks bump (behavior unchanged; the silent fallback becomes countable). */
 export function makeRecord(storeRoot: string): SaverDeps["record"] {
   return async (input: RecordOverlayOutputInput): Promise<RecordOverlayOutputResult> => {
+    let daemonFailed = false;
     try {
       const handle = await getRunningDaemon({ storeRoot });
       if (handle !== null) {
@@ -77,13 +110,16 @@ export function makeRecord(storeRoot: string): SaverDeps["record"] {
           if (res.ok) {
             return (await res.json()) as RecordOverlayOutputResult;
           }
+          daemonFailed = true;
         } catch {
           clearTimeout(timer);
+          daemonFailed = true;
         }
       }
     } catch {
       // fall through to in-process
     }
+    if (daemonFailed) recordDaemonFallback(storeRoot, input.workspaceKey);
     return recordAndFilterOverlayOutput(input);
   };
 }
@@ -117,6 +153,8 @@ export async function runSaverHookFromProcess(): Promise<void> {
       record: makeRecord(storeRoot),
       recordInvocation,
       recordCompression,
+      recordFailure,
+      recordCompletion,
     };
     const decision = await buildSaverDecision(payload, deps);
     const s = renderSaverStdout(decision);

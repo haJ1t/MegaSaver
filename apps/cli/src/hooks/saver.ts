@@ -1,4 +1,4 @@
-import { OVERLAY_CHUNK_LINES } from "@megasaver/context-gate";
+import { type FailureKind, OVERLAY_CHUNK_LINES } from "@megasaver/context-gate";
 import {
   type RecordOverlayOutputInput,
   type RecordOverlayOutputResult,
@@ -76,6 +76,14 @@ export type SaverDeps = {
   // Metadata-only liveness heartbeats (best-effort; never block the tool call).
   recordInvocation: (storeRoot: string, workspaceKey: string) => void;
   recordCompression: (storeRoot: string, workspaceKey: string) => void;
+  // E21 ledger (best-effort; never block the tool call).
+  recordFailure: (
+    storeRoot: string,
+    workspaceKey: string,
+    kind: FailureKind,
+    tsIso: string,
+  ) => void;
+  recordCompletion: (storeRoot: string, workspaceKey: string, tsIso: string) => void;
 };
 
 export type SaverDecision = { updatedToolOutput: unknown } | { passthrough: true };
@@ -221,100 +229,139 @@ function labelOf(toolInput: unknown, fallback: string): string {
   );
 }
 
-// Pure decision: never throws (callers rely on this), returns passthrough on any
-// gate miss. `deps` are injected so tests need no fs/store.
+type DecisionContext = { stage: FailureKind; workspaceKey?: string };
+
+// Pure decision: never throws (callers rely on this), returns passthrough on
+// any gate miss. `deps` are injected so tests need no fs/store. E21: a throw
+// records a failure heartbeat with a coarse stage, a finished run records a
+// completion — the invocation/completion gap is the crash signal. The §13.4
+// fail-open posture is unchanged; failures become visible, not fatal.
 export async function buildSaverDecision(
   payload: unknown,
   deps: SaverDeps,
 ): Promise<SaverDecision> {
+  const ctx: DecisionContext = { stage: "payload" };
   try {
-    if (typeof payload !== "object" || payload === null) return PASSTHROUGH;
-    const p = payload as Record<string, unknown>;
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    const tool = asStr(p["tool_name"]);
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    const sessionId = asStr(p["session_id"]);
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    const cwd = asStr(p["cwd"]);
-    if (tool === undefined || sessionId === undefined || cwd === undefined) return PASSTHROUGH;
-
-    const sourceKind = resolveSourceKind(tool);
-    if (sourceKind === undefined) return PASSTHROUGH;
-
-    // C13: a recovery expansion must arrive whole — never re-compress it.
-    // Foreground Bash only (the footer advertises a foreground run); a
-    // backgrounded expansion read via BashOutput has no command in its input
-    // to match — its re-compression is itself recoverable, so it's tolerated.
-    if (tool === "Bash") {
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      const ti = p["tool_input"];
-      const i = typeof ti === "object" && ti !== null ? (ti as Record<string, unknown>) : {};
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      const cmd = asStr(i["command"]) ?? "";
-      if (/\bmega\s+output\s+chunk\b/.test(cmd)) return PASSTHROUGH;
+    const decision = await decide(payload, deps, ctx);
+    try {
+      deps.recordCompletion(
+        deps.storeRoot,
+        ctx.workspaceKey ?? encodeWorkspaceKey(process.cwd()),
+        new Date().toISOString(),
+      );
+    } catch {
+      /* ledger is best-effort */
     }
-
-    const workspaceKey = encodeWorkspaceKey(cwd);
-    // Step 1: liveness heartbeat for every valid payload, before activation and
-    // size gates (so a healthy hook is observable even on passthrough).
-    deps.recordInvocation(deps.storeRoot, workspaceKey);
-
-    const settings = deps.resolveSettings(deps.storeRoot, cwd);
-    if (settings === null || !settings.enabled) return PASSTHROUGH;
-    const sessionIntent = deps.readSessionIntent(deps.storeRoot, workspaceKey, sessionId);
-
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    const shape = readOutputShape(p["tool_response"]);
-    if (shape === null) return PASSTHROUGH;
-    const floorBytes = minBytesFor(tool, settings.mode);
-    if (Buffer.byteLength(shape.raw, "utf8") <= floorBytes) return PASSTHROUGH;
-
-    const recorded = await deps.record({
-      storeRoot: deps.storeRoot,
-      // Evidence rows live under <storeRoot>/evidence/<wk>/ — same base root the
-      // MCP approve-memory path reads from. Passing it turns on the best-effort
-      // evidence write inside record(); a failure there never blocks compression.
-      evidenceStoreRoot: deps.storeRoot,
-      workspaceKey,
-      liveSessionId: sessionId,
-      raw: shape.raw,
-      sourceKind,
-      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      label: labelOf(p["tool_input"], tool),
-      mode: settings.mode,
-      storeRawOutput: true,
-      // B8: the gate above is the single eligibility authority; record()
-      // collapses the filter thresholds onto it.
-      compressFloorBytes: floorBytes,
-      ...(sessionIntent !== undefined ? { intent: sessionIntent } : {}),
-    });
-    if (recorded.decision !== "compressed") return PASSTHROUGH;
-
-    // Step 5: a qualifying compression updates the global latestCompression.
-    deps.recordCompression(deps.storeRoot, workspaceKey);
-
-    const rawTokens = tokensFromBytes(recorded.rawBytes);
-    const returnedTokens = tokensFromBytes(recorded.returnedBytes);
-    const tokenPct = rawTokens === 0 ? "0.0" : ((1 - returnedTokens / rawTokens) * 100).toFixed(1);
-    const n = recorded.chunkCount ?? 1;
-    const L = OVERLAY_CHUNK_LINES;
-    // Advertise chunk IDS, never a line->id formula: chunks index the REDACTED
-    // stored text, while the agent sees the original tool output's line numbers
-    // (a multi-line secret redacts to one line, shifting the two spaces apart).
-    // Fetch by id 0..n-1 is correct regardless.
-    const expandCmd =
-      n > 1
-        ? `— stored in ${n} chunks of ~${L} lines each; fetch any with: mega output chunk "${recorded.chunkSetId}" "<i>" (i = 0..${n - 1})`
-        : `— run: mega output chunk "${recorded.chunkSetId}" "0"`;
-    const partialNoun = n > 1 ? "recovered chunks are" : "recovered chunk is";
-    const recovery = looksPreTruncated(shape.raw)
-      ? `NOTE: upstream output appears truncated, ${partialNoun} PARTIAL, not complete ${expandCmd} (or MCP proxy_expand_chunk if connected)`
-      : `Full output recoverable ${expandCmd} (or MCP proxy_expand_chunk if connected)`;
-    const pointer = recorded.chunkSetId
-      ? `\n\n[Mega Saver: compressed ${recorded.rawBytes}→${recorded.returnedBytes} B (~${rawTokens}→${returnedTokens} tokens, ${tokenPct}%). ${recovery}.]`
-      : "";
-    return { updatedToolOutput: shape.rebuild(`${recorded.returnedText}${pointer}`) };
+    return decision;
   } catch {
+    try {
+      deps.recordFailure(
+        deps.storeRoot,
+        // On a payload-stage failure the payload's cwd never parsed; fall back
+        // to the hook process's own cwd — the same key the settings path uses.
+        ctx.workspaceKey ?? encodeWorkspaceKey(process.cwd()),
+        ctx.stage,
+        new Date().toISOString(),
+      );
+    } catch {
+      /* ledger is best-effort */
+    }
     return PASSTHROUGH; // §13.4 best-effort: never break the tool call.
   }
+}
+
+async function decide(
+  payload: unknown,
+  deps: SaverDeps,
+  ctx: DecisionContext,
+): Promise<SaverDecision> {
+  if (typeof payload !== "object" || payload === null) return PASSTHROUGH;
+  const p = payload as Record<string, unknown>;
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const tool = asStr(p["tool_name"]);
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const sessionId = asStr(p["session_id"]);
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const cwd = asStr(p["cwd"]);
+  if (tool === undefined || sessionId === undefined || cwd === undefined) return PASSTHROUGH;
+  ctx.stage = "resolve";
+
+  const sourceKind = resolveSourceKind(tool);
+  if (sourceKind === undefined) return PASSTHROUGH;
+
+  // C13: a recovery expansion must arrive whole — never re-compress it.
+  // Foreground Bash only (the footer advertises a foreground run); a
+  // backgrounded expansion read via BashOutput has no command in its input
+  // to match — its re-compression is itself recoverable, so it's tolerated.
+  if (tool === "Bash") {
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const ti = p["tool_input"];
+    const i = typeof ti === "object" && ti !== null ? (ti as Record<string, unknown>) : {};
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    const cmd = asStr(i["command"]) ?? "";
+    if (/\bmega\s+output\s+chunk\b/.test(cmd)) return PASSTHROUGH;
+  }
+
+  const workspaceKey = encodeWorkspaceKey(cwd);
+  ctx.workspaceKey = workspaceKey;
+  // Step 1: liveness heartbeat for every valid payload, before activation and
+  // size gates (so a healthy hook is observable even on passthrough).
+  deps.recordInvocation(deps.storeRoot, workspaceKey);
+
+  const settings = deps.resolveSettings(deps.storeRoot, cwd);
+  if (settings === null || !settings.enabled) return PASSTHROUGH;
+  const sessionIntent = deps.readSessionIntent(deps.storeRoot, workspaceKey, sessionId);
+
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const shape = readOutputShape(p["tool_response"]);
+  if (shape === null) return PASSTHROUGH;
+  const floorBytes = minBytesFor(tool, settings.mode);
+  if (Buffer.byteLength(shape.raw, "utf8") <= floorBytes) return PASSTHROUGH;
+
+  ctx.stage = "record";
+  const recorded = await deps.record({
+    storeRoot: deps.storeRoot,
+    // Evidence rows live under <storeRoot>/evidence/<wk>/ — same base root the
+    // MCP approve-memory path reads from. Passing it turns on the best-effort
+    // evidence write inside record(); a failure there never blocks compression.
+    evidenceStoreRoot: deps.storeRoot,
+    workspaceKey,
+    liveSessionId: sessionId,
+    raw: shape.raw,
+    sourceKind,
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    label: labelOf(p["tool_input"], tool),
+    mode: settings.mode,
+    storeRawOutput: true,
+    // B8: the gate above is the single eligibility authority; record()
+    // collapses the filter thresholds onto it.
+    compressFloorBytes: floorBytes,
+    ...(sessionIntent !== undefined ? { intent: sessionIntent } : {}),
+  });
+  if (recorded.decision !== "compressed") return PASSTHROUGH;
+
+  // Step 5: a qualifying compression updates the global latestCompression.
+  deps.recordCompression(deps.storeRoot, workspaceKey);
+
+  const rawTokens = tokensFromBytes(recorded.rawBytes);
+  const returnedTokens = tokensFromBytes(recorded.returnedBytes);
+  const tokenPct = rawTokens === 0 ? "0.0" : ((1 - returnedTokens / rawTokens) * 100).toFixed(1);
+  const n = recorded.chunkCount ?? 1;
+  const L = OVERLAY_CHUNK_LINES;
+  // Advertise chunk IDS, never a line->id formula: chunks index the REDACTED
+  // stored text, while the agent sees the original tool output's line numbers
+  // (a multi-line secret redacts to one line, shifting the two spaces apart).
+  // Fetch by id 0..n-1 is correct regardless.
+  const expandCmd =
+    n > 1
+      ? `— stored in ${n} chunks of ~${L} lines each; fetch any with: mega output chunk "${recorded.chunkSetId}" "<i>" (i = 0..${n - 1})`
+      : `— run: mega output chunk "${recorded.chunkSetId}" "0"`;
+  const partialNoun = n > 1 ? "recovered chunks are" : "recovered chunk is";
+  const recovery = looksPreTruncated(shape.raw)
+    ? `NOTE: upstream output appears truncated, ${partialNoun} PARTIAL, not complete ${expandCmd} (or MCP proxy_expand_chunk if connected)`
+    : `Full output recoverable ${expandCmd} (or MCP proxy_expand_chunk if connected)`;
+  const pointer = recorded.chunkSetId
+    ? `\n\n[Mega Saver: compressed ${recorded.rawBytes}→${recorded.returnedBytes} B (~${rawTokens}→${returnedTokens} tokens, ${tokenPct}%). ${recovery}.]`
+    : "";
+  return { updatedToolOutput: shape.rebuild(`${recorded.returnedText}${pointer}`) };
 }

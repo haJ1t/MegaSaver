@@ -2,6 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  recordDaemonFallbackHeartbeat,
+  recordFailureHeartbeat,
   recordInvocationHeartbeat,
   writeExactRecord,
   writeGlobalDefault,
@@ -97,5 +99,42 @@ describe("session saver resolve", () => {
     expect(parsed.mode).toBe("balanced");
     expect(parsed.policyClamp).toEqual({ floor: "balanced", original: "aggressive" });
     rmSync(cwd, { recursive: true, force: true });
+  });
+
+  it("renders failure and daemon-fallback telemetry for this workspace", async () => {
+    const now = Date.UTC(2026, 0, 1);
+    const wk = encodeWorkspaceKey(CWD);
+    recordFailureHeartbeat(store, wk, "record", new Date(now).toISOString(), now);
+    recordDaemonFallbackHeartbeat(store, wk, new Date(now).toISOString(), now);
+    const { out } = await run(false, now);
+    const joined = out.join("\n");
+    expect(joined).toContain(
+      `hook failures (this workspace): 1 (last ${new Date(now).toISOString()}, record)`,
+    );
+    expect(joined).toContain(
+      `daemon fallbacks (this workspace): 1 (last ${new Date(now).toISOString()})`,
+    );
+  });
+
+  it("emits the new ledger fields in JSON", async () => {
+    const now = Date.UTC(2026, 0, 1);
+    const wk = encodeWorkspaceKey(CWD);
+    recordFailureHeartbeat(store, wk, "payload", new Date(now).toISOString(), now);
+    const { out } = await run(true, now);
+    const p = JSON.parse(out[0] as string);
+    expect(p.failures).toEqual({
+      count: 1,
+      lastAt: new Date(now).toISOString(),
+      lastKind: "payload",
+    });
+    expect(p.completions).toBeNull();
+    expect(p.daemonFallbacks).toBeNull();
+  });
+
+  it("shows none observed when the ledger is empty", async () => {
+    const { out } = await run(false);
+    const joined = out.join("\n");
+    expect(joined).toContain("hook failures (this workspace): none observed");
+    expect(joined).toContain("daemon fallbacks (this workspace): none observed");
   });
 });

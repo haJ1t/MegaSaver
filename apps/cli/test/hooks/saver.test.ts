@@ -26,6 +26,8 @@ function deps(overrides: Partial<Parameters<typeof buildSaverDecision>[1]> = {})
     record: vi.fn().mockResolvedValue(RECORDED),
     recordInvocation: vi.fn(),
     recordCompression: vi.fn(),
+    recordFailure: vi.fn(),
+    recordCompletion: vi.fn(),
     ...overrides,
   };
 }
@@ -318,6 +320,8 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
     record: recordAndFilterOverlayOutput,
     recordInvocation: () => {},
     recordCompression: () => {},
+    recordFailure: () => {},
+    recordCompletion: () => {},
   });
 
   function evidenceRecords(storeRoot: string, cwd: string): unknown[] {
@@ -376,6 +380,8 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
       record,
       recordInvocation: () => {},
       recordCompression: () => {},
+      recordFailure: () => {},
+      recordCompletion: () => {},
     });
     expect("updatedToolOutput" in out).toBe(true);
     if ("updatedToolOutput" in out) {
@@ -899,5 +905,55 @@ describe("B9 follow-up: background-shell retrieval shares Bash's ceiling", () =>
     const d = deps({ resolveSettings: () => ({ enabled: true, mode: "safe" as const }) });
     const decision = await buildSaverDecision(shellPayload("Task", "x".repeat(26_000)), d);
     expect(decision).toEqual({ passthrough: true }); // 26000 < 32000 -> passthrough (documented: Task is unbounded, big reports still compress)
+  });
+});
+
+describe("E21 failure + completion ledger", () => {
+  it("records a completion after a successful run", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
+    expect("updatedToolOutput" in out).toBe(true);
+    expect(d.recordCompletion).toHaveBeenCalledOnce();
+    const [storeRoot, wk, ts] = d.recordCompletion.mock.calls[0] as [string, string, string];
+    expect(storeRoot).toBe("/store");
+    expect(wk).toBe(encodeWorkspaceKey("/Users/x/proj"));
+    expect(Number.isNaN(Date.parse(ts))).toBe(false);
+    expect(d.recordFailure).not.toHaveBeenCalled();
+  });
+
+  it('a throwing record dep stays passthrough AND records a failure with kind "record"', async () => {
+    const d = deps({ record: vi.fn().mockRejectedValue(new Error("disk full")) });
+    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
+    expect(out).toEqual({ passthrough: true });
+    expect(d.recordFailure).toHaveBeenCalledOnce();
+    const [, wk, kind] = d.recordFailure.mock.calls[0] as [string, string, string, string];
+    expect(wk).toBe(encodeWorkspaceKey("/Users/x/proj"));
+    expect(kind).toBe("record");
+    expect(d.recordCompletion).not.toHaveBeenCalled();
+  });
+
+  it('a payload that explodes during parsing records kind "payload" with a cwd-derived key', async () => {
+    const d = deps();
+    const bomb = {
+      get tool_name(): string {
+        throw new Error("boom");
+      },
+    };
+    const out = await buildSaverDecision(bomb, d);
+    expect(out).toEqual({ passthrough: true });
+    expect(d.recordFailure).toHaveBeenCalledOnce();
+    const [, wk, kind] = d.recordFailure.mock.calls[0] as [string, string, string, string];
+    expect(kind).toBe("payload");
+    expect(wk).toBe(encodeWorkspaceKey(process.cwd()));
+  });
+
+  it("a throwing ledger write never breaks the decision", async () => {
+    const d = deps({
+      recordCompletion: vi.fn(() => {
+        throw new Error("ledger io");
+      }),
+    });
+    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
+    expect("updatedToolOutput" in out).toBe(true);
   });
 });
