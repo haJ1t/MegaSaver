@@ -29,6 +29,7 @@ const excerptRequestSchema = z
     mode: tokenSaverModeSchema,
     storeRawOutput: z.boolean(),
     intent: z.string().min(1).optional(),
+    compressFloorBytes: z.number().int().positive().optional(),
   })
   .strict();
 

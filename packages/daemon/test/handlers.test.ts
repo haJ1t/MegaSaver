@@ -93,6 +93,24 @@ describe("excerptHandler", () => {
     });
     expect(res.status).toBe(200);
   });
+
+  it("B8: /excerpt accepts compressFloorBytes and derives thresholds from it", async () => {
+    const raw = Array.from({ length: 150 }, (_, i) => `line ${i}: build noise xxxxxxxxxx`).join(
+      "\n",
+    );
+    const res = await excerptHandler(store, {
+      workspaceKey: "ws",
+      liveSessionId: "live1",
+      raw,
+      sourceKind: "command",
+      label: "pnpm build",
+      mode: "aggressive",
+      storeRawOutput: true,
+      compressFloorBytes: 4000,
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.decision).toBe("compressed");
+  });
 });
 
 describe("expandHandler", () => {
