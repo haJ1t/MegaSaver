@@ -160,6 +160,7 @@ describe("doctorCommand", () => {
     tempHome = mkdtempSync(join(tmpdir(), "megasaver-doctor-home-"));
     vi.stubEnv("HOME", tempHome);
     vi.stubEnv("USERPROFILE", tempHome);
+    vi.stubEnv("XDG_DATA_HOME", join(tempHome, "xdg"));
   });
 
   afterEach(() => {
@@ -188,17 +189,18 @@ describe("doctorCommand", () => {
     } as never);
     const output = logSpy.mock.calls[0]?.[0] as string;
     expect(output).toMatch(/^node v\d+\.\d+\.\d+/);
-    expect(output).toContain("\n\n3 PASS / 0 FAIL");
+    expect(output).toContain("saver-hooks-registered");
+    expect(output).toMatch(/5 PASS \/ 1 FAIL/);
   });
 
-  it("leaves process.exitCode at 0 on Node 22+", async () => {
+  it("sets exitCode 1 when the saver hook is not installed", async () => {
     await doctorCommand.run?.({
       args: {},
       cmd: doctorCommand,
       rawArgs: [],
       data: undefined,
     } as never);
-    expect(process.exitCode).toBe(0);
+    expect(process.exitCode).toBe(1);
   });
 
   it("reports hook telemetry as missing with the install hint when absent", () => {

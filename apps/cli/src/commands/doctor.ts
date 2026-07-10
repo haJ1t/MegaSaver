@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { DEFAULT_HOOK_COMMAND, hasPreToolUseHook } from "@megasaver/connector-claude-code";
 import { defineCommand } from "citty";
 import { HOOK_LOG_RELATIVE_PATH } from "../hooks/logger.js";
+import { runSaverChecks } from "./doctor-saver.js";
 import { resolveClaudeCodeSettingsPath } from "./hooks/settings-path.js";
 
 export type Check = {
@@ -96,7 +97,10 @@ export const doctorCommand = defineCommand({
   },
   args: {},
   run() {
-    const checks = runChecks();
+    // E22: environment checks + the saver verifier (registration, binary,
+    // store bake, liveness, self-test, daemon). Saver FAILs affect the exit
+    // code through the same exitCodeFor; warnings are pass:true with a reason.
+    const checks = [...runChecks(), ...runSaverChecks()];
     // Hook telemetry is informational: a "missing" result reports the install
     // hint but never fails the doctor (it is opt-in, not an environment fault),
     // so it is rendered below the env summary and excluded from exitCodeFor.
