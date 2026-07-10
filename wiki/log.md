@@ -3008,3 +3008,91 @@ uncapped: subagent reports aren't shell-truncated (GitHub #12054 suggests
 unbounded), so large reports already clear 32000. Closes the final code-review
 Minor. Safe-direction: if the ceiling assumption is wrong it only compresses
 smaller background logs, fully recoverable.
+
+## [2026-07-09] audit | saver savings gaps — 46 confirmed findings
+
+Live-session check first: hooks DO fire (repo-local cwd-scoped store
+`.megasaver/hooks/claude-tool-calls.jsonl`, 23 entries session `ae662232`),
+saver DOES compress Reads 87-92%. Earlier "not saving" diagnosis was wrong
+(stale-store mtimes + self-excluding find filter + live footer misread as
+file content / false prompt-injection alarm — retracted with grep proof).
+
+Then 55-agent workflow (7 finder dimensions -> per-finding adversarial
+refuters): **46 confirmed / 2 refuted** gaps-bugs-edge-cases blocking extra
+saving. Full dedup + citations: [[syntheses/saver-savings-gaps]].
+Headliners: Task/subagent reports + BashOutput + all mcp__* tools never
+compressed (TOOL_SOURCE 6-entry cap, saver.ts:11-18); aggressive-mode
+4001-7999B dead band; recovery dead end-to-end (footer advertises
+proxy_expand_chunk but no MCP server registered in session; all-or-nothing
+chunk "0" makes expansion worse than no compression); intent tokenizer
+ASCII-only (Turkish prompts -> ranking inert); every failure fail-open with
+green doctor; footer tokens excluded from savings math (over-reporting).
+Priority pointer in the page. Candidate feed for post-2.0 backlog next to
+E5 megabrain.
+
+## [2026-07-09] decision | 2.0 scope: saver-gap fixes join E5
+
+User directive: the 46 confirmed saver-gap findings
+([[syntheses/saver-savings-gaps]]) are scoped INTO the 2.0 release,
+alongside E5 portable project brain. Portfolio status updated
+([[syntheses/pro-differentiation-portfolio]]); gaps page gained a
+"Release scope" section. Priority order A1/A2/A3/C11-13/B8/E23.
+
+## [2026-07-09] fix | Memory visualization layout uses available page width
+
+The GUI Memory page now presents notes beside a fluid graph column at the
+desktop breakpoint, with Decision Trace spanning the full row beneath. Both
+visualizations have a minimum usable canvas height and collapse back to one
+column on smaller screens. No bridge or Core contract changed.
+
+Source: `docs/superpowers/specs/2026-07-09-memory-visualization-layout-design.md`.
+
+## [2026-07-10] investigation | "Saver cache corruption" root-caused: no cache bug exists
+
+Forensic investigation (4 parallel agents: transcript, live config, store,
+controlled repro) of the wave-3 session's "fabricated/stale tool outputs":
+
+1. **Stale-cache hypothesis REFUTED.** Installed hook path
+   (`runSaverHookFromProcess` → `recordAndFilterOverlayOutput` → `filterOutput`,
+   mega.mjs 1.12.0 bundle) has no cache/recall lookup returning prior content.
+   Controlled repro: identical `cat` 20s apart after rewriting the file produced
+   two distinct chunk sets, second output contained only the new content. All 15
+   of the day's overlay events had unique chunkSetIds; stored raws for every
+   suspicious call matched fresh truth at capture time.
+2. **"Fabricated git" outputs were self-inflicted, not product corruption.**
+   The session shell cwd silently flipped from the saver-eligibility worktree to
+   the main repo (transcript L3709, 11:37:59Z); every later relative-path git
+   command truthfully reported main-repo state (HEAD 4c08de03, 204-line
+   saver.ts, wave SHAs not ancestors). The "MISSING" verdicts were a script
+   mislabel: `git merge-base --is-ancestor || echo MISSING` conflates
+   not-an-ancestor with missing object. None of these outputs carried a saver
+   footer — the hook never touched them.
+3. **One real corruption confirmed = D16, already fixed on the branch.** The
+   live 1.12.0 hook (registered globally in `~/.claude/settings.json`, matcher
+   `Read|Bash|Grep|Glob|LS|WebFetch`) renders kept excerpts score-ordered with
+   bare joins and no elision markers — a subagent's `gh pr view 278`
+   (12043→4017 B, "1 kept, 0 dropped") and a `cat saver.ts` repro ("2 kept,
+   6 dropped", splice starts mid-expression) both read as complete output while
+   fragments. Live bundle greps: `BASH_COMPRESS_FLOOR`=0, `chunkedLineCount`=0,
+   elision markers=0. Wave 3 (PR #278, D16 source-order + `… [lines A-B
+   omitted]` markers) fixes exactly this; strongest possible dogfood evidence
+   for merging the stack.
+4. **Side findings.** (a) Two stored events raw=exactly 30000 B — Claude Code's
+   Bash truncation ceiling visible in the store, validating B9's 24000 floor.
+   (b) The MCP proxy pipeline (not the hook) has prior-content paths: read-index
+   contentHash short-circuit + shown-excerpt dedupe (mega.mjs ~237113, ~237017)
+   — no bug found, but the only place stale semantics could ever arise; candidate
+   for a wave-4/5 guard test. (c) Live binary is 1.12.0 (homebrew), one release
+   behind 1.13.0.
+
+Store: `~/.local/share/megasaver`. Session: ae662232 (wave-3 worktree session).
+
+## [2026-07-10] release | Saver waves 1-3 merged to main (PRs #276-#278)
+
+The saver-savings-gaps stack landed on main via fast-forward push
+(origin/main 9f2caaf7 → 3f18e44a): wave 1 coverage (#276), wave 2 recovery
+(#277), wave 3 eligibility + ranking (#278, B8-B10 / D16-D19 fixed, D20
+conscious-accept, B9 follow-up caps BashOutput/Monitor). `pnpm verify` was
+green at 3f18e44a before merge; the merged tree is byte-identical. Remote
+feature branches deleted. Remaining for 2.0: wave 4 (E21-29) and wave 5
+(F30-34); PR #275 (brain portability) still open, independent.
