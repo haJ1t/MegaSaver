@@ -3096,3 +3096,58 @@ conscious-accept, B9 follow-up caps BashOutput/Monitor). `pnpm verify` was
 green at 3f18e44a before merge; the merged tree is byte-identical. Remote
 feature branches deleted. Remaining for 2.0: wave 4 (E21-29) and wave 5
 (F30-34); PR #275 (brain portability) still open, independent.
+
+## [2026-07-10] feat | Saver observability wave 4 (E21-E29)
+
+Branch `feat/saver-observability` (worktree). Theme E of the audit fixed:
+a dead saver no longer looks healthy.
+
+- E21: heartbeat registry grew parallel ledgers — `completions` (strict-newer
+  per workspace), `failures` ({count, lastAt, lastKind} with coarse kind
+  payload/resolve/record/unknown; count never lost), `daemonFallbacks`.
+  Written best-effort from buildSaverDecision's new wrapper (completion on
+  every non-throwing finish, failure with stage on throw) and makeRecord's
+  daemon-POST-failed branch. Surfaced in `mega session saver resolve` (two
+  text lines + three JSON fields).
+- E25/E26: new `withFileLock(lockPath, {deadlineMs, staleMs}, fn)` in
+  @megasaver/shared (its first fs module) — a lock file older than staleMs
+  (5 s) is stolen as dead-holder residue. Heartbeat lock delegates to it
+  (10 ms deadline kept); appendOverlayEvent's summary read-modify-write runs
+  under `<summary>.lock` (50 ms deadline; on contention the summary write is
+  skipped — the JSONL line is already durable).
+- E24: overlay summaries self-heal — a corrupt summary is rebuilt from the
+  corruption-tolerant events JSONL and stamped `rebuiltAt`
+  (secretsRedactedTotal/chunksStoredTotal reset to 0: events do not carry
+  them — a documented liveness trade). The daily GC sweep now runs
+  reconcileOverlaySummaries: any summary that fails schema or whose
+  eventsTotal lags its JSONL line count is rebuilt (repairs E26 lock-skips
+  permanently).
+- E23/E29: hook commands are registered as the absolute invoked CLI path
+  (argv[1] launcher, quoted iff whitespace) with explicit timeouts (saver
+  30 s, log/intent 10 s); a non-default store is baked as `--store "<abs>"`.
+  Matching is by `hooks <sub>` suffix, so re-install migrates legacy bare
+  entries in place and uninstall removes every historical form.
+- E22: `mega doctor` gained runSaverChecks — registration (missing saver =
+  FAIL, exit 1), binary exists+X_OK plus a --version-vs-CLI-version WARN
+  sub-check, baked-store vs CLI-store split-brain
+  WARN, heartbeat liveness (failures without a newer completion = FAIL),
+  self-test (spawns the exact registered command with a synthetic
+  doctor-selftest payload, asserts exit 0 + heartbeat advance), daemon ping
+  (INFO only, via discovery file).
+- E27/E28: `mega hooks status <id>` falls back to the overlay keyspace and
+  renders a labeled "Live hook session (overlay)" block; the new no-arg form
+  prints per-workspace totals, a TOTAL line, and per-workspace heartbeat
+  recency (invoked/completed/failures).
+- Guard test pins the proxy read-index short-circuit seam (changed content
+  must never reuse the prior chunk set; outline slot separate). The T9
+  read-index guard test (packages/context-gate/test/read-index-invalidation.test.ts)
+  is a structural proxy; the same invalidation invariant already has stronger
+  end-to-end coverage in packages/context-gate/test/run.test.ts
+  (diff-on-reread suppression).
+
+Verification: `pnpm verify` green at the wave-4 tip (code tip c5efd99b; this
+T10 commit folds a bracket-access + biome-ignore reconciliation into the T2
+heartbeat test — noPropertyAccessFromIndexSignature vs useLiteralKeys — so the
+full gate passes: biome, tsc, 52-package vitest, conventions:check). Plan:
+docs/superpowers/plans/2026-07-10-saver-observability-plan.md. Spec:
+docs/superpowers/specs/2026-07-10-saver-observability-design.md.

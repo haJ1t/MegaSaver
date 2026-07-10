@@ -141,19 +141,22 @@ describe("failure / completion / daemon-fallback ledger (E21)", () => {
     recordFailureHeartbeat(store, "aaaa", "record", iso(NOW - 1000), NOW);
     recordFailureHeartbeat(store, "aaaa", "payload", iso(NOW - 5000), NOW); // older ts still counts
     const v = readHeartbeatView(store, NOW);
-    expect(v.failures?.aaaa).toEqual({ count: 2, lastAt: iso(NOW - 1000), lastKind: "record" });
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(v.failures?.["aaaa"]).toEqual({ count: 2, lastAt: iso(NOW - 1000), lastKind: "record" });
   });
 
   it("completion is strict-newer per key (older is a no-op)", () => {
     recordCompletionHeartbeat(store, "aaaa", iso(NOW), NOW);
     recordCompletionHeartbeat(store, "aaaa", iso(NOW - 5000), NOW);
-    expect(readHeartbeatView(store, NOW).completions?.aaaa).toBe(iso(NOW));
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(readHeartbeatView(store, NOW).completions?.["aaaa"]).toBe(iso(NOW));
   });
 
   it("daemon fallback counts and keeps the newest lastAt", () => {
     recordDaemonFallbackHeartbeat(store, "aaaa", iso(NOW - 2000), NOW);
     recordDaemonFallbackHeartbeat(store, "aaaa", iso(NOW - 1000), NOW);
-    expect(readHeartbeatView(store, NOW).daemonFallbacks?.aaaa).toEqual({
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(readHeartbeatView(store, NOW).daemonFallbacks?.["aaaa"]).toEqual({
       count: 2,
       lastAt: iso(NOW - 1000),
     });
@@ -169,8 +172,10 @@ describe("failure / completion / daemon-fallback ledger (E21)", () => {
     );
     recordFailureHeartbeat(store, "new", "record", iso(NOW), NOW);
     const v = readHeartbeatView(store, NOW);
-    expect(v.failures?.old).toBeUndefined();
-    expect(v.failures?.new?.count).toBe(1);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(v.failures?.["old"]).toBeUndefined();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(v.failures?.["new"]?.count).toBe(1);
   });
 
   it("an old-format registry (workspaces only) still reads", () => {
@@ -207,10 +212,14 @@ describe("failure / completion / daemon-fallback ledger (E21)", () => {
       }),
     );
     const v = readHeartbeatView(store, NOW);
-    expect(v.failures?.good?.count).toBe(3);
-    expect(v.failures?.badKind).toBeUndefined();
-    expect(v.failures?.badCount).toBeUndefined();
-    expect(v.failures?.badShape).toBeUndefined();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(v.failures?.["good"]?.count).toBe(3);
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(v.failures?.["badKind"]).toBeUndefined();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(v.failures?.["badCount"]).toBeUndefined();
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+    expect(v.failures?.["badShape"]).toBeUndefined();
   });
 });
 
