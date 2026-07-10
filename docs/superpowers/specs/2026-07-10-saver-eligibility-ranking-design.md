@@ -165,9 +165,15 @@ New committed policy file at the repo root: `.megasaver/policy.json`:
   no clamp (fail-open, consistent with hook philosophy) — `mega doctor` can
   surface it later (wave 4 territory).
 - **Enforcement, single point:** `resolveWorkspaceTokenSaverSettings` reads the
-  policy from the git worktree top-level (fallback cwd), and clamps the resolved
-  mode to the floor using the order `aggressive < balanced < safe`. A clamped
-  result is marked (e.g. `clampedBy: "policy"` on the resolution) so `status`
+  policy floor via `readPolicyModeFloor(cwd)` and clamps the resolved mode to it
+  using the order `aggressive < balanced < safe`. The floor is resolved
+  **strictest-wins**: the reader walks cwd → filesystem root and takes the
+  highest floor across every `.megasaver/policy.json` it finds, skipping
+  floorless (`{}`) and malformed files. A nested policy can therefore only make
+  preservation stricter, never disable or relax an ancestor floor (an
+  evidence-loss hole the adversarial review caught in the first cut, which
+  returned on the nearest file and stopped). A clamped result is marked
+  (`policyClamp: { floor, original }` on the resolution) so `status`/`resolve`
   can show it.
 - `mega session saver enable --mode aggressive` on a floored repo: prints a
   notice that the policy clamps it; the record is still written as requested

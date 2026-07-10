@@ -143,6 +143,11 @@ export async function recordAndFilterOverlayOutput(
   const base = {
     decision: filtered.decision,
     summary: filtered.summary,
+    // returnedText carries D16 elision markers (~25-35 B each, <= excerpts+1),
+    // but returnedBytes/bytesSaved/savingRatio below come from filterOutput,
+    // computed BEFORE markers exist — so reported savings are marginally
+    // optimistic by the marker bytes. Bounded and non-billing; honest
+    // marker-inclusive accounting is deferred to wave-5 (F30).
     returnedText: returnedTextOf(filtered),
     rawBytes: filtered.rawBytes,
     returnedBytes: filtered.returnedBytes,
