@@ -488,4 +488,44 @@ describe("multi-chunk overlay write (C12)", () => {
     expect(r.decision).toBe("compressed");
     expect(r.returnedText).toContain("TARGET_BODY_MARKER");
   });
+
+  it("D16: excerpts render in source order with elision markers", async () => {
+    const storeRoot = store();
+    // 200 lines; errors at 41-80 and 121-160 outrank filler under budget
+    // pressure; the two kept blocks are non-adjacent -> gap markers. ~40-char
+    // lines keep each 40-line chunk ≈1.6KB so both error chunks fit 4000 B.
+    // The second block carries the token "failure" (not "FATAL", which the
+    // ranker's error lexicon does not recognize) so it scores as an error;
+    // the wording stays distinct from block one so simhash cannot collapse them.
+    const block = (start: number, n: number, mk: (i: number) => string) =>
+      Array.from({ length: n }, (_, i) => mk(start + i));
+    const lines = [
+      ...block(1, 40, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
+      ...block(41, 40, (i) => `ERROR: build exploded at step ${i} ${"x".repeat(10)}`),
+      ...block(81, 40, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
+      ...block(121, 40, (i) => `FATAL: linker gave up on unit ${i} failure ${"x".repeat(10)}`),
+      ...block(161, 40, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
+    ];
+    const raw = lines.join("\n");
+    const r = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw,
+      sourceKind: "command",
+      label: "pnpm verify",
+      mode: "aggressive",
+      storeRawOutput: true,
+      compressFloorBytes: 4000,
+    });
+    expect(r.decision).toBe("compressed");
+    const text = r.returnedText;
+    expect(text).toMatch(/… \[lines \d+-\d+ omitted\]/);
+    const firstErr = text.indexOf("ERROR: build exploded at step 41");
+    const secondErr = text.indexOf("FATAL: linker gave up on unit 121");
+    expect(firstErr).toBeGreaterThan(-1);
+    expect(secondErr).toBeGreaterThan(firstErr);
+    const leadMarker = text.indexOf("… [lines 1-40 omitted]");
+    if (leadMarker !== -1) expect(leadMarker).toBeLessThan(firstErr);
+  });
 });

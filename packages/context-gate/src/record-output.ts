@@ -75,8 +75,30 @@ export type RecordOverlayOutputResult = {
   chunkCount?: number;
 };
 
-function returnedTextOf(result: FilterOutputResult): string {
-  return [result.summary, ...result.excerpts.map((e) => e.text)].join("\n");
+function countLines(text: string): number {
+  if (text === "") return 0;
+  let n = 1;
+  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) n++;
+  return n;
+}
+
+// D16: excerpts render in SOURCE order with gap markers so spliced fragments
+// can never parse as contiguous code. Line numbers are the ORIGINAL raw line
+// space; recovery stays fetch-by-chunk-id (the wave-2 footer), so no line->id
+// promise is made here.
+function returnedTextOf(result: FilterOutputResult, rawTotalLines: number): string {
+  const ordered = [...result.excerpts].sort(
+    (a, b) => a.startLine - b.startLine || a.endLine - b.endLine,
+  );
+  const parts: string[] = [result.summary];
+  let cursor = 1;
+  for (const e of ordered) {
+    if (e.startLine > cursor) parts.push(`… [lines ${cursor}-${e.startLine - 1} omitted]`);
+    parts.push(e.text);
+    cursor = Math.max(cursor, e.endLine + 1);
+  }
+  if (cursor <= rawTotalLines) parts.push(`… [lines ${cursor}-${rawTotalLines} omitted]`);
+  return parts.join("\n");
 }
 
 function chunkSetSource(kind: OutputSourceKind, label: string): OverlayChunkSet["source"] {
@@ -121,10 +143,12 @@ export async function recordAndFilterOverlayOutput(
     ...(input.intent !== undefined ? { intent: input.intent } : {}),
   });
 
+  const rawTotalLines = countLines(input.raw);
+
   const base = {
     decision: filtered.decision,
     summary: filtered.summary,
-    returnedText: returnedTextOf(filtered),
+    returnedText: returnedTextOf(filtered, rawTotalLines),
     rawBytes: filtered.rawBytes,
     returnedBytes: filtered.returnedBytes,
     bytesSaved: filtered.bytesSaved,
@@ -202,7 +226,7 @@ export async function recordAndFilterOverlayOutput(
   // Fire-and-await but swallowed: evidence failure must never block compressed output
   // (same fail-safe posture as appendOverlayEvent above).
   if (input.evidenceStoreRoot !== undefined && chunkSetId !== undefined) {
-    const { redacted: redactedReturnedText } = redact(returnedTextOf(filtered));
+    const { redacted: redactedReturnedText } = redact(returnedTextOf(filtered, rawTotalLines));
     const evidenceRecord: EvidenceRecordInput = {
       evidenceId: newId(),
       // workspaceKey in RecordOverlayOutputInput is plain string; evidence schema
