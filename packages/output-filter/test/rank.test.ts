@@ -267,3 +267,24 @@ describe("fitBudget pins the top intent match under budget pressure", () => {
     expect(kept).toContain(tiny);
   });
 });
+
+describe("D18: Unicode-aware tokenizer", () => {
+  it("Turkish intent tokens match Turkish chunk text", () => {
+    const chunk = { text: "işçi kaydını günceller ve derler", startLine: 1, endLine: 1 };
+    const scored = scoreChunk("işçi kaydı neden bozuk", chunk);
+    expect(scored.features.keywordScore).toBeGreaterThan(0);
+  });
+
+  it("accent folding is symmetric across case (İ/ı/ç/ş)", () => {
+    const chunk = { text: "KIRMIZI İŞÇİ ÇALIŞIYOR", startLine: 1, endLine: 1 };
+    const scored = scoreChunk("kırmızı işçi çalışıyor", chunk);
+    expect(scored.features.keywordScore).toBe(3);
+  });
+
+  it("ASCII tokenization is unchanged (identifiers, digits, underscores)", () => {
+    const chunk = { text: "parseConfig v2 reads snake_case_keys", startLine: 1, endLine: 1 };
+    const scored = scoreChunk("parseConfig snake_case_keys", chunk);
+    // "snake_case_keys" splits on "_" exactly as before: snake, case, keys
+    expect(scored.features.keywordScore).toBe(4);
+  });
+});
