@@ -25,6 +25,7 @@ export {
   readOverlaySummary,
   readOverlaySummaryAnyWorkspace,
   rebuildOverlaySummaryFromEvents,
+  reconcileOverlaySummaries,
   readWorkspaceTokenSaverTotals,
   type WorkspaceTokenSaverTotals,
   readAllWorkspaceTokenSaverTotals,

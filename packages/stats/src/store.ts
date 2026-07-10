@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { ProjectId, SessionId } from "@megasaver/shared";
+import { type ProjectId, type SessionId, withFileLock } from "@megasaver/shared";
 import { atomicWriteFile } from "./atomic-write.js";
 import { StatsError } from "./errors.js";
 import {
@@ -226,6 +226,60 @@ export function rebuildOverlaySummaryFromEvents(
   return rebuilt;
 }
 
+// E26 repair: summaries that lag their JSONL (lock-skipped updates) or fail
+// schema are rebuilt. Bounded: invoked from the once-a-day GC sweep. Returns
+// the number of files rebuilt. Best-effort — every per-file failure is
+// swallowed so one bad workspace cannot stop the walk.
+// ponytail: line count counts ALL non-empty lines while the rebuild folds only
+// schema-valid ones, so a JSONL with garbage lines is re-rebuilt every sweep —
+// benign (once/day, atomic write); tighten to a validated count if it matters.
+export function reconcileOverlaySummaries(store: StatsStore): number {
+  let rebuilt = 0;
+  let workspaces: string[];
+  try {
+    workspaces = readdirSync(join(store.root, "stats"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return 0;
+  }
+  for (const workspaceKey of workspaces) {
+    if (!isSafeSegment(workspaceKey)) continue;
+    let files: string[];
+    try {
+      files = readdirSync(join(store.root, "stats", workspaceKey));
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      if (!file.endsWith(".events.jsonl")) continue;
+      const liveSessionId = file.slice(0, -".events.jsonl".length);
+      if (!isSafeSegment(liveSessionId)) continue;
+      try {
+        const lineCount = readFileSync(join(store.root, "stats", workspaceKey, file), "utf8")
+          .split("\n")
+          .filter((line) => line.trim() !== "").length;
+        let summary: OverlaySessionTokenSaverStats | null = null;
+        let corrupt = false;
+        try {
+          summary = loadOverlaySummaryStrict(
+            overlaySummaryPath(store, workspaceKey, liveSessionId),
+          );
+        } catch {
+          corrupt = true;
+        }
+        if (corrupt || summary === null || summary.eventsTotal < lineCount) {
+          rebuildOverlaySummaryFromEvents(store, workspaceKey, liveSessionId);
+          rebuilt += 1;
+        }
+      } catch {
+        /* best-effort: continue the walk */
+      }
+    }
+  }
+  return rebuilt;
+}
+
 // If the REBUILD itself fails, keep the original store_corrupt posture.
 function rebuildGuarded(
   store: StatsStore,
@@ -282,33 +336,46 @@ export function appendOverlayEvent(input: AppendOverlayEventInput): OverlaySessi
   mkdirSync(dirname(events), { recursive: true });
   appendFileSync(events, `${JSON.stringify(event)}\n`);
 
-  let prior: OverlaySessionTokenSaverStats | null;
-  try {
-    prior = loadOverlaySummaryStrict(summary);
-  } catch (error) {
-    if (!(error instanceof StatsError) || error.code !== "store_corrupt") throw error;
-    // E24: corrupt summary — the JSONL (which already contains the line
-    // appended above) is authoritative. The rebuild therefore covers this
-    // event too; do NOT accumulate on top of it.
-    return rebuildGuarded(store, event.workspaceKey, event.liveSessionId);
-  }
-  const base = prior ?? emptyOverlaySummary(event.liveSessionId);
-  const rawBytesTotal = base.rawBytesTotal + event.rawBytes;
-  const bytesSavedTotal = base.bytesSavedTotal + event.bytesSaved;
-  const next: OverlaySessionTokenSaverStats = {
-    liveSessionId: event.liveSessionId,
-    eventsTotal: base.eventsTotal + 1,
-    rawBytesTotal,
-    returnedBytesTotal: base.returnedBytesTotal + event.returnedBytes,
-    bytesSavedTotal,
-    savingRatio: rawBytesTotal === 0 ? 0 : bytesSavedTotal / rawBytesTotal,
-    secretsRedactedTotal: base.secretsRedactedTotal + secretsRedacted,
-    chunksStoredTotal: base.chunksStoredTotal + chunksStored,
-    updatedAt: new Date().toISOString(),
-  };
-
-  atomicWriteFile(summary, JSON.stringify(next));
-  return next;
+  // E26: parallel tool calls in one turn race this read-modify-write.
+  // Serialize under a short stale-aware lock: deadlineMs 50 (a hook must not
+  // stall the agent), staleMs 5000 (a dead writer's lock is stolen).
+  let next: OverlaySessionTokenSaverStats | null = null;
+  const ran = withFileLock(`${summary}.lock`, { deadlineMs: 50, staleMs: 5000 }, () => {
+    let prior: OverlaySessionTokenSaverStats | null;
+    try {
+      prior = loadOverlaySummaryStrict(summary);
+    } catch (error) {
+      if (!(error instanceof StatsError) || error.code !== "store_corrupt") throw error;
+      // E24: corrupt summary — the JSONL (which already contains the line
+      // appended above) is authoritative. The rebuild therefore covers this
+      // event too; do NOT accumulate on top of it.
+      next = rebuildGuarded(store, event.workspaceKey, event.liveSessionId);
+      return;
+    }
+    const base = prior ?? emptyOverlaySummary(event.liveSessionId);
+    const rawBytesTotal = base.rawBytesTotal + event.rawBytes;
+    const bytesSavedTotal = base.bytesSavedTotal + event.bytesSaved;
+    next = {
+      liveSessionId: event.liveSessionId,
+      eventsTotal: base.eventsTotal + 1,
+      rawBytesTotal,
+      returnedBytesTotal: base.returnedBytesTotal + event.returnedBytes,
+      bytesSavedTotal,
+      savingRatio: rawBytesTotal === 0 ? 0 : bytesSavedTotal / rawBytesTotal,
+      secretsRedactedTotal: base.secretsRedactedTotal + secretsRedacted,
+      chunksStoredTotal: base.chunksStoredTotal + chunksStored,
+      updatedAt: new Date().toISOString(),
+    };
+    atomicWriteFile(summary, JSON.stringify(next));
+  });
+  if (ran && next !== null) return next;
+  // Lock contended: the event line is already durable in the JSONL. Skip the
+  // summary update and return the freshest readable summary; the GC sweep's
+  // reconcileOverlaySummaries repairs the undercount permanently.
+  return (
+    loadOverlaySummarySelfHealing(store, event.workspaceKey, event.liveSessionId) ??
+    emptyOverlaySummary(event.liveSessionId)
+  );
 }
 
 export function readOverlaySummary(

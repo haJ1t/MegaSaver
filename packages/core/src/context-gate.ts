@@ -74,6 +74,7 @@ export {
   observationsFromEvents,
   readOverlayEvents,
   readOverlaySummaryAnyWorkspace,
+  reconcileOverlaySummaries,
   recordedEventsFromLogs,
   tokensFromBytes,
   proxyUsageSavings,

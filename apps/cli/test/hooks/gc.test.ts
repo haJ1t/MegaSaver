@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   statSync,
   utimesSync,
@@ -87,5 +88,48 @@ describe("maybeRunOverlayGc", () => {
     expect(ran).toBe(true);
     expect(existsSync(old)).toBe(false);
     expect(existsSync(fresh)).toBe(true);
+  });
+
+  it("reconciles overlay summaries whose count lags the JSONL (E26 drift)", async () => {
+    const wk = encodeWorkspaceKey("/test/proj");
+    const id = "live-gc-drift-1";
+    const dir = join(store, "stats", wk);
+    mkdirSync(dir, { recursive: true });
+    const ev = (n: number) =>
+      JSON.stringify({
+        id: `e${n}`,
+        liveSessionId: id,
+        workspaceKey: wk,
+        createdAt: "2026-07-10T00:00:00.000Z",
+        sourceKind: "command",
+        label: "echo",
+        rawBytes: 1000,
+        returnedBytes: 100,
+        bytesSaved: 900,
+        savingRatio: 0.9,
+        summary: "s",
+        mode: "balanced",
+      });
+    writeFileSync(join(dir, `${id}.events.jsonl`), `${ev(1)}\n${ev(2)}\n${ev(3)}\n`);
+    writeFileSync(
+      join(dir, `${id}.json`),
+      JSON.stringify({
+        liveSessionId: id,
+        eventsTotal: 1,
+        rawBytesTotal: 1000,
+        returnedBytesTotal: 100,
+        bytesSavedTotal: 900,
+        savingRatio: 0.9,
+        secretsRedactedTotal: 0,
+        chunksStoredTotal: 0,
+        updatedAt: "2026-07-10T00:00:00.000Z",
+      }),
+    );
+    const prune = vi.fn(async () => ({ removed: 0 }));
+    const ran = await maybeRunOverlayGc(store, { now: () => NOW, prune });
+    expect(ran).toBe(true);
+    const after = JSON.parse(readFileSync(join(dir, `${id}.json`), "utf8"));
+    expect(after.eventsTotal).toBe(3);
+    expect(after.rebuiltAt).toBeDefined();
   });
 });

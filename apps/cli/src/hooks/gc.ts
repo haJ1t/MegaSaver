@@ -1,6 +1,7 @@
 import { readdirSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pruneOlderThan } from "@megasaver/content-store";
+import { reconcileOverlaySummaries } from "@megasaver/core";
 
 export const OVERLAY_RETENTION_MS = 30 * 86_400_000;
 export const GC_INTERVAL_MS = 86_400_000;
@@ -67,6 +68,13 @@ export async function maybeRunOverlayGc(storeRoot: string, deps: GcDeps = {}): P
   try {
     await prune({ storeRoot, olderThan: new Date(now() - OVERLAY_RETENTION_MS) });
     pruneIntentFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
+    // E26 drift repair: summaries lagging their JSONL (lock-skipped updates)
+    // or failing schema are rebuilt in the same daily sweep. Best-effort.
+    try {
+      reconcileOverlaySummaries({ root: storeRoot });
+    } catch {
+      /* best-effort */
+    }
     return true;
   } catch {
     return false;
