@@ -101,7 +101,10 @@ describe("workspace toggle — non-Git cwd → exact scope", () => {
   it("D19: enabling aggressive in a floored repo prints a clamp notice", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "megasaver-floored-"));
     mkdirSync(join(cwd, ".megasaver"), { recursive: true });
-    writeFileSync(join(cwd, ".megasaver", "policy.json"), JSON.stringify({ modeFloor: "balanced" }));
+    writeFileSync(
+      join(cwd, ".megasaver", "policy.json"),
+      JSON.stringify({ modeFloor: "balanced" }),
+    );
     const { code, err } = await enable({ mode: "aggressive", cwd });
     expect(code).toBe(0); // record still written; resolver clamps at read time
     expect(err.join("\n")).toContain('floors this repository at "balanced"');

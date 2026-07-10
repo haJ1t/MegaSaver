@@ -2923,3 +2923,73 @@ green (200/3000-line → multi-chunk fetch → prune removes → cold). CLI smok
 Still open (later waves): B8-10 eligibility, D16-20 ranking, E21-29 silent-
 failure, F30-34 metrics. Deferred v1 ceiling: `around`/line-window fetch, size/
 count-based retention, daemon periodic GC (spec non-goals).
+
+## [2026-07-10] feat | saver eligibility + ranking wave 3 SHIPPED (feat/saver-eligibility)
+
+Wave 3 of [[syntheses/saver-savings-gaps]] — B8-10 (eligibility) + D16-20
+(ranking) — on `feat/saver-eligibility`, stacked on wave 2. Spec/plan:
+`docs/superpowers/specs/2026-07-10-saver-eligibility-ranking-design.md`,
+`docs/superpowers/plans/2026-07-10-saver-eligibility-ranking-plan.md`.
+
+**B8 dead band closed** — the hook's `minBytesFor` gate is now the single
+eligibility authority. `record()` forwards it as `compressFloorBytes`;
+`recordAndFilterOverlayOutput` derives BOTH filter token thresholds from it
+(`ceil(floor/4)`, fallback `modeToBudget`). No output past the gate can land in
+a passthrough/light band and be discarded. Daemon `/excerpt` accepts the same
+optional field (context-gate + daemon).
+
+**B9 safe-mode Bash** — `apps/cli/src/hooks/saver.ts BASH_COMPRESS_FLOOR=24000`;
+`minBytesFor` caps Bash at 24000 B (below Claude Code's ~30000-char Bash
+truncation ceiling). Aggressive/balanced unchanged; Read/Grep/Glob safe stays
+32000.
+
+**B10 semantic chunking live** — `record-output.ts` passes `source` (raw label,
+extension preserved) into `filterOutput`, so `.ts/.py/.go/.rs/.md/.json` reads
+chunk on AST boundaries instead of blind 40-line slices. Daemon path fixed for
+free (same function).
+
+**D16 source-order rendering** — `returnedTextOf` sorts excerpts by startLine
+and emits `… [lines A-B omitted]` gap markers (leading/interior/trailing). Line
+numbers walk the excerpts' own (post-collapse) space via a new
+`FilterOutputResult.chunkedLineCount` — a review CRITICAL: the first cut mixed
+raw-space total with normalized-space excerpts, yielding phantom
+`lines 45-4040 omitted` tails on collapsed output; fixed RED-first.
+
+**D17 per-session intent + TTL** — `intent-run.ts` writes
+`stats/<ws>/intent/<sessionId>.json` (session_id from the UserPromptSubmit
+payload, `SAFE_SEGMENT`-guarded against path traversal) plus the legacy
+`session-intent.json` (id-less/old-binary compat). Reads session-first with a
+30-minute TTL (the `ts` field was written but never read before). GC sweep
+prunes stale intent files. Conscious-accept: scoped→legacy fallback keeps a
+narrow cross-session contamination window (session idle >30 min), retained for
+id-less compat.
+
+**D18 Unicode tokenizer** — extracted `output-filter/src/tokenize.ts`
+`tokenizeForMatch` (lowercase → NFD → strip marks → dotless-ı fold →
+`\p{L}\p{N}` split); rank.ts AND compress/json.ts (the D18 twin) both use it, so
+Turkish prompts rank instead of shattering. ASCII byte-identical.
+
+**D19 repo-local mode floor** — committed `.megasaver/policy.json`
+`{modeFloor}` (strict Zod, fail-open) clamps the resolved mode at the SINGLE
+resolver chokepoint (`resolveWorkspaceTokenSaverSettings` → `policyClamp`).
+`mega session saver enable` warns; `resolve` shows the clamp. This repo commits
+`{"modeFloor":"balanced"}` — a HIGH-risk source repo must not run
+evidence-dropping aggressive compression (§12). `.gitignore` un-ignores only
+`policy.json`; runtime `.megasaver/` files stay ignored.
+
+**D20** — conscious-accept: B10 routes `.md` file reads to semantic chunking
+(the wiki-startup-read breakage), so the prose compressor's 3-item list / para
+collapse stays as-is for fetch/command prose (recoverable via footer).
+
+**Review catches fixed RED-first:** D16 line-space CRITICAL (phantom omitted
+tails → chunkedLineCount); T5 missed a `ResolverDeps` test literal + a daemon
+`exactOptionalPropertyTypes` spread break (both broke `pnpm verify`, fixed);
+D18 twin tokenizer in compress/json.ts (shared module); D16 fixture FATAL not in
+error lexicon. Subagent-driven: fresh implementer per task + spec/quality review
+each; adversarial catches were the D16 line-space bug and the two verify breaks.
+
+**Evidence:** per-task RED→GREEN captured; full `pnpm verify` pending final run.
+Pending: code-reviewer + critic → stacked PR.
+
+Still open (later waves): E21-29 silent-failure/observability, F30-34 metrics
+honesty.

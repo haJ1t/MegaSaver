@@ -71,7 +71,10 @@ describe("session saver resolve", () => {
   it("D19: reports the policy clamp for a floored aggressive record", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "megasaver-resolve-floored-"));
     mkdirSync(join(cwd, ".megasaver"), { recursive: true });
-    writeFileSync(join(cwd, ".megasaver", "policy.json"), JSON.stringify({ modeFloor: "balanced" }));
+    writeFileSync(
+      join(cwd, ".megasaver", "policy.json"),
+      JSON.stringify({ modeFloor: "balanced" }),
+    );
     writeExactRecord(store, encodeWorkspaceKey(cwd), {
       enabled: true,
       mode: "aggressive",
