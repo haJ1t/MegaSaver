@@ -171,7 +171,7 @@ function overlayEventsPath(store: StatsStore, workspaceKey: string, liveSessionI
   return join(store.root, "stats", workspaceKey, `${liveSessionId}.events.jsonl`);
 }
 
-function loadOverlaySummary(path: string): OverlaySessionTokenSaverStats | null {
+function loadOverlaySummaryStrict(path: string): OverlaySessionTokenSaverStats | null {
   if (!existsSync(path)) {
     return null;
   }
@@ -186,6 +186,72 @@ function loadOverlaySummary(path: string): OverlaySessionTokenSaverStats | null 
     throw new StatsError("store_corrupt");
   }
   return parsed.data;
+}
+
+// E24 self-heal: rebuild the summary from the corruption-tolerant JSONL reader
+// and persist it. secretsRedactedTotal / chunksStoredTotal cannot be recovered
+// from events — events carry neither — so the repair trades those two counters
+// for liveness (rebuilt as 0). A missing events file rebuilds to an empty
+// summary (readOverlayEvents returns []), never a throw.
+export function rebuildOverlaySummaryFromEvents(
+  store: StatsStore,
+  workspaceKey: string,
+  liveSessionId: string,
+  nowIso: string = new Date().toISOString(),
+): OverlaySessionTokenSaverStats {
+  const events = readOverlayEvents(store, workspaceKey, liveSessionId);
+  let eventsTotal = 0;
+  let rawBytesTotal = 0;
+  let returnedBytesTotal = 0;
+  let bytesSavedTotal = 0;
+  for (const event of events) {
+    eventsTotal += 1;
+    rawBytesTotal += event.rawBytes;
+    returnedBytesTotal += event.returnedBytes;
+    bytesSavedTotal += event.bytesSaved;
+  }
+  const rebuilt: OverlaySessionTokenSaverStats = {
+    liveSessionId,
+    eventsTotal,
+    rawBytesTotal,
+    returnedBytesTotal,
+    bytesSavedTotal,
+    savingRatio: rawBytesTotal === 0 ? 0 : bytesSavedTotal / rawBytesTotal,
+    secretsRedactedTotal: 0,
+    chunksStoredTotal: 0,
+    updatedAt: nowIso,
+    rebuiltAt: nowIso,
+  };
+  atomicWriteFile(overlaySummaryPath(store, workspaceKey, liveSessionId), JSON.stringify(rebuilt));
+  return rebuilt;
+}
+
+// If the REBUILD itself fails, keep the original store_corrupt posture.
+function rebuildGuarded(
+  store: StatsStore,
+  workspaceKey: string,
+  liveSessionId: string,
+): OverlaySessionTokenSaverStats {
+  try {
+    return rebuildOverlaySummaryFromEvents(store, workspaceKey, liveSessionId);
+  } catch {
+    throw new StatsError("store_corrupt");
+  }
+}
+
+// Self-healing read: repair-on-read is by design, so this WRITES on a corrupt
+// summary (atomicWriteFile). Non-corrupt errors still propagate.
+function loadOverlaySummarySelfHealing(
+  store: StatsStore,
+  workspaceKey: string,
+  liveSessionId: string,
+): OverlaySessionTokenSaverStats | null {
+  try {
+    return loadOverlaySummaryStrict(overlaySummaryPath(store, workspaceKey, liveSessionId));
+  } catch (error) {
+    if (!(error instanceof StatsError) || error.code !== "store_corrupt") throw error;
+    return rebuildGuarded(store, workspaceKey, liveSessionId);
+  }
 }
 
 function emptyOverlaySummary(liveSessionId: string): OverlaySessionTokenSaverStats {
@@ -216,18 +282,28 @@ export function appendOverlayEvent(input: AppendOverlayEventInput): OverlaySessi
   mkdirSync(dirname(events), { recursive: true });
   appendFileSync(events, `${JSON.stringify(event)}\n`);
 
-  const prior = loadOverlaySummary(summary) ?? emptyOverlaySummary(event.liveSessionId);
-  const rawBytesTotal = prior.rawBytesTotal + event.rawBytes;
-  const bytesSavedTotal = prior.bytesSavedTotal + event.bytesSaved;
+  let prior: OverlaySessionTokenSaverStats | null;
+  try {
+    prior = loadOverlaySummaryStrict(summary);
+  } catch (error) {
+    if (!(error instanceof StatsError) || error.code !== "store_corrupt") throw error;
+    // E24: corrupt summary — the JSONL (which already contains the line
+    // appended above) is authoritative. The rebuild therefore covers this
+    // event too; do NOT accumulate on top of it.
+    return rebuildGuarded(store, event.workspaceKey, event.liveSessionId);
+  }
+  const base = prior ?? emptyOverlaySummary(event.liveSessionId);
+  const rawBytesTotal = base.rawBytesTotal + event.rawBytes;
+  const bytesSavedTotal = base.bytesSavedTotal + event.bytesSaved;
   const next: OverlaySessionTokenSaverStats = {
     liveSessionId: event.liveSessionId,
-    eventsTotal: prior.eventsTotal + 1,
+    eventsTotal: base.eventsTotal + 1,
     rawBytesTotal,
-    returnedBytesTotal: prior.returnedBytesTotal + event.returnedBytes,
+    returnedBytesTotal: base.returnedBytesTotal + event.returnedBytes,
     bytesSavedTotal,
     savingRatio: rawBytesTotal === 0 ? 0 : bytesSavedTotal / rawBytesTotal,
-    secretsRedactedTotal: prior.secretsRedactedTotal + secretsRedacted,
-    chunksStoredTotal: prior.chunksStoredTotal + chunksStored,
+    secretsRedactedTotal: base.secretsRedactedTotal + secretsRedacted,
+    chunksStoredTotal: base.chunksStoredTotal + chunksStored,
     updatedAt: new Date().toISOString(),
   };
 
@@ -240,7 +316,7 @@ export function readOverlaySummary(
   workspaceKey: string,
   liveSessionId: string,
 ): OverlaySessionTokenSaverStats | null {
-  return loadOverlaySummary(overlaySummaryPath(store, workspaceKey, liveSessionId));
+  return loadOverlaySummarySelfHealing(store, workspaceKey, liveSessionId);
 }
 
 // A CLI command receives only a liveSessionId (never a workspaceKey), so to

@@ -29,6 +29,8 @@ export const overlaySessionTokenSaverStatsSchema = z
     secretsRedactedTotal: z.number().int().nonnegative(),
     chunksStoredTotal: z.number().int().nonnegative(),
     updatedAt: z.string().datetime({ offset: true }),
+    // E24: present iff the summary was reconstructed from its events JSONL.
+    rebuiltAt: z.string().datetime({ offset: true }).optional(),
   })
   .strict();
 

@@ -74,14 +74,18 @@ describe("readOverlaySummaryAnyWorkspace", () => {
     expect(readOverlaySummaryAnyWorkspace(store, LSID)).toBeNull();
   });
 
-  it("skips a workspace whose summary file is corrupt and still finds a valid one", () => {
+  it("self-heals a corrupt summary file during an any-workspace scan", () => {
     const badDir = join(root, "stats", "aaa");
     mkdirSync(badDir, { recursive: true });
     writeFileSync(join(badDir, `${LSID}.json`), "{ not json");
     writeSummary("bbb", LSID, summary({ eventsTotal: 7 }));
 
+    // E24: a corrupt summary is now rebuilt from its events JSONL rather than
+    // skipped. With no events file next to it, "aaa" heals to an empty summary
+    // and — sorted first — is returned ahead of the valid "bbb".
     const found = readOverlaySummaryAnyWorkspace(store, LSID);
-    expect(found?.workspaceKey).toBe("bbb");
-    expect(found?.summary.eventsTotal).toBe(7);
+    expect(found?.workspaceKey).toBe("aaa");
+    expect(found?.summary.eventsTotal).toBe(0);
+    expect(found?.summary.rebuiltAt).toBeDefined();
   });
 });
