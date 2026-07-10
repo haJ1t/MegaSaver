@@ -50,6 +50,11 @@ export type RecordOverlayOutputInput = {
   label: string;
   mode: TokenSaverMode;
   storeRawOutput: boolean;
+  // The byte gate the caller already applied (hook minBytesFor). Both token
+  // thresholds derive from it so the caller's gate is the single eligibility
+  // authority — no passthrough/light dead band can open between the gate and
+  // the decision (B8). Absent -> modeToBudget(mode) (old callers, old daemon).
+  compressFloorBytes?: number;
   // Ranking hint passed to filterOutput. Optional: when absent, ranking is
   // generic (today's behavior). The hook path fills it from the captured
   // session prompt; proxy tools already pass their own explicit intent.
@@ -99,10 +104,16 @@ export async function recordAndFilterOverlayOutput(
   const now = input.now ?? (() => new Date().toISOString());
   const newId = input.newId ?? (() => randomUUID());
 
+  const floorBytes = input.compressFloorBytes ?? modeToBudget(input.mode);
+  // ~4 bytes/token, mirroring output-filter estimateTokens.
+  const thresholdTokens = Math.max(1, Math.ceil(floorBytes / 4));
+
   const filtered = await filterOutput({
     raw: input.raw,
     mode: input.mode,
     maxReturnedBytes: modeToBudget(input.mode),
+    passthroughThresholdTokens: thresholdTokens,
+    hardWrapThresholdTokens: thresholdTokens,
     ...(input.intent !== undefined ? { intent: input.intent } : {}),
   });
 

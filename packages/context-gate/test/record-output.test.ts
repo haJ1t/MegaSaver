@@ -413,4 +413,44 @@ describe("multi-chunk overlay write (C12)", () => {
     expect(result.chunkSetId).toBeUndefined();
     expect(result.chunkCount).toBeUndefined();
   });
+
+  it("B8: a ~5KB aggressive output compresses (dead band closed)", async () => {
+    const storeRoot = store();
+    // 150 lines x ~34 chars ≈ 5.1 KB ≈ 1275 tokens: past the aggressive 4000 B
+    // gate, but inside the old fixed 1200/2000 band -> "light" -> discarded.
+    const raw = Array.from({ length: 150 }, (_, i) => `line ${i}: build noise xxxxxxxxxx`).join(
+      "\n",
+    );
+    const r = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw,
+      sourceKind: "command",
+      label: "pnpm build",
+      mode: "aggressive",
+      storeRawOutput: true,
+      compressFloorBytes: 4000,
+    });
+    expect(r.decision).toBe("compressed");
+    expect(r.chunkSetId).toBeDefined();
+  });
+
+  it("B8: gate falls back to modeToBudget(mode) when compressFloorBytes is absent", async () => {
+    const storeRoot = store();
+    const raw = Array.from({ length: 150 }, (_, i) => `line ${i}: build noise xxxxxxxxxx`).join(
+      "\n",
+    );
+    const r = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw,
+      sourceKind: "command",
+      label: "pnpm build",
+      mode: "aggressive",
+      storeRawOutput: true,
+    });
+    expect(r.decision).toBe("compressed");
+  });
 });
