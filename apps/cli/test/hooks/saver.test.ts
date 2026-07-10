@@ -843,3 +843,61 @@ describe("B8: hook forwards its gate as compressFloorBytes", () => {
     expect(captured[0]?.compressFloorBytes).toBe(4_000);
   });
 });
+
+describe("B9 follow-up: background-shell retrieval shares Bash's ceiling", () => {
+  const shellPayload = (tool: string, text: string) => ({
+    tool_name: tool,
+    tool_input: { bash_id: "bg-1" },
+    tool_response: { stdout: text, stderr: "", interrupted: false, isImage: false },
+    session_id: "live-1",
+    cwd: "/Users/x/proj",
+  });
+
+  it("safe mode compresses a 26KB BashOutput with the 24000 floor", async () => {
+    const captured: Array<{ compressFloorBytes?: number }> = [];
+    const d = deps({
+      resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
+      record: vi.fn(async (i: { compressFloorBytes?: number }) => {
+        captured.push(i);
+        return RECORDED;
+      }),
+    });
+    const decision = await buildSaverDecision(shellPayload("BashOutput", "x".repeat(26_000)), d);
+    expect("updatedToolOutput" in decision).toBe(true); // today: passthrough (32000 gate)
+    expect(captured[0]?.compressFloorBytes).toBe(24_000);
+  });
+
+  it("safe mode compresses a 26KB Monitor with the 24000 floor", async () => {
+    const captured: Array<{ compressFloorBytes?: number }> = [];
+    const d = deps({
+      resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
+      record: vi.fn(async (i: { compressFloorBytes?: number }) => {
+        captured.push(i);
+        return RECORDED;
+      }),
+    });
+    const decision = await buildSaverDecision(shellPayload("Monitor", "x".repeat(26_000)), d);
+    expect("updatedToolOutput" in decision).toBe(true);
+    expect(captured[0]?.compressFloorBytes).toBe(24_000);
+  });
+
+  it("aggressive BashOutput keeps the 16384 new-surface floor (not lowered to 4000)", async () => {
+    const captured: Array<{ compressFloorBytes?: number }> = [];
+    const d = deps({
+      resolveSettings: () => ({ enabled: true, mode: "aggressive" as const }),
+      record: vi.fn(async (i: { compressFloorBytes?: number }) => {
+        captured.push(i);
+        return RECORDED;
+      }),
+    });
+    // 17KB > 16384 floor -> compresses; floor must be 16384, not 4000
+    await buildSaverDecision(shellPayload("BashOutput", "x".repeat(17_000)), d);
+    expect(captured[0]?.compressFloorBytes).toBe(16_384);
+  });
+
+  it("Task (subagent report, not shell-truncated) is left at the 32000 safe floor", async () => {
+    const d = deps({ resolveSettings: () => ({ enabled: true, mode: "safe" as const }) });
+    const decision = await buildSaverDecision(shellPayload("Task", "x".repeat(26_000)), d);
+    expect(decision).toEqual({ passthrough: true }); // 26000 < 32000 -> passthrough (documented: Task is unbounded, big reports still compress)
+  });
+});

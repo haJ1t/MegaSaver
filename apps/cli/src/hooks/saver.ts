@@ -43,10 +43,21 @@ function resolveSourceKind(tool: string): OutputSourceKind | undefined {
   return undefined;
 }
 
+// BashOutput/Monitor retrieve background-shell output, which shares Bash's
+// ~30000-char truncation ceiling (undocumented, but the same shell machinery),
+// so safe mode's 32000 floor would never fire — the B9 dead zone. Cap them
+// below the ceiling too, while keeping the coarse 16384 new-surface floor for
+// aggressive/balanced. Safe-direction if the ceiling assumption is wrong: it
+// only compresses smaller background logs, which stay fully recoverable. Task
+// is a subagent report (not shell-truncated, effectively unbounded) so its
+// large reports already clear 32000 — it keeps the plain new-surface floor.
+const BACKGROUND_SHELL_TOOLS = new Set(["BashOutput", "Monitor"]);
+
 function minBytesFor(tool: string, mode: TokenSaverMode): number {
   const budget = modeToBudget(mode);
   if (tool === "Bash") return Math.min(budget, BASH_COMPRESS_FLOOR);
-  return ORIGINAL_TOOLS.has(tool) ? budget : Math.max(budget, NEW_SURFACE_MIN_BYTES);
+  const floor = ORIGINAL_TOOLS.has(tool) ? budget : Math.max(budget, NEW_SURFACE_MIN_BYTES);
+  return BACKGROUND_SHELL_TOOLS.has(tool) ? Math.min(floor, BASH_COMPRESS_FLOOR) : floor;
 }
 
 export type SaverSettings = { enabled: boolean; mode: TokenSaverMode };
