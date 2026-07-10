@@ -22,7 +22,19 @@ export type DoctorSaverDeps = {
 };
 
 const SELF_TEST_TIMEOUT_MS = 10_000;
+// E22.3: invocation and completion are stamped microseconds apart in the same
+// decide() call, so any latest-invocation newer than the latest-completion by
+// more than this grace means the most recent activity never finished.
+const LIVENESS_GAP_GRACE_MS = 5 * 60_000;
 const REPAIR_HINT = "run: mega hooks install";
+
+function newestTs(map: Record<string, string> | undefined): string | null {
+  let newest: string | null = null;
+  for (const ts of Object.values(map ?? {})) {
+    if (newest === null || Date.parse(ts) > Date.parse(newest)) newest = ts;
+  }
+  return newest;
+}
 
 function defaultSpawn(
   cmd: string,
@@ -218,6 +230,16 @@ export function runSaverChecks(deps: DoctorSaverDeps = {}): Check[] {
     });
     const totalFailures = Object.values(failures).reduce((n, f) => n + f.count, 0);
     const first = failing[0];
+    // Per-workspace invocation-vs-completion gap: a recent invocation with no
+    // (or a far-older) completion is a crash/timeout signal — the hook fired
+    // but never finished. computeView already prunes stale invocations, so any
+    // survivor here is recent enough that a missing completion is real.
+    const gap = Object.entries(view.workspaces)
+      .map(([wk, invIso]) => {
+        const comp = view.completions?.[wk];
+        return { wk, inv: Date.parse(invIso), comp: comp !== undefined ? Date.parse(comp) : null };
+      })
+      .find(({ inv, comp }) => comp === null || inv - comp > LIVENESS_GAP_GRACE_MS);
     if (first !== undefined) {
       const [wk, f] = first;
       checks.push({
@@ -225,6 +247,17 @@ export function runSaverChecks(deps: DoctorSaverDeps = {}): Check[] {
         value: `failing (last ${f.lastKind} @ ${f.lastAt}, workspace ${wk})`,
         pass: false,
         reason: "no completion since the last failure — see: mega session saver resolve",
+      });
+    } else if (gap !== undefined) {
+      const detail =
+        gap.comp === null
+          ? "with no completion"
+          : `${gap.inv - gap.comp}ms ahead of last completion`;
+      checks.push({
+        key: "saver-liveness",
+        value: `invocations not completing (crash/timeout signal, workspace ${gap.wk})`,
+        pass: false,
+        reason: `invocation ${detail} — run: mega doctor after the next tool call, or mega hooks install`,
       });
     } else if (totalFailures > 0) {
       checks.push({
@@ -257,7 +290,9 @@ export function runSaverChecks(deps: DoctorSaverDeps = {}): Check[] {
   // proven registered; only the between-run passive hint is affected. A
   // sentinel-key fix was judged not worth the cost.
   if (saverCmd !== null) {
-    const before = readHeartbeatView(storeRoot, now()).latest?.ts ?? null;
+    const beforeView = readHeartbeatView(storeRoot, now());
+    const before = beforeView.latest?.ts ?? null;
+    const beforeComp = newestTs(beforeView.completions);
     const payload = JSON.stringify({
       session_id: `doctor-selftest-${randomUUID()}`,
       tool_name: "Bash",
@@ -273,17 +308,26 @@ export function runSaverChecks(deps: DoctorSaverDeps = {}): Check[] {
         reason: REPAIR_HINT,
       });
     } else {
-      const after = readHeartbeatView(storeRoot, now()).latest?.ts ?? null;
-      const advanced =
+      const afterView = readHeartbeatView(storeRoot, now());
+      const after = afterView.latest?.ts ?? null;
+      const afterComp = newestTs(afterView.completions);
+      const invAdvanced =
         after !== null && (before === null || Date.parse(after) > Date.parse(before));
+      // A working hook records a completion on every non-throwing finish
+      // (including passthrough); a stamp-then-die records only the invocation.
+      const compAdvanced =
+        afterComp !== null &&
+        (beforeComp === null || Date.parse(afterComp) > Date.parse(beforeComp));
       checks.push(
-        advanced
+        invAdvanced && compAdvanced
           ? { key: "saver-self-test", value: "exit 0, heartbeat advanced", pass: true }
           : {
               key: "saver-self-test",
-              value: "exit 0 but no heartbeat",
+              value: invAdvanced ? "exit 0 but no completion heartbeat" : "exit 0 but no heartbeat",
               pass: false,
-              reason: `hook ran but wrote no invocation heartbeat — check store wiring (${REPAIR_HINT})`,
+              reason: invAdvanced
+                ? `hook fired but never recorded a completion (crash/timeout after invocation) — check store wiring (${REPAIR_HINT})`
+                : `hook ran but wrote no invocation heartbeat — check store wiring (${REPAIR_HINT})`,
             },
       );
     }

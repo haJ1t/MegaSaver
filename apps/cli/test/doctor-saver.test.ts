@@ -1,7 +1,11 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { recordFailureHeartbeat, recordInvocationHeartbeat } from "@megasaver/context-gate";
+import {
+  recordCompletionHeartbeat,
+  recordFailureHeartbeat,
+  recordInvocationHeartbeat,
+} from "@megasaver/context-gate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runSaverChecks } from "../src/commands/doctor-saver.js";
 import type { Check } from "../src/commands/doctor.js";
@@ -75,6 +79,7 @@ function fakeBinary(): string {
 const advancingSpawn = (cmd: string) => {
   if (!cmd.endsWith("--version")) {
     recordInvocationHeartbeat(storeRoot, "wk-selftest", iso(NOW + 1000), NOW + 1000);
+    recordCompletionHeartbeat(storeRoot, "wk-selftest", iso(NOW + 1000), NOW + 1000);
   }
   return { status: 0 };
 };
@@ -86,6 +91,7 @@ describe("runSaverChecks", () => {
     const bin = fakeBinary();
     const settingsPath = writeHookSettings(`${bin} hooks saver`);
     recordInvocationHeartbeat(storeRoot, "wk-a", iso(NOW - 1000), NOW - 1000);
+    recordCompletionHeartbeat(storeRoot, "wk-a", iso(NOW - 1000), NOW - 1000);
     const checks = runSaverChecks({
       settingsPath,
       storeRoot,
@@ -155,6 +161,56 @@ describe("runSaverChecks", () => {
       now: () => NOW,
     });
     expect(find(checks, "saver-liveness")?.pass).toBe(false);
+  });
+
+  it("FAILs liveness when a workspace has invocations but no completion (crash/timeout)", () => {
+    const bin = fakeBinary();
+    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    // invocation stamped, but the hook died before recording a completion
+    recordInvocationHeartbeat(storeRoot, "wk-a", iso(NOW - 1000), NOW - 1000);
+    const checks = runSaverChecks({
+      settingsPath,
+      storeRoot,
+      spawn: () => ({ status: 0 }),
+      now: () => NOW,
+    });
+    const liveness = find(checks, "saver-liveness");
+    expect(liveness?.pass).toBe(false);
+    expect(liveness?.value).toContain("not completing");
+  });
+
+  it("PASSes liveness when invocation and completion are in lockstep", () => {
+    const bin = fakeBinary();
+    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    recordInvocationHeartbeat(storeRoot, "wk-a", iso(NOW - 1000), NOW - 1000);
+    recordCompletionHeartbeat(storeRoot, "wk-a", iso(NOW - 1000), NOW - 1000);
+    const checks = runSaverChecks({
+      settingsPath,
+      storeRoot,
+      spawn: advancingSpawn,
+      now: () => NOW,
+    });
+    expect(find(checks, "saver-liveness")?.pass).toBe(true);
+  });
+
+  it("FAILs the self-test when the hook bumps invocation but not completion", () => {
+    const bin = fakeBinary();
+    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const invocationOnlySpawn = (cmd: string) => {
+      if (!cmd.endsWith("--version")) {
+        recordInvocationHeartbeat(storeRoot, "wk-selftest", iso(NOW + 1000), NOW + 1000);
+      }
+      return { status: 0 };
+    };
+    const checks = runSaverChecks({
+      settingsPath,
+      storeRoot,
+      spawn: invocationOnlySpawn,
+      now: () => NOW + 2000,
+    });
+    const selfTest = find(checks, "saver-self-test");
+    expect(selfTest?.pass).toBe(false);
+    expect(selfTest?.value).toContain("completion");
   });
 
   it("WARNs on a store baked into the command that differs from the CLI store (E29)", () => {
