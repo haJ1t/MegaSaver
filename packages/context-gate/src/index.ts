@@ -107,9 +107,15 @@ export {
 export {
   type HeartbeatView,
   type HeartbeatStamp,
+  type FailureKind,
+  type HeartbeatFailureEntry,
+  type HeartbeatFallbackEntry,
   readHeartbeatView,
   recordInvocationHeartbeat,
   recordCompressionHeartbeat,
+  recordCompletionHeartbeat,
+  recordFailureHeartbeat,
+  recordDaemonFallbackHeartbeat,
 } from "./saver-heartbeat.js";
 export {
   type ActivationScope,

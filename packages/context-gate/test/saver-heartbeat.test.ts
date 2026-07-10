@@ -1,10 +1,21 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   readHeartbeatView,
+  recordCompletionHeartbeat,
   recordCompressionHeartbeat,
+  recordDaemonFallbackHeartbeat,
+  recordFailureHeartbeat,
   recordInvocationHeartbeat,
 } from "../src/saver-heartbeat.js";
 
@@ -122,5 +133,102 @@ describe("hardening", () => {
     const v = readHeartbeatView(store, NOW);
     expect(v.workspaces).toHaveProperty("good", iso(NOW));
     expect(v.workspaces).not.toHaveProperty("bad");
+  });
+});
+
+describe("failure / completion / daemon-fallback ledger (E21)", () => {
+  it("failure record increments count and keeps the newest lastAt/lastKind", () => {
+    recordFailureHeartbeat(store, "aaaa", "record", iso(NOW - 1000), NOW);
+    recordFailureHeartbeat(store, "aaaa", "payload", iso(NOW - 5000), NOW); // older ts still counts
+    const v = readHeartbeatView(store, NOW);
+    expect(v.failures?.aaaa).toEqual({ count: 2, lastAt: iso(NOW - 1000), lastKind: "record" });
+  });
+
+  it("completion is strict-newer per key (older is a no-op)", () => {
+    recordCompletionHeartbeat(store, "aaaa", iso(NOW), NOW);
+    recordCompletionHeartbeat(store, "aaaa", iso(NOW - 5000), NOW);
+    expect(readHeartbeatView(store, NOW).completions?.aaaa).toBe(iso(NOW));
+  });
+
+  it("daemon fallback counts and keeps the newest lastAt", () => {
+    recordDaemonFallbackHeartbeat(store, "aaaa", iso(NOW - 2000), NOW);
+    recordDaemonFallbackHeartbeat(store, "aaaa", iso(NOW - 1000), NOW);
+    expect(readHeartbeatView(store, NOW).daemonFallbacks?.aaaa).toEqual({
+      count: 2,
+      lastAt: iso(NOW - 1000),
+    });
+  });
+
+  it("prunes failure entries older than 30 days", () => {
+    recordFailureHeartbeat(
+      store,
+      "old",
+      "unknown",
+      iso(NOW - 31 * 86_400_000),
+      NOW - 31 * 86_400_000,
+    );
+    recordFailureHeartbeat(store, "new", "record", iso(NOW), NOW);
+    const v = readHeartbeatView(store, NOW);
+    expect(v.failures?.old).toBeUndefined();
+    expect(v.failures?.new?.count).toBe(1);
+  });
+
+  it("an old-format registry (workspaces only) still reads", () => {
+    mkdirSync(join(store, "stats"), { recursive: true });
+    writeFileSync(
+      join(store, "stats", "saver-hook-heartbeats.json"),
+      JSON.stringify({
+        version: 1,
+        latest: { ts: iso(NOW), workspaceKey: "aaaa" },
+        latestCompression: null,
+        workspaces: { aaaa: iso(NOW) },
+      }),
+    );
+    const v = readHeartbeatView(store, NOW);
+    expect(v.workspaces).toHaveProperty("aaaa", iso(NOW));
+    expect(v.completions).toBeUndefined();
+    expect(v.failures).toBeUndefined();
+    expect(v.daemonFallbacks).toBeUndefined();
+  });
+
+  it("drops malformed failure entries field-by-field", () => {
+    mkdirSync(join(store, "stats"), { recursive: true });
+    writeFileSync(
+      join(store, "stats", "saver-hook-heartbeats.json"),
+      JSON.stringify({
+        version: 1,
+        workspaces: {},
+        failures: {
+          good: { count: 3, lastAt: iso(NOW), lastKind: "record" },
+          badKind: { count: 1, lastAt: iso(NOW), lastKind: "exploded" },
+          badCount: { count: "many", lastAt: iso(NOW), lastKind: "record" },
+          badShape: "nope",
+        },
+      }),
+    );
+    const v = readHeartbeatView(store, NOW);
+    expect(v.failures?.good?.count).toBe(3);
+    expect(v.failures?.badKind).toBeUndefined();
+    expect(v.failures?.badCount).toBeUndefined();
+    expect(v.failures?.badShape).toBeUndefined();
+  });
+});
+
+describe("stale lock (E25)", () => {
+  it("steals a stale lock file instead of skipping forever", () => {
+    mkdirSync(join(store, "stats"), { recursive: true });
+    const lock = join(store, "stats", ".saver-heartbeat.lock");
+    writeFileSync(lock, "");
+    const old = new Date(Date.now() - 10_000);
+    utimesSync(lock, old, old);
+    recordInvocationHeartbeat(store, "aaaa", iso(NOW), NOW);
+    expect(readHeartbeatView(store, NOW).workspaces).toHaveProperty("aaaa", iso(NOW));
+  });
+
+  it("a fresh contended lock still skips (contention semantics kept)", () => {
+    mkdirSync(join(store, "stats"), { recursive: true });
+    writeFileSync(join(store, "stats", ".saver-heartbeat.lock"), ""); // mtime = now
+    recordInvocationHeartbeat(store, "aaaa", iso(NOW), NOW);
+    expect(readHeartbeatView(store, NOW).workspaces).not.toHaveProperty("aaaa");
   });
 });
