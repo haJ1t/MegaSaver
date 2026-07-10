@@ -1,6 +1,15 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GC_INTERVAL_MS, OVERLAY_RETENTION_MS, maybeRunOverlayGc } from "../../src/hooks/gc.js";
 
@@ -59,5 +68,24 @@ describe("maybeRunOverlayGc", () => {
     expect(ran).toBe(false);
     expect(prune).not.toHaveBeenCalled();
     rmSync(bare, { recursive: true, force: true });
+  });
+
+  it("D17: sweeps intent files older than retention", async () => {
+    const ws = encodeWorkspaceKey("/some/project");
+    const dir = join(store, "stats", ws, "intent");
+    mkdirSync(dir, { recursive: true });
+    const old = join(dir, "aaaa.json");
+    const fresh = join(dir, "bbbb.json");
+    writeFileSync(old, JSON.stringify({ prompt: "old", ts: 0 }));
+    writeFileSync(fresh, JSON.stringify({ prompt: "new", ts: NOW }));
+    const past = new Date(NOW - 40 * 86_400_000);
+    utimesSync(old, past, past);
+    const ran = await maybeRunOverlayGc(store, {
+      now: () => NOW,
+      prune: async () => ({ removed: 0 }),
+    });
+    expect(ran).toBe(true);
+    expect(existsSync(old)).toBe(false);
+    expect(existsSync(fresh)).toBe(true);
   });
 });

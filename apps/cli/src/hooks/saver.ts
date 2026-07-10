@@ -56,7 +56,11 @@ export type SaverDeps = {
   // Resolves activation from the cwd through the repository-family precedence
   // (exact → family → legacy-root → global). null ⇒ disabled/passthrough.
   resolveSettings: (storeRoot: string, cwd: string) => SaverSettings | null;
-  readSessionIntent: (storeRoot: string, workspaceKey: string) => string | undefined;
+  readSessionIntent: (
+    storeRoot: string,
+    workspaceKey: string,
+    sessionId?: string,
+  ) => string | undefined;
   record: (input: RecordOverlayOutputInput) => Promise<RecordOverlayOutputResult>;
   // Metadata-only liveness heartbeats (best-effort; never block the tool call).
   recordInvocation: (storeRoot: string, workspaceKey: string) => void;
@@ -246,7 +250,7 @@ export async function buildSaverDecision(
 
     const settings = deps.resolveSettings(deps.storeRoot, cwd);
     if (settings === null || !settings.enabled) return PASSTHROUGH;
-    const sessionIntent = deps.readSessionIntent(deps.storeRoot, workspaceKey);
+    const sessionIntent = deps.readSessionIntent(deps.storeRoot, workspaceKey, sessionId);
 
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     const shape = readOutputShape(p["tool_response"]);

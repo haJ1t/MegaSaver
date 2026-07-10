@@ -49,7 +49,7 @@ describe("readSessionIntent", () => {
 
   it("returns the prompt for a valid file", () => {
     captureIntent(storeRoot, { prompt: "add logging", cwd }, () => 1);
-    expect(readSessionIntent(storeRoot, wk)).toBe("add logging");
+    expect(readSessionIntent(storeRoot, wk, undefined, () => 1)).toBe("add logging");
   });
 
   it("returns undefined for malformed JSON", () => {
@@ -72,5 +72,38 @@ describe("readSessionIntent", () => {
       "utf8",
     );
     expect(readSessionIntent(storeRoot, wk)).toBeUndefined();
+  });
+});
+
+describe("D17: per-session intent + TTL", () => {
+  const sidA = "11111111-1111-4111-8111-111111111111";
+  const sidB = "22222222-2222-4222-8222-222222222222";
+
+  it("two sessions in one workspace read their own prompts", () => {
+    captureIntent(storeRoot, { prompt: "fix the parser", cwd, session_id: sidA }, () => 1000);
+    captureIntent(storeRoot, { prompt: "write the docs", cwd, session_id: sidB }, () => 1000);
+    expect(readSessionIntent(storeRoot, wk, sidA, () => 1000)).toBe("fix the parser");
+    expect(readSessionIntent(storeRoot, wk, sidB, () => 1000)).toBe("write the docs");
+  });
+
+  it("id-less payloads still work via the legacy latest-wins file", () => {
+    captureIntent(storeRoot, { prompt: "legacy prompt", cwd }, () => 1000);
+    expect(readSessionIntent(storeRoot, wk, undefined, () => 1000)).toBe("legacy prompt");
+    // an unknown session id falls back to the legacy file
+    expect(readSessionIntent(storeRoot, wk, sidA, () => 1000)).toBe("legacy prompt");
+  });
+
+  it("intent expires after 30 minutes", () => {
+    const t0 = 1_000_000_000_000;
+    captureIntent(storeRoot, { prompt: "old prompt", cwd, session_id: sidA }, () => t0);
+    const late = () => t0 + 30 * 60_000 + 1;
+    expect(readSessionIntent(storeRoot, wk, sidA, late)).toBeUndefined();
+    expect(readSessionIntent(storeRoot, wk, undefined, late)).toBeUndefined();
+  });
+
+  it("a hostile session_id cannot escape the store (falls back to legacy)", () => {
+    captureIntent(storeRoot, { prompt: "safe prompt", cwd, session_id: "../../evil" }, () => 1000);
+    // per-session write was skipped (bad id); legacy file still written and readable
+    expect(readSessionIntent(storeRoot, wk, "../../evil", () => 1000)).toBe("safe prompt");
   });
 });

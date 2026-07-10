@@ -1,4 +1,4 @@
-import { statSync, utimesSync, writeFileSync } from "node:fs";
+import { readdirSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pruneOlderThan } from "@megasaver/content-store";
 
@@ -9,6 +9,35 @@ export type GcDeps = {
   now?: () => number;
   prune?: typeof pruneOlderThan;
 };
+
+// D17: per-session intent files are tiny but unbounded; sweep them with the
+// same retention as chunk sets. Best-effort, every failure swallowed.
+function pruneIntentFiles(storeRoot: string, cutoffMs: number): void {
+  let workspaces: string[];
+  try {
+    workspaces = readdirSync(join(storeRoot, "stats"));
+  } catch {
+    return;
+  }
+  for (const ws of workspaces) {
+    const dir = join(storeRoot, "stats", ws, "intent");
+    let files: string[];
+    try {
+      files = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      if (!f.endsWith(".json")) continue;
+      const p = join(dir, f);
+      try {
+        if (statSync(p).mtimeMs < cutoffMs) unlinkSync(p);
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+}
 
 // Throttled, best-effort content-store GC (C14). The marker is touched BEFORE
 // pruning so a hook arriving AFTER the touch skips the walk. A simultaneous
@@ -37,6 +66,7 @@ export async function maybeRunOverlayGc(storeRoot: string, deps: GcDeps = {}): P
   }
   try {
     await prune({ storeRoot, olderThan: new Date(now() - OVERLAY_RETENTION_MS) });
+    pruneIntentFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
     return true;
   } catch {
     return false;

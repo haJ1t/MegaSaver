@@ -7,18 +7,40 @@ import { z } from "zod";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 
 const intentFileSchema = z.object({ prompt: z.string(), ts: z.number() });
-const payloadSchema = z.object({ prompt: z.string(), cwd: z.string().min(1) });
+const payloadSchema = z.object({
+  prompt: z.string(),
+  cwd: z.string().min(1),
+  // Claude Code sends session_id on every hook event; optional so old/other
+  // harness payloads keep working through the legacy file.
+  session_id: z.string().min(1).optional(),
+});
+
+export const INTENT_TTL_MS = 30 * 60_000;
+
+// session_id becomes a filesystem segment; reject anything that could carry a
+// path separator or dot-prefix (daemon safeSegmentSchema posture). A rejected
+// id silently degrades to the legacy workspace file.
+const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 export function intentFilePath(storeRoot: string, workspaceKey: string): string {
   return join(storeRoot, "stats", workspaceKey, "session-intent.json");
 }
 
-export function readSessionIntent(storeRoot: string, workspaceKey: string): string | undefined {
-  const path = intentFilePath(storeRoot, workspaceKey);
+export function sessionIntentFilePath(
+  storeRoot: string,
+  workspaceKey: string,
+  sessionId: string,
+): string {
+  return join(storeRoot, "stats", workspaceKey, "intent", `${sessionId}.json`);
+}
+
+function readIntentAt(path: string, now: () => number): string | undefined {
   if (!existsSync(path)) return undefined;
   try {
     const parsed = intentFileSchema.safeParse(JSON.parse(readFileSync(path, "utf8")));
     if (!parsed.success) return undefined;
+    // D17: a stale prompt ranking a fresh read is worse than no intent at all.
+    if (now() - parsed.data.ts > INTENT_TTL_MS) return undefined;
     const prompt = parsed.data.prompt.trim();
     return prompt === "" ? undefined : prompt;
   } catch {
@@ -26,15 +48,22 @@ export function readSessionIntent(storeRoot: string, workspaceKey: string): stri
   }
 }
 
-// Atomic write (tmp + rename): the file is read by a separate process (the saver
-// hook / daemon); a reader must never see a half-written file.
-function writeIntentFile(
+export function readSessionIntent(
   storeRoot: string,
   workspaceKey: string,
-  prompt: string,
-  ts: number,
-): void {
-  const path = intentFilePath(storeRoot, workspaceKey);
+  sessionId?: string,
+  now: () => number = Date.now,
+): string | undefined {
+  if (sessionId !== undefined && SAFE_SEGMENT.test(sessionId)) {
+    const scoped = readIntentAt(sessionIntentFilePath(storeRoot, workspaceKey, sessionId), now);
+    if (scoped !== undefined) return scoped;
+  }
+  return readIntentAt(intentFilePath(storeRoot, workspaceKey), now);
+}
+
+// Atomic write (tmp + rename): the file is read by a separate process (the saver
+// hook / daemon); a reader must never see a half-written file.
+function writeIntentAt(path: string, prompt: string, ts: number): void {
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true });
   const tmp = join(dir, `.${randomUUID()}.tmp`);
@@ -58,9 +87,17 @@ export function captureIntent(
   if (!parsed.success) return;
   const prompt = parsed.data.prompt.trim();
   if (prompt === "") return;
+  const wsKey = encodeWorkspaceKey(parsed.data.cwd);
   // Redact secrets before persisting — a user may paste an API key into a prompt;
   // the sibling tool-output path (context-gate record-output.ts) redacts the same way.
-  writeIntentFile(storeRoot, encodeWorkspaceKey(parsed.data.cwd), redact(prompt).redacted, now());
+  const redacted = redact(prompt).redacted;
+  const ts = now();
+  const sid = parsed.data.session_id;
+  if (sid !== undefined && SAFE_SEGMENT.test(sid)) {
+    writeIntentAt(sessionIntentFilePath(storeRoot, wsKey, sid), redacted, ts);
+  }
+  // Legacy latest-wins file: id-less payloads and older saver binaries.
+  writeIntentAt(intentFilePath(storeRoot, wsKey), redacted, ts);
 }
 
 function readStdinSync(): string {
