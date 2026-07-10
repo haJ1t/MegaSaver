@@ -15,7 +15,46 @@ export const SAVER_HOOK_COMMAND = "mega hooks saver";
 export const SAVER_HOOK_MATCHER = HOOK_MATCHER;
 export const INTENT_HOOK_COMMAND = "mega hooks intent";
 
-type CommandHook = { type: "command"; command: string };
+type CommandHook = { type: "command"; command: string; timeout?: number };
+
+export type HookCommandConfig = { cliPath?: string; storeRoot?: string };
+
+// E23: hook commands are built from the stable ABSOLUTE launcher path of the
+// running CLI (quoted iff it contains whitespace — the hook shell splits on
+// spaces) plus, for a non-default store, an E29 `--store` bake. cliPath absent
+// keeps the legacy bare "mega" form.
+export function buildHookCommand(
+  subcommand: "log" | "saver" | "intent",
+  cfg: HookCommandConfig = {},
+): string {
+  const bin = cfg.cliPath === undefined ? "mega" : quoteIfNeeded(cfg.cliPath);
+  const store = cfg.storeRoot === undefined ? "" : ` --store "${cfg.storeRoot}"`;
+  return `${bin}${store} hooks ${subcommand}`;
+}
+
+function quoteIfNeeded(p: string): string {
+  return /\s/.test(p) ? `"${p}"` : p;
+}
+
+// One matcher for every historical command form: bare `mega hooks saver`,
+// absolute `/abs/mega hooks saver`, store-baked `/abs/mega --store "…" hooks
+// saver`. The space-prefixed suffix check excludes accidental substrings
+// ("myhooks saver").
+export function hookCommandMatches(command: string, subcommand: string): boolean {
+  return command === `hooks ${subcommand}` || command.endsWith(` hooks ${subcommand}`);
+}
+
+// Every Mega hook command ends with "hooks <subcommand>"; the public add/has/
+// remove functions keep their (settings, command) signatures for compat and
+// derive the subcommand from the command's last token.
+function subcommandOf(command: string): string {
+  const parts = command.trim().split(/\s+/);
+  return parts[parts.length - 1] ?? "";
+}
+
+function timeoutFor(subcommand: string): number {
+  return subcommand === "saver" ? 30 : 10;
+}
 type ToolUseEntry = { matcher?: string; hooks?: CommandHook[] };
 type SettingsObject = {
   hooks?: {
@@ -31,26 +70,38 @@ function asSettings(value: unknown): SettingsObject {
   return typeof value === "object" && value !== null ? { ...(value as SettingsObject) } : {};
 }
 
-function entryReferencesCommand(entry: unknown, command: string): boolean {
+function entryMatchesSubcommand(entry: unknown, subcommand: string): boolean {
   if (typeof entry !== "object" || entry === null) return false;
   const hooks = (entry as ToolUseEntry).hooks;
-  return Array.isArray(hooks) && hooks.some((h) => h?.command === command);
+  return (
+    Array.isArray(hooks) &&
+    hooks.some((h) => typeof h?.command === "string" && hookCommandMatches(h.command, subcommand))
+  );
 }
 
-// Rewrites the matcher on the entry (if any) that already references
-// `command`, leaving every other entry untouched and never mutating the
-// input array or its entries. Returns null when no entry references the
-// command, so the caller falls through to appending a new one.
-function repairMatcher(
+// Rewrites, on every entry that already carries this subcommand, the matcher
+// (when given) AND the CommandHook itself to `desired` — this is how a legacy
+// bare/absolute/store-baked entry migrates in place on re-install. Never
+// mutates the input array or its entries. Returns null when no entry matched,
+// so the caller falls through to appending a new one.
+function repairEntry(
   entries: ToolUseEntry[],
-  command: string,
-  matcher: string,
+  subcommand: string,
+  matcher: string | undefined,
+  desired: CommandHook,
 ): ToolUseEntry[] | null {
   let found = false;
   const next = entries.map((entry) => {
-    if (!entryReferencesCommand(entry, command)) return entry;
+    if (!entryMatchesSubcommand(entry, subcommand)) return entry;
     found = true;
-    return entry.matcher === matcher ? entry : { ...entry, matcher };
+    const hooks = (entry.hooks ?? []).map((h) =>
+      typeof h?.command === "string" && hookCommandMatches(h.command, subcommand)
+        ? { ...desired }
+        : h,
+    );
+    const repaired: ToolUseEntry = { ...entry, hooks };
+    if (matcher !== undefined) repaired.matcher = matcher;
+    return repaired;
   });
   return found ? next : null;
 }
@@ -58,14 +109,16 @@ function repairMatcher(
 export function hasPreToolUseHook(settings: unknown, command: string): boolean {
   if (typeof settings !== "object" || settings === null) return false;
   const pre = (settings as SettingsObject).hooks?.PreToolUse;
-  return Array.isArray(pre) && pre.some((e) => entryReferencesCommand(e, command));
+  return Array.isArray(pre) && pre.some((e) => entryMatchesSubcommand(e, subcommandOf(command)));
 }
 
 export function addPreToolUseHook(settings: unknown, command: string): SettingsObject {
+  const sub = subcommandOf(command);
+  const desired: CommandHook = { type: "command", command, timeout: timeoutFor(sub) };
   const next = asSettings(settings);
   const existingPre = next.hooks?.PreToolUse;
   if (Array.isArray(existingPre)) {
-    const repaired = repairMatcher(existingPre as ToolUseEntry[], command, HOOK_MATCHER);
+    const repaired = repairEntry(existingPre as ToolUseEntry[], sub, HOOK_MATCHER, desired);
     if (repaired !== null) {
       next.hooks = { ...next.hooks, PreToolUse: repaired };
       return next;
@@ -73,7 +126,7 @@ export function addPreToolUseHook(settings: unknown, command: string): SettingsO
   }
   const hooks = next.hooks ? { ...next.hooks } : {};
   const pre = Array.isArray(existingPre) ? [...(existingPre as ToolUseEntry[])] : [];
-  pre.push({ matcher: HOOK_MATCHER, hooks: [{ type: "command", command }] });
+  pre.push({ matcher: HOOK_MATCHER, hooks: [desired] });
   next.hooks = { ...hooks, PreToolUse: pre };
   return next;
 }
@@ -81,14 +134,16 @@ export function addPreToolUseHook(settings: unknown, command: string): SettingsO
 export function hasPostToolUseHook(settings: unknown, command: string): boolean {
   if (typeof settings !== "object" || settings === null) return false;
   const post = (settings as SettingsObject).hooks?.PostToolUse;
-  return Array.isArray(post) && post.some((e) => entryReferencesCommand(e, command));
+  return Array.isArray(post) && post.some((e) => entryMatchesSubcommand(e, subcommandOf(command)));
 }
 
 export function addPostToolUseHook(settings: unknown, command: string): SettingsObject {
+  const sub = subcommandOf(command);
+  const desired: CommandHook = { type: "command", command, timeout: timeoutFor(sub) };
   const next = asSettings(settings);
   const existingPost = next.hooks?.PostToolUse;
   if (Array.isArray(existingPost)) {
-    const repaired = repairMatcher(existingPost as ToolUseEntry[], command, SAVER_HOOK_MATCHER);
+    const repaired = repairEntry(existingPost as ToolUseEntry[], sub, SAVER_HOOK_MATCHER, desired);
     if (repaired !== null) {
       next.hooks = { ...next.hooks, PostToolUse: repaired };
       return next;
@@ -96,7 +151,7 @@ export function addPostToolUseHook(settings: unknown, command: string): Settings
   }
   const hooks = next.hooks ? { ...next.hooks } : {};
   const post = Array.isArray(existingPost) ? [...(existingPost as ToolUseEntry[])] : [];
-  post.push({ matcher: SAVER_HOOK_MATCHER, hooks: [{ type: "command", command }] });
+  post.push({ matcher: SAVER_HOOK_MATCHER, hooks: [desired] });
   next.hooks = { ...hooks, PostToolUse: post };
   return next;
 }
@@ -126,14 +181,16 @@ function pruneHooks(
 // holds unrelated user commands keeps them (only the matching CommandHook is
 // dropped); an entry left with no hooks is removed. Entries without a hooks
 // array (or non-object entries) pass through untouched.
-function stripCommand(entries: ToolUseEntry[], command: string): ToolUseEntry[] {
+function stripCommand(entries: ToolUseEntry[], subcommand: string): ToolUseEntry[] {
   const kept: ToolUseEntry[] = [];
   for (const entry of entries) {
     if (typeof entry !== "object" || entry === null || !Array.isArray(entry.hooks)) {
       kept.push(entry);
       continue;
     }
-    const hooks = entry.hooks.filter((h) => h?.command !== command);
+    const hooks = entry.hooks.filter(
+      (h) => !(typeof h?.command === "string" && hookCommandMatches(h.command, subcommand)),
+    );
     if (hooks.length === entry.hooks.length) {
       kept.push(entry);
     } else if (hooks.length > 0) {
@@ -147,7 +204,7 @@ export function removePreToolUseHook(settings: unknown, command: string): Settin
   const next = asSettings(settings);
   const existing = next.hooks?.PreToolUse;
   if (!Array.isArray(existing)) return next;
-  const kept = stripCommand(existing as ToolUseEntry[], command);
+  const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
   return pruneHooks(next, "PreToolUse", kept);
 }
 
@@ -155,24 +212,32 @@ export function removePostToolUseHook(settings: unknown, command: string): Setti
   const next = asSettings(settings);
   const existing = next.hooks?.PostToolUse;
   if (!Array.isArray(existing)) return next;
-  const kept = stripCommand(existing as ToolUseEntry[], command);
+  const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
   return pruneHooks(next, "PostToolUse", kept);
 }
 
 export function hasUserPromptSubmitHook(settings: unknown, command: string): boolean {
   if (typeof settings !== "object" || settings === null) return false;
   const ups = (settings as SettingsObject).hooks?.UserPromptSubmit;
-  return Array.isArray(ups) && ups.some((e) => entryReferencesCommand(e, command));
+  return Array.isArray(ups) && ups.some((e) => entryMatchesSubcommand(e, subcommandOf(command)));
 }
 
 export function addUserPromptSubmitHook(settings: unknown, command: string): SettingsObject {
+  const sub = subcommandOf(command);
+  const desired: CommandHook = { type: "command", command, timeout: timeoutFor(sub) };
   const next = asSettings(settings);
-  if (hasUserPromptSubmitHook(next, command)) return next;
+  const existingUps = next.hooks?.UserPromptSubmit;
+  if (Array.isArray(existingUps)) {
+    const repaired = repairEntry(existingUps as ToolUseEntry[], sub, undefined, desired);
+    if (repaired !== null) {
+      next.hooks = { ...next.hooks, UserPromptSubmit: repaired };
+      return next;
+    }
+  }
   const hooks = next.hooks ? { ...next.hooks } : {};
-  const existingUps = hooks.UserPromptSubmit;
   const ups = Array.isArray(existingUps) ? [...(existingUps as ToolUseEntry[])] : [];
   // ponytail: no matcher for UserPromptSubmit — Claude Code ignores the field for this event type
-  ups.push({ hooks: [{ type: "command", command }] });
+  ups.push({ hooks: [desired] });
   next.hooks = { ...hooks, UserPromptSubmit: ups };
   return next;
 }
@@ -181,11 +246,15 @@ export function removeUserPromptSubmitHook(settings: unknown, command: string): 
   const next = asSettings(settings);
   const existing = next.hooks?.UserPromptSubmit;
   if (!Array.isArray(existing)) return next;
-  const kept = stripCommand(existing as ToolUseEntry[], command);
+  const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
   return pruneHooks(next, "UserPromptSubmit", kept);
 }
 
-export type InstallClaudeCodeHookInput = { settingsPath: string; command?: string };
+export type InstallClaudeCodeHookInput = {
+  settingsPath: string;
+  command?: string;
+  config?: HookCommandConfig;
+};
 export type ClaudeCodeHookResult = { settingsPath: string; changed: boolean };
 
 function readSettings(settingsPath: string): unknown {
@@ -211,11 +280,12 @@ function writeSettings(settingsPath: string, settings: SettingsObject): void {
 }
 
 export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): ClaudeCodeHookResult {
-  const command = input.command ?? DEFAULT_HOOK_COMMAND;
+  const cfg = input.config ?? {};
+  const command = input.command ?? buildHookCommand("log", cfg);
   const existing = readSettings(input.settingsPath);
   let next = addPreToolUseHook(existing, command);
-  next = addPostToolUseHook(next, SAVER_HOOK_COMMAND);
-  next = addUserPromptSubmitHook(next, INTENT_HOOK_COMMAND);
+  next = addPostToolUseHook(next, buildHookCommand("saver", cfg));
+  next = addUserPromptSubmitHook(next, buildHookCommand("intent", cfg));
   // Presence alone isn't enough to no-op: a matcher can drift (wave-1 tool
   // additions) while the command entry stays present. Diff by value so a
   // drifted matcher is repaired in place and reported as changed.

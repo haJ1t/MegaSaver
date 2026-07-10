@@ -10,7 +10,9 @@ import {
   SAVER_HOOK_MATCHER,
   addPostToolUseHook,
   addUserPromptSubmitHook,
+  buildHookCommand,
   hasUserPromptSubmitHook,
+  hookCommandMatches,
   installClaudeCodeHook,
   readClaudeCodeHookStatus,
   removePostToolUseHook,
@@ -212,5 +214,133 @@ describe("UserPromptSubmit intent hook", () => {
     uninstallClaudeCodeHook({ settingsPath: p });
     const written = JSON.parse(readFileSync(p, "utf8"));
     expect(hasUserPromptSubmitHook(written, INTENT_HOOK_COMMAND)).toBe(false);
+  });
+});
+
+describe("buildHookCommand (E23/E29)", () => {
+  it("legacy bare form when no config", () => {
+    expect(buildHookCommand("saver")).toBe("mega hooks saver");
+    expect(buildHookCommand("log")).toBe(DEFAULT_HOOK_COMMAND);
+    expect(buildHookCommand("intent")).toBe("mega hooks intent");
+  });
+
+  it("absolute cliPath, quoted only when it contains whitespace", () => {
+    expect(buildHookCommand("saver", { cliPath: "/opt/homebrew/bin/mega" })).toBe(
+      "/opt/homebrew/bin/mega hooks saver",
+    );
+    expect(buildHookCommand("saver", { cliPath: "/Users/a b/mega" })).toBe(
+      '"/Users/a b/mega" hooks saver',
+    );
+  });
+
+  it("bakes --store between the binary and the subcommand", () => {
+    expect(
+      buildHookCommand("saver", { cliPath: "/usr/local/bin/mega", storeRoot: "/data/mega" }),
+    ).toBe('/usr/local/bin/mega --store "/data/mega" hooks saver');
+  });
+});
+
+describe("hookCommandMatches", () => {
+  it("matches bare, absolute, and store-baked forms", () => {
+    expect(hookCommandMatches("mega hooks saver", "saver")).toBe(true);
+    expect(hookCommandMatches("/opt/homebrew/bin/mega hooks saver", "saver")).toBe(true);
+    expect(hookCommandMatches('"/Users/a b/mega" --store "/data" hooks saver', "saver")).toBe(true);
+  });
+
+  it("does not cross subcommands or match unrelated commands", () => {
+    expect(hookCommandMatches("mega hooks saver", "log")).toBe(false);
+    expect(hookCommandMatches("myhooks saver", "saver")).toBe(false);
+    expect(hookCommandMatches("other-tool", "saver")).toBe(false);
+  });
+});
+
+describe("install migration (E23/E29)", () => {
+  it("fresh install with config writes absolute commands + timeouts", () => {
+    const p = tmpSettings();
+    const r = installClaudeCodeHook({
+      settingsPath: p,
+      config: { cliPath: "/opt/homebrew/bin/mega" },
+    });
+    expect(r.changed).toBe(true);
+    const s = JSON.parse(readFileSync(p, "utf8"));
+    expect(s.hooks.PostToolUse[0].hooks[0]).toEqual({
+      type: "command",
+      command: "/opt/homebrew/bin/mega hooks saver",
+      timeout: 30,
+    });
+    expect(s.hooks.PreToolUse[0].hooks[0]).toEqual({
+      type: "command",
+      command: "/opt/homebrew/bin/mega hooks log",
+      timeout: 10,
+    });
+    expect(s.hooks.UserPromptSubmit[0].hooks[0]).toEqual({
+      type: "command",
+      command: "/opt/homebrew/bin/mega hooks intent",
+      timeout: 10,
+    });
+  });
+
+  it("re-install over legacy bare entries migrates them in place (no duplicates)", () => {
+    const p = tmpSettings({
+      hooks: {
+        PreToolUse: [
+          { matcher: HOOK_MATCHER, hooks: [{ type: "command", command: "mega hooks log" }] },
+        ],
+        PostToolUse: [
+          {
+            matcher: SAVER_HOOK_MATCHER,
+            hooks: [{ type: "command", command: "mega hooks saver" }],
+          },
+        ],
+        UserPromptSubmit: [{ hooks: [{ type: "command", command: "mega hooks intent" }] }],
+      },
+    });
+    const r = installClaudeCodeHook({
+      settingsPath: p,
+      config: { cliPath: "/opt/homebrew/bin/mega" },
+    });
+    expect(r.changed).toBe(true);
+    const s = JSON.parse(readFileSync(p, "utf8"));
+    expect(s.hooks.PostToolUse).toHaveLength(1);
+    expect(s.hooks.PostToolUse[0].hooks[0].command).toBe("/opt/homebrew/bin/mega hooks saver");
+    expect(s.hooks.PostToolUse[0].hooks[0].timeout).toBe(30);
+    expect(s.hooks.PreToolUse).toHaveLength(1);
+    expect(s.hooks.UserPromptSubmit).toHaveLength(1);
+  });
+
+  it("uninstall removes store-baked absolute forms too", () => {
+    const p = tmpSettings({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: HOOK_MATCHER,
+            hooks: [{ type: "command", command: "/opt/homebrew/bin/mega hooks log", timeout: 10 }],
+          },
+        ],
+        PostToolUse: [
+          {
+            matcher: SAVER_HOOK_MATCHER,
+            hooks: [
+              {
+                type: "command",
+                command: '/opt/homebrew/bin/mega --store "/data" hooks saver',
+                timeout: 30,
+              },
+            ],
+          },
+        ],
+        UserPromptSubmit: [
+          {
+            hooks: [
+              { type: "command", command: "/opt/homebrew/bin/mega hooks intent", timeout: 10 },
+            ],
+          },
+        ],
+      },
+    });
+    const r = uninstallClaudeCodeHook({ settingsPath: p });
+    expect(r.changed).toBe(true);
+    const s = JSON.parse(readFileSync(p, "utf8"));
+    expect(s.hooks).toBeUndefined();
   });
 });

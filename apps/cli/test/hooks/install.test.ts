@@ -12,6 +12,11 @@ import {
   installClaudeCodeHook,
 } from "@megasaver/connector-claude-code";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  resolveBakedStoreRoot,
+  resolveInvokedCliPath,
+  runHooksInstall,
+} from "../../src/commands/hooks/install.js";
 
 const COMMAND = "mega hooks log";
 
@@ -29,7 +34,7 @@ describe("addPreToolUseHook (pure, idempotent)", () => {
     };
     const entry = next.hooks.PreToolUse[0];
     expect(entry?.matcher).toBe(HOOK_MATCHER);
-    expect(entry?.hooks[0]).toEqual({ type: "command", command: COMMAND });
+    expect(entry?.hooks[0]).toEqual({ type: "command", command: COMMAND, timeout: 10 });
   });
 
   it("is idempotent — re-adding does not duplicate the entry", () => {
@@ -64,7 +69,7 @@ describe("addPostToolUseHook (pure, idempotent)", () => {
     };
     const entry = next.hooks.PostToolUse[0];
     expect(entry?.matcher).toBe(SAVER_HOOK_MATCHER);
-    expect(entry?.hooks[0]).toEqual({ type: "command", command: SAVER_HOOK_COMMAND });
+    expect(entry?.hooks[0]).toEqual({ type: "command", command: SAVER_HOOK_COMMAND, timeout: 30 });
     expect(hasPostToolUseHook(next, SAVER_HOOK_COMMAND)).toBe(true);
   });
 
@@ -85,7 +90,11 @@ describe("addPostToolUseHook (pure, idempotent)", () => {
     const next = addPostToolUseHook(existing, SAVER_HOOK_COMMAND) as typeof existing;
     expect(next.hooks.PostToolUse).toHaveLength(2);
     expect(next.hooks.PostToolUse[0]).toEqual(existing.hooks.PostToolUse[0]);
-    expect(hasPostToolUseHook(next, "other")).toBe(true);
+    // has* now matches by the "hooks <subcommand>" suffix, so a foreign command
+    // is not reported present; assert preservation structurally instead.
+    expect(next.hooks.PostToolUse.some((e) => e.hooks.some((h) => h.command === "other"))).toBe(
+      true,
+    );
     expect(hasPostToolUseHook(next, SAVER_HOOK_COMMAND)).toBe(true);
   });
 
@@ -187,5 +196,57 @@ describe("installClaudeCodeHook (file)", () => {
     const written = JSON.parse(readFileSync(settingsPath, "utf8"));
     expect(written.hooks.PreToolUse[0].matcher).toBe(HOOK_MATCHER);
     expect(written.hooks.PostToolUse[0].matcher).toBe(SAVER_HOOK_MATCHER);
+  });
+});
+
+describe("E29 store baking", () => {
+  const env = {
+    cwd: "/work",
+    home: "/home/u",
+    xdgDataHome: undefined,
+    platform: "linux" as NodeJS.Platform,
+    localAppData: undefined,
+  };
+
+  it("a non-default store resolves to a baked root", () => {
+    expect(resolveBakedStoreRoot({ ...env, storeFlag: "/custom/store" })).toBe("/custom/store");
+  });
+
+  it("the default store bakes nothing", () => {
+    expect(resolveBakedStoreRoot({ ...env, storeFlag: undefined })).toBeUndefined();
+  });
+
+  it("runHooksInstall writes the config-built commands", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ms-install-bake-"));
+    try {
+      const p = join(dir, "settings.json");
+      const code = runHooksInstall({
+        target: "claude-code",
+        settingsPath: p,
+        config: { cliPath: "/opt/homebrew/bin/mega", storeRoot: "/custom/store" },
+        stdout: () => {},
+        stderr: () => {},
+        json: false,
+      });
+      expect(code).toBe(0);
+      const s = JSON.parse(readFileSync(p, "utf8"));
+      expect(s.hooks.PostToolUse[0].hooks[0].command).toBe(
+        '/opt/homebrew/bin/mega --store "/custom/store" hooks saver',
+      );
+      expect(s.hooks.PostToolUse[0].hooks[0].timeout).toBe(30);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("resolveInvokedCliPath", () => {
+  it("returns an absolute argv[1] as-is", () => {
+    expect(resolveInvokedCliPath("/usr/local/bin/mega")).toBe("/usr/local/bin/mega");
+  });
+
+  it("returns undefined when argv[1] is missing or unresolvable", () => {
+    expect(resolveInvokedCliPath(undefined)).toBeUndefined();
+    expect(resolveInvokedCliPath("definitely-not-a-real-file-xyz")).toBeUndefined();
   });
 });
