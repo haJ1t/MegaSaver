@@ -114,6 +114,10 @@ export async function recordAndFilterOverlayOutput(
     maxReturnedBytes: modeToBudget(input.mode),
     passthroughThresholdTokens: thresholdTokens,
     hardWrapThresholdTokens: thresholdTokens,
+    // RAW label, not the redacted one: the file extension must survive for
+    // semantic chunking to trigger. In-memory hint only — the persisted
+    // chunk-set source below still uses redactedLabel.
+    source: chunkSetSource(input.sourceKind, input.label),
     ...(input.intent !== undefined ? { intent: input.intent } : {}),
   });
 

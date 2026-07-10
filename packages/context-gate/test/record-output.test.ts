@@ -453,4 +453,39 @@ describe("multi-chunk overlay write (C12)", () => {
     });
     expect(r.decision).toBe("compressed");
   });
+
+  it("B10: a file read reaches filterOutput with a file source (semantic chunking)", async () => {
+    const storeRoot = store();
+    // A function that CROSSES the blind 40-line wall: head at line 40, marker in
+    // the body at line 46. Blind chunking splits head/body into different chunks
+    // and budget pressure drops the body; semantic chunking keeps the function
+    // whole, so the marker survives into returnedText.
+    const filler = (n: number, tag: string, width = 80) =>
+      Array.from({ length: n }, (_, i) => `// ${tag} filler line ${i} ${"x".repeat(width)}`);
+    const lines = [
+      ...filler(39, "head"),
+      "function targetFn() {",
+      ...filler(5, "body"),
+      '  return "TARGET_BODY_MARKER";',
+      "}",
+      // Tripled tail width: budget pressure drops the blind body chunk so only
+      // semantic chunking (function kept whole) preserves the marker.
+      ...filler(260, "tail", 240),
+    ];
+    const raw = lines.join("\n");
+    const r = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw,
+      sourceKind: "file",
+      label: "/Users/x/proj/src/target-module.ts",
+      mode: "aggressive",
+      storeRawOutput: true,
+      compressFloorBytes: 4000,
+      intent: "why does targetFn misbehave",
+    });
+    expect(r.decision).toBe("compressed");
+    expect(r.returnedText).toContain("TARGET_BODY_MARKER");
+  });
 });
