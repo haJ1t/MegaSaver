@@ -788,3 +788,58 @@ describe("N-aware recovery footer (C12)", () => {
     expect(u.stdout).not.toContain("covers lines");
   });
 });
+
+describe("B9: safe mode compresses Bash below Claude Code's output ceiling", () => {
+  it("a 26KB Bash output in safe mode reaches record() with the Bash floor", async () => {
+    const captured: Array<{ compressFloorBytes?: number }> = [];
+    const d = deps({
+      resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
+      record: vi.fn(async (input: { compressFloorBytes?: number }) => {
+        captured.push(input);
+        return RECORDED;
+      }),
+    });
+    const decision = await buildSaverDecision(bigBash("x".repeat(26_000)), d);
+    expect("updatedToolOutput" in decision).toBe(true); // today: passthrough (32000 gate)
+    expect(captured[0]?.compressFloorBytes).toBe(24_000);
+  });
+
+  it("safe mode still passes a 26KB Read through (32KB Read gate intact)", async () => {
+    const d = deps({ resolveSettings: () => ({ enabled: true, mode: "safe" as const }) });
+    const decision = await buildSaverDecision(
+      {
+        tool_name: "Read",
+        tool_input: { file_path: "/Users/x/proj/big.txt" },
+        tool_response: { file: { content: "x".repeat(26_000) } },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect(decision).toEqual({ passthrough: true });
+  });
+});
+
+describe("B8: hook forwards its gate as compressFloorBytes", () => {
+  it("aggressive Read forwards the 4000 B gate", async () => {
+    const captured: Array<{ compressFloorBytes?: number }> = [];
+    const d = deps({
+      resolveSettings: () => ({ enabled: true, mode: "aggressive" as const }),
+      record: vi.fn(async (input: { compressFloorBytes?: number }) => {
+        captured.push(input);
+        return RECORDED;
+      }),
+    });
+    await buildSaverDecision(
+      {
+        tool_name: "Read",
+        tool_input: { file_path: "/Users/x/proj/big.txt" },
+        tool_response: { file: { content: "x".repeat(5_000) } },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect(captured[0]?.compressFloorBytes).toBe(4_000);
+  });
+});

@@ -31,6 +31,10 @@ const MEGA_MCP_TOOL = /^mcp__megasaver__/i;
 // every newer/coarser surface (Task/background/search/mcp__*) gets the floor.
 const ORIGINAL_TOOLS = new Set(["Read", "LS", "Bash", "Grep", "Glob", "WebFetch"]);
 export const NEW_SURFACE_MIN_BYTES = 16_384;
+// Claude Code truncates Bash output at ~30 000 chars before the hook sees it;
+// a gate at or above that ceiling means "never compress a command" (B9). Keep
+// the Bash floor below the ceiling so safe mode still saves on commands.
+export const BASH_COMPRESS_FLOOR = 24_000;
 
 function resolveSourceKind(tool: string): OutputSourceKind | undefined {
   const mapped = TOOL_SOURCE[tool];
@@ -41,6 +45,7 @@ function resolveSourceKind(tool: string): OutputSourceKind | undefined {
 
 function minBytesFor(tool: string, mode: TokenSaverMode): number {
   const budget = modeToBudget(mode);
+  if (tool === "Bash") return Math.min(budget, BASH_COMPRESS_FLOOR);
   return ORIGINAL_TOOLS.has(tool) ? budget : Math.max(budget, NEW_SURFACE_MIN_BYTES);
 }
 
@@ -246,8 +251,8 @@ export async function buildSaverDecision(
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     const shape = readOutputShape(p["tool_response"]);
     if (shape === null) return PASSTHROUGH;
-    if (Buffer.byteLength(shape.raw, "utf8") <= minBytesFor(tool, settings.mode))
-      return PASSTHROUGH;
+    const floorBytes = minBytesFor(tool, settings.mode);
+    if (Buffer.byteLength(shape.raw, "utf8") <= floorBytes) return PASSTHROUGH;
 
     const recorded = await deps.record({
       storeRoot: deps.storeRoot,
@@ -263,6 +268,9 @@ export async function buildSaverDecision(
       label: labelOf(p["tool_input"], tool),
       mode: settings.mode,
       storeRawOutput: true,
+      // B8: the gate above is the single eligibility authority; record()
+      // collapses the filter thresholds onto it.
+      compressFloorBytes: floorBytes,
       ...(sessionIntent !== undefined ? { intent: sessionIntent } : {}),
     });
     if (recorded.decision !== "compressed") return PASSTHROUGH;
