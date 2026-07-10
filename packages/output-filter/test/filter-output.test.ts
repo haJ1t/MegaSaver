@@ -139,6 +139,16 @@ describe("filterOutput pipeline (spec §6 / §11)", () => {
     expect(joined).toContain("[repeated");
   });
 
+  it("chunkedLineCount tracks collapsed space, not raw lines (D16)", async () => {
+    const raw = Array.from({ length: 200 }, () => "identical repeated line qqqqqqqqqq").join("\n");
+    const result = await filterOutput(base(raw, { mode: "aggressive" }));
+    expect(result.chunkedLineCount).toBeDefined();
+    expect(result.chunkedLineCount as number).toBeLessThan(200);
+    for (const e of result.excerpts) {
+      expect(e.endLine).toBeLessThanOrEqual(result.chunkedLineCount as number);
+    }
+  });
+
   it("returns savingRatio 0 for empty raw", async () => {
     const result = await filterOutput(base("", { mode: "safe" }));
     expect(result.rawBytes).toBe(0);

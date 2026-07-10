@@ -528,4 +528,34 @@ describe("multi-chunk overlay write (C12)", () => {
     const leadMarker = text.indexOf("… [lines 1-40 omitted]");
     if (leadMarker !== -1) expect(leadMarker).toBeLessThan(firstErr);
   });
+
+  it("D16: gap markers stay in collapsed line space (no phantom raw-space tail)", async () => {
+    const storeRoot = store();
+    // 2030 raw lines, but a 2000-line identical block collapses to a single
+    // '[repeated ...]' line -> excerpts index into a ~30-line collapsed space.
+    // A raw-space total would emit '… [lines 33-2030 omitted]'; markers must
+    // reference the collapsed space, so no 4-digit range may appear.
+    const distinct = Array.from(
+      { length: 30 },
+      (_, i) => `ERROR: build broke at distinct stage ${i} zzz`,
+    );
+    const repeated = Array.from(
+      { length: 2000 },
+      () => "info: same identical heartbeat line qqqqqqqqqq",
+    );
+    const raw = [...distinct, ...repeated].join("\n");
+    const r = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw,
+      sourceKind: "command",
+      label: "pnpm verify",
+      mode: "aggressive",
+      storeRawOutput: true,
+      compressFloorBytes: 4000,
+    });
+    expect(r.decision).toBe("compressed");
+    expect(r.returnedText).not.toMatch(/\d{4,}\s+omitted/);
+  });
 });

@@ -96,6 +96,10 @@ export type FilterOutputResult = {
   returnedTokens: number;
   bytesSaved: number;
   savingRatio: number;
+  // Total line count of the text the excerpts index into (post-collapse /
+  // post-compression space, NOT raw). Lets a renderer place gap markers in
+  // the same space as excerpt line numbers instead of mixing in raw lines.
+  chunkedLineCount?: number;
   trace?: RankingTrace;
   chunkSetId?: string;
   chunks?: readonly OutlineBody[];
@@ -202,10 +206,11 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
     // saves context. Otherwise fall through to the normal rank/fit pipeline
     // (still lossless — it persists its own chunks).
     if (outline !== null && returnedBytes < rawBytes * OUTLINE_MAX_SKELETON_RATIO) {
+      const normalizedLineCount = normalized.replace(/\n$/, "").split("\n").length;
       const skeletonChunk = {
         text: outline.skeleton,
         startLine: 1,
-        endLine: normalized.replace(/\n$/, "").split("\n").length,
+        endLine: normalizedLineCount,
       };
       const excerpt = excerptOf(scoreChunk(intent, skeletonChunk, sessionHints));
       const rawTokens = estimateTokens(raw);
@@ -215,6 +220,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
         // ponytail: tool name hardcoded; lift to a constant when the CLI surface stabilises.
         summary: "outline mode: expand bodies via mega_fetch_chunk",
         excerpts: [excerpt],
+        chunkedLineCount: normalizedLineCount,
         chunks: outline.chunks.map((c) => ({
           startLine: c.startLine,
           endLine: c.endLine,
@@ -358,9 +364,19 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
       })
     : undefined;
 
+  // Max endLine over the FINAL chunk universe (kept ∪ omitted) — space-agnostic,
+  // always matching the excerpts whether the path used compressed, normalized,
+  // or the no-blind fallback text.
+  const chunkedLineCount = Math.max(
+    0,
+    ...kept.map((c) => c.endLine),
+    ...omitted.map((c) => c.endLine),
+  );
+
   const result: FilterOutputResult = {
     summary,
     excerpts,
+    chunkedLineCount,
     classification,
     decision,
     compressor,
