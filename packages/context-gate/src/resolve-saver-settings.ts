@@ -8,6 +8,7 @@ import {
 } from "@megasaver/shared";
 import { type CaseMode, canonicalFamilyPath, familyKeyFromPath } from "./family-identity.js";
 import { type GitCommonDirResult, nodeGitFamilyFs, resolveGitCommonDir } from "./git-family.js";
+import { type PolicyModeFloor, clampModeToFloor, readPolicyModeFloor } from "./policy-floor.js";
 import { readExactRecord, readFamilyRecord, readGlobalDefault } from "./saver-store.js";
 
 export type SaverSource = "exact" | "repository" | "legacy-root" | "global" | "missing" | "invalid";
@@ -29,6 +30,7 @@ export type ResolvedWorkspaceTokenSaver = {
   sourceKey: WorkspaceKey | RepositoryFamilyKey | null;
   familyUnavailableReason: FamilyUnavailableReason;
   familyIdentityDiagnostic: "case_mode_unknown" | null;
+  policyClamp: { floor: TokenSaverMode; original: TokenSaverMode } | null;
 };
 
 export type ResolverDeps = {
@@ -36,6 +38,7 @@ export type ResolverDeps = {
   resolveGit: (cwd: string) => GitCommonDirResult;
   caseModeOf: (path: string) => CaseMode;
   realpath: (path: string) => string;
+  readPolicyFloor: (cwd: string) => PolicyModeFloor | null;
 };
 
 const DEFAULT_MODE: TokenSaverMode = "safe";
@@ -46,7 +49,7 @@ function disabled(
   familyUnavailableReason: FamilyUnavailableReason = null,
   familyIdentityDiagnostic: "case_mode_unknown" | null = null,
   repositoryFamilyKey: RepositoryFamilyKey | null = null,
-): ResolvedWorkspaceTokenSaver {
+): Omit<ResolvedWorkspaceTokenSaver, "policyClamp"> {
   return {
     enabled: false,
     mode: DEFAULT_MODE,
@@ -59,15 +62,32 @@ function disabled(
   };
 }
 
-// Precedence steps 0-4 per the design spec. Never spawns Git (git resolution is
-// injected). Degraded git never resurrects a legacy record over a possible
-// family disable it cannot see, but the git-independent global default still
-// applies when no legacy record is present.
+// D19 enforcement is HERE and only here: every consumer (hook, daemon,
+// resolve/status commands) goes through this resolver, so a repo-local
+// floor cannot be bypassed by any store record.
 export function resolveWorkspaceTokenSaverSettings(
   storeRoot: string,
   cwd: string,
   deps: ResolverDeps,
 ): ResolvedWorkspaceTokenSaver {
+  const r = resolveUnclamped(storeRoot, cwd, deps);
+  if (!r.enabled) return { ...r, policyClamp: null };
+  const floor = deps.readPolicyFloor(cwd);
+  if (floor === null) return { ...r, policyClamp: null };
+  const clamped = clampModeToFloor(r.mode, floor);
+  if (clamped === r.mode) return { ...r, policyClamp: null };
+  return { ...r, mode: clamped, policyClamp: { floor, original: r.mode } };
+}
+
+// Precedence steps 0-4 per the design spec. Never spawns Git (git resolution is
+// injected). Degraded git never resurrects a legacy record over a possible
+// family disable it cannot see, but the git-independent global default still
+// applies when no legacy record is present.
+function resolveUnclamped(
+  storeRoot: string,
+  cwd: string,
+  deps: ResolverDeps,
+): Omit<ResolvedWorkspaceTokenSaver, "policyClamp"> {
   const requested = encodeWorkspaceKey(cwd);
 
   // Step 0-1: classify the exact record; a v1-exact override wins pre-Git.
@@ -215,6 +235,7 @@ export function nodeResolverDeps(): ResolverDeps {
     resolveGit: (cwd) => resolveGitCommonDir(cwd, nodeGitFamilyFs),
     caseModeOf: detectCaseMode,
     realpath: (p) => realpathSync.native(p),
+    readPolicyFloor: readPolicyModeFloor,
   };
 }
 

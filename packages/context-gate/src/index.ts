@@ -100,6 +100,11 @@ export {
   nodeResolverDeps,
 } from "./resolve-saver-settings.js";
 export {
+  type PolicyModeFloor,
+  clampModeToFloor,
+  readPolicyModeFloor,
+} from "./policy-floor.js";
+export {
   type HeartbeatView,
   type HeartbeatStamp,
   readHeartbeatView,

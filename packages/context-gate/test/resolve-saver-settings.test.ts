@@ -27,6 +27,7 @@ function deps(git: GitCommonDirResult): ResolverDeps {
     resolveGit: () => git,
     caseModeOf: () => "sensitive",
     realpath: (p) => p,
+    readPolicyFloor: () => null,
   };
 }
 
@@ -196,6 +197,61 @@ describe("malformed exact record", () => {
     const r = resolveWorkspaceTokenSaverSettings(store, CWD, deps({ kind: "not_git" }));
     expect(r.enabled).toBe(false);
     expect(r.source).toBe("invalid");
+  });
+});
+
+describe("D19 policy floor clamp", () => {
+  it("clamps an aggressive exact record to the balanced floor", () => {
+    writeExactRecord(store, encodeWorkspaceKey(CWD), {
+      enabled: true,
+      mode: "aggressive",
+      scope: "exact",
+    });
+    const r = resolveWorkspaceTokenSaverSettings(store, CWD, {
+      ...deps({ kind: "ok", commonDir: "/repo/.git" }),
+      readPolicyFloor: () => "balanced",
+    });
+    expect(r.enabled).toBe(true);
+    expect(r.mode).toBe("balanced");
+    expect(r.policyClamp).toEqual({ floor: "balanced", original: "aggressive" });
+  });
+
+  it("no floor -> resolution unchanged, policyClamp null", () => {
+    writeExactRecord(store, encodeWorkspaceKey(CWD), {
+      enabled: true,
+      mode: "aggressive",
+      scope: "exact",
+    });
+    const r = resolveWorkspaceTokenSaverSettings(store, CWD, {
+      ...deps({ kind: "ok", commonDir: "/repo/.git" }),
+      readPolicyFloor: () => null,
+    });
+    expect(r.mode).toBe("aggressive");
+    expect(r.policyClamp).toBeNull();
+  });
+
+  it("floor at/below the record mode -> no clamp mark", () => {
+    writeExactRecord(store, encodeWorkspaceKey(CWD), {
+      enabled: true,
+      mode: "safe",
+      scope: "exact",
+    });
+    const r = resolveWorkspaceTokenSaverSettings(store, CWD, {
+      ...deps({ kind: "ok", commonDir: "/repo/.git" }),
+      readPolicyFloor: () => "balanced",
+    });
+    expect(r.mode).toBe("safe");
+    expect(r.policyClamp).toBeNull();
+  });
+
+  it("a disabled resolution is never clamped", () => {
+    // no record at all -> disabled/missing; floor must not flip it on
+    const r = resolveWorkspaceTokenSaverSettings(store, CWD, {
+      ...deps({ kind: "ok", commonDir: "/repo/.git" }),
+      readPolicyFloor: () => "safe",
+    });
+    expect(r.enabled).toBe(false);
+    expect(r.policyClamp).toBeNull();
   });
 });
 

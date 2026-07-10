@@ -25,12 +25,14 @@ const okDeps: ResolverDeps = {
   resolveGit: () => ({ kind: "ok", commonDir: "/repo/.git" }),
   caseModeOf: () => "sensitive",
   realpath: (p) => p,
+  readPolicyFloor: () => null,
 };
 const notGitDeps: ResolverDeps = {
   platform: "linux",
   resolveGit: () => ({ kind: "not_git" }),
   caseModeOf: () => "sensitive",
   realpath: (p) => p,
+  readPolicyFloor: () => null,
 };
 
 describe("resolveActivationScope", () => {
