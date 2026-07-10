@@ -35,6 +35,11 @@ export function withFileLock(lockPath: string, opts: FileLockOptions, fn: () => 
         } catch {
           // recreated or removed concurrently — next wx attempt races normally
         }
+        // Bound the steal: if rmSync keeps throwing (a directory at the path,
+        // EPERM) the mtime stays stale forever, so without this the loop spins
+        // until the caller's own timeout. staleMs >> deadlineMs, so a stale
+        // lock means the deadline has effectively passed — return false (skip).
+        if (Date.now() >= deadline) return false;
         continue;
       }
       if (Date.now() >= deadline) return false;

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -43,6 +43,19 @@ describe("withFileLock", () => {
     expect(fn).toHaveBeenCalledOnce();
     expect(existsSync(lockPath())).toBe(false);
   });
+
+  it("returns false (does not hang) when a stale lock cannot be removed", () => {
+    // A directory at the lock path reads as a stale holder (old mtime), but
+    // rmSync (non-recursive) throws EISDIR — the steal can never succeed.
+    // Without a deadline check in the steal branch this loops forever.
+    mkdirSync(lockPath());
+    const old = new Date(Date.now() - 10_000);
+    utimesSync(lockPath(), old, old);
+    const fn = vi.fn();
+    const ran = withFileLock(lockPath(), OPTS, fn);
+    expect(ran).toBe(false);
+    expect(fn).not.toHaveBeenCalled();
+  }, 5000);
 
   it("propagates fn errors AFTER releasing the lock file", () => {
     expect(() =>
