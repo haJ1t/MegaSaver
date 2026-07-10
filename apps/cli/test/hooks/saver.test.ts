@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { recordAndFilterOverlayOutput } from "@megasaver/core";
 import { encodeWorkspaceKey } from "@megasaver/shared";
-import { describe, expect, it, vi } from "vitest";
+import { type Mock, describe, expect, it, vi } from "vitest";
 import { NEW_SURFACE_MIN_BYTES, buildSaverDecision } from "../../src/hooks/saver.js";
 
 const RECORDED = {
@@ -914,7 +914,11 @@ describe("E21 failure + completion ledger", () => {
     const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
     expect("updatedToolOutput" in out).toBe(true);
     expect(d.recordCompletion).toHaveBeenCalledOnce();
-    const [storeRoot, wk, ts] = d.recordCompletion.mock.calls[0] as [string, string, string];
+    const [storeRoot, wk, ts] = (d.recordCompletion as unknown as Mock).mock.calls[0] as [
+      string,
+      string,
+      string,
+    ];
     expect(storeRoot).toBe("/store");
     expect(wk).toBe(encodeWorkspaceKey("/Users/x/proj"));
     expect(Number.isNaN(Date.parse(ts))).toBe(false);
@@ -926,7 +930,12 @@ describe("E21 failure + completion ledger", () => {
     const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
     expect(out).toEqual({ passthrough: true });
     expect(d.recordFailure).toHaveBeenCalledOnce();
-    const [, wk, kind] = d.recordFailure.mock.calls[0] as [string, string, string, string];
+    const [, wk, kind] = (d.recordFailure as unknown as Mock).mock.calls[0] as [
+      string,
+      string,
+      string,
+      string,
+    ];
     expect(wk).toBe(encodeWorkspaceKey("/Users/x/proj"));
     expect(kind).toBe("record");
     expect(d.recordCompletion).not.toHaveBeenCalled();
@@ -942,7 +951,12 @@ describe("E21 failure + completion ledger", () => {
     const out = await buildSaverDecision(bomb, d);
     expect(out).toEqual({ passthrough: true });
     expect(d.recordFailure).toHaveBeenCalledOnce();
-    const [, wk, kind] = d.recordFailure.mock.calls[0] as [string, string, string, string];
+    const [, wk, kind] = (d.recordFailure as unknown as Mock).mock.calls[0] as [
+      string,
+      string,
+      string,
+      string,
+    ];
     expect(kind).toBe("payload");
     expect(wk).toBe(encodeWorkspaceKey(process.cwd()));
   });

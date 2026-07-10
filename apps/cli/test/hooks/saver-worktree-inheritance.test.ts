@@ -97,6 +97,8 @@ describe("saver hook — repository-family inheritance across worktrees", () => 
       record: recordAndFilterOverlayOutput,
       recordInvocation: () => {},
       recordCompression: () => {},
+      recordFailure: () => {},
+      recordCompletion: () => {},
     });
     expect("updatedToolOutput" in out).toBe(true);
     if ("updatedToolOutput" in out) {
@@ -128,6 +130,8 @@ describe("saver hook — repository-family inheritance across worktrees", () => 
           recordInvocationHeartbeat(sr, wk, new Date(now).toISOString(), now);
         },
         recordCompression: () => {},
+        recordFailure: () => {},
+        recordCompletion: () => {},
       },
     );
     expect(out).toEqual({ passthrough: true });
