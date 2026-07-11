@@ -9,7 +9,7 @@ import {
   saveConfig,
   updateLastSeen,
 } from "../src/config.js";
-import { BrainSyncError } from "../src/errors.js";
+import type { BrainSyncError } from "../src/errors.js";
 
 const dirs: string[] = [];
 const tempStore = () => {
@@ -53,7 +53,12 @@ describe("config", () => {
     const store = tempStore();
     saveConfig(store, validConfig);
     saveConfig(store, { ...validConfig, extra: 1 } as never);
-    expect(() => loadConfig(store)).toThrow(BrainSyncError);
+    try {
+      loadConfig(store);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as BrainSyncError).code).toBe("config_invalid");
+    }
   });
 
   it("updateLastSeen persists per project id", () => {
@@ -64,15 +69,35 @@ describe("config", () => {
     expect(loadConfig(store).lastSeen[pid]).toBe(4);
   });
 
+  it("updateLastSeen rejects non-uuid project id without bricking config", () => {
+    const store = tempStore();
+    saveConfig(store, validConfig);
+    try {
+      updateLastSeen(store, "not-a-uuid", 1);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as BrainSyncError).code).toBe("config_invalid");
+    }
+    expect(loadConfig(store)).toEqual(validConfig);
+  });
+
   it("assertSafeEndpoint: https ok, http localhost ok, http remote rejected", () => {
     expect(() => assertSafeEndpoint("https://s3.example.com")).not.toThrow();
     expect(() => assertSafeEndpoint("http://127.0.0.1:9000")).not.toThrow();
     expect(() => assertSafeEndpoint("http://localhost:9000")).not.toThrow();
-    try {
-      assertSafeEndpoint("http://s3.example.com");
-      expect.unreachable();
-    } catch (err) {
-      expect((err as BrainSyncError).code).toBe("insecure_endpoint");
+    expect(() => assertSafeEndpoint("http://[::1]:9000")).not.toThrow();
+    for (const bad of [
+      "http://s3.example.com",
+      "HTTP://S3.EXAMPLE.COM",
+      "http://localhost@evil.com",
+      "http://localhost.evil.com",
+    ]) {
+      try {
+        assertSafeEndpoint(bad);
+        expect.unreachable();
+      } catch (err) {
+        expect((err as BrainSyncError).code).toBe("insecure_endpoint");
+      }
     }
   });
 

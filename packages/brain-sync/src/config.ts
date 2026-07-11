@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { withFileLock } from "@megasaver/shared/node";
 import { z } from "zod";
 import { atomicWriteFile } from "./atomic-write.js";
 import { BrainSyncError } from "./errors.js";
@@ -64,8 +65,15 @@ export function saveConfig(storeRoot: string, config: BrainSyncConfig): void {
 }
 
 export function updateLastSeen(storeRoot: string, projectId: string, generation: number): void {
-  const config = loadConfig(storeRoot);
-  saveConfig(storeRoot, { ...config, lastSeen: { ...config.lastSeen, [projectId]: generation } });
+  // ponytail: if the deadline passes under contention the write is skipped —
+  // safe here, a stale-low lastSeen just triggers an idempotent re-pull next run.
+  withFileLock(`${configPath(storeRoot)}.lock`, { deadlineMs: 50, staleMs: 5000 }, () => {
+    if (!z.string().uuid().safeParse(projectId).success) {
+      throw new BrainSyncError("config_invalid", `invalid project id for last-seen: ${projectId}`);
+    }
+    const config = loadConfig(storeRoot);
+    saveConfig(storeRoot, { ...config, lastSeen: { ...config.lastSeen, [projectId]: generation } });
+  });
 }
 
 export function assertSafeEndpoint(endpoint: string): void {
@@ -76,7 +84,7 @@ export function assertSafeEndpoint(endpoint: string): void {
     throw new BrainSyncError("insecure_endpoint", `endpoint is not a valid URL: ${endpoint}`);
   }
   if (url.protocol === "https:") return;
-  const localHosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+  const localHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
   if (url.protocol === "http:" && localHosts.has(url.hostname)) return;
   throw new BrainSyncError(
     "insecure_endpoint",
