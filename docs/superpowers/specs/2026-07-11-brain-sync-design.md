@@ -4,6 +4,7 @@ status: approved
 risk: CRITICAL
 approved-design: 2026-07-11
 revised: 2026-07-11 (architect pass — 2 BLOCKER, 4 SHOULD-FIX, 2 NIT incorporated)
+revised: 2026-07-11 (whole-branch gauntlet — 2 design BLOCKERS + HIGH/M1 + L1 fixed; see Design delta)
 ---
 
 # `mega brain sync` — E2E-encrypted BYO cloud sync (2.1)
@@ -142,14 +143,16 @@ Node built-in `node:crypto` only. No libsodium, no age.
 - AAD binds context, **including the project id** — one keyfile is shared
   across all of a user's projects, and remote per-project isolation is only
   the storage prefix, which the untrusted provider controls; binding
-  `projectId` into every AAD makes a cross-project ciphertext transplant
-  fail authentication under the shared key:
-  - manifest object: `megasaver-brain-sync:v1:manifest:<projectId>` (its
+  `brainId` (the cross-machine identity — see Design delta) into every AAD
+  makes a cross-brain ciphertext transplant fail authentication under the
+  shared key:
+  - manifest object: `megasaver-brain-sync:v1:manifest:<brainId>` (its
     generation cannot live in its own AAD — only known after decrypt;
     rollback is caught by the monotonicity check instead);
-  - brain object: `megasaver-brain-sync:v1:object:<projectId>:<objectKey>`
-    where `objectKey` is the object's logical key (below). `projectId` is a
-    uuid and `objectKey` contains no `:`, so the delimiters are unambiguous.
+  - brain object: `megasaver-brain-sync:v1:object:<brainId>:<objectKey>`
+    where `objectKey` is the object's logical key (below). `brainId` is a
+    64-hex sha256 and `objectKey` contains no `:`, so the delimiters are
+    unambiguous.
 - Tamper/auth failure → hard error naming the object; never partial output.
 - Key never leaves the machine except as the user-held recovery code.
 
@@ -157,8 +160,9 @@ Node built-in `node:crypto` only. No libsodium, no age.
 
 Content is small (`.megabrain` bundles are KB–MB); whole-object storage,
 no chunking. Brains are per-project, so the remote space is scoped by the
-stable project id: the effective prefix for a project is
-`<configured-prefix><projectId>/`. Logical keys (transport prepends the
+cross-machine **`brainId`** (see Design delta — NOT the local project
+UUID): the effective prefix for a project is
+`<configured-prefix><brainId>/`. Logical keys (transport prepends the
 effective prefix):
 
 ```
@@ -334,3 +338,96 @@ Per `docs/conventions/risk-modes.md` (cryptographic ops ⇒ CRITICAL):
   package.
 - Remaining confirmation required BEFORE merge: user reviews smoke evidence
   and explicitly approves the release that first ships these commands.
+
+## Design delta — whole-branch gauntlet fixes (2026-07-11, user-approved)
+
+The pre-merge CRITICAL gauntlet found two design blockers and a HIGH that the
+per-task reviews could not see. Fixes (user-approved direction + mechanism):
+
+### B1 — cross-machine identity via a derived `brainId` (was: local project UUID)
+
+**Blocker:** the remote prefix and every AAD were keyed on the machine-local
+`project.id` (a random UUID minted per machine). Two machines' "same" project
+get different UUIDs → different remote location + incompatible AAD → they can
+never sync. This defeats the feature's entire purpose.
+
+**Fix:** the sync identity is a derived, cross-machine-stable **`brainId`**:
+
+```
+brainId = sha256_hex( key ‖ utf8(normalize(projectName)) )
+normalize(name) = name.trim().toLowerCase()
+```
+
+- Two machines that (a) share the key (via the recovery code) and (b) name the
+  project the same compute the **same** `brainId` → same prefix, same AAD →
+  sync works with zero extra command/token/config.
+- Salting by the secret `key` means the provider cannot dictionary-attack the
+  project name from `brainId` (it's not a bare name hash).
+- `brainId` replaces the local `projectId` everywhere it was the remote/crypto
+  key: the effective prefix `<configured-prefix><brainId>/`, the manifest AAD,
+  the object AAD, and the config `lastSeen` map key.
+- `deriveBrainId(key, projectName)` is a package export; the CLI computes it in
+  `buildProjectSyncContext` and passes it to the engine as the AAD-bound id.
+- **Tradeoff (documented):** the project must be named the same on both
+  machines; a rename moves the remote (old objects orphan — clear with
+  `reset`). `pull`/`status` on an empty remote hint the user to check that the
+  project name matches the machine they synced from.
+- Cross-project transplant protection is preserved: different name → different
+  `brainId` → different AAD → GCM auth fails.
+
+### B2 — `push` refuses to silently regress the remote
+
+**Blocker:** `exportBrain` emits approved-only memories, `importBrain` writes
+imported entries as `suggested`, and `push` overwrites the remote wholesale.
+So a machine that pulled suggestions and approved none would, on its next
+`push`, publish a bundle missing them → the remote (the "durable cloud copy")
+loses those memories; a third joiner then pulls a memory-less brain.
+
+**Fix:** before publishing, `push` refuses when the local project has pending
+**sync-imported suggestions** — `suggested`-approval memories whose `evidence`
+carries the `brain-import:` provenance tag. Message: "N synced suggestions are
+pending — run `mega memory approve` (or discard them) before pushing; pushing
+now would drop them from the remote." A `--force` flag overrides for an
+intentional overwrite. This prevents the *silent* durability loss; the user
+resolves synced suggestions before they can be dropped.
+
+### HIGH / security-M1 — reset + stale last-seen
+
+- `mega brain sync reset <project> --force` now ALSO clears that project's
+  local `lastSeen` entry (keyed by `brainId`), so a machine that reset the
+  remote does not carry a stale high generation.
+- Sibling machines: `push`/`pull` refuses the bootstrap/rollback trap — when
+  the remote manifest is absent (`remote === null`) but local `lastSeen > 0`,
+  it does not silently reset the rollback floor to gen 1; it errors
+  (`rollback_detected`-class message) directing the user to
+  `mega brain sync reset --force` (which clears local last-seen so a fresh
+  chain is trusted). This closes security finding M1 (a provider deleting the
+  manifest can no longer drive `lastSeen` back to re-open the TOFU window) and
+  the sibling-stranding HIGH, without a blanket `max()` that would break the
+  legitimate reset new-chain semantics.
+
+### L1 — endpoint guard on the read path
+
+`buildProjectSyncContext` re-asserts `assertSafeEndpoint(config.endpoint)` when
+rebuilding the transport from stored config, so a hand-edited `brain-sync.json`
+cannot downgrade to plaintext `http://` on push/pull.
+
+### Minor cleanups
+
+- `init` throws a typed `BrainSyncError("conditional_writes_unsupported", …)`
+  on probe failure (was a bespoke stderr string with the code in prose), so the
+  union member is live and the failure path is consistent with every other.
+- `brainSyncConfigSchema` is dropped from the public surface (unused externally;
+  the package stays minimal — `BrainSyncConfig` type remains exported).
+
+### Threat-model honesty (security L3/L4)
+
+- Metadata residual: the provider learns per-brain object churn, generation
+  cadence, ciphertext sizes, and sync timing (inherent to E2E object storage).
+  `brainId` is key-salted so the project name is not recoverable, but the
+  existence/activity of distinct brains under one bucket is visible.
+- The init conditional-write probe rejects providers that do not *support*
+  CAS; it cannot detect a provider that passes the probe then stops enforcing.
+  That degrades to a lost-update/fork between the user's own machines — never a
+  confidentiality or forgery break (manifests stay authenticated; rollback is
+  still caught by generation monotonicity).
