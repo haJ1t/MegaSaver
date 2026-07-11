@@ -3,10 +3,13 @@ import { decrypt, encrypt } from "./crypto.js";
 import { BrainSyncError } from "./errors.js";
 
 export const MANIFEST_KEY = "manifest.json.enc";
-export const MANIFEST_AAD = "megasaver-brain-sync:v1:manifest";
 
-export function objectAad(objectKey: string): string {
-  return `megasaver-brain-sync:v1:object:${objectKey}`;
+export function manifestAad(projectId: string): string {
+  return `megasaver-brain-sync:v1:manifest:${projectId}`;
+}
+
+export function objectAad(projectId: string, objectKey: string): string {
+  return `megasaver-brain-sync:v1:object:${projectId}:${objectKey}`;
 }
 
 export const syncManifestSchema = z
@@ -21,12 +24,12 @@ export const syncManifestSchema = z
 
 export type SyncManifest = z.infer<typeof syncManifestSchema>;
 
-export function sealManifest(manifest: SyncManifest, key: Uint8Array): Buffer {
-  return encrypt(Buffer.from(JSON.stringify(manifest), "utf8"), key, MANIFEST_AAD);
+export function sealManifest(manifest: SyncManifest, key: Uint8Array, projectId: string): Buffer {
+  return encrypt(Buffer.from(JSON.stringify(manifest), "utf8"), key, manifestAad(projectId));
 }
 
-export function openManifest(blob: Uint8Array, key: Uint8Array): SyncManifest {
-  const text = decrypt(blob, key, MANIFEST_AAD).toString("utf8");
+export function openManifest(blob: Uint8Array, key: Uint8Array, projectId: string): SyncManifest {
+  const text = decrypt(blob, key, manifestAad(projectId)).toString("utf8");
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
