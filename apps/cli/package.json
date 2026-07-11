@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@megasaver/agent-office": "workspace:*",
+    "@megasaver/brain-sync": "workspace:*",
     "@megasaver/connector-claude-code": "workspace:*",
     "@megasaver/connector-generic-cli": "workspace:*",
     "@megasaver/connectors-shared": "workspace:*",

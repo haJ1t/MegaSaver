@@ -39,6 +39,9 @@ importers:
       '@megasaver/agent-office':
         specifier: workspace:*
         version: link:../../packages/agent-office
+      '@megasaver/brain-sync':
+        specifier: workspace:*
+        version: link:../../packages/brain-sync
       '@megasaver/connector-claude-code':
         specifier: workspace:*
         version: link:../../packages/connectors/claude-code
