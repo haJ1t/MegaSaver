@@ -62,8 +62,17 @@ export async function createTransport(config: TransportConfig): Promise<Transpor
         }
         return { body, etag: response.ETag };
       } catch (err) {
-        if (statusOf(err) === 404 || nameOf(err) === "NoSuchKey") return null;
-        throw err;
+        if (err instanceof BrainSyncError) throw err;
+        if (
+          nameOf(err) === "NoSuchKey" ||
+          (statusOf(err) === 404 && nameOf(err) !== "NoSuchBucket")
+        ) {
+          return null;
+        }
+        throw new BrainSyncError(
+          "transport_error",
+          `S3 GET ${key} failed: ${nameOf(err) ?? "request failed"}${statusOf(err) !== undefined ? ` (${statusOf(err)})` : ""}`,
+        );
       }
     },
 
@@ -83,15 +92,27 @@ export async function createTransport(config: TransportConfig): Promise<Transpor
         }
         return { etag: response.ETag };
       } catch (err) {
-        if (statusOf(err) === 412) {
+        if (err instanceof BrainSyncError) throw err;
+        if (statusOf(err) === 412 || nameOf(err) === "PreconditionFailed") {
           throw new BrainSyncError("precondition_failed", `conditional write failed for ${key}`);
         }
-        throw err;
+        throw new BrainSyncError(
+          "transport_error",
+          `S3 PUT ${key} failed: ${nameOf(err) ?? "request failed"}${statusOf(err) !== undefined ? ` (${statusOf(err)})` : ""}`,
+        );
       }
     },
 
     async deleteObject(key) {
-      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: fullKey(key) }));
+      try {
+        await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: fullKey(key) }));
+      } catch (err) {
+        if (err instanceof BrainSyncError) throw err;
+        throw new BrainSyncError(
+          "transport_error",
+          `S3 DELETE ${key} failed: ${nameOf(err) ?? "request failed"}${statusOf(err) !== undefined ? ` (${statusOf(err)})` : ""}`,
+        );
+      }
     },
   };
 }

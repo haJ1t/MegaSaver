@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { BrainSyncError } from "../src/errors.js";
+import { BrainSyncError } from "../src/errors.js";
 import { type Transport, createTransport, probeConditionalWrites } from "../src/transport.js";
 import { type S3Double, startS3Double } from "./helpers/s3-double.js";
 
@@ -67,6 +67,23 @@ describe("transport", () => {
     await transport.deleteObject("gone");
     expect(await transport.getObject("gone")).toBeNull();
     expect(await probeConditionalWrites(transport)).toBe(true);
+  });
+
+  it("wraps a network failure as transport_error (no raw SDK error)", async () => {
+    const dead = await createTransport({
+      endpoint: "http://127.0.0.1:1",
+      region: "auto",
+      bucket: "b",
+      prefix: "p/",
+      pathStyle: true,
+    });
+    try {
+      await dead.getObject("anything");
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(BrainSyncError);
+      expect((err as BrainSyncError).code).toBe("transport_error");
+    }
   });
 
   it("probe returns false against a non-enforcing store", async () => {
