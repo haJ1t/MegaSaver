@@ -7,7 +7,7 @@ sources:
   - workflow saver-gap-hunt wf_147629b1-073 (55 agents, 46 confirmed / 2 refuted, 2026-07-09)
 status: active
 created: 2026-07-09
-updated: 2026-07-10
+updated: 2026-07-11
 ---
 
 ## TL;DR
@@ -72,14 +72,23 @@ independently verified against code by a refuter agent.
 ## E. Silent failure — dead saver looks healthy
 
 21. **Every hook failure is fail-open with zero failure telemetry** (saver.ts:143-159).
+   **Status:** FIXED — PR #279 (merged 2026-07-11)
 22. **`mega doctor` says "installed" without verifying the saver hook exists or fires** (saver-telemetry.ts:26).
+   **Status:** FIXED — PR #279 (merged 2026-07-11)
 23. **Hooks installed as bare `mega ...`** — no absolute path, no timeout; one PATH difference in the hook shell = exit 127, everything silently off (hook-settings.ts:6-9).
+   **Status:** FIXED — PR #279 (merged 2026-07-11)
 24. **One corrupt/stale per-session stats summary disables compression for that session** while still writing orphan chunks (stats store.ts:174-189).
+   **Status:** FIXED — PR #279 (merged 2026-07-11)
 25. **Stale heartbeat lock freezes liveness telemetry forever** — 1.13 anomaly alerts watch frozen timestamps (saver-heartbeat.ts:159-182).
+   **Status:** FIXED — PR #279 (merged 2026-07-11)
 26. **Parallel tool calls race the summary read-modify-write** — savings undercounted (stats store.ts:219-234).
+   **Status:** FIXED — PR #279 (merged 2026-07-11)
 27. **`mega hooks status <claude-session-uuid>` always "session not found"** — hooks never register live sessions (verified this session).
+   **Status:** FIXED — PR #279 (merged 2026-07-11)
 28. **Telemetry log cwd-scoped, never aggregated** — nested stores (`~`, `~/Desktop`, repo) blind cross-session metrics (hooks store.ts:39).
+   **Status:** FIXED — PR #279 (merged 2026-07-11)
 29. **Hook processes hard-code default store** — operators using `--store` get a split brain.
+   **Status:** FIXED — PR #279 (merged 2026-07-11)
 
 ## F. Metrics honesty
 
@@ -105,7 +114,7 @@ verifier verdicts: workflow output `wf_147629b1-073` (session artifact, not in r
 **Targeted for the 2.0 release** (user directive, 2026-07-09): these fixes ship in 2.0 alongside
 the E5 portable project brain ([[syntheses/pro-differentiation-portfolio]]).
 
-**Progress (2026-07-10):** waves 1-3 merged to main (PRs #276-#278, fast-forward,
-9f2caaf7 → 3f18e44a). Of the 34 deduped items: A1-7, C11-15 fixed (#276/#277);
-B8-10, D16-19 fixed (#278); D20 accepted (conscious). 20 of 34 addressed;
-remaining for 2.0: wave 4 (E21-29) and wave 5 (F30-34) — 14 items open.
+**Progress (2026-07-11):** waves 1-4 merged to main (PRs #276-#279, fast-forward,
+9f2caaf7 → aa1b285d). Of the 34 deduped items: A1-7, C11-15 fixed (#276/#277);
+B8-10, D16-19 fixed (#278); E21-29 fixed (#279); D20 accepted (conscious).
+29 of 34 addressed; remaining for 2.0: wave 5 (F30-34) — 5 items open.
