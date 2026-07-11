@@ -31,7 +31,9 @@ export function rethrowSdkLoadError(err: NodeJS.ErrnoException): never {
   if (err.code === "ERR_MODULE_NOT_FOUND" || err.code === "MODULE_NOT_FOUND") {
     throw new BrainSyncError(
       "transport_error",
-      "the @aws-sdk/client-s3 package is required for brain sync but is not installed — run `npm i @aws-sdk/client-s3` (bundled CLI users have it automatically)",
+      // Keep the original loader message: a PARTIAL install (@aws-sdk present but a
+      // transitive @smithy/* missing) would otherwise be masked by the npm-i advice.
+      `the @aws-sdk/client-s3 package is required for brain sync but is not installed — run \`npm i @aws-sdk/client-s3\` (bundled CLI users have it automatically). Original: ${err.message}`,
     );
   }
   throw err;

@@ -18,7 +18,8 @@ describe("rethrowSdkLoadError", () => {
       } catch (err) {
         expect(err).toBeInstanceOf(BrainSyncError);
         expect((err as BrainSyncError).code).toBe("transport_error");
-        expect((err as Error).message).toContain("@aws-sdk/client-s3 package is required");
+        expect((err as Error).message).toContain("required for brain sync");
+        expect((err as Error).message).toContain("Original:");
       }
     });
   }
