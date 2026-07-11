@@ -60,6 +60,32 @@ function readWorkspaceSavedTokensSince(
   return tokensFromBytes(sumBytesSavedSince(events, sinceMs));
 }
 
+export type WorkspaceSavings = {
+  totalTokens: number;
+  byWorkspace: Record<string, number>;
+};
+
+// F33 numerator: sum savings across EVERY workspace under stats/ so the
+// ratio's scope matches the global usage denominator (the proxy meters all
+// workspaces on this machine). Per-workspace token values are kept for the
+// breakdown; totalTokens sums them (ceil-per-workspace rounding is noise).
+function readAllWorkspacesSavedTokensSince(storeRoot: string, sinceMs: number): WorkspaceSavings {
+  let names: string[] = [];
+  try {
+    names = readdirSync(join(storeRoot, "stats"));
+  } catch {
+    return { totalTokens: 0, byWorkspace: {} };
+  }
+  const byWorkspace: Record<string, number> = {};
+  let totalTokens = 0;
+  for (const workspaceKey of names) {
+    const saved = readWorkspaceSavedTokensSince(storeRoot, workspaceKey, sinceMs);
+    if (saved > 0) byWorkspace[workspaceKey] = saved;
+    totalTokens += saved;
+  }
+  return { totalTokens, byWorkspace };
+}
+
 export function renderUsageReport(m: ProxyUsageSavings, skippedLines: number): string {
   const pct = (n: number): string => `${(n * 100).toFixed(1)}%`;
   const n = (x: number): string => x.toLocaleString("en-US");
@@ -111,16 +137,15 @@ export type RunAuditUsageInput = {
   storeRoot: string;
   cwd: string;
   json: boolean;
-  // Injectable for tests; default to the real on-disk readers. `readSaved`
-  // returns saved TOKENS within [sinceMs, now].
+  // Injectable for tests; default to the real on-disk readers. `readSavedAll`
+  // returns saved TOKENS within [sinceMs, now] summed across all workspaces.
   readUsage?: typeof readProxyUsage;
-  readSaved?: (storeRoot: string, workspaceKey: string, sinceMs: number) => number;
+  readSavedAll?: (storeRoot: string, sinceMs: number) => WorkspaceSavings;
 };
 
 export async function runAuditUsage(input: RunAuditUsageInput): Promise<string> {
-  const workspaceKey = encodeWorkspaceKey(input.cwd);
-  const readSaved = input.readSaved ?? readWorkspaceSavedTokensSince;
   const readUsage = input.readUsage ?? readProxyUsage;
+  const readSavedAll = input.readSavedAll ?? readAllWorkspacesSavedTokensSince;
 
   let usage: readonly ProxyUsageEvent[] = [];
   let skippedLines = 0;
@@ -138,19 +163,77 @@ export async function runAuditUsage(input: RunAuditUsageInput): Promise<string> 
     return Number.isFinite(t) ? Math.min(min, t) : min;
   }, Number.POSITIVE_INFINITY);
 
-  let savedTokens = 0;
+  let saved: WorkspaceSavings = { totalTokens: 0, byWorkspace: {} };
   if (usage.length > 0) {
     try {
-      savedTokens = readSaved(input.storeRoot, workspaceKey, sinceMs);
+      saved = readSavedAll(input.storeRoot, sinceMs);
     } catch {
       // Store not initialized — report against zero savings.
     }
   }
 
-  const savings = proxyUsageSavings({ savedTokens, usage });
-  return input.json
-    ? JSON.stringify({ ...savings, skippedLines })
-    : renderUsageReport(savings, skippedLines);
+  // F33 scope matching: rows carrying a workspaceKey divide against that
+  // workspace's savings ONLY; keyless rows form the global bucket, divided
+  // against savings not attributed to any keyed workspace. Today the writer
+  // never stamps workspaceKey (single global listener, no per-request
+  // attribution), so every row is keyless and global/global is the — scope-
+  // matched — comparison.
+  const keyed = new Map<string, ProxyUsageEvent[]>();
+  const keyless: ProxyUsageEvent[] = [];
+  for (const u of usage) {
+    if (u.workspaceKey === undefined) {
+      keyless.push(u);
+    } else {
+      keyed.set(u.workspaceKey, [...(keyed.get(u.workspaceKey) ?? []), u]);
+    }
+  }
+  const scoped: Record<string, ProxyUsageSavings> = {};
+  let attributedTokens = 0;
+  for (const [key, rows] of keyed) {
+    const savedTokens = saved.byWorkspace[key] ?? 0;
+    attributedTokens += savedTokens;
+    scoped[key] = proxyUsageSavings({ savedTokens, usage: rows });
+  }
+  const globalSavings = proxyUsageSavings({
+    savedTokens: saved.totalTokens - attributedTokens,
+    usage: keyless,
+  });
+
+  if (input.json) {
+    return JSON.stringify({
+      ...globalSavings,
+      skippedLines,
+      savedByWorkspace: saved.byWorkspace,
+      ...(keyed.size > 0 ? { scoped } : {}),
+    });
+  }
+
+  const n = (x: number): string => x.toLocaleString("en-US");
+  const lines: string[] = [];
+  for (const [key, s] of Object.entries(scoped)) {
+    const share = s.reliable
+      ? ` (${(s.savedShareOfNewContext * 100).toFixed(1)}%)`
+      : " (% suppressed: low coverage)";
+    lines.push(
+      `workspace ${key}: saved ~${n(s.savedTokens)} of ${n(s.newContextTokens)} new-context tokens${share}`,
+    );
+  }
+  if (keyless.length > 0 || keyed.size === 0) {
+    if (lines.length > 0) lines.push("");
+    lines.push("scope: all workspaces (global)");
+    lines.push(renderUsageReport(globalSavings, skippedLines));
+  }
+  const breakdown = Object.entries(saved.byWorkspace)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  if (breakdown.length > 0) {
+    const current = encodeWorkspaceKey(input.cwd);
+    lines.push("", "savings by workspace (usage is not attributed per workspace — no ratios):");
+    for (const [key, tokens] of breakdown) {
+      lines.push(`  ${key}  ~${n(tokens)} tokens${key === current ? " (this workspace)" : ""}`);
+    }
+  }
+  return lines.join("\n");
 }
 
 export const auditUsageCommand = defineCommand({

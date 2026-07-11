@@ -21,6 +21,13 @@ export const proxyUsageEventSchema = z
     cacheCreationTokens: z.number().int().nonnegative(),
     messageCount: z.number().int().nonnegative(),
     stream: z.boolean(),
+    // F33: reserved per-request workspace attribution. The proxy today runs
+    // a single global listener with NO per-request workspace signal (no env
+    // or header scoping), so the writer never stamps this — audit falls back
+    // to the labeled global bucket. Optional keeps old rows parsing under
+    // .strict(); the day a signal exists, stamping it activates the scoped
+    // ratios in `mega audit usage` with no further schema change.
+    workspaceKey: z.string().min(1).optional(),
   })
   .strict();
 

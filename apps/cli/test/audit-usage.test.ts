@@ -25,7 +25,7 @@ describe("audit usage", () => {
   it("reports the onboarding hint when no proxy usage exists", async () => {
     const out = await runAuditUsage({
       ...base,
-      readSaved: () => 0,
+      readSavedAll: () => ({ totalTokens: 0, byWorkspace: {} }),
       readUsage: async () => ({ events: [], skippedLines: 0 }),
     });
     expect(out).toContain("No proxy usage recorded yet");
@@ -34,7 +34,7 @@ describe("audit usage", () => {
   it("computes both shares against real proxy usage", async () => {
     const out = await runAuditUsage({
       ...base,
-      readSaved: () => 1000,
+      readSavedAll: () => ({ totalTokens: 1000, byWorkspace: { "wk-a": 1000 } }),
       readUsage: async () => ({ events: [event(9000, 0, 0, 500)], skippedLines: 0 }),
     });
     // saved 1000 of would-be 10000 new context = 10.0%
@@ -47,7 +47,7 @@ describe("audit usage", () => {
     const out = await runAuditUsage({
       ...base,
       json: true,
-      readSaved: () => 500,
+      readSavedAll: () => ({ totalTokens: 500, byWorkspace: { "wk-a": 500 } }),
       readUsage: async () => ({ events: [event(1000, 0, 90000, 0)], skippedLines: 0 }),
     });
     const parsed = JSON.parse(out);
@@ -61,7 +61,7 @@ describe("audit usage", () => {
   it("suppresses the % when saved exceeds the measured new context", async () => {
     const out = await runAuditUsage({
       ...base,
-      readSaved: () => 5000, // > new context (1000) => partial proxy coverage
+      readSavedAll: () => ({ totalTokens: 5000, byWorkspace: { "wk-a": 5000 } }), // > new context (1000) => partial proxy coverage
       readUsage: async () => ({ events: [event(1000, 0, 0, 100)], skippedLines: 0 }),
     });
     expect(out).toContain("% suppressed");
@@ -72,9 +72,9 @@ describe("audit usage", () => {
     let receivedSince = -1;
     await runAuditUsage({
       ...base,
-      readSaved: (_s, _w, since) => {
+      readSavedAll: (_s, since) => {
         receivedSince = since;
-        return 100;
+        return { totalTokens: 100, byWorkspace: {} };
       },
       readUsage: async () => ({
         events: [
@@ -91,9 +91,51 @@ describe("audit usage", () => {
   it("F32: renders the skipped-line note when the reader reports torn lines", async () => {
     const out = await runAuditUsage({
       ...base,
-      readSaved: () => 100,
+      readSavedAll: () => ({ totalTokens: 100, byWorkspace: {} }),
       readUsage: async () => ({ events: [event(1000, 0, 0, 0)], skippedLines: 2 }),
     });
     expect(out).toContain("⚠ 2 unreadable usage lines skipped");
+  });
+
+  it("F33: the ratio divides GLOBAL savings by global usage (all workspaces summed)", async () => {
+    const out = await runAuditUsage({
+      ...base,
+      readSavedAll: () => ({ totalTokens: 1000, byWorkspace: { "wk-a": 700, "wk-b": 300 } }),
+      readUsage: async () => ({ events: [event(9000, 0, 0, 500)], skippedLines: 0 }),
+    });
+    expect(out).toContain("scope: all workspaces (global)");
+    // 1000 / (1000 + 9000) — NOT just the cwd workspace's share
+    expect(out).toContain("saved of new context:       10.0%");
+  });
+
+  it("F33: renders the per-workspace savings breakdown without ratios", async () => {
+    const out = await runAuditUsage({
+      ...base,
+      readSavedAll: () => ({ totalTokens: 1000, byWorkspace: { "wk-a": 700, "wk-b": 300 } }),
+      readUsage: async () => ({ events: [event(9000, 0, 0, 500)], skippedLines: 0 }),
+    });
+    expect(out).toContain("savings by workspace");
+    expect(out).toContain("wk-a  ~700 tokens");
+    expect(out).toContain("wk-b  ~300 tokens");
+    expect(out).not.toMatch(/wk-a.*%/);
+  });
+
+  it("F33: usage rows carrying workspaceKey get a scoped ratio; keyless stay global", async () => {
+    const out = await runAuditUsage({
+      ...base,
+      readSavedAll: () => ({ totalTokens: 1000, byWorkspace: { "wk-a": 600, "wk-b": 400 } }),
+      readUsage: async () => ({
+        events: [
+          { ...event(2400, 0, 0, 0), workspaceKey: "wk-a" },
+          event(5000, 0, 0, 0), // keyless -> global bucket
+        ],
+        skippedLines: 0,
+      }),
+    });
+    expect(out).toContain("workspace wk-a: saved ~600 of 2,400 new-context tokens (20.0%)");
+    expect(out).toContain("scope: all workspaces (global)");
+    // global bucket numerator excludes the 600 attributed to wk-a
+    // (spacing-agnostic: renderUsageReport pads the label column)
+    expect(out).toContain("~400 tokens (est, bytes/4)");
   });
 });
