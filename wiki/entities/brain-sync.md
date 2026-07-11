@@ -52,5 +52,9 @@ existing `"brain-portability"` entitlement key.
 ## Risk & status
 
 Risk **CRITICAL** (E2E crypto, [[concepts/risk-aware-development]]). Implemented
-(16-task TDD plan, subagent-driven); pending the review gauntlet
-(architect + critic + security-reviewer + tracer) + smoke + user release approval.
+(16-task TDD plan, subagent-driven) + whole-branch gauntlet PASSED: it found
+2 design blockers (B1 cross-machine identity → now a key-salted `brainId`;
+B2 remote-regression → push-guard) + HIGH/M1 (reset clears last-seen), all
+fixed and re-verified closed with no new Critical/High. Full repo `pnpm verify`
+green. Pending only: real-endpoint (MinIO/R2) smoke evidence + explicit user
+release approval before PR/merge (see [[log]] 2026-07-11).
