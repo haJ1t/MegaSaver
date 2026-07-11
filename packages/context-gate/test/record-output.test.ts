@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadOverlayChunkSet } from "@megasaver/content-store";
@@ -557,5 +557,128 @@ describe("multi-chunk overlay write (C12)", () => {
     });
     expect(r.decision).toBe("compressed");
     expect(r.returnedText).not.toMatch(/\d{4,}\s+omitted/);
+  });
+});
+
+describe("F30 honest delivered-bytes accounting", () => {
+  const bigRaw = () => `line ${"x".repeat(40)}\n`.repeat(2000);
+
+  it("persisted returnedBytes equals delivered bytes (markers + footer) with includeFooter", async () => {
+    const storeRoot = store();
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: bigRaw(),
+      sourceKind: "command",
+      label: "echo big",
+      mode: "aggressive",
+      storeRawOutput: true,
+      includeFooter: true,
+    });
+    expect(res.decision).toBe("compressed");
+    expect(res.returnedText).toContain("[Mega Saver: compressed ");
+    expect(res.returnedBytes).toBe(Buffer.byteLength(res.returnedText, "utf8"));
+    expect(res.bytesSaved).toBe(res.rawBytes - res.returnedBytes);
+    const events = readOverlayEvents({ root: storeRoot }, WK, SID);
+    expect(events[0]?.returnedBytes).toBe(res.returnedBytes);
+    expect(events[0]?.bytesSaved).toBe(res.bytesSaved);
+    expect(events[0]?.savingRatio).toBe(res.savingRatio);
+  });
+
+  it("the event row carries secretsRedacted/chunksStored (W5 counters)", async () => {
+    const storeRoot = store();
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: bigRaw(),
+      sourceKind: "command",
+      label: "echo big",
+      mode: "aggressive",
+      storeRawOutput: true,
+      includeFooter: true,
+    });
+    const events = readOverlayEvents({ root: storeRoot }, WK, SID);
+    expect(events[0]?.chunksStored).toBe(res.chunkCount);
+    expect(events[0]?.secretsRedacted).toBe(0);
+  });
+
+  it("returnedBytes counts D16 markers even WITHOUT a footer", async () => {
+    const storeRoot = store();
+    const block = (start: number, n: number, mk: (i: number) => string) =>
+      Array.from({ length: n }, (_, i) => mk(start + i));
+    const raw = [
+      ...block(1, 40, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
+      ...block(41, 40, (i) => `ERROR: build exploded at step ${i} ${"x".repeat(10)}`),
+      ...block(81, 40, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
+      ...block(121, 40, (i) => `FATAL: linker gave up on unit ${i} failure ${"x".repeat(10)}`),
+      ...block(161, 40, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
+    ].join("\n");
+    const r = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw,
+      sourceKind: "command",
+      label: "pnpm verify",
+      mode: "aggressive",
+      storeRawOutput: true,
+      compressFloorBytes: 4000,
+    });
+    expect(r.decision).toBe("compressed");
+    expect(r.returnedText).toMatch(/… \[lines \d+-\d+ omitted\]/);
+    expect(r.returnedBytes).toBe(Buffer.byteLength(r.returnedText, "utf8"));
+    const events = readOverlayEvents({ root: storeRoot }, WK, SID);
+    expect(events[0]?.returnedBytes).toBe(r.returnedBytes);
+  });
+
+  it("net-negative guard: degrades to passthrough with ZERO side effects", async () => {
+    const storeRoot = store();
+    // Small eligible input: summary + full excerpts + footer >= raw.
+    const raw = Array.from({ length: 12 }, (_, i) => `ERROR: distinct failure item ${i} qq`).join(
+      "\n",
+    );
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw,
+      sourceKind: "command",
+      label: "small",
+      mode: "aggressive",
+      storeRawOutput: true,
+      includeFooter: true,
+      compressFloorBytes: 64,
+    });
+    expect(res.decision).toBe("passthrough");
+    expect(res.returnedText).toBe(raw);
+    expect(res.returnedBytes).toBe(res.rawBytes);
+    expect(res.bytesSaved).toBe(0);
+    expect(res.savingRatio).toBe(0);
+    expect(res.chunkSetId).toBeUndefined();
+    expect(readOverlayEvents({ root: storeRoot }, WK, SID)).toHaveLength(0);
+    expect(existsSync(join(storeRoot, "content", WK, SID))).toBe(false);
+  });
+
+  it("footer's displayed returnedBytes matches the persisted value (fixed point)", async () => {
+    const storeRoot = store();
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: bigRaw(),
+      sourceKind: "command",
+      label: "echo big",
+      mode: "aggressive",
+      storeRawOutput: true,
+      includeFooter: true,
+    });
+    const m = res.returnedText.match(/compressed (\d+)→(\d+) B/);
+    expect(m).not.toBeNull();
+    expect(Number(m?.[1])).toBe(res.rawBytes);
+    // ≤2-iteration fixed point: displayed size may drift by its own
+    // digit-width change in pathological rollovers — documented tolerance.
+    expect(Math.abs(Number(m?.[2]) - res.returnedBytes)).toBeLessThanOrEqual(2);
   });
 });

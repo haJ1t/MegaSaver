@@ -47,8 +47,13 @@ export {
   recordAndFilterOverlayOutput,
   type RecordOverlayOutputInput,
   type RecordOverlayOutputResult,
-  OVERLAY_CHUNK_LINES,
 } from "./record-output.js";
+export {
+  OVERLAY_CHUNK_LINES,
+  buildRecoveryFooter,
+  looksPreTruncated,
+  type RecoveryFooterInput,
+} from "./recovery-footer.js";
 export {
   hashContent,
   hashPath,

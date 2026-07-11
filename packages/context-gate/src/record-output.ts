@@ -18,10 +18,7 @@ import {
 import { redact } from "@megasaver/policy";
 import { type TokenSaverMode, type WorkspaceKey, modeToBudget } from "@megasaver/shared";
 import { appendOverlayEvent } from "@megasaver/stats";
-
-// Matches the generic chunker default; the saver footer's line->id formula
-// mirrors this.
-export const OVERLAY_CHUNK_LINES = 40;
+import { OVERLAY_CHUNK_LINES, buildRecoveryFooter, looksPreTruncated } from "./recovery-footer.js";
 
 // Redacts every secret-bearing string field in a SourceRef using the policy
 // redactor. hookTool is a tool name (not secret-bearing) and is left as-is.
@@ -59,6 +56,11 @@ export type RecordOverlayOutputInput = {
   // generic (today's behavior). The hook path fills it from the captured
   // session prompt; proxy tools already pass their own explicit intent.
   intent?: string;
+  // F30: when true and the decision compresses with a stored chunk set, the
+  // canonical recovery footer is appended to returnedText INSIDE record so
+  // the persisted returnedBytes/bytesSaved count everything the model
+  // receives. Callers must NOT append their own footer.
+  includeFooter?: boolean;
   now?: () => string;
   newId?: () => string;
 };
@@ -140,21 +142,17 @@ export async function recordAndFilterOverlayOutput(
     ...(input.intent !== undefined ? { intent: input.intent } : {}),
   });
 
-  const base = {
-    decision: filtered.decision,
-    summary: filtered.summary,
-    // returnedText carries D16 elision markers (~25-35 B each, <= excerpts+1),
-    // but returnedBytes/bytesSaved/savingRatio below come from filterOutput,
-    // computed BEFORE markers exist — so reported savings are marginally
-    // optimistic by the marker bytes. Bounded and non-billing; honest
-    // marker-inclusive accounting is deferred to wave-5 (F30).
-    returnedText: returnedTextOf(filtered),
-    rawBytes: filtered.rawBytes,
-    returnedBytes: filtered.returnedBytes,
-    bytesSaved: filtered.bytesSaved,
-    savingRatio: filtered.savingRatio,
-  };
-  if (filtered.decision !== "compressed") return base;
+  if (filtered.decision !== "compressed") {
+    return {
+      decision: filtered.decision,
+      summary: filtered.summary,
+      returnedText: returnedTextOf(filtered),
+      rawBytes: filtered.rawBytes,
+      returnedBytes: filtered.returnedBytes,
+      bytesSaved: filtered.bytesSaved,
+      savingRatio: filtered.savingRatio,
+    };
+  }
 
   const createdAt = now();
   const { redacted: redactedText, count: secretCount } = redact(input.raw);
@@ -163,26 +161,86 @@ export async function recordAndFilterOverlayOutput(
   // overlay stats event — mirrors policyRedactSourceRef on the evidence path.
   const redactedLabel = redact(input.label).redacted;
 
-  // A throw here is fine: the PostToolUse hook caller treats any failure as
-  // passthrough (the original output reaches the model untouched), so a partial
-  // write (chunk saved, event throws) is acceptable — no evidence is lost.
+  // Chunk pieces are prepared IN MEMORY first: the footer needs chunkCount
+  // and the net-negative guard below must run before any side effect.
   let chunkSetId: string | undefined;
-  let chunksStored = 0;
-  let chunkRefs: ReturnedChunkRef[] = [];
+  let chunks: OverlayChunkSet["chunks"] = [];
   if (input.storeRawOutput) {
     chunkSetId = newId();
-    const csid = chunkSetId;
     const pieces =
       redactedText === ""
         ? [{ text: "", startLine: 1, endLine: 1 }]
         : chunkByLines(redactedText, OVERLAY_CHUNK_LINES);
-    const chunks = pieces.map((piece, i) => ({
+    chunks = pieces.map((piece, i) => ({
       id: String(i),
       startLine: piece.startLine,
       endLine: piece.endLine,
       bytes: Buffer.byteLength(piece.text, "utf8"),
       text: piece.text,
     }));
+  }
+
+  // F30 honest accounting: persisted numbers count the bytes the model
+  // actually receives — summary + excerpts + D16 markers, plus the recovery
+  // footer when the caller asks for one.
+  const text0 = returnedTextOf(filtered);
+  let finalText = text0;
+  if (input.includeFooter === true && chunkSetId !== undefined) {
+    const text0Bytes = Buffer.byteLength(text0, "utf8");
+    const footerInput = {
+      rawBytes: filtered.rawBytes,
+      chunkSetId,
+      chunkCount: chunks.length,
+      rawLooksTruncated: looksPreTruncated(input.raw),
+    };
+    let footer = buildRecoveryFooter({ ...footerInput, returnedBytes: text0Bytes });
+    // Fixed point on the displayed size: the footer's own bytes are part of
+    // the delivered size it reports. One correction pass almost always
+    // converges; the second absorbs a digit-width rollover. A rollover ON
+    // the second pass is accepted — the display drifts by at most its own
+    // digit-width change, while the PERSISTED numbers stay exact byte
+    // counts of the final text.
+    for (let i = 0; i < 2; i++) {
+      const next = buildRecoveryFooter({
+        ...footerInput,
+        returnedBytes: text0Bytes + Buffer.byteLength(footer, "utf8"),
+      });
+      if (Buffer.byteLength(next, "utf8") === Buffer.byteLength(footer, "utf8")) {
+        footer = next;
+        break;
+      }
+      footer = next;
+    }
+    finalText = text0 + footer;
+  }
+  const finalReturnedBytes = Buffer.byteLength(finalText, "utf8");
+
+  // Net-negative guard, BEFORE any side effect (saveOverlayChunkSet,
+  // appendOverlayEvent, evidence): never deliver a replacement at least as
+  // large as the original. Degrading to passthrough also structurally
+  // preserves the honest-metrics invariant returnedTokens <= rawTokens.
+  if (finalReturnedBytes >= filtered.rawBytes) {
+    return {
+      decision: "passthrough",
+      summary: filtered.summary,
+      returnedText: input.raw,
+      rawBytes: filtered.rawBytes,
+      returnedBytes: filtered.rawBytes,
+      bytesSaved: 0,
+      savingRatio: 0,
+    };
+  }
+
+  const bytesSaved = filtered.rawBytes - finalReturnedBytes;
+  const savingRatio = bytesSaved / filtered.rawBytes;
+
+  // A throw here is fine: the PostToolUse hook caller treats any failure as
+  // passthrough (the original output reaches the model untouched), so a partial
+  // write (chunk saved, event throws) is acceptable — no evidence is lost.
+  let chunksStored = 0;
+  let chunkRefs: ReturnedChunkRef[] = [];
+  if (input.storeRawOutput && chunkSetId !== undefined) {
+    const csid = chunkSetId;
     const chunkSet: OverlayChunkSet = {
       chunkSetId,
       workspaceKey: input.workspaceKey,
@@ -211,12 +269,16 @@ export async function recordAndFilterOverlayOutput(
       sourceKind: input.sourceKind,
       label: redactedLabel,
       rawBytes: filtered.rawBytes,
-      returnedBytes: filtered.returnedBytes,
-      bytesSaved: filtered.bytesSaved,
-      savingRatio: filtered.savingRatio,
+      returnedBytes: finalReturnedBytes,
+      bytesSaved,
+      savingRatio,
       ...(chunkSetId !== undefined ? { chunkSetId } : {}),
       summary: filtered.summary,
       mode: input.mode,
+      // W5: event-carried counters — rebuilds recover them without
+      // carryForward when the summary file is lost.
+      secretsRedacted: secretCount,
+      chunksStored,
     },
     secretsRedacted: secretCount,
     chunksStored,
@@ -226,7 +288,7 @@ export async function recordAndFilterOverlayOutput(
   // Fire-and-await but swallowed: evidence failure must never block compressed output
   // (same fail-safe posture as appendOverlayEvent above).
   if (input.evidenceStoreRoot !== undefined && chunkSetId !== undefined) {
-    const { redacted: redactedReturnedText } = redact(returnedTextOf(filtered));
+    const { redacted: redactedReturnedText } = redact(finalText);
     const evidenceRecord: EvidenceRecordInput = {
       evidenceId: newId(),
       // workspaceKey in RecordOverlayOutputInput is plain string; evidence schema
@@ -267,7 +329,13 @@ export async function recordAndFilterOverlayOutput(
   }
 
   return {
-    ...base,
+    decision: "compressed",
+    summary: filtered.summary,
+    returnedText: finalText,
+    rawBytes: filtered.rawBytes,
+    returnedBytes: finalReturnedBytes,
+    bytesSaved,
+    savingRatio,
     ...(chunkSetId !== undefined ? { chunkSetId, chunkCount: chunksStored } : {}),
   };
 }
