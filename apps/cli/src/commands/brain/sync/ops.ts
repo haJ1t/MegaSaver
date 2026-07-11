@@ -11,7 +11,9 @@ export async function runBrainSyncPush(input: BrainSyncOpInput): Promise<0 | 1> 
     const result = await push(ctx.deps);
     if (result.state === "pushed") {
       input.stdout(
-        `pushed generation ${result.generation}${result.merged ? " (merged remote changes first)" : ""}`,
+        result.merged
+          ? `pushed generation ${result.generation} (merged remote changes first — imported entries are suggested; run: mega memory approve)`
+          : `pushed generation ${result.generation}`,
       );
     } else if (result.merged) {
       input.stdout(

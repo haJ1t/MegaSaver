@@ -79,14 +79,18 @@ async function seedProject(root: string, name: string): Promise<void> {
   } as never);
 }
 
-async function seedApprovedMemory(root: string): Promise<void> {
+async function seedApprovedMemory(
+  root: string,
+  id = "11111111-1111-4111-8111-111111111111",
+  content = "plain knowledge",
+): Promise<void> {
   const { registry } = await ensureStore(root);
   registry.createMemoryEntry({
     projectId: PROJECT_ID,
-    id: "11111111-1111-4111-8111-111111111111",
+    id,
     type: "decision",
     title: "t",
-    content: "plain knowledge",
+    content,
     keywords: [],
     confidence: "high",
     source: "manual",
@@ -172,6 +176,31 @@ describe("runBrainSyncPush", () => {
     const storeKeys = [...d.store.keys()];
     expect(storeKeys).toContain(`${prefix}manifest.json.enc`);
     expect(storeKeys.filter((k) => k.startsWith(`${prefix}objects/`))).toHaveLength(1);
+  });
+
+  it("pushed+merged: merges the remote first, publishes gen 2, and surfaces both lines", async () => {
+    const rootA = mkStore();
+    activatePro(rootA);
+    const d = await double();
+    const recovery = await recoveryCodeOf(rootA, d.url);
+    await seedProject(rootA, "alpha");
+    await seedApprovedMemory(rootA);
+    expect((await runOp(runBrainSyncPush, rootA, { publicKey: keys.publicKey })).code).toBe(0);
+
+    const rootB = mkStore();
+    activatePro(rootB);
+    expect(await initStore(rootB, d.url, recovery)).toBe(0);
+    await seedProject(rootB, "alpha");
+    // A distinct approved memory so B's export differs from A's remote and the
+    // merge is followed by a real gen-2 publish (not an up-to-date no-op).
+    await seedApprovedMemory(rootB, "22222222-2222-4222-8222-222222222222", "beta knowledge");
+
+    const { code, out } = await runOp(runBrainSyncPush, rootB, { publicKey: keys.publicKey });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("merged: +");
+    expect(out.join("\n")).toContain(
+      "pushed generation 2 (merged remote changes first — imported entries are suggested; run: mega memory approve)",
+    );
   });
 
   it("free tier: prints the upsell, exits 0, and never touches the remote", async () => {
