@@ -45,6 +45,10 @@ export const overlayTokenSaverEventSchema = z
     chunkSetId: z.string().min(1).optional(),
     summary: z.string(),
     mode: tokenSaverModeSchema,
+    // W5: event-carried counters. Optional so pre-wave-5 JSONL rows keep
+    // parsing; rebuilds fold them so a lost summary no longer zeroes them.
+    secretsRedacted: z.number().int().nonnegative().optional(),
+    chunksStored: z.number().int().nonnegative().optional(),
   })
   .strict();
 

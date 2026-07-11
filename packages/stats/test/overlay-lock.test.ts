@@ -119,4 +119,16 @@ describe("E26 summary lock + reconciliation", () => {
     expect(reconcileOverlaySummaries({ root })).toBe(1);
     expect(JSON.parse(readFileSync(summaryPath(), "utf8")).eventsTotal).toBe(1);
   });
+
+  it("W5: reconcile does not rebuild a healthy summary over a garbage JSONL line", () => {
+    appendOverlayEvent({
+      store: { root },
+      event: event("e1"),
+      secretsRedacted: 0,
+      chunksStored: 1,
+    });
+    appendFileSync(eventsPath(), "{{{ torn line\n");
+    // summary (eventsTotal 1) matches the 1 schema-valid line — no drift.
+    expect(reconcileOverlaySummaries({ root })).toBe(0);
+  });
 });

@@ -190,12 +190,13 @@ function loadOverlaySummaryStrict(path: string): OverlaySessionTokenSaverStats |
 }
 
 // E24 self-heal: rebuild the summary from the corruption-tolerant JSONL reader
-// and persist it. secretsRedactedTotal / chunksStoredTotal cannot be recovered
-// from events — events carry neither. When the prior summary is still loadable
-// (the normal lock-skip lag path), the caller passes carryForward so those two
-// counters survive; only a genuinely unreadable summary loses them (rebuilt as
-// 0 — no source). A missing events file rebuilds to an empty summary
-// (readOverlayEvents returns []), never a throw.
+// and persist it. secretsRedactedTotal / chunksStoredTotal: carryForward (the
+// loadable prior summary's totals, which include pre-wave-5 history) is
+// authoritative and WINS when present; the fold over event-carried counters
+// (W5 rows) is the recovery path for a genuinely unreadable summary — better
+// than zero, exact for post-wave-5 events, 0 for pre-wave-5 rows. A missing
+// events file rebuilds to an empty summary (readOverlayEvents returns []),
+// never a throw.
 export function rebuildOverlaySummaryFromEvents(
   store: StatsStore,
   workspaceKey: string,
@@ -208,11 +209,15 @@ export function rebuildOverlaySummaryFromEvents(
   let rawBytesTotal = 0;
   let returnedBytesTotal = 0;
   let bytesSavedTotal = 0;
+  let secretsFolded = 0;
+  let chunksFolded = 0;
   for (const event of events) {
     eventsTotal += 1;
     rawBytesTotal += event.rawBytes;
     returnedBytesTotal += event.returnedBytes;
     bytesSavedTotal += event.bytesSaved;
+    secretsFolded += event.secretsRedacted ?? 0;
+    chunksFolded += event.chunksStored ?? 0;
   }
   const rebuilt: OverlaySessionTokenSaverStats = {
     liveSessionId,
@@ -221,8 +226,8 @@ export function rebuildOverlaySummaryFromEvents(
     returnedBytesTotal,
     bytesSavedTotal,
     savingRatio: rawBytesTotal === 0 ? 0 : bytesSavedTotal / rawBytesTotal,
-    secretsRedactedTotal: carryForward?.secretsRedactedTotal ?? 0,
-    chunksStoredTotal: carryForward?.chunksStoredTotal ?? 0,
+    secretsRedactedTotal: carryForward?.secretsRedactedTotal ?? secretsFolded,
+    chunksStoredTotal: carryForward?.chunksStoredTotal ?? chunksFolded,
     updatedAt: nowIso,
     rebuiltAt: nowIso,
   };
@@ -233,10 +238,10 @@ export function rebuildOverlaySummaryFromEvents(
 // E26 repair: summaries that lag their JSONL (lock-skipped updates) or fail
 // schema are rebuilt. Bounded: invoked from the once-a-day GC sweep. Returns
 // the number of files rebuilt. Best-effort — every per-file failure is
-// swallowed so one bad workspace cannot stop the walk.
-// ponytail: line count counts ALL non-empty lines while the rebuild folds only
-// schema-valid ones, so a JSONL with garbage lines is re-rebuilt every sweep —
-// benign (once/day, atomic write); tighten to a validated count if it matters.
+// swallowed so one bad workspace cannot stop the walk. The drift count uses
+// SCHEMA-VALID lines (same reader the rebuild folds), so garbage lines can
+// no longer trigger a rebuild every sweep; the extra parse is bounded by the
+// once-a-day cadence.
 export function reconcileOverlaySummaries(store: StatsStore): number {
   let rebuilt = 0;
   let workspaces: string[];
@@ -260,9 +265,7 @@ export function reconcileOverlaySummaries(store: StatsStore): number {
       const liveSessionId = file.slice(0, -".events.jsonl".length);
       if (!isSafeSegment(liveSessionId)) continue;
       try {
-        const lineCount = readFileSync(join(store.root, "stats", workspaceKey, file), "utf8")
-          .split("\n")
-          .filter((line) => line.trim() !== "").length;
+        const lineCount = readOverlayEvents(store, workspaceKey, liveSessionId).length;
         let summary: OverlaySessionTokenSaverStats | null = null;
         let corrupt = false;
         try {
