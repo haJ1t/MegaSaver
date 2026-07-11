@@ -1189,10 +1189,19 @@ export async function createTransport(config: TransportConfig): Promise<Transpor
     endpoint: config.endpoint,
     region: config.region,
     forcePathStyle: config.pathStyle,
+    // WHEN_REQUIRED: with the default WHEN_SUPPORTED, aws-sdk can switch a
+    // body to Content-Encoding: aws-chunked framing, which corrupts stores
+    // that don't decode it. Our bodies are always in-memory Buffers of known
+    // length; disabling opportunistic checksums keeps the wire body == the
+    // plaintext bytes for both the test double and real S3/R2.
+    requestChecksumCalculation: "WHEN_REQUIRED",
     ...(accessKeyId !== undefined && secretAccessKey !== undefined
       ? { credentials: { accessKeyId, secretAccessKey } }
       : {}),
   });
+  // Bodies MUST be in-memory Buffers/Uint8Arrays of known length (never
+  // streams) so no aws-chunked framing kicks in. pathStyle MUST be true for
+  // the endpoint (the key layout is /<bucket>/<key>).
   const fullKey = (key: string) => `${config.prefix}${key}`;
 
   return {
