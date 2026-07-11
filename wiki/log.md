@@ -3275,3 +3275,21 @@ Whole-branch CRITICAL gauntlet (3 fresh-context passes) on worktree-brain-sync:
 Status: IMPLEMENTATION complete + internally rigorous (62 pkg + 21 CLI tests,
 verify green), but BLOCKED on design decisions for B1/B2. NOT merged. Smoke +
 user release approval deferred until blockers resolved. Escalated to user.
+
+## [2026-07-11] gauntlet-fix | brain-sync (E7) — 2 blockers CLOSED
+User approved fixing B1+B2 (name-derived brainId mechanism). Implemented:
+- B1: brainId = sha256(key ‖ normalize(projectName)) replaces local project
+  UUID for remote prefix + AAD + lastSeen (engine e748a138 + CLI da8f18be).
+  Two-machine test REWRITTEN to same-name/different-local-id -> proves
+  cross-machine sync (RED->GREEN: revert to localProjectId fails it).
+- B2: push refuses pending sync-imported suggestions (brain-import provenance)
+  unless --force -> no silent remote regression.
+- HIGH/M1: reset clears local lastSeen (clearLastSeen); push refuses bootstrap
+  when remote absent && lastSeen>0 -> rollback_detected + reset hint (both
+  paths). L1: assertSafeEndpoint on read path. Minors: typed
+  conditional_writes_unsupported, dropped unused schema export.
+Re-verify (fresh adversarial): ALL 3 blockers CLOSED, no new Critical/High;
+config 64-hex + AAD binding consistent; no id misuse. Full repo pnpm verify
+exit 0. brain-sync 69 tests, cli brain-sync 24, full cli 1110 pass.
+REMAINING (user-gated): real-endpoint (MinIO/R2) smoke evidence + explicit
+user release approval before merge/PR.
