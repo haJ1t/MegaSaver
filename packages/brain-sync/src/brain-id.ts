@@ -7,6 +7,6 @@ import { createHash } from "node:crypto";
 // attack). Different name → different id → AAD auth fails (cross-brain
 // transplant protection).
 export function deriveBrainId(key: Uint8Array, projectName: string): string {
-  const normalized = projectName.trim().toLowerCase();
+  const normalized = projectName.trim().normalize("NFC").toLowerCase();
   return createHash("sha256").update(key).update(normalized, "utf8").digest("hex");
 }

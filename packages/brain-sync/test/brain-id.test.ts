@@ -24,4 +24,13 @@ describe("deriveBrainId", () => {
   it("returns 64 lowercase hex chars", () => {
     expect(deriveBrainId(key, "alpha")).toMatch(/^[0-9a-f]{64}$/);
   });
+
+  it("NFC-normalizes so precomposed and decomposed names derive the same id", () => {
+    // "café": precomposed (…f + U+00E9) vs decomposed (…fe + U+0301) look
+    // identical but are different code points — without NFC they'd fork.
+    const precomposed = "café";
+    const decomposed = "café";
+    expect(precomposed).not.toBe(decomposed);
+    expect(deriveBrainId(key, precomposed)).toBe(deriveBrainId(key, decomposed));
+  });
 });

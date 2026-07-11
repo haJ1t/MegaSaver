@@ -14,6 +14,13 @@ export async function runBrainSyncPush(input: BrainSyncOpInput): Promise<0 | 1> 
     const ctx = await buildProjectSyncContext(input);
     if (ctx === null) return 1;
     if (!input.force) {
+      // Merge remote FIRST so entries push's own internal merge would import
+      // can't slip past the guard: pull imports any remote changes as
+      // suggested + advances last-seen, then the guard blocks publishing an
+      // approved-only bundle that would drop them. (A remote that advances in
+      // the tiny window between this pull and the push below is the only
+      // residual — push reports merged:true there, which warns the user.)
+      await pull(ctx.deps);
       const pending = pendingSyncSuggestions(ctx.registry, ctx.localProjectId);
       if (pending > 0) {
         input.stderr(

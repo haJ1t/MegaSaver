@@ -34,6 +34,10 @@ function signTestLicense(privateKey: KeyObject, payload: Payload): string {
 const NOW_MS = Date.UTC(2026, 6, 15, 12, 0, 0);
 const now = () => NOW_MS;
 const PROJECT_ID = "0f0e0d0c-0b0a-4900-8807-060504030201";
+// Distinct local ids for machines that share the brain by name (see B1). Real
+// machines never share a project UUID — brainId (key+name) is what aligns them.
+const B_LOCAL_ID = "aaaa0000-bbbb-4ccc-8ddd-eeee0000ffff";
+const C_LOCAL_ID = "cccc1111-dddd-4eee-8fff-111122223333";
 
 let roots: string[];
 let doubles: S3Double[];
@@ -75,10 +79,40 @@ async function ensureStore(root: string) {
   return ensureStoreReady(root);
 }
 
-async function seedProject(root: string, name: string): Promise<void> {
+async function alphaRegistry(root: string) {
+  const { registry } = await ensureStore(root);
+  const project = registry.listProjects().find((p) => p.name === "alpha");
+  if (project === undefined) throw new Error("alpha project not seeded");
+  return { registry, projectId: project.id };
+}
+
+async function approveImportedSuggestions(root: string): Promise<void> {
+  const { registry, projectId } = await alphaRegistry(root);
+  for (const m of registry.listMemoryEntries(projectId)) {
+    if (
+      m.approval === "suggested" &&
+      (m.evidence ?? []).some((e) => e.startsWith("brain-import:"))
+    ) {
+      registry.updateMemoryEntry(m.id, {
+        approval: "approved",
+        updatedAt: "2026-07-09T12:00:00.000Z",
+      });
+    }
+  }
+}
+
+async function memoryContents(root: string): Promise<string[]> {
+  const { registry, projectId } = await alphaRegistry(root);
+  return registry
+    .listMemoryEntries(projectId)
+    .map((m) => m.content)
+    .sort();
+}
+
+async function seedProject(root: string, name: string, projectId = PROJECT_ID): Promise<void> {
   const { registry } = await ensureStore(root);
   registry.createProject({
-    id: PROJECT_ID,
+    id: projectId,
     name,
     rootPath: "/tmp/alpha",
     createdAt: "2026-07-09T12:00:00.000Z",
@@ -90,10 +124,11 @@ async function seedApprovedMemory(
   root: string,
   id = "11111111-1111-4111-8111-111111111111",
   content = "plain knowledge",
+  projectId = PROJECT_ID,
 ): Promise<void> {
   const { registry } = await ensureStore(root);
   registry.createMemoryEntry({
-    projectId: PROJECT_ID,
+    projectId,
     id,
     type: "decision",
     title: "t",
@@ -208,7 +243,11 @@ describe("runBrainSyncPush", () => {
     expect(storeKeys.filter((k) => k.startsWith(`${prefix}objects/`))).toHaveLength(1);
   });
 
-  it("pushed+merged: merges the remote first, publishes gen 2, and surfaces both lines", async () => {
+  it("--force pushed+merged: merges the remote inside push, publishes gen 2, surfaces both lines", async () => {
+    // The non-force path now pulls-first and would BLOCK here (the merge imports
+    // A's entry as a pending suggestion). --force skips the guard, so push's own
+    // internal mergeRemote fires — the documented override that can drop the
+    // un-approved import from the approved-only bundle.
     const rootA = mkStore();
     activatePro(rootA);
     const d = await double();
@@ -225,7 +264,10 @@ describe("runBrainSyncPush", () => {
     // merge is followed by a real gen-2 publish (not an up-to-date no-op).
     await seedApprovedMemory(rootB, "22222222-2222-4222-8222-222222222222", "beta knowledge");
 
-    const { code, out } = await runOp(runBrainSyncPush, rootB, { publicKey: keys.publicKey });
+    const { code, out } = await runOp(runBrainSyncPush, rootB, {
+      publicKey: keys.publicKey,
+      force: true,
+    });
     expect(code).toBe(0);
     expect(out.join("\n")).toContain("merged: +");
     expect(out.join("\n")).toContain(
@@ -320,6 +362,59 @@ describe("brain sync — B2 push-guard + reset last-seen", () => {
 
     expect((await runReset(root, true)).code).toBe(0);
     expect(loadConfig(root).lastSeen[brainId]).toBeUndefined();
+  });
+
+  it("merge-during-push window: refuses to drop a remote entry push would merge, approve→push keeps both", async () => {
+    // A publishes approved X (gen1). B (same name, DIFFERENT local id) holds its
+    // OWN approved Y and has NOT pulled. Pre-fix, B's push would internally
+    // merge X (as suggested) then drop it from the approved-only bundle — silent
+    // loss. The pull-before-guard must catch X and refuse.
+    const rootA = mkStore();
+    activatePro(rootA);
+    const d = await double();
+    const recovery = await recoveryCodeOf(rootA, d.url);
+    await seedProject(rootA, "alpha");
+    await seedApprovedMemory(rootA); // X = "plain knowledge"
+    expect((await runOp(runBrainSyncPush, rootA, { publicKey: keys.publicKey })).code).toBe(0);
+
+    const prefix = brainPrefix(rootA);
+    const manifestKey = `${prefix}manifest.json.enc`;
+    const gen1Manifest = d.store.get(manifestKey);
+
+    const rootB = mkStore();
+    activatePro(rootB);
+    expect(await initStore(rootB, d.url, recovery)).toBe(0);
+    await seedProject(rootB, "alpha", B_LOCAL_ID);
+    await seedApprovedMemory(
+      rootB,
+      "22222222-2222-4222-8222-222222222222",
+      "beta-knowledge",
+      B_LOCAL_ID,
+    ); // Y
+
+    // Push WITHOUT force: the pre-push pull imports X → guard blocks, exit 1.
+    const blocked = await runOp(runBrainSyncPush, rootB, { publicKey: keys.publicKey });
+    expect(blocked.code).toBe(1);
+    expect(blocked.err.join("\n")).toContain("synced suggestion");
+    expect(blocked.err.join("\n")).toContain("--force");
+    // Remote is untouched — X was NOT dropped, still generation 1 (one object).
+    expect(d.store.get(manifestKey)).toEqual(gen1Manifest);
+    expect([...d.store.keys()].filter((k) => k.startsWith(`${prefix}objects/`))).toHaveLength(1);
+
+    // Approve the imported X, then push: nothing pending → publishes gen2.
+    await approveImportedSuggestions(rootB);
+    const ok = await runOp(runBrainSyncPush, rootB, { publicKey: keys.publicKey });
+    expect(ok.code).toBe(0);
+    expect(ok.out.join("\n")).toContain("pushed generation 2");
+
+    // A fresh third machine pulls gen2 and sees BOTH X and Y — the bundle
+    // preserved X and added Y (the window is closed).
+    const rootC = mkStore();
+    activatePro(rootC);
+    expect(await initStore(rootC, d.url, recovery)).toBe(0);
+    await seedProject(rootC, "alpha", C_LOCAL_ID);
+    expect((await runOp(runBrainSyncPull, rootC, { publicKey: keys.publicKey })).code).toBe(0);
+    expect(await memoryContents(rootC)).toEqual(["beta-knowledge", "plain knowledge"]);
   });
 });
 
