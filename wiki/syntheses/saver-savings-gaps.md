@@ -93,10 +93,15 @@ independently verified against code by a refuter agent.
 ## F. Metrics honesty
 
 30. **~46–50 token footer per event excluded from returnedBytes/bytesSaved** — savings systematically over-reported (types.ts:340-345).
+   **Status:** FIXED — PR #280 (merged 2026-07-11)
 31. **Route drift kills metering forever** — settings rewrite removing `ANTHROPIC_BASE_URL` → monitorTick blocks + drains, never re-applies (supervisor.ts:267-269).
+   **Status:** FIXED — PR #280 (merged 2026-07-11)
 32. **One torn line in proxy `usage.jsonl` zeroes every future `mega audit usage` report** (proxy store.ts:50).
+   **Status:** FIXED — PR #280 (merged 2026-07-11)
 33. **`audit usage` scope mismatch**: per-cwd savings ÷ global proxy usage → wrong ratio with 2+ workspaces (usage.ts:129-132).
+   **Status:** FIXED — PR #280 (merged 2026-07-11)
 34. **HTTP proxy saves zero tokens** (passthrough + metering only, proxy-handler.ts:200) — never count it as a saver.
+   **Status:** FIXED — PR #280 (merged 2026-07-11)
 
 ## Refuted (2)
 
@@ -114,7 +119,8 @@ verifier verdicts: workflow output `wf_147629b1-073` (session artifact, not in r
 **Targeted for the 2.0 release** (user directive, 2026-07-09): these fixes ship in 2.0 alongside
 the E5 portable project brain ([[syntheses/pro-differentiation-portfolio]]).
 
-**Progress (2026-07-11):** waves 1-4 merged to main (PRs #276-#279, fast-forward,
-9f2caaf7 → aa1b285d). Of the 34 deduped items: A1-7, C11-15 fixed (#276/#277);
-B8-10, D16-19 fixed (#278); E21-29 fixed (#279); D20 accepted (conscious).
-29 of 34 addressed; remaining for 2.0: wave 5 (F30-34) — 5 items open.
+**Progress (2026-07-11):** waves 1-5 merged to main (PRs #276-#280, fast-forward,
+9f2caaf7 → 34a88dcc). Of the 34 deduped items: A1-7, C11-15 fixed (#276/#277);
+B8-10, D16-19 fixed (#278); E21-29 fixed (#279); F30-34 fixed (#280); D20 accepted
+(conscious). 34 of 34 addressed — the saver-savings-gaps program is COMPLETE
+(33 fixed + D20 conscious accept).
