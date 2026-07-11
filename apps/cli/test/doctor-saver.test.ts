@@ -288,7 +288,12 @@ describe("runSaverChecks", () => {
 
   it("saver-proxy-route: passes as informational when the proxy is disabled", () => {
     const settingsPath = writeHookSettings(`${fakeBinary()} hooks saver`);
-    const checks = runSaverChecks({ settingsPath, storeRoot, spawn: advancingSpawn, now: () => NOW });
+    const checks = runSaverChecks({
+      settingsPath,
+      storeRoot,
+      spawn: advancingSpawn,
+      now: () => NOW,
+    });
     const c = find(checks, "saver-proxy-route");
     expect(c?.pass).toBe(true);
     expect(c?.value).toContain("disabled");
@@ -300,7 +305,12 @@ describe("runSaverChecks", () => {
       storeRoot,
       proxyControl({ reconcileBlocked: { reason: "route_removed", at: iso(NOW) } }),
     );
-    const checks = runSaverChecks({ settingsPath, storeRoot, spawn: advancingSpawn, now: () => NOW });
+    const checks = runSaverChecks({
+      settingsPath,
+      storeRoot,
+      spawn: advancingSpawn,
+      now: () => NOW,
+    });
     const c = find(checks, "saver-proxy-route");
     expect(c?.pass).toBe(false);
     expect(c?.reason).toContain("mega proxy enable");
@@ -324,7 +334,12 @@ describe("runSaverChecks", () => {
       lastUsagePersistedAt: null,
       routeReapplies: 3,
     });
-    const checks = runSaverChecks({ settingsPath, storeRoot, spawn: advancingSpawn, now: () => NOW });
+    const checks = runSaverChecks({
+      settingsPath,
+      storeRoot,
+      spawn: advancingSpawn,
+      now: () => NOW,
+    });
     const c = find(checks, "saver-proxy-route");
     expect(c?.pass).toBe(true);
     expect(c?.value).toContain("re-applied 3");

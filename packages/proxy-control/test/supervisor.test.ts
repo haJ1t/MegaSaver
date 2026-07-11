@@ -375,9 +375,7 @@ describe("monitorTick — observe-only while a transition is retained", () => {
     expect(s.drainingGeneration).toBeNull();
     const rt = readRuntimeState(store);
     expect(rt?.routeReapplies).toBe(1);
-    expect(rt?.lastRouteReappliedAt).toBe(
-      new Date(Date.UTC(2026, 6, 3, 0, 0, 30)).toISOString(),
-    );
+    expect(rt?.lastRouteReappliedAt).toBe(new Date(Date.UTC(2026, 6, 3, 0, 0, 30)).toISOString());
   });
 
   it("F31: a second drift bumps the counter to 2", () => {

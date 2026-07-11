@@ -190,7 +190,7 @@ describe("doctorCommand", () => {
     const output = logSpy.mock.calls[0]?.[0] as string;
     expect(output).toMatch(/^node v\d+\.\d+\.\d+/);
     expect(output).toContain("saver-hooks-registered");
-    expect(output).toMatch(/6 PASS \/ 0 FAIL/);
+    expect(output).toMatch(/7 PASS \/ 0 FAIL/);
   });
 
   it("sets exitCode 0 when the saver hook is not installed (absent = WARN, not FAIL)", async () => {

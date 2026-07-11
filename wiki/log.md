@@ -3181,3 +3181,52 @@ full gate passes: biome, tsc, 52-package vitest, conventions:check). Plan:
 docs/superpowers/plans/2026-07-10-saver-observability-plan.md. Spec:
 docs/superpowers/specs/2026-07-10-saver-observability-design.md.
 
+## [2026-07-11] feat | Saver metrics honesty wave 5 (F30-F34)
+
+Wave 5 (final) of the saver-savings-gaps program, branch
+`feat/saver-metrics-honesty` (spec
+`docs/superpowers/specs/2026-07-11-saver-metrics-honesty-design.md`).
+
+- F30 — honest delivered-bytes accounting: `recordAndFilterOverlayOutput`
+  now computes persisted `returnedBytes`/`bytesSaved`/`savingRatio` from
+  the FINAL delivered text (summary + excerpts + D16 markers + recovery
+  footer). The footer moved into context-gate as the canonical
+  `buildRecoveryFooter` (new `recovery-footer.ts`, also home of
+  `looksPreTruncated` and `OVERLAY_CHUNK_LINES`); the saver hook and the
+  daemon `/excerpt` opt in via `includeFooter: true` and emit
+  `returnedText` verbatim. Net-negative guard: if the delivered
+  replacement would be >= raw, record degrades to passthrough BEFORE any
+  side effect (no chunk set, no event, no evidence). Footer display uses a
+  <=2-iteration fixed point (digit-width drift tolerated, persisted
+  numbers exact).
+- Contract adjustment vs spec: the spec's `footerTemplate` callback was
+  replaced by the canonical in-package footer + `includeFooter` boolean —
+  a function value cannot cross the daemon HTTP boundary
+  (architect-approved at plan time).
+- W5-extra — overlay events now carry `secretsRedacted`/`chunksStored`
+  (optional, strict schema keeps old rows parsing); rebuilds fold them so
+  an unreadable summary loses nothing post-wave-5 (carryForward still wins
+  when the prior summary is loadable). Reconcile drift-counts schema-valid
+  lines only — the garbage-line rebuild-every-sweep ponytail is gone.
+- F32 — `readProxyUsage` reads usage.jsonl tolerantly (torn lines skipped
+  + counted; `listProxyUsage` delegates); `mega audit usage` prints
+  "N unreadable usage lines skipped".
+- F33 — audit usage ratios are scope-matched: GLOBAL savings (all
+  `stats/<wk>/` dirs summed) over global usage, per-workspace savings
+  breakdown without ratios, and a ready scoped-ratio branch for usage rows
+  carrying the new optional `workspaceKey`. Resolution recorded: the proxy
+  has NO per-request workspace signal today (single global listener), so
+  the writer never stamps the key — the field is reserved, the fallback is
+  the labeled global bucket.
+- F31 — supervisor `monitorTick` re-applies an ABSENT route when the
+  listener is healthy (lease kept, no block), bumps persisted
+  `routeReapplies`/`lastRouteReappliedAt` in runtime state; foreign values
+  are never overwritten (adapter value-guard). New doctor check
+  `saver-proxy-route`: FAIL on blocked route while enabled, churn WARN on
+  `routeReapplies > 0`.
+- F34 — `proxy_mediated_token_savings` renamed to
+  `saver_mediated_token_savings` (no shim, pre-1.0); `hooks status` says
+  "saver-mediated savings"; `session saver stats` mediation is
+  `saver_hook` (was a hardcoded `proxy`); audit usage carries "note: the
+  proxy meters usage; savings come from the saver hook/tools."
+
