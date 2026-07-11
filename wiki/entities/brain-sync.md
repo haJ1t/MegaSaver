@@ -19,7 +19,9 @@ export/import (opaque `bundleText`); it does NOT import [[entities/core]].
 
 ## Module surface
 
-- `crypto` — AES-256-GCM seal/open, projectId-bound AAD.
+- `crypto` — AES-256-GCM seal/open, brainId-bound AAD.
+- `brain-id` — `deriveBrainId(key, name) = sha256(key ‖ normalize(name))`:
+  the cross-machine identity (same key + same project name → same brain).
 - `keyfile` — 256-bit key at `<store-root>/brain-sync.key` + one-time recovery
   code (RFC4648 base32); no passphrase derivation.
 - `config` — `brain-sync.json` schema + `assertSafeEndpoint` (HTTPS-only).
@@ -36,8 +38,9 @@ existing `"brain-portability"` entitlement key.
 
 ## Key decisions
 
-- **projectId-bound AAD** — a bundle sealed for project A cannot be opened as
-  project B (cross-project binding).
+- **brainId-bound AAD** — every AAD binds `brainId` (the key-salted
+  cross-machine identity), so a bundle sealed for one brain cannot be opened
+  as another (cross-brain binding), and the same brain syncs across machines.
 - **Content-addressed objects + manifest CAS** — push is a compare-and-swap on
   the manifest generation; concurrent writers conflict, never clobber.
 - **Conditional-write init probe** — `init` rejects endpoints that do not

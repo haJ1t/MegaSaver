@@ -177,7 +177,7 @@ objects/<uuid>.enc           encrypted full bundle; random name, written
   Object names are random UUIDs — the provider sees no plaintext-derived
   fingerprint and no cross-time equality signal.
 - `objectKey` inside the manifest binds manifest→object; the object's AAD
-  binds the name AND the projectId, so transplanting ciphertexts between
+  binds the name AND the brainId, so transplanting ciphertexts between
   names, generations, or projects fails authentication.
 
 **Conditional-write rules (every manifest PUT is conditional):**
@@ -202,7 +202,7 @@ true` is recorded in config; smoke evidence must name the providers tested.
 2. If remote generation < local last-seen → `rollback_detected`, stop.
    If remote generation > local last-seen → pull step 3 first (merge
    before publish; a push can never drop unseen remote entries).
-3. Pull/merge: GET `objectKey`, decrypt (AAD = projectId + name), verify `brainSha256`,
+3. Pull/merge: GET `objectKey`, decrypt (AAD = brainId + object name), verify `brainSha256`,
    `importBrain` merge (suggested-gate), then persist last-seen =
    remote generation.
 4. Export local bundle (firewall-redacted 2.0 path). If its sha256 equals
@@ -245,7 +245,7 @@ behavior, documented, not changed).
 | Provider fingerprints content via object names | Names are random UUIDs; plaintext hash lives only inside the encrypted manifest |
 | MITM on endpoint | HTTPS enforced (http only for localhost dev); GCM auth rejects modified ciphertext regardless |
 | Ciphertext swap/transplant between objects or generations | Object AAD binds the name; authenticated manifest binds `objectKey` + `brainSha256` |
-| Cross-project transplant (provider serves project A's ciphertexts under project B's prefix; one keyfile is shared across the user's projects) | Every AAD binds `projectId` (`…:manifest:<projectId>`, `…:object:<projectId>:<objectKey>`) — a foreign project's ciphertext fails GCM auth under the shared key |
+| Cross-brain transplant (provider serves brain A's ciphertexts under brain B's prefix; one keyfile is shared across the user's projects) | Every AAD binds `brainId` (`…:manifest:<brainId>`, `…:object:<brainId>:<objectKey>`) — a foreign brain's ciphertext fails GCM auth under the shared key |
 | Manifest rollback (old manifest re-served) | Generation monotonicity vs persisted last-seen, checked on every pull after the first (first pull on a fresh machine is TOFU) |
 | Concurrent writers lose updates | All manifest PUTs conditional (`If-Match` / `If-None-Match: *`); enforcement verified per-endpoint by the init probe; bounded CAS retry |
 | Stolen bucket credentials (no keyfile) | Attacker reads ciphertext only; cannot decrypt or forge (no key) |
@@ -253,7 +253,7 @@ behavior, documented, not changed).
 | Weak user secret | Eliminated by design: key is generated, not derived |
 | Recovery-code typo at join | 2-byte sha256 checksum → immediate `bad_recovery_code` |
 | Local keyfile exposure | Temp file created `0o600` then renamed (no chmod window); machine-trust boundary documented |
-| Second machine plain-`init` onto a used bucket (wrong new key) | Fail-closed, no gate at init (init is store-level; remote manifests are per-project under `<prefix><projectId>/`, so init cannot enumerate them without ListObjects, which is out of scope). A wrong key surfaces as `wrong_key` on the first sync of any affected project, and an undecryptable manifest is NEVER overwritten (the push CAS only overwrites a manifest it successfully decrypted). The local keyfile-exists guard additionally blocks re-`init` from silently replacing a working key without `--reset --force`. |
+| Second machine plain-`init` onto a used bucket (wrong new key) | Fail-closed, no gate at init (init is store-level; remote manifests are per-brain under `<prefix><brainId>/`, so init cannot enumerate them without ListObjects, which is out of scope). A wrong key surfaces as `wrong_key` on the first sync of any affected project, and an undecryptable manifest is NEVER overwritten (the push CAS only overwrites a manifest it successfully decrypted). The local keyfile-exists guard additionally blocks re-`init` from silently replacing a working key without `--reset --force`. |
 | Secret leakage into brain content | Export path is firewall-redacted (2.0 guarantee) — sync never touches unredacted stores |
 | Credential leakage by us | Creds never written to config/logs/telemetry; endpoint+bucket never sent in telemetry |
 
