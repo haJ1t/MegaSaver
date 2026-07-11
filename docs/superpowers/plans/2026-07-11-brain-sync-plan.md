@@ -213,6 +213,7 @@ export type BrainSyncErrorCode =
   | "wrong_key"
   | "rollback_detected"
   | "hash_mismatch"
+  | "decrypt_failed"
   | "precondition_failed"
   | "sync_conflict"
   | "conditional_writes_unsupported"
@@ -221,6 +222,7 @@ export type BrainSyncErrorCode =
   | "keyfile_invalid"
   | "config_invalid"
   | "manifest_invalid"
+  | "object_missing"
   | "insecure_endpoint"
   | "transport_error";
 
@@ -1488,7 +1490,7 @@ export type PullResult =
   | { state: "merged"; generation: number };
 
 export type PushResult =
-  | { state: "up-to-date"; generation: number }
+  | { state: "up-to-date"; generation: number; merged: boolean }
   | { state: "pushed"; generation: number; merged: boolean };
 
 export type StatusResult =
@@ -1525,7 +1527,7 @@ async function mergeRemote(deps: SyncDeps, remote: RemoteState): Promise<PullRes
   if (manifest.generation === lastSeen) return { state: "up-to-date", generation: manifest.generation };
   const obj = await deps.transport.getObject(manifest.objectKey);
   if (obj === null) {
-    throw new BrainSyncError("manifest_invalid", `manifest points at missing object ${manifest.objectKey}`);
+    throw new BrainSyncError("object_missing", `manifest points at missing object ${manifest.objectKey}`);
   }
   const bundleText = decrypt(obj.body, deps.key, objectAad(deps.projectId, manifest.objectKey)).toString("utf8");
   if (sha256Hex(bundleText) !== manifest.brainSha256) {
@@ -1594,7 +1596,7 @@ describe("push", () => {
   it("skip-unchanged: same bundle hash → up-to-date, no generation churn", async () => {
     const a = makeMachine("bundle-a");
     await push(a.deps);
-    expect(await push(a.deps)).toEqual({ state: "up-to-date", generation: 1 });
+    expect(await push(a.deps)).toEqual({ state: "up-to-date", generation: 1, merged: false });
   });
 
   it("push merges unseen remote changes first (merged: true)", async () => {
@@ -1682,13 +1684,21 @@ export async function push(deps: SyncDeps): Promise<PushResult> {
   for (let attempt = 1; attempt <= MAX_CAS_ATTEMPTS; attempt += 1) {
     const remote = await readRemote(deps.transport, deps.key, deps.projectId);
     if (remote !== null) {
-      const mergeResult = await mergeRemote(deps, remote);
-      if (mergeResult.state === "merged") merged = true;
+      try {
+        const mergeResult = await mergeRemote(deps, remote);
+        if (mergeResult.state === "merged") merged = true;
+      } catch (err) {
+        // A concurrent push may have superseded this manifest and deleted its
+        // object between our read and fetch. Retry: the next readRemote sees
+        // the newer manifest, whose object exists. Bounded by MAX_CAS_ATTEMPTS.
+        if (err instanceof BrainSyncError && err.code === "object_missing") continue;
+        throw err;
+      }
     }
     const bundleText = deps.exportBundle();
     const brainSha256 = sha256Hex(bundleText);
     if (remote !== null && remote.manifest.brainSha256 === brainSha256) {
-      return { state: "up-to-date", generation: remote.manifest.generation };
+      return { state: "up-to-date", generation: remote.manifest.generation, merged };
     }
     const objectKey = `objects/${randomUUID()}.enc`;
     const ciphertext = encrypt(Buffer.from(bundleText, "utf8"), deps.key, objectAad(deps.projectId, objectKey));

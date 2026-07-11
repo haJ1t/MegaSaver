@@ -261,11 +261,25 @@ the plaintext store anyway), storage-provider availability.
   (`wrong_key`, `rollback_detected`, `hash_mismatch`, `decrypt_failed`,
   `precondition_failed`, `sync_conflict`, `conditional_writes_unsupported`,
   `bad_recovery_code`, `keyfile_missing`, `keyfile_invalid`,
-  `config_invalid`, `manifest_invalid`, `insecure_endpoint`,
-  `transport_error`).
+  `config_invalid`, `manifest_invalid`, `object_missing`,
+  `insecure_endpoint`, `transport_error`).
 - Network/SDK failures surface as single-line actionable errors (no raw
-  SDK stack dumps into agent context).
+  SDK stack dumps into agent context). The transport (the sole aws-sdk
+  boundary) wraps every SDK failure as `transport_error` carrying only
+  op + key + error name + status — never the SDK message/stack (which can
+  echo the access-key id).
+- `object_missing` = the live manifest references an object absent from the
+  store. In `pull` it surfaces to the user; in `push` it is treated as a
+  concurrent supersession and retried within the bounded CAS loop (a
+  competing push deleted the old object after committing a newer manifest).
 - No silent retries except the bounded CAS loop.
+- Orphan objects: a push that fails after writing its content object, or
+  whose best-effort cleanup of the superseded object fails, leaves an
+  unreferenced encrypted object in the user's bucket. These are cost-only
+  (no correctness/security impact — every live manifest names a present
+  object) and are NOT swept in 2.1; `sync reset` clears a project's remote
+  wholesale. A GC sweep of `objects/` not named by the live manifest is a
+  documented later-nicety, deliberately deferred (YAGNI).
 
 ## Testing & evidence
 
