@@ -817,15 +817,18 @@ git commit -m "feat(brain-sync): strict config with per-project last-seen"
 
 - [ ] **Step 1: Write the failing tests**
 
-`test/manifest.test.ts`:
+`test/manifest.test.ts` (AADs bind `projectId` — see the AAD design in the
+spec; a cross-project transplant must fail authentication):
 ```ts
 import { randomBytes, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { BrainSyncError } from "../src/errors.js";
-import { MANIFEST_AAD, objectAad, openManifest, sealManifest, type SyncManifest } from "../src/manifest.js";
-import { decrypt } from "../src/crypto.js";
+import { decrypt, encrypt } from "../src/crypto.js";
+import type { BrainSyncError } from "../src/errors.js";
+import { manifestAad, objectAad, openManifest, sealManifest, type SyncManifest } from "../src/manifest.js";
 
 const key = randomBytes(32);
+const projectId = "3b6c1c8e-0f4c-4d6a-9b3e-2f8a1c9d7e5f";
+const otherProjectId = "9f1e2d3c-4b5a-4c6d-8e7f-0a1b2c3d4e5f";
 const manifest: SyncManifest = {
   schemaVersion: 1,
   generation: 3,
@@ -835,33 +838,65 @@ const manifest: SyncManifest = {
 };
 
 describe("sync manifest", () => {
-  it("seal/open round-trips", () => {
-    expect(openManifest(sealManifest(manifest, key), key)).toEqual(manifest);
+  it("seal/open round-trips under the same projectId", () => {
+    expect(openManifest(sealManifest(manifest, key, projectId), key, projectId)).toEqual(manifest);
   });
 
   it("seal uses the manifest AAD (decrypt with object AAD fails)", () => {
-    const sealed = sealManifest(manifest, key);
-    expect(() => decrypt(sealed, key, objectAad("objects/x.enc"))).toThrow(BrainSyncError);
-    expect(() => decrypt(sealed, key, MANIFEST_AAD)).not.toThrow();
+    const sealed = sealManifest(manifest, key, projectId);
+    expect(() => decrypt(sealed, key, objectAad(projectId, "objects/x.enc"))).toThrow();
+    expect(() => decrypt(sealed, key, manifestAad(projectId))).not.toThrow();
+  });
+
+  it("rejects a manifest transplanted to a different project", () => {
+    const sealed = sealManifest(manifest, key, projectId);
+    expect(() => openManifest(sealed, key, otherProjectId)).toThrow();
   });
 
   it("open rejects valid-JSON payloads that fail the schema", () => {
-    const sealed = sealManifest(manifest, key);
-    const bad = openManifestTamper(sealed);
+    const bad = encrypt(new TextEncoder().encode(JSON.stringify({ nope: true })), key, manifestAad(projectId));
     try {
-      openManifest(bad, key);
+      openManifest(bad, key, projectId);
       expect.unreachable();
     } catch (err) {
       expect((err as BrainSyncError).code).toBe("manifest_invalid");
     }
   });
-});
 
-// helper: re-seal a schema-invalid manifest with the correct AAD
-import { encrypt } from "../src/crypto.js";
-function openManifestTamper(_sealed: Uint8Array): Uint8Array {
-  return encrypt(new TextEncoder().encode(JSON.stringify({ nope: true })), key, MANIFEST_AAD);
-}
+  it("open rejects non-JSON plaintext", () => {
+    const bad = encrypt(new TextEncoder().encode("not json at all"), key, manifestAad(projectId));
+    try {
+      openManifest(bad, key, projectId);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as BrainSyncError).code).toBe("manifest_invalid");
+    }
+  });
+
+  it("aad helpers produce the bound strings", () => {
+    expect(manifestAad(projectId)).toBe(`megasaver-brain-sync:v1:manifest:${projectId}`);
+    expect(objectAad(projectId, "objects/abc.enc")).toBe(
+      `megasaver-brain-sync:v1:object:${projectId}:objects/abc.enc`,
+    );
+  });
+
+  it("rejects an extra field (strict schema)", () => {
+    const bad = encrypt(
+      new TextEncoder().encode(JSON.stringify({ ...manifest, extra: 1 })),
+      key,
+      manifestAad(projectId),
+    );
+    expect(() => openManifest(bad, key, projectId)).toThrow();
+  });
+
+  it("rejects generation 0, malformed objectKey, and uppercase brainSha256", () => {
+    const seal = (m: unknown) =>
+      encrypt(new TextEncoder().encode(JSON.stringify(m)), key, manifestAad(projectId));
+    expect(() => openManifest(seal({ ...manifest, generation: 0 }), key, projectId)).toThrow();
+    expect(() => openManifest(seal({ ...manifest, objectKey: "objects/../evil.enc" }), key, projectId)).toThrow();
+    expect(() => openManifest(seal({ ...manifest, brainSha256: "A".repeat(64) }), key, projectId)).toThrow();
+  });
+});
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -878,10 +913,16 @@ import { decrypt, encrypt } from "./crypto.js";
 import { BrainSyncError } from "./errors.js";
 
 export const MANIFEST_KEY = "manifest.json.enc";
-export const MANIFEST_AAD = "megasaver-brain-sync:v1:manifest";
 
-export function objectAad(objectKey: string): string {
-  return `megasaver-brain-sync:v1:object:${objectKey}`;
+// Every AAD binds projectId: one keyfile is shared across a user's projects
+// and remote per-project isolation is only the (provider-controlled) prefix,
+// so a foreign project's ciphertext must fail auth under the shared key.
+export function manifestAad(projectId: string): string {
+  return `megasaver-brain-sync:v1:manifest:${projectId}`;
+}
+
+export function objectAad(projectId: string, objectKey: string): string {
+  return `megasaver-brain-sync:v1:object:${projectId}:${objectKey}`;
 }
 
 export const syncManifestSchema = z
@@ -896,12 +937,12 @@ export const syncManifestSchema = z
 
 export type SyncManifest = z.infer<typeof syncManifestSchema>;
 
-export function sealManifest(manifest: SyncManifest, key: Uint8Array): Buffer {
-  return encrypt(Buffer.from(JSON.stringify(manifest), "utf8"), key, MANIFEST_AAD);
+export function sealManifest(manifest: SyncManifest, key: Uint8Array, projectId: string): Buffer {
+  return encrypt(Buffer.from(JSON.stringify(manifest), "utf8"), key, manifestAad(projectId));
 }
 
-export function openManifest(blob: Uint8Array, key: Uint8Array): SyncManifest {
-  const text = decrypt(blob, key, MANIFEST_AAD).toString("utf8");
+export function openManifest(blob: Uint8Array, key: Uint8Array, projectId: string): SyncManifest {
+  const text = decrypt(blob, key, manifestAad(projectId)).toString("utf8");
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -1265,6 +1306,7 @@ import { startS3Double, type S3Double } from "./helpers/s3-double.js";
 let double: S3Double;
 let transport: Transport;
 const key = randomBytes(32);
+const projectId = "3b6c1c8e-0f4c-4d6a-9b3e-2f8a1c9d7e5f";
 
 // Fake "local machine": in-memory bundle + last-seen
 function makeMachine(initialBundle: string) {
@@ -1274,6 +1316,7 @@ function makeMachine(initialBundle: string) {
   const deps: SyncDeps = {
     transport,
     key,
+    projectId,
     lastSeenGeneration: () => lastSeen,
     persistLastSeen: (generation) => {
       lastSeen = generation;
@@ -1374,8 +1417,8 @@ describe("pull/status", () => {
     const { openManifest } = await import("../src/manifest.js");
     const { encrypt } = await import("../src/crypto.js");
     const { objectAad } = await import("../src/manifest.js");
-    const manifest = openManifest(manifestEntry?.body ?? new Uint8Array(), key);
-    const forged = encrypt(Buffer.from("not-the-bundle"), key, objectAad(manifest.objectKey));
+    const manifest = openManifest(manifestEntry?.body ?? new Uint8Array(), key, projectId);
+    const forged = encrypt(Buffer.from("not-the-bundle"), key, objectAad(projectId, manifest.objectKey));
     double.store.set(`proj-1/${manifest.objectKey}`, { body: Buffer.from(forged), etag: '"f"' });
     const b = makeMachine("x");
     try {
@@ -1422,6 +1465,7 @@ import type { Transport } from "./transport.js";
 export type SyncDeps = {
   transport: Transport;
   key: Uint8Array;
+  projectId: string;
   lastSeenGeneration: () => number;
   persistLastSeen: (generation: number) => void;
   exportBundle: () => string;
@@ -1444,11 +1488,11 @@ export type StatusResult =
 
 type RemoteState = { manifest: SyncManifest; etag: string };
 
-async function readRemote(transport: Transport, key: Uint8Array): Promise<RemoteState | null> {
+async function readRemote(transport: Transport, key: Uint8Array, projectId: string): Promise<RemoteState | null> {
   const got = await transport.getObject(MANIFEST_KEY);
   if (got === null) return null;
   try {
-    return { manifest: openManifest(got.body, key), etag: got.etag };
+    return { manifest: openManifest(got.body, key, projectId), etag: got.etag };
   } catch (err) {
     if (err instanceof BrainSyncError && err.code === "decrypt_failed") {
       throw new BrainSyncError(
@@ -1474,7 +1518,7 @@ async function mergeRemote(deps: SyncDeps, remote: RemoteState): Promise<PullRes
   if (obj === null) {
     throw new BrainSyncError("manifest_invalid", `manifest points at missing object ${manifest.objectKey}`);
   }
-  const bundleText = decrypt(obj.body, deps.key, objectAad(manifest.objectKey)).toString("utf8");
+  const bundleText = decrypt(obj.body, deps.key, objectAad(deps.projectId, manifest.objectKey)).toString("utf8");
   if (sha256Hex(bundleText) !== manifest.brainSha256) {
     throw new BrainSyncError("hash_mismatch", "decrypted bundle does not match the manifest brainSha256");
   }
@@ -1484,15 +1528,15 @@ async function mergeRemote(deps: SyncDeps, remote: RemoteState): Promise<PullRes
 }
 
 export async function pull(deps: SyncDeps): Promise<PullResult> {
-  const remote = await readRemote(deps.transport, deps.key);
+  const remote = await readRemote(deps.transport, deps.key, deps.projectId);
   if (remote === null) return { state: "empty" };
   return mergeRemote(deps, remote);
 }
 
 export async function status(
-  deps: Pick<SyncDeps, "transport" | "key" | "lastSeenGeneration">,
+  deps: Pick<SyncDeps, "transport" | "key" | "projectId" | "lastSeenGeneration">,
 ): Promise<StatusResult> {
-  const remote = await readRemote(deps.transport, deps.key);
+  const remote = await readRemote(deps.transport, deps.key, deps.projectId);
   if (remote === null) return { state: "empty" };
   const lastSeen = deps.lastSeenGeneration();
   return {
@@ -1627,7 +1671,7 @@ const MAX_CAS_ATTEMPTS = 3;
 export async function push(deps: SyncDeps): Promise<PushResult> {
   let merged = false;
   for (let attempt = 1; attempt <= MAX_CAS_ATTEMPTS; attempt += 1) {
-    const remote = await readRemote(deps.transport, deps.key);
+    const remote = await readRemote(deps.transport, deps.key, deps.projectId);
     if (remote !== null) {
       const mergeResult = await mergeRemote(deps, remote);
       if (mergeResult.state === "merged") merged = true;
@@ -1638,7 +1682,7 @@ export async function push(deps: SyncDeps): Promise<PushResult> {
       return { state: "up-to-date", generation: remote.manifest.generation };
     }
     const objectKey = `objects/${randomUUID()}.enc`;
-    const ciphertext = encrypt(Buffer.from(bundleText, "utf8"), deps.key, objectAad(objectKey));
+    const ciphertext = encrypt(Buffer.from(bundleText, "utf8"), deps.key, objectAad(deps.projectId, objectKey));
     await deps.transport.putObject(objectKey, ciphertext);
     const manifest: SyncManifest = {
       schemaVersion: 1,
@@ -1650,7 +1694,7 @@ export async function push(deps: SyncDeps): Promise<PushResult> {
     try {
       await deps.transport.putObject(
         MANIFEST_KEY,
-        sealManifest(manifest, deps.key),
+        sealManifest(manifest, deps.key, deps.projectId),
         remote === null ? { kind: "if-none-match" } : { kind: "if-match", etag: remote.etag },
       );
     } catch (err) {
@@ -1859,7 +1903,8 @@ export function gate(input: { storeRoot: string; now: () => number; publicKey?: 
 //   2. loadConfig(storeRoot) + loadKeyfile(keyfilePath(storeRoot))
 //   3. registry = ensureStoreReady(storeRoot); resolve project by name (mirror export.ts) → projectId
 //   4. transport = await createTransport({ ...config connection fields, prefix: `${config.prefix}${projectId}/` })
-//   5. return SyncDeps wiring:
+//   5. return SyncDeps wiring (projectId is REQUIRED — it binds every AAD):
+//      projectId,
 //      lastSeenGeneration: () => loadConfig(storeRoot).lastSeen[projectId] ?? 0
 //      persistLastSeen: (g) => updateLastSeen(storeRoot, projectId, g)
 //      exportBundle: () => exportBrain({ registry, projectId, createdAt: new Date(input.now()).toISOString() })

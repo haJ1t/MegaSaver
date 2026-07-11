@@ -136,12 +136,17 @@ Node built-in `node:crypto` only. No libsodium, no age.
 - Encryption: AES-256-GCM. Per-object random 96-bit IV
   (`crypto.randomBytes(12)`), never reused; blob layout
   `[iv(12)][ciphertext][tag(16)]`.
-- AAD binds context:
-  - manifest object: `megasaver-brain-sync:v1:manifest` (its generation
-    cannot live in its own AAD — only known after decrypt; rollback is
-    caught by the monotonicity check instead);
-  - brain object: `megasaver-brain-sync:v1:object:<objectKey>` where
-    `objectKey` is the object's logical key (below).
+- AAD binds context, **including the project id** — one keyfile is shared
+  across all of a user's projects, and remote per-project isolation is only
+  the storage prefix, which the untrusted provider controls; binding
+  `projectId` into every AAD makes a cross-project ciphertext transplant
+  fail authentication under the shared key:
+  - manifest object: `megasaver-brain-sync:v1:manifest:<projectId>` (its
+    generation cannot live in its own AAD — only known after decrypt;
+    rollback is caught by the monotonicity check instead);
+  - brain object: `megasaver-brain-sync:v1:object:<projectId>:<objectKey>`
+    where `objectKey` is the object's logical key (below). `projectId` is a
+    uuid and `objectKey` contains no `:`, so the delimiters are unambiguous.
 - Tamper/auth failure → hard error naming the object; never partial output.
 - Key never leaves the machine except as the user-held recovery code.
 
@@ -165,8 +170,8 @@ objects/<uuid>.enc           encrypted full bundle; random name, written
   Object names are random UUIDs — the provider sees no plaintext-derived
   fingerprint and no cross-time equality signal.
 - `objectKey` inside the manifest binds manifest→object; the object's AAD
-  binds the name, so transplanting ciphertexts between names or
-  generations fails authentication.
+  binds the name AND the projectId, so transplanting ciphertexts between
+  names, generations, or projects fails authentication.
 
 **Conditional-write rules (every manifest PUT is conditional):**
 
@@ -190,7 +195,7 @@ true` is recorded in config; smoke evidence must name the providers tested.
 2. If remote generation < local last-seen → `rollback_detected`, stop.
    If remote generation > local last-seen → pull step 3 first (merge
    before publish; a push can never drop unseen remote entries).
-3. Pull/merge: GET `objectKey`, decrypt (AAD = name), verify `brainSha256`,
+3. Pull/merge: GET `objectKey`, decrypt (AAD = projectId + name), verify `brainSha256`,
    `importBrain` merge (suggested-gate), then persist last-seen =
    remote generation.
 4. Export local bundle (firewall-redacted 2.0 path). If its sha256 equals
@@ -233,6 +238,7 @@ behavior, documented, not changed).
 | Provider fingerprints content via object names | Names are random UUIDs; plaintext hash lives only inside the encrypted manifest |
 | MITM on endpoint | HTTPS enforced (http only for localhost dev); GCM auth rejects modified ciphertext regardless |
 | Ciphertext swap/transplant between objects or generations | Object AAD binds the name; authenticated manifest binds `objectKey` + `brainSha256` |
+| Cross-project transplant (provider serves project A's ciphertexts under project B's prefix; one keyfile is shared across the user's projects) | Every AAD binds `projectId` (`…:manifest:<projectId>`, `…:object:<projectId>:<objectKey>`) — a foreign project's ciphertext fails GCM auth under the shared key |
 | Manifest rollback (old manifest re-served) | Generation monotonicity vs persisted last-seen, checked on every pull after the first (first pull on a fresh machine is TOFU) |
 | Concurrent writers lose updates | All manifest PUTs conditional (`If-Match` / `If-None-Match: *`); enforcement verified per-endpoint by the init probe; bounded CAS retry |
 | Stolen bucket credentials (no keyfile) | Attacker reads ciphertext only; cannot decrypt or forge (no key) |
