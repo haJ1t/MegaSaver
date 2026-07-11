@@ -3237,3 +3237,13 @@ E2E-encrypted, keyfile). Spec (CRITICAL, architect-pass revised) +
 16-task TDD plan + growth portfolio synthesis brought onto
 worktree-brain-sync from local main (commits fe2752ea/1bf6ca17).
 Execution: subagent-driven.
+
+
+## [2026-07-11] feature | brain-sync (E7) implemented
+`mega brain sync` built on `worktree-brain-sync`: `@megasaver/brain-sync`
+(AES-256-GCM crypto + keyfile/recovery-code + config + manifest + transport +
+CAS sync engine) + 5 CLI commands, 16-task TDD plan executed subagent-driven.
+CRITICAL review findings fixed inline: projectId-AAD cross-project binding,
+config lastSeen lock, transport SDK-error wrapping, init key-print/write-order,
+vacuous-guard replacement. Bundle: `@aws-sdk/client-s3` externalized from
+`mega.mjs` (inlining breached the 12MB guard). Pending smoke + user approval.

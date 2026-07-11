@@ -70,9 +70,11 @@ cloud brain sync, fleet connectors, CI metering, or org dashboards.
 ## Status
 
 Direction LOCKED (user, 2026-07-11): **path B+C mix** (up-market backbone,
-distribution tactical). **2.1 = E7 `mega brain sync`** — first spec cycle
-next. Note: E7 involves E2E encryption → cryptographic ops → **CRITICAL**
-risk per [[concepts/risk-aware-development]]: architect + critic +
-security-reviewer + tracer evidence loop + manual user confirmation in spec.
-Each subsequent pick → full superpowers chain per
-[[concepts/superpowers-discipline]].
+distribution tactical). **2.1 = E7 `mega brain sync`** — now **IMPLEMENTED**
+(branch `worktree-brain-sync`; `@megasaver/brain-sync` package + 5 CLI commands,
+16-task TDD plan executed subagent-driven; see [[entities/brain-sync]]). Still
+pending the CRITICAL review gauntlet (architect + critic + security-reviewer +
+tracer evidence loop) + smoke + manual user release approval before merge.
+E7 involves E2E encryption → cryptographic ops → **CRITICAL** risk per
+[[concepts/risk-aware-development]]. Each subsequent pick → full superpowers
+chain per [[concepts/superpowers-discipline]].

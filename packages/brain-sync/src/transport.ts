@@ -21,10 +21,26 @@ const statusOf = (err: unknown): number | undefined =>
   (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
 const nameOf = (err: unknown): string | undefined => (err as { name?: string }).name;
 
+// @aws-sdk/client-s3 is externalized from the standalone `mega.mjs` bundle (it
+// inlines ~1.2MB and pushes the binary past its size guard — see
+// wiki/decisions/bundle-externalize-native-chain.md). npm-installed CLIs get it
+// via the `@megasaver/cli` optionalDependency; a bare `node mega.mjs` download
+// resolves it from node_modules at runtime or, if absent, hits this mapping —
+// which turns the raw loader error into a friendly, actionable transport_error.
+export function rethrowSdkLoadError(err: NodeJS.ErrnoException): never {
+  if (err.code === "ERR_MODULE_NOT_FOUND" || err.code === "MODULE_NOT_FOUND") {
+    throw new BrainSyncError(
+      "transport_error",
+      "the @aws-sdk/client-s3 package is required for brain sync but is not installed — run `npm i @aws-sdk/client-s3` (bundled CLI users have it automatically)",
+    );
+  }
+  throw err;
+}
+
 export async function createTransport(config: TransportConfig): Promise<Transport> {
   const { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = await import(
     "@aws-sdk/client-s3"
-  );
+  ).catch(rethrowSdkLoadError);
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const accessKeyId = process.env["MEGA_SYNC_ACCESS_KEY_ID"];
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
