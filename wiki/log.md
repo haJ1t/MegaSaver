@@ -3247,3 +3247,31 @@ CRITICAL review findings fixed inline: projectId-AAD cross-project binding,
 config lastSeen lock, transport SDK-error wrapping, init key-print/write-order,
 vacuous-guard replacement. Bundle: `@aws-sdk/client-s3` externalized from
 `mega.mjs` (inlining breached the 12MB guard). Pending smoke + user approval.
+
+## [2026-07-11] gauntlet | brain-sync (E7) — 2 design BLOCKERS found
+Whole-branch CRITICAL gauntlet (3 fresh-context passes) on worktree-brain-sync:
+- code-reviewer: APPROVE, 4 minors (dead conditional_writes_unsupported code,
+  unused brainSyncConfigSchema export, dup s3-double helper, endpoint not
+  rechecked on read path).
+- security-reviewer: YES-with-fixes. Crypto core SOUND (AES-256-GCM, fresh
+  IV, projectId-bound AAD, 0600 keyfile, env-only creds, SDK-error scrubbing,
+  2-condition CAS probe). Must-fix M1: bootstrap push when remote==null &&
+  lastSeen>0 silently resets rollback floor (route to reset instead). L1:
+  re-assert assertSafeEndpoint on read path. L3/L4: spec threat-model honesty.
+- critic (adversarial): TWO BLOCKERS.
+  * BLOCKER 1 (CONFIRMED): cross-machine project-id mismatch. prefix+AAD keyed
+    on LOCAL random project UUID (project.ts:149, common.ts:64); recovery code
+    carries only key, no project id. Two machines' "same" project get
+    different UUIDs -> different remote prefix + incompatible AAD -> cannot
+    sync. Two-machine test passes ONLY by hardcoding one PROJECT_ID into both
+    stores — a precondition the real product can't produce. Feature does not
+    achieve its stated cross-machine goal end-to-end.
+  * BLOCKER 2: approval-asymmetry regresses remote. exportBrain=approved-only,
+    importBrain writes suggested, push=full-overwrite. B pulls A's approved M
+    (lands suggested), B pushes approving nothing -> M dropped from remote ->
+    durability hole; a third joiner pulls memory-less bundle.
+  * HIGH: sync reset deletes manifest but not local last-seen -> sibling B's
+    next pull sees gen1<lastSeen5 -> false rollback_detected -> stranded.
+Status: IMPLEMENTATION complete + internally rigorous (62 pkg + 21 CLI tests,
+verify green), but BLOCKED on design decisions for B1/B2. NOT merged. Smoke +
+user release approval deferred until blockers resolved. Escalated to user.
