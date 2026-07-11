@@ -140,5 +140,9 @@ export const proxyRuntimeStateSchema = z.object({
   startedAt: z.string(),
   lastReconciledAt: z.string(),
   lastUsagePersistedAt: z.string().nullable(),
+  // F31 self-heal telemetry: bumped by monitorTick when it restores a
+  // removed route. Optional — pre-wave-5 runtime files keep parsing.
+  routeReapplies: z.number().int().nonnegative().optional(),
+  lastRouteReappliedAt: z.string().datetime({ offset: true }).optional(),
 });
 export type ProxyRuntimeState = z.infer<typeof proxyRuntimeStateSchema>;

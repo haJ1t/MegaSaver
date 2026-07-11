@@ -2,8 +2,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { ProxyControlState, ProxyTransition } from "../src/state.js";
-import { readControlState, writeControlState } from "../src/stores.js";
+import type { ProxyControlState, ProxyRuntimeState, ProxyTransition } from "../src/state.js";
+import {
+  readControlState,
+  readRuntimeState,
+  writeControlState,
+  writeRuntimeState,
+} from "../src/stores.js";
 import type { RouteAdapter } from "../src/supervisor.js";
 import {
   monitorTick,
@@ -123,6 +128,22 @@ function control(over: Partial<ProxyControlState>): ProxyControlState {
     ...over,
   };
 }
+
+const runtime = (over: Partial<ProxyRuntimeState> = {}): ProxyRuntimeState => ({
+  version: 1,
+  pid: 1234,
+  processStartToken: "tok",
+  bootId: "boot",
+  instanceId: "inst",
+  controlUrl: "http://127.0.0.1:8788",
+  controlToken: "secret",
+  healthCapability: "health",
+  proxyUrl: OWNED,
+  startedAt: "2026-07-03T00:00:00.000Z",
+  lastReconciledAt: "2026-07-03T00:00:00.000Z",
+  lastUsagePersistedAt: null,
+  ...over,
+});
 
 const deps = (route: RouteAdapter, listener: ReturnType<typeof fakeListener>) => ({
   storeRoot: store,
@@ -336,8 +357,8 @@ describe("monitorTick — observe-only while a transition is retained", () => {
     expect(readControlState(store).transition).not.toBeNull();
   });
 
-  it("with no transition + enabled + healthy + route drift → blocks and drains, never applies", () => {
-    const route = fakeRoute(null); // drifted away
+  it("F31: absent-route drift + healthy listener → re-applies, keeps lease, no block", () => {
+    const route = fakeRoute(null); // settings rewrite dropped our value
     writeControlState(
       store,
       control({
@@ -345,12 +366,67 @@ describe("monitorTick — observe-only while a transition is retained", () => {
         routeLease: { url: OWNED, instanceId: "inst", phase: "active", installedAt: "x" },
       }),
     );
+    writeRuntimeState(store, runtime());
     monitorTick(deps(route, fakeListener(true, "matching")));
     const s = readControlState(store);
-    expect(route.value).toBeNull(); // never re-applied
+    expect(route.value).toBe(OWNED); // route restored in place
+    expect(s.reconcileBlocked).toBeNull();
+    expect(s.routeLease?.phase).toBe("active"); // lease KEPT
+    expect(s.drainingGeneration).toBeNull();
+    const rt = readRuntimeState(store);
+    expect(rt?.routeReapplies).toBe(1);
+    expect(rt?.lastRouteReappliedAt).toBe(
+      new Date(Date.UTC(2026, 6, 3, 0, 0, 30)).toISOString(),
+    );
+  });
+
+  it("F31: a second drift bumps the counter to 2", () => {
+    const route = fakeRoute(null);
+    writeControlState(
+      store,
+      control({
+        transition: null,
+        routeLease: { url: OWNED, instanceId: "inst", phase: "active", installedAt: "x" },
+      }),
+    );
+    writeRuntimeState(store, runtime({ routeReapplies: 1 }));
+    monitorTick(deps(route, fakeListener(true, "matching")));
+    expect(readRuntimeState(store)?.routeReapplies).toBe(2);
+  });
+
+  it("F31: re-apply that does not take (lost write) falls back to block + drain", () => {
+    const route = brokenRoute(null); // apply() silently fails
+    writeControlState(
+      store,
+      control({
+        transition: null,
+        routeLease: { url: OWNED, instanceId: "inst", phase: "active", installedAt: "x" },
+      }),
+    );
+    writeRuntimeState(store, runtime());
+    monitorTick(deps(route, fakeListener(true, "matching")));
+    const s = readControlState(store);
+    expect(route.value).toBeNull();
     expect(s.reconcileBlocked?.reason).toBe("route_removed");
     expect(s.routeLease).toBeNull();
     expect(s.drainingGeneration).not.toBeNull();
+    expect(readRuntimeState(store)?.routeReapplies).toBeUndefined();
+  });
+
+  it("F31: unhealthy listener never re-applies — blocks without draining a dead generation", () => {
+    const route = fakeRoute(null);
+    writeControlState(
+      store,
+      control({
+        transition: null,
+        routeLease: { url: OWNED, instanceId: "inst", phase: "active", installedAt: "x" },
+      }),
+    );
+    monitorTick(deps(route, fakeListener(false, "none")));
+    const s = readControlState(store);
+    expect(route.value).toBeNull(); // not re-applied
+    expect(s.reconcileBlocked?.reason).toBe("route_removed");
+    expect(s.drainingGeneration).toBeNull();
   });
 
   it("no transition + foreign route drift → preserves foreign, blocks route_conflict", () => {

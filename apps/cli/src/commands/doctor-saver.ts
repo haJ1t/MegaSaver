@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { hookCommandMatches } from "@megasaver/connector-claude-code";
 import { readHeartbeatView } from "@megasaver/context-gate";
 import { readDiscovery } from "@megasaver/daemon";
+import { readControlState, readRuntimeState } from "@megasaver/proxy-control";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import type { Check } from "./doctor.js";
 import { resolveClaudeCodeSettingsPath } from "./hooks/settings-path.js";
@@ -345,6 +346,36 @@ export function runSaverChecks(deps: DoctorSaverDeps = {}): Check[] {
         : `running (pid ${disc.pid}, port ${disc.port})`,
     pass: true,
   });
+
+  // F31 route health: desiredEnabled with a blocked route means metering
+  // died silently (the exact failure the supervisor now self-heals); a
+  // nonzero re-apply counter means something on this machine keeps
+  // rewriting settings — churn worth knowing about, not a failure.
+  const proxyControl = readControlState(storeRoot);
+  if (!proxyControl.desiredEnabled) {
+    checks.push({
+      key: "saver-proxy-route",
+      value: "proxy disabled (no route expected)",
+      pass: true,
+    });
+  } else if (proxyControl.reconcileBlocked !== null) {
+    checks.push({
+      key: "saver-proxy-route",
+      value: `route ${proxyControl.reconcileBlocked.reason} at ${proxyControl.reconcileBlocked.at}`,
+      pass: false,
+      reason: "proxy route lost and not restorable — run: mega proxy enable",
+    });
+  } else {
+    const reapplies = readRuntimeState(storeRoot)?.routeReapplies ?? 0;
+    checks.push({
+      key: "saver-proxy-route",
+      value:
+        reapplies > 0
+          ? `route healthy — re-applied ${reapplies} times (something rewrites settings)`
+          : "route healthy",
+      pass: true,
+    });
+  }
 
   return checks;
 }

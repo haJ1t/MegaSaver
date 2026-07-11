@@ -1,6 +1,11 @@
 import { type ReconcileDecision, type ReconcileObs, reconcileTransition } from "./reconcile.js";
 import type { ProxyControlErrorCode, ProxyControlState } from "./state.js";
-import { readControlState, writeControlState } from "./stores.js";
+import {
+  readControlState,
+  readRuntimeState,
+  writeControlState,
+  writeRuntimeState,
+} from "./stores.js";
 
 // Injected so proxy-control stays agent-agnostic (the CLI composition root
 // supplies the Claude route adapter). Only the value-guarded surface is needed.
@@ -265,21 +270,44 @@ export function superviseDrive(deps: SupervisorDeps): { ready: boolean } {
 }
 
 // Fixed 5-second monitor. Suspended while a transition is retained (observe-only:
-// never mutates route/lease/block). With no transition, missing/foreign route
-// drift blocks + drains the still-healthy generation and never re-applies.
+// never mutates route/lease/block). With no transition: an ABSENT route with a
+// healthy listener is re-applied in place (F31 — a settings rewrite dropped our
+// value; the route adapter's value-guard makes overwriting a FOREIGN value
+// structurally impossible, so self-heal can never fight another gateway).
+// Foreign/invalid drift and failed re-applies block + drain as before.
 export function monitorTick(deps: SupervisorDeps): void {
   const control = readControlState(deps.storeRoot);
   if (control.transition !== null) return; // observe-only during a retained transition
 
   // During an expected-unrouted (disable) window there is no transition here by
   // construction; a missing route with no lease is simply the steady disabled
-  // state. Drift only matters when we still hold a lease.
+  // state. Drift only matters when we still hold a lease. Deliberate disable
+  // stops the supervisor first, so re-apply cannot fight the user.
   if (control.routeLease === null) return;
   const route = deps.route.inspect(deps.ownedUrl);
   if (route === "exact") return; // still routed, no drift
 
   const nowIso = new Date(deps.now()).toISOString();
   const healthy = deps.listener.isAlive() && deps.listener.healthCheck() === "matching";
+
+  if (route === "absent" && healthy) {
+    deps.route.apply(deps.ownedUrl);
+    if (deps.route.inspect(deps.ownedUrl) === "exact") {
+      // Route restored: keep the lease, no block, no drain. Count the
+      // re-apply so doctor can surface settings-rewrite churn.
+      const runtime = readRuntimeState(deps.storeRoot);
+      if (runtime !== null) {
+        writeRuntimeState(deps.storeRoot, {
+          ...runtime,
+          routeReapplies: (runtime.routeReapplies ?? 0) + 1,
+          lastRouteReappliedAt: nowIso,
+        });
+      }
+      return;
+    }
+    // Re-apply did not take (lost write / refused): fall through to the
+    // block + drain path below.
+  }
   const next: ProxyControlState = {
     ...control,
     // Never overwrite/remove: a foreign value is preserved; a leased exact value

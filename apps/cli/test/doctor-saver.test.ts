@@ -6,6 +6,11 @@ import {
   recordFailureHeartbeat,
   recordInvocationHeartbeat,
 } from "@megasaver/context-gate";
+import {
+  type ProxyControlState,
+  writeControlState,
+  writeRuntimeState,
+} from "@megasaver/proxy-control";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runSaverChecks } from "../src/commands/doctor-saver.js";
 import type { Check } from "../src/commands/doctor.js";
@@ -85,6 +90,22 @@ const advancingSpawn = (cmd: string) => {
 };
 
 const find = (checks: Check[], key: string) => checks.find((c) => c.key === key);
+
+function proxyControl(over: Partial<ProxyControlState>): ProxyControlState {
+  return {
+    version: 1,
+    desiredEnabled: true,
+    port: 8787,
+    upstreamBaseUrl: "https://api.anthropic.com",
+    routeLease: null,
+    drainingGeneration: null,
+    reconcileBlocked: null,
+    transition: null,
+    updatedAt: iso(NOW),
+    lastError: null,
+    ...over,
+  };
+}
 
 describe("runSaverChecks", () => {
   it("passes end-to-end with registered absolute hooks + an advancing heartbeat", () => {
@@ -263,5 +284,50 @@ describe("runSaverChecks", () => {
     const version = find(checks, "saver-hook-version");
     expect(version?.pass).toBe(true);
     expect(version?.reason).toBeUndefined();
+  });
+
+  it("saver-proxy-route: passes as informational when the proxy is disabled", () => {
+    const settingsPath = writeHookSettings(`${fakeBinary()} hooks saver`);
+    const checks = runSaverChecks({ settingsPath, storeRoot, spawn: advancingSpawn, now: () => NOW });
+    const c = find(checks, "saver-proxy-route");
+    expect(c?.pass).toBe(true);
+    expect(c?.value).toContain("disabled");
+  });
+
+  it("saver-proxy-route: FAILs when desiredEnabled but the route is blocked", () => {
+    const settingsPath = writeHookSettings(`${fakeBinary()} hooks saver`);
+    writeControlState(
+      storeRoot,
+      proxyControl({ reconcileBlocked: { reason: "route_removed", at: iso(NOW) } }),
+    );
+    const checks = runSaverChecks({ settingsPath, storeRoot, spawn: advancingSpawn, now: () => NOW });
+    const c = find(checks, "saver-proxy-route");
+    expect(c?.pass).toBe(false);
+    expect(c?.reason).toContain("mega proxy enable");
+  });
+
+  it("saver-proxy-route: WARNs (pass + churn note) when routeReapplies > 0", () => {
+    const settingsPath = writeHookSettings(`${fakeBinary()} hooks saver`);
+    writeControlState(storeRoot, proxyControl({}));
+    writeRuntimeState(storeRoot, {
+      version: 1,
+      pid: 1234,
+      processStartToken: "tok",
+      bootId: "boot",
+      instanceId: "inst",
+      controlUrl: "http://127.0.0.1:8788",
+      controlToken: "secret",
+      healthCapability: "health",
+      proxyUrl: "http://127.0.0.1:8787",
+      startedAt: iso(NOW),
+      lastReconciledAt: iso(NOW),
+      lastUsagePersistedAt: null,
+      routeReapplies: 3,
+    });
+    const checks = runSaverChecks({ settingsPath, storeRoot, spawn: advancingSpawn, now: () => NOW });
+    const c = find(checks, "saver-proxy-route");
+    expect(c?.pass).toBe(true);
+    expect(c?.value).toContain("re-applied 3");
+    expect(c?.value).toContain("rewrites settings");
   });
 });
