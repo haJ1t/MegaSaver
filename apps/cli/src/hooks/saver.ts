@@ -1,9 +1,5 @@
-import { type FailureKind, OVERLAY_CHUNK_LINES } from "@megasaver/context-gate";
-import {
-  type RecordOverlayOutputInput,
-  type RecordOverlayOutputResult,
-  tokensFromBytes,
-} from "@megasaver/core";
+import type { FailureKind } from "@megasaver/context-gate";
+import type { RecordOverlayOutputInput, RecordOverlayOutputResult } from "@megasaver/core";
 import type { OutputSourceKind } from "@megasaver/output-filter";
 import { type TokenSaverMode, encodeWorkspaceKey, modeToBudget } from "@megasaver/shared";
 
@@ -194,17 +190,6 @@ function asStr(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
-// The harness can truncate a tool output BEFORE the PostToolUse hook sees it; the
-// stored chunk is then incomplete and "Full output recoverable" would be a lie.
-// Anchored near the END of the buffer (last 256 bytes) to keep false positives low:
-// a mid-text mention of truncation is normal content, not a real cutoff.
-const TRUNCATION_MARKER = /\[truncated\b|output truncated|<truncated\b/i;
-const TRUNCATION_TAIL_BYTES = 256;
-function looksPreTruncated(raw: string): boolean {
-  const tail = raw.length > TRUNCATION_TAIL_BYTES ? raw.slice(-TRUNCATION_TAIL_BYTES) : raw;
-  return TRUNCATION_MARKER.test(tail);
-}
-
 function labelOf(toolInput: unknown, fallback: string): string {
   if (typeof toolInput !== "object" || toolInput === null) return fallback;
   const i = toolInput as Record<string, unknown>;
@@ -333,6 +318,9 @@ async function decide(
     label: labelOf(p["tool_input"], tool),
     mode: settings.mode,
     storeRawOutput: true,
+    // F30: the recovery footer is built INSIDE record() so the persisted
+    // numbers count it; returnedText comes back ready-to-emit.
+    includeFooter: true,
     // B8: the gate above is the single eligibility authority; record()
     // collapses the filter thresholds onto it.
     compressFloorBytes: floorBytes,
@@ -343,25 +331,5 @@ async function decide(
   // Step 5: a qualifying compression updates the global latestCompression.
   deps.recordCompression(deps.storeRoot, workspaceKey);
 
-  const rawTokens = tokensFromBytes(recorded.rawBytes);
-  const returnedTokens = tokensFromBytes(recorded.returnedBytes);
-  const tokenPct = rawTokens === 0 ? "0.0" : ((1 - returnedTokens / rawTokens) * 100).toFixed(1);
-  const n = recorded.chunkCount ?? 1;
-  const L = OVERLAY_CHUNK_LINES;
-  // Advertise chunk IDS, never a line->id formula: chunks index the REDACTED
-  // stored text, while the agent sees the original tool output's line numbers
-  // (a multi-line secret redacts to one line, shifting the two spaces apart).
-  // Fetch by id 0..n-1 is correct regardless.
-  const expandCmd =
-    n > 1
-      ? `— stored in ${n} chunks of ~${L} lines each; fetch any with: mega output chunk "${recorded.chunkSetId}" "<i>" (i = 0..${n - 1})`
-      : `— run: mega output chunk "${recorded.chunkSetId}" "0"`;
-  const partialNoun = n > 1 ? "recovered chunks are" : "recovered chunk is";
-  const recovery = looksPreTruncated(shape.raw)
-    ? `NOTE: upstream output appears truncated, ${partialNoun} PARTIAL, not complete ${expandCmd} (or MCP proxy_expand_chunk if connected)`
-    : `Full output recoverable ${expandCmd} (or MCP proxy_expand_chunk if connected)`;
-  const pointer = recorded.chunkSetId
-    ? `\n\n[Mega Saver: compressed ${recorded.rawBytes}→${recorded.returnedBytes} B (~${rawTokens}→${returnedTokens} tokens, ${tokenPct}%). ${recovery}.]`
-    : "";
-  return { updatedToolOutput: shape.rebuild(`${recorded.returnedText}${pointer}`) };
+  return { updatedToolOutput: shape.rebuild(recorded.returnedText) };
 }

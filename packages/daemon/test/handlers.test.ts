@@ -111,6 +111,22 @@ describe("excerptHandler", () => {
     expect(res.status).toBe(200);
     expect(res.json.decision).toBe("compressed");
   });
+
+  it("F30: /excerpt accepts includeFooter and the result carries the footer", async () => {
+    const res = await excerptHandler(store, {
+      workspaceKey: "ws",
+      liveSessionId: "live1",
+      raw: bigRaw,
+      sourceKind: "command",
+      label: "test",
+      mode: "aggressive",
+      storeRawOutput: true,
+      includeFooter: true,
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.decision).toBe("compressed");
+    expect(String(res.json.returnedText)).toContain("[Mega Saver: compressed ");
+  });
 });
 
 describe("expandHandler", () => {

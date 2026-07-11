@@ -6,10 +6,12 @@ import { encodeWorkspaceKey } from "@megasaver/shared";
 import { type Mock, describe, expect, it, vi } from "vitest";
 import { NEW_SURFACE_MIN_BYTES, buildSaverDecision } from "../../src/hooks/saver.js";
 
+const FOOTER =
+  '\n\n[Mega Saver: compressed 100000→200 B (~25000→50 tokens, 99.8%). Full output recoverable — run: mega output chunk "cs-1" "0" (or MCP proxy_expand_chunk if connected).]';
 const RECORDED = {
   decision: "compressed" as const,
   summary: "SUMMARY",
-  returnedText: "SHORT",
+  returnedText: `SHORT${FOOTER}`,
   rawBytes: 100_000,
   returnedBytes: 200,
   bytesSaved: 99_800,
@@ -253,46 +255,8 @@ describe("buildSaverDecision", () => {
     expect(d.record).toHaveBeenCalledWith(expect.objectContaining({ evidenceStoreRoot: "/store" }));
   });
 
-  it("marks the pointer PARTIAL when the raw output ends with a truncation marker", async () => {
-    // The harness can truncate a tool output BEFORE the PostToolUse hook sees it.
-    // When the recovered chunk is therefore incomplete, the pointer must not promise
-    // "Full output recoverable" — it must say the recovered chunk is PARTIAL.
-    const truncated = `${"X".repeat(50_000)}\n[truncated]`;
-    const out = await buildSaverDecision(bigBash(truncated), deps());
-    expect("updatedToolOutput" in out).toBe(true);
-    if ("updatedToolOutput" in out) {
-      const u = out.updatedToolOutput as { stdout: string };
-      expect(u.stdout).not.toContain("Full output recoverable");
-      expect(u.stdout).toContain("PARTIAL");
-      expect(u.stdout).toContain("truncated");
-      // Recovery hint must stay so the model can still fetch what was stored.
-      expect(u.stdout).toContain("proxy_expand_chunk");
-      expect(u.stdout).toContain("cs-1");
-    }
-  });
-
-  it("keeps the normal pointer when the raw output is not truncated", async () => {
-    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), deps());
-    expect("updatedToolOutput" in out).toBe(true);
-    if ("updatedToolOutput" in out) {
-      const u = out.updatedToolOutput as { stdout: string };
-      expect(u.stdout).toContain("Full output recoverable");
-      expect(u.stdout).not.toContain("PARTIAL");
-    }
-  });
-
-  it("does not trip on a benign 'truncated' word in the middle of the output", async () => {
-    // Anchored detection: the marker is meaningful only near the END of the buffer.
-    // A mid-text mention of truncation is normal content, not a real cutoff.
-    const benign = `the build log was truncated earlier\n${"X".repeat(50_000)}`;
-    const out = await buildSaverDecision(bigBash(benign), deps());
-    expect("updatedToolOutput" in out).toBe(true);
-    if ("updatedToolOutput" in out) {
-      const u = out.updatedToolOutput as { stdout: string };
-      expect(u.stdout).toContain("Full output recoverable");
-      expect(u.stdout).not.toContain("PARTIAL");
-    }
-  });
+  // Truncation → PARTIAL / normal-vs-truncated footer wording now lives in
+  // record()/context-gate; see packages/context-gate/test/recovery-footer.test.ts.
 
   it("inline pointer reports a token figure from the @megasaver/stats estimator", async () => {
     // RECORDED: rawBytes 100_000, returnedBytes 200 → tokensFromBytes (ceil/4)
@@ -774,24 +738,18 @@ describe("wave-1 shapes", () => {
   });
 });
 
-describe("N-aware recovery footer (C12)", () => {
-  it("single chunk keeps today's wording (regression)", async () => {
-    const d = deps(); // RECORDED now has chunkCount: 1
+describe("footer comes from record (F30)", () => {
+  it("emits recorded.returnedText verbatim — no hook-side footer appending", async () => {
+    const d = deps();
     const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
     const u = (out as { updatedToolOutput: { stdout: string } }).updatedToolOutput;
-    expect(u.stdout).toContain('run: mega output chunk "cs-1" "0"');
-    expect(u.stdout).not.toContain("chunks of");
+    expect(u.stdout).toBe(RECORDED.returnedText);
   });
 
-  it("multi chunk advertises N and the id range (no line->id formula)", async () => {
-    const d = deps({ record: vi.fn().mockResolvedValue({ ...RECORDED, chunkCount: 5 }) });
-    const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
-    const u = (out as { updatedToolOutput: { stdout: string } }).updatedToolOutput;
-    expect(u.stdout).toContain("stored in 5 chunks of ~40 lines each");
-    expect(u.stdout).toContain('mega output chunk "cs-1" "<i>" (i = 0..4)');
-    // Must NOT advertise a line->id formula (chunks index redacted space, the
-    // agent sees original line numbers — they diverge on multi-line redaction).
-    expect(u.stdout).not.toContain("covers lines");
+  it("asks record() to include the footer", async () => {
+    const d = deps();
+    await buildSaverDecision(bigBash("X".repeat(50_000)), d);
+    expect(d.record).toHaveBeenCalledWith(expect.objectContaining({ includeFooter: true }));
   });
 });
 
