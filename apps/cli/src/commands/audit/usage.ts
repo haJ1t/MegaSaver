@@ -6,7 +6,7 @@ import {
   sumBytesSavedSince,
   tokensFromBytes,
 } from "@megasaver/core";
-import { listProxyUsage } from "@megasaver/llm-proxy";
+import { type ProxyUsageEvent, readProxyUsage } from "@megasaver/llm-proxy";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
@@ -60,14 +60,16 @@ function readWorkspaceSavedTokensSince(
   return tokensFromBytes(sumBytesSavedSince(events, sinceMs));
 }
 
-export function renderUsageReport(m: ProxyUsageSavings): string {
+export function renderUsageReport(m: ProxyUsageSavings, skippedLines: number): string {
   const pct = (n: number): string => `${(n * 100).toFixed(1)}%`;
   const n = (x: number): string => x.toLocaleString("en-US");
+  const skipNote = skippedLines > 0 ? ["", `⚠ ${skippedLines} unreadable usage lines skipped`] : [];
   if (m.proxyCalls === 0) {
     return [
       "No proxy usage recorded yet.",
       "Run `mega proxy start`, point your agent at it (export ANTHROPIC_BASE_URL),",
       "then this reports savings against your real Claude token usage.",
+      ...skipNote,
     ].join("\n");
   }
   const rawLines = [
@@ -89,6 +91,7 @@ export function renderUsageReport(m: ProxyUsageSavings): string {
       "(tokens saved exceed the new context the proxy measured — the proxy saw only",
       "part of your traffic, so any % would overstate the saving). Route your agent",
       "through `mega proxy` for your whole workload, then re-run for a real figure.",
+      ...skipNote,
     ].join("\n");
   }
   return [
@@ -100,6 +103,7 @@ export function renderUsageReport(m: ProxyUsageSavings): string {
     "Scope: savings are windowed to the period since your first recorded proxy",
     "call, to match the usage denominator. One-shot estimate (a floor): a saved",
     "token also avoids cache re-reads on every later turn, so real impact is larger.",
+    ...skipNote,
   ].join("\n");
 }
 
@@ -109,18 +113,21 @@ export type RunAuditUsageInput = {
   json: boolean;
   // Injectable for tests; default to the real on-disk readers. `readSaved`
   // returns saved TOKENS within [sinceMs, now].
-  listUsage?: typeof listProxyUsage;
+  readUsage?: typeof readProxyUsage;
   readSaved?: (storeRoot: string, workspaceKey: string, sinceMs: number) => number;
 };
 
 export async function runAuditUsage(input: RunAuditUsageInput): Promise<string> {
   const workspaceKey = encodeWorkspaceKey(input.cwd);
   const readSaved = input.readSaved ?? readWorkspaceSavedTokensSince;
-  const listUsage = input.listUsage ?? listProxyUsage;
+  const readUsage = input.readUsage ?? readProxyUsage;
 
-  let usage: Awaited<ReturnType<typeof listProxyUsage>> = [];
+  let usage: readonly ProxyUsageEvent[] = [];
+  let skippedLines = 0;
   try {
-    usage = await listUsage({ storeRoot: input.storeRoot });
+    const read = await readUsage({ storeRoot: input.storeRoot });
+    usage = read.events;
+    skippedLines = read.skippedLines;
   } catch {
     // No proxy-usage log yet.
   }
@@ -141,7 +148,9 @@ export async function runAuditUsage(input: RunAuditUsageInput): Promise<string> 
   }
 
   const savings = proxyUsageSavings({ savedTokens, usage });
-  return input.json ? JSON.stringify(savings) : renderUsageReport(savings);
+  return input.json
+    ? JSON.stringify({ ...savings, skippedLines })
+    : renderUsageReport(savings, skippedLines);
 }
 
 export const auditUsageCommand = defineCommand({

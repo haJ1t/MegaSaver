@@ -26,7 +26,7 @@ describe("audit usage", () => {
     const out = await runAuditUsage({
       ...base,
       readSaved: () => 0,
-      listUsage: async () => [],
+      readUsage: async () => ({ events: [], skippedLines: 0 }),
     });
     expect(out).toContain("No proxy usage recorded yet");
   });
@@ -35,7 +35,7 @@ describe("audit usage", () => {
     const out = await runAuditUsage({
       ...base,
       readSaved: () => 1000,
-      listUsage: async () => [event(9000, 0, 0, 500)],
+      readUsage: async () => ({ events: [event(9000, 0, 0, 500)], skippedLines: 0 }),
     });
     // saved 1000 of would-be 10000 new context = 10.0%
     expect(out).toContain("saved of new context:       10.0%");
@@ -48,7 +48,7 @@ describe("audit usage", () => {
       ...base,
       json: true,
       readSaved: () => 500,
-      listUsage: async () => [event(1000, 0, 90000, 0)],
+      readUsage: async () => ({ events: [event(1000, 0, 90000, 0)], skippedLines: 0 }),
     });
     const parsed = JSON.parse(out);
     expect(parsed.savedTokens).toBe(500);
@@ -62,7 +62,7 @@ describe("audit usage", () => {
     const out = await runAuditUsage({
       ...base,
       readSaved: () => 5000, // > new context (1000) => partial proxy coverage
-      listUsage: async () => [event(1000, 0, 0, 100)],
+      readUsage: async () => ({ events: [event(1000, 0, 0, 100)], skippedLines: 0 }),
     });
     expect(out).toContain("% suppressed");
     expect(out).not.toContain("saved of new context:");
@@ -76,12 +76,24 @@ describe("audit usage", () => {
         receivedSince = since;
         return 100;
       },
-      listUsage: async () => [
-        { ...event(1000, 0, 0, 0), ts: "2026-07-01T12:00:00.000Z" },
-        { ...event(1000, 0, 0, 0), ts: "2026-07-01T08:00:00.000Z" }, // earliest
-        { ...event(1000, 0, 0, 0), ts: "2026-07-01T20:00:00.000Z" },
-      ],
+      readUsage: async () => ({
+        events: [
+          { ...event(1000, 0, 0, 0), ts: "2026-07-01T12:00:00.000Z" },
+          { ...event(1000, 0, 0, 0), ts: "2026-07-01T08:00:00.000Z" }, // earliest
+          { ...event(1000, 0, 0, 0), ts: "2026-07-01T20:00:00.000Z" },
+        ],
+        skippedLines: 0,
+      }),
     });
     expect(receivedSince).toBe(Date.parse("2026-07-01T08:00:00.000Z"));
+  });
+
+  it("F32: renders the skipped-line note when the reader reports torn lines", async () => {
+    const out = await runAuditUsage({
+      ...base,
+      readSaved: () => 100,
+      readUsage: async () => ({ events: [event(1000, 0, 0, 0)], skippedLines: 2 }),
+    });
+    expect(out).toContain("⚠ 2 unreadable usage lines skipped");
   });
 });

@@ -11,7 +11,13 @@ export {
   type StartProxyOptions,
   type RunningProxy,
 } from "./server.js";
-export { appendProxyUsage, listProxyUsage, proxyUsageLogPath } from "./store.js";
+export {
+  appendProxyUsage,
+  listProxyUsage,
+  proxyUsageLogPath,
+  readProxyUsage,
+  type ReadProxyUsageResult,
+} from "./store.js";
 export {
   HEALTH_PATH,
   HEALTH_SERVICE,
