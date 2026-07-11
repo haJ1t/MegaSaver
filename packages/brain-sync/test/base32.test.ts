@@ -18,4 +18,8 @@ describe("base32 (RFC 4648, no padding)", () => {
   it("rejects characters outside the alphabet", () => {
     expect(() => base32Decode("MZX0")).toThrow(BrainSyncError); // 0 not in alphabet
   });
+
+  it("round-trips empty input", () => {
+    expect(base32Decode(base32Encode(new Uint8Array(0)))).toEqual(new Uint8Array(0));
+  });
 });
