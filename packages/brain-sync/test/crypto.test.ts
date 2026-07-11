@@ -39,4 +39,26 @@ describe("crypto", () => {
   it("rejects blobs shorter than iv+tag", () => {
     expect(() => decrypt(new Uint8Array(10), key, aad)).toThrow(BrainSyncError);
   });
+
+  it("round-trips empty plaintext (exactly iv+tag = 28 bytes)", () => {
+    const blob = encrypt(new Uint8Array(0), key, aad);
+    expect(blob.length).toBe(28);
+    expect(decrypt(blob, key, aad)).toEqual(Buffer.alloc(0));
+  });
+
+  it("rejects a 27-byte blob (one below the iv+tag boundary)", () => {
+    expect(() => decrypt(new Uint8Array(27), key, aad)).toThrow(BrainSyncError);
+  });
+
+  it("rejects tampering in the IV region (authenticates all three regions)", () => {
+    const blob = encrypt(plaintext, key, aad);
+    blob[0] = (blob[0] ?? 0) ^ 0xff;
+    expect(() => decrypt(blob, key, aad)).toThrow(BrainSyncError);
+  });
+
+  it("rejects tampering in the tag region", () => {
+    const blob = encrypt(plaintext, key, aad);
+    blob[blob.length - 1] = (blob[blob.length - 1] ?? 0) ^ 0xff;
+    expect(() => decrypt(blob, key, aad)).toThrow(BrainSyncError);
+  });
 });
