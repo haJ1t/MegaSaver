@@ -32,7 +32,9 @@ export type AdoptionMetrics = {
   proxy_call_count: number;
   proxy_calls_by_type: Record<ProxyToolName, number>;
   expand_rate: number;
-  proxy_mediated_token_savings: number;
+  // F34: these bytes were saved by the SAVER pipeline (hook/proxy tools); the
+  // metering HTTP proxy itself saves nothing (passthrough by design).
+  saver_mediated_token_savings: number;
   raw_stored_output_count: number;
   avg_compression_ratio: number;
 };
@@ -68,7 +70,7 @@ export function aggregateAdoption(events: readonly TokenSaverEvent[]): AdoptionM
     proxy_call_count: proxyCalls,
     proxy_calls_by_type: byType,
     expand_rate: compressedResponses === 0 ? 0 : byType.proxy_expand_chunk / compressedResponses,
-    proxy_mediated_token_savings: savings,
+    saver_mediated_token_savings: savings,
     raw_stored_output_count: knownMegasaverCalls,
     avg_compression_ratio: knownMegasaverCalls === 0 ? 0 : ratioSum / knownMegasaverCalls,
   };

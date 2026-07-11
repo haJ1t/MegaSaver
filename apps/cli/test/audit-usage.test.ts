@@ -138,4 +138,13 @@ describe("audit usage", () => {
     // (spacing-agnostic: renderUsageReport pads the label column)
     expect(out).toContain("~400 tokens (est, bytes/4)");
   });
+
+  it("F34: clarifies that the proxy meters usage and saves nothing itself", async () => {
+    const out = await runAuditUsage({
+      ...base,
+      readSavedAll: () => ({ totalTokens: 1000, byWorkspace: { "wk-a": 1000 } }),
+      readUsage: async () => ({ events: [event(9000, 0, 0, 500)], skippedLines: 0 }),
+    });
+    expect(out).toContain("note: the proxy meters usage; savings come from the saver hook/tools");
+  });
 });

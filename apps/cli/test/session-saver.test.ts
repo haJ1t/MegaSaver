@@ -20,6 +20,7 @@ import {
   runSessionSaverStatus,
   sessionSaverCommand,
 } from "../src/commands/session/saver/index.js";
+import { sessionEventToRecorded } from "../src/commands/session/saver/stats.js";
 import {
   MODE_INVALID_MESSAGE_PREFIX,
   invalidModeMessage,
@@ -663,6 +664,15 @@ describe("session saver commands", () => {
       expect(code).toBe(1);
       expect(out).toHaveLength(0);
       nonJsonStderr(err);
+    });
+  });
+
+  it("F34: session saver events are saver_hook-mediated, not proxy", () => {
+    expect(sessionEventToRecorded({ rawBytes: 100, returnedBytes: 10 })).toEqual({
+      rawBytes: 100,
+      returnedBytes: 10,
+      mediation: "saver_hook",
+      decision: "compressed",
     });
   });
 });

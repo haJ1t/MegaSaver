@@ -32,6 +32,23 @@ export type RunSessionSaverStatsInput = {
   now?: () => string;
 };
 
+// F34: session-store saver events were mediated by the SAVER pipeline, not
+// the metering HTTP proxy (which is passthrough and saves nothing).
+// Exported so the mediation label is testable.
+export function sessionEventToRecorded(e: { rawBytes: number; returnedBytes: number }): {
+  rawBytes: number;
+  returnedBytes: number;
+  mediation: "saver_hook";
+  decision: "compressed";
+} {
+  return {
+    rawBytes: e.rawBytes,
+    returnedBytes: e.returnedBytes,
+    mediation: "saver_hook",
+    decision: "compressed",
+  };
+}
+
 export async function runSessionSaverStats(input: RunSessionSaverStatsInput): Promise<0 | 1> {
   let rootDir: string;
   try {
@@ -84,12 +101,9 @@ export async function runSessionSaverStats(input: RunSessionSaverStatsInput): Pr
     const honest: HonestMetrics | null = eventStats
       ? aggregateHonestMetrics(
           observationsFromEvents(
-            readEvents({ root: rootDir }, session.projectId, parsedSessionId).map((e) => ({
-              rawBytes: e.rawBytes,
-              returnedBytes: e.returnedBytes,
-              mediation: "proxy",
-              decision: "compressed",
-            })),
+            readEvents({ root: rootDir }, session.projectId, parsedSessionId).map((e) =>
+              sessionEventToRecorded({ rawBytes: e.rawBytes, returnedBytes: e.returnedBytes }),
+            ),
           ),
         )
       : null;

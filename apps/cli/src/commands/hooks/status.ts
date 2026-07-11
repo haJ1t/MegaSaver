@@ -50,7 +50,7 @@ function renderText(metrics: ProxyMetrics): string[] {
     "Proxy adoption (universal):",
     `  adoption rate: ${pct(a.proxy_adoption_rate)} (${a.proxy_call_count} MegaSaver-mediated calls)`,
     `  by type: read=${a.proxy_calls_by_type.proxy_read_file} command=${a.proxy_calls_by_type.proxy_run_command} search=${a.proxy_calls_by_type.proxy_search_code} expand=${a.proxy_calls_by_type.proxy_expand_chunk}`,
-    `  expand rate: ${pct(a.expand_rate)} | raw stored: ${a.raw_stored_output_count} | avg compression: ${pct(a.avg_compression_ratio)} | proxy-mediated savings: ${a.proxy_mediated_token_savings} B`,
+    `  expand rate: ${pct(a.expand_rate)} | raw stored: ${a.raw_stored_output_count} | avg compression: ${pct(a.avg_compression_ratio)} | saver-mediated savings: ${a.saver_mediated_token_savings} B`,
   ];
   if (metrics.interception === null) {
     lines.push("", `Hook-based interception: ${metrics.interception_hint}`);

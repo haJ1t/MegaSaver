@@ -90,6 +90,7 @@ export function renderUsageReport(m: ProxyUsageSavings, skippedLines: number): s
   const pct = (n: number): string => `${(n * 100).toFixed(1)}%`;
   const n = (x: number): string => x.toLocaleString("en-US");
   const skipNote = skippedLines > 0 ? ["", `⚠ ${skippedLines} unreadable usage lines skipped`] : [];
+  const meteringNote = "note: the proxy meters usage; savings come from the saver hook/tools.";
   if (m.proxyCalls === 0) {
     return [
       "No proxy usage recorded yet.",
@@ -117,6 +118,7 @@ export function renderUsageReport(m: ProxyUsageSavings, skippedLines: number): s
       "(tokens saved exceed the new context the proxy measured — the proxy saw only",
       "part of your traffic, so any % would overstate the saving). Route your agent",
       "through `mega proxy` for your whole workload, then re-run for a real figure.",
+      meteringNote,
       ...skipNote,
     ].join("\n");
   }
@@ -129,6 +131,7 @@ export function renderUsageReport(m: ProxyUsageSavings, skippedLines: number): s
     "Scope: savings are windowed to the period since your first recorded proxy",
     "call, to match the usage denominator. One-shot estimate (a floor): a saved",
     "token also avoids cache re-reads on every later turn, so real impact is larger.",
+    meteringNote,
     ...skipNote,
   ].join("\n");
 }

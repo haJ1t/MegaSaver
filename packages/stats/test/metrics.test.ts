@@ -75,12 +75,12 @@ describe("aggregateAdoption", () => {
     expect(adoption.expand_rate).toBeCloseTo(0.5);
   });
 
-  it("sums proxy-mediated token savings and raw stored output count", () => {
+  it("sums saver-mediated token savings and raw stored output count", () => {
     const adoption = aggregateAdoption([
       makeEvent({ sourceKind: "file", rawBytes: 1000, returnedBytes: 200, bytesSaved: 800 }),
       makeEvent({ sourceKind: "command", rawBytes: 4000, returnedBytes: 1000, bytesSaved: 3000 }),
     ]);
-    expect(adoption.proxy_mediated_token_savings).toBe(3800);
+    expect(adoption.saver_mediated_token_savings).toBe(3800);
     expect(adoption.raw_stored_output_count).toBe(2);
   });
 
@@ -98,7 +98,7 @@ describe("aggregateAdoption", () => {
     expect(adoption.proxy_call_count).toBe(0);
     expect(adoption.expand_rate).toBe(0);
     expect(adoption.avg_compression_ratio).toBe(0);
-    expect(adoption.proxy_mediated_token_savings).toBe(0);
+    expect(adoption.saver_mediated_token_savings).toBe(0);
     expect(adoption.raw_stored_output_count).toBe(0);
   });
 });
