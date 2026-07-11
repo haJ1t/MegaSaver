@@ -71,7 +71,7 @@ async function mergeRemote(deps: SyncDeps, remote: RemoteState): Promise<PullRes
   if (manifest.generation < lastSeen) {
     throw new BrainSyncError(
       "rollback_detected",
-      `remote generation ${manifest.generation} is older than last-seen ${lastSeen} — refusing to merge a rolled-back manifest`,
+      `remote generation ${manifest.generation} is older than last-seen ${lastSeen} — refusing to merge a rolled-back manifest. If a sibling machine ran \`mega brain sync reset\`, run \`mega brain sync reset <project> --force\` here to clear local state and rejoin the new chain.`,
     );
   }
   if (manifest.generation === lastSeen)
