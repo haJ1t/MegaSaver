@@ -246,7 +246,7 @@ behavior, documented, not changed).
 | Weak user secret | Eliminated by design: key is generated, not derived |
 | Recovery-code typo at join | 2-byte sha256 checksum → immediate `bad_recovery_code` |
 | Local keyfile exposure | Temp file created `0o600` then renamed (no chmod window); machine-trust boundary documented |
-| Second machine plain-`init` onto used prefix (wrong new key) | `prefix_in_use` refusal without `--join`/`--reset`; undecryptable manifest is never overwritten |
+| Second machine plain-`init` onto a used bucket (wrong new key) | Fail-closed, no gate at init (init is store-level; remote manifests are per-project under `<prefix><projectId>/`, so init cannot enumerate them without ListObjects, which is out of scope). A wrong key surfaces as `wrong_key` on the first sync of any affected project, and an undecryptable manifest is NEVER overwritten (the push CAS only overwrites a manifest it successfully decrypted). The local keyfile-exists guard additionally blocks re-`init` from silently replacing a working key without `--reset --force`. |
 | Secret leakage into brain content | Export path is firewall-redacted (2.0 guarantee) — sync never touches unredacted stores |
 | Credential leakage by us | Creds never written to config/logs/telemetry; endpoint+bucket never sent in telemetry |
 
