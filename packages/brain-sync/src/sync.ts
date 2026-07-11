@@ -14,7 +14,7 @@ import type { Transport } from "./transport.js";
 export type SyncDeps = {
   transport: Transport;
   key: Uint8Array;
-  projectId: string;
+  brainId: string;
   lastSeenGeneration: () => number;
   persistLastSeen: (generation: number) => void;
   exportBundle: () => string;
@@ -48,12 +48,12 @@ const MAX_CAS_ATTEMPTS = 3;
 async function readRemote(
   transport: Transport,
   key: Uint8Array,
-  projectId: string,
+  brainId: string,
 ): Promise<RemoteState | null> {
   const got = await transport.getObject(MANIFEST_KEY);
   if (got === null) return null;
   try {
-    return { manifest: openManifest(got.body, key, projectId), etag: got.etag };
+    return { manifest: openManifest(got.body, key, brainId), etag: got.etag };
   } catch (err) {
     if (err instanceof BrainSyncError && err.code === "decrypt_failed") {
       throw new BrainSyncError(
@@ -86,7 +86,7 @@ async function mergeRemote(deps: SyncDeps, remote: RemoteState): Promise<PullRes
   const bundleText = decrypt(
     obj.body,
     deps.key,
-    objectAad(deps.projectId, manifest.objectKey),
+    objectAad(deps.brainId, manifest.objectKey),
   ).toString("utf8");
   if (sha256Hex(bundleText) !== manifest.brainSha256) {
     throw new BrainSyncError(
@@ -100,15 +100,15 @@ async function mergeRemote(deps: SyncDeps, remote: RemoteState): Promise<PullRes
 }
 
 export async function pull(deps: SyncDeps): Promise<PullResult> {
-  const remote = await readRemote(deps.transport, deps.key, deps.projectId);
+  const remote = await readRemote(deps.transport, deps.key, deps.brainId);
   if (remote === null) return { state: "empty" };
   return mergeRemote(deps, remote);
 }
 
 export async function status(
-  deps: Pick<SyncDeps, "transport" | "key" | "projectId" | "lastSeenGeneration">,
+  deps: Pick<SyncDeps, "transport" | "key" | "brainId" | "lastSeenGeneration">,
 ): Promise<StatusResult> {
-  const remote = await readRemote(deps.transport, deps.key, deps.projectId);
+  const remote = await readRemote(deps.transport, deps.key, deps.brainId);
   if (remote === null) return { state: "empty" };
   const lastSeen = deps.lastSeenGeneration();
   return {
@@ -123,7 +123,13 @@ export async function status(
 export async function push(deps: SyncDeps): Promise<PushResult> {
   let merged = false;
   for (let attempt = 1; attempt <= MAX_CAS_ATTEMPTS; attempt += 1) {
-    const remote = await readRemote(deps.transport, deps.key, deps.projectId);
+    const remote = await readRemote(deps.transport, deps.key, deps.brainId);
+    if (remote === null && deps.lastSeenGeneration() > 0) {
+      throw new BrainSyncError(
+        "rollback_detected",
+        `the remote manifest is gone but this machine last synced generation ${deps.lastSeenGeneration()} — a sibling may have run \`mega brain sync reset\`. Run \`mega brain sync reset <project> --force\` here to start a fresh chain (clears local last-seen).`,
+      );
+    }
     if (remote !== null) {
       try {
         const mergeResult = await mergeRemote(deps, remote);
@@ -145,7 +151,7 @@ export async function push(deps: SyncDeps): Promise<PushResult> {
     const ciphertext = encrypt(
       Buffer.from(bundleText, "utf8"),
       deps.key,
-      objectAad(deps.projectId, objectKey),
+      objectAad(deps.brainId, objectKey),
     );
     await deps.transport.putObject(objectKey, ciphertext);
     const manifest: SyncManifest = {
@@ -158,7 +164,7 @@ export async function push(deps: SyncDeps): Promise<PushResult> {
     try {
       await deps.transport.putObject(
         MANIFEST_KEY,
-        sealManifest(manifest, deps.key, deps.projectId),
+        sealManifest(manifest, deps.key, deps.brainId),
         remote === null ? { kind: "if-none-match" } : { kind: "if-match", etag: remote.etag },
       );
     } catch (err) {

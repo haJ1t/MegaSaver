@@ -1,3 +1,4 @@
+export { deriveBrainId } from "./brain-id.js";
 export { BrainSyncError, type BrainSyncErrorCode } from "./errors.js";
 export {
   decodeRecoveryCode,

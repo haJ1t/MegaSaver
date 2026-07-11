@@ -8,7 +8,7 @@ import { type S3Double, startS3Double } from "./helpers/s3-double.js";
 let double: S3Double;
 let transport: Transport;
 const key = randomBytes(32);
-const projectId = "3b6c1c8e-0f4c-4d6a-9b3e-2f8a1c9d7e5f";
+const brainId = "3b6c1c8e-0f4c-4d6a-9b3e-2f8a1c9d7e5f";
 
 // Fake "local machine": in-memory bundle + last-seen
 function makeMachine(initialBundle: string) {
@@ -18,7 +18,7 @@ function makeMachine(initialBundle: string) {
   const deps: SyncDeps = {
     transport,
     key,
-    projectId,
+    brainId,
     lastSeenGeneration: () => lastSeen,
     persistLastSeen: (generation) => {
       lastSeen = generation;
@@ -120,11 +120,11 @@ describe("pull/status", () => {
     expect(manifestEntry).toBeDefined();
     const { openManifest, objectAad } = await import("../src/manifest.js");
     const { encrypt } = await import("../src/crypto.js");
-    const manifest = openManifest(manifestEntry?.body ?? new Uint8Array(), key, projectId);
+    const manifest = openManifest(manifestEntry?.body ?? new Uint8Array(), key, brainId);
     const forged = encrypt(
       Buffer.from("not-the-bundle"),
       key,
-      objectAad(projectId, manifest.objectKey),
+      objectAad(brainId, manifest.objectKey),
     );
     double.store.set(`proj-1/${manifest.objectKey}`, { body: Buffer.from(forged), etag: '"f"' });
     const b = makeMachine("x");
@@ -158,6 +158,22 @@ describe("push", () => {
     expect(await push(a.deps)).toEqual({ state: "pushed", generation: 1, merged: false });
     expect(a.getLastSeen()).toBe(1);
     expect(double.store.has("proj-1/manifest.json.enc")).toBe(true);
+  });
+
+  it("absent remote after a prior sync (lastSeen>0) → rollback_detected, no bootstrap", async () => {
+    const a = makeMachine("bundle-a");
+    await push(a.deps); // gen 1, lastSeen 1
+    expect(a.getLastSeen()).toBe(1);
+    // provider (or a sibling `reset`) deletes the remote manifest
+    double.store.delete("proj-1/manifest.json.enc");
+    try {
+      await push(a.deps);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as BrainSyncError).code).toBe("rollback_detected");
+    }
+    // did NOT bootstrap a fresh gen-1 chain
+    expect(double.store.has("proj-1/manifest.json.enc")).toBe(false);
   });
 
   it("skip-unchanged: same bundle hash → up-to-date, no generation churn", async () => {
