@@ -2,6 +2,7 @@ export type BrainSyncErrorCode =
   | "wrong_key"
   | "rollback_detected"
   | "hash_mismatch"
+  | "object_missing"
   | "decrypt_failed"
   | "precondition_failed"
   | "sync_conflict"

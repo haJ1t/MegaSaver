@@ -163,7 +163,7 @@ describe("push", () => {
   it("skip-unchanged: same bundle hash → up-to-date, no generation churn", async () => {
     const a = makeMachine("bundle-a");
     await push(a.deps);
-    expect(await push(a.deps)).toEqual({ state: "up-to-date", generation: 1 });
+    expect(await push(a.deps)).toEqual({ state: "up-to-date", generation: 1, merged: false });
   });
 
   it("push merges unseen remote changes first (merged: true)", async () => {
@@ -230,5 +230,28 @@ describe("push", () => {
     } catch (err) {
       expect((err as BrainSyncError).code).toBe("sync_conflict");
     }
+  });
+
+  it("concurrent supersession: object deleted mid-merge → retries on the newer manifest", async () => {
+    const a = makeMachine("bundle-a");
+    await push(a.deps); // gen1, objA
+    const b = makeMachine("bundle-b");
+    let superseded = false;
+    const rawGet = transport.getObject.bind(transport);
+    (b.deps as { transport: Transport }).transport = {
+      ...transport,
+      getObject: async (getKey) => {
+        if (!superseded && getKey.startsWith("objects/")) {
+          superseded = true;
+          a.setBundle("bundle-a2");
+          await push(a.deps); // gen2 (new object), best-effort deletes objA
+        }
+        return rawGet(getKey);
+      },
+    };
+    const result = await push(b.deps);
+    expect(result.state).toBe("pushed");
+    expect(result.generation).toBe(3); // gen1(a) → gen2(a race) → gen3(b retry)
+    expect(b.imported).toContain("bundle-a2");
   });
 });
