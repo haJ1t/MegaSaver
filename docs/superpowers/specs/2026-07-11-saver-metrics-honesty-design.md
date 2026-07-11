@@ -55,10 +55,13 @@ the model, and no ratio divides mismatched scopes.**
 `recordAndFilterOverlayOutput` becomes the single place the persisted
 numbers are computed, from the FINAL delivered text:
 
-- `RecordOverlayOutputInput` gains an optional
-  `footerTemplate?: (r: { rawBytes: number; returnedBytes: number; chunkSetId?: string }) => string`.
-  The hook passes its footer builder; the daemon path passes the same one
-  (both routes through this function).
+- `RecordOverlayOutputInput` gains an optional `includeFooter?: boolean`.
+  (Plan-time adjustment: the originally-sketched `footerTemplate` callback
+  cannot cross the daemon HTTP boundary — the excerpt handler receives JSON.
+  The footer builder therefore moves INTO context-gate as the canonical
+  implementation, `buildRecoveryFooter` + `looksPreTruncated` in
+  `recovery-footer.ts`, byte-identical wording to the old hook pointer; the
+  hook and daemon paths both opt in with `includeFooter: true`.)
 - Flow inside record: build `returnedText = returnedTextOf(filtered)`
   (summary + source-ordered excerpts + D16 markers), generate the footer
   once from the marker-inclusive size, append it, and set
@@ -109,9 +112,15 @@ instead of zeroing the report.
 ### F33 — scope-matched ratios
 
 - Usage rows gain an optional `workspaceKey` (strict schema + optional field
-  → old rows keep parsing). The writer stamps it when a workspace signal
-  exists for the request; the mechanism (env, header, launch scope) is
-  resolved at plan time from the proxy handler.
+  → old rows keep parsing). Plan-time resolution: the proxy has NO
+  per-request workspace signal today (one global listener; no captured
+  header, no env, launch-scoped to a single store root) — the writer stays
+  unchanged and the field is reserved for a future attributed launch mode.
+  Consequently ALL current rows are keyless and the ratio is computed
+  global÷global (summed savings across every workspace ÷ global usage) with
+  an explicit "all workspaces (global)" label, plus a per-workspace savings
+  breakdown WITHOUT ratios. The scoped-division branch ships now and
+  activates automatically if rows ever carry keys.
 - `audit usage` computes ratios ONLY over scope-matched pairs: per-workspace
   savings ÷ that workspace's usage rows. Rows without a key aggregate into
   an explicitly labeled global bucket; if the only available comparison is
