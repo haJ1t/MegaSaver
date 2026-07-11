@@ -3230,3 +3230,10 @@ Wave 5 (final) of the saver-savings-gaps program, branch
   `saver_hook` (was a hardcoded `proxy`); audit usage carries "note: the
   proxy meters usage; savings come from the saver hook/tools."
 
+
+## [2026-07-11] plan | brain-sync (E7) spec + plan land on feature branch
+Post-2.0 ideation locked path B+C; 2.1 = E7 `mega brain sync` (BYO S3,
+E2E-encrypted, keyfile). Spec (CRITICAL, architect-pass revised) +
+16-task TDD plan + growth portfolio synthesis brought onto
+worktree-brain-sync from local main (commits fe2752ea/1bf6ca17).
+Execution: subagent-driven.
