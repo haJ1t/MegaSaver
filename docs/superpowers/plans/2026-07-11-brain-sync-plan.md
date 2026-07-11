@@ -115,7 +115,8 @@ apps/cli/test/brain-sync.two-machine.test.ts  # integration incl. CAS race
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "rootDir": ".", "noEmit": true, "composite": false, "declaration": false, "declarationMap": false },
-  "include": ["src/**/*", "test/**/*"]
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["dist", "node_modules", ".turbo"]
 }
 ```
 
@@ -138,7 +139,12 @@ export default defineConfig({
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  test: { testTimeout: 30_000, hookTimeout: 30_000, include: ["test/**/*.test.ts"] },
+  test: {
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
+    include: ["test/**/*.test.ts"],
+    passWithNoTests: true,
+  },
 });
 ```
 
