@@ -2,7 +2,13 @@ import { type KeyObject, generateKeyPairSync, sign } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfig, saveConfig } from "@megasaver/brain-sync";
+import {
+  deriveBrainId,
+  keyfilePath,
+  loadConfig,
+  loadKeyfile,
+  saveConfig,
+} from "@megasaver/brain-sync";
 import { activateLicense } from "@megasaver/entitlement";
 import { runCommand } from "citty";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -15,6 +21,7 @@ import {
   runBrainSyncPush,
   runBrainSyncStatus,
 } from "../../src/commands/brain/sync/ops.js";
+import { runBrainSyncReset } from "../../src/commands/brain/sync/reset.js";
 import { type S3Double, startS3Double } from "../helpers/s3-double.js";
 
 type Payload = { v: number; tier: string; id: string; iat: number; exp: number | null };
@@ -124,7 +131,7 @@ type OpFn = typeof runBrainSyncPush;
 async function runOp(
   op: OpFn,
   root: string,
-  opts?: { publicKey?: KeyObject },
+  opts?: { publicKey?: KeyObject; force?: boolean },
 ): Promise<{ code: 0 | 1; out: string[]; err: string[] }> {
   const out: string[] = [];
   const err: string[] = [];
@@ -133,12 +140,35 @@ async function runOp(
     now,
     projectName: "alpha",
     ...(opts?.publicKey === undefined ? {} : { publicKey: opts.publicKey }),
+    ...(opts?.force === undefined ? {} : { force: opts.force }),
     ensureStore: () => ensureStore(root),
     stdout: (l) => out.push(l),
     stderr: (l) => err.push(l),
   });
   return { code, out, err };
 }
+
+async function runReset(
+  root: string,
+  force: boolean,
+): Promise<{ code: 0 | 1; out: string[]; err: string[] }> {
+  const out: string[] = [];
+  const err: string[] = [];
+  const code = await runBrainSyncReset({
+    storeRoot: root,
+    now,
+    publicKey: keys.publicKey,
+    projectName: "alpha",
+    force,
+    ensureStore: () => ensureStore(root),
+    stdout: (l) => out.push(l),
+    stderr: (l) => err.push(l),
+  });
+  return { code, out, err };
+}
+
+const brainPrefix = (root: string): string =>
+  `megasaver-brain/${deriveBrainId(loadKeyfile(keyfilePath(root)), "alpha")}/`;
 
 async function recoveryCodeOf(root: string, endpoint: string): Promise<string> {
   const out: string[] = [];
@@ -172,7 +202,7 @@ describe("runBrainSyncPush", () => {
     expect(code).toBe(0);
     expect(out.join("\n")).toContain("pushed generation 1");
 
-    const prefix = `megasaver-brain/${PROJECT_ID}/`;
+    const prefix = brainPrefix(root);
     const storeKeys = [...d.store.keys()];
     expect(storeKeys).toContain(`${prefix}manifest.json.enc`);
     expect(storeKeys.filter((k) => k.startsWith(`${prefix}objects/`))).toHaveLength(1);
@@ -231,6 +261,65 @@ describe("runBrainSyncPush", () => {
     expect(err).toHaveLength(1);
     expect(err[0]).toMatch(/^error: /);
     expect(err[0]).not.toContain("\n");
+  });
+});
+
+describe("brain sync — B2 push-guard + reset last-seen", () => {
+  // A pushes an approved memory; B joins and pulls it — it lands as a
+  // suggested sync-import (evidence `brain-import:alpha`). B's own bundle is
+  // approved-only, so a plain push would drop the un-approved suggestion from
+  // the remote. push must refuse until B resolves it (or forces).
+  async function joinAndPull(): Promise<{ d: S3Double; rootB: string }> {
+    const rootA = mkStore();
+    activatePro(rootA);
+    const d = await double();
+    const recovery = await recoveryCodeOf(rootA, d.url);
+    await seedProject(rootA, "alpha");
+    await seedApprovedMemory(rootA);
+    expect((await runOp(runBrainSyncPush, rootA, { publicKey: keys.publicKey })).code).toBe(0);
+
+    const rootB = mkStore();
+    activatePro(rootB);
+    expect(await initStore(rootB, d.url, recovery)).toBe(0);
+    await seedProject(rootB, "alpha");
+    expect((await runOp(runBrainSyncPull, rootB, { publicKey: keys.publicKey })).code).toBe(0);
+    return { d, rootB };
+  }
+
+  it("refuses to push while sync-imported suggestions are pending approval", async () => {
+    const { rootB } = await joinAndPull();
+
+    const { code, err } = await runOp(runBrainSyncPush, rootB, { publicKey: keys.publicKey });
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("synced suggestion");
+    expect(err.join("\n")).toContain("--force");
+  });
+
+  it("--force overrides the pending-suggestion guard and publishes", async () => {
+    const { rootB } = await joinAndPull();
+
+    const { code, out } = await runOp(runBrainSyncPush, rootB, {
+      publicKey: keys.publicKey,
+      force: true,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("pushed generation 2");
+  });
+
+  it("reset --force clears the local last-seen entry for the brain", async () => {
+    const root = mkStore();
+    activatePro(root);
+    const d = await double();
+    expect(await initStore(root, d.url)).toBe(0);
+    await seedProject(root, "alpha");
+    await seedApprovedMemory(root);
+    expect((await runOp(runBrainSyncPush, root, { publicKey: keys.publicKey })).code).toBe(0);
+
+    const brainId = deriveBrainId(loadKeyfile(keyfilePath(root)), "alpha");
+    expect(loadConfig(root).lastSeen[brainId]).toBe(1);
+
+    expect((await runReset(root, true)).code).toBe(0);
+    expect(loadConfig(root).lastSeen[brainId]).toBeUndefined();
   });
 });
 

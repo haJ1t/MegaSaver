@@ -1,13 +1,27 @@
 import { BrainSyncError, pull, push, status } from "@megasaver/brain-sync";
-import { type BrainSyncCommonInput, buildProjectSyncContext, gate } from "./common.js";
+import {
+  type BrainSyncCommonInput,
+  buildProjectSyncContext,
+  gate,
+  pendingSyncSuggestions,
+} from "./common.js";
 
-export type BrainSyncOpInput = BrainSyncCommonInput & { projectName: string };
+export type BrainSyncOpInput = BrainSyncCommonInput & { projectName: string; force?: boolean };
 
 export async function runBrainSyncPush(input: BrainSyncOpInput): Promise<0 | 1> {
   if (!gate(input)) return 0;
   try {
     const ctx = await buildProjectSyncContext(input);
     if (ctx === null) return 1;
+    if (!input.force) {
+      const pending = pendingSyncSuggestions(ctx.registry, ctx.localProjectId);
+      if (pending > 0) {
+        input.stderr(
+          `error: ${pending} synced suggestion(s) are pending approval — run \`mega memory approve\` (or discard them) before pushing; pushing now would drop them from the remote. Use --force to override.`,
+        );
+        return 1;
+      }
+    }
     const result = await push(ctx.deps);
     if (result.state === "pushed") {
       input.stdout(

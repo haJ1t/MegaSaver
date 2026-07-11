@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   assertSafeEndpoint,
+  clearLastSeen,
   loadConfig,
   normalizePrefix,
   saveConfig,
@@ -61,24 +62,34 @@ describe("config", () => {
     }
   });
 
-  it("updateLastSeen persists per project id", () => {
+  it("updateLastSeen persists per brain id", () => {
     const store = tempStore();
     saveConfig(store, validConfig);
-    const pid = "3b6c1c8e-0f4c-4d6a-9b3e-2f8a1c9d7e5f";
-    updateLastSeen(store, pid, 4);
-    expect(loadConfig(store).lastSeen[pid]).toBe(4);
+    const brainId = "a".repeat(64);
+    updateLastSeen(store, brainId, 4);
+    expect(loadConfig(store).lastSeen[brainId]).toBe(4);
   });
 
-  it("updateLastSeen rejects non-uuid project id without bricking config", () => {
+  it("updateLastSeen rejects a non-64-hex brain id without bricking config", () => {
     const store = tempStore();
     saveConfig(store, validConfig);
     try {
-      updateLastSeen(store, "not-a-uuid", 1);
+      updateLastSeen(store, "not-64-hex", 1);
       expect.unreachable();
     } catch (err) {
       expect((err as BrainSyncError).code).toBe("config_invalid");
     }
     expect(loadConfig(store)).toEqual(validConfig);
+  });
+
+  it("clearLastSeen removes the brain id entry", () => {
+    const store = tempStore();
+    saveConfig(store, validConfig);
+    const brainId = "b".repeat(64);
+    updateLastSeen(store, brainId, 7);
+    expect(loadConfig(store).lastSeen[brainId]).toBe(7);
+    clearLastSeen(store, brainId);
+    expect(loadConfig(store).lastSeen[brainId]).toBeUndefined();
   });
 
   it("assertSafeEndpoint: https ok, http localhost ok, http remote rejected", () => {

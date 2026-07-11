@@ -17,7 +17,7 @@ export const brainSyncConfigSchema = z
     region: z.string().min(1),
     pathStyle: z.boolean(),
     conditionalWritesVerified: z.literal(true),
-    lastSeen: z.record(z.string().uuid(), z.number().int().nonnegative()),
+    lastSeen: z.record(z.string().regex(/^[0-9a-f]{64}$/), z.number().int().nonnegative()),
   })
   .strict();
 
@@ -64,15 +64,25 @@ export function saveConfig(storeRoot: string, config: BrainSyncConfig): void {
   atomicWriteFile(configPath(storeRoot), `${JSON.stringify(config, null, 2)}\n`);
 }
 
-export function updateLastSeen(storeRoot: string, projectId: string, generation: number): void {
+const brainIdSchema = z.string().regex(/^[0-9a-f]{64}$/);
+
+export function updateLastSeen(storeRoot: string, brainId: string, generation: number): void {
   // ponytail: if the deadline passes under contention the write is skipped —
   // safe here, a stale-low lastSeen just triggers an idempotent re-pull next run.
   withFileLock(`${configPath(storeRoot)}.lock`, { deadlineMs: 50, staleMs: 5000 }, () => {
-    if (!z.string().uuid().safeParse(projectId).success) {
-      throw new BrainSyncError("config_invalid", `invalid project id for last-seen: ${projectId}`);
+    if (!brainIdSchema.safeParse(brainId).success) {
+      throw new BrainSyncError("config_invalid", `invalid brain id for last-seen: ${brainId}`);
     }
     const config = loadConfig(storeRoot);
-    saveConfig(storeRoot, { ...config, lastSeen: { ...config.lastSeen, [projectId]: generation } });
+    saveConfig(storeRoot, { ...config, lastSeen: { ...config.lastSeen, [brainId]: generation } });
+  });
+}
+
+export function clearLastSeen(storeRoot: string, brainId: string): void {
+  withFileLock(`${configPath(storeRoot)}.lock`, { deadlineMs: 50, staleMs: 5000 }, () => {
+    const config = loadConfig(storeRoot);
+    const { [brainId]: _drop, ...rest } = config.lastSeen;
+    saveConfig(storeRoot, { ...config, lastSeen: rest });
   });
 }
 

@@ -1,4 +1,4 @@
-import { BrainSyncError, MANIFEST_KEY } from "@megasaver/brain-sync";
+import { BrainSyncError, MANIFEST_KEY, clearLastSeen } from "@megasaver/brain-sync";
 import { defineCommand } from "citty";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../../store.js";
 import { type BrainSyncCommonInput, buildProjectSyncContext, gate } from "./common.js";
@@ -22,7 +22,10 @@ export async function runBrainSyncReset(input: RunBrainSyncResetInput): Promise<
     const ctx = await buildProjectSyncContext(input);
     if (ctx === null) return 1;
     await ctx.deps.transport.deleteObject(MANIFEST_KEY);
-    input.stdout("Remote manifest deleted — the next push starts a new chain at generation 1.");
+    clearLastSeen(input.storeRoot, ctx.deps.brainId);
+    input.stdout(
+      "Remote manifest deleted and local sync state cleared — the next push starts a new chain at generation 1.",
+    );
     return 0;
   } catch (err) {
     if (err instanceof BrainSyncError) {

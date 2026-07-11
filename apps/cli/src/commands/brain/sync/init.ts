@@ -60,10 +60,10 @@ export async function runBrainSyncInit(input: RunBrainSyncInitInput): Promise<0 
     });
     const ok = await probeConditionalWrites(transport);
     if (!ok) {
-      input.stderr(
-        "error: endpoint does not enforce conditional writes — refusing to sync against it (conditional_writes_unsupported)",
+      throw new BrainSyncError(
+        "conditional_writes_unsupported",
+        "the endpoint does not enforce conditional writes — refusing to sync against it",
       );
-      return 1;
     }
 
     // Config first, keyfile last: the re-init guard keys off keyfile existence,

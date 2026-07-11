@@ -2,9 +2,9 @@ import { type KeyObject, generateKeyPairSync, sign } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { configPath, keyfilePath } from "@megasaver/brain-sync";
+import { configPath, deriveBrainId, keyfilePath, loadKeyfile } from "@megasaver/brain-sync";
 import { activateLicense } from "@megasaver/entitlement";
-import { projectIdSchema } from "@megasaver/shared";
+import { type ProjectId, projectIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runBrainSyncInit } from "../../src/commands/brain/sync/init.js";
 import {
@@ -23,9 +23,14 @@ function signTestLicense(privateKey: KeyObject, payload: Payload): string {
 
 const NOW_MS = Date.UTC(2026, 6, 15, 12, 0, 0);
 const now = () => NOW_MS;
-// One fixed project id shared by A and B so their per-project S3 prefix and
-// manifest AAD line up — the precondition for two machines sharing one brain.
-const PROJECT_ID = projectIdSchema.parse("0f0e0d0c-0b0a-4900-8807-060504030201");
+// B1 proof: A and B name the project the same ("alpha") but mint their OWN
+// distinct local project ids — real machines never share a UUID. The remote
+// identity (prefix + AAD + lastSeen) derives from the shared key + name via
+// brainId, NOT the local id, so both machines resolve to the same remote and
+// sync. This is what proves cross-machine sync WITHOUT a shared project id.
+const PROJECT_NAME = "alpha";
+const A_LOCAL_ID = projectIdSchema.parse("0f0e0d0c-0b0a-4900-8807-060504030201");
+const B_LOCAL_ID = projectIdSchema.parse("aaaa0000-bbbb-4ccc-8ddd-eeee0000ffff");
 
 let roots: string[];
 let doubles: S3Double[];
@@ -67,21 +72,26 @@ async function ensureStore(root: string) {
   return ensureStoreReady(root);
 }
 
-async function seedProject(root: string): Promise<void> {
+async function seedProject(root: string, projectId: ProjectId): Promise<void> {
   const { registry } = await ensureStore(root);
   registry.createProject({
-    id: PROJECT_ID,
-    name: "alpha",
+    id: projectId,
+    name: PROJECT_NAME,
     rootPath: "/tmp/alpha",
     createdAt: "2026-07-09T12:00:00.000Z",
     updatedAt: "2026-07-09T12:00:00.000Z",
   } as never);
 }
 
-async function seedApprovedMemory(root: string, id: string, content: string): Promise<void> {
+async function seedApprovedMemory(
+  root: string,
+  projectId: ProjectId,
+  id: string,
+  content: string,
+): Promise<void> {
   const { registry } = await ensureStore(root);
   registry.createMemoryEntry({
-    projectId: PROJECT_ID,
+    projectId,
     id,
     type: "decision",
     title: "t",
@@ -137,9 +147,10 @@ async function runOp(op: OpFn, root: string): Promise<{ code: 0 | 1; out: string
 
 async function projectMemories(
   root: string,
+  projectId: ProjectId,
 ): Promise<Array<{ content: string; approval: string }>> {
   const { registry } = await ensureStore(root);
-  return registry.listMemoryEntries(PROJECT_ID).map((m) => ({
+  return registry.listMemoryEntries(projectId).map((m) => ({
     content: m.content,
     approval: m.approval,
   }));
@@ -149,7 +160,7 @@ const ALPHA_ID = "11111111-1111-4111-8111-111111111111";
 const BETA_ID = "22222222-2222-4222-8222-222222222222";
 
 describe("brain sync — two-machine lifecycle", () => {
-  it("A inits, seeds+pushes; B joins by recovery code, pulls (suggested), and dedupes on re-pull", async () => {
+  it("B1: same project name + DIFFERENT local ids sync via brainId — A pushes, B joins/pulls/dedupes", async () => {
     const d = await double();
     const rootA = mkStore();
     const rootB = mkStore();
@@ -164,13 +175,14 @@ describe("brain sync — two-machine lifecycle", () => {
     expect(existsSync(keyfilePath(rootA))).toBe(true);
     expect(existsSync(configPath(rootA))).toBe(true);
 
-    // 2. A seeds an approved project memory and pushes generation 1.
-    await seedProject(rootA);
-    await seedApprovedMemory(rootA, ALPHA_ID, "alpha-knowledge");
+    // 2. A seeds an approved project memory (under A's OWN local id) and pushes
+    //    generation 1. The remote prefix is the brainId (key+name), not A's id.
+    await seedProject(rootA, A_LOCAL_ID);
+    await seedApprovedMemory(rootA, A_LOCAL_ID, ALPHA_ID, "alpha-knowledge");
     const pushA1 = await runOp(runBrainSyncPush, rootA);
     expect(pushA1.code).toBe(0);
     expect(pushA1.out.join("\n")).toContain("pushed generation 1");
-    const prefix = `megasaver-brain/${PROJECT_ID}/`;
+    const prefix = `megasaver-brain/${deriveBrainId(loadKeyfile(keyfilePath(rootA)), PROJECT_NAME)}/`;
     const storeKeys = [...d.store.keys()];
     expect(storeKeys).toContain(`${prefix}manifest.json.enc`);
     expect(storeKeys.filter((k) => k.startsWith(`${prefix}objects/`))).toHaveLength(1);
@@ -181,15 +193,17 @@ describe("brain sync — two-machine lifecycle", () => {
     expect(initB.out.join("\n")).not.toContain("Recovery code");
     expect(readFileSync(keyfilePath(rootB))).toEqual(readFileSync(keyfilePath(rootA)));
 
-    // 4. B pull: merges remote generation 1; alpha lands as a suggested entry.
-    await seedProject(rootB);
+    // 4. B seeds the SAME-named project under its OWN distinct local id, then
+    //    pulls: it derives the identical brainId and merges remote generation 1;
+    //    alpha lands as a suggested entry. This is the B1 proof — no shared id.
+    await seedProject(rootB, B_LOCAL_ID);
     const pullB1 = await runOp(runBrainSyncPull, rootB);
     expect(pullB1.code).toBe(0);
     const pullB1Text = pullB1.out.join("\n");
     expect(pullB1Text).toContain("merged remote generation 1");
     expect(pullB1Text).toContain("mega memory approve");
     expect(pullB1Text).toContain("merged: +1 memories (suggested)");
-    expect(await projectMemories(rootB)).toEqual([
+    expect(await projectMemories(rootB, B_LOCAL_ID)).toEqual([
       { content: "alpha-knowledge", approval: "suggested" },
     ]);
 
@@ -203,7 +217,7 @@ describe("brain sync — two-machine lifecycle", () => {
     // 6. A seeds a second approved memory and pushes generation 2 (bundle now
     //    carries alpha + beta — both approved on A). A is already up to date vs
     //    gen 1, so this is a plain publish, not a merge.
-    await seedApprovedMemory(rootA, BETA_ID, "beta-knowledge");
+    await seedApprovedMemory(rootA, A_LOCAL_ID, BETA_ID, "beta-knowledge");
     const pushA2 = await runOp(runBrainSyncPush, rootA);
     expect(pushA2.code).toBe(0);
     expect(pushA2.out.join("\n")).toContain("pushed generation 2");
@@ -216,7 +230,7 @@ describe("brain sync — two-machine lifecycle", () => {
     const pullB2Text = pullB2.out.join("\n");
     expect(pullB2Text).toContain("merged remote generation 2");
     expect(pullB2Text).toContain("merged: +1 memories (suggested)");
-    const afterDedupe = await projectMemories(rootB);
+    const afterDedupe = await projectMemories(rootB, B_LOCAL_ID);
     expect(afterDedupe).toHaveLength(2);
     expect(afterDedupe.filter((m) => m.content === "alpha-knowledge")).toHaveLength(1);
     expect(afterDedupe).toContainEqual({ content: "beta-knowledge", approval: "suggested" });
@@ -227,6 +241,6 @@ describe("brain sync — two-machine lifecycle", () => {
     const pullB3Text = pullB3.out.join("\n");
     expect(pullB3Text).toContain("already up to date (generation 2)");
     expect(pullB3Text).not.toContain("merged:");
-    expect(await projectMemories(rootB)).toHaveLength(2);
+    expect(await projectMemories(rootB, B_LOCAL_ID)).toHaveLength(2);
   });
 });

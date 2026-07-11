@@ -9,7 +9,7 @@ export {
 } from "./keyfile.js";
 export {
   assertSafeEndpoint,
-  brainSyncConfigSchema,
+  clearLastSeen,
   configPath,
   keyfilePath,
   loadConfig,

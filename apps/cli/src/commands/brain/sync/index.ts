@@ -18,12 +18,18 @@ export {
 
 type RunOp = (input: BrainSyncOpInput) => Promise<0 | 1>;
 
-async function dispatch(run: RunOp, projectName: string, store: string | undefined): Promise<void> {
+async function dispatch(
+  run: RunOp,
+  projectName: string,
+  store: string | undefined,
+  force?: boolean,
+): Promise<void> {
   const storeRoot = resolveStorePath(readStoreEnv(store));
   const code = await run({
     storeRoot,
     now: () => Date.now(),
     projectName,
+    ...(force === undefined ? {} : { force }),
     ensureStore: () => ensureStoreReady(storeRoot),
     stdout: (line) => console.log(line),
     stderr: (line) => console.error(line),
@@ -41,12 +47,20 @@ export const brainSyncPushCommand = defineCommand({
     name: "push",
     description: "Push the local project brain to the remote (Mega Saver Pro).",
   },
-  args: opArgs,
+  args: {
+    ...opArgs,
+    force: {
+      type: "boolean",
+      default: false,
+      description: "Push even if synced suggestions are pending (overwrites remote).",
+    },
+  },
   run: ({ args }) =>
     dispatch(
       runBrainSyncPush,
       String(args.projectName),
       typeof args.store === "string" ? args.store : undefined,
+      !!args.force,
     ),
 });
 
