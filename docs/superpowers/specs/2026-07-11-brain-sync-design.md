@@ -106,10 +106,13 @@ measured in verification.
   - `--join <recovery-code>` (or `--keyfile <path>`): reconstruct/copy the
     existing key instead of generating; no recovery code printed; accepts
     an existing remote manifest.
-- `mega brain sync <project>` — safe bidirectional flow (= push semantics
-  below: merge anything unseen, then publish).
-- `mega brain sync push <project>` — same safe flow (never publishes
-  without first merging unseen remote changes).
+- `mega brain sync push <project>` — the canonical safe bidirectional flow
+  (= push semantics below: merge anything unseen, then publish; never
+  publishes without first merging unseen remote changes). A bare
+  `mega brain sync <project>` shorthand was considered but dropped: citty
+  cannot route a bare positional and named subcommands on the same group
+  (a bare positional is read as an unknown subcommand), so `sync` is a
+  subcommands-only group and `push` is the canonical form.
 - `mega brain sync pull <project>` — pull/merge only.
 - `mega brain sync status <project>` — remote generation vs local
   last-seen, remote `updatedAt`, up-to-date flag. Read-only, no mutation.
@@ -189,7 +192,7 @@ existing key and require 412; DELETE the probe. Any non-enforcing endpoint
 → `conditional_writes_unsupported`, init fails. `conditionalWritesVerified:
 true` is recorded in config; smoke evidence must name the providers tested.
 
-**Sync flow (push semantics — also what bare `mega brain sync` runs):**
+**Sync flow (push semantics — what `mega brain sync push` runs):**
 
 1. GET manifest (+ETag). Decrypt failure → `wrong_key`, stop.
 2. If remote generation < local last-seen → `rollback_detected`, stop.
