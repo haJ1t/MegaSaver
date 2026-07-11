@@ -88,4 +88,19 @@ describe("keyfile", () => {
       expect((err as BrainSyncError).code).toBe("bad_recovery_code");
     }
   });
+
+  it("recovery code: empty string -> bad_recovery_code", () => {
+    try {
+      decodeRecoveryCode("");
+      expect.unreachable();
+    } catch (err) {
+      expect((err as BrainSyncError).code).toBe("bad_recovery_code");
+    }
+  });
+
+  it("recovery code: tolerates embedded spaces", () => {
+    const key = generateKey();
+    const spaced = encodeRecoveryCode(key).replaceAll("-", " ");
+    expect(decodeRecoveryCode(spaced)).toEqual(key);
+  });
 });
