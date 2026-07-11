@@ -1,5 +1,50 @@
 # @megasaver/daemon
 
+## 0.1.3
+
+### Patch Changes
+
+- 815445a: Saver eligibility + ranking wave 3: the hook's byte gate is now the single
+  compression-eligibility authority (no more 4–8 KB dead band), safe mode
+  compresses Bash below Claude Code's output ceiling, file reads get semantic
+  AST chunking, compressed views render in source order with `… [lines A-B
+omitted]` markers, intent is per-session with a 30-minute TTL, the intent
+  tokenizer understands non-ASCII prompts, and a committed
+  `.megasaver/policy.json` can floor the mode a repo may be compressed with.
+- b91c052: Saver metrics honesty wave 5 (F30-F34): every reported number now counts
+  the bytes actually delivered to the model, and no ratio divides mismatched
+  scopes. `recordAndFilterOverlayOutput` computes the persisted
+  returnedBytes/bytesSaved/savingRatio from the FINAL delivered text — D16
+  elision markers plus the recovery footer, which now renders inside record
+  (new canonical `buildRecoveryFooter` + `includeFooter` flag, wired through
+  the saver hook and the daemon /excerpt schema) — and degrades to
+  passthrough with ZERO side effects when a compressed replacement would be
+  net-negative. Overlay events carry `secretsRedacted`/`chunksStored`, so
+  summary rebuilds recover both counters without carryForward, and the GC
+  reconcile counts schema-valid lines only (garbage lines no longer force a
+  rebuild every sweep). The proxy usage reader tolerates torn JSONL lines
+  and `mega audit usage` reports the skipped count, matches a GLOBAL savings
+  numerator to the global usage denominator, adds a per-workspace savings
+  breakdown (no unattributable ratios), and carries a scoped-ratio branch
+  for future workspace-keyed usage rows. The proxy supervisor re-applies a
+  removed route in place (lease kept; counter surfaced by the new
+  `saver-proxy-route` doctor check), and metering is no longer framed as
+  saving: `saver_mediated_token_savings`, `mediation: "saver_hook"`, and an
+  explicit metering note in the audit report.
+- Updated dependencies [64a5300]
+- Updated dependencies [ce66902]
+- Updated dependencies [815445a]
+- Updated dependencies [b91c052]
+- Updated dependencies [5695012]
+- Updated dependencies [3905c30]
+  - @megasaver/core@1.3.0
+  - @megasaver/context-gate@0.6.0
+  - @megasaver/output-filter@1.5.0
+  - @megasaver/stats@1.4.0
+  - @megasaver/shared@1.3.0
+  - @megasaver/content-store@1.1.3
+  - @megasaver/retrieval@1.0.3
+
 ## 0.1.2
 
 ### Patch Changes

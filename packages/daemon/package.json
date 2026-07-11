@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/daemon",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "MIT",
   "private": true,
   "description": "Machine-wide local context daemon: discovery, singleton lock, loopback HTTP, lazy-spawn client.",

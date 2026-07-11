@@ -1,5 +1,35 @@
 # @megasaver/gui
 
+## 1.4.1
+
+### Patch Changes
+
+- Updated dependencies [64a5300]
+- Updated dependencies [ce66902]
+- Updated dependencies [815445a]
+- Updated dependencies [b91c052]
+- Updated dependencies [5695012]
+- Updated dependencies [3905c30]
+  - @megasaver/core@1.3.0
+  - @megasaver/context-gate@0.6.0
+  - @megasaver/connector-claude-code@1.3.0
+  - @megasaver/output-filter@1.5.0
+  - @megasaver/daemon@0.1.3
+  - @megasaver/stats@1.4.0
+  - @megasaver/llm-proxy@0.3.0
+  - @megasaver/proxy-control@0.3.0
+  - @megasaver/shared@1.3.0
+  - @megasaver/content-store@1.1.3
+  - @megasaver/agent-office@0.1.3
+  - @megasaver/connector-generic-cli@1.1.3
+  - @megasaver/connectors-shared@1.2.2
+  - @megasaver/mcp-bridge@1.2.2
+  - @megasaver/context-pruner@0.2.2
+  - @megasaver/evidence-ledger@0.2.2
+  - @megasaver/indexer@0.2.2
+  - @megasaver/memory-graph@1.1.2
+  - @megasaver/policy@1.2.2
+
 ## 1.4.0
 
 ### Minor Changes

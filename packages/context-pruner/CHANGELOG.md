@@ -1,5 +1,14 @@
 # @megasaver/context-pruner
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [5695012]
+  - @megasaver/shared@1.3.0
+  - @megasaver/indexer@0.2.2
+  - @megasaver/retrieval@1.0.3
+
 ## 0.2.1
 
 ### Patch Changes

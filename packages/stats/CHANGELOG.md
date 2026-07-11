@@ -1,5 +1,53 @@
 # @megasaver/stats
 
+## 1.4.0
+
+### Minor Changes
+
+- b91c052: Saver metrics honesty wave 5 (F30-F34): every reported number now counts
+  the bytes actually delivered to the model, and no ratio divides mismatched
+  scopes. `recordAndFilterOverlayOutput` computes the persisted
+  returnedBytes/bytesSaved/savingRatio from the FINAL delivered text — D16
+  elision markers plus the recovery footer, which now renders inside record
+  (new canonical `buildRecoveryFooter` + `includeFooter` flag, wired through
+  the saver hook and the daemon /excerpt schema) — and degrades to
+  passthrough with ZERO side effects when a compressed replacement would be
+  net-negative. Overlay events carry `secretsRedacted`/`chunksStored`, so
+  summary rebuilds recover both counters without carryForward, and the GC
+  reconcile counts schema-valid lines only (garbage lines no longer force a
+  rebuild every sweep). The proxy usage reader tolerates torn JSONL lines
+  and `mega audit usage` reports the skipped count, matches a GLOBAL savings
+  numerator to the global usage denominator, adds a per-workspace savings
+  breakdown (no unattributable ratios), and carries a scoped-ratio branch
+  for future workspace-keyed usage rows. The proxy supervisor re-applies a
+  removed route in place (lease kept; counter surfaced by the new
+  `saver-proxy-route` doctor check), and metering is no longer framed as
+  saving: `saver_mediated_token_savings`, `mediation: "saver_hook"`, and an
+  explicit metering note in the audit report.
+- 5695012: Saver observability wave 4 (E21-E29): a dead saver is now visible. The
+  per-workspace heartbeat registry becomes a full liveness ledger — hook
+  failures (with a coarse kind), successful completions, and daemon
+  fallbacks are recorded best-effort and surfaced in `mega session saver
+resolve`, `mega hooks status`, and a new `mega doctor` verifier section
+  (registration, binary, store bake, heartbeat liveness, spawned self-test,
+  daemon ping). Corrupt per-session overlay summaries self-heal from their
+  events JSONL (stamped `rebuiltAt`); summary read-modify-writes are
+  serialized by a new stale-aware `withFileLock` in `@megasaver/shared`
+  (which also unfreezes the heartbeat lock), and the daily GC sweep
+  reconciles summaries that lag their JSONL. `mega hooks install` now
+  registers hooks by absolute CLI path with explicit timeouts, bakes
+  `--store` for non-default stores, and migrates legacy bare entries in
+  place; `mega hooks status <id>` also resolves live overlay sessions, and
+  the no-arg form aggregates savings and liveness across workspaces.
+
+### Patch Changes
+
+- Updated dependencies [815445a]
+- Updated dependencies [5695012]
+- Updated dependencies [3905c30]
+  - @megasaver/output-filter@1.5.0
+  - @megasaver/shared@1.3.0
+
 ## 1.3.0
 
 ### Minor Changes

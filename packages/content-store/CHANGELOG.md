@@ -1,5 +1,23 @@
 # @megasaver/content-store
 
+## 1.1.3
+
+### Patch Changes
+
+- 3905c30: Saver recovery wave 2: hook-compressed output is now stored as uniform
+  40-line chunks — the recovery footer advertises `N chunks` with fetch-by-id
+  (`i = 0..N-1`) so an agent expands only the slice it needs instead of
+  re-paying for the whole raw. The content
+  store self-cleans: `pruneOlderThan` now recognizes overlay chunk sets (they
+  previously leaked forever), removes emptied directories, runs best-effort
+  from the saver hook at most once a day (30-day retention), and is available
+  manually as `mega output gc [--days N]`.
+- Updated dependencies [815445a]
+- Updated dependencies [5695012]
+- Updated dependencies [3905c30]
+  - @megasaver/output-filter@1.5.0
+  - @megasaver/shared@1.3.0
+
 ## 1.1.2
 
 ### Patch Changes

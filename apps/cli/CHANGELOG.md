@@ -1,5 +1,86 @@
 # @megasaver/cli
 
+## 2.0.0
+
+### Major Changes
+
+- 64a5300: `mega brain export <project>` / `mega brain import <project> <file>` — the
+  portable project brain (Mega Saver Pro). Export writes the knowledge layer
+  (approved project-scoped memories, rules, failed-attempt lessons) to a
+  2-line `.megabrain` bundle with a SHA-256 payload integrity hash and
+  firewall redaction (findings counted in the manifest). Import verifies the
+  hash, then merges everything as NEW entries with `approval: "suggested"` —
+  nothing activates until `mega memory approve`; exact duplicates are skipped
+  and counted. Core gains `exportBrain` / `importBrain` /
+  `parseBrainBundle` / `serializeBrainBundle`.
+
+### Minor Changes
+
+- ce66902: Saver coverage wave 1: the PostToolUse saver now compresses Task/subagent
+  reports, BashOutput/Monitor retrievals, WebSearch/ToolSearch results, and
+  third-party `mcp__*` tool outputs whose response exposes a recognized text
+  shape (bare string, `{result}`/`{content}`, or a text content-block array) —
+  16 KiB conservative floor; Mega Saver's own `mcp__megasaver__*` bridge is
+  excluded. Any unrecognized response shape safely falls through untouched.
+  Plus Grep files-mode/Glob
+  filename arrays, Bash stderr (larger-stream slot), and the text blocks of
+  mixed content arrays. Recovery is now real: `fetchChunk` reads hook-written
+  overlay chunk sets, so the compression footer's new
+  `mega output chunk "<set>" "0"` instruction works in every session (and an
+  expansion is never itself re-compressed). `mega hooks install` repairs a
+  stale hook matcher in place, and both hook matchers are anchored so they
+  never over-match unrelated tool names.
+- 815445a: Saver eligibility + ranking wave 3: the hook's byte gate is now the single
+  compression-eligibility authority (no more 4–8 KB dead band), safe mode
+  compresses Bash below Claude Code's output ceiling, file reads get semantic
+  AST chunking, compressed views render in source order with `… [lines A-B
+omitted]` markers, intent is per-session with a 30-minute TTL, the intent
+  tokenizer understands non-ASCII prompts, and a committed
+  `.megasaver/policy.json` can floor the mode a repo may be compressed with.
+- b91c052: Saver metrics honesty wave 5 (F30-F34): every reported number now counts
+  the bytes actually delivered to the model, and no ratio divides mismatched
+  scopes. `recordAndFilterOverlayOutput` computes the persisted
+  returnedBytes/bytesSaved/savingRatio from the FINAL delivered text — D16
+  elision markers plus the recovery footer, which now renders inside record
+  (new canonical `buildRecoveryFooter` + `includeFooter` flag, wired through
+  the saver hook and the daemon /excerpt schema) — and degrades to
+  passthrough with ZERO side effects when a compressed replacement would be
+  net-negative. Overlay events carry `secretsRedacted`/`chunksStored`, so
+  summary rebuilds recover both counters without carryForward, and the GC
+  reconcile counts schema-valid lines only (garbage lines no longer force a
+  rebuild every sweep). The proxy usage reader tolerates torn JSONL lines
+  and `mega audit usage` reports the skipped count, matches a GLOBAL savings
+  numerator to the global usage denominator, adds a per-workspace savings
+  breakdown (no unattributable ratios), and carries a scoped-ratio branch
+  for future workspace-keyed usage rows. The proxy supervisor re-applies a
+  removed route in place (lease kept; counter surfaced by the new
+  `saver-proxy-route` doctor check), and metering is no longer framed as
+  saving: `saver_mediated_token_savings`, `mediation: "saver_hook"`, and an
+  explicit metering note in the audit report.
+- 5695012: Saver observability wave 4 (E21-E29): a dead saver is now visible. The
+  per-workspace heartbeat registry becomes a full liveness ledger — hook
+  failures (with a coarse kind), successful completions, and daemon
+  fallbacks are recorded best-effort and surfaced in `mega session saver
+resolve`, `mega hooks status`, and a new `mega doctor` verifier section
+  (registration, binary, store bake, heartbeat liveness, spawned self-test,
+  daemon ping). Corrupt per-session overlay summaries self-heal from their
+  events JSONL (stamped `rebuiltAt`); summary read-modify-writes are
+  serialized by a new stale-aware `withFileLock` in `@megasaver/shared`
+  (which also unfreezes the heartbeat lock), and the daily GC sweep
+  reconciles summaries that lag their JSONL. `mega hooks install` now
+  registers hooks by absolute CLI path with explicit timeouts, bakes
+  `--store` for non-default stores, and migrates legacy bare entries in
+  place; `mega hooks status <id>` also resolves live overlay sessions, and
+  the no-arg form aggregates savings and liveness across workspaces.
+- 3905c30: Saver recovery wave 2: hook-compressed output is now stored as uniform
+  40-line chunks — the recovery footer advertises `N chunks` with fetch-by-id
+  (`i = 0..N-1`) so an agent expands only the slice it needs instead of
+  re-paying for the whole raw. The content
+  store self-cleans: `pruneOlderThan` now recognizes overlay chunk sets (they
+  previously leaked forever), removes emptied directories, runs best-effort
+  from the saver hook at most once a day (30-day retention), and is available
+  manually as `mega output gc [--days N]`.
+
 ## 1.13.0
 
 ### Minor Changes

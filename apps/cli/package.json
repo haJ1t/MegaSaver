@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/cli",
-  "version": "1.13.0",
+  "version": "2.0.0",
   "license": "SEE LICENSE IN NOTICE",
   "description": "Mega Saver CLI - the `mega` command.",
   "type": "module",

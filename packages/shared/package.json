@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/shared",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "license": "MIT",
   "private": true,
   "description": "Cross-cutting types and Zod schemas for the Mega Saver workspace.",

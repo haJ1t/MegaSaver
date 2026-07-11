@@ -1,5 +1,33 @@
 # @megasaver/output-filter
 
+## 1.5.0
+
+### Minor Changes
+
+- 815445a: Saver eligibility + ranking wave 3: the hook's byte gate is now the single
+  compression-eligibility authority (no more 4–8 KB dead band), safe mode
+  compresses Bash below Claude Code's output ceiling, file reads get semantic
+  AST chunking, compressed views render in source order with `… [lines A-B
+omitted]` markers, intent is per-session with a 30-minute TTL, the intent
+  tokenizer understands non-ASCII prompts, and a committed
+  `.megasaver/policy.json` can floor the mode a repo may be compressed with.
+- 3905c30: Saver recovery wave 2: hook-compressed output is now stored as uniform
+  40-line chunks — the recovery footer advertises `N chunks` with fetch-by-id
+  (`i = 0..N-1`) so an agent expands only the slice it needs instead of
+  re-paying for the whole raw. The content
+  store self-cleans: `pruneOlderThan` now recognizes overlay chunk sets (they
+  previously leaked forever), removes emptied directories, runs best-effort
+  from the saver hook at most once a day (30-day retention), and is available
+  manually as `mega output gc [--days N]`.
+
+### Patch Changes
+
+- Updated dependencies [5695012]
+  - @megasaver/shared@1.3.0
+  - @megasaver/evidence-ledger@0.2.2
+  - @megasaver/indexer@0.2.2
+  - @megasaver/policy@1.2.2
+
 ## 1.4.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/stats",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "license": "MIT",
   "private": true,
   "description": "Session token-saver stats and event schemas with atomic on-disk persistence for Mega Saver.",
