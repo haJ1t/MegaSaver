@@ -378,6 +378,28 @@ describe("monitorTick — observe-only while a transition is retained", () => {
     expect(rt?.lastRouteReappliedAt).toBe(new Date(Date.UTC(2026, 6, 3, 0, 0, 30)).toISOString());
   });
 
+  it("F31: no pre-seeded runtime.json — self-heal creates it and persists the counter", () => {
+    const route = fakeRoute(null); // settings rewrite dropped our value
+    writeControlState(
+      store,
+      control({
+        transition: null,
+        routeLease: { url: OWNED, instanceId: "inst", phase: "active", installedAt: "x" },
+      }),
+    );
+    // Fresh install: nothing ever wrote runtime.json before the first re-apply.
+    expect(readRuntimeState(store)).toBeNull();
+    monitorTick(deps(route, fakeListener(true, "matching")));
+    const rt = readRuntimeState(store);
+    expect(rt).not.toBeNull();
+    expect(rt?.routeReapplies).toBe(1);
+    expect(rt?.lastRouteReappliedAt).toBe(new Date(Date.UTC(2026, 6, 3, 0, 0, 30)).toISOString());
+    // A second consecutive drift bumps to 2 — still no external writer.
+    const route2 = fakeRoute(null);
+    monitorTick(deps(route2, fakeListener(true, "matching")));
+    expect(readRuntimeState(store)?.routeReapplies).toBe(2);
+  });
+
   it("F31: a second drift bumps the counter to 2", () => {
     const route = fakeRoute(null);
     writeControlState(

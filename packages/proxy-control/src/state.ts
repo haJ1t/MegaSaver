@@ -129,17 +129,22 @@ export type ProxyControlState = z.infer<typeof proxyControlStateSchema>;
 
 export const proxyRuntimeStateSchema = z.object({
   version: z.literal(1),
-  pid: z.number().int(),
-  processStartToken: z.string(),
-  bootId: z.string(),
-  instanceId: z.string(),
-  controlUrl: z.string(),
-  controlToken: z.string(),
-  healthCapability: z.string(),
-  proxyUrl: z.string(),
-  startedAt: z.string(),
-  lastReconciledAt: z.string(),
-  lastUsagePersistedAt: z.string().nullable(),
+  // Only routeReapplies/lastRouteReappliedAt are consumed today (by doctor).
+  // These identity/control fields have no reader yet and are reserved for a
+  // future control-server surface — optional so monitorTick can persist churn
+  // telemetry from a fresh install without fabricating control-server identity
+  // it does not actually hold.
+  pid: z.number().int().optional(),
+  processStartToken: z.string().optional(),
+  bootId: z.string().optional(),
+  instanceId: z.string().optional(),
+  controlUrl: z.string().optional(),
+  controlToken: z.string().optional(),
+  healthCapability: z.string().optional(),
+  proxyUrl: z.string().optional(),
+  startedAt: z.string().optional(),
+  lastReconciledAt: z.string().optional(),
+  lastUsagePersistedAt: z.string().nullable().optional(),
   // F31 self-heal telemetry: bumped by monitorTick when it restores a
   // removed route. Optional — pre-wave-5 runtime files keep parsing.
   routeReapplies: z.number().int().nonnegative().optional(),

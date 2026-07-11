@@ -296,13 +296,12 @@ export function monitorTick(deps: SupervisorDeps): void {
       // Route restored: keep the lease, no block, no drain. Count the
       // re-apply so doctor can surface settings-rewrite churn.
       const runtime = readRuntimeState(deps.storeRoot);
-      if (runtime !== null) {
-        writeRuntimeState(deps.storeRoot, {
-          ...runtime,
-          routeReapplies: (runtime.routeReapplies ?? 0) + 1,
-          lastRouteReappliedAt: nowIso,
-        });
-      }
+      writeRuntimeState(deps.storeRoot, {
+        ...(runtime ?? {}),
+        version: 1,
+        routeReapplies: (runtime?.routeReapplies ?? 0) + 1,
+        lastRouteReappliedAt: nowIso,
+      });
       return;
     }
     // Re-apply did not take (lost write / refused): fall through to the
