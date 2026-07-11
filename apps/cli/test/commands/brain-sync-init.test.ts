@@ -74,7 +74,13 @@ async function ensureStore(root: string) {
 
 async function runInit(
   root: string,
-  fields: { endpoint: string; join?: string; reset?: boolean; force?: boolean },
+  fields: {
+    endpoint: string;
+    join?: string;
+    keyfileImportPath?: string;
+    reset?: boolean;
+    force?: boolean;
+  },
 ): Promise<{ code: 0 | 1; out: string[]; err: string[] }> {
   const out: string[] = [];
   const err: string[] = [];
@@ -88,6 +94,9 @@ async function runInit(
     region: "auto",
     pathStyle: true,
     ...(fields.join === undefined ? {} : { join: fields.join }),
+    ...(fields.keyfileImportPath === undefined
+      ? {}
+      : { keyfileImportPath: fields.keyfileImportPath }),
     ...(fields.reset === undefined ? {} : { reset: fields.reset }),
     ...(fields.force === undefined ? {} : { force: fields.force }),
     ensureStore: () => ensureStore(root),
@@ -168,6 +177,21 @@ describe("runBrainSyncInit — entitled", () => {
     expect(second.code).toBe(0);
     expect(second.out.join("\n")).not.toContain("Recovery code:");
     expect(readFileSync(keyfilePath(root2))).toEqual(readFileSync(keyfilePath(root1)));
+  });
+
+  it("--keyfile imports an existing key silently (no recovery code printed)", async () => {
+    const rootA = mkStore();
+    activatePro(rootA);
+    const d = await double();
+    const a = await runInit(rootA, { endpoint: d.url });
+    expect(a.code).toBe(0);
+
+    const rootB = mkStore();
+    activatePro(rootB);
+    const b = await runInit(rootB, { endpoint: d.url, keyfileImportPath: keyfilePath(rootA) });
+    expect(b.code).toBe(0);
+    expect(b.out.join("\n")).not.toContain("Recovery code");
+    expect(readFileSync(keyfilePath(rootB))).toEqual(readFileSync(keyfilePath(rootA)));
   });
 
   it("refuses to overwrite an existing keyfile without --reset --force", async () => {

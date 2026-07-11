@@ -43,7 +43,7 @@ export async function runBrainSyncInit(input: RunBrainSyncInitInput): Promise<0 
       return 1;
     }
 
-    const joined = input.join !== undefined;
+    const generated = input.join === undefined && input.keyfileImportPath === undefined;
     const key =
       input.join !== undefined
         ? decodeRecoveryCode(input.join)
@@ -66,7 +66,8 @@ export async function runBrainSyncInit(input: RunBrainSyncInitInput): Promise<0 
       return 1;
     }
 
-    saveKeyfile(keyfilePath(input.storeRoot), key);
+    // Config first, keyfile last: the re-init guard keys off keyfile existence,
+    // so a crash between the two writes must leave NO keyfile → re-init unblocked.
     saveConfig(input.storeRoot, {
       schemaVersion: 1,
       endpoint: input.endpoint,
@@ -77,12 +78,13 @@ export async function runBrainSyncInit(input: RunBrainSyncInitInput): Promise<0 
       conditionalWritesVerified: true,
       lastSeen: {},
     });
+    saveKeyfile(keyfilePath(input.storeRoot), key);
 
-    if (joined) {
-      input.stdout("Joined existing brain sync.");
-    } else {
+    if (generated) {
       input.stdout(`Recovery code: ${encodeRecoveryCode(key)}`);
       input.stdout("Store this recovery code now — it will not be shown again.");
+    } else {
+      input.stdout("Joined existing brain sync.");
     }
     return 0;
   } catch (err) {
