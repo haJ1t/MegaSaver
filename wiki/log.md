@@ -3298,3 +3298,17 @@ user release approval before merge/PR.
 Pushed worktree-brain-sync -> origin/feat/brain-sync; opened DRAFT PR #282
 (https://github.com/haJ1t/MegaSaver/pull/282). Held draft: real-endpoint
 smoke + user release approval remain before ready/merge. No merge, no publish.
+
+## [2026-07-12] review | brain-sync (E7) PR #282 final review + fixes
+In-session final review (code + security, fresh contexts) on the post-gauntlet
+state. Code: MERGE-READY (only stale docs — projectId->brainId reconciled in
+wiki entity + spec body/threat-table, 40181e1e). Security: crypto SOUND
+(deriveBrainId keyed-hash verified, no key leak/AAD injection, no gauntlet-fix
+regression), YES-with-fixes. Found + FIXED [Medium] B2 merge-during-push window
+(73197d39): push's internal merge could drop a never-pulled machine's unseen
+remote entry past the pre-push guard -> now CLI push pull-merges FIRST, then
+guards, then publishes; RED->GREEN proven (remove `await pull` -> silent loss
+returns). + NFC normalize in brainId (prevents Unicode-equivalent name forks).
+Also PR #283 (embeddings ESM-blind lazy-load guard fix) MERGED to main.
+brain-sync 70 tests, cli 1111. PR #282 still draft: real-endpoint smoke +
+user release approval remain.

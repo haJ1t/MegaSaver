@@ -383,13 +383,23 @@ So a machine that pulled suggestions and approved none would, on its next
 `push`, publish a bundle missing them → the remote (the "durable cloud copy")
 loses those memories; a third joiner then pulls a memory-less brain.
 
-**Fix:** before publishing, `push` refuses when the local project has pending
-**sync-imported suggestions** — `suggested`-approval memories whose `evidence`
-carries the `brain-import:` provenance tag. Message: "N synced suggestions are
-pending — run `mega memory approve` (or discard them) before pushing; pushing
-now would drop them from the remote." A `--force` flag overrides for an
-intentional overwrite. This prevents the *silent* durability loss; the user
-resolves synced suggestions before they can be dropped.
+**Fix:** the CLI `push` (non-`--force`) **merges the remote first** (`pull`),
+THEN runs the guard, THEN publishes. The guard refuses when the local project
+has pending **sync-imported suggestions** — `suggested`-approval memories whose
+`evidence` carries the `brain-import:` provenance tag. Message: "N synced
+suggestions are pending — run `mega memory approve` (or discard them) before
+pushing; pushing now would drop them from the remote." A `--force` flag
+overrides for an intentional overwrite (skips the pull+guard; `push`'s own
+merge fires).
+
+Pull-before-guard is load-bearing: `push` itself merges internally, so a
+machine that had NOT pulled would otherwise pass a pre-push guard (0 pending),
+then `push`'s internal merge would import the remote entry and the
+approved-only export would drop it — a silent loss *without* `--force*. Merging
+first surfaces those imports to the guard. Residual (accepted): a remote that
+advances in the tiny window between this pull and the immediately-following
+publish is re-merged inside `push`, which reports `merged: true` (warns the
+user) — a much narrower race than the never-pulled case.
 
 ### HIGH / security-M1 — reset + stale last-seen
 
