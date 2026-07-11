@@ -235,7 +235,7 @@ describe("observationsFromEvents token count is pinned to estimateTokens", () =>
 });
 
 describe("recordedEventsFromLogs (mediation assigned by log source)", () => {
-  it("tags overlay events saver_hook, session events proxy, hook-log native", () => {
+  it("tags overlay events saver_hook, session events saver_hook, hook-log native", () => {
     const recorded = recordedEventsFromLogs({
       overlayEvents: [{ rawBytes: 8000, returnedBytes: 400 }],
       sessionEvents: [{ rawBytes: 6000, returnedBytes: 300 }],
@@ -250,7 +250,7 @@ describe("recordedEventsFromLogs (mediation assigned by log source)", () => {
     expect(recorded).toContainEqual({
       rawBytes: 6000,
       returnedBytes: 300,
-      mediation: "proxy",
+      mediation: "saver_hook",
       decision: "compressed",
     });
     expect(recorded).toContainEqual({

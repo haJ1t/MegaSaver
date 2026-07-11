@@ -99,8 +99,8 @@ export function tokensFromBytes(bytes: number): number {
 
 // A persisted event always records a `compressed` mediated output. `decision`
 // and `mediation` are REQUIRED — the loader sets them from the log source
-// (overlay→saver_hook, session→proxy, hook-telemetry→native); they are never
-// read from the row, which does not carry them.
+// (overlay→saver_hook, session→saver_hook, hook-telemetry→native); they are
+// never read from the row, which does not carry them.
 export interface RecordedEventLike {
   rawBytes: number;
   returnedBytes: number;
@@ -137,7 +137,7 @@ export function recordedEventsFromLogs(input: {
     })),
     ...input.sessionEvents.map((e) => ({
       ...e,
-      mediation: "proxy" as const,
+      mediation: "saver_hook" as const,
       decision: "compressed" as const,
     })),
     ...input.nativeEligible.map((n) => ({
