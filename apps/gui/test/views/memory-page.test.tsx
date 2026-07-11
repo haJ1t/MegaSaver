@@ -30,6 +30,27 @@ describe("MemoryPage", () => {
     expect(pageHeading?.textContent).toBe("Memory");
   });
 
+  it("gives the visualizations the broad desktop content area", () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("[]", { status: 200, headers: { "content-type": "application/json" } }),
+      ),
+    );
+    render(<MemoryPage options={OPTS} activeKey="k1" onWorkspaceChange={() => {}} />);
+
+    const layout = screen.getByTestId("memory-workspace-layout");
+    expect(layout.className).toContain("grid");
+    expect(layout.className).toContain("lg:grid-cols-[minmax(18rem,0.85fr)_minmax(0,2.15fr)]");
+    expect(screen.getByLabelText("Memory graph").parentElement?.className).toContain(
+      "lg:col-start-2",
+    );
+    expect(screen.getByLabelText("Decision trace").parentElement?.className).toContain(
+      "lg:col-span-2",
+    );
+  });
+
   it("prompts to select when there is no active workspace", () => {
     render(<MemoryPage options={[]} activeKey={null} onWorkspaceChange={() => {}} />);
     expect(screen.getByText(/select a workspace/i)).toBeTruthy();

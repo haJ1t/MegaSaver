@@ -8,7 +8,7 @@ sources:
   - docs/superpowers/plans/2026-07-03-gui-redesign-v3.md
 status: published
 created: 2026-05-10
-updated: 2026-07-03
+updated: 2026-07-09
 ---
 
 # `@megasaver/gui`
@@ -282,6 +282,15 @@ overloaded cockpit. Frontend-only — no bridge/Core change.
   per-session figure (cockpit rail) is live.
 - Source: `docs/superpowers/specs/2026-07-03-gui-redesign-v3-design.md`,
   `docs/superpowers/plans/2026-07-03-gui-redesign-v3.md`.
+
+## Memory visualization layout (2026-07-09)
+
+The Memory page now uses a responsive grid: notes are a bounded desktop
+column, the memory graph uses the fluid remaining column, and Decision Trace
+spans the complete row below. Both visualizations keep a minimum canvas height;
+on smaller screens they return to a single-column flow.
+
+Source: `docs/superpowers/specs/2026-07-09-memory-visualization-layout-design.md`.
 
 ## `mega gui` — packaged GUI served by the bridge (Slice A–C, feat/mega-gui-command)
 
