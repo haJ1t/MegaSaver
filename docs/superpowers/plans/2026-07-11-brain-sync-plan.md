@@ -1758,23 +1758,29 @@ git commit -m "feat(brain-sync): cas sync engine with merge-before-publish"
 
 - [ ] **Step 1: Write the failing guard test**
 
-`test/no-eager-aws-sdk.test.ts` (mirrors `packages/output-filter/test/no-eager-typescript.test.ts`):
+`test/no-eager-aws-sdk.test.ts` — NOTE: the `no-eager-typescript` moduleLoadList
+pattern does NOT transfer here. `process.moduleLoadList` records only native +
+CJS-`require` loads; `@aws-sdk/client-s3` v3 resolves to ESM under `import`, so
+it never appears there and a moduleLoadList assertion is vacuous (always "0",
+passes even with a real eager import). Assert on BUNDLE CONTENT instead — tsup
+externalizes @aws-sdk, so a static import emits a top-level `from
+"@aws-sdk/client-s3"` while the lazy path stays an `import("@aws-sdk/client-s3")`
+call:
 ```ts
-import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("no eager @aws-sdk load", () => {
-  it("importing dist/index.js loads zero @aws-sdk modules", () => {
-    const entryUrl = new URL("../dist/index.js", import.meta.url).href;
-    const code = `import(${JSON.stringify(entryUrl)}).then(() => {
-      const loaded = process.moduleLoadList.filter((m) => /node_modules[\\\\/]@aws-sdk[\\\\/]/.test(m));
-      console.log(loaded.length);
-    });`;
-    const out = execFileSync(process.execPath, ["--input-type=module", "-e", code], { encoding: "utf8" });
-    expect(out.trim()).toBe("0");
+  it("dist/index.js reaches @aws-sdk only via dynamic import", () => {
+    const dist = readFileSync(new URL("../dist/index.js", import.meta.url), "utf8");
+    expect(dist).toMatch(/import\(\s*["']@aws-sdk\/client-s3["']\s*\)/);
+    expect(dist).not.toMatch(/from\s*["']@aws-sdk\/client-s3["']/);
+    expect(dist).not.toMatch(/^\s*import\s*["']@aws-sdk\/client-s3["']/m);
   });
 });
 ```
+(Verify non-vacuous by temporarily adding a top-level SDK import → rebuild →
+test must FAIL → revert.)
 
 - [ ] **Step 2: Fill in the public surface**
 
