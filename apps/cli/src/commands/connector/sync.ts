@@ -3,12 +3,15 @@ import { dirname, join } from "node:path";
 import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
 import {
   ConnectorError,
+  MEGA_SAVER_WS_BLOCK_START,
   normalizeEol,
   projectionPreflight,
   readTargetFile,
+  renderWarmStartBlockText,
   upsertBlock,
   writeTargetFile,
 } from "@megasaver/connectors-shared";
+import { assembleWarmStartBrief } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { KNOWN_TARGETS, KNOWN_TARGET_IDS } from "../../known-targets.js";
@@ -113,7 +116,28 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           continue;
         }
 
-        const newContent = upsertBlock({ existingContent: existing, context });
+        let warmStartBlock: string | undefined;
+        if (existing.includes(MEGA_SAVER_WS_BLOCK_START)) {
+          const refreshedAt = new Date().toISOString();
+          const brief = assembleWarmStartBrief({
+            projectName: project.name,
+            branch: null,
+            now: refreshedAt,
+            lastSeenAt: null,
+            reonboardUnlocked: false,
+            timeless: true,
+            memories: memoryEntries,
+            rules: registry.listProjectRules(project.id),
+            failedAttempts: registry.listFailedAttempts(project.id),
+            gitDelta: null,
+          });
+          warmStartBlock = renderWarmStartBlockText({ briefText: brief.text, asOf: refreshedAt });
+        }
+        const newContent = upsertBlock({
+          existingContent: existing,
+          context,
+          ...(warmStartBlock !== undefined ? { warmStartBlock } : {}),
+        });
         if (normalizeEol(newContent) === normalizeEol(existing)) {
           emit(target, "noop", sessionId);
           continue;

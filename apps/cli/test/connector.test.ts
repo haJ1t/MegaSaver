@@ -1,7 +1,12 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConnectorError, MEGA_SAVER_BLOCK_START } from "@megasaver/connectors-shared";
+import {
+  ConnectorError,
+  MEGA_SAVER_BLOCK_START,
+  MEGA_SAVER_WS_BLOCK_START,
+  renderWarmStartBlockText,
+} from "@megasaver/connectors-shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectorStatusCommand, connectorSyncCommand } from "../src/commands/connector/index.js";
 import { KNOWN_TARGET_IDS } from "../src/known-targets.js";
@@ -1654,4 +1659,96 @@ describe("connectorSyncCommand — phase 9 targets", () => {
       await expect(readFile(join(projectRoot, c.path), "utf8")).rejects.toThrow();
     });
   }
+});
+
+describe("connectorSyncCommand — warm-start block refresh", () => {
+  let store: string;
+  let projectRoot: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let errSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "megasaver-cli-connector-ws-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "megasaver-cli-connector-ws-root-"));
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function seedProject(name: string): Promise<void> {
+    await mkdir(store, { recursive: true });
+    await writeFile(
+      join(store, "projects.json"),
+      JSON.stringify([
+        {
+          id: PROJECT_ID,
+          name,
+          rootPath: projectRoot,
+          createdAt: STARTED_AT,
+          updatedAt: STARTED_AT,
+        },
+      ]),
+    );
+    await writeFile(
+      join(store, "sessions.json"),
+      JSON.stringify([
+        {
+          id: SESSION_ID,
+          projectId: PROJECT_ID,
+          agentId: "claude-code",
+          riskLevel: "medium",
+          title: "smoke",
+          startedAt: STARTED_AT,
+          endedAt: null,
+        },
+      ]),
+    );
+  }
+
+  async function runSync(): Promise<void> {
+    await connectorSyncCommand.run?.({
+      args: { projectName: "demo", store },
+      cmd: connectorSyncCommand,
+      rawArgs: [],
+      data: undefined,
+    } as never);
+  }
+
+  it("refreshes an existing WS block in place and never seeds one where absent", async () => {
+    await seedProject("demo");
+    const staleBlock = renderWarmStartBlockText({
+      briefText: "# Warm Start — demo\n\nSTALE BRIEF CONTENT",
+      asOf: "2020-01-01T00:00:00.000Z",
+    });
+    await writeFile(
+      join(projectRoot, "CLAUDE.md"),
+      `# Project notes\n\nHand-authored line.\n\n${staleBlock}`,
+    );
+
+    await runSync();
+
+    expect(process.exitCode).toBe(0);
+    expect(errSpy).not.toHaveBeenCalled();
+    const written = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    // Legacy managed block is always (re)seeded by sync.
+    expect(written).toContain(MEGA_SAVER_BLOCK_START);
+    // Exactly one WS block pair, refreshed content (no stale marker, no stale as-of).
+    expect(written.split(MEGA_SAVER_WS_BLOCK_START).length - 1).toBe(1);
+    expect(written).not.toContain("STALE BRIEF CONTENT");
+    expect(written).not.toContain("2020-01-01T00:00:00.000Z");
+    expect(written).toContain("Warm Start — demo");
+    // Hand-authored prose outside the managed blocks survives.
+    expect(written).toContain("Hand-authored line.");
+    // AGENTS.md never existed and default sync never creates one — it must
+    // not gain a WS block either (sync only refreshes, never seeds).
+    await expect(readFile(join(projectRoot, "AGENTS.md"), "utf8")).rejects.toThrow();
+  });
 });

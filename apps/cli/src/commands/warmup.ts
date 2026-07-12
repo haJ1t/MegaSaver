@@ -1,6 +1,8 @@
-import { randomUUID } from "node:crypto";
-import { sep } from "node:path";
+import { type KeyObject, randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { dirname, join, sep } from "node:path";
 import {
+  type CoreRegistry,
   type GitDelta,
   type Project,
   type WarmStartMode,
@@ -19,6 +21,9 @@ import {
   resolveStorePath,
 } from "../store.js";
 
+export const WARMUP_WRITE_UPSELL =
+  "Cross-agent warm start (--write) is a Mega Saver Pro feature. Activate a key: mega license activate <key>.";
+
 export function findProjectByCwd(projects: readonly Project[], cwd: string): Project | null {
   const matches = projects.filter((p) => cwd === p.rootPath || cwd.startsWith(p.rootPath + sep));
   matches.sort((a, b) => b.rootPath.length - a.rootPath.length);
@@ -35,6 +40,7 @@ export type RunWarmupInput = {
   json: boolean;
   write: boolean;
   writeTarget?: string;
+  publicKey?: KeyObject | string;
   gatherDelta: (cwd: string, lastSeenAt: string | null) => GitDelta | null;
   ensureStore: () => Promise<EnsureStoreReadyResult>;
   stdout: (line: string) => void;
@@ -42,13 +48,6 @@ export type RunWarmupInput = {
 };
 
 export async function runWarmup(input: RunWarmupInput): Promise<0 | 1> {
-  if (input.write) {
-    // A later task wires the sentinel-block write path; until then --write is a
-    // hard error so we never ship a silent no-op flag.
-    input.stderr("error: --write not available yet (Mega Saver Pro)");
-    return 1;
-  }
-
   const { registry } = await input.ensureStore();
   const project =
     input.projectName !== undefined
@@ -64,7 +63,21 @@ export async function runWarmup(input: RunWarmupInput): Promise<0 | 1> {
   const reonboardUnlocked = checkEntitlement("savings-analytics", {
     storeRoot: input.storeRoot,
     now: input.now,
+    ...(input.publicKey === undefined ? {} : { publicKey: input.publicKey }),
   }).entitled;
+
+  if (input.write) {
+    const ent = checkEntitlement("brain-portability", {
+      storeRoot: input.storeRoot,
+      now: input.now,
+      ...(input.publicKey === undefined ? {} : { publicKey: input.publicKey }),
+    });
+    if (!ent.entitled) {
+      input.stdout(WARMUP_WRITE_UPSELL);
+      return 0;
+    }
+    return runWarmupWrite(input, registry, project, nowIso, reonboardUnlocked);
+  }
 
   const brief = assembleWarmStartBrief({
     projectName: project.name,
@@ -99,6 +112,73 @@ export async function runWarmup(input: RunWarmupInput): Promise<0 | 1> {
     // stats are advisory — never fail the brief over a bad event write
   }
   return 0;
+}
+
+async function runWarmupWrite(
+  input: RunWarmupInput,
+  registry: CoreRegistry,
+  project: Project,
+  nowIso: string,
+  reonboardUnlocked: boolean,
+): Promise<0 | 1> {
+  const { renderWarmStartBlockText, upsertBlock, readTargetFile, writeTargetFile } = await import(
+    "@megasaver/connectors-shared"
+  );
+  const { KNOWN_TARGETS, isKnownTargetId } = await import("../known-targets.js");
+  const { buildConnectorContext } = await import("./connector/shared.js");
+  const { invalidTargetMessage } = await import("../errors.js");
+
+  const targetFilter = input.writeTarget ?? "all";
+  if (targetFilter !== "all" && !isKnownTargetId(targetFilter)) {
+    const cli = invalidTargetMessage(targetFilter);
+    input.stderr(cli.message);
+    return 1;
+  }
+  const targets = KNOWN_TARGETS.filter((t) => targetFilter === "all" || t.id === targetFilter);
+
+  const brief = assembleWarmStartBrief({
+    projectName: project.name,
+    branch: null,
+    now: nowIso,
+    lastSeenAt: null,
+    reonboardUnlocked,
+    timeless: true, // sentinel block carries only timeless sections
+    memories: registry.listMemoryEntries(project.id),
+    rules: registry.listProjectRules(project.id),
+    failedAttempts: registry.listFailedAttempts(project.id),
+    gitDelta: null,
+  });
+  const block = renderWarmStartBlockText({ briefText: brief.text, asOf: nowIso });
+
+  const sessions = registry.listSessions(project.id);
+  const memoryEntries = registry.listMemoryEntries(project.id);
+  let anyFailed = false;
+  for (const target of targets) {
+    try {
+      const absPath = join(project.rootPath, target.relativePath);
+      const existing = await readTargetFile(absPath);
+      if (existing === null && targetFilter === "all") {
+        input.stdout(`${target.id}: skipped (no ${target.relativePath})`);
+        continue; // 'all' never creates files; an explicit --target does
+      }
+
+      const context = buildConnectorContext(target, project, sessions, memoryEntries);
+      const next = upsertBlock({
+        existingContent: existing ?? ("header" in target ? (target.header ?? "") : ""),
+        context,
+        warmStartBlock: block,
+      });
+      if (existing === null) {
+        await mkdir(dirname(absPath), { recursive: true });
+      }
+      await writeTargetFile({ absPath, content: next });
+      input.stdout(`${target.id}: wrote warm-start block (${brief.tokenEstimate} tokens)`);
+    } catch (err) {
+      anyFailed = true;
+      input.stderr(`${target.id}: error — ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return anyFailed ? 1 : 0;
 }
 
 const MODES = ["auto", "micro", "standard", "reonboard"] as const;

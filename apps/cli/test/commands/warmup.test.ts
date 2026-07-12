@@ -1,6 +1,8 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { generateKeyPairSync, sign } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { activateLicense } from "@megasaver/entitlement";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { findProjectByCwd, runWarmup } from "../../src/commands/warmup.js";
 import { ensureStoreReady } from "../../src/store.js";
@@ -27,6 +29,16 @@ async function seedProject(rootPath: string) {
     updatedAt: NOW,
   } as never);
   return { registry, project };
+}
+
+type LicensePayload = { v: number; tier: string; id: string; iat: number; exp: number | null };
+const b64url = (buf: Buffer): string => buf.toString("base64url");
+function signTestLicense(
+  privateKey: ReturnType<typeof generateKeyPairSync>["privateKey"],
+  payload: LicensePayload,
+): string {
+  const bytes = Buffer.from(JSON.stringify(payload));
+  return `msp_${b64url(bytes)}.${b64url(sign(null, bytes, privateKey))}`;
 }
 
 function baseInput(over: Partial<Parameters<typeof runWarmup>[0]> = {}) {
@@ -91,5 +103,49 @@ describe("runWarmup", () => {
     const events = readWarmStartEvents({ root }, "11111111-1111-4111-8111-111111111111" as never);
     expect(events.length).toBe(1);
     expect(events[0]?.estimated).toBe(true);
+  });
+});
+
+describe("--write", () => {
+  it("prints the Pro upsell and exits 0 without a license", async () => {
+    await seedProject("/work/demo");
+    const code = await runWarmup(baseInput({ write: true }));
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("Pro feature");
+  });
+
+  it("writes the WS block into an existing AGENTS.md for --target codex (entitled)", async () => {
+    const projectDir = mkdtempSync(join(tmpdir(), "megasaver-warmup-write-"));
+    try {
+      await seedProject(projectDir);
+      writeFileSync(join(projectDir, "AGENTS.md"), "# Project notes\n\nHand-authored line.\n");
+
+      const keys = generateKeyPairSync("ed25519");
+      const key = signTestLicense(keys.privateKey, {
+        v: 1,
+        tier: "pro",
+        id: "c1",
+        iat: 0,
+        exp: null,
+      });
+      expect(
+        activateLicense(root, key, { publicKey: keys.publicKey, now: () => Date.parse(NOW) }).ok,
+      ).toBe(true);
+
+      const code = await runWarmup(
+        baseInput({
+          write: true,
+          writeTarget: "codex",
+          projectName: "demo",
+          publicKey: keys.publicKey,
+        }),
+      );
+      expect(code).toBe(0);
+      const written = readFileSync(join(projectDir, "AGENTS.md"), "utf8");
+      expect(written).toContain("<!-- MEGA SAVER:WARM_START BEGIN -->");
+      expect(written).toContain("Hand-authored line.");
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true });
+    }
   });
 });
