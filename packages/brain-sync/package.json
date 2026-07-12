@@ -1,13 +1,18 @@
 {
   "name": "@megasaver/brain-sync",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "private": true,
   "description": "E2E-encrypted BYO S3 sync engine for .megabrain bundles",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "files": ["dist"],
   "sideEffects": false,
   "scripts": {
@@ -23,5 +28,7 @@
     "@megasaver/shared": "workspace:*",
     "zod": "^3.24.1"
   },
-  "devDependencies": { "@types/node": "^22.19.17" }
+  "devDependencies": {
+    "@types/node": "^22.19.17"
+  }
 }
