@@ -1,0 +1,443 @@
+---
+title: mega brain sync — E2E-encrypted BYO cloud sync
+status: approved
+risk: CRITICAL
+approved-design: 2026-07-11
+revised: 2026-07-11 (architect pass — 2 BLOCKER, 4 SHOULD-FIX, 2 NIT incorporated)
+revised: 2026-07-11 (whole-branch gauntlet — 2 design BLOCKERS + HIGH/M1 + L1 fixed; see Design delta)
+---
+
+# `mega brain sync` — E2E-encrypted BYO cloud sync (2.1)
+
+## Problem
+
+2.0 shipped `mega brain export/import`: a portable, SHA-256-hashed,
+firewall-redacted `.megabrain` bundle with suggested-gate merge on import
+(source: `wiki/entities/brain-portability.md`). Moving a brain between
+machines is manual: export, carry the file, import. Users working across a
+laptop and a desktop re-do this on every change, or drift apart.
+
+Post-2.0 direction locked path B+C (up-market backbone, distribution
+tactical); 2.1 = E7 brain sync (source:
+`wiki/syntheses/post-2.0-growth-portfolio.md`, user 2026-07-11).
+
+## Locked decisions (user, 2026-07-11)
+
+1. **Hybrid BYO-first.** 2.1 syncs to the user's own S3-compatible storage.
+   Managed MegaSaver cloud is deferred to the Team tier (3.0); the sync
+   protocol must not preclude it.
+2. **Transport: S3-compatible API only.** Covers Cloudflare R2, AWS S3,
+   Backblaze B2, MinIO. Git transport is out of scope. Conditional-write
+   support is verified per-endpoint at init (see protocol); providers that
+   do not enforce it are rejected.
+3. **Key management: generated keyfile.** 256-bit random symmetric key at
+   `<store-root>/brain-sync.key` (store root = existing `resolveStorePath`
+   convention: `$XDG_DATA_HOME/megasaver` → `~/.local/share/megasaver`
+   POSIX, `%LOCALAPPDATA%/megasaver` win32 — same dir as `license.json`)
+   plus a one-time-displayed recovery code. No passphrase derivation.
+
+## Goals
+
+- One command keeps a project brain identical across the user's machines
+  through a bucket only they control.
+- Server-side storage holds ciphertext only; object names carry no
+  plaintext-derived fingerprint. The storage provider can never read or
+  confirm brain content.
+- Reuse the shipped 2.0 machinery: firewall-redacted export path and
+  suggested-gate merge import path. Sync adds transport + crypto, not a new
+  memory pipeline.
+- Pro-gated: reuses the existing `"brain-portability"` `ProFeature` key via
+  `checkEntitlement` (`@megasaver/entitlement`); unentitled → print upsell,
+  exit 0 (existing convention).
+
+## Non-goals (2.1)
+
+- No managed MegaSaver cloud, no accounts, no server code.
+- No Team/multi-user sharing; single user, multiple machines.
+- No git transport, no selective/partial sync, no sessions/stats sync.
+- No key rotation command (manual procedure: `init --reset` + full re-push).
+- No background daemon/watch mode; sync runs when invoked.
+- No interactive prompts; destructive re-init requires explicit flags.
+
+## Architecture
+
+New package `packages/brain-sync` → `@megasaver/brain-sync`. One bounded
+context: crypto + transport + sync protocol. **It does NOT import core**:
+the engine operates on opaque `bundleText` strings; the CLI orchestrates
+`exportBrain`/`importBrain` (which need a `CoreRegistry`) and injects them
+as callbacks. This keeps the CRITICAL crypto package's runtime dependency
+surface at exactly `@aws-sdk/client-s3` + `zod`.
+
+```
+apps/cli ──► @megasaver/core (brain-bundle: exportBrain/importBrain)
+    │
+    └────► @megasaver/brain-sync (crypto + S3 transport + sync engine)
+                └─► S3-compatible endpoint (user's bucket)
+```
+
+`@aws-sdk/client-s3` MUST be lazy-loaded via dynamic import (source:
+`wiki/decisions/lazy-load-heavy-deps.md`); a no-eager-load guard test
+mirrors `packages/output-filter/test/no-eager-typescript.test.ts`. The CLI
+lazy-imports `@megasaver/brain-sync` only after the entitlement gate passes
+(same pattern as `brain export` lazy-importing core). Bundle impact
+measured in verification.
+
+## Commands & UX
+
+- `mega brain sync init`
+  - Flags: `--endpoint <url>`, `--bucket`, `--prefix` (default
+    `megasaver-brain/`, normalized to trailing `/`), `--region` (default
+    `auto`), `--path-style` (boolean, default true), `--store`.
+  - Endpoint must be `https://`; `http://` allowed only for
+    `localhost`/`127.0.0.1`/`::1` (MinIO dev).
+  - Runs the conditional-write capability probe (see protocol). Probe
+    failure → hard error `conditional_writes_unsupported`; config is NOT
+    written.
+  - Generates the keyfile; prints the recovery code ONCE with an explicit
+    "store this now, it will not be shown again" warning. Refuses to
+    overwrite an existing keyfile/config unless `--reset --force`
+    (regenerates key, wipes config incl. last-seen map; plain-language
+    data-loss warning). A machine that plain-`init`s a fresh key against a
+    prefix already used by another key is still safe: the undecryptable
+    remote manifest triggers `wrong_key` and is never overwritten.
+  - Writes non-secret config to `<store-root>/brain-sync.json` (atomic).
+  - Credentials are NEVER written by us: resolved at runtime from
+    `MEGA_SYNC_ACCESS_KEY_ID` / `MEGA_SYNC_SECRET_ACCESS_KEY` env vars,
+    falling back to the standard AWS credential chain.
+  - `--join <recovery-code>` (or `--keyfile <path>`): reconstruct/copy the
+    existing key instead of generating; no recovery code printed; accepts
+    an existing remote manifest.
+- `mega brain sync push <project>` — the canonical safe bidirectional flow
+  (= push semantics below: merge anything unseen, then publish; never
+  publishes without first merging unseen remote changes). A bare
+  `mega brain sync <project>` shorthand was considered but dropped: citty
+  cannot route a bare positional and named subcommands on the same group
+  (a bare positional is read as an unknown subcommand), so `sync` is a
+  subcommands-only group and `push` is the canonical form.
+- `mega brain sync pull <project>` — pull/merge only.
+- `mega brain sync status <project>` — remote generation vs local
+  last-seen, remote `updatedAt`, up-to-date flag. Read-only, no mutation.
+- `mega brain sync reset <project> --force` — destructive: deletes that
+  project's remote manifest (its objects become unreadable orphans) so a
+  new chain can start, e.g. after key loss. Requires `--force`;
+  plain-language data-loss warning.
+- All subcommands entitlement-gated (`brain-portability` feature);
+  unentitled → upsell text, exit 0. Runtime errors → single-line message,
+  exit 1.
+
+## Crypto design
+
+Node built-in `node:crypto` only. No libsodium, no age.
+
+- Keyfile: 32 random bytes (`crypto.randomBytes`), stored raw at
+  `<store-root>/brain-sync.key`. Written atomically with the temp file
+  CREATED at `mode: 0o600` (no create-then-chmod window), then renamed.
+- Recovery code: base32 (RFC 4648 alphabet, upper-case, no padding) of
+  `key || sha256(key)[0..2)` — 34 bytes → 55 chars, displayed in 5-char
+  dash-separated groups. The 2-byte checksum is validated on `--join`;
+  a typo fails immediately as `bad_recovery_code`, never as a
+  tamper-looking decrypt error later.
+- Encryption: AES-256-GCM. Per-object random 96-bit IV
+  (`crypto.randomBytes(12)`), never reused; blob layout
+  `[iv(12)][ciphertext][tag(16)]`.
+- AAD binds context, **including the project id** — one keyfile is shared
+  across all of a user's projects, and remote per-project isolation is only
+  the storage prefix, which the untrusted provider controls; binding
+  `brainId` (the cross-machine identity — see Design delta) into every AAD
+  makes a cross-brain ciphertext transplant fail authentication under the
+  shared key:
+  - manifest object: `megasaver-brain-sync:v1:manifest:<brainId>` (its
+    generation cannot live in its own AAD — only known after decrypt;
+    rollback is caught by the monotonicity check instead);
+  - brain object: `megasaver-brain-sync:v1:object:<brainId>:<objectKey>`
+    where `objectKey` is the object's logical key (below). `brainId` is a
+    64-hex sha256 and `objectKey` contains no `:`, so the delimiters are
+    unambiguous.
+- Tamper/auth failure → hard error naming the object; never partial output.
+- Key never leaves the machine except as the user-held recovery code.
+
+## Remote layout & sync protocol
+
+Content is small (`.megabrain` bundles are KB–MB); whole-object storage,
+no chunking. Brains are per-project, so the remote space is scoped by the
+cross-machine **`brainId`** (see Design delta — NOT the local project
+UUID): the effective prefix for a project is
+`<configured-prefix><brainId>/`. Logical keys (transport prepends the
+effective prefix):
+
+```
+manifest.json.enc            encrypted JSON: { schemaVersion: 1, generation,
+                             updatedAt, brainSha256, objectKey }
+objects/<uuid>.enc           encrypted full bundle; random name, written
+                             once, never overwritten
+```
+
+- `brainSha256` = sha256 of the PLAINTEXT `.megabrain` bundle text; lives
+  only inside the encrypted manifest (post-decrypt integrity check).
+  Object names are random UUIDs — the provider sees no plaintext-derived
+  fingerprint and no cross-time equality signal.
+- `objectKey` inside the manifest binds manifest→object; the object's AAD
+  binds the name AND the brainId, so transplanting ciphertexts between
+  names, generations, or projects fails authentication.
+
+**Conditional-write rules (every manifest PUT is conditional):**
+
+- Manifest GET returned 404 this run → PUT with `If-None-Match: *`
+  (bootstrap; two machines racing first push cannot clobber each other).
+- Manifest existed → PUT with `If-Match: <etag>` of a manifest that was
+  **successfully decrypted in this run**. A manifest that fails decryption
+  is NEVER overwritten — error `wrong_key` ("use `init --join` with the
+  original recovery code"); the only way past it is `init --reset --force`.
+
+**Capability probe (at init, before config is written):** PUT a probe key
+unconditionally; conditional-PUT it again with a deliberately stale ETag
+and require HTTP 412; conditional-PUT with `If-None-Match: *` over the
+existing key and require 412; DELETE the probe. Any non-enforcing endpoint
+→ `conditional_writes_unsupported`, init fails. `conditionalWritesVerified:
+true` is recorded in config; smoke evidence must name the providers tested.
+
+**Sync flow (push semantics — what `mega brain sync push` runs):**
+
+1. GET manifest (+ETag). Decrypt failure → `wrong_key`, stop.
+2. If remote generation < local last-seen → `rollback_detected`, stop.
+   If remote generation > local last-seen → pull step 3 first (merge
+   before publish; a push can never drop unseen remote entries).
+3. Pull/merge: GET `objectKey`, decrypt (AAD = brainId + object name), verify `brainSha256`,
+   `importBrain` merge (suggested-gate), then persist last-seen =
+   remote generation.
+4. Export local bundle (firewall-redacted 2.0 path). If its sha256 equals
+   the remote manifest's `brainSha256` → up-to-date, stop (no generation
+   churn).
+5. PUT new brain object at fresh `objects/<uuid>.enc` (unconditional —
+   unique name, collision-free, orphan-safe).
+6. PUT manifest conditionally (rules above) with `generation =
+   remote.generation + 1` (or 1 on bootstrap).
+   - 412 → best-effort DELETE the just-written orphan object, re-run from
+     step 1 (bounded: 3 attempts, then `sync_conflict` telling the user to
+     re-run).
+   - success → persist last-seen = new generation; best-effort DELETE the
+     previously referenced object. Deletion failures are ignored (orphans
+     cost cents; correctness never depends on them).
+
+**Local last-seen generation:** stored in `<store-root>/brain-sync.json`
+as a per-project-id map, persisted only AFTER `importBrain` returns (an
+interrupted import re-pulls on the next run — import is
+idempotent/self-healing by 2.0 design). `init` writes a fresh config with
+an empty map. A freshly joined machine has no last-seen, so its FIRST pull
+per project inherently trusts the served manifest (TOFU); rollback
+protection covers every subsequent pull.
+
+## Merge semantics
+
+Entirely delegated to the shipped 2.0 import machinery: imported memories
+re-enter as `approval: "suggested"` with fresh ids and provenance
+(`brain-import:<sourceProject>`), dedupe by content/rule/task keys, nothing
+activates until `mega memory approve`. Sync introduces NO new merge logic;
+if import semantics change, sync inherits them. Note: cross-machine
+`updatedAt` comparisons inherit wall-clock skew between machines (2.0
+behavior, documented, not changed).
+
+## Threat model
+
+| Actor / vector | Mitigation |
+|---|---|
+| Storage provider reads objects | Client-side AES-256-GCM; provider sees ciphertext + sizes only |
+| Provider fingerprints content via object names | Names are random UUIDs; plaintext hash lives only inside the encrypted manifest |
+| MITM on endpoint | HTTPS enforced (http only for localhost dev); GCM auth rejects modified ciphertext regardless |
+| Ciphertext swap/transplant between objects or generations | Object AAD binds the name; authenticated manifest binds `objectKey` + `brainSha256` |
+| Cross-brain transplant (provider serves brain A's ciphertexts under brain B's prefix; one keyfile is shared across the user's projects) | Every AAD binds `brainId` (`…:manifest:<brainId>`, `…:object:<brainId>:<objectKey>`) — a foreign brain's ciphertext fails GCM auth under the shared key |
+| Manifest rollback (old manifest re-served) | Generation monotonicity vs persisted last-seen, checked on every pull after the first (first pull on a fresh machine is TOFU) |
+| Concurrent writers lose updates | All manifest PUTs conditional (`If-Match` / `If-None-Match: *`); enforcement verified per-endpoint by the init probe; bounded CAS retry |
+| Stolen bucket credentials (no keyfile) | Attacker reads ciphertext only; cannot decrypt or forge (no key) |
+| Stolen keyfile (no bucket creds) | Attacker cannot reach data; both factors required |
+| Weak user secret | Eliminated by design: key is generated, not derived |
+| Recovery-code typo at join | 2-byte sha256 checksum → immediate `bad_recovery_code` |
+| Local keyfile exposure | Temp file created `0o600` then renamed (no chmod window); machine-trust boundary documented |
+| Second machine plain-`init` onto a used bucket (wrong new key) | Fail-closed, no gate at init (init is store-level; remote manifests are per-brain under `<prefix><brainId>/`, so init cannot enumerate them without ListObjects, which is out of scope). A wrong key surfaces as `wrong_key` on the first sync of any affected project, and an undecryptable manifest is NEVER overwritten (the push CAS only overwrites a manifest it successfully decrypted). The local keyfile-exists guard additionally blocks re-`init` from silently replacing a working key without `--reset --force`. |
+| Secret leakage into brain content | Export path is firewall-redacted (2.0 guarantee) — sync never touches unredacted stores |
+| Credential leakage by us | Creds never written to config/logs/telemetry; endpoint+bucket never sent in telemetry |
+
+Out of scope: compromised local machine (attacker with user privileges owns
+the plaintext store anyway), storage-provider availability.
+
+## Error handling
+
+- Boundary validation (Zod, `.strict()`) on: config file, decrypted
+  manifest, recovery-code input, endpoint URL.
+- Error type: `BrainSyncError` with a closed `code` union
+  (`wrong_key`, `rollback_detected`, `hash_mismatch`, `decrypt_failed`,
+  `precondition_failed`, `sync_conflict`, `conditional_writes_unsupported`,
+  `bad_recovery_code`, `keyfile_missing`, `keyfile_invalid`,
+  `config_invalid`, `manifest_invalid`, `object_missing`,
+  `insecure_endpoint`, `transport_error`).
+- Network/SDK failures surface as single-line actionable errors (no raw
+  SDK stack dumps into agent context). The transport (the sole aws-sdk
+  boundary) wraps every SDK failure as `transport_error` carrying only
+  op + key + error name + status — never the SDK message/stack (which can
+  echo the access-key id).
+- `object_missing` = the live manifest references an object absent from the
+  store. In `pull` it surfaces to the user; in `push` it is treated as a
+  concurrent supersession and retried within the bounded CAS loop (a
+  competing push deleted the old object after committing a newer manifest).
+- No silent retries except the bounded CAS loop.
+- Orphan objects: a push that fails after writing its content object, or
+  whose best-effort cleanup of the superseded object fails, leaves an
+  unreferenced encrypted object in the user's bucket. These are cost-only
+  (no correctness/security impact — every live manifest names a present
+  object) and are NOT swept in 2.1; `sync reset` clears a project's remote
+  wholesale. A GC sweep of `objects/` not named by the live manifest is a
+  documented later-nicety, deliberately deferred (YAGNI).
+
+## Testing & evidence
+
+- Unit: encrypt/decrypt roundtrip; IV uniqueness across calls; tamper →
+  auth error; AAD mismatch (renamed object) → error; recovery code
+  roundtrip → identical keyfile; checksum typo → `bad_recovery_code`;
+  base32 vectors; config Zod rejects bad input + http endpoint; manifest
+  schema rejects unknown fields.
+- Integration: in-process S3 test double (node:http, in-memory,
+  implements ETag + `If-Match`/`If-None-Match: *` semantics with S3-style
+  XML errors). Scenarios: bootstrap race, pull/merge, skip-unchanged,
+  CAS conflict → bounded retry, rollback detection, wrong-key refusal,
+  probe pass/fail. Two temp-store "machines" run the full
+  init → push → join → pull → merge flow against real core registries.
+- Bundle guard: child-process `moduleLoadList` test asserts
+  `@aws-sdk/client-s3` is not loaded by importing `dist/index.js`
+  (mirrors `no-eager-typescript.test.ts`).
+- Smoke evidence (DoD item 5): captured terminal session against a real
+  R2 and/or MinIO endpoint, both machines simulated, generations and
+  before/after brain hashes shown, probe result shown per provider.
+- `pnpm verify` green; changeset: `"@megasaver/brain-sync": minor`,
+  `"@megasaver/cli": minor`.
+
+## CRITICAL chain requirements
+
+Per `docs/conventions/risk-modes.md` (cryptographic ops ⇒ CRITICAL):
+
+- Architect design pass — **DONE 2026-07-11** (Plan-agent stand-in, fresh
+  context): 2 BLOCKER (conditional-PUT portability → init probe; manifest
+  PUT preconditions → conditional-write rules), 4 SHOULD-FIX (object-name
+  plaintext oracle → UUID names; last-seen persistence; recovery-code
+  checksum; keyfile mode race), 2 NIT (core-free package; deviceId cut).
+  All incorporated above.
+- `code-reviewer` AND `critic` separate pre-merge passes (fresh contexts;
+  author ≠ reviewer).
+- Security-reviewer pass focused on the crypto design + secrets handling.
+- Tracer evidence loop on the CAS race behavior (concurrent-push test
+  transcript as evidence).
+- Verifier pass with reproduction evidence.
+- Forbidden: autopilot/ralph/unsupervised loops; no aggressive log
+  compression during this feature's debugging.
+
+## Manual user confirmation (CRITICAL requirement)
+
+- 2026-07-11: user approved the design in-session ("onayladım spec yaz",
+  then approved this revised spec's direction via "onayladım plana geç")
+  after explicit CRITICAL-risk notice, covering: hybrid BYO-first scope,
+  S3-only transport, keyfile key management, new `@megasaver/brain-sync`
+  package.
+- Remaining confirmation required BEFORE merge: user reviews smoke evidence
+  and explicitly approves the release that first ships these commands.
+
+## Design delta — whole-branch gauntlet fixes (2026-07-11, user-approved)
+
+The pre-merge CRITICAL gauntlet found two design blockers and a HIGH that the
+per-task reviews could not see. Fixes (user-approved direction + mechanism):
+
+### B1 — cross-machine identity via a derived `brainId` (was: local project UUID)
+
+**Blocker:** the remote prefix and every AAD were keyed on the machine-local
+`project.id` (a random UUID minted per machine). Two machines' "same" project
+get different UUIDs → different remote location + incompatible AAD → they can
+never sync. This defeats the feature's entire purpose.
+
+**Fix:** the sync identity is a derived, cross-machine-stable **`brainId`**:
+
+```
+brainId = sha256_hex( key ‖ utf8(normalize(projectName)) )
+normalize(name) = name.trim().toLowerCase()
+```
+
+- Two machines that (a) share the key (via the recovery code) and (b) name the
+  project the same compute the **same** `brainId` → same prefix, same AAD →
+  sync works with zero extra command/token/config.
+- Salting by the secret `key` means the provider cannot dictionary-attack the
+  project name from `brainId` (it's not a bare name hash).
+- `brainId` replaces the local `projectId` everywhere it was the remote/crypto
+  key: the effective prefix `<configured-prefix><brainId>/`, the manifest AAD,
+  the object AAD, and the config `lastSeen` map key.
+- `deriveBrainId(key, projectName)` is a package export; the CLI computes it in
+  `buildProjectSyncContext` and passes it to the engine as the AAD-bound id.
+- **Tradeoff (documented):** the project must be named the same on both
+  machines; a rename moves the remote (old objects orphan — clear with
+  `reset`). `pull`/`status` on an empty remote hint the user to check that the
+  project name matches the machine they synced from.
+- Cross-project transplant protection is preserved: different name → different
+  `brainId` → different AAD → GCM auth fails.
+
+### B2 — `push` refuses to silently regress the remote
+
+**Blocker:** `exportBrain` emits approved-only memories, `importBrain` writes
+imported entries as `suggested`, and `push` overwrites the remote wholesale.
+So a machine that pulled suggestions and approved none would, on its next
+`push`, publish a bundle missing them → the remote (the "durable cloud copy")
+loses those memories; a third joiner then pulls a memory-less brain.
+
+**Fix:** the CLI `push` (non-`--force`) **merges the remote first** (`pull`),
+THEN runs the guard, THEN publishes. The guard refuses when the local project
+has pending **sync-imported suggestions** — `suggested`-approval memories whose
+`evidence` carries the `brain-import:` provenance tag. Message: "N synced
+suggestions are pending — run `mega memory approve` (or discard them) before
+pushing; pushing now would drop them from the remote." A `--force` flag
+overrides for an intentional overwrite (skips the pull+guard; `push`'s own
+merge fires).
+
+Pull-before-guard is load-bearing: `push` itself merges internally, so a
+machine that had NOT pulled would otherwise pass a pre-push guard (0 pending),
+then `push`'s internal merge would import the remote entry and the
+approved-only export would drop it — a silent loss *without* `--force*. Merging
+first surfaces those imports to the guard. Residual (accepted): a remote that
+advances in the tiny window between this pull and the immediately-following
+publish is re-merged inside `push`, which reports `merged: true` (warns the
+user) — a much narrower race than the never-pulled case.
+
+### HIGH / security-M1 — reset + stale last-seen
+
+- `mega brain sync reset <project> --force` now ALSO clears that project's
+  local `lastSeen` entry (keyed by `brainId`), so a machine that reset the
+  remote does not carry a stale high generation.
+- Sibling machines: `push`/`pull` refuses the bootstrap/rollback trap — when
+  the remote manifest is absent (`remote === null`) but local `lastSeen > 0`,
+  it does not silently reset the rollback floor to gen 1; it errors
+  (`rollback_detected`-class message) directing the user to
+  `mega brain sync reset --force` (which clears local last-seen so a fresh
+  chain is trusted). This closes security finding M1 (a provider deleting the
+  manifest can no longer drive `lastSeen` back to re-open the TOFU window) and
+  the sibling-stranding HIGH, without a blanket `max()` that would break the
+  legitimate reset new-chain semantics.
+
+### L1 — endpoint guard on the read path
+
+`buildProjectSyncContext` re-asserts `assertSafeEndpoint(config.endpoint)` when
+rebuilding the transport from stored config, so a hand-edited `brain-sync.json`
+cannot downgrade to plaintext `http://` on push/pull.
+
+### Minor cleanups
+
+- `init` throws a typed `BrainSyncError("conditional_writes_unsupported", …)`
+  on probe failure (was a bespoke stderr string with the code in prose), so the
+  union member is live and the failure path is consistent with every other.
+- `brainSyncConfigSchema` is dropped from the public surface (unused externally;
+  the package stays minimal — `BrainSyncConfig` type remains exported).
+
+### Threat-model honesty (security L3/L4)
+
+- Metadata residual: the provider learns per-brain object churn, generation
+  cadence, ciphertext sizes, and sync timing (inherent to E2E object storage).
+  `brainId` is key-salted so the project name is not recoverable, but the
+  existence/activity of distinct brains under one bucket is visible.
+- The init conditional-write probe rejects providers that do not *support*
+  CAS; it cannot detect a provider that passes the probe then stops enforcing.
+  That degrades to a lost-update/fork between the user's own machines — never a
+  confidentiality or forgery break (manifests stay authenticated; rollback is
+  still caught by generation monotonicity).

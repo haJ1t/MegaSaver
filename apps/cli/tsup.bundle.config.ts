@@ -69,7 +69,14 @@ export default defineConfig({
   // optionalDependency, installed for the host platform) → embeddings work;
   // absent (unsupported platform, or a bare `node mega.mjs` download) → embed()
   // rejects and every call site already degrades gracefully.
-  external: ["@huggingface/transformers", "onnxruntime-node"],
+  // @aws-sdk/client-s3 joins the externalized set: @megasaver/brain-sync reaches
+  // it through a guarded dynamic import (transport.ts createTransport), and
+  // inlining it added ~1.2MB (tree-shaken to S3Client + 3 commands + smithy
+  // runtime), pushing mega.mjs past the 12MB bundle-smoke guard. Externalized,
+  // the dynamic import resolves from node_modules at runtime: present (the CLI's
+  // optionalDependency, installed by npm) → sync works; absent (a bare
+  // `node mega.mjs` download) → createTransport throws a friendly transport_error.
+  external: ["@huggingface/transformers", "onnxruntime-node", "@aws-sdk/client-s3"],
   // Inline everything else resolvable, including the TypeScript compiler pulled
   // in via @megasaver/indexer — the banner's __filename/__dirname shim lets it
   // run inlined, so the single file stays self-contained for every command,
@@ -80,5 +87,5 @@ export default defineConfig({
   // Why a negative lookahead instead of /.*/: tsup's `noExternal` wins over
   // esbuild's `external`, so a blanket /.*/ would re-inline the chain above and
   // silently undo it. Excluding those two specifiers here lets `external` apply.
-  noExternal: [/^(?!@huggingface\/transformers|onnxruntime-node).*/],
+  noExternal: [/^(?!@huggingface\/transformers|onnxruntime-node|@aws-sdk\/client-s3).*/],
 });

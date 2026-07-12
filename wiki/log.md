@@ -3230,3 +3230,85 @@ Wave 5 (final) of the saver-savings-gaps program, branch
   `saver_hook` (was a hardcoded `proxy`); audit usage carries "note: the
   proxy meters usage; savings come from the saver hook/tools."
 
+
+## [2026-07-11] plan | brain-sync (E7) spec + plan land on feature branch
+Post-2.0 ideation locked path B+C; 2.1 = E7 `mega brain sync` (BYO S3,
+E2E-encrypted, keyfile). Spec (CRITICAL, architect-pass revised) +
+16-task TDD plan + growth portfolio synthesis brought onto
+worktree-brain-sync from local main (commits fe2752ea/1bf6ca17).
+Execution: subagent-driven.
+
+
+## [2026-07-11] feature | brain-sync (E7) implemented
+`mega brain sync` built on `worktree-brain-sync`: `@megasaver/brain-sync`
+(AES-256-GCM crypto + keyfile/recovery-code + config + manifest + transport +
+CAS sync engine) + 5 CLI commands, 16-task TDD plan executed subagent-driven.
+CRITICAL review findings fixed inline: projectId-AAD cross-project binding,
+config lastSeen lock, transport SDK-error wrapping, init key-print/write-order,
+vacuous-guard replacement. Bundle: `@aws-sdk/client-s3` externalized from
+`mega.mjs` (inlining breached the 12MB guard). Pending smoke + user approval.
+
+## [2026-07-11] gauntlet | brain-sync (E7) — 2 design BLOCKERS found
+Whole-branch CRITICAL gauntlet (3 fresh-context passes) on worktree-brain-sync:
+- code-reviewer: APPROVE, 4 minors (dead conditional_writes_unsupported code,
+  unused brainSyncConfigSchema export, dup s3-double helper, endpoint not
+  rechecked on read path).
+- security-reviewer: YES-with-fixes. Crypto core SOUND (AES-256-GCM, fresh
+  IV, projectId-bound AAD, 0600 keyfile, env-only creds, SDK-error scrubbing,
+  2-condition CAS probe). Must-fix M1: bootstrap push when remote==null &&
+  lastSeen>0 silently resets rollback floor (route to reset instead). L1:
+  re-assert assertSafeEndpoint on read path. L3/L4: spec threat-model honesty.
+- critic (adversarial): TWO BLOCKERS.
+  * BLOCKER 1 (CONFIRMED): cross-machine project-id mismatch. prefix+AAD keyed
+    on LOCAL random project UUID (project.ts:149, common.ts:64); recovery code
+    carries only key, no project id. Two machines' "same" project get
+    different UUIDs -> different remote prefix + incompatible AAD -> cannot
+    sync. Two-machine test passes ONLY by hardcoding one PROJECT_ID into both
+    stores — a precondition the real product can't produce. Feature does not
+    achieve its stated cross-machine goal end-to-end.
+  * BLOCKER 2: approval-asymmetry regresses remote. exportBrain=approved-only,
+    importBrain writes suggested, push=full-overwrite. B pulls A's approved M
+    (lands suggested), B pushes approving nothing -> M dropped from remote ->
+    durability hole; a third joiner pulls memory-less bundle.
+  * HIGH: sync reset deletes manifest but not local last-seen -> sibling B's
+    next pull sees gen1<lastSeen5 -> false rollback_detected -> stranded.
+Status: IMPLEMENTATION complete + internally rigorous (62 pkg + 21 CLI tests,
+verify green), but BLOCKED on design decisions for B1/B2. NOT merged. Smoke +
+user release approval deferred until blockers resolved. Escalated to user.
+
+## [2026-07-11] gauntlet-fix | brain-sync (E7) — 2 blockers CLOSED
+User approved fixing B1+B2 (name-derived brainId mechanism). Implemented:
+- B1: brainId = sha256(key ‖ normalize(projectName)) replaces local project
+  UUID for remote prefix + AAD + lastSeen (engine e748a138 + CLI da8f18be).
+  Two-machine test REWRITTEN to same-name/different-local-id -> proves
+  cross-machine sync (RED->GREEN: revert to localProjectId fails it).
+- B2: push refuses pending sync-imported suggestions (brain-import provenance)
+  unless --force -> no silent remote regression.
+- HIGH/M1: reset clears local lastSeen (clearLastSeen); push refuses bootstrap
+  when remote absent && lastSeen>0 -> rollback_detected + reset hint (both
+  paths). L1: assertSafeEndpoint on read path. Minors: typed
+  conditional_writes_unsupported, dropped unused schema export.
+Re-verify (fresh adversarial): ALL 3 blockers CLOSED, no new Critical/High;
+config 64-hex + AAD binding consistent; no id misuse. Full repo pnpm verify
+exit 0. brain-sync 69 tests, cli brain-sync 24, full cli 1110 pass.
+REMAINING (user-gated): real-endpoint (MinIO/R2) smoke evidence + explicit
+user release approval before merge/PR.
+
+## [2026-07-11] pr | brain-sync (E7) draft PR #282
+Pushed worktree-brain-sync -> origin/feat/brain-sync; opened DRAFT PR #282
+(https://github.com/haJ1t/MegaSaver/pull/282). Held draft: real-endpoint
+smoke + user release approval remain before ready/merge. No merge, no publish.
+
+## [2026-07-12] review | brain-sync (E7) PR #282 final review + fixes
+In-session final review (code + security, fresh contexts) on the post-gauntlet
+state. Code: MERGE-READY (only stale docs — projectId->brainId reconciled in
+wiki entity + spec body/threat-table, 40181e1e). Security: crypto SOUND
+(deriveBrainId keyed-hash verified, no key leak/AAD injection, no gauntlet-fix
+regression), YES-with-fixes. Found + FIXED [Medium] B2 merge-during-push window
+(73197d39): push's internal merge could drop a never-pulled machine's unseen
+remote entry past the pre-push guard -> now CLI push pull-merges FIRST, then
+guards, then publishes; RED->GREEN proven (remove `await pull` -> silent loss
+returns). + NFC normalize in brainId (prevents Unicode-equivalent name forks).
+Also PR #283 (embeddings ESM-blind lazy-load guard fix) MERGED to main.
+brain-sync 70 tests, cli 1111. PR #282 still draft: real-endpoint smoke +
+user release approval remain.

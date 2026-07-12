@@ -48,6 +48,17 @@ describe("standalone CLI bundle", () => {
     expect(src).not.toContain("onnxruntime_binding");
   });
 
+  // @megasaver/brain-sync reaches @aws-sdk/client-s3 via a guarded dynamic import;
+  // it's externalized (see tsup.bundle.config.ts) so it doesn't inline ~1.2MB and
+  // breach the size guard above. The @smithy/* runtime is aws-sdk-internal — it
+  // appears in the bundle ONLY if the SDK was inlined (our own code never imports
+  // it), so its absence proves the externalization held. Backstops the coarse size
+  // guard against a re-inline masked by trimming elsewhere under the cap.
+  it.skipIf(!hasBundle)("does not inline the @aws-sdk/client-s3 chain", () => {
+    const src = readFileSync(bundle, "utf8");
+    expect(src).not.toContain("@smithy/");
+  });
+
   it.skipIf(!hasBundle)(`keeps mega.mjs under ${MAX_BUNDLE_MB}MB`, () => {
     const mb = statSync(bundle).size / (1024 * 1024);
     expect(mb).toBeLessThan(MAX_BUNDLE_MB);
