@@ -14,6 +14,7 @@ import {
 import { handleApproveMemory } from "./tools/approve-memory.js";
 import { handleAuditTokenUsage } from "./tools/audit-token-usage.js";
 import { handleBuildTaskPlan } from "./tools/build-task-plan.js";
+import { handleCheckApproach } from "./tools/check-approach.js";
 import {
   handleExplainContextSelection,
   handleGetContextBudgetReport,
@@ -91,6 +92,9 @@ export type ServerDeps = {
   storeRoot: string;
   now?: () => string;
   newId?: () => string;
+  // Entitlement is resolved CLI-side (mega mcp serve) — the bridge keeps zero
+  // entitlement deps.
+  isPro?: boolean;
   // Public tool naming mode (Proxy Mode v1.2 §5). Injectable for
   // tests; production resolves from MEGASAVER_TOOL_NAMING once at
   // startup, defaulting to proxy.
@@ -119,6 +123,10 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
     description: "Summarize recorded token/context savings for a project or session.",
   },
   { id: "build_task_plan", description: "Create an ordered, dependency-aware task plan." },
+  {
+    id: "check_approach",
+    description: "Check a planned approach against recorded failed attempts before retrying.",
+  },
   {
     id: "convert_failure_to_rule",
     description: "Convert a failed attempt into a reusable project rule.",
@@ -307,6 +315,11 @@ export function buildServer(deps: ServerDeps): {
         );
       case "build_task_plan":
         return handleBuildTaskPlan({ registry: deps.registry, now, newId }, args);
+      case "check_approach":
+        return handleCheckApproach(
+          { registry: deps.registry, now, isPro: deps.isPro ?? false },
+          args,
+        );
       case "mega_fetch_chunk":
         return handleFetchChunk(
           {
@@ -400,7 +413,10 @@ export function buildServer(deps: ServerDeps): {
       case "convert_failure_to_rule":
         return handleConvertFailureToRule({ registry: deps.registry, now, newId }, args);
       case "find_similar_failures":
-        return handleFindSimilarFailures({ registry: deps.registry }, args);
+        return handleFindSimilarFailures(
+          { registry: deps.registry, now, isPro: deps.isPro ?? false },
+          args,
+        );
       case "get_applicable_rules":
         return handleGetApplicableRules({ registry: deps.registry }, args);
     }

@@ -15,6 +15,7 @@ export const mcpToolNameSchema = z.enum([
   "approve_memory",
   "audit_token_usage",
   "build_task_plan",
+  "check_approach",
   "convert_failure_to_rule",
   "explain_context_selection",
   "find_similar_failures",
