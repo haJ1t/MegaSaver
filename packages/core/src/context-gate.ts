@@ -55,8 +55,11 @@ export {
 } from "@megasaver/stats";
 
 export {
+  appendGuardEvent,
   appendWarmStartEvent,
+  readGuardEvents,
   readWarmStartEvents,
+  type GuardEvent,
   type WarmStartEvent,
 } from "@megasaver/stats";
 
