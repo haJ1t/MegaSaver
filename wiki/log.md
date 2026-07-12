@@ -3230,3 +3230,14 @@ Wave 5 (final) of the saver-savings-gaps program, branch
   `saver_hook` (was a hardcoded `proxy`); audit usage carries "note: the
   proxy meters usage; savings come from the saver hook/tools."
 
+## [2026-07-12] implement | warm-start (i8)
+
+Executed docs/superpowers/plans/2026-07-12-warm-start-plan.md — 13 TDD tasks
+in worktree worktree-warm-start. Core: assembleWarmStartBrief (pure, budgeted,
+micro/standard/reonboard modes) + per-project lastSeenAt freshness stamp.
+Stats: separate WarmStartEvent (measured brief size, never a TokenSaverEvent).
+Delivery: fail-open Claude Code SessionStart hook (mega hooks warmup), mega
+warmup CLI, Pro-gated cross-agent sentinel block (mega warmup --write) +
+connector sync refresh, MCP get_warm_start_brief. Savings surfaces show a
+measured "Warm start" line. All tasks reviewed (spec+quality) green; pending
+HIGH-risk gauntlet (code-reviewer + critic) + finish-branch.
