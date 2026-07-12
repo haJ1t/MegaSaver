@@ -40,6 +40,8 @@ export function renderContextGateBlockText(fields: ContextGateBlockFields): stri
     `Max returned bytes: ${fields.maxReturnedBytes}`,
     "At task start, call get_task_context({ projectId, task }) to fetch a task-scoped context pack before reading files.",
     "After editing files, call get_edit_impact({ projectId }) to see impacted callers and which tests to run.",
+    "After an approach fails, record it with record_failed_attempt({ projectId, task, failedStep, errorOutput }).",
+    "Before retrying something that previously failed, call check_approach({ projectId, description, files }).",
     MEGA_SAVER_CG_BLOCK_END,
     "",
   ].join("\n");
