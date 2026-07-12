@@ -53,7 +53,8 @@ describe("guard state", () => {
     writeGuardState(root, PROJECT_ID, { ...DEFAULT_GUARD_STATE, sessions });
     const read = readGuardState(root, PROJECT_ID);
     expect(Object.keys(read?.sessions ?? {}).length).toBe(GUARD_STATE_MAX_SESSIONS);
-    expect(read?.sessions.s0).toBeUndefined(); // insertion-order eviction
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature (TS4111)
+    expect(read?.sessions["s0"]).toBeUndefined(); // insertion-order eviction
   });
 
   it("write never throws on an unwritable root (best-effort)", () => {

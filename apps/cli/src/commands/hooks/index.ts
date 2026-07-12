@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { hooksGuardCommand } from "./guard.js";
 import { hooksInstallCommand } from "./install.js";
 import { hooksIntentCommand } from "./intent.js";
 import { hooksLogCommand } from "./log.js";
@@ -18,6 +19,7 @@ export { resolveClaudeCodeSettingsPath } from "./settings-path.js";
 export { hooksLogCommand } from "./log.js";
 export { hooksSaverCommand } from "./saver.js";
 export { hooksIntentCommand } from "./intent.js";
+export { hooksGuardCommand } from "./guard.js";
 export { hooksWarmupCommand } from "./warmup.js";
 
 export const hooksCommand = defineCommand({
@@ -32,6 +34,7 @@ export const hooksCommand = defineCommand({
     log: hooksLogCommand,
     saver: hooksSaverCommand,
     intent: hooksIntentCommand,
+    guard: hooksGuardCommand,
     warmup: hooksWarmupCommand,
   },
 });

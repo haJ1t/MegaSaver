@@ -78,6 +78,7 @@ export {
   guardCorpusRowSchema,
   readGuardCorpus,
 } from "./guard-corpus.js";
+export { MAX_SIGNATURES_PER_SESSION, extractFailureSignatures } from "./session-hints.js";
 export {
   type CaseMode,
   type FamilyFsAdapter,
