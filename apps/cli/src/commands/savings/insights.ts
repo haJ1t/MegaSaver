@@ -7,7 +7,10 @@ import { readStoreEnv, resolveStorePath } from "../../store.js";
 import {
   PRO_ANALYTICS_UPSELL,
   type SavingsEventReader,
+  type WarmStartTotalsReader,
   defaultSavingsEventReader,
+  defaultWarmStartTotalsReader,
+  formatWarmStartLine,
 } from "./shared.js";
 
 export type InsightsBy = "source" | "label";
@@ -17,6 +20,7 @@ export type RunSavingsInsightsInput = {
   now: () => number;
   publicKey?: KeyObject | string;
   readAllEvents: SavingsEventReader;
+  readWarmStartTotals?: WarmStartTotalsReader;
   by?: InsightsBy;
   json?: boolean;
   csv?: boolean;
@@ -96,6 +100,10 @@ export async function runSavingsInsights(input: RunSavingsInsightsInput): Promis
       "",
       ...renderTable(rows as unknown as Record<string, unknown>[]),
     ].join("\n");
+    if (input.readWarmStartTotals !== undefined) {
+      const warmLine = formatWarmStartLine(await input.readWarmStartTotals());
+      if (warmLine !== null) rendered = `${rendered}\n\n${warmLine}`;
+    }
   }
 
   if (input.out !== undefined) {
@@ -127,6 +135,9 @@ export const savingsInsightsCommand = defineCommand({
       ),
       now: () => Date.now(),
       readAllEvents: defaultSavingsEventReader(
+        readStoreEnv(typeof args.store === "string" ? args.store : undefined),
+      ),
+      readWarmStartTotals: defaultWarmStartTotalsReader(
         readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       ),
       ...(by === "source" || by === "label" ? { by } : {}),

@@ -7,7 +7,10 @@ import { readStoreEnv, resolveStorePath } from "../../store.js";
 import {
   PRO_ANALYTICS_UPSELL,
   type SavingsEventReader,
+  type WarmStartTotalsReader,
   defaultSavingsEventReader,
+  defaultWarmStartTotalsReader,
+  formatWarmStartLine,
 } from "./shared.js";
 
 export type HistoryBy = "day" | "week" | "project";
@@ -17,6 +20,7 @@ export type RunSavingsHistoryInput = {
   now: () => number;
   publicKey?: KeyObject | string;
   readAllEvents: SavingsEventReader;
+  readWarmStartTotals?: WarmStartTotalsReader;
   by?: HistoryBy;
   json?: boolean;
   csv?: boolean;
@@ -84,6 +88,10 @@ export async function runSavingsHistory(input: RunSavingsHistoryInput): Promise<
     rendered = exportSavings(rows, "csv");
   } else {
     rendered = renderTable(rows as unknown as Record<string, unknown>[], columns).join("\n");
+    if (input.readWarmStartTotals !== undefined) {
+      const warmLine = formatWarmStartLine(await input.readWarmStartTotals());
+      if (warmLine !== null) rendered = `${rendered}\n\n${warmLine}`;
+    }
   }
 
   if (input.out !== undefined) {
@@ -112,6 +120,9 @@ export const savingsHistoryCommand = defineCommand({
       ),
       now: () => Date.now(),
       readAllEvents: defaultSavingsEventReader(
+        readStoreEnv(typeof args.store === "string" ? args.store : undefined),
+      ),
+      readWarmStartTotals: defaultWarmStartTotalsReader(
         readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       ),
       ...(by === "day" || by === "week" || by === "project" ? { by } : {}),
