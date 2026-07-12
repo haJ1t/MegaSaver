@@ -17,5 +17,9 @@ describe("@megasaver/connectors-shared public exports", () => {
     expect(typeof pkg.ConnectorError).toBe("function");
     expect(pkg.connectorErrorCodeSchema).toBeDefined();
     expect(pkg.ConnectorContextSchema).toBeDefined();
+    expect(typeof pkg.MEGA_SAVER_WS_BLOCK_START).toBe("string");
+    expect(typeof pkg.MEGA_SAVER_WS_BLOCK_END).toBe("string");
+    expect(typeof pkg.renderWarmStartBlockText).toBe("function");
+    expect(typeof pkg.containsSentinel).toBe("function");
   });
 });
