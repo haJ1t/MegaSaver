@@ -1,4 +1,11 @@
-import { type TokenSaverEvent, readEvents, readWarmStartEvents } from "@megasaver/core";
+import {
+  INPUT_PRICE_PER_MTOK_USD,
+  type TokenSaverEvent,
+  formatDollarsSaved,
+  readEvents,
+  readGuardEvents,
+  readWarmStartEvents,
+} from "@megasaver/core";
 import { type ResolveStorePathInput, ensureStoreReady, resolveStorePath } from "../../store.js";
 
 // The honest upsell shown when a free user runs a Pro-gated savings command.
@@ -64,4 +71,44 @@ export function defaultWarmStartTotalsReader(
 export function formatWarmStartLine(totals: WarmStartTotals): string | null {
   if (totals.sessions === 0) return null;
   return `Warm start: ${totals.sessions} sessions warmed, ~${totals.briefTokens} brief tokens (measured)`;
+}
+
+export type GuardTotals = { heededIntercepts: number; avoidedTokens: number; overridden: number };
+export type GuardTotalsReader = () => GuardTotals | Promise<GuardTotals>;
+
+// Heeded = a warn/deny intercept with no outcome row (spec §3.3): the agent
+// did not re-run the matched command this session. Estimated by contract —
+// never mixed into TokenSaverEvent totals.
+export function defaultGuardTotalsReader(storeInput: ResolveStorePathInput): GuardTotalsReader {
+  return async () => {
+    const rootDir = resolveStorePath(storeInput);
+    const { registry } = await ensureStoreReady(rootDir);
+    let heededIntercepts = 0;
+    let avoidedTokens = 0;
+    let overridden = 0;
+    for (const project of registry.listProjects()) {
+      const events = readGuardEvents({ root: rootDir }, project.id);
+      const outcomeRefs = new Set(
+        events
+          .filter((e) => e.type === "outcome")
+          .map((e) => (e as { interceptId: string }).interceptId),
+      );
+      for (const e of events) {
+        if (e.type !== "intercept" || e.action === "recall") continue;
+        if (outcomeRefs.has(e.id)) {
+          overridden += 1;
+        } else {
+          heededIntercepts += 1;
+          avoidedTokens += e.avoidedTokens;
+        }
+      }
+    }
+    return { heededIntercepts, avoidedTokens, overridden };
+  };
+}
+
+export function formatGuardLine(totals: GuardTotals): string | null {
+  if (totals.heededIntercepts === 0) return null;
+  const dollars = (totals.avoidedTokens / 1_000_000) * INPUT_PRICE_PER_MTOK_USD;
+  return `Retry cost avoided (estimated): ~${totals.avoidedTokens} tokens (~${formatDollarsSaved(dollars)}) across ${totals.heededIntercepts} intercepts`;
 }

@@ -1,17 +1,25 @@
-import { type KeyObject, generateKeyPairSync, sign } from "node:crypto";
+import { type KeyObject, generateKeyPairSync, randomUUID, sign } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { TokenSaverEvent } from "@megasaver/core";
+import {
+  type TokenSaverEvent,
+  appendGuardEvent,
+  createJsonDirectoryCoreRegistry,
+  initStore,
+} from "@megasaver/core";
 import { activateLicense } from "@megasaver/entitlement";
+import { projectIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type SavingsEventReader,
+  defaultGuardTotalsReader,
   runSavingsExport,
   runSavingsForecast,
   runSavingsHistory,
   runSavingsInsights,
 } from "../../src/commands/savings/index.js";
+import { readStoreEnv } from "../../src/store.js";
 
 // Spy on the proprietary Pro compute while delegating to the real implementation.
 // The entitled tests exercise real analytics; the gating tests assert these are
@@ -363,6 +371,137 @@ describe("runSavingsHistory — warm start line (measured)", () => {
   });
 });
 
+describe("runSavingsHistory — retry-cost-avoided line (estimated)", () => {
+  beforeEach(() => activatePro());
+
+  it("appends the retry-cost-avoided line when heeded intercepts exist", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      readGuardTotals: () => ({ heededIntercepts: 1, avoidedTokens: 4200, overridden: 0 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("Retry cost avoided (estimated): ~4200 tokens");
+  });
+
+  it("omits the line when there are zero heeded intercepts", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      readGuardTotals: () => ({ heededIntercepts: 0, avoidedTokens: 0, overridden: 2 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Retry cost avoided");
+  });
+
+  it("omits the line when no reader is provided", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Retry cost avoided");
+  });
+
+  it("never adds the line to --json output", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      readGuardTotals: () => ({ heededIntercepts: 1, avoidedTokens: 4200, overridden: 0 }),
+      json: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Retry cost avoided");
+  });
+
+  it("never adds the line to --csv output", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      readGuardTotals: () => ({ heededIntercepts: 1, avoidedTokens: 4200, overridden: 0 }),
+      csv: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Retry cost avoided");
+  });
+});
+
+// Seeds a real guard ledger and drives the production reader — the heeded
+// computation (recall excluded, outcome rows demote intercepts to overridden)
+// is money-path logic the injected-stub tests above never exercise.
+describe("defaultGuardTotalsReader — heeded computation", () => {
+  it("counts warn/deny intercepts with no outcome as heeded; excludes recall + overridden", async () => {
+    const projectId = projectIdSchema.parse("22222222-2222-4222-8222-222222222222");
+    await initStore(root);
+    createJsonDirectoryCoreRegistry({ rootDir: root }).createProject({
+      id: projectId,
+      name: "demo",
+      rootPath: "/tmp/demo",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const heededId = randomUUID();
+    const overriddenId = randomUUID();
+    const base = {
+      projectId,
+      sessionId: "sess-1",
+      matchedId: "m1",
+      matchedKind: "failed-attempt" as const,
+      normalizedCommand: null,
+      tier: "t1" as const,
+      estimated: true as const,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    appendGuardEvent(
+      { root },
+      { type: "intercept", id: heededId, action: "warn", avoidedTokens: 4200, ...base },
+    );
+    appendGuardEvent(
+      { root },
+      { type: "intercept", id: overriddenId, action: "deny", avoidedTokens: 1000, ...base },
+    );
+    appendGuardEvent(
+      { root },
+      { type: "intercept", id: randomUUID(), action: "recall", avoidedTokens: 999, ...base },
+    );
+    appendGuardEvent(
+      { root },
+      {
+        type: "outcome",
+        id: randomUUID(),
+        projectId,
+        sessionId: "sess-1",
+        interceptId: overriddenId,
+        outcome: "overridden",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    );
+
+    const totals = await defaultGuardTotalsReader(readStoreEnv(root))();
+    expect(totals).toEqual({ heededIntercepts: 1, avoidedTokens: 4200, overridden: 1 });
+  });
+});
+
 describe("runSavingsExport — gating", () => {
   it("with NO license: prints the upsell, exit 0, reads NO events", async () => {
     const readAllEvents = vi.fn(stubReader());
@@ -707,6 +846,81 @@ describe("runSavingsInsights — warm start line (measured)", () => {
     });
     expect(code).toBe(0);
     expect(out.join("\n")).not.toContain("Warm start:");
+  });
+});
+
+describe("runSavingsInsights — retry-cost-avoided line (estimated)", () => {
+  beforeEach(() => activatePro());
+
+  it("appends the retry-cost-avoided line when heeded intercepts exist", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      readGuardTotals: () => ({ heededIntercepts: 1, avoidedTokens: 4200, overridden: 0 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("Retry cost avoided (estimated): ~4200 tokens");
+  });
+
+  it("omits the line when there are zero heeded intercepts", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      readGuardTotals: () => ({ heededIntercepts: 0, avoidedTokens: 0, overridden: 2 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Retry cost avoided");
+  });
+
+  it("omits the line when no reader is provided", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Retry cost avoided");
+  });
+
+  it("never adds the line to --json output", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      readGuardTotals: () => ({ heededIntercepts: 1, avoidedTokens: 4200, overridden: 0 }),
+      json: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Retry cost avoided");
+  });
+
+  it("never adds the line to --csv output", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      readGuardTotals: () => ({ heededIntercepts: 1, avoidedTokens: 4200, overridden: 0 }),
+      csv: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Retry cost avoided");
   });
 });
 

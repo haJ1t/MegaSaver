@@ -4,9 +4,12 @@ import { checkEntitlement } from "@megasaver/entitlement";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import {
+  type GuardTotalsReader,
   PRO_ANALYTICS_URL,
   type SavingsEventReader,
+  defaultGuardTotalsReader,
   defaultSavingsEventReader,
+  formatGuardLine,
 } from "./savings/shared.js";
 
 // roi-specific upsell: the shared PRO_ANALYTICS_UPSELL says "historical savings
@@ -26,6 +29,7 @@ export type RunRoiInput = {
   now: () => number;
   publicKey?: KeyObject | string;
   readAllEvents: SavingsEventReader;
+  readGuardTotals?: GuardTotalsReader;
   price?: string;
   json?: boolean;
   stdout: (line: string) => void;
@@ -98,6 +102,13 @@ export async function runRoi(input: RunRoiInput): Promise<0 | 1> {
   input.stdout(`projected end  ${proj} (est.) = ${roiProj}`);
   input.stdout(`sessions       +${sessions} sessions' worth of context`);
   input.stdout(`days left      ${daysLeft}`);
+  if (input.readGuardTotals !== undefined) {
+    const guardLine = formatGuardLine(await input.readGuardTotals());
+    if (guardLine !== null) {
+      input.stdout("");
+      input.stdout(guardLine);
+    }
+  }
   return 0;
 }
 
@@ -121,6 +132,9 @@ export const roiCommand = defineCommand({
       ),
       now: () => Date.now(),
       readAllEvents: defaultSavingsEventReader(
+        readStoreEnv(typeof args.store === "string" ? args.store : undefined),
+      ),
+      readGuardTotals: defaultGuardTotalsReader(
         readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       ),
       ...(typeof args.price === "string" ? { price: args.price } : {}),
