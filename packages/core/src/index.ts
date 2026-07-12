@@ -126,3 +126,17 @@ export {
   type WarmStartInput,
   type WarmStartMode,
 } from "./warm-start.js";
+export {
+  GUARD_T1_MAX_AGE_DAYS,
+  GUARD_T3_MARGIN,
+  GUARD_T3_MIN_SCORE,
+  type GuardCandidate,
+  type GuardMatch,
+  type GuardMatchInput,
+  type GuardToolCall,
+  guardCandidateCreatedAt,
+  guardCandidateErrorOutput,
+  guardCandidateId,
+  matchGuard,
+  normalizeCommand,
+} from "./guard-match.js";
