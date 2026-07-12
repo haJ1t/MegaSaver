@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readGuardCorpus } from "../src/guard-corpus.js";
 import type { OrchestratorRegistry, SessionFailureRecord } from "../src/registry-port.js";
 import { runOutputExecCommand } from "../src/run-command.js";
 import type { RunCommandSpawn } from "../src/run-command.js";
@@ -95,6 +96,60 @@ describe("session failure capture", () => {
     expect(created[0]?.command).toBe("pnpm test");
     expect(created[0]?.errorOutput).toContain("boom");
     expect(created[0]?.source).toBe("proxy-classifier");
+  });
+
+  it("captures a durable guard-corpus row when the command exits non-zero", async () => {
+    const created: SessionFailureRecord[] = [];
+    const child = makeChild();
+    const p = runOutputExecCommand({
+      registry: makeFakeRegistry(projectRoot, created),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      command: "pnpm",
+      args: ["test"],
+      intent: "run tests",
+      originPid: ROOT_PID,
+      timeoutMs: 300_000,
+      maxBytes: 20_000_000,
+      now: () => NOW,
+      newId: () => "33333333-3333-4333-8333-333333333333",
+      loadPermissions: () => null,
+      spawn: spawnMock(child),
+    });
+    child.stdout.emit("data", Buffer.from("boom"));
+    child.emit("close", 1);
+    const res = await p;
+    expect(res.ok).toBe(true);
+    expect(created).toHaveLength(1);
+    const corpus = readGuardCorpus(store, PROJECT_ID);
+    expect(corpus).toHaveLength(1);
+    expect(corpus[0]?.command).toBe("pnpm test");
+    expect(corpus[0]?.wastedTokens).toBeGreaterThan(0);
+  });
+
+  it("leaves the guard corpus empty on benign exit 1 with empty output", async () => {
+    const created: SessionFailureRecord[] = [];
+    const child = makeChild();
+    const p = runOutputExecCommand({
+      registry: makeFakeRegistry(projectRoot, created),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      command: "pnpm",
+      args: ["test"],
+      intent: "run tests",
+      originPid: ROOT_PID,
+      timeoutMs: 300_000,
+      maxBytes: 20_000_000,
+      now: () => NOW,
+      newId: () => "33333333-3333-4333-8333-333333333333",
+      loadPermissions: () => null,
+      spawn: spawnMock(child),
+    });
+    child.emit("close", 1);
+    const res = await p;
+    expect(res.ok).toBe(true);
+    expect(created).toHaveLength(0);
+    expect(readGuardCorpus(store, PROJECT_ID)).toEqual([]);
   });
 
   it("records nothing on exit 1 with EMPTY output (benign no-match convention) and still returns the result", async () => {

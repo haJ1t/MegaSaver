@@ -38,6 +38,7 @@ import {
   appendOverlayEvent,
 } from "@megasaver/stats";
 import { appendFirewallEventsFromFilter } from "./firewall-ledger.js";
+import { captureGuardCorpusRow } from "./guard-corpus.js";
 import { appendOverlayFailure, buildOverlayHints } from "./overlay-failures.js";
 import {
   type LoadProjectPermissions,
@@ -332,6 +333,23 @@ export async function runOutputExecCommand(
         });
       } catch (err) {
         captureWarnings.push(`session-failure capture skipped: ${messageOf(err)}`);
+      }
+
+      // Durable guard-corpus twin of the ephemeral SessionFailure above: the
+      // Mistake Firewall matches against this across sessions (spec §3.1).
+      // Same best-effort contract — a corpus write failure never breaks
+      // command-output delivery.
+      try {
+        captureGuardCorpusRow({
+          storeRoot: input.storeRoot,
+          projectId: settings.projectId,
+          command: redactedLabel,
+          errorOutput: redactedErrorOutput,
+          raw: outcome.capture.raw,
+          now: now(),
+        });
+      } catch (err) {
+        captureWarnings.push(`guard corpus capture skipped: ${messageOf(err)}`);
       }
     }
   }
