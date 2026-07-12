@@ -3312,3 +3312,10 @@ returns). + NFC normalize in brainId (prevents Unicode-equivalent name forks).
 Also PR #283 (embeddings ESM-blind lazy-load guard fix) MERGED to main.
 brain-sync 70 tests, cli 1111. PR #282 still draft: real-endpoint smoke +
 user release approval remain.
+
+## [2026-07-12] release | brain-sync (E7) SHIPPED in 2.1.0
+`@megasaver/cli@2.1.0` published to npm + GitHub Release v2.1.0 (release.yml
+green). Real-endpoint smoke PASS on live MinIO (two machines, different local
+ids, same name → converged; Pro license signed with launch key for the gate).
+PR #282 squash-merged; version bump 09d04c65 direct-pushed to main; tag v2.1.0.
+brain-sync 0.2.0 (private, bundled into cli). E7 = mega brain sync complete.

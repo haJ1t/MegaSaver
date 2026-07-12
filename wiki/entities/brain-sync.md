@@ -6,7 +6,7 @@ sources:
   - docs/superpowers/plans/2026-07-11-brain-sync-plan.md
 status: active
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 The 2.1 flagship: `mega brain sync` keeps a project brain identical across the
@@ -54,10 +54,12 @@ existing `"brain-portability"` entitlement key.
 
 ## Risk & status
 
-Risk **CRITICAL** (E2E crypto, [[concepts/risk-aware-development]]). Implemented
-(16-task TDD plan, subagent-driven) + whole-branch gauntlet PASSED: it found
-2 design blockers (B1 cross-machine identity → now a key-salted `brainId`;
-B2 remote-regression → push-guard) + HIGH/M1 (reset clears last-seen), all
-fixed and re-verified closed with no new Critical/High. Full repo `pnpm verify`
-green. Pending only: real-endpoint (MinIO/R2) smoke evidence + explicit user
-release approval before PR/merge (see [[log]] 2026-07-11).
+Risk **CRITICAL** (E2E crypto, [[concepts/risk-aware-development]]). **SHIPPED
+in `@megasaver/cli@2.1.0`** (npm + GitHub Release v2.1.0, 2026-07-12). Built
+via a 16-task TDD plan (subagent-driven); whole-branch gauntlet found 2 design
+blockers (B1 cross-machine identity → key-salted `brainId`; B2 remote-regression
+→ pull-before-guard push) + HIGH/M1 (reset clears last-seen), all fixed and
+re-verified closed with no new Critical/High. Final in-session review closed
+the B2 merge-during-push window + added NFC brainId. Real-endpoint smoke PASS
+(live MinIO, two machines / different local ids / same name → converged). PR
+#282 merged; #283 (ESM-blind lazy-load guard fix) merged. See [[log]] 2026-07-12.
