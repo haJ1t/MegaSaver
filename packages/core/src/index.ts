@@ -111,6 +111,13 @@ export {
   importBrain,
 } from "./brain-import.js";
 export {
+  DEFAULT_GUARD_STATE,
+  GUARD_STATE_MAX_SESSIONS,
+  type GuardState,
+  readGuardState,
+  writeGuardState,
+} from "./guard-state.js";
+export {
   readWarmStartState,
   stampWarmStartSeen,
   type WarmStartState,
