@@ -17,6 +17,7 @@ import {
 import { getRunningDaemon } from "@megasaver/daemon";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import { maybeRunOverlayGc } from "./gc.js";
+import { maybeRecordGuardOutcome } from "./guard-outcome.js";
 import { readSessionIntent } from "./intent-run.js";
 import {
   type SaverDecision,
@@ -146,6 +147,9 @@ export async function runSaverHookFromProcess(): Promise<void> {
     if (raw === "") return;
     const payload: unknown = JSON.parse(raw);
     const storeRoot = resolveStorePath(readStoreEnv(undefined));
+    // Guard outcome labeling must run BEFORE buildSaverDecision: decide()
+    // passthroughs early on small outputs and failing re-runs are small.
+    await maybeRecordGuardOutcome(payload, storeRoot);
     const deps: SaverDeps = {
       storeRoot,
       resolveSettings,
