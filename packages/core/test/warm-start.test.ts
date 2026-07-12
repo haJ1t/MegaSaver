@@ -177,3 +177,97 @@ describe("determinism", () => {
     expect(assembleWarmStartBrief(input)).toEqual(assembleWarmStartBrief(input));
   });
 });
+
+describe("mode selection", () => {
+  it("null lastSeenAt -> standard", () => {
+    expect(selectWarmStartMode(NOW, null)).toBe("standard");
+  });
+  it("boundaries: <4h micro, 4h-14d standard, >14d reonboard", () => {
+    expect(selectWarmStartMode(NOW, "2026-07-12T07:00:00.000Z")).toBe("micro"); // 3h
+    expect(selectWarmStartMode(NOW, "2026-07-12T06:00:00.000Z")).toBe("standard"); // exactly 4h
+    expect(selectWarmStartMode(NOW, "2026-07-01T10:00:00.000Z")).toBe("standard"); // 11d
+    expect(selectWarmStartMode(NOW, "2026-06-28T10:00:00.000Z")).toBe("standard"); // exactly 14d
+    expect(selectWarmStartMode(NOW, "2026-06-28T09:59:59.000Z")).toBe("reonboard"); // 14d + 1s
+  });
+});
+
+describe("micro mode", () => {
+  it("hard 300 budget overrides a larger --budget", () => {
+    const input = baseInput({
+      lastSeenAt: "2026-07-12T09:00:00.000Z", // 1h -> micro
+      budgetTokens: 8000,
+      rules: Array.from({ length: 20 }, (_, i) =>
+        rule({ title: `rule ${i}`, rule: "y".repeat(500) }),
+      ),
+    });
+    const brief = assembleWarmStartBrief(input);
+    expect(brief.mode).toBe("micro");
+    expect(estimateTokens(brief.text)).toBeLessThanOrEqual(300);
+  });
+
+  it("explicit mode override escapes the micro clamp", () => {
+    const input = baseInput({ lastSeenAt: "2026-07-12T09:00:00.000Z", mode: "standard" });
+    expect(assembleWarmStartBrief(input).mode).toBe("standard");
+  });
+
+  it("micro carries no decisions/failures/git sections", () => {
+    const input = baseInput({
+      lastSeenAt: "2026-07-12T09:00:00.000Z",
+      memories: [mem({ type: "decision", title: "DEC-HIDDEN" })],
+      gitDelta: { commits: [{ sha: "abc1234", subject: "wip", date: NOW }], changedFiles: [] },
+    });
+    const t = assembleWarmStartBrief(input).text;
+    expect(t).not.toContain("DEC-HIDDEN");
+    expect(t).not.toContain("abc1234");
+  });
+});
+
+describe("reonboard mode", () => {
+  const AWAY_SINCE = "2026-06-01T00:00:00.000Z"; // 41d -> reonboard
+
+  it("surfaces a memory whose validTo fell inside the absence window", () => {
+    const input = baseInput({
+      lastSeenAt: AWAY_SINCE,
+      memories: [mem({ title: "npm decision", validTo: "2026-06-15T00:00:00.000Z" })],
+    });
+    const t = assembleWarmStartBrief(input).text;
+    expect(t).toContain("Changed while you were away");
+    expect(t).toContain("npm decision");
+  });
+
+  it("surfaces rules added since (createdAt in window)", () => {
+    const input = baseInput({
+      lastSeenAt: AWAY_SINCE,
+      rules: [rule({ title: "fresh rule", createdAt: "2026-06-20T00:00:00.000Z" })],
+    });
+    expect(assembleWarmStartBrief(input).text).toContain("new rule: fresh rule");
+  });
+
+  it("free tier gets the full standard body plus one upsell line", () => {
+    const input = baseInput({
+      lastSeenAt: AWAY_SINCE,
+      reonboardUnlocked: false,
+      memories: [mem({ type: "decision", title: "DEC-VISIBLE" })],
+    });
+    const t = assembleWarmStartBrief(input).text;
+    expect(t).toContain("DEC-VISIBLE"); // standard body intact
+    expect(t).toContain("Pro: expanded absence diff");
+    expect(t).not.toContain("Changed while you were away");
+  });
+});
+
+describe("timeless (sentinel-block) variant", () => {
+  it("omits branch/visit header detail and git sections, keeps rules+decisions+todos+failures", () => {
+    const input = baseInput({
+      timeless: true,
+      memories: [mem({ type: "decision", title: "DEC-T" })],
+      rules: [rule({ title: "RULE-T" })],
+      failedAttempts: [attempt({ task: "FAIL-T" })],
+      gitDelta: { commits: [{ sha: "abc1234", subject: "wip", date: NOW }], changedFiles: [] },
+    });
+    const t = assembleWarmStartBrief(input).text;
+    for (const want of ["DEC-T", "RULE-T", "FAIL-T"]) expect(t).toContain(want);
+    expect(t).not.toContain("abc1234");
+    expect(t).not.toContain("last visit");
+  });
+});
