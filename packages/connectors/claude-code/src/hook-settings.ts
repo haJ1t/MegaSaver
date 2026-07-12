@@ -15,6 +15,10 @@ export const SAVER_HOOK_COMMAND = "mega hooks saver";
 export const SAVER_HOOK_MATCHER = HOOK_MATCHER;
 export const INTENT_HOOK_COMMAND = "mega hooks intent";
 export const WARMUP_HOOK_COMMAND = "mega hooks warmup";
+export const GUARD_HOOK_COMMAND = "mega hooks guard";
+// Guard runs ONLY on mutating tools — never Read/Grep/etc. Anchored for the
+// same substring-compile reason as HOOK_MATCHER.
+export const GUARD_HOOK_MATCHER = "^(?:Bash|Edit|Write|MultiEdit|NotebookEdit)$";
 
 type CommandHook = { type: "command"; command: string; timeout?: number };
 
@@ -25,7 +29,7 @@ export type HookCommandConfig = { cliPath?: string; storeRoot?: string };
 // spaces) plus, for a non-default store, an E29 `--store` bake. cliPath absent
 // keeps the legacy bare "mega" form.
 export function buildHookCommand(
-  subcommand: "log" | "saver" | "intent" | "warmup",
+  subcommand: "log" | "saver" | "intent" | "warmup" | "guard",
   cfg: HookCommandConfig = {},
 ): string {
   const bin = cfg.cliPath === undefined ? "mega" : quoteIfNeeded(cfg.cliPath);
@@ -288,11 +292,49 @@ export function removeSessionStartHook(settings: unknown, command: string): Sett
   return pruneHooks(next, "SessionStart", kept);
 }
 
+// Guard is a SECOND PreToolUse entry alongside the log entry. addPreToolUseHook
+// hardcodes HOOK_MATCHER, so guard needs its own adder with GUARD_HOOK_MATCHER.
+// entryMatchesSubcommand/repairEntry key on the subcommand ("guard" vs "log"),
+// so the two PreToolUse entries never collide.
+export function hasGuardHook(settings: unknown, command: string): boolean {
+  if (typeof settings !== "object" || settings === null) return false;
+  const pre = (settings as SettingsObject).hooks?.PreToolUse;
+  return Array.isArray(pre) && pre.some((e) => entryMatchesSubcommand(e, subcommandOf(command)));
+}
+
+export function addGuardHook(settings: unknown, command: string): SettingsObject {
+  const sub = subcommandOf(command);
+  const desired: CommandHook = { type: "command", command, timeout: timeoutFor(sub) };
+  const next = asSettings(settings);
+  const existingPre = next.hooks?.PreToolUse;
+  if (Array.isArray(existingPre)) {
+    const repaired = repairEntry(existingPre as ToolUseEntry[], sub, GUARD_HOOK_MATCHER, desired);
+    if (repaired !== null) {
+      next.hooks = { ...next.hooks, PreToolUse: repaired };
+      return next;
+    }
+  }
+  const hooks = next.hooks ? { ...next.hooks } : {};
+  const pre = Array.isArray(existingPre) ? [...(existingPre as ToolUseEntry[])] : [];
+  pre.push({ matcher: GUARD_HOOK_MATCHER, hooks: [desired] });
+  next.hooks = { ...hooks, PreToolUse: pre };
+  return next;
+}
+
+export function removeGuardHook(settings: unknown, command: string): SettingsObject {
+  const next = asSettings(settings);
+  const existing = next.hooks?.PreToolUse;
+  if (!Array.isArray(existing)) return next;
+  const kept = stripCommand(existing as ToolUseEntry[], subcommandOf(command));
+  return pruneHooks(next, "PreToolUse", kept);
+}
+
 export type InstallClaudeCodeHookInput = {
   settingsPath: string;
   command?: string;
   config?: HookCommandConfig;
   warmup?: boolean;
+  guard?: boolean;
 };
 export type ClaudeCodeHookResult = { settingsPath: string; changed: boolean };
 
@@ -328,6 +370,9 @@ export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): Claude
   if (input.warmup !== false) {
     next = addSessionStartHook(next, buildHookCommand("warmup", cfg));
   }
+  if (input.guard !== false) {
+    next = addGuardHook(next, buildHookCommand("guard", cfg));
+  }
   // Presence alone isn't enough to no-op: a matcher can drift (wave-1 tool
   // additions) while the command entry stays present. Diff by value so a
   // drifted matcher is repaired in place and reported as changed.
@@ -348,7 +393,8 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
     !hasPreToolUseHook(existing, command) &&
     !hasPostToolUseHook(existing, SAVER_HOOK_COMMAND) &&
     !hasUserPromptSubmitHook(existing, INTENT_HOOK_COMMAND) &&
-    !hasSessionStartHook(existing, WARMUP_HOOK_COMMAND)
+    !hasSessionStartHook(existing, WARMUP_HOOK_COMMAND) &&
+    !hasGuardHook(existing, GUARD_HOOK_COMMAND)
   ) {
     return { settingsPath: input.settingsPath, changed: false };
   }
@@ -356,6 +402,7 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
   next = removePostToolUseHook(next, SAVER_HOOK_COMMAND);
   next = removeUserPromptSubmitHook(next, INTENT_HOOK_COMMAND);
   next = removeSessionStartHook(next, WARMUP_HOOK_COMMAND);
+  next = removeGuardHook(next, GUARD_HOOK_COMMAND);
   writeSettings(input.settingsPath, next);
   return { settingsPath: input.settingsPath, changed: true };
 }
@@ -366,6 +413,7 @@ export type ClaudeCodeHookStatus = {
   postInstalled: boolean;
   intentInstalled: boolean;
   warmupInstalled: boolean;
+  guardInstalled: boolean;
 };
 
 export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): ClaudeCodeHookStatus {
@@ -380,18 +428,21 @@ export function readClaudeCodeHookStatus(input: InstallClaudeCodeHookInput): Cla
       postInstalled: false,
       intentInstalled: false,
       warmupInstalled: false,
+      guardInstalled: false,
     };
   }
   const preInstalled = hasPreToolUseHook(settings, command);
   const postInstalled = hasPostToolUseHook(settings, SAVER_HOOK_COMMAND);
   const intentInstalled = hasUserPromptSubmitHook(settings, INTENT_HOOK_COMMAND);
   const warmupInstalled = hasSessionStartHook(settings, WARMUP_HOOK_COMMAND);
+  const guardInstalled = hasGuardHook(settings, GUARD_HOOK_COMMAND);
   return {
     connected: preInstalled && postInstalled && intentInstalled,
     preInstalled,
     postInstalled,
     intentInstalled,
     warmupInstalled,
+    guardInstalled,
   };
 }
 

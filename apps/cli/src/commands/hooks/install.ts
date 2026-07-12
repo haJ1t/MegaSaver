@@ -15,6 +15,7 @@ export type RunHooksInstallInput = {
   command?: string;
   config?: HookCommandConfig;
   warmup?: boolean;
+  guard?: boolean;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json: boolean;
@@ -58,6 +59,7 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
       ...(input.command !== undefined ? { command: input.command } : {}),
       ...(input.config !== undefined ? { config: input.config } : {}),
       ...(input.warmup !== undefined ? { warmup: input.warmup } : {}),
+      ...(input.guard !== undefined ? { guard: input.guard } : {}),
     });
   } catch (err) {
     input.stderr(
@@ -97,6 +99,11 @@ export const hooksInstallCommand = defineCommand({
       default: false,
       description: "Skip the SessionStart warm-start hook.",
     },
+    noGuard: {
+      type: "boolean",
+      default: false,
+      description: "Skip the Mistake Firewall PreToolUse hook.",
+    },
   },
   run({ args }) {
     const cliPath = resolveInvokedCliPath(process.argv[1]);
@@ -113,6 +120,7 @@ export const hooksInstallCommand = defineCommand({
         typeof args.settings === "string" ? args.settings : resolveClaudeCodeSettingsPath(),
       config,
       warmup: !args.noWarmup,
+      guard: !args.noGuard,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

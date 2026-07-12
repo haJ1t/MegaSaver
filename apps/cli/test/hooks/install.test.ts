@@ -240,6 +240,47 @@ describe("runHooksInstall --no-warmup", () => {
   });
 });
 
+describe("runHooksInstall --no-guard", () => {
+  let dir: string;
+  let settingsPath: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "megasaver-hook-install-guard-"));
+    settingsPath = join(dir, "settings.json");
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("installs the guard PreToolUse hook by default", () => {
+    const code = runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    expect(code).toBe(0);
+    const s = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(s.hooks.PreToolUse[1].hooks[0].command).toBe("mega hooks guard");
+  });
+
+  it("skips the guard PreToolUse hook when guard is false", () => {
+    const code = runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      guard: false,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    expect(code).toBe(0);
+    const s = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(s.hooks.PreToolUse.length).toBe(1);
+  });
+});
+
 describe("E29 store baking", () => {
   const env = {
     cwd: "/work",
