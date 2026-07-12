@@ -13,6 +13,7 @@ import { doctorCommand } from "./commands/doctor.js";
 import { failCommand } from "./commands/fail/index.js";
 import { firewallCommand } from "./commands/firewall.js";
 import { githubCommand } from "./commands/github/index.js";
+import { guardCommand } from "./commands/guard/index.js";
 import { guiCommand } from "./commands/gui.js";
 import { hooksCommand } from "./commands/hooks/index.js";
 import { indexCommand } from "./commands/index/index.js";
@@ -65,6 +66,7 @@ export const mainCommand = defineCommand({
     doctor: doctorCommand,
     github: githubCommand,
     gui: guiCommand,
+    guard: guardCommand,
     fail: failCommand,
     firewall: firewallCommand,
     learn: learnCommand,
