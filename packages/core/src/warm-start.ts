@@ -15,6 +15,7 @@ export type WarmStartMode = "micro" | "standard" | "reonboard";
 export type GitDelta = {
   commits: { sha: string; subject: string; date: string }[];
   changedFiles: { path: string; churn: number }[];
+  branch?: string | null;
 };
 
 export type WarmStartInput = {
@@ -197,13 +198,7 @@ export function assembleWarmStartBrief(input: WarmStartInput): WarmStartBrief {
 
   const rules = rulesSection(input.rules);
   const decisions = memSection("decisions", "## Standing decisions", recallable, "decision", now);
-  const todos = memSection(
-    "todos",
-    "## Open todos",
-    recallable.filter((m) => !m.stale),
-    "todo",
-    now,
-  );
+  const todos = memSection("todos", "## Open todos", recallable, "todo", now);
   const failures = failuresSection(input.failedAttempts, input.gitDelta);
   const git = gitSection(input.gitDelta, mode === "reonboard");
   const entities = entitiesSection(recallable);

@@ -42,9 +42,10 @@ export async function buildWarmupHookOutput(input: BuildWarmupHookInput): Promis
       now: input.now,
     }).entitled;
 
+    const gitDelta = input.gatherDelta(cwd, lastSeenAt);
     const brief = assembleWarmStartBrief({
       projectName: project.name,
-      branch: null,
+      branch: gitDelta?.branch ?? null,
       now: nowIso,
       lastSeenAt,
       reonboardUnlocked,
@@ -52,7 +53,7 @@ export async function buildWarmupHookOutput(input: BuildWarmupHookInput): Promis
       memories: registry.listMemoryEntries(project.id),
       rules: registry.listProjectRules(project.id),
       failedAttempts: registry.listFailedAttempts(project.id),
-      gitDelta: input.gatherDelta(cwd, lastSeenAt),
+      gitDelta,
     });
 
     stampWarmStartSeen(input.storeRoot, project.id, nowIso);

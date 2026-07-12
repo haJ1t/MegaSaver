@@ -67,4 +67,17 @@ describe("buildWarmupHookOutput", () => {
     });
     expect(readWarmStartState(root, "11111111-1111-4111-8111-111111111111")?.lastSeenAt).toBe(NOW);
   });
+
+  it("returns empty string when gatherDelta throws mid-flight (fail-open)", async () => {
+    await seed("/work/demo");
+    const text = await buildWarmupHookOutput({
+      payload: { session_id: "s1", cwd: "/work/demo", source: "startup" },
+      storeRoot: root,
+      now: () => Date.parse(NOW),
+      gatherDelta: () => {
+        throw new Error("boom");
+      },
+    });
+    expect(text).toBe("");
+  });
 });

@@ -116,8 +116,11 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           continue;
         }
 
+        const hasWsBlock = existing
+          .split(/\r?\n/)
+          .some((line) => line.trim() === MEGA_SAVER_WS_BLOCK_START);
         let warmStartBlock: string | undefined;
-        if (existing.includes(MEGA_SAVER_WS_BLOCK_START)) {
+        if (hasWsBlock) {
           const refreshedAt = new Date().toISOString();
           const brief = assembleWarmStartBrief({
             projectName: project.name,

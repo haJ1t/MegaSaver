@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   ConnectorError,
   MEGA_SAVER_BLOCK_START,
+  MEGA_SAVER_WS_BLOCK_END,
   MEGA_SAVER_WS_BLOCK_START,
   renderWarmStartBlockText,
 } from "@megasaver/connectors-shared";
@@ -1750,5 +1751,28 @@ describe("connectorSyncCommand — warm-start block refresh", () => {
     // AGENTS.md never existed and default sync never creates one — it must
     // not gain a WS block either (sync only refreshes, never seeds).
     await expect(readFile(join(projectRoot, "AGENTS.md"), "utf8")).rejects.toThrow();
+  });
+
+  it("does not append a WS block when the sentinel appears only in prose", async () => {
+    await seedProject("demo");
+    const proseLine = `Note: the sentinel is \`${MEGA_SAVER_WS_BLOCK_START}\` inline in a sentence.`;
+    await writeFile(
+      join(projectRoot, "CLAUDE.md"),
+      `# Project notes\n\n${proseLine}\n\nHand-authored line.\n`,
+    );
+
+    await runSync();
+
+    expect(process.exitCode).toBe(0);
+    expect(errSpy).not.toHaveBeenCalled();
+    const written = await readFile(join(projectRoot, "CLAUDE.md"), "utf8");
+    // The sentinel appears only inside the prose sentence, never as its own line
+    // (i.e. no managed WS block was seeded/appended by the refresh gate).
+    expect(written.split(/\r?\n/).some((line) => line.trim() === MEGA_SAVER_WS_BLOCK_START)).toBe(
+      false,
+    );
+    expect(written).not.toContain(MEGA_SAVER_WS_BLOCK_END);
+    expect(written).toContain(proseLine);
+    expect(written).toContain("Hand-authored line.");
   });
 });

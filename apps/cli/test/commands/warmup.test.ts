@@ -1,5 +1,5 @@
 import { generateKeyPairSync, sign } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activateLicense } from "@megasaver/entitlement";
@@ -74,6 +74,15 @@ describe("runWarmup", () => {
     expect(out.join("\n")).toContain("Warm Start — demo");
   });
 
+  it("wires the real git branch into the header", async () => {
+    await seedProject("/work/demo");
+    const code = await runWarmup(
+      baseInput({ gatherDelta: () => ({ commits: [], changedFiles: [], branch: "feat/x" }) }),
+    );
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("feat/x");
+  });
+
   it("errors when no project matches cwd", async () => {
     await seedProject("/work/demo");
     const code = await runWarmup(baseInput({ cwd: "/nowhere" }));
@@ -108,10 +117,16 @@ describe("runWarmup", () => {
 
 describe("--write", () => {
   it("prints the Pro upsell and exits 0 without a license", async () => {
-    await seedProject("/work/demo");
-    const code = await runWarmup(baseInput({ write: true }));
-    expect(code).toBe(0);
-    expect(out.join("\n")).toContain("Pro feature");
+    const projectDir = mkdtempSync(join(tmpdir(), "megasaver-warmup-nowrite-"));
+    try {
+      await seedProject(projectDir);
+      const code = await runWarmup(baseInput({ cwd: projectDir, write: true }));
+      expect(code).toBe(0);
+      expect(out.join("\n")).toContain("Pro feature");
+      expect(existsSync(join(projectDir, "AGENTS.md"))).toBe(false);
+    } finally {
+      rmSync(projectDir, { recursive: true, force: true });
+    }
   });
 
   it("writes the WS block into an existing AGENTS.md for --target codex (entitled)", async () => {

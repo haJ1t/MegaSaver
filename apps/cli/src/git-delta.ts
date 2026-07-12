@@ -3,8 +3,15 @@ import type { GitDelta } from "@megasaver/core";
 
 export type ExecGit = (args: string[], cwd: string) => string;
 
+// timeout so a stuck git (index.lock, slow FS) can't stall session start; tryGit catches the throw
 const defaultExecGit: ExecGit = (args, cwd) =>
-  execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 3000,
+    maxBuffer: 10 * 1024 * 1024,
+  });
 
 const FALLBACK_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -93,5 +100,5 @@ export function gatherGitDelta(
     if (out !== null) changedFiles = parseNameOnly(out);
   }
 
-  return { commits, changedFiles };
+  return { commits, changedFiles, branch };
 }

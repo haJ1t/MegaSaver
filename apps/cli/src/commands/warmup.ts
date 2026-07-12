@@ -79,9 +79,10 @@ export async function runWarmup(input: RunWarmupInput): Promise<0 | 1> {
     return runWarmupWrite(input, registry, project, nowIso, reonboardUnlocked);
   }
 
+  const gitDelta = input.gatherDelta(input.cwd, lastSeenAt);
   const brief = assembleWarmStartBrief({
     projectName: project.name,
-    branch: null,
+    branch: gitDelta?.branch ?? null,
     now: nowIso,
     ...(input.budget !== undefined ? { budgetTokens: input.budget } : {}),
     ...(input.mode !== undefined ? { mode: input.mode } : {}),
@@ -91,7 +92,7 @@ export async function runWarmup(input: RunWarmupInput): Promise<0 | 1> {
     memories: registry.listMemoryEntries(project.id),
     rules: registry.listProjectRules(project.id),
     failedAttempts: registry.listFailedAttempts(project.id),
-    gitDelta: input.gatherDelta(input.cwd, lastSeenAt),
+    gitDelta,
   });
 
   input.stdout(input.json ? JSON.stringify(brief) : brief.text);
