@@ -2,10 +2,13 @@ import { type KeyObject, generateKeyPairSync, sign } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { appendGuardCorpusRow } from "@megasaver/context-gate";
 import { appendGuardEvent, readGuardState } from "@megasaver/core";
 import { activateLicense } from "@megasaver/entitlement";
 import type { ProjectId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { runGuardCheck } from "../../src/commands/guard/check.js";
+import { runGuardEvents } from "../../src/commands/guard/events.js";
 import { runGuardMode } from "../../src/commands/guard/mode.js";
 import { runGuardMute } from "../../src/commands/guard/mute.js";
 import { runGuardStatus } from "../../src/commands/guard/status.js";
@@ -98,6 +101,17 @@ function outcome(over: Record<string, unknown> = {}) {
   };
 }
 
+function corpusRow(over: Record<string, unknown> = {}) {
+  return {
+    id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    command: "pnpm vitest --shard 2",
+    errorOutput: "Error: unknown option '--shard' in src/run.ts",
+    wastedTokens: 4200,
+    createdAt: "2026-07-11T10:00:00.000Z",
+    ...over,
+  } as never;
+}
+
 describe("mega guard mode", () => {
   it("strict without a license prints the upsell and exits 0, state unchanged", async () => {
     await seedProject("/work/demo");
@@ -151,5 +165,41 @@ describe("mega guard status", () => {
     expect(text).toContain("mode: warn");
     expect(text).toContain("intercepts this month: 2");
     expect(text).toContain("overridden: 1");
+  });
+});
+
+describe("mega guard events", () => {
+  it("is Pro-gated: upsell + exit 0 without a license, no ledger read", async () => {
+    await seedProject("/work/demo");
+    const code = await runGuardEvents(baseInput({ limit: 20 }));
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("Pro feature");
+  });
+
+  it("lists newest-first with tier/action/outcome and estimated tokens", async () => {
+    await seedProject("/work/demo");
+    activatePro();
+    appendGuardEvent({ root }, intercept());
+    appendGuardEvent({ root }, outcome());
+    await runGuardEvents(baseInput({ limit: 20 }));
+    const text = out.join("\n");
+    expect(text).toContain("t1");
+    expect(text).toContain("~4200 tokens (estimated)");
+    expect(text).toContain("overridden-ok");
+  });
+});
+
+describe("mega guard check", () => {
+  it("dry-runs the matcher and prints the match reason", async () => {
+    await seedProject("/work/demo");
+    appendGuardCorpusRow(root, PROJECT_ID, corpusRow());
+    await runGuardCheck(baseInput({ query: "pnpm vitest --shard 2" }));
+    expect(out.join("\n")).toContain("t1");
+  });
+
+  it("prints 'no match' cleanly on a miss", async () => {
+    await seedProject("/work/demo");
+    await runGuardCheck(baseInput({ query: "totally novel command" }));
+    expect(out.join("\n")).toContain("no match");
   });
 });

@@ -1,4 +1,6 @@
 import { defineCommand } from "citty";
+import { guardCheckCommand } from "./check.js";
+import { guardEventsCommand } from "./events.js";
 import { guardModeCommand } from "./mode.js";
 import { guardMuteCommand, guardUnmuteCommand } from "./mute.js";
 import { guardStatusCommand } from "./status.js";
@@ -10,5 +12,7 @@ export const guardCommand = defineCommand({
     mode: guardModeCommand,
     mute: guardMuteCommand,
     unmute: guardUnmuteCommand,
+    events: guardEventsCommand,
+    check: guardCheckCommand,
   },
 });
