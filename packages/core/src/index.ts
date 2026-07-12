@@ -110,3 +110,8 @@ export {
   type ImportCounts,
   importBrain,
 } from "./brain-import.js";
+export {
+  readWarmStartState,
+  stampWarmStartSeen,
+  type WarmStartState,
+} from "./warm-start-state.js";
