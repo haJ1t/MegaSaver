@@ -3407,3 +3407,28 @@ gauntlet critic: CLI `mega memory approve` closes without the MCP path's
 evidence/conflict quarantine (guarded by applySupersession structural check +
 stderr disclosure + reopen + physically-human-typed). Out of scope: recall
 write-back, from-session detection, LLM-confirm band, GUI history scrubber.
+
+### Gauntlet outcome (2026-07-13, same day)
+
+HIGH-risk gauntlet (fresh code-reviewer + adversarial critic, both opus, full
+branch diff) found the CLI-approve asymmetry to be LOW/accepted, but surfaced
+a NET-NEW critical BLOCKER the per-task reviews missed at the seam:
+
+- BLOCKER (fixed 9c12cd98): `save_memory` (agent-callable MCP) let an agent
+  forge `approval:"approved"` + agent-controlled `supersedesId` → the
+  born-approved immediate-close ladder closed ANY same-project/scope approved
+  rule with one call, no human, no disclosure. Broke spec §9.1. Root-cause
+  fix: `saveMemoryWithLineage` gains `allowImmediateClose` (default false);
+  the save-time `applySupersession` fires only for physically human-typed CLI
+  writers (create, task status). Agent save_memory defers the close to the
+  human `approve_memory` path (declared-target exemption, unchanged).
+- MAJOR (fixed ed071444): `lastActiveAt` was never stamped at create, so the
+  decay rekey was a no-op for real rows (approve-flip still reset age). Fixed
+  by stamping `lastActiveAt = createdAt` in both `createMemoryEntry` impls.
+- MINOR (fixed f70693cb): explicit `--supersede <invalid>` now discloses the
+  no-op on stderr.
+
+Fresh-context verifier re-pass (opus): both defects RESOLVED (re-ran both
+attack vectors → defer; real create→approve age unchanged), intended flows
+intact, no over-correction, no regression, verify 52/52 non-cached. CLEAR TO
+MERGE. Spec §4.5 note records the accepted CLI-approve asymmetry.
