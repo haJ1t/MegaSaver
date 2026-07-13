@@ -1,6 +1,7 @@
 import type { MemoryEntryId, SessionId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import type { MemoryEntry } from "../src/memory-entry.js";
+import { searchMemoryEntries } from "../src/memory-search.js";
 import {
   POSSIBLE_SUPERSEDES_PREFIX,
   SUPERSEDE_COSINE_AMBIGUOUS,
@@ -170,5 +171,110 @@ describe("detectSupersession — lexical ladder", () => {
     const second = detectSupersession(candidate, corpus, NOW);
     expect(second).toEqual(first);
     expect(second).toEqual({ kind: "supersede", supersededId: ID_B1, via: "supersession" });
+  });
+});
+
+describe("detectSupersession — cosine overlay", () => {
+  const OLD = "2026-01-01T00:00:00.000Z";
+  const RECENT = "2026-07-12T00:00:00.000Z";
+  const ID_STALE = "00000000-0000-4000-8000-0000000000e1" as MemoryEntryId;
+  const ID_FRESH = "00000000-0000-4000-8000-0000000000e2" as MemoryEntryId;
+  const queryVector = Float32Array.from([1, 0]);
+
+  // No relatedFiles overlap and no negation keywords, so the lexical rungs
+  // all miss and the ladder reaches the overlay.
+  const candidate = mk(CAND_ID, {
+    title: "auth middleware decision v2",
+    content: "auth middleware uses session cookies",
+    keywords: [],
+    relatedFiles: [],
+  });
+  const stalePredecessor = mk(ID_STALE, {
+    title: "auth middleware decision",
+    content: "auth middleware uses jwt tokens",
+    keywords: [],
+    relatedFiles: [],
+    confidence: "low",
+    createdAt: OLD,
+    updatedAt: OLD,
+  });
+  const freshBystander = mk(ID_FRESH, {
+    title: "auth middleware decision",
+    content: "auth middleware logging setup",
+    keywords: [],
+    relatedFiles: [],
+    confidence: "high",
+    createdAt: RECENT,
+    updatedAt: RECENT,
+  });
+
+  it("fixture sanity: the decay-weighted BM25 #1 is NOT the true predecessor", () => {
+    const pool = searchMemoryEntries([stalePredecessor, freshBystander], {
+      text: `${candidate.title} ${candidate.content}`,
+      asOf: NOW,
+      limit: SUPERSEDE_TOP_K,
+    });
+    expect(pool[0]?.id).toBe(ID_FRESH);
+    expect(pool.map((e) => e.id)).toContain(ID_STALE);
+  });
+
+  it("links by MAX RAW COSINE over the BM25 pool, not the weighted #1", () => {
+    const memoryVectors = new Map<string, Float32Array>([
+      [ID_STALE, Float32Array.from([1, 0])],
+      [ID_FRESH, Float32Array.from([0, 1])],
+    ]);
+    const result = detectSupersession(candidate, [stalePredecessor, freshBystander], NOW, {
+      queryVector,
+      memoryVectors,
+    });
+    expect(result).toEqual({ kind: "supersede", supersededId: ID_STALE, via: "cosine", score: 1 });
+  });
+
+  it("0.60 <= max < 0.80 -> ambiguous, no link", () => {
+    // cosine([1,0],[1,1]) = 1/sqrt(2) ~= 0.707 — inside the ambiguous band.
+    const memoryVectors = new Map<string, Float32Array>([[ID_STALE, Float32Array.from([1, 1])]]);
+    const result = detectSupersession(candidate, [stalePredecessor], NOW, {
+      queryVector,
+      memoryVectors,
+    });
+    expect(result).toEqual({ kind: "ambiguous", possibleIds: [ID_STALE] });
+  });
+
+  it("max < 0.60 -> none", () => {
+    // cosine([1,0],[1,2]) = 1/sqrt(5) ~= 0.447 — below the band.
+    const memoryVectors = new Map<string, Float32Array>([[ID_STALE, Float32Array.from([1, 2])]]);
+    const result = detectSupersession(candidate, [stalePredecessor], NOW, {
+      queryVector,
+      memoryVectors,
+    });
+    expect(result).toEqual({ kind: "none" });
+  });
+
+  it("pool entries without a sidecar vector cannot link -> none", () => {
+    const result = detectSupersession(candidate, [stalePredecessor], NOW, {
+      queryVector,
+      memoryVectors: new Map(),
+    });
+    expect(result).toEqual({ kind: "none" });
+  });
+
+  it("no queryVector -> overlay skipped even when vectors exist", () => {
+    const memoryVectors = new Map<string, Float32Array>([[ID_STALE, Float32Array.from([1, 0])]]);
+    const result = detectSupersession(candidate, [stalePredecessor], NOW, { memoryVectors });
+    expect(result).toEqual({ kind: "none" });
+  });
+
+  it("an entry outside the BM25 pool never links, however similar its vector", () => {
+    const offTopic = mk(ID_FRESH, {
+      title: "quarterly revenue targets",
+      content: "quarterly revenue targets for finance",
+      keywords: [],
+      relatedFiles: [],
+    });
+    const result = detectSupersession(candidate, [offTopic], NOW, {
+      queryVector,
+      memoryVectors: new Map<string, Float32Array>([[ID_FRESH, Float32Array.from([1, 0])]]),
+    });
+    expect(result).toEqual({ kind: "none" });
   });
 });

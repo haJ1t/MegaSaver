@@ -1,6 +1,8 @@
+import { cosine } from "@megasaver/embeddings";
 import type { MemoryEntryId } from "@megasaver/shared";
 import { checkConflicts } from "./conflict-checker.js";
 import { type MemoryEntry, isRecallable } from "./memory-entry.js";
+import { searchMemoryEntries } from "./memory-search.js";
 import type { CoreRegistry } from "./registry.js";
 
 // The bi-temporal validTo-close block, extracted verbatim from the approve
@@ -74,9 +76,13 @@ export function eligibleSupersessionCorpus(
 // Deterministic decision ladder, first match wins. Pure given inputs: no I/O,
 // no wall clock — `now` is threaded explicitly so fixtures ARE the spec.
 // Lexical classes come from checkConflicts (precedence-ordered duplicate ->
-// supersession -> contradiction). The cosine overlay (opts) is the only
-// non-lexical rung and lands in the next commit; `now` and `opts` are part of
-// the stable public signature.
+// supersession -> contradiction). Cosine overlay only when the caller injects
+// a queryVector (embedding is the caller's async boundary, mirroring
+// searchMemoryEntriesSemantic): pool = BM25 top-K over the corpus, link
+// target = MAX RAW COSINE over the pool — NOT the weighted BM25 #1, whose
+// effectiveConfidence weighting can rank a fresher, less-similar row above
+// the true stale predecessor. No BM25-only auto-link: BM25 scores are
+// unnormalized; the 0.60/0.80 bands are cosine bands.
 export function detectSupersession(
   candidate: MemoryEntry,
   corpus: readonly MemoryEntry[],
@@ -90,6 +96,31 @@ export function detectSupersession(
     if (conflict.outcome === "supersession" || conflict.outcome === "contradiction") {
       return { kind: "supersede", supersededId: target, via: conflict.outcome };
     }
+  }
+
+  const queryVector = opts?.queryVector;
+  if (queryVector === undefined) return { kind: "none" };
+  const memoryVectors = opts?.memoryVectors ?? new Map<string, Float32Array>();
+
+  const pool = searchMemoryEntries(corpus, {
+    text: `${candidate.title} ${candidate.content}`,
+    asOf: now,
+    limit: SUPERSEDE_TOP_K,
+  });
+
+  let best: { id: MemoryEntryId; score: number } | undefined;
+  for (const entry of pool) {
+    const vector = memoryVectors.get(entry.id);
+    if (vector === undefined) continue;
+    const score = cosine(queryVector, vector);
+    if (best === undefined || score > best.score) best = { id: entry.id, score };
+  }
+  if (best === undefined) return { kind: "none" };
+  if (best.score >= SUPERSEDE_COSINE_LINK) {
+    return { kind: "supersede", supersededId: best.id, via: "cosine", score: best.score };
+  }
+  if (best.score >= SUPERSEDE_COSINE_AMBIGUOUS) {
+    return { kind: "ambiguous", possibleIds: [best.id] };
   }
   return { kind: "none" };
 }
