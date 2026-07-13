@@ -1,4 +1,4 @@
-import type { MemoryEntryUpdatePatch } from "@megasaver/core";
+import { type MemoryEntryUpdatePatch, applySupersession } from "@megasaver/core";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, memoryEntryNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
@@ -65,6 +65,14 @@ export async function runMemoryApprove(input: RunMemoryApproveInput): Promise<0 
     const updatedAt = readTestEnv("MEGA_TEST_NOW") ?? now();
     const patch: MemoryEntryUpdatePatch = { approval: input.approval, updatedAt };
     const updated = registry.updateMemoryEntry(parsedId, patch);
+    if (input.approval === "approved") {
+      const result = applySupersession(registry, updated, () => updatedAt);
+      if (result.closed && result.superseded) {
+        input.stderr(
+          `note: this approval closed ${result.superseded.id} ("${result.superseded.title}") — undo: mega memory reopen ${result.superseded.id}`,
+        );
+      }
+    }
     input.stdout(input.jsonFlag ? JSON.stringify(updated) : updated.id);
     return 0;
   } catch (err) {
