@@ -1,5 +1,11 @@
 import { type ChunkSetSummary, listChunkSets } from "@megasaver/content-store";
-import { type CoreRegistry, type MemoryEntry, isRecallable } from "@megasaver/core";
+import {
+  type ChangedFrom,
+  type CoreRegistry,
+  type MemoryEntry,
+  changedFromFor,
+  isRecallable,
+} from "@megasaver/core";
 import type { SessionId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
@@ -19,7 +25,7 @@ const recallInputSchema = z
   .strict();
 
 export type RecallToolResult = {
-  memory: readonly MemoryEntry[];
+  memory: readonly (MemoryEntry & { changedFrom?: ChangedFrom })[];
   chunkSets: readonly ChunkSetSummary[];
 };
 
@@ -50,9 +56,17 @@ export async function handleRecall(
       }
 
       const allMemory = env.registry.listMemoryEntries(session.projectId);
-      const memory = allMemory.filter(
-        (m) => isRecallable(m, at) && (m.sessionId === session.id || m.scope === "project"),
-      );
+      // changedFrom enrichment (response-only): the predecessor lookup is free
+      // from the already-loaded allMemory. NOTE: the daemon /recall-registry
+      // route has no server-side handler today; if one ever lands it must
+      // mirror this enrichment.
+      const byId = new Map<string, MemoryEntry>(allMemory.map((m) => [m.id, m]));
+      const memory = allMemory
+        .filter((m) => isRecallable(m, at) && (m.sessionId === session.id || m.scope === "project"))
+        .map((m) => {
+          const changedFrom = changedFromFor(m, byId);
+          return { ...m, ...(changedFrom === undefined ? {} : { changedFrom }) };
+        });
       const chunkSets = await listChunkSets({
         storeRoot: env.storeRoot,
         projectId: session.projectId,

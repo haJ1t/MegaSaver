@@ -1,7 +1,9 @@
 import {
+  type ChangedFrom,
   type CoreRegistry,
   CoreRegistryError,
   type MemoryEntry,
+  changedFromFor,
   isRecallable,
   memoryEmbeddingsSidecarPath,
   searchMemoryEntriesSemantic,
@@ -32,7 +34,9 @@ const getRelevantMemoriesInputSchema = z
   })
   .strict();
 
-export type GetRelevantMemoriesResult = { memory: readonly MemoryEntry[] };
+export type GetRelevantMemoriesResult = {
+  memory: readonly (MemoryEntry & { changedFrom?: ChangedFrom })[];
+};
 
 // Best-effort semantic ranking: returns vector-ranked memories ONLY when a
 // sidecar with FULL coverage of the candidate memories exists AND embedding the
@@ -80,6 +84,25 @@ async function semanticMemoryRanking(
   }
 }
 
+// changedFrom enrichment (response-only, never persisted): a hit that
+// supersedes a CLOSED predecessor carries { title, closedAt, reason } so the
+// agent sees what changed. Reopened predecessors (validTo null) carry nothing.
+function withChangedFrom(
+  registry: CoreRegistry,
+  hits: readonly MemoryEntry[],
+): (MemoryEntry & { changedFrom?: ChangedFrom })[] {
+  const byId = new Map<string, MemoryEntry>();
+  for (const hit of hits) {
+    if (hit.supersedesId === undefined || byId.has(hit.supersedesId)) continue;
+    const predecessor = registry.getMemoryEntry(hit.supersedesId);
+    if (predecessor !== null) byId.set(hit.supersedesId, predecessor);
+  }
+  return hits.map((hit) => {
+    const changedFrom = changedFromFor(hit, byId);
+    return { ...hit, ...(changedFrom === undefined ? {} : { changedFrom }) };
+  });
+}
+
 // Free-text task → top-N relevant memories. Semantic (cosine over the memory
 // sidecar) when available, gracefully falling back to BM25 over title+content+
 // keywords (the same offline ranker as `mega memory search`).
@@ -96,13 +119,13 @@ export async function handleGetRelevantMemories(
 
   try {
     const semantic = await semanticMemoryRanking(env, projectId as ProjectId, task, limit, at);
-    if (semantic !== null) return { memory: semantic };
+    if (semantic !== null) return { memory: withChangedFrom(env.registry, semantic) };
     const memory = env.registry.searchMemoryEntries(projectId as ProjectId, {
       text: task,
       asOf: at,
       ...(limit !== undefined ? { limit } : {}),
     });
-    return { memory };
+    return { memory: withChangedFrom(env.registry, memory) };
   } catch (err) {
     if (err instanceof CoreRegistryError && err.code === "project_not_found") {
       throw new McpBridgeError("resource_not_found", err.message);
