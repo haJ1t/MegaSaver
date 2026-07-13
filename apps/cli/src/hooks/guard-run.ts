@@ -17,6 +17,7 @@ import {
   writeGuardState,
 } from "@megasaver/core";
 import { estimateTokens } from "@megasaver/output-filter";
+import { redact } from "@megasaver/policy";
 import { z } from "zod";
 import { findProjectByCwd } from "../commands/warmup.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../store.js";
@@ -152,6 +153,13 @@ export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<
     const text = match.action === "recall" ? recallText(match) : warnText(match, avoidedTokens);
     const eventId = randomUUID();
     const candidateId = guardCandidateId(match.candidate);
+    // The agent's raw command may carry inline secrets (`curl -H "Authorization:
+    // Bearer …"`); redact BEFORE it is persisted to the events ledger / state.
+    // Matching (matchGuard above) uses the raw command in-memory and never
+    // persists it. The outcome loop applies the same redact+normalize so its
+    // re-run lookup still matches this stored value.
+    const storedCommand =
+      call.tool === "Bash" ? normalizeCommand(redact(call.command).redacted) : null;
 
     // Best-effort side writes — a ledger/state failure never suppresses the warn.
     try {
@@ -164,7 +172,7 @@ export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<
           sessionId,
           matchedId: candidateId,
           matchedKind: match.candidate.kind,
-          normalizedCommand: call.tool === "Bash" ? normalizeCommand(call.command) : null,
+          normalizedCommand: storedCommand,
           tier: match.tier,
           action: deny ? "deny" : match.action === "recall" ? "recall" : "warn",
           avoidedTokens,
@@ -175,24 +183,30 @@ export async function buildGuardHookOutput(input: BuildGuardHookInput): Promise<
     } catch {
       /* advisory */
     }
-    try {
-      const intercepts = { ...session.intercepts };
-      if (call.tool === "Bash" && match.action !== "recall") {
-        intercepts[eventId] = {
-          command: normalizeCommand(call.command),
-          signatures: extractFailureSignatures(guardCandidateErrorOutput(match.candidate)),
-          candidateId,
-        };
+    // A strict DENY blocks the command (never executed) and must keep firing on
+    // retry until the user mutes it or switches to warn — so it does NOT consume
+    // the per-session cooldown and records no intercept (nothing to classify).
+    // Only a delivered warn/recall fires once per session.
+    if (!deny) {
+      try {
+        const intercepts = { ...session.intercepts };
+        if (call.tool === "Bash" && storedCommand !== null && match.action !== "recall") {
+          intercepts[eventId] = {
+            command: storedCommand,
+            signatures: extractFailureSignatures(guardCandidateErrorOutput(match.candidate)),
+            candidateId,
+          };
+        }
+        writeGuardState(input.storeRoot, project.id, {
+          ...state,
+          sessions: {
+            ...state.sessions,
+            [sessionId]: { firedIds: [...session.firedIds, candidateId], intercepts },
+          },
+        });
+      } catch {
+        /* advisory */
       }
-      writeGuardState(input.storeRoot, project.id, {
-        ...state,
-        sessions: {
-          ...state.sessions,
-          [sessionId]: { firedIds: [...session.firedIds, candidateId], intercepts },
-        },
-      });
-    } catch {
-      /* advisory */
     }
 
     if (deny) {

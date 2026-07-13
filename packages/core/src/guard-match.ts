@@ -37,10 +37,13 @@ export type GuardMatch = {
   action: "warn" | "deny-capable" | "recall";
 };
 
-const ENV_PREFIX = /^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/;
-
+// Whitespace-only normalization. We deliberately do NOT strip leading
+// `VAR=val` env prefixes: env vars change behavior (`NODE_ENV=production npm
+// build` is a different command from `npm build`, and is often the *fix* for a
+// failure), so conflating them at the exact tier would produce false T1 denies.
+// `\s+` is linear (no backtracking) so it is safe on adversarially large input.
 export function normalizeCommand(command: string): string {
-  return command.trim().replace(ENV_PREFIX, "").replace(/\s+/g, " ").trim();
+  return command.trim().replace(/\s+/g, " ");
 }
 
 export function guardCandidateId(candidate: GuardCandidate): string {

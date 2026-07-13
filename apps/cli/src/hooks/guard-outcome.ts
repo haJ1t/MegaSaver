@@ -7,6 +7,7 @@ import {
   readGuardState,
   writeGuardState,
 } from "@megasaver/core";
+import { redact } from "@megasaver/policy";
 import { z } from "zod";
 import { findProjectByCwd } from "../commands/warmup.js";
 import { ensureStoreReady } from "../store.js";
@@ -50,7 +51,9 @@ export async function maybeRecordGuardOutcome(
     const parsed = postToolUsePayloadSchema.safeParse(payload);
     if (!parsed.success) return;
     const { session_id: sessionId, cwd } = parsed.data;
-    const normalized = normalizeCommand(parsed.data.tool_input.command);
+    // Same redact+normalize the hook applied when it stored the intercept
+    // command, so the lookup matches without persisting a raw secret.
+    const normalized = normalizeCommand(redact(parsed.data.tool_input.command).redacted);
     if (normalized === "") return;
 
     const { registry } = await ensureStoreReady(storeRoot);

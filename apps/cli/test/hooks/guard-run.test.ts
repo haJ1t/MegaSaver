@@ -107,6 +107,39 @@ describe("buildGuardHookOutput", () => {
     expect(second).toBe("");
   });
 
+  it("strict deny keeps firing on retry (does not consume cooldown)", async () => {
+    await seed("/work/demo");
+    appendGuardCorpusRow(root, PROJECT_ID, corpusRow());
+    writeGuardState(root, PROJECT_ID, { ...DEFAULT_GUARD_STATE, mode: "strict" });
+    const first = JSON.parse(await call(bashPayload("pnpm vitest --shard 2")));
+    expect(first.hookSpecificOutput.permissionDecision).toBe("deny");
+    // A bare retry must NOT bypass the block (critic finding #2).
+    const second = JSON.parse(await call(bashPayload("pnpm vitest --shard 2")));
+    expect(second.hookSpecificOutput.permissionDecision).toBe("deny");
+  });
+
+  it("redacts inline secrets before persisting the intercept command", async () => {
+    await seed("/work/demo");
+    appendGuardCorpusRow(root, PROJECT_ID, {
+      id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      command: "curl -X POST https://api.internal/deploy",
+      errorOutput: "deploy webhook returned 500 error at api.internal deploy",
+      wastedTokens: 8000,
+      createdAt: "2026-07-11T10:00:00.000Z",
+    } as never);
+    const secret = "SECRETTOKEN12345";
+    await call(
+      bashPayload(
+        `curl -X POST -H "Authorization: Bearer sk-live-${secret}" https://api.internal/deploy`,
+      ),
+    );
+    const events = readGuardEvents({ root }, PROJECT_ID as never);
+    expect(events.length).toBeGreaterThan(0); // T3 matched
+    const persisted = JSON.stringify(events) + JSON.stringify(readGuardState(root, PROJECT_ID));
+    expect(persisted).not.toContain(secret);
+    expect(persisted).toContain("[REDACTED]");
+  });
+
   it("fail-open: empty output on bad payload, missing project, or mid-flight throw", async () => {
     expect(await call({ nope: true })).toBe("");
     await seed("/work/demo");

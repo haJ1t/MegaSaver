@@ -54,8 +54,10 @@ describe("normalizeCommand", () => {
   it("collapses whitespace runs and trims", () => {
     expect(normalizeCommand("  pnpm   vitest  --shard 2 ")).toBe("pnpm vitest --shard 2");
   });
-  it("strips leading env-assignment prefixes", () => {
-    expect(normalizeCommand("CI=1 NODE_ENV=test pnpm vitest")).toBe("pnpm vitest");
+  it("does NOT strip env-assignment prefixes (they change behavior)", () => {
+    expect(normalizeCommand("CI=1 NODE_ENV=test pnpm vitest")).toBe(
+      "CI=1 NODE_ENV=test pnpm vitest",
+    );
   });
   it("does NOT reorder flags (deferred, semantic risk)", () => {
     expect(normalizeCommand("ls -a -l")).not.toBe(normalizeCommand("ls -l -a"));
@@ -63,10 +65,16 @@ describe("normalizeCommand", () => {
 });
 
 describe("T1 exact", () => {
-  it("hits on whitespace + env-prefix variants of a corpus command", () => {
-    const m = bash("CI=1  pnpm  vitest --shard 2", [corpusRow()]);
+  it("hits on whitespace variants of a corpus command", () => {
+    const m = bash("  pnpm   vitest --shard 2 ", [corpusRow()]);
     expect(m?.tier).toBe("t1");
     expect(m?.action).toBe("deny-capable");
+  });
+  it("does NOT T1-deny an env-prefixed variant (env changes behavior)", () => {
+    // regression: NODE_ENV=production npm build must not exact-match a stored
+    // `npm build` failure and get denied in strict mode.
+    const m = bash("NODE_ENV=production pnpm vitest --shard 2", [corpusRow()]);
+    expect(m?.action).not.toBe("deny-capable");
   });
   it("hits on a FailedAttempt whose failedStep normalizes to the command", () => {
     const m = bash("pnpm vitest --shard 2", [attempt()]);
