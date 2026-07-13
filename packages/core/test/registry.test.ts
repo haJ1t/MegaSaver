@@ -69,6 +69,7 @@ const projectMemory: MemoryEntry = {
   stale: false,
   createdAt: "2026-05-04T12:30:00.000Z",
   updatedAt: "2026-05-04T12:30:00.000Z",
+  lastActiveAt: "2026-05-04T12:30:00.000Z",
 };
 
 const sessionMemory: MemoryEntry = {

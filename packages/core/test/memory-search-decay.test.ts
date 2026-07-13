@@ -1,4 +1,4 @@
-import type { ProjectId } from "@megasaver/shared";
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import {
   type MemoryEntry,
@@ -9,6 +9,7 @@ import {
 } from "../src/memory-entry.js";
 import { searchMemoryEntriesSemantic } from "../src/memory-search-semantic.js";
 import { searchMemoryEntries } from "../src/memory-search.js";
+import { createInMemoryCoreRegistry } from "../src/registry.js";
 
 const PROJECT = "00000000-0000-4000-8000-000000000001" as ProjectId;
 const NOW = "2026-06-30T00:00:00.000Z";
@@ -206,5 +207,37 @@ describe("lastActiveAt decay rekey", () => {
 
     const legacyOld = entry({ id: ID_B, content: "alpha decision", updatedAt: OLD });
     expect(effectiveConfidence(afterFlip, NOW)).toBe(effectiveConfidence(legacyOld, NOW));
+  });
+
+  it("real create→approve: createMemoryEntry stamps lastActiveAt so an approve keeps age", () => {
+    const registry = createInMemoryCoreRegistry();
+    registry.createProject({
+      id: PROJECT,
+      name: "demo",
+      rootPath: "/tmp/demo",
+      createdAt: OLD,
+      updatedAt: OLD,
+    });
+    const created = registry.createMemoryEntry(
+      entry({
+        id: ID_A,
+        content: "alpha decision",
+        approval: "suggested",
+        createdAt: OLD,
+        updatedAt: OLD,
+      }),
+    );
+    // The real writer stamps lastActiveAt = createdAt at create (not hand-set).
+    expect(created.lastActiveAt).toBe(OLD);
+    const before = effectiveConfidence(created, NOW);
+
+    // Approve flips approval and bumps updatedAt; age must stay keyed to
+    // lastActiveAt (the create timestamp), not the bumped updatedAt.
+    const approved = registry.updateMemoryEntry(ID_A as MemoryEntryId, {
+      approval: "approved",
+      updatedAt: NOW,
+    });
+    expect(approved.lastActiveAt).toBe(OLD);
+    expect(effectiveConfidence(approved, NOW)).toBe(before);
   });
 });
