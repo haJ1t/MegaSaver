@@ -1,7 +1,7 @@
 # Living Brain (i1) — Design Spec
 
-- **Date:** 2026-07-13
-- **Status:** approved-pending-architect-pass
+- **Date:** 2026-07-13 (rev 2 — architect pass applied: 5 MAJOR, 3 MINOR)
+- **Status:** architect-approved-with-fixes-applied
 - **Risk:** HIGH (§12 — memory schema change + main write path). Worktree,
   architect pass before implementation, `code-reviewer` AND `critic`
   gauntlet, verifier evidence.
@@ -115,8 +115,18 @@ Fix — a narrow exemption in `approve-memory.ts`:
 > validTo close.
 
 `duplicate` still auto-rejects. Conflicts with any *other* entry (not the
-declared target) stay quarantined exactly as today. Evidence validation
-(fail-closed sidecar checks) is untouched and still runs first.
+declared target) stay quarantined exactly as today — pinned by test
+(architect #7: `checkConflicts` returns only the first match via
+`.find()`, so a bystander conflict makes `conflictIds != [target]` and
+the row fails closed into quarantine; expected, documented behavior).
+Evidence validation (fail-closed sidecar checks) is untouched and still
+runs first.
+
+Disclosure (architect #6): the close must be visible at the decision
+surface, not only post-hoc. `approve_memory`'s result gains
+`superseded?: { id, title }`; `mega memory approve` prints
+`note: this approval closed a1b2c3 ("use npm for installs") — undo:
+mega memory reopen a1b2c3`.
 
 ### 3.2 Five writers, not three
 
@@ -146,8 +156,11 @@ The validTo-close block lifted verbatim from `approve-memory.ts:177-201`
 rewired — pure refactor, existing tests must stay green) and
 `saveMemoryWithLineage` when the new entry is born `approved`.
 
-**`detectSupersession(candidate, corpus, opts?): SupersessionDetection`**
-Pure given inputs; no I/O. `opts?: { queryVector?: Float32Array;
+**`detectSupersession(candidate, corpus, now, opts?): SupersessionDetection`**
+Pure given inputs; no I/O, no wall clock. `now: string` is threaded
+explicitly (architect #2: `searchMemoryEntries` defaults `asOf` to
+`new Date()`, which would make detection non-deterministic and break the
+fixtures-are-the-spec property). `opts?: { queryVector?: Float32Array;
 memoryVectors?: Map<string, Float32Array> }` — embedding is the caller's
 async boundary, mirroring `searchMemoryEntriesSemantic`.
 
@@ -160,11 +173,15 @@ async boundary, mirroring `searchMemoryEntriesSemantic`.
   2. `checkConflicts` `supersession` | `contradiction` ⇒
      `{ kind: "supersede", supersededId: conflictIds[0],
         method: "lexical" }`.
-  3. Cosine overlay — only when `opts.queryVector` AND the BM25 top-1
-     (via existing `searchMemoryEntries` over the corpus subset,
-     `limit: SUPERSEDE_TOP_K`) has a sidecar vector:
-     `cosine ≥ 0.80` ⇒ `{ kind: "supersede", supersededId: top1.id,
-     method: "cosine", score }`; `0.60 ≤ cosine < 0.80` ⇒
+  3. Cosine overlay — only when `opts.queryVector` is present: take the
+     BM25 top-K (existing `searchMemoryEntries` over the corpus subset,
+     `limit: SUPERSEDE_TOP_K`, `asOf: now`) as the candidate pool, then
+     link by **max raw cosine over that pool** among entries that have a
+     sidecar vector (architect #2: `searchMemoryEntries`' #1 is
+     effectiveConfidence-weighted — a fresher, less-similar row can
+     outrank the true stale predecessor, so the weighted order must not
+     pick the link target). `max cosine ≥ 0.80` ⇒ `{ kind: "supersede",
+     supersededId, method: "cosine", score }`; `0.60 ≤ max < 0.80` ⇒
      `{ kind: "ambiguous", possibleIds }` — no link; caller appends
      `"possible-supersedes:<id>"` strings to the entry's `evidence[]`
      (plain-string format per §2).
@@ -200,11 +217,25 @@ Flow: explicit `entry.supersedesId` beats detection (skip detect) →
 otherwise `detectSupersession` → `duplicate` short-circuits (no write,
 return existing) → `supersede` sets `supersedesId` on the entry at create
 (immutable field, so it must land here) → `ambiguous` appends evidence
-strings → `createMemoryEntry` → if the created row is `approved`,
-`applySupersession` immediately. `suggested` rows carry the link but
-close nothing — the close fires at approval via the existing gate + §3.1
-exemption. **The human-approval boundary is preserved: agent writes never
-auto-close anything at save time.**
+strings → `createMemoryEntry` → close per the ladder below.
+
+**Close ladder (architect #3 — a weak lexical heuristic must never close
+at save time):**
+
+- `suggested` rows (all agent writes): carry the link, close nothing —
+  the close fires at approval via the existing gate + §3.1 exemption,
+  with decision-surface disclosure (§4.5). Human gate preserved.
+- Born-`approved` rows (`mega memory create`, `task status
+  --save-summary`) with **explicit** supersedesId (new create flag
+  `--supersede <id>`): link + `applySupersession` immediately — explicit
+  intent is the human gate.
+- Born-`approved` rows with **detected** supersession: immediate close
+  only on strong signals — checkConflicts `contradiction` or cosine
+  ≥ 0.80. The weak `supersession` class (mere file overlap + different
+  content) is downgraded to the ambiguous treatment on born-approved
+  paths: evidence note only, **no link, no close**. Every immediate
+  close prints a loud stderr disclosure naming the closed entry and the
+  `mega memory reopen` undo.
 
 Rewired writers (1-5 of §2). Surface contracts:
 
@@ -212,17 +243,25 @@ Rewired writers (1-5 of §2). Surface contracts:
   notes go to **stderr**: `note: superseded a1b2c3 ("use npm for
   installs")` / `note: duplicate of a1b2c3 — not written` (dedupe still
   prints the existing id on stdout). `--json` gains `supersession?` /
-  `deduped?`. New flag `--no-supersede` ⇒ `detect: false`.
+  `deduped?` — a documented shape change from the bare entry to
+  `{ ...entry, supersession?, deduped? }` (architect #8). New flags:
+  `--supersede <id>` (explicit link + close), `--no-supersede`
+  ⇒ `detect: false`; mutually exclusive.
 - MCP `save_memory` response: `{ id }` → `{ id, supersession?, deduped? }`
-  (additive). Explicit `supersedesId` passthrough unchanged.
-- from-session twins: keep their `from-session:` dedupe key; detection on.
-- `task status --save-summary`: detection on (born-approved ⇒ immediate
-  close possible).
-- Cosine overlay wiring in production: `save_memory` env gains optional
-  `embedFn` (same pattern as `approve-memory`); the handler embeds the
-  candidate text once, best-effort try/catch → on any failure falls back
-  to lexical-only. CLI create stays lexical-only in v1 (no model load on
-  an interactive command).
+  (additive). Explicit `supersedesId` passthrough unchanged. Env gains
+  optional `storeRoot` (for `readVectors`) + `embedFn` (same pattern as
+  `approve-memory`/`get-relevant-memories`; architect #8): the handler
+  embeds the candidate text once, best-effort try/catch → any failure
+  falls back to lexical-only.
+- from-session twins: **exempt from detection in v1**
+  (`detect: false`, documented) — N terse extracted candidates sharing
+  session files would mass-auto-link against approved rows and prime a
+  bulk-approval mass-close (architect #5). They keep their
+  `from-session:` dedupe key.
+- `task status --save-summary`: detection on, born-approved ladder
+  applies (weak class ⇒ note only).
+- CLI create stays lexical-only in v1 (no model load on an interactive
+  command) — so its detected auto-close path is `contradiction`-only.
 
 ### 4.3 MOVE 3a — decay rekey (`lastActiveAt`)
 
@@ -231,17 +270,23 @@ Rewired writers (1-5 of §2). Surface contracts:
   schema (patchable).
 - Set: at create (= `createdAt`); by `mega memory update` when the patch
   touches content-bearing fields (`title`/`content`/`keywords`/
-  `relatedFiles`); batch write-back on recall hits —
-  `get_relevant_memories` + `mega_recall` returned entries only,
-  best-effort (never fails the read), skipped when the entry's
-  `lastActiveAt` is < 1h old (`RECALL_TOUCH_DEBOUNCE_MS`, bounds write
-  amplification on per-project JSON).
+  `relatedFiles`).
+- **Recall write-back is CUT from v1** (architect #4): touching
+  `lastActiveAt` from `get_relevant_memories`/`mega_recall` would turn a
+  hot read path into a whole-file store writer (per-project JSON is
+  rewritten in full), widen the last-writer-wins lost-update window
+  against concurrent saves, and force an `updatedAt` choice with side
+  effects (sweep idle timer, transaction age). Deferred to the storage
+  rework (§10).
 - `effectiveConfidence` decay ref becomes
   `lastActiveAt ?? updatedAt ?? createdAt`. Legacy rows (no
   `lastActiveAt`) behave bit-identically — snapshot tests pin ranking
   order before/after. Approve/reject/sweep no longer reset age (they
-  never touch `lastActiveAt`).
-- `sweepMemoryTiers` idle keying: unchanged (out of scope).
+  never touch `lastActiveAt`) — this is the core fix that survives the
+  write-back cut.
+- `sweepMemoryTiers` idle keying: unchanged (out of scope; note — a
+  frequently-recalled but never-edited memory can still idle toward
+  archival, acceptable until recall write-back lands).
 
 ### 4.4 MOVE 3b — `changedFrom` recall enrichment
 
@@ -259,10 +304,19 @@ Surfaces (all four):
    `/recall-registry` route has no server-side handler today; if one ever
    lands it must mirror the enrichment (comment in code).
 3. Connector block — data resolved in `buildConnectorContext` (the only
-   holder of the unfiltered list), carried through `ConnectorContext`
-   schema, rendered by `renderMemoryEntries` as a one-line suffix:
-   `(changed from: "<pred.title>", closed <validTo>)`. Predecessor title
-   passes the existing sentinel guard. Plus the §3.3 validity fix.
+   holder of the unfiltered list; gains a threaded `now`, architect #8),
+   carried through `ConnectorContext` schema, rendered by
+   `renderMemoryEntries` as a one-line suffix:
+   `(changed from: "<pred.title>", closed <validTo>)`.
+   **Sentinel guard must be EXTENDED, not assumed** (architect #1,
+   security): the existing superRefine only checks entries *in*
+   `memoryEntries` — the predecessor is filtered out by §3.3, so its
+   agent-controlled title reaches the rendered block only via
+   `changedFrom`. The `ConnectorContext` superRefine gains a
+   `containsSentinel` rejection on every `changedFrom.title`. Without
+   this an agent could plant a sentinel in a memory title, supersede it,
+   and inject the sentinel into agent config files. Plus the §3.3
+   validity fix.
 4. Warm-start brief — suffix inside `memLine`; the greedy budget fill
    meters it automatically (a long changedFrom can evict later lines —
    accepted, budget honesty beats completeness).
@@ -335,10 +389,19 @@ strips `supersedesId`, so no cross-machine auto-close).
 - Table-driven `detectSupersession` fixtures ARE the spec: exact dup,
   negation flip ("use npm" / "never use npm"), file-overlap divergence,
   ambiguous cosine band, unrelated, muted via `--no-supersede`, explicit
-  supersedesId beats detection, session-scope compatibility.
+  supersedesId beats detection, session-scope compatibility,
+  determinism under fixed `now`, max-cosine-over-top-K beats
+  weighted-top-1 (fixture where the decay-weighted #1 differs from the
+  most-similar row).
 - Declared-target exemption: approve of a linked candidate flips + closes
   (regression: unlinked supersession conflict still quarantines;
-  duplicate still auto-rejects).
+  duplicate still auto-rejects; bystander conflict beyond the declared
+  target quarantines — architect #7 pin).
+- Born-approved close ladder: weak `supersession` class produces note
+  only (no link/close); `contradiction` closes with stderr disclosure;
+  `--supersede` closes; `--supersede` + `--no-supersede` rejected.
+- Sentinel injection regression (architect #1): memory title containing
+  the sentinel, superseded — connector context build must reject.
 - `applySupersession` extraction: existing `approve-memory` tests green
   unchanged (pure-refactor gate).
 - Ranking snapshot tests pin ordering pre/post decay rekey for legacy
@@ -359,9 +422,13 @@ strips `supersedesId`, so no cross-machine auto-close).
 
 1. **False-positive auto-close = silent recall loss** (the
    CRITICAL-adjacent one). Mitigations: agent writes are born `suggested`
-   (close only at human approval); 0.80 cosine bar; ambiguous band
-   deliberately links nothing; `reopen` undo; lineage always inspectable;
-   nothing is ever deleted.
+   (close only at human approval, with decision-surface disclosure);
+   born-approved writers close only on explicit `--supersede` or strong
+   signals (`contradiction` / cosine ≥ 0.80) with loud stderr disclosure
+   — the weak lexical `supersession` class can never close at save time
+   (architect #3); 0.80 cosine bar; ambiguous band deliberately links
+   nothing; `reopen` undo; lineage always inspectable; nothing is ever
+   deleted.
 2. Sidecar stale/absent ⇒ lexical-only, tagged `method`, never blocks.
 3. Ranking regression from decay rekey ⇒ snapshot-pinned; legacy rows
    bit-identical.
@@ -374,7 +441,10 @@ strips `supersedesId`, so no cross-machine auto-close).
 
 LLM-confirm on the ambiguous band; GUI history scrubber; daemon
 `/recall-registry` handler; storage-format rework; `sweepMemoryTiers`
-rekey; embedding-on-save for CLI create; `brain-import` lineage.
+rekey; embedding-on-save for CLI create; `brain-import` lineage;
+recall write-back for `lastActiveAt` (architect #4 — deferred to the
+storage rework); from-session supersession detection (architect #5 —
+revisit with a cosine-strength signal).
 
 ## Packages touched
 
