@@ -124,3 +124,68 @@ export function detectSupersession(
   }
   return { kind: "none" };
 }
+
+// Chain oldest -> newest: ancestors via the supersedesId walk, then the entry,
+// then descendants via one linear scan building a supersedesId -> first-child
+// map (first child per parent by createdAt asc, stable by id). No new index,
+// no back-pointer field. supersedesId is agent-controlled data, so both walks
+// are cycle-guarded by a shared visited set — a forged chain must not hang
+// the CLI.
+export function buildLineage(entries: readonly MemoryEntry[], id: MemoryEntryId): MemoryEntry[] {
+  const byId = new Map<string, MemoryEntry>(entries.map((e) => [e.id, e]));
+  const self = byId.get(id);
+  if (self === undefined) return [];
+
+  const visited = new Set<string>([self.id]);
+
+  const ancestors: MemoryEntry[] = [];
+  let ancestor = self.supersedesId !== undefined ? byId.get(self.supersedesId) : undefined;
+  while (ancestor !== undefined && !visited.has(ancestor.id)) {
+    visited.add(ancestor.id);
+    ancestors.unshift(ancestor);
+    ancestor = ancestor.supersedesId !== undefined ? byId.get(ancestor.supersedesId) : undefined;
+  }
+
+  const childOf = new Map<string, MemoryEntry>();
+  for (const e of entries) {
+    if (e.supersedesId === undefined) continue;
+    const prev = childOf.get(e.supersedesId);
+    if (
+      prev === undefined ||
+      e.createdAt < prev.createdAt ||
+      (e.createdAt === prev.createdAt && e.id < prev.id)
+    ) {
+      childOf.set(e.supersedesId, e);
+    }
+  }
+
+  const descendants: MemoryEntry[] = [];
+  let child = childOf.get(self.id);
+  while (child !== undefined && !visited.has(child.id)) {
+    visited.add(child.id);
+    descendants.push(child);
+    child = childOf.get(child.id);
+  }
+
+  return [...ancestors, self, ...descendants];
+}
+
+export type ChangedFrom = { title: string; closedAt: string; reason?: string };
+
+// Recall enrichment: immediate predecessor only (never the chain — token
+// discipline). A reopened predecessor (validTo back to null) suppresses the
+// line: the row is current again, so "changed from" would be a lie.
+export function changedFromFor(
+  hit: Pick<MemoryEntry, "supersedesId" | "reason">,
+  byId: ReadonlyMap<string, MemoryEntry>,
+): ChangedFrom | undefined {
+  if (hit.supersedesId === undefined) return undefined;
+  const predecessor = byId.get(hit.supersedesId);
+  if (predecessor === undefined || predecessor.validTo == null) return undefined;
+  const reason = hit.reason ?? predecessor.reason;
+  return {
+    title: predecessor.title,
+    closedAt: predecessor.validTo,
+    ...(reason !== undefined ? { reason } : {}),
+  };
+}
