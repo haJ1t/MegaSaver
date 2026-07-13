@@ -271,3 +271,46 @@ describe("timeless (sentinel-block) variant", () => {
     expect(t).not.toContain("last visit");
   });
 });
+
+describe("changedFrom suffix", () => {
+  it("successor line carries (was: ...) when its predecessor is closed", () => {
+    const predecessor = mem({
+      title: "use npm",
+      content: "Use npm for installs.",
+      validTo: "2026-07-01T00:00:00.000Z",
+    });
+    const successor = mem({
+      title: "use pnpm",
+      content: "Use pnpm for installs.",
+      supersedesId: predecessor.id,
+    });
+    const brief = assembleWarmStartBrief(baseInput({ memories: [predecessor, successor] }));
+    expect(brief.text).toContain('(was: "use npm" until 2026-07-01)');
+    // The closed predecessor's OWN line must not render (its title still
+    // appears inside the successor's suffix, so match the line prefix).
+    expect(brief.text).not.toContain("- [decision] use npm —");
+  });
+
+  it("suppresses the suffix when the predecessor is reopened (validTo null)", () => {
+    const predecessor = mem({ title: "use npm", validTo: null });
+    const successor = mem({ title: "use pnpm", supersedesId: predecessor.id });
+    const brief = assembleWarmStartBrief(baseInput({ memories: [predecessor, successor] }));
+    expect(brief.text).not.toContain("(was:");
+  });
+
+  it("budget invariant holds with the longer suffixed lines", () => {
+    const big = "x".repeat(4000);
+    const memories: MemoryEntry[] = [];
+    for (let i = 0; i < 20; i += 1) {
+      const predecessor = mem({
+        title: `old title ${i} ${"y".repeat(200)}`,
+        validTo: "2026-07-01T00:00:00.000Z",
+      });
+      const successor = mem({ title: `new ${i}`, content: big, supersedesId: predecessor.id });
+      memories.push(predecessor, successor);
+    }
+    const brief = assembleWarmStartBrief(baseInput({ budgetTokens: 500, memories }));
+    expect(estimateTokens(brief.text)).toBeLessThanOrEqual(500);
+    expect(brief.tokenEstimate).toBe(estimateTokens(brief.text));
+  });
+});
