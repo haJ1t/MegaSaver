@@ -4,6 +4,7 @@ import {
   type MemoryEntry,
   extractSessionMemories,
   memoryEntrySchema,
+  saveMemoryWithLineage,
 } from "@megasaver/core";
 import type { SessionId } from "@megasaver/shared";
 import { z } from "zod";
@@ -85,7 +86,11 @@ export async function handleFromSessionMemory(
         createdAt: env.now(),
         updatedAt: env.now(),
       });
-      env.registry.createMemoryEntry(entry);
+      // detect: false (living brain, architect #5): N terse extracted candidates
+      // sharing the same session files would mass-auto-link against approved
+      // rows and prime a bulk-approval mass-close. The from-session: dedupe
+      // keyword stays the only dedupe on this path.
+      saveMemoryWithLineage(env.registry, entry, { now: env.now, detect: false });
       staged.add(dedupeKeyword);
       suggested += 1;
     }
