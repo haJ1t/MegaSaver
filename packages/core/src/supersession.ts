@@ -189,3 +189,128 @@ export function changedFromFor(
     ...(reason !== undefined ? { reason } : {}),
   };
 }
+
+export type SaveMemoryLineageResult = {
+  entry: MemoryEntry; // written row, or the existing row when deduped
+  supersession?: {
+    supersededId: MemoryEntryId;
+    // "explicit" = caller-supplied supersedesId (no detection ran)
+    via: "supersession" | "contradiction" | "cosine" | "explicit";
+    score?: number;
+    closed: boolean;
+  };
+  deduped?: { existingId: MemoryEntryId };
+};
+
+function withEvidenceNotes(entry: MemoryEntry, notes: readonly string[]): MemoryEntry {
+  return { ...entry, evidence: [...(entry.evidence ?? []), ...notes] };
+}
+
+// The single write path for lineage-aware memory saves (spec §4.2). All entry
+// mutation (supersedesId, evidence) happens BEFORE createMemoryEntry — both
+// fields are create-time-immutable afterwards. The close ladder (architect
+// #3): a weak lexical heuristic must never close at save time — suggested
+// rows carry the link and close at approval; born-approved rows close only on
+// explicit supersedesId or strong signals (contradiction / cosine >= 0.80).
+export function saveMemoryWithLineage(
+  registry: CoreRegistry,
+  entry: MemoryEntry,
+  opts: {
+    now: () => string;
+    detect?: boolean; // default true
+    queryVector?: Float32Array;
+    memoryVectors?: Map<string, Float32Array>;
+  },
+): SaveMemoryLineageResult {
+  // Explicit supersedesId beats detection: the caller declared the target, so
+  // detection must not second-guess (or dedupe away) the write. Explicit
+  // intent is the human gate — born-approved closes immediately; suggested
+  // rows keep today's passthrough (close fires at approval).
+  if (entry.supersedesId !== undefined) {
+    const created = registry.createMemoryEntry(entry);
+    if (created.approval !== "approved") return { entry: created };
+    const applied = applySupersession(registry, created, opts.now);
+    return {
+      entry: created,
+      supersession: {
+        supersededId: entry.supersedesId,
+        via: "explicit",
+        closed: applied.closed,
+      },
+    };
+  }
+  if (opts.detect === false) return { entry: registry.createMemoryEntry(entry) };
+
+  let detection: SupersessionDetection;
+  try {
+    const now = opts.now();
+    const corpus = eligibleSupersessionCorpus(
+      entry,
+      registry.listMemoryEntries(entry.projectId),
+      now,
+    );
+    detection = detectSupersession(entry, corpus, now, {
+      ...(opts.queryVector !== undefined ? { queryVector: opts.queryVector } : {}),
+      ...(opts.memoryVectors !== undefined ? { memoryVectors: opts.memoryVectors } : {}),
+    });
+  } catch {
+    // Fail-open (spec §7): detection must never block a save.
+    return { entry: registry.createMemoryEntry(entry) };
+  }
+
+  if (detection.kind === "duplicate") {
+    const existing = registry.getMemoryEntry(detection.existingId);
+    // Detection ids come from this registry's live corpus; null means a
+    // racing delete — fail open with a plain create rather than lose the write.
+    if (existing === null) return { entry: registry.createMemoryEntry(entry) };
+    return { entry: existing, deduped: { existingId: detection.existingId } };
+  }
+
+  if (detection.kind === "supersede") {
+    const { supersededId, via } = detection;
+    if (entry.approval !== "approved") {
+      const created = registry.createMemoryEntry({ ...entry, supersedesId: supersededId });
+      return {
+        entry: created,
+        supersession: {
+          supersededId,
+          via,
+          ...(detection.score !== undefined ? { score: detection.score } : {}),
+          closed: false,
+        },
+      };
+    }
+    if (via === "supersession") {
+      // Born-approved + weak lexical class (mere file overlap + different
+      // content): downgraded to the ambiguous treatment — evidence note only,
+      // no link, no close (architect #3).
+      const created = registry.createMemoryEntry(
+        withEvidenceNotes(entry, [`${POSSIBLE_SUPERSEDES_PREFIX}${supersededId}`]),
+      );
+      return { entry: created };
+    }
+    const created = registry.createMemoryEntry({ ...entry, supersedesId: supersededId });
+    const applied = applySupersession(registry, created, opts.now);
+    return {
+      entry: created,
+      supersession: {
+        supersededId,
+        via,
+        ...(detection.score !== undefined ? { score: detection.score } : {}),
+        closed: applied.closed,
+      },
+    };
+  }
+
+  if (detection.kind === "ambiguous") {
+    const created = registry.createMemoryEntry(
+      withEvidenceNotes(
+        entry,
+        detection.possibleIds.map((id) => `${POSSIBLE_SUPERSEDES_PREFIX}${id}`),
+      ),
+    );
+    return { entry: created };
+  }
+
+  return { entry: registry.createMemoryEntry(entry) };
+}
