@@ -6,6 +6,7 @@ import {
   type MemoryEntry,
   type MemoryValidation,
   type ValidationStatus,
+  applySupersession,
   checkConflicts,
   isRecallable,
   memoryEmbedText,
@@ -52,6 +53,9 @@ export interface ApproveMemoryResult {
   approval: MemoryApproval;
   validation?: { status: ValidationStatus; reasons: readonly string[] };
   conflict?: { outcome: ConflictOutcome; conflictIds: readonly MemoryEntryId[] };
+  // Decision-surface disclosure (living brain, architect #6): present ONLY when
+  // this approval actually closed a superseded row's validity.
+  superseded?: { id: string; title: string };
 }
 
 export async function handleApproveMemory(
@@ -153,7 +157,17 @@ export async function handleApproveMemory(
     }
     // Any non-valid validation or any non-unrelated conflict blocks the flip: the
     // row stays `suggested` and the reasons are surfaced for the human to resolve.
-    if (validation.status !== "valid" || conflict.outcome !== "unrelated") {
+    // EXCEPT the declared target (living brain §3.1): a supersession/contradiction
+    // conflict whose single conflictId IS the row this candidate declares via
+    // supersedesId is not a blocker — the candidate exists to replace that row,
+    // and approval resolves the conflict through the validTo close below. Any
+    // bystander conflict (different id) still quarantines; duplicate never
+    // reaches here (auto-rejected above).
+    const declaredTarget =
+      (conflict.outcome === "supersession" || conflict.outcome === "contradiction") &&
+      conflict.conflictIds.length === 1 &&
+      conflict.conflictIds[0] === existing.supersedesId;
+    if (validation.status !== "valid" || (conflict.outcome !== "unrelated" && !declaredTarget)) {
       writeSidecar(env, existing.id as MemoryEntryId, {
         validationStatus: validation.status,
         reasons: [...validation.reasons, ...conflict.reasons],
@@ -176,29 +190,12 @@ export async function handleApproveMemory(
   const updated = env.registry.updateMemoryEntry(id, { approval, updatedAt: env.now() });
   // Bi-temporal supersession (M1): approving a memory that supersedes an older
   // one closes the old one's valid-time (validTo = now) so it drops out of
-  // current-by-default recall. The old row is NOT deleted — kept for time-travel
-  // (lossless). Only on approve; a reject leaves all validity untouched.
-  if (approval === "approved" && updated.supersedesId !== undefined) {
-    const superseded = env.registry.getMemoryEntry(updated.supersedesId as MemoryEntryId);
-    // supersedesId is agent-controlled (save_memory passes it through; the schema
-    // only checks UUID shape). Validate the target before closing its validity, or
-    // an agent could (a) close a CURRENT memory in another project/scope it should
-    // not touch, or (b) self-reference to close its own validity — approved yet
-    // instantly non-current, silently vanishing from default recall. So close ONLY
-    // a different, same-project, same-scope, still-open target.
-    const targetIsValid =
-      superseded !== null &&
-      superseded.id !== updated.id &&
-      superseded.projectId === updated.projectId &&
-      superseded.scope === updated.scope &&
-      superseded.validTo == null;
-    if (targetIsValid) {
-      env.registry.updateMemoryEntry(updated.supersedesId as MemoryEntryId, {
-        validTo: env.now(),
-        updatedAt: env.now(),
-      });
-    }
-  }
+  // current-by-default recall. The close — including the tamper guard that
+  // validates the agent-controlled target (non-self, same-project, same-scope,
+  // still-open) — now lives in core's applySupersession, shared with
+  // saveMemoryWithLineage. Only on approve; a reject leaves validity untouched.
+  const supersessionResult =
+    approval === "approved" ? applySupersession(env.registry, updated, env.now) : undefined;
   // M3: semantic canonicalization runs ONLY on the approve success path, AFTER
   // the flip — so a near-duplicate is SURFACED on a still-successful approval,
   // never blocked or auto-mutated. The human canonicalizes by re-approving with
@@ -215,15 +212,20 @@ export async function handleApproveMemory(
     conflictIds: semantic.conflictIds,
     validatedBy: approval === "rejected" ? "human" : "system",
   });
+  const supersededField =
+    supersessionResult?.superseded !== undefined
+      ? { superseded: supersessionResult.superseded }
+      : {};
   if (reasons.length > 0) {
     return {
       id: updated.id,
       approval: updated.approval,
       validation: { status: "valid", reasons },
       conflict: { outcome: "unrelated", conflictIds: semantic.conflictIds },
+      ...supersededField,
     };
   }
-  return { id: updated.id, approval: updated.approval };
+  return { id: updated.id, approval: updated.approval, ...supersededField };
 }
 
 // Best-effort near-duplicate detection over the memory-vector sidecar. Returns

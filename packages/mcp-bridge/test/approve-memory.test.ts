@@ -701,3 +701,135 @@ describe("approve_memory — evidence-port integration (slice 3b)", () => {
     expect(sidecar?.conflictIds).toContain(APPROVED_ID);
   });
 });
+
+const TGT_ID = "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1" as MemoryEntryId;
+const CAND_ID = "b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2" as MemoryEntryId;
+const BYS_ID = "c3c3c3c3-c3c3-4c3c-8c3c-c3c3c3c3c3c3" as MemoryEntryId;
+
+// Living brain §3.1 declared-target exemption. The suggested candidate LEXICALLY
+// conflicts (supersession class: same type + relatedFiles overlap + different
+// content) with the row it declares via supersedesId. Pre-exemption the
+// quarantine gate blocked this flip, so create-time links could never close at
+// approval. Bystander is created FIRST so checkConflicts' .find() hits it before
+// the declared target (architect #7 pin).
+function declaredConflictRegistry(
+  over: { link?: boolean; bystander?: boolean; duplicate?: boolean } = {},
+) {
+  const registry = createInMemoryCoreRegistry();
+  registry.createProject({
+    id: PROJECT_ID,
+    name: "demo",
+    rootPath: "/tmp/demo",
+    createdAt: TS,
+    updatedAt: TS,
+  });
+  if (over.bystander === true) {
+    registry.createMemoryEntry({
+      id: BYS_ID,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      scope: "project",
+      type: "decision",
+      title: "Region latency notes",
+      content: "Latency benchmarks for candidate regions.",
+      keywords: [],
+      confidence: "medium",
+      source: "manual",
+      stale: false,
+      approval: "approved",
+      relatedFiles: ["src/deploy.ts"],
+      createdAt: TS,
+      updatedAt: TS,
+    });
+  }
+  registry.createMemoryEntry({
+    id: TGT_ID,
+    projectId: PROJECT_ID,
+    sessionId: null,
+    scope: "project",
+    type: "decision",
+    title: "Deploy region us-east",
+    content: "Primary deploy region is us-east.",
+    keywords: [],
+    confidence: "medium",
+    source: "manual",
+    stale: false,
+    approval: "approved",
+    relatedFiles: ["src/deploy.ts"],
+    createdAt: TS,
+    updatedAt: TS,
+  });
+  registry.createMemoryEntry({
+    id: CAND_ID,
+    projectId: PROJECT_ID,
+    sessionId: null,
+    scope: "project",
+    type: "decision",
+    title: over.duplicate === true ? "Deploy region us-east" : "Deploy region eu-west",
+    content:
+      over.duplicate === true
+        ? "Primary deploy region is us-east."
+        : "Primary deploy region is eu-west.",
+    keywords: [],
+    confidence: "medium",
+    source: "manual",
+    stale: false,
+    approval: "suggested",
+    relatedFiles: ["src/deploy.ts"],
+    ...(over.link === false ? {} : { supersedesId: TGT_ID }),
+    createdAt: TS,
+    updatedAt: TS,
+  });
+  return registry;
+}
+
+describe("approve_memory declared-target exemption (living brain §3.1)", () => {
+  const APPROVE_AT = "2026-06-26T00:00:00.000Z";
+
+  it("flips a linked candidate whose only conflict is its declared target, closes it, and reports superseded", async () => {
+    const registry = declaredConflictRegistry();
+    const result = await handleApproveMemory(
+      { registry, storeRoot: "", now: () => APPROVE_AT },
+      { memoryEntryId: CAND_ID, approval: "approved" },
+    );
+    expect(result.approval).toBe("approved");
+    expect(result.superseded).toEqual({ id: TGT_ID, title: "Deploy region us-east" });
+    expect(registry.getMemoryEntry(CAND_ID as never)?.approval).toBe("approved");
+    expect(registry.getMemoryEntry(TGT_ID as never)?.validTo).toBe(APPROVE_AT);
+  });
+
+  it("still quarantines an UNLINKED supersession conflict (no supersedesId declared)", async () => {
+    const registry = declaredConflictRegistry({ link: false });
+    const result = await handleApproveMemory(
+      { registry, storeRoot: "", now: () => APPROVE_AT },
+      { memoryEntryId: CAND_ID, approval: "approved" },
+    );
+    expect(result.approval).toBe("suggested");
+    expect(result.conflict?.outcome).toBe("supersession");
+    expect(result.superseded).toBeUndefined();
+    expect(registry.getMemoryEntry(TGT_ID as never)?.validTo).toBeUndefined();
+  });
+
+  it("still quarantines when the first conflict is a BYSTANDER, not the declared target (architect #7 pin)", async () => {
+    const registry = declaredConflictRegistry({ bystander: true });
+    const result = await handleApproveMemory(
+      { registry, storeRoot: "", now: () => APPROVE_AT },
+      { memoryEntryId: CAND_ID, approval: "approved" },
+    );
+    expect(result.approval).toBe("suggested");
+    expect(result.conflict?.conflictIds).toEqual([BYS_ID]);
+    expect(result.superseded).toBeUndefined();
+    expect(registry.getMemoryEntry(TGT_ID as never)?.validTo).toBeUndefined();
+  });
+
+  it("a duplicate of the declared target still auto-rejects (exemption never reaches the duplicate branch)", async () => {
+    const registry = declaredConflictRegistry({ duplicate: true });
+    const result = await handleApproveMemory(
+      { registry, storeRoot: "", now: () => APPROVE_AT },
+      { memoryEntryId: CAND_ID, approval: "approved" },
+    );
+    expect(result.approval).toBe("rejected");
+    expect(result.conflict?.outcome).toBe("duplicate");
+    expect(registry.getMemoryEntry(TGT_ID as never)?.validTo).toBeUndefined();
+  });
+});
