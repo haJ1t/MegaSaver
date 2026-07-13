@@ -118,7 +118,7 @@ describe("saveMemoryWithLineage — close ladder", () => {
       relatedFiles: ["ci.yml"],
     });
 
-    const result = saveMemoryWithLineage(registry, candidate, { now });
+    const result = saveMemoryWithLineage(registry, candidate, { now, allowImmediateClose: true });
 
     expect(result.entry.supersedesId).toBe(ID_OLD);
     expect(result.supersession).toEqual({
@@ -148,6 +148,7 @@ describe("saveMemoryWithLineage — close ladder", () => {
       now,
       queryVector: Float32Array.from([1, 0]),
       memoryVectors: new Map<string, Float32Array>([[ID_OLD, Float32Array.from([1, 0])]]),
+      allowImmediateClose: true,
     });
 
     expect(result.entry.supersedesId).toBe(ID_OLD);
@@ -198,7 +199,7 @@ describe("saveMemoryWithLineage — close ladder", () => {
       supersedesId: ID_OLD,
     });
 
-    const result = saveMemoryWithLineage(registry, candidate, { now });
+    const result = saveMemoryWithLineage(registry, candidate, { now, allowImmediateClose: true });
 
     expect(result.entry.id).toBe(ID_NEW);
     expect(result.deduped).toBeUndefined();
@@ -209,6 +210,18 @@ describe("saveMemoryWithLineage — close ladder", () => {
     });
     expect(registry.getMemoryEntry(ID_OLD)?.validTo).toBe(NOW);
     expect(registry.getMemoryEntry(ID_THIRD)?.validTo).toBeUndefined();
+  });
+
+  it("born-approved explicit WITHOUT allowImmediateClose: link kept, no close (§9.1 gate)", () => {
+    const registry = freshRegistry();
+    registry.createMemoryEntry(mem({ id: ID_OLD, content: "use npm for installs" }));
+    const candidate = mem({ id: ID_NEW, content: "use pnpm for installs", supersedesId: ID_OLD });
+
+    const result = saveMemoryWithLineage(registry, candidate, { now });
+
+    expect(result.entry.supersedesId).toBe(ID_OLD);
+    expect(result.supersession).toBeUndefined();
+    expect(registry.getMemoryEntry(ID_OLD)?.validTo).toBeUndefined();
   });
 
   it("explicit supersedesId on a suggested write: passthrough, no close, no supersession field", () => {

@@ -79,7 +79,10 @@ export async function runTaskStatus(input: RunTaskStatusInput): Promise<0 | 1> {
       // born-approved close ladder applies. This path is lexical-only (no
       // vectors), so only a checkConflicts contradiction can close — and every
       // close is disclosed loudly on stderr with its undo.
-      const result = saveMemoryWithLineage(registry, entry, { now: () => ts });
+      const result = saveMemoryWithLineage(registry, entry, {
+        now: () => ts,
+        allowImmediateClose: true,
+      });
       if (result.supersession?.closed === true) {
         const closedTitle = registry.getMemoryEntry(result.supersession.supersededId)?.title ?? "";
         input.stderr(

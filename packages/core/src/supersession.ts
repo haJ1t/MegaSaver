@@ -210,8 +210,13 @@ function withEvidenceNotes(entry: MemoryEntry, notes: readonly string[]): Memory
 // mutation (supersedesId, evidence) happens BEFORE createMemoryEntry — both
 // fields are create-time-immutable afterwards. The close ladder (architect
 // #3): a weak lexical heuristic must never close at save time — suggested
-// rows carry the link and close at approval; born-approved rows close only on
-// explicit supersedesId or strong signals (contradiction / cosine >= 0.80).
+// rows carry the link and close at approval; born-approved rows close at save
+// only when `opts.allowImmediateClose` is set. That flag is the trust gate:
+// approval alone is NOT proof of a human decision because save_memory lets an
+// agent forge `approval:"approved"` (spec §9.1). Only physically human-typed
+// surfaces (CLI `memory create`, `task status --save-summary`) pass it; agent
+// saves never immediately close — the link is still written and the close
+// defers to the human `approve_memory` gate (safe degradation, lineage kept).
 export function saveMemoryWithLineage(
   registry: CoreRegistry,
   entry: MemoryEntry,
@@ -220,15 +225,18 @@ export function saveMemoryWithLineage(
     detect?: boolean; // default true
     queryVector?: Float32Array;
     memoryVectors?: Map<string, Float32Array>;
+    allowImmediateClose?: boolean; // default false — see the trust-gate note above
   },
 ): SaveMemoryLineageResult {
   // Explicit supersedesId beats detection: the caller declared the target, so
-  // detection must not second-guess (or dedupe away) the write. Explicit
-  // intent is the human gate — born-approved closes immediately; suggested
-  // rows keep today's passthrough (close fires at approval).
+  // detection must not second-guess (or dedupe away) the write. Born-approved
+  // closes immediately only when the caller is a trusted human surface;
+  // otherwise the link is written and the close defers (close fires at approval).
   if (entry.supersedesId !== undefined) {
     const created = registry.createMemoryEntry(entry);
-    if (created.approval !== "approved") return { entry: created };
+    if (created.approval !== "approved" || opts.allowImmediateClose !== true) {
+      return { entry: created };
+    }
     const applied = applySupersession(registry, created, opts.now);
     return {
       entry: created,
@@ -290,7 +298,13 @@ export function saveMemoryWithLineage(
       return { entry: created };
     }
     const created = registry.createMemoryEntry({ ...entry, supersedesId: supersededId });
-    const applied = applySupersession(registry, created, opts.now);
+    // Trust gate (spec §9.1): a born-approved detected close fires only from a
+    // human surface. An agent's forged approval keeps the link but defers the
+    // close — the row degrades to suggested behavior (link + closed:false).
+    const applied =
+      opts.allowImmediateClose === true
+        ? applySupersession(registry, created, opts.now)
+        : { closed: false as const };
     return {
       entry: created,
       supersession: {

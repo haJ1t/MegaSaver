@@ -198,7 +198,7 @@ describe("save_memory supersession lineage (living brain)", () => {
     expect(registry.getMemoryEntry(RULE_ID as never)?.validTo).toBeUndefined();
   });
 
-  it("closes the contradicted rule when the write is born approved (closed: true)", async () => {
+  it("does NOT close the contradicted rule on an agent's forged born-approved write", async () => {
     const registry = ruleSeededRegistry();
     const result = await handleSaveMemory(
       { registry, now: () => LATER_TS, newId: idFactory() },
@@ -213,12 +213,16 @@ describe("save_memory supersession lineage (living brain)", () => {
         approval: "approved",
       },
     );
+    // save_memory never passes allowImmediateClose (§9.1): the agent's forged
+    // approval keeps the link but the close defers to the human approve gate.
     expect(result.supersession).toEqual({
       supersededId: RULE_ID,
       via: "contradiction",
-      closed: true,
+      closed: false,
     });
-    expect(registry.getMemoryEntry(RULE_ID as never)?.validTo).toBe(LATER_TS);
+    const stored = registry.getMemoryEntry(result.id as never);
+    expect(stored?.supersedesId).toBe(RULE_ID);
+    expect(registry.getMemoryEntry(RULE_ID as never)?.validTo).toBeUndefined();
   });
 
   it("dedupes an exact duplicate of an approved memory (no write, existing id returned)", async () => {

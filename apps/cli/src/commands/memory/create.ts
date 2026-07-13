@@ -261,6 +261,7 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
     const result = saveMemoryWithLineage(registry, entry, {
       now: () => createdAt,
       detect: input.autoSupersedeFlag !== false,
+      allowImmediateClose: true,
     });
 
     if (result.deduped) {
