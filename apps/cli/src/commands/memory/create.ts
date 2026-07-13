@@ -273,6 +273,12 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
         input.stderr(
           `note: superseded ${closedId} ("${closedTitle}") — undo: mega memory reopen ${closedId}`,
         );
+      } else if (parsedSupersedeId !== undefined) {
+        // Explicit --supersede that did not close: the human asked for a close
+        // that the structural guard rejected. Auto-detect stays silent (§7).
+        input.stderr(
+          `note: --supersede ${parsedSupersedeId} did not close it (target missing, cross-scope, or already closed)`,
+        );
       }
       for (const ev of result.entry.evidence ?? []) {
         if (!ev.startsWith(POSSIBLE_SUPERSEDES_PREFIX)) continue;

@@ -207,6 +207,26 @@ describe("mega memory create — supersession", () => {
     );
   });
 
+  it("--supersede that does not close discloses the no-op on stderr", async () => {
+    await seedStore();
+    const MISSING_ID = "44444444-4444-4444-8444-444444444444";
+    const code = await runMemoryCreate(
+      makeInput({
+        typeFlag: "decision",
+        titleFlag: "Switch to bun",
+        contentFlag: "use bun for installs",
+        supersedeFlag: MISSING_ID,
+      }),
+    );
+    expect(code).toBe(0);
+    // The row is still written with the link; only the close was a no-op.
+    const rows = await readRows();
+    expect(rows.find((r) => r.id === NEW_ID)?.supersedesId).toBe(MISSING_ID);
+    expect(errLines).toContain(
+      `note: --supersede ${MISSING_ID} did not close it (target missing, cross-scope, or already closed)`,
+    );
+  });
+
   it("--supersede with --no-auto-supersede is rejected", async () => {
     await seedStore();
     const code = await runMemoryCreate(
