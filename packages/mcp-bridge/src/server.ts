@@ -354,7 +354,10 @@ export function buildServer(deps: ServerDeps): {
           args,
         ).then(recordChunkSetId);
       case "save_memory":
-        return handleSaveMemory({ registry: deps.registry, now, newId }, args);
+        return handleSaveMemory(
+          { registry: deps.registry, storeRoot: deps.storeRoot, now, newId },
+          args,
+        );
       case "search_memory":
         return handleSearchMemory({ registry: deps.registry }, args);
       case "get_relevant_memories":

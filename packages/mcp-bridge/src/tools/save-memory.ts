@@ -1,14 +1,20 @@
 import {
   type CoreRegistry,
   type MemoryEntry,
+  type SaveMemoryLineageResult,
   memoryApprovalSchema,
   memoryConfidenceSchema,
+  memoryEmbedText,
+  memoryEmbeddingsSidecarPath,
   memoryEntrySchema,
   memoryScopeSchema,
   memorySourceSchema,
   memoryTypeSchema,
+  saveMemoryWithLineage,
 } from "@megasaver/core";
 import { CoreRegistryError } from "@megasaver/core";
+import { embed, readVectors } from "@megasaver/embeddings";
+import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 
@@ -16,6 +22,16 @@ export type SaveMemoryEnv = {
   registry: CoreRegistry;
   now: () => string;
   newId: () => string;
+  // Cosine supersession inputs are best-effort: storeRoot locates the memory
+  // vector sidecar; embedFn is injectable so tests never load the real model.
+  storeRoot?: string;
+  embedFn?: (texts: readonly string[]) => Promise<Float32Array[]>;
+};
+
+export type SaveMemoryResult = {
+  id: string;
+  supersession?: SaveMemoryLineageResult["supersession"];
+  deduped?: SaveMemoryLineageResult["deduped"];
 };
 
 const saveMemoryInputSchema = z
@@ -54,10 +70,32 @@ function mapCoreError(err: unknown): McpBridgeError {
   return new McpBridgeError("validation_failed", "save_memory failed");
 }
 
+// Best-effort cosine inputs for supersession detection (living brain §4.2):
+// only when a storeRoot is configured AND the sidecar has vectors. Embeds the
+// candidate's title+content once. Any failure (no model, unreadable sidecar)
+// degrades to lexical-only detection — never blocks the save.
+async function cosineInputsFor(
+  env: SaveMemoryEnv,
+  entry: MemoryEntry,
+): Promise<{ queryVector: Float32Array; memoryVectors: Map<string, Float32Array> } | undefined> {
+  if (env.storeRoot === undefined) return undefined;
+  try {
+    const memoryVectors = readVectors(
+      memoryEmbeddingsSidecarPath(env.storeRoot, entry.projectId as ProjectId),
+    );
+    if (memoryVectors.size === 0) return undefined;
+    const [queryVector] = await (env.embedFn ?? embed)([memoryEmbedText(entry)]);
+    if (queryVector === undefined) return undefined;
+    return { queryVector, memoryVectors };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function handleSaveMemory(
   env: SaveMemoryEnv,
   rawArgs: unknown,
-): Promise<{ id: string }> {
+): Promise<SaveMemoryResult> {
   const parsed = saveMemoryInputSchema.safeParse(rawArgs);
   if (!parsed.success) {
     throw new McpBridgeError("validation_failed", parsed.error.message);
@@ -93,9 +131,17 @@ export async function handleSaveMemory(
     );
   }
 
+  const cosineInputs = await cosineInputsFor(env, entry);
   try {
-    const created = env.registry.createMemoryEntry(entry);
-    return { id: created.id };
+    const result = saveMemoryWithLineage(env.registry, entry, {
+      now: env.now,
+      ...(cosineInputs ?? {}),
+    });
+    return {
+      id: result.entry.id,
+      ...(result.supersession !== undefined ? { supersession: result.supersession } : {}),
+      ...(result.deduped !== undefined ? { deduped: result.deduped } : {}),
+    };
   } catch (err) {
     throw mapCoreError(err);
   }
