@@ -3352,3 +3352,17 @@ PreToolUse 10s budget; user accepted, daemon fast-path deferred (spec §9, share
 across all hooks). additionalContext PreToolUse support is a spec assumption
 (§4.1) — hook emits the documented shape; validate in a real Claude Code session.
 Known deferred: --no-guard/--no-warmup citty negation bug (spawned follow-up task).
+
+### Gauntlet (2026-07-13)
+HIGH-risk dual review on the full diff. code-reviewer APPROVE. Adversarial
+critic found 1 BLOCKER + 2 MAJOR (repro-proven): (B) guard events+state stored
+the RAW agent command — a T3 fuzzy match on a secret-bearing command leaked the
+token to disk / mega guard events; (M) strict deny consumed the session cooldown
+so a bare retry bypassed the block; (M) normalizeCommand stripped env prefixes,
+false-denying NODE_ENV=prod npm build. All three fixed (commit 70c59f81): redact
+before persist on both hook + outcome-loop lookup, deny keeps firing until
+mute/mode-warn, env prefixes preserved (also kills an ENV_PREFIX RangeError).
+Verifier re-pass: all RESOLVED with on-disk evidence, no regressions, verify
+52/52 green, CLEAR TO MERGE. Follow-ups noted: (1) --no-guard/--no-warmup citty
+negation (spawned task); (2) LOW: deny events append per retry (bounded,
+redacted, slightly inflates guard status deny count).
