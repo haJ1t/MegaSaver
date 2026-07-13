@@ -3,6 +3,7 @@ import { mapErrorToCliMessage, memoryEntryNotFoundMessage } from "../../errors.j
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import {
   formatMemoryExplainLines,
+  formatMemoryLineageLines,
   formatMemoryValidationLines,
   memoryEntryIdSchema,
 } from "./shared.js";
@@ -61,6 +62,8 @@ export async function runMemoryExplain(input: RunMemoryExplainInput): Promise<0 
     } else {
       for (const line of formatMemoryExplainLines(entry)) input.stdout(line);
       for (const line of formatMemoryValidationLines(validation)) input.stdout(line);
+      const all = registry.listMemoryEntries(entry.projectId);
+      for (const line of formatMemoryLineageLines(entry, all)) input.stdout(line);
     }
     return 0;
   } catch (err) {
