@@ -5,8 +5,10 @@ import { memoryDeleteCommand } from "./delete.js";
 import { memoryExplainCommand } from "./explain.js";
 import { memoryFromSessionCommand } from "./from-session.js";
 import { memoryGraphCommand } from "./graph.js";
+import { memoryHistoryCommand } from "./history.js";
 import { memoryIndexBuildCommand } from "./index-build.js";
 import { memoryListCommand } from "./list.js";
+import { memoryReopenCommand } from "./reopen.js";
 import { memoryReviewCommand } from "./review.js";
 import { memorySearchCommand } from "./search.js";
 import { memoryShowCommand } from "./show.js";
@@ -79,6 +81,16 @@ export {
   runMemoryFromSession,
   memoryFromSessionCommand,
 } from "./from-session.js";
+export {
+  type RunMemoryHistoryInput,
+  runMemoryHistory,
+  memoryHistoryCommand,
+} from "./history.js";
+export {
+  type RunMemoryReopenInput,
+  runMemoryReopen,
+  memoryReopenCommand,
+} from "./reopen.js";
 
 export const memoryCommand = defineCommand({
   meta: { name: "memory", description: "Manage Mega Saver memory entries." },
@@ -97,5 +109,7 @@ export const memoryCommand = defineCommand({
     index: memoryIndexBuildCommand,
     sweep: memorySweepCommand,
     "from-session": memoryFromSessionCommand,
+    history: memoryHistoryCommand,
+    reopen: memoryReopenCommand,
   },
 });
