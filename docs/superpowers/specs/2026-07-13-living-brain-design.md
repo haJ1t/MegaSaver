@@ -346,6 +346,36 @@ Surfaces (all four):
   `formatMemoryLineageLines` — supersedesId, validFrom/validTo, immediate
   predecessor/successor titles.
 
+> **Implementation deviations (recorded at ship, 2026-07-13):**
+> - Create opt-out flag shipped as `--no-auto-supersede` (arg
+>   `autoSupersede`, default true), not `--no-supersede` — citty's
+>   `--no-<name>` negation sets the arg it names and would collide with the
+>   string-valued `--supersede <id>` arg. The `run()` wrapper reads the
+>   kebab key `args["auto-supersede"]` (citty's multi-word negation writes
+>   the kebab form).
+> - `changedFrom` render format shipped as `(changed from "<title>", closed
+>   <YYYY-MM-DD>)` (connector) / `(was: "<title>" until <YYYY-MM-DD>)`
+>   (warm-start) — date sliced to the day, token discipline.
+> - Lexical `contradiction` auto-close on born-approved writers is narrow
+>   in practice (`checkConflicts` precedence classifies same-type
+>   file-overlap divergences as the weak `supersession` class first, which
+>   the close ladder downgrades to note-only). Born-approved auto-close is
+>   deliberately conservative; explicit `--supersede` is the human gate.
+>   The agent path (suggested write auto-links → approval closes via the
+>   §3.1 exemption) is unaffected.
+> - `SaveMemoryLineageResult.supersession.via` union carries an `"explicit"`
+>   member for caller-supplied `supersedesId`.
+> - **CLI `mega memory approve` asymmetry (accepted for v1):** the CLI
+>   approve does its own unconditional flip (pre-existing) and now also
+>   closes the declared target via `applySupersession`, WITHOUT the
+>   evidence/conflict quarantine the MCP `approve_memory` path enforces on
+>   the same decision. Mitigations: `applySupersession`'s structural guard
+>   (non-self/same-project/same-scope/open) still applies; the close is
+>   disclosed on stderr; `mega memory reopen` is a free undo; and the CLI is
+>   a physically human-typed command (no agent can invoke it), so it is a
+>   genuine human approval boundary. Flagged for the gauntlet critic;
+>   tightening to route the CLI close through the same gate is deferred.
+
 ## 5. Free/Pro split
 
 | Capability | Tier |
