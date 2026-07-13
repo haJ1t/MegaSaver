@@ -1,12 +1,14 @@
 import {
   type MemoryEntry,
+  POSSIBLE_SUPERSEDES_PREFIX,
   memoryConfidenceSchema,
   memoryEntrySchema,
   memoryScopeSchema,
   memorySourceSchema,
   memoryTypeSchema,
+  saveMemoryWithLineage,
 } from "@megasaver/core";
-import { sessionIdSchema, titleSchema } from "@megasaver/shared";
+import { type MemoryEntryId, sessionIdSchema, titleSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { z } from "zod";
 import {
@@ -26,7 +28,7 @@ import {
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { readTestEnv } from "../session/shared.js";
 import { projectNameSchema } from "../shared/schemas.js";
-import { contentSchema, toStringArray } from "./shared.js";
+import { contentSchema, memoryEntryIdSchema, toStringArray } from "./shared.js";
 
 export type RunMemoryCreateInput = {
   projectName: string;
@@ -42,6 +44,8 @@ export type RunMemoryCreateInput = {
   keywordFlags?: unknown;
   fileFlags?: unknown;
   expiresFlag?: string | undefined;
+  supersedeFlag?: string | undefined;
+  autoSupersedeFlag?: boolean | undefined;
   storeFlag: string | undefined;
   cwd: string;
   home: string;
@@ -56,6 +60,11 @@ export type RunMemoryCreateInput = {
 };
 
 export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 1> {
+  if (input.supersedeFlag !== undefined && input.autoSupersedeFlag === false) {
+    input.stderr("error: --supersede and --no-auto-supersede are mutually exclusive");
+    return 1;
+  }
+
   let rootDir: string;
   try {
     rootDir = resolveStorePath({
@@ -182,6 +191,17 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
     return cli.exitCode;
   }
 
+  let parsedSupersedeId: ReturnType<typeof memoryEntryIdSchema.parse> | undefined;
+  if (input.supersedeFlag !== undefined) {
+    try {
+      parsedSupersedeId = memoryEntryIdSchema.parse(input.supersedeFlag);
+    } catch (err) {
+      const cli = mapErrorToCliMessage(err, { kind: "memoryEntryId" });
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
+  }
+
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
@@ -231,12 +251,48 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
       ...(input.goalFlag !== undefined ? { goal: input.goalFlag } : {}),
       ...(relatedFiles.length > 0 ? { relatedFiles } : {}),
       ...(input.expiresFlag !== undefined ? { expiresAt: input.expiresFlag } : {}),
+      ...(parsedSupersedeId !== undefined ? { supersedesId: parsedSupersedeId } : {}),
       createdAt,
       updatedAt: createdAt,
     });
 
-    registry.createMemoryEntry(entry);
-    input.stdout(input.json ? JSON.stringify(entry) : entry.id);
+    // Lexical-only in v1: no queryVector — an interactive create must not load
+    // the embedding model, so the detected auto-close path is contradiction-only.
+    const result = saveMemoryWithLineage(registry, entry, {
+      now: () => createdAt,
+      detect: input.autoSupersedeFlag !== false,
+    });
+
+    if (result.deduped) {
+      input.stderr(`note: duplicate of ${result.deduped.existingId} — not written`);
+    } else {
+      if (result.supersession?.closed) {
+        const closedId = result.supersession.supersededId;
+        const closedTitle = registry.getMemoryEntry(closedId)?.title ?? "";
+        input.stderr(
+          `note: superseded ${closedId} ("${closedTitle}") — undo: mega memory reopen ${closedId}`,
+        );
+      }
+      for (const ev of result.entry.evidence ?? []) {
+        if (!ev.startsWith(POSSIBLE_SUPERSEDES_PREFIX)) continue;
+        // Detection wrote this id into evidence moments ago; it is a real row.
+        const possibleId = ev.slice(POSSIBLE_SUPERSEDES_PREFIX.length) as MemoryEntryId;
+        const possibleTitle = registry.getMemoryEntry(possibleId)?.title ?? "";
+        input.stderr(
+          `note: possibly supersedes ${possibleId} ("${possibleTitle}") — link explicitly with --supersede ${possibleId}`,
+        );
+      }
+    }
+
+    input.stdout(
+      input.json
+        ? JSON.stringify({
+            ...result.entry,
+            ...(result.supersession ? { supersession: result.supersession } : {}),
+            ...(result.deduped ? { deduped: result.deduped } : {}),
+          })
+        : result.entry.id,
+    );
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "memory_create" });
@@ -285,6 +341,15 @@ export const memoryCreateCommand = defineCommand({
     goal: { type: "string", description: "Goal this memory serves." },
     file: { type: "string", description: "Related file path (repeatable)." },
     expires: { type: "string", description: "Expiry timestamp (ISO-8601)." },
+    supersede: {
+      type: "string",
+      description: "Explicitly supersede a memory id (links + closes it).",
+    },
+    autoSupersede: {
+      type: "boolean",
+      default: true,
+      description: "Detect supersession automatically (--no-auto-supersede to skip).",
+    },
     store: { type: "string", description: "Override store directory." },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
@@ -303,6 +368,12 @@ export const memoryCreateCommand = defineCommand({
       keywordFlags: args.keyword,
       fileFlags: args.file,
       expiresFlag: typeof args.expires === "string" ? args.expires : undefined,
+      supersedeFlag: typeof args.supersede === "string" ? args.supersede : undefined,
+      // Citty negation trap (commit 38488043): --no-auto-supersede lands on the
+      // kebab key while the declared default lands on the camel key. Read the
+      // kebab key — the args proxy resolves the negation when present and falls
+      // back to the camel default otherwise.
+      autoSupersedeFlag: args["auto-supersede"] !== false,
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
