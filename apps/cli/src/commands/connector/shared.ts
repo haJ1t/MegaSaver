@@ -1,6 +1,14 @@
 import type { ConnectorTarget } from "@megasaver/connector-generic-cli";
 import { type ConnectorContext, assertProjectRoot } from "@megasaver/connectors-shared";
-import type { CoreRegistry, MemoryEntry, Project, Session } from "@megasaver/core";
+import {
+  type ChangedFrom,
+  type CoreRegistry,
+  type MemoryEntry,
+  type Project,
+  type Session,
+  changedFromFor,
+  isRecallable,
+} from "@megasaver/core";
 import {
   invalidTargetMessage,
   mapErrorToCliMessage,
@@ -35,9 +43,14 @@ export function pickLatestOpenSession(
 export function filterMemoryEntriesForSession(
   entries: readonly MemoryEntry[],
   session: Session | null,
+  now: string,
 ): MemoryEntry[] {
   return entries.filter((entry) => {
-    if (entry.approval !== "approved") return false;
+    // isRecallable (approved + current + non-archival) replaces the bare
+    // approval check so closed (superseded) rows stop rendering — without
+    // this a changedFrom line would co-render beside the very predecessor
+    // it references (spec §3.3).
+    if (!isRecallable(entry, now)) return false;
     if (entry.scope === "project") return true;
     return session !== null && entry.sessionId === session.id;
   });
@@ -48,18 +61,28 @@ export function buildConnectorContext(
   project: Project,
   allSessions: readonly Session[],
   allMemoryEntries: readonly MemoryEntry[],
+  now: string,
 ): ConnectorContext {
   const session = pickLatestOpenSession(allSessions, target.agentId);
-  const filtered = filterMemoryEntriesForSession(allMemoryEntries, session);
+  const filtered = filterMemoryEntriesForSession(allMemoryEntries, session, now);
   // connector block caps at 20 most-recent entries; older entries remain queryable via 'mega memory list'
   const memoryEntries = [...filtered]
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
     .slice(0, 20);
+  // changedFrom lookups go over the UNFILTERED list — the closed predecessor
+  // is exactly the row filterMemoryEntriesForSession drops.
+  const byId = new Map<string, MemoryEntry>(allMemoryEntries.map((m) => [m.id, m]));
+  const memoryChangedFrom: Record<string, ChangedFrom> = {};
+  for (const entry of memoryEntries) {
+    const changedFrom = changedFromFor(entry, byId);
+    if (changedFrom !== undefined) memoryChangedFrom[entry.id] = changedFrom;
+  }
   return {
     agentId: target.agentId,
     project,
     session,
     memoryEntries,
+    ...(Object.keys(memoryChangedFrom).length > 0 ? { memoryChangedFrom } : {}),
   };
 }
 

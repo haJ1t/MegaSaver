@@ -89,6 +89,7 @@ export async function runConnectorDoctor(input: RunConnectorDoctorInput): Promis
 
   const sessions = registry.listSessions(project.id);
   const memoryEntries = registry.listMemoryEntries(project.id);
+  const now = new Date().toISOString();
   let anyError = false;
   const records: DoctorRecord[] = [];
 
@@ -142,7 +143,7 @@ export async function runConnectorDoctor(input: RunConnectorDoctorInput): Promis
       continue;
     }
 
-    const context = buildConnectorContext(target, project, sessions, memoryEntries);
+    const context = buildConnectorContext(target, project, sessions, memoryEntries, now);
     const upserted = upsertBlock({ existingContent: existing, context });
     if (normalizeEol(upserted) === normalizeEol(existing)) {
       emit(target, "ok", true, sessionId);

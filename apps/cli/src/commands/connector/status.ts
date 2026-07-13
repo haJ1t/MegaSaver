@@ -53,6 +53,7 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
 
     const sessions = registry.listSessions(project.id);
     const memoryEntries = registry.listMemoryEntries(project.id);
+    const now = new Date().toISOString();
     let anyDriftOrError = false;
     type StatusRecord = {
       id: string;
@@ -98,7 +99,7 @@ export async function runConnectorStatus(input: RunConnectorStatusInput): Promis
           continue;
         }
 
-        const context = buildConnectorContext(target, project, sessions, memoryEntries);
+        const context = buildConnectorContext(target, project, sessions, memoryEntries, now);
         const upserted = upsertBlock({ existingContent: existing, context });
         if (normalizeEol(upserted) === normalizeEol(existing)) {
           if (input.json) {

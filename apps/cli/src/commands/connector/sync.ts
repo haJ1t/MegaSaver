@@ -62,6 +62,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
   try {
     const sessions = registry.listSessions(project.id);
     const memoryEntries = registry.listMemoryEntries(project.id);
+    const now = new Date().toISOString();
     let anyFailed = false;
     const records: SyncRecord[] = [];
     const emit = (target: ConnectorTarget, status: string, sessionId: string | null) => {
@@ -91,7 +92,7 @@ export async function runConnectorSync(input: RunConnectorSyncInput): Promise<0 
           continue;
         }
 
-        const context = buildConnectorContext(target, project, sessions, memoryEntries);
+        const context = buildConnectorContext(target, project, sessions, memoryEntries, now);
         const expectHeader = "header" in target && Boolean(target.header);
 
         if (existing === null) {

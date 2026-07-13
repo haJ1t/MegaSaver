@@ -47,3 +47,27 @@ describe("renderBlock", () => {
   // surface. Test deleted because it asserted defensive behavior on out-of-policy
   // input that the renderer no longer handles.
 });
+
+describe("changedFrom suffix", () => {
+  it("renders the changed-from suffix when memoryChangedFrom has the entry", () => {
+    const block = renderBlock({
+      ...buildContext({
+        memoryEntries: [{ id: MEMORY_ID, scope: "project", content: "use pnpm" }],
+      }),
+      memoryChangedFrom: {
+        [MEMORY_ID]: { title: "use npm", closedAt: "2026-07-01T00:00:00.000Z" },
+      },
+    });
+    expect(block).toContain(
+      `- [project:${MEMORY_ID}] use pnpm (changed from "use npm", closed 2026-07-01)`,
+    );
+  });
+
+  it("renders no suffix for entries without a changedFrom record", () => {
+    const block = renderBlock(
+      buildContext({ memoryEntries: [{ id: MEMORY_ID, scope: "project", content: "use pnpm" }] }),
+    );
+    expect(block).toContain(`- [project:${MEMORY_ID}] use pnpm\n`);
+    expect(block).not.toContain("changed from");
+  });
+});

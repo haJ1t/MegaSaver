@@ -171,7 +171,7 @@ async function runWarmupWrite(
         continue; // 'all' never creates files; an explicit --target does
       }
 
-      const context = buildConnectorContext(target, project, sessions, memoryEntries);
+      const context = buildConnectorContext(target, project, sessions, memoryEntries, nowIso);
       const next = upsertBlock({
         existingContent: existing ?? ("header" in target ? (target.header ?? "") : ""),
         context,
