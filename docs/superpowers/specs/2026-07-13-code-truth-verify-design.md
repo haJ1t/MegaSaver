@@ -1,7 +1,8 @@
 # Code-Truth Verify (i6) — Design
 
 - **Date:** 2026-07-13
-- **Status:** draft (pending architect pass)
+- **Status:** architect pass applied (verdict APPROVE-WITH-FIXES; B1 + M1–M5 +
+  N1–N7 integrated, 2026-07-13)
 - **Risk:** HIGH (§12 — memory schema change, connector-adjacent recall path,
   user-repo hook install). Architect pass on this spec + full gauntlet
   (code-reviewer AND critic) required before merge. The hook-install slice is
@@ -50,13 +51,17 @@ No LLM anywhere. CI-safe. Non-git projects degrade to unanchored gracefully.
 | `evidence: z.array(z.string()).optional()` exists | `memory-entry.ts:91` |
 | `effectiveConfidence` = confidence × ageDecay(lastActiveAt ?? updatedAt ?? createdAt) × tier | `memory-entry.ts:214-224` |
 | `sweepMemoryTiers` pure-planner pattern (pure plan / impure apply) | `memory-entry.ts:236` |
-| Indexer extractors are pure `(filePath, source) → ExtractedBlock[]`, publicly exported, blocks carry `contentHash`, `startLine`, `endLine`, `name` | `packages/indexer/src/index.ts:2-7`, `code-block.ts` |
-| Extractor dispatch `extractorFor(path)` exists but is private | `packages/indexer/src/build.ts:46-49` |
+| Indexer extractors are pure `(filePath, source) → ExtractedBlock[]`, publicly exported, blocks carry `contentHash`, `startLine`, `endLine`, `name` (optional, non-unique) | `packages/indexer/src/index.ts:2-7`, `code-block.ts:26` |
+| Indexer's own `extractorFor` dispatches only TS/JS/MD/JSON (architect M2) — the POLYGLOT dispatch (ts/js/py/go/rs/md/json) lives in output-filter, private | `packages/indexer/src/build.ts:46-49`; `packages/output-filter/src/parsers/outline.ts:15-26` |
+| `relatedSymbols` is read by 4 surfaces but written by NO writer (architect M1) | `create.ts:170`, `update.ts:157`, `save-memory.ts:51` |
+| Agent-recall rankers exclude stale rows outright (STALE_WEIGHT can't fire there) | `memory-search.ts:65`, `get-relevant-memories.ts:71` |
+| `updateMemoryEntry` = full-store read + rewrite under dir lock, per call | `json-directory-registry.ts:334-337`, `json-directory-store.ts:132-157` |
+| Bridge dispatch is pure request→response; no post-response lifecycle | `mcp-bridge/src/server.ts:289-291` |
 | `ProFeature = "savings-analytics" \| "brain-portability"`; `checkEntitlement` is feature-agnostic (key = documentation) | `packages/entitlement/src/entitlement.ts:6,37` |
 | CLI gate-then-upsell pattern (`MEMORY_HISTORY_UPSELL`) | `apps/cli/src/commands/memory/history.ts` |
 | Guard analytics ledger precedent: dedicated append-only event file, deliberately NOT TokenSaverEvent because avoided tokens are estimates | `packages/stats/src/guard-event.ts:8-13` |
 | `Project.rootPath` exists (verify knows where to run git) | `packages/core/src/project.ts:12` |
-| Dependency direction: core does NOT depend on indexer today; indexer does NOT depend on core → adding `@megasaver/indexer` to core creates no cycle | both `package.json` |
+| Core already depends on output-filter, which depends on indexer → extractors reachable with NO new dependency edge (architect M2) | `core/package.json:30` |
 | Living Brain: `lastActiveAt` stamped at create; decay keys on it | i1 spec + `registry.ts` |
 
 ## 4. Data model
@@ -90,11 +95,19 @@ export const lastVerifiedSchema = z.object({
   headSha: z.string().min(1),
   at: z.string().datetime({ offset: true }),
   result: verificationResultSchema,
+  // Close ownership (architect B1): true ONLY when the contradiction mutation
+  // itself closed validTo (found the row open). Heal may reopen validTo only
+  // when this is true — a close owned by the lineage channel (supersession,
+  // manual close) is never stomped by a code-truth heal.
+  closedByCodeTruth: z.boolean(),
 }).strict();
 ```
 
-Two optional fields on `memoryEntrySchema` (and its overlay/patch shapes,
-mirroring how i1 added `lastActiveAt`):
+Two optional fields on `memoryEntrySchema` AND explicitly on
+`memoryEntryUpdatePatchSchema` AND the overlay entry schema (all three are
+`.strict()` — `memory-entry.ts:325,350` — and `updateMemoryEntry` re-parses
+the full entry, so omitting the patch/overlay additions makes every §7
+mutation and every anchor repoint a runtime Zod rejection; architect N1):
 
 - `anchor?: CodeAnchor`
 - `lastVerified?: LastVerified`
@@ -123,13 +136,26 @@ captureCodeAnchor({
 - Runs BEFORE the sync `registry.createMemoryEntry`; the anchor rides in on
   the entry. Registry signatures stay sync and untouched.
 - Per related file: `git -C rootPath rev-parse HEAD:<path>` → `blobSha`.
-- Per related symbol: run the indexer extractor for the cited file
-  (`extractorFor` — exported from indexer as part of this feature, one-line
-  additive change) on the file's current content; match block by `name`;
-  copy its `contentHash` + span. Symbol strings support two forms:
+- Per related symbol: extract blocks from the cited file's current content
+  using the **output-filter polyglot dispatch** (the private `extractorFor`
+  in `packages/output-filter/src/parsers/outline.ts:15-26`, exported from
+  output-filter's public surface as part of this feature — small additive
+  change). Core already depends on output-filter, so NO new `core → indexer`
+  dependency is added (architect M2). **Supported languages: TS/JS
+  (mts/cts/tsx/jsx/ts/js/mjs/cjs), Python, Go, Rust, Markdown, JSON.** Other
+  extensions get file anchors only (no symbol anchors) — stated limitation,
+  not an error.
+- Match block by `name`; copy its `contentHash` + span. Symbol strings
+  support two forms:
   - `path#name` — explicit file.
   - bare `name` — searched across the blocks of all `relatedFiles`.
   - No match ⇒ that symbol is skipped (not an error).
+  - **Name-collision rule (architect N2):** `ExtractedBlock.name` is optional
+    and not unique within a file. At capture, if multiple blocks in the file
+    share the name, skip that symbol (cannot anchor unambiguously). At
+    verify, if multiple candidate blocks share the name, the symbol
+    contradicts only when NONE of them matches the anchored `contentHash`
+    (any match ⇒ verified). Ambiguity never produces a contradiction.
 - `repoHead` = `git rev-parse HEAD`.
 - **Best-effort, total:** ANY failure (not a git repo, path outside repo, git
   missing, extractor throw) ⇒ returns `undefined`, save proceeds unanchored.
@@ -138,6 +164,32 @@ captureCodeAnchor({
   if nothing anchors, return `undefined`.
 - Path safety: reject (skip) any related file that normalizes outside
   `rootPath` — anchors never reference paths outside the project root.
+- Path normalization (architect N3): related-file inputs may be cwd-relative
+  while git runs at `project.rootPath`; normalize every input to
+  repo-relative POSIX form before any git call, and store only that form.
+- Git argv/stdin hygiene (architect N4, hard requirements): git is spawned
+  via `execFile` (no shell); every path-taking invocation uses the `HEAD:`
+  prefix (`rev-parse HEAD:<path>`) or an explicit `--` separator (`log`,
+  `diff`) so a leading-dash path can never be parsed as a flag; paths
+  containing newlines or control characters are rejected before being written
+  to `cat-file --batch-check` stdin (a newline would inject an extra object
+  query).
+
+### 5.1 Symbol input plumbing (prerequisite slice — architect M1)
+
+`relatedSymbols` is READ by four surfaces today but WRITTEN BY NO writer:
+CLI `create.ts` builds only `relatedFiles` from `--file`, `update.ts` patches
+only `relatedFiles`, and MCP `save-memory.ts`'s input schema lacks the field
+entirely. Since the symbol is the contradiction unit (§6.2), this plumbing is
+a hard prerequisite, scoped as its own task:
+
+- CLI `mega memory create`/`update`: new repeatable `--symbol <name|path#name>`
+  flag → `relatedSymbols`.
+- MCP `save_memory`: `relatedSymbols` added to the input schema (same
+  validation shape as `relatedFiles`) and spread into the entry build.
+- `update.ts` re-capture needs `rootPath`: resolve via
+  `registry.getMemoryEntry(id).projectId → registry.getProject(...).rootPath`
+  (both exist today — architect N3).
 
 Writers wired (all pass-through; capture stays in core):
 
@@ -210,9 +262,24 @@ never flags.
 
 ### 6.3 Heal
 
-An entry whose `lastVerified.result === "contradicted"` (or `stale === true`
-with a code-truth evidence line) that now passes all checks ⇒ `healed`.
-Entries passing checks with no prior contradiction ⇒ `verified`.
+An entry whose `lastVerified.result === "contradicted"` that now passes all
+checks ⇒ `healed`. Keyed STRICTLY on the structured `lastVerified` field —
+never on evidence-string sniffing (architect B1: string-matching `evidence[]`
+to decide a bi-temporal reopen is brittle and helped enable the resurrection
+bug below). Entries passing checks with no prior contradiction ⇒ `verified`.
+
+**Close ownership (architect B1 — the resurrection bug).** `validTo` is
+shared state between the i1 lineage channel (supersession, manual close) and
+the i6 code-truth channel. The failure without ownership tracking: A is
+superseded by B (lineage closes A); A's symbol later changes → verify marks A
+contradicted (validTo already closed, skipped); code reverts → heal blindly
+sets `validTo: null` → A is current again ALONGSIDE its superseder B, and
+`changedFromFor` suppresses B's lineage line (a reopened predecessor
+suppresses enrichment — `supersession.ts:184`). Fix: contradiction records
+`lastVerified.closedByCodeTruth = true` ONLY when it actually closed an open
+row. Heal reopens `validTo` ONLY when that flag is true; otherwise heal
+clears `stale`, updates `lastVerified`, appends heal evidence — and leaves
+`validTo` untouched.
 
 ### 6.4 Worktree-vs-HEAD semantics (pinned)
 
@@ -225,6 +292,20 @@ commit; when the change is uncommitted (dirty tree), `commit` is absent and
 the reason says `uncommitted change`. Dirty-tree flips are expected to
 oscillate; healing makes that harmless and the post-commit hook only fires on
 commits.
+
+Two pinned edge semantics:
+
+- **Granularity inconsistency (architect N6, accepted):** file existence is a
+  HEAD question (`rev-parse HEAD:<path>`), symbol existence is a worktree
+  question (disk read). An uncommitted whole-file delete therefore never
+  trips rule 1 (blob still at HEAD) — only rule 2, for files with symbol
+  anchors (disk read fails ⇒ symbols missing). Benign because the hook fires
+  on commits; documented so tests pin it.
+- **Unreachable anchorHead (architect N7):** after rebase/amend/force-push,
+  `<anchorHead>..HEAD` may error or return nothing. Contradiction detection
+  is unaffected (it reads current state); only attribution degrades — treat
+  as "attribution unavailable" (`commit` absent), never let it throw the
+  runner.
 
 ### 6.5 Impure runner
 
@@ -252,10 +333,19 @@ Via existing `registry.updateMemoryEntry`, per plan bucket:
 
 | Bucket | Mutation |
 |---|---|
-| contradicted | `stale: true`; `validTo: now` (only if currently open); append evidence `"code-truth: contradicted by <sha7> — <path>#<symbol> <reason>"` (or `path` alone for file anchors); set `lastVerified {headSha, at, result: "contradicted"}` |
-| healed | `stale: false`; `validTo: null`; append evidence `"code-truth: healed at <sha7> — hash matches again"`; `lastVerified.result = "healed"` |
+| contradicted | `stale: true`; `validTo: now` ONLY if currently open, and record `lastVerified.closedByCodeTruth = true` in exactly that case (else `false`); append evidence `"code-truth: contradicted by <sha7> — <path>#<symbol> <reason>"` (or `path` alone for file anchors); set `lastVerified {headSha, at, result: "contradicted", closedByCodeTruth}` |
+| healed | `stale: false`; `validTo: null` ONLY when `lastVerified.closedByCodeTruth === true` (B1 ownership guard — never reopen a close owned by the lineage channel); append evidence `"code-truth: healed at <sha7> — hash matches again"`; `lastVerified = {…, result: "healed", closedByCodeTruth: false}` |
 | verified | update `lastVerified` only — **no-op write suppression**: skip the write entirely when `lastVerified.headSha` is unchanged (keeps repeat verifies free and updatedAt honest) |
 | repointed | rewrite anchor paths; no status change |
+
+**Batch apply (architect M5).** `updateMemoryEntry` re-reads the whole
+project store and rewrites the full `.jsonl` under a cross-process dir lock
+per call — applying a big plan row-by-row is N serialized full-store
+rewrites. The applier uses a new registry batch operation
+(`applyMemoryEntryPatches(projectId, patches[])`: one dir-locked
+read-modify-write applying every plan mutation at once, same validation per
+entry as `updateMemoryEntry`). Single-row surfaces keep using
+`updateMemoryEntry`.
 
 Invariants:
 
@@ -332,14 +422,28 @@ Free tier: sweep behaves exactly as today (no verify pre-pass, no error).
 In MCP `get_relevant_memories` (and in-process `recall`):
 
 - Take top-5 anchored hits from the ranked result.
-- mtime pre-filter: skip files whose `mtime <= anchor.capturedAt` (unchanged
-  since capture); re-hash only the rest. Hard budget ~50ms — on budget
-  exhaustion, remaining hits pass through unchecked (fail-open).
-- Contradicted hits: down-ranked in THIS response (STALE_WEIGHT re-ordering)
-  + tagged `verification: "contradicted-by-code"` in the payload; the
-  stale/validTo flip is persisted asynchronously (post-response) via the same
-  §7 mutations, so the NEXT recall drops the row entirely (§9 mechanism 1).
-- Free tier: no spot-check; payload omits the field.
+- mtime pre-filter: skip files whose `mtime <= anchor.capturedAt`; re-hash
+  only the rest. **Non-authoritative optimization** (architect N5): mtime can
+  be back-dated by checkout/revert/touch, so a skipped hit may hide a real
+  contradiction — accepted as fail-open; the full `mega memory verify` pass
+  never uses mtime. Hard budget ~50ms — on exhaustion, remaining hits pass
+  through unchecked (fail-open).
+- Contradicted hits are **excluded from the returned results** and disclosed
+  in a response-level `contradictedByCode: [{id, title}]` field (i1
+  changedFrom-style disclosure; titles pass the sentinel guard). The
+  stale/validTo flip is persisted **inline, inside the existing handler
+  try/catch, fail-open** — write errors are swallowed, the response still
+  returns (architect M3: the bridge has no post-response lifecycle; a
+  floating promise's rejection would kill the stdio server via
+  unhandledRejection, and `updateMemoryEntry` is sync anyway, so deferring
+  bought nothing).
+- Coverage honesty (architect M4): the spot-check inspects only the top-5
+  anchored hits post-ranking. A contradicted row ranked below that leaks into
+  at most ONE recall response; the next verify/sweep/hook pass or its own
+  future top-5 appearance flips it, after which §9 mechanism 1 drops it. The
+  Pro claim is worded "checked memories never reach your agent; everything
+  anchored is checked within one recall of surfacing."
+- Free tier: no spot-check; results unchanged.
 
 ### 8.5 `mega memory show` / `explain` (FREE)
 
@@ -367,12 +471,15 @@ Two distinct mechanisms — do not conflate them:
    row with its badge (and `--as-of`/`history` show the closed period), so
    nothing vanishes from the human.
 2. **`STALE_WEIGHT = 0.3`** multiplier in `effectiveConfidence` when
-   `memory.stale === true` (add `stale` to the function's `Pick`). It covers
-   the rows that are stale but still open/recallable: pre-existing
-   user/sweep-marked stale rows, and the §8.4 in-flight demotion (the row was
-   ranked before the flip persisted — this response down-ranks it; the next
-   recall drops it via mechanism 1). Non-stale rows rank bit-identically to
-   today.
+   `memory.stale === true` (add `stale` to the function's `Pick`). Honesty
+   note (architect M4): both agent-recall rankers already EXCLUDE stale rows
+   outright (`memory-search.ts:65` `includeStale` default false;
+   `get-relevant-memories.ts:71` `isRecallable && !e.stale`), so this weight
+   never fires on the agent path. Its scope is the human `includeStale`
+   surfaces (CLI list/search with stale shown): stale rows sort to the bottom
+   instead of ranking as if healthy. The §8.4 in-flight demotion is NOT this
+   mechanism — it is the explicit exclusion + disclosure described there.
+   Non-stale rows rank bit-identically to today.
 
 ## 10. Savings attribution (PRO)
 
@@ -421,7 +528,13 @@ every free verify that finds contradictions prints the hook upsell line.
 - **Pure planner:** fixture `RepoState` unit tests — contradiction ladder
   (file deleted / symbol missing / hash changed / blob-only change stays
   verified), rename repoint, heal, unanchored passthrough, dirty-tree
-  attribution absence. Zero git.
+  attribution absence, name-collision ambiguity (any-match ⇒ verified;
+  capture-side skip). Zero git.
+- **B1 regression (mandatory):** supersede A with B (lineage close) →
+  contradict A's symbol → verify → revert → heal pass MUST NOT reopen A's
+  `validTo` (closedByCodeTruth=false); and the mirror case where code-truth
+  itself closed the row MUST reopen. Assert `changedFromFor` enrichment for B
+  survives.
 - **Capture:** temp-git-repo integration test (git init, commit fixture TS
   file, capture, assert blob/symbol hashes; non-git dir ⇒ undefined; path
   escape ⇒ skipped).
@@ -433,7 +546,9 @@ every free verify that finds contradictions prints the hook upsell line.
 - **Ranking:** stale row ranks below identical non-stale row; non-stale
   bit-identical snapshot.
 - **Spot-check:** injected clock/fs — budget exhaustion passes through;
-  demotion tags + async flip persisted; free tier untouched payload.
+  contradicted hit excluded + `contradictedByCode` disclosure present; flip
+  persisted inline and a write error is swallowed (response still returns);
+  free tier untouched payload.
 - **E2E smoke (DoD):** captured terminal session of the WOW loop through the
   real binary.
 
@@ -459,8 +574,10 @@ adversarial critic, opus) over full branch diff; verifier re-pass on fixes.
 2. **Dirty-tree flapping** — worktree semantics pinned (§6.4); hook fires on
    commits only; healing absorbs oscillation.
 3. **Legacy-row decay inflation on flip** — accepted with rationale (§7).
-4. **Perf** — batched cat-file; `--changed` scoping; 50ms spot-check budget
-   with mtime pre-filter; per-project JSON ceiling unchanged.
+4. **Perf** — batched cat-file on the git read side; `--changed` scoping;
+   50ms spot-check budget with mtime pre-filter; and batch-apply on the write
+   side (§7 — one dir-locked rewrite per plan, not per row; architect M5).
+   Per-project JSON ceiling unchanged.
 5. **Hook trust** — §8.2 confinement; fail-open body; sentinel block;
    explicit command only.
 6. **Competitor clone** — moat is cross-agent local store + bi-temporal audit
