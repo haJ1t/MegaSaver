@@ -1,6 +1,12 @@
 import type { ProjectId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
-import { type MemoryEntry, memoryEntrySchema } from "../src/memory-entry.js";
+import {
+  type MemoryEntry,
+  effectiveConfidence,
+  memoryEntrySchema,
+  memoryEntryUpdatePatchSchema,
+  overlayMemoryEntrySchema,
+} from "../src/memory-entry.js";
 import { searchMemoryEntriesSemantic } from "../src/memory-search-semantic.js";
 import { searchMemoryEntries } from "../src/memory-search.js";
 
@@ -32,6 +38,7 @@ function entry(
     createdAt: over.createdAt ?? RECENT,
     updatedAt: over.updatedAt ?? RECENT,
     ...(over.tier !== undefined ? { tier: over.tier } : {}),
+    ...(over.lastActiveAt !== undefined ? { lastActiveAt: over.lastActiveAt } : {}),
   });
 }
 
@@ -109,5 +116,95 @@ describe("searchMemoryEntriesSemantic — M2 archival filter", () => {
       includeArchival: true,
     });
     expect(incl.map((e) => e.id).sort()).toEqual([ID_RECENT_HIGH, ID_ARCHIVAL].sort());
+  });
+});
+
+describe("lastActiveAt decay rekey", () => {
+  const ID_A = "00000000-0000-4000-8000-0000000000e1";
+  const ID_B = "00000000-0000-4000-8000-0000000000e2";
+
+  it("pin: legacy rows without lastActiveAt rank exactly as before the rekey", () => {
+    const fresh = entry({
+      id: ID_A,
+      content: "auth middleware decision",
+      keywords: ["auth"],
+      updatedAt: RECENT,
+    });
+    const stale = entry({
+      id: ID_B,
+      content: "auth middleware decision",
+      keywords: ["auth"],
+      updatedAt: OLD,
+    });
+    const result = searchMemoryEntries([stale, fresh], { text: "auth middleware", asOf: NOW });
+    expect(result.map((e) => e.id)).toEqual([ID_A, ID_B]);
+  });
+
+  it("schema accepts lastActiveAt on entry, overlay, and update patch", () => {
+    const withField = entry({ id: ID_A, content: "alpha decision", lastActiveAt: RECENT });
+    expect(withField.lastActiveAt).toBe(RECENT);
+
+    const overlay = overlayMemoryEntrySchema.parse({
+      id: ID_B,
+      workspaceKey: "/tmp/demo",
+      liveSessionId: null,
+      scope: "project",
+      type: "decision",
+      title: "alpha",
+      content: "alpha",
+      keywords: [],
+      confidence: "medium",
+      source: "manual",
+      approval: "approved",
+      stale: false,
+      createdAt: RECENT,
+      updatedAt: RECENT,
+      lastActiveAt: RECENT,
+    });
+    expect(overlay.lastActiveAt).toBe(RECENT);
+
+    const patch = memoryEntryUpdatePatchSchema.parse({ lastActiveAt: NOW, updatedAt: NOW });
+    expect(patch.lastActiveAt).toBe(NOW);
+  });
+
+  it("decay keys on lastActiveAt when present", () => {
+    const touchedRecently = entry({
+      id: ID_A,
+      content: "auth middleware decision",
+      keywords: ["auth"],
+      updatedAt: OLD,
+      lastActiveAt: RECENT,
+    });
+    const touchedLongAgo = entry({
+      id: ID_B,
+      content: "auth middleware decision",
+      keywords: ["auth"],
+      updatedAt: RECENT,
+      lastActiveAt: OLD,
+    });
+    const result = searchMemoryEntries([touchedLongAgo, touchedRecently], {
+      text: "auth middleware",
+      asOf: NOW,
+    });
+    expect(result.map((e) => e.id)).toEqual([ID_A, ID_B]);
+  });
+
+  it("an approval flip that bumps updatedAt no longer resets age", () => {
+    const beforeFlip = entry({
+      id: ID_A,
+      content: "alpha decision",
+      updatedAt: OLD,
+      lastActiveAt: OLD,
+    });
+    const afterFlip = entry({
+      id: ID_A,
+      content: "alpha decision",
+      updatedAt: NOW,
+      lastActiveAt: OLD,
+    });
+    expect(effectiveConfidence(afterFlip, NOW)).toBe(effectiveConfidence(beforeFlip, NOW));
+
+    const legacyOld = entry({ id: ID_B, content: "alpha decision", updatedAt: OLD });
+    expect(effectiveConfidence(afterFlip, NOW)).toBe(effectiveConfidence(legacyOld, NOW));
   });
 });

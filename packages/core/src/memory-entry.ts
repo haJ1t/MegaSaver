@@ -103,6 +103,12 @@ export const memoryEntrySchema = z
     validFrom: z.string().datetime({ offset: true }).optional(),
     validTo: z.string().datetime({ offset: true }).nullable().optional(),
     supersedesId: memoryEntryIdSchema.optional(),
+    // Decay rekey (Living Brain): last time the CONTENT was touched. Set at
+    // create by writers and by `mega memory update` on content-bearing
+    // patches; approval flips and sweeps bump updatedAt but never this field.
+    // Absent on legacy rows ⇒ decay falls back to updatedAt (bit-identical
+    // pre-rekey behavior).
+    lastActiveAt: z.string().datetime({ offset: true }).optional(),
     // M2 tier. Absent ⇒ recall (see memoryTierSchema). Only the explicit sweep
     // mutates it; recall hides `archival` by default.
     tier: memoryTierSchema.optional(),
@@ -199,15 +205,18 @@ function ageDecay(ageMs: number): number {
 
 // M2: effective confidence for RANKING only — a pure read-time function that
 // never mutates the stored `confidence`. effective = baseWeight(confidence) ×
-// ageDecay(now − updatedAt) × tierWeight(tier). Older memories rank lower; the
-// working tier ranks slightly higher. Always > 0, so a current memory is only
-// ever DOWN-RANKED by decay, never dropped. `now` is an ISO-8601 datetime.
+// ageDecay(now − lastActiveAt) × tierWeight(tier), falling back to updatedAt
+// then createdAt for legacy rows (bit-identical pre-rekey ordering). Approval
+// flips and sweeps bump updatedAt but never lastActiveAt, so they no longer
+// reset a memory's age. Older memories rank lower; the working tier ranks
+// slightly higher. Always > 0, so a current memory is only ever DOWN-RANKED
+// by decay, never dropped. `now` is an ISO-8601 datetime.
 export function effectiveConfidence(
-  memory: Pick<MemoryEntry, "confidence" | "tier" | "createdAt" | "updatedAt">,
+  memory: Pick<MemoryEntry, "confidence" | "tier" | "createdAt" | "updatedAt" | "lastActiveAt">,
   now: string,
 ): number {
   const at = Date.parse(now);
-  const ref = Date.parse(memory.updatedAt ?? memory.createdAt);
+  const ref = Date.parse(memory.lastActiveAt ?? memory.updatedAt ?? memory.createdAt);
   // A NaN from either parse ⇒ no decay (factor 1) rather than a NaN weight that
   // would corrupt the ranking sort. Ranking degrades gracefully; it never breaks.
   const factor = Number.isNaN(at) || Number.isNaN(ref) ? 1 : ageDecay(at - ref);
@@ -277,6 +286,12 @@ export const overlayMemoryEntrySchema = z
     validFrom: z.string().datetime({ offset: true }).optional(),
     validTo: z.string().datetime({ offset: true }).nullable().optional(),
     supersedesId: memoryEntryIdSchema.optional(),
+    // Decay rekey (Living Brain): last time the CONTENT was touched. Set at
+    // create by writers and by `mega memory update` on content-bearing
+    // patches; approval flips and sweeps bump updatedAt but never this field.
+    // Absent on legacy rows ⇒ decay falls back to updatedAt (bit-identical
+    // pre-rekey behavior).
+    lastActiveAt: z.string().datetime({ offset: true }).optional(),
     // M2 tier. Absent ⇒ recall (see memoryTierSchema). Only the explicit sweep
     // mutates it; recall hides `archival` by default.
     tier: memoryTierSchema.optional(),
@@ -326,6 +341,8 @@ export const memoryEntryUpdatePatchSchema = z
     // validTo is patchable so the supersede gate can close a memory's validity
     // (validFrom/supersedesId are set at create and immutable, like the key cols).
     validTo: z.string().datetime({ offset: true }).nullable().optional(),
+    // lastActiveAt is patchable so content-bearing updates can re-key decay.
+    lastActiveAt: z.string().datetime({ offset: true }).optional(),
     // tier is patchable so `mega memory sweep` can demote a memory to archival.
     tier: memoryTierSchema.optional(),
     updatedAt: z.string().datetime({ offset: true }),
