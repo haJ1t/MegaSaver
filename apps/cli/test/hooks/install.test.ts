@@ -11,8 +11,10 @@ import {
   hasPreToolUseHook,
   installClaudeCodeHook,
 } from "@megasaver/connector-claude-code";
+import { runCommand } from "citty";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  hooksInstallCommand,
   resolveBakedStoreRoot,
   resolveInvokedCliPath,
   runHooksInstall,
@@ -278,6 +280,62 @@ describe("runHooksInstall --no-guard", () => {
     expect(code).toBe(0);
     const s = JSON.parse(readFileSync(settingsPath, "utf8"));
     expect(s.hooks.PreToolUse.length).toBe(1);
+  });
+});
+
+// The blocks above drive the PROGRAMMATIC runHooksInstall({guard/warmup:false})
+// path. This block drives the real citty flag parse (`--no-guard`/`--no-warmup`)
+// end to end, which the programmatic tests bypass — that is where the arg
+// negation lived.
+describe("hooks install CLI flag negation (citty parse path)", () => {
+  let dir: string;
+  let settingsPath: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "megasaver-hook-install-cli-"));
+    settingsPath = join(dir, "settings.json");
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function hasHook(settings: unknown, event: string, suffix: string): boolean {
+    const entries = (settings as { hooks?: Record<string, unknown> })?.hooks?.[event];
+    if (!Array.isArray(entries)) return false;
+    return entries.some(
+      (e) =>
+        typeof e === "object" &&
+        e !== null &&
+        Array.isArray((e as { hooks?: unknown }).hooks) &&
+        (e as { hooks: { command?: unknown }[] }).hooks.some(
+          (h) => typeof h.command === "string" && h.command.endsWith(suffix),
+        ),
+    );
+  }
+
+  async function install(...flags: string[]): Promise<unknown> {
+    await runCommand(hooksInstallCommand, {
+      rawArgs: ["claude-code", "--settings", settingsPath, ...flags],
+    });
+    return JSON.parse(readFileSync(settingsPath, "utf8"));
+  }
+
+  it("--no-guard skips the guard hook, keeps the log hook", async () => {
+    const s = await install("--no-guard");
+    expect(hasHook(s, "PreToolUse", " hooks guard")).toBe(false);
+    expect(hasHook(s, "PreToolUse", " hooks log")).toBe(true);
+  });
+
+  it("--no-warmup skips the SessionStart warmup hook", async () => {
+    const s = await install("--no-warmup");
+    expect(hasHook(s, "SessionStart", " hooks warmup")).toBe(false);
+  });
+
+  it("no flags installs both guard and warmup", async () => {
+    const s = await install();
+    expect(hasHook(s, "PreToolUse", " hooks guard")).toBe(true);
+    expect(hasHook(s, "SessionStart", " hooks warmup")).toBe(true);
   });
 });
 

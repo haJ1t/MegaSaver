@@ -94,15 +94,19 @@ export const hooksInstallCommand = defineCommand({
       description: "Override store directory (baked into the hook commands when non-default).",
     },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
-    noWarmup: {
+    // Defined as `warmup`/`guard` (default true), NOT `noWarmup`/`noGuard`:
+    // citty's `--no-<name>` negation sets the arg it names, so `--no-warmup`
+    // populates `args.warmup = false`. A `noWarmup` arg would leave `noWarmup`
+    // at its default and set a phantom `warmup`, silently ignoring the flag.
+    warmup: {
       type: "boolean",
-      default: false,
-      description: "Skip the SessionStart warm-start hook.",
+      default: true,
+      description: "Install the SessionStart warm-start hook (--no-warmup to skip).",
     },
-    noGuard: {
+    guard: {
       type: "boolean",
-      default: false,
-      description: "Skip the Mistake Firewall PreToolUse hook.",
+      default: true,
+      description: "Install the Mistake Firewall PreToolUse hook (--no-guard to skip).",
     },
   },
   run({ args }) {
@@ -119,8 +123,8 @@ export const hooksInstallCommand = defineCommand({
       settingsPath:
         typeof args.settings === "string" ? args.settings : resolveClaudeCodeSettingsPath(),
       config,
-      warmup: !args.noWarmup,
-      guard: !args.noGuard,
+      warmup: args.warmup !== false,
+      guard: args.guard !== false,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,
