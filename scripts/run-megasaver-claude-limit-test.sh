@@ -41,70 +41,6 @@ if ! curl -s -o /dev/null --max-time 3 "$PROXY_URL" 2>/dev/null; then
 fi
 echo "Proxy reachable at $PROXY_URL (mega $(mega --version 2>/dev/null || echo '?'))"
 
-echo "Creating baseline settings without MegaSaver proxy/hooks..."
-python3 - "$DEFAULT_SETTINGS" "$BASELINE_SETTINGS" <<'PY'
-import json, sys, copy
-src, dst = sys.argv[1], sys.argv[2]
-with open(src) as f:
-    settings = json.load(f)
-
-baseline = copy.deepcopy(settings)
-
-# Remove MegaSaver proxy routing (and its first-party assertion flag).
-if 'env' in baseline:
-    baseline['env'].pop('ANTHROPIC_BASE_URL', None)
-    baseline['env'].pop('_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL', None)
-    if not baseline['env']:
-        del baseline['env']
-
-# Remove hooks whose command contains 'mega hooks' (MegaSaver telemetry/saver/intent).
-if 'hooks' in baseline:
-    cleaned_hooks = {}
-    for event, configs in baseline['hooks'].items():
-        kept_configs = []
-        for cfg in configs:
-            kept_inner = []
-            for h in cfg.get('hooks', []):
-                cmd = h.get('command', '')
-                if 'mega hooks' in cmd:
-                    continue
-                kept_inner.append(h)
-            if kept_inner:
-                new_cfg = dict(cfg)
-                new_cfg['hooks'] = kept_inner
-                kept_configs.append(new_cfg)
-        if kept_configs:
-            cleaned_hooks[event] = kept_configs
-    if cleaned_hooks:
-        baseline['hooks'] = cleaned_hooks
-    else:
-        del baseline['hooks']
-
-with open(dst, 'w') as f:
-    json.dump(baseline, f, indent=2)
-PY
-
-echo "Baseline settings written to $BASELINE_SETTINGS"
-
-# Both arms run with an explicit --settings file and a scrubbed ANTHROPIC_BASE_URL,
-# so an inherited env var can never decide which endpoint an arm talks to.
-python3 - "$DEFAULT_SETTINGS" "$MEGASAVER_SETTINGS" "$PROXY_URL" <<'PY'
-import json, sys
-src, dst, proxy_url = sys.argv[1], sys.argv[2], sys.argv[3]
-with open(src) as f:
-    settings = json.load(f)
-env = settings.setdefault('env', {})
-env['ANTHROPIC_BASE_URL'] = proxy_url
-# Mirrors what the fixed route installer writes: without it Claude Code enters
-# non-first-party mode (tools inlined, hook tail uncached, cold-cache rewrites).
-env['_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL'] = '1'
-with open(dst, 'w') as f:
-    json.dump(settings, f, indent=2)
-PY
-
-echo "MegaSaver settings written to $MEGASAVER_SETTINGS (proxy $PROXY_URL)"
-echo ""
-
 # Task prompts (mixed workload).
 TASKS=(
   "Add a date picker to the event creation form."
@@ -225,6 +161,86 @@ BASELINE_COMMIT=$(git rev-parse HEAD)
 (cd "$REPO" && mega init --yes --no-gui --mode balanced >/dev/null 2>&1) \
   || { echo "ERROR: mega init failed — saver not enabled for bench repo"; exit 1; }
 echo "Workspace saver enabled for $REPO"
+
+# Snapshot both arms only after init has installed the hooks. Claude runs with
+# --setting-sources "", so the treatment file must carry those hooks itself.
+echo "Creating baseline settings without MegaSaver proxy/hooks..."
+python3 - "$DEFAULT_SETTINGS" "$BASELINE_SETTINGS" <<'PY'
+import json, sys, copy
+src, dst = sys.argv[1], sys.argv[2]
+with open(src) as f:
+    settings = json.load(f)
+
+baseline = copy.deepcopy(settings)
+
+# Remove MegaSaver proxy routing (and its first-party assertion flag).
+if 'env' in baseline:
+    baseline['env'].pop('ANTHROPIC_BASE_URL', None)
+    baseline['env'].pop('_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL', None)
+    if not baseline['env']:
+        del baseline['env']
+
+# Remove hooks whose command contains 'mega hooks' (MegaSaver telemetry/saver/intent).
+if 'hooks' in baseline:
+    cleaned_hooks = {}
+    for event, configs in baseline['hooks'].items():
+        kept_configs = []
+        for cfg in configs:
+            kept_inner = []
+            for h in cfg.get('hooks', []):
+                cmd = h.get('command', '')
+                if 'mega hooks' in cmd:
+                    continue
+                kept_inner.append(h)
+            if kept_inner:
+                new_cfg = dict(cfg)
+                new_cfg['hooks'] = kept_inner
+                kept_configs.append(new_cfg)
+        if kept_configs:
+            cleaned_hooks[event] = kept_configs
+    if cleaned_hooks:
+        baseline['hooks'] = cleaned_hooks
+    else:
+        del baseline['hooks']
+
+with open(dst, 'w') as f:
+    json.dump(baseline, f, indent=2)
+PY
+
+echo "Baseline settings written to $BASELINE_SETTINGS"
+
+# Both arms run with an explicit --settings file and a scrubbed ANTHROPIC_BASE_URL,
+# so an inherited env var can never decide which endpoint an arm talks to.
+python3 - "$DEFAULT_SETTINGS" "$MEGASAVER_SETTINGS" "$PROXY_URL" <<'PY'
+import json, sys
+src, dst, proxy_url = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(src) as f:
+    settings = json.load(f)
+env = settings.setdefault('env', {})
+env['ANTHROPIC_BASE_URL'] = proxy_url
+# Mirrors what the fixed route installer writes: without it Claude Code enters
+# non-first-party mode (tools inlined, hook tail uncached, cold-cache rewrites).
+env['_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL'] = '1'
+with open(dst, 'w') as f:
+    json.dump(settings, f, indent=2)
+PY
+
+python3 - "$MEGASAVER_SETTINGS" <<'PY'
+import json, sys
+with open(sys.argv[1]) as f:
+    settings = json.load(f)
+commands = [
+    hook.get('command', '')
+    for configs in settings.get('hooks', {}).values()
+    for config in configs
+    for hook in config.get('hooks', [])
+]
+if not any('mega hooks saver' in command for command in commands):
+    raise SystemExit('ERROR: MegaSaver settings snapshot has no saver hook')
+PY
+
+echo "MegaSaver settings written to $MEGASAVER_SETTINGS (proxy $PROXY_URL)"
+echo ""
 
 # Results dir.
 rm -rf "$RESULTS"
