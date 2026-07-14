@@ -17,6 +17,7 @@ export * from "./json-directory-registry.js";
 export * from "./memory-anchor.js";
 export {
   DEFAULT_SWEEP_POLICY,
+  STALE_WEIGHT,
   type MemoryApproval,
   type MemoryConfidence,
   type MemoryEntry,
