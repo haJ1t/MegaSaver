@@ -7,6 +7,7 @@ import {
   type CoreRegistry,
   type MemoryEntry,
   appendCodeTruthEvent,
+  normalizeSourceEol,
   tokensFromBytes,
 } from "@megasaver/core";
 import { extractBlocksForFile } from "@megasaver/output-filter";
@@ -109,7 +110,7 @@ export async function spotCheckHits<T extends MemoryEntry>(
       }
       let blocks: Awaited<ReturnType<typeof extractBlocksForFile>>;
       try {
-        blocks = await extractBlocksForFile(path, source);
+        blocks = await extractBlocksForFile(path, normalizeSourceEol(source));
       } catch {
         continue; // extractor failure is never a contradiction — fail open
       }

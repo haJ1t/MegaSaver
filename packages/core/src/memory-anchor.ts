@@ -4,6 +4,15 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import { type ExtractedBlock, extractBlocksForFile } from "@megasaver/output-filter";
 import { z } from "zod";
 
+// Anchor hashes are taken over LF-normalized text. git's autocrlf (the Windows
+// default) re-materializes a file as CRLF on checkout/revert, so hashing raw
+// bytes would read a pure line-ending flip as a symbol-hash change and falsely
+// close every symbol-anchored memory. Capture and verify MUST normalize
+// identically or no hash ever matches.
+export function normalizeSourceEol(source: string): string {
+  return source.replace(/\r\n/g, "\n");
+}
+
 // No control chars (C0 + DEL): stored paths are fed into cat-file's batched
 // stdin as `HEAD:<path>` lines and mapped back positionally — a newline would
 // inject an extra query and desync the pairing (defense at the write boundary,
@@ -131,7 +140,7 @@ export async function captureCodeAnchor(opts: {
         let blocks: ExtractedBlock[] | undefined;
         try {
           const source = await readFile(resolve(opts.rootPath, rel), "utf8");
-          blocks = await extractBlocksForFile(rel, source);
+          blocks = await extractBlocksForFile(rel, normalizeSourceEol(source));
         } catch {
           blocks = undefined; // unreadable / extractor throw — symbols skipped
         }

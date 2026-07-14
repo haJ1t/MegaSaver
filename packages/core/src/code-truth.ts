@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { extractBlocksForFile } from "@megasaver/output-filter";
 import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
-import type { CodeAnchor } from "./memory-anchor.js";
+import { type CodeAnchor, normalizeSourceEol } from "./memory-anchor.js";
 import type { MemoryEntry, MemoryEntryUpdatePatch } from "./memory-entry.js";
 import type { CoreRegistry } from "./registry.js";
 
@@ -324,7 +324,7 @@ export async function runVerify(opts: {
     }
     let extracted: Awaited<ReturnType<typeof extractBlocksForFile>>;
     try {
-      extracted = await extractBlocksForFile(path, source);
+      extracted = await extractBlocksForFile(path, normalizeSourceEol(source));
     } catch {
       // Parser / loadExtractors fault — a TOOLING failure, not evidence the
       // symbol is gone. Mark undetermined so it is never contradicted (mirrors

@@ -713,4 +713,51 @@ describe("runVerify — WOW loop on a real repo", () => {
     expect(healed?.validTo).toBeNull();
     expect(healed?.lastVerified?.result).toBe("healed");
   }, 20000);
+
+  it("a pure line-ending flip (LF -> CRLF) never contradicts", async () => {
+    // git's autocrlf re-materializes a file as CRLF on checkout/revert (the
+    // Windows default), so hashing raw bytes would read an EOL flip as a
+    // symbol-hash change and falsely close every symbol-anchored memory.
+    const anchorHead = git(["rev-parse", "HEAD"]).trim();
+    const blobSha = git(["rev-parse", "HEAD:src/auth.ts"]).trim();
+    const lf = readFileSync(join(repoDir, "src/auth.ts"), "utf8");
+    const extracted = await extractBlocksForFile("src/auth.ts", lf);
+    const symbol = extracted?.find((candidate) => candidate.name === "verifyToken");
+    if (symbol === undefined) {
+      throw new Error("fixture: verifyToken block not extracted");
+    }
+
+    const registry = freshRegistry(repoDir);
+    registry.createMemoryEntry(
+      mem({
+        id: E1,
+        anchor: {
+          repoHead: anchorHead,
+          capturedAt: TS,
+          files: [{ path: "src/auth.ts", blobSha }],
+          symbols: [
+            {
+              path: "src/auth.ts",
+              name: "verifyToken",
+              startLine: symbol.startLine,
+              endLine: symbol.endLine,
+              contentHash: symbol.contentHash,
+            },
+          ],
+        },
+      }),
+    );
+
+    // same logical content, CRLF endings — as a Windows checkout would leave it
+    writeFileSync(join(repoDir, "src/auth.ts"), lf.replace(/\n/g, "\r\n"));
+
+    const plan = await runVerify({
+      registry,
+      projectId: PROJECT_ID,
+      rootPath: repoDir,
+      now: NOW,
+    });
+    expect(plan.contradicted).toEqual([]);
+    expect(plan.verified).toEqual([E1]);
+  }, 20000);
 });
