@@ -94,7 +94,9 @@ export interface CoreRegistry {
   ): MemoryEntry[];
   // Mutator variant for code-truth verify (critic F2): each closure recomputes
   // its patch against the FRESH in-lock row, so a concurrent writer between
-  // snapshot and apply is never clobbered. A null return is a per-entry no-op.
+  // snapshot and apply is never clobbered. A null return is a per-entry no-op;
+  // a vanished id is skipped (the verify plan tolerates a concurrent delete —
+  // unlike applyMemoryEntryPatches, which stays strict for direct callers).
   applyMemoryEntryMutations(
     projectId: ProjectId,
     mutations: ReadonlyArray<{
@@ -458,10 +460,7 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       for (const { id, mutate } of mutations) {
         const fresh = staged.get(id) ?? memoryEntries.get(id);
         if (!fresh || fresh.projectId !== projectId) {
-          throw new CoreRegistryError(
-            "memory_entry_not_found",
-            `Memory entry does not exist: ${id}`,
-          );
+          continue; // vanished (concurrent delete) — skip, never abort the batch
         }
         const patch = mutate(fresh);
         if (patch === null) {

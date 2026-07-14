@@ -371,6 +371,35 @@ describe("runVerify — mutation semantics (fake git)", () => {
     expect(entry?.evidence?.some((line) => line.includes("contradicted"))).toBe(true);
   });
 
+  it("MINOR D: a concurrent delete skips the vanished id, applies the rest", async () => {
+    const registry = freshRegistry(ROOT);
+    registry.createMemoryEntry(mem({ id: E1, anchor: fileAnchor() }));
+    registry.createMemoryEntry(mem({ id: E2, anchor: fileAnchor("src/b.ts") }));
+    // E2 is hard-deleted between the snapshot and the apply. The verify batch
+    // must skip the vanished id, not abort — E1 still gets contradicted.
+    const raced: CoreRegistry = {
+      ...registry,
+      listMemoryEntries: (projectId) => {
+        const snapshot = registry.listMemoryEntries(projectId);
+        registry.deleteMemoryEntry(E2);
+        return snapshot;
+      },
+    };
+    await runVerify({
+      registry: raced,
+      projectId: PROJECT_ID,
+      rootPath: ROOT,
+      now: NOW,
+      execGit: fakeGit({
+        head: HEAD,
+        blobs: {},
+        attribution: { "src/a.ts": FALSIFIER, "src/b.ts": FALSIFIER },
+      }),
+    });
+    expect(registry.getMemoryEntry(E1)?.stale).toBe(true);
+    expect(registry.getMemoryEntry(E2)).toBeNull();
+  });
+
   it("stamps lastVerified on first verify with ONE batch apply", async () => {
     const registry = freshRegistry(ROOT);
     registry.createMemoryEntry(mem({ id: E1, anchor: fileAnchor() }));

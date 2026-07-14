@@ -401,10 +401,7 @@ export function createJsonDirectoryCoreRegistry(
         for (const { id, mutate } of mutations) {
           const fresh = byId.get(id);
           if (!fresh) {
-            throw new CoreRegistryError(
-              "memory_entry_not_found",
-              `Memory entry does not exist: ${id}`,
-            );
+            continue; // vanished (concurrent delete) — skip, never abort the batch
           }
           const patch = mutate(fresh);
           if (patch === null) {
