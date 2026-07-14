@@ -1,11 +1,11 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listProxyUsage } from "@megasaver/llm-proxy";
 import type { ProxyUsageEvent, RunningProxy, StartProxyOptions } from "@megasaver/llm-proxy";
-import type { RouteAdapter } from "@megasaver/proxy-control";
+import { type RouteAdapter, readControlState, writeControlState } from "@megasaver/proxy-control";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   proxySuperviseCommand,
@@ -18,6 +18,8 @@ const eaddrinuse = (): NodeJS.ErrnoException => {
   (e as NodeJS.ErrnoException).code = "EADDRINUSE";
   return e;
 };
+
+const FIRST_PARTY_FLAG = "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL";
 
 // A route adapter whose `inspect` is spied so we can assert the monitor never ran.
 const spyRoute = (): { route: RouteAdapter; inspect: ReturnType<typeof vi.fn> } => {
@@ -129,6 +131,55 @@ describe("runSupervisor — idempotent bind", () => {
       stdout: () => {},
       sleep: () => Promise.resolve(),
     }) as const;
+
+  const fakeStart = (): Promise<RunningProxy> =>
+    Promise.resolve({
+      url: "http://127.0.0.1:8787",
+      port: 8787,
+      close: () => Promise.resolve(),
+    });
+
+  const seedLeasedRoute = (withFlag: boolean) => {
+    const env: Record<string, string> = { ANTHROPIC_BASE_URL: base().ownedUrl };
+    if (withFlag) env[FIRST_PARTY_FLAG] = "1";
+    writeFileSync(base().settingsPath, JSON.stringify({ env }));
+    writeControlState(store, {
+      ...readControlState(store),
+      desiredEnabled: true,
+      routeLease: {
+        url: base().ownedUrl,
+        instanceId: "old",
+        phase: "active",
+        installedAt: "2026-07-14T00:00:00.000Z",
+      },
+    });
+  };
+
+  const readEnv = (): Record<string, string> =>
+    (JSON.parse(readFileSync(base().settingsPath, "utf8")) as { env: Record<string, string> }).env;
+
+  it.each(["https://api.anthropic.com", "HTTPS://API.ANTHROPIC.COM/"])(
+    "adds the first-party flag for default-origin upstream %s",
+    async (upstream) => {
+      seedLeasedRoute(false);
+      const result = await runSupervisor({ ...base(), upstream, startServer: fakeStart });
+      expect(result.kind).toBe("listening");
+      expect(readEnv()[FIRST_PARTY_FLAG]).toBe("1");
+      if (result.kind === "listening") await result.runtime.stop();
+    },
+  );
+
+  it("removes a stale first-party flag for a custom upstream", async () => {
+    seedLeasedRoute(true);
+    const result = await runSupervisor({
+      ...base(),
+      upstream: "https://gateway.example.com",
+      startServer: fakeStart,
+    });
+    expect(result.kind).toBe("listening");
+    expect(readEnv()).toEqual({ ANTHROPIC_BASE_URL: base().ownedUrl });
+    if (result.kind === "listening") await result.runtime.stop();
+  });
 
   it("returns already-in-use and never starts the monitor when EADDRINUSE persists", async () => {
     const { route, inspect } = spyRoute();
