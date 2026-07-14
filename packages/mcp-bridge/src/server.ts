@@ -342,7 +342,10 @@ export function buildServer(deps: ServerDeps): {
       case "mega_memory_sweep":
         return handleSweepMemory({ registry: deps.registry }, args);
       case "mega_recall":
-        return handleRecall({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
+        return handleRecall(
+          { registry: deps.registry, storeRoot: deps.storeRoot, isPro: deps.isPro ?? false, now },
+          args,
+        );
       case "mega_run_command":
         return handleRunCommand(
           { registry: deps.registry, storeRoot: deps.storeRoot, now, newId, originPid },
@@ -362,7 +365,7 @@ export function buildServer(deps: ServerDeps): {
         return handleSearchMemory({ registry: deps.registry }, args);
       case "get_relevant_memories":
         return handleGetRelevantMemories(
-          { registry: deps.registry, storeRoot: deps.storeRoot },
+          { registry: deps.registry, storeRoot: deps.storeRoot, isPro: deps.isPro ?? false, now },
           args,
         );
       case "get_task_status":
