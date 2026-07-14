@@ -426,6 +426,13 @@ export function invalidExpiresMessage(value: string): CliMessage {
   };
 }
 
+export function invalidAsOfMessage(value: string): CliMessage {
+  return {
+    message: `error: invalid as-of "${value}", expected ISO-8601 datetime`,
+    exitCode: 1,
+  };
+}
+
 export function officePermissionDeniedMessage(detail: string): CliMessage {
   return { message: `error: permission_denied: ${detail}`, exitCode: 1 };
 }

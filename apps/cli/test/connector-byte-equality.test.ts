@@ -161,7 +161,7 @@ describe("upsertBlock — byte-equality regression fixture (S6)", () => {
             ...(perm.tokenSaver ? { tokenSaver: perm.tokenSaver } : {}),
           } as Session,
         ];
-        const context = buildConnectorContext(target, project, sessions, []);
+        const context = buildConnectorContext(target, project, sessions, [], TS);
         const upserted = upsertBlock({ existingContent: written, context });
 
         // Byte-identical re-application is the contract that drives

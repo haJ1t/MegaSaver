@@ -90,6 +90,21 @@ export { buildPrMemoryComment, type PrMemoryCommentOptions } from "./pr-memory-c
 export { validationStatusSchema, type ValidationStatus } from "./validation-status.js";
 export { validateSave, type ValidateSaveInput, type ValidateSaveResult } from "./save-validator.js";
 export { checkConflicts, type ConflictOutcome, type ConflictResult } from "./conflict-checker.js";
+export {
+  POSSIBLE_SUPERSEDES_PREFIX,
+  SUPERSEDE_COSINE_AMBIGUOUS,
+  SUPERSEDE_COSINE_LINK,
+  SUPERSEDE_TOP_K,
+  applySupersession,
+  buildLineage,
+  type ChangedFrom,
+  changedFromFor,
+  detectSupersession,
+  eligibleSupersessionCorpus,
+  type SaveMemoryLineageResult,
+  saveMemoryWithLineage,
+  type SupersessionDetection,
+} from "./supersession.js";
 export { memoryValidationSchema, type MemoryValidation } from "./memory-validation.js";
 export {
   BRAIN_SCHEMA_VERSION,

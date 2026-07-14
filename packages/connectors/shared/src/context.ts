@@ -10,6 +10,11 @@ export const ConnectorContextSchema = z
     project: projectSchema,
     session: sessionSchema.nullable(),
     memoryEntries: z.array(memoryEntrySchema),
+    // Response/render-only data (never persisted), keyed by memory entry id:
+    // the CLOSED predecessor's title/closedAt for the "changed from" suffix.
+    memoryChangedFrom: z
+      .record(z.object({ title: z.string(), closedAt: z.string(), reason: z.string().optional() }))
+      .optional(),
   })
   .strict()
   .superRefine((context, ctx) => {
@@ -86,6 +91,19 @@ export const ConnectorContextSchema = z
         }
       }
     });
+
+    // The predecessor named by changedFrom is filtered OUT of memoryEntries
+    // (closed rows are not recallable), so its agent-controlled title reaches
+    // the rendered block only through this record — guard it like the entries.
+    for (const [id, changedFrom] of Object.entries(context.memoryChangedFrom ?? {})) {
+      if (containsSentinel(changedFrom.title)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Changed-from title cannot contain Mega Saver sentinels.",
+          path: ["memoryChangedFrom", id, "title"],
+        });
+      }
+    }
   });
 
 export type ConnectorContext = z.infer<typeof ConnectorContextSchema>;

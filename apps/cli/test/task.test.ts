@@ -219,6 +219,43 @@ describe("mega task status + explain", () => {
     ).toHaveLength(1);
   });
 
+  it("status --save-summary dedupes an identical re-save (living brain: no duplicate row)", async () => {
+    const stepA = "d0000000-0000-4000-8000-00000000000a";
+    const stepB = "d0000000-0000-4000-8000-00000000000b";
+    for (const stepId of [stepA, stepB]) {
+      const code = await runTaskStep({
+        ...base(root, [], []),
+        planIdFlag: PLAN_ID,
+        stepIdFlag: stepId,
+        statusFlag: "completed",
+      });
+      expect(code).toBe(0);
+    }
+
+    const first = await runTaskStatus({
+      ...base(root, [], []),
+      planIdFlag: PLAN_ID,
+      saveSummaryFlag: "all done",
+      newId: () => "d0000000-0000-4000-8000-0000000000c1",
+    });
+    expect(first).toBe(0);
+
+    const err: string[] = [];
+    const second = await runTaskStatus({
+      ...base(root, [], err),
+      planIdFlag: PLAN_ID,
+      saveSummaryFlag: "all done",
+      newId: () => "d0000000-0000-4000-8000-0000000000c2",
+    });
+    expect(second).toBe(0);
+    expect(err.join("\n")).toContain(
+      "note: duplicate of d0000000-0000-4000-8000-0000000000c1 — not written",
+    );
+    expect(
+      createJsonDirectoryCoreRegistry({ rootDir: root }).listMemoryEntries(PROJECT_ID),
+    ).toHaveLength(1);
+  });
+
   it("explain renders a blocked-reason line for a dependent step", async () => {
     const out: string[] = [];
     const code = await runTaskExplain({ ...base(root, out, []), planIdFlag: PLAN_ID });

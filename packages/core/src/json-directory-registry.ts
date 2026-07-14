@@ -279,7 +279,12 @@ export function createJsonDirectoryCoreRegistry(
 
     createMemoryEntry(entry) {
       return withDirLock(options.rootDir, () => {
-        const parsed = memoryEntrySchema.parse(entry);
+        // Stamp lastActiveAt at create (= createdAt) so decay keys on birth,
+        // not updatedAt — an approve flip bumps updatedAt but must not reset age.
+        const parsed = memoryEntrySchema.parse({
+          ...entry,
+          lastActiveAt: entry.lastActiveAt ?? entry.createdAt,
+        });
         if (readAllMemoryEntries(paths).some((existingEntry) => existingEntry.id === parsed.id)) {
           throw new CoreRegistryError(
             "memory_entry_already_exists",

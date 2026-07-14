@@ -3366,3 +3366,69 @@ Verifier re-pass: all RESOLVED with on-disk evidence, no regressions, verify
 52/52 green, CLEAR TO MERGE. Follow-ups noted: (1) --no-guard/--no-warmup citty
 negation (spawned task); (2) LOW: deny events append per retry (bounded,
 redacted, slightly inflates guard status deny count).
+
+## 2026-07-13 — i1 Living Brain SHIPPED (feat/living-brain, stacked on feat/guard)
+
+Auto-superseding memory save path + lineage recall + time-travel. 16 TDD
+tasks, subagent-driven (fresh implementer + fresh reviewer each; Tasks 5/7/14
+opus-reviewed as security-load-bearing). verify 52/52 green.
+
+Grounding: 6-agent survey + fresh architect pass on the spec found 5 MAJORs,
+all fixed pre-implementation: (1) declared-target exemption — without it the
+approve quarantine gate blocks the flip on an auto-linked suggested row, so
+auto-supersede was dead on arrival; (2) deterministic detection (threaded
+`now`, max-raw-cosine over top-K not decay-weighted #1); (3) born-approved
+close ladder — weak lexical `supersession` class can NEVER close at save,
+only `contradiction`/cosine/explicit `--supersede`; (4) recall write-back for
+`lastActiveAt` CUT from v1 (hot read path must not rewrite the store);
+(5) from-session detection exempted (mass auto-link risk).
+
+Shipped: core `supersession.ts` (applySupersession close, detectSupersession
+lexical+cosine, buildLineage cycle-guarded, changedFromFor, saveMemoryWithLineage
+close ladder); `lastActiveAt` decay rekey (legacy rows bit-identical, snapshot
+pinned); approve-memory declared-target exemption + `superseded` disclosure;
+save_memory best-effort cosine wiring; from-session twins detect:false;
+`changedFrom` on 4 recall surfaces (get_relevant_memories, mega_recall,
+connector block, warm-start brief); connector sentinel guard on
+`changedFrom.title` (architect #1 injection fix — opus-verified closed);
+`mega memory history` (PRO) / `reopen` (FREE) / `search|list --as-of` (PRO
+per-flag) / `explain` lineage section / create `--supersede`+`--no-auto-supersede`.
+
+E2E smoke (captured): weak-class create → note-only (no close); explicit
+`--supersede` → close + `note: superseded … — undo: mega memory reopen …`;
+search drops the closed row; `--as-of` free → PRO upsell exit 0; `history`
+free → "1 prior versions. …"; `explain` shows lineage; `reopen` restores;
+reopen-not-closed → exit 1.
+
+Deviations recorded in spec: `--no-auto-supersede` (citty kebab negation),
+`via:"explicit"`, changedFrom date sliced to day, born-approved auto-close
+narrow (explicit is the human gate). ACCEPTED-for-v1 asymmetry flagged for the
+gauntlet critic: CLI `mega memory approve` closes without the MCP path's
+evidence/conflict quarantine (guarded by applySupersession structural check +
+stderr disclosure + reopen + physically-human-typed). Out of scope: recall
+write-back, from-session detection, LLM-confirm band, GUI history scrubber.
+
+### Gauntlet outcome (2026-07-13, same day)
+
+HIGH-risk gauntlet (fresh code-reviewer + adversarial critic, both opus, full
+branch diff) found the CLI-approve asymmetry to be LOW/accepted, but surfaced
+a NET-NEW critical BLOCKER the per-task reviews missed at the seam:
+
+- BLOCKER (fixed 9c12cd98): `save_memory` (agent-callable MCP) let an agent
+  forge `approval:"approved"` + agent-controlled `supersedesId` → the
+  born-approved immediate-close ladder closed ANY same-project/scope approved
+  rule with one call, no human, no disclosure. Broke spec §9.1. Root-cause
+  fix: `saveMemoryWithLineage` gains `allowImmediateClose` (default false);
+  the save-time `applySupersession` fires only for physically human-typed CLI
+  writers (create, task status). Agent save_memory defers the close to the
+  human `approve_memory` path (declared-target exemption, unchanged).
+- MAJOR (fixed ed071444): `lastActiveAt` was never stamped at create, so the
+  decay rekey was a no-op for real rows (approve-flip still reset age). Fixed
+  by stamping `lastActiveAt = createdAt` in both `createMemoryEntry` impls.
+- MINOR (fixed f70693cb): explicit `--supersede <invalid>` now discloses the
+  no-op on stderr.
+
+Fresh-context verifier re-pass (opus): both defects RESOLVED (re-ran both
+attack vectors → defer; real create→approve age unchanged), intended flows
+intact, no over-correction, no regression, verify 52/52 non-cached. CLEAR TO
+MERGE. Spec §4.5 note records the accepted CLI-approve asymmetry.

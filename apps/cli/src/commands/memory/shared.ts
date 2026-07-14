@@ -134,3 +134,30 @@ export function formatMemoryValidationLines(v: MemoryValidation | null): string[
     `${padExplain("conflictIds")}${v.conflictIds.length > 0 ? v.conflictIds.join(", ") : "-"}`,
   ];
 }
+
+// Shared by the search/list --as-of gates: one sentence, two commands.
+export const MEMORY_AS_OF_UPSELL =
+  "Time-travel queries (--as-of) are a Mega Saver Pro feature. Activate a key: mega license activate <key>.";
+
+export function formatMemoryLineageLines(
+  entry: MemoryEntry,
+  all: readonly MemoryEntry[],
+): string[] {
+  const lines: string[] = [];
+  if (entry.validFrom !== undefined) lines.push(`${padExplain("validFrom")}${entry.validFrom}`);
+  if (entry.validTo != null) lines.push(`${padExplain("validTo")}${entry.validTo}`);
+  if (entry.supersedesId !== undefined) {
+    lines.push(`${padExplain("supersedesId")}${entry.supersedesId}`);
+    const predecessor = all.find((e) => e.id === entry.supersedesId);
+    if (predecessor !== undefined) {
+      lines.push(`${padExplain("supersedes")}${predecessor.id} ("${predecessor.title}")`);
+    }
+  }
+  const successor = all
+    .filter((e) => e.supersedesId === entry.id)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+  if (successor !== undefined) {
+    lines.push(`${padExplain("supersededBy")}${successor.id} ("${successor.title}")`);
+  }
+  return lines;
+}

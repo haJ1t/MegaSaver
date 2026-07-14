@@ -1,5 +1,5 @@
 import { type CoreRegistry, createInMemoryCoreRegistry } from "@megasaver/core";
-import type { ProjectId } from "@megasaver/shared";
+import type { MemoryEntryId, ProjectId } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { handleGetRelevantMemories } from "../../src/tools/get-relevant-memories.js";
 import { handleSaveMemory } from "../../src/tools/save-memory.js";
@@ -141,5 +141,121 @@ describe("memory MCP tools", () => {
     );
     const stored = registry.getMemoryEntry(result.id as never);
     expect(stored?.approval).toBe("approved");
+  });
+});
+
+const RULE_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" as MemoryEntryId;
+const LATER_TS = "2026-06-12T00:00:00.000Z";
+
+// An approved project_rule the candidates below collide with. Contradiction
+// fixture shape (core conflict-checker): same type + relatedFiles overlap +
+// SAME normalized content (so the higher-precedence supersession class cannot
+// shadow contradiction) + negation-keyword XOR ("never" on the candidate only).
+function ruleSeededRegistry(): CoreRegistry {
+  const registry = seededRegistry();
+  registry.createMemoryEntry({
+    id: RULE_ID,
+    projectId: PROJECT_ID,
+    sessionId: null,
+    scope: "project",
+    type: "project_rule",
+    title: "Deploy region rule",
+    content: "deploy to us-east",
+    keywords: ["deploy"],
+    confidence: "medium",
+    source: "manual",
+    stale: false,
+    approval: "approved",
+    relatedFiles: ["src/deploy.ts"],
+    createdAt: TS,
+    updatedAt: TS,
+  });
+  return registry;
+}
+
+describe("save_memory supersession lineage (living brain)", () => {
+  it("links a detected contradiction on a suggested write (no close) and reports it", async () => {
+    const registry = ruleSeededRegistry();
+    const result = await handleSaveMemory(
+      { registry, now: () => LATER_TS, newId: idFactory() },
+      {
+        projectId: PROJECT_ID,
+        scope: "project",
+        type: "project_rule",
+        title: "Never deploy region rule",
+        content: "deploy to us-east",
+        keywords: ["never"],
+        relatedFiles: ["src/deploy.ts"],
+      },
+    );
+    expect(result.supersession).toEqual({
+      supersededId: RULE_ID,
+      via: "contradiction",
+      closed: false,
+    });
+    const stored = registry.getMemoryEntry(result.id as never);
+    expect(stored?.supersedesId).toBe(RULE_ID);
+    expect(registry.getMemoryEntry(RULE_ID as never)?.validTo).toBeUndefined();
+  });
+
+  it("does NOT close the contradicted rule on an agent's forged born-approved write", async () => {
+    const registry = ruleSeededRegistry();
+    const result = await handleSaveMemory(
+      { registry, now: () => LATER_TS, newId: idFactory() },
+      {
+        projectId: PROJECT_ID,
+        scope: "project",
+        type: "project_rule",
+        title: "Never deploy region rule",
+        content: "deploy to us-east",
+        keywords: ["never"],
+        relatedFiles: ["src/deploy.ts"],
+        approval: "approved",
+      },
+    );
+    // save_memory never passes allowImmediateClose (§9.1): the agent's forged
+    // approval keeps the link but the close defers to the human approve gate.
+    expect(result.supersession).toEqual({
+      supersededId: RULE_ID,
+      via: "contradiction",
+      closed: false,
+    });
+    const stored = registry.getMemoryEntry(result.id as never);
+    expect(stored?.supersedesId).toBe(RULE_ID);
+    expect(registry.getMemoryEntry(RULE_ID as never)?.validTo).toBeUndefined();
+  });
+
+  it("dedupes an exact duplicate of an approved memory (no write, existing id returned)", async () => {
+    const registry = ruleSeededRegistry();
+    const result = await handleSaveMemory(
+      { registry, now: () => LATER_TS, newId: idFactory() },
+      {
+        projectId: PROJECT_ID,
+        scope: "project",
+        type: "project_rule",
+        title: "Deploy region rule",
+        content: "deploy to us-east",
+      },
+    );
+    expect(result.id).toBe(RULE_ID);
+    expect(result.deduped).toEqual({ existingId: RULE_ID });
+    expect(result.supersession).toBeUndefined();
+    expect(registry.listMemoryEntries(PROJECT_ID)).toHaveLength(1);
+  });
+
+  it("explicit supersedesId passthrough is unchanged (suggested: stored link, no close)", async () => {
+    const registry = ruleSeededRegistry();
+    const result = await handleSaveMemory(
+      { registry, now: () => LATER_TS, newId: idFactory() },
+      {
+        projectId: PROJECT_ID,
+        scope: "project",
+        content: "we moved deploys to eu-west",
+        supersedesId: RULE_ID,
+      },
+    );
+    const stored = registry.getMemoryEntry(result.id as never);
+    expect(stored?.supersedesId).toBe(RULE_ID);
+    expect(registry.getMemoryEntry(RULE_ID as never)?.validTo).toBeUndefined();
   });
 });

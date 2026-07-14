@@ -28,5 +28,11 @@ function renderMemoryEntries(context: ConnectorContext): string[] {
     return ["- none"];
   }
   // contentSchema rejects newlines, so entry.content is always single-line here.
-  return context.memoryEntries.map((entry) => `- [${entry.scope}:${entry.id}] ${entry.content}`);
+  return context.memoryEntries.map((entry) => {
+    const base = `- [${entry.scope}:${entry.id}] ${entry.content}`;
+    const changedFrom = context.memoryChangedFrom?.[entry.id];
+    if (changedFrom === undefined) return base;
+    const closedDate = changedFrom.closedAt.slice(0, 10);
+    return `${base} (changed from "${changedFrom.title}", closed ${closedDate})`;
+  });
 }

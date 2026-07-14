@@ -1,14 +1,10 @@
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, memoryEntryNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
-import {
-  formatMemoryExplainLines,
-  formatMemoryLineageLines,
-  formatMemoryValidationLines,
-  memoryEntryIdSchema,
-} from "./shared.js";
+import { readTestEnv } from "../session/shared.js";
+import { memoryEntryIdSchema } from "./shared.js";
 
-export type RunMemoryExplainInput = {
+export type RunMemoryReopenInput = {
   memoryEntryId: string;
   storeFlag: string | undefined;
   jsonFlag: boolean;
@@ -19,9 +15,10 @@ export type RunMemoryExplainInput = {
   localAppData: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+  now?: () => string;
 };
 
-export async function runMemoryExplain(input: RunMemoryExplainInput): Promise<0 | 1> {
+export async function runMemoryReopen(input: RunMemoryReopenInput): Promise<0 | 1> {
   let rootDir: string;
   try {
     rootDir = resolveStorePath({
@@ -47,34 +44,36 @@ export async function runMemoryExplain(input: RunMemoryExplainInput): Promise<0 
     return cli.exitCode;
   }
 
+  const now = input.now ?? (() => new Date().toISOString());
+
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
-    const entry = registry.getMemoryEntry(parsedId);
-    if (!entry) {
+    const existing = registry.getMemoryEntry(parsedId);
+    if (existing === null) {
       const cli = memoryEntryNotFoundMessage(parsedId);
       input.stderr(cli.message);
       return cli.exitCode;
     }
-    const validation = registry.getMemoryValidation(parsedId);
-    if (input.jsonFlag) {
-      input.stdout(JSON.stringify({ ...entry, validation: validation ?? null }));
-    } else {
-      for (const line of formatMemoryExplainLines(entry)) input.stdout(line);
-      for (const line of formatMemoryValidationLines(validation)) input.stdout(line);
-      const all = registry.listMemoryEntries(entry.projectId);
-      for (const line of formatMemoryLineageLines(entry, all)) input.stdout(line);
+    if (existing.validTo == null) {
+      input.stderr(`error: memory ${parsedId} is not closed`);
+      return 1;
     }
+    const updatedAt = readTestEnv("MEGA_TEST_NOW") ?? now();
+    const updated = registry.updateMemoryEntry(parsedId, { validTo: null, updatedAt });
+    input.stdout(
+      input.jsonFlag ? JSON.stringify(updated) : `reopened ${updated.id} ("${updated.title}")`,
+    );
     return 0;
   } catch (err) {
-    const cli = mapErrorToCliMessage(err);
+    const cli = mapErrorToCliMessage(err, { kind: "memory_update" });
     input.stderr(cli.message);
     return cli.exitCode;
   }
 }
 
-export const memoryExplainCommand = defineCommand({
-  meta: { name: "explain", description: "Explain a memory entry (all fields)." },
+export const memoryReopenCommand = defineCommand({
+  meta: { name: "reopen", description: "Reopen a superseded memory (clear validTo)." },
   args: {
     memoryEntryId: {
       type: "positional",
@@ -85,7 +84,7 @@ export const memoryExplainCommand = defineCommand({
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
-    const code = await runMemoryExplain({
+    const code = await runMemoryReopen({
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       memoryEntryId: typeof args.memoryEntryId === "string" ? args.memoryEntryId : "",
       jsonFlag: args.json === true,

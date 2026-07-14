@@ -76,6 +76,7 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
   const updatedAt = readTestEnv("MEGA_TEST_NOW") ?? now();
   const patch: MemoryEntryUpdatePatch = { updatedAt };
   let touched = false;
+  let contentBearing = false;
 
   if (input.typeFlag !== undefined) {
     const result = memoryTypeSchema.safeParse(input.typeFlag);
@@ -116,6 +117,7 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
       return cli.exitCode;
     }
     touched = true;
+    contentBearing = true;
   }
   if (input.contentFlag !== undefined) {
     try {
@@ -126,6 +128,7 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
       return cli.exitCode;
     }
     touched = true;
+    contentBearing = true;
   }
   if (input.reasonFlag !== undefined) {
     if (input.reasonFlag.trim().length === 0) {
@@ -148,10 +151,12 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
   if (input.keywordFlags !== undefined) {
     patch.keywords = toStringArray(input.keywordFlags);
     touched = true;
+    contentBearing = true;
   }
   if (input.fileFlags !== undefined) {
     patch.relatedFiles = toStringArray(input.fileFlags);
     touched = true;
+    contentBearing = true;
   }
   if (input.staleFlag !== undefined) {
     patch.stale = input.staleFlag;
@@ -166,6 +171,10 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
     patch.expiresAt = input.expiresFlag;
     touched = true;
   }
+
+  // Content-bearing edits refresh the decay anchor (lastActiveAt); metadata-only
+  // patches (stale/expires/approval) must not reset a memory's age.
+  if (contentBearing) patch.lastActiveAt = updatedAt;
 
   if (!touched) {
     const cli = nothingToUpdateMessage();

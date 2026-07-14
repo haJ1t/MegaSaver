@@ -1,4 +1,9 @@
-import { type MemoryEntry, extractSessionMemories, memoryEntrySchema } from "@megasaver/core";
+import {
+  type MemoryEntry,
+  extractSessionMemories,
+  memoryEntrySchema,
+  saveMemoryWithLineage,
+} from "@megasaver/core";
 import { sessionIdSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, sessionNotFoundMessage } from "../../errors.js";
@@ -109,7 +114,11 @@ export async function runMemoryFromSession(input: RunMemoryFromSessionInput): Pr
         createdAt: now,
         updatedAt: now,
       });
-      registry.createMemoryEntry(entry);
+      // detect: false (living brain, architect #5): N terse extracted candidates
+      // sharing the same session files would mass-auto-link against approved
+      // rows and prime a bulk-approval mass-close. The from-session: dedupe
+      // keyword stays the only dedupe on this path.
+      saveMemoryWithLineage(registry, entry, { now: () => now, detect: false });
       staged.add(dedupeKeyword);
       suggested += 1;
     }

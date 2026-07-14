@@ -9,6 +9,7 @@ import {
 } from "./memory-entry.js";
 import { rankApplicableRules } from "./project-rule-ranking.js";
 import type { ProjectRule } from "./project-rule.js";
+import { changedFromFor } from "./supersession.js";
 
 export type WarmStartMode = "micro" | "standard" | "reonboard";
 
@@ -69,8 +70,11 @@ function clampSentence(content: string): string {
   return first.length > CLAMP_CHARS ? `${first.slice(0, CLAMP_CHARS - 1)}…` : first;
 }
 
-function memLine(m: MemoryEntry, now: string): string {
-  return `- [${m.type}] ${m.title} — ${clampSentence(m.content)} (${m.confidence}, ${ageDays(now, m.updatedAt)}d)`;
+function memLine(m: MemoryEntry, now: string, byId: ReadonlyMap<string, MemoryEntry>): string {
+  const base = `- [${m.type}] ${m.title} — ${clampSentence(m.content)} (${m.confidence}, ${ageDays(now, m.updatedAt)}d)`;
+  const changedFrom = changedFromFor(m, byId);
+  if (changedFrom === undefined) return base;
+  return `${base} (was: "${changedFrom.title}" until ${changedFrom.closedAt.slice(0, 10)})`;
 }
 
 type Section = { key: string; lines: string[] };
@@ -86,12 +90,13 @@ function memSection(
   memories: readonly MemoryEntry[],
   type: MemoryType,
   now: string,
+  byId: ReadonlyMap<string, MemoryEntry>,
 ): Section {
   const items = memories
     .filter((m) => m.type === type)
     .sort(byScore(now))
     .slice(0, SECTION_ITEM_CAP)
-    .map((m) => memLine(m, now));
+    .map((m) => memLine(m, now, byId));
   return { key, lines: items.length === 0 ? [] : ["", heading, ...items] };
 }
 
@@ -197,8 +202,18 @@ export function assembleWarmStartBrief(input: WarmStartInput): WarmStartBrief {
   const header: Section = { key: "header", lines: headerLines };
 
   const rules = rulesSection(input.rules);
-  const decisions = memSection("decisions", "## Standing decisions", recallable, "decision", now);
-  const todos = memSection("todos", "## Open todos", recallable, "todo", now);
+  // changedFrom lookups go over the UNFILTERED input.memories — the closed
+  // predecessor is exactly the row the recallable filter drops.
+  const byId = new Map<string, MemoryEntry>(input.memories.map((m) => [m.id, m]));
+  const decisions = memSection(
+    "decisions",
+    "## Standing decisions",
+    recallable,
+    "decision",
+    now,
+    byId,
+  );
+  const todos = memSection("todos", "## Open todos", recallable, "todo", now, byId);
   const failures = failuresSection(input.failedAttempts, input.gitDelta);
   const git = gitSection(input.gitDelta, mode === "reonboard");
   const entities = entitiesSection(recallable);

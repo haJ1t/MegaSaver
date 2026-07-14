@@ -1,14 +1,15 @@
+import type { KeyObject } from "node:crypto";
+import { buildLineage } from "@megasaver/core";
+import { checkEntitlement } from "@megasaver/entitlement";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, memoryEntryNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
-import {
-  formatMemoryExplainLines,
-  formatMemoryLineageLines,
-  formatMemoryValidationLines,
-  memoryEntryIdSchema,
-} from "./shared.js";
+import { memoryEntryIdSchema } from "./shared.js";
 
-export type RunMemoryExplainInput = {
+export const MEMORY_HISTORY_UPSELL =
+  "Memory history is a Mega Saver Pro feature. Activate a key: mega license activate <key>.";
+
+export type RunMemoryHistoryInput = {
   memoryEntryId: string;
   storeFlag: string | undefined;
   jsonFlag: boolean;
@@ -19,9 +20,11 @@ export type RunMemoryExplainInput = {
   localAppData: string | undefined;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+  nowMs?: () => number;
+  publicKey?: KeyObject | string;
 };
 
-export async function runMemoryExplain(input: RunMemoryExplainInput): Promise<0 | 1> {
+export async function runMemoryHistory(input: RunMemoryHistoryInput): Promise<0 | 1> {
   let rootDir: string;
   try {
     rootDir = resolveStorePath({
@@ -47,23 +50,45 @@ export async function runMemoryExplain(input: RunMemoryExplainInput): Promise<0 
     return cli.exitCode;
   }
 
+  // Gate first: entitlement is decided before any Pro compute runs.
+  const ent = checkEntitlement("savings-analytics", {
+    storeRoot: rootDir,
+    now: input.nowMs ?? (() => Date.now()),
+    ...(input.publicKey === undefined ? {} : { publicKey: input.publicKey }),
+  });
+
   try {
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
     const entry = registry.getMemoryEntry(parsedId);
-    if (!entry) {
+    if (entry === null) {
       const cli = memoryEntryNotFoundMessage(parsedId);
       input.stderr(cli.message);
       return cli.exitCode;
     }
-    const validation = registry.getMemoryValidation(parsedId);
+
+    const chain = buildLineage(registry.listMemoryEntries(entry.projectId), parsedId);
+
+    if (!ent.entitled) {
+      // Chains only form via supersession, so the ancestor count is cheap and
+      // honest to disclose on the free tier.
+      const priorVersions = chain.findIndex((e) => e.id === parsedId);
+      input.stdout(
+        priorVersions > 0
+          ? `${priorVersions} prior versions. ${MEMORY_HISTORY_UPSELL}`
+          : MEMORY_HISTORY_UPSELL,
+      );
+      return 0;
+    }
+
     if (input.jsonFlag) {
-      input.stdout(JSON.stringify({ ...entry, validation: validation ?? null }));
-    } else {
-      for (const line of formatMemoryExplainLines(entry)) input.stdout(line);
-      for (const line of formatMemoryValidationLines(validation)) input.stdout(line);
-      const all = registry.listMemoryEntries(entry.projectId);
-      for (const line of formatMemoryLineageLines(entry, all)) input.stdout(line);
+      input.stdout(JSON.stringify(chain));
+      return 0;
+    }
+    for (const e of chain) {
+      input.stdout(`${e.id}  ${e.title}`);
+      input.stdout(`  ${e.validFrom ?? e.createdAt} -> ${e.validTo ?? "current"}`);
+      if (e.reason !== undefined) input.stdout(`  reason: ${e.reason}`);
     }
     return 0;
   } catch (err) {
@@ -73,8 +98,8 @@ export async function runMemoryExplain(input: RunMemoryExplainInput): Promise<0 
   }
 }
 
-export const memoryExplainCommand = defineCommand({
-  meta: { name: "explain", description: "Explain a memory entry (all fields)." },
+export const memoryHistoryCommand = defineCommand({
+  meta: { name: "history", description: "Show a memory entry's lineage chain (Pro)." },
   args: {
     memoryEntryId: {
       type: "positional",
@@ -85,7 +110,7 @@ export const memoryExplainCommand = defineCommand({
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
-    const code = await runMemoryExplain({
+    const code = await runMemoryHistory({
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       memoryEntryId: typeof args.memoryEntryId === "string" ? args.memoryEntryId : "",
       jsonFlag: args.json === true,

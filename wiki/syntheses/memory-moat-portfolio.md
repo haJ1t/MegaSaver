@@ -2,7 +2,7 @@
 title: Memory Moat Portfolio — long-term memory differentiation ideas
 tags: [synthesis, product, memory, pro, ideas]
 sources: [ultracode workflow wf_4d826f4a-e32 2026-07-12 (19 agents: 1 map, 6 lenses, dedup+gap critic, 3-judge panel, 6 sketches), syntheses/pro-differentiation-portfolio.md, syntheses/post-2.0-growth-portfolio.md]
-status: active — i8 Warm Start + i7 Mistake Firewall SHIPPED; rest awaiting pick
+status: active — i8 Warm Start + i7 Mistake Firewall + i1 Living Brain SHIPPED; rest awaiting pick
 created: 2026-07-12
 updated: 2026-07-12
 ---
@@ -32,7 +32,7 @@ i10≈N10 handoff, i14≈autopilot).
 | i7 | 30.3 | **Mistake Firewall** | PreToolUse hook intercepts commands/edits matching stored failed_attempts; warns agent mid-mistake with priced replay cost. **SHIPPED** (feat/guard: durable guard corpus + 3-tier pure matcher + fail-open hook + outcome loop + mega guard CLI + check_approach MCP + Pro retry-cost-avoided; verify green, 14 TDD tasks all reviewed). |
 | i8 | 29.3 | **Warm Start** | SessionStart hook injects ≤2k-token budgeted brief (decisions, rules, todos, branch-relevant failures, git delta) into every agent; measured savings. **SHIPPED** (feat/warm-start: core assembler + freshness stamp, WarmStartEvent, fail-open hook, mega warmup, Pro cross-agent block, MCP tool; verify green, gauntlet passed). |
 | i6 | 29.0 | **Code-Truth Verify** | Git-anchored memories: save-time SHA+line-hash anchors; post-commit hook flags memories contradicted by code, revert heals. Sketched. |
-| i1 | 28.3 | **Living Brain** | Auto-superseding write path (fills M1 gap): save detects conflict, closes old validTo, links supersedesId; `history`/`--as-of` time travel. Sketched. |
+| i1 | 28.3 | **Living Brain** | Auto-superseding write path (fills M1 gap): save detects conflict, closes old validTo, links supersedesId; `history`/`--as-of` time travel. **SHIPPED** (feat/living-brain: core `supersession` module — detect ladder + cosine overlay + close ladder + lineage + `saveMemoryWithLineage`; approve declared-target exemption; `changedFrom` on 4 recall surfaces + sentinel guard; `lastActiveAt` decay rekey; `mega memory history`/`reopen`/`--as-of`; verify 52/52, 16 TDD tasks all reviewed, 2 opus-reviewed security surfaces). |
 | i14 | 28.3 | **Brain Autopilot** | Session-end auto-capture + auto-approve trusted types + morning `mega brain digest` y/n/e triage. Kills approval rot. Sketched. |
 | i21 | 28.0 | **Déjà Vu** | Global cross-project index; recall surfaces redacted hits from other repos ("you fixed this in repo-a"). Free teaser = upsell. Sketched. |
 | i4 | 27.7 | **Recall Receipts** | Per-memory $ ROI attribution: log recall injections, credit load-bearing hits, "your brain saved $23 this month". Anti-churn artifact. |

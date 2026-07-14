@@ -1,4 +1,9 @@
-import { type MemoryEntry, memoryEntrySchema, readySteps } from "@megasaver/core";
+import {
+  type MemoryEntry,
+  memoryEntrySchema,
+  readySteps,
+  saveMemoryWithLineage,
+} from "@megasaver/core";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
@@ -70,8 +75,25 @@ export async function runTaskStatus(input: RunTaskStatusInput): Promise<0 | 1> {
         createdAt: ts,
         updatedAt: ts,
       });
-      registry.createMemoryEntry(entry);
-      input.stderr(`note: saved summary memory ${entry.id}`);
+      // Detection ON (living brain §4.2): summaries are born approved, so the
+      // born-approved close ladder applies. This path is lexical-only (no
+      // vectors), so only a checkConflicts contradiction can close — and every
+      // close is disclosed loudly on stderr with its undo.
+      const result = saveMemoryWithLineage(registry, entry, {
+        now: () => ts,
+        allowImmediateClose: true,
+      });
+      if (result.supersession?.closed === true) {
+        const closedTitle = registry.getMemoryEntry(result.supersession.supersededId)?.title ?? "";
+        input.stderr(
+          `note: superseded ${result.supersession.supersededId} ("${closedTitle}") — undo: mega memory reopen ${result.supersession.supersededId}`,
+        );
+      }
+      if (result.deduped !== undefined) {
+        input.stderr(`note: duplicate of ${result.deduped.existingId} — not written`);
+      } else {
+        input.stderr(`note: saved summary memory ${result.entry.id}`);
+      }
     }
 
     if (input.json) {
