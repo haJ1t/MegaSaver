@@ -3432,3 +3432,71 @@ Fresh-context verifier re-pass (opus): both defects RESOLVED (re-ran both
 attack vectors → defer; real create→approve age unchanged), intended flows
 intact, no over-correction, no regression, verify 52/52 non-cached. CLEAR TO
 MERGE. Spec §4.5 note records the accepted CLI-approve asymmetry.
+
+## [2026-07-14] ship | i6 Code-Truth Verify
+
+Branch `feat/code-truth` (stacked on `feat/living-brain`). 18 TDD tasks,
+subagent-driven (fresh implementer + fresh reviewer per task; Tasks 4/5/7/11/14/15
+opus-reviewed as security/correctness-load-bearing). `pnpm verify` green (52/52).
+
+Shipped: core `memory-anchor` (schemas + best-effort `captureCodeAnchor`) and
+`code-truth` (pure `verifyAnchors` planner + `runVerify` git runner) modules;
+whole-batch `applyMemoryEntryPatches`; `closedByCodeTruth` close-ownership guard
+(heal never reopens a lineage-owned close); `STALE_WEIGHT` down-rank;
+`output-filter.extractBlocksForFile` polyglot export; `mega memory verify` (free)
++ `--install-hook`/`--uninstall-hook` (Pro, sentinel-block confined) + sweep
+verify pre-pass (Pro); `--symbol` writer plumbing + anchor capture on all writers
+(`--no-anchor` opt-out); show/explain anchor + badge; MCP `save_memory` symbol
+anchors + `get_relevant_memories` badge + Pro pre-recall spot-check (excludes
+contradicted, sentinel-guarded disclosure, inline fail-open flip) +
+`verify_memories` tool; stale-recall-avoided stats ledger + savings line; new
+`code-truth` ProFeature key.
+
+Per-task reviews surfaced + fixed before merge: Task 7 gauntlet found a PROVEN
+BLOCKER — a `cat-file --batch-check` FATAL/timeout mapped every anchored path to
+"missing", mass-closing every file-anchored memory on a large-repo timeout; fixed
+to degrade to `unanchored` + zero writes. Also hardened: anchor-path control-char
+rejection at the schema boundary (cat-file stdin injection vector); extractor-throw
+treated as `undetermined` not missing (false-contradiction hole); `save_memory`
+agent-forge negative tests (no agent-supplied anchor/lastVerified); spot-check
+inline fail-open (no floating promise in the stdio server).
+
+Deviations recorded in spec §15. Full-branch gauntlet (fresh opus code-reviewer +
+adversarial critic) run at merge time.
+
+## [2026-07-14] gauntlet | i6 Code-Truth Verify — cleared
+
+Full-branch gauntlet: fresh opus code-reviewer + adversarial critic over
+`feat/living-brain...feat/code-truth`. Two independent BLOCKERs + one MAJOR
+found at the task seams (per-task reviews missed them):
+
+- BLOCKER (reviewer): multi-head re-contradiction clobbered `closedByCodeTruth`
+  (true→false) so a later heal never reopened `validTo` — memory silently
+  stuck closed after the code was restored (common case; reachable via free
+  `mega memory verify`). Executable repro. Fixed 103f1210.
+- BLOCKER (critic): disk-read faults (readFileSync/statSync throw) failed
+  CLOSED — a transient FS error (EMFILE/EACCES) or a `git mv` rename → false
+  "file missing" → close → silent recall data loss. Same mass-false-close class
+  as the Task-7 cat-file finding, at a different catch site, both runVerify and
+  the spot-check. Fixed 5ac7877a (branch on err.code: ENOENT→delete,
+  transient→undetermined; spot-check never closes from a disk fault).
+- MAJOR (critic): runVerify planned from an UNLOCKED snapshot then applied
+  absolute-value patches under the lock → the post-commit hook (a separate
+  process on every commit) racing the MCP server lost evidence and could
+  reopen a lineage-owned close. Fixed d7414b21 — new
+  `applyMemoryEntryMutations` recomputes evidence/open/ownership from the
+  in-lock fresh row; the cross-process lock is never held across git I/O.
+- MINORs fixed: ledger double-count on persistent close-write failure
+  (f41edbd8); concurrent-delete aborting the whole batch (dd5bcb80);
+  runVerify/spot-check divergence on unsupported-extension symbols (8d367399);
+  dead anchor scaffolding in task status (5c2ee31f); changed-paths diff
+  missing `core.quotePath=off` (7fb1d140).
+
+Held under attack: git argv/stdin injection, agent forge/badge spoof, hook
+confinement, stdio-bridge crash, savings-leak isolation, recall leak.
+
+Fresh opus verifier re-pass: all 8 RESOLVED, no over-correction, no regression,
+no new race in the mutator refactor. `pnpm verify` green (52/52). CLEAR TO
+MERGE. Deferred follow-ups: update re-capture verification-state reset,
+code-truth.ts file split, shared 3-arg ExecGit type at bridge boundaries,
+heal-branch idempotence guard (narrow concurrent-heal duplicate-evidence).

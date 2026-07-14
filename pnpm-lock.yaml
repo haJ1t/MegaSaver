@@ -554,6 +554,9 @@ importers:
 
   packages/mcp-bridge:
     dependencies:
+      '@megasaver/connectors-shared':
+        specifier: workspace:*
+        version: link:../connectors/shared
       '@megasaver/content-store':
         specifier: workspace:*
         version: link:../content-store

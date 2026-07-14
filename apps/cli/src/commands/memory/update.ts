@@ -1,5 +1,6 @@
 import {
   type MemoryEntryUpdatePatch,
+  captureCodeAnchor,
   memoryConfidenceSchema,
   memorySourceSchema,
   memoryTypeSchema,
@@ -32,6 +33,8 @@ export type RunMemoryUpdateInput = {
   goalFlag: string | undefined;
   keywordFlags: unknown;
   fileFlags: unknown;
+  symbolFlags: unknown;
+  anchorFlag?: boolean | undefined;
   staleFlag: boolean | undefined;
   expiresFlag: string | undefined;
   storeFlag: string | undefined;
@@ -158,6 +161,11 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
     touched = true;
     contentBearing = true;
   }
+  if (input.symbolFlags !== undefined) {
+    patch.relatedSymbols = toStringArray(input.symbolFlags);
+    touched = true;
+    contentBearing = true;
+  }
   if (input.staleFlag !== undefined) {
     patch.stale = input.staleFlag;
     touched = true;
@@ -186,10 +194,29 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
     const { registry, initialized } = await ensureStoreReady(rootDir);
     if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
 
-    if (registry.getMemoryEntry(parsedId) === null) {
+    const existing = registry.getMemoryEntry(parsedId);
+    if (existing === null) {
       const cli = memoryEntryNotFoundMessage(parsedId);
       input.stderr(cli.message);
       return cli.exitCode;
+    }
+    // Re-capture when citations change (spec §5.1). Best-effort: a failed
+    // capture leaves the stored anchor untouched — verify will contradict or
+    // repoint it from repo state if it drifted.
+    if (
+      input.anchorFlag !== false &&
+      (input.fileFlags !== undefined || input.symbolFlags !== undefined)
+    ) {
+      const project = registry.getProject(existing.projectId);
+      if (project !== null) {
+        const anchor = await captureCodeAnchor({
+          rootPath: project.rootPath,
+          relatedFiles: patch.relatedFiles ?? existing.relatedFiles ?? [],
+          relatedSymbols: patch.relatedSymbols ?? existing.relatedSymbols ?? [],
+          now: updatedAt,
+        });
+        if (anchor !== undefined) patch.anchor = anchor;
+      }
     }
     const updated = registry.updateMemoryEntry(parsedId, patch);
     input.stdout(input.jsonFlag ? JSON.stringify(updated) : updated.id);
@@ -224,6 +251,15 @@ export const memoryUpdateCommand = defineCommand({
     reason: { type: "string", description: "Set reason." },
     goal: { type: "string", description: "Set goal." },
     file: { type: "string", description: "Replace related files (repeatable)." },
+    symbol: {
+      type: "string",
+      description: "Replace related symbols, name or path#name (repeatable).",
+    },
+    anchor: {
+      type: "boolean",
+      default: true,
+      description: "Re-capture the code anchor when citations change (--no-anchor to skip).",
+    },
     stale: { type: "boolean", description: "Mark stale (--no-stale to clear)." },
     expires: { type: "string", description: "Set expiry timestamp (ISO-8601)." },
     store: { type: "string", description: "Override store directory." },
@@ -242,6 +278,8 @@ export const memoryUpdateCommand = defineCommand({
       goalFlag: typeof args.goal === "string" ? args.goal : undefined,
       keywordFlags: args.keyword,
       fileFlags: args.file,
+      symbolFlags: args.symbol,
+      anchorFlag: args.anchor !== false,
       staleFlag: typeof args.stale === "boolean" ? args.stale : undefined,
       expiresFlag: typeof args.expires === "string" ? args.expires : undefined,
       jsonFlag: args.json === true,

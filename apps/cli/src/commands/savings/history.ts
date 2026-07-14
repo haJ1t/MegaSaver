@@ -5,13 +5,16 @@ import { checkEntitlement } from "@megasaver/entitlement";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
 import {
+  type CodeTruthTotalsReader,
   type GuardTotalsReader,
   PRO_ANALYTICS_UPSELL,
   type SavingsEventReader,
   type WarmStartTotalsReader,
+  defaultCodeTruthTotalsReader,
   defaultGuardTotalsReader,
   defaultSavingsEventReader,
   defaultWarmStartTotalsReader,
+  formatCodeTruthLine,
   formatGuardLine,
   formatWarmStartLine,
 } from "./shared.js";
@@ -25,6 +28,7 @@ export type RunSavingsHistoryInput = {
   readAllEvents: SavingsEventReader;
   readWarmStartTotals?: WarmStartTotalsReader;
   readGuardTotals?: GuardTotalsReader;
+  readCodeTruthTotals?: CodeTruthTotalsReader;
   by?: HistoryBy;
   json?: boolean;
   csv?: boolean;
@@ -100,6 +104,10 @@ export async function runSavingsHistory(input: RunSavingsHistoryInput): Promise<
       const guardLine = formatGuardLine(await input.readGuardTotals());
       if (guardLine !== null) rendered = `${rendered}\n\n${guardLine}`;
     }
+    if (input.readCodeTruthTotals !== undefined) {
+      const codeTruthLine = formatCodeTruthLine(await input.readCodeTruthTotals());
+      if (codeTruthLine !== null) rendered = `${rendered}\n\n${codeTruthLine}`;
+    }
   }
 
   if (input.out !== undefined) {
@@ -134,6 +142,9 @@ export const savingsHistoryCommand = defineCommand({
         readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       ),
       readGuardTotals: defaultGuardTotalsReader(
+        readStoreEnv(typeof args.store === "string" ? args.store : undefined),
+      ),
+      readCodeTruthTotals: defaultCodeTruthTotalsReader(
         readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       ),
       ...(by === "day" || by === "week" || by === "project" ? { by } : {}),

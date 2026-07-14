@@ -84,6 +84,26 @@ export interface CoreRegistry {
   getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
   listMemoryEntries(projectId: ProjectId): MemoryEntry[];
   updateMemoryEntry(id: MemoryEntryId, patch: MemoryEntryUpdatePatch): MemoryEntry;
+  // Batch variant for code-truth verify (architect M5): one locked
+  // read-modify-write instead of N full-store rewrites. Whole-batch atomic —
+  // any invalid patch or unknown id rejects the entire batch; per-entry
+  // validation is identical to updateMemoryEntry.
+  applyMemoryEntryPatches(
+    projectId: ProjectId,
+    patches: ReadonlyArray<{ id: MemoryEntryId; patch: MemoryEntryUpdatePatch }>,
+  ): MemoryEntry[];
+  // Mutator variant for code-truth verify (critic F2): each closure recomputes
+  // its patch against the FRESH in-lock row, so a concurrent writer between
+  // snapshot and apply is never clobbered. A null return is a per-entry no-op;
+  // a vanished id is skipped (the verify plan tolerates a concurrent delete —
+  // unlike applyMemoryEntryPatches, which stays strict for direct callers).
+  applyMemoryEntryMutations(
+    projectId: ProjectId,
+    mutations: ReadonlyArray<{
+      id: MemoryEntryId;
+      mutate: (fresh: MemoryEntry) => MemoryEntryUpdatePatch | null;
+    }>,
+  ): MemoryEntry[];
   // Write-only by design: a hard delete returns nothing. A caller that needs
   // the pre-delete state reads it via getMemoryEntry first (the CLI does this
   // to render a not-found error before deleting).
@@ -406,6 +426,55 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       const updated = memoryEntrySchema.parse({ ...existing, ...parsedPatch });
       memoryEntries.set(id, updated);
       return updated;
+    },
+
+    applyMemoryEntryPatches(projectId, patches) {
+      requireProject(projectId);
+      // Stage everything first — whole-batch atomicity: any rejection above
+      // leaves the backing Map untouched.
+      const staged = new Map<MemoryEntryId, MemoryEntry>();
+      const results: MemoryEntry[] = [];
+      for (const { id, patch } of patches) {
+        const parsedPatch = memoryEntryUpdatePatchSchema.parse(patch);
+        const existing = staged.get(id) ?? memoryEntries.get(id);
+        if (!existing || existing.projectId !== projectId) {
+          throw new CoreRegistryError(
+            "memory_entry_not_found",
+            `Memory entry does not exist: ${id}`,
+          );
+        }
+        const updated = memoryEntrySchema.parse({ ...existing, ...parsedPatch });
+        staged.set(id, updated);
+        results.push(updated);
+      }
+      for (const [id, updated] of staged) {
+        memoryEntries.set(id, updated);
+      }
+      return results;
+    },
+
+    applyMemoryEntryMutations(projectId, mutations) {
+      requireProject(projectId);
+      const staged = new Map<MemoryEntryId, MemoryEntry>();
+      const results: MemoryEntry[] = [];
+      for (const { id, mutate } of mutations) {
+        const fresh = staged.get(id) ?? memoryEntries.get(id);
+        if (!fresh || fresh.projectId !== projectId) {
+          continue; // vanished (concurrent delete) — skip, never abort the batch
+        }
+        const patch = mutate(fresh);
+        if (patch === null) {
+          continue;
+        }
+        const parsedPatch = memoryEntryUpdatePatchSchema.parse(patch);
+        const updated = memoryEntrySchema.parse({ ...fresh, ...parsedPatch });
+        staged.set(id, updated);
+        results.push(updated);
+      }
+      for (const [id, updated] of staged) {
+        memoryEntries.set(id, updated);
+      }
+      return results;
     },
 
     deleteMemoryEntry(id) {

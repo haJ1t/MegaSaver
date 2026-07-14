@@ -1,6 +1,7 @@
 import {
   type MemoryEntry,
   POSSIBLE_SUPERSEDES_PREFIX,
+  captureCodeAnchor,
   memoryConfidenceSchema,
   memoryEntrySchema,
   memoryScopeSchema,
@@ -43,6 +44,8 @@ export type RunMemoryCreateInput = {
   goalFlag?: string | undefined;
   keywordFlags?: unknown;
   fileFlags?: unknown;
+  symbolFlags?: unknown;
+  anchorFlag?: boolean | undefined;
   expiresFlag?: string | undefined;
   supersedeFlag?: string | undefined;
   autoSupersedeFlag?: boolean | undefined;
@@ -168,6 +171,7 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
 
   const keywords = toStringArray(input.keywordFlags);
   const relatedFiles = toStringArray(input.fileFlags);
+  const relatedSymbols = toStringArray(input.symbolFlags);
 
   // Boundary validation of optional metadata: Core's schema requires reason/
   // goal non-empty and expiresAt ISO-8601, so reject bad input here with a
@@ -233,6 +237,19 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
     const id = readTestEnv("MEGA_TEST_MEMORY_ENTRY_ID") ?? newId();
     const createdAt = readTestEnv("MEGA_TEST_NOW") ?? now();
 
+    // Best-effort capture (spec §5): any failure — non-git root, untracked
+    // file, extractor throw — yields undefined and the save proceeds
+    // unanchored. Skipped entirely when nothing is cited (no git spawn).
+    const anchor =
+      input.anchorFlag === false || (relatedFiles.length === 0 && relatedSymbols.length === 0)
+        ? undefined
+        : await captureCodeAnchor({
+            rootPath: project.rootPath,
+            relatedFiles,
+            relatedSymbols,
+            now: createdAt,
+          });
+
     // Parse-on-handoff boundary: re-parse here because the connector block
     // renderer writes entry.content/title verbatim into agent config files.
     const entry: MemoryEntry = memoryEntrySchema.parse({
@@ -250,6 +267,8 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
       ...(input.reasonFlag !== undefined ? { reason: input.reasonFlag } : {}),
       ...(input.goalFlag !== undefined ? { goal: input.goalFlag } : {}),
       ...(relatedFiles.length > 0 ? { relatedFiles } : {}),
+      ...(relatedSymbols.length > 0 ? { relatedSymbols } : {}),
+      ...(anchor !== undefined ? { anchor } : {}),
       ...(input.expiresFlag !== undefined ? { expiresAt: input.expiresFlag } : {}),
       ...(parsedSupersedeId !== undefined ? { supersedesId: parsedSupersedeId } : {}),
       createdAt,
@@ -347,6 +366,15 @@ export const memoryCreateCommand = defineCommand({
     reason: { type: "string", description: "Why this memory exists." },
     goal: { type: "string", description: "Goal this memory serves." },
     file: { type: "string", description: "Related file path (repeatable)." },
+    symbol: {
+      type: "string",
+      description: "Related symbol name or path#name (repeatable).",
+    },
+    anchor: {
+      type: "boolean",
+      default: true,
+      description: "Capture a code anchor from cited files/symbols (--no-anchor to skip).",
+    },
     expires: { type: "string", description: "Expiry timestamp (ISO-8601)." },
     supersede: {
       type: "string",
@@ -374,6 +402,8 @@ export const memoryCreateCommand = defineCommand({
       goalFlag: typeof args.goal === "string" ? args.goal : undefined,
       keywordFlags: args.keyword,
       fileFlags: args.file,
+      symbolFlags: args.symbol,
+      anchorFlag: args.anchor !== false,
       expiresFlag: typeof args.expires === "string" ? args.expires : undefined,
       supersedeFlag: typeof args.supersede === "string" ? args.supersede : undefined,
       // Citty negation trap (commit 38488043): --no-auto-supersede lands on the

@@ -12,6 +12,12 @@ import { embed, readVectors } from "@megasaver/embeddings";
 import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
+import {
+  type ContradictedDisclosure,
+  type VerificationBadge,
+  spotCheckHits,
+  verificationBadgeFor,
+} from "./code-truth-check.js";
 
 // embedFn is injectable so the boundary can be unit-tested with a fake — no model
 // in CI. storeRoot locates the per-project memory-vector sidecar; absent ⇒ the
@@ -21,6 +27,13 @@ export type GetRelevantMemoriesEnv = {
   registry: CoreRegistry;
   storeRoot?: string;
   embedFn?: EmbedFn;
+  // Pro is resolved CLI-side (mega mcp serve) and threaded through ServerDeps;
+  // the spot-check (i6 §8.4) is a no-op when absent/false. now/monotonicNow/
+  // execGit are injectable for deterministic spot-check tests.
+  isPro?: boolean;
+  now?: () => string;
+  monotonicNow?: () => number;
+  execGit?: (args: string[], cwd: string) => string;
 };
 
 const getRelevantMemoriesInputSchema = z
@@ -35,7 +48,11 @@ const getRelevantMemoriesInputSchema = z
   .strict();
 
 export type GetRelevantMemoriesResult = {
-  memory: readonly (MemoryEntry & { changedFrom?: ChangedFrom })[];
+  memory: readonly (MemoryEntry & {
+    changedFrom?: ChangedFrom;
+    verification: VerificationBadge;
+  })[];
+  contradictedByCode?: ContradictedDisclosure[];
 };
 
 // Best-effort semantic ranking: returns vector-ranked memories ONLY when a
@@ -119,13 +136,43 @@ export async function handleGetRelevantMemories(
 
   try {
     const semantic = await semanticMemoryRanking(env, projectId as ProjectId, task, limit, at);
-    if (semantic !== null) return { memory: withChangedFrom(env.registry, semantic) };
-    const memory = env.registry.searchMemoryEntries(projectId as ProjectId, {
-      text: task,
-      asOf: at,
-      ...(limit !== undefined ? { limit } : {}),
-    });
-    return { memory: withChangedFrom(env.registry, memory) };
+    const ranked =
+      semantic ??
+      env.registry.searchMemoryEntries(projectId as ProjectId, {
+        text: task,
+        asOf: at,
+        ...(limit !== undefined ? { limit } : {}),
+      });
+    // Pre-recall spot-check (i6 §8.4): Pro-only, fail-open, ~50ms budget.
+    // Contradicted hits are EXCLUDED from the response and disclosed in
+    // contradictedByCode; the stale/validTo flip persists inline inside THIS
+    // try/catch (architect M3 — the bridge has no post-response lifecycle).
+    const project = env.registry.getProject(projectId as ProjectId);
+    const check =
+      project !== null
+        ? await spotCheckHits(
+            {
+              registry: env.registry,
+              isPro: env.isPro ?? false,
+              now: env.now ?? (() => new Date().toISOString()),
+              ...(env.monotonicNow !== undefined ? { monotonicNow: env.monotonicNow } : {}),
+              ...(env.execGit !== undefined ? { execGit: env.execGit } : {}),
+              ...(env.storeRoot !== undefined ? { ledger: { storeRoot: env.storeRoot } } : {}),
+            },
+            project.rootPath,
+            ranked,
+          )
+        : { hits: [...ranked], contradictedByCode: [] as ContradictedDisclosure[] };
+    const memory = withChangedFrom(env.registry, check.hits).map((m) => ({
+      ...m,
+      verification: verificationBadgeFor(m),
+    }));
+    return {
+      memory,
+      ...(check.contradictedByCode.length > 0
+        ? { contradictedByCode: check.contradictedByCode }
+        : {}),
+    };
   } catch (err) {
     if (err instanceof CoreRegistryError && err.code === "project_not_found") {
       throw new McpBridgeError("resource_not_found", err.message);

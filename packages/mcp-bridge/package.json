@@ -24,6 +24,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@megasaver/connectors-shared": "workspace:*",
     "@megasaver/content-store": "workspace:*",
     "@megasaver/context-pruner": "workspace:*",
     "@megasaver/core": "workspace:*",

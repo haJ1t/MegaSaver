@@ -5,6 +5,7 @@ import {
   titleSchema,
 } from "@megasaver/shared";
 import { z } from "zod";
+import { codeAnchorSchema, lastVerifiedSchema } from "./memory-anchor.js";
 
 // Order: semantic — project precedes session because sessions belong to
 // projects (containment hierarchy). Used for derived CLI strings.
@@ -112,6 +113,10 @@ export const memoryEntrySchema = z
     // M2 tier. Absent ⇒ recall (see memoryTierSchema). Only the explicit sweep
     // mutates it; recall hides `archival` by default.
     tier: memoryTierSchema.optional(),
+    // Code-truth (i6): git anchor captured at save + verification stamp.
+    // Optional + additive — legacy rows parse untouched.
+    anchor: codeAnchorSchema.optional(),
+    lastVerified: lastVerifiedSchema.optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
@@ -211,8 +216,16 @@ function ageDecay(ageMs: number): number {
 // reset a memory's age. Older memories rank lower; the working tier ranks
 // slightly higher. Always > 0, so a current memory is only ever DOWN-RANKED
 // by decay, never dropped. `now` is an ISO-8601 datetime.
+// Code-truth (i6): stale rows are down-weighted so human includeStale
+// surfaces (CLI list/search) sort them to the bottom. Agent rankers exclude
+// stale rows before ranking, so this never fires on the agent path (§9).
+export const STALE_WEIGHT = 0.3;
+
 export function effectiveConfidence(
-  memory: Pick<MemoryEntry, "confidence" | "tier" | "createdAt" | "updatedAt" | "lastActiveAt">,
+  memory: Pick<
+    MemoryEntry,
+    "confidence" | "tier" | "createdAt" | "updatedAt" | "lastActiveAt" | "stale"
+  >,
   now: string,
 ): number {
   const at = Date.parse(now);
@@ -220,7 +233,10 @@ export function effectiveConfidence(
   // A NaN from either parse ⇒ no decay (factor 1) rather than a NaN weight that
   // would corrupt the ranking sort. Ranking degrades gracefully; it never breaks.
   const factor = Number.isNaN(at) || Number.isNaN(ref) ? 1 : ageDecay(at - ref);
-  return CONFIDENCE_WEIGHT[memory.confidence] * factor * TIER_WEIGHT[tierOf(memory)];
+  // Same multiplication order as before the stale multiply was appended, so
+  // non-stale rows rank bit-identically to the pre-code-truth build.
+  const base = CONFIDENCE_WEIGHT[memory.confidence] * factor * TIER_WEIGHT[tierOf(memory)];
+  return memory.stale ? base * STALE_WEIGHT : base;
 }
 
 // M2 sweep policy. A memory is swept to `archival` when it is currently NOT
@@ -295,6 +311,10 @@ export const overlayMemoryEntrySchema = z
     // M2 tier. Absent ⇒ recall (see memoryTierSchema). Only the explicit sweep
     // mutates it; recall hides `archival` by default.
     tier: memoryTierSchema.optional(),
+    // Code-truth (i6): git anchor captured at save + verification stamp.
+    // Optional + additive — legacy rows parse untouched.
+    anchor: codeAnchorSchema.optional(),
+    lastVerified: lastVerifiedSchema.optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
@@ -345,6 +365,11 @@ export const memoryEntryUpdatePatchSchema = z
     lastActiveAt: z.string().datetime({ offset: true }).optional(),
     // tier is patchable so `mega memory sweep` can demote a memory to archival.
     tier: memoryTierSchema.optional(),
+    // anchor/lastVerified are patchable so code-truth verify can stamp results
+    // and repoint renamed paths (updateMemoryEntry re-parses the full entry —
+    // omitting these here would make every verify mutation a Zod rejection).
+    anchor: codeAnchorSchema.optional(),
+    lastVerified: lastVerifiedSchema.optional(),
     updatedAt: z.string().datetime({ offset: true }),
   })
   .strict();

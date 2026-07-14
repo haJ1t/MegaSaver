@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type TokenSaverEvent,
+  appendCodeTruthEvent,
   appendGuardEvent,
   createJsonDirectoryCoreRegistry,
   initStore,
@@ -13,6 +14,7 @@ import { projectIdSchema } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type SavingsEventReader,
+  defaultCodeTruthTotalsReader,
   defaultGuardTotalsReader,
   runSavingsExport,
   runSavingsForecast,
@@ -1256,5 +1258,107 @@ describe("runSavingsForecast — stored budget auto-load (1.13)", () => {
       expect(err.join("\n")).toContain("corrupt");
       expect(out.join("\n")).not.toContain("% of your");
     });
+  });
+});
+
+describe("savings — stale-recall-avoided line (estimated, i6 §10)", () => {
+  beforeEach(() => activatePro());
+
+  it("history appends the stale-recall line when demotions exist", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      readCodeTruthTotals: () => ({ demotions: 2, avoidedTokens: 300 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("Stale recall waste avoided (estimated): ~300 tokens");
+    expect(out.join("\n")).toContain("across 2 demotions");
+  });
+
+  it("history omits the line when there are zero demotions", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      readCodeTruthTotals: () => ({ demotions: 0, avoidedTokens: 0 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Stale recall waste avoided");
+  });
+
+  it("insights mirrors the line", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      readCodeTruthTotals: () => ({ demotions: 1, avoidedTokens: 120 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("Stale recall waste avoided (estimated): ~120 tokens");
+  });
+
+  it("never adds the line to --json output", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      readCodeTruthTotals: () => ({ demotions: 2, avoidedTokens: 300 }),
+      json: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Stale recall waste avoided");
+  });
+
+  it("defaultCodeTruthTotalsReader sums real ledger events", async () => {
+    const projectId = projectIdSchema.parse("22222222-2222-4222-8222-222222222222");
+    await initStore(root);
+    createJsonDirectoryCoreRegistry({ rootDir: root }).createProject({
+      id: projectId,
+      name: "demo",
+      rootPath: "/tmp/demo",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    appendCodeTruthEvent(
+      { root },
+      {
+        type: "stale-recall-avoided",
+        id: randomUUID(),
+        projectId,
+        sessionId: "sess-1",
+        memoryId: "m1",
+        avoidedTokens: 120,
+        estimated: true,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    );
+    appendCodeTruthEvent(
+      { root },
+      {
+        type: "stale-recall-avoided",
+        id: randomUUID(),
+        projectId,
+        sessionId: "sess-1",
+        memoryId: "m2",
+        avoidedTokens: 30,
+        estimated: true,
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    );
+    const totals = await defaultCodeTruthTotalsReader(readStoreEnv(root))();
+    expect(totals).toEqual({ demotions: 2, avoidedTokens: 150 });
   });
 });

@@ -14,6 +14,7 @@ import { memorySearchCommand } from "./search.js";
 import { memoryShowCommand } from "./show.js";
 import { memorySweepCommand } from "./sweep.js";
 import { memoryUpdateCommand } from "./update.js";
+import { memoryVerifyCommand } from "./verify.js";
 
 export {
   type RunMemoryApproveInput,
@@ -91,6 +92,12 @@ export {
   runMemoryReopen,
   memoryReopenCommand,
 } from "./reopen.js";
+export {
+  type RunMemoryVerifyInput,
+  runMemoryVerify,
+  memoryVerifyCommand,
+  MEMORY_VERIFY_UPSELL,
+} from "./verify.js";
 
 export const memoryCommand = defineCommand({
   meta: { name: "memory", description: "Manage Mega Saver memory entries." },
@@ -111,5 +118,6 @@ export const memoryCommand = defineCommand({
     "from-session": memoryFromSessionCommand,
     history: memoryHistoryCommand,
     reopen: memoryReopenCommand,
+    verify: memoryVerifyCommand,
   },
 });

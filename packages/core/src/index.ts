@@ -1,4 +1,5 @@
 export * from "./context-gate.js";
+export * from "./code-truth.js";
 export * from "./tool-definition.js";
 export * from "./tool-router.js";
 export * from "./task-plan.js";
@@ -14,8 +15,10 @@ export {
 } from "./session-failure.js";
 export * from "./init-store.js";
 export * from "./json-directory-registry.js";
+export * from "./memory-anchor.js";
 export {
   DEFAULT_SWEEP_POLICY,
+  STALE_WEIGHT,
   type MemoryApproval,
   type MemoryConfidence,
   type MemoryEntry,

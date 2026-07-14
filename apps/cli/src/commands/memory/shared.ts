@@ -1,4 +1,4 @@
-import type { MemoryEntry, MemoryValidation } from "@megasaver/core";
+import type { CodeAnchor, LastVerified, MemoryEntry, MemoryValidation } from "@megasaver/core";
 import { memoryEntryIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 import { NAME_CONTROL_CHARS_MESSAGE } from "../../errors.js";
@@ -34,6 +34,8 @@ export function formatMemoryShowLines(entry: {
   scope: "project" | "session";
   content: string;
   createdAt: string;
+  anchor?: CodeAnchor | undefined;
+  lastVerified?: LastVerified | undefined;
 }): string[] {
   return [
     `${pad("id")}${entry.id}`,
@@ -42,6 +44,16 @@ export function formatMemoryShowLines(entry: {
     `${pad("scope")}${entry.scope}`,
     `${pad("content")}${entry.content}`,
     `${pad("createdAt")}${entry.createdAt}`,
+    ...(entry.anchor !== undefined
+      ? [
+          `${pad("anchor")}${entry.anchor.files.length} files, ${entry.anchor.symbols.length} symbols @ ${entry.anchor.repoHead.slice(0, 7)}`,
+        ]
+      : []),
+    ...(entry.lastVerified !== undefined
+      ? [
+          `${pad("verified")}${entry.lastVerified.result} @ ${entry.lastVerified.headSha.slice(0, 7)} (${entry.lastVerified.at})`,
+        ]
+      : []),
   ];
 }
 
@@ -111,6 +123,16 @@ export function formatMemoryExplainLines(entry: MemoryEntry): string[] {
     `${padExplain("evidence")}${list(entry.evidence)}`,
     `${padExplain("relatedFiles")}${list(entry.relatedFiles)}`,
     `${padExplain("relatedSymbols")}${list(entry.relatedSymbols)}`,
+    ...(entry.anchor !== undefined
+      ? [
+          `${padExplain("anchor")}${entry.anchor.files.length} files, ${entry.anchor.symbols.length} symbols @ ${entry.anchor.repoHead.slice(0, 7)}`,
+        ]
+      : []),
+    ...(entry.lastVerified !== undefined
+      ? [
+          `${padExplain("verification")}${entry.lastVerified.result} @ ${entry.lastVerified.headSha.slice(0, 7)} (${entry.lastVerified.at})`,
+        ]
+      : []),
     `${padExplain("createdAt")}${entry.createdAt}`,
     `${padExplain("updatedAt")}${entry.updatedAt}`,
     `${padExplain("expiresAt")}${entry.expiresAt ?? "-"}`,

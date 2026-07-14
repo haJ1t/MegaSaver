@@ -2,6 +2,7 @@ import {
   type CoreRegistry,
   type MemoryEntry,
   type SaveMemoryLineageResult,
+  captureCodeAnchor,
   memoryApprovalSchema,
   memoryConfidenceSchema,
   memoryEmbedText,
@@ -26,6 +27,9 @@ export type SaveMemoryEnv = {
   // vector sidecar; embedFn is injectable so tests never load the real model.
   storeRoot?: string;
   embedFn?: (texts: readonly string[]) => Promise<Float32Array[]>;
+  // Injectable git runner threaded into captureCodeAnchor so anchor tests
+  // never need a real repo. Absent ⇒ capture's execFileSync default.
+  execGit?: (args: string[], cwd: string) => string;
 };
 
 export type SaveMemoryResult = {
@@ -49,6 +53,7 @@ const saveMemoryInputSchema = z
     reason: z.string().min(1).optional(),
     goal: z.string().min(1).optional(),
     relatedFiles: z.array(z.string()).optional(),
+    relatedSymbols: z.array(z.string()).optional(),
     expiresAt: z.string().datetime({ offset: true }).optional(),
     supersedesId: z.string().min(1).optional(),
   })
@@ -102,6 +107,22 @@ export async function handleSaveMemory(
   }
   const d = parsed.data;
 
+  // Code anchor capture (i6 §5): best-effort and TOTAL — any failure (no git,
+  // missing project, extractor throw) yields undefined and the save proceeds
+  // unanchored. Capture must never block or fail a save. save_memory has no
+  // opt-out flag by design (§5.1: agents shouldn't decide).
+  const project = env.registry.getProject(d.projectId as ProjectId);
+  const anchor =
+    project !== null && (d.relatedFiles !== undefined || d.relatedSymbols !== undefined)
+      ? await captureCodeAnchor({
+          rootPath: project.rootPath,
+          ...(d.relatedFiles !== undefined ? { relatedFiles: d.relatedFiles } : {}),
+          ...(d.relatedSymbols !== undefined ? { relatedSymbols: d.relatedSymbols } : {}),
+          now: env.now(),
+          ...(env.execGit !== undefined ? { execGit: env.execGit } : {}),
+        })
+      : undefined;
+
   let entry: MemoryEntry;
   try {
     entry = memoryEntrySchema.parse({
@@ -119,6 +140,8 @@ export async function handleSaveMemory(
       ...(d.reason !== undefined ? { reason: d.reason } : {}),
       ...(d.goal !== undefined ? { goal: d.goal } : {}),
       ...(d.relatedFiles !== undefined ? { relatedFiles: d.relatedFiles } : {}),
+      ...(d.relatedSymbols !== undefined ? { relatedSymbols: d.relatedSymbols } : {}),
+      ...(anchor !== undefined ? { anchor } : {}),
       ...(d.expiresAt !== undefined ? { expiresAt: d.expiresAt } : {}),
       ...(d.supersedesId !== undefined ? { supersedesId: d.supersedesId } : {}),
       createdAt: env.now(),
