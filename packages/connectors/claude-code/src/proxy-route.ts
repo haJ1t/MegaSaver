@@ -31,6 +31,13 @@ export type ClaudeRouteAdapter = {
   inspectHooks(): boolean;
 };
 
+// Claude Code drops to a non-first-party mode for any custom ANTHROPIC_BASE_URL
+// (tool search off, hook output past the last cache_control breakpoint, late
+// attachment merge) which costs 2-10x in prompt-cache churn. This internal client
+// flag restores first-party behavior. Only honest when the proxy forwards to the
+// default Anthropic upstream — callers gate on that.
+export const FIRST_PARTY_FLAG = "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL";
+
 // ANTHROPIC_BASE_URL is a NAMED field (not an index-signature access) so strict
 // noPropertyAccessFromIndexSignature is satisfied without bracket noise.
 type Settings = {
@@ -99,7 +106,11 @@ function writeSettings(path: string, settings: Settings): void {
   }
 }
 
-export function createClaudeRouteAdapter(settingsPath: string): ClaudeRouteAdapter {
+export function createClaudeRouteAdapter(
+  settingsPath: string,
+  opts?: { assumeFirstParty?: boolean },
+): ClaudeRouteAdapter {
+  const assumeFirstParty = opts?.assumeFirstParty ?? false;
   return {
     inspect(expectedUrl) {
       const s = readSettings(settingsPath);
@@ -107,7 +118,11 @@ export function createClaudeRouteAdapter(settingsPath: string): ClaudeRouteAdapt
       if (s === "invalid") return "invalid";
       const current = s.env?.ANTHROPIC_BASE_URL;
       if (current === undefined) return "absent";
-      return current === expectedUrl ? "exact" : "foreign";
+      if (current !== expectedUrl) return "foreign";
+      // Route installed by an older version lacks the flag: report absent so the
+      // reconcile matrix re-applies (apply is idempotent and value-guarded).
+      if (assumeFirstParty && s.env?.[FIRST_PARTY_FLAG] !== "1") return "absent";
+      return "exact";
     },
     apply(expectedUrl) {
       const s = readSettings(settingsPath);
@@ -120,7 +135,11 @@ export function createClaudeRouteAdapter(settingsPath: string): ClaudeRouteAdapt
       // matrix only emits apply on an absent route, but a foreign value slipping
       // into the read→write window must not clobber the operator's own gateway.
       if (current !== undefined && current !== expectedUrl) return;
-      settings.env = { ...(settings.env ?? {}), ANTHROPIC_BASE_URL: expectedUrl };
+      settings.env = {
+        ...(settings.env ?? {}),
+        ANTHROPIC_BASE_URL: expectedUrl,
+        ...(assumeFirstParty ? { [FIRST_PARTY_FLAG]: "1" } : {}),
+      };
       writeSettings(settingsPath, settings);
     },
     removeExpected(expectedUrl) {
@@ -128,7 +147,9 @@ export function createClaudeRouteAdapter(settingsPath: string): ClaudeRouteAdapt
       if (s === "absent" || s === "invalid") return;
       // Value-guard: only drop the key when it is exactly our owned url.
       if (s.env?.ANTHROPIC_BASE_URL !== expectedUrl) return;
-      const { ANTHROPIC_BASE_URL: _drop, ...rest } = s.env;
+      // The flag is dropped unconditionally with the route: a stale first-party
+      // assertion without our route must never survive removal.
+      const { ANTHROPIC_BASE_URL: _drop, [FIRST_PARTY_FLAG]: _dropFlag, ...rest } = s.env;
       s.env = rest;
       writeSettings(settingsPath, s);
     },

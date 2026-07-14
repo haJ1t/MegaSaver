@@ -142,3 +142,65 @@ describe("ensureHooks", () => {
     expect(JSON.stringify(s)).toContain("mega hooks saver");
   });
 });
+
+describe("assumeFirstParty option", () => {
+  const FLAG = "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL";
+  const fpAdapter = () => createClaudeRouteAdapter(settings, { assumeFirstParty: true });
+  const readFullEnv = () =>
+    (JSON.parse(readFileSync(settings, "utf8")) as { env?: Record<string, string> }).env ?? {};
+
+  it("apply writes the first-party flag next to the base url", () => {
+    fpAdapter().apply(URL_OURS);
+    expect(readFullEnv()).toEqual({ ANTHROPIC_BASE_URL: URL_OURS, [FLAG]: "1" });
+  });
+
+  it("apply without the option writes only the base url (back-compat)", () => {
+    adapter().apply(URL_OURS);
+    expect(readFullEnv()).toEqual({ ANTHROPIC_BASE_URL: URL_OURS });
+  });
+
+  it("removeExpected drops both keys and preserves foreign env keys", () => {
+    writeFileSync(
+      settings,
+      JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS, [FLAG]: "1", OTHER: "keep" } }),
+    );
+    fpAdapter().removeExpected(URL_OURS);
+    expect(readFullEnv()).toEqual({ OTHER: "keep" });
+  });
+
+  it("removeExpected without the option still drops a stale flag", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS, [FLAG]: "1" } }));
+    adapter().removeExpected(URL_OURS);
+    expect(readFullEnv()).toEqual({});
+  });
+
+  it("removeExpected on a foreign base url touches nothing", () => {
+    writeFileSync(
+      settings,
+      JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_FOREIGN, [FLAG]: "1" } }),
+    );
+    fpAdapter().removeExpected(URL_OURS);
+    expect(readFullEnv()).toEqual({ ANTHROPIC_BASE_URL: URL_FOREIGN, [FLAG]: "1" });
+  });
+
+  it("inspect reports absent when the route exists but the flag is missing (self-heal)", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS } }));
+    expect(fpAdapter().inspect(URL_OURS)).toBe("absent");
+  });
+
+  it("inspect reports exact when both keys are present", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS, [FLAG]: "1" } }));
+    expect(fpAdapter().inspect(URL_OURS)).toBe("exact");
+  });
+
+  it("inspect without the option ignores the flag (unchanged semantics)", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS } }));
+    expect(adapter().inspect(URL_OURS)).toBe("exact");
+  });
+
+  it("apply is idempotent when re-run to heal a missing flag", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS } }));
+    fpAdapter().apply(URL_OURS);
+    expect(readFullEnv()).toEqual({ ANTHROPIC_BASE_URL: URL_OURS, [FLAG]: "1" });
+  });
+});

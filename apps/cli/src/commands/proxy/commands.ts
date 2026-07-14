@@ -21,7 +21,11 @@ function realDeps(storeFlag: string | undefined): ProxyControlPlaneDeps {
   const storeRoot = resolveStorePath(readStoreEnv(storeFlag));
   return {
     storeRoot,
-    route: createClaudeRouteAdapter(resolveClaudeCodeSettingsPath()),
+    route: createClaudeRouteAdapter(resolveClaudeCodeSettingsPath(), {
+      // The LaunchAgent this control plane installs always supervises the
+      // default Anthropic upstream (superviseArgv carries no --upstream).
+      assumeFirstParty: true,
+    }),
     launchctl: nodeLaunchctlRunner,
     plistPath: join(homedir(), "Library", "LaunchAgents", "com.megasaver.proxy.plist"),
     backupDir: join(storeRoot, "proxy", "migration-backups"),
