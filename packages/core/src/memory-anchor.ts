@@ -4,9 +4,21 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import { type ExtractedBlock, extractBlocksForFile } from "@megasaver/output-filter";
 import { z } from "zod";
 
+// No control chars (C0 + DEL): stored paths are fed into cat-file's batched
+// stdin as `HEAD:<path>` lines and mapped back positionally — a newline would
+// inject an extra query and desync the pairing (defense at the write boundary,
+// not just in captureCodeAnchor's stripping). Space IS allowed — cat-file
+// resolves `HEAD:src/My File.ts` as one object — matching normalizeRepoPath so
+// a legit space-containing path is never silently dropped as unanchored.
+const anchorPathSchema = z
+  .string()
+  .min(1)
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting control chars is the point
+  .regex(/^[^\x00-\x1f\x7f]+$/);
+
 export const fileAnchorSchema = z
   .object({
-    path: z.string().min(1), // repo-relative, POSIX separators
+    path: anchorPathSchema, // repo-relative, POSIX separators
     blobSha: z.string().min(1), // git blob SHA at capture
   })
   .strict();
@@ -14,7 +26,7 @@ export type FileAnchor = z.infer<typeof fileAnchorSchema>;
 
 export const symbolAnchorSchema = z
   .object({
-    path: z.string().min(1),
+    path: anchorPathSchema,
     name: z.string().min(1),
     startLine: z.number().int().positive(),
     endLine: z.number().int().positive(),

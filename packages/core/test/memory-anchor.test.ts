@@ -74,6 +74,34 @@ describe("memory-anchor schemas", () => {
     expect(codeAnchorSchema.safeParse({ ...ANCHOR, bogus: 1 }).success).toBe(false);
   });
 
+  it("rejects control chars in anchor paths but allows spaces (cat-file stdin guard)", () => {
+    // A newline would inject an extra `HEAD:<path>` query into the batched
+    // cat-file stdin and shift every positional lines[i] -> paths[i] pairing.
+    const newlinePath = "src/a.ts\nHEAD:src/secret.ts";
+    const delPath = "src/a\x7fb.ts";
+    const spacePath = "docs/Design Doc.md";
+    expect(fileAnchorSchema.safeParse({ ...ANCHOR.files[0], path: newlinePath }).success).toBe(
+      false,
+    );
+    expect(fileAnchorSchema.safeParse({ ...ANCHOR.files[0], path: delPath }).success).toBe(false);
+    expect(symbolAnchorSchema.safeParse({ ...ANCHOR.symbols[0], path: newlinePath }).success).toBe(
+      false,
+    );
+    expect(
+      codeAnchorSchema.safeParse({
+        ...ANCHOR,
+        files: [{ ...ANCHOR.files[0], path: newlinePath }],
+      }).success,
+    ).toBe(false);
+    // Space is NOT an injection vector — cat-file resolves `HEAD:docs/Design
+    // Doc.md` as one object — and must parse so legit paths aren't dropped.
+    expect(fileAnchorSchema.safeParse({ ...ANCHOR.files[0], path: spacePath }).success).toBe(true);
+    // A normal repo-relative path with dots/slashes/hyphens still parses.
+    expect(fileAnchorSchema.safeParse({ path: "src/my-file_2.ts", blobSha: "x" }).success).toBe(
+      true,
+    );
+  });
+
   it("rejects non-positive line numbers on symbol anchors", () => {
     expect(symbolAnchorSchema.safeParse({ ...ANCHOR.symbols[0], startLine: 0 }).success).toBe(
       false,
