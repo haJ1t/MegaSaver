@@ -46,6 +46,7 @@ export const mcpToolNameSchema = z.enum([
   "save_memory",
   "save_project_rule",
   "search_memory",
+  "verify_memories",
 ]);
 
 export type McpToolName = z.infer<typeof mcpToolNameSchema>;

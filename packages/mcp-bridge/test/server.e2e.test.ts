@@ -274,6 +274,7 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
         "save_memory",
         "save_project_rule",
         "search_memory",
+        "verify_memories",
       ].sort(),
     );
     // Exactly one name per tool: no tool is exposed under both its mega_*
@@ -324,6 +325,7 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
         "save_memory",
         "save_project_rule",
         "search_memory",
+        "verify_memories",
       ].sort(),
     );
     // Exactly one name per tool: no duplicates across the legacy set.
@@ -536,10 +538,11 @@ describe("phase 7 tool router over the bridge", () => {
     return { client, server };
   }
 
-  it("lists 34 tools", async () => {
+  it("lists 35 tools", async () => {
     const { client, server } = await connectWithTools();
     const { tools } = (await client.listTools()) as { tools: { name: string }[] };
-    expect(tools).toHaveLength(34);
+    expect(tools).toHaveLength(35);
+    expect(tools.map((t) => t.name)).toContain("verify_memories");
     expect(tools.map((t) => t.name)).toContain("approve_memory");
     expect(tools.map((t) => t.name)).toContain("audit_token_usage");
     expect(tools.map((t) => t.name)).toContain("proxy_search_code");

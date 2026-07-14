@@ -46,6 +46,7 @@ import { handleSaveMemory } from "./tools/save-memory.js";
 import { handleSearchCode } from "./tools/search-code.js";
 import { handleSearchMemory } from "./tools/search-memory.js";
 import { handleSweepMemory } from "./tools/sweep-memory.js";
+import { handleVerifyMemories } from "./tools/verify-memories.js";
 
 // Maximum number of chunkSetIds the server-owned expansion-guard set may hold.
 // Evicts the oldest entry (FIFO) when the cap is exceeded so a long-lived
@@ -220,6 +221,10 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
   { id: "save_memory", description: "Write a typed memory entry to a project." },
   { id: "save_project_rule", description: "Write a reusable project rule." },
   { id: "search_memory", description: "Search project memories by text and filters." },
+  {
+    id: "verify_memories",
+    description: "Verify anchored memories against the current repo (Pro).",
+  },
 ];
 
 // The MCP SDK serialises only `error.message` into the JSON-RPC
@@ -425,6 +430,11 @@ export function buildServer(deps: ServerDeps): {
         );
       case "get_applicable_rules":
         return handleGetApplicableRules({ registry: deps.registry }, args);
+      case "verify_memories":
+        return handleVerifyMemories(
+          { registry: deps.registry, now, isPro: deps.isPro ?? false },
+          args,
+        );
     }
   }
 

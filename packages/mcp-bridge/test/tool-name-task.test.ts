@@ -38,6 +38,7 @@ describe("tool-name enum (34 tools)", () => {
       "save_memory",
       "save_project_rule",
       "search_memory",
+      "verify_memories",
     ]);
   });
 });

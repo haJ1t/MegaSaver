@@ -88,6 +88,7 @@ describe("McpToolName type regression", () => {
       "save_memory",
       "save_project_rule",
       "search_memory",
+      "verify_memories",
     ] = mcpToolNameSchema.options;
     void _t;
   });
