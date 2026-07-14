@@ -5,6 +5,7 @@ import {
   titleSchema,
 } from "@megasaver/shared";
 import { z } from "zod";
+import { codeAnchorSchema, lastVerifiedSchema } from "./memory-anchor.js";
 
 // Order: semantic — project precedes session because sessions belong to
 // projects (containment hierarchy). Used for derived CLI strings.
@@ -112,6 +113,10 @@ export const memoryEntrySchema = z
     // M2 tier. Absent ⇒ recall (see memoryTierSchema). Only the explicit sweep
     // mutates it; recall hides `archival` by default.
     tier: memoryTierSchema.optional(),
+    // Code-truth (i6): git anchor captured at save + verification stamp.
+    // Optional + additive — legacy rows parse untouched.
+    anchor: codeAnchorSchema.optional(),
+    lastVerified: lastVerifiedSchema.optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
@@ -295,6 +300,10 @@ export const overlayMemoryEntrySchema = z
     // M2 tier. Absent ⇒ recall (see memoryTierSchema). Only the explicit sweep
     // mutates it; recall hides `archival` by default.
     tier: memoryTierSchema.optional(),
+    // Code-truth (i6): git anchor captured at save + verification stamp.
+    // Optional + additive — legacy rows parse untouched.
+    anchor: codeAnchorSchema.optional(),
+    lastVerified: lastVerifiedSchema.optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
@@ -345,6 +354,11 @@ export const memoryEntryUpdatePatchSchema = z
     lastActiveAt: z.string().datetime({ offset: true }).optional(),
     // tier is patchable so `mega memory sweep` can demote a memory to archival.
     tier: memoryTierSchema.optional(),
+    // anchor/lastVerified are patchable so code-truth verify can stamp results
+    // and repoint renamed paths (updateMemoryEntry re-parses the full entry —
+    // omitting these here would make every verify mutation a Zod rejection).
+    anchor: codeAnchorSchema.optional(),
+    lastVerified: lastVerifiedSchema.optional(),
     updatedAt: z.string().datetime({ offset: true }),
   })
   .strict();
