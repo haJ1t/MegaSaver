@@ -138,6 +138,7 @@ export async function spotCheckHits<T extends MemoryEntry>(
     // Flip persisted INLINE, fail-open (§7 contradicted bucket): stale, close
     // validTo ONLY when open (and own that close via closedByCodeTruth),
     // machine-composed evidence, lastVerified. NEVER touches lastActiveAt.
+    let closed = false;
     try {
       const now = env.now();
       const open = hit.validTo === undefined || hit.validTo === null;
@@ -156,10 +157,14 @@ export async function spotCheckHits<T extends MemoryEntry>(
         },
         updatedAt: now,
       });
+      closed = true;
     } catch {
       // swallowed: the spot-check must never fail the recall response
     }
-    if (env.ledger !== undefined) {
+    // Ledger only when the close persisted — a persistently failing write keeps
+    // the row open and re-contradicts every recall, so an unconditional append
+    // would double-count the same avoided recall on each pass.
+    if (closed && env.ledger !== undefined) {
       // Analytics only: the ledger append must never block or fail recall.
       try {
         appendCodeTruthEvent(

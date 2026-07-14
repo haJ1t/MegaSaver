@@ -315,4 +315,28 @@ describe("code-truth on recall surfaces (i6 §8.4/§8.6)", () => {
       rmSync(store, { recursive: true, force: true });
     }
   });
+
+  it("MINOR C: a persistently failing close write appends NO ledger event", async () => {
+    const registry = seeded();
+    makeEntry(registry, STALE, { anchor: staleAnchor() });
+    // The close write always throws (e.g. disk full) ⇒ the row stays open and
+    // is re-contradicted on every recall. The ledger event must NOT be appended
+    // unless the close actually persisted, else it double-counts every recall.
+    const failing: CoreRegistry = {
+      ...registry,
+      updateMemoryEntry: (() => {
+        throw new Error("disk full");
+      }) as CoreRegistry["updateMemoryEntry"],
+    };
+    const store = mkdtempSync(join(tmpdir(), "code-truth-ledger-fail-"));
+    try {
+      await handleGetRelevantMemories(
+        { registry: failing, storeRoot: store, isPro: true, now: () => NOW, execGit: fakeExecGit },
+        { projectId: PROJECT_ID, task: "verifyToken" },
+      );
+      expect(readCodeTruthEvents({ root: store }, PROJECT_ID)).toHaveLength(0);
+    } finally {
+      rmSync(store, { recursive: true, force: true });
+    }
+  });
 });
