@@ -165,7 +165,9 @@ export async function runSupervisor(input: RunSupervisorInput): Promise<Supervis
       createClaudeRouteAdapter(input.settingsPath, {
         // A custom upstream is genuinely non-first-party: asserting otherwise
         // would leak client attribution/beta behavior to a third-party origin.
-        assumeFirstParty: input.upstream === DEFAULT_UPSTREAM,
+        // Origin-compare, matching the credential-forwarding gate: a trailing
+        // slash or case difference must not silently disable the flag.
+        assumeFirstParty: new URL(input.upstream).origin === new URL(DEFAULT_UPSTREAM).origin,
       }),
     listener: handle.listener,
     ownedUrl: input.ownedUrl,

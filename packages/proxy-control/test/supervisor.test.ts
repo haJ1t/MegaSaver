@@ -39,7 +39,9 @@ function fakeRoute(initial: string | null): RouteAdapter & { value: string | nul
       return state.value === expected ? "exact" : "foreign";
     },
     apply(expected) {
+      if (state.value === expected) return false;
       state.value = expected;
+      return true;
     },
     removeExpected(expected) {
       if (state.value === expected) state.value = null;
@@ -62,6 +64,7 @@ function brokenRoute(initial: string | null): RouteAdapter & { value: string | n
     },
     apply() {
       /* write silently fails */
+      return false;
     },
     removeExpected() {
       /* removal silently fails */
@@ -398,6 +401,54 @@ describe("monitorTick — observe-only while a transition is retained", () => {
     const route2 = fakeRoute(null);
     monitorTick(deps(route2, fakeListener(true, "matching")));
     expect(readRuntimeState(store)?.routeReapplies).toBe(2);
+  });
+
+  it("exact route with incomplete env: healthy tick heals via apply and counts one write", () => {
+    // Models a route installed by an older version: URL correct, first-party
+    // flag missing. inspect() must stay "exact" (removal paths depend on it);
+    // healing happens through the write-reporting apply.
+    let healed = false;
+    const route: RouteAdapter = {
+      inspect: () => "exact",
+      apply: () => {
+        if (healed) return false;
+        healed = true;
+        return true;
+      },
+      removeExpected: () => {},
+    };
+    writeControlState(
+      store,
+      control({
+        transition: null,
+        routeLease: { url: OWNED, instanceId: "inst", phase: "active", installedAt: "x" },
+      }),
+    );
+    monitorTick(deps(route, fakeListener(true, "matching")));
+    expect(healed).toBe(true);
+    expect(readRuntimeState(store)?.routeReapplies).toBe(1);
+    // Steady state: apply reports no write, counter stays put, lease intact.
+    monitorTick(deps(route, fakeListener(true, "matching")));
+    expect(readRuntimeState(store)?.routeReapplies).toBe(1);
+    expect(readControlState(store).routeLease).not.toBeNull();
+  });
+
+  it("exact route with incomplete env: unhealthy listener never drops the lease", () => {
+    const route: RouteAdapter = {
+      inspect: () => "exact",
+      apply: () => true,
+      removeExpected: () => {},
+    };
+    writeControlState(
+      store,
+      control({
+        transition: null,
+        routeLease: { url: OWNED, instanceId: "inst", phase: "active", installedAt: "x" },
+      }),
+    );
+    monitorTick(deps(route, fakeListener(false, "none")));
+    expect(readControlState(store).routeLease).not.toBeNull();
+    expect(readControlState(store).reconcileBlocked).toBeNull();
   });
 
   it("F31: a second drift bumps the counter to 2", () => {

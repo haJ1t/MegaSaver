@@ -4,7 +4,7 @@ import {
   createClaudeRouteAdapter,
   resolveClaudeCodeSettingsPath,
 } from "@megasaver/connector-claude-code";
-import { nodeLaunchctlRunner } from "@megasaver/proxy-control";
+import { nodeLaunchctlRunner, readControlState } from "@megasaver/proxy-control";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
 import {
@@ -17,14 +17,24 @@ import {
 
 const OWNED_URL = "http://127.0.0.1:8787";
 
+function upstreamIsDefaultOrigin(storeRoot: string): boolean {
+  try {
+    const upstream = readControlState(storeRoot).upstreamBaseUrl;
+    return new URL(upstream).origin === new URL("https://api.anthropic.com").origin;
+  } catch {
+    return false;
+  }
+}
+
 function realDeps(storeFlag: string | undefined): ProxyControlPlaneDeps {
   const storeRoot = resolveStorePath(readStoreEnv(storeFlag));
   return {
     storeRoot,
     route: createClaudeRouteAdapter(resolveClaudeCodeSettingsPath(), {
-      // The LaunchAgent this control plane installs always supervises the
-      // default Anthropic upstream (superviseArgv carries no --upstream).
-      assumeFirstParty: true,
+      // Gate on the persisted upstream fact, not on the prose invariant that
+      // superviseArgv carries no --upstream: a hand-edited control store or
+      // plist must never cause a first-party assertion toward a foreign origin.
+      assumeFirstParty: upstreamIsDefaultOrigin(storeRoot),
     }),
     launchctl: nodeLaunchctlRunner,
     plistPath: join(homedir(), "Library", "LaunchAgents", "com.megasaver.proxy.plist"),

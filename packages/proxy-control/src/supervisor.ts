@@ -11,7 +11,9 @@ import {
 // supplies the Claude route adapter). Only the value-guarded surface is needed.
 export type RouteAdapter = {
   inspect(expectedUrl: string): "absent" | "exact" | "foreign" | "invalid";
-  apply(expectedUrl: string): void;
+  // Reports whether a write happened; idempotent re-applies return false so the
+  // monitor can heal env drift on every healthy tick without counting no-ops.
+  apply(expectedUrl: string): boolean;
   removeExpected(expectedUrl: string): void;
 };
 
@@ -285,23 +287,34 @@ export function monitorTick(deps: SupervisorDeps): void {
   // stops the supervisor first, so re-apply cannot fight the user.
   if (control.routeLease === null) return;
   const route = deps.route.inspect(deps.ownedUrl);
-  if (route === "exact") return; // still routed, no drift
 
   const nowIso = new Date(deps.now()).toISOString();
   const healthy = deps.listener.isAlive() && deps.listener.healthCheck() === "matching";
+
+  const bumpReapply = () => {
+    const runtime = readRuntimeState(deps.storeRoot);
+    writeRuntimeState(deps.storeRoot, {
+      ...(runtime ?? {}),
+      version: 1,
+      routeReapplies: (runtime?.routeReapplies ?? 0) + 1,
+      lastRouteReappliedAt: nowIso,
+    });
+  };
+
+  if (route === "exact") {
+    // Still routed. Heal env drift beside an intact route (e.g. the first-party
+    // flag missing from an install by an older version): apply is idempotent,
+    // value-guarded, and reports whether it wrote — steady state costs no I/O.
+    if (healthy && deps.route.apply(deps.ownedUrl)) bumpReapply();
+    return;
+  }
 
   if (route === "absent" && healthy) {
     deps.route.apply(deps.ownedUrl);
     if (deps.route.inspect(deps.ownedUrl) === "exact") {
       // Route restored: keep the lease, no block, no drain. Count the
       // re-apply so doctor can surface settings-rewrite churn.
-      const runtime = readRuntimeState(deps.storeRoot);
-      writeRuntimeState(deps.storeRoot, {
-        ...(runtime ?? {}),
-        version: 1,
-        routeReapplies: (runtime?.routeReapplies ?? 0) + 1,
-        lastRouteReappliedAt: nowIso,
-      });
+      bumpReapply();
       return;
     }
     // Re-apply did not take (lost write / refused): fall through to the

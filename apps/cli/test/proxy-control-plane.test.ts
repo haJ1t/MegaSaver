@@ -41,7 +41,9 @@ function fakeRoute(initial: string | null) {
         | "foreign"
         | "invalid",
     apply: (u: string) => {
+      if (s.value === u) return false;
       s.value = u;
+      return true;
     },
     removeExpected: (u: string) => {
       if (s.value === u) s.value = null;
