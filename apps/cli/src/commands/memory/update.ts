@@ -32,6 +32,7 @@ export type RunMemoryUpdateInput = {
   goalFlag: string | undefined;
   keywordFlags: unknown;
   fileFlags: unknown;
+  symbolFlags: unknown;
   staleFlag: boolean | undefined;
   expiresFlag: string | undefined;
   storeFlag: string | undefined;
@@ -158,6 +159,11 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
     touched = true;
     contentBearing = true;
   }
+  if (input.symbolFlags !== undefined) {
+    patch.relatedSymbols = toStringArray(input.symbolFlags);
+    touched = true;
+    contentBearing = true;
+  }
   if (input.staleFlag !== undefined) {
     patch.stale = input.staleFlag;
     touched = true;
@@ -224,6 +230,10 @@ export const memoryUpdateCommand = defineCommand({
     reason: { type: "string", description: "Set reason." },
     goal: { type: "string", description: "Set goal." },
     file: { type: "string", description: "Replace related files (repeatable)." },
+    symbol: {
+      type: "string",
+      description: "Replace related symbols, name or path#name (repeatable).",
+    },
     stale: { type: "boolean", description: "Mark stale (--no-stale to clear)." },
     expires: { type: "string", description: "Set expiry timestamp (ISO-8601)." },
     store: { type: "string", description: "Override store directory." },
@@ -242,6 +252,7 @@ export const memoryUpdateCommand = defineCommand({
       goalFlag: typeof args.goal === "string" ? args.goal : undefined,
       keywordFlags: args.keyword,
       fileFlags: args.file,
+      symbolFlags: args.symbol,
       staleFlag: typeof args.stale === "boolean" ? args.stale : undefined,
       expiresFlag: typeof args.expires === "string" ? args.expires : undefined,
       jsonFlag: args.json === true,

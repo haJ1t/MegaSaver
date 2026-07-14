@@ -76,6 +76,7 @@ describe("mega memory update — lastActiveAt touch", () => {
       goalFlag: undefined,
       keywordFlags: undefined,
       fileFlags: undefined,
+      symbolFlags: undefined,
       staleFlag: undefined,
       expiresFlag: undefined,
       storeFlag: store,
