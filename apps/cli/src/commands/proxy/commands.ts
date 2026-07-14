@@ -60,9 +60,18 @@ export const proxyStartCommand = defineCommand({
     description:
       "Persistently enable the local proxy: install the supervisor LaunchAgent and route future Claude sessions.",
   },
-  args: { ...storeArg },
+  args: {
+    ...storeArg,
+    "restart-supervisor": {
+      type: "boolean",
+      default: false,
+      description: "Restart the managed supervisor after an upgrade so route migrations apply.",
+    },
+  },
   run({ args }) {
-    const r = runProxyStart(realDeps(typeof args.store === "string" ? args.store : undefined));
+    const r = runProxyStart(realDeps(typeof args.store === "string" ? args.store : undefined), {
+      restartSupervisor: args["restart-supervisor"] === true,
+    });
     if (r.status === "transition_in_progress") {
       console.error("mega proxy: a proxy transition is already in progress; retry shortly.");
       process.exitCode = 1;

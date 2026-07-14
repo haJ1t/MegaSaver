@@ -1,6 +1,6 @@
 ---
 "@megasaver/connector-claude-code": minor
-"@megasaver/proxy-control": patch
+"@megasaver/proxy-control": minor
 "@megasaver/cli": patch
 ---
 
@@ -12,5 +12,5 @@ eliminating the custom-base-URL cache penalties: inline tool schemas
 cold-cache double writes (up to 176k tokens).
 
 For an already-running proxy installed by an older version, run
-`mega proxy start` once after upgrading. The new CLI process safely heals the
-owned route without interrupting connected clients.
+`mega proxy start --restart-supervisor` once after upgrading. The explicit
+managed-job restart loads the new monitor, which safely heals the owned route.

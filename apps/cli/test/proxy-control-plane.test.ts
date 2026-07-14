@@ -29,13 +29,10 @@ const OWNED = "http://127.0.0.1:8787";
 const MANAGED_ARGV = ["/bin/mega", "proxy", "supervise", "--store", "/store"];
 
 function fakeRoute(initial: string | null) {
-  const s = { value: initial, applyCalls: 0 };
+  const s = { value: initial };
   return {
     get value() {
       return s.value;
-    },
-    get applyCalls() {
-      return s.applyCalls;
     },
     inspect: (u: string) =>
       (s.value === null ? "absent" : s.value === u ? "exact" : "foreign") as
@@ -44,7 +41,6 @@ function fakeRoute(initial: string | null) {
         | "foreign"
         | "invalid",
     apply: (u: string) => {
-      s.applyCalls++;
       if (s.value === u) return false;
       s.value = u;
       return true;
@@ -73,7 +69,7 @@ function fakeLaunchctl(loaded: Record<string, string[] | undefined> = {}): Launc
       calls.push("bootstrap");
       state["com.megasaver.proxy"] = MANAGED_ARGV;
     },
-    kickstart: () => calls.push("kickstart"),
+    kickstart: (label, force) => calls.push(`kickstart ${label} ${force}`),
   };
 }
 
@@ -105,11 +101,18 @@ describe("runProxyStart", () => {
     expect(lc.calls).not.toContain("bootout com.megasaver.proxy");
   });
 
-  it("re-applies an exact route when an older managed supervisor is already running", () => {
-    const route = fakeRoute(OWNED);
+  it("restarts an older managed supervisor only when explicitly requested", () => {
     const lc = fakeLaunchctl({ "com.megasaver.proxy": MANAGED_ARGV });
-    expect(runProxyStart(deps(route, lc)).status).toBe("already_managed");
-    expect(route.applyCalls).toBe(1);
+    expect(runProxyStart(deps(fakeRoute(OWNED), lc), { restartSupervisor: true }).status).toBe(
+      "already_managed",
+    );
+    expect(lc.calls).toContain("kickstart com.megasaver.proxy true");
+  });
+
+  it("does not restart an already managed supervisor by default", () => {
+    const lc = fakeLaunchctl({ "com.megasaver.proxy": MANAGED_ARGV });
+    expect(runProxyStart(deps(fakeRoute(OWNED), lc)).status).toBe("already_managed");
+    expect(lc.calls).not.toContain("kickstart com.megasaver.proxy true");
   });
 });
 
