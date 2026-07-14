@@ -5,7 +5,7 @@ created: 2026-07-14
 sources:
   - session forensics 2026-07-14 (7-agent workflow wf_7256731c-d79, request-body captures, proxy usage.jsonl)
   - docs/superpowers/specs/2026-07-14-proxy-first-party-cache-parity-design.md
-  - commits 966ffad3, 3f11b49a (fix/connector-first-party-cache-parity → main)
+  - commits 966ffad3, 3f11b49a, 09fe8970, 9c90ea20, 25ad04ae, b09a3983
 ---
 
 # Proxy First-Party Cache Parity
@@ -45,6 +45,14 @@ write-reporting idempotent `apply()`. `inspect()` stays URL-only — an earlier
 draft that lied about flag-less routes was killed by adversarial review
 (stranded live routes on every removal path).
 
+Final hardening closes the upgrade and custom-upstream edges: the production
+adapter removes any stale first-party flag when the configured upstream is not
+Anthropic's default, and real-adapter tests cover canonical, normalized, and
+custom origins. Existing managed supervisors are refreshed only through the
+explicit `mega proxy start --restart-supervisor` operator action. URL equality
+is never treated as proof of service ownership; legacy and foreign jobs are not
+restarted.
+
 ## Result (same benchmark, after fix + saver enabled)
 
 | task | cost savings | input savings |
@@ -56,7 +64,10 @@ draft that lied about flag-less routes was killed by adversarial review
 | **geomean** | **1.30x** | **1.63x** |
 
 4/4 tasks won (was 0/4 at 0.38x cost before the fix). Single-run cells —
-direction robust, magnitudes carry run-to-run variance.
+direction robust, magnitudes carry run-to-run variance. Aggregate billed cost
+was approximately **$1.87 MegaSaver vs $2.49 baseline**. The archived treatment
+settings contained the log, intent, and saver hooks; the harness now snapshots
+settings only after setup and fails before billing if the saver hook is absent.
 
 ## Open threads
 
@@ -64,7 +75,9 @@ direction robust, magnitudes carry run-to-run variance.
   orphaned flags (downgrade/manual-swap residual) and client versions that
   drop the flag. (Spawned task chip 2026-07-14.)
 - The "4x cheaper" product claim needs aggressive saver mode + longer
-  tool-heavy sessions to test honestly; balanced mode measured 1.30x cost.
+  tool-heavy sessions to test honestly; balanced mode measured 1.30x cost in
+  this smoke benchmark, with nondeterministic turn counts limiting magnitude
+  claims.
 - Benchmark harness (`scripts/run-megasaver-claude-limit-test.sh`) now
   measures real usage tokens, isolates arms via `--setting-sources ""`, and
   suppresses aggregates when any session fails.
