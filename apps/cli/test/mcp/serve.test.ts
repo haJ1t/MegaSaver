@@ -88,4 +88,27 @@ describe("runMcpServe", () => {
 
     expect(captured?.transportFactory).toBe(transportFactory);
   });
+
+  it("threads resolved Pro entitlement through to createBridge", async () => {
+    const registry = createInMemoryCoreRegistry();
+    let captured: McpBridgeConfig | undefined;
+    const fakeBridge: McpBridge = {
+      transport: "stdio",
+      start: async () => undefined,
+      stop: async () => undefined,
+    };
+
+    await runMcpServe({
+      resolveStore: async () => ({ storeRoot: "/tmp/x", registry }),
+      createBridge: (config) => {
+        captured = config;
+        return fakeBridge;
+      },
+      resolveIsPro: () => true,
+      waitForShutdown: async () => undefined,
+      stderr: () => undefined,
+    });
+
+    expect(captured?.isPro).toBe(true);
+  });
 });

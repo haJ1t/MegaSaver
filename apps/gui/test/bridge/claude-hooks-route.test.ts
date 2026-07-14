@@ -28,6 +28,7 @@ describe("GET/POST/DELETE /api/hooks/claude-code", () => {
       postInstalled: false,
       intentInstalled: false,
       warmupInstalled: false,
+      guardInstalled: false,
     });
   });
 

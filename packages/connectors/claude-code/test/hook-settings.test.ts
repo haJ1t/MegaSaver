@@ -4,15 +4,20 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_HOOK_COMMAND,
+  GUARD_HOOK_COMMAND,
+  GUARD_HOOK_MATCHER,
   HOOK_MATCHER,
   INTENT_HOOK_COMMAND,
   SAVER_HOOK_COMMAND,
   SAVER_HOOK_MATCHER,
   WARMUP_HOOK_COMMAND,
+  addGuardHook,
   addPostToolUseHook,
+  addPreToolUseHook,
   addSessionStartHook,
   addUserPromptSubmitHook,
   buildHookCommand,
+  hasGuardHook,
   hasSessionStartHook,
   hasUserPromptSubmitHook,
   hookCommandMatches,
@@ -84,6 +89,7 @@ describe("hook-settings", () => {
       postInstalled: true,
       intentInstalled: true,
       warmupInstalled: true,
+      guardInstalled: true,
     });
     expect(installClaudeCodeHook({ settingsPath: p }).changed).toBe(false);
   });
@@ -175,6 +181,7 @@ describe("hook-settings", () => {
       postInstalled: false,
       intentInstalled: false,
       warmupInstalled: false,
+      guardInstalled: false,
     });
     const bad = tmpSettings();
     writeFileSync(bad, "{ not json");
@@ -194,6 +201,7 @@ describe("hook-settings", () => {
       postInstalled: true,
       intentInstalled: true,
       warmupInstalled: true,
+      guardInstalled: true,
     });
     expect(SAVER_HOOK_COMMAND).toBe("mega hooks saver");
     expect(removePostToolUseHook).toBeTypeOf("function");
@@ -273,6 +281,56 @@ describe("SessionStart warmup hook", () => {
     const written = JSON.parse(readFileSync(p, "utf8"));
     expect(hasSessionStartHook(written, WARMUP_HOOK_COMMAND)).toBe(false);
     expect(readClaudeCodeHookStatus({ settingsPath: p }).warmupInstalled).toBe(false);
+  });
+});
+
+describe("guard hook", () => {
+  it("addGuardHook adds a second PreToolUse entry with the guard matcher", () => {
+    const next = addGuardHook(addPreToolUseHook({}, "mega hooks log"), "mega hooks guard") as {
+      hooks: { PreToolUse: { matcher?: string; hooks: { command: string }[] }[] };
+    };
+    expect(next.hooks.PreToolUse.length).toBe(2);
+    expect(next.hooks.PreToolUse[1]?.matcher).toBe(GUARD_HOOK_MATCHER);
+    expect(next.hooks.PreToolUse[1]?.hooks[0]?.command).toBe("mega hooks guard");
+  });
+
+  it("hasGuardHook does not confuse the log entry for the guard entry", () => {
+    const withLog = addPreToolUseHook({}, "mega hooks log");
+    expect(hasGuardHook(withLog, GUARD_HOOK_COMMAND)).toBe(false);
+    expect(hasGuardHook(addGuardHook(withLog, GUARD_HOOK_COMMAND), GUARD_HOOK_COMMAND)).toBe(true);
+  });
+
+  it("install writes the guard PreToolUse hook and status reports it", () => {
+    const p = tmpSettings();
+    installClaudeCodeHook({ settingsPath: p });
+    const written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasGuardHook(written, GUARD_HOOK_COMMAND)).toBe(true);
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).guardInstalled).toBe(true);
+  });
+
+  it("uninstall removes the guard PreToolUse hook", () => {
+    const p = tmpSettings();
+    installClaudeCodeHook({ settingsPath: p });
+    uninstallClaudeCodeHook({ settingsPath: p });
+    const written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasGuardHook(written, GUARD_HOOK_COMMAND)).toBe(false);
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).guardInstalled).toBe(false);
+  });
+
+  it("install with guard: false skips the guard PreToolUse hook", () => {
+    const p = tmpSettings();
+    installClaudeCodeHook({ settingsPath: p, guard: false });
+    const written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasGuardHook(written, GUARD_HOOK_COMMAND)).toBe(false);
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).guardInstalled).toBe(false);
+  });
+
+  it("status reports guardInstalled without folding it into connected", () => {
+    const p = tmpSettings();
+    installClaudeCodeHook({ settingsPath: p, guard: false });
+    const status = readClaudeCodeHookStatus({ settingsPath: p });
+    expect(status.guardInstalled).toBe(false);
+    expect(status.connected).toBe(true);
   });
 });
 
@@ -357,6 +415,7 @@ describe("install migration (E23/E29)", () => {
     const r = installClaudeCodeHook({
       settingsPath: p,
       config: { cliPath: "/opt/homebrew/bin/mega" },
+      guard: false,
     });
     expect(r.changed).toBe(true);
     const s = JSON.parse(readFileSync(p, "utf8"));

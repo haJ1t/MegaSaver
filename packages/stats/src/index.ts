@@ -6,6 +6,13 @@ export {
 } from "./event.js";
 
 export {
+  appendGuardEvent,
+  guardEventSchema,
+  readGuardEvents,
+  type GuardEvent,
+} from "./guard-event.js";
+
+export {
   appendWarmStartEvent,
   readWarmStartEvents,
   warmStartEventSchema,

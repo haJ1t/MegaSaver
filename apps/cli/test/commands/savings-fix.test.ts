@@ -381,6 +381,36 @@ describe("runSavingsFix — apply mode (entitled)", () => {
   });
 });
 
+describe("runSavingsFix — Mistake Firewall hint", () => {
+  beforeEach(() => activatePro());
+
+  it("prints the enable-guard hint when the guard hook is not installed", async () => {
+    const code = await runSavingsFix(baseInput({ readGuardInstalled: () => false }));
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("Mistake Firewall");
+    expect(text).toContain("mega hooks install claude-code");
+  });
+
+  it("omits the hint when the guard hook is already installed", async () => {
+    const code = await runSavingsFix(baseInput({ readGuardInstalled: () => true }));
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("mega hooks install claude-code");
+  });
+
+  it("omits the hint when no reader is provided", async () => {
+    const code = await runSavingsFix(baseInput());
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("mega hooks install claude-code");
+  });
+
+  it("never adds the hint to --json output", async () => {
+    const code = await runSavingsFix(baseInput({ readGuardInstalled: () => false, json: true }));
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("mega hooks install claude-code");
+  });
+});
+
 describe("defaultMemoryFileReader", () => {
   it("stats only existing files, size only", async () => {
     const { defaultMemoryFileReader } = await import("../../src/commands/savings/fix.js");

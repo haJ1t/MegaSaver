@@ -111,6 +111,13 @@ export {
   importBrain,
 } from "./brain-import.js";
 export {
+  DEFAULT_GUARD_STATE,
+  GUARD_STATE_MAX_SESSIONS,
+  type GuardState,
+  readGuardState,
+  writeGuardState,
+} from "./guard-state.js";
+export {
   readWarmStartState,
   stampWarmStartSeen,
   type WarmStartState,
@@ -126,3 +133,17 @@ export {
   type WarmStartInput,
   type WarmStartMode,
 } from "./warm-start.js";
+export {
+  GUARD_T1_MAX_AGE_DAYS,
+  GUARD_T3_MARGIN,
+  GUARD_T3_MIN_SCORE,
+  type GuardCandidate,
+  type GuardMatch,
+  type GuardMatchInput,
+  type GuardToolCall,
+  guardCandidateCreatedAt,
+  guardCandidateErrorOutput,
+  guardCandidateId,
+  matchGuard,
+  normalizeCommand,
+} from "./guard-match.js";

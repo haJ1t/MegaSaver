@@ -70,6 +70,16 @@ export {
   type OverlayFailureRecord,
 } from "./overlay-failures.js";
 export {
+  GUARD_CORPUS_MAX,
+  type CaptureGuardCorpusInput,
+  type GuardCorpusRow,
+  appendGuardCorpusRow,
+  captureGuardCorpusRow,
+  guardCorpusRowSchema,
+  readGuardCorpus,
+} from "./guard-corpus.js";
+export { MAX_SIGNATURES_PER_SESSION, extractFailureSignatures } from "./session-hints.js";
+export {
   type CaseMode,
   type FamilyFsAdapter,
   type CanonicalFamilyPath,

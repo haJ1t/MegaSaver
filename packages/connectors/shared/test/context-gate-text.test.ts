@@ -30,6 +30,17 @@ describe("renderContextGateBlockText", () => {
   it("ends with a trailing newline", () => {
     expect(block().endsWith("\n")).toBe(true);
   });
+
+  it("instructs failure recording and pre-retry checking (guard cold-start path)", () => {
+    const text = renderContextGateBlockText({
+      sessionId: "s",
+      projectId: "p",
+      mode: "safe",
+      maxReturnedBytes: 1,
+    });
+    expect(text).toContain("record_failed_attempt");
+    expect(text).toContain("check_approach");
+  });
 });
 
 describe("upsertContextGateBlockText", () => {

@@ -17,6 +17,9 @@ export type McpBridgeConfig = z.infer<typeof mcpBridgeConfigSchema> & {
   registry: CoreRegistry;
   now?: () => string;
   newId?: () => string;
+  // Entitlement resolved CLI-side (mega mcp serve); the bridge keeps zero
+  // entitlement deps and just threads the resolved flag to buildServer.
+  isPro?: boolean;
   // Injectable transport (CRITICAL §12): production defaults to a
   // real StdioServerTransport; tests pass a no-op.
   transportFactory?: () => StdioServerTransport;
@@ -51,6 +54,7 @@ export function createBridge(config: McpBridgeConfig): McpBridge {
       const built = buildServer({
         registry: config.registry,
         storeRoot: config.storeRoot,
+        ...(config.isPro !== undefined ? { isPro: config.isPro } : {}),
         ...(config.now !== undefined ? { now: config.now } : {}),
         ...(config.newId !== undefined ? { newId: config.newId } : {}),
         ...(config.transportFactory !== undefined

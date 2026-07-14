@@ -33,7 +33,7 @@ function seeded(): CoreRegistry {
 describe("find_similar_failures", () => {
   it("returns ranked failures for a task", async () => {
     const res = await handleFindSimilarFailures(
-      { registry: seeded() },
+      { registry: seeded(), now: () => TS, isPro: true },
       { projectId: PROJECT_ID, task: "login auth" },
     );
     expect(res.failures).toHaveLength(1);
@@ -41,17 +41,60 @@ describe("find_similar_failures", () => {
   it("rejects unknown project as resource_not_found", async () => {
     await expect(
       handleFindSimilarFailures(
-        { registry: seeded() },
+        { registry: seeded(), now: () => TS, isPro: true },
         { projectId: "99999999-9999-4999-8999-999999999999", task: "x" },
       ),
     ).rejects.toMatchObject({ code: "resource_not_found" });
   });
   it("rejects invalid input as validation_failed", async () => {
     await expect(
-      handleFindSimilarFailures({ registry: seeded() }, { projectId: PROJECT_ID }),
+      handleFindSimilarFailures(
+        { registry: seeded(), now: () => TS, isPro: true },
+        { projectId: PROJECT_ID },
+      ),
     ).rejects.toMatchObject({
       code: "validation_failed",
     });
+  });
+  it("caps free callers to the last 7 days", async () => {
+    const r = createInMemoryCoreRegistry();
+    r.createProject({
+      id: PROJECT_ID,
+      name: "demo",
+      rootPath: "/tmp/demo",
+      createdAt: "2026-07-12T10:00:00.000Z",
+      updatedAt: "2026-07-12T10:00:00.000Z",
+    });
+    r.createFailedAttempt({
+      id: "a0000000-0000-4000-8000-000000000010" as FailedAttemptId,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      task: "shard vitest run",
+      failedStep: "pnpm vitest --shard 2",
+      relatedFiles: [],
+      convertedToRule: false,
+      createdAt: "2026-07-11T10:00:00.000Z",
+    });
+    r.createFailedAttempt({
+      id: "a0000000-0000-4000-8000-000000000011" as FailedAttemptId,
+      projectId: PROJECT_ID,
+      sessionId: null,
+      task: "shard vitest run old",
+      failedStep: "pnpm vitest --shard 9",
+      relatedFiles: [],
+      convertedToRule: false,
+      createdAt: "2026-06-01T10:00:00.000Z",
+    });
+    const pro = await handleFindSimilarFailures(
+      { registry: r, now: () => "2026-07-12T10:00:00.000Z", isPro: true },
+      { projectId: PROJECT_ID, task: "vitest shard run" },
+    );
+    expect(pro.failures).toHaveLength(2);
+    const free = await handleFindSimilarFailures(
+      { registry: r, now: () => "2026-07-12T10:00:00.000Z", isPro: false },
+      { projectId: PROJECT_ID, task: "vitest shard run" },
+    );
+    expect(free.failures).toHaveLength(1);
   });
 });
 

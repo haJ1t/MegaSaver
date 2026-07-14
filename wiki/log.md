@@ -3330,3 +3330,39 @@ warmup CLI, Pro-gated cross-agent sentinel block (mega warmup --write) +
 connector sync refresh, MCP get_warm_start_brief. Savings surfaces show a
 measured "Warm start" line. All tasks reviewed (spec+quality) green; pending
 HIGH-risk gauntlet (code-reviewer + critic) + finish-branch.
+
+## 2026-07-13 — i7 Mistake Firewall (guard) SHIPPED
+Feature complete on feat/guard (stacked on feat/warm-start). 14 TDD tasks,
+each spec+quality reviewed green; HIGH-risk gauntlet pending. Core: durable
+bounded guard corpus (context-gate, captured on proxy failure path) + pure
+3-tier matcher guard-match.ts (T1 exact/deny-capable, T2 path+text/warn, T3
+BM25/warn; GUARD_T3_MIN_SCORE tuned 1.5→1.2, 0.21 precision headroom verified)
++ guard state (mode/mutes/cooldown/intercepts) + guard events (stats, separate
+from TokenSaverEvent — honest metrics). Delivery: fail-open PreToolUse hook
+(mega hooks guard), install-by-default with --no-guard, outcome loop in the
+saver process (signature-overlap classify + 3-strike auto-mute), mega guard
+status/mode/mute/unmute/events/check CLI, check_approach MCP (34th tool) with
+free 7-day cap also applied to find_similar_failures, retry-cost-avoided line
+in roi/savings (estimated, never summed into measured savings), connector block
+seeding instructions. Free = warn interception; Pro (savings-analytics key) =
+strict deny + events ledger + cumulative analytics. Smoke: end-to-end warn
+emitted for a recorded failure. Latency: hook p50 240ms = identical to shipped
+saver (240ms) / warmup (250ms) hooks — same cli.js bundle-load cost, within the
+PreToolUse 10s budget; user accepted, daemon fast-path deferred (spec §9, shared
+across all hooks). additionalContext PreToolUse support is a spec assumption
+(§4.1) — hook emits the documented shape; validate in a real Claude Code session.
+Known deferred: --no-guard/--no-warmup citty negation bug (spawned follow-up task).
+
+### Gauntlet (2026-07-13)
+HIGH-risk dual review on the full diff. code-reviewer APPROVE. Adversarial
+critic found 1 BLOCKER + 2 MAJOR (repro-proven): (B) guard events+state stored
+the RAW agent command — a T3 fuzzy match on a secret-bearing command leaked the
+token to disk / mega guard events; (M) strict deny consumed the session cooldown
+so a bare retry bypassed the block; (M) normalizeCommand stripped env prefixes,
+false-denying NODE_ENV=prod npm build. All three fixed (commit 70c59f81): redact
+before persist on both hook + outcome-loop lookup, deny keeps firing until
+mute/mode-warn, env prefixes preserved (also kills an ENV_PREFIX RangeError).
+Verifier re-pass: all RESOLVED with on-disk evidence, no regressions, verify
+52/52 green, CLEAR TO MERGE. Follow-ups noted: (1) --no-guard/--no-warmup citty
+negation (spawned task); (2) LOW: deny events append per retry (bounded,
+redacted, slightly inflates guard status deny count).

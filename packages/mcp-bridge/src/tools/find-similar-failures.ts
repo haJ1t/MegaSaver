@@ -3,7 +3,13 @@ import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 
-export type FindSimilarFailuresEnv = { registry: CoreRegistry };
+export type FindSimilarFailuresEnv = {
+  registry: CoreRegistry;
+  now: () => string;
+  isPro: boolean;
+};
+
+const FREE_WINDOW_MS = 7 * 86_400_000;
 
 const inputSchema = z
   .object({
@@ -26,11 +32,17 @@ export async function handleFindSimilarFailures(
   }
   const { projectId, task, limit, includeConverted } = parsed.data;
   try {
-    const failures = env.registry.searchFailedAttempts(projectId as ProjectId, {
+    let failures = env.registry.searchFailedAttempts(projectId as ProjectId, {
       text: task,
       ...(limit !== undefined ? { limit } : {}),
       ...(includeConverted !== undefined ? { includeConverted } : {}),
     });
+    // Free tier sees the last 7 days only — the SAME cap check_approach applies,
+    // so neither tool bypasses the other.
+    if (!env.isPro) {
+      const cutoff = Date.parse(env.now()) - FREE_WINDOW_MS;
+      failures = failures.filter((a) => Date.parse(a.createdAt) >= cutoff);
+    }
     return { failures };
   } catch (err) {
     if (err instanceof CoreRegistryError && err.code === "project_not_found") {

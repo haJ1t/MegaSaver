@@ -33,14 +33,18 @@ export {
   savingsForecastCommand,
 } from "./forecast.js";
 export {
+  type GuardTotals,
+  type GuardTotalsReader,
   type SavingsEventReader,
   type SavingsSnapshot,
   type WarmStartTotals,
   type WarmStartTotalsReader,
   PRO_ANALYTICS_UPSELL,
   PRO_ANALYTICS_URL,
+  defaultGuardTotalsReader,
   defaultSavingsEventReader,
   defaultWarmStartTotalsReader,
+  formatGuardLine,
   formatWarmStartLine,
 } from "./shared.js";
 export {

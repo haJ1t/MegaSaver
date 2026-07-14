@@ -1,4 +1,5 @@
 import type { CoreRegistry } from "@megasaver/core";
+import { checkEntitlement } from "@megasaver/entitlement";
 import { type McpBridge, type McpBridgeConfig, createBridge } from "@megasaver/mcp-bridge";
 import { defineCommand } from "citty";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
@@ -11,6 +12,9 @@ export type RunMcpServeDeps = {
   // Injected createBridge so the test asserts the config + controls
   // start/stop without a real StdioServerTransport.
   createBridge: (config: McpBridgeConfig) => McpBridge;
+  // Resolves Pro entitlement from the store. Injected so the unit test
+  // never touches a license file; production checks the license signature.
+  resolveIsPro?: (storeRoot: string) => boolean;
   // Holds the process alive until stdin closes / SIGINT / SIGTERM.
   // Injected so the unit test resolves immediately (no real stdin
   // attach, no hanging event loop).
@@ -28,10 +32,12 @@ export type RunMcpServeDeps = {
 // one-shot command).
 export async function runMcpServe(deps: RunMcpServeDeps): Promise<0 | 1> {
   const { storeRoot, registry } = await deps.resolveStore();
+  const isPro = deps.resolveIsPro !== undefined ? deps.resolveIsPro(storeRoot) : false;
   const bridge = deps.createBridge({
     transport: "stdio",
     storeRoot,
     registry,
+    isPro,
     ...(deps.transportFactory !== undefined ? { transportFactory: deps.transportFactory } : {}),
   });
   await bridge.start();
@@ -80,6 +86,8 @@ export const mcpServeCommand = defineCommand({
         return { storeRoot, registry };
       },
       createBridge,
+      resolveIsPro: (storeRoot) =>
+        checkEntitlement("savings-analytics", { storeRoot, now: () => Date.now() }).entitled,
       waitForShutdown: waitForStdioShutdown,
       stderr: (line) => console.error(line),
     });

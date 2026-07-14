@@ -1,6 +1,7 @@
 import type { KeyObject } from "node:crypto";
 import { statSync } from "node:fs";
 import { join } from "node:path";
+import { readClaudeCodeHookStatus } from "@megasaver/connector-claude-code";
 import {
   nodeResolverDeps,
   resolveActivationScope,
@@ -12,6 +13,7 @@ import { checkEntitlement } from "@megasaver/entitlement";
 import type { TokenSaverMode } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
+import { resolveClaudeCodeSettingsPath } from "../hooks/settings-path.js";
 import { PRO_ANALYTICS_URL, type SavingsEventReader, defaultSavingsEventReader } from "./shared.js";
 
 // fix-specific upsell: the shared string says "historical savings analytics",
@@ -66,6 +68,7 @@ export type RunSavingsFixInput = {
   readSaver: FixSaverReader;
   readMemoryFileSizes: FixMemoryFileReader;
   writeSaver: FixSaverWriter;
+  readGuardInstalled?: () => boolean;
   apply?: boolean;
   json?: boolean;
   stdout: (line: string) => void;
@@ -151,6 +154,11 @@ export async function runSavingsFix(input: RunSavingsFixInput): Promise<0 | 1> {
     input.stdout("");
     input.stdout(`Run with --apply to apply ${appliableCount} fix(es).`);
   }
+
+  if (input.readGuardInstalled !== undefined && !input.readGuardInstalled()) {
+    input.stdout("");
+    input.stdout("hint: enable the Mistake Firewall: mega hooks install claude-code (guard hook)");
+  }
   return 0;
 }
 
@@ -180,6 +188,8 @@ export const savingsFixCommand = defineCommand({
       readSaver: defaultSaverReader(storeRoot, cwd),
       readMemoryFileSizes: defaultMemoryFileReader(cwd),
       writeSaver: defaultSaverWriter(storeRoot, cwd),
+      readGuardInstalled: () =>
+        readClaudeCodeHookStatus({ settingsPath: resolveClaudeCodeSettingsPath() }).guardInstalled,
       apply: !!args.apply,
       json: !!args.json,
       stdout: (line) => console.log(line),

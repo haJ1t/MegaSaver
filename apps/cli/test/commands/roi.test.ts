@@ -253,3 +253,70 @@ describe("runRoi — render variants (entitled)", () => {
     expect(out.join("\n")).toContain("No savings recorded this month yet.");
   });
 });
+
+describe("runRoi — retry-cost-avoided line (estimated)", () => {
+  beforeEach(() => activatePro());
+
+  it("appends the retry-cost-avoided line when heeded intercepts exist", async () => {
+    const code = await runRoi({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: roiReader(),
+      readGuardTotals: () => ({ heededIntercepts: 1, avoidedTokens: 4200, overridden: 0 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("Retry cost avoided (estimated): ~4200 tokens");
+  });
+
+  it("omits the line when there are zero heeded intercepts", async () => {
+    const code = await runRoi({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: roiReader(),
+      readGuardTotals: () => ({ heededIntercepts: 0, avoidedTokens: 0, overridden: 2 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Retry cost avoided");
+  });
+
+  it("omits the line when no reader is provided", async () => {
+    const code = await runRoi({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: roiReader(),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Retry cost avoided");
+  });
+
+  it("never adds the line to --json output; measured savedSoFar is unchanged", async () => {
+    const code = await runRoi({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: roiReader(),
+      readGuardTotals: () => ({ heededIntercepts: 1, avoidedTokens: 4200, overridden: 0 }),
+      json: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    const parsed = JSON.parse(out.join("\n")) as {
+      roiSoFar: number;
+      savedSoFar: { tokens: number };
+    };
+    expect(out.join("\n")).not.toContain("Retry cost avoided");
+    // Guard's estimate never leaks into the measured aggregate.
+    expect(parsed.savedSoFar.tokens).toBe(2_000_000);
+    expect(parsed.roiSoFar).toBeCloseTo(6 / 7.99);
+  });
+});
