@@ -286,6 +286,83 @@ describe("runSavingsHistory — render variants (entitled)", () => {
   });
 });
 
+describe("runSavingsHistory — warm start line (measured)", () => {
+  beforeEach(() => activatePro());
+
+  it("appends a Warm Start line when warm-start events exist", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      readWarmStartTotals: () => ({ sessions: 3, briefTokens: 2400 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain(
+      "Warm start: 3 sessions warmed, ~2400 brief tokens (measured)",
+    );
+  });
+
+  it("omits the Warm Start line when there are no warm-start events", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      readWarmStartTotals: () => ({ sessions: 0, briefTokens: 0 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Warm start:");
+  });
+
+  it("omits the Warm Start line when no reader is provided", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Warm start:");
+  });
+
+  it("never adds the Warm Start line to --json output", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      readWarmStartTotals: () => ({ sessions: 3, briefTokens: 2400 }),
+      json: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Warm start:");
+  });
+
+  it("never adds the Warm Start line to --csv output", async () => {
+    const code = await runSavingsHistory({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: stubReader(),
+      readWarmStartTotals: () => ({ sessions: 3, briefTokens: 2400 }),
+      csv: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Warm start:");
+  });
+});
+
 describe("runSavingsExport — gating", () => {
   it("with NO license: prints the upsell, exit 0, reads NO events", async () => {
     const readAllEvents = vi.fn(stubReader());
@@ -553,6 +630,83 @@ describe("runSavingsInsights — render variants (entitled)", () => {
     });
     expect(code).toBe(0);
     expect(out.join("\n")).toContain("No savings recorded yet.");
+  });
+});
+
+describe("runSavingsInsights — warm start line (measured)", () => {
+  beforeEach(() => activatePro());
+
+  it("appends a Warm Start line when warm-start events exist", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      readWarmStartTotals: () => ({ sessions: 3, briefTokens: 2400 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain(
+      "Warm start: 3 sessions warmed, ~2400 brief tokens (measured)",
+    );
+  });
+
+  it("omits the Warm Start line when there are no warm-start events", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      readWarmStartTotals: () => ({ sessions: 0, briefTokens: 0 }),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Warm start:");
+  });
+
+  it("omits the Warm Start line when no reader is provided", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Warm start:");
+  });
+
+  it("never adds the Warm Start line to --json output", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      readWarmStartTotals: () => ({ sessions: 3, briefTokens: 2400 }),
+      json: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Warm start:");
+  });
+
+  it("never adds the Warm Start line to --csv output", async () => {
+    const code = await runSavingsInsights({
+      storeRoot: root,
+      now,
+      publicKey: keys.publicKey,
+      readAllEvents: insightsReader(),
+      readWarmStartTotals: () => ({ sessions: 3, briefTokens: 2400 }),
+      csv: true,
+      stdout,
+      stderr,
+    });
+    expect(code).toBe(0);
+    expect(out.join("\n")).not.toContain("Warm start:");
   });
 });
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { mcpToolNameSchema } from "../src/tool-name.js";
 
-describe("tool-name enum (32 tools)", () => {
-  it("is a closed set of 32 alphabetically-ordered names", () => {
+describe("tool-name enum (33 tools)", () => {
+  it("is a closed set of 33 alphabetically-ordered names", () => {
     expect(mcpToolNameSchema.options).toEqual([
       "approve_memory",
       "audit_token_usage",
@@ -20,6 +20,7 @@ describe("tool-name enum (32 tools)", () => {
       "get_relevant_memories",
       "get_task_context",
       "get_task_status",
+      "get_warm_start_brief",
       "mega_fetch_chunk",
       "mega_impact",
       "mega_index_memory",

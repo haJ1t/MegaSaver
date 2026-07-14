@@ -35,9 +35,13 @@ export {
 export {
   type SavingsEventReader,
   type SavingsSnapshot,
+  type WarmStartTotals,
+  type WarmStartTotalsReader,
   PRO_ANALYTICS_UPSELL,
   PRO_ANALYTICS_URL,
   defaultSavingsEventReader,
+  defaultWarmStartTotalsReader,
+  formatWarmStartLine,
 } from "./shared.js";
 export {
   type FixMemoryFileReader,

@@ -110,3 +110,19 @@ export {
   type ImportCounts,
   importBrain,
 } from "./brain-import.js";
+export {
+  readWarmStartState,
+  stampWarmStartSeen,
+  type WarmStartState,
+} from "./warm-start-state.js";
+export {
+  DEFAULT_WARM_START_BUDGET,
+  MICRO_BUDGET,
+  REONBOARD_UPSELL_LINE,
+  assembleWarmStartBrief,
+  selectWarmStartMode,
+  type GitDelta,
+  type WarmStartBrief,
+  type WarmStartInput,
+  type WarmStartMode,
+} from "./warm-start.js";

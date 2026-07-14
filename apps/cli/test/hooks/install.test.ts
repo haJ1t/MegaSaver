@@ -199,6 +199,47 @@ describe("installClaudeCodeHook (file)", () => {
   });
 });
 
+describe("runHooksInstall --no-warmup", () => {
+  let dir: string;
+  let settingsPath: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "megasaver-hook-install-warmup-"));
+    settingsPath = join(dir, "settings.json");
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("installs the SessionStart warmup hook by default", () => {
+    const code = runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    expect(code).toBe(0);
+    const s = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(s.hooks.SessionStart[0].hooks[0].command).toBe("mega hooks warmup");
+  });
+
+  it("skips the SessionStart warmup hook when warmup is false", () => {
+    const code = runHooksInstall({
+      target: "claude-code",
+      settingsPath,
+      warmup: false,
+      stdout: () => {},
+      stderr: () => {},
+      json: false,
+    });
+    expect(code).toBe(0);
+    const s = JSON.parse(readFileSync(settingsPath, "utf8"));
+    expect(s.hooks.SessionStart).toBeUndefined();
+  });
+});
+
 describe("E29 store baking", () => {
   const env = {
     cwd: "/work",

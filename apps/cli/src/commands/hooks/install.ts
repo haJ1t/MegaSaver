@@ -14,6 +14,7 @@ export type RunHooksInstallInput = {
   settingsPath: string;
   command?: string;
   config?: HookCommandConfig;
+  warmup?: boolean;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
   json: boolean;
@@ -56,6 +57,7 @@ export function runHooksInstall(input: RunHooksInstallInput): 0 | 1 {
       settingsPath: input.settingsPath,
       ...(input.command !== undefined ? { command: input.command } : {}),
       ...(input.config !== undefined ? { config: input.config } : {}),
+      ...(input.warmup !== undefined ? { warmup: input.warmup } : {}),
     });
   } catch (err) {
     input.stderr(
@@ -90,6 +92,11 @@ export const hooksInstallCommand = defineCommand({
       description: "Override store directory (baked into the hook commands when non-default).",
     },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
+    noWarmup: {
+      type: "boolean",
+      default: false,
+      description: "Skip the SessionStart warm-start hook.",
+    },
   },
   run({ args }) {
     const cliPath = resolveInvokedCliPath(process.argv[1]);
@@ -105,6 +112,7 @@ export const hooksInstallCommand = defineCommand({
       settingsPath:
         typeof args.settings === "string" ? args.settings : resolveClaudeCodeSettingsPath(),
       config,
+      warmup: !args.noWarmup,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
       json: !!args.json,

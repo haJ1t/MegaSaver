@@ -5,6 +5,7 @@ import { hooksLogCommand } from "./log.js";
 import { hooksSaverCommand } from "./saver.js";
 import { hooksStatusCommand } from "./status.js";
 import { hooksUninstallCommand } from "./uninstall.js";
+import { hooksWarmupCommand } from "./warmup.js";
 
 export { type RunHooksInstallInput, runHooksInstall, hooksInstallCommand } from "./install.js";
 export {
@@ -17,6 +18,7 @@ export { resolveClaudeCodeSettingsPath } from "./settings-path.js";
 export { hooksLogCommand } from "./log.js";
 export { hooksSaverCommand } from "./saver.js";
 export { hooksIntentCommand } from "./intent.js";
+export { hooksWarmupCommand } from "./warmup.js";
 
 export const hooksCommand = defineCommand({
   meta: {
@@ -30,5 +32,6 @@ export const hooksCommand = defineCommand({
     log: hooksLogCommand,
     saver: hooksSaverCommand,
     intent: hooksIntentCommand,
+    warmup: hooksWarmupCommand,
   },
 });

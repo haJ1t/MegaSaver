@@ -20,6 +20,7 @@ describe("McpToolName type regression", () => {
       "get_relevant_memories",
       "get_task_context",
       "get_task_status",
+      "get_warm_start_brief",
       "mega_fetch_chunk",
       "mega_impact",
       "mega_index_memory",
@@ -51,7 +52,7 @@ describe("McpToolName type regression", () => {
     void arr;
   });
 
-  it("schema.options preserves the 32-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context + edit-impact get_edit_impact)", () => {
+  it("schema.options preserves the 33-member alphabetic order (AA1 §8a + Phase 1 + Phase 3 + Phase 4 + Phase 5 FORGE + Phase 6 Task Engine + Phase 7 Tool Router + Phase 8 Audit + Phase 10 Approval + Proxy Mode v1.2 search + impact + memory index + M2 memory sweep + M4 from-session + live-context-seam get_task_context + edit-impact get_edit_impact + warm-start get_warm_start_brief)", () => {
     const _t: readonly [
       "approve_memory",
       "audit_token_usage",
@@ -69,6 +70,7 @@ describe("McpToolName type regression", () => {
       "get_relevant_memories",
       "get_task_context",
       "get_task_status",
+      "get_warm_start_brief",
       "mega_fetch_chunk",
       "mega_impact",
       "mega_index_memory",

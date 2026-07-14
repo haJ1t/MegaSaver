@@ -30,6 +30,7 @@ import { handleGetEditImpact } from "./tools/get-edit-impact.js";
 import { handleGetRelevantMemories } from "./tools/get-relevant-memories.js";
 import { handleGetTaskContext } from "./tools/get-task-context.js";
 import { handleGetTaskStatus } from "./tools/get-task-status.js";
+import { handleGetWarmStartBrief } from "./tools/get-warm-start-brief.js";
 import { handleImpact } from "./tools/impact.js";
 import { handleIndexMemory } from "./tools/index-memory.js";
 import { handleGetProjectContext } from "./tools/project-context.js";
@@ -162,6 +163,10 @@ const TOOL_DEFS: ReadonlyArray<{ id: McpToolName; description: string }> = [
     description: "Build a task-aware context pack from the project index and memories.",
   },
   { id: "get_task_status", description: "Plan status, per-step state, and ready steps." },
+  {
+    id: "get_warm_start_brief",
+    description: "Assemble the budgeted warm-start session brief for a project.",
+  },
   { id: "mega_fetch_chunk", description: "Fetch one stored chunk from a chunk set." },
   {
     id: "mega_impact",
@@ -368,6 +373,11 @@ export function buildServer(deps: ServerDeps): {
         );
       case "get_task_context":
         return handleGetTaskContext({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
+      case "get_warm_start_brief":
+        return handleGetWarmStartBrief(
+          { registry: deps.registry, storeRoot: deps.storeRoot, now },
+          args,
+        );
       case "get_edit_impact":
         return handleGetEditImpact({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "get_project_context":

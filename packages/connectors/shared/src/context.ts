@@ -1,22 +1,8 @@
 import { memoryEntrySchema, projectSchema, sessionSchema } from "@megasaver/core";
 import { agentIdSchema } from "@megasaver/shared";
 import { z } from "zod";
-import { MEGA_SAVER_BLOCK_END, MEGA_SAVER_BLOCK_START } from "./constants.js";
 import { ConnectorError } from "./errors.js";
-
-const sentinels = [MEGA_SAVER_BLOCK_START, MEGA_SAVER_BLOCK_END] as const;
-
-// Strip zero-width, bidi-control, and BOM characters before NFKC-normalising,
-// so visually-identical sentinel lookalikes are rejected the same as exact matches.
-const SENTINEL_INVISIBLE_CHARS = /[​-‏‪-‮⁠-⁤﻿]/g;
-
-const normalizeForSentinelCheck = (value: string): string =>
-  value.replace(SENTINEL_INVISIBLE_CHARS, "").normalize("NFKC");
-
-const containsSentinel = (value: string): boolean => {
-  const normalized = normalizeForSentinelCheck(value);
-  return sentinels.some((sentinel) => normalized.includes(sentinel));
-};
+import { containsSentinel } from "./sentinel-guard.js";
 
 export const ConnectorContextSchema = z
   .object({

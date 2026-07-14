@@ -1,4 +1,4 @@
-import { type TokenSaverEvent, readEvents } from "@megasaver/core";
+import { type TokenSaverEvent, readEvents, readWarmStartEvents } from "@megasaver/core";
 import { type ResolveStorePathInput, ensureStoreReady, resolveStorePath } from "../../store.js";
 
 // The honest upsell shown when a free user runs a Pro-gated savings command.
@@ -35,4 +35,33 @@ export function defaultSavingsEventReader(storeInput: ResolveStorePathInput): Sa
     }
     return { events, eventsByProject };
   };
+}
+
+export type WarmStartTotals = { sessions: number; briefTokens: number };
+export type WarmStartTotalsReader = () => WarmStartTotals | Promise<WarmStartTotals>;
+
+// Parallel to defaultSavingsEventReader, but sums measured WarmStartEvents
+// instead. These are measured brief-token sizes, NOT counterfactual savings —
+// they must never be mixed into TokenSaverEvent totals.
+export function defaultWarmStartTotalsReader(
+  storeInput: ResolveStorePathInput,
+): WarmStartTotalsReader {
+  return async () => {
+    const rootDir = resolveStorePath(storeInput);
+    const { registry } = await ensureStoreReady(rootDir);
+    let sessions = 0;
+    let briefTokens = 0;
+    for (const project of registry.listProjects()) {
+      for (const e of readWarmStartEvents({ root: rootDir }, project.id)) {
+        sessions += 1;
+        briefTokens += e.briefTokens;
+      }
+    }
+    return { sessions, briefTokens };
+  };
+}
+
+export function formatWarmStartLine(totals: WarmStartTotals): string | null {
+  if (totals.sessions === 0) return null;
+  return `Warm start: ${totals.sessions} sessions warmed, ~${totals.briefTokens} brief tokens (measured)`;
 }

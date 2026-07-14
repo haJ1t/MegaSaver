@@ -1,4 +1,9 @@
-import { MEGA_SAVER_CG_BLOCK_END, MEGA_SAVER_CG_BLOCK_START } from "./constants.js";
+import {
+  MEGA_SAVER_CG_BLOCK_END,
+  MEGA_SAVER_CG_BLOCK_START,
+  MEGA_SAVER_WS_BLOCK_END,
+  MEGA_SAVER_WS_BLOCK_START,
+} from "./constants.js";
 import { renderContextGateBlock } from "./context-gate-block.js";
 import type { ConnectorContext } from "./context.js";
 import { type IndexedLine, type SentinelPair, parseBlock, splitIndexedLines } from "./parse.js";
@@ -7,11 +12,18 @@ import { renderBlock } from "./render.js";
 interface UpsertBlockInput {
   existingContent: string;
   context: ConnectorContext;
+  // undefined = leave any existing WS block untouched; "" = remove; text = upsert.
+  warmStartBlock?: string;
 }
 
 const CG_SENTINELS: SentinelPair = {
   start: MEGA_SAVER_CG_BLOCK_START,
   end: MEGA_SAVER_CG_BLOCK_END,
+};
+
+const WS_SENTINELS: SentinelPair = {
+  start: MEGA_SAVER_WS_BLOCK_START,
+  end: MEGA_SAVER_WS_BLOCK_END,
 };
 
 export function upsertBlock(input: UpsertBlockInput): string {
@@ -26,7 +38,13 @@ export function upsertBlock(input: UpsertBlockInput): string {
   const cgBlock = renderContextGateBlock(input.context);
   const result = applyOptionalBlock(afterLegacy, cgBlock, CG_SENTINELS);
 
-  return eol === "\r\n" ? result.replace(/\n/g, "\r\n") : result;
+  // 3) WARM_START block — independent pair, opt-in. undefined ⇒ leave untouched.
+  const withWs =
+    input.warmStartBlock === undefined
+      ? result
+      : applyOptionalBlock(result, input.warmStartBlock, WS_SENTINELS);
+
+  return eol === "\r\n" ? withWs.replace(/\n/g, "\r\n") : withWs;
 }
 
 // Insert-or-replace the legacy managed block (default sentinels).

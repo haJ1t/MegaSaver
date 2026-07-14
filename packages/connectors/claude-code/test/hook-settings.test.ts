@@ -8,15 +8,19 @@ import {
   INTENT_HOOK_COMMAND,
   SAVER_HOOK_COMMAND,
   SAVER_HOOK_MATCHER,
+  WARMUP_HOOK_COMMAND,
   addPostToolUseHook,
+  addSessionStartHook,
   addUserPromptSubmitHook,
   buildHookCommand,
+  hasSessionStartHook,
   hasUserPromptSubmitHook,
   hookCommandMatches,
   installClaudeCodeHook,
   readClaudeCodeHookStatus,
   removePostToolUseHook,
   removePreToolUseHook,
+  removeSessionStartHook,
   uninstallClaudeCodeHook,
 } from "../src/hook-settings.js";
 
@@ -79,6 +83,7 @@ describe("hook-settings", () => {
       preInstalled: true,
       postInstalled: true,
       intentInstalled: true,
+      warmupInstalled: true,
     });
     expect(installClaudeCodeHook({ settingsPath: p }).changed).toBe(false);
   });
@@ -169,6 +174,7 @@ describe("hook-settings", () => {
       preInstalled: false,
       postInstalled: false,
       intentInstalled: false,
+      warmupInstalled: false,
     });
     const bad = tmpSettings();
     writeFileSync(bad, "{ not json");
@@ -187,6 +193,7 @@ describe("hook-settings", () => {
       preInstalled: false,
       postInstalled: true,
       intentInstalled: true,
+      warmupInstalled: true,
     });
     expect(SAVER_HOOK_COMMAND).toBe("mega hooks saver");
     expect(removePostToolUseHook).toBeTypeOf("function");
@@ -214,6 +221,58 @@ describe("UserPromptSubmit intent hook", () => {
     uninstallClaudeCodeHook({ settingsPath: p });
     const written = JSON.parse(readFileSync(p, "utf8"));
     expect(hasUserPromptSubmitHook(written, INTENT_HOOK_COMMAND)).toBe(false);
+  });
+});
+
+describe("SessionStart warmup hook", () => {
+  it("adds a matcher-less SessionStart entry with 10s timeout", () => {
+    const next = addSessionStartHook({}, WARMUP_HOOK_COMMAND) as {
+      hooks: {
+        SessionStart: { matcher?: string; hooks: { command: string; timeout: number }[] }[];
+      };
+    };
+    const entry = next.hooks.SessionStart[0];
+    expect(entry?.matcher).toBeUndefined();
+    expect(entry?.hooks[0]).toEqual({ type: "command", command: WARMUP_HOOK_COMMAND, timeout: 10 });
+  });
+
+  it("is idempotent", () => {
+    const once = addSessionStartHook({}, WARMUP_HOOK_COMMAND);
+    const twice = addSessionStartHook(once, WARMUP_HOOK_COMMAND);
+    expect(JSON.stringify(twice)).toBe(JSON.stringify(once));
+  });
+
+  it("has/remove round-trip", () => {
+    const added = addSessionStartHook({}, WARMUP_HOOK_COMMAND);
+    expect(hasSessionStartHook(added, WARMUP_HOOK_COMMAND)).toBe(true);
+    const removed = removeSessionStartHook(added, WARMUP_HOOK_COMMAND);
+    expect(hasSessionStartHook(removed, WARMUP_HOOK_COMMAND)).toBe(false);
+    expect((removed as { hooks?: unknown }).hooks).toBeUndefined();
+  });
+
+  it("install writes the SessionStart warmup hook and status reports it", () => {
+    const p = tmpSettings();
+    installClaudeCodeHook({ settingsPath: p });
+    const written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasSessionStartHook(written, WARMUP_HOOK_COMMAND)).toBe(true);
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).warmupInstalled).toBe(true);
+  });
+
+  it("uninstall removes the SessionStart warmup hook", () => {
+    const p = tmpSettings();
+    installClaudeCodeHook({ settingsPath: p });
+    uninstallClaudeCodeHook({ settingsPath: p });
+    const written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasSessionStartHook(written, WARMUP_HOOK_COMMAND)).toBe(false);
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).warmupInstalled).toBe(false);
+  });
+
+  it("install with warmup: false skips the SessionStart hook", () => {
+    const p = tmpSettings();
+    installClaudeCodeHook({ settingsPath: p, warmup: false });
+    const written = JSON.parse(readFileSync(p, "utf8"));
+    expect(hasSessionStartHook(written, WARMUP_HOOK_COMMAND)).toBe(false);
+    expect(readClaudeCodeHookStatus({ settingsPath: p }).warmupInstalled).toBe(false);
   });
 });
 

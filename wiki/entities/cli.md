@@ -13,9 +13,11 @@ sources:
   - docs/superpowers/specs/2026-06-25-intent-aware-hook-design.md
   - docs/superpowers/specs/2026-07-06-pro-entitlement-design.md
   - docs/superpowers/specs/2026-07-07-pro-roi-design.md
+  - docs/superpowers/specs/2026-07-12-warm-start-design.md
+  - docs/superpowers/plans/2026-07-12-warm-start-plan.md
 status: published
 created: 2026-05-05
-updated: 2026-07-07
+updated: 2026-07-12
 ---
 
 # `@megasaver/cli`
@@ -245,7 +247,7 @@ flag shape; failure = text stderr, exit 1, no stdout).
 Errors surface as `error: <SkillPackErrorCode>: <detail>` via
 `skillPackErrorMessage` (closed 7-member enum, [[entities/skill-packs]]).
 
-### `mega hooks {install,uninstall,status,intent}` (Proxy Mode v1.2, P5; uninstall PR #141; intent PR #180)
+### `mega hooks {install,uninstall,status,intent,warmup}` (Proxy Mode v1.2, P5; uninstall PR #141; intent PR #180; warmup worktree-warm-start)
 
 Hook telemetry surface for measuring native-tool interception. Shipped
 P5 (commit `07040de`). See [[concepts/proxy-mode]].
@@ -289,6 +291,13 @@ P5 (commit `07040de`). See [[concepts/proxy-mode]].
   Token saver tab), and returns `updatedToolOutput` so the model ingests
   the compressed result. Always exits 0; any error / multi-modal output
   ⇒ original untouched (passthrough).
+- `hooks warmup` (worktree-warm-start) — the SessionStart target: fail-open,
+  ALWAYS exits 0 / prints nothing on any error. Reads the stdin payload,
+  resolves the project by `cwd`, and prints `assembleWarmStartBrief`'s
+  budgeted markdown to stdout for Claude Code to inject into context.
+  Public counterpart: `mega warmup [--budget][--mode][--project][--write]`
+  prints the same brief on demand; `--write` (Mega Saver Pro) upserts it as
+  a cross-agent sentinel block. See [[entities/core]].
 
 ### Store resolution
 
