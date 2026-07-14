@@ -160,7 +160,13 @@ export async function runSupervisor(input: RunSupervisorInput): Promise<Supervis
   const self = identity.self();
   const deps: SupervisorDeps = {
     storeRoot: input.storeRoot,
-    route: input.route ?? createClaudeRouteAdapter(input.settingsPath),
+    route:
+      input.route ??
+      createClaudeRouteAdapter(input.settingsPath, {
+        // A custom upstream is genuinely non-first-party: asserting otherwise
+        // would leak client attribution/beta behavior to a third-party origin.
+        assumeFirstParty: input.upstream === DEFAULT_UPSTREAM,
+      }),
     listener: handle.listener,
     ownedUrl: input.ownedUrl,
     instanceId: handle.instanceId,
