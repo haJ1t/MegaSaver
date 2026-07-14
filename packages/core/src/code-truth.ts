@@ -311,8 +311,16 @@ export async function runVerify(opts: {
     let source: string;
     try {
       source = readFileSync(join(opts.rootPath, path), "utf8");
-    } catch {
-      continue; // unreadable/deleted on disk ⇒ no blocks ⇒ symbols missing (N6)
+    } catch (err) {
+      // ENOENT is genuine absence (rename already resolved upstream) ⇒ no
+      // blocks ⇒ symbols missing (N6). A transient/unknown fs fault (EMFILE,
+      // ENFILE, EACCES, EIO, EBUSY, ELOOP, …) is NOT evidence of deletion ⇒
+      // mark undetermined so it never contradicts (same policy as an extractor
+      // throw / Finding A's blob degrade).
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        undetermined.add(path);
+      }
+      continue;
     }
     let extracted: Awaited<ReturnType<typeof extractBlocksForFile>>;
     try {

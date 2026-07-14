@@ -191,6 +191,41 @@ describe("code-truth on recall surfaces (i6 §8.4/§8.6)", () => {
     expect(registry.getMemoryEntry(STALE)?.stale).toBe(false);
   });
 
+  it("BLOCKER B: a renamed-away symbol path is not contradicted (fail-open)", async () => {
+    const registry = seeded();
+    // The symbol cites a path that no longer exists on disk (git mv moved it) —
+    // statSync throws ENOENT. The spot-check cannot tell rename from deletion in
+    // its budget, so it must fail open and defer to `mega memory verify`, never
+    // persisting a close.
+    makeEntry(registry, STALE, {
+      anchor: {
+        repoHead: OLD_HEAD,
+        capturedAt: CAPTURED_AT,
+        files: [],
+        symbols: [
+          {
+            path: "src/renamed-away.ts",
+            name: "verifyToken",
+            startLine: 1,
+            endLine: 3,
+            contentHash: "not-the-current-hash",
+          },
+        ],
+      },
+    });
+    makeEntry(registry, PLAIN);
+    const result = await handleGetRelevantMemories(
+      { registry, isPro: true, now: () => NOW, execGit: fakeExecGit },
+      { projectId: PROJECT_ID, task: "verifyToken" },
+    );
+    expect(result.contradictedByCode).toBeUndefined();
+    expect(result.memory.map((m) => m.id).sort()).toEqual([PLAIN, STALE].sort());
+    const stale = registry.getMemoryEntry(STALE);
+    expect(stale?.stale).toBe(false);
+    expect(stale?.validTo == null).toBe(true);
+    expect(stale?.lastVerified).toBeUndefined();
+  });
+
   it("budget exhaustion passes remaining hits through unchecked (fail-open)", async () => {
     const registry = seeded();
     makeEntry(registry, STALE, { anchor: staleAnchor() });

@@ -101,11 +101,10 @@ export async function spotCheckHits<T extends MemoryEntry>(
         if (statSync(join(rootPath, path)).mtimeMs <= capturedAtMs) continue;
         source = readFileSync(join(rootPath, path), "utf8");
       } catch {
-        // Worktree read failed ⇒ every symbol in the file is missing (§6.4).
-        const first = symbols[0];
-        if (first !== undefined) {
-          contradiction = { path, symbol: first.name, reason: "file missing from worktree" };
-        }
+        // A stat/read fault cannot distinguish a rename from a deletion in the
+        // ~50ms budget (no git history) — fail open and defer to the full
+        // `mega memory verify` pass, which resolves renames. Never persist a
+        // close from a disk fault.
         continue;
       }
       let blocks: Awaited<ReturnType<typeof extractBlocksForFile>>;

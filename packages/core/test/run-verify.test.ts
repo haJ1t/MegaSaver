@@ -477,6 +477,39 @@ describe("runVerify — mutation semantics (fake git)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("BLOCKER B: a transient (non-ENOENT) read fault degrades to undetermined", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "megasaver-codetruth-eisdir-"));
+    mkdirSync(join(dir, "src"), { recursive: true });
+    // A directory at the symbol path makes readFileSync throw EISDIR — a
+    // transient/unknown code, NOT ENOENT. It must never contradict (a disk
+    // fault is not evidence the symbol is gone).
+    mkdirSync(join(dir, "src/a.ts"), { recursive: true });
+    const registry = freshRegistry(dir);
+    registry.createMemoryEntry(
+      mem({
+        id: E1,
+        anchor: {
+          repoHead: OLD_HEAD,
+          capturedAt: TS,
+          files: [],
+          symbols: [{ path: "src/a.ts", name: "foo", startLine: 1, endLine: 1, contentHash: "h" }],
+        },
+      }),
+    );
+    const plan = await runVerify({
+      registry,
+      projectId: PROJECT_ID,
+      rootPath: dir,
+      now: NOW,
+      execGit: fakeGit({ head: HEAD, blobs: { "src/a.ts": "blob-x" } }),
+    });
+    expect(plan.contradicted).toEqual([]);
+    const entry = registry.getMemoryEntry(E1);
+    expect(entry?.stale).toBe(false);
+    expect(entry?.validTo).toBeUndefined();
+    rmSync(dir, { recursive: true, force: true });
+  });
 });
 
 describe("runVerify — WOW loop on a real repo", () => {
