@@ -3517,4 +3517,4 @@ adversarial critic both returned Ready. Four-task real-billing smoke benchmark
 improved from 0/4 losses to 4/4 wins (1.30x cost geomean; approximately $1.87
 vs $2.49 total), while the 4x claim remains unproven. Implementation branch:
 `fix/proxy-cache-parity-finalize`; code head before this wiki record:
-`b09a3983`.
+`b09a3983`. Integration PR: GitHub #288.

@@ -167,7 +167,8 @@ an explicit `mega proxy start --restart-supervisor` action restricted to the
 managed service. Benchmark harness setup ordering is fixed. Full `pnpm verify`
 and 70 focused tests pass; independent reviewer and critic both returned Ready.
 Real-billing smoke result: 4/4 wins, 1.30x cost geomean; do not claim 4x from
-this evidence. Branch `fix/proxy-cache-parity-finalize`, code head `b09a3983`.
+this evidence. Branch `fix/proxy-cache-parity-finalize`, code head `b09a3983`;
+integration PR: GitHub #288.
 
 Status: ready
 
