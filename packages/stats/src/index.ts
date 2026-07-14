@@ -13,6 +13,13 @@ export {
 } from "./guard-event.js";
 
 export {
+  appendCodeTruthEvent,
+  codeTruthEventSchema,
+  readCodeTruthEvents,
+  type CodeTruthEvent,
+} from "./code-truth-event.js";
+
+export {
   appendWarmStartEvent,
   readWarmStartEvents,
   warmStartEventSchema,

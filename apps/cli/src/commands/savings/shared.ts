@@ -2,6 +2,7 @@ import {
   INPUT_PRICE_PER_MTOK_USD,
   type TokenSaverEvent,
   formatDollarsSaved,
+  readCodeTruthEvents,
   readEvents,
   readGuardEvents,
   readWarmStartEvents,
@@ -111,4 +112,33 @@ export function formatGuardLine(totals: GuardTotals): string | null {
   if (totals.heededIntercepts === 0) return null;
   const dollars = (totals.avoidedTokens / 1_000_000) * INPUT_PRICE_PER_MTOK_USD;
   return `Retry cost avoided (estimated): ~${totals.avoidedTokens} tokens (~${formatDollarsSaved(dollars)}) across ${totals.heededIntercepts} intercepts`;
+}
+
+export type CodeTruthTotals = { demotions: number; avoidedTokens: number };
+export type CodeTruthTotalsReader = () => CodeTruthTotals | Promise<CodeTruthTotals>;
+
+// One row per pre-recall spot-check demotion (i6 spec §10). Estimated by
+// contract — never mixed into TokenSaverEvent totals.
+export function defaultCodeTruthTotalsReader(
+  storeInput: ResolveStorePathInput,
+): CodeTruthTotalsReader {
+  return async () => {
+    const rootDir = resolveStorePath(storeInput);
+    const { registry } = await ensureStoreReady(rootDir);
+    let demotions = 0;
+    let avoidedTokens = 0;
+    for (const project of registry.listProjects()) {
+      for (const e of readCodeTruthEvents({ root: rootDir }, project.id)) {
+        demotions += 1;
+        avoidedTokens += e.avoidedTokens;
+      }
+    }
+    return { demotions, avoidedTokens };
+  };
+}
+
+export function formatCodeTruthLine(totals: CodeTruthTotals): string | null {
+  if (totals.demotions === 0) return null;
+  const dollars = (totals.avoidedTokens / 1_000_000) * INPUT_PRICE_PER_MTOK_USD;
+  return `Stale recall waste avoided (estimated): ~${totals.avoidedTokens} tokens (~${formatDollarsSaved(dollars)}) across ${totals.demotions} demotions`;
 }

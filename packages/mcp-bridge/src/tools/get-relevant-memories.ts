@@ -157,6 +157,7 @@ export async function handleGetRelevantMemories(
               now: env.now ?? (() => new Date().toISOString()),
               ...(env.monotonicNow !== undefined ? { monotonicNow: env.monotonicNow } : {}),
               ...(env.execGit !== undefined ? { execGit: env.execGit } : {}),
+              ...(env.storeRoot !== undefined ? { ledger: { storeRoot: env.storeRoot } } : {}),
             },
             project.rootPath,
             ranked,

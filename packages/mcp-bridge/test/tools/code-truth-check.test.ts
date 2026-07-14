@@ -1,7 +1,13 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type CoreRegistry, type MemoryEntry, createInMemoryCoreRegistry } from "@megasaver/core";
+import {
+  type CoreRegistry,
+  type MemoryEntry,
+  createInMemoryCoreRegistry,
+  readCodeTruthEvents,
+  tokensFromBytes,
+} from "@megasaver/core";
 import { extractBlocksForFile } from "@megasaver/output-filter";
 import type { MemoryEntryId, ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -243,6 +249,33 @@ describe("code-truth on recall surfaces (i6 §8.4/§8.6)", () => {
       expect(result.memory[0]?.verification).toBe("unanchored");
       expect(result.contradictedByCode).toEqual([{ id: STALE, title: "memory aaaaaaaa" }]);
       expect(registry.getMemoryEntry(STALE)?.stale).toBe(true);
+    } finally {
+      rmSync(store, { recursive: true, force: true });
+    }
+  });
+
+  it("a spot-check demotion appends one stale-recall-avoided ledger event", async () => {
+    const registry = seeded();
+    makeEntry(registry, STALE, { anchor: staleAnchor() });
+    const store = mkdtempSync(join(tmpdir(), "code-truth-ledger-"));
+    try {
+      await handleGetRelevantMemories(
+        { registry, storeRoot: store, isPro: true, now: () => NOW, execGit: fakeExecGit },
+        { projectId: PROJECT_ID, task: "verifyToken" },
+      );
+      const events = readCodeTruthEvents({ root: store }, PROJECT_ID);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        type: "stale-recall-avoided",
+        projectId: PROJECT_ID,
+        sessionId: "unattributed",
+        memoryId: STALE,
+        avoidedTokens: tokensFromBytes(
+          Buffer.byteLength("verifyToken rejects empty tokens", "utf8"),
+        ),
+        estimated: true,
+        createdAt: NOW,
+      });
     } finally {
       rmSync(store, { recursive: true, force: true });
     }

@@ -1,8 +1,14 @@
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { containsSentinel } from "@megasaver/connectors-shared";
-import type { CoreRegistry, MemoryEntry } from "@megasaver/core";
+import {
+  type CoreRegistry,
+  type MemoryEntry,
+  appendCodeTruthEvent,
+  tokensFromBytes,
+} from "@megasaver/core";
 import { extractBlocksForFile } from "@megasaver/output-filter";
 import type { MemoryEntryId } from "@megasaver/shared";
 
@@ -30,6 +36,11 @@ export type SpotCheckEnv = {
   // Injectable for tests (spec §12): budget clock + git head resolver.
   monotonicNow?: () => number;
   execGit?: (args: string[], cwd: string) => string;
+  // Savings ledger (i6 §10): when present, each demotion appends one
+  // stale-recall-avoided event. sessionId comes from the caller (mega_recall
+  // has a session; get_relevant_memories does not — its demotions fall back
+  // to the memory's own sessionId or "unattributed").
+  ledger?: { storeRoot: string; sessionId?: string; newId?: () => string };
 };
 
 export type SpotCheckResult<T extends MemoryEntry> = {
@@ -148,6 +159,26 @@ export async function spotCheckHits<T extends MemoryEntry>(
       });
     } catch {
       // swallowed: the spot-check must never fail the recall response
+    }
+    if (env.ledger !== undefined) {
+      // Analytics only: the ledger append must never block or fail recall.
+      try {
+        appendCodeTruthEvent(
+          { root: env.ledger.storeRoot },
+          {
+            type: "stale-recall-avoided",
+            id: (env.ledger.newId ?? randomUUID)(),
+            projectId: hit.projectId,
+            sessionId: env.ledger.sessionId ?? hit.sessionId ?? "unattributed",
+            memoryId: hit.id,
+            avoidedTokens: tokensFromBytes(Buffer.byteLength(hit.content, "utf8")),
+            estimated: true,
+            createdAt: env.now(),
+          },
+        );
+      } catch {
+        // swallowed
+      }
     }
   }
 
