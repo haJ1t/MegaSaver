@@ -1,5 +1,6 @@
 import {
   type MemoryEntry,
+  captureCodeAnchor,
   memoryEntrySchema,
   readySteps,
   saveMemoryWithLineage,
@@ -60,6 +61,19 @@ export async function runTaskStatus(input: RunTaskStatusInput): Promise<0 | 1> {
       const newId = input.newId ?? (() => crypto.randomUUID());
       const now = input.now ?? (() => new Date().toISOString());
       const ts = readTestEnv("MEGA_TEST_NOW") ?? now();
+      const project = registry.getProject(plan.projectId);
+      // Summaries cite no files today, so nothing is anchored — the empty
+      // relatedFiles guard skips the git spawn entirely (matches create.ts /
+      // from-session.ts). Kept wired per spec §5.1 for when summaries cite.
+      const summaryFiles: readonly string[] = [];
+      const anchor =
+        project === null || summaryFiles.length === 0
+          ? undefined
+          : await captureCodeAnchor({
+              rootPath: project.rootPath,
+              relatedFiles: summaryFiles,
+              now: ts,
+            });
       const entry: MemoryEntry = memoryEntrySchema.parse({
         id: readTestEnv("MEGA_TEST_MEMORY_ENTRY_ID") ?? newId(),
         projectId: plan.projectId,
@@ -71,6 +85,7 @@ export async function runTaskStatus(input: RunTaskStatusInput): Promise<0 | 1> {
         keywords: [],
         confidence: "medium",
         source: "session_summary",
+        ...(anchor !== undefined ? { anchor } : {}),
         stale: false,
         createdAt: ts,
         updatedAt: ts,

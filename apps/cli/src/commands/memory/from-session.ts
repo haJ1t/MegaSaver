@@ -1,5 +1,6 @@
 import {
   type MemoryEntry,
+  captureCodeAnchor,
   extractSessionMemories,
   memoryEntrySchema,
   saveMemoryWithLineage,
@@ -89,6 +90,7 @@ export async function runMemoryFromSession(input: RunMemoryFromSessionInput): Pr
 
     const newId = input.newId ?? (() => crypto.randomUUID());
     const now = input.now ?? readTestEnv("MEGA_TEST_NOW") ?? new Date().toISOString();
+    const project = registry.getProject(session.projectId);
 
     let suggested = 0;
     let skipped = 0;
@@ -98,6 +100,16 @@ export async function runMemoryFromSession(input: RunMemoryFromSessionInput): Pr
         skipped += 1;
         continue;
       }
+      // ponytail: one capture (≈1 git spawn per cited file) per candidate;
+      // batch through RepoState if extraction volume ever grows.
+      const anchor =
+        project === null || candidate.relatedFiles.length === 0
+          ? undefined
+          : await captureCodeAnchor({
+              rootPath: project.rootPath,
+              relatedFiles: candidate.relatedFiles,
+              now,
+            });
       const entry: MemoryEntry = memoryEntrySchema.parse({
         id: newId(),
         projectId: session.projectId,
@@ -111,6 +123,7 @@ export async function runMemoryFromSession(input: RunMemoryFromSessionInput): Pr
         source: candidate.source,
         approval: candidate.approval,
         ...(candidate.relatedFiles.length > 0 ? { relatedFiles: candidate.relatedFiles } : {}),
+        ...(anchor !== undefined ? { anchor } : {}),
         createdAt: now,
         updatedAt: now,
       });
