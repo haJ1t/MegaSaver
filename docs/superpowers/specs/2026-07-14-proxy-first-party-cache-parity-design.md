@@ -72,9 +72,12 @@ Callers:
   **Never set the flag for custom upstreams.**
 - `commands.ts` (control plane): the LaunchAgent it installs always supervises with the
   default upstream (no `--upstream` in `superviseArgv`), so `assumeFirstParty: true`.
-- `mega proxy start`: when an exact owned route already exists, re-run the adapter's
-  idempotent `apply` from the upgraded CLI process. This heals an older still-running
-  supervisor without stopping the listener or interrupting connected clients.
+- `mega proxy start --restart-supervisor`: after persisting the enable transition,
+  explicitly force-restart only a loaded managed LaunchAgent. The new supervisor then
+  heals the route through its authenticated listener + active-lease monitor path.
+  URL equality alone never authorizes a settings migration. The explicit restart can
+  briefly interrupt active proxy requests, so it is an upgrade action rather than the
+  default behavior; legacy and foreign jobs are still refused.
 
 ## Constraints / risks
 

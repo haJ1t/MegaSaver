@@ -17,7 +17,8 @@ Spec: `docs/superpowers/specs/2026-07-14-proxy-first-party-cache-parity-design.m
    (default-origin comparison) and `commands.ts` (persisted upstream origin gate).
    → verify: `vitest run` green, `pnpm verify` green.
 4. Changeset (`@megasaver/connector-claude-code` minor for the optional public adapter
-   API; `@megasaver/proxy-control` + `@megasaver/cli` patch).
+   API; `@megasaver/proxy-control` minor for the changed exported adapter contract;
+   `@megasaver/cli` patch).
 5. Reviews: `code-reviewer` + `critic` agents, fresh contexts. Address findings.
 6. Merge to `main`, reinstall global CLI, restart proxy, confirm settings healed
    (flag present next to route).
@@ -26,8 +27,9 @@ Spec: `docs/superpowers/specs/2026-07-14-proxy-first-party-cache-parity-design.m
 8. Wiki: update `wiki/` pages + `wiki/log.md` entry; conventions untouched (no drift).
 
 Review amendments:
-- `mega proxy start` re-applies an already-owned exact route from the upgraded CLI
-  process, healing older running supervisors without interrupting clients.
+- `mega proxy start --restart-supervisor` explicitly force-restarts only the loaded
+  managed LaunchAgent; the new monitor then heals older installations. URL equality
+  alone never authorizes an in-process settings migration.
 - Production-adapter tests cover default-origin normalization and custom-upstream
   stale-flag removal.
 - Benchmark settings snapshots are created after hook installation and the treatment
