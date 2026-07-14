@@ -7,6 +7,7 @@ import { defineCommand } from "citty";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
 import { readTestEnv } from "../session/shared.js";
+import { installPostCommitHook, uninstallPostCommitHook } from "./verify-hook.js";
 
 export const MEMORY_VERIFY_UPSELL =
   "Automatic code-truth verification (post-commit hook, sweep pre-pass) is a Mega Saver Pro feature. Activate a key: mega license activate <key>.";
@@ -16,6 +17,8 @@ export type RunMemoryVerifyInput = {
   changedFlag: boolean;
   quietFlag: boolean;
   jsonFlag: boolean;
+  installHookFlag?: boolean;
+  uninstallHookFlag?: boolean;
   storeFlag: string | undefined;
   cwd: string;
   home: string;
@@ -85,6 +88,57 @@ export async function runMemoryVerify(input: RunMemoryVerifyInput): Promise<0 | 
   if (!idResult.success) {
     input.stderr(`error: invalid project id: ${input.projectId}`);
     return 1;
+  }
+
+  // Hook mode (spec §8.2). PRO gate FIRST — before ensureStoreReady (which
+  // initializes the store on disk) and before any write into the user's repo.
+  // Free tier must not touch the filesystem at all.
+  if (input.installHookFlag === true || input.uninstallHookFlag === true) {
+    if (input.installHookFlag === true && input.uninstallHookFlag === true) {
+      input.stderr("error: --install-hook and --uninstall-hook are mutually exclusive");
+      return 1;
+    }
+    const ent = checkEntitlement("code-truth", {
+      storeRoot: rootDir,
+      now: input.nowMs ?? (() => Date.now()),
+      ...(input.publicKey === undefined ? {} : { publicKey: input.publicKey }),
+    });
+    if (!ent.entitled) {
+      input.stdout(MEMORY_VERIFY_UPSELL);
+      return 0;
+    }
+    try {
+      const { registry, initialized } = await ensureStoreReady(rootDir);
+      if (initialized) input.stderr(`note: initialized store at ${rootDir}`);
+      const project = registry.getProject(idResult.data);
+      if (project === null) {
+        const cli = projectNotFoundMessage(input.projectId);
+        input.stderr(cli.message);
+        return cli.exitCode;
+      }
+      const result =
+        input.installHookFlag === true
+          ? installPostCommitHook({
+              rootPath: project.rootPath,
+              projectId: project.id,
+              storeDir: rootDir,
+            })
+          : uninstallPostCommitHook({ rootPath: project.rootPath });
+      if (!result.ok) {
+        input.stderr(result.message);
+        return 1;
+      }
+      input.stdout(
+        input.installHookFlag === true
+          ? `installed: ${result.path}`
+          : `uninstalled: ${result.path}`,
+      );
+      return 0;
+    } catch (err) {
+      const cli = mapErrorToCliMessage(err);
+      input.stderr(cli.message);
+      return cli.exitCode;
+    }
   }
 
   try {
@@ -168,6 +222,16 @@ export const memoryVerifyCommand = defineCommand({
       default: false,
       description: "Print only when something contradicted or healed.",
     },
+    "install-hook": {
+      type: "boolean",
+      default: false,
+      description: "Install the post-commit verify hook into this project's repo (Pro).",
+    },
+    "uninstall-hook": {
+      type: "boolean",
+      default: false,
+      description: "Remove the Mega Saver block from the post-commit hook (Pro).",
+    },
     store: { type: "string", description: "Override store directory." },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
@@ -178,6 +242,8 @@ export const memoryVerifyCommand = defineCommand({
       changedFlag: args.changed === true,
       quietFlag: args.quiet === true,
       jsonFlag: args.json === true,
+      installHookFlag: args["install-hook"] === true,
+      uninstallHookFlag: args["uninstall-hook"] === true,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
     });
