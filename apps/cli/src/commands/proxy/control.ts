@@ -63,6 +63,10 @@ export function runProxyStart(deps: ProxyControlPlaneDeps): StartResult {
     "start",
     () => {
       const control = readControlState(deps.storeRoot);
+      // Package upgrades do not restart an already-loaded LaunchAgent. Re-apply
+      // only an exact owned route from this new CLI process so adapter migrations
+      // (such as the first-party cache flag) land without interrupting clients.
+      if (deps.route.inspect(deps.ownedUrl) === "exact") deps.route.apply(deps.ownedUrl);
       const nowIso = new Date(deps.now()).toISOString();
       writeControlState(deps.storeRoot, {
         ...control,

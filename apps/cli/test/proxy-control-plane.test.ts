@@ -29,10 +29,13 @@ const OWNED = "http://127.0.0.1:8787";
 const MANAGED_ARGV = ["/bin/mega", "proxy", "supervise", "--store", "/store"];
 
 function fakeRoute(initial: string | null) {
-  const s = { value: initial };
+  const s = { value: initial, applyCalls: 0 };
   return {
     get value() {
       return s.value;
+    },
+    get applyCalls() {
+      return s.applyCalls;
     },
     inspect: (u: string) =>
       (s.value === null ? "absent" : s.value === u ? "exact" : "foreign") as
@@ -41,6 +44,7 @@ function fakeRoute(initial: string | null) {
         | "foreign"
         | "invalid",
     apply: (u: string) => {
+      s.applyCalls++;
       if (s.value === u) return false;
       s.value = u;
       return true;
@@ -99,6 +103,13 @@ describe("runProxyStart", () => {
     const r = runProxyStart(deps(fakeRoute(null), lc));
     expect(r.status).toBe("legacy_service_present");
     expect(lc.calls).not.toContain("bootout com.megasaver.proxy");
+  });
+
+  it("re-applies an exact route when an older managed supervisor is already running", () => {
+    const route = fakeRoute(OWNED);
+    const lc = fakeLaunchctl({ "com.megasaver.proxy": MANAGED_ARGV });
+    expect(runProxyStart(deps(route, lc)).status).toBe("already_managed");
+    expect(route.applyCalls).toBe(1);
   });
 });
 
