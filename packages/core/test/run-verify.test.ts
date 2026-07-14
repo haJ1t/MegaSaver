@@ -293,6 +293,55 @@ describe("runVerify — mutation semantics (fake git)", () => {
     expect(registry.getMemoryEntry(E1)?.evidence).toHaveLength(1);
   });
 
+  it("BLOCKER A: re-contradiction across a new HEAD keeps close ownership and heals", async () => {
+    const HEAD_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const HEAD_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const HEAD_C = "cccccccccccccccccccccccccccccccccccccccc";
+    const registry = freshRegistry(ROOT);
+    registry.createMemoryEntry(mem({ id: E1, anchor: fileAnchor() }));
+
+    // HEAD A: file gone ⇒ contradiction closes an open row and owns the close.
+    await runVerify({
+      registry,
+      projectId: PROJECT_ID,
+      rootPath: ROOT,
+      now: NOW,
+      execGit: fakeGit({ head: HEAD_A, blobs: {}, attribution: { "src/a.ts": FALSIFIER } }),
+    });
+    const afterA = registry.getMemoryEntry(E1);
+    expect(afterA?.validTo).toBe(NOW);
+    expect(afterA?.lastVerified?.closedByCodeTruth).toBe(true);
+    expect(afterA?.evidence?.filter((line) => line.includes("contradicted"))).toHaveLength(1);
+
+    // HEAD B: an UNRELATED commit moves HEAD; the file is still gone. The row
+    // must STAY contradicted, keep close ownership, and grow NO duplicate
+    // evidence — the old head-keyed guard clobbered closedByCodeTruth here.
+    await runVerify({
+      registry,
+      projectId: PROJECT_ID,
+      rootPath: ROOT,
+      now: LATER,
+      execGit: fakeGit({ head: HEAD_B, blobs: {}, attribution: { "src/a.ts": FALSIFIER } }),
+    });
+    const afterB = registry.getMemoryEntry(E1);
+    expect(afterB?.validTo).toBe(NOW);
+    expect(afterB?.lastVerified?.closedByCodeTruth).toBe(true);
+    expect(afterB?.evidence?.filter((line) => line.includes("contradicted"))).toHaveLength(1);
+
+    // HEAD C: the file is restored ⇒ heal reopens the code-truth-owned close.
+    const plan = await runVerify({
+      registry,
+      projectId: PROJECT_ID,
+      rootPath: ROOT,
+      now: LATER,
+      execGit: fakeGit({ head: HEAD_C, blobs: { "src/a.ts": "blob-old" } }),
+    });
+    expect(plan.healed).toEqual([E1]);
+    const healed = registry.getMemoryEntry(E1);
+    expect(healed?.validTo).toBeNull();
+    expect(healed?.stale).toBe(false);
+  });
+
   it("stamps lastVerified on first verify with ONE batch apply", async () => {
     const registry = freshRegistry(ROOT);
     registry.createMemoryEntry(mem({ id: E1, anchor: fileAnchor() }));

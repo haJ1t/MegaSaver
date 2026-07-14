@@ -418,10 +418,12 @@ export async function runVerify(opts: {
     if (entry === undefined) {
       continue;
     }
-    // Idempotence: a contradiction already recorded at this head is a no-op —
-    // same principle as the verified suppression; evidence must not grow on
-    // repeat runs at an unchanged head.
-    if (entry.lastVerified?.result === "contradicted" && entry.lastVerified.headSha === headSha) {
+    // Idempotence: an already-contradicted row is never re-mutated, at ANY
+    // head. A head-keyed guard let an unrelated later commit re-run this
+    // mutation, which clobbered closedByCodeTruth to false (breaking heal
+    // ownership) and appended a duplicate evidence line every commit. Heal is
+    // a separate branch (plan.healed), so this never blocks a heal.
+    if (entry.lastVerified?.result === "contradicted") {
       continue;
     }
     const open = entry.validTo == null; // null OR undefined — row still current
@@ -437,10 +439,12 @@ export async function runVerify(opts: {
         headSha,
         at: opts.now,
         result: "contradicted",
-        // B1 close ownership: true ONLY when this contradiction itself closed
-        // an open row. A row already closed by lineage/manual keeps false so
-        // a later heal never reopens a close it does not own.
-        closedByCodeTruth: open,
+        // B1 close ownership: true when this contradiction itself closed an
+        // open row, OR when a prior code-truth contradiction already owned the
+        // close — never downgrade ownership. A row closed by lineage/manual
+        // (prior flag false, not open) keeps false so heal never reopens a
+        // close it does not own.
+        closedByCodeTruth: open || entry.lastVerified?.closedByCodeTruth === true,
       },
     });
   }
