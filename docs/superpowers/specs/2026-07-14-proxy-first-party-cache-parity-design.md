@@ -28,9 +28,10 @@ stdout injection from log/intent hooks, saver disabled in bench workspace).
 
 ## Fix
 
-Claude Code ≥ 2.1.x reads `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` (internal flag,
-discovered via binary strings; verified empirically 2026-07-14 on 2.1.207): the client
-then treats the custom base URL as first-party and restores all three behaviors.
+Claude Code 2.1.207 reads `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1` (internal flag,
+discovered via binary strings; verified empirically 2026-07-14): the client then treats
+the custom base URL as first-party and restores all three behaviors. Other client
+versions require the same smoke probe because the flag is undocumented.
 
 Verified effect through the MegaSaver proxy (probe pairs):
 
@@ -71,16 +72,18 @@ Callers:
   **Never set the flag for custom upstreams.**
 - `commands.ts` (control plane): the LaunchAgent it installs always supervises with the
   default upstream (no `--upstream` in `superviseArgv`), so `assumeFirstParty: true`.
+- `mega proxy start`: when an exact owned route already exists, re-run the adapter's
+  idempotent `apply` from the upgraded CLI process. This heals an older still-running
+  supervisor without stopping the listener or interrupting connected clients.
 
 ## Constraints / risks
 
 - The flag is **undocumented and underscore-prefixed**: it may vanish in a future
   Claude Code release. Failure mode is graceful (client ignores unknown env; behavior
   reverts to today's non-first-party costs). Track via `mega doctor` in a follow-up.
-- Residual (accepted, doctor follow-up): a stale flag can survive next to a foreign
-  base URL after a version downgrade (old `removeExpected` drops only the URL) or a
-  manual URL swap. No in-version write path creates that state; `mega doctor` should
-  detect and offer to remove it.
+- A custom-upstream adapter removes a stale first-party flag from an exact owned route;
+  foreign base URLs remain untouched. A version downgrade/manual foreign-URL swap can
+  still leave an orphan, so `mega doctor` should detect and offer to remove it.
 - Flag applies only to Claude Code; other agents' connectors unaffected.
 - No proxy-side body rewriting in this fix: not needed once the client behaves
   first-party. (Rejected alternative: proxy-side `cache_control` injection — larger
