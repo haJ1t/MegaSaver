@@ -568,6 +568,39 @@ describe("runVerify — mutation semantics (fake git)", () => {
     expect(entry?.validTo).toBeUndefined();
     rmSync(dir, { recursive: true, force: true });
   });
+
+  it("MINOR E: an unsupported-extension symbol path is undetermined, not contradicted", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "megasaver-codetruth-unsupported-"));
+    mkdirSync(join(dir, "src"), { recursive: true });
+    // A .txt file has no extractor ⇒ extractBlocksForFile returns undefined.
+    // runVerify must treat it as undetermined (matching the spot-check), never
+    // a false "symbol missing" contradiction.
+    writeFileSync(join(dir, "src/notes.txt"), "plain prose, no code blocks\n");
+    const registry = freshRegistry(dir);
+    registry.createMemoryEntry(
+      mem({
+        id: E1,
+        anchor: {
+          repoHead: OLD_HEAD,
+          capturedAt: TS,
+          files: [],
+          symbols: [
+            { path: "src/notes.txt", name: "foo", startLine: 1, endLine: 1, contentHash: "h" },
+          ],
+        },
+      }),
+    );
+    const plan = await runVerify({
+      registry,
+      projectId: PROJECT_ID,
+      rootPath: dir,
+      now: NOW,
+      execGit: fakeGit({ head: HEAD, blobs: { "src/notes.txt": "blob-x" } }),
+    });
+    expect(plan.contradicted).toEqual([]);
+    expect(registry.getMemoryEntry(E1)?.stale).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
 });
 
 describe("runVerify — WOW loop on a real repo", () => {

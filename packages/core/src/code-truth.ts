@@ -333,6 +333,10 @@ export async function runVerify(opts: {
       continue;
     }
     if (extracted === undefined) {
+      // Unsupported extension (no extractor) — the worktree can't confirm or
+      // deny the symbol, so mark undetermined (never contradict), matching the
+      // recall spot-check. Without this, zero candidates read as "symbol gone".
+      undetermined.add(path);
       continue;
     }
     blocks.set(
