@@ -1,4 +1,5 @@
 export * from "./context-gate.js";
+export * from "./code-truth.js";
 export * from "./tool-definition.js";
 export * from "./tool-router.js";
 export * from "./task-plan.js";
