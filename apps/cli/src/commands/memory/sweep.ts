@@ -1,4 +1,6 @@
-import { sweepMemoryTiers } from "@megasaver/core";
+import type { KeyObject } from "node:crypto";
+import { runVerify, sweepMemoryTiers } from "@megasaver/core";
+import { checkEntitlement } from "@megasaver/entitlement";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, projectNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
@@ -19,6 +21,10 @@ export type RunMemorySweepInput = {
   now?: string;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+  verifyFlag?: boolean;
+  nowMs?: () => number;
+  publicKey?: KeyObject | string;
+  execGit?: (args: string[], cwd: string) => string;
 };
 
 // Deterministic, on-demand tier sweep (the memory analog of `mega memory index`):
@@ -64,6 +70,27 @@ export async function runMemorySweep(input: RunMemorySweepInput): Promise<0 | 1>
     }
 
     const now = input.now ?? readTestEnv("MEGA_TEST_NOW") ?? new Date().toISOString();
+
+    // PRO verify pre-pass (spec §8.3): contradicted rows flip stale and the
+    // sweep below archives them in the same run — zero new sweep logic. The
+    // free tier skips silently: output stays byte-identical to today.
+    if (input.verifyFlag !== false) {
+      const ent = checkEntitlement("code-truth", {
+        storeRoot: rootDir,
+        now: input.nowMs ?? (() => Date.now()),
+        ...(input.publicKey === undefined ? {} : { publicKey: input.publicKey }),
+      });
+      if (ent.entitled) {
+        await runVerify({
+          registry,
+          projectId: project.id,
+          rootPath: project.rootPath,
+          now,
+          ...(input.execGit !== undefined ? { execGit: input.execGit } : {}),
+        });
+      }
+    }
+
     const entries = registry.listMemoryEntries(project.id);
     const { archiveIds } = sweepMemoryTiers(entries, now);
     for (const id of archiveIds) {
@@ -96,6 +123,11 @@ export const memorySweepCommand = defineCommand({
       description: "Project name (must already exist).",
     },
     store: { type: "string", description: "Override store directory." },
+    verify: {
+      type: "boolean",
+      default: true,
+      description: "Run the code-truth verify pre-pass first (Pro; --no-verify to skip).",
+    },
     json: { type: "boolean", default: false, description: "Emit JSON output." },
   },
   async run({ args }) {
@@ -103,6 +135,7 @@ export const memorySweepCommand = defineCommand({
       ...readStoreEnv(typeof args.store === "string" ? args.store : undefined),
       projectName: typeof args.projectName === "string" ? args.projectName : "",
       jsonFlag: args.json === true,
+      verifyFlag: args.verify !== false,
       stdout: (line) => console.log(line),
       stderr: (line) => console.error(line),
     });
