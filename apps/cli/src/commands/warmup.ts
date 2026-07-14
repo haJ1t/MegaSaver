@@ -1,6 +1,6 @@
 import { type KeyObject, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
-import { dirname, join, sep } from "node:path";
+import { dirname, join } from "node:path";
 import {
   type CoreRegistry,
   type GitDelta,
@@ -25,7 +25,15 @@ export const WARMUP_WRITE_UPSELL =
   "Cross-agent warm start (--write) is a Mega Saver Pro feature. Activate a key: mega license activate <key>.";
 
 export function findProjectByCwd(projects: readonly Project[], cwd: string): Project | null {
-  const matches = projects.filter((p) => cwd === p.rootPath || cwd.startsWith(p.rootPath + sep));
+  // Accept either separator at the boundary: a store synced across machines
+  // (brain-sync) can carry a rootPath whose separator differs from the host's,
+  // so keying on the platform `sep` alone would silently fail to resolve it.
+  const matches = projects.filter((p) => {
+    if (cwd === p.rootPath) return true;
+    if (!cwd.startsWith(p.rootPath)) return false;
+    const boundary = cwd[p.rootPath.length];
+    return boundary === "/" || boundary === "\\";
+  });
   matches.sort((a, b) => b.rootPath.length - a.rootPath.length);
   return matches[0] ?? null;
 }

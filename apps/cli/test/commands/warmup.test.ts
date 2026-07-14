@@ -64,6 +64,22 @@ describe("findProjectByCwd", () => {
     });
     expect(findProjectByCwd(projects as never, "/elsewhere")).toBeNull();
   });
+
+  it("matches on either path separator regardless of the host platform", () => {
+    // A store synced across machines (brain-sync) can carry a rootPath whose
+    // separator differs from the host's — the boundary check must accept both
+    // "/" and "\\" so warm start still resolves the project.
+    const win = [{ rootPath: "C:\\work\\demo" }] as never[];
+    expect(findProjectByCwd(win as never, "C:\\work\\demo\\src")).toEqual({
+      rootPath: "C:\\work\\demo",
+    });
+    const posix = [{ rootPath: "/work/demo" }] as never[];
+    expect(findProjectByCwd(posix as never, "/work/demo/src")).toEqual({
+      rootPath: "/work/demo",
+    });
+    // a sibling that only shares a name prefix must NOT match (boundary intact)
+    expect(findProjectByCwd([{ rootPath: "/work" }] as never, "/workshop")).toBeNull();
+  });
 });
 
 describe("runWarmup", () => {
