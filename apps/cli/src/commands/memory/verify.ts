@@ -54,7 +54,10 @@ function changedPathsAtHead(
   execGit: (args: string[], cwd: string) => string,
 ): string[] {
   try {
-    return execGit(["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"], rootPath)
+    return execGit(
+      ["-c", "core.quotePath=off", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+      rootPath,
+    )
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
