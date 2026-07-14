@@ -114,3 +114,16 @@ export async function outlineFile(
 
   return { skeleton, chunks };
 }
+
+// Public polyglot per-file extraction (code-truth anchor capture, i6). Wraps
+// the private dispatch above: undefined = unsupported extension, so the
+// caller falls back to file-level anchors. Async only because the indexer
+// (and its typescript dep) loads lazily — never import it eagerly here.
+export async function extractBlocksForFile(
+  path: string,
+  source: string,
+): Promise<ExtractedBlock[] | undefined> {
+  const extractor = extractorFor(path, await loadExtractors());
+  if (extractor === undefined) return undefined;
+  return extractor(path, source);
+}

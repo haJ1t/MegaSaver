@@ -70,3 +70,9 @@ export {
   type RankedChunk,
   type SessionHints,
 } from "./rank.js";
+
+export { extractBlocksForFile } from "./parsers/outline.js";
+// Type-only re-export (erased at runtime — the no-eager-typescript guard
+// stays intact): lets @megasaver/core type anchor capture without adding a
+// core -> indexer dependency edge.
+export type { ExtractedBlock } from "@megasaver/indexer";
