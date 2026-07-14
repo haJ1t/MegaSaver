@@ -25,6 +25,7 @@ import { describe, expect, it } from "vitest";
 // @megasaver/core (never @megasaver/stats directly), so stats stays forbidden.
 const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/agent-office",
+  "@megasaver/brain-sync",
   "@megasaver/connector-claude-code",
   "@megasaver/connector-generic-cli",
   "@megasaver/connectors-shared",

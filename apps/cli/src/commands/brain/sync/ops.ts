@@ -1,0 +1,102 @@
+import { BrainSyncError, pull, push, status } from "@megasaver/brain-sync";
+import {
+  type BrainSyncCommonInput,
+  buildProjectSyncContext,
+  gate,
+  pendingSyncSuggestions,
+} from "./common.js";
+
+export type BrainSyncOpInput = BrainSyncCommonInput & { projectName: string; force?: boolean };
+
+export async function runBrainSyncPush(input: BrainSyncOpInput): Promise<0 | 1> {
+  if (!gate(input)) return 0;
+  try {
+    const ctx = await buildProjectSyncContext(input);
+    if (ctx === null) return 1;
+    if (!input.force) {
+      // Merge remote FIRST so entries push's own internal merge would import
+      // can't slip past the guard: pull imports any remote changes as
+      // suggested + advances last-seen, then the guard blocks publishing an
+      // approved-only bundle that would drop them. (A remote that advances in
+      // the tiny window between this pull and the push below is the only
+      // residual — push reports merged:true there, which warns the user.)
+      await pull(ctx.deps);
+      const pending = pendingSyncSuggestions(ctx.registry, ctx.localProjectId);
+      if (pending > 0) {
+        input.stderr(
+          `error: ${pending} synced suggestion(s) are pending approval — run \`mega memory approve\` (or discard them) before pushing; pushing now would drop them from the remote. Use --force to override.`,
+        );
+        return 1;
+      }
+    }
+    const result = await push(ctx.deps);
+    if (result.state === "pushed") {
+      input.stdout(
+        result.merged
+          ? `pushed generation ${result.generation} (merged remote changes first — imported entries are suggested; run: mega memory approve)`
+          : `pushed generation ${result.generation}`,
+      );
+    } else if (result.merged) {
+      input.stdout(
+        "merged remote changes — imported entries are suggested; run: mega memory approve",
+      );
+    } else {
+      input.stdout(`already up to date (generation ${result.generation})`);
+    }
+    return 0;
+  } catch (err) {
+    if (err instanceof BrainSyncError) {
+      input.stderr(`error: ${err.message}`);
+      return 1;
+    }
+    throw err;
+  }
+}
+
+export async function runBrainSyncPull(input: BrainSyncOpInput): Promise<0 | 1> {
+  if (!gate(input)) return 0;
+  try {
+    const ctx = await buildProjectSyncContext(input);
+    if (ctx === null) return 1;
+    const result = await pull(ctx.deps);
+    if (result.state === "empty") {
+      input.stdout("remote is empty — run `mega brain sync push <project>` first");
+    } else if (result.state === "merged") {
+      input.stdout(
+        `merged remote generation ${result.generation} — imported entries are suggested; run: mega memory approve`,
+      );
+    } else {
+      input.stdout(`already up to date (generation ${result.generation})`);
+    }
+    return 0;
+  } catch (err) {
+    if (err instanceof BrainSyncError) {
+      input.stderr(`error: ${err.message}`);
+      return 1;
+    }
+    throw err;
+  }
+}
+
+export async function runBrainSyncStatus(input: BrainSyncOpInput): Promise<0 | 1> {
+  if (!gate(input)) return 0;
+  try {
+    const ctx = await buildProjectSyncContext(input);
+    if (ctx === null) return 1;
+    const result = await status(ctx.deps);
+    if (result.state === "empty") {
+      input.stdout("remote: empty");
+    } else {
+      input.stdout(
+        `remote generation: ${result.remoteGeneration} / last seen: ${result.lastSeenGeneration} / up to date: ${result.upToDate ? "yes" : "no"} / updated: ${result.updatedAt}`,
+      );
+    }
+    return 0;
+  } catch (err) {
+    if (err instanceof BrainSyncError) {
+      input.stderr(`error: ${err.message}`);
+      return 1;
+    }
+    throw err;
+  }
+}

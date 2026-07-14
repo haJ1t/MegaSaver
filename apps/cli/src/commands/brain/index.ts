@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { brainExportCommand } from "./export.js";
 import { brainImportCommand } from "./import.js";
+import { brainSyncCommand } from "./sync/index.js";
 
 export {
   BRAIN_EXPORT_UPSELL,
@@ -14,6 +15,16 @@ export {
   brainImportCommand,
   runBrainImport,
 } from "./import.js";
+export {
+  type BrainSyncOpInput,
+  brainSyncCommand,
+  brainSyncPullCommand,
+  brainSyncPushCommand,
+  brainSyncStatusCommand,
+  runBrainSyncPull,
+  runBrainSyncPush,
+  runBrainSyncStatus,
+} from "./sync/index.js";
 
 export const brainCommand = defineCommand({
   meta: {
@@ -23,5 +34,6 @@ export const brainCommand = defineCommand({
   subCommands: {
     export: brainExportCommand,
     import: brainImportCommand,
+    sync: brainSyncCommand,
   },
 });
