@@ -137,7 +137,7 @@ export function verifyAnchors(
 // The registry surface the runner needs. There is no standalone
 // MemoryRegistry interface in core — memory methods live on CoreRegistry —
 // so the contract name is a Pick; any full CoreRegistry satisfies it.
-export type MemoryRegistry = Pick<CoreRegistry, "listMemoryEntries" | "applyMemoryEntryPatches">;
+export type MemoryRegistry = Pick<CoreRegistry, "listMemoryEntries" | "applyMemoryEntryMutations">;
 
 // The optional third `input` feeds git's stdin (batched cat-file). A
 // contract-shaped (args, cwd) => string function is still assignable, but a
@@ -388,110 +388,153 @@ export async function runVerify(opts: {
     opts.now,
   );
 
-  // 5. Mutations (§7) — merged per entry, applied in ONE batch. NEVER touches
-  //    lastActiveAt: verify is observation, not use.
+  // 5. Mutations (§7) — one closure per entry, applied in ONE batch under the
+  //    registry lock. NEVER touches lastActiveAt: verify is observation, not
+  //    use. Each closure recomputes its patch from the FRESH in-lock row
+  //    (critic F2) so a concurrent writer between this snapshot and the apply is
+  //    never clobbered; the snapshot below only decides WHICH entries could
+  //    mutate, so an all-no-op run still makes zero apply calls.
   const byId = new Map(candidates.map((entry) => [entry.id, entry] as const));
-  const patchFor = new Map<MemoryEntryId, MemoryEntryUpdatePatch>();
-  const upsertPatch = (
-    id: MemoryEntryId,
-    patch: Omit<Partial<MemoryEntryUpdatePatch>, "updatedAt">,
-  ): void => {
-    const current = patchFor.get(id) ?? { updatedAt: opts.now };
-    patchFor.set(id, { ...current, ...patch, updatedAt: opts.now });
-  };
 
-  const rewrittenAnchors = new Map<MemoryEntryId, CodeAnchor>();
+  const repointsFor = new Map<MemoryEntryId, Array<{ from: string; to: string }>>();
   for (const item of plan.repointed) {
-    const entry = byId.get(item.id);
-    if (entry?.anchor === undefined) {
+    if (byId.get(item.id)?.anchor === undefined) {
       continue;
     }
-    const current = rewrittenAnchors.get(item.id) ?? entry.anchor;
-    rewrittenAnchors.set(item.id, {
-      ...current,
-      files: current.files.map((file) =>
-        file.path === item.from ? { ...file, path: item.to } : file,
-      ),
-      symbols: current.symbols.map((symbol) =>
-        symbol.path === item.from ? { ...symbol, path: item.to } : symbol,
-      ),
-    });
-  }
-  for (const [id, anchor] of rewrittenAnchors) {
-    upsertPatch(id, { anchor });
+    const list = repointsFor.get(item.id) ?? [];
+    list.push({ from: item.from, to: item.to });
+    repointsFor.set(item.id, list);
   }
 
+  type Action =
+    | { kind: "contradict"; evidenceLine: string }
+    | { kind: "heal" }
+    | { kind: "verify" };
+  const actionFor = new Map<MemoryEntryId, Action>();
   for (const item of plan.contradicted) {
-    const entry = byId.get(item.id);
-    if (entry === undefined) {
+    if (!byId.has(item.id)) {
       continue;
     }
-    // Idempotence: an already-contradicted row is never re-mutated, at ANY
-    // head. A head-keyed guard let an unrelated later commit re-run this
-    // mutation, which clobbered closedByCodeTruth to false (breaking heal
-    // ownership) and appended a duplicate evidence line every commit. Heal is
-    // a separate branch (plan.healed), so this never blocks a heal.
-    if (entry.lastVerified?.result === "contradicted") {
-      continue;
-    }
-    const open = entry.validTo == null; // null OR undefined — row still current
     const evidenceLine =
       item.commit === undefined
         ? `code-truth: contradicted — ${item.reason}`
         : `code-truth: contradicted by ${sha7(item.commit)} — ${item.reason}`;
-    upsertPatch(item.id, {
-      stale: true,
-      ...(open ? { validTo: opts.now } : {}),
-      evidence: [...(entry.evidence ?? []), evidenceLine],
-      lastVerified: {
-        headSha,
-        at: opts.now,
-        result: "contradicted",
-        // B1 close ownership: true when this contradiction itself closed an
-        // open row, OR when a prior code-truth contradiction already owned the
-        // close — never downgrade ownership. A row closed by lineage/manual
-        // (prior flag false, not open) keeps false so heal never reopens a
-        // close it does not own.
-        closedByCodeTruth: open || entry.lastVerified?.closedByCodeTruth === true,
-      },
-    });
+    actionFor.set(item.id, { kind: "contradict", evidenceLine });
   }
-
   for (const id of plan.healed) {
-    const entry = byId.get(id);
-    if (entry === undefined) {
-      continue;
+    if (byId.has(id)) {
+      actionFor.set(id, { kind: "heal" });
     }
-    const ownedClose = entry.lastVerified?.closedByCodeTruth === true;
-    upsertPatch(id, {
-      stale: false,
-      ...(ownedClose ? { validTo: null } : {}),
-      evidence: [
-        ...(entry.evidence ?? []),
-        `code-truth: healed at ${sha7(headSha)} — hash matches again`,
-      ],
-      lastVerified: { headSha, at: opts.now, result: "healed", closedByCodeTruth: false },
-    });
   }
-
   for (const id of plan.verified) {
-    const entry = byId.get(id);
-    if (entry === undefined) {
-      continue;
+    if (byId.has(id)) {
+      actionFor.set(id, { kind: "verify" });
     }
-    // No-op suppression (§7): repeat verifies at an unchanged head write
-    // nothing — keeps them free and updatedAt honest.
-    if (entry.lastVerified?.headSha === headSha) {
-      continue;
-    }
-    upsertPatch(id, {
-      lastVerified: { headSha, at: opts.now, result: "verified", closedByCodeTruth: false },
-    });
   }
 
-  const patches = [...patchFor.entries()].map(([id, patch]) => ({ id, patch }));
-  if (patches.length > 0) {
-    opts.registry.applyMemoryEntryPatches(opts.projectId, patches);
+  const rewriteAnchor = (
+    anchor: CodeAnchor,
+    repoints: ReadonlyArray<{ from: string; to: string }>,
+  ): CodeAnchor => {
+    let next = anchor;
+    for (const { from, to } of repoints) {
+      next = {
+        ...next,
+        files: next.files.map((file) => (file.path === from ? { ...file, path: to } : file)),
+        symbols: next.symbols.map((symbol) =>
+          symbol.path === from ? { ...symbol, path: to } : symbol,
+        ),
+      };
+    }
+    return next;
+  };
+
+  const buildPatch = (
+    fresh: MemoryEntry,
+    repoints: ReadonlyArray<{ from: string; to: string }>,
+    action: Action | undefined,
+  ): MemoryEntryUpdatePatch | null => {
+    const patch: MemoryEntryUpdatePatch = { updatedAt: opts.now };
+    let wrote = false;
+    if (repoints.length > 0 && fresh.anchor !== undefined) {
+      patch.anchor = rewriteAnchor(fresh.anchor, repoints);
+      wrote = true;
+    }
+    if (action?.kind === "contradict") {
+      // Idempotence: an already-contradicted row is never re-mutated (BLOCKER A).
+      if (fresh.lastVerified?.result !== "contradicted") {
+        const open = fresh.validTo == null; // null OR undefined — row still current
+        patch.stale = true;
+        if (open) {
+          patch.validTo = opts.now;
+        }
+        patch.evidence = [...(fresh.evidence ?? []), action.evidenceLine];
+        patch.lastVerified = {
+          headSha,
+          at: opts.now,
+          result: "contradicted",
+          // B1 close ownership: own the close when this contradiction closed an
+          // open row, OR a prior code-truth contradiction already owned it —
+          // never downgrade. A lineage/manual close (flag false, not open) stays
+          // false so heal never reopens a close it does not own.
+          closedByCodeTruth: open || fresh.lastVerified?.closedByCodeTruth === true,
+        };
+        wrote = true;
+      }
+    } else if (action?.kind === "heal") {
+      const ownedClose = fresh.lastVerified?.closedByCodeTruth === true;
+      patch.stale = false;
+      if (ownedClose) {
+        patch.validTo = null;
+      }
+      patch.evidence = [
+        ...(fresh.evidence ?? []),
+        `code-truth: healed at ${sha7(headSha)} — hash matches again`,
+      ];
+      patch.lastVerified = { headSha, at: opts.now, result: "healed", closedByCodeTruth: false };
+      wrote = true;
+    } else if (action?.kind === "verify") {
+      // No-op suppression (§7): repeat verifies at an unchanged head write
+      // nothing — keeps them free and updatedAt honest.
+      if (fresh.lastVerified?.headSha !== headSha) {
+        patch.lastVerified = {
+          headSha,
+          at: opts.now,
+          result: "verified",
+          closedByCodeTruth: false,
+        };
+        wrote = true;
+      }
+    }
+    return wrote ? patch : null;
+  };
+
+  const mutations: Array<{
+    id: MemoryEntryId;
+    mutate: (fresh: MemoryEntry) => MemoryEntryUpdatePatch | null;
+  }> = [];
+  for (const id of new Set<MemoryEntryId>([...repointsFor.keys(), ...actionFor.keys()])) {
+    const snapshot = byId.get(id);
+    if (snapshot === undefined) {
+      continue;
+    }
+    const repoints = repointsFor.get(id) ?? [];
+    const action = actionFor.get(id);
+    // Snapshot-level suppression, mirroring the old per-branch guards: skip an
+    // entry entirely when nothing would be written, so an all-no-op run makes
+    // zero apply calls. The mutator re-checks against the fresh row at apply.
+    const actionWrites =
+      action !== undefined &&
+      (action.kind === "heal" ||
+        (action.kind === "contradict" && snapshot.lastVerified?.result !== "contradicted") ||
+        (action.kind === "verify" && snapshot.lastVerified?.headSha !== headSha));
+    if (repoints.length === 0 && !actionWrites) {
+      continue;
+    }
+    mutations.push({ id, mutate: (fresh) => buildPatch(fresh, repoints, action) });
+  }
+  if (mutations.length > 0) {
+    opts.registry.applyMemoryEntryMutations(opts.projectId, mutations);
   }
   return plan;
 }

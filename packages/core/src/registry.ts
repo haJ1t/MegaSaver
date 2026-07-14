@@ -92,6 +92,16 @@ export interface CoreRegistry {
     projectId: ProjectId,
     patches: ReadonlyArray<{ id: MemoryEntryId; patch: MemoryEntryUpdatePatch }>,
   ): MemoryEntry[];
+  // Mutator variant for code-truth verify (critic F2): each closure recomputes
+  // its patch against the FRESH in-lock row, so a concurrent writer between
+  // snapshot and apply is never clobbered. A null return is a per-entry no-op.
+  applyMemoryEntryMutations(
+    projectId: ProjectId,
+    mutations: ReadonlyArray<{
+      id: MemoryEntryId;
+      mutate: (fresh: MemoryEntry) => MemoryEntryUpdatePatch | null;
+    }>,
+  ): MemoryEntry[];
   // Write-only by design: a hard delete returns nothing. A caller that needs
   // the pre-delete state reads it via getMemoryEntry first (the CLI does this
   // to render a not-found error before deleting).
@@ -432,6 +442,33 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
           );
         }
         const updated = memoryEntrySchema.parse({ ...existing, ...parsedPatch });
+        staged.set(id, updated);
+        results.push(updated);
+      }
+      for (const [id, updated] of staged) {
+        memoryEntries.set(id, updated);
+      }
+      return results;
+    },
+
+    applyMemoryEntryMutations(projectId, mutations) {
+      requireProject(projectId);
+      const staged = new Map<MemoryEntryId, MemoryEntry>();
+      const results: MemoryEntry[] = [];
+      for (const { id, mutate } of mutations) {
+        const fresh = staged.get(id) ?? memoryEntries.get(id);
+        if (!fresh || fresh.projectId !== projectId) {
+          throw new CoreRegistryError(
+            "memory_entry_not_found",
+            `Memory entry does not exist: ${id}`,
+          );
+        }
+        const patch = mutate(fresh);
+        if (patch === null) {
+          continue;
+        }
+        const parsedPatch = memoryEntryUpdatePatchSchema.parse(patch);
+        const updated = memoryEntrySchema.parse({ ...fresh, ...parsedPatch });
         staged.set(id, updated);
         results.push(updated);
       }

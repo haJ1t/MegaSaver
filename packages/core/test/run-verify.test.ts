@@ -121,9 +121,9 @@ function spy(registry: CoreRegistry): { registry: MemoryRegistry; calls: () => n
   return {
     registry: {
       listMemoryEntries: (projectId) => registry.listMemoryEntries(projectId),
-      applyMemoryEntryPatches: (projectId, patches) => {
+      applyMemoryEntryMutations: (projectId, mutations) => {
         applyCalls += 1;
-        return registry.applyMemoryEntryPatches(projectId, patches);
+        return registry.applyMemoryEntryMutations(projectId, mutations);
       },
     },
     calls: () => applyCalls,
@@ -340,6 +340,35 @@ describe("runVerify — mutation semantics (fake git)", () => {
     const healed = registry.getMemoryEntry(E1);
     expect(healed?.validTo).toBeNull();
     expect(healed?.stale).toBe(false);
+  });
+
+  it("MAJOR F2: a concurrent evidence append survives runVerify's apply", async () => {
+    const registry = freshRegistry(ROOT);
+    registry.createMemoryEntry(mem({ id: E1, anchor: fileAnchor() }));
+    // Seam: a concurrent process (the post-commit hook, a SEPARATE process)
+    // appends evidence AFTER the runner snapshots but BEFORE it applies. The
+    // mutator recomputes from the fresh in-lock row, so the append survives.
+    const raced: CoreRegistry = {
+      ...registry,
+      listMemoryEntries: (projectId) => {
+        const snapshot = registry.listMemoryEntries(projectId);
+        registry.updateMemoryEntry(E1, {
+          evidence: ["concurrent: appended by another process"],
+          updatedAt: LATER,
+        });
+        return snapshot;
+      },
+    };
+    await runVerify({
+      registry: raced,
+      projectId: PROJECT_ID,
+      rootPath: ROOT,
+      now: NOW,
+      execGit: fakeGit({ head: HEAD, blobs: {}, attribution: { "src/a.ts": FALSIFIER } }),
+    });
+    const entry = registry.getMemoryEntry(E1);
+    expect(entry?.evidence).toContain("concurrent: appended by another process");
+    expect(entry?.evidence?.some((line) => line.includes("contradicted"))).toBe(true);
   });
 
   it("stamps lastVerified on first verify with ONE batch apply", async () => {

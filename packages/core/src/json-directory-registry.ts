@@ -388,6 +388,44 @@ export function createJsonDirectoryCoreRegistry(
       });
     },
 
+    applyMemoryEntryMutations(projectId, mutations) {
+      // One dir-locked read-modify-write (critic F2): each mutator recomputes
+      // its patch against the FRESH row read INSIDE this lock, so a concurrent
+      // writer between the runner's snapshot and here is never clobbered. The
+      // lock is held only across this fast in-memory pass, never across git I/O.
+      return withDirLock(options.rootDir, () => {
+        requireProject(projectId);
+        const entries = readMemoryEntriesForProject(paths, projectId);
+        const byId = new Map(entries.map((entry) => [entry.id, entry] as const));
+        const results: MemoryEntry[] = [];
+        for (const { id, mutate } of mutations) {
+          const fresh = byId.get(id);
+          if (!fresh) {
+            throw new CoreRegistryError(
+              "memory_entry_not_found",
+              `Memory entry does not exist: ${id}`,
+            );
+          }
+          const patch = mutate(fresh);
+          if (patch === null) {
+            continue;
+          }
+          const parsedPatch = memoryEntryUpdatePatchSchema.parse(patch);
+          const updated = memoryEntrySchema.parse({ ...fresh, ...parsedPatch });
+          byId.set(id, updated);
+          results.push(updated);
+        }
+        if (results.length > 0) {
+          writeMemoryEntriesForProject(
+            paths,
+            projectId,
+            entries.map((entry) => byId.get(entry.id) ?? entry),
+          );
+        }
+        return results;
+      });
+    },
+
     deleteMemoryEntry(id) {
       withDirLock(options.rootDir, () => {
         const existing = readAllMemoryEntries(paths).find((candidate) => candidate.id === id);
