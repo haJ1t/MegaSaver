@@ -582,3 +582,49 @@ adversarial critic, opus) over full branch diff; verifier re-pass on fixes.
    explicit command only.
 6. **Competitor clone** — moat is cross-agent local store + bi-temporal audit
    trail + $-savings proof, not the git trick alone.
+
+## 15. Implementation deviations (build phase, 2026-07-14)
+
+Recorded from the 18-task subagent-driven build (branch `feat/code-truth`,
+stacked on `feat/living-brain`). Each traces to a task commit.
+
+- Registry interface is `CoreRegistry`; the spec's "MemoryRegistry" survives
+  only as a `Pick`-alias in `code-truth.ts` for the runner's narrow
+  dependency.
+- `captureCodeAnchor` / `extractBlocksForFile` are async — the indexer
+  extractor set loads via a memoized dynamic import (keeps the multi-MB
+  TypeScript compiler off the plain output-filter import path; the
+  `no-eager-typescript` guard stays green).
+- Symbol extraction reuses the existing polyglot dispatch in
+  `@megasaver/output-filter` (ts/js/py/go/rs/md/json) rather than adding a
+  `core → indexer` edge.
+- `ExecGit` carries an optional third `input?` parameter so the batched
+  `git cat-file --batch-check` can feed paths via stdin. A contradiction/heal
+  gauntlet finding (proven) hardened `runVerify` and the CLI verify command:
+  a cat-file FATAL/timeout (`out === null`) degrades the whole run to
+  `unanchored` with zero writes — it never fabricates deletions (the earlier
+  code mapped every path to "missing", which would have mass-closed every
+  file-anchored memory on a large-repo timeout).
+- Anchor `path` fields reject C0 controls + DEL (`/^[^\x00-\x1f\x7f]+$/`),
+  matching `captureCodeAnchor`'s `normalizeRepoPath` (allows space, rejects
+  DEL) — closes a cat-file stdin injection vector and keeps capture↔schema
+  parity.
+- `runVerify` treats an `extractBlocksForFile` throw as `undetermined`
+  (never contradicts) rather than skipping the path (which the pure planner
+  would read as "symbol missing" → false contradiction).
+- MCP `save_memory` input schema stays `.strict()` and accepts only
+  `relatedSymbols` (data) — never an agent-supplied `anchor`/`lastVerified`;
+  the anchor is computed server-side. Negative regression tests pin the
+  forge rejection.
+- Pre-recall spot-check persists the stale/validTo flip INLINE (sync
+  `updateMemoryEntry` inside the handler try/catch, write errors swallowed) —
+  no post-response async, because the stdio server has no post-response
+  lifecycle and a floating rejection would crash it.
+- `"code-truth"` ProFeature key landed as a standalone prerequisite commit
+  (Section C tasks gate on it) ahead of the `save_memory` slice.
+- `verify_memories` requires `projectId` (a stateless call has no default);
+  free tier returns an upsell payload, not an error or a real verify.
+- `SpotCheckEnv.ledger` is a data object `{ storeRoot; sessionId?; newId? }`;
+  the bridge appends via the `@megasaver/core` re-export of
+  `appendCodeTruthEvent` (no bridge→stats dependency edge). The append is in
+  its own swallow so a ledger write error never breaks a recall response.

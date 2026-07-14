@@ -3432,3 +3432,34 @@ Fresh-context verifier re-pass (opus): both defects RESOLVED (re-ran both
 attack vectors → defer; real create→approve age unchanged), intended flows
 intact, no over-correction, no regression, verify 52/52 non-cached. CLEAR TO
 MERGE. Spec §4.5 note records the accepted CLI-approve asymmetry.
+
+## [2026-07-14] ship | i6 Code-Truth Verify
+
+Branch `feat/code-truth` (stacked on `feat/living-brain`). 18 TDD tasks,
+subagent-driven (fresh implementer + fresh reviewer per task; Tasks 4/5/7/11/14/15
+opus-reviewed as security/correctness-load-bearing). `pnpm verify` green (52/52).
+
+Shipped: core `memory-anchor` (schemas + best-effort `captureCodeAnchor`) and
+`code-truth` (pure `verifyAnchors` planner + `runVerify` git runner) modules;
+whole-batch `applyMemoryEntryPatches`; `closedByCodeTruth` close-ownership guard
+(heal never reopens a lineage-owned close); `STALE_WEIGHT` down-rank;
+`output-filter.extractBlocksForFile` polyglot export; `mega memory verify` (free)
++ `--install-hook`/`--uninstall-hook` (Pro, sentinel-block confined) + sweep
+verify pre-pass (Pro); `--symbol` writer plumbing + anchor capture on all writers
+(`--no-anchor` opt-out); show/explain anchor + badge; MCP `save_memory` symbol
+anchors + `get_relevant_memories` badge + Pro pre-recall spot-check (excludes
+contradicted, sentinel-guarded disclosure, inline fail-open flip) +
+`verify_memories` tool; stale-recall-avoided stats ledger + savings line; new
+`code-truth` ProFeature key.
+
+Per-task reviews surfaced + fixed before merge: Task 7 gauntlet found a PROVEN
+BLOCKER — a `cat-file --batch-check` FATAL/timeout mapped every anchored path to
+"missing", mass-closing every file-anchored memory on a large-repo timeout; fixed
+to degrade to `unanchored` + zero writes. Also hardened: anchor-path control-char
+rejection at the schema boundary (cat-file stdin injection vector); extractor-throw
+treated as `undetermined` not missing (false-contradiction hole); `save_memory`
+agent-forge negative tests (no agent-supplied anchor/lastVerified); spot-check
+inline fail-open (no floating promise in the stdio server).
+
+Deviations recorded in spec §15. Full-branch gauntlet (fresh opus code-reviewer +
+adversarial critic) run at merge time.
