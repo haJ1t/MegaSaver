@@ -35,7 +35,11 @@ import {
   writeTaskPlansForProject,
   writeToolDefinitionsForProject,
 } from "./json-directory-store.js";
-import { memoryEntrySchema, memoryEntryUpdatePatchSchema } from "./memory-entry.js";
+import {
+  type MemoryEntry,
+  memoryEntrySchema,
+  memoryEntryUpdatePatchSchema,
+} from "./memory-entry.js";
 import { searchMemoryEntries as searchEntries } from "./memory-search.js";
 import { memoryValidationSchema } from "./memory-validation.js";
 import { type ProjectRule, failureToRuleInputSchema, projectRuleSchema } from "./project-rule.js";
@@ -347,6 +351,40 @@ export function createJsonDirectoryCoreRegistry(
         );
         writeMemoryEntriesForProject(paths, existing.projectId, next);
         return updated;
+      });
+    },
+
+    applyMemoryEntryPatches(projectId, patches) {
+      // One dir-locked read-modify-write for the whole plan (architect M5):
+      // read the project store once, merge every patch in memory, rewrite the
+      // JSONL once. Whole-batch atomic — any rejection escapes before the
+      // single write, so a partially-applied plan can never hit disk.
+      return withDirLock(options.rootDir, () => {
+        requireProject(projectId);
+        const entries = readMemoryEntriesForProject(paths, projectId);
+        const byId = new Map(entries.map((entry) => [entry.id, entry] as const));
+        const results: MemoryEntry[] = [];
+        for (const { id, patch } of patches) {
+          const parsedPatch = memoryEntryUpdatePatchSchema.parse(patch);
+          const existing = byId.get(id);
+          if (!existing) {
+            throw new CoreRegistryError(
+              "memory_entry_not_found",
+              `Memory entry does not exist: ${id}`,
+            );
+          }
+          const updated = memoryEntrySchema.parse({ ...existing, ...parsedPatch });
+          byId.set(id, updated);
+          results.push(updated);
+        }
+        if (results.length > 0) {
+          writeMemoryEntriesForProject(
+            paths,
+            projectId,
+            entries.map((entry) => byId.get(entry.id) ?? entry),
+          );
+        }
+        return results;
       });
     },
 

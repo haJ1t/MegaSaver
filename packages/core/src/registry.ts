@@ -84,6 +84,14 @@ export interface CoreRegistry {
   getMemoryEntry(id: MemoryEntryId): MemoryEntry | null;
   listMemoryEntries(projectId: ProjectId): MemoryEntry[];
   updateMemoryEntry(id: MemoryEntryId, patch: MemoryEntryUpdatePatch): MemoryEntry;
+  // Batch variant for code-truth verify (architect M5): one locked
+  // read-modify-write instead of N full-store rewrites. Whole-batch atomic —
+  // any invalid patch or unknown id rejects the entire batch; per-entry
+  // validation is identical to updateMemoryEntry.
+  applyMemoryEntryPatches(
+    projectId: ProjectId,
+    patches: ReadonlyArray<{ id: MemoryEntryId; patch: MemoryEntryUpdatePatch }>,
+  ): MemoryEntry[];
   // Write-only by design: a hard delete returns nothing. A caller that needs
   // the pre-delete state reads it via getMemoryEntry first (the CLI does this
   // to render a not-found error before deleting).
@@ -406,6 +414,31 @@ export function createInMemoryCoreRegistry(): CoreRegistry {
       const updated = memoryEntrySchema.parse({ ...existing, ...parsedPatch });
       memoryEntries.set(id, updated);
       return updated;
+    },
+
+    applyMemoryEntryPatches(projectId, patches) {
+      requireProject(projectId);
+      // Stage everything first — whole-batch atomicity: any rejection above
+      // leaves the backing Map untouched.
+      const staged = new Map<MemoryEntryId, MemoryEntry>();
+      const results: MemoryEntry[] = [];
+      for (const { id, patch } of patches) {
+        const parsedPatch = memoryEntryUpdatePatchSchema.parse(patch);
+        const existing = staged.get(id) ?? memoryEntries.get(id);
+        if (!existing || existing.projectId !== projectId) {
+          throw new CoreRegistryError(
+            "memory_entry_not_found",
+            `Memory entry does not exist: ${id}`,
+          );
+        }
+        const updated = memoryEntrySchema.parse({ ...existing, ...parsedPatch });
+        staged.set(id, updated);
+        results.push(updated);
+      }
+      for (const [id, updated] of staged) {
+        memoryEntries.set(id, updated);
+      }
+      return results;
     },
 
     deleteMemoryEntry(id) {
