@@ -116,8 +116,11 @@ describe("mega memory verify --install-hook / --uninstall-hook", () => {
     expect(content).toContain(
       `mega memory verify ${PROJECT_ID} --changed --quiet --store '${store}' || true`,
     );
-    // owner-executable
-    expect(statSync(hookPath).mode & 0o100).not.toBe(0);
+    // owner-executable — Windows has no POSIX permission bits (git runs hooks
+    // through sh regardless), so the mode is only meaningful on POSIX hosts.
+    if (process.platform !== "win32") {
+      expect(statSync(hookPath).mode & 0o100).not.toBe(0);
+    }
   });
 
   it("preserves a foreign hook byte-for-byte and uninstall removes only the block", async () => {
