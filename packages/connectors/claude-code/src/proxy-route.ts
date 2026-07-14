@@ -137,8 +137,9 @@ export function createClaudeRouteAdapter(
       // matrix only emits apply on an absent route, but a foreign value slipping
       // into the read→write window must not clobber the operator's own gateway.
       if (current !== undefined && current !== expectedUrl) return false;
+      const { [FIRST_PARTY_FLAG]: _staleFirstPartyFlag, ...preservedEnv } = settings.env ?? {};
       const desired = {
-        ...(settings.env ?? {}),
+        ...preservedEnv,
         ANTHROPIC_BASE_URL: expectedUrl,
         ...(assumeFirstParty ? { [FIRST_PARTY_FLAG]: "1" } : {}),
       };
