@@ -183,9 +183,22 @@ describe("assumeFirstParty option", () => {
     expect(readFullEnv()).toEqual({ ANTHROPIC_BASE_URL: URL_FOREIGN, [FLAG]: "1" });
   });
 
-  it("inspect reports absent when the route exists but the flag is missing (self-heal)", () => {
+  it("inspect stays exact when the route exists without the flag (never lies to removal paths)", () => {
     writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS } }));
-    expect(fpAdapter().inspect(URL_OURS)).toBe("absent");
+    expect(fpAdapter().inspect(URL_OURS)).toBe("exact");
+  });
+
+  it("apply returns true when it heals a missing flag and false once env is complete", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS } }));
+    expect(fpAdapter().apply(URL_OURS)).toBe(true);
+    expect(readFullEnv()).toEqual({ ANTHROPIC_BASE_URL: URL_OURS, [FLAG]: "1" });
+    expect(fpAdapter().apply(URL_OURS)).toBe(false);
+  });
+
+  it("apply returns false without writing on a foreign route", () => {
+    writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_FOREIGN } }));
+    expect(fpAdapter().apply(URL_OURS)).toBe(false);
+    expect(readFullEnv()).toEqual({ ANTHROPIC_BASE_URL: URL_FOREIGN });
   });
 
   it("inspect reports exact when both keys are present", () => {
@@ -200,7 +213,9 @@ describe("assumeFirstParty option", () => {
 
   it("apply is idempotent when re-run to heal a missing flag", () => {
     writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS } }));
-    fpAdapter().apply(URL_OURS);
+    expect(fpAdapter().apply(URL_OURS)).toBe(true);
+    expect(readFullEnv()).toEqual({ ANTHROPIC_BASE_URL: URL_OURS, [FLAG]: "1" });
+    expect(fpAdapter().apply(URL_OURS)).toBe(false);
     expect(readFullEnv()).toEqual({ ANTHROPIC_BASE_URL: URL_OURS, [FLAG]: "1" });
   });
 });

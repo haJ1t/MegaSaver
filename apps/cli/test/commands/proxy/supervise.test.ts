@@ -24,7 +24,7 @@ const spyRoute = (): { route: RouteAdapter; inspect: ReturnType<typeof vi.fn> } 
   const inspect = vi.fn(() => "absent" as const);
   return {
     inspect,
-    route: { inspect, apply: () => {}, removeExpected: () => {} },
+    route: { inspect, apply: () => false, removeExpected: () => {} },
   };
 };
 
