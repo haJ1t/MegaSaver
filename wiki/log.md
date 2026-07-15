@@ -3500,3 +3500,21 @@ no new race in the mutator refactor. `pnpm verify` green (52/52). CLEAR TO
 MERGE. Deferred follow-ups: update re-capture verification-state reset,
 code-truth.ts file split, shared 3-arg ExecGit type at bridge boundaries,
 heal-branch idempotence guard (narrow concurrent-heal duplicate-evidence).
+
+## [2026-07-14 21:15 +03] fix | Claude proxy cache parity finalized
+
+Root cause confirmed as Claude Code's custom-base-URL mode, not proxy payload
+mutation: it changes tool-schema and hook-attachment cache placement. The
+first-party route flag restores parity for the verified Claude Code 2.1.207
+client. Final hardening clears stale flags for custom upstreams, tests the real
+CLI adapter, snapshots benchmark hooks after setup, and exposes an explicit
+managed-service-only upgrade restart. URL equality is never used as ownership
+authorization.
+
+Evidence: 70 focused tests and full `pnpm verify` passed; changeset status,
+benchmark shell syntax, and diff checks passed. Independent code reviewer and
+adversarial critic both returned Ready. Four-task real-billing smoke benchmark
+improved from 0/4 losses to 4/4 wins (1.30x cost geomean; approximately $1.87
+vs $2.49 total), while the 4x claim remains unproven. Implementation branch:
+`fix/proxy-cache-parity-finalize`; code head before this wiki record:
+`b09a3983`. Integration PR: GitHub #288.

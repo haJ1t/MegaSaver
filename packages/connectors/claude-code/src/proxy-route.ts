@@ -23,13 +23,22 @@ export type EnsureHooksError = "settings_invalid" | "lock_unverifiable" | "write
 // symlinked settings file.
 export type ClaudeRouteAdapter = {
   inspect(expectedUrl: string): RouteInspection;
-  apply(expectedUrl: string): void;
+  // Returns whether a write happened: the monitor heals a missing first-party
+  // flag by re-applying on healthy ticks and must count only real writes.
+  apply(expectedUrl: string): boolean;
   removeExpected(expectedUrl: string): void;
   ensureHooks(): { configured: boolean; error?: EnsureHooksError };
   // Read-only: reports whether the saver hooks are installed WITHOUT mutating
   // settings — the status/read path must never install anything.
   inspectHooks(): boolean;
 };
+
+// Claude Code drops to a non-first-party mode for any custom ANTHROPIC_BASE_URL
+// (tool search off, hook output past the last cache_control breakpoint, late
+// attachment merge) which costs 2-10x in prompt-cache churn. This internal client
+// flag restores first-party behavior. Only honest when the proxy forwards to the
+// default Anthropic upstream — callers gate on that.
+export const FIRST_PARTY_FLAG = "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL";
 
 // ANTHROPIC_BASE_URL is a NAMED field (not an index-signature access) so strict
 // noPropertyAccessFromIndexSignature is satisfied without bracket noise.
@@ -99,9 +108,17 @@ function writeSettings(path: string, settings: Settings): void {
   }
 }
 
-export function createClaudeRouteAdapter(settingsPath: string): ClaudeRouteAdapter {
+export function createClaudeRouteAdapter(
+  settingsPath: string,
+  opts?: { assumeFirstParty?: boolean },
+): ClaudeRouteAdapter {
+  const assumeFirstParty = opts?.assumeFirstParty ?? false;
   return {
     inspect(expectedUrl) {
+      // Reports on the ROUTE only — never on the flag. A flag-missing route must
+      // still read "exact": the reconcile matrix treats "absent" as nothing-to-
+      // remove, so lying here would strand a live route on disable/drain/rollback.
+      // Flag healing happens through the monitor's idempotent apply instead.
       const s = readSettings(settingsPath);
       if (s === "absent") return "absent";
       if (s === "invalid") return "invalid";
@@ -113,22 +130,34 @@ export function createClaudeRouteAdapter(settingsPath: string): ClaudeRouteAdapt
       const s = readSettings(settingsPath);
       // Never clobber an unparseable file (the matrix only applies on an absent
       // route; an invalid file is not absent, so this is defense in depth).
-      if (s === "invalid") return;
+      if (s === "invalid") return false;
       const settings: Settings = s === "absent" ? {} : s;
       const current = settings.env?.ANTHROPIC_BASE_URL;
       // Value-guard (defense in depth): never overwrite a FOREIGN route. The
       // matrix only emits apply on an absent route, but a foreign value slipping
       // into the read→write window must not clobber the operator's own gateway.
-      if (current !== undefined && current !== expectedUrl) return;
-      settings.env = { ...(settings.env ?? {}), ANTHROPIC_BASE_URL: expectedUrl };
+      if (current !== undefined && current !== expectedUrl) return false;
+      const { [FIRST_PARTY_FLAG]: _staleFirstPartyFlag, ...preservedEnv } = settings.env ?? {};
+      const desired = {
+        ...preservedEnv,
+        ANTHROPIC_BASE_URL: expectedUrl,
+        ...(assumeFirstParty ? { [FIRST_PARTY_FLAG]: "1" } : {}),
+      };
+      // Write-avoidance: the monitor calls apply on every healthy tick to heal a
+      // missing flag; identical env must cost zero writes.
+      if (JSON.stringify(settings.env ?? {}) === JSON.stringify(desired)) return false;
+      settings.env = desired;
       writeSettings(settingsPath, settings);
+      return true;
     },
     removeExpected(expectedUrl) {
       const s = readSettings(settingsPath);
       if (s === "absent" || s === "invalid") return;
       // Value-guard: only drop the key when it is exactly our owned url.
       if (s.env?.ANTHROPIC_BASE_URL !== expectedUrl) return;
-      const { ANTHROPIC_BASE_URL: _drop, ...rest } = s.env;
+      // The flag is dropped unconditionally with the route: a stale first-party
+      // assertion without our route must never survive removal.
+      const { ANTHROPIC_BASE_URL: _drop, [FIRST_PARTY_FLAG]: _dropFlag, ...rest } = s.env;
       s.env = rest;
       writeSettings(settingsPath, s);
     },

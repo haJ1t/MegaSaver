@@ -4,7 +4,7 @@ import {
   createClaudeRouteAdapter,
   resolveClaudeCodeSettingsPath,
 } from "@megasaver/connector-claude-code";
-import { nodeLaunchctlRunner } from "@megasaver/proxy-control";
+import { nodeLaunchctlRunner, readControlState } from "@megasaver/proxy-control";
 import { defineCommand } from "citty";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
 import {
@@ -17,11 +17,25 @@ import {
 
 const OWNED_URL = "http://127.0.0.1:8787";
 
+function upstreamIsDefaultOrigin(storeRoot: string): boolean {
+  try {
+    const upstream = readControlState(storeRoot).upstreamBaseUrl;
+    return new URL(upstream).origin === new URL("https://api.anthropic.com").origin;
+  } catch {
+    return false;
+  }
+}
+
 function realDeps(storeFlag: string | undefined): ProxyControlPlaneDeps {
   const storeRoot = resolveStorePath(readStoreEnv(storeFlag));
   return {
     storeRoot,
-    route: createClaudeRouteAdapter(resolveClaudeCodeSettingsPath()),
+    route: createClaudeRouteAdapter(resolveClaudeCodeSettingsPath(), {
+      // Gate on the persisted upstream fact, not on the prose invariant that
+      // superviseArgv carries no --upstream: a hand-edited control store or
+      // plist must never cause a first-party assertion toward a foreign origin.
+      assumeFirstParty: upstreamIsDefaultOrigin(storeRoot),
+    }),
     launchctl: nodeLaunchctlRunner,
     plistPath: join(homedir(), "Library", "LaunchAgents", "com.megasaver.proxy.plist"),
     backupDir: join(storeRoot, "proxy", "migration-backups"),
@@ -46,9 +60,18 @@ export const proxyStartCommand = defineCommand({
     description:
       "Persistently enable the local proxy: install the supervisor LaunchAgent and route future Claude sessions.",
   },
-  args: { ...storeArg },
+  args: {
+    ...storeArg,
+    "restart-supervisor": {
+      type: "boolean",
+      default: false,
+      description: "Restart the managed supervisor after an upgrade so route migrations apply.",
+    },
+  },
   run({ args }) {
-    const r = runProxyStart(realDeps(typeof args.store === "string" ? args.store : undefined));
+    const r = runProxyStart(realDeps(typeof args.store === "string" ? args.store : undefined), {
+      restartSupervisor: args["restart-supervisor"] === true,
+    });
     if (r.status === "transition_in_progress") {
       console.error("mega proxy: a proxy transition is already in progress; retry shortly.");
       process.exitCode = 1;
