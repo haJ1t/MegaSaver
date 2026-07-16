@@ -1,7 +1,8 @@
 # Brain Autopilot (i14) — Design
 
 - **Date:** 2026-07-14
-- **Status:** draft (pending architect pass)
+- **Status:** architect pass applied (verdict APPROVE-WITH-FIXES; B1 + M2–M5 +
+  m6–m10 integrated, 2026-07-14)
 - **Risk:** HIGH (§12 — memory write path: a machine writes `approved` rows).
   Architect pass on this spec + full gauntlet (code-reviewer AND critic)
   required before merge.
@@ -19,7 +20,7 @@
 
 Approval rot (baseline weakness #3): agent writes default to
 `approval: "suggested"` and sit invisible. Every shipped feature now FEEDS
-this queue — guard outcomes write `failed_attempt` rows, warm start reads
+this queue — guard outcomes write `FailedAttempt` source rows, warm start reads
 only approved rows, `save_memory` (i1) deliberately defers closes to human
 approval, code-truth anchors accumulate on suggested rows too. The queue
 fills faster with each feature; nothing drains it.
@@ -53,7 +54,9 @@ surface instead of adding a new table.
 | `ProFeature = "savings-analytics" \| "brain-portability" \| "code-truth"`; `checkEntitlement` fail-closed, feature-agnostic; gate-first + upsell-print pattern | `packages/entitlement/src/entitlement.ts:6,37` |
 | `brainCommand` subcommand tree (export/import/sync) — autopilot + digest slot in here | `apps/cli/src/commands/brain/index.ts` |
 | Recall predicate `isRecallable` = approved + current + non-archival — suggested rows are invisible to agents until approved | `packages/core/src/memory-entry.ts:176-185` |
-| Extraction inputs today are failures only → candidates are `failed_attempt` (+ `decision` when an explicit `DECISION:` marker exists) | `session-memory.ts:36-97` |
+| Extraction inputs today are failures only → candidates carry type `"test_behavior"` (test-shaped) or `"bug"` (generic), plus `"decision"` when an explicit `DECISION:` marker exists. **The extractor NEVER emits type `"failed_attempt"`** — `FailedAttempt` is the SOURCE row, not a candidate type (architect B1) | `session-memory.ts:72` (`type: isTest ? "test_behavior" : "bug"`), `:80-88`; corroborated by `packages/core/test/session-memory.test.ts:74` |
+| `DEDUPE_KEYWORD_PREFIX` is NOT exported today — a local const duplicated in from-session.ts:32 AND mcp-bridge from-session-memory.ts:27 (architect m6: must be promoted to a shared core export) | both files |
+| from-session also captures a git code anchor per candidate (`captureCodeAnchor` over relatedFiles) — "reuse from-session exactly" includes the anchor (architect m7) | `from-session.ts:105-113` |
 
 ## 4. Data model
 
@@ -72,18 +75,19 @@ export const autopilotPolicySchema = z.object({
 
 export const DEFAULT_AUTOPILOT_POLICY: AutopilotPolicy = {
   enabled: false,
-  autoApproveTypes: ["failed_attempt"],
+  autoApproveTypes: ["bug", "test_behavior"],
   autoApproveMinConfidence: "high",
   maxAutoApprovesPerSession: 10,
 };
 ```
 
 - Global (no per-project overrides in v1).
-- **Default `autoApproveTypes = ["failed_attempt"]`** — deviation from the
-  sketch (`["test_behavior","failed_attempt"]`): the extractor only produces
-  `failed_attempt`/`decision` today; a `test_behavior` allowlist entry would
-  be dead config (YAGNI). `decision` is deliberately NOT defaulted —
-  human-stated decisions deserve human approval.
+- **Default `autoApproveTypes = ["bug", "test_behavior"]`** (architect B1:
+  these are the two types the extractor actually emits from failures —
+  `failed_attempt` is the SOURCE row kind, never a candidate type; the
+  sketch and the first spec draft conflated them, which would have made
+  auto-approve permanently inert). `decision` is deliberately NOT
+  defaulted — human-stated decisions deserve human approval.
 - Missing/corrupt file ⇒ `DEFAULT_AUTOPILOT_POLICY` (fail-closed to
   disabled; a corrupt policy never silently enables auto-approval).
 
@@ -92,12 +96,13 @@ export const DEFAULT_AUTOPILOT_POLICY: AutopilotPolicy = {
 ```ts
 export const digestStateSchema = z.object({
   lastDigestAt: z.string().datetime({ offset: true }).nullable(),
-  lastSessionSeen: z.string().nullable(),
 }).strict();
 ```
 
-Drives the digest header ("since <lastDigestAt>") only. v1 has no nudge
-(nudges belong to the trigger wave).
+Drives the digest header ("since <lastDigestAt>") only. `lastSessionSeen`
+DROPPED from v1 (architect m8 — no reader until the nudge/trigger wave;
+`.strict()` makes re-adding it there a clean additive change). v1 has no
+nudge.
 
 ### 4.3 `ExtractedCandidate.occurrences` (additive, core-internal type)
 
@@ -114,15 +119,34 @@ ignore the extra field. Existing tests must stay green.
 ### 5.1 `scoreCandidate` (pure)
 
 ```ts
-export function scoreCandidate(candidate: ExtractedCandidate): MemoryConfidence;
+export function scoreCandidate(
+  candidate: ExtractedCandidate,
+  signals: { priorSessionHit: boolean },
+): MemoryConfidence;
 ```
 
 Deterministic rule table, no LLM:
 
 | Rule id | Condition | Result |
 |---|---|---|
-| `repeat-failure` | `type === "failed_attempt"` AND `occurrences >= 2` | `"high"` |
+| `recurring-failure` | `(type === "bug" \|\| type === "test_behavior")` AND `signals.priorSessionHit` | `"high"` |
 | `keep-extractor` | everything else | `candidate.confidence` (extractor's low/medium) |
+
+**Dampener (architect M2 — non-negotiable):** within-session repetition
+alone NEVER auto-approves. The guard-outcome loop and `task step
+--record-failure` write `FailedAttempt` rows automatically, so a stuck retry
+storm trivially produces `occurrences >= 2` in one session — that is a
+signal an automated loop got stuck, not that the memory matters.
+`priorSessionHit` is true only when the candidate's `contentHash` also
+appears among the candidates extracted from a DIFFERENT, EARLIER session's
+failures in the same project (recomputed with the same pure
+`extractSessionMemories` — cheap, deterministic). Cross-session recurrence
+is the importance signal; single-session storms stay `suggested` and drain
+through the digest. **This dampener is a hard precondition for the wave-2
+auto-trigger spec** — automation without it weaponizes occurrence inflation.
+
+`occurrences` (within-session collapse count) is kept as a DISPLAY signal
+(digest renders "seen N× this session"), not a scoring input.
 
 The rule id is recorded in provenance evidence. Adding rules later = new
 table rows; the function stays pure and trivially TDD-able.
@@ -152,22 +176,33 @@ Algorithm:
 
 1. `extractSessionMemories` **verbatim** over the session's failures
    (`listFailedAttempts` pre-filtered to `sessionId`) — same candidates,
-   same dedupe.
+   same dedupe. Ordering assumption (architect m10): candidate order derives
+   from `listFailedAttempts` input order, which is append-only/stable — the
+   collapse keeps the FIRST failure's id in `dedupeKey`, so a reordering
+   store would break idempotence. The idempotence test pins this (add a new
+   failure, re-run, assert no duplicate of the old rows).
 2. Cross-run idempotence: skip any candidate whose
    `from-session:<dedupeKey>` keyword already exists on the project
    (EXACTLY the from-session mechanism, same keyword prefix — so autopilot
    then manual `from-session` is a no-op and vice versa).
-3. Score each candidate via `scoreCandidate`.
-4. Split (in candidate order, deterministic):
+3. Dampener signal: extract candidates from the project's OTHER (earlier)
+   sessions' failures with the same pure extractor; `priorSessionHit` =
+   current candidate's `contentHash` present in that set. Then score via
+   `scoreCandidate(candidate, { priorSessionHit })`.
+4. Split (in candidate order, deterministic). BOTH branches write
+   `keywords: ["from-session:<dedupeKey>"]` (architect M4 — the keyword IS
+   the idempotence ledger; approved rows without it would duplicate on
+   every re-run) and capture the same git code anchor from-session captures
+   (`captureCodeAnchor` over relatedFiles, architect m7):
    - `type ∈ policy.autoApproveTypes` AND score `=== "high"` AND
      auto-approve count `< maxAutoApprovesPerSession` →
      `approval: "approved"`, `confidence: "high"`,
      `validFrom: now` (first automatic writer of the M1 bi-temporal field),
      `lastActiveAt: now`, evidence
-     `"autopilot@1 rule=repeat-failure session=<sessionId>"`.
+     `"autopilot@1 rule=recurring-failure session=<sessionId>"`.
    - everything else (wrong type, low score, over cap) →
      `approval: "suggested"`, extractor confidence, no autopilot evidence —
-     byte-identical to what `from-session` writes today.
+     the same row shape `from-session` writes today.
 5. `dryRun` returns both sets WITHOUT any registry write (entries built with
    placeholder ids; the result is for rendering only).
 6. Writes go through `registry.createMemoryEntry` one row at a time (the
@@ -191,13 +226,19 @@ All under the existing `brainCommand`. New files
 
 ```
 mega brain autopilot status      # enabled?, policy, pending suggested count, last digest
-mega brain autopilot on  [--auto-approve-types failed_attempt] [--max-per-session 10]
+mega brain autopilot on  [--auto-approve-types bug,test_behavior] [--max-per-session 10]
 mega brain autopilot off
 mega brain autopilot run --session <id> [--project <name>] [--dry-run] [--json]
 ```
 
 - `status`/`on`/`off`: FREE (policy file edit only; `on` prints what will
   happen at the next entitled run).
+- **`enabled` semantics (architect M3):** real `run` HONORS the toggle —
+  `enabled:false` ⇒ `run` refuses with
+  `autopilot is off — enable with: mega brain autopilot on` (exit 1, zero
+  writes). `run --dry-run` works regardless of `enabled` (it is the free
+  proof surface). This gives the toggle a real v1 effect; the wave-2
+  triggers will read the same field.
 - `run --dry-run`: FREE — prints the would-approve/would-stage split with a
   `DRY RUN — nothing written` banner. This is the free proof surface AND the
   DoD smoke evidence.
@@ -243,6 +284,22 @@ first), then project-scope rows.
   exits 0 (read-only). Plain non-TTY prints the queue with numbered ids +
   a hint to use `mega memory approve/reject <id>`. Raw-mode keystroke loop
   only on a real TTY. CI/pipes never hang.
+- **Raw-mode lifecycle (architect M5, hard requirements):** cooked mode is
+  restored and keypress listeners removed in a `finally` AND on
+  `SIGINT`/`SIGTERM` before exit — a Ctrl-C mid-digest must never leave the
+  shell in raw/no-echo mode. `e` with `$EDITOR` unset ⇒ message + treated
+  as skip; editor exiting non-zero ⇒ that row's approve is aborted (stays
+  `suggested`); the raw loop is paused (raw off, listeners detached) while
+  the editor child owns the TTY and resumed after. Terminal resize is
+  ignored (redraw on next keystroke). The keystroke loop lives in one
+  module with an injected input stream (testable without a real TTY).
+- **I/O plumbing (architect m9):** the digest opens the registry ONCE and
+  reuses it across the loop; `runMemoryApprove` is called with CAPTURED
+  stdout/stderr sinks so per-row output (including the "closed predecessor
+  — mega memory reopen <id>" supersession note) renders inside the digest
+  UI instead of corrupting the raw-mode screen, and with the store already
+  resolved (no per-keystroke store re-resolution — extract the core flip
+  into a helper shared by the CLI command and the digest if needed).
 - `--limit N` caps rendered rows (default 50, newest first).
 
 ### 6.3 Unchanged surfaces
@@ -290,8 +347,10 @@ labor. No nudges in v1 (trigger wave owns the once-daily upsell line).
 
 ## 9. Testing
 
-- **scoreCandidate:** pure table tests — occurrences 1 vs 2, type gate,
-  extractor-confidence passthrough.
+- **scoreCandidate:** pure table tests — priorSessionHit true/false, type
+  gate (`bug`/`test_behavior` vs `decision`), extractor-confidence
+  passthrough; the M2 regression: a single-session retry storm
+  (occurrences 5, priorSessionHit false) stays low/medium — NEVER high.
 - **occurrences field:** extractor counts collapses (3 identical failures →
   1 candidate, `occurrences: 3`); existing session-memory tests unchanged.
 - **runAutopilot:** existing JSON-store harness — approve/stage split; cap
@@ -308,10 +367,14 @@ labor. No nudges in v1 (trigger wave owns the once-daily upsell line).
   stdin), approve/reject routed through the real ops, undo flips back,
   spot-review revoke, empty-state line, --json read-only, non-TTY numbered
   fallback (no raw mode, no hang), digest-state written on quit.
-- **E2E smoke (DoD):** the WOW loop through the real binary — session with
-  the same failure recorded twice → `autopilot run` → 1 auto-approved (high,
-  provenance) + rest staged → `brain digest` → y/n triage → new-session
-  recall cites the auto-approved memory.
+- **E2E smoke (DoD):** the WOW loop through the real binary — the SAME
+  failure recorded in session A, then again in session B (cross-session
+  recurrence, the dampener's qualifying signal) → `autopilot run --session
+  <B>` → 1 auto-approved (high, `rule=recurring-failure` provenance,
+  validFrom/lastActiveAt stamped) + the rest staged → `brain digest` → y/n
+  triage → recall cites the auto-approved memory. Also capture the negative:
+  a single-session double failure auto-approves NOTHING (dry-run shows it
+  staged only).
 
 TDD per task; `pnpm verify` green; gauntlet (fresh code-reviewer + fresh
 adversarial critic, opus) over the full branch; verifier re-pass on fixes.
@@ -343,6 +406,9 @@ adversarial critic, opus) over the full branch; verifier re-pass on fixes.
    rows. Mitigation: `--limit` default 50 + newest-first ordering + count in
    the header ("showing 50 of 312").
 5. **Dedupe-keyword coupling:** autopilot reuses `from-session:<dedupeKey>`
-   keywords as its idempotence ledger; if from-session ever changes its
-   prefix, autopilot must move in lockstep (single shared constant —
-   `DEDUPE_KEYWORD_PREFIX` already exported).
+   keywords as its idempotence ledger. The prefix is NOT shared today — a
+   local const duplicated in `from-session.ts:32` AND the MCP
+   `from-session-memory.ts:27` (architect m6). This feature PROMOTES it to
+   a single `@megasaver/core` export (beside `extractSessionMemories`) and
+   rewires both existing call sites + autopilot to import it — three copies
+   would drift.
