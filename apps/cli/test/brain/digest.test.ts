@@ -460,6 +460,74 @@ describe("mega brain digest", () => {
     expect(parsed.autoApprovedSinceLastDigest).toBe(0);
   });
 
+  it("a rejected row carrying autopilot evidence is never resurrected by n", async () => {
+    await seed([
+      memoryRow(MEM_A, SESSION_B),
+      memoryRow(MEM_AUTO, SESSION_B, {
+        approval: "rejected",
+        evidence: [`autopilot@1 rule=recurring-failure session=${SESSION_B}`],
+        createdAt: TS_NEW,
+        updatedAt: TS_NEW,
+      }),
+    ]);
+    activatePro();
+    const stdin = fakeStdin();
+    const loop = runBrainDigest(digestInput({ isTTY: true, stdin }));
+    stdin.write("an");
+    stdin.end();
+    const code = await loop;
+    expect(code).toBe(0);
+    // Only rows still APPROVED are "auto-approved while you were away". A row
+    // the human already rejected must not re-enter the spot-review set: there
+    // `n` means "revoke to suggested", so reject would RESURRECT it (§8.5).
+    expect((await readRows()).find((r) => r.id === MEM_AUTO)?.approval).toBe("rejected");
+    expect(out.some((l) => l.includes("auto-approved while you were away"))).toBe(false);
+    expect((await readRows()).find((r) => r.id === MEM_A)?.approval).toBe("rejected");
+  });
+
+  it("a second a does not re-splice the same auto-approved rows", async () => {
+    await seed([
+      memoryRow(MEM_A, SESSION_B),
+      memoryRow(MEM_AUTO, SESSION_B, {
+        approval: "approved",
+        evidence: [`autopilot@1 rule=recurring-failure session=${SESSION_B}`],
+        createdAt: TS_NEW,
+        updatedAt: TS_NEW,
+      }),
+    ]);
+    activatePro();
+    const stdin = fakeStdin();
+    const loop = runBrainDigest(digestInput({ isTTY: true, stdin }));
+    stdin.write("aayyy");
+    stdin.end();
+    const code = await loop;
+    expect(code).toBe(0);
+    // The latch is what bounds the queue: splice() inserts at index without
+    // advancing it, so an unlatched second `a` re-inserts the same rows and
+    // the human triages them twice — N presses, N copies.
+    expect(out.filter((l) => l.includes("spot-review"))).toHaveLength(1);
+    expect(out.some((l) => l.includes("no auto-approved rows to review"))).toBe(true);
+  });
+
+  it("approving a linked candidate discloses the close on stdout", async () => {
+    await seed([
+      memoryRow(MEM_PRED, SESSION_B, { approval: "approved" }),
+      memoryRow(MEM_A, SESSION_B, { supersedesId: MEM_PRED }),
+    ]);
+    activatePro();
+    const stdin = fakeStdin();
+    const loop = runBrainDigest(digestInput({ isTTY: true, stdin }));
+    stdin.write("y");
+    stdin.end();
+    const code = await loop;
+    expect(code).toBe(0);
+    // The close really happens, so silence here would be a silent supersession:
+    // approve-and-move-on never presses `u`, so this line is the only
+    // disclosure that a memory was closed.
+    expect((await readRows()).find((r) => r.id === MEM_PRED)?.validTo).toBe(NOW);
+    expect(out.some((l) => l.includes(`note: closed ${MEM_PRED}`))).toBe(true);
+  });
+
   it("a human-approved row is never offered for spot-review", async () => {
     await seed([
       memoryRow(MEM_A, SESSION_B),
@@ -547,8 +615,8 @@ describe("mega brain digest", () => {
     expect((await readRows()).find((r) => r.id === MEM_A)?.approval).toBe("suggested");
   });
 
-  it("editor success rewrites title/content then approves", async () => {
-    await seed([memoryRow(MEM_A, SESSION_B)]);
+  it("editor success rewrites title/content, re-keys decay, then approves", async () => {
+    await seed([memoryRow(MEM_A, SESSION_B, { lastActiveAt: TS_OLD })]);
     activatePro();
     const stdin = fakeStdin();
     const spawnEditor = (_editor: string, path: string): { status: number | null } => {
@@ -564,6 +632,31 @@ describe("mega brain digest", () => {
     expect(row?.approval).toBe("approved");
     expect(row?.title).toBe("Edited title");
     expect(row?.content).toBe("Edited content");
+    // Decay keys off `lastActiveAt ?? updatedAt` (memory-entry.ts:232) and
+    // approval flips deliberately never re-key it (:214), so a content-bearing
+    // edit must stamp it here or the freshly edited row keeps decaying as if
+    // untouched — updatedAt cannot rescue it.
+    expect(row?.lastActiveAt).toBe(NOW);
+  });
+
+  it("the un-injected default editor path spawns the real $EDITOR", async () => {
+    const fixture = join(store, "fixture.md");
+    await writeFile(fixture, "Spawned title\n\nSpawned content\n");
+    await seed([memoryRow(MEM_A, SESSION_B)]);
+    activatePro();
+    const stdin = fakeStdin();
+    // No spawnEditor injection: this is the path `brainDigestCommand` actually
+    // takes in production (`input.spawnEditor ?? defaultSpawnEditor`), so it
+    // runs the real spawnSync("sh", ["-c", '$EDITOR "$0"']) end-to-end.
+    const loop = runBrainDigest(digestInput({ isTTY: true, stdin, editor: `cp ${fixture}` }));
+    stdin.write("e");
+    stdin.end();
+    const code = await loop;
+    expect(code).toBe(0);
+    const row = (await readRows()).find((r) => r.id === MEM_A);
+    expect(row?.approval).toBe("approved");
+    expect(row?.title).toBe("Spawned title");
+    expect(row?.content).toBe("Spawned content");
   });
 
   it("an editor that writes nothing approves without re-keying decay", async () => {

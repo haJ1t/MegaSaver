@@ -247,6 +247,11 @@ export async function runBrainDigest(input: RunBrainDigestInput): Promise<0 | 1>
       case "skip":
         return { lines: [] };
       case "undo": {
+        // Unreachable in practice: the loop only emits undo when it holds a
+        // decision, and it clears lastDecisionIndex (digest-loop.ts:159) in
+        // lockstep with the clear below. That lockstep spans a callback
+        // boundary and nothing enforces it, so the guard stays — it is also
+        // what proves `undone` non-null to the compiler.
         if (lastFlip === null) return { lines: ["nothing to undo"] };
         const undone = lastFlip;
         lastFlip = null;
