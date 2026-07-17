@@ -1,5 +1,6 @@
 import { defineCommand } from "citty";
 import { brainAutopilotCommand } from "./autopilot.js";
+import { brainDigestCommand } from "./digest.js";
 import { brainExportCommand } from "./export.js";
 import { brainImportCommand } from "./import.js";
 import { brainSyncCommand } from "./sync/index.js";
@@ -16,6 +17,12 @@ export {
   runAutopilotRun,
   runAutopilotStatus,
 } from "./autopilot.js";
+export {
+  DIGEST_UPSELL,
+  type RunBrainDigestInput,
+  brainDigestCommand,
+  runBrainDigest,
+} from "./digest.js";
 export {
   BRAIN_EXPORT_UPSELL,
   type RunBrainExportInput,
@@ -46,6 +53,7 @@ export const brainCommand = defineCommand({
   },
   subCommands: {
     autopilot: brainAutopilotCommand,
+    digest: brainDigestCommand,
     export: brainExportCommand,
     import: brainImportCommand,
     sync: brainSyncCommand,
