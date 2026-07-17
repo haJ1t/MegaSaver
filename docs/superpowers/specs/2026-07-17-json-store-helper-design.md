@@ -109,6 +109,19 @@ the barrel exports only public surface).
   security-adjacent path) — verify no error-posture flattening, no `structuredClone`
   regression, no scope creep into the fsync-throwing writers.
 
+## Reviewed micro-divergence (the only non-byte-identical behavior)
+
+`writeGuardState`'s session-pruning previously ran *inside* the try that
+swallowed write errors; it now runs before `writeJsonAtomic` (only the write is
+swallowed). For any valid `GuardState` the pruning is pure `Object.keys`/
+`Object.fromEntries` and cannot throw, so persisted output is byte-identical
+(gauntlet critic diffed the >20-session payload — identical, keeps last 20).
+The behaviors differ only on a runtime input that violates the `GuardState`
+type — an impossible-per-§8 case we deliberately do not defend, and re-wrapping
+pure pruning in a swallow-try to preserve that would ADD the defensive code §8
+bans. Left as-is; both the code-reviewer and the adversarial critic confirmed no
+reachable regression.
+
 ## Non-goals
 
 - No fsync added (would change the advisory contract).
