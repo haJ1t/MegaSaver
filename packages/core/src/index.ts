@@ -167,3 +167,12 @@ export {
   matchGuard,
   normalizeCommand,
 } from "./guard-match.js";
+export {
+  type AutopilotPolicy,
+  DEFAULT_AUTOPILOT_POLICY,
+  type DigestState,
+  readAutopilotPolicy,
+  readDigestState,
+  writeAutopilotPolicy,
+  writeDigestState,
+} from "./autopilot-store.js";
