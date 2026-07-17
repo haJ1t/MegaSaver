@@ -8,6 +8,7 @@ import {
   memorySourceSchema,
   memoryTypeSchema,
   saveMemoryWithLineage,
+  stripReservedKeywords,
 } from "@megasaver/core";
 import { type MemoryEntryId, sessionIdSchema, titleSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
@@ -169,7 +170,7 @@ export async function runMemoryCreate(input: RunMemoryCreateInput): Promise<0 | 
     return cli.exitCode;
   }
 
-  const keywords = toStringArray(input.keywordFlags);
+  const keywords = stripReservedKeywords(toStringArray(input.keywordFlags));
   const relatedFiles = toStringArray(input.fileFlags);
   const relatedSymbols = toStringArray(input.symbolFlags);
 

@@ -12,6 +12,7 @@ import {
   memorySourceSchema,
   memoryTypeSchema,
   saveMemoryWithLineage,
+  stripReservedKeywords,
 } from "@megasaver/core";
 import { CoreRegistryError } from "@megasaver/core";
 import { embed, readVectors } from "@megasaver/embeddings";
@@ -133,7 +134,7 @@ export async function handleSaveMemory(
       type: d.type ?? "todo",
       title: d.title ?? d.content,
       content: d.content,
-      keywords: d.keywords ?? [],
+      keywords: stripReservedKeywords(d.keywords ?? []),
       confidence: d.confidence ?? "medium",
       source: d.source ?? "agent",
       approval: d.approval ?? "suggested",

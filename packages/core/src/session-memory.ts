@@ -112,6 +112,25 @@ export function dedupeKeywordFor(dedupeKey: string): string {
   return `${DEDUPE_KEYWORD_PREFIX}${dedupeKey}`;
 }
 
+// The ledger namespace is internal-only: a keyword under it is a claim that a
+// candidate was already captured, which the from-session/autopilot dedupe scan
+// trusts. Agent-facing keyword writers (save_memory, memory create/update, brain
+// import) strip these before the write, so an agent cannot plant a forged ledger
+// entry to suppress a legitimate capture (denial-of-capture). Internal writers
+// build the keyword themselves and bypass the strip.
+export function isReservedKeyword(keyword: string): boolean {
+  // Match the SAME normalization keywordsSchema (memory-entry.ts) applies to
+  // stored keywords — `.trim().toLowerCase()`. The strip runs on raw input
+  // BEFORE that normalization, so a case/whitespace forge like `From-Session:x`
+  // or ` from-session:x ` would otherwise pass the guard, then be normalized
+  // back into the reserved namespace on write and defeat the strip.
+  return keyword.trim().toLowerCase().startsWith(DEDUPE_KEYWORD_PREFIX);
+}
+
+export function stripReservedKeywords(keywords: string[]): string[] {
+  return keywords.filter((keyword) => !isReservedKeyword(keyword));
+}
+
 // Pure: no I/O, no clock, no model. Deterministic over already-structured
 // FailedAttempt rows. Dedupes identical candidates within the session by
 // contentHash so N identical failures collapse to 1.
