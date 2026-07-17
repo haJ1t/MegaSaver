@@ -21,6 +21,10 @@ export type ExtractedCandidate = {
   // sourceFailureId:contentHash — the stable per-candidate key the caller uses
   // for cross-run idempotence (skip a candidate already staged from this source).
   dedupeKey: string;
+  // Within-session collapse count: how many source failures produced this
+  // candidate. Display + storm diagnostics only — NEVER a scoring input
+  // (architect M2: single-session retry storms must not look important).
+  occurrences: number;
 };
 
 export type ExtractSessionMemoriesInput = {
@@ -56,6 +60,7 @@ function candidate(
     scope: "session",
     confidence: "low",
     approval: "suggested",
+    occurrences: 1,
     ...fields,
     contentHash,
     dedupeKey: `${failureId}:${contentHash}`,
@@ -112,10 +117,15 @@ export function dedupeKeywordFor(dedupeKey: string): string {
 // contentHash so N identical failures collapse to 1.
 export function extractSessionMemories(input: ExtractSessionMemoriesInput): ExtractedCandidate[] {
   const out: ExtractedCandidate[] = [];
-  const seen = new Set<string>();
+  const seen = new Map<string, ExtractedCandidate>();
   const push = (c: ExtractedCandidate | undefined): void => {
-    if (c === undefined || seen.has(c.contentHash)) return;
-    seen.add(c.contentHash);
+    if (c === undefined) return;
+    const survivor = seen.get(c.contentHash);
+    if (survivor !== undefined) {
+      survivor.occurrences += 1;
+      return;
+    }
+    seen.set(c.contentHash, c);
     out.push(c);
   };
   for (const failure of input.failedAttempts) {

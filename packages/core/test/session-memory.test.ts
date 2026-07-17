@@ -95,6 +95,31 @@ describe("extractSessionMemories", () => {
     expect(titles).toEqual(["run auth tests", "run lint"]);
   });
 
+  it("counts collapsed duplicates in occurrences", () => {
+    const out = extractSessionMemories({
+      sessionId: SESSION_ID,
+      projectId: PROJECT_ID,
+      failedAttempts: [
+        fa(A, { failedStep: "run auth tests", errorOutput: "boom 401" }),
+        fa(B, { failedStep: "run auth tests", errorOutput: "boom 401" }),
+        fa(C, { failedStep: "run auth tests", errorOutput: "boom 401" }),
+      ],
+    });
+
+    expect(out).toHaveLength(1);
+    expect(out[0]?.occurrences).toBe(3);
+  });
+
+  it("a non-duplicated candidate has occurrences 1", () => {
+    const out = extractSessionMemories({
+      sessionId: SESSION_ID,
+      projectId: PROJECT_ID,
+      failedAttempts: [fa(A, { failedStep: "run lint", errorOutput: "no-unused-vars" })],
+    });
+
+    expect(out[0]?.occurrences).toBe(1);
+  });
+
   it("emits a decision candidate from a DECISION: marker", () => {
     const failure = fa(A, {
       failedStep: "run auth tests",
