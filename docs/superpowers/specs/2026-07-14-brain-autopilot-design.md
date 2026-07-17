@@ -329,9 +329,18 @@ labor. No nudges in v1 (trigger wave owns the once-daily upsell line).
    against the schema enum at the CLI boundary.
 2. **Never mutates existing entries** — autopilot only creates NEW rows;
    the only path that flips approval is the human digest/approve ops.
-3. **Provenance always** — every auto-approved row carries
+3. **Provenance always, and unforgeable** — every auto-approved row carries
    `autopilot@1 rule=<ruleId> session=<id>` in `evidence[]`; a row without
-   that line was not auto-approved (auditable).
+   that line was not auto-approved (auditable). `evidence[]` is writable only
+   by internal core — no agent- or user-facing surface (`save_memory` is
+   `.strict()` with no evidence field, `from_session_memory` takes only a
+   session id, `convert_failure_to_rule` writes a different table) can place
+   that marker on a row. The gauntlet critic confirmed this by exhaustive
+   probe: the stamp cannot be forged. This is what makes the digest's
+   spot-review trustworthy — a row it labels "auto-approved" genuinely was.
+   What the stamp attests is narrow (see §11.6): `rule=recurring-failure`
+   means the same recorded failure text appeared under two distinct sessions,
+   NOT that a human confirmed the lesson.
 4. **Per-session cap** — hard, order-deterministic, surplus reported.
 5. **Reversible** — digest spot-review revokes an auto-approval back to
    `suggested`; reject/undo cover the rest. Nothing is deleted.
@@ -412,6 +421,23 @@ adversarial critic, opus) over the full branch; verifier re-pass on fixes.
    a single `@megasaver/core` export (beside `extractSessionMemories`) and
    rewires both existing call sites + autopilot to import it — three copies
    would drift.
+6. **"Recurring" is agent-satisfiable — do not overclaim (gauntlet critic
+   finding #1):** `priorSessionHit` fires when the same recorded failure text
+   (`contentHash` = type+title+content, all agent-supplied via
+   `record_failed_attempt`) appears under two distinct session ids. The
+   `contentHash` carries no session binding, so the engine CANNOT distinguish
+   a genuine recurrence from an agent repeating itself across two of the
+   user's real sessions. This adds no new brain-poisoning capability — an
+   agent can already write `approval:"approved"` directly through
+   `save_memory` — and the stamp stays truthful about what it measures. But
+   auto-approved ≠ human-vetted: the real gate is the digest spot-review
+   (revoke-to-suggested), plus the consent toggle and the per-session cap.
+   Product copy and digest UX must say "auto-captured" / "review these", never
+   imply the user personally hit the bug twice. Optional future hardening:
+   don't default BOTH `bug` and `test_behavior` into the allowlist; namespace
+   the ledger keyword so an agent-authored keyword can't suppress a legit
+   capture (a pre-existing property of the from-session ledger, tracked as a
+   follow-up, not new to this feature).
 
 ---
 

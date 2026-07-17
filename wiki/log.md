@@ -3571,3 +3571,44 @@ guard by execution (they had each named a different disjunct of one compound
 condition). Deferred follow-up: hoist the triplicated JSON-store atomic-write
 mechanic (guard-state / warm-start-state / autopilot-store) into one shared
 helper — spawned as its own task, out of scope for this branch.
+
+### Gauntlet verdict (2026-07-17)
+
+Two fresh opus reviewers against the full branch diff. **Code-reviewer: CLEAR
+TO MERGE** (no blockers, verify green). **Adversarial critic: SHIP** — no
+exploit forged the provenance stamp, corrupted data irreversibly, or broke the
+terminal.
+
+The critic's hardest target, and what it could NOT break: the `autopilot@1`
+evidence stamp is unforgeable through every agent- and user-facing surface —
+`save_memory` is `.strict()` with no evidence field, `from_session_memory`
+takes only a session id, `convert_failure_to_rule` writes a different table.
+Only internal core writes `evidence[]`. So the digest spot-review can trust
+that a row it labels auto-approved genuinely was.
+
+Fixed before merge:
+- 🟠 (code-reviewer) `autopilot@1` was a duplicated magic string — writer built
+  it inline in core, digest reader had a local `AUTOPILOT_EVIDENCE_PREFIX`.
+  Drift would silently blind the human-review window with no type error.
+  Promoted to a shared `AUTOPILOT_EVIDENCE_PREFIX` + `formatAutopilotEvidence`
+  core export, both writer and reader through it (9592450c) — the exact fix the
+  branch already made for the dedupe keyword.
+- 🟠 (critic #1) "genuinely recurred" overclaim. `priorSessionHit` fires when
+  the same agent-supplied failure text appears under two session ids; the
+  contentHash carries no session binding, so the engine can't tell a genuine
+  recurrence from an agent repeating itself. Adds no new capability (agents can
+  already `save_memory` with `approval:"approved"`) and the stamp stays
+  truthful about what it measures, but auto-approved ≠ human-vetted. Spec §8.3
+  and new §11.6 now say so; the real gate is consent + cap + reversible
+  spot-review.
+
+Deferred as spawned follow-up tasks (pre-existing / theoretical, not merge
+blockers):
+- 🟡 (critic #5) ledger-suppression: an agent can pre-write a `from-session:`
+  keyword via save_memory to silently suppress a legit autopilot capture.
+  Denial, not forgery; pre-existing property of the from-session ledger.
+- 🟡 (critic #6) policy-store TOCTOU: enabled-check and run observe two
+  separate policy reads across an await; a concurrent `autopilot off` in the
+  window still auto-approves. Single-user, theoretical. Fix = thread one
+  snapshot.
+- (code-reviewer prior) hoist the triplicated JSON-store atomic-write mechanic.
