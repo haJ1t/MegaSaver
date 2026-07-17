@@ -1,6 +1,8 @@
 import {
+  DEDUPE_KEYWORD_PREFIX,
   type MemoryEntry,
   captureCodeAnchor,
+  dedupeKeywordFor,
   extractSessionMemories,
   memoryEntrySchema,
   saveMemoryWithLineage,
@@ -25,11 +27,6 @@ export type RunMemoryFromSessionInput = {
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
-
-// Idempotence: each staged memory carries its candidate's dedupeKey as a
-// keyword so a re-run can skip already-staged candidates (lossless, never
-// deletes). Keywords are already a normalized, searchable surface.
-const DEDUPE_KEYWORD_PREFIX = "from-session:";
 
 // M4 transcript→memory: deterministically distill a recorded session's failures
 // into `suggested` memories for the human approval gate. NO LLM. Never
@@ -95,7 +92,7 @@ export async function runMemoryFromSession(input: RunMemoryFromSessionInput): Pr
     let suggested = 0;
     let skipped = 0;
     for (const candidate of candidates) {
-      const dedupeKeyword = `${DEDUPE_KEYWORD_PREFIX}${candidate.dedupeKey}`;
+      const dedupeKeyword = dedupeKeywordFor(candidate.dedupeKey);
       if (staged.has(dedupeKeyword)) {
         skipped += 1;
         continue;

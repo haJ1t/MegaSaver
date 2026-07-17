@@ -96,6 +96,17 @@ function decisionCandidate(failure: FailedAttempt): ExtractedCandidate | undefin
   return undefined;
 }
 
+// Idempotence ledger: every memory staged from an extracted candidate carries
+// `from-session:<dedupeKey>` as a keyword, so ANY writer (CLI from-session,
+// MCP from_session_memory, autopilot) can skip candidates already captured by
+// any other. Promoted from duplicated local consts (architect m6) — three
+// copies would drift.
+export const DEDUPE_KEYWORD_PREFIX = "from-session:";
+
+export function dedupeKeywordFor(dedupeKey: string): string {
+  return `${DEDUPE_KEYWORD_PREFIX}${dedupeKey}`;
+}
+
 // Pure: no I/O, no clock, no model. Deterministic over already-structured
 // FailedAttempt rows. Dedupes identical candidates within the session by
 // contentHash so N identical failures collapse to 1.

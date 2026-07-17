@@ -83,6 +83,8 @@ export * from "./project.js";
 export * from "./registry.js";
 export * from "./session.js";
 export {
+  DEDUPE_KEYWORD_PREFIX,
+  dedupeKeywordFor,
   type ExtractedCandidate,
   type ExtractSessionMemoriesInput,
   extractSessionMemories,

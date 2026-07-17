@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import type { FailedAttempt } from "../src/failed-attempt.js";
 import { isRecallable, memoryEntrySchema } from "../src/memory-entry.js";
 import { searchMemoryEntries } from "../src/memory-search.js";
-import { extractSessionMemories } from "../src/session-memory.js";
+import {
+  DEDUPE_KEYWORD_PREFIX,
+  dedupeKeywordFor,
+  extractSessionMemories,
+} from "../src/session-memory.js";
 
 const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const SESSION_ID = sessionIdSchema.parse("22222222-2222-4222-8222-222222222222");
@@ -152,5 +156,14 @@ describe("extractSessionMemories", () => {
     expect(
       searchMemoryEntries([entry], { text: "auth", asOf: TS, includeUnapproved: true }),
     ).toHaveLength(1);
+  });
+});
+
+describe("dedupe keyword ledger (shared export)", () => {
+  it("exports the from-session prefix and composer", () => {
+    expect(DEDUPE_KEYWORD_PREFIX).toBe("from-session:");
+    expect(dedupeKeywordFor("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:0123456789abcdef")).toBe(
+      "from-session:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:0123456789abcdef",
+    );
   });
 });
