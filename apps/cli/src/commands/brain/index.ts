@@ -5,12 +5,15 @@ import { brainImportCommand } from "./import.js";
 import { brainSyncCommand } from "./sync/index.js";
 
 export {
+  AUTOPILOT_UPSELL,
   type RunAutopilotOffInput,
   type RunAutopilotOnInput,
+  type RunAutopilotRunInput,
   type RunAutopilotStatusInput,
   brainAutopilotCommand,
   runAutopilotOff,
   runAutopilotOn,
+  runAutopilotRun,
   runAutopilotStatus,
 } from "./autopilot.js";
 export {
