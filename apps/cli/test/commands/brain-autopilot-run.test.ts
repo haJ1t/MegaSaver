@@ -334,4 +334,36 @@ describe("mega brain autopilot run", () => {
     expect(err.join("\n")).toContain(`session ${SESSION_B} does not belong to project "elsewhere"`);
     expect(await snapshotStore()).toBe(before);
   });
+
+  // Single-snapshot / TOCTOU: the run must act on the SAME policy the enabled gate
+  // validated. The injected ensureStore sits exactly in the window between the gate
+  // read and the old re-read; it flips the on-disk allowlist to empty (a concurrent
+  // `autopilot on --auto-approve-types ...` landing mid-run). A double-read would
+  // pick up the empty allowlist and approve nothing; a single threaded snapshot
+  // approves the recurrence gated moments earlier.
+  it("runs on the gate's policy snapshot, not a mid-run store edit (TOCTOU)", async () => {
+    await seedRecurringPlusOneOff();
+    activatePro();
+    writeAutopilotPolicy(store, { ...DEFAULT_AUTOPILOT_POLICY, enabled: true });
+    const code = await runAutopilotRun(
+      runInput({
+        ensureStore: async () => {
+          // Concurrent policy change lands during the ensureStore await.
+          writeAutopilotPolicy(store, {
+            ...DEFAULT_AUTOPILOT_POLICY,
+            enabled: true,
+            autoApproveTypes: [],
+          });
+          return ensureStoreReady(store);
+        },
+      }),
+    );
+    expect(code).toBe(0);
+    const mems = await readMemories();
+    const approved = mems.filter((m) => m.approval === "approved");
+    expect(approved).toHaveLength(1);
+    expect(approved[0]?.evidence).toContain(
+      `autopilot@1 rule=recurring-failure session=${SESSION_B}`,
+    );
+  });
 });

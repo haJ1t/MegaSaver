@@ -163,10 +163,18 @@ export async function runAutopilotRun(input: RunAutopilotRunInput): Promise<0 | 
       input.stdout(AUTOPILOT_UPSELL);
       return 0;
     }
-    if (!readAutopilotPolicy(input.storeRoot).enabled) {
-      input.stderr("autopilot is off — enable with: mega brain autopilot on");
-      return 1;
-    }
+  }
+
+  // ONE policy snapshot, read after the PRO gate (unentitled returns first, zero
+  // work) and before ensureStore (a disabled run must not initialize the store).
+  // Threaded through both the enabled gate AND runAutopilot below so a concurrent
+  // `autopilot on/off` in the ensureStore window can't make the run act on a policy
+  // the gate never validated (TOCTOU). --dry-run skips the enabled gate but still
+  // needs the snapshot to report what it would do.
+  const policy = readAutopilotPolicy(input.storeRoot);
+  if (!input.dryRunFlag && !policy.enabled) {
+    input.stderr("autopilot is off — enable with: mega brain autopilot on");
+    return 1;
   }
 
   try {
@@ -191,7 +199,6 @@ export async function runAutopilotRun(input: RunAutopilotRunInput): Promise<0 | 
       }
     }
 
-    const policy = readAutopilotPolicy(input.storeRoot);
     const result = await runAutopilot({
       registry,
       projectId: session.projectId,
