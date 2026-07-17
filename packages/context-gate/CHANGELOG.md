@@ -1,5 +1,20 @@
 # @megasaver/context-gate
 
+## 0.7.0
+
+### Minor Changes
+
+- 8db0074: Mistake Firewall (guard): PreToolUse hook intercepts Bash/edit calls matching stored failures and warns the agent mid-mistake with the estimated original cost. Durable bounded guard corpus captured on the proxy path; three-tier pure matcher (exact / path+text / BM25); outcome feedback loop with signature overlap + auto-mute; `mega guard` CLI (status/mode/events/mute/check); `check_approach` MCP tool with a free 7-day window (also applied to `find_similar_failures`); Pro retry-cost-avoided line in roi/savings surfaces. Free warn interception + Pro strict-deny / events ledger / cumulative analytics, all under the existing `savings-analytics` entitlement key.
+
+### Patch Changes
+
+- Updated dependencies [eb74c35]
+- Updated dependencies [8db0074]
+- Updated dependencies [6312ef3]
+  - @megasaver/output-filter@1.6.0
+  - @megasaver/stats@1.5.0
+  - @megasaver/content-store@1.1.4
+
 ## 0.6.0
 
 ### Minor Changes

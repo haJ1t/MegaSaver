@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/mcp-bridge",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "license": "MIT",
   "private": true,
   "description": "Mega Saver MCP server bridge — stdio transport, four context-gate tools.",
@@ -13,7 +13,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",

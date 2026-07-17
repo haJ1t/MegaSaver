@@ -1,13 +1,18 @@
 {
   "name": "@megasaver/cli",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "license": "SEE LICENSE IN NOTICE",
   "description": "Mega Saver CLI - the `mega` command.",
   "type": "module",
   "bin": {
     "mega": "dist-bundle/mega.mjs"
   },
-  "files": ["dist-bundle", "LICENSE", "PRO-LICENSE", "NOTICE"],
+  "files": [
+    "dist-bundle",
+    "LICENSE",
+    "PRO-LICENSE",
+    "NOTICE"
+  ],
   "sideEffects": false,
   "publishConfig": {
     "access": "public"

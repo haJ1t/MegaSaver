@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/pro-analytics",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "SEE LICENSE IN LICENSE",
   "private": true,
   "description": "Mega Saver Pro — proprietary historical savings analytics and export. Use requires a valid Mega Saver Pro license.",
@@ -13,7 +13,10 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "LICENSE"],
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",

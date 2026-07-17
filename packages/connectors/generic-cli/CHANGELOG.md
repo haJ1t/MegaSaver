@@ -1,5 +1,19 @@
 # @megasaver/connector-generic-cli
 
+## 1.1.4
+
+### Patch Changes
+
+- Updated dependencies [4403f40]
+- Updated dependencies [eb74c35]
+- Updated dependencies [5f8bbdb]
+- Updated dependencies [6d40d2c]
+- Updated dependencies [8db0074]
+- Updated dependencies [2459179]
+- Updated dependencies [6312ef3]
+  - @megasaver/core@1.4.0
+  - @megasaver/connectors-shared@1.3.0
+
 ## 1.1.3
 
 ### Patch Changes

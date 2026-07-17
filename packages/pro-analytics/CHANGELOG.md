@@ -1,5 +1,14 @@
 # @megasaver/pro-analytics
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [eb74c35]
+- Updated dependencies [8db0074]
+- Updated dependencies [6312ef3]
+  - @megasaver/stats@1.5.0
+
 ## 0.1.2
 
 ### Patch Changes

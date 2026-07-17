@@ -1,5 +1,12 @@
 # @megasaver/content-store
 
+## 1.1.4
+
+### Patch Changes
+
+- Updated dependencies [eb74c35]
+  - @megasaver/output-filter@1.6.0
+
 ## 1.1.3
 
 ### Patch Changes

@@ -1,5 +1,87 @@
 # @megasaver/cli
 
+## 2.2.0
+
+### Minor Changes
+
+- 4403f40: Brain Autopilot (i14): the brain grows itself, safely.
+
+  - core: `autopilot` module — a pure `scoreCandidate` rule table plus the
+    `runAutopilot` engine over the existing session extractor — and
+    `autopilot-store` (policy + digest state, fail-closed). Auto-approval
+    requires cross-session recurrence: a failure repeating inside a single
+    session is a retry storm, not a lesson, so `ExtractedCandidate.occurrences`
+    is a display-only signal and never a scoring input. The shared
+    `from-session:` dedupe keyword is now a core export so every writer agrees.
+  - cli: `mega brain autopilot status|on|off|run` — dry-run free, real run Pro,
+    honors the enabled toggle, per-session cap with a capped-out notice — and
+    `mega brain digest` (Pro): single-keystroke y/n/e/s/u/a/q triage over the
+    suggested backlog, auto-approved spot-review with revoke, raw-mode teardown
+    on every exit path, non-TTY and `--json` fallbacks. `runMemoryApprove` now
+    admits a `suggested` target so an auto-approval can be revoked; its core
+    flip is extracted as `applyApprovalFlip`.
+  - entitlement: `brain-autopilot` ProFeature key.
+  - mcp-bridge: the from-session tool imports the shared dedupe prefix from core
+    instead of redeclaring it. Behavior unchanged.
+
+- eb74c35: Code-Truth Verify (i6): git-anchored memories that stale and heal.
+
+  - core: `memory-anchor` module (codeAnchor/lastVerified schemas, best-effort
+    `captureCodeAnchor`), `code-truth` module (pure `verifyAnchors` planner +
+    `runVerify` git runner), whole-batch `applyMemoryEntryPatches`, and
+    `STALE_WEIGHT` down-ranking for stale rows on includeStale surfaces.
+    Contradiction closes `validTo` with ownership tracking
+    (`closedByCodeTruth`); heal reopens only code-truth-owned closes. Anchor
+    paths reject control characters at the schema boundary.
+  - output-filter: public `extractBlocksForFile` polyglot per-file extraction.
+  - cli: `mega memory verify` (free one-shot; `--install-hook` /
+    `--uninstall-hook` Pro post-commit automation), `--symbol` inputs,
+    `--no-anchor` opt-out, sweep verify pre-pass (Pro), show/explain anchor
+    summary + verification badge.
+  - mcp-bridge: `save_memory` symbol anchors, `get_relevant_memories`
+    verification badges + Pro pre-recall spot-check with sentinel-guarded
+    disclosure, new `verify_memories` tool (Pro).
+  - stats/entitlement: `code-truth` ProFeature key, stale-recall-avoided ledger
+    and "stale recall waste avoided" savings line.
+
+- 8db0074: Mistake Firewall (guard): PreToolUse hook intercepts Bash/edit calls matching stored failures and warns the agent mid-mistake with the estimated original cost. Durable bounded guard corpus captured on the proxy path; three-tier pure matcher (exact / path+text / BM25); outcome feedback loop with signature overlap + auto-mute; `mega guard` CLI (status/mode/events/mute/check); `check_approach` MCP tool with a free 7-day window (also applied to `find_similar_failures`); Pro retry-cost-avoided line in roi/savings surfaces. Free warn interception + Pro strict-deny / events ledger / cumulative analytics, all under the existing `savings-analytics` entitlement key.
+- 6d40d2c: save_memory detects supersession/dedupe via saveMemoryWithLineage (response
+  gains `supersession?`/`deduped?`; best-effort cosine inputs from the memory
+  sidecar). from-session writers switch to detect:false lineage saves; `mega
+task status --save-summary` gains detection with stderr disclosure.
+- 6312ef3: Warm Start: budgeted session boot brief for every agent. A pure assembler
+  (`assembleWarmStartBrief`) renders standing rules, decisions, open todos,
+  branch-touching failed attempts, git delta, and hot-spot entities into a
+  hard-budgeted markdown brief (default 2000 tokens; micro <4h = 300; reonboard
+  > 14d shows what changed while you were away). Delivered via a fail-open
+  > Claude Code SessionStart hook (`mega hooks warmup`, installed by
+  > `mega hooks install`, opt-out `--no-warmup`), `mega warmup` on stdout, a
+  > Pro-gated cross-agent sentinel block (`mega warmup --write`, refreshed by
+  > `mega connector sync`), and an MCP `get_warm_start_brief` tool. Reporting is
+  > measured-only: a separate `WarmStartEvent` (never a TokenSaverEvent) feeds a
+  > "Warm start: N sessions warmed" line in savings history/insights.
+
+### Patch Changes
+
+- 8145016: `mega brain autopilot run` now reads the autopilot policy ONCE and threads that
+  single snapshot through both the enabled gate and the run, closing a TOCTOU where
+  a concurrent `autopilot on/off` (or a direct edit of `autopilot.json`) landing in
+  the `ensureStore` window between the two former reads could make the run act on a
+  policy the enabled gate never validated (i14 gauntlet finding #6). Behavior is
+  unchanged in the common (no-race) case; entitlement-first, enabled-before-store,
+  and dry-run-free ordering are all preserved.
+- 2459179: Reserve the `from-session:` idempotence-ledger keyword namespace so an agent can
+  no longer suppress a legitimate autopilot / from-session capture by planting a
+  forged ledger keyword (i14 gauntlet finding #5, denial-of-capture).
+
+  - core: new `isReservedKeyword` / `stripReservedKeywords` exports; `brain import`
+    strips reserved keywords from imported memories.
+  - mcp-bridge: `save_memory` strips reserved keywords from agent input.
+  - cli: `memory create` strips reserved keywords; `memory update` strips a forged
+    add AND preserves the row's existing reserved keyword (so an edit can't drop
+    the real ledger entry). Internal ledger writers (from-session, autopilot) build
+    the keyword themselves and are unaffected; the shared ledger still dedupes.
+
 ## 2.1.0
 
 ### Minor Changes

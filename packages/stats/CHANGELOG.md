@@ -1,5 +1,47 @@
 # @megasaver/stats
 
+## 1.5.0
+
+### Minor Changes
+
+- eb74c35: Code-Truth Verify (i6): git-anchored memories that stale and heal.
+
+  - core: `memory-anchor` module (codeAnchor/lastVerified schemas, best-effort
+    `captureCodeAnchor`), `code-truth` module (pure `verifyAnchors` planner +
+    `runVerify` git runner), whole-batch `applyMemoryEntryPatches`, and
+    `STALE_WEIGHT` down-ranking for stale rows on includeStale surfaces.
+    Contradiction closes `validTo` with ownership tracking
+    (`closedByCodeTruth`); heal reopens only code-truth-owned closes. Anchor
+    paths reject control characters at the schema boundary.
+  - output-filter: public `extractBlocksForFile` polyglot per-file extraction.
+  - cli: `mega memory verify` (free one-shot; `--install-hook` /
+    `--uninstall-hook` Pro post-commit automation), `--symbol` inputs,
+    `--no-anchor` opt-out, sweep verify pre-pass (Pro), show/explain anchor
+    summary + verification badge.
+  - mcp-bridge: `save_memory` symbol anchors, `get_relevant_memories`
+    verification badges + Pro pre-recall spot-check with sentinel-guarded
+    disclosure, new `verify_memories` tool (Pro).
+  - stats/entitlement: `code-truth` ProFeature key, stale-recall-avoided ledger
+    and "stale recall waste avoided" savings line.
+
+- 8db0074: Mistake Firewall (guard): PreToolUse hook intercepts Bash/edit calls matching stored failures and warns the agent mid-mistake with the estimated original cost. Durable bounded guard corpus captured on the proxy path; three-tier pure matcher (exact / path+text / BM25); outcome feedback loop with signature overlap + auto-mute; `mega guard` CLI (status/mode/events/mute/check); `check_approach` MCP tool with a free 7-day window (also applied to `find_similar_failures`); Pro retry-cost-avoided line in roi/savings surfaces. Free warn interception + Pro strict-deny / events ledger / cumulative analytics, all under the existing `savings-analytics` entitlement key.
+- 6312ef3: Warm Start: budgeted session boot brief for every agent. A pure assembler
+  (`assembleWarmStartBrief`) renders standing rules, decisions, open todos,
+  branch-touching failed attempts, git delta, and hot-spot entities into a
+  hard-budgeted markdown brief (default 2000 tokens; micro <4h = 300; reonboard
+  > 14d shows what changed while you were away). Delivered via a fail-open
+  > Claude Code SessionStart hook (`mega hooks warmup`, installed by
+  > `mega hooks install`, opt-out `--no-warmup`), `mega warmup` on stdout, a
+  > Pro-gated cross-agent sentinel block (`mega warmup --write`, refreshed by
+  > `mega connector sync`), and an MCP `get_warm_start_brief` tool. Reporting is
+  > measured-only: a separate `WarmStartEvent` (never a TokenSaverEvent) feeds a
+  > "Warm start: N sessions warmed" line in savings history/insights.
+
+### Patch Changes
+
+- Updated dependencies [eb74c35]
+  - @megasaver/output-filter@1.6.0
+
 ## 1.4.0
 
 ### Minor Changes

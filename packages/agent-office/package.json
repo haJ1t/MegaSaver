@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/agent-office",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "license": "MIT",
   "private": true,
   "description": "Agent Office engine — roster, roles, and per-agent task queues for Mega Saver.",
@@ -13,7 +13,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",

@@ -3612,3 +3612,43 @@ blockers):
   window still auto-approves. Single-user, theoretical. Fix = thread one
   snapshot.
 - (code-reviewer prior) hoist the triplicated JSON-store atomic-write mechanic.
+
+### Merge to main + release v2.1.1 (2026-07-17)
+
+The whole Brain Autopilot (i14) line merged to `main` as four squash commits,
+then cut as release **v2.1.1**.
+
+Merged (squash, linear history):
+- `4403f408` feat(core): Brain Autopilot (i14) — self-growing memory (#289).
+  Session-end auto-capture + cross-session-recurrence auto-approve (M2 dampener)
+  + `mega brain digest` keystroke triage. CI green ubuntu+windows, gauntlet
+  cleared (code-reviewer CLEAR, critic SHIP).
+- `5f8bbdb8` refactor(core): share advisory atomic-JSON-store helper (#290).
+  Hoisted the triplicated mkdir+tmp+rename mechanic into core-internal
+  `json-store.ts`; each store keeps its own schema + error posture. Closes the
+  code-reviewer's i14 follow-up. Pure extraction — 31 tests unmodified. Both
+  gauntlet reviewers: byte-identical, 41 differential checks.
+- `24591793` fix(core): reserve the from-session ledger keyword namespace (#291).
+  Closes gauntlet finding #5 (denial-of-capture): an agent could plant a forged
+  `from-session:` keyword via save_memory / memory create|update / brain import
+  to suppress a legit autopilot capture. Reserve the namespace at all four
+  agent-facing boundaries; internal writers bypass. Both reviewers found+fixed a
+  case/whitespace bypass (strip ran on raw input, keywordsSchema normalizes with
+  `.trim().toLowerCase()` after) — `isReservedKeyword` now mirrors that
+  normalization.
+- `8145016f` fix(cli): read autopilot policy once, close run TOCTOU (#292).
+  Closes gauntlet finding #6: two policy reads across the `ensureStore` await let
+  a concurrent `autopilot on/off` make the run act on an ungated snapshot. Thread
+  one snapshot through both the enabled gate and `runAutopilot`. code-reviewer
+  CLEAR.
+
+Release v2.1.1 (local: `changeset version` + CHANGELOGs + git tag, no publish).
+Consumed the 10-changeset backlog that had accumulated since v2.1.0 — not just
+i14 but code-truth (i6), warm-start (i8), living-brain (i1), mistake-firewall
+(i7), plus bridge-declared-target-exemption, save-path-lineage,
+first-party-cache-parity. Package bumps: core 1.3.0→1.4.0, cli →2.2.0,
+mcp-bridge →1.3.0, entitlement →0.3.0 (product tag decoupled from package
+versions per the existing convention — core stayed 1.3.0 across v2.0.0/v2.1.0).
+
+All three i14 gauntlet follow-ups now closed. Merged branches + worktrees cleaned
+up.

@@ -1,11 +1,14 @@
 {
   "name": "@megasaver/gui",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "license": "MIT",
   "private": true,
   "description": "Mega Saver GUI app - localhost web shell over the core registry.",
   "type": "module",
-  "files": ["dist", "dist-bridge"],
+  "files": [
+    "dist",
+    "dist-bridge"
+  ],
   "exports": {
     "./bridge": {
       "types": "./dist-bridge/index.d.ts",

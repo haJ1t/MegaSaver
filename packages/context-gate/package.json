@@ -1,6 +1,6 @@
 {
   "name": "@megasaver/context-gate",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "license": "MIT",
   "private": true,
   "description": "Context-gate orchestrator for Mega Saver — file/exec output pipeline + chunk fetch, composed over policy, output-filter, content-store, and stats.",
@@ -13,7 +13,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",

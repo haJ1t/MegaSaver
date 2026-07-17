@@ -1,5 +1,30 @@
 # @megasaver/gui
 
+## 1.4.2
+
+### Patch Changes
+
+- Updated dependencies [4403f40]
+- Updated dependencies [6d40d2c]
+- Updated dependencies [eb74c35]
+- Updated dependencies [5f8bbdb]
+- Updated dependencies [6d40d2c]
+- Updated dependencies [8db0074]
+- Updated dependencies [2459179]
+- Updated dependencies [6d40d2c]
+- Updated dependencies [6312ef3]
+  - @megasaver/core@1.4.0
+  - @megasaver/mcp-bridge@1.3.0
+  - @megasaver/output-filter@1.6.0
+  - @megasaver/stats@1.5.0
+  - @megasaver/connectors-shared@1.3.0
+  - @megasaver/context-gate@0.7.0
+  - @megasaver/connector-claude-code@1.4.0
+  - @megasaver/agent-office@0.1.4
+  - @megasaver/connector-generic-cli@1.1.4
+  - @megasaver/daemon@0.1.4
+  - @megasaver/content-store@1.1.4
+
 ## 1.4.1
 
 ### Patch Changes

@@ -1,5 +1,48 @@
 # @megasaver/connectors-shared
 
+## 1.3.0
+
+### Minor Changes
+
+- 6d40d2c: Living Brain (i1): auto-superseding memory save path with lineage recall and
+  time-travel queries.
+
+  - core: new `supersession` module — `detectSupersession` (lexical
+    checkConflicts ladder + best-effort cosine overlay), the extracted
+    `applySupersession` close, `buildLineage`, `changedFromFor`, and the single
+    write entry point `saveMemoryWithLineage` with a born-approved close ladder.
+    Optional `lastActiveAt` on the memory schema; `effectiveConfidence` decay
+    rekeys to `lastActiveAt ?? updatedAt ?? createdAt` (legacy rows rank
+    bit-identically). Warm-start briefs carry a `(was: … until …)` suffix.
+  - connectors-shared: `ConnectorContext` gains an optional `memoryChangedFrom`
+    record; its titles are sentinel-guarded, and the connector block renders a
+    `(changed from …)` suffix. Closed/archival memories stop rendering in the
+    connector block (validity gate).
+
+- 8db0074: Mistake Firewall (guard): PreToolUse hook intercepts Bash/edit calls matching stored failures and warns the agent mid-mistake with the estimated original cost. Durable bounded guard corpus captured on the proxy path; three-tier pure matcher (exact / path+text / BM25); outcome feedback loop with signature overlap + auto-mute; `mega guard` CLI (status/mode/events/mute/check); `check_approach` MCP tool with a free 7-day window (also applied to `find_similar_failures`); Pro retry-cost-avoided line in roi/savings surfaces. Free warn interception + Pro strict-deny / events ledger / cumulative analytics, all under the existing `savings-analytics` entitlement key.
+- 6312ef3: Warm Start: budgeted session boot brief for every agent. A pure assembler
+  (`assembleWarmStartBrief`) renders standing rules, decisions, open todos,
+  branch-touching failed attempts, git delta, and hot-spot entities into a
+  hard-budgeted markdown brief (default 2000 tokens; micro <4h = 300; reonboard
+  > 14d shows what changed while you were away). Delivered via a fail-open
+  > Claude Code SessionStart hook (`mega hooks warmup`, installed by
+  > `mega hooks install`, opt-out `--no-warmup`), `mega warmup` on stdout, a
+  > Pro-gated cross-agent sentinel block (`mega warmup --write`, refreshed by
+  > `mega connector sync`), and an MCP `get_warm_start_brief` tool. Reporting is
+  > measured-only: a separate `WarmStartEvent` (never a TokenSaverEvent) feeds a
+  > "Warm start: N sessions warmed" line in savings history/insights.
+
+### Patch Changes
+
+- Updated dependencies [4403f40]
+- Updated dependencies [eb74c35]
+- Updated dependencies [5f8bbdb]
+- Updated dependencies [6d40d2c]
+- Updated dependencies [8db0074]
+- Updated dependencies [2459179]
+- Updated dependencies [6312ef3]
+  - @megasaver/core@1.4.0
+
 ## 1.2.2
 
 ### Patch Changes
