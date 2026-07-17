@@ -3581,7 +3581,16 @@ export async function runDigestLoop(opts: {
         output(KEY_HELP);
       }
     }
-    if (!closed) await emit({ kind: "quit" });
+    // CORRECTED post-review (was `if (!closed) await emit(...)`). The guard was a
+    // BLOCKER: with a handler doing real disk I/O — which is exactly what Task 10's
+    // quit handler does (writeDigestState) — `closed` is always true here, so quit
+    // fired 0/10 runs and lastDigestAt never persisted on piped runs. A torn write:
+    // the per-key handlers already applied the approvals, so only the bookkeeping
+    // was lost and the next digest re-nudged an already-triaged backlog.
+    // It was also semantically wrong: this line is only reachable on a fully drained
+    // queue (EOF-mid-queue returns earlier at `key === null`), so it suppressed quit
+    // exactly when the digest COMPLETED. For a pipe, "input closed" is always true.
+    await emit({ kind: "quit" });
   } finally {
     cleanup();
   }
