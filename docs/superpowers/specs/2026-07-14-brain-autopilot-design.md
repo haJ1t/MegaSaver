@@ -412,3 +412,65 @@ adversarial critic, opus) over the full branch; verifier re-pass on fixes.
    a single `@megasaver/core` export (beside `extractSessionMemories`) and
    rewires both existing call sites + autopilot to import it — three copies
    would drift.
+
+---
+
+## 12. Implementation deviations (build phase)
+
+Recorded during the 10-task subagent-driven build. Each is a place where the
+implementation diverged from this spec (or the plan derived from it); every one
+was reviewer-caught or reviewer-confirmed.
+
+- **`applyApprovalFlip` extraction (T10).** `runMemoryApprove`'s core flip is
+  extracted as `applyApprovalFlip(registry, existing, approval, updatedAt)` in
+  `approve.ts` so the digest reuses one opened registry across many rows;
+  `runMemoryApprove` rewired byte-identically (differential-tested against the
+  pre-extraction version across 13 cases — identical on every output byte and
+  every stored-row byte; the only divergence is one extra pure `now()` call on
+  no-op paths, unobservable).
+
+- **Digest queue / autopilot pending counts are PROJECT-scoped** where they read
+  rows — `listMemoryEntries` is per-project. `mega brain autopilot status`
+  deliberately reports a STORE-WIDE count, labelled `pending suggested (all
+  projects):` and `last digest (any project):`, because the policy and
+  digest-state are store-wide singletons; `mega brain digest` drains ONE project
+  by name. The two scopes are intentionally different and the labels say so.
+
+- **Store writes swallow errors; reads fail closed** (mirrors the shipped
+  guard-state store). A lost policy write can never enable auto-approval.
+  `readAutopilotPolicy` returns a `structuredClone` of the disabled default, not
+  the singleton, so a caller mutating the result cannot flip the process-wide
+  default to enabled.
+
+- **`scoreCandidate` clamps its passthrough (T4).** The non-recurring branch
+  returns `candidate.confidence === "high" ? "medium" : candidate.confidence`,
+  so `"high"` — the auto-approval score — is structurally unreachable without
+  `priorSessionHit`. The spec left this implicit (relying on the extractor
+  hardcoding `confidence: "low"`); the clamp makes the safety property local to
+  the rule table rather than dependent on a literal in another module.
+
+- **The M2 dampener guards on `priorSessionHit`, not `occurrences` (T4/T5).**
+  `occurrences` (within-session collapse count) is additive and display-only;
+  it never enters a scoring or approval decision. Cross-session recurrence is
+  the sole path to `"high"`.
+
+- **`runAutopilot` writes born-approved rows via `registry.createMemoryEntry`
+  directly (T5),** not `saveMemoryWithLineage(…, {detect:false})` as the
+  from-session path does — because `detect:false` does NOT disable supersession
+  when `supersedesId` is set (`supersession.ts` tests it above the short-circuit),
+  and a machine-written approved row must never close existing memory. Going
+  direct makes that structural, not flag-dependent.
+
+- **Spec-test corrections (the plan's own tests contradicted its implementation,
+  twice).** T9: the `runDigestLoop` contract carried `if (!closed) await
+  emit({kind:"quit"})`, a data-loss BLOCKER (quit fired 0/10 with a real-disk-I/O
+  handler → `lastDigestAt` never persisted on piped runs) — deleted, plan
+  corrected. T10: the spec's two `u` (undo) tests seeded a 1-row queue whose loop
+  exits before `u` is ever read; adapted to the 2-row `"yuss"` shape (Task 9's own
+  undo fixture), every assertion preserved.
+
+- **Approval union widened to `"approved" | "rejected" | "suggested"` (T6)** so an
+  auto-approval can be revoked back into the digest queue. The suggested flip
+  patches `approval` + `updatedAt` and nothing else — not `validTo` (would vanish
+  the row from default recall), not `lastActiveAt` (would re-key decay); both
+  pinned by tests on the flipped row itself.
