@@ -1,9 +1,11 @@
 import {
   type MemoryEntryUpdatePatch,
   captureCodeAnchor,
+  isReservedKeyword,
   memoryConfidenceSchema,
   memorySourceSchema,
   memoryTypeSchema,
+  stripReservedKeywords,
 } from "@megasaver/core";
 import { titleSchema } from "@megasaver/shared";
 import { defineCommand } from "citty";
@@ -152,7 +154,7 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
     touched = true;
   }
   if (input.keywordFlags !== undefined) {
-    patch.keywords = toStringArray(input.keywordFlags);
+    patch.keywords = stripReservedKeywords(toStringArray(input.keywordFlags));
     touched = true;
     contentBearing = true;
   }
@@ -199,6 +201,12 @@ export async function runMemoryUpdate(input: RunMemoryUpdateInput): Promise<0 | 
       const cli = memoryEntryNotFoundMessage(parsedId);
       input.stderr(cli.message);
       return cli.exitCode;
+    }
+    // A keyword replace strips reserved keywords from user input (above); carry
+    // the row's existing reserved ledger keyword back so an edit never drops it
+    // (which would let autopilot re-capture the row as a duplicate).
+    if (patch.keywords !== undefined) {
+      patch.keywords = [...existing.keywords.filter(isReservedKeyword), ...patch.keywords];
     }
     // Re-capture when citations change (spec §5.1). Best-effort: a failed
     // capture leaves the stored anchor untouched — verify will contradict or

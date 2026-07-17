@@ -7,6 +7,8 @@ import {
   DEDUPE_KEYWORD_PREFIX,
   dedupeKeywordFor,
   extractSessionMemories,
+  isReservedKeyword,
+  stripReservedKeywords,
 } from "../src/session-memory.js";
 
 const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
@@ -190,5 +192,32 @@ describe("dedupe keyword ledger (shared export)", () => {
     expect(dedupeKeywordFor("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:0123456789abcdef")).toBe(
       "from-session:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:0123456789abcdef",
     );
+  });
+
+  it("isReservedKeyword flags only the ledger namespace", () => {
+    expect(isReservedKeyword("from-session:x")).toBe(true);
+    expect(isReservedKeyword(dedupeKeywordFor("a:b"))).toBe(true);
+    expect(isReservedKeyword("auth")).toBe(false);
+    expect(isReservedKeyword("session:x")).toBe(false);
+    expect(isReservedKeyword("")).toBe(false);
+  });
+
+  it("isReservedKeyword catches case/whitespace forges that keywordsSchema would normalize back", () => {
+    // keywordsSchema stores keywords as `.trim().toLowerCase()`, so these all
+    // land as the reserved `from-session:...` on write — the guard must catch
+    // them on raw input or the strip is trivially bypassed.
+    expect(isReservedKeyword("From-Session:x")).toBe(true);
+    expect(isReservedKeyword("FROM-SESSION:x")).toBe(true);
+    expect(isReservedKeyword("  from-session:x  ")).toBe(true);
+    expect(isReservedKeyword("\tFrom-Session:x")).toBe(true);
+  });
+
+  it("stripReservedKeywords drops reserved entries, preserves order and the rest", () => {
+    expect(stripReservedKeywords(["auth", "from-session:x", "cache"])).toEqual(["auth", "cache"]);
+    expect(stripReservedKeywords([])).toEqual([]);
+    expect(stripReservedKeywords(["a", "b"])).toEqual(["a", "b"]);
+    expect(stripReservedKeywords(["from-session:x", "from-session:y"])).toEqual([]);
+    // Case/whitespace forges are stripped too.
+    expect(stripReservedKeywords(["From-Session:x", "real", " from-session:y "])).toEqual(["real"]);
   });
 });

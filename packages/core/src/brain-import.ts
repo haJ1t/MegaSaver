@@ -3,6 +3,7 @@ import type { ProjectId } from "@megasaver/shared";
 import { type BrainBundle, parseBrainBundle } from "./brain-bundle.js";
 import { CoreRegistryError } from "./errors.js";
 import type { CoreRegistry } from "./registry.js";
+import { stripReservedKeywords } from "./session-memory.js";
 
 export type ImportCounts = { memories: number; rules: number; failures: number };
 
@@ -54,6 +55,10 @@ export function importBrain(input: ImportBrainInput): ImportBrainReport {
       sessionId: null,
       scope: "project",
       approval: "suggested",
+      // An imported bundle is external keyword data: strip the reserved ledger
+      // namespace so a bundle can't plant a forged from-session: keyword that
+      // suppresses a legitimate autopilot/from-session capture in this project.
+      keywords: stripReservedKeywords(rest.keywords),
       evidence: [...(entry.evidence ?? []), provenance],
     });
     memoryKeys.add(entry.content);

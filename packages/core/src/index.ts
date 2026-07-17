@@ -85,6 +85,8 @@ export * from "./session.js";
 export {
   DEDUPE_KEYWORD_PREFIX,
   dedupeKeywordFor,
+  isReservedKeyword,
+  stripReservedKeywords,
   type ExtractedCandidate,
   type ExtractSessionMemoriesInput,
   extractSessionMemories,
