@@ -7,7 +7,7 @@ import { memoryEntryIdSchema } from "./shared.js";
 
 export type RunMemoryApproveInput = {
   memoryEntryId: string;
-  approval: "approved" | "rejected";
+  approval: "approved" | "rejected" | "suggested";
   storeFlag: string | undefined;
   jsonFlag: boolean;
   cwd: string;
