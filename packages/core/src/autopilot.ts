@@ -11,6 +11,15 @@ import {
   extractSessionMemories,
 } from "./session-memory.js";
 
+// Auditable marker for "auto-approved while you were away" (spec §8.3):
+// digest.ts detects autopilot-written rows via AUTOPILOT_EVIDENCE_PREFIX, so
+// writer and reader must share one definition or detection silently drifts.
+export const AUTOPILOT_EVIDENCE_PREFIX = "autopilot@1";
+
+export function formatAutopilotEvidence(sessionId: SessionId): string {
+  return `${AUTOPILOT_EVIDENCE_PREFIX} rule=recurring-failure session=${sessionId}`;
+}
+
 export type ScoreSignals = { priorSessionHit: boolean };
 
 // Deterministic rule table (spec §5.1) — no LLM, no clock, no I/O.
@@ -147,7 +156,7 @@ export async function runAutopilot(opts: {
         ? {
             validFrom: now,
             lastActiveAt: now,
-            evidence: [`autopilot@1 rule=recurring-failure session=${sessionId}`],
+            evidence: [formatAutopilotEvidence(sessionId)],
           }
         : {}),
       createdAt: now,

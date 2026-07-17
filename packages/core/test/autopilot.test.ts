@@ -5,7 +5,12 @@ import { join } from "node:path";
 import type { ProjectId, SessionId } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_AUTOPILOT_POLICY } from "../src/autopilot-store.js";
-import { runAutopilot, scoreCandidate } from "../src/autopilot.js";
+import {
+  AUTOPILOT_EVIDENCE_PREFIX,
+  formatAutopilotEvidence,
+  runAutopilot,
+  scoreCandidate,
+} from "../src/autopilot.js";
 import { createJsonDirectoryCoreRegistry } from "../src/json-directory-registry.js";
 import { type CoreRegistry, createInMemoryCoreRegistry } from "../src/registry.js";
 import type { ExtractedCandidate } from "../src/session-memory.js";
@@ -67,6 +72,14 @@ describe("scoreCandidate", () => {
     // recurrence is a stuck automated loop, not an important memory.
     const storm = scoreCandidate(cand({ occurrences: 5 }), { priorSessionHit: false });
     expect(storm).toBe("low");
+  });
+});
+
+describe("formatAutopilotEvidence", () => {
+  it("produces the exact marker digest.ts detects via AUTOPILOT_EVIDENCE_PREFIX", () => {
+    const formatted = formatAutopilotEvidence(CURRENT_SESSION);
+    expect(formatted.startsWith(AUTOPILOT_EVIDENCE_PREFIX)).toBe(true);
+    expect(formatted).toBe(`autopilot@1 rule=recurring-failure session=${CURRENT_SESSION}`);
   });
 });
 

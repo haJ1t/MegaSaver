@@ -4,6 +4,7 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AUTOPILOT_EVIDENCE_PREFIX,
   type MemoryEntry,
   dedupeKeywordFor,
   extractSessionMemories,
@@ -32,9 +33,6 @@ import {
 
 export const DIGEST_UPSELL = `Brain digest is a Mega Saver Pro feature. Activate a key: mega license activate <key>. Learn more: ${PRO_ANALYTICS_URL}.`;
 
-// Safety invariant §8.3: only autopilot writes this evidence prefix, so it is
-// the auditable marker for "auto-approved while you were away".
-const AUTOPILOT_EVIDENCE_PREFIX = "autopilot@1";
 const DEFAULT_LIMIT = 50;
 
 export type RunBrainDigestInput = {

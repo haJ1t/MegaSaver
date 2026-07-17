@@ -176,4 +176,9 @@ export {
   writeAutopilotPolicy,
   writeDigestState,
 } from "./autopilot-store.js";
-export { type RunAutopilotResult, runAutopilot } from "./autopilot.js";
+export {
+  AUTOPILOT_EVIDENCE_PREFIX,
+  formatAutopilotEvidence,
+  type RunAutopilotResult,
+  runAutopilot,
+} from "./autopilot.js";
