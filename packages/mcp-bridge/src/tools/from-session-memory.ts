@@ -1,7 +1,9 @@
 import {
   type CoreRegistry,
   CoreRegistryError,
+  DEDUPE_KEYWORD_PREFIX,
   type MemoryEntry,
+  dedupeKeywordFor,
   extractSessionMemories,
   memoryEntrySchema,
   saveMemoryWithLineage,
@@ -21,10 +23,6 @@ export type FromSessionMemoryEnv = {
 export type FromSessionMemoryResult = { suggested: number; skipped: number };
 
 const fromSessionMemoryInputSchema = z.object({ sessionId: z.string().min(1) }).strict();
-
-// Idempotence: each staged memory carries its candidate's dedupeKey as a keyword
-// so a re-run skips already-staged candidates (lossless; never deletes).
-const DEDUPE_KEYWORD_PREFIX = "from-session:";
 
 // M4 transcript→memory (MCP analog of `mega memory from-session`): deterministically
 // distill a session's RECORDED failures into `suggested` memories for the human
@@ -65,7 +63,7 @@ export async function handleFromSessionMemory(
     let suggested = 0;
     let skipped = 0;
     for (const candidate of candidates) {
-      const dedupeKeyword = `${DEDUPE_KEYWORD_PREFIX}${candidate.dedupeKey}`;
+      const dedupeKeyword = dedupeKeywordFor(candidate.dedupeKey);
       if (staged.has(dedupeKeyword)) {
         skipped += 1;
         continue;

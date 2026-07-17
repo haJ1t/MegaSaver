@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import type { FailedAttempt } from "../src/failed-attempt.js";
 import { isRecallable, memoryEntrySchema } from "../src/memory-entry.js";
 import { searchMemoryEntries } from "../src/memory-search.js";
-import { extractSessionMemories } from "../src/session-memory.js";
+import {
+  DEDUPE_KEYWORD_PREFIX,
+  dedupeKeywordFor,
+  extractSessionMemories,
+} from "../src/session-memory.js";
 
 const PROJECT_ID = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 const SESSION_ID = sessionIdSchema.parse("22222222-2222-4222-8222-222222222222");
@@ -91,6 +95,31 @@ describe("extractSessionMemories", () => {
     expect(titles).toEqual(["run auth tests", "run lint"]);
   });
 
+  it("counts collapsed duplicates in occurrences", () => {
+    const out = extractSessionMemories({
+      sessionId: SESSION_ID,
+      projectId: PROJECT_ID,
+      failedAttempts: [
+        fa(A, { failedStep: "run auth tests", errorOutput: "boom 401" }),
+        fa(B, { failedStep: "run auth tests", errorOutput: "boom 401" }),
+        fa(C, { failedStep: "run auth tests", errorOutput: "boom 401" }),
+      ],
+    });
+
+    expect(out).toHaveLength(1);
+    expect(out[0]?.occurrences).toBe(3);
+  });
+
+  it("a non-duplicated candidate has occurrences 1", () => {
+    const out = extractSessionMemories({
+      sessionId: SESSION_ID,
+      projectId: PROJECT_ID,
+      failedAttempts: [fa(A, { failedStep: "run lint", errorOutput: "no-unused-vars" })],
+    });
+
+    expect(out[0]?.occurrences).toBe(1);
+  });
+
   it("emits a decision candidate from a DECISION: marker", () => {
     const failure = fa(A, {
       failedStep: "run auth tests",
@@ -152,5 +181,14 @@ describe("extractSessionMemories", () => {
     expect(
       searchMemoryEntries([entry], { text: "auth", asOf: TS, includeUnapproved: true }),
     ).toHaveLength(1);
+  });
+});
+
+describe("dedupe keyword ledger (shared export)", () => {
+  it("exports the from-session prefix and composer", () => {
+    expect(DEDUPE_KEYWORD_PREFIX).toBe("from-session:");
+    expect(dedupeKeywordFor("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:0123456789abcdef")).toBe(
+      "from-session:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:0123456789abcdef",
+    );
   });
 });

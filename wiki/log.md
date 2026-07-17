@@ -3500,3 +3500,115 @@ no new race in the mutator refactor. `pnpm verify` green (52/52). CLEAR TO
 MERGE. Deferred follow-ups: update re-capture verification-state reset,
 code-truth.ts file split, shared 3-arg ExecGit type at bridge boundaries,
 heal-branch idempotence guard (narrow concurrent-heal duplicate-evidence).
+
+## 2026-07-17 — i14 Brain Autopilot SHIPPED (feat/brain-autopilot)
+
+The brain grows itself, safely. `runAutopilot` distills a finished session's
+failures (reusing `extractSessionMemories` verbatim) into memory candidates
+and auto-approves only the allowlisted slice that recurred ACROSS sessions,
+under a per-session cap, stamped `autopilot@1 rule=recurring-failure
+session=<id>`. Everything else stages as `approval: "suggested"` for
+`mega brain digest` to triage with single-keystroke y/n/e/s/u/a/q.
+
+Zero MemoryEntry schema change — the digest queue IS `approval === "suggested"`.
+10 TDD tasks, each with fresh implementer + fresh reviewer per task; the
+highest-risk ones (store, scoreCandidate, runAutopilot, approve widening,
+digest engine) reviewed at opus with executable mutation testing.
+
+Architect B1 catch (pre-implementation): the extractor emits candidate types
+`bug`/`test_behavior`/`decision` — NEVER `failed_attempt` (that's the source
+row). The original sketch conflated them and would have auto-approved zero
+rows forever. Allowlist retargeted to bug/test_behavior.
+
+M2 dampener (the safety model): within-session repetition never auto-approves
+— guard/task-step recorders auto-record failures in a loop, so 5x in one
+session is a retry storm, not a lesson. Only cross-session recurrence
+(`priorSessionHit`) scores "high". `ExtractedCandidate.occurrences` is a
+display-only signal, never a scoring input. Verified end-to-end through the
+real binary: a single-session 5x storm yields `auto-approved 0 · staged 1`.
+
+Gauntlet BLOCKERs caught and fixed pre-merge (each proven by execution, each
+now pinned by a regression test):
+- SECURITY (T5): `FailedAttempt.sessionId` is nullable, and the priors filter
+  used `!== sessionId` — so null-session rows counted as "a different session".
+  One null-session failure + one current-session failure with identical
+  content → auto-approved with `rule=recurring-failure`, no cross-session
+  recurrence. Reachable from the agent-facing `record_failed_attempt` (sessionId
+  optional). The unforgeable evidence string was attesting to a forgeable
+  precondition. Fixed: `=== null || === sessionId`; the grouping Map retyped
+  `Map<SessionId, …>` so the compiler now enforces the invariant.
+- DATA-LOSS (T9→T10): the digest loop's `if (!closed) await emit({kind:"quit"})`
+  guard (transcribed from the plan) fired quit 0/10 runs when the handler does
+  real disk I/O — exactly what the digest's writeDigestState handler does. So
+  `lastDigestAt` never persisted on piped runs: a torn write (approvals applied,
+  bookkeeping lost, next digest re-nudges an already-triaged backlog). The guard
+  was also semantically unreachable except on a fully drained queue. Guard
+  deleted; plan corrected so it can't be re-transcribed.
+- SECURITY (T3): `readAutopilotPolicy` returned the `DEFAULT_AUTOPILOT_POLICY`
+  singleton by reference — one in-place mutation flipped the fail-closed default
+  to enabled process-wide. Fixed with `structuredClone`; 21-test hostile-input
+  suite pins every schema constraint.
+- REVERSIBILITY (T10 digest): a human-rejected row carrying autopilot evidence
+  entered the auto-approved collapse, so pressing `n` (reject) resurrected it to
+  `suggested`. Guard `entry.approval === "approved"` was load-bearing and
+  unpinned; now pinned.
+
+Self-enforcing invariants added in review: `scoreCandidate` clamps its
+passthrough so "high" is structurally unreachable without `priorSessionHit`
+(no longer depending on the extractor hardcoding `confidence: "low"` two files
+away). approve's `memoryEntryUpdatePatchSchema` is `.strict()` and omits
+`validFrom`/`supersedesId`, so `applyApprovalFlip` cannot corrupt bi-temporal
+fields — structural, not disciplinary.
+
+Gating: new `brain-autopilot` ProFeature. status/on/off + dry-run are FREE;
+real `run` and `digest` are Pro (unentitled → upsell on stdout, exit 0, zero
+writes). `runMemoryApprove.approval` widened to admit `suggested` (undo/revoke).
+
+`pnpm verify` green (54/54). Process note: two mutation-testing agents briefly
+shared the worktree (scheduling error) and produced contradictory findings — a
+quiet-worktree re-run on the final squashed commit resolved every contested
+guard by execution (they had each named a different disjunct of one compound
+condition). Deferred follow-up: hoist the triplicated JSON-store atomic-write
+mechanic (guard-state / warm-start-state / autopilot-store) into one shared
+helper — spawned as its own task, out of scope for this branch.
+
+### Gauntlet verdict (2026-07-17)
+
+Two fresh opus reviewers against the full branch diff. **Code-reviewer: CLEAR
+TO MERGE** (no blockers, verify green). **Adversarial critic: SHIP** — no
+exploit forged the provenance stamp, corrupted data irreversibly, or broke the
+terminal.
+
+The critic's hardest target, and what it could NOT break: the `autopilot@1`
+evidence stamp is unforgeable through every agent- and user-facing surface —
+`save_memory` is `.strict()` with no evidence field, `from_session_memory`
+takes only a session id, `convert_failure_to_rule` writes a different table.
+Only internal core writes `evidence[]`. So the digest spot-review can trust
+that a row it labels auto-approved genuinely was.
+
+Fixed before merge:
+- 🟠 (code-reviewer) `autopilot@1` was a duplicated magic string — writer built
+  it inline in core, digest reader had a local `AUTOPILOT_EVIDENCE_PREFIX`.
+  Drift would silently blind the human-review window with no type error.
+  Promoted to a shared `AUTOPILOT_EVIDENCE_PREFIX` + `formatAutopilotEvidence`
+  core export, both writer and reader through it (9592450c) — the exact fix the
+  branch already made for the dedupe keyword.
+- 🟠 (critic #1) "genuinely recurred" overclaim. `priorSessionHit` fires when
+  the same agent-supplied failure text appears under two session ids; the
+  contentHash carries no session binding, so the engine can't tell a genuine
+  recurrence from an agent repeating itself. Adds no new capability (agents can
+  already `save_memory` with `approval:"approved"`) and the stamp stays
+  truthful about what it measures, but auto-approved ≠ human-vetted. Spec §8.3
+  and new §11.6 now say so; the real gate is consent + cap + reversible
+  spot-review.
+
+Deferred as spawned follow-up tasks (pre-existing / theoretical, not merge
+blockers):
+- 🟡 (critic #5) ledger-suppression: an agent can pre-write a `from-session:`
+  keyword via save_memory to silently suppress a legit autopilot capture.
+  Denial, not forgery; pre-existing property of the from-session ledger.
+- 🟡 (critic #6) policy-store TOCTOU: enabled-check and run observe two
+  separate policy reads across an await; a concurrent `autopilot off` in the
+  window still auto-approves. Single-user, theoretical. Fix = thread one
+  snapshot.
+- (code-reviewer prior) hoist the triplicated JSON-store atomic-write mechanic.

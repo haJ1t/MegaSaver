@@ -83,6 +83,8 @@ export * from "./project.js";
 export * from "./registry.js";
 export * from "./session.js";
 export {
+  DEDUPE_KEYWORD_PREFIX,
+  dedupeKeywordFor,
   type ExtractedCandidate,
   type ExtractSessionMemoriesInput,
   extractSessionMemories,
@@ -165,3 +167,18 @@ export {
   matchGuard,
   normalizeCommand,
 } from "./guard-match.js";
+export {
+  type AutopilotPolicy,
+  DEFAULT_AUTOPILOT_POLICY,
+  type DigestState,
+  readAutopilotPolicy,
+  readDigestState,
+  writeAutopilotPolicy,
+  writeDigestState,
+} from "./autopilot-store.js";
+export {
+  AUTOPILOT_EVIDENCE_PREFIX,
+  formatAutopilotEvidence,
+  type RunAutopilotResult,
+  runAutopilot,
+} from "./autopilot.js";

@@ -21,6 +21,10 @@ export type ExtractedCandidate = {
   // sourceFailureId:contentHash — the stable per-candidate key the caller uses
   // for cross-run idempotence (skip a candidate already staged from this source).
   dedupeKey: string;
+  // Within-session collapse count: how many source failures produced this
+  // candidate. Display + storm diagnostics only — NEVER a scoring input
+  // (architect M2: single-session retry storms must not look important).
+  occurrences: number;
 };
 
 export type ExtractSessionMemoriesInput = {
@@ -56,6 +60,7 @@ function candidate(
     scope: "session",
     confidence: "low",
     approval: "suggested",
+    occurrences: 1,
     ...fields,
     contentHash,
     dedupeKey: `${failureId}:${contentHash}`,
@@ -96,15 +101,31 @@ function decisionCandidate(failure: FailedAttempt): ExtractedCandidate | undefin
   return undefined;
 }
 
+// Idempotence ledger: every memory staged from an extracted candidate carries
+// `from-session:<dedupeKey>` as a keyword, so ANY writer (CLI from-session,
+// MCP from_session_memory, autopilot) can skip candidates already captured by
+// any other. Promoted from duplicated local consts (architect m6) — three
+// copies would drift.
+export const DEDUPE_KEYWORD_PREFIX = "from-session:";
+
+export function dedupeKeywordFor(dedupeKey: string): string {
+  return `${DEDUPE_KEYWORD_PREFIX}${dedupeKey}`;
+}
+
 // Pure: no I/O, no clock, no model. Deterministic over already-structured
 // FailedAttempt rows. Dedupes identical candidates within the session by
 // contentHash so N identical failures collapse to 1.
 export function extractSessionMemories(input: ExtractSessionMemoriesInput): ExtractedCandidate[] {
   const out: ExtractedCandidate[] = [];
-  const seen = new Set<string>();
+  const seen = new Map<string, ExtractedCandidate>();
   const push = (c: ExtractedCandidate | undefined): void => {
-    if (c === undefined || seen.has(c.contentHash)) return;
-    seen.add(c.contentHash);
+    if (c === undefined) return;
+    const survivor = seen.get(c.contentHash);
+    if (survivor !== undefined) {
+      survivor.occurrences += 1;
+      return;
+    }
+    seen.set(c.contentHash, c);
     out.push(c);
   };
   for (const failure of input.failedAttempts) {

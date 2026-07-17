@@ -70,6 +70,20 @@ describe("checkEntitlement", () => {
     });
   });
 
+  it("accepts the brain-autopilot feature key with tier-wide semantics", () => {
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    expect(checkEntitlement("brain-autopilot", { storeRoot: root, now, publicKey })).toEqual({
+      entitled: false,
+      reason: "no_license",
+    });
+    writeLicense(signTestLicense(privateKey, { v: 1, tier: "pro", id: "x", iat: 0, exp: null }));
+    expect(checkEntitlement("brain-autopilot", { storeRoot: root, now, publicKey })).toEqual({
+      entitled: true,
+      tier: "pro",
+      expiresAt: null,
+    });
+  });
+
   it("returns not entitled with invalid_signature for a stored forged license", () => {
     const { publicKey } = generateKeyPairSync("ed25519");
     const { privateKey: otherPriv } = generateKeyPairSync("ed25519");

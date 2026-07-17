@@ -1,4 +1,10 @@
-import { type MemoryEntryUpdatePatch, applySupersession } from "@megasaver/core";
+import {
+  type CoreRegistry,
+  type MemoryEntry,
+  type MemoryEntryUpdatePatch,
+  applySupersession,
+} from "@megasaver/core";
+import type { MemoryEntryId } from "@megasaver/shared";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage, memoryEntryNotFoundMessage } from "../../errors.js";
 import { ensureStoreReady, readStoreEnv, resolveStorePath } from "../../store.js";
@@ -7,7 +13,7 @@ import { memoryEntryIdSchema } from "./shared.js";
 
 export type RunMemoryApproveInput = {
   memoryEntryId: string;
-  approval: "approved" | "rejected";
+  approval: "approved" | "rejected" | "suggested";
   storeFlag: string | undefined;
   jsonFlag: boolean;
   cwd: string;
@@ -19,6 +25,36 @@ export type RunMemoryApproveInput = {
   stderr: (line: string) => void;
   now?: () => string;
 };
+
+export type ApprovalFlipOutcome = {
+  entry: MemoryEntry;
+  changed: boolean;
+  closedPredecessor?: { id: MemoryEntryId; title: string };
+};
+
+// The core approval flip shared by approve/reject and `mega brain digest`
+// (architect m9: the digest opens the registry ONCE and must not re-resolve
+// the store per keystroke — runMemoryApprove's signature forces per-call
+// resolveStorePath + ensureStoreReady, so the flip is extracted instead).
+// Byte-identical behavior: no-op guard, approval patch, supersession close
+// only on the approved flip.
+export function applyApprovalFlip(
+  registry: CoreRegistry,
+  existing: MemoryEntry,
+  approval: "approved" | "rejected" | "suggested",
+  updatedAt: string,
+): ApprovalFlipOutcome {
+  if (existing.approval === approval) return { entry: existing, changed: false };
+  const patch: MemoryEntryUpdatePatch = { approval, updatedAt };
+  const updated = registry.updateMemoryEntry(existing.id, patch);
+  if (approval === "approved") {
+    const result = applySupersession(registry, updated, () => updatedAt);
+    if (result.closed && result.superseded) {
+      return { entry: updated, changed: true, closedPredecessor: result.superseded };
+    }
+  }
+  return { entry: updated, changed: true };
+}
 
 export async function runMemoryApprove(input: RunMemoryApproveInput): Promise<0 | 1> {
   let rootDir: string;
@@ -57,23 +93,14 @@ export async function runMemoryApprove(input: RunMemoryApproveInput): Promise<0 
       input.stderr(cli.message);
       return cli.exitCode;
     }
-    // True no-op: re-approving an already-approved memory must not churn updatedAt.
-    if (existing.approval === input.approval) {
-      input.stdout(input.jsonFlag ? JSON.stringify(existing) : existing.id);
-      return 0;
-    }
     const updatedAt = readTestEnv("MEGA_TEST_NOW") ?? now();
-    const patch: MemoryEntryUpdatePatch = { approval: input.approval, updatedAt };
-    const updated = registry.updateMemoryEntry(parsedId, patch);
-    if (input.approval === "approved") {
-      const result = applySupersession(registry, updated, () => updatedAt);
-      if (result.closed && result.superseded) {
-        input.stderr(
-          `note: this approval closed ${result.superseded.id} ("${result.superseded.title}") — undo: mega memory reopen ${result.superseded.id}`,
-        );
-      }
+    const flip = applyApprovalFlip(registry, existing, input.approval, updatedAt);
+    if (flip.closedPredecessor !== undefined) {
+      input.stderr(
+        `note: this approval closed ${flip.closedPredecessor.id} ("${flip.closedPredecessor.title}") — undo: mega memory reopen ${flip.closedPredecessor.id}`,
+      );
     }
-    input.stdout(input.jsonFlag ? JSON.stringify(updated) : updated.id);
+    input.stdout(input.jsonFlag ? JSON.stringify(flip.entry) : flip.entry.id);
     return 0;
   } catch (err) {
     const cli = mapErrorToCliMessage(err, { kind: "memory_update" });

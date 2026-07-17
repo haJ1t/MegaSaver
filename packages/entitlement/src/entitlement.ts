@@ -3,7 +3,11 @@ import { verifyLicense } from "./license.js";
 import { MEGASAVER_PUBLIC_KEY } from "./public-key.js";
 import { readLicenseFile } from "./store.js";
 
-export type ProFeature = "savings-analytics" | "brain-portability" | "code-truth";
+export type ProFeature =
+  | "savings-analytics"
+  | "brain-portability"
+  | "code-truth"
+  | "brain-autopilot";
 
 export type EntitlementDeps = {
   storeRoot: string;
