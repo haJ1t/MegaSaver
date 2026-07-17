@@ -176,4 +176,4 @@ export {
   writeAutopilotPolicy,
   writeDigestState,
 } from "./autopilot-store.js";
-export { type ScoreSignals, scoreCandidate } from "./autopilot.js";
+export { type RunAutopilotResult, runAutopilot } from "./autopilot.js";
