@@ -1,7 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
+import { readJsonFile, writeJsonAtomic } from "./json-store.js";
 
 // Small advisory state for the Mistake Firewall (spec §3.4): mode, mutes,
 // per-session cooldown, and intercept context for the outcome loop. Pattern
@@ -53,29 +52,16 @@ function statePath(rootDir: string, projectId: string): string {
 }
 
 export function readGuardState(rootDir: string, projectId: string): GuardState | null {
-  try {
-    const raw: unknown = JSON.parse(readFileSync(statePath(rootDir, projectId), "utf8"));
-    const parsed = guardStateSchema.safeParse(raw);
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
+  const parsed = guardStateSchema.safeParse(readJsonFile(statePath(rootDir, projectId)));
+  return parsed.success ? parsed.data : null;
 }
 
 export function writeGuardState(rootDir: string, projectId: string, state: GuardState): void {
-  try {
-    const keys = Object.keys(state.sessions);
-    const kept =
-      keys.length > GUARD_STATE_MAX_SESSIONS ? keys.slice(-GUARD_STATE_MAX_SESSIONS) : keys;
-    const sessions = Object.fromEntries(
-      kept.map((k) => [k, state.sessions[k] ?? { firedIds: [], intercepts: {} }]),
-    );
-    const dir = join(rootDir, "guard");
-    mkdirSync(dir, { recursive: true });
-    const tmp = join(dir, `.${randomUUID()}.tmp`);
-    writeFileSync(tmp, JSON.stringify({ ...state, sessions }));
-    renameSync(tmp, statePath(rootDir, projectId));
-  } catch {
-    // best-effort — advisory state, never blocks a hook
-  }
+  const keys = Object.keys(state.sessions);
+  const kept =
+    keys.length > GUARD_STATE_MAX_SESSIONS ? keys.slice(-GUARD_STATE_MAX_SESSIONS) : keys;
+  const sessions = Object.fromEntries(
+    kept.map((k) => [k, state.sessions[k] ?? { firedIds: [], intercepts: {} }]),
+  );
+  writeJsonAtomic(join(rootDir, "guard"), `${projectId}.json`, { ...state, sessions });
 }

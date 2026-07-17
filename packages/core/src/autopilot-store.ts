@@ -1,7 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
+import { readJsonFile, writeJsonAtomic } from "./json-store.js";
 import { memoryTypeSchema } from "./memory-entry.js";
 
 // Store-root policy + digest state for Brain Autopilot (spec §4.1/§4.2).
@@ -42,27 +41,6 @@ const digestStateSchema = z
   .strict();
 
 export type DigestState = z.infer<typeof digestStateSchema>;
-
-function readJsonFile(path: string): unknown {
-  try {
-    return JSON.parse(readFileSync(path, "utf8")) as unknown;
-  } catch {
-    return undefined;
-  }
-}
-
-function writeJsonAtomic(storeRoot: string, fileName: string, data: unknown): void {
-  try {
-    mkdirSync(storeRoot, { recursive: true });
-    const tmp = join(storeRoot, `.${randomUUID()}.tmp`);
-    writeFileSync(tmp, JSON.stringify(data));
-    renameSync(tmp, join(storeRoot, fileName));
-  } catch {
-    // best-effort like guard-state: a lost write fails closed (autopilot
-    // stays disabled / digest header falls back to null) — corruption is
-    // what tmp+rename prevents.
-  }
-}
 
 export function readAutopilotPolicy(storeRoot: string): AutopilotPolicy {
   const parsed = autopilotPolicySchema.safeParse(readJsonFile(join(storeRoot, "autopilot.json")));
