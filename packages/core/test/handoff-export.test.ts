@@ -485,7 +485,7 @@ describe("buildHandoffPacket — assembly", () => {
     );
     const parsed = parseHandoffPacket(serializeHandoffPacket(packet), { now: NOW });
     expect(parsed.manifest).toEqual(packet.manifest);
-    expect(parsed.payload.memories).toHaveLength(1);
+    expect(parsed.payload).toEqual(packet.payload);
   });
 
   it("serialized payload carries no badge field", () => {

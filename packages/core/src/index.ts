@@ -136,8 +136,8 @@ export {
   HANDOFF_DIFF_TOKEN_CAP,
   type BuildHandoffPacketInput,
   type BuildHandoffPacketResult,
-  buildHandoffPacket,
   type HandoffPackReport,
+  buildHandoffPacket,
 } from "./handoff-export.js";
 export {
   HANDOFF_SCHEMA_VERSION,
