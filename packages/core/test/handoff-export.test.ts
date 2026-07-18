@@ -1,7 +1,13 @@
+import { parseProjectPermissions } from "@megasaver/policy";
 import { projectIdSchema, sessionIdSchema } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { type FailedAttempt, failedAttemptSchema } from "../src/failed-attempt.js";
-import { type BuildHandoffPacketInput, buildHandoffPacket } from "../src/handoff-export.js";
+import {
+  type BuildHandoffPacketInput,
+  HANDOFF_DIFF_TOKEN_CAP,
+  type HandoffDirtyState,
+  buildHandoffPacket,
+} from "../src/handoff-export.js";
 import { type MemoryEntry, memoryEntrySchema } from "../src/memory-entry.js";
 
 const NOW_ISO = "2026-07-18T12:00:00.000Z";
@@ -256,5 +262,159 @@ describe("buildHandoffPacket — redaction, manifest, report", () => {
     for (const m of packet.payload.memories) {
       expect(m).not.toHaveProperty("badge");
     }
+  });
+});
+
+function fileDiff(path: string, added: string): string {
+  return [
+    `diff --git a/${path} b/${path}`,
+    "index 1111111..2222222 100644",
+    `--- a/${path}`,
+    `+++ b/${path}`,
+    "@@ -1,1 +1,1 @@",
+    "-old",
+    `+${added}`,
+  ].join("\n");
+}
+
+function dirty(
+  diffText: string | null,
+  statusPaths: { path: string; status: string }[] = [],
+): HandoffDirtyState {
+  return { headSha: "abc1234", dirty: true, statusPaths, diffText };
+}
+
+describe("buildHandoffPacket — diff + path filter pipeline", () => {
+  it.each([".env", "config/secrets/prod.yaml", ".ssh/id_rsa"])(
+    "drops the %s hunk and lists it as excluded",
+    (secretPath) => {
+      const diffText = [fileDiff("src/app.ts", "safe change"), fileDiff(secretPath, "TOP=1")].join(
+        "\n",
+      );
+      const { packet, report } = buildHandoffPacket(baseInput({ dirtyState: dirty(diffText) }));
+      const diff = packet.payload.git?.diff;
+      expect(diff).not.toBeNull();
+      expect(diff?.text).toContain("src/app.ts");
+      expect(diff?.text).not.toContain(secretPath);
+      expect(diff?.excludedPaths).toEqual([secretPath]);
+      expect(packet.manifest.secretPathsExcluded).toBe(1);
+      expect(report.excludedPaths).toEqual([secretPath]);
+      expect(packet.manifest.counts.diffFiles).toBe(1);
+    },
+  );
+
+  it("honors project deny.read globs only via the threaded permissions object", () => {
+    const diffText = fileDiff("docs/private/notes.md", "internal");
+    const without = buildHandoffPacket(baseInput({ dirtyState: dirty(diffText) }));
+    expect(without.packet.payload.git?.diff?.text).toContain("docs/private/notes.md");
+    expect(without.report.excludedPaths).toEqual([]);
+
+    const permissions = parseProjectPermissions({ deny: { read: ["docs/private/**"] } });
+    const withPerms = buildHandoffPacket(baseInput({ dirtyState: dirty(diffText), permissions }));
+    expect(withPerms.packet.payload.git?.diff?.text).not.toContain("docs/private/notes.md");
+    expect(withPerms.report.excludedPaths).toEqual(["docs/private/notes.md"]);
+  });
+
+  it("filters changedFiles and statusPaths through the same check", () => {
+    const { packet, report } = buildHandoffPacket(
+      baseInput({
+        gitDelta: {
+          commits: [],
+          changedFiles: [
+            { path: ".env", churn: 3 },
+            { path: "src/app.ts", churn: 1 },
+          ],
+          branch: "main",
+        },
+        dirtyState: dirty(null, [
+          { path: ".aws/credentials", status: "M" },
+          { path: "src/ok.ts", status: "M" },
+        ]),
+      }),
+    );
+    expect(packet.payload.git?.changedFiles).toEqual([{ path: "src/app.ts", churn: 1 }]);
+    expect(report.excludedPaths).toEqual([".aws/credentials", ".env"]);
+    expect(packet.manifest.secretPathsExcluded).toBe(2);
+    expect(packet.payload.git?.diff).toBeNull();
+    expect(JSON.stringify(packet.payload)).not.toContain(".aws/credentials");
+  });
+
+  it("redacts secrets inside surviving hunks", () => {
+    const diffText = fileDiff("src/config.ts", `const key = "${SECRET}";`);
+    const { packet } = buildHandoffPacket(baseInput({ dirtyState: dirty(diffText) }));
+    expect(packet.payload.git?.diff?.text).not.toContain(SECRET);
+    expect(packet.manifest.redactionFindings).toBeGreaterThan(0);
+  });
+
+  it("compresses unchanged context runs", () => {
+    const diffText = [
+      "diff --git a/src/ctx.ts b/src/ctx.ts",
+      "--- a/src/ctx.ts",
+      "+++ b/src/ctx.ts",
+      "@@ -1,9 +1,9 @@",
+      "-first change",
+      "+first CHANGED",
+      " ctx1",
+      " ctx2",
+      " ctx3",
+      " ctx4",
+      " ctx5",
+      "-second change",
+      "+second CHANGED",
+    ].join("\n");
+    const { packet } = buildHandoffPacket(baseInput({ dirtyState: dirty(diffText) }));
+    expect(packet.payload.git?.diff?.text).toContain("unchanged]");
+  });
+
+  it("truncates whole trailing file chunks over the token cap", () => {
+    const bigBody = Array.from({ length: 70 }, () => `+${"x".repeat(100)}`).join("\n");
+    const bigFile = (path: string): string =>
+      [
+        `diff --git a/${path} b/${path}`,
+        `--- a/${path}`,
+        `+++ b/${path}`,
+        "@@ -1,1 +1,70 @@",
+        bigBody,
+      ].join("\n");
+    const diffText = [bigFile("src/one.ts"), bigFile("src/two.ts")].join("\n");
+    const { packet } = buildHandoffPacket(baseInput({ dirtyState: dirty(diffText) }));
+    const diff = packet.payload.git?.diff;
+    expect(diff?.truncated).toBe(true);
+    expect(diff?.text).toContain("src/one.ts");
+    expect(diff?.text).not.toContain("src/two.ts");
+    expect(packet.manifest.counts.diffFiles).toBe(1);
+    expect(diff === null || diff === undefined).toBe(false);
+    if (diff != null) {
+      expect(diff.text.length / 4).toBeLessThanOrEqual(HANDOFF_DIFF_TOKEN_CAP);
+    }
+  });
+
+  it("excludes a C-quoted non-ASCII secret path from the diff", () => {
+    const quoted = [
+      'diff --git "a/caf\\303\\251/.env" "b/caf\\303\\251/.env"',
+      "index 1111111..2222222 100644",
+      '--- "a/caf\\303\\251/.env"',
+      '+++ "b/caf\\303\\251/.env"',
+      "@@ -1,1 +1,1 @@",
+      "-old",
+      "+TOP=1",
+    ].join("\n");
+    const diffText = [fileDiff("src/app.ts", "safe change"), quoted].join("\n");
+    const { packet } = buildHandoffPacket(baseInput({ dirtyState: dirty(diffText) }));
+    const diff = packet.payload.git?.diff;
+    expect(diff?.text).toContain("src/app.ts");
+    expect(diff?.text).not.toContain("TOP=1");
+    expect(packet.manifest.secretPathsExcluded).toBe(1);
+  });
+
+  it("keeps diff null on a clean tree while git state travels", () => {
+    const { packet } = buildHandoffPacket(
+      baseInput({
+        dirtyState: { headSha: "abc1234", dirty: false, statusPaths: [], diffText: null },
+      }),
+    );
+    expect(packet.payload.git?.diff).toBeNull();
+    expect(packet.payload.git?.dirty).toBe(false);
+    expect(packet.manifest.counts.diffFiles).toBe(0);
   });
 });
