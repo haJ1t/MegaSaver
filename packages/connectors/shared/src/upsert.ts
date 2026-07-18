@@ -95,10 +95,16 @@ const HANDOFF_SENTINELS: SentinelPair = {
 
 // HANDOFF-only upsert. Like upsertContextGateBlockText it never touches the
 // legacy/CG/WS blocks — `mega handoff open`/`clear` have no ConnectorContext.
-// Empty block ⇒ remove the HANDOFF block if present.
+// Empty block ⇒ remove the HANDOFF block if present; when no block exists the
+// input is returned byte-identical (no EOL/trailing-newline normalisation), so
+// a repeated `mega handoff clear` never mutates a user file. Deliberately
+// stricter than the CG variant; parseBlock still rejects corrupted sentinels.
 export function upsertHandoffBlockText(existingContent: string, block: string): string {
   const eol = detectDominantEol(existingContent);
   const normalized = existingContent.replace(/\r\n/g, "\n");
+  if (block.length === 0 && parseBlock(normalized, HANDOFF_SENTINELS).block === null) {
+    return existingContent;
+  }
   const result = applyOptionalBlock(normalized, block, HANDOFF_SENTINELS);
   return eol === "\r\n" ? result.replace(/\n/g, "\r\n") : result;
 }

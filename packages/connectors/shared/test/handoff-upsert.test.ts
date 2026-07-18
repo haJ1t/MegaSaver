@@ -35,6 +35,8 @@ describe("HANDOFF sentinel pair", () => {
     expect(containsSentinel(`x\n${HB}\ny`)).toBe(true);
     expect(containsSentinel(`x\n${HE}\ny`)).toBe(true);
     expect(containsSentinel("<!-- MEGA SAVER:HANDOFF​ END -->")).toBe(true);
+    expect(containsSentinel("<!-- MEGA SAVER:HANDOFF⁦ BEGIN -->")).toBe(true);
+    expect(containsSentinel("<!-- MEGA SAVER:HAND­OFF BEGIN -->")).toBe(true);
   });
 });
 
@@ -66,6 +68,9 @@ describe("upsertHandoffBlockText", () => {
 
   it("empty block on content without a HANDOFF block is a no-op", () => {
     expect(upsertHandoffBlockText("# Notes\n", "")).toBe("# Notes\n");
+    expect(upsertHandoffBlockText("# Notes", "")).toBe("# Notes");
+    expect(upsertHandoffBlockText("# Notes\n\n\n", "")).toBe("# Notes\n\n\n");
+    expect(upsertHandoffBlockText("   \n", "")).toBe("   \n");
   });
 
   it("preserves CRLF line endings (dominant-EOL round-trip)", () => {
