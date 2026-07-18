@@ -53,6 +53,16 @@ describe("verificationBadgeFor", () => {
     expect(badge).toBe("verified");
   });
 
+  it("returns verified when anchored and last verification healed", () => {
+    const badge = verificationBadgeFor(
+      entry({
+        anchor: ANCHOR,
+        lastVerified: { headSha: HEAD, at: TS, result: "healed", closedByCodeTruth: false },
+      }),
+    );
+    expect(badge).toBe("verified");
+  });
+
   it("returns contradicted-by-code when a contradiction is stored", () => {
     const badge = verificationBadgeFor(
       entry({
