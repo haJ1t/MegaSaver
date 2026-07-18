@@ -146,6 +146,26 @@ describe("applyHandoffMemories", () => {
     );
   });
 
+  it("drops the packet's lastVerified stamp but keeps the anchor", () => {
+    const { registry, project } = target();
+    const stamped = mem({
+      content: "stamped fact",
+      anchor: { repoHead: "abc123", capturedAt: NOW, files: [], symbols: [] },
+      lastVerified: { headSha: "abc123", at: NOW, result: "verified", closedByCodeTruth: true },
+    });
+    const report = applyHandoffMemories({
+      registry,
+      projectId: project.id,
+      packet: packetWith([stamped]),
+      now: NOW_MS,
+      newId,
+    });
+    const [m] = registry.listMemoryEntries(project.id);
+    expect(m?.lastVerified).toBeUndefined();
+    expect(m?.anchor).toBeDefined();
+    expect(report.badges.map((b) => b.badge)).toEqual(["verified"]);
+  });
+
   it("never imports failures — memories only in v1", () => {
     const { registry, project } = target();
     const failure = {

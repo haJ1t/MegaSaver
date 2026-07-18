@@ -26,8 +26,11 @@ export interface HandoffMergeReport {
 // importBrain's safeguards, memories only (failures are inspect-only in v1).
 // Session-scoped packet entries land project-scoped with sessionId null: the
 // sender's session ids mean nothing in the receiving store (brain-import
-// precedent). Badges are recomputed locally over the CREATED rows so a
-// hostile packet can never assert "verified".
+// precedent). Badges are recomputed locally over the CREATED rows: the badge
+// FIELD cannot travel in the packet, but the OUTCOME is anchor-derived and
+// thus attacker-steerable — any schema-valid anchor reads "verified", which
+// means only "anchored, no known local contradiction" (stored-state
+// semantics, verification-badge.ts). Merge-report renderers must convey that.
 export function applyHandoffMemories(input: ApplyHandoffMemoriesInput): HandoffMergeReport {
   const project = input.registry.getProject(input.projectId);
   if (project === null) {
@@ -46,7 +49,11 @@ export function applyHandoffMemories(input: ApplyHandoffMemoriesInput): HandoffM
       skipped += 1;
       continue;
     }
-    const { supersedesId: _dropped, ...rest } = entry;
+    // lastVerified is a LOCAL audit stamp: it asserts a verification event
+    // that never happened in this repo, and closedByCodeTruth is an ownership
+    // flag the code-truth heal path trusts. The anchor stays (re-verifiable
+    // here); the stamp does not.
+    const { supersedesId: _dropped, lastVerified: _stamp, ...rest } = entry;
     const created = input.registry.createMemoryEntry({
       ...rest,
       id: memoryEntryIdSchema.parse(input.newId()),
