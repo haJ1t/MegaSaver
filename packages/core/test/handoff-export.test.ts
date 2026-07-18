@@ -8,6 +8,8 @@ import {
   type HandoffDirtyState,
   buildHandoffPacket,
 } from "../src/handoff-export.js";
+import { parseHandoffPacket, serializeHandoffPacket } from "../src/handoff-packet.js";
+import * as core from "../src/index.js";
 import { type MemoryEntry, memoryEntrySchema } from "../src/memory-entry.js";
 
 const NOW_ISO = "2026-07-18T12:00:00.000Z";
@@ -469,5 +471,35 @@ describe("buildHandoffPacket — diff + path filter pipeline", () => {
     expect(packet.payload.git?.diff).toBeNull();
     expect(packet.payload.git?.dirty).toBe(false);
     expect(packet.manifest.counts.diffFiles).toBe(0);
+  });
+});
+
+describe("buildHandoffPacket — assembly", () => {
+  it("round-trips through serialize + parse with a valid hash", () => {
+    const { packet } = buildHandoffPacket(
+      baseInput({
+        memories: [memory()],
+        failedAttempts: [failure()],
+        dirtyState: dirty(fileDiff("src/app.ts", "safe change")),
+      }),
+    );
+    const parsed = parseHandoffPacket(serializeHandoffPacket(packet), { now: NOW });
+    expect(parsed.manifest).toEqual(packet.manifest);
+    expect(parsed.payload.memories).toHaveLength(1);
+  });
+
+  it("serialized payload carries no badge field", () => {
+    const anchored = memory({
+      anchor: { repoHead: "abc1234", capturedAt: NOW_ISO, files: [], symbols: [] },
+    });
+    const { packet, report } = buildHandoffPacket(baseInput({ memories: [anchored] }));
+    const serialized = serializeHandoffPacket(packet);
+    expect(serialized).not.toContain('"badge"');
+    expect(report.badges[0]?.badge).toBe("verified");
+  });
+
+  it("is exported from the core public surface", () => {
+    expect(typeof core.buildHandoffPacket).toBe("function");
+    expect(core.HANDOFF_DIFF_TOKEN_CAP).toBe(2000);
   });
 });
