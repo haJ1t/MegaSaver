@@ -138,6 +138,14 @@ describe("parseHandoffPacket", () => {
     );
   });
 
+  it("fails closed when expiresAt is zod-valid but unparseable (NaN)", () => {
+    const idx = text.indexOf("\n");
+    const line = { ...manifestLineOf(text), expiresAt: "2026-07-18T12:00:00-99:00" };
+    const nanText = `${JSON.stringify(line)}\n${text.slice(idx + 1)}`;
+    expect(codeOf(() => parseHandoffPacket(nanText, { now: NOW }))).toBe("expired");
+    expect(diagnoseHandoffPacket(nanText, { now: NOW }).expiry).toBe("expired");
+  });
+
   it("rejects unknown schemaVersion with unsupported_version", () => {
     const future = { ...manifestLineOf(text), schemaVersion: "2", extraFutureField: true };
     const idx = text.indexOf("\n");

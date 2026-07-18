@@ -21,6 +21,8 @@ export class HandoffPacketError extends Error {
   }
 }
 
+// payloadSha256 protects ONLY the payload line; manifest fields themselves are
+// not integrity-protected — counts, expiry, and agents are sender-asserted.
 export const handoffManifestSchema = z
   .object({
     schemaVersion: z.literal(HANDOFF_SCHEMA_VERSION),
@@ -51,7 +53,9 @@ export const handoffGitSchema = z
     headSha: z.string().nullable(),
     dirty: z.boolean(),
     commits: z.array(z.object({ sha: z.string(), subject: z.string(), date: z.string() }).strict()),
-    changedFiles: z.array(z.object({ path: z.string(), churn: z.number() }).strict()),
+    changedFiles: z.array(
+      z.object({ path: z.string(), churn: z.number().int().nonnegative() }).strict(),
+    ),
     diff: z
       .object({
         text: z.string(),
@@ -99,7 +103,9 @@ export function serializeHandoffPacket(packet: HandoffPacket): string {
 
 export function parseHandoffPacket(text: string, opts: { now: number }): HandoffPacket {
   const parsed = parseBundle(handoffFrame, text);
-  if (Date.parse(parsed.manifest.expiresAt) <= opts.now) {
+  // Inverted comparison so an unparseable expiresAt (Date.parse → NaN, which zod
+  // datetime() can let through) fails CLOSED as expired instead of never expiring.
+  if (!(Date.parse(parsed.manifest.expiresAt) > opts.now)) {
     throw new HandoffPacketError(
       "expired",
       `Packet expired at ${parsed.manifest.expiresAt} — ask the sender to re-pack, or run mega handoff clear.`,
@@ -114,6 +120,8 @@ export interface HandoffDiagnostics {
   hash: "ok" | "mismatch" | "skipped";
   expiry: "ok" | "expired" | "skipped";
   payloadSchema: "ok" | "malformed" | "skipped";
+  // Untrusted whenever hash !== "ok": diagnose surfaces whatever it could parse
+  // for display, so consumers must only render these fields, never apply them.
   parsedManifest?: HandoffManifest;
   parsedPayload?: HandoffPayload;
 }
@@ -146,7 +154,8 @@ export function diagnoseHandoffPacket(text: string, opts: { now: number }): Hand
       diagnostics.parsedManifest = manifestResult.data;
       diagnostics.hash =
         sha256Hex(payloadRaw) === manifestResult.data.payloadSha256 ? "ok" : "mismatch";
-      diagnostics.expiry = Date.parse(manifestResult.data.expiresAt) <= opts.now ? "expired" : "ok";
+      // Same fail-closed inversion as parseHandoffPacket: NaN expiresAt → "expired".
+      diagnostics.expiry = Date.parse(manifestResult.data.expiresAt) > opts.now ? "ok" : "expired";
     }
   }
 
