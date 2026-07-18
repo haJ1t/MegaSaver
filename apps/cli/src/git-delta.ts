@@ -122,9 +122,10 @@ export function gatherDirtyState(
     if (record === "") continue;
     const state = record.slice(0, 2);
     const path = record.slice(3);
-    // rename/copy records carry the OLD path in the next NUL field; the
-    // record's own path is already the NEW one downstream filters must match
-    if (state.startsWith("R") || state.startsWith("C")) skipOldPath = true;
+    // rename/copy records (either XY column — staged "R " or worktree " R")
+    // carry the OLD path in the next NUL field; the record's own path is
+    // already the NEW one downstream filters must match
+    if (state.includes("R") || state.includes("C")) skipOldPath = true;
     if (path === "") continue;
     statusPaths.push({ path, status: state });
   }

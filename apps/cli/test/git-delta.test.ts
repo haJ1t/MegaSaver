@@ -132,6 +132,19 @@ describe("gatherDirtyState", () => {
     ]);
   });
 
+  it("skips the old-path field for worktree-side renames too", () => {
+    const state = gatherDirtyState(
+      "/repo",
+      fakeGit({
+        "status --porcelain": " R new.ts\0old.ts\0",
+        "rev-parse HEAD": "abc1234def\n",
+        "diff --cached": "",
+        diff: "diff --git a unstaged\n",
+      }),
+    );
+    expect(state?.statusPaths).toEqual([{ path: "new.ts", status: " R" }]);
+  });
+
   it("unborn HEAD yields null headSha; whitespace-only diff normalizes to null", () => {
     const state = gatherDirtyState(
       "/repo",
