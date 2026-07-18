@@ -10,9 +10,21 @@ export interface HandoffBlockFields {
   expiresAt: string;
 }
 
+// Stricter than normalizeEol (which keeps lone \r): a field's "\r\r\n" would
+// survive it as "\r\n" and re-expand to literal \r\r\n bytes when
+// upsertHandoffBlockText converts \n back to \r\n for a CRLF-dominant file.
+const toLf = (value: string): string => value.replace(/\r\n?/g, "\n");
+
 // Render-time guard on EVERY interpolated field: open consumes untrusted
 // packets, so pack-time sentinel guarding never runs on a hostile path.
-export function renderHandoffBlockText(fields: HandoffBlockFields): string {
+export function renderHandoffBlockText(rawFields: HandoffBlockFields): string {
+  const fields: HandoffBlockFields = {
+    resumeInstructions: toLf(rawFields.resumeInstructions),
+    summaryText: toLf(rawFields.summaryText),
+    gitLine: rawFields.gitLine === null ? null : toLf(rawFields.gitLine),
+    diffText: rawFields.diffText === null ? null : toLf(rawFields.diffText),
+    expiresAt: toLf(rawFields.expiresAt),
+  };
   for (const [name, value] of Object.entries(fields)) {
     if (typeof value === "string" && containsSentinel(value)) {
       throw new ConnectorError(

@@ -6,6 +6,7 @@ import {
 } from "../src/constants.js";
 import { ConnectorError } from "../src/errors.js";
 import { type HandoffBlockFields, renderHandoffBlockText } from "../src/handoff-block.js";
+import { upsertHandoffBlockText } from "../src/upsert.js";
 
 const FIELDS: HandoffBlockFields = {
   resumeInstructions: "You are resuming a task handed off from claude-code on project demo.",
@@ -84,6 +85,24 @@ describe("renderHandoffBlockText", () => {
     expect(() =>
       renderHandoffBlockText({ ...FIELDS, diffText: `+${MEGA_SAVER_WS_BLOCK_START}` }),
     ).toThrow(ConnectorError);
+  });
+
+  it("normalizes CRLF and lone-CR field text so the block carries no \\r", () => {
+    const block = renderHandoffBlockText({
+      ...FIELDS,
+      diffText: "diff --git a/a b/a\r\n--- a/a\r\n+++ b/a\r\n@@ -1 +1 @@\r\n-old\r\r\n+new",
+    });
+    expect(block).not.toContain("\r");
+  });
+
+  it("never writes \\r\\r\\n when upserted into a CRLF-dominant file", () => {
+    const block = renderHandoffBlockText({
+      ...FIELDS,
+      diffText: "diff --git a/a b/a\r\n--- a/a\r\n+++ b/a\r\n@@ -1 +1 @@\r\n-old\r\r\n+new",
+    });
+    const result = upsertHandoffBlockText("# AGENTS\r\n\r\nhuman text\r\n", block);
+    expect(result).not.toContain("\r\r\n");
+    expect(result).toContain("\r\n");
   });
 
   it("rejects a zero-width-obfuscated sentinel in the summary", () => {
