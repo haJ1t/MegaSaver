@@ -22,7 +22,17 @@ export function serializeBundle<M, P>(
   bundle: { manifest: M; payload: P },
 ): string {
   const manifest = cfg.manifestSchema.parse(bundle.manifest);
-  return `${JSON.stringify(manifest)}\n${JSON.stringify(bundle.payload)}`;
+  const payloadRaw = JSON.stringify(bundle.payload);
+  // Fail-closed self-check: the bytes we write must be the bytes the manifest
+  // hash covers, so a stale caller-supplied sha can never produce a bundle that
+  // fails its own parse.
+  if (sha256Hex(payloadRaw) !== cfg.payloadShaOf(manifest)) {
+    throw cfg.makeError(
+      "hash_mismatch",
+      "Bundle manifest payloadSha256 does not match the serialized payload.",
+    );
+  }
+  return `${JSON.stringify(manifest)}\n${payloadRaw}`;
 }
 
 export function parseBundle<M, P>(

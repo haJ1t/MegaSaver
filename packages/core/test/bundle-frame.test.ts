@@ -78,6 +78,13 @@ describe("serializeBundle", () => {
       serializeBundle(frame, { manifest: { ...manifest, note: "" }, payload }),
     ).toThrow();
   });
+
+  it("rejects a manifest sha that does not cover the payload", () => {
+    const stale = { ...manifest, payloadSha256: sha256Hex("stale payload bytes") };
+    expect(codeOf(() => serializeBundle(frame, { manifest: stale, payload }))).toBe(
+      "hash_mismatch",
+    );
+  });
 });
 
 describe("parseBundle", () => {
@@ -125,6 +132,13 @@ describe("parseBundle", () => {
     const m = { ...manifest, payloadSha256: sha256Hex(badPayload) };
     expect(codeOf(() => parseBundle(frame, `${JSON.stringify(m)}\n${badPayload}`))).toBe(
       "malformed",
+    );
+  });
+
+  it("checks the hash before parsing payload JSON: bad JSON + wrong sha is hash_mismatch", () => {
+    const badPayload = "{not json";
+    expect(codeOf(() => parseBundle(frame, `${JSON.stringify(manifest)}\n${badPayload}`))).toBe(
+      "hash_mismatch",
     );
   });
 

@@ -133,6 +133,22 @@ export {
   importBrain,
 } from "./brain-import.js";
 export {
+  HANDOFF_SCHEMA_VERSION,
+  HandoffPacketError,
+  type HandoffDiagnostics,
+  type HandoffGit,
+  type HandoffManifest,
+  type HandoffPacket,
+  type HandoffPacketErrorCode,
+  type HandoffPayload,
+  diagnoseHandoffPacket,
+  handoffGitSchema,
+  handoffManifestSchema,
+  handoffPayloadSchema,
+  parseHandoffPacket,
+  serializeHandoffPacket,
+} from "./handoff-packet.js";
+export {
   DEFAULT_GUARD_STATE,
   GUARD_STATE_MAX_SESSIONS,
   type GuardState,
