@@ -27,6 +27,13 @@ export {
 } from "./warm-start-event.js";
 
 export {
+  appendHandoffEvent,
+  handoffEventSchema,
+  readHandoffEvents,
+  type HandoffEvent,
+} from "./handoff-event.js";
+
+export {
   sessionTokenSaverStatsSchema,
   type SessionTokenSaverStats,
   overlaySessionTokenSaverStatsSchema,

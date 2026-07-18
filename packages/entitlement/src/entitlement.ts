@@ -7,7 +7,8 @@ export type ProFeature =
   | "savings-analytics"
   | "brain-portability"
   | "code-truth"
-  | "brain-autopilot";
+  | "brain-autopilot"
+  | "hot-handoff";
 
 export type EntitlementDeps = {
   storeRoot: string;
