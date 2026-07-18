@@ -1,7 +1,7 @@
 import { estimateTokens } from "@megasaver/output-filter";
 import type { ProjectPermissions } from "@megasaver/policy";
 import type { ProjectId, SessionId } from "@megasaver/shared";
-import { makeRedactor, redactFailure, redactMemory } from "./brain-export.js";
+import { type Redactor, makeRedactor, redactFailure, redactMemory } from "./brain-export.js";
 import { sha256Hex } from "./bundle-frame.js";
 import type { FailedAttempt } from "./failed-attempt.js";
 import {
@@ -62,14 +62,9 @@ const FAILURE_CAP = 10;
 
 type HandoffGit = HandoffPayload["git"];
 
-function selectMemories(input: BuildHandoffPacketInput, nowIso: string): MemoryEntry[] {
-  return input.memories
-    .filter(
-      (m) =>
-        isRecallable(m, nowIso) &&
-        !m.stale &&
-        (m.scope === "project" || (input.sessionId !== null && m.sessionId === input.sessionId)),
-    )
+function selectMemories(memories: MemoryEntry[], nowIso: string): MemoryEntry[] {
+  return memories
+    .filter((m) => isRecallable(m, nowIso) && !m.stale)
     .sort(
       (a, b) =>
         effectiveConfidence(b, nowIso) - effectiveConfidence(a, nowIso) || a.id.localeCompare(b.id),
@@ -84,14 +79,20 @@ function selectFailures(input: BuildHandoffPacketInput): FailedAttempt[] {
     .slice(0, FAILURE_CAP);
 }
 
-function buildGit(input: BuildHandoffPacketInput): { git: HandoffGit; diffFiles: number } {
+// gitDelta and dirtyState can degrade independently; one null with the other
+// present still reads degradedGit=false with a partially-filled git object —
+// by design until T10 wires real gathering, where both come from one probe.
+function buildGit(
+  input: BuildHandoffPacketInput,
+  r: Redactor,
+): { git: HandoffGit; diffFiles: number } {
   if (input.gitDelta === null && input.dirtyState === null) return { git: null, diffFiles: 0 };
   return {
     git: {
       branch: input.gitDelta?.branch ?? null,
       headSha: input.dirtyState?.headSha ?? null,
       dirty: input.dirtyState?.dirty ?? false,
-      commits: input.gitDelta?.commits ?? [],
+      commits: (input.gitDelta?.commits ?? []).map((c) => ({ ...c, subject: r.text(c.subject) })),
       changedFiles: input.gitDelta?.changedFiles ?? [],
       diff: null,
     },
@@ -107,9 +108,15 @@ export function buildHandoffPacket(input: BuildHandoffPacketInput): BuildHandoff
   const r = makeRedactor();
   const excluded = new Set<string>();
 
-  const selected = selectMemories(input, nowIso);
+  // Scope BEFORE the brief, not just the payload: assembleWarmStartBrief only
+  // filters recallable/stale, so an unscoped list would leak foreign-session
+  // content into taskSummary.text while payload.memories correctly drops it.
+  const scoped = input.memories.filter(
+    (m) => m.scope === "project" || (input.sessionId !== null && m.sessionId === input.sessionId),
+  );
+  const selected = selectMemories(scoped, nowIso);
   const failures = selectFailures(input);
-  const { git, diffFiles } = buildGit(input);
+  const { git, diffFiles } = buildGit(input, r);
 
   // Explicit mode: never let selectWarmStartMode auto-pick — a handoff is
   // packed minutes after working and lastSeenAt<4h would collapse the brief
@@ -123,9 +130,9 @@ export function buildHandoffPacket(input: BuildHandoffPacketInput): BuildHandoff
     lastSeenAt: null,
     reonboardUnlocked: true,
     timeless: true,
-    memories: input.memories,
+    memories: scoped,
     rules: input.rules,
-    failedAttempts: input.failedAttempts,
+    failedAttempts: failures,
     gitDelta: input.gitDelta,
   });
   const summaryText = r.text(brief.text);

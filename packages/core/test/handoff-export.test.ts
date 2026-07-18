@@ -99,12 +99,14 @@ describe("buildHandoffPacket — memory selection", () => {
     const contents = packet.payload.memories.map((m) => m.content);
     expect(contents).toContain("session insight");
     expect(contents).not.toContain("other session");
+    expect(JSON.stringify(packet)).not.toContain("other session");
   });
 
   it("excludes all session memories when no session resolved", () => {
     const mine = memory({ scope: "session", sessionId: SESSION_ID, content: "session insight" });
     const { packet, report } = buildHandoffPacket(baseInput({ memories: [mine] }));
     expect(packet.payload.memories).toEqual([]);
+    expect(JSON.stringify(packet)).not.toContain("session insight");
     expect(report.noOpenSession).toBe(true);
   });
 
@@ -142,6 +144,19 @@ describe("buildHandoffPacket — failures", () => {
     expect(packet.payload.failures[0]?.task).toBe("newer");
     expect(packet.payload.failures.map((f) => f.task)).not.toContain("older");
   });
+
+  it("keeps resolved failures out of the brief's do-not-retry section", () => {
+    const { packet } = buildHandoffPacket(
+      baseInput({
+        failedAttempts: [
+          failure({ task: "open one" }),
+          failure({ task: "resolved one", resolution: "fixed by pinning node" }),
+        ],
+      }),
+    );
+    expect(packet.payload.taskSummary.text).toContain("tried: open one");
+    expect(packet.payload.taskSummary.text).not.toContain("resolved one");
+  });
 });
 
 describe("buildHandoffPacket — task summary", () => {
@@ -165,6 +180,19 @@ describe("buildHandoffPacket — redaction, manifest, report", () => {
     expect(JSON.stringify(packet)).not.toContain(SECRET);
     expect(packet.manifest.redactionFindings).toBeGreaterThanOrEqual(3);
     expect(report.redactionFindings).toBe(packet.manifest.redactionFindings);
+  });
+
+  it("redacts secrets in commit subjects", () => {
+    const { packet } = buildHandoffPacket(
+      baseInput({
+        gitDelta: {
+          commits: [{ sha: "abc1234", subject: `oops leaked ${SECRET}`, date: NOW_ISO }],
+          changedFiles: [],
+          branch: "main",
+        },
+      }),
+    );
+    expect(JSON.stringify(packet)).not.toContain(SECRET);
   });
 
   it("writes manifest identity, expiry, and counts", () => {
