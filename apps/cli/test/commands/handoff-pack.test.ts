@@ -86,7 +86,7 @@ describe("handoff shared — parseExpires", () => {
   });
 
   it("rejects malformed values with null", () => {
-    for (const bad of ["0h", "h", "12", "1w", "-1h", "1.5h", "", "01h", "1H"]) {
+    for (const bad of ["0h", "h", "12", "1w", "-1h", "1.5h", "", "01h", "1H", "999999999999h"]) {
       expect(parseExpires(bad, NOW_MS)).toBeNull();
     }
   });
@@ -302,5 +302,31 @@ describe("runHandoffPack — entitled", () => {
     const { code } = run({ outPath: "s.megahandoff" });
     expect(await code).toBe(0);
     expect(out.join("\n")).toContain("no open session");
+  });
+
+  it("unwritable --out: exit 1, no packet, no event, no leftover tmp", async () => {
+    const { code } = run({ outPath: "nonexistent-dir/x.megahandoff" });
+    expect(await code).toBe(1);
+    expect(err.join("\n")).toContain("cannot write packet");
+    expect(packedFiles(projectRoot)).toEqual([]);
+    expect(readdirSync(projectRoot).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+    expect(readHandoffEvents({ root: storeRoot }, PROJECT_ID)).toEqual([]);
+  });
+
+  it("--dry-run --json emits the report with badges, writes nothing", async () => {
+    const { code } = run({ dryRun: true, json: true });
+    expect(await code).toBe(0);
+    const report = JSON.parse(out.join("\n")) as {
+      status: string;
+      counts: { memories: number };
+      badges: { memoryId: string; badge: string }[];
+    };
+    expect(report.status).toBe("dry-run");
+    expect(report.counts.memories).toBe(1);
+    expect(report.badges).toEqual([
+      { memoryId: "22222222-2222-4222-8222-222222222222", badge: expect.any(String) },
+    ]);
+    expect(packedFiles(projectRoot)).toEqual([]);
+    expect(readHandoffEvents({ root: storeRoot }, PROJECT_ID)).toEqual([]);
   });
 });

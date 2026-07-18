@@ -24,7 +24,9 @@ export function gate(input: HandoffGateInput): boolean {
   return true;
 }
 
-const EXPIRES_PATTERN = /^([1-9]\d*)([hd])$/;
+// Count capped at 5 digits (99999h ≈ 11.4y): unbounded counts overflow the
+// Date range and toISOString throws instead of a clean flag error.
+const EXPIRES_PATTERN = /^([1-9]\d{0,4})([hd])$/;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
