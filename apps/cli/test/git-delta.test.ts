@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type ExecGit, gatherGitDelta } from "../src/git-delta.js";
+import { type ExecGit, gatherDirtyState, gatherGitDelta } from "../src/git-delta.js";
 
 const SINCE = "2026-07-01T00:00:00.000Z";
 
@@ -72,6 +72,71 @@ describe("gatherGitDelta", () => {
   it("returns null when git is unavailable", () => {
     expect(
       gatherGitDelta("/repo", SINCE, () => {
+        throw new Error("ENOENT");
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("gatherDirtyState", () => {
+  it("reports a dirty tree with status paths and combined diff", () => {
+    const state = gatherDirtyState(
+      "/repo",
+      fakeGit({
+        "status --porcelain": " M src/a.ts\n?? notes.md\n",
+        "rev-parse HEAD": "abc1234def\n",
+        "diff --cached": "diff --git b staged\n",
+        diff: "diff --git a unstaged\n",
+      }),
+    );
+    expect(state).toEqual({
+      headSha: "abc1234def",
+      dirty: true,
+      statusPaths: [
+        { path: "src/a.ts", status: "M" },
+        { path: "notes.md", status: "??" },
+      ],
+      diffText: "diff --git a unstaged\n\ndiff --git b staged\n",
+    });
+  });
+
+  it("clean tree: no diff calls, diffText null", () => {
+    const state = gatherDirtyState(
+      "/repo",
+      fakeGit({
+        "status --porcelain": "",
+        "rev-parse HEAD": "abc1234def\n",
+      }),
+    );
+    expect(state).toEqual({
+      headSha: "abc1234def",
+      dirty: false,
+      statusPaths: [],
+      diffText: null,
+    });
+  });
+
+  it("rename lines keep the new path; unborn HEAD yields null headSha", () => {
+    const state = gatherDirtyState(
+      "/repo",
+      fakeGit({
+        "status --porcelain": "R  old.ts -> new.ts\n",
+        "rev-parse HEAD": new Error("unborn"),
+        "diff --cached": "",
+        diff: "",
+      }),
+    );
+    expect(state).toEqual({
+      headSha: null,
+      dirty: true,
+      statusPaths: [{ path: "new.ts", status: "R" }],
+      diffText: "\n",
+    });
+  });
+
+  it("returns null when not a git repo", () => {
+    expect(
+      gatherDirtyState("/repo", () => {
         throw new Error("ENOENT");
       }),
     ).toBeNull();

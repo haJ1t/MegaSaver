@@ -201,3 +201,4 @@ export {
   runAutopilot,
 } from "./autopilot.js";
 export { type VerificationBadge, verificationBadgeFor } from "./verification-badge.js";
+export type { HandoffDirtyState } from "./handoff-export.js";

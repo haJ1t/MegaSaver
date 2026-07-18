@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import type { GitDelta } from "@megasaver/core";
+import type { GitDelta, HandoffDirtyState } from "@megasaver/core";
 
 export type ExecGit = (args: string[], cwd: string) => string;
 
@@ -101,4 +101,33 @@ export function gatherGitDelta(
   }
 
   return { commits, changedFiles, branch };
+}
+
+export function gatherDirtyState(
+  cwd: string,
+  execGit: ExecGit = defaultExecGit,
+): HandoffDirtyState | null {
+  const status = tryGit(execGit, ["status", "--porcelain"], cwd);
+  if (status === null) return null;
+
+  const statusPaths: HandoffDirtyState["statusPaths"] = [];
+  for (const line of status.split("\n")) {
+    if (line.trim() === "") continue;
+    const state = line.slice(0, 2).trim();
+    const rest = line.slice(3);
+    // porcelain rename lines read "R  old -> new"; keep the path that exists
+    // so downstream evaluatePathRead filtering matches real files
+    const arrow = rest.indexOf(" -> ");
+    const path = (arrow === -1 ? rest : rest.slice(arrow + 4)).trim();
+    if (path === "") continue;
+    statusPaths.push({ path, status: state });
+  }
+
+  const headSha = tryGit(execGit, ["rev-parse", "HEAD"], cwd)?.trim() ?? null;
+  const dirty = statusPaths.length > 0;
+  const diffText = dirty
+    ? `${tryGit(execGit, ["diff"], cwd) ?? ""}\n${tryGit(execGit, ["diff", "--cached"], cwd) ?? ""}`
+    : null;
+
+  return { headSha, dirty, statusPaths, diffText };
 }
