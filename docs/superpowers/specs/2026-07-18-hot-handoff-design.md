@@ -7,8 +7,18 @@
   `upsertHandoffBlockText`, render-time sentinel guard, badge recompute,
   payload-derived `inspect`, explicit `WarmStartInput`, `evaluatePathRead`
   path filtering incl. `changedFiles`, KNOWN_TARGETS resolution, dry-run
-  gate semantics). Architect pass pending per HIGH chain; user spec review
-  pending.
+  gate semantics). User approved spec 2026-07-18. Architect pass (fresh
+  context, xhigh) returned REVISE — B1 (deny.read globs require a threaded
+  `permissions` object; spec's call shape provably didn't apply them),
+  M1 (resolved session was never consumed; session-scoped memories now
+  travel and merge forces `sessionId: null` + `scope: "project"`),
+  M2 (open creates missing target file), M3 (open-side re-redaction),
+  m1 (shared `bundle-frame.ts` instead of duplicated parse ordering),
+  m2 (self-discounting expiry footer), m3 (`--merge` memories-only v1),
+  m4 (§10 write-suppression test table), m5 (two-state upsert wording) —
+  ALL integrated same day. Architect's own note: fixes fully enumerated,
+  no second architect pass warranted beyond integration. Next gate:
+  writing-plans.
 - **Risk:** HIGH (§12 — connector core path, public CLI flags, writes into
   target agent config files, secret-exfiltration surface). Architect design
   pass + code-reviewer AND critic (separate passes) required before merge.
@@ -150,9 +160,11 @@ pure `runHandoff(input): Promise<0|1>` with injected
    `apps/cli/src/commands/warmup.ts`). Session rule: latest open session
    across ALL agents; `--from` is manifest metadata only, never a session
    filter (`pickLatestOpenSession`'s agentId filtering does not apply
-   here). No open session → pack proceeds with project-scoped content only
-   (memories, rules, failures, git are project-level); the report notes
-   "no open session".
+   here). The resolved session is CONSUMED in step 5: recallable
+   session-scoped memories with `sessionId === resolved session's id` join
+   the packet (this is the "this task, right now" content the feature
+   exists for). No open session → pack proceeds with project-scoped
+   content only; the report notes "no open session".
 3. **Git state.** `gatherGitDelta` (`apps/cli/src/git-delta.ts`, as-is) for
    branch/commits/changed-files, plus NEW `gatherDirtyState` in the same
    file, same injectable `ExecGit` convention (`execFileSync`, 3000 ms
@@ -163,25 +175,37 @@ pure `runHandoff(input): Promise<0|1>` with injected
    noted in the report, never fatal.
 4. **Diff + path filter (ordered, all steps mandatory):**
    a. split the patch into per-file hunks;
-   b. drop every hunk whose path fails
-      `evaluatePathRead({ path, project })` (`@megasaver/policy` public
-      export; applies the LOCKED secret-path denylist internally plus the
-      project's `deny.read` globs; `project` = the packing project's id) —
-      count unique excluded paths into `secretPathsExcluded`, list into
-      `diff.excludedPaths`. Rationale: a committed `.env` hunk defeats the
-      17 regex detectors; the path denylist is the reliable signal.
+   b. load `ProjectPermissions` ONCE per pack from the packing project's
+      root via `loadProjectPermissions`
+      (`packages/context-gate/src/load-project-permissions.ts`; the CLI
+      loads it and threads it into the pure `buildHandoffPacket` —
+      injected-deps command shape). A present-but-malformed
+      `permissions.yaml` ABORTS the pack, fail-closed (context-gate
+      `run.ts` I3 precedent). Then drop every hunk whose path fails
+      `evaluatePathRead({ path, project, permissions })` — the
+      `permissions` object MUST be passed on every call: the LOCKED
+      secret-path denylist is internal, but the project's `deny.read`
+      globs apply ONLY via the threaded `permissions` object (the
+      `project` field is a vestigial label the function never reads —
+      `context-gate/src/read.ts:122`). Count unique excluded paths into
+      `secretPathsExcluded`, list into `diff.excludedPaths`. Rationale: a
+      committed `.env` hunk defeats the 17 regex detectors; the path
+      denylist + user deny globs are the reliable signal.
       `SECRET_PATH_PATTERNS` itself is not on policy's public surface and
       is not imported directly;
-   c. apply the same `evaluatePathRead` check to `changedFiles[]` and every
-      porcelain-derived path list — an excluded path appears nowhere in
-      the packet (existence disclosure is a leak too);
+   c. apply the same `evaluatePathRead` check (same `permissions` object)
+      to `changedFiles[]` and every porcelain-derived path list — an
+      excluded path appears nowhere in the packet (existence disclosure is
+      a leak too);
    d. `redactWithFindings` over the surviving text;
    e. `compressDiff` (`packages/output-filter/src/compress/diff.ts`);
    f. token cap via `estimateTokens`; on overflow truncate whole trailing
       hunks, set `diff.truncated`.
 5. **Memories.** `listMemoryEntries(projectId)` →
-   `isRecallable(m, now) && !stale`, ranked by `effectiveConfidence`, cap 20
-   (the `buildConnectorContext` cap). Badges via `verificationBadgeFor`
+   `isRecallable(m, now) && !stale`, PLUS recallable session-scoped
+   entries whose `sessionId` equals the step-2 resolved session (project
+   and session entries compete in the same ranking), ranked by
+   `effectiveConfidence`, cap 20 (the `buildConnectorContext` cap). Badges via `verificationBadgeFor`
    **hoisted from `packages/mcp-bridge` to
    `packages/core/src/verification-badge.ts`** (it depends only on
    `MemoryEntry`; mcp-bridge re-imports from core — no behavior change) —
@@ -245,10 +269,28 @@ holds by construction, not by filtering.
      todos, do-not-retry failures);
    - working-tree diff excerpt (`git.diff` — the only content the brief
      does not carry) + branch/headSha/dirty line;
-   - `Expires: <iso>` footer.
-   Structured `failures[]` and `memories[]` are NOT re-rendered in the
-   block (the brief covers them); they exist in the payload for `--merge`
-   and `inspect`.
+   - footer as a self-discounting INSTRUCTION, not a bare date (expiry is
+     fail-closed on open only; once applied the block would otherwise feed
+     the agent forever): `Expires: <iso> — if the current date is past
+     this, disregard this handoff and suggest \`mega handoff clear\`.`
+   Structured `memories[]` exist in the payload for `--merge` and
+   `inspect`; structured `failures[]` are for `inspect` ONLY in v1
+   (`--merge` does not import failures — see step 6). Neither is
+   re-rendered in the block (the brief covers them).
+   **Missing target file:** the packet's `targetAgent` is an explicit
+   target, so open CREATES the file when absent (fresh machine / fresh
+   clone is the primary cross-machine case): mkdir the dirname, write a
+   file containing only the HANDOFF block, seeding the target's `header`
+   frontmatter first if the `ConnectorTarget` defines one (cursor
+   frontmatter contract, conventions §7). Warmup's "'all' never creates"
+   rule applies only to implicit target fans, not here.
+   **Open-side redaction (untrusted path, same principle as the sentinel
+   guard):** before rendering, run `redactWithFindings` over every
+   interpolated field — a hostile, tampered, or older-weaker-redaction
+   packet must not persist raw secrets into a user file that routinely
+   gets committed. Write the redacted text; warn in the open report when
+   findings > 0 (a legitimately packed packet reports 0, happy path
+   unchanged).
    **Render-time sentinel guard (mandatory):** `renderHandoffBlockText`
    runs `containsSentinel` over EVERY field it interpolates (resume text,
    summary, diff text — multi-line and schema-unconstrained, so a bare
@@ -262,22 +304,26 @@ holds by construction, not by filtering.
    - NEW standalone `upsertHandoffBlockText(existingContent, block)`
      following the `upsertContextGateBlockText` precedent (upsert.ts:82 —
      it exists precisely because the GUI path has no `ConnectorContext`).
-     It touches ONLY the HANDOFF sentinel pair with tri-state semantics
-     (undefined = untouched, `""` = remove, text = upsert) and leaves the
-     legacy + CG + WS blocks byte-identical. The full `upsertBlock`
+     Two-state like its precedent (`""` = remove, text = upsert;
+     "untouched" is expressed by not calling it). It touches ONLY the
+     HANDOFF sentinel pair and leaves the legacy + CG + WS blocks
+     byte-identical. The full `upsertBlock`
      (which requires a `ConnectorContext` and unconditionally re-renders
      the other managed blocks) is NOT used by open/clear;
    - `projectionPreflight` extended with one more `parseBlock` call for the
      new pair;
    - file IO exclusively through `writeTargetFile` (atomic temp+rename,
      symlink-refusing) — the HIGH-risk destination-write property.
-6. **Memory merge — opt-in `--merge`.** Clone of `importBrain` safeguards
+6. **Memory merge — opt-in `--merge`, memories ONLY in v1** (failures are
+   inspect-only; no failure import). Clone of `importBrain` safeguards
    (`packages/core/src/brain-import.ts`), all load-bearing: remint ids,
-   force `approval: "suggested"`, provenance evidence
-   `handoff:<sourceProject.name>`, `stripReservedKeywords` (blocks forged
-   `from-session:` ledger keywords), content-keyed dedupe, merge-only,
-   idempotent. Badges shown in the merge report are recomputed locally
-   (§4.2). Default open = block only.
+   force `approval: "suggested"`, force `sessionId: null` and
+   `scope: "project"` (session-scoped packet entries land project-scoped
+   on the receiving side — `brain-import.ts:54-56` precedent), provenance
+   evidence `handoff:<sourceProject.name>`, `stripReservedKeywords`
+   (blocks forged `from-session:` ledger keywords), content-keyed dedupe,
+   merge-only, idempotent. Badges shown in the merge report are recomputed
+   locally (§4.2). Default open = block only.
 7. **`mega handoff clear [--target <id>]`** — removes the HANDOFF block via
    `upsertHandoffBlockText(existing, "")`. No `--target` = clear the block
    from every `KNOWN_TARGETS` file present in the project root (warmup
@@ -320,7 +366,8 @@ exit 0, uniform with every gated command.
 
 | File | Content |
 |---|---|
-| `packages/core/src/handoff-packet.ts` | schemas, `serializeHandoffPacket`, `parseHandoffPacket`, `HandoffPacketError`, `HANDOFF_SCHEMA_VERSION` |
+| `packages/core/src/bundle-frame.ts` | NEW shared parametrized two-line-bundle frame (kind literal, version const, manifest/payload schemas, error class in; parse/serialize + version→schema→hash ordering out) — extracted from `brain-bundle.ts`, consumed by BOTH brain-bundle and handoff-packet so the security-relevant parse ordering has one copy (`5f8bbdb8` shared-helper precedent); brain-bundle's public surface unchanged |
+| `packages/core/src/handoff-packet.ts` | handoff schemas over the shared frame + expiry check after the frame returns, `serializeHandoffPacket`, `parseHandoffPacket`, `HandoffPacketError`, `HANDOFF_SCHEMA_VERSION` |
 | `packages/core/src/handoff-export.ts` | pure `buildHandoffPacket` (registry data + git state + now + pre-rendered `resumeInstructions` string in, packet out — target-to-text rendering stays in the CLI), redaction accumulator, diff hunk filter |
 | `packages/core/src/handoff-import.ts` | `applyHandoffMemories` suggested-gate merge |
 | `packages/core/src/verification-badge.ts` | hoisted `verificationBadgeFor`; mcp-bridge re-imports |
@@ -337,8 +384,14 @@ agent-specific logic in core (target rendering lives in connectors/CLI).
 
 ## 9. Security posture (HIGH)
 
-- **Redaction-first:** no field enters the packet un-redacted; counts are
-  disclosed in the manifest and by `inspect`.
+- **Redaction-first, BOTH directions:** no field enters the packet
+  un-redacted at pack time, and open re-redacts every interpolated field
+  before writing into the user's config file (hostile/tampered packets
+  never persist raw secrets); counts are disclosed in the manifest, by
+  `inspect`, and in the open report.
+- **User deny globs honored:** `ProjectPermissions` loaded once per pack
+  and threaded into every `evaluatePathRead` call; malformed
+  `permissions.yaml` aborts fail-closed.
 - **Secret-path exclusion** on diff hunks — regex detectors alone are
   insufficient for committed secret files (design-time finding).
 - **No transcripts read** — structural, not filtered (§5).
@@ -381,10 +434,13 @@ agent-specific logic in core (target rendering lives in connectors/CLI).
    `expired`; trailing-newline tolerance.
 2. `handoff-export`: table-driven — redaction counts sum correctly;
    secret-path table incl. adversarial rows (`.env` hunk, `**/secrets/**`,
-   `id_rsa`); a denylisted path present in `changedFiles[]` is dropped
-   there too; caps (20 memories / 10 failures / diff truncation flag);
-   unresolved-failure filter; degraded-git packet; no badge field in the
-   serialized payload.
+   `id_rsa`); a path denied ONLY by a project `deny.read` glob is excluded
+   from hunks AND `changedFiles[]` (permissions threading); malformed
+   `permissions.yaml` aborts the pack; a denylisted path present in
+   `changedFiles[]` is dropped there too; session-scoped memories of the
+   resolved session included, other sessions' excluded; caps (20 memories
+   / 10 failures / diff truncation flag); unresolved-failure filter;
+   degraded-git packet; no badge field in the serialized payload.
 3. `gatherDirtyState`: injected `ExecGit` fixtures — dirty/clean/no-repo.
 4. Connectors: `upsertHandoffBlockText` tri-state; other managed blocks
    byte-identical after a handoff upsert/remove; preflight with all four
@@ -397,13 +453,22 @@ agent-specific logic in core (target rendering lives in connectors/CLI).
    `--dry-run` performs reads but zero writes); `clear` works unlicensed
    and defaults to all present targets.
 6. Integration: pack in fixture project A → open in fixture project B →
-   assert `AGENTS.md` block content, expiry footer, `--merge` produces
-   `suggested` entries with provenance and locally recomputed badges.
+   assert `AGENTS.md` block content, expiry-instruction footer, `--merge`
+   produces `suggested` entries with provenance, `sessionId: null`,
+   `scope: "project"`, and locally recomputed badges; open into a project
+   with NO pre-existing target file creates it (header seeded when the
+   target defines one).
    HOSTILE-PACKET rows: forged manifest counts (raw key in payload,
    `redactionFindings: 12` claimed) → `inspect` recomputes and warns;
-   packet-supplied badge ignored (schema rejects a `badge` field);
-   expired packet → `open` refuses, `inspect` still reports.
-7. Smoke (DoD evidence): real-repo pack → open → captured session.
+   raw key in payload text → `open` writes the REDACTED form and warns
+   (open-side redaction); packet-supplied badge ignored (schema rejects a
+   `badge` field); expired packet → `open` refuses, `inspect` still
+   reports.
+7. §10 write-suppression table (one table-driven CLI block, each row
+   asserting exit code AND target file + store byte-unchanged): open
+   outside a registered project; unrecognized `packet.targetAgent`;
+   oversized packet; corrupted sentinels (`block_conflict`).
+8. Smoke (DoD evidence): real-repo pack → open → captured session.
 
 ## 12. Process
 
