@@ -3,18 +3,15 @@ import {
   type ChangedFrom,
   type CoreRegistry,
   type MemoryEntry,
+  type VerificationBadge,
   changedFromFor,
   isRecallable,
+  verificationBadgeFor,
 } from "@megasaver/core";
 import type { SessionId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
-import {
-  type ContradictedDisclosure,
-  type VerificationBadge,
-  spotCheckHits,
-  verificationBadgeFor,
-} from "./code-truth-check.js";
+import { type ContradictedDisclosure, spotCheckHits } from "./code-truth-check.js";
 import { forwardOrFallback } from "./forward.js";
 
 export type RecallToolEnv = {

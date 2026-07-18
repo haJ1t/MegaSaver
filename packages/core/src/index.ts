@@ -200,3 +200,4 @@ export {
   type RunAutopilotResult,
   runAutopilot,
 } from "./autopilot.js";
+export { type VerificationBadge, verificationBadgeFor } from "./verification-badge.js";
