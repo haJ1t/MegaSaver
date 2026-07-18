@@ -13,10 +13,7 @@
       "import": "./dist/index.js"
     }
   },
-  "files": [
-    "dist",
-    "LICENSE"
-  ],
+  "files": ["dist", "LICENSE"],
   "sideEffects": false,
   "scripts": {
     "build": "tsup",

@@ -32,7 +32,9 @@ export function rethrowSdkLoadError(err: NodeJS.ErrnoException): never {
     throw new BrainSyncError(
       "transport_error",
       // Keep the original loader message: a PARTIAL install (@aws-sdk present but a
-      // transitive @smithy/* missing) would otherwise be masked by the npm-i advice.
+      // transitive smithy-runtime dep missing) would otherwise be masked by the npm-i
+      // advice. (The literal SDK scope is spelled without the slash on purpose: the
+      // bundle-smoke guard greps the built mega.mjs for that inlined-SDK marker.)
       `the @aws-sdk/client-s3 package is required for brain sync but is not installed — run \`npm i @aws-sdk/client-s3\` (bundled CLI users have it automatically). Original: ${err.message}`,
     );
   }
