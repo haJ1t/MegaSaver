@@ -83,7 +83,7 @@ describe("gatherDirtyState", () => {
     const state = gatherDirtyState(
       "/repo",
       fakeGit({
-        "status --porcelain": " M src/a.ts\n?? notes.md\n",
+        "status --porcelain": " M src/a.ts\0?? notes.md\0",
         "rev-parse HEAD": "abc1234def\n",
         "diff --cached": "diff --git b staged\n",
         diff: "diff --git a unstaged\n",
@@ -93,7 +93,7 @@ describe("gatherDirtyState", () => {
       headSha: "abc1234def",
       dirty: true,
       statusPaths: [
-        { path: "src/a.ts", status: "M" },
+        { path: "src/a.ts", status: " M" },
         { path: "notes.md", status: "??" },
       ],
       diffText: "diff --git a unstaged\n\ndiff --git b staged\n",
@@ -116,11 +116,27 @@ describe("gatherDirtyState", () => {
     });
   });
 
-  it("rename lines keep the new path; unborn HEAD yields null headSha", () => {
+  it("skips the rename old-path field and keeps spaced paths unquoted", () => {
     const state = gatherDirtyState(
       "/repo",
       fakeGit({
-        "status --porcelain": "R  old.ts -> new.ts\n",
+        "status --porcelain": "R  new.ts\0old.ts\0?? has space.md\0",
+        "rev-parse HEAD": "abc1234def\n",
+        "diff --cached": "diff --git b staged\n",
+        diff: "",
+      }),
+    );
+    expect(state?.statusPaths).toEqual([
+      { path: "new.ts", status: "R " },
+      { path: "has space.md", status: "??" },
+    ]);
+  });
+
+  it("unborn HEAD yields null headSha; whitespace-only diff normalizes to null", () => {
+    const state = gatherDirtyState(
+      "/repo",
+      fakeGit({
+        "status --porcelain": "?? notes.md\0",
         "rev-parse HEAD": new Error("unborn"),
         "diff --cached": "",
         diff: "",
@@ -129,8 +145,8 @@ describe("gatherDirtyState", () => {
     expect(state).toEqual({
       headSha: null,
       dirty: true,
-      statusPaths: [{ path: "new.ts", status: "R" }],
-      diffText: "\n",
+      statusPaths: [{ path: "notes.md", status: "??" }],
+      diffText: null,
     });
   });
 

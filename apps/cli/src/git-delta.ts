@@ -107,27 +107,34 @@ export function gatherDirtyState(
   cwd: string,
   execGit: ExecGit = defaultExecGit,
 ): HandoffDirtyState | null {
-  const status = tryGit(execGit, ["status", "--porcelain"], cwd);
+  // -z: NUL-separated records, never C-quoted — quoted paths would silently
+  // bypass downstream evaluatePathRead secret filtering
+  const status = tryGit(execGit, ["status", "--porcelain", "-z"], cwd);
   if (status === null) return null;
 
   const statusPaths: HandoffDirtyState["statusPaths"] = [];
-  for (const line of status.split("\n")) {
-    if (line.trim() === "") continue;
-    const state = line.slice(0, 2).trim();
-    const rest = line.slice(3);
-    // porcelain rename lines read "R  old -> new"; keep the path that exists
-    // so downstream evaluatePathRead filtering matches real files
-    const arrow = rest.indexOf(" -> ");
-    const path = (arrow === -1 ? rest : rest.slice(arrow + 4)).trim();
+  let skipOldPath = false;
+  for (const record of status.split("\0")) {
+    if (skipOldPath) {
+      skipOldPath = false;
+      continue;
+    }
+    if (record === "") continue;
+    const state = record.slice(0, 2);
+    const path = record.slice(3);
+    // rename/copy records carry the OLD path in the next NUL field; the
+    // record's own path is already the NEW one downstream filters must match
+    if (state.startsWith("R") || state.startsWith("C")) skipOldPath = true;
     if (path === "") continue;
     statusPaths.push({ path, status: state });
   }
 
   const headSha = tryGit(execGit, ["rev-parse", "HEAD"], cwd)?.trim() ?? null;
   const dirty = statusPaths.length > 0;
-  const diffText = dirty
+  const diffRaw = dirty
     ? `${tryGit(execGit, ["diff"], cwd) ?? ""}\n${tryGit(execGit, ["diff", "--cached"], cwd) ?? ""}`
     : null;
+  const diffText = diffRaw !== null && diffRaw.trim() !== "" ? diffRaw : null;
 
   return { headSha, dirty, statusPaths, diffText };
 }
