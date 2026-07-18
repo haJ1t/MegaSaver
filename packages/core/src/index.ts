@@ -133,6 +133,11 @@ export {
   importBrain,
 } from "./brain-import.js";
 export {
+  type ApplyHandoffMemoriesInput,
+  type HandoffMergeReport,
+  applyHandoffMemories,
+} from "./handoff-import.js";
+export {
   HANDOFF_DIFF_TOKEN_CAP,
   type BuildHandoffPacketInput,
   type BuildHandoffPacketResult,
