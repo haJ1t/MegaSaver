@@ -407,6 +407,59 @@ describe("buildHandoffPacket — diff + path filter pipeline", () => {
     expect(packet.manifest.secretPathsExcluded).toBe(1);
   });
 
+  it("decodes a C-quoted path so builtin basename globs still match", () => {
+    const quoted = [
+      'diff --git "a/service-account\\303\\204.json" "b/service-account\\303\\204.json"',
+      "index 1111111..2222222 100644",
+      '--- "a/service-account\\303\\204.json"',
+      '+++ "b/service-account\\303\\204.json"',
+      "@@ -1,1 +1,1 @@",
+      "-old",
+      '+{"private_key": "TOP"}',
+    ].join("\n");
+    const diffText = [fileDiff("src/app.ts", "safe change"), quoted].join("\n");
+    const { packet, report } = buildHandoffPacket(baseInput({ dirtyState: dirty(diffText) }));
+    const diff = packet.payload.git?.diff;
+    expect(diff?.text).toContain("src/app.ts");
+    expect(diff?.text).not.toContain("TOP");
+    expect(report.excludedPaths).toEqual(["service-accountÄ.json"]);
+    expect(packet.manifest.secretPathsExcluded).toBe(1);
+  });
+
+  it("decodes a C-quoted path before matching user deny globs", () => {
+    const quoted = [
+      'diff --git "a/config-caf\\303\\251.secret" "b/config-caf\\303\\251.secret"',
+      "index 1111111..2222222 100644",
+      '--- "a/config-caf\\303\\251.secret"',
+      '+++ "b/config-caf\\303\\251.secret"',
+      "@@ -1,1 +1,1 @@",
+      "-old",
+      "+TOP=1",
+    ].join("\n");
+    const permissions = parseProjectPermissions({ deny: { read: ["config-*.secret"] } });
+    const { packet, report } = buildHandoffPacket(
+      baseInput({ dirtyState: dirty(quoted), permissions }),
+    );
+    expect(packet.payload.git?.diff?.text).not.toContain("TOP=1");
+    expect(report.excludedPaths).toEqual(["config-café.secret"]);
+  });
+
+  it("emits a placeholder when the first chunk alone exceeds the cap", () => {
+    const bigBody = Array.from({ length: 90 }, () => `+${"x".repeat(100)}`).join("\n");
+    const diffText = [
+      "diff --git a/src/huge.ts b/src/huge.ts",
+      "--- a/src/huge.ts",
+      "+++ b/src/huge.ts",
+      "@@ -1,1 +1,90 @@",
+      bigBody,
+    ].join("\n");
+    const { packet } = buildHandoffPacket(baseInput({ dirtyState: dirty(diffText) }));
+    const diff = packet.payload.git?.diff;
+    expect(diff?.truncated).toBe(true);
+    expect(diff?.text).toBe("[diff omitted: src/huge.ts exceeded token cap]");
+    expect(packet.manifest.counts.diffFiles).toBe(0);
+  });
+
   it("keeps diff null on a clean tree while git state travels", () => {
     const { packet } = buildHandoffPacket(
       baseInput({

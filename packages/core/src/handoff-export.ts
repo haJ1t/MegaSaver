@@ -80,14 +80,39 @@ function pathAllowed(
 
 type FileChunk = { path: string; text: string };
 
+// git's C-quote escapes: `\NNN` 3-digit octal bytes plus `\\ \" \t \n \r`.
+// Reassemble octal runs as UTF-8 via Buffer — leaving them literal is a
+// bypass, because normalizePath maps each `\` to `/` and the split segments
+// defeat basename globs (`service-account*.json`), and evaluatePathRead is
+// fail-open, so the un-matched secret hunk would be KEPT.
+function decodeCQuoted(inner: string): string {
+  const bytes: number[] = [];
+  for (let i = 0; i < inner.length; i += 1) {
+    const ch = inner[i] as string;
+    if (ch !== "\\") {
+      bytes.push(...Buffer.from(ch, "utf8"));
+      continue;
+    }
+    const next = inner[i + 1] ?? "";
+    if (next >= "0" && next <= "7") {
+      bytes.push(Number.parseInt(inner.slice(i + 1, i + 4), 8));
+      i += 3;
+      continue;
+    }
+    const mapped = next === "t" ? "\t" : next === "n" ? "\n" : next === "r" ? "\r" : next;
+    bytes.push(...Buffer.from(mapped, "utf8"));
+    i += 1;
+  }
+  return Buffer.from(bytes).toString("utf8");
+}
+
 // `git diff` C-quotes exotic (non-ASCII/special) paths as `"b/<escaped>"`.
-// Strip the wrapper so the deny-glob sees the real extension/segments — the
-// `.env`/`secrets/` anchors survive un-decoded and `.*` spans the escape
-// bytes. Without this the whole header line becomes the "path", matches no
-// secret glob, and evaluatePathRead (fail-open) would KEEP the secret hunk.
+// Strip the wrapper AND decode, so the deny-glob sees the real path. Without
+// this the whole header line becomes the "path", matches no secret glob, and
+// evaluatePathRead (fail-open) would KEEP the secret hunk.
 function headerPath(line: string): string {
   const quoted = line.lastIndexOf(' "b/');
-  if (quoted !== -1 && line.endsWith('"')) return line.slice(quoted + 4, -1);
+  if (quoted !== -1 && line.endsWith('"')) return decodeCQuoted(line.slice(quoted + 4, -1));
   const at = line.lastIndexOf(" b/");
   return at === -1 ? line : line.slice(at + 3);
 }
@@ -153,23 +178,33 @@ function buildGit(
       if (pathAllowed(chunk.path, input.projectId, input.permissions)) kept.push(chunk);
       else excluded.add(chunk.path);
     }
+    // Redaction runs before the cap, so r.total may also count findings in
+    // chunks the cap later drops — advisory high-water semantics, by design.
     const compressed = kept.map((c) => ({
       path: c.path,
       text: compressByCategory("diff", r.text(c.text)).text,
     }));
     const included: FileChunk[] = [];
     let truncated = false;
+    let overflowPath: string | null = null;
     for (const chunk of compressed) {
       const candidate = [...included.map((c) => c.text), chunk.text].join("\n");
       if (estimateTokens(candidate) > HANDOFF_DIFF_TOKEN_CAP) {
         truncated = true;
+        overflowPath = chunk.path;
         break;
       }
       included.push(chunk);
     }
     diffFiles = new Set(included.map((c) => c.path)).size;
+    // An empty body with truncated=true is unexplainable to the reader; name
+    // the chunk that alone blew the cap instead.
+    const text =
+      included.length === 0 && overflowPath !== null
+        ? `[diff omitted: ${r.text(overflowPath)} exceeded token cap]`
+        : included.map((c) => c.text).join("\n");
     diff = {
-      text: included.map((c) => c.text).join("\n"),
+      text,
       truncated,
       excludedPaths: [...excluded].sort(),
     };
