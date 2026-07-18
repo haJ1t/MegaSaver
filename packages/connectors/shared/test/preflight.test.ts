@@ -4,6 +4,8 @@ import {
   MEGA_SAVER_BLOCK_START,
   MEGA_SAVER_CG_BLOCK_END,
   MEGA_SAVER_CG_BLOCK_START,
+  MEGA_SAVER_HANDOFF_BLOCK_END,
+  MEGA_SAVER_HANDOFF_BLOCK_START,
 } from "../src/constants.js";
 import { ConnectorError } from "../src/errors.js";
 import { projectionPreflight } from "../src/preflight.js";
@@ -13,8 +15,12 @@ const E = MEGA_SAVER_BLOCK_END;
 const CB = MEGA_SAVER_CG_BLOCK_START;
 const CE = MEGA_SAVER_CG_BLOCK_END;
 
+const HB = MEGA_SAVER_HANDOFF_BLOCK_START;
+const HE = MEGA_SAVER_HANDOFF_BLOCK_END;
+
 const MANAGED = `${B}\nmanaged content\n${E}\n`;
 const CG = `${CB}\ngate content\n${CE}\n`;
+const HANDOFF = `${HB}\nhandoff content\n${HE}\n`;
 
 function expectProjectionInvalid(fn: () => void): void {
   let thrown: unknown;
@@ -46,6 +52,14 @@ describe("projectionPreflight", () => {
 
   it("rejects output with an unbalanced CONTEXT_GATE block", () => {
     expectProjectionInvalid(() => projectionPreflight(`${MANAGED}${CB}\ngate content\n`));
+  });
+
+  it("passes a managed block plus a balanced HANDOFF block", () => {
+    expect(() => projectionPreflight(`${MANAGED}${CG}${HANDOFF}`)).not.toThrow();
+  });
+
+  it("rejects output with an unbalanced HANDOFF block", () => {
+    expectProjectionInvalid(() => projectionPreflight(`${MANAGED}${HB}\nhandoff content\n`));
   });
 
   it("rejects a header target whose managed block is at the top (frontmatter eaten)", () => {

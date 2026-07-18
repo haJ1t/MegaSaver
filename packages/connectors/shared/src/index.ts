@@ -3,6 +3,8 @@ export {
   MEGA_SAVER_BLOCK_START,
   MEGA_SAVER_CG_BLOCK_END,
   MEGA_SAVER_CG_BLOCK_START,
+  MEGA_SAVER_HANDOFF_BLOCK_END,
+  MEGA_SAVER_HANDOFF_BLOCK_START,
   MEGA_SAVER_WS_BLOCK_END,
   MEGA_SAVER_WS_BLOCK_START,
 } from "./constants.js";
@@ -22,7 +24,12 @@ export { renderBlock } from "./render.js";
 export { parseBlock, type ParsedBlock } from "./parse.js";
 export { projectionPreflight } from "./preflight.js";
 export { containsSentinel } from "./sentinel-guard.js";
-export { removeBlock, upsertBlock, upsertContextGateBlockText } from "./upsert.js";
+export {
+  removeBlock,
+  upsertBlock,
+  upsertContextGateBlockText,
+  upsertHandoffBlockText,
+} from "./upsert.js";
 export { renderWarmStartBlockText, type WarmStartBlockFields } from "./warm-start-block.js";
 export { normalizeEol } from "./eol.js";
 export {
