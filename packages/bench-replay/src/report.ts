@@ -89,6 +89,14 @@ export function buildVerdict(
   };
 }
 
+// Two replays of the same pair in OPPOSITE orders must agree, or the number is
+// an artifact of which arm warmed the shared prefix rather than a property of
+// the saver. Same question `verdictStable` asks of two repeat runs, so it reuses
+// the same fail-closed comparison; only the reason for disagreeing differs.
+export function orderSensitive(ratioAB: number, ratioBA: number, tolerance: number): boolean {
+  return !verdictStable(ratioAB, ratioBA, tolerance);
+}
+
 // A repeat replay of the same recording must reproduce the cost ratio within
 // tolerance, or the run is unstable and no verdict may be reported — same
 // "never vouch for a number we can't stand behind" contract as calibrationOk.

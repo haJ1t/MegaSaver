@@ -39,6 +39,11 @@ export type ArmUsage = RequestUsage & {
   normalizedCostUsd: number;
   saver: SaverOutcomes;
   bytes: ToolResultBytes;
+  // The size of the prompt-cache discount the second arm inherits depends
+  // entirely on the wall-clock gap since the first arm warmed the shared prefix.
+  // Left unrecorded, that gap is an unmeasured input to every ratio here.
+  startedAtMs: number;
+  finishedAtMs: number;
   // The megasaver arm's cache_read collapsing while baseline's stays large is
   // the one diagnostic that makes a prefix-churn regression obvious on sight;
   // summing it away hides exactly that.
@@ -81,6 +86,13 @@ export type VerdictVerification = {
   integrity: ArmIntegrity;
   order: OrderCheck | null;
   baselineDriftSmoke: DriftSmokeResult | null;
+};
+
+export type PairResult = {
+  order: ReplayOrder;
+  baseline: ArmUsage;
+  megasaver: ArmUsage;
+  costRatio: number;
 };
 
 export type ReplayVerdict = {

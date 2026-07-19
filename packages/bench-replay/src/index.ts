@@ -5,6 +5,7 @@ export {
   type ArmUsage,
   type DriftSmokeResult,
   type OrderCheck,
+  type PairResult,
   type RecordedRequest,
   type ReplayOrder,
   type ReplayVerdict,
@@ -21,12 +22,19 @@ export {
   type RunHook,
   type SaverMode,
 } from "./saver-subprocess.js";
-export { replayArm, type Send, type SendResult } from "./replay.js";
+export {
+  replayArm,
+  replayBothOrders,
+  replayPair,
+  type Send,
+  type SendResult,
+} from "./replay.js";
 export {
   MIN_DRIFT_SMOKE_TOLERANCE,
   baselineDriftSmokeOk,
   buildVerdict,
   checkArmIntegrity,
   costRatioOf,
+  orderSensitive,
   verdictStable,
 } from "./report.js";

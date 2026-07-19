@@ -1,10 +1,16 @@
 import { normalizedCostUsd } from "@megasaver/stats";
+import { buildVerdict, costRatioOf, orderSensitive } from "./report.js";
 import { transformRequest } from "./transform.js";
 import type { ApplySaver } from "./transform.js";
 import type {
   Arm,
   ArmUsage,
+  DriftSmokeResult,
+  OrderCheck,
+  PairResult,
   RecordedRequest,
+  ReplayOrder,
+  ReplayVerdict,
   RequestUsage,
   SaverOutcomes,
   ToolResultBytes,
@@ -65,7 +71,10 @@ export async function replayArm(input: {
   requests: readonly RecordedRequest[];
   applySaver: ApplySaver;
   send: Send;
+  now?: () => number;
 }): Promise<ArmUsage> {
+  const now = input.now ?? Date.now;
+  const startedAtMs = now();
   const total = {
     inputTokens: 0,
     cacheCreationTokens: 0,
@@ -129,6 +138,108 @@ export async function replayArm(input: {
     }),
     saver,
     bytes,
+    startedAtMs,
+    finishedAtMs: now(),
     perRequest,
   };
+}
+
+// Replays both arms back-to-back in the given order. The order is an explicit
+// REQUIRED argument, never a default, because it is a measurement parameter:
+// the two arms share a byte-identical system+tools prefix, so whichever runs
+// first pays cache_creation ($10/Mtok) for it and whichever runs second reads
+// the same bytes at cache_read ($0.50/Mtok) — a ~20x discount handed to the
+// second arm by the calendar, not by the saver. A single run of this function
+// therefore CANNOT produce a trustworthy ratio on its own; use
+// `replayBothOrders`, which is the only path to a verdict.
+export async function replayPair(input: {
+  requests: readonly RecordedRequest[];
+  applySaver: ApplySaver;
+  send: Send;
+  order: ReplayOrder;
+  now?: () => number;
+}): Promise<PairResult> {
+  const run = (arm: Arm): Promise<ArmUsage> =>
+    replayArm({
+      arm,
+      requests: input.requests,
+      applySaver: input.applySaver,
+      send: input.send,
+      ...(input.now === undefined ? {} : { now: input.now }),
+    });
+
+  // Awaited one at a time and in the stated order: running the arms
+  // concurrently would have them racing for the same cache entry, measuring
+  // neither. Spelled out per branch so the order is legible, not computed.
+  let baseline: ArmUsage;
+  let megasaver: ArmUsage;
+  if (input.order === "baseline-first") {
+    baseline = await run("baseline");
+    megasaver = await run("megasaver");
+  } else {
+    megasaver = await run("megasaver");
+    baseline = await run("baseline");
+  }
+  return { order: input.order, baseline, megasaver, costRatio: costRatioOf(baseline, megasaver) };
+}
+
+// The only path to a verdict, because it is the only one that can see the
+// order effect at all. Replays the pair twice — baseline-first, then
+// megasaver-first — and refuses if the two ratios disagree beyond
+// `orderTolerance`, on the same fail-closed posture as every other guard here.
+//
+// ASSUMPTION THE CALLER MUST HONOUR: the two pair runs are NOT separated by a
+// cache cool-down. The Anthropic prompt cache has a ~5 minute TTL, so by the
+// second pair every shared prefix is already warm from the first and both arms
+// read it at cache_read. That is the point: it is what makes the two runs
+// comparable to each other. It also means the reported ratio describes a
+// warm-cache regime, and a caller who inserts a long sleep between the runs
+// invalidates the comparison rather than improving it.
+export async function replayBothOrders(input: {
+  task: string;
+  requests: readonly RecordedRequest[];
+  applySaver: ApplySaver;
+  send: Send;
+  orderTolerance: number;
+  now?: () => number;
+  baselineDriftSmoke?: DriftSmokeResult;
+}): Promise<ReplayVerdict> {
+  const clock = input.now === undefined ? {} : { now: input.now };
+  const baselineFirst = await replayPair({
+    requests: input.requests,
+    applySaver: input.applySaver,
+    send: input.send,
+    order: "baseline-first",
+    ...clock,
+  });
+  const megasaverFirst = await replayPair({
+    requests: input.requests,
+    applySaver: input.applySaver,
+    send: input.send,
+    order: "megasaver-first",
+    ...clock,
+  });
+
+  const a = baselineFirst.costRatio;
+  const b = megasaverFirst.costRatio;
+  if (orderSensitive(a, b, input.orderTolerance)) {
+    throw new Error(
+      `replayBothOrders(${input.task}): the run is order-sensitive — baseline-first gave ${a} and megasaver-first gave ${b} (tolerance ${input.orderTolerance}). The gap is prompt-cache warming, not saver behaviour, so there is no verdict to report`,
+    );
+  }
+  const order: OrderCheck = {
+    ratioBaselineFirst: a,
+    ratioMegasaverFirst: b,
+    spread: a === b ? 0 : Math.abs(a - b) / a,
+    tolerance: input.orderTolerance,
+    combinedRatio: (a + b) / 2,
+  };
+  // Arms from the baseline-first run are the ones reported; the ratio quoted is
+  // the combination of both, since neither single order is free of the bias.
+  return buildVerdict(input.task, baselineFirst.baseline, baselineFirst.megasaver, {
+    order,
+    ...(input.baselineDriftSmoke === undefined
+      ? {}
+      : { baselineDriftSmoke: input.baselineDriftSmoke }),
+  });
 }

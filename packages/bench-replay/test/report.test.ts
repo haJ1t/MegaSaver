@@ -18,6 +18,8 @@ const arm = (cost: number) => ({
   // Fix B: a verdict is only constructible for an arm whose transform actually
   // shrank the payload, so the shared fixture has to carry real compression.
   bytes: { original: 1000, transformed: 400 },
+  startedAtMs: 0,
+  finishedAtMs: 1,
   perRequest: [],
 });
 
