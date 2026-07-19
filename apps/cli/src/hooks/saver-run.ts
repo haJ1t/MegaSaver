@@ -1,12 +1,14 @@
 import { readFileSync } from "node:fs";
 import {
   type FailureKind,
+  hasSeenOutput,
   nodeResolverDeps,
   recordCompletionHeartbeat,
   recordCompressionHeartbeat,
   recordDaemonFallbackHeartbeat,
   recordFailureHeartbeat,
   recordInvocationHeartbeat,
+  recordSeenOutput,
   resolveWorkspaceTokenSaverSettings,
   saverPausedByNetEffect,
 } from "@megasaver/context-gate";
@@ -161,6 +163,8 @@ export async function runSaverHookFromProcess(): Promise<void> {
       recordFailure,
       recordCompletion,
       saverPaused: saverPausedByNetEffect,
+      hasSeenOutput,
+      recordSeenOutput,
     };
     const decision = await buildSaverDecision(payload, deps);
     const s = renderSaverStdout(decision);
