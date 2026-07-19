@@ -565,6 +565,19 @@ importers:
         specifier: ^22.19.17
         version: 22.19.17
 
+  packages/long-memory:
+    dependencies:
+      '@megasaver/retrieval':
+        specifier: workspace:*
+        version: link:../retrieval
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.17
+        version: 22.19.17
+
   packages/mcp-bridge:
     dependencies:
       '@megasaver/connectors-shared':
