@@ -3726,3 +3726,16 @@ via fast-mode 2x billing; task_4 baseline 10→6 turns across runs) exceeds the
 until measurement is fixed. Branch parked unmerged. Two real by-products kept:
 a latent `newId` collision that silently broke evidence writes (found+fixed in
 Task 7), and the 1.5x pause hysteresis. See [[syntheses/saver-cache-churn]].
+
+## [2026-07-19] strategy | Global Agent Continuity Layer direction approved
+
+User approved the long-horizon position: MegaSaver stays developer-first for
+the individual daily buyer but is built as a user-owned, agent-agnostic Agent
+Continuity Layer. The durable promise is continuity of verified work across
+agents, models, repositories, and machines—not token reduction alone. The
+strategy adds five product layers (continuity, truth, control, economics,
+ecosystem), four expansion horizons, and gates that prevent generic-AI scope
+creep or unproven cost claims. The near-term feature sequence remains Agent
+Passport / Hot Handoff → Brain Doctor → Context Contracts → Déjà Vu; Hot
+Handoff remains separately owned. Sources: [[syntheses/global-agent-continuity-strategy]],
+[[syntheses/solo-developer-roadmap]], user approval 2026-07-19.

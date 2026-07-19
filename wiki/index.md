@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-07-17
+updated: 2026-07-19
 ---
 
 # Wiki Index — Mega Saver
@@ -96,6 +96,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 - [[syntheses/contextops-roadmap]] — **strategic Phase 0–10 roadmap** (DIMMEM/LAMR/FORGE), **all 10 phases shipped** on `main` (PRs #114–#123, 2026-06-12); MCP surface 4 → 25 tools (26 with the v1.2 `proxy_search_code`). Keeps the original 22-agent-audit done/partial/gap framing for the historical record.
 - [[syntheses/release-history]] — full chronological release/status narrative (every PR, critic round, process metric, open-backlog note) for Phase 9/10, v1.1.0, v1.0, AA1 BB1–BB7a, v0.3, v0.2. Split out of `index.md` on 2026-07-04 to keep the catalog lean; the `## Status` section below is the one-line-per-release digest.
 - [[syntheses/solo-developer-roadmap]] — active 2026-07-17 reset after v2.1.1 / CLI 2.2.0: the Experience Layer is shipped; Agent Passport → Brain Doctor → Context Contracts → Déjà Vu, with release gates and honest-metrics constraints.
+- [[syntheses/global-agent-continuity-strategy]] — approved 2026-07-19 long-horizon direction: developer-first Agent Continuity Layer, four horizons, platform gates, and privacy/evidence guardrails.
 - [[concepts/proxy-mode]] / Proxy Mode v1.2 — public naming mode, output classifier, vitest/tsc compressors, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics; full spec+plan written and shipped on `docs/contextops-roadmap-phases`.
 
 ## Sources (pointers to raw + project artifacts)
