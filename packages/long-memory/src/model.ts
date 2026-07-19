@@ -48,3 +48,39 @@ export const recallBundleSchema = z
   .object({ items: z.array(recallItemSchema), receipt: z.array(receiptItemSchema) })
   .strict();
 export type RecallBundle = z.infer<typeof recallBundleSchema>;
+
+export const rpcRequestSchema = z.discriminatedUnion("op", [
+  z
+    .object({
+      id: z.string().min(1),
+      op: z.literal("insert"),
+      observation: observationSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1),
+      op: z.literal("query"),
+      request: recallRequestSchema,
+    })
+    .strict(),
+]);
+export type RpcRequest = z.infer<typeof rpcRequestSchema>;
+
+export const rpcResponseSchema = z.union([
+  z
+    .object({
+      id: z.string().min(1),
+      ok: z.literal(true),
+      result: z.union([z.object({ inserted: z.boolean() }).strict(), recallBundleSchema]),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().nullable(),
+      ok: z.literal(false),
+      error: z.object({ code: z.literal("invalid_request") }).strict(),
+    })
+    .strict(),
+]);
+export type RpcResponse = z.infer<typeof rpcResponseSchema>;
