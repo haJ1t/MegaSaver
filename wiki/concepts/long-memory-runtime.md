@@ -6,7 +6,8 @@ sources:
   - concepts/structured-memory-engine.md
   - concepts/memory-superset.md
   - docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md
-status: LM0 implementation verified
+  - docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md
+status: LM0 implementation verified; LM1 design approved
 created: 2026-07-19
 updated: 2026-07-20
 ---
@@ -35,3 +36,9 @@ workspace-scoped observation deduplication, receipt-bearing BM25 recall, a
 JSONL host, and a public-data-only LongMemEval-V2 adapter. It does not change
 existing product memory or imply LM1–LM3 capabilities. (source:
 `docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md`)
+
+LM1 design is approved for durable, immutable snapshots/transitions with
+evidence-binding authorization, retry-stable Evidence Ledger adoption, and
+revocation-aware recall. It preserves LM0's TypeScript and JSONL boundaries;
+implementation remains gated on a TDD plan, fresh review, and verification.
+(source: `docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`)
