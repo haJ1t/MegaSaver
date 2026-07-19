@@ -202,6 +202,19 @@ describe("LM1 file store", () => {
     );
   });
 
+  it("rejects a dangling static symlinked record parent", () => {
+    const root = createRoot();
+    const outside = createRoot();
+    const record = createRecord();
+    const workspaceDir = join(root, "long-memory", "v1", workspaceKey);
+    mkdirSync(workspaceDir, { recursive: true });
+    symlinkSync(join(outside, "missing"), join(workspaceDir, "snapshots"));
+
+    expect(() => createFileLm1Store({ storeRoot: root }).publish(record)).toThrow(
+      expect.objectContaining({ code: "store_corrupt" }),
+    );
+  });
+
   it("fails closed instead of hiding a static symlink while listing records", () => {
     const root = createRoot();
     const outside = createRoot();
