@@ -3,7 +3,9 @@ import type { Lm1Kind, PreparedCapture } from "./lm1-model.js";
 
 export type Sha256 = string & { readonly __sha256: unique symbol };
 
-type CanonicalCapture = Omit<PreparedCapture, "canonicalCaptureDigest">;
+type CanonicalCapture =
+  | Omit<Extract<PreparedCapture, { kind: "state_snapshot" }>, "canonicalCaptureDigest">
+  | Omit<Extract<PreparedCapture, { kind: "state_transition" }>, "canonicalCaptureDigest">;
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
@@ -26,7 +28,34 @@ function canonicalJson(value: unknown): string {
 }
 
 export function canonicalCaptureDigest(input: CanonicalCapture | PreparedCapture): Sha256 {
-  const { canonicalCaptureDigest: _ignored, ...capture } = input as PreparedCapture;
+  const capture =
+    input.kind === "state_snapshot"
+      ? {
+          schemaVersion: input.schemaVersion,
+          workspaceKey: input.workspaceKey,
+          kind: input.kind,
+          observedAt: input.observedAt,
+          text: input.text,
+          action: input.action,
+          evidenceIds: input.evidenceIds,
+          stateKey: input.stateKey,
+          representation: input.representation,
+          supersedesSnapshotId: input.supersedesSnapshotId,
+          redactionVersion: input.redactionVersion,
+        }
+      : {
+          schemaVersion: input.schemaVersion,
+          workspaceKey: input.workspaceKey,
+          kind: input.kind,
+          observedAt: input.observedAt,
+          text: input.text,
+          action: input.action,
+          evidenceIds: input.evidenceIds,
+          preSnapshotId: input.preSnapshotId,
+          postSnapshotId: input.postSnapshotId,
+          outcome: input.outcome,
+          redactionVersion: input.redactionVersion,
+        };
   return sha256(`megasaver.long-memory.lm1.capture.v1\0${canonicalJson(capture)}`);
 }
 
