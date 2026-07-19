@@ -15,6 +15,9 @@ BASELINE_SETTINGS=/tmp/claude-baseline-no-megasaver.json
 MEGASAVER_SETTINGS=/tmp/claude-megasaver.json
 PROXY_URL="${MEGA_PROXY_URL:-http://127.0.0.1:8787}"
 CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude || true)}"
+# Absolute — the script cd's into $REPO before running tasks, so a relative
+# path to benchmark-rates.json would not resolve from there.
+RATES_JSON="$(cd "$(dirname "$0")" && pwd)/benchmark-rates.json"
 
 if [ -z "$CLAUDE_BIN" ] || [ ! -x "$CLAUDE_BIN" ]; then
   echo "ERROR: claude CLI not found in PATH."
@@ -272,9 +275,9 @@ run_task() {
   git diff --stat > "$outdir/diffstat.txt" || true
   git diff > "$outdir/diff.patch" || true
 
-  python3 - "$outdir" "$name" "$mode" "$elapsed" <<'PY'
+  python3 - "$outdir" "$name" "$mode" "$elapsed" "$RATES_JSON" <<'PY'
 import json, os, sys
-outdir, task, mode, elapsed = sys.argv[1:5]
+outdir, task, mode, elapsed, rates_json = sys.argv[1:6]
 
 summary = {"task": task, "mode": mode, "wall_seconds": int(elapsed), "ok": False}
 try:
@@ -299,6 +302,15 @@ else:
         "num_turns": r.get("num_turns", 0),
         "duration_ms": r.get("duration_ms", 0),
     })
+    # `total_cost_usd` mixes 1x/2x (fast-mode) billed requests -- price the
+    # same token breakdown at fixed rates so identical tokens cost the same.
+    rates = json.load(open(rates_json))
+    summary["normalized_cost_usd"] = (
+        u.get("input_tokens", 0) * rates["input"]
+        + u.get("cache_creation_input_tokens", 0) * rates["cacheCreation"]
+        + u.get("cache_read_input_tokens", 0) * rates["cacheRead"]
+        + u.get("output_tokens", 0) * rates["output"]
+    ) / 1_000_000
     if r.get("is_error"):
         summary["error"] = r.get("result", "")[:200]
 
@@ -338,6 +350,7 @@ METRICS = [
     'cache_read_input_tokens',
     'cache_creation_input_tokens',
     'output_tokens',
+    'normalized_cost_usd',
     'total_cost_usd',
     'wall_seconds',
 ]
@@ -396,8 +409,10 @@ else:
         print(f'  {m:<28} {g:>9.2f}x')
 
 print()
-print('Tokens and cost come from `claude --output-format json` -> .usage / .total_cost_usd,')
-print('i.e. what Anthropic actually billed -- not a stdout-size proxy.')
+print('Gate metric: normalized_cost_usd (token breakdown priced at fixed standard')
+print('rates from scripts/benchmark-rates.json). Raw total_cost_usd is shown for')
+print('transparency only — it mixes 1x and 2x (fast-mode) billed requests, so it')
+print('is NOT comparable across runs.')
 print()
 print('Raw logs and diffs: /tmp/megasaver-claude-limit-test-results')
 print('=' * 92)
