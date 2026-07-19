@@ -5662,7 +5662,6 @@ Tests: `apps/cli/test/doctor.test.ts` (`checkSettingsPermissions`, posix-only).
 
 Sources: [[docs/superpowers/specs/2026-07-25-hook-settings-file-mode-design]],
 [[entities/connectors-claude-code]].
-
 ## 2026-07-26 — seed-guard allowlist had three dead entries
 
 `MATCH_FREE_BY_DESIGN` exempted three labels the guard never iterates, so they
@@ -5682,3 +5681,16 @@ answerable question is "does it still contain its anchor?", not "does it
 match?". Left unbuilt and recorded.
 
 Sources: [[docs/superpowers/specs/2026-07-26-probe-parity-design]] §6.
+
+## [2026-07-19] ingest | LongMemEval-V2
+
+Ingested the official benchmark into [[sources/longmemeval-v2]]. It evaluates
+static state, dynamic state, workflow, gotchas, and premise awareness on an
+accuracy-latency frontier.
+
+## [2026-07-19] query | Evidence-Backed Long Memory Runtime
+
+User approved one agent-neutral, evidence-cited runtime for product recall and
+LongMemEval-V2. The architecture and LM0–LM3 delivery boundaries are in
+`docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md`; see
+[[concepts/long-memory-runtime]].
