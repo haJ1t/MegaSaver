@@ -1,5 +1,11 @@
 import { rankBm25 } from "@megasaver/retrieval";
-import type { Observation, RecallBundle, RecallRequest } from "./model.js";
+import {
+  type Observation,
+  type RecallBundle,
+  type RecallRequest,
+  observationSchema,
+  recallRequestSchema,
+} from "./model.js";
 
 export type LongMemoryStore = {
   insert(observation: Observation): { inserted: boolean };
@@ -7,22 +13,43 @@ export type LongMemoryStore = {
 };
 
 export function createInMemoryLongMemoryStore(): LongMemoryStore {
-  const observationsByWorkspace = new Map<string, Map<string, Observation>>();
+  const observationsByWorkspace = new Map<
+    string,
+    { observationsByDigest: Map<string, Observation>; sourceDigestById: Map<string, string> }
+  >();
 
   return {
     insert(observation) {
-      const observations = observationsByWorkspace.get(observation.workspaceKey) ?? new Map();
-      if (observations.has(observation.sourceDigest)) return { inserted: false };
-      observations.set(observation.sourceDigest, observation);
-      observationsByWorkspace.set(observation.workspaceKey, observations);
+      const parsedObservation = observationSchema.parse(observation);
+      const workspace = observationsByWorkspace.get(parsedObservation.workspaceKey) ?? {
+        observationsByDigest: new Map(),
+        sourceDigestById: new Map(),
+      };
+      if (workspace.observationsByDigest.has(parsedObservation.sourceDigest)) {
+        return { inserted: false };
+      }
+      if (workspace.sourceDigestById.has(parsedObservation.id)) {
+        throw new Error("Observation id already exists in workspace");
+      }
+      workspace.observationsByDigest.set(parsedObservation.sourceDigest, parsedObservation);
+      workspace.sourceDigestById.set(parsedObservation.id, parsedObservation.sourceDigest);
+      observationsByWorkspace.set(parsedObservation.workspaceKey, workspace);
       return { inserted: true };
     },
     query(request) {
-      const observations = [...(observationsByWorkspace.get(request.workspaceKey)?.values() ?? [])];
+      const parsedRequest = recallRequestSchema.parse(request);
+      const observations = [
+        ...(observationsByWorkspace
+          .get(parsedRequest.workspaceKey)
+          ?.observationsByDigest.values() ?? []),
+      ];
       const byId = new Map(observations.map((observation) => [observation.id, observation]));
       const ranked = rankBm25({
-        query: request.task,
-        documents: observations.map((observation) => ({ id: observation.id, text: observation.text })),
+        query: parsedRequest.task,
+        documents: observations.map((observation) => ({
+          id: observation.id,
+          text: observation.text,
+        })),
         topN: observations.length || 1,
       });
       let usedTokens = 0;
@@ -33,7 +60,7 @@ export function createInMemoryLongMemoryStore(): LongMemoryStore {
         const observation = byId.get(hit.id);
         if (observation === undefined) continue;
         const tokenEstimate = Math.ceil(observation.text.length / 4);
-        if (usedTokens + tokenEstimate > request.tokenBudget) continue;
+        if (usedTokens + tokenEstimate > parsedRequest.tokenBudget) continue;
         usedTokens += tokenEstimate;
         items.push({ type: "text", value: observation.text, observationId: observation.id });
         receipt.push({

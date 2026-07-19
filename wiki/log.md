@@ -5378,3 +5378,26 @@ User approved one agent-neutral, evidence-cited runtime for product recall and
 LongMemEval-V2. The architecture and LM0–LM3 delivery boundaries are in
 `docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md`; see
 [[concepts/long-memory-runtime]].
+
+## [2026-07-20] implementation | Long Memory LM0 benchmark boundary
+
+Implemented the isolated `@megasaver/long-memory` LM0 package in worktree
+`codex/feat/long-memory-runtime`: strict observations and receipts,
+workspace-scoped idempotent ingestion, deterministic BM25 recall, and a JSONL
+`insert|query` host. Added a public-data-only LongMemEval-V2 Python adapter
+that keeps one local Node process per memory instance and rejects image paths
+outside the configured benchmark root. LM1–LM3 product memory, semantic
+retrieval, transitions, runbooks, gotchas, premises, and media remain out of
+scope. Source: [[concepts/long-memory-runtime]].
+
+## [2026-07-20] verification | Long Memory LM0 benchmark boundary
+
+Independent critical review initially found incompatible official trajectory
+input, non-canonical digest construction, uncorrelated RPC failures, missing
+boundary limits, child-process lifecycle gaps, and retrieval UUID ambiguity.
+The implementation now accepts both official public trajectory forms, uses
+canonical digests, preserves typed internal RPC correlation, aligns Python and
+Node UTF-16/token limits, bounds process lifetime, and rejects workspace-local
+UUID collisions. Independent re-review approved the final fix set; `pnpm
+verify` and the Python adapter suite were then rerun as release evidence.
+Source: [[concepts/long-memory-runtime]].
