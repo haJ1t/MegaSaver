@@ -32,6 +32,11 @@ export {
   type Sha256,
 } from "./lm1-identity.js";
 export {
+  createFileLm1Store,
+  type FileLm1Store,
+  type PublishedLm1Record,
+} from "./lm1-store.js";
+export {
   MAX_EVIDENCE_IDS,
   MAX_EVIDENCE_ID_LENGTH,
   MAX_OBSERVATION_TEXT_CHARS,

@@ -39,4 +39,19 @@ describe("LM1 canonical identity", () => {
       }),
     ).toBe("a120fe80b88240ff9fd398090b705d80f8720b469b2d7185360f78928d41bc13");
   });
+
+  it("ignores persisted record fields when recomputing a capture digest", () => {
+    expect(
+      canonicalCaptureDigest({
+        ...prepared,
+        canonicalCaptureDigest: "f".repeat(64),
+        id: "11111111-1111-4111-8111-111111111111",
+        sourceDigest: "e".repeat(64),
+        evidenceBindingDigest: "d".repeat(64),
+        recordedAt: "2026-07-20T00:00:01.000Z",
+        evidenceDigests: ["c".repeat(64), "b".repeat(64)],
+        status: "recorded" as const,
+      }),
+    ).toBe(canonicalCaptureDigest(prepared));
+  });
 });
