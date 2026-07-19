@@ -123,7 +123,11 @@ export async function recordAndFilterOverlayOutput(
   input: RecordOverlayOutputInput,
 ): Promise<RecordOverlayOutputResult> {
   const now = input.now ?? (() => new Date().toISOString());
-  const newId = input.newId ?? (() => randomUUID());
+  // input.newId derives ONLY the chunk-set id, so identical content re-emitted in
+  // a new session yields an identical chunk-set id (P1 cache friendliness). The
+  // per-event audit ids (overlay event id, evidenceId) MUST stay unique random
+  // UUIDs — evidenceId is UUID-schema-constrained and the ledger is append-only.
+  const chunkSetIdGen = input.newId ?? (() => randomUUID());
 
   const floorBytes = input.compressFloorBytes ?? modeToBudget(input.mode);
   // ~4 bytes/token, mirroring output-filter estimateTokens.
@@ -166,7 +170,7 @@ export async function recordAndFilterOverlayOutput(
   let chunkSetId: string | undefined;
   let chunks: OverlayChunkSet["chunks"] = [];
   if (input.storeRawOutput) {
-    chunkSetId = newId();
+    chunkSetId = chunkSetIdGen();
     const pieces =
       redactedText === ""
         ? [{ text: "", startLine: 1, endLine: 1 }]
@@ -262,7 +266,7 @@ export async function recordAndFilterOverlayOutput(
   appendOverlayEvent({
     store: { root: input.storeRoot },
     event: {
-      id: newId(),
+      id: randomUUID(),
       liveSessionId: input.liveSessionId,
       workspaceKey: input.workspaceKey,
       createdAt,
@@ -290,7 +294,7 @@ export async function recordAndFilterOverlayOutput(
   if (input.evidenceStoreRoot !== undefined && chunkSetId !== undefined) {
     const { redacted: redactedReturnedText } = redact(finalText);
     const evidenceRecord: EvidenceRecordInput = {
-      evidenceId: newId(),
+      evidenceId: randomUUID(),
       // workspaceKey in RecordOverlayOutputInput is plain string; evidence schema
       // requires the branded WorkspaceKey — the value is already validated upstream
       // by the overlay event path, so this cast is safe at the call boundary.

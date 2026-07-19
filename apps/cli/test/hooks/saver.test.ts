@@ -31,6 +31,8 @@ function deps(overrides: Partial<Parameters<typeof buildSaverDecision>[1]> = {})
     recordFailure: vi.fn(),
     recordCompletion: vi.fn(),
     saverPaused: () => false,
+    hasSeenOutput: () => false,
+    recordSeenOutput: () => {},
     ...overrides,
   };
 }
@@ -290,6 +292,8 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
     recordFailure: () => {},
     recordCompletion: () => {},
     saverPaused: () => false,
+    hasSeenOutput: () => false,
+    recordSeenOutput: () => {},
   });
 
   function evidenceRecords(storeRoot: string, cwd: string): unknown[] {
@@ -351,6 +355,8 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
       recordFailure: () => {},
       recordCompletion: () => {},
       saverPaused: () => false,
+      hasSeenOutput: () => false,
+      recordSeenOutput: () => {},
     });
     expect("updatedToolOutput" in out).toBe(true);
     if ("updatedToolOutput" in out) {
@@ -424,6 +430,8 @@ describe("buildSaverDecision intent fill-gap", () => {
       recordInvocation: () => {},
       recordCompression: () => {},
       saverPaused: () => false,
+      hasSeenOutput: () => false,
+      recordSeenOutput: () => {},
       record: async (input: { intent?: string }) => {
         captured = input;
         return {
@@ -451,6 +459,8 @@ describe("buildSaverDecision intent fill-gap", () => {
       recordInvocation: () => {},
       recordCompression: () => {},
       saverPaused: () => false,
+      hasSeenOutput: () => false,
+      recordSeenOutput: () => {},
       record: async (input: Record<string, unknown>) => {
         captured = input;
         return {
@@ -951,5 +961,44 @@ describe("net-effect auto-pause gate", () => {
     const d = deps({ saverPaused: () => false });
     const decision = await buildSaverDecision(compressiblePayload(), d);
     expect("updatedToolOutput" in decision).toBe(true);
+  });
+});
+
+describe("first-sight gate + stable chunk id", () => {
+  it("second sight of identical output passes through untouched (no rewrite, no churn)", async () => {
+    const seen = new Set<string>();
+    const d = deps({
+      hasSeenOutput: (_s, _w, _sid, h) => seen.has(h),
+      recordSeenOutput: (_s, _w, _sid, h) => {
+        seen.add(h);
+      },
+    });
+    const first = await buildSaverDecision(compressiblePayload(), d);
+    expect("updatedToolOutput" in first).toBe(true);
+    const second = await buildSaverDecision(compressiblePayload(), d);
+    expect(second).toEqual({ passthrough: true });
+  });
+
+  it("aggressive mode also never rewrites seen output", async () => {
+    const d = deps({
+      resolveSettings: () => ({ enabled: true, mode: "aggressive" as const }),
+      hasSeenOutput: () => true,
+    });
+    expect(await buildSaverDecision(compressiblePayload(), d)).toEqual({ passthrough: true });
+  });
+
+  it("chunk-set id derives from content: identical raw output yields an identical id", async () => {
+    const recordedIds: string[] = [];
+    const makeDeps = () =>
+      deps({
+        record: async (input) => {
+          recordedIds.push(input.newId?.() ?? "missing");
+          return RECORDED;
+        },
+      });
+    await buildSaverDecision(compressiblePayload(), makeDeps());
+    await buildSaverDecision(compressiblePayload(), makeDeps());
+    expect(recordedIds[0]).toBe(recordedIds[1]);
+    expect(recordedIds[0]).not.toBe("missing");
   });
 });

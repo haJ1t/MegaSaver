@@ -1,4 +1,4 @@
-import type { FailureKind } from "@megasaver/context-gate";
+import { type FailureKind, hashToolOutput } from "@megasaver/context-gate";
 import type { RecordOverlayOutputInput, RecordOverlayOutputResult } from "@megasaver/core";
 import type { OutputSourceKind } from "@megasaver/output-filter";
 import { type TokenSaverMode, encodeWorkspaceKey, modeToBudget } from "@megasaver/shared";
@@ -83,6 +83,19 @@ export type SaverDeps = {
   // P0 guardrail: measured net-negative saver auto-pauses per workspace.
   // Read-only, fail-open (store layer returns false on any anomaly).
   saverPaused: (storeRoot: string, workspaceKey: string, nowIso: string) => boolean;
+  // P1 first-sight ledger (fail-open at the store layer).
+  hasSeenOutput: (
+    storeRoot: string,
+    workspaceKey: string,
+    sessionId: string,
+    hash: string,
+  ) => boolean;
+  recordSeenOutput: (
+    storeRoot: string,
+    workspaceKey: string,
+    sessionId: string,
+    hash: string,
+  ) => void;
 };
 
 export type SaverDecision = { updatedToolOutput: unknown } | { passthrough: true };
@@ -307,6 +320,12 @@ async function decide(
   const floorBytes = minBytesFor(tool, settings.mode);
   if (Buffer.byteLength(shape.raw, "utf8") <= floorBytes) return PASSTHROUGH;
 
+  // P1: a seen output is already in the conversation and (likely) in the
+  // client's prompt cache — rewriting it now would invalidate that cache and
+  // bill the whole prefix as a fresh cache write. First sight only.
+  const outputHash = hashToolOutput(shape.raw);
+  if (deps.hasSeenOutput(deps.storeRoot, workspaceKey, sessionId, outputHash)) return PASSTHROUGH;
+
   ctx.stage = "record";
   const recorded = await deps.record({
     storeRoot: deps.storeRoot,
@@ -328,9 +347,17 @@ async function decide(
     // B8: the gate above is the single eligibility authority; record()
     // collapses the filter thresholds onto it.
     compressFloorBytes: floorBytes,
+    // P1: content-derived chunk-set id so a re-run at the same position reuses
+    // the same id (idempotent store, no orphan chunk sets).
+    newId: () => `cs-${outputHash.slice(0, 32)}`,
     ...(sessionIntent !== undefined ? { intent: sessionIntent } : {}),
   });
   if (recorded.decision !== "compressed") return PASSTHROUGH;
+
+  // P1: mark seen ONLY after a confirmed compression — a passthrough/too-small
+  // output stays unmarked so a later larger version at the same position can
+  // still compress on its own first sight.
+  deps.recordSeenOutput(deps.storeRoot, workspaceKey, sessionId, outputHash);
 
   // Step 5: a qualifying compression updates the global latestCompression.
   deps.recordCompression(deps.storeRoot, workspaceKey);
