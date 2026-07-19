@@ -178,10 +178,10 @@ export type Lm1RecallBundle = {
 export type EvidenceBindingPort = {
   verify(input: {
     workspaceKey: string;
-    canonicalCaptureDigest: Sha256;
+    canonicalCaptureDigest: string;
     evidenceIds: readonly string[];
     authorization: string;
-  }): Promise<{ evidenceDigests: readonly Sha256[] } | null>;
+  }): Promise<{ evidenceDigests: readonly string[] } | null>;
 };
 
 export type EvidenceEligibilityPort = {
