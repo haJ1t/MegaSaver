@@ -5333,3 +5333,16 @@ lint clean. Behavioural fixtures added for the three mutant classes the reviewer
 identified as pin-only-and-dangerous: the ceiling mutant (still matches, so it
 redacts a prefix and reports green over a live key), the value-class widening, and
 three connection-string field names with no coverage.
+
+## [2026-07-19] ingest | LongMemEval-V2
+
+Ingested the official benchmark into [[sources/longmemeval-v2]]. It evaluates
+static state, dynamic state, workflow, gotchas, and premise awareness on an
+accuracy-latency frontier.
+
+## [2026-07-19] query | Evidence-Backed Long Memory Runtime
+
+User approved one agent-neutral, evidence-cited runtime for product recall and
+LongMemEval-V2. The architecture and LM0–LM3 delivery boundaries are in
+`docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md`; see
+[[concepts/long-memory-runtime]].
