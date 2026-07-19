@@ -41,6 +41,7 @@ export {
   type Lm1CaptureService,
   type Lm1Clock,
 } from "./lm1-capture.js";
+export { compareSnapshotsForCurrent, selectStructuralSnapshotLeaves } from "./lm1-state.js";
 export {
   MAX_EVIDENCE_IDS,
   MAX_EVIDENCE_ID_LENGTH,
