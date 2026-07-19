@@ -3,8 +3,11 @@
 - **Date:** 2026-07-19
 - **Risk:** HIGH (saver core path; evidence-preserving compression; touches every
   PostToolUse). Per risk-modes.md: full chain + architect + critic + worktree.
-- **Status:** problem-proven, design-direction. NOT yet brainstormed to approval —
-  this captures the finding and candidate approaches for the brainstorming gate.
+- **Status:** SUPERSEDED 2026-07-19 by
+  `2026-07-19-net-positive-megasaver-design.md` (brainstormed + user-approved).
+  The first-sight-only direction proposed here was adopted as its Stage A/P1;
+  the wider staged composition (ledger guardrail, turn-cutter warm start,
+  gated model cascade) lives there. Kept for the evidence trail.
 
 ## Problem (proven)
 
