@@ -16,3 +16,16 @@ export function compareSnapshotsForCurrent(left: Lm1Snapshot, right: Lm1Snapshot
   if (left.recordedAt !== right.recordedAt) return right.recordedAt.localeCompare(left.recordedAt);
   return left.id.localeCompare(right.id);
 }
+
+export function selectCurrentStateSnapshots(
+  snapshots: readonly Lm1Snapshot[],
+): readonly Lm1Snapshot[] {
+  const currentByStateKey = new Map<string, Lm1Snapshot>();
+  for (const snapshot of selectStructuralSnapshotLeaves(snapshots)) {
+    const current = currentByStateKey.get(snapshot.stateKey);
+    if (current === undefined || compareSnapshotsForCurrent(snapshot, current) < 0) {
+      currentByStateKey.set(snapshot.stateKey, snapshot);
+    }
+  }
+  return [...currentByStateKey.values()].sort(compareSnapshotsForCurrent);
+}

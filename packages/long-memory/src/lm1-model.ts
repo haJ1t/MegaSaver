@@ -8,6 +8,8 @@ export const MAX_LM1_TEXT_CODE_UNITS = 50_000;
 export const MAX_LM1_ACTION_CODE_UNITS = 5_000;
 export const MAX_LM1_STATE_KEY_CODE_UNITS = 512;
 export const MAX_LM1_EVIDENCE_IDS = 64;
+export const MAX_LM1_RECALL_TASK_CODE_UNITS = 20_000;
+export const MAX_LM1_RECALL_TOKEN_BUDGET = 100_000;
 
 const lowercaseUuidSchema = z
   .string()
@@ -158,11 +160,14 @@ export function prepareCapture(
   return result.data;
 }
 
-export type Lm1RecallRequest = {
-  workspaceKey: string;
-  task: string;
-  tokenBudget: number;
-};
+export const lm1RecallRequestSchema = z
+  .object({
+    workspaceKey: workspaceKeySchema,
+    task: z.string().trim().min(1).max(MAX_LM1_RECALL_TASK_CODE_UNITS),
+    tokenBudget: z.number().int().min(1).max(MAX_LM1_RECALL_TOKEN_BUDGET),
+  })
+  .strict();
+export type Lm1RecallRequest = z.infer<typeof lm1RecallRequestSchema>;
 
 export type Lm1RecallBundle = {
   items: readonly { type: "text"; value: string; observationId: string }[];

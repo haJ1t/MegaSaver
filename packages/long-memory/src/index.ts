@@ -6,10 +6,13 @@ export {
   LM1_SCHEMA_VERSION,
   MAX_LM1_ACTION_CODE_UNITS,
   MAX_LM1_EVIDENCE_IDS,
+  MAX_LM1_RECALL_TASK_CODE_UNITS,
+  MAX_LM1_RECALL_TOKEN_BUDGET,
   MAX_LM1_STATE_KEY_CODE_UNITS,
   MAX_LM1_TEXT_CODE_UNITS,
   lm1KindSchema,
   lm1RecordSchema,
+  lm1RecallRequestSchema,
   prepareCapture,
   prepareCaptureInputSchema,
   preparedCaptureSchema,
@@ -41,7 +44,19 @@ export {
   type Lm1CaptureService,
   type Lm1Clock,
 } from "./lm1-capture.js";
-export { compareSnapshotsForCurrent, selectStructuralSnapshotLeaves } from "./lm1-state.js";
+export {
+  compareSnapshotsForCurrent,
+  selectCurrentStateSnapshots,
+  selectStructuralSnapshotLeaves,
+} from "./lm1-state.js";
+export {
+  createLm1RecallService,
+  MAX_LM1_CANDIDATES,
+  MAX_LM1_EVIDENCE_LOOKUPS,
+  MAX_LM1_RECORDS_SCANNED,
+  MAX_LM1_TOKEN_BUDGET,
+  type Lm1RecallService,
+} from "./lm1-recall.js";
 export {
   MAX_EVIDENCE_IDS,
   MAX_EVIDENCE_ID_LENGTH,
