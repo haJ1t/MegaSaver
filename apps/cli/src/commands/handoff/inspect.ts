@@ -82,6 +82,9 @@ export async function runHandoffInspect(input: RunHandoffInspectInput): Promise<
       summary: summary.redacted,
     };
     if (diag.parsedManifest !== undefined) {
+      // Scoped to security-relevant claims only (redactions/secret paths and
+      // the entry counts a reviewer trusts); diffFiles/commits are cosmetic and
+      // would just add false-positive warnings.
       mismatch =
         redactionFindings > 0 ||
         secretPaths.length > 0 ||
@@ -124,8 +127,14 @@ export async function runHandoffInspect(input: RunHandoffInspectInput): Promise<
   input.stdout(`payload: ${diag.payloadSchema}`);
   if (diag.parsedManifest !== undefined) {
     const m = diag.parsedManifest;
+    // sourceProject.name is free-form (z.string) and NOT hash-protected, so a
+    // hostile packet embeds newlines/ANSI to forge verdict lines onto this
+    // trust surface; scrub control chars before printing (schema stays open).
+    const projectName = Array.from(m.sourceProject.name, (ch) =>
+      ch < " " || ch === "\u007f" ? " " : ch,
+    ).join("");
     input.stdout(
-      `from ${m.sourceAgent} to ${m.targetAgent} | project ${m.sourceProject.name} | expires ${m.expiresAt}`,
+      `from ${m.sourceAgent} to ${m.targetAgent} | project ${projectName} | expires ${m.expiresAt}`,
     );
     input.stdout(
       `manifest claims: redactions ${m.redactionFindings} | secret paths ${m.secretPathsExcluded} | memories ${m.counts.memories} | failures ${m.counts.failures}`,
