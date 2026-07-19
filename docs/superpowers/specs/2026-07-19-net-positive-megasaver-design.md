@@ -63,6 +63,16 @@ the proxy meters per-request usage (`proxy-usage/usage.jsonl`). Combine them in
   exist (overlay events + usage ledger); no new storage format — one new
   derived view + one persisted verdict file `stats/<wk>/net-effect.json`
   `{window, savedTokens, churnTokens, verdict, updatedAt}`.
+- **Hysteresis (`PAUSE_MARGIN = 1.5`):** the verdict is `negative` only when
+  `churnTokens > savedTokens * 1.5`, not merely when churn edges past savings.
+  **Accepted risk, signed off 2026-07-19:** the usage ledger carries no workspace
+  key, so excess is attributed by compression share and a workspace can inherit
+  churn it did not cause (5m-TTL expiry between turns, user edits, context
+  compaction). Without a margin, a genuinely cache-safe saver could be paused on
+  that noise. The margin does not weaken the invariant — a truly net-negative
+  saver produces churn that is a multiple of savings, well past 1.5x. Failure
+  direction remains safe: a false pause reverts to baseline cost, never breaks a
+  tool call and never overcharges; recovery is the manual `resume` command.
 - **Auto-pause:** verdict net-negative → saver decision path short-circuits to
   passthrough for that workspace. Doctor surfaces it:
   `saver-net-effect: NEGATIVE — auto-paused (run: mega saver resume)`.

@@ -30,6 +30,14 @@ export type NetEffectVerdict = {
 
 const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_CONTINUATION_ROWS = 20;
+// Hysteresis before auto-pausing. Churn attribution is a heuristic: the usage
+// ledger carries no workspace key, so excess is split by compression share and
+// a workspace can inherit churn it did not cause (5m-TTL expiry between turns,
+// user edits, context compaction). Requiring churn to clearly EXCEED savings —
+// not merely edge past them — keeps a cache-safe saver from being paused on
+// noise, while a genuinely net-negative saver (churn is multiples of savings)
+// still trips it.
+const PAUSE_MARGIN = 1.5;
 
 function median(sorted: number[]): number {
   const mid = Math.floor(sorted.length / 2);
@@ -70,7 +78,7 @@ export function estimateNetEffect(input: {
       workspaceKey: w.workspaceKey,
       savedTokens,
       churnTokens,
-      verdict: savedTokens - churnTokens < 0 ? "negative" : "ok",
+      verdict: churnTokens > savedTokens * PAUSE_MARGIN ? "negative" : "ok",
     };
   });
 }
