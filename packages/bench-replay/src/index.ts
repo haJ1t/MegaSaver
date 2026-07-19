@@ -8,3 +8,5 @@ export {
 export { startCaptureProxy, type CaptureProxy } from "./capture-proxy.js";
 export { transformRequest, type ApplySaver } from "./transform.js";
 export { makeSpawnedSaver, type RunHook } from "./saver-subprocess.js";
+export { replayArm, type Send, type SendResult } from "./replay.js";
+export { buildVerdict, calibrationOk, verdictStable } from "./report.js";
