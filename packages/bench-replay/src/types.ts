@@ -14,13 +14,20 @@ export type RecordedRequest = z.infer<typeof recordedRequestSchema>;
 
 export type Arm = "baseline" | "megasaver";
 
-export type ArmUsage = {
-  arm: Arm;
+export type RequestUsage = {
   inputTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
   outputTokens: number;
+};
+
+export type ArmUsage = RequestUsage & {
+  arm: Arm;
   normalizedCostUsd: number;
+  // The megasaver arm's cache_read collapsing while baseline's stays large is
+  // the one diagnostic that makes a prefix-churn regression obvious on sight;
+  // summing it away hides exactly that.
+  perRequest: readonly RequestUsage[];
 };
 
 export type ReplayVerdict = {

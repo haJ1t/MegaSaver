@@ -65,6 +65,10 @@ describe("transformRequest", () => {
       model: "m",
       messages: [
         {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "t1", name: "Bash", input: {} }],
+        },
+        {
           role: "user",
           content: [
             {
@@ -81,7 +85,7 @@ describe("transformRequest", () => {
       ],
     };
     const out = transformRequest(arrayBody, "megasaver", (raw) => `COMPRESSED(${raw.length})`);
-    const block = (out.messages[0] as { content: { content: unknown }[] }).content[0];
+    const block = (out.messages[1] as { content: { content: unknown }[] }).content[0];
     // "part one\npart two" is 17 chars.
     expect(block.content).toEqual([
       { type: "tool_reference", tool_name: "WebSearch" },
@@ -93,6 +97,10 @@ describe("transformRequest", () => {
     const imageOnlyBody = {
       model: "m",
       messages: [
+        {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "t1", name: "Bash", input: {} }],
+        },
         {
           role: "user",
           content: [
@@ -114,6 +122,10 @@ describe("transformRequest", () => {
     const arrayBody = {
       model: "m",
       messages: [
+        {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "t1", name: "Bash", input: {} }],
+        },
         {
           role: "user",
           content: [

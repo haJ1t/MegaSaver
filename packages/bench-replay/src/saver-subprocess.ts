@@ -42,13 +42,20 @@ export function makeSpawnedSaver(input: {
 }): ApplySaver {
   const run = input.run ?? defaultRun(input.megaBin, input.cwd, input.storeRoot);
 
-  return (rawToolResult) => {
+  return (rawToolResult, ctx) => {
     const payload = JSON.stringify({
       session_id: input.sessionId,
       cwd: input.cwd,
-      tool_name: "Bash",
-      tool_input: { command: "replay" },
-      tool_response: { stdout: rawToolResult, stderr: "" },
+      tool_name: ctx.toolName,
+      tool_input: ctx.toolInput,
+      // A bare string is one of the shapes readOutputShape accepts (apps/cli/src/
+      // hooks/saver.ts) and it is the honest one here: a recording preserves a
+      // single blob of tool_result text with no stdout/stderr split to
+      // reconstruct. Shape only decides where the hook FINDS the text — the
+      // decision itself turns on tool_name (floor + sourceKind) and tool_input
+      // (chunk-set label) — so a bare string measures the same compression a
+      // shape-faithful payload would, and can never be misread as empty.
+      tool_response: rawToolResult,
     });
     let out: string;
     try {
@@ -57,11 +64,9 @@ export function makeSpawnedSaver(input: {
       return null; // hook failed → treat as passthrough, same as production
     }
     try {
-      const parsed = JSON.parse(out) as {
-        hookSpecificOutput?: { updatedToolOutput?: { stdout?: unknown } };
-      };
-      const stdout = parsed.hookSpecificOutput?.updatedToolOutput?.stdout;
-      return typeof stdout === "string" ? stdout : null;
+      const parsed = JSON.parse(out) as { hookSpecificOutput?: { updatedToolOutput?: unknown } };
+      const updated = parsed.hookSpecificOutput?.updatedToolOutput;
+      return typeof updated === "string" ? updated : null;
     } catch {
       return null;
     }

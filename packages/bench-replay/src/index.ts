@@ -4,9 +4,10 @@ export {
   type ArmUsage,
   type RecordedRequest,
   type ReplayVerdict,
+  type RequestUsage,
 } from "./types.js";
 export { startCaptureProxy, type CaptureProxy } from "./capture-proxy.js";
-export { transformRequest, type ApplySaver } from "./transform.js";
+export { transformRequest, type ApplySaver, type ToolCallContext } from "./transform.js";
 export { makeSpawnedSaver, type RunHook } from "./saver-subprocess.js";
 export { replayArm, type Send, type SendResult } from "./replay.js";
 export { buildVerdict, calibrationOk, verdictStable } from "./report.js";

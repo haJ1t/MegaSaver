@@ -5,6 +5,7 @@ const recorded = [
   {
     model: "m",
     messages: [
+      { role: "assistant", content: [{ type: "tool_use", id: "t", name: "Bash", input: {} }] },
       { role: "user", content: [{ type: "tool_result", tool_use_id: "t", content: "RAW" }] },
     ],
   },
@@ -100,5 +101,167 @@ describe("replayArm", () => {
     ).rejects.toThrow(/network blew up/);
     // must not have gone on to send further requests after the failure
     expect(calls).toBe(2);
+  });
+});
+
+// Fix 1: a Messages API conversation resends its whole history, so a tool_result
+// recorded once appears in every later request. Production fires the saver hook
+// ONCE per tool call (PostToolUse) and the compressed text then sits in the
+// transcript byte-for-byte forever — that byte-stability is exactly what keeps
+// the prompt cache warm. Re-invoking the (stateful, non-deterministic) saver per
+// request would churn the megasaver arm's prefix and manufacture a ~20x
+// cache_creation penalty the product does not actually have.
+describe("replayArm saver memoization (once per tool_use_id)", () => {
+  const growing = [
+    {
+      model: "m",
+      messages: [
+        { role: "assistant", content: [{ type: "tool_use", id: "a", name: "Bash", input: {} }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "RAW-A" }] },
+      ],
+    },
+    {
+      model: "m",
+      messages: [
+        { role: "assistant", content: [{ type: "tool_use", id: "a", name: "Bash", input: {} }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "RAW-A" }] },
+        { role: "assistant", content: [{ type: "tool_use", id: "b", name: "Bash", input: {} }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "b", content: "RAW-B" }] },
+      ],
+    },
+    {
+      model: "m",
+      messages: [
+        { role: "assistant", content: [{ type: "tool_use", id: "a", name: "Bash", input: {} }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "RAW-A" }] },
+        { role: "assistant", content: [{ type: "tool_use", id: "b", name: "Bash", input: {} }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "b", content: "RAW-B" }] },
+        { role: "assistant", content: [{ type: "tool_use", id: "c", name: "Bash", input: {} }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "c", content: "RAW-C" }] },
+      ],
+    },
+  ];
+
+  const zeroUsage = {
+    input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 0,
+    output_tokens: 0,
+  };
+
+  function toolResultContentFor(body: unknown, id: string): unknown {
+    const msgs = (body as { messages: unknown[] }).messages;
+    for (const m of msgs) {
+      const content = (m as { content?: unknown }).content;
+      if (!Array.isArray(content)) continue;
+      for (const b of content) {
+        const block = b as { type?: string; tool_use_id?: string; content?: unknown };
+        if (block.type === "tool_result" && block.tool_use_id === id) return block.content;
+      }
+    }
+    return undefined;
+  }
+
+  it("invokes the saver once per distinct tool_use_id and reuses its text verbatim", async () => {
+    // Counter-based on purpose: mirrors the real saver's non-determinism (a
+    // randomUUID chunk-set id is embedded in the returned text), so a regression
+    // to per-request application fails loudly instead of coincidentally matching.
+    let calls = 0;
+    const sent: unknown[] = [];
+    await replayArm({
+      arm: "megasaver",
+      requests: growing,
+      applySaver: (raw) => {
+        calls++;
+        return `COMPRESSED(${raw})#${calls}`;
+      },
+      send: async (body) => {
+        sent.push(body);
+        return zeroUsage;
+      },
+    });
+
+    expect(calls).toBe(3);
+    const a0 = toolResultContentFor(sent[0], "a");
+    expect(a0).toBe("COMPRESSED(RAW-A)#1");
+    expect(toolResultContentFor(sent[1], "a")).toBe(a0);
+    expect(toolResultContentFor(sent[2], "a")).toBe(a0);
+    const b1 = toolResultContentFor(sent[1], "b");
+    expect(toolResultContentFor(sent[2], "b")).toBe(b1);
+  });
+
+  it("reuses a memoized passthrough (null) without re-invoking the saver", async () => {
+    let calls = 0;
+    await replayArm({
+      arm: "megasaver",
+      requests: growing,
+      applySaver: () => {
+        calls++;
+        return null;
+      },
+      send: async () => zeroUsage,
+    });
+    expect(calls).toBe(3);
+  });
+
+  it("passes the real tool identity to the saver, resolved from the tool_use block", async () => {
+    const seen: { toolUseId: string; toolName: string; toolInput: unknown }[] = [];
+    await replayArm({
+      arm: "megasaver",
+      requests: [
+        {
+          model: "m",
+          messages: [
+            {
+              role: "assistant",
+              content: [
+                { type: "tool_use", id: "t1", name: "Read", input: { file_path: "/repo/a.ts" } },
+              ],
+            },
+            {
+              role: "user",
+              content: [{ type: "tool_result", tool_use_id: "t1", content: "FILE BODY" }],
+            },
+          ],
+        },
+      ],
+      applySaver: (_raw, ctx) => {
+        seen.push(ctx);
+        return null;
+      },
+      send: async () => zeroUsage,
+    });
+    expect(seen).toEqual([
+      { toolUseId: "t1", toolName: "Read", toolInput: { file_path: "/repo/a.ts" } },
+    ]);
+  });
+});
+
+// Fix 4: the megasaver arm's cache_read collapsing while baseline's stays large
+// is the single diagnostic that makes a prefix-churn regression obvious on
+// sight. Summing it away before anyone can see it hides exactly that.
+describe("replayArm per-request usage", () => {
+  it("retains the per-request usage breakdown alongside the totals", async () => {
+    let n = 0;
+    const usage = await replayArm({
+      arm: "baseline",
+      requests: recorded,
+      applySaver: () => null,
+      send: async () => {
+        n++;
+        return {
+          input_tokens: n,
+          cache_creation_input_tokens: n * 10,
+          cache_read_input_tokens: n * 100,
+          output_tokens: n * 1000,
+        };
+      },
+    });
+    expect(usage.perRequest).toEqual([
+      { inputTokens: 1, cacheCreationTokens: 10, cacheReadTokens: 100, outputTokens: 1000 },
+      { inputTokens: 2, cacheCreationTokens: 20, cacheReadTokens: 200, outputTokens: 2000 },
+    ]);
+    expect(usage.inputTokens).toBe(3);
+    expect(usage.cacheReadTokens).toBe(300);
   });
 });

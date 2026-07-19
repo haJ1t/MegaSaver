@@ -8,6 +8,7 @@ const arm = (cost: number) => ({
   cacheReadTokens: 0,
   outputTokens: 0,
   normalizedCostUsd: cost,
+  perRequest: [],
 });
 
 describe("buildVerdict", () => {

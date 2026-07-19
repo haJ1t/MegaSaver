@@ -49,7 +49,11 @@ describe("makeSpawnedSaver store isolation (real binary)", () => {
         // is a passthrough decision (null) — the point here is the STORE WRITE the
         // hook makes on every valid payload (the invocation heartbeat), not
         // compression, which store isolation must land in `storeRoot`.
-        const result = apply("integration test raw tool output");
+        const result = apply("integration test raw tool output", {
+          toolUseId: "t1",
+          toolName: "Bash",
+          toolInput: { command: "echo hi" },
+        });
         expect(result).toBeNull();
 
         const isolatedHeartbeats = join(
