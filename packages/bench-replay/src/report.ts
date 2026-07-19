@@ -89,6 +89,23 @@ export function buildVerdict(
   };
 }
 
+// Pools the per-task ratios into one headline number. A geometric mean of each
+// verdict's costRatio rather than a cost-weighted sum of arm dollars: costRatio
+// is already the mean of BOTH replay orders, while `baseline`/`megasaver` carry
+// the baseline-first pair alone, so summing those dollars would quietly
+// reintroduce the cache-warming bias that running both orders exists to remove.
+// Unweighted by design — an expensive task counts the same as a cheap one — and
+// fails closed to NaN rather than pooling a ratio it cannot stand behind.
+export function pooledCostRatio(verdicts: readonly ReplayVerdict[]): number {
+  if (verdicts.length === 0) return Number.NaN;
+  let sumOfLogs = 0;
+  for (const verdict of verdicts) {
+    if (!(verdict.costRatio > 0) || !Number.isFinite(verdict.costRatio)) return Number.NaN;
+    sumOfLogs += Math.log(verdict.costRatio);
+  }
+  return Math.exp(sumOfLogs / verdicts.length);
+}
+
 // Two replays of the same pair in OPPOSITE orders must agree, or the number is
 // an artifact of which arm warmed the shared prefix rather than a property of
 // the saver. Same question `verdictStable` asks of two repeat runs, so it reuses

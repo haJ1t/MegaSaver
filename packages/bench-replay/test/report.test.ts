@@ -4,6 +4,7 @@ import {
   baselineDriftSmokeOk,
   buildVerdict,
   checkArmIntegrity,
+  pooledCostRatio,
   verdictStable,
 } from "../src/report.js";
 
@@ -32,6 +33,28 @@ describe("buildVerdict", () => {
   it("a zero-cost megasaver arm yields Infinity rather than NaN", () => {
     const v = buildVerdict("task_1", arm(1.0), { ...arm(0), arm: "megasaver" });
     expect(v.costRatio).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe("pooledCostRatio", () => {
+  const verdict = (ratio: number) =>
+    buildVerdict("t", arm(ratio), { ...arm(1), arm: "megasaver" as const });
+
+  it("is the geometric mean of the per-task ratios", () => {
+    expect(pooledCostRatio([verdict(4), verdict(1)])).toBeCloseTo(2, 9);
+  });
+
+  it("a single task pools to its own ratio", () => {
+    expect(pooledCostRatio([verdict(1.25)])).toBeCloseTo(1.25, 9);
+  });
+
+  it("refuses to pool an empty set", () => {
+    expect(pooledCostRatio([])).toBeNaN();
+  });
+
+  it("refuses to pool when any task ratio is not finite and positive", () => {
+    const infinite = buildVerdict("t", arm(1), { ...arm(0), arm: "megasaver" as const });
+    expect(pooledCostRatio([verdict(2), infinite])).toBeNaN();
   });
 });
 

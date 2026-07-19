@@ -41,5 +41,13 @@ export {
   checkArmIntegrity,
   costRatioOf,
   orderSensitive,
+  pooledCostRatio,
   verdictStable,
 } from "./report.js";
+export { assembleSseUsage, assembleUsage } from "./usage.js";
+export {
+  FIRST_PARTY_FLAG,
+  TASK_PROMPTS,
+  buildRecordCommand,
+  type RecordCommand,
+} from "./record-command.js";
