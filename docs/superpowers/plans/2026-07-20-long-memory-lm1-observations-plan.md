@@ -380,7 +380,7 @@ git commit -m "feat(memory): validate LM1 transitions"
 - Consumes: Task 1 recall schemas/port types, Task 2 store, Task 4 structural leaves.
 - Produces: createLm1RecallService({ store, evidenceEligibility }) with recall(request): Promise<Lm1RecallBundle>.
 
-- [ ] **Step 1: Write failing ranking, budget, and revocation tests**
+- [x] **Step 1: Write failing ranking, budget, and revocation tests**
 
 ~~~ts
 const result = await recall.recall({
@@ -399,13 +399,13 @@ expect(result.receipt).toMatchObject({
 
 Prove enumeration by kind then source digest before the 10,000 cap; score/observedAt/UUID tie ordering; zero-score suppression; full-item token-budget omission; 512-distinct-evidence omission; live status recheck after capture; transition endpoint eligibility; correction-chain omission; and stable receipt ordering.
 
-- [ ] **Step 2: Run recall tests red**
+- [x] **Step 2: Run recall tests red**
 
 Run: pnpm --filter @megasaver/long-memory test -- lm1-recall.test.ts
 
 Expected: FAIL because the recall service is absent.
 
-- [ ] **Step 3: Implement deterministic recall**
+- [x] **Step 3: Implement deterministic recall**
 
 ~~~ts
 const records = store.list(request.workspaceKey, MAX_LM1_RECORDS_SCANNED);
@@ -418,13 +418,13 @@ const ranked = rankBm25({
 
 Re-sort hits by score descending, observedAt descending, and id ascending. Before resolving each candidate, count new evidence IDs; omit it as omitted_evidence_limit if doing so exceeds 512. Require exact eligible evidence replies using the same helper as capture. Select only whole items whose Math.ceil(text.length / 4) fits the token budget. Emit exactly selected, omitted, scannedRecordCount, candidateCount, and evidenceLookupCount; permitted reasons are omitted_evidence_unavailable, omitted_evidence_limit, omitted_budget, and omitted_correction_chain_unavailable.
 
-- [ ] **Step 4: Run package tests green**
+- [x] **Step 4: Run package tests green**
 
 Run: pnpm --filter @megasaver/long-memory test && pnpm --filter @megasaver/long-memory typecheck
 
 Expected: all LM0 and LM1 tests pass and LM1 recall is deterministic and revocation-aware.
 
-- [ ] **Step 5: Commit recall**
+- [x] **Step 5: Commit recall**
 
 Run:
 ~~~bash
