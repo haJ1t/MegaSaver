@@ -23,8 +23,11 @@ function realStoreRoot(): string {
   return resolve(home, ".local", "share", "megasaver");
 }
 
-function readIfExists(path: string): string | null {
-  return existsSync(path) ? readFileSync(path, "utf8") : null;
+type Heartbeats = { workspaces: Record<string, string> };
+
+function readWorkspaceKeys(path: string): string[] {
+  if (!existsSync(path)) return [];
+  return Object.keys((JSON.parse(readFileSync(path, "utf8")) as Heartbeats).workspaces);
 }
 
 describe("makeSpawnedSaver store isolation (real binary)", () => {
@@ -36,7 +39,6 @@ describe("makeSpawnedSaver store isolation (real binary)", () => {
       const storeRoot = join(base, "store");
       mkdirSync(cwd, { recursive: true }); // execFileSync's cwd option needs a real dir; storeRoot is left absent on purpose.
       const realHeartbeats = join(realStoreRoot(), "stats", "saver-hook-heartbeats.json");
-      const before = readIfExists(realHeartbeats);
 
       try {
         const apply = makeSpawnedSaver({
@@ -62,15 +64,17 @@ describe("makeSpawnedSaver store isolation (real binary)", () => {
           "stats",
           "saver-hook-heartbeats.json",
         );
-        expect(existsSync(isolatedHeartbeats)).toBe(true);
-        const isolated = JSON.parse(readFileSync(isolatedHeartbeats, "utf8")) as {
-          workspaces: Record<string, string>;
-        };
-        expect(Object.keys(isolated.workspaces).length).toBeGreaterThan(0);
+        const isolatedKeys = readWorkspaceKeys(isolatedHeartbeats);
+        expect(isolatedKeys.length).toBeGreaterThan(0);
 
-        // The real store must be byte-identical to before: nothing leaked out of
-        // the isolated storeRoot into the operator's actual ~/.local/share/megasaver.
-        expect(readIfExists(realHeartbeats)).toBe(before);
+        // Isolation evidence, stated precisely: THIS test's temp cwd registered a
+        // workspace in the isolated store and in no circumstance in the real one.
+        // Byte-comparing the whole real heartbeat file would be flakier and
+        // weaker — any concurrent Claude Code session (including the one running
+        // `pnpm verify` in this dogfooding repo) mutates it through its own
+        // PostToolUse hook, failing the test for a leak that never happened.
+        const realKeys = readWorkspaceKeys(realHeartbeats);
+        for (const key of isolatedKeys) expect(realKeys).not.toContain(key);
       } finally {
         rmSync(base, { recursive: true, force: true });
       }
