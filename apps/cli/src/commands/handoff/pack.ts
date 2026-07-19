@@ -138,6 +138,8 @@ export async function runHandoffPack(input: RunHandoffPackInput): Promise<0 | 1>
   const notes = (emit: (line: string) => void): void => {
     if (report.noOpenSession) emit("note: no open session — project-scoped content only");
     if (report.degradedGit) emit("note: git unavailable — packet carries no git state");
+    if (report.gitDiffUnavailable)
+      emit("note: git diff unavailable — working-tree changes present but diff not captured");
   };
 
   if (input.dryRun) {
@@ -151,6 +153,7 @@ export async function runHandoffPack(input: RunHandoffPackInput): Promise<0 | 1>
           excludedPaths: report.excludedPaths,
           noOpenSession: report.noOpenSession,
           degradedGit: report.degradedGit,
+          gitDiffUnavailable: report.gitDiffUnavailable,
           badges: report.badges,
         }),
       );
@@ -218,6 +221,7 @@ export async function runHandoffPack(input: RunHandoffPackInput): Promise<0 | 1>
         excludedPaths: report.excludedPaths,
         noOpenSession: report.noOpenSession,
         degradedGit: report.degradedGit,
+        gitDiffUnavailable: report.gitDiffUnavailable,
       }),
     );
     return 0;

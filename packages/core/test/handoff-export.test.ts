@@ -250,6 +250,35 @@ describe("buildHandoffPacket — redaction, manifest, report", () => {
     expect(withGit.packet.manifest.counts.commits).toBe(1);
   });
 
+  it("flags gitDiffUnavailable when a tracked change exists but the diff is null", () => {
+    const { report } = buildHandoffPacket(
+      baseInput({
+        dirtyState: {
+          headSha: "abc1234",
+          dirty: true,
+          statusPaths: [{ path: "src/app.ts", status: " M" }],
+          diffText: null,
+        },
+      }),
+    );
+    expect(report.gitDiffUnavailable).toBe(true);
+    expect(report.degradedGit).toBe(false);
+  });
+
+  it("does not flag gitDiffUnavailable for an untracked-only tree", () => {
+    const { report } = buildHandoffPacket(
+      baseInput({
+        dirtyState: {
+          headSha: "abc1234",
+          dirty: true,
+          statusPaths: [{ path: "new.ts", status: "??" }],
+          diffText: null,
+        },
+      }),
+    );
+    expect(report.gitDiffUnavailable).toBe(false);
+  });
+
   it("recomputes badges into the report, never the payload", () => {
     const anchored = memory({
       content: "anchored row",

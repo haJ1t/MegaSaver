@@ -310,6 +310,20 @@ describe("runHandoffPack — entitled", () => {
     expect(packet.payload.git).toBeNull();
   });
 
+  it("partial git: dirty tree but diff probe fails, note printed, exit 0", async () => {
+    const diffProbeFails: ExecGit = (args) => {
+      const key = args.join(" ");
+      if (key === "rev-parse --abbrev-ref HEAD") return "feat/x\n";
+      if (key.startsWith("log ")) return "";
+      if (key === "status --porcelain -z") return " M src/app.ts\0";
+      if (key === "rev-parse HEAD") return "deadbeef\n";
+      throw new Error(`diff probe failed: ${key}`);
+    };
+    const { code } = run({ execGit: diffProbeFails, outPath: "p.megahandoff" });
+    expect(await code).toBe(0);
+    expect(out.join("\n")).toContain("git diff unavailable");
+  });
+
   it("no open session: report notes it, exit 0", async () => {
     const { code } = run({ outPath: "s.megahandoff" });
     expect(await code).toBe(0);

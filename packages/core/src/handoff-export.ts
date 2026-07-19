@@ -49,6 +49,7 @@ export interface HandoffPackReport {
   counts: { memories: number; failures: number; diffFiles: number; commits: number };
   noOpenSession: boolean;
   degradedGit: boolean;
+  gitDiffUnavailable: boolean;
   badges: { memoryId: string; badge: string }[];
 }
 
@@ -212,10 +213,11 @@ function buildGit(
 
   return {
     git: {
-      // gitDelta and dirtyState can degrade independently; one null with the
-      // other present still reads degradedGit=false with a partially-filled
-      // git object — by design until T10 wires real gathering, where both come
-      // from one probe.
+      // gitDelta and dirtyState come from two independent probes (own
+      // maxBuffer/timeout each); one can fail while the other succeeds, giving
+      // a partially-filled git object with degradedGit=false. The reader-facing
+      // gap — a dirty tree whose diff probe failed — is surfaced via the
+      // report's gitDiffUnavailable flag, not left silent.
       branch: input.gitDelta?.branch ?? null,
       headSha: input.dirtyState?.headSha ?? null,
       dirty: input.dirtyState?.dirty ?? false,
@@ -294,6 +296,13 @@ export function buildHandoffPacket(input: BuildHandoffPacketInput): BuildHandoff
     counts,
   };
 
+  // dirty tree + null diff is silent omission when a TRACKED change should have
+  // produced a diff but the probe failed (10MB/timeout); an all-`??` untracked
+  // tree yields the same null legitimately, so exclude it.
+  const ds = input.dirtyState;
+  const gitDiffUnavailable =
+    ds?.dirty === true && ds.diffText === null && ds.statusPaths.some((s) => s.status !== "??");
+
   return {
     packet: { manifest, payload },
     report: {
@@ -303,6 +312,7 @@ export function buildHandoffPacket(input: BuildHandoffPacketInput): BuildHandoff
       counts,
       noOpenSession: input.sessionId === null,
       degradedGit: git === null,
+      gitDiffUnavailable,
       badges: selected.map((m) => ({ memoryId: m.id, badge: verificationBadgeFor(m) })),
     },
   };
