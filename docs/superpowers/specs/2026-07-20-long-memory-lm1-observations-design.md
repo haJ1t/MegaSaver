@@ -100,7 +100,12 @@ type EvidenceBindingPort = {
     canonicalCaptureDigest: Sha256;
     evidenceIds: readonly LowercaseUuid[];
     authorization: string;
-  }): Promise<{ evidenceDigests: readonly Sha256[] } | null>;
+  }): Promise<{
+    evidence: readonly {
+      evidenceId: LowercaseUuid;
+      evidenceDigest: Sha256;
+    }[];
+  } | null>;
 };
 
 type RedactionPort = {
@@ -122,8 +127,10 @@ capture digest and redaction version, and only issues an opaque authorization
 after it has verified that observation against cited post-redaction evidence.
 The production adapter binds the authorization to workspace, sorted evidence
 ids, their persisted returned-content digests, and canonical capture digest
-using a coordinator-held authentication key. LM1 validates it through the port
-and persists only the returned evidence-digest commitment, never a secret. An
+using a coordinator-held authentication key. LM1 validates exact ordered
+id/digest pairs through the port and rejects missing, duplicate, extra,
+foreign, or out-of-order pairs before it persists the returned evidence-digest
+commitment, never a secret. An
 available same-workspace evidence id therefore cannot be attached to an
 unrelated observation through the production composition. The public-data
 adapter applies the same contract using fixture-owned authorization material.

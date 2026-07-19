@@ -8,6 +8,7 @@ import { createFileLm1Store } from "../src/lm1-store.js";
 const roots: string[] = [];
 const workspaceKey = "0123456789abcdef";
 const evidenceId = "11111111-1111-4111-8111-111111111111";
+const secondEvidenceId = "22222222-2222-4222-8222-222222222222";
 
 function createRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "megasaver-lm1-capture-"));
@@ -19,7 +20,8 @@ function createService(options?: {
   status?: "available" | "retained_metadata_only" | "revoked";
   unresolvedHighRisk?: boolean;
   evidenceIds?: readonly string[];
-  evidenceDigests?: readonly string[] | null;
+  binding?: readonly { evidenceId: string; evidenceDigest: string }[] | null;
+  eligibility?: unknown;
 }) {
   const redact = vi.fn(({ text, action }: { text: string; action: string | null }) => ({
     text,
@@ -32,18 +34,32 @@ function createService(options?: {
     redaction: { version: "redaction-v1", redact },
     evidenceBinding: {
       verify: async ({ evidenceIds }) =>
-        options?.evidenceDigests === null
+        options?.binding === null
           ? null
-          : { evidenceDigests: options?.evidenceDigests ?? evidenceIds.map(() => "a".repeat(64)) },
+          : {
+              evidence:
+                options?.binding ??
+                evidenceIds.map((resolvedEvidenceId) => ({
+                  evidenceId: resolvedEvidenceId,
+                  evidenceDigest: "a".repeat(64),
+                })),
+            },
     },
     evidenceEligibility: {
       resolve: async ({ workspaceKey: requestedWorkspaceKey, evidenceIds }) =>
-        (options?.evidenceIds ?? evidenceIds).map((resolvedEvidenceId) => ({
-          evidenceId: resolvedEvidenceId,
-          workspaceKey: requestedWorkspaceKey,
-          status: options?.status ?? "available",
-          unresolvedHighRisk: options?.unresolvedHighRisk ?? false,
-        })),
+        (options !== undefined && "eligibility" in options
+          ? options.eligibility
+          : (options?.evidenceIds ?? evidenceIds).map((resolvedEvidenceId) => ({
+              evidenceId: resolvedEvidenceId,
+              workspaceKey: requestedWorkspaceKey,
+              status: options?.status ?? "available",
+              unresolvedHighRisk: options?.unresolvedHighRisk ?? false,
+            }))) as unknown as {
+          evidenceId: string;
+          workspaceKey: string;
+          status: "available" | "retained_metadata_only" | "revoked";
+          unresolvedHighRisk: boolean;
+        }[],
     },
     clock: { now: () => "2026-07-20T00:00:01.000Z" },
   });
@@ -113,5 +129,31 @@ describe("LM1 capture service", () => {
     ).rejects.toMatchObject({
       code: "evidence_unavailable",
     });
+  });
+
+  it("rejects an out-of-order evidence binding", async () => {
+    const { service } = createService({
+      binding: [
+        { evidenceId: secondEvidenceId, evidenceDigest: "a".repeat(64) },
+        { evidenceId, evidenceDigest: "b".repeat(64) },
+      ],
+    });
+    const prepared = service.prepare({
+      ...snapshotInput(),
+      evidenceIds: [secondEvidenceId, evidenceId],
+    });
+
+    await expect(
+      service.capturePrepared({ prepared, authorization: "signed" }),
+    ).rejects.toMatchObject({ code: "evidence_binding_invalid" });
+  });
+
+  it("maps a malformed evidence eligibility reply to a closed error", async () => {
+    const { service } = createService({ eligibility: null });
+    const prepared = service.prepare(snapshotInput());
+
+    await expect(
+      service.capturePrepared({ prepared, authorization: "signed" }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
   });
 });
