@@ -15,6 +15,7 @@ import { firewallCommand } from "./commands/firewall.js";
 import { githubCommand } from "./commands/github/index.js";
 import { guardCommand } from "./commands/guard/index.js";
 import { guiCommand } from "./commands/gui.js";
+import { handoffCommand } from "./commands/handoff/index.js";
 import { hooksCommand } from "./commands/hooks/index.js";
 import { indexCommand } from "./commands/index/index.js";
 import { initCommand } from "./commands/init.js";
@@ -67,6 +68,7 @@ export const mainCommand = defineCommand({
     github: githubCommand,
     gui: guiCommand,
     guard: guardCommand,
+    handoff: handoffCommand,
     fail: failCommand,
     firewall: firewallCommand,
     learn: learnCommand,

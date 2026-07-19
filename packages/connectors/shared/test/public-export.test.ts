@@ -21,5 +21,9 @@ describe("@megasaver/connectors-shared public exports", () => {
     expect(typeof pkg.MEGA_SAVER_WS_BLOCK_END).toBe("string");
     expect(typeof pkg.renderWarmStartBlockText).toBe("function");
     expect(typeof pkg.containsSentinel).toBe("function");
+    expect(typeof pkg.MEGA_SAVER_HANDOFF_BLOCK_START).toBe("string");
+    expect(typeof pkg.MEGA_SAVER_HANDOFF_BLOCK_END).toBe("string");
+    expect(typeof pkg.upsertHandoffBlockText).toBe("function");
+    expect(typeof pkg.renderHandoffBlockText).toBe("function");
   });
 });

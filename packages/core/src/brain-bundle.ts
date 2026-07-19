@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { z } from "zod";
+import { type BundleFrameConfig, parseBundle, serializeBundle, sha256Hex } from "./bundle-frame.js";
 import { failedAttemptSchema } from "./failed-attempt.js";
 import { memoryEntrySchema } from "./memory-entry.js";
 import { projectRuleSchema } from "./project-rule.js";
@@ -48,9 +48,13 @@ export type BrainPayload = z.infer<typeof brainPayloadSchema>;
 
 export type BrainBundle = { manifest: BrainManifest; payload: BrainPayload };
 
-function sha256Hex(text: string): string {
-  return createHash("sha256").update(text, "utf8").digest("hex");
-}
+const brainFrame: BundleFrameConfig<BrainManifest, BrainPayload> = {
+  schemaVersion: BRAIN_SCHEMA_VERSION,
+  manifestSchema: brainManifestSchema,
+  payloadSchema: brainPayloadSchema,
+  payloadShaOf: (manifest) => manifest.payloadSha256,
+  makeError: (code, message) => new BrainBundleError(code, message),
+};
 
 export function serializeBrainBundle(input: {
   sourceProject: { id: string; name: string };
@@ -59,7 +63,7 @@ export function serializeBrainBundle(input: {
   payload: BrainPayload;
 }): string {
   const payloadRaw = JSON.stringify(input.payload);
-  const manifest: BrainManifest = brainManifestSchema.parse({
+  const manifest: BrainManifest = {
     schemaVersion: BRAIN_SCHEMA_VERSION,
     kind: "megabrain",
     sourceProject: input.sourceProject,
@@ -71,61 +75,10 @@ export function serializeBrainBundle(input: {
     },
     payloadSha256: sha256Hex(payloadRaw),
     redactionFindings: input.redactionFindings,
-  });
-  return `${JSON.stringify(manifest)}\n${payloadRaw}`;
+  };
+  return serializeBundle(brainFrame, { manifest, payload: input.payload });
 }
 
 export function parseBrainBundle(text: string): BrainBundle {
-  const idx = text.indexOf("\n");
-  if (idx === -1) {
-    throw new BrainBundleError(
-      "malformed",
-      "Bundle must contain a manifest line and a payload line.",
-    );
-  }
-  const manifestRaw = text.slice(0, idx);
-  // Serialize never appends a trailing newline; strip one a transfer/editor may
-  // have added so a benign final newline isn't misread as corruption.
-  const payloadRaw = text.slice(idx + 1).replace(/\r?\n$/, "");
-
-  let manifestJson: unknown;
-  try {
-    manifestJson = JSON.parse(manifestRaw);
-  } catch {
-    throw new BrainBundleError("malformed", "Bundle manifest is not valid JSON.");
-  }
-  if (manifestJson === null || typeof manifestJson !== "object") {
-    throw new BrainBundleError("malformed", "Bundle manifest is not a JSON object.");
-  }
-  const version = (manifestJson as { schemaVersion?: unknown }).schemaVersion;
-  if (version !== BRAIN_SCHEMA_VERSION) {
-    throw new BrainBundleError(
-      "unsupported_version",
-      `Bundle schemaVersion ${String(version)} is not supported; this build reads version ${BRAIN_SCHEMA_VERSION}. Upgrade mega.`,
-    );
-  }
-  const manifestResult = brainManifestSchema.safeParse(manifestJson);
-  if (!manifestResult.success) {
-    throw new BrainBundleError("malformed", "Bundle manifest failed schema validation.");
-  }
-  const manifest = manifestResult.data;
-
-  if (sha256Hex(payloadRaw) !== manifest.payloadSha256) {
-    throw new BrainBundleError(
-      "hash_mismatch",
-      "Bundle payload hash mismatch — file is corrupted or tampered.",
-    );
-  }
-
-  let payloadJson: unknown;
-  try {
-    payloadJson = JSON.parse(payloadRaw);
-  } catch {
-    throw new BrainBundleError("malformed", "Bundle payload is not valid JSON.");
-  }
-  const payloadResult = brainPayloadSchema.safeParse(payloadJson);
-  if (!payloadResult.success) {
-    throw new BrainBundleError("malformed", "Bundle payload failed schema validation.");
-  }
-  return { manifest, payload: payloadResult.data };
+  return parseBundle(brainFrame, text);
 }

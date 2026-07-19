@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import type { GitDelta } from "@megasaver/core";
+import type { GitDelta, HandoffDirtyState } from "@megasaver/core";
 
 export type ExecGit = (args: string[], cwd: string) => string;
 
@@ -101,4 +101,41 @@ export function gatherGitDelta(
   }
 
   return { commits, changedFiles, branch };
+}
+
+export function gatherDirtyState(
+  cwd: string,
+  execGit: ExecGit = defaultExecGit,
+): HandoffDirtyState | null {
+  // -z: NUL-separated records, never C-quoted — quoted paths would silently
+  // bypass downstream evaluatePathRead secret filtering
+  const status = tryGit(execGit, ["status", "--porcelain", "-z"], cwd);
+  if (status === null) return null;
+
+  const statusPaths: HandoffDirtyState["statusPaths"] = [];
+  let skipOldPath = false;
+  for (const record of status.split("\0")) {
+    if (skipOldPath) {
+      skipOldPath = false;
+      continue;
+    }
+    if (record === "") continue;
+    const state = record.slice(0, 2);
+    const path = record.slice(3);
+    // rename/copy records (either XY column — staged "R " or worktree " R")
+    // carry the OLD path in the next NUL field; the record's own path is
+    // already the NEW one downstream filters must match
+    if (state.includes("R") || state.includes("C")) skipOldPath = true;
+    if (path === "") continue;
+    statusPaths.push({ path, status: state });
+  }
+
+  const headSha = tryGit(execGit, ["rev-parse", "HEAD"], cwd)?.trim() ?? null;
+  const dirty = statusPaths.length > 0;
+  const diffRaw = dirty
+    ? `${tryGit(execGit, ["diff"], cwd) ?? ""}\n${tryGit(execGit, ["diff", "--cached"], cwd) ?? ""}`
+    : null;
+  const diffText = diffRaw !== null && diffRaw.trim() !== "" ? diffRaw : null;
+
+  return { headSha, dirty, statusPaths, diffText };
 }

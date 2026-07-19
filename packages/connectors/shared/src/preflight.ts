@@ -1,4 +1,9 @@
-import { MEGA_SAVER_CG_BLOCK_END, MEGA_SAVER_CG_BLOCK_START } from "./constants.js";
+import {
+  MEGA_SAVER_CG_BLOCK_END,
+  MEGA_SAVER_CG_BLOCK_START,
+  MEGA_SAVER_HANDOFF_BLOCK_END,
+  MEGA_SAVER_HANDOFF_BLOCK_START,
+} from "./constants.js";
 import { ConnectorError } from "./errors.js";
 import { type ParsedBlock, parseBlock } from "./parse.js";
 
@@ -28,6 +33,15 @@ export function projectionPreflight(content: string, opts: { expectHeader?: bool
   // If a future renderer can interleave, this preflight must add an ordering check.
   try {
     parseBlock(content, { start: MEGA_SAVER_CG_BLOCK_START, end: MEGA_SAVER_CG_BLOCK_END });
+  } catch (err) {
+    throw asProjectionInvalid(err);
+  }
+
+  try {
+    parseBlock(content, {
+      start: MEGA_SAVER_HANDOFF_BLOCK_START,
+      end: MEGA_SAVER_HANDOFF_BLOCK_END,
+    });
   } catch (err) {
     throw asProjectionInvalid(err);
   }
