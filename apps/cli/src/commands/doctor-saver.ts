@@ -4,14 +4,15 @@ import { constants, accessSync, existsSync, readFileSync, readdirSync } from "no
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { hookCommandMatches } from "@megasaver/connector-claude-code";
-import { readHeartbeatView, writeNetEffectRecord } from "@megasaver/context-gate";
-import { readDiscovery } from "@megasaver/daemon";
-import { readControlState, readRuntimeState } from "@megasaver/proxy-control";
 import {
   estimateNetEffect,
   overlayTokenSaverEventSchema,
+  readHeartbeatView,
   sumBytesSavedSince,
-} from "@megasaver/stats";
+  writeNetEffectRecord,
+} from "@megasaver/context-gate";
+import { readDiscovery } from "@megasaver/daemon";
+import { readControlState, readRuntimeState } from "@megasaver/proxy-control";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import type { Check } from "./doctor.js";
 import { resolveClaudeCodeSettingsPath } from "./hooks/settings-path.js";
