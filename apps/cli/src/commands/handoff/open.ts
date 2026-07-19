@@ -11,9 +11,7 @@ import {
   resolveStorePath,
 } from "../../store.js";
 import { findProjectByCwd } from "../warmup.js";
-import { HANDOFF_BADGE_NOTE, gate } from "./shared.js";
-
-const MAX_PACKET_BYTES = 10 * 1024 * 1024;
+import { HANDOFF_BADGE_NOTE, MAX_PACKET_BYTES, gate } from "./shared.js";
 
 export type RunHandoffOpenInput = {
   storeRoot: string;
@@ -164,8 +162,13 @@ export async function runHandoffOpen(input: RunHandoffOpenInput): Promise<0 | 1>
     // stats are advisory — never fail the open over a bad event write
   }
 
-  if (openFindings > 0) {
-    input.stderr(`warning: open-side redaction replaced ${openFindings} secret(s) from the packet`);
+  // Block fields are re-redacted above; --merge scrubs memory content/title on
+  // its own path — fold both so the warning reflects every secret scrubbed.
+  const totalFindings = openFindings + (mergeReport?.redactionFindings ?? 0);
+  if (totalFindings > 0) {
+    input.stderr(
+      `warning: open-side redaction replaced ${totalFindings} secret(s) from the packet`,
+    );
   }
   if (input.json) {
     input.stdout(

@@ -5,6 +5,15 @@ import { PRO_ANALYTICS_URL } from "../savings/index.js";
 
 export const HANDOFF_UPSELL = `Hot handoff is a Mega Saver Pro feature. Activate a key: mega license activate <key>. Learn more: ${PRO_ANALYTICS_URL}.`;
 
+// Single size lever for open + inspect, both of which run the shared (quadratic)
+// redaction pass over attacker-controlled packet text. An honest packet's
+// worst case is well under ~128KB: resume brief ≤2000 tok (~8KB) + task summary
+// ≤8000 tok (~32KB) + diff ≤HANDOFF_DIFF_TOKEN_CAP 2000 tok (~8KB) + ≤20
+// memories + ≤10 failures (content/evidence, ~a few KB each). 512KB caps the
+// worst-case redaction well under 1s (1MB ≈ 1.1s, quadratic) while leaving ~4x
+// headroom over that ceiling; a hostile MB-scale packet is refused before read.
+export const MAX_PACKET_BYTES = 512 * 1024;
+
 // A "verified" badge means the SENDER anchored it — never a check against this
 // repo — so both the open and inspect renderers must qualify it or the reader
 // infers false trust.

@@ -1,9 +1,8 @@
 import { readFileSync, statSync } from "node:fs";
 import type { ProjectId } from "@megasaver/shared";
 import { defineCommand } from "citty";
-import { HANDOFF_BADGE_NOTE } from "./shared.js";
+import { HANDOFF_BADGE_NOTE, MAX_PACKET_BYTES } from "./shared.js";
 
-const MAX_PACKET_BYTES = 10 * 1024 * 1024;
 // evaluatePathRead's `project` field is a vestigial label the function never
 // reads (context-gate read.ts:122); inspect has no project context.
 const INSPECT_PROJECT_ID = "00000000-0000-4000-8000-000000000000" as ProjectId;

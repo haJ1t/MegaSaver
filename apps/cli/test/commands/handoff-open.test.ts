@@ -6,7 +6,7 @@ import { readHandoffEvents } from "@megasaver/core";
 import { activateLicense } from "@megasaver/entitlement";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runHandoffOpen } from "../../src/commands/handoff/open.js";
-import { HANDOFF_UPSELL } from "../../src/commands/handoff/shared.js";
+import { HANDOFF_UPSELL, MAX_PACKET_BYTES } from "../../src/commands/handoff/shared.js";
 import { ensureStoreReady } from "../../src/store.js";
 
 type LicensePayload = { v: number; tier: string; id: string; iat: number; exp: number | null };
@@ -175,6 +175,37 @@ describe("runHandoffOpen — entitled", () => {
     expect(existsSync(join(projectRoot, "AGENTS.md"))).toBe(false);
   });
 
+  it("default cap refuses a packet over the honest ceiling before read", async () => {
+    await seedProject();
+    const file = writePacket({ resume: "a".repeat(MAX_PACKET_BYTES + 1024) });
+    const { code } = run({ filePath: file });
+    expect(await code).toBe(1);
+    expect(err.join("\n")).toContain("exceeds");
+    expect(existsSync(join(projectRoot, "AGENTS.md"))).toBe(false);
+  });
+
+  it("a realistic full-size honest packet fits under the cap with margin", () => {
+    const memories = Array.from({ length: 20 }, (_, i) => ({
+      ...packetMemory,
+      id: `33333333-3333-4333-8333-3333333333${String(10 + i)}`,
+      content: `decision ${i}: ${"x".repeat(1500)}`,
+    }));
+    const diffText = "d".repeat(8 * 1024);
+    const file = writePacket({
+      resume: "r".repeat(8 * 1024),
+      memories,
+      git: {
+        branch: "main",
+        headSha: null,
+        dirty: true,
+        commits: [],
+        changedFiles: [],
+        diff: { text: diffText, truncated: false, excludedPaths: [] },
+      },
+    });
+    expect(readFileSync(file).byteLength).toBeLessThan(MAX_PACKET_BYTES / 2);
+  });
+
   it("expired packet: exit 1, nothing written", async () => {
     await seedProject();
     const file = writePacket({ expiresAt: "2026-07-15T11:59:00.000Z" });
@@ -293,5 +324,23 @@ describe("runHandoffOpen — entitled", () => {
     expect(imported?.sessionId).toBeNull();
     expect(imported?.evidence ?? []).toContain("handoff:alpha");
     expect(out.join("\n")).toContain("suggested");
+  });
+
+  it("--merge redacts a secret in memory content and folds it into the warning", async () => {
+    await seedProject();
+    const secret = `ghp_${"d".repeat(36)}`;
+    const secretMemory = { ...packetMemory, content: `token ${secret} for auth` };
+    const file = writePacket({ memories: [secretMemory] });
+    let n = 0;
+    const newId = () => `44444444-4444-4444-8444-4444444444${String(40 + n++)}`;
+    const { code } = run({ filePath: file, merge: true, newId });
+    expect(await code).toBe(0);
+    const { registry } = await ensureStoreReady(root);
+    const imported = registry
+      .listMemoryEntries(RECEIVER_ID as never)
+      .find((m) => m.content.includes("for auth"));
+    expect(imported?.content).not.toContain(secret);
+    expect(imported?.content).toContain("gh*_[REDACTED]");
+    expect(err.join("\n")).toContain("open-side redaction replaced 1 secret");
   });
 });

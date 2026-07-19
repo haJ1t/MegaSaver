@@ -1,3 +1,4 @@
+import { redactWithFindings } from "@megasaver/policy";
 import { memoryEntryIdSchema } from "@megasaver/shared";
 import type { ProjectId } from "@megasaver/shared";
 import { CoreRegistryError } from "./errors.js";
@@ -20,6 +21,7 @@ export interface ApplyHandoffMemoriesInput {
 export interface HandoffMergeReport {
   imported: number;
   skipped: number;
+  redactionFindings: number;
   badges: { memoryId: string; badge: string }[];
 }
 
@@ -42,13 +44,22 @@ export function applyHandoffMemories(input: ApplyHandoffMemoriesInput): HandoffM
 
   let imported = 0;
   let skipped = 0;
+  let redactionFindings = 0;
   const badges: { memoryId: string; badge: string }[] = [];
 
   for (const entry of input.packet.payload.memories) {
-    if (contentKeys.has(entry.content)) {
+    // The registry is user-controlled state like a written file: an exotic
+    // secret in packet content/title must be scrubbed before it persists,
+    // matching the open-side block guarantee. Dedupe on the REDACTED content so
+    // re-running a secret-bearing packet stays idempotent (stored rows already
+    // hold the redacted form).
+    const content = redactWithFindings(entry.content);
+    const title = redactWithFindings(entry.title);
+    if (contentKeys.has(content.redacted)) {
       skipped += 1;
       continue;
     }
+    redactionFindings += content.count + title.count;
     // lastVerified is a LOCAL audit stamp: it asserts a verification event
     // that never happened in this repo, and closedByCodeTruth is an ownership
     // flag the code-truth heal path trusts. The anchor stays (re-verifiable
@@ -56,6 +67,8 @@ export function applyHandoffMemories(input: ApplyHandoffMemoriesInput): HandoffM
     const { supersedesId: _dropped, lastVerified: _stamp, ...rest } = entry;
     const created = input.registry.createMemoryEntry({
       ...rest,
+      content: content.redacted,
+      title: title.redacted,
       id: memoryEntryIdSchema.parse(input.newId()),
       projectId: input.projectId,
       sessionId: null,
@@ -67,10 +80,10 @@ export function applyHandoffMemories(input: ApplyHandoffMemoriesInput): HandoffM
       keywords: stripReservedKeywords(rest.keywords),
       evidence: [...(entry.evidence ?? []), provenance],
     });
-    contentKeys.add(entry.content);
+    contentKeys.add(content.redacted);
     imported += 1;
     badges.push({ memoryId: created.id, badge: verificationBadgeFor(created) });
   }
 
-  return { imported, skipped, badges };
+  return { imported, skipped, redactionFindings, badges };
 }

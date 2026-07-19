@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runHandoffInspect } from "../../src/commands/handoff/inspect.js";
+import { MAX_PACKET_BYTES } from "../../src/commands/handoff/shared.js";
 
 const NOW_MS = Date.parse("2026-07-15T12:00:00.000Z");
 const now = () => NOW_MS;
@@ -166,6 +167,11 @@ describe("runHandoffInspect", () => {
 
   it("oversized packet: exit 1 before read", async () => {
     expect(await run(writePacket(), { maxPacketBytes: 4 })).toBe(1);
+    expect(err.join("\n")).toContain("exceeds");
+  });
+
+  it("default cap refuses a packet over the honest ceiling before read", async () => {
+    expect(await run(writePacket({ resume: `${"a".repeat(MAX_PACKET_BYTES + 1024)}` }))).toBe(1);
     expect(err.join("\n")).toContain("exceeds");
   });
 

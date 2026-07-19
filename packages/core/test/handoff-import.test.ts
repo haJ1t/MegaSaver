@@ -188,6 +188,24 @@ describe("applyHandoffMemories", () => {
     expect(registry.listFailedAttempts(project.id)).toHaveLength(0);
   });
 
+  it("redacts an exotic-format secret in memory content and counts it", () => {
+    const { registry, project } = target();
+    const token = `ghp_${"c".repeat(36)}`;
+    const secretMem = mem({ content: `use token ${token} to auth`, title: `key ${token}` });
+    const report = applyHandoffMemories({
+      registry,
+      projectId: project.id,
+      packet: packetWith([secretMem]),
+      now: NOW_MS,
+      newId,
+    });
+    const [m] = registry.listMemoryEntries(project.id);
+    expect(m?.content).not.toContain(token);
+    expect(m?.content).toContain("gh*_[REDACTED]");
+    expect(m?.title).not.toContain(token);
+    expect(report.redactionFindings).toBe(2);
+  });
+
   it("throws on unknown target project", () => {
     const registry = createInMemoryCoreRegistry();
     expect(() =>
