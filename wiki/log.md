@@ -3682,3 +3682,15 @@ sentinel upsert + policy firewall + entitlement — no new store.
   (core/cli/connectors-shared/entitlement/stats), `pnpm verify` green.
   Wiki: `entities/hot-handoff.md` created, index + i10 portfolio row
   marked SHIPPED. Branch not yet merged.
+
+## [2026-07-19] pr | Hot Handoff (i10) opened as PR #293
+
+Branch `worktree-feat-hot-handoff` (36 commits) pushed and opened as
+[PR #293](https://github.com/haJ1t/MegaSaver/pull/293), to be squash-merged
+per §10. `pnpm verify` green on HEAD; final gauntlet passed (code-reviewer
+APPROVE, adversarial critic REVISE→fixed, verifier DoD MET with a captured
+built-CLI acceptance run). Deferred follow-up filed: the LOCKED redaction
+baseline in `packages/policy` misses 7 cloud credential formats (Stripe,
+OpenAI project, Google, Slack, GitHub fine-grained, SendGrid, npm) —
+pre-existing, shared with `brain export`, needs its own spec + security
+review before the detectors change.
