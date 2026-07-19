@@ -689,6 +689,7 @@ describe("sessionSaverCommand wiring", () => {
       "disable",
       "enable",
       "resolve",
+      "resume",
       "stats",
       "status",
       "workspace",
