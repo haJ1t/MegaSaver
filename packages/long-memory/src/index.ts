@@ -1,4 +1,5 @@
 export const LONG_MEMORY_PACKAGE = "@megasaver/long-memory";
+export { createInMemoryLongMemoryStore, type LongMemoryStore } from "./store.js";
 export {
   observationKindSchema,
   observationSchema,
