@@ -99,8 +99,9 @@ Success criteria:
    layered on top, not a replacement. It also created a silent-divergence
    class — a regex edited without its `prefix` field yields a detector
    that never runs, i.e. a leak with no failing test. Removed. The
-   absolute cost it was meant to address is ~2.3 ms for all 32 detectors
-   over a 1 MB buffer, which is noise on every sink.)*
+   absolute cost it was meant to address is 27.8 ms for the full
+   50-detector set over 1 MiB of realistic text, which is noise on every
+   sink.)*
 5. **Context-gated low-confidence rules:** included, with an indicator
    lookbehind that is **case-insensitive and left-bounded**, plus a
    trailing lookahead (§4b).
@@ -119,6 +120,18 @@ lookahead over the same class. Without it a token longer than the cap is
 truncated and the tail stays in cleartext — a partial redaction that still
 leaks. The security gate measured 6–16 surviving secret characters across
 eight detectors that lacked this.
+
+**Accepted trade-off of that discipline.** The guard converts an
+over-cap token from a *partial* match into a *total* non-match: a bare
+token longer than its cap now gets zero redaction where it previously got
+partial redaction. This was measured non-reachable for every current
+format — each cap clears its real shape with headroom (a real
+`sk-proj-<74>T3BlbkFJ<74>` key is 164 B against a 317 B break; Azure 40 B,
+HuggingFace 40 B, SendGrid 69 B, Stripe 107 B all match in full) — and
+inside an env-var container `env_value` still catches the value. It is
+recorded here rather than left implicit, because a future provider
+lengthening a token is the one path that makes it real, and the fix then
+is to raise the cap, not to drop the guard.
 
 ### 4a. Prefix-anchored, high confidence
 
@@ -344,20 +357,42 @@ three sites — three hand-copied sentences would drift. It stays out of
    uppercase SHA-256 digests containing `AC`+32 hex.
 3. **Ordering — behavioral and structural.** One behavioral test per rule
    in §6. Plus one structural test over the whole table: for each ordered
-   pair, derive the leading literal run from `pattern.source` (strip a
-   leading `\b`, take characters up to the first metacharacter) and
-   assert that if one entry's literal is a proper prefix of another's,
-   the more specific entry has the lower index. Five hand-picked pairs
-   cannot cover ~1,275.
+   pair, derive the leading literal run from `pattern.source` and assert
+   that if one entry's literal is a proper prefix of another's, the more
+   specific entry has the lower index. Six hand-picked pairs cannot cover
+   ~1,190.
+
+   **The derivation must read through non-capturing alternations and
+   single-character classes, not stop at the first metacharacter.** The
+   naive form (stop at `(` or `[`) yields four false failures that were
+   measured against this exact table: `sk-` derived from
+   `openai_project_key` appears to precede `sk-ant-`, and `xox` derived
+   from the three Slack token rules appears to precede `xoxe`. All four
+   were verified as artifacts — each format is claimed and labelled
+   correctly end to end. Deriving `sk-(?:proj|svcacct|admin)-` and
+   `xox[ar]-` through their groups removes the artifact without a
+   whitelist.
 4. **LOCKED snapshot.** A frozen inline table asserting `{name,
    pattern.source, pattern.flags, replacement, hasValidate}` for the
    original 19 — minus the single intended `private_key_block` change,
    which the snapshot records in its fixed form. This converts §2's
    safety invariant from a promise into a CI gate.
-5. **ReDoS timing regression.** Each detector is timed against adversarial
-   input at four scales (20/39/78/156 KiB of prefix-repetition padding),
-   asserting a generous wall-clock ceiling. `openai_project_key` carries
-   the 313 KiB case explicitly, since that is the one measured to blow up.
+5. **ReDoS timing regression — scoped to the new tier.** Each detector
+   added by this change is timed against adversarial input at four scales
+   (20/39/78/156 KiB of prefix-repetition padding), asserting a generous
+   wall-clock ceiling. `openai_project_key` carries the 313 KiB case
+   explicitly, since that is the one measured to blow up (11.47 ms
+   bounded, versus 4× per doubling unbounded).
+
+   The ceiling deliberately does **not** cover the original 19: the
+   existing `jwt` detector is already strongly super-linear — 31.1 /
+   114.2 / 437.0 / 1850.2 ms at those same scales against
+   `'eyJaA0'.repeat(n)`, and reachable from realistic base64-JSON log
+   output (an unbroken 24.6 KiB run costs 9.93 ms, 4× per doubling). That
+   is a pre-existing exposure this change neither introduces nor is
+   scoped to fix, and §13 locks the detector. Applying the gate to it
+   would fail CI on day one for a defect out of scope. Recorded as a
+   follow-up in §14.
 6. **PKCS#8 before/after.** `private_key_block` matches bare
    `-----BEGIN PRIVATE KEY-----`, a GCP service-account JSON with escaped
    newlines, and every previously-covered variant.
@@ -424,8 +459,18 @@ enforcement, so "LOCKED" is evaluable rather than decorative.
 
 ## 14. Known follow-ups (not in scope)
 
-Stripe `whsec_` webhook signing secrets; GitLab `glrt-` runner
-authentication tokens (the live replacement for the deprecated
+**`jwt` ReDoS (live exposure in shipped code, own chain required).** The
+existing `jwt` detector backtracks super-linearly: 31.1 / 114.2 / 437.0 /
+1850.2 ms at 20/39/78/156 KiB against `'eyJaA0'.repeat(n)`, with one run
+peaking at 7,268 ms at 78 KiB; a control on non-`eyJ` text costs 0.08 ms.
+It is reachable from realistic base64-JSON log output, so every sink that
+redacts agent output can be stalled by ordinary — not even adversarial —
+input. Same class as the DoS fixed on the handoff path. Out of scope here
+(§13 locks the detector and this change neither introduces nor touches
+it), tracked separately.
+
+Also deferred: Stripe `whsec_` webhook signing secrets; GitLab `glrt-`
+runner authentication tokens (the live replacement for the deprecated
 `GR1348941` format included here); Slack `xoxc-`/`xoxd-` browser session
 tokens. Self-managed GitLab lets administrators change the `glpat-`
 prefix entirely, so every GitLab detector here is gitlab.com-specific —
