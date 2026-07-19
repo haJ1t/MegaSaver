@@ -3739,3 +3739,25 @@ creep or unproven cost claims. The near-term feature sequence remains Agent
 Passport / Hot Handoff → Brain Doctor → Context Contracts → Déjà Vu; Hot
 Handoff remains separately owned. Sources: [[syntheses/global-agent-continuity-strategy]],
 [[syntheses/solo-developer-roadmap]], user approval 2026-07-19.
+
+## [2026-07-20] plan | Redaction baseline extension planned (CRITICAL)
+
+13-task TDD plan (3,458 lines) at
+`docs/superpowers/plans/2026-07-19-redaction-baseline-extension-plan.md`,
+implementing `docs/superpowers/specs/2026-07-19-redaction-baseline-extension-design.md`.
+31 new credential detectors plus a PKCS#8 fix to the existing
+`private_key_block`. Both CRITICAL design gates ran and returned REVISE:
+the architect measured the proposed prefix pre-filter as a 3x
+pessimization (V8 already fast-paths literal-anchored regexes) and the
+security reviewer found 6 BLOCKING defects — a quadratic ReDoS in the
+OpenAI detector, case-sensitive context gates that leaked 7 of 8
+canonical uppercase env-var shapes, a false "already covered" exclusion
+claim that turned out to be a real PKCS#8 gap in shipped code, 360
+corpus false positives from a Mailgun rule (dropped), 8 detectors
+missing trailing boundaries, and an unanchored GitHub App rule that ate
+file paths. All integrated; re-check APPROVE_WITH_FIXES, closed.
+Safety gates land before the detectors: frozen snapshot of the original
+19, a 5,010-line false-positive corpus, ordering tests (behavioral plus
+structural), and a ReDoS timing regression scoped to the new tier.
+Separately filed: a live ReDoS in the shipped `jwt` detector
+(1850 ms at 156 KiB, reachable from ordinary base64-heavy logs).
