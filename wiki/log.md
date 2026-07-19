@@ -3793,3 +3793,34 @@ mutation-tested the boundary operator.
 Correction to an earlier claim in this session: `bundle-smoke` **skips** when no
 bundle exists, so `main` was not red for everyone — only for anyone with a built
 bundle on disk.
+## 2026-07-20 — Variance-controlled benchmark harness (L0 + L1) built; fast-mode premise retracted
+
+Built `feat/bench-replay` (15 commits, 101 package tests green) implementing the
+L0 cost-normalization + L1 record/replay harness from
+[[syntheses/variance-controlled-benchmark]].
+
+**Retraction.** The spec's premise that a fast-mode 2x billing artifact drove
+benchmark variance was checked against all 24 saved Stage A result files and is
+FALSE: every one is `service_tier: standard`, `fast_mode_state: off`, with raw
+`total_cost_usd` equal to normalized cost (0% deviation). L0 changes no number
+on current data and is kept only as insurance. Corrected in
+[[syntheses/saver-cache-churn]].
+
+**Real variance sources:** (1) agent turn count driving cache_read near-linearly;
+(2) previously unidentified — the saver's per-workspace store carrying over
+between runs. task_1 ran 5/5 turns in both Stage A runs yet megasaver
+cache_creation fell 48,681 → 29,613 (baseline 30,129): the saver had switched
+itself off. Its run-2 "1.03x pass" was decay, not success.
+
+**Review caught four defects that would each have produced a confident wrong
+number:** saver applied per-request instead of per-tool-call (would have imposed
+a ~20x cache penalty on the arm under test); an isolated store silently
+disabling the saver (inert arm reporting 1.00x); arm run order contaminating via
+the shared prompt-cache prefix; and array-form `tool_result` blocks (14.4% of
+17,584 real blocks) passing through untransformed. All fixed.
+
+**Not done:** the real gate has not run — replay needs an `ANTHROPIC_API_KEY`
+(Claude Code's OAuth is not usable by a separate HTTP client). No Stage A
+verdict exists; `feat/net-positive-stage-a` remains parked and ungated.
+Sources: code-reviewer + critic passes 2026-07-20, direct inspection of
+`/tmp/stagea-run{1,2}-results`.

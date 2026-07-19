@@ -93,12 +93,42 @@ effect", not "it worked".
 
 ### The real finding: benchmark variance now exceeds the effect
 
-- Same task, same code: task_1 run1 **0.70x** → run2 **1.03x** on near-identical
-  token counts — a pure fast-mode 2x billing artifact (`total_cost_usd` mixes
-  1x and 2x served requests).
+- Same task, same code: task_1 run1 **0.70x** → run2 **1.03x**.
 - Agent path is nondeterministic: task_4 baseline took **10 turns** in run 1 and
   **6** in run 2; task_2 megasaver input swung **384k → 591k** for the same prompt.
 - Spread **0.68x–1.23x (1.8×)** against a ~5% effect.
+
+### CORRECTION (2026-07-20): the fast-mode billing hypothesis was WRONG
+
+The original text above attributed task_1's 0.70x → 1.03x swing to a fast-mode
+2x billing artifact. **That is false and is retracted.** All 24 saved result
+files across both Stage A runs were checked directly:
+
+| field | value in all 24 files |
+|---|---|
+| `fast_mode_state` | `off` |
+| `usage.service_tier` | `standard` |
+| raw `total_cost_usd` ÷ normalized cost | **1.000** (0% deviation) |
+
+No 1x/2x mixing exists in this data. Cost normalization (L0) therefore changes
+no number here; it is kept only as insurance against a tier the benchmark has
+not yet been served at.
+
+The two variance sources that are real:
+
+1. **Turn count → cache_read, near-linearly.** task_4 baseline 10 turns /
+   402k cache_read → 6 turns / 203k. task_3 megasaver 12 turns / 507k →
+   18 turns / 776k. This was correctly identified originally.
+2. **Saver state carry-over between runs (NOT previously identified).**
+   task_1 ran **5/5 turns in both runs** — no path variance at all — yet
+   megasaver `cache_creation` went **48,681 → 29,613**, landing on baseline's
+   30,129. The saver compressed in run 1 and did essentially nothing in run 2.
+   Its per-workspace store (first-sight hash ledger + net-effect auto-pause
+   verdict) survived between runs.
+
+Consequence: **task_1's "1.03x pass" in run 2 was Stage A switching itself off,
+not Stage A working.** Any harness that reuses a saver store across runs
+measures the saver's decay, not its effect.
 
 Consequence: **no stage can be validated with this harness** — including Stage B
 (P2 turn-cutter), whose target metric (turn count) is exactly what swings randomly.
