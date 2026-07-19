@@ -3712,3 +3712,17 @@ survives only on large first-sight output. First-party fix robust
 docs/superpowers/specs/2026-07-19-cache-aware-saver-design.md
 (HIGH risk; candidate: first-sight-only compression). Benchmark script
 now takes MEGA_SAVER_MODE env (default balanced).
+
+## [2026-07-19] ingest | Stage A measured: gate FAILED, benchmark variance is the blocker
+
+Stage A (P0 guardrail + P1 first-sight saver) implemented via subagent-driven
+TDD, 11 commits, every task 2-stage reviewed, adversarial final review (no
+BLOCKERs), `pnpm verify` 54/54 green. Benchmark gate FAILED: geomean 0.948x
+(needed ≥1.0x), min task 0.68x (needed ≥0.9x), pooled 0.971x. Pre-Stage-A was
+0.96x — Stage A produced NO measurable improvement. Root finding: harness
+variance (0.68x–1.23x spread; task_1 flipped 0.70x→1.03x on identical tokens
+via fast-mode 2x billing; task_4 baseline 10→6 turns across runs) exceeds the
+~5% effect. No stage — including Stage B's turn-cutter — can be validated
+until measurement is fixed. Branch parked unmerged. Two real by-products kept:
+a latent `newId` collision that silently broke evidence writes (found+fixed in
+Task 7), and the 1.5x pause hysteresis. See [[syntheses/saver-cache-churn]].

@@ -70,6 +70,48 @@ optimizing a cost the client already solved, and paying to do so.
   non-recurring tool output (big log dumps, wide greps read once) would favor the
   saver more. Not yet measured.
 
+## Stage A results (2026-07-19) — gate FAILED, and the harness is now the blocker
+
+Stage A (P0 ledger guardrail + P1 first-sight-only saver) was implemented,
+fully reviewed, and `pnpm verify` green (54/54). It was then measured with the
+Stage A build deployed globally, balanced mode, 2 full runs (8 task-pairs):
+
+| task | run 1 | run 2 | ms turns | bl turns |
+|---|---:|---:|---|---|
+| task_1 | 0.70x | 1.03x | 5 / 5 | 5 / 5 |
+| task_2 | 1.15x | 0.88x | 11, 13 | 14, 13 |
+| task_3 | 1.23x | 1.07x | 12, 18 | 14, 18 |
+| task_4 | 1.02x | 0.68x | 10, 11 | 10, 6 |
+
+- geomean of 8 ratios **0.948x** (gate wanted ≥1.0x) → **FAIL**
+- min task **0.68x** (gate wanted ≥0.9x) → **FAIL**
+- pooled total cost **0.971x** ($5.06 megasaver vs $4.92 baseline)
+
+**Stage A produced no measurable improvement.** Pre-Stage-A balanced was 0.96x;
+Stage A pooled is 0.97x — indistinguishable. The honest claim is "no measured
+effect", not "it worked".
+
+### The real finding: benchmark variance now exceeds the effect
+
+- Same task, same code: task_1 run1 **0.70x** → run2 **1.03x** on near-identical
+  token counts — a pure fast-mode 2x billing artifact (`total_cost_usd` mixes
+  1x and 2x served requests).
+- Agent path is nondeterministic: task_4 baseline took **10 turns** in run 1 and
+  **6** in run 2; task_2 megasaver input swung **384k → 591k** for the same prompt.
+- Spread **0.68x–1.23x (1.8×)** against a ~5% effect.
+
+Consequence: **no stage can be validated with this harness** — including Stage B
+(P2 turn-cutter), whose target metric (turn count) is exactly what swings randomly.
+Fixing measurement is the critical path before further optimization.
+
+Cheapest known fixes: compute cost from the token breakdown at fixed standard
+rates (kills the fast-mode artifact outright, pure arithmetic, zero extra runs);
+and control agent-path nondeterminism (replay a fixed tool-call transcript through
+both arms, or raise N with normalized cost).
+
+Stage A branch `feat/net-positive-stage-a` (11 commits) is parked unmerged
+pending a harness that can resolve the effect.
+
 ## Direction
 
 Make the saver **cache-aware** — compress only what the client won't cache cheaply,
