@@ -54,6 +54,38 @@ describe("estimateNetEffect", () => {
     expect(out.find((v) => v.workspaceKey === "b")?.verdict).toBe("negative");
   });
 
+  it("churn within the 1.5x margin does NOT pause (hysteresis against misattributed churn)", () => {
+    // saved 1000 tok (4000 B); churn 1200 → exceeds savings but stays inside the
+    // margin, so a cache-safe saver is not paused on attribution noise.
+    const rows = [
+      ...flatRows(19, 1000),
+      { ts: IN_WINDOW, cacheCreationTokens: 2200, messageCount: 5 },
+    ];
+    const [v] = estimateNetEffect({
+      nowIso: NOW,
+      workspaces: [{ workspaceKey: "wk1", savedBytesInWindow: 4000, compressionsInWindow: 5 }],
+      usageRows: rows,
+    });
+    expect(v?.churnTokens).toBe(1200);
+    expect(v?.savedTokens).toBe(1000);
+    expect(v?.verdict).toBe("ok");
+  });
+
+  it("churn beyond the 1.5x margin pauses", () => {
+    // saved 1000 tok; churn 1600 > 1500 → negative.
+    const rows = [
+      ...flatRows(19, 1000),
+      { ts: IN_WINDOW, cacheCreationTokens: 2600, messageCount: 5 },
+    ];
+    const [v] = estimateNetEffect({
+      nowIso: NOW,
+      workspaces: [{ workspaceKey: "wk1", savedBytesInWindow: 4000, compressionsInWindow: 5 }],
+      usageRows: rows,
+    });
+    expect(v?.churnTokens).toBe(1600);
+    expect(v?.verdict).toBe("negative");
+  });
+
   it("unknown when usage rows are insufficient (< 20 continuation rows in window)", () => {
     const [v] = estimateNetEffect({
       nowIso: NOW,
