@@ -30,6 +30,7 @@ function deps(overrides: Partial<Parameters<typeof buildSaverDecision>[1]> = {})
     recordCompression: vi.fn(),
     recordFailure: vi.fn(),
     recordCompletion: vi.fn(),
+    saverPaused: () => false,
     ...overrides,
   };
 }
@@ -41,6 +42,8 @@ const bigBash = (text: string) => ({
   session_id: "live-1",
   cwd: "/Users/x/proj",
 });
+
+const compressiblePayload = () => bigBash("X".repeat(50_000));
 
 describe("buildSaverDecision", () => {
   it("compresses an eligible large Bash output and preserves the output shape", async () => {
@@ -286,6 +289,7 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
     recordCompression: () => {},
     recordFailure: () => {},
     recordCompletion: () => {},
+    saverPaused: () => false,
   });
 
   function evidenceRecords(storeRoot: string, cwd: string): unknown[] {
@@ -346,6 +350,7 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
       recordCompression: () => {},
       recordFailure: () => {},
       recordCompletion: () => {},
+      saverPaused: () => false,
     });
     expect("updatedToolOutput" in out).toBe(true);
     if ("updatedToolOutput" in out) {
@@ -418,6 +423,7 @@ describe("buildSaverDecision intent fill-gap", () => {
       readSessionIntent: () => "refactor the auth module",
       recordInvocation: () => {},
       recordCompression: () => {},
+      saverPaused: () => false,
       record: async (input: { intent?: string }) => {
         captured = input;
         return {
@@ -444,6 +450,7 @@ describe("buildSaverDecision intent fill-gap", () => {
       readSessionIntent: () => undefined,
       recordInvocation: () => {},
       recordCompression: () => {},
+      saverPaused: () => false,
       record: async (input: Record<string, unknown>) => {
         captured = input;
         return {
@@ -927,5 +934,22 @@ describe("E21 failure + completion ledger", () => {
     });
     const out = await buildSaverDecision(bigBash("X".repeat(50_000)), d);
     expect("updatedToolOutput" in out).toBe(true);
+  });
+});
+
+describe("net-effect auto-pause gate", () => {
+  it("net-effect pause forces passthrough even when settings enable the saver", async () => {
+    const d = deps({
+      resolveSettings: () => ({ enabled: true, mode: "balanced" as const }),
+      saverPaused: () => true,
+    });
+    const decision = await buildSaverDecision(compressiblePayload(), d);
+    expect(decision).toEqual({ passthrough: true });
+  });
+
+  it("saverPaused defaults to not-paused when dep reports false", async () => {
+    const d = deps({ saverPaused: () => false });
+    const decision = await buildSaverDecision(compressiblePayload(), d);
+    expect("updatedToolOutput" in decision).toBe(true);
   });
 });

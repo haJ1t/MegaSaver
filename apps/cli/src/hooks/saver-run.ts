@@ -8,6 +8,7 @@ import {
   recordFailureHeartbeat,
   recordInvocationHeartbeat,
   resolveWorkspaceTokenSaverSettings,
+  saverPausedByNetEffect,
 } from "@megasaver/context-gate";
 import {
   type RecordOverlayOutputInput,
@@ -159,6 +160,7 @@ export async function runSaverHookFromProcess(): Promise<void> {
       recordCompression,
       recordFailure,
       recordCompletion,
+      saverPaused: saverPausedByNetEffect,
     };
     const decision = await buildSaverDecision(payload, deps);
     const s = renderSaverStdout(decision);

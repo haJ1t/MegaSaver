@@ -99,6 +99,7 @@ describe("saver hook — repository-family inheritance across worktrees", () => 
       recordCompression: () => {},
       recordFailure: () => {},
       recordCompletion: () => {},
+      saverPaused: () => false,
     });
     expect("updatedToolOutput" in out).toBe(true);
     if ("updatedToolOutput" in out) {
@@ -132,6 +133,7 @@ describe("saver hook — repository-family inheritance across worktrees", () => 
         recordCompression: () => {},
         recordFailure: () => {},
         recordCompletion: () => {},
+        saverPaused: () => false,
       },
     );
     expect(out).toEqual({ passthrough: true });
