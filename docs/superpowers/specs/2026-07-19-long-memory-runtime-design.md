@@ -1,6 +1,6 @@
 ---
 topic: long-memory-runtime
-status: user-approved design; written-spec review pending
+status: user-approved; LM0 implementation verified
 risk: HIGH
 date: 2026-07-19
 sources:
@@ -56,6 +56,19 @@ scope and splits implementation into separate HIGH-risk specs/plans:
 LM0 is the next implementation-plan candidate after the written spec is
 reviewed. Each slice gets its own worktree, TDD, architect/critic review, and
 `pnpm verify` result.
+
+## LM0 implementation boundary
+
+LM0 is implemented as a new leaf package with strict state-observation and
+recall/receipt schemas, deterministic per-workspace digest idempotency, BM25
+recall, and a JSONL `insert|query` host. Its development-only LongMemEval-V2
+adapter holds one local Node child process per memory instance and maps public
+trajectory states to state snapshots.
+
+LM0 deliberately does not write `MemoryEntry`, Evidence Ledger, connector, or
+agent-facing product stores. It does not claim semantic retrieval, transitions,
+runbooks, gotchas, premises, or multimodal retrieval; those require the
+separate LM1–LM3 plans above.
 
 ## Constraints
 
