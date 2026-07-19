@@ -3652,3 +3652,33 @@ versions per the existing convention — core stayed 1.3.0 across v2.0.0/v2.1.0)
 
 All three i14 gauntlet follow-ups now closed. Merged branches + worktrees cleaned
 up.
+
+## [2026-07-19] feat | Hot Handoff (i10) shipped
+
+Subagent-driven implementation of i10 Hot Handoff on
+`worktree-feat-hot-handoff` (spec
+`docs/superpowers/specs/2026-07-18-hot-handoff-design.md`, plan
+`docs/superpowers/plans/2026-07-18-hot-handoff-plan.md`). `mega handoff
+pack/open/inspect/clear` — redacted, expiring `.megahandoff` task packets
+carry live task state (budgeted brief + recallable memories + unresolved
+failures + secret-path-filtered dirty diff) across agents; suggested-gate
+memory merge; new `hot-handoff` ProFeature (dry-run/inspect/clear free);
+advisory `HandoffEvent` stats stream. New modules: core `bundle-frame`,
+`handoff-packet`, `handoff-export`, `handoff-import`, `verification-badge`;
+connectors-shared `handoff-block`; stats `handoff-event`; cli `handoff/*`.
+Reuses the `.megabrain` bundle frame + Warm Start brief + connectors-shared
+sentinel upsert + policy firewall + entitlement — no new store.
+
+- 13 TDD tasks, red→green→refactor; every task two-stage reviewed
+  (code-reviewer + critic in fresh contexts, author≠reviewer).
+- Security findings caught + fixed pre-merge: NaN expiry (Date overflow),
+  C-quoted-path secret-filter bypass, resolved-session memory leak,
+  commit-subject redaction gap, Trojan-Source/ANSI sentinel forgery, CRLF
+  block corruption, badge forgery, inspect report forgery, and a citty
+  root-run+subCommands routing regression (→ subcommands-only surface).
+- Close-out (this session): DRY consolidation (`HANDOFF_BADGE_NOTE` +
+  core-exported `agentSlugSchema` reused by the CLI), spec §7 + Status
+  updated to the subcommand surface, five-package changeset added
+  (core/cli/connectors-shared/entitlement/stats), `pnpm verify` green.
+  Wiki: `entities/hot-handoff.md` created, index + i10 portfolio row
+  marked SHIPPED. Branch not yet merged.
