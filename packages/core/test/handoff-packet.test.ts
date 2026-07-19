@@ -159,6 +159,20 @@ describe("parseHandoffPacket", () => {
   it("rejects a single-line file with malformed", () => {
     expect(codeOf(() => parseHandoffPacket("{}", { now: NOW }))).toBe("malformed");
   });
+
+  it("rejects non-slug agent fields (escape/newline forgery)", () => {
+    const idx = text.indexOf("\n");
+    const hostile = { ...manifestLineOf(text), sourceAgent: "claude\u001b[31m\n-code" };
+    const hostileText = `${JSON.stringify(hostile)}\n${text.slice(idx + 1)}`;
+    expect(codeOf(() => parseHandoffPacket(hostileText, { now: NOW }))).toBe("malformed");
+    expect(diagnoseHandoffPacket(hostileText, { now: NOW }).manifest).toBe("malformed");
+    const badTarget = { ...manifestLineOf(text), targetAgent: "Codex Agent" };
+    expect(
+      codeOf(() =>
+        parseHandoffPacket(`${JSON.stringify(badTarget)}\n${text.slice(idx + 1)}`, { now: NOW }),
+      ),
+    ).toBe("malformed");
+  });
 });
 
 describe("diagnoseHandoffPacket", () => {

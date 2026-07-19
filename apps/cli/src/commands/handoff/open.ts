@@ -142,8 +142,9 @@ export async function runHandoffOpen(input: RunHandoffOpenInput): Promise<0 | 1>
         projectId: project.id,
         kind: "open",
         targetAgent: target.id,
-        memories: packet.manifest.counts.memories,
-        failures: packet.manifest.counts.failures,
+        // payload lengths, not manifest counts: the manifest is attacker-writable
+        memories: packet.payload.memories.length,
+        failures: packet.payload.failures.length,
         redactionFindings: openFindings,
         createdAt: new Date(input.now()).toISOString(),
       },
@@ -163,7 +164,15 @@ export async function runHandoffOpen(input: RunHandoffOpenInput): Promise<0 | 1>
         path: absPath,
         expiresAt: packet.manifest.expiresAt,
         redactionFindings: openFindings,
-        ...(mergeReport === null ? {} : { merge: mergeReport }),
+        ...(mergeReport === null
+          ? {}
+          : {
+              merge: {
+                ...mergeReport,
+                badgeNote:
+                  "badges reflect sender-supplied anchors, not yet checked against this repo",
+              },
+            }),
       }),
     );
     return 0;

@@ -21,6 +21,13 @@ export class HandoffPacketError extends Error {
   }
 }
 
+// Agent ids are echoed verbatim into terminal reports on the open side; a slug
+// shape blocks \n / ANSI forgery at the boundary. All real ids conform.
+const agentSlugSchema = z
+  .string()
+  .max(64)
+  .regex(/^[a-z0-9][a-z0-9-]*$/);
+
 // payloadSha256 protects ONLY the payload line; manifest fields themselves are
 // not integrity-protected — counts, expiry, and agents are sender-asserted.
 export const handoffManifestSchema = z
@@ -28,8 +35,8 @@ export const handoffManifestSchema = z
     schemaVersion: z.literal(HANDOFF_SCHEMA_VERSION),
     kind: z.literal("megahandoff"),
     sourceProject: z.object({ name: z.string().trim().min(1) }).strict(),
-    sourceAgent: z.string().min(1),
-    targetAgent: z.string().min(1),
+    sourceAgent: agentSlugSchema,
+    targetAgent: agentSlugSchema,
     createdAt: z.string().datetime({ offset: true }),
     expiresAt: z.string().datetime({ offset: true }),
     payloadSha256: z.string().regex(/^[0-9a-f]{64}$/),

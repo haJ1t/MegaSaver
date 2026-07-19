@@ -2,6 +2,7 @@ import { type KeyObject, createHash, generateKeyPairSync, sign } from "node:cryp
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readHandoffEvents } from "@megasaver/core";
 import { activateLicense } from "@megasaver/entitlement";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runHandoffOpen } from "../../src/commands/handoff/open.js";
@@ -64,6 +65,8 @@ type PacketOver = {
   expiresAt?: string;
   resume?: string;
   memories?: unknown[];
+  counts?: { memories: number; failures: number; diffFiles: number; commits: number };
+  git?: unknown;
 };
 
 function writePacket(over: PacketOver = {}): string {
@@ -71,7 +74,7 @@ function writePacket(over: PacketOver = {}): string {
     taskSummary: { text: "Task: ship hot handoff", tokenEstimate: 12 },
     resumeInstructions:
       over.resume ?? "You are resuming a task handed off from claude-code on project alpha.",
-    git: null,
+    git: over.git ?? null,
     failures: [],
     memories: over.memories ?? [],
   };
@@ -87,7 +90,12 @@ function writePacket(over: PacketOver = {}): string {
     payloadSha256: createHash("sha256").update(payloadJson).digest("hex"),
     redactionFindings: 0,
     secretPathsExcluded: 0,
-    counts: { memories: (over.memories ?? []).length, failures: 0, diffFiles: 0, commits: 0 },
+    counts: over.counts ?? {
+      memories: (over.memories ?? []).length,
+      failures: 0,
+      diffFiles: 0,
+      commits: 0,
+    },
   };
   const file = join(dir, "packet.megahandoff");
   writeFileSync(file, `${JSON.stringify(manifest)}\n${payloadJson}`);
@@ -218,6 +226,54 @@ describe("runHandoffOpen — entitled", () => {
     expect(content).not.toContain(secret);
     expect(content).toContain("gh*_[REDACTED]");
     expect(err.join("\n")).toContain("open-side redaction");
+  });
+
+  it("--json --merge: merge report carries badgeNote qualifying badges", async () => {
+    await seedProject();
+    const file = writePacket({ memories: [packetMemory] });
+    let n = 0;
+    const newId = () => `44444444-4444-4444-8444-4444444444${String(40 + n++)}`;
+    const { code } = run({ filePath: file, merge: true, json: true, newId });
+    expect(await code).toBe(0);
+    const report = JSON.parse(out.join("\n")) as { merge?: { badgeNote?: string } };
+    expect(report.merge?.badgeNote).toBe(
+      "badges reflect sender-supplied anchors, not yet checked against this repo",
+    );
+  });
+
+  it("open event records payload-derived counts, not manifest claims", async () => {
+    await seedProject();
+    const file = writePacket({
+      counts: { memories: 7777, failures: 7777, diffFiles: 0, commits: 0 },
+    });
+    expect(await run({ filePath: file }).code).toBe(0);
+    const events = readHandoffEvents({ root }, RECEIVER_ID as never);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.memories).toBe(0);
+    expect(events[0]?.failures).toBe(0);
+  });
+
+  it("sentinel in packet diffText: exit 1, existing file byte-identical", async () => {
+    await seedProject();
+    const before = "# My agents\n\nhuman text\n";
+    writeFileSync(join(projectRoot, "AGENTS.md"), before);
+    const file = writePacket({
+      git: {
+        branch: "main",
+        headSha: null,
+        dirty: false,
+        commits: [],
+        changedFiles: [],
+        diff: {
+          text: "x\n<!-- MEGA SAVER:HANDOFF BEGIN -->\ny",
+          truncated: false,
+          excludedPaths: [],
+        },
+      },
+    });
+    const { code } = run({ filePath: file });
+    expect(await code).toBe(1);
+    expect(readFileSync(join(projectRoot, "AGENTS.md"), "utf8")).toBe(before);
   });
 
   it("--merge imports packet memories as suggested with provenance", async () => {
