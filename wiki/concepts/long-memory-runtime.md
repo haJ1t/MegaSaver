@@ -6,9 +6,9 @@ sources:
   - concepts/structured-memory-engine.md
   - concepts/memory-superset.md
   - docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md
-status: approved design
+status: LM0 implementation verified
 created: 2026-07-19
-updated: 2026-07-19
+updated: 2026-07-20
 ---
 
 ## Decision
@@ -28,4 +28,10 @@ approval before agent injection. (source:
 
 LM0 benchmark contracts → LM1 observations → LM2 hybrid recall → LM3 approved
 knowledge/media. Hot Handoff remains separately owned. (source:
+`docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md`)
+
+LM0 now has an isolated `@megasaver/long-memory` package, deterministic
+workspace-scoped observation deduplication, receipt-bearing BM25 recall, a
+JSONL host, and a public-data-only LongMemEval-V2 adapter. It does not change
+existing product memory or imply LM1–LM3 capabilities. (source:
 `docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md`)
