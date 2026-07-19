@@ -21,7 +21,7 @@ function createService() {
     },
     evidenceBinding: {
       verify: async ({ evidenceIds }) => ({
-        evidenceDigests: evidenceIds.map(() => "a".repeat(64)),
+        evidence: evidenceIds.map((evidenceId) => ({ evidenceId, evidenceDigest: "a".repeat(64) })),
       }),
     },
     evidenceEligibility: {

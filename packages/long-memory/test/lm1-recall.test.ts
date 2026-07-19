@@ -39,7 +39,7 @@ function createServices() {
     },
     evidenceBinding: {
       verify: async ({ evidenceIds }) => ({
-        evidenceDigests: evidenceIds.map(() => "a".repeat(64)),
+        evidence: evidenceIds.map((evidenceId) => ({ evidenceId, evidenceDigest: "a".repeat(64) })),
       }),
     },
     evidenceEligibility,
@@ -206,6 +206,23 @@ describe("LM1 recall", () => {
     });
   });
 
+  it("uses an older eligible independent leaf when the newest leaf is revoked", async () => {
+    const { capture, recall, statuses } = createServices();
+    const paid = await captureSnapshot(capture);
+    await captureSnapshot(capture, {
+      observedAt: "2026-07-20T00:00:01.000Z",
+      text: "Billing status is pending.",
+      evidenceIds: [secondEvidenceId],
+    });
+    statuses.set(secondEvidenceId, "revoked");
+
+    await expect(
+      recall.recall({ workspaceKey, task: "What is the billing status?", tokenBudget: 20 }),
+    ).resolves.toMatchObject({
+      items: [{ observationId: paid.id, value: "Billing status is paid." }],
+    });
+  });
+
   it("does not reactivate a superseded state when its correction is revoked", async () => {
     const { capture, recall, statuses } = createServices();
     const paid = await captureSnapshot(capture);
@@ -261,6 +278,47 @@ describe("LM1 recall", () => {
 
     expect(result.receipt.candidateCount).toBe(1_000);
     expect(result.receipt.selected).toHaveLength(1_000);
+  });
+
+  it("uses LM1 timestamp and identifier ties before enforcing the candidate cap", async () => {
+    const pre = snapshotRecord({
+      id: uuid(6_001),
+      stateKey: "workflow.status",
+      text: "The workflow started.",
+    });
+    const post = snapshotRecord({
+      id: uuid(6_002),
+      stateKey: "workflow.status",
+      text: "The workflow ended.",
+    });
+    const transitions = Array.from({ length: 1_000 }, (_, index) =>
+      transitionRecord({
+        id: uuid(7_000 + index),
+        text: "Workflow changed state.",
+        preSnapshotId: pre.id,
+        postSnapshotId: post.id,
+        evidenceIds: [firstEvidenceId],
+      }),
+    );
+    const expectedWinner = transitionRecord({
+      id: uuid(5),
+      text: "Workflow changed state.",
+      preSnapshotId: pre.id,
+      postSnapshotId: post.id,
+      evidenceIds: [firstEvidenceId],
+    });
+    const recall = recallFromRecords([pre, post, ...transitions, expectedWinner]);
+
+    const result = await recall.recall({
+      workspaceKey,
+      task: "workflow changed",
+      tokenBudget: 100_000,
+    });
+
+    expect(result.receipt.candidateCount).toBe(1_000);
+    expect(result.items).toContainEqual(
+      expect.objectContaining({ observationId: expectedWinner.id }),
+    );
   });
 
   it("omits a matching record that would exceed the evidence lookup cap", async () => {
@@ -347,5 +405,26 @@ describe("LM1 recall", () => {
     ).resolves.toMatchObject({
       items: [{ observationId: newer.id }, { observationId: older.id }],
     });
+  });
+
+  it("fails closed when the evidence eligibility port throws", async () => {
+    const record = snapshotRecord({
+      id: uuid(9_001),
+      stateKey: "billing.status",
+      text: "billing status is current",
+    });
+    const store = { list: () => [record] } as FileLm1Store;
+    const recall = createLm1RecallService({
+      store,
+      evidenceEligibility: {
+        resolve: async () => {
+          throw new Error("public evidence adapter unavailable");
+        },
+      },
+    });
+
+    await expect(
+      recall.recall({ workspaceKey, task: "billing status", tokenBudget: 100 }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
   });
 });

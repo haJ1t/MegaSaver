@@ -66,21 +66,46 @@ const preparedTransitionSchema = transitionCaptureSchema.extend({
   redactionVersion: z.string().trim().min(1),
   canonicalCaptureDigest: sha256Schema,
 });
+
+function validateCanonicalCaptureFields(
+  capture: {
+    evidenceIds: readonly string[];
+    observedAt: string;
+    text: string;
+    action: string | null;
+    redactionVersion: string;
+    stateKey?: string;
+  },
+  context: z.RefinementCtx,
+): void {
+  const sortedEvidenceIds = [...new Set(capture.evidenceIds)].sort();
+  if (
+    sortedEvidenceIds.length !== capture.evidenceIds.length ||
+    sortedEvidenceIds.some((id, index) => id !== capture.evidenceIds[index])
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "evidenceIds must be sorted and unique",
+      path: ["evidenceIds"],
+    });
+  }
+  if (
+    capture.observedAt !== normalizeDate(capture.observedAt) ||
+    capture.text !== normalizeText(capture.text) ||
+    (capture.action !== null && capture.action !== normalizeText(capture.action)) ||
+    capture.redactionVersion !== normalizeText(capture.redactionVersion) ||
+    (capture.stateKey !== undefined && capture.stateKey !== normalizeText(capture.stateKey))
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "capture fields must be normalized",
+    });
+  }
+}
+
 export const preparedCaptureSchema = z
   .discriminatedUnion("kind", [preparedSnapshotSchema, preparedTransitionSchema])
-  .superRefine((capture, context) => {
-    const sorted = [...new Set(capture.evidenceIds)].sort();
-    if (
-      sorted.length !== capture.evidenceIds.length ||
-      sorted.some((id, index) => id !== capture.evidenceIds[index])
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "evidenceIds must be sorted and unique",
-        path: ["evidenceIds"],
-      });
-    }
-  });
+  .superRefine(validateCanonicalCaptureFields);
 export type PreparedCapture = z.infer<typeof preparedCaptureSchema>;
 
 const commonRecordShape = {
@@ -96,6 +121,7 @@ const transitionRecordSchema = preparedTransitionSchema.extend(commonRecordShape
 export const lm1RecordSchema = z
   .discriminatedUnion("kind", [snapshotRecordSchema, transitionRecordSchema])
   .superRefine((record, context) => {
+    validateCanonicalCaptureFields(record, context);
     if (record.evidenceDigests.length !== record.evidenceIds.length) {
       context.addIssue({
         code: "custom",
@@ -180,25 +206,42 @@ export type Lm1RecallBundle = {
   };
 };
 
+const evidenceBindingEntrySchema = z
+  .object({
+    evidenceId: lowercaseUuidSchema,
+    evidenceDigest: sha256Schema,
+  })
+  .strict();
+export const evidenceBindingResultSchema = z
+  .object({ evidence: z.array(evidenceBindingEntrySchema).min(1).max(MAX_LM1_EVIDENCE_IDS) })
+  .strict();
+export type EvidenceBinding = z.infer<typeof evidenceBindingResultSchema>;
+
 export type EvidenceBindingPort = {
   verify(input: {
     workspaceKey: string;
     canonicalCaptureDigest: string;
     evidenceIds: readonly string[];
     authorization: string;
-  }): Promise<{ evidenceDigests: readonly string[] } | null>;
+  }): Promise<EvidenceBinding | null>;
 };
+
+const evidenceEligibilityEntrySchema = z
+  .object({
+    evidenceId: lowercaseUuidSchema,
+    workspaceKey: workspaceKeySchema,
+    status: z.enum(["available", "retained_metadata_only", "revoked"]),
+    unresolvedHighRisk: z.boolean(),
+  })
+  .strict();
+export const evidenceEligibilityResultSchema = z
+  .array(evidenceEligibilityEntrySchema)
+  .max(MAX_LM1_EVIDENCE_IDS * 3);
+export type EvidenceEligibility = z.infer<typeof evidenceEligibilityResultSchema>;
 
 export type EvidenceEligibilityPort = {
   resolve(input: {
     workspaceKey: string;
     evidenceIds: readonly string[];
-  }): Promise<
-    readonly {
-      evidenceId: string;
-      workspaceKey: string;
-      status: "available" | "retained_metadata_only" | "revoked";
-      unresolvedHighRisk: boolean;
-    }[]
-  >;
+  }): Promise<EvidenceEligibility>;
 };
