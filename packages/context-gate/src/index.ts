@@ -147,3 +147,10 @@ export {
   type FirewallScope,
   type FilterFirewallCounts,
 } from "./firewall-ledger.js";
+export {
+  readNetEffectRecord,
+  saverPausedByNetEffect,
+  writeNetEffectRecord,
+  writeResumeOverride,
+  type NetEffectRecord,
+} from "./net-effect-store.js";
