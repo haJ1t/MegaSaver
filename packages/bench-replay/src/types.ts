@@ -21,6 +21,12 @@ export type Arm = "baseline" | "megasaver";
 // what makes that visible.
 export type SaverOutcomes = { applied: number; passthrough: number; failed: number };
 
+// Counted once per distinct tool call, mirroring how often production applies
+// the saver. `applied > 0` only proves the hook RETURNED something; an arm that
+// handed back the same bytes measured nothing, and that is invisible in the
+// outcome counters alone.
+export type ToolResultBytes = { original: number; transformed: number };
+
 export type RequestUsage = {
   inputTokens: number;
   cacheCreationTokens: number;
@@ -32,10 +38,49 @@ export type ArmUsage = RequestUsage & {
   arm: Arm;
   normalizedCostUsd: number;
   saver: SaverOutcomes;
+  bytes: ToolResultBytes;
   // The megasaver arm's cache_read collapsing while baseline's stays large is
   // the one diagnostic that makes a prefix-churn regression obvious on sight;
   // summing it away hides exactly that.
   perRequest: readonly RequestUsage[];
+};
+
+export type ArmIntegrity = {
+  applied: number;
+  originalBytes: number;
+  transformedBytes: number;
+  // transformed ÷ original; < 1 is the only value that means the arm did work.
+  byteRatio: number;
+  ok: boolean;
+};
+
+export type DriftSmokeResult = { ok: boolean; tolerance: number };
+
+export type ReplayOrder = "baseline-first" | "megasaver-first";
+
+// Both arms share a byte-identical system+tools prefix, so whichever runs first
+// pays cache_creation ($10/Mtok) for it and whichever runs second reads it at
+// cache_read ($0.50/Mtok). Running the pair in one fixed order therefore hands
+// the second arm a discount that no property of the saver earned. Measuring
+// both orders is what turns that bias from invisible into reportable.
+export type OrderCheck = {
+  ratioBaselineFirst: number;
+  ratioMegasaverFirst: number;
+  // |difference| relative to the baseline-first ratio.
+  spread: number;
+  tolerance: number;
+  // The mean of the two orders — what a caller should quote, since neither
+  // single order is free of the cache-warming asymmetry.
+  combinedRatio: number;
+};
+
+// Which guards actually ran, carried on the verdict itself. A reader who sees
+// only a costRatio cannot tell a smoke-tested number from a calibrated one, and
+// an absent check must read as "unverified" (null) rather than as "passed".
+export type VerdictVerification = {
+  integrity: ArmIntegrity;
+  order: OrderCheck | null;
+  baselineDriftSmoke: DriftSmokeResult | null;
 };
 
 export type ReplayVerdict = {
@@ -44,4 +89,5 @@ export type ReplayVerdict = {
   megasaver: ArmUsage;
   // baseline ÷ megasaver on normalized cost; >1 means megasaver is cheaper.
   costRatio: number;
+  verified: VerdictVerification;
 };

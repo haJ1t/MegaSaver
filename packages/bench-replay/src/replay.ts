@@ -1,7 +1,14 @@
 import { normalizedCostUsd } from "@megasaver/stats";
 import { transformRequest } from "./transform.js";
 import type { ApplySaver } from "./transform.js";
-import type { Arm, ArmUsage, RecordedRequest, RequestUsage, SaverOutcomes } from "./types.js";
+import type {
+  Arm,
+  ArmUsage,
+  RecordedRequest,
+  RequestUsage,
+  SaverOutcomes,
+  ToolResultBytes,
+} from "./types.js";
 
 // The API response fields we consume. Injected `send` keeps unit tests offline;
 // production passes a real fetch against /v1/messages.
@@ -24,7 +31,11 @@ export type Send = (body: RecordedRequest) => Promise<SendResult>;
 // ($0.50/Mtok): a ~20x penalty manufactured by the harness, condemning the very
 // feature built to prevent prefix churn. Memoizing per tool_use_id restores
 // production semantics exactly.
-function memoize(applySaver: ApplySaver, outcomes: SaverOutcomes): ApplySaver {
+function memoize(
+  applySaver: ApplySaver,
+  outcomes: SaverOutcomes,
+  bytes: ToolResultBytes,
+): ApplySaver {
   const decisions = new Map<string, string | null>();
   return (raw, ctx) => {
     const memoized = decisions.get(ctx.toolUseId);
@@ -38,6 +49,12 @@ function memoize(applySaver: ApplySaver, outcomes: SaverOutcomes): ApplySaver {
     }
     if (decision === null) outcomes.passthrough++;
     else outcomes.applied++;
+    // Accumulated here rather than at the request loop because this is the one
+    // place that sees each tool call exactly once — the same cardinality
+    // production's PostToolUse hook fires at. Summing per request would count a
+    // resent history N times and inflate both sides.
+    bytes.original += Buffer.byteLength(raw, "utf8");
+    bytes.transformed += Buffer.byteLength(decision ?? raw, "utf8");
     decisions.set(ctx.toolUseId, decision);
     return decision;
   };
@@ -57,7 +74,8 @@ export async function replayArm(input: {
   };
   const perRequest: RequestUsage[] = [];
   const saver: SaverOutcomes = { applied: 0, passthrough: 0, failed: 0 };
-  const applySaver = memoize(input.applySaver, saver);
+  const bytes: ToolResultBytes = { original: 0, transformed: 0 };
+  const applySaver = memoize(input.applySaver, saver, bytes);
 
   // Sequential on purpose: the API's prompt cache is order-dependent, so
   // parallelising would measure a different (and meaningless) cache pattern.
@@ -110,6 +128,7 @@ export async function replayArm(input: {
       output_tokens: total.outputTokens,
     }),
     saver,
+    bytes,
     perRequest,
   };
 }

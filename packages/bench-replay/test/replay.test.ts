@@ -300,6 +300,29 @@ describe("replayArm saver outcome accounting", () => {
     expect(usage.saver.passthrough).toBe(2);
   });
 
+  // Fix B: the integrity guard is only as good as the bytes fed to it, and they
+  // are accumulated once per distinct tool call — not once per request, which a
+  // resent conversation history would inflate.
+  it("accumulates original vs transformed tool_result bytes per tool call", async () => {
+    const usage = await replayArm({
+      arm: "megasaver",
+      requests: one,
+      applySaver: () => "S",
+      send: async () => zeroUsage,
+    });
+    expect(usage.bytes).toEqual({ original: 10, transformed: 2 }); // "RAW-A" + "RAW-B" → "S" + "S"
+  });
+
+  it("counts a passthrough as its own bytes unchanged, not as a saving", async () => {
+    const usage = await replayArm({
+      arm: "megasaver",
+      requests: one,
+      applySaver: () => null,
+      send: async () => zeroUsage,
+    });
+    expect(usage.bytes).toEqual({ original: 10, transformed: 10 });
+  });
+
   it("aborts when a tool_result has no matching tool_use block rather than guessing", async () => {
     await expect(
       replayArm({
