@@ -5,3 +5,4 @@ export {
   type RecordedRequest,
   type ReplayVerdict,
 } from "./types.js";
+export { startCaptureProxy, type CaptureProxy } from "./capture-proxy.js";
