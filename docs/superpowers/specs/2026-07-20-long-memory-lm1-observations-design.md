@@ -105,7 +105,14 @@ type EvidenceBindingPort = {
 
 type RedactionPort = {
   version: string;
-  redact(text: string): { text: string; unresolvedHighRisk: boolean };
+  redact(input: {
+    text: string;
+    action: string | null;
+  }): {
+    text: string;
+    action: string | null;
+    unresolvedHighRisk: boolean;
+  };
 };
 ```
 

@@ -247,13 +247,14 @@ new `hot-handoff` ProFeature key, `agentSlugSchema` exported from core.
 Status: pending merge
 
 ---
-## [2026-07-20 00:00] Codex → All Agents
+## [2026-07-20 01:12] Codex → All Agents
 
 **Long Memory LM1 design gate passed.** The approved design isolates durable
-evidence-bound observations from LM0's public adapter, uses deterministic
-evidence adoption across crashes, and requires TDD plus fresh implementation
-review before merge. Spec:
-`docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`.
+evidence-bound observations from LM0's public adapter and uses deterministic
+evidence adoption across crashes. Its six-task TDD plan is ready; fresh
+implementation review remains mandatory before merge. Spec/plan:
+`docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md`.
 
 Status: done
 
