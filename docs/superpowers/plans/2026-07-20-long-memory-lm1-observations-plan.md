@@ -220,7 +220,7 @@ git commit -m "feat(memory): persist immutable LM1 records"
 - Consumes: Task 1 PreparedCapture/port types and Task 2 FileLm1Store.
 - Produces: createLm1CaptureService({ store, redaction, evidenceBinding, evidenceEligibility, clock }) with prepare(input) and capturePrepared({ prepared, authorization }).
 
-- [ ] **Step 1: Write failing capture tests with complete fake ports**
+- [x] **Step 1: Write failing capture tests with complete fake ports**
 
 ~~~ts
 const service = createLm1CaptureService({
@@ -247,13 +247,13 @@ await expect(service.capturePrepared({
 
 Cover null, missing, duplicate, extra, and out-of-order binding digest arrays; exact eligibility result matching; foreign workspace; metadata-only/revoked/unresolved statuses; thrown known and unknown port errors; and a changed redaction version that cannot reuse prior authorization. Assert capturePrepared never calls the redactor. Add a public-data fixture port that validates the same canonical digest without a user store.
 
-- [ ] **Step 2: Run capture tests red**
+- [x] **Step 2: Run capture tests red**
 
 Run: pnpm --filter @megasaver/long-memory test -- lm1-capture.test.ts
 
 Expected: FAIL because createLm1CaptureService is absent.
 
-- [ ] **Step 3: Implement fail-closed capture**
+- [x] **Step 3: Implement fail-closed capture**
 
 ~~~ts
 const prepared = preparedCaptureSchema.parse(input.prepared);
@@ -277,13 +277,13 @@ return store.publish(buildRecord(prepared, binding.evidenceDigests, clock.now())
 
 Map known port errors to their closed codes and unknown failures to store_corrupt. Derive evidenceBindingDigest from the domain-separated canonical object with workspace, canonical capture digest, ordered IDs, and ordered evidence digests. For snapshots, require any superseded record to be a same-workspace/same-stateKey snapshot with a strictly earlier observedAt.
 
-- [ ] **Step 4: Run capture tests green**
+- [x] **Step 4: Run capture tests green**
 
 Run: pnpm --filter @megasaver/long-memory test -- lm1-capture.test.ts lm1-model.test.ts lm1-identity.test.ts lm1-store.test.ts
 
 Expected: all prepared-digest, binding, eligibility, public-data-port, and snapshot tests pass.
 
-- [ ] **Step 5: Commit snapshot capture**
+- [x] **Step 5: Commit snapshot capture**
 
 Run:
 ~~~bash
