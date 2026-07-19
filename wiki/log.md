@@ -3652,3 +3652,63 @@ versions per the existing convention — core stayed 1.3.0 across v2.0.0/v2.1.0)
 
 All three i14 gauntlet follow-ups now closed. Merged branches + worktrees cleaned
 up.
+
+## [2026-07-17] query | Recalibrated the solo-developer product roadmap after v2.1.1
+
+Verified the new release state: product tag `v2.1.1` is at `653f7599` and
+`@megasaver/cli@2.2.0` is npm `latest` (registry check 2026-07-17). The release
+ships the previously proposed Agent Experience Layer: Brain Sync, Warm Start,
+Mistake Firewall, Living Brain, Code-Truth Verify, and Brain Autopilot.
+
+The active roadmap now changes from B+C (up-market first) to A+C (solo depth
+plus tactical distribution): package and measure that daily experience now;
+build **Agent Passport / Hot Handoff** next; then Brain Doctor, Context
+Contracts, and conservative cross-project Déjà Vu. Recall Receipts remains
+deferred until it can support causal rather than correlational dollar claims.
+Sources: [[syntheses/post-2.0-growth-portfolio]],
+[[syntheses/memory-moat-portfolio]], `apps/cli/CHANGELOG.md` 2.2.0, npm registry
+check, [Causal Agent Replay](https://arxiv.org/abs/2606.08275).
+
+## [2026-07-18] spec | Hot Handoff (i10) design written, user-approved, verify-hardened
+
+Brainstorm→spec for i10 Agent Passport / Hot Handoff (roadmap 2.2 slice).
+User locked 4 scope decisions: `.megahandoff` bundle arch (brain-bundle
+sibling + `handoff open` consumption), dry-run-free/pack-Pro under new
+`"hot-handoff"` ProFeature key, filtered dirty diff included
+(`evaluatePathRead` secret-path exclusion → redact → compressDiff → cap),
+file-always + darwin `--copy` (path only). 8-reader ultracode sweep mapped
+the reuse surface; 3-lens adversarial verify found 21 findings (2 BLOCKING:
+context-less `upsertHandoffBlockText` needed instead of full `upsertBlock`;
+render-time sentinel guard on open) — all integrated. Spec:
+`docs/superpowers/specs/2026-07-18-hot-handoff-design.md` (risk HIGH).
+Pending: user spec review → architect pass → writing-plans in worktree
+`feat/hot-handoff`. Sources: [[syntheses/solo-developer-roadmap]],
+[[syntheses/memory-moat-portfolio]].
+
+## [2026-07-18] plan | Hot Handoff (i10) implementation plan written
+
+16-task TDD plan (5983 lines, full code in every step) at
+`docs/superpowers/plans/2026-07-18-hot-handoff-plan.md`. Produced by 7
+parallel section writers grounded in real source + seam-check verifier
+(5 mechanical findings, all fixed: duplicate index re-export, missing
+newId in integration helper, Create-vs-Modify collision on
+handoff-export.ts, one placeholder path, 4 unwrapped commit steps).
+Plan-time deviations from spec recorded in the plan header (diff cap
+2000, compressByCategory dispatcher, per-file truncation unit, WS
+preflight pre-existing gap flagged). Execution: worktree
+`feat/hot-handoff`, dependency order 1→14.
+
+## [2026-07-19] ingest | Saver cache-churn finding + cache-aware saver spec
+
+Benchmark (mega 2.2.0 + first-party fix) both modes: cost geomean
+balanced 0.96x / aggressive 0.93x — no net win, aggressive WORSE.
+Root cause proven via .usage composition: the PostToolUse saver
+rewrites tool_result in place, invalidating Claude Code's native 1h
+prompt cache → cache_creation churn (aggressive task_1: megasaver
+48,005 vs baseline 29,525) cancels the compression benefit. The saver
+optimizes a cost the client already solved (cheap cache-reads). Win
+survives only on large first-sight output. First-party fix robust
+(plain input ≤15 tok). New: [[syntheses/saver-cache-churn]] +
+docs/superpowers/specs/2026-07-19-cache-aware-saver-design.md
+(HIGH risk; candidate: first-sight-only compression). Benchmark script
+now takes MEGA_SAVER_MODE env (default balanced).

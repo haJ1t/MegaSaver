@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-07-05
+updated: 2026-07-17
 ---
 
 # Wiki Index — Mega Saver
@@ -38,6 +38,7 @@ updated: 2026-07-05
 - [[concepts/proxy-mode]] — Proxy Mode v1.2 (7 phases shipped): public naming mode, output classifier, vitest/tsc compressors + passthrough, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics, replay trace.
 - [[concepts/persistent-proxy-routing]] — proposed dedicated proxy supervisor: persistent CLI/GUI opt-in, nonce/lease route ownership, LaunchAgent lifecycle, drain-safe stop.
 - [[concepts/saver-activation-inheritance]] — proposed exact → Git-family → legacy-root → global Saver activation plus hook heartbeat.
+- [[syntheses/saver-cache-churn]] — benchmark finding (2026-07-19): the PostToolUse saver's in-place `tool_result` rewrite invalidates Claude Code's native prompt cache; net cost balanced 0.96x / aggressive 0.93x (no win, aggressive worse). Cache-creation churn cancels compression. First-party fix robust (plain input ≤15 tok). Direction → cache-aware saver spec `docs/superpowers/specs/2026-07-19-cache-aware-saver-design.md`.
 - [[concepts/context-ledger-architecture]] — proposed next architecture: split specs for ContextGate honest ~90% reduction + reliable save ledger.
 - [[concepts/intent-aware-hook]] — Phase 6b (PR #180): UserPromptSubmit hook captures the prompt → fill-gap ranking intent for PostToolUse-captured output.
 - [[concepts/diff-on-reread]] — PR #181: unchanged re-reads return a lossless `unchanged-marker` (prior chunkSetId) via a per-session sha256 read-index; skips re-filter/re-persist.
@@ -94,6 +95,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 - [[syntheses/post-v1.1-roadmap]] — post-v1.1 arc (PRs #102–#110 resolved: stats, skill-packs, Windows port + follow-ups) + remaining work, priority-ordered (npm publish gap, conventions:sync, GUI packaging, i18n, fikri §16 backlog).
 - [[syntheses/contextops-roadmap]] — **strategic Phase 0–10 roadmap** (DIMMEM/LAMR/FORGE), **all 10 phases shipped** on `main` (PRs #114–#123, 2026-06-12); MCP surface 4 → 25 tools (26 with the v1.2 `proxy_search_code`). Keeps the original 22-agent-audit done/partial/gap framing for the historical record.
 - [[syntheses/release-history]] — full chronological release/status narrative (every PR, critic round, process metric, open-backlog note) for Phase 9/10, v1.1.0, v1.0, AA1 BB1–BB7a, v0.3, v0.2. Split out of `index.md` on 2026-07-04 to keep the catalog lean; the `## Status` section below is the one-line-per-release digest.
+- [[syntheses/solo-developer-roadmap]] — active 2026-07-17 reset after v2.1.1 / CLI 2.2.0: the Experience Layer is shipped; Agent Passport → Brain Doctor → Context Contracts → Déjà Vu, with release gates and honest-metrics constraints.
 - [[concepts/proxy-mode]] / Proxy Mode v1.2 — public naming mode, output classifier, vitest/tsc compressors, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics; full spec+plan written and shipped on `docs/contextops-roadmap-phases`.
 
 ## Sources (pointers to raw + project artifacts)
@@ -167,6 +169,7 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 > [[syntheses/release-history]] on 2026-07-04. One line per release below;
 > follow the link for the complete history.
 
+- **v2.1.1 / CLI 2.2.0 — Agent Experience Layer** — PUBLISHED to npm 2026-07-17 (`latest`): Brain Sync, Warm Start, Mistake Firewall, Living Brain, Code-Truth Verify, and Brain Autopilot. The product tag and CLI package version are intentionally decoupled. [[syntheses/solo-developer-roadmap]]
 - **v1.13.0 — anomaly alerts + persistent budgets (N7)** — PUBLISHED to npm 2026-07-09 (`latest`): `mega alerts` (median+MAD spike detection over traffic/source/ratio/firewall + budget pace, value-free firewall axis preserving F-FW-1), `mega savings budget set|show|clear` (`stats/budget.json`), forecast auto-loads the stored budget. Bundles #272 firewall-strip + #273 url_basic_auth patches. code-reviewer APPROVE + critic REQUEST-CHANGES→resolved (4 mutation-coverage tests, kills proven). Published-tarball entitled smoke verified. Tag `v1.13.0`. [[syntheses/pro-differentiation-portfolio]]
 - **v1.6.1 — mega roi + bundle fix** — PUBLISHED to npm 2026-07-07 (`latest`): Pro module 4 `mega roi` (PR #252) + prepack dependency-closure fix; 1.6.0 deprecated (broken bundle — stale pro-analytics dist inlined). Published-tarball activation e2e-verified. Tag `v1.6.1`.
 - **v1.5.0 — Pro launch wave** — versioned 2026-07-06 (#231–#251), PUBLISHED to npm 2026-07-07 08:19Z: entitlement seam + 3 Pro analytics modules (`savings history/insights/forecast`), free proof surface (headline, GUI share card, `mega init`, `mega gui`), landing + /pro + Gumroad checkout live at megasaver.dev ($7.99/mo).

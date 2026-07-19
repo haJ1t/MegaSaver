@@ -222,9 +222,10 @@ BASELINE_COMMIT=$(git rev-parse HEAD)
 
 # Enable the workspace token saver for the bench repo, otherwise the megasaver
 # arm pays the proxy overhead without the product's compression benefit.
-(cd "$REPO" && mega init --yes --no-gui --mode balanced >/dev/null 2>&1) \
+SAVER_MODE="${MEGA_SAVER_MODE:-balanced}"
+(cd "$REPO" && mega init --yes --no-gui --mode "$SAVER_MODE" >/dev/null 2>&1) \
   || { echo "ERROR: mega init failed — saver not enabled for bench repo"; exit 1; }
-echo "Workspace saver enabled for $REPO"
+echo "Workspace saver enabled for $REPO (mode: $SAVER_MODE)"
 
 # Results dir.
 rm -rf "$RESULTS"
