@@ -5401,3 +5401,13 @@ Node UTF-16/token limits, bounds process lifetime, and rejects workspace-local
 UUID collisions. Independent re-review approved the final fix set; `pnpm
 verify` and the Python adapter suite were then rerun as release evidence.
 Source: [[concepts/long-memory-runtime]].
+
+## [2026-07-20] design | Long Memory LM1 observations approved
+
+LM1's HIGH-risk design gate passed independent architecture and adversarial
+review. The next slice adds immutable evidence-bound snapshots/transitions with
+deterministic cross-store retry adoption, correction-chain fail-closed recall,
+and preserved LM0 public boundaries. Implementation has not started; it remains
+gated on a TDD plan, fresh review, and `pnpm verify`. Source:
+[[concepts/long-memory-runtime]],
+`docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`.
