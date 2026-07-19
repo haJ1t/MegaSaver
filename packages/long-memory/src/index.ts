@@ -37,6 +37,11 @@ export {
   type PublishedLm1Record,
 } from "./lm1-store.js";
 export {
+  createLm1CaptureService,
+  type Lm1CaptureService,
+  type Lm1Clock,
+} from "./lm1-capture.js";
+export {
   MAX_EVIDENCE_IDS,
   MAX_EVIDENCE_ID_LENGTH,
   MAX_OBSERVATION_TEXT_CHARS,
