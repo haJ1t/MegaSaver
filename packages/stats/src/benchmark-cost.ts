@@ -1,10 +1,15 @@
-// Benchmark cost normalization. `total_cost_usd` from the Claude CLI mixes
-// 1x- and 2x-billed (fast-mode) requests, so two runs of identical work can
-// differ ~1.45x — larger than any effect a benchmark is trying to measure.
-// Pricing the token breakdown at fixed standard rates removes that artifact:
-// identical tokens always cost the same. Rates mirror scripts/benchmark-rates.json
-// (a test asserts they stay in sync); that JSON is what the bash/python harness
-// reads, so both consumers share one source.
+// Benchmark cost normalization. `total_cost_usd` from the Claude CLI reflects
+// whatever tier served the request, so a fast-mode-billed run and a standard
+// one price identical work differently. Pricing the token breakdown at fixed
+// standard rates makes the gate metric independent of that: identical tokens
+// always cost the same. Rates mirror scripts/benchmark-rates.json (a test
+// asserts they stay in sync); that JSON is what the bash/python harness reads,
+// so both consumers share one source.
+//
+// Measured caveat: all 24 saved benchmark results to date were standard-tier
+// with fast mode off, where raw and normalized cost are already equal. This is
+// insurance against a variance source that has not yet fired, not a fix for
+// one that has.
 export const BENCHMARK_RATES_PER_MTOK = {
   input: 5,
   cacheCreation: 10,
