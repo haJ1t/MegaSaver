@@ -30,6 +30,13 @@ const EXPIRES_PATTERN = /^([1-9]\d{0,4})([hd])$/;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
+// Mirrors core's agentSlugSchema (handoff-packet.ts): serializeHandoffPacket
+// validates the manifest, so a non-slug --from throws inside the packer — reject
+// it at the CLI boundary for a clean error instead of an uncaught ZodError.
+export function isAgentSlug(value: string): boolean {
+  return value.length <= 64 && /^[a-z0-9][a-z0-9-]*$/.test(value);
+}
+
 // null = malformed flag; the caller owns the exit-1 message (runCache --days precedent).
 export function parseExpires(raw: string | undefined, now: number): number | null {
   if (raw === undefined) return now + DAY_MS;

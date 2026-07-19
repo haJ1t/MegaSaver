@@ -189,6 +189,18 @@ describe("runHandoffPack — gating and boundaries", () => {
     expect(err.join("\n")).toContain('invalid --expires "1w"');
   });
 
+  it("invalid --from: exit 1 before gate and store, nothing written", async () => {
+    activatePro();
+    await seedProject();
+    const { code, ensureStore } = run({ from: "Not A Slug!" });
+    expect(await code).toBe(1);
+    expect(err.join("\n")).toMatch(/invalid --from/);
+    expect(ensureStore).not.toHaveBeenCalled();
+    expect(packedFiles(projectRoot)).toEqual([]);
+    expect(readdirSync(projectRoot).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+    expect(readHandoffEvents({ root: storeRoot }, PROJECT_ID)).toEqual([]);
+  });
+
   it("cwd outside any registered project: exit 1 pointing at mega init", async () => {
     activatePro();
     await seedProject();

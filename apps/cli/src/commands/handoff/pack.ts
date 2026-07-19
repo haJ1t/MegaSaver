@@ -14,7 +14,7 @@ import {
   resolveStorePath,
 } from "../../store.js";
 import { findProjectByCwd } from "../warmup.js";
-import { gate, parseExpires } from "./shared.js";
+import { gate, isAgentSlug, parseExpires } from "./shared.js";
 
 export type RunHandoffPackInput = {
   storeRoot: string;
@@ -69,6 +69,10 @@ export async function runHandoffPack(input: RunHandoffPackInput): Promise<0 | 1>
   const expiresAt = parseExpires(input.expires, input.now());
   if (expiresAt === null) {
     input.stderr(`error: invalid --expires "${String(input.expires)}", expected <n>h or <n>d`);
+    return 1;
+  }
+  if (input.from !== undefined && !isAgentSlug(input.from)) {
+    input.stderr(`error: invalid --from "${input.from}", expected a slug ([a-z0-9-], max 64)`);
     return 1;
   }
   // --dry-run is the free read-only surface; the gate applies to real packs only.
