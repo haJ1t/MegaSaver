@@ -1,0 +1,6 @@
+{
+  "input": 5,
+  "cacheCreation": 10,
+  "cacheRead": 0.5,
+  "output": 25
+}
