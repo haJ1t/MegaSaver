@@ -29,6 +29,7 @@ updated: 2026-07-20
 - [[concepts/windows-support]] — full Windows support (PRs #104–#108): win32 store path, CRLF drift fix, lowercase ids, atomic-write `r+` fsync, `windows-latest` CI matrix.
 - [[concepts/structured-memory-engine]] — DIMMEM, roadmap Phase 1: typed engineering memory (10 MemoryTypes + metadata); reconciles the v0.1 MemoryEntry primitive.
 - [[concepts/memory-superset]] — WS3: superset of mem0/Letta/Zep/Cognee/Memori/claude-mem on our stack. Increment 1 shipped: semantic memory recall (per-project vector sidecar + boundary-embed fallback), `memoryRelevance` wiring (all approved memory's relatedFiles), entity node/edge layer (deterministic, no-LLM); (3)-(6) deferred.
+- [[concepts/long-memory-runtime]] — approved evidence-backed runtime: state/transition evidence plus approved runbooks, gotchas, and premises; one product + LongMemEval-V2 contract.
 - [[concepts/semantic-repo-index]] — roadmap Phase 2: parse repo into typed CodeBlocks (AST) so retrieval works on blocks, not files.
 - [[concepts/context-pruning-engine]] — LAMR, roadmap Phase 3: task-aware multi-factor scoring → 6–8-block context pack; repo-side cousin of context-gate-pipeline.
 - [[concepts/failed-run-learning]] — FORGE, roadmap Phase 5: find similar failures, convert a failure to a rule, rank applicable rules; deterministic (BM25 + path overlap).
@@ -109,6 +110,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 - [[sources/spec-bootstrap]] — pointer to `docs/superpowers/specs/2026-05-03-mega-saver-bootstrap-design.md`.
 - [[sources/plan-bootstrap]] — pointer to `docs/superpowers/plans/2026-05-03-mega-saver-bootstrap-plan.md`.
 - [[sources/roadmap-phases-v2]] — summary of `~/Desktop/MegaSaver_Roadmap.txt` (Phase 0–10 strategic roadmap, 2026-06-11). Synthesized into [[syntheses/contextops-roadmap]].
+- [[sources/longmemeval-v2]] — official long-memory benchmark summary: five abilities and accuracy-latency evaluation contract.
 - [[syntheses/post-v1.1-roadmap#3-feature-spec-index]] — pointers to the 3 shipped ContextOps feature specs+plans (intent-aware hook #180, diff-on-reread #181, semantic AST read #182). (was `sources/post-v1.1-features`, merged 2026-07-04)
 
 ## Raw
@@ -166,6 +168,7 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 | How does the tool router decide allow/block?       | [[concepts/tool-router]]                         |
 | How is the token-savings audit computed?           | [[concepts/audit-dashboard]]                     |
 | How does memory approval / the team gate work?     | [[concepts/structured-memory-engine#approval-gate]] |
+| What is the long-memory product + benchmark direction? | [[concepts/long-memory-runtime]] |
 | What are the 25 MCP tools?                          | [[entities/mcp-bridge]]                          |
 | Is Windows supported / how?                         | [[concepts/windows-support]]                    |
 | Why did a regex make the suite time out?            | [[concepts/unbounded-run-redos]]                |
