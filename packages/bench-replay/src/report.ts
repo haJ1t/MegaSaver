@@ -1,6 +1,15 @@
 import type { ArmUsage, ReplayVerdict } from "./types.js";
 
+// The ONLY constructor of a ReplayVerdict, so the refusal below cannot be
+// skipped by a caller. A megasaver arm that compressed nothing is not a
+// measurement of the saver — it is a second baseline, and its costRatio ≈ 1.00
+// reads as a confident, healthy-looking "the saver has no effect".
 export function buildVerdict(task: string, baseline: ArmUsage, megasaver: ArmUsage): ReplayVerdict {
+  if (megasaver.saver.applied === 0) {
+    throw new Error(
+      `buildVerdict(${task}): the megasaver arm applied the saver 0 times (passthrough=${megasaver.saver.passthrough}, failed=${megasaver.saver.failed}) — it is identical to baseline, so there is no verdict to report`,
+    );
+  }
   return {
     task,
     baseline,

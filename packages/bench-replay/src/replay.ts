@@ -1,7 +1,7 @@
 import { normalizedCostUsd } from "@megasaver/stats";
 import { transformRequest } from "./transform.js";
 import type { ApplySaver } from "./transform.js";
-import type { Arm, ArmUsage, RecordedRequest, RequestUsage } from "./types.js";
+import type { Arm, ArmUsage, RecordedRequest, RequestUsage, SaverOutcomes } from "./types.js";
 
 // The API response fields we consume. Injected `send` keeps unit tests offline;
 // production passes a real fetch against /v1/messages.
@@ -24,12 +24,20 @@ export type Send = (body: RecordedRequest) => Promise<SendResult>;
 // ($0.50/Mtok): a ~20x penalty manufactured by the harness, condemning the very
 // feature built to prevent prefix churn. Memoizing per tool_use_id restores
 // production semantics exactly.
-function memoize(applySaver: ApplySaver): ApplySaver {
+function memoize(applySaver: ApplySaver, outcomes: SaverOutcomes): ApplySaver {
   const decisions = new Map<string, string | null>();
   return (raw, ctx) => {
     const memoized = decisions.get(ctx.toolUseId);
     if (memoized !== undefined) return memoized; // a memoized null is reused AS null
-    const decision = applySaver(raw, ctx);
+    let decision: string | null;
+    try {
+      decision = applySaver(raw, ctx);
+    } catch (cause) {
+      outcomes.failed++;
+      throw cause;
+    }
+    if (decision === null) outcomes.passthrough++;
+    else outcomes.applied++;
     decisions.set(ctx.toolUseId, decision);
     return decision;
   };
@@ -48,12 +56,25 @@ export async function replayArm(input: {
     outputTokens: 0,
   };
   const perRequest: RequestUsage[] = [];
-  const applySaver = memoize(input.applySaver);
+  const saver: SaverOutcomes = { applied: 0, passthrough: 0, failed: 0 };
+  const applySaver = memoize(input.applySaver, saver);
 
   // Sequential on purpose: the API's prompt cache is order-dependent, so
   // parallelising would measure a different (and meaningless) cache pattern.
   for (const [index, request] of input.requests.entries()) {
-    const body = transformRequest(request, input.arm, applySaver);
+    let body: RecordedRequest;
+    try {
+      body = transformRequest(request, input.arm, applySaver);
+    } catch (cause) {
+      // A saver that could not be consulted is NOT a passthrough. Continuing
+      // would report an inert megasaver arm as a measurement, so abort with the
+      // counts that explain it — no retry.
+      const reason = cause instanceof Error ? cause.message : String(cause);
+      throw new Error(
+        `replayArm(${input.arm}): saver failed on request ${index} (applied=${saver.applied} passthrough=${saver.passthrough} failed=${saver.failed}): ${reason}`,
+        { cause },
+      );
+    }
     let usage: SendResult;
     try {
       usage = await input.send(body);
@@ -88,6 +109,7 @@ export async function replayArm(input: {
       cache_read_input_tokens: total.cacheReadTokens,
       output_tokens: total.outputTokens,
     }),
+    saver,
     perRequest,
   };
 }

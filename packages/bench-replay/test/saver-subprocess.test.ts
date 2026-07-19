@@ -27,15 +27,18 @@ describe("makeSpawnedSaver", () => {
     expect(saver(() => "")("LONG RAW", BASH)).toBeNull();
   });
 
-  it("returns null when the hook process throws (fail-open, e.g. binary not found)", () => {
+  // Fix 2: a crashed hook, a missing binary or a maxBuffer overrun must NOT be
+  // reported as a passthrough decision — that is how an inert megasaver arm
+  // masquerades as "the saver has no effect".
+  it("throws when the hook process fails instead of faking a passthrough", () => {
     const apply = saver(() => {
-      throw new Error("spawn failed");
+      throw new Error("spawn ENOENT");
     });
-    expect(apply("LONG RAW", BASH)).toBeNull();
+    expect(() => apply("LONG RAW", BASH)).toThrow(/spawn ENOENT/);
   });
 
-  it("returns null when the hook emits unparseable output (fail-open)", () => {
-    expect(saver(() => "{not json")("LONG RAW", BASH)).toBeNull();
+  it("throws when the hook emits unparseable output", () => {
+    expect(() => saver(() => "{not json")("LONG RAW", BASH)).toThrow(/unparseable|JSON/i);
   });
 
   // Fix 3: floors are per-tool (Bash caps at BASH_COMPRESS_FLOOR, Read/Grep use

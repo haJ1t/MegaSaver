@@ -8,6 +8,7 @@ const arm = (cost: number) => ({
   cacheReadTokens: 0,
   outputTokens: 0,
   normalizedCostUsd: cost,
+  saver: { applied: 1, passthrough: 0, failed: 0 },
   perRequest: [],
 });
 
@@ -70,5 +71,25 @@ describe("verdictStable", () => {
 
   it("treats an Infinity vs finite ratio as unstable", () => {
     expect(verdictStable(Number.POSITIVE_INFINITY, 1.25, 0.01)).toBe(false);
+  });
+});
+
+// Fix 2: a megasaver arm that compressed nothing is not a measurement — it is a
+// second baseline. Reporting its costRatio ≈ 1.00 as "the saver has no effect"
+// is the exact failure mode this harness exists to avoid, so the refusal lives
+// in the only constructor of a verdict rather than in a caller that can skip it.
+describe("buildVerdict refuses an inert megasaver arm", () => {
+  const msArm = (applied: number) => ({
+    ...arm(1),
+    arm: "megasaver" as const,
+    saver: { applied, passthrough: 5, failed: 0 },
+  });
+
+  it("throws when the megasaver arm applied the saver zero times", () => {
+    expect(() => buildVerdict("t", arm(1), msArm(0))).toThrow(/applied the saver 0 times/);
+  });
+
+  it("emits a verdict once the saver was applied at least once", () => {
+    expect(buildVerdict("t", arm(1), msArm(1)).costRatio).toBe(1);
   });
 });

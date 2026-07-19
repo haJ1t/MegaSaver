@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { makeSpawnedSaver } from "../src/saver-subprocess.js";
+import { makeSpawnedSaver, prepareSaverStore } from "../src/saver-subprocess.js";
 
 // Built by `pnpm turbo build --filter=@megasaver/cli...` then
 // `pnpm --filter @megasaver/cli run bundle` (see apps/cli/package.json's
@@ -80,6 +80,59 @@ describe("makeSpawnedSaver store isolation (real binary)", () => {
       }
     },
   );
+
+  // Fix 2: a FRESH isolated store has no saver settings, so the hook resolves to
+  // "disabled (safe) — source missing" and passes everything through. The whole
+  // measured effect silently depended on a seeding step that lived nowhere in
+  // this package. This is the test that would have caught it.
+  it.skipIf(!bundleExists)("a seeded isolated store actually compresses", () => {
+    const base = mkdtempSync(join(tmpdir(), "bench-store-seeded-"));
+    const cwd = join(base, "cwd");
+    const storeRoot = join(base, "store");
+    mkdirSync(cwd, { recursive: true });
+
+    try {
+      prepareSaverStore({ megaBin: MEGA_BIN, cwd, storeRoot, mode: "safe" });
+      const apply = makeSpawnedSaver({
+        megaBin: MEGA_BIN,
+        cwd,
+        sessionId: randomUUID(),
+        storeRoot,
+      });
+      // Clears safe mode's 32000-byte Read floor with the smallest margin that
+      // still compresses: the real hook's cost grows super-linearly in payload
+      // size (~5s at 40 KB, ~27s at 100 KB on the reviewing machine), and this
+      // test must not sit against vitest's 30s ceiling.
+      const raw = "x".repeat(40_000);
+      const out = apply(raw, {
+        toolUseId: "t1",
+        toolName: "Read",
+        toolInput: { file_path: join(cwd, "big.ts") },
+      });
+      expect(out).not.toBeNull();
+      expect((out as string).length).toBeLessThan(raw.length);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(!bundleExists)("refuses to run against a store it could not enable", () => {
+    const base = mkdtempSync(join(tmpdir(), "bench-store-unseeded-"));
+    const cwd = join(base, "cwd");
+    mkdirSync(cwd, { recursive: true });
+    try {
+      expect(() =>
+        prepareSaverStore({
+          megaBin: join(base, "does-not-exist.mjs"),
+          cwd,
+          storeRoot: join(base, "store"),
+          mode: "safe",
+        }),
+      ).toThrow(/saver/i);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
 
   if (!bundleExists) {
     it("SKIPPED: apps/cli/dist-bundle/mega.mjs not built — run `pnpm turbo build --filter=@megasaver/cli...` then `pnpm --filter @megasaver/cli run bundle` to enable this test", () => {

@@ -237,6 +237,91 @@ describe("replayArm saver memoization (once per tool_use_id)", () => {
   });
 });
 
+// Fix 2: a fail-open `null` is indistinguishable from a legitimate passthrough
+// decision. A missing binary, a crashed hook or a maxBuffer overrun would turn
+// the megasaver arm into a second baseline and report costRatio ≈ 1.00 as a
+// clean "the saver has no effect" measurement. Failures must be counted and
+// must abort.
+describe("replayArm saver outcome accounting", () => {
+  const one = [
+    {
+      model: "m",
+      messages: [
+        { role: "assistant", content: [{ type: "tool_use", id: "a", name: "Bash", input: {} }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "RAW-A" }] },
+        { role: "assistant", content: [{ type: "tool_use", id: "b", name: "Bash", input: {} }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "b", content: "RAW-B" }] },
+      ],
+    },
+  ];
+  const zeroUsage = {
+    input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 0,
+    output_tokens: 0,
+  };
+
+  it("aborts loudly when the saver fails instead of silently passing through", async () => {
+    let sends = 0;
+    await expect(
+      replayArm({
+        arm: "megasaver",
+        requests: one,
+        applySaver: () => {
+          throw new Error("spawn ENOENT");
+        },
+        send: async () => {
+          sends++;
+          return zeroUsage;
+        },
+      }),
+    ).rejects.toThrow(/spawn ENOENT/);
+    expect(sends).toBe(0);
+  });
+
+  it("counts applied vs passthrough decisions per arm", async () => {
+    const usage = await replayArm({
+      arm: "megasaver",
+      requests: one,
+      applySaver: (raw) => (raw === "RAW-A" ? "SHORT" : null),
+      send: async () => zeroUsage,
+    });
+    expect(usage.saver).toEqual({ applied: 1, passthrough: 1, failed: 0 });
+  });
+
+  it("surfaces an entirely inert megasaver arm as applied === 0", async () => {
+    const usage = await replayArm({
+      arm: "megasaver",
+      requests: one,
+      applySaver: () => null,
+      send: async () => zeroUsage,
+    });
+    expect(usage.saver.applied).toBe(0);
+    expect(usage.saver.passthrough).toBe(2);
+  });
+
+  it("aborts when a tool_result has no matching tool_use block rather than guessing", async () => {
+    await expect(
+      replayArm({
+        arm: "megasaver",
+        requests: [
+          {
+            model: "m",
+            messages: [
+              {
+                role: "user",
+                content: [{ type: "tool_result", tool_use_id: "orphan", content: "RAW" }],
+              },
+            ],
+          },
+        ],
+        applySaver: () => "SHORT",
+        send: async () => zeroUsage,
+      }),
+    ).rejects.toThrow(/orphan/);
+  });
+});
+
 // Fix 4: the megasaver arm's cache_read collapsing while baseline's stays large
 // is the single diagnostic that makes a prefix-churn regression obvious on
 // sight. Summing it away before anyone can see it hides exactly that.
