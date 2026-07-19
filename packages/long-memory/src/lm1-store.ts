@@ -17,7 +17,7 @@ import {
   deriveLm1RecordId,
 } from "./lm1-identity.js";
 import { type Lm1Kind, type Lm1Record, lm1RecordSchema } from "./lm1-model.js";
-import { assertLm1PathIsNotSymlink, lm1RecordPath } from "./lm1-paths.js";
+import { assertLm1PathIsNotSymlink, lm1RecordDirectory, lm1RecordPath } from "./lm1-paths.js";
 
 export type PublishedLm1Record = { inserted: boolean; record: Lm1Record };
 
@@ -55,7 +55,13 @@ function isNotFound(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
-function parseRecord(path: string): Lm1Record {
+type RecordLocation = {
+  workspaceKey: string;
+  kind: Lm1Kind;
+  sourceDigest: string;
+};
+
+function parseRecord(path: string, location: RecordLocation): Lm1Record {
   assertLm1PathIsNotSymlink(path);
   let raw: string;
   try {
@@ -73,6 +79,13 @@ function parseRecord(path: string): Lm1Record {
   const result = lm1RecordSchema.safeParse(parsed);
   if (!result.success) throw new Lm1Error("store_corrupt", "Long-memory record is invalid.");
   assertRecordIdentity(result.data);
+  if (
+    result.data.workspaceKey !== location.workspaceKey ||
+    result.data.kind !== location.kind ||
+    result.data.sourceDigest !== location.sourceDigest
+  ) {
+    throw new Lm1Error("store_corrupt", "Long-memory record does not match its path.");
+  }
   return result.data;
 }
 
@@ -126,23 +139,39 @@ function publishNoClobber(path: string, serialized: string): "created" | "exists
   }
 }
 
-function listKind(storeRoot: string, workspaceKey: string, kind: Lm1Kind): Lm1Record[] {
+function listKind(
+  storeRoot: string,
+  workspaceKey: string,
+  kind: Lm1Kind,
+  limit: number,
+): Lm1Record[] {
+  let directory: string;
   let names: string[];
   try {
-    const directory = lm1RecordPath(storeRoot, workspaceKey, kind, "0".repeat(64));
-    names = readdirSync(dirname(directory));
+    directory = lm1RecordDirectory(storeRoot, workspaceKey, kind);
+    names = readdirSync(directory);
   } catch (error) {
-    if (error instanceof Lm1Error && error.code === "invalid_input") throw error;
-    return [];
+    if (error instanceof Lm1Error) throw error;
+    throw new Lm1Error("store_corrupt", "Long-memory record directory is unreadable.");
   }
   return names
     .filter((name) => name.endsWith(".json"))
     .sort()
+    .slice(0, limit)
     .map((name) =>
-      parseRecord(
-        join(dirname(lm1RecordPath(storeRoot, workspaceKey, kind, "0".repeat(64))), name),
-      ),
+      parseRecord(join(directory, name), {
+        workspaceKey,
+        kind,
+        sourceDigest: name.slice(0, -".json".length),
+      }),
     );
+}
+
+function listRecords(storeRoot: string, workspaceKey: string, limit: number): readonly Lm1Record[] {
+  const snapshots = listKind(storeRoot, workspaceKey, "state_snapshot", limit);
+  const remaining = limit - snapshots.length;
+  if (remaining === 0) return snapshots;
+  return [...snapshots, ...listKind(storeRoot, workspaceKey, "state_transition", remaining)];
 }
 
 export function createFileLm1Store(input: { storeRoot: string }): FileLm1Store {
@@ -159,7 +188,11 @@ export function createFileLm1Store(input: { storeRoot: string }): FileLm1Store {
       );
       const published = publishNoClobber(path, `${JSON.stringify(parsed.data)}\n`);
       if (published === "created") return { inserted: true, record: parsed.data };
-      const existing = parseRecord(path);
+      const existing = parseRecord(path, {
+        workspaceKey: parsed.data.workspaceKey,
+        kind: parsed.data.kind,
+        sourceDigest: parsed.data.sourceDigest,
+      });
       if (!sameImmutableRecord(existing, parsed.data)) {
         throw new Lm1Error("store_corrupt", "Long-memory record conflicts with its digest path.");
       }
@@ -168,14 +201,16 @@ export function createFileLm1Store(input: { storeRoot: string }): FileLm1Store {
     getByDigest(workspaceKey, kind, sourceDigest) {
       const path = lm1RecordPath(input.storeRoot, workspaceKey, kind, sourceDigest);
       try {
-        return parseRecord(path);
+        return parseRecord(path, { workspaceKey, kind, sourceDigest });
       } catch (error) {
         if (error instanceof Lm1Error) throw error;
         throw new Lm1Error("not_found", "Long-memory record does not exist.");
       }
     },
     getById(workspaceKey, id) {
-      const found = this.list(workspaceKey, 10_000).find((record) => record.id === id);
+      const found = listRecords(input.storeRoot, workspaceKey, Number.MAX_SAFE_INTEGER).find(
+        (record) => record.id === id,
+      );
       if (found === undefined)
         throw new Lm1Error("not_found", "Long-memory record does not exist.");
       return found;
@@ -184,9 +219,7 @@ export function createFileLm1Store(input: { storeRoot: string }): FileLm1Store {
       if (!Number.isInteger(limit) || limit < 1) {
         throw new Lm1Error("invalid_input", "Invalid LM1 list limit.");
       }
-      const snapshots = listKind(input.storeRoot, workspaceKey, "state_snapshot");
-      const transitions = listKind(input.storeRoot, workspaceKey, "state_transition");
-      return [...snapshots, ...transitions].slice(0, limit);
+      return listRecords(input.storeRoot, workspaceKey, limit);
     },
   };
 }

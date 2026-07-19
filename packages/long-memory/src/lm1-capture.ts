@@ -11,6 +11,8 @@ import {
   type PrepareCaptureInput,
   type PreparedCapture,
   type RedactionPort,
+  evidenceBindingResultSchema,
+  evidenceEligibilityResultSchema,
   prepareCapture,
   preparedCaptureSchema,
 } from "./lm1-model.js";
@@ -26,33 +28,34 @@ export type Lm1CaptureService = {
   }): Promise<PublishedLm1Record>;
 };
 
-function assertBinding(
-  evidenceIds: readonly string[],
-  binding: { evidenceDigests: readonly string[] } | null,
-): readonly string[] {
-  if (binding === null || binding.evidenceDigests.length !== evidenceIds.length) {
+function assertBinding(evidenceIds: readonly string[], binding: unknown): readonly string[] {
+  const parsed = evidenceBindingResultSchema.safeParse(binding);
+  if (!parsed.success || parsed.data.evidence.length !== evidenceIds.length) {
     throw new Lm1Error("evidence_binding_invalid", "Evidence binding is incomplete.");
   }
-  if (binding.evidenceDigests.some((digest) => !/^[0-9a-f]{64}$/.test(digest))) {
-    throw new Lm1Error("evidence_binding_invalid", "Evidence binding contains an invalid digest.");
+  const evidenceDigests: string[] = [];
+  for (const [index, evidence] of parsed.data.evidence.entries()) {
+    if (evidence.evidenceId !== evidenceIds[index]) {
+      throw new Lm1Error("evidence_binding_invalid", "Evidence binding is out of order.");
+    }
+    evidenceDigests.push(evidence.evidenceDigest);
   }
-  return binding.evidenceDigests;
+  return evidenceDigests;
 }
 
 function assertEligibility(
   workspaceKey: string,
   evidenceIds: readonly string[],
-  eligibility: readonly {
-    evidenceId: string;
-    workspaceKey: string;
-    status: "available" | "retained_metadata_only" | "revoked";
-    unresolvedHighRisk: boolean;
-  }[],
+  eligibility: unknown,
 ): void {
-  if (eligibility.length !== evidenceIds.length) {
+  const parsed = evidenceEligibilityResultSchema.safeParse(eligibility);
+  if (!parsed.success) {
+    throw new Lm1Error("store_corrupt", "Evidence eligibility response is invalid.");
+  }
+  if (parsed.data.length !== evidenceIds.length) {
     throw new Lm1Error("evidence_unavailable", "Evidence eligibility is incomplete.");
   }
-  for (const [index, evidence] of eligibility.entries()) {
+  for (const [index, evidence] of parsed.data.entries()) {
     if (
       evidence.evidenceId !== evidenceIds[index] ||
       evidence.workspaceKey !== workspaceKey ||
@@ -149,7 +152,7 @@ export function createLm1CaptureService(input: {
         throw new Lm1Error("evidence_binding_invalid", "Prepared capture digest mismatch.");
       }
 
-      let binding: { evidenceDigests: readonly string[] } | null;
+      let binding: Awaited<ReturnType<EvidenceBindingPort["verify"]>>;
       try {
         binding = await input.evidenceBinding.verify({
           workspaceKey: prepared.data.workspaceKey,

@@ -2,7 +2,9 @@ import { existsSync, lstatSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { workspaceKeySchema } from "@megasaver/shared";
 import { Lm1Error } from "./lm1-errors.js";
-import type { Lm1Kind } from "./lm1-model.js";
+import { type Lm1Kind, lm1KindSchema } from "./lm1-model.js";
+
+const sourceDigestPattern = /^[0-9a-f]{64}$/;
 
 function assertNotSymlink(path: string): void {
   if (existsSync(path) && lstatSync(path).isSymbolicLink()) {
@@ -21,13 +23,17 @@ function ensureDirectory(path: string): void {
 
 export function lm1RecordDirectory(storeRoot: string, workspaceKey: string, kind: Lm1Kind): string {
   const parsedWorkspaceKey = workspaceKeySchema.safeParse(workspaceKey);
-  if (!parsedWorkspaceKey.success) {
+  const parsedKind = lm1KindSchema.safeParse(kind);
+  if (!parsedWorkspaceKey.success || !parsedKind.success) {
     throw new Lm1Error("invalid_input", "Invalid workspace key.");
   }
   const root = join(storeRoot, "long-memory");
   const version = join(root, "v1");
   const workspace = join(version, parsedWorkspaceKey.data);
-  const records = join(workspace, kind === "state_snapshot" ? "snapshots" : "transitions");
+  const records = join(
+    workspace,
+    parsedKind.data === "state_snapshot" ? "snapshots" : "transitions",
+  );
   ensureDirectory(storeRoot);
   ensureDirectory(root);
   ensureDirectory(version);
@@ -42,6 +48,9 @@ export function lm1RecordPath(
   kind: Lm1Kind,
   sourceDigest: string,
 ): string {
+  if (!sourceDigestPattern.test(sourceDigest)) {
+    throw new Lm1Error("invalid_input", "Invalid long-memory source digest.");
+  }
   const directory = lm1RecordDirectory(storeRoot, workspaceKey, kind);
   const path = join(directory, `${sourceDigest}.json`);
   assertNotSymlink(path);
