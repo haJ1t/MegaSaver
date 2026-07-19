@@ -5727,3 +5727,11 @@ and preserved LM0 public boundaries. Implementation has not started; it remains
 gated on a TDD plan, fresh review, and `pnpm verify`. Source:
 [[concepts/long-memory-runtime]],
 `docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`.
+
+## [2026-07-20] plan | Long Memory LM1 observations
+
+The approved six-task TDD plan preserves LM0's public TypeScript/JSONL surface,
+then builds canonical evidence-bound contracts, immutable no-clobber storage,
+capture, correction-aware transitions, bounded recall, and independent release
+evidence. Source: [[concepts/long-memory-runtime]],
+`docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md`.

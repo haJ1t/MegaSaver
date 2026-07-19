@@ -7,7 +7,8 @@ sources:
   - concepts/memory-superset.md
   - docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md
   - docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md
-status: LM0 implementation verified; LM1 design approved
+  - docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md
+status: LM0 implementation verified; LM1 design and TDD plan approved
 created: 2026-07-19
 updated: 2026-07-20
 ---
@@ -42,3 +43,8 @@ evidence-binding authorization, retry-stable Evidence Ledger adoption, and
 revocation-aware recall. It preserves LM0's TypeScript and JSONL boundaries;
 implementation remains gated on a TDD plan, fresh review, and verification.
 (source: `docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`)
+
+Its six-task plan fixes contracts and public-surface compatibility first, then
+immutable storage, evidence-bound capture, correction-aware transitions,
+bounded recall, and independent verification. (source:
+`docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md`)
