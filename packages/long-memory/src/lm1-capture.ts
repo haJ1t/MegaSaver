@@ -95,6 +95,40 @@ function buildRecord(
   return record as Lm1Record;
 }
 
+function assertReferences(store: FileLm1Store, prepared: PreparedCapture): void {
+  try {
+    if (prepared.kind === "state_snapshot") {
+      if (prepared.supersedesSnapshotId === null) return;
+      const previous = store.getById(prepared.workspaceKey, prepared.supersedesSnapshotId);
+      if (
+        previous.kind !== "state_snapshot" ||
+        previous.stateKey !== prepared.stateKey ||
+        previous.observedAt >= prepared.observedAt
+      ) {
+        throw new Lm1Error("invalid_transition", "Invalid snapshot correction.");
+      }
+      return;
+    }
+
+    if (prepared.preSnapshotId === prepared.postSnapshotId) {
+      throw new Lm1Error("invalid_transition", "Transition cannot reference itself.");
+    }
+    const pre = store.getById(prepared.workspaceKey, prepared.preSnapshotId);
+    const post = store.getById(prepared.workspaceKey, prepared.postSnapshotId);
+    if (
+      pre.kind !== "state_snapshot" ||
+      post.kind !== "state_snapshot" ||
+      pre.stateKey !== post.stateKey ||
+      !(pre.observedAt <= prepared.observedAt && prepared.observedAt <= post.observedAt)
+    ) {
+      throw new Lm1Error("invalid_transition", "Invalid transition endpoints.");
+    }
+  } catch (error) {
+    if (error instanceof Lm1Error && error.code === "invalid_transition") throw error;
+    throw new Lm1Error("invalid_transition", "Transition references are unavailable.");
+  }
+}
+
 export function createLm1CaptureService(input: {
   store: FileLm1Store;
   redaction: RedactionPort;
@@ -138,6 +172,8 @@ export function createLm1CaptureService(input: {
         mapPortError(error);
       }
       assertEligibility(prepared.data.workspaceKey, prepared.data.evidenceIds, eligibility);
+
+      assertReferences(input.store, prepared.data);
 
       return input.store.publish(buildRecord(prepared.data, evidenceDigests, input.clock.now()));
     },

@@ -303,7 +303,7 @@ git commit -m "feat(memory): capture bound LM1 snapshots"
 - Consumes: Task 3 capture service and persisted snapshots.
 - Produces: valid state_transition capture and structural-leaf helpers for Task 5.
 
-- [ ] **Step 1: Write failing transition and correction tests**
+- [x] **Step 1: Write failing transition and correction tests**
 
 ~~~ts
 await capture(snapshotA);
@@ -326,13 +326,13 @@ expect(currentStateAfterRevokingB("billing.status")).toMatchObject({
 
 Cover missing/non-snapshot endpoint, self-reference, mismatched state keys, invalid pre ≤ transition ≤ post chronology, correction older/equal time, branch ties by observedAt/recordedAt/UUID, and revoked or metadata-only correction that must never reactivate its predecessor.
 
-- [ ] **Step 2: Run transition tests red**
+- [x] **Step 2: Run transition tests red**
 
 Run: pnpm --filter @megasaver/long-memory test -- lm1-transition.test.ts
 
 Expected: FAIL because transition and structural-leaf behavior is absent.
 
-- [ ] **Step 3: Implement endpoint checks and leaves before eligibility**
+- [x] **Step 3: Implement endpoint checks and leaves before eligibility**
 
 ~~~ts
 function assertTransition(pre: Lm1Snapshot, post: Lm1Snapshot, transition: PreparedTransition): void {
@@ -354,13 +354,13 @@ function structuralLeaves(records: readonly Lm1Snapshot[]): readonly Lm1Snapshot
 
 Validate references before publish. Determine structural leaves from all durable snapshots before evidence eligibility. Rank eligible leaves by observedAt descending, recordedAt descending, then id ascending. If a closed chain has no eligible leaf, report its correction-chain omission without exposing its predecessor as current state.
 
-- [ ] **Step 4: Run transition tests green**
+- [x] **Step 4: Run transition tests green**
 
 Run: pnpm --filter @megasaver/long-memory test -- lm1-transition.test.ts lm1-capture.test.ts
 
 Expected: all endpoint, ordering, branch, and revocation-chain tests pass.
 
-- [ ] **Step 5: Commit transition semantics**
+- [x] **Step 5: Commit transition semantics**
 
 Run:
 ~~~bash
