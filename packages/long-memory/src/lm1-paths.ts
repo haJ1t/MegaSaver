@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync } from "node:fs";
+import { lstatSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { workspaceKeySchema } from "@megasaver/shared";
 import { Lm1Error } from "./lm1-errors.js";
@@ -7,8 +7,13 @@ import { type Lm1Kind, lm1KindSchema } from "./lm1-model.js";
 const sourceDigestPattern = /^[0-9a-f]{64}$/;
 
 function assertNotSymlink(path: string): void {
-  if (existsSync(path) && lstatSync(path).isSymbolicLink()) {
+  try {
+    if (!lstatSync(path).isSymbolicLink()) return;
     throw new Lm1Error("store_corrupt", "Long-memory path is a symbolic link.");
+  } catch (error) {
+    if (error instanceof Lm1Error) throw error;
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+    throw new Lm1Error("store_corrupt", "Long-memory path is unreadable.");
   }
 }
 
