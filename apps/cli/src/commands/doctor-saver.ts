@@ -1,11 +1,17 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { constants, accessSync, existsSync, readFileSync } from "node:fs";
+import { constants, accessSync, existsSync, readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
+import { join } from "node:path";
 import { hookCommandMatches } from "@megasaver/connector-claude-code";
-import { readHeartbeatView } from "@megasaver/context-gate";
+import { readHeartbeatView, writeNetEffectRecord } from "@megasaver/context-gate";
 import { readDiscovery } from "@megasaver/daemon";
 import { readControlState, readRuntimeState } from "@megasaver/proxy-control";
+import {
+  estimateNetEffect,
+  overlayTokenSaverEventSchema,
+  sumBytesSavedSince,
+} from "@megasaver/stats";
 import { readStoreEnv, resolveStorePath } from "../store.js";
 import type { Check } from "./doctor.js";
 import { resolveClaudeCodeSettingsPath } from "./hooks/settings-path.js";
@@ -112,6 +118,123 @@ function firstToken(command: string): string {
 function bakedStore(command: string): string | null {
   const m = command.match(/--store\s+(?:"([^"]+)"|(\S+))/);
   return m === null ? null : (m[1] ?? m[2] ?? null);
+}
+
+const NET_EFFECT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Assemble estimator inputs from disk, persist verdicts, return doctor checks.
+// Exported for tests. Called from runSaverChecks after the liveness/self-test
+// checks. Fail-open: any read anomaly degrades to a warn, never throws.
+export function refreshNetEffectVerdicts(storeRoot: string, nowIso: string): Check[] {
+  const since = Date.parse(nowIso) - NET_EFFECT_WINDOW_MS;
+  const statsDir = join(storeRoot, "stats");
+  const workspaces: {
+    workspaceKey: string;
+    savedBytesInWindow: number;
+    compressionsInWindow: number;
+  }[] = [];
+  try {
+    for (const wk of readdirSync(statsDir, { withFileTypes: true })) {
+      if (!wk.isDirectory()) continue;
+      const events: { createdAt: string; bytesSaved: number }[] = [];
+      let compressions = 0;
+      for (const f of readdirSync(join(statsDir, wk.name))) {
+        if (!f.endsWith(".events.jsonl")) continue;
+        for (const line of readFileSync(join(statsDir, wk.name, f), "utf8").split("\n")) {
+          if (line.trim() === "") continue;
+          try {
+            const parsed = overlayTokenSaverEventSchema.safeParse(JSON.parse(line));
+            if (!parsed.success) continue;
+            events.push(parsed.data);
+            if (Date.parse(parsed.data.createdAt) >= since) compressions += 1;
+          } catch {
+            /* skip bad line */
+          }
+        }
+      }
+      workspaces.push({
+        workspaceKey: wk.name,
+        savedBytesInWindow: sumBytesSavedSince(events, since),
+        compressionsInWindow: compressions,
+      });
+    }
+  } catch {
+    return [
+      {
+        key: "saver-net-effect",
+        value: "stats dir unreadable",
+        pass: true,
+        reason: "warn: could not assemble net-effect inputs",
+      },
+    ];
+  }
+
+  const usageRows: { ts: string; cacheCreationTokens: number; messageCount: number }[] = [];
+  try {
+    for (const line of readFileSync(join(storeRoot, "proxy-usage", "usage.jsonl"), "utf8").split(
+      "\n",
+    )) {
+      if (line.trim() === "") continue;
+      try {
+        const r = JSON.parse(line) as {
+          ts?: unknown;
+          cacheCreationTokens?: unknown;
+          messageCount?: unknown;
+        };
+        if (
+          typeof r.ts === "string" &&
+          typeof r.cacheCreationTokens === "number" &&
+          typeof r.messageCount === "number"
+        ) {
+          usageRows.push({
+            ts: r.ts,
+            cacheCreationTokens: r.cacheCreationTokens,
+            messageCount: r.messageCount,
+          });
+        }
+      } catch {
+        /* skip bad line */
+      }
+    }
+  } catch {
+    /* no ledger → estimator yields unknown */
+  }
+
+  const verdicts = estimateNetEffect({ nowIso, workspaces, usageRows });
+  const checks: Check[] = [];
+  for (const v of verdicts) {
+    if (v.savedTokens === 0 && v.churnTokens === 0 && v.verdict === "unknown") continue; // idle workspace, no signal
+    try {
+      writeNetEffectRecord(storeRoot, v.workspaceKey, {
+        savedTokens: v.savedTokens,
+        churnTokens: v.churnTokens,
+        verdict: v.verdict,
+        updatedAt: nowIso,
+      });
+    } catch {
+      /* persist is best-effort; a write failure must not crash doctor */
+    }
+    checks.push({
+      key: "saver-net-effect",
+      value: `${v.verdict} (saved≈${v.savedTokens} vs churn≈${v.churnTokens} tok, 7d, workspace ${v.workspaceKey})`,
+      pass: v.verdict !== "negative",
+      reason:
+        v.verdict === "negative"
+          ? "saver auto-paused for this workspace — run: mega session saver resume"
+          : v.verdict === "unknown"
+            ? "warn: not enough proxied traffic to judge — verdict pending"
+            : "net savings positive",
+    });
+  }
+  if (checks.length === 0) {
+    checks.push({
+      key: "saver-net-effect",
+      value: "no compression activity in window",
+      pass: true,
+      reason: "warn: nothing to judge yet",
+    });
+  }
+  return checks;
 }
 
 // E22: doctor verifies the saver instead of trusting settings presence. WARN =
@@ -386,6 +509,8 @@ export function runSaverChecks(deps: DoctorSaverDeps = {}): Check[] {
       pass: true,
     });
   }
+
+  checks.push(...refreshNetEffectVerdicts(storeRoot, new Date(now()).toISOString()));
 
   return checks;
 }
