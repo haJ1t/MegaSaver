@@ -1,14 +1,12 @@
 import { readFileSync, statSync } from "node:fs";
 import type { ProjectId } from "@megasaver/shared";
 import { defineCommand } from "citty";
+import { HANDOFF_BADGE_NOTE } from "./shared.js";
 
 const MAX_PACKET_BYTES = 10 * 1024 * 1024;
 // evaluatePathRead's `project` field is a vestigial label the function never
 // reads (context-gate read.ts:122); inspect has no project context.
 const INSPECT_PROJECT_ID = "00000000-0000-4000-8000-000000000000" as ProjectId;
-// A "verified" badge means the SENDER anchored it — never a check against this
-// repo — so both renderers must qualify it or the reader infers false trust.
-const BADGE_NOTE = "badges reflect sender-supplied anchors, not yet checked against this repo";
 const VERIFIED_QUALIFIER = "sender anchor — not yet checked against this repo";
 
 export type RunHandoffInspectInput = {
@@ -110,7 +108,7 @@ export async function runHandoffInspect(input: RunHandoffInspectInput): Promise<
                 secretPaths: recomputed.secretPaths,
                 badges: recomputed.badges,
               },
-              badgeNote: BADGE_NOTE,
+              badgeNote: HANDOFF_BADGE_NOTE,
             }),
       }),
     );

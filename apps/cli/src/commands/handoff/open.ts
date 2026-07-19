@@ -11,7 +11,7 @@ import {
   resolveStorePath,
 } from "../../store.js";
 import { findProjectByCwd } from "../warmup.js";
-import { gate } from "./shared.js";
+import { HANDOFF_BADGE_NOTE, gate } from "./shared.js";
 
 const MAX_PACKET_BYTES = 10 * 1024 * 1024;
 
@@ -180,8 +180,7 @@ export async function runHandoffOpen(input: RunHandoffOpenInput): Promise<0 | 1>
           : {
               merge: {
                 ...mergeReport,
-                badgeNote:
-                  "badges reflect sender-supplied anchors, not yet checked against this repo",
+                badgeNote: HANDOFF_BADGE_NOTE,
               },
             }),
       }),

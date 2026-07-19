@@ -153,6 +153,7 @@ export {
   type HandoffPacket,
   type HandoffPacketErrorCode,
   type HandoffPayload,
+  agentSlugSchema,
   diagnoseHandoffPacket,
   handoffGitSchema,
   handoffManifestSchema,

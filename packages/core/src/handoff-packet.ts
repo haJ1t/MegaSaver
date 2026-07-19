@@ -23,7 +23,7 @@ export class HandoffPacketError extends Error {
 
 // Agent ids are echoed verbatim into terminal reports on the open side; a slug
 // shape blocks \n / ANSI forgery at the boundary. All real ids conform.
-const agentSlugSchema = z
+export const agentSlugSchema = z
   .string()
   .max(64)
   .regex(/^[a-z0-9][a-z0-9-]*$/);

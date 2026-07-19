@@ -1,8 +1,15 @@
 import type { KeyObject } from "node:crypto";
+import { agentSlugSchema } from "@megasaver/core";
 import { checkEntitlement } from "@megasaver/entitlement";
 import { PRO_ANALYTICS_URL } from "../savings/index.js";
 
 export const HANDOFF_UPSELL = `Hot handoff is a Mega Saver Pro feature. Activate a key: mega license activate <key>. Learn more: ${PRO_ANALYTICS_URL}.`;
+
+// A "verified" badge means the SENDER anchored it — never a check against this
+// repo — so both the open and inspect renderers must qualify it or the reader
+// infers false trust.
+export const HANDOFF_BADGE_NOTE =
+  "badges reflect sender-supplied anchors, not yet checked against this repo";
 
 export type HandoffGateInput = {
   storeRoot: string;
@@ -30,11 +37,11 @@ const EXPIRES_PATTERN = /^([1-9]\d{0,4})([hd])$/;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
-// Mirrors core's agentSlugSchema (handoff-packet.ts): serializeHandoffPacket
-// validates the manifest, so a non-slug --from throws inside the packer — reject
-// it at the CLI boundary for a clean error instead of an uncaught ZodError.
+// serializeHandoffPacket validates the manifest, so a non-slug --from throws
+// inside the packer — reject it at the CLI boundary for a clean error instead of
+// an uncaught ZodError. Reuses core's agentSlugSchema so the shape can't drift.
 export function isAgentSlug(value: string): boolean {
-  return value.length <= 64 && /^[a-z0-9][a-z0-9-]*$/.test(value);
+  return agentSlugSchema.safeParse(value).success;
 }
 
 // null = malformed flag; the caller owns the exit-1 message (runCache --days precedent).
