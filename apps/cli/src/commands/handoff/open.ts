@@ -124,15 +124,26 @@ export async function runHandoffOpen(input: RunHandoffOpenInput): Promise<0 | 1>
     throw error;
   }
 
-  const mergeReport = input.merge
-    ? applyHandoffMemories({
+  // The block is already written (the committed artifact); a merge failure must
+  // not surface as an uncaught throw — report it against the applied block and
+  // return 1 so the caller sees a clean §10 failure.
+  let mergeReport: ReturnType<typeof applyHandoffMemories> | null = null;
+  if (input.merge) {
+    try {
+      mergeReport = applyHandoffMemories({
         registry,
         projectId: project.id,
         packet,
         now: input.now(),
         newId: input.newId ?? randomUUID,
-      })
-    : null;
+      });
+    } catch (error) {
+      input.stderr(
+        `error: applied the handoff block to ${absPath}, but merging memories failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return 1;
+    }
+  }
 
   try {
     appendHandoffEvent(

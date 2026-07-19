@@ -52,13 +52,32 @@ async function seedProject(): Promise<void> {
   } as never);
 }
 
-function writePacket(over: { targetAgent?: string } = {}): string {
+const RECEIVER_ID = "22222222-2222-4222-8222-222222222222";
+
+const packetMemory = {
+  id: "33333333-3333-4333-8333-333333333333",
+  projectId: "0f0e0d0c-0b0a-4900-8807-060504030201",
+  sessionId: null,
+  scope: "project",
+  type: "decision",
+  title: "handoff decision",
+  content: "prefer pnpm for installs",
+  keywords: [],
+  confidence: "high",
+  source: "manual",
+  approval: "approved",
+  stale: false,
+  createdAt: "2026-07-15T10:00:00.000Z",
+  updatedAt: "2026-07-15T10:00:00.000Z",
+};
+
+function writePacket(over: { targetAgent?: string; memories?: unknown[] } = {}): string {
   const payload = {
     taskSummary: { text: "Task: ship hot handoff", tokenEstimate: 12 },
     resumeInstructions: "Resume the handoff task.",
     git: null,
     failures: [],
-    memories: [],
+    memories: over.memories ?? [],
   };
   const payloadJson = JSON.stringify(payload);
   const manifest = {
@@ -154,4 +173,38 @@ describe("§10 write-suppression table — every failure leaves target + store u
       }
     });
   }
+});
+
+// The one failure mode where the target IS written: the block lands first (the
+// committed artifact), then the optional memory merge throws. §10 honesty means
+// a clean exit 1 that names the applied block — never an uncaught throw.
+describe("§10 merge failure after the block is applied", () => {
+  it("exit 1, clean error naming the block, no partial memory, no uncaught throw", async () => {
+    await seedProject();
+    const file = writePacket({ memories: [packetMemory] });
+
+    const code = await runHandoffOpen({
+      storeRoot: root,
+      cwd: projectRoot,
+      now,
+      publicKey: keys.publicKey,
+      filePath: file,
+      merge: true,
+      json: false,
+      newId: () => "not-a-valid-uuid",
+      ensureStore: () => ensureStoreReady(root),
+      stdout: (l) => out.push(l),
+      stderr: (l) => err.push(l),
+    });
+
+    expect(code).toBe(1);
+    expect(readFileSync(join(projectRoot, "AGENTS.md"), "utf8")).toContain(
+      "<!-- MEGA SAVER:HANDOFF BEGIN -->",
+    );
+    expect(err.join("\n")).toMatch(/applied the handoff block/);
+    expect(err.join("\n")).toMatch(/merging memories failed/);
+
+    const { registry } = await ensureStoreReady(root);
+    expect(registry.listMemoryEntries(RECEIVER_ID as never)).toHaveLength(0);
+  });
 });

@@ -235,7 +235,7 @@ export async function runHandoffPack(input: RunHandoffPackInput): Promise<0 | 1>
 
 export const handoffPackCommand = defineCommand({
   meta: {
-    name: "handoff",
+    name: "pack",
     description:
       "Pack the current task into a .megahandoff packet (Mega Saver Pro; --dry-run free).",
   },

@@ -14,19 +14,19 @@ export {
 } from "./inspect.js";
 export { type RunHandoffClearInput, handoffClearCommand, runHandoffClear } from "./clear.js";
 
-// Root run = pack: `mega handoff --to codex` packs; subcommands consume.
-// Spread keeps pack's args/run as the SAME references (registration test asserts
-// identity) while preserving their optional modifier — a direct `args:
-// handoffPackCommand.args` would widen to `| undefined` and fail
-// exactOptionalPropertyTypes.
+// Subcommands-only, like every other command family here (office, project, …).
+// citty 0.1.6 cannot combine a root `run` + required root `args` (--to) with
+// `subCommands`: the required flag shadows subcommand dispatch, so
+// `handoff open <file>` fails "Missing required argument: --to" and
+// `handoff pack --to codex` fails "Unknown command codex".
 export const handoffCommand = defineCommand({
-  ...handoffPackCommand,
   meta: {
     name: "handoff",
     description:
-      "Pack the live task into a .megahandoff packet for another agent (Mega Saver Pro).",
+      "Pack, open, inspect, or clear .megahandoff packets between agents (Mega Saver Pro).",
   },
   subCommands: {
+    pack: handoffPackCommand,
     open: handoffOpenCommand,
     inspect: handoffInspectCommand,
     clear: handoffClearCommand,
