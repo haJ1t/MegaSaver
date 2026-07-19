@@ -55,7 +55,7 @@
 - Consumes: WorkspaceKey and workspaceKeySchema from @megasaver/shared.
 - Produces: Lm1Error, PrepareCaptureInput, PreparedCapture, Lm1Record, RedactionPort, EvidenceBindingPort, EvidenceEligibilityPort, prepareCapture, canonicalCaptureDigest, deriveLm1RecordId, deriveEvidenceBindingDigest.
 
-- [ ] **Step 1: Write failing strict-schema, one-pass redaction, and export tests**
+- [x] **Step 1: Write failing strict-schema, one-pass redaction, and export tests**
 
 ~~~ts
 const redactor: RedactionPort = {
@@ -90,13 +90,13 @@ it("prepares a canonical snapshot with one redaction call", () => {
 
 Extend index.test-d.ts to type-import each existing LM0 root export from the current index.ts: LONG_MEMORY_PACKAGE, createInMemoryLongMemoryStore, LongMemoryStore, dispatchRpcLine, all LM0 schemas, and all LM0 public types. It must also type-import prepareCapture and the Task 1 LM1 public types. Task 3 extends this fixture with createLm1CaptureService. Add a fixed golden vector for NFC text, explicit null, SHA-256 digest, and lowercase UUID version 5.
 
-- [ ] **Step 2: Run tests red**
+- [x] **Step 2: Run tests red**
 
 Run: pnpm --filter @megasaver/long-memory test -- lm1-model.test.ts lm1-identity.test.ts index.test-d.ts
 
 Expected: FAIL because LM1 files and root exports do not exist.
 
-- [ ] **Step 3: Implement contracts and identity**
+- [x] **Step 3: Implement contracts and identity**
 
 ~~~ts
 export const LM1_SCHEMA_VERSION = 1 as const;
@@ -116,13 +116,13 @@ export type RedactionPort = {
 
 Implement strict discriminated snapshot/transition schemas. Require explicit null for supersedesSnapshotId and action where not applicable. Make prepareCapture call RedactionPort once, reject unresolved high risk, normalize all strings, sort/de-duplicate evidence IDs, and seal redactionVersion plus canonicalCaptureDigest. Use UTF-8 SHA-256 over recursively key-sorted JSON; set RFC version and variant bits on the first 16 SHA-256 bytes of the LM1 ID domain input. Append only Task 1 LM1 exports to index.ts without removing/reordering LM0 exports. Add @megasaver/shared workspace dependency and update pnpm-lock.yaml only if pnpm changes it.
 
-- [ ] **Step 4: Run contracts green**
+- [x] **Step 4: Run contracts green**
 
 Run: pnpm --filter @megasaver/long-memory test -- lm1-model.test.ts lm1-identity.test.ts index.test-d.ts && pnpm --filter @megasaver/long-memory typecheck && pnpm lint
 
 Expected: focused tests, type tests, and formatting pass; old LM0 root imports still compile.
 
-- [ ] **Step 5: Commit the contract boundary**
+- [x] **Step 5: Commit the contract boundary**
 
 Run:
 ~~~bash
@@ -145,7 +145,7 @@ git commit -m "feat(memory): add LM1 contracts"
 - Consumes: Task 1 Lm1Record, canonical identity helpers, and Lm1Error.
 - Produces: createFileLm1Store({ storeRoot }) with publish(record), getById(workspaceKey, id), getByDigest(workspaceKey, kind, sourceDigest), and list(workspaceKey, limit).
 
-- [ ] **Step 1: Write failing restart, corrupt-path, symlink, and concurrency tests**
+- [x] **Step 1: Write failing restart, corrupt-path, symlink, and concurrency tests**
 
 ~~~ts
 it("adopts first durable content while ignoring retry recordedAt", () => {
@@ -166,13 +166,13 @@ it("rejects a static snapshot-directory symlink", () => {
 
 Add tests for JSON corruption, filename/sourceDigest mismatch, derived-ID mismatch, pre-publish injected failure, valid restarted list ordering, and two child Node processes publishing the same record. The child test must prove one inserted true, one inserted false, and one parseable final record.
 
-- [ ] **Step 2: Run storage tests red**
+- [x] **Step 2: Run storage tests red**
 
 Run: pnpm --filter @megasaver/long-memory test -- lm1-store.test.ts
 
 Expected: FAIL because createFileLm1Store is absent.
 
-- [ ] **Step 3: Implement paths and atomic no-clobber publishing**
+- [x] **Step 3: Implement paths and atomic no-clobber publishing**
 
 ~~~ts
 function publishNoClobber(path: string, serialized: string): "created" | "exists" {
@@ -194,13 +194,13 @@ function publishNoClobber(path: string, serialized: string): "created" | "exists
 
 Validate the workspace path segment with the shared schema. Reject a pre-existing symlink at root, v1 directory, workspace directory, kind directory, record, and temp path using lstatSync. On existing target, parse with lm1RecordSchema, verify workspace/kind/digest/derived ID, compare identity, payload, and binding fields but deliberately ignore incoming recordedAt, then return the first persisted record unchanged. Sort list output by kind then source digest and stop at the explicit limit.
 
-- [ ] **Step 4: Run storage tests green**
+- [x] **Step 4: Run storage tests green**
 
 Run: pnpm --filter @megasaver/long-memory test -- lm1-store.test.ts && pnpm --filter @megasaver/long-memory typecheck
 
 Expected: restart adoption, symlink rejection, corrupted-file rejection, concurrent equal publish, and pre-publish retry tests pass.
 
-- [ ] **Step 5: Commit persistence**
+- [x] **Step 5: Commit persistence**
 
 Run:
 ~~~bash
