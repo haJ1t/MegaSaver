@@ -1,6 +1,6 @@
 import { normalizedCostUsd } from "@megasaver/stats";
 import { buildVerdict, costRatioOf, orderSensitive } from "./report.js";
-import { transformRequest } from "./transform.js";
+import { assertUncompressedRecording, transformRequest } from "./transform.js";
 import type { ApplySaver } from "./transform.js";
 import type {
   Arm,
@@ -73,6 +73,11 @@ export async function replayArm(input: {
   send: Send;
   now?: () => number;
 }): Promise<ArmUsage> {
+  // Checked here rather than in the pair runners because this is the single
+  // choke point every replay routes through — a contaminated recording cannot
+  // reach the API by any path.
+  assertUncompressedRecording(input.requests);
+
   const now = input.now ?? Date.now;
   const startedAtMs = now();
   const total = {

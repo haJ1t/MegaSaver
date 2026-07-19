@@ -15,7 +15,12 @@ export {
   type VerdictVerification,
 } from "./types.js";
 export { startCaptureProxy, type CaptureProxy } from "./capture-proxy.js";
-export { transformRequest, type ApplySaver, type ToolCallContext } from "./transform.js";
+export {
+  assertUncompressedRecording,
+  transformRequest,
+  type ApplySaver,
+  type ToolCallContext,
+} from "./transform.js";
 export {
   makeSpawnedSaver,
   prepareSaverStore,

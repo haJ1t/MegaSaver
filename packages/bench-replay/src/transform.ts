@@ -83,6 +83,43 @@ function rewriteToolResultContent(
   );
 }
 
+// The literal prefix of the recovery footer the saver appends to every output it
+// compresses — see buildRecoveryFooter in packages/context-gate/src/recovery-footer.ts.
+// Only the fixed head is matched; everything after it is interpolated byte counts.
+const SAVER_FOOTER_MARKER = "[Mega Saver: compressed ";
+
+function toolResultText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter(isTextBlock)
+    .map((b) => b.text)
+    .join("\n");
+}
+
+// A recording is only a baseline if it was captured with MegaSaver's hooks OFF.
+// Captured with the saver live, its tool_results are ALREADY compressed: the
+// "baseline" arm is then secretly a megasaver run and the megasaver arm is a
+// double-compression, so the ratio collapses toward 1.00 and reads as a clean
+// "the saver has no effect". Nothing else in the pipeline can tell the
+// difference, so the saver's own footer is the precondition we check.
+export function assertUncompressedRecording(requests: readonly RecordedRequest[]): void {
+  for (const [index, body] of requests.entries()) {
+    for (const message of body.messages) {
+      if (typeof message !== "object" || message === null) continue;
+      const content = (message as { content?: unknown }).content;
+      if (!Array.isArray(content)) continue;
+      for (const block of content) {
+        if (!isToolResultBlock(block)) continue;
+        if (!toolResultText(block.content).includes(SAVER_FOOTER_MARKER)) continue;
+        throw new Error(
+          `assertUncompressedRecording: request ${index}, tool_result ${JSON.stringify(block.tool_use_id)} is already compressed — it carries the saver's "${SAVER_FOOTER_MARKER}" footer, so this conversation was recorded with MegaSaver's hooks ON. Both arms would replay pre-compressed output and the comparison would be meaningless. Re-record it with the saver disabled (mega session saver default disable).`,
+        );
+      }
+    }
+  }
+}
+
 // Produces the body to send for one arm. Baseline is a deep copy of the
 // recording; megasaver is the same conversation with each tool_result's text
 // replaced by the saver's decision. Everything else — model, system, tools,
