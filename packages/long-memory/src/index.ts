@@ -1,6 +1,36 @@
 export const LONG_MEMORY_PACKAGE = "@megasaver/long-memory";
 export { createInMemoryLongMemoryStore, type LongMemoryStore } from "./store.js";
 export { dispatchRpcLine } from "./rpc.js";
+export { Lm1Error, lm1ErrorCodeSchema, type Lm1ErrorCode } from "./lm1-errors.js";
+export {
+  LM1_SCHEMA_VERSION,
+  MAX_LM1_ACTION_CODE_UNITS,
+  MAX_LM1_EVIDENCE_IDS,
+  MAX_LM1_STATE_KEY_CODE_UNITS,
+  MAX_LM1_TEXT_CODE_UNITS,
+  lm1KindSchema,
+  lm1RecordSchema,
+  prepareCapture,
+  prepareCaptureInputSchema,
+  preparedCaptureSchema,
+  type EvidenceBindingPort,
+  type EvidenceEligibilityPort,
+  type Lm1Kind,
+  type Lm1RecallBundle,
+  type Lm1RecallRequest,
+  type Lm1Record,
+  type Lm1Snapshot,
+  type Lm1Transition,
+  type PreparedCapture,
+  type PrepareCaptureInput,
+  type RedactionPort,
+} from "./lm1-model.js";
+export {
+  canonicalCaptureDigest,
+  deriveEvidenceBindingDigest,
+  deriveLm1RecordId,
+  type Sha256,
+} from "./lm1-identity.js";
 export {
   MAX_EVIDENCE_IDS,
   MAX_EVIDENCE_ID_LENGTH,
