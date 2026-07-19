@@ -82,6 +82,17 @@ const unanchoredMemory = {
   updatedAt: "2026-07-15T10:00:00.000Z",
 };
 
+const anchoredMemory = {
+  ...unanchoredMemory,
+  id: "44444444-4444-4444-8444-444444444444",
+  anchor: {
+    repoHead: "abc1234",
+    capturedAt: "2026-07-15T10:00:00.000Z",
+    files: [],
+    symbols: [],
+  },
+};
+
 function run(filePath: string, over: { json?: boolean; maxPacketBytes?: number } = {}) {
   return runHandoffInspect({
     filePath,
@@ -155,5 +166,31 @@ describe("runHandoffInspect", () => {
   it("oversized packet: exit 1 before read", async () => {
     expect(await run(writePacket(), { maxPacketBytes: 4 })).toBe(1);
     expect(err.join("\n")).toContain("exceeds");
+  });
+
+  it("anchored badge: text qualifies verified as sender anchor, json carries badgeNote", async () => {
+    const file = writePacket({ memories: [anchoredMemory] });
+    expect(await run(file)).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain(`badge: ${anchoredMemory.id} verified`);
+    expect(text).toContain("sender anchor");
+    expect(text).toContain("not yet checked against this repo");
+
+    out = [];
+    expect(await run(file, { json: true })).toBe(0);
+    const parsed = JSON.parse(out.join("\n"));
+    expect(parsed.badgeNote).toBe(
+      "badges reflect sender-supplied anchors, not yet checked against this repo",
+    );
+    expect(parsed.recomputed.badges[0].badge).toBe("verified");
+  });
+
+  it("tampered packet with anchored memory: hash mismatch, still qualifies verified badge", async () => {
+    const file = writePacket({ memories: [anchoredMemory], tamper: true });
+    expect(await run(file)).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("hash: mismatch");
+    expect(text).toContain(`badge: ${anchoredMemory.id} verified`);
+    expect(text).toContain("not yet checked against this repo");
   });
 });
