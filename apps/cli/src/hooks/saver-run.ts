@@ -8,7 +8,7 @@ import {
   recordDaemonFallbackHeartbeat,
   recordFailureHeartbeat,
   recordInvocationHeartbeat,
-  recordSeenOutput,
+  recordSeenOutput as recordSeenOutputImpl,
   resolveWorkspaceTokenSaverSettings,
   saverPausedByNetEffect,
 } from "@megasaver/context-gate";
@@ -75,6 +75,20 @@ function recordDaemonFallback(storeRoot: string, workspaceKey: string): void {
     recordDaemonFallbackHeartbeat(storeRoot, workspaceKey, new Date().toISOString());
   } catch {
     /* liveness is best-effort */
+  }
+}
+// A write throw here must not fall the call to passthrough AFTER record() already
+// persisted a savings event — that would inflate the estimate. Best-effort, like siblings.
+function recordSeenOutput(
+  storeRoot: string,
+  workspaceKey: string,
+  sessionId: string,
+  hash: string,
+): void {
+  try {
+    recordSeenOutputImpl(storeRoot, workspaceKey, sessionId, hash);
+  } catch {
+    /* seen-ledger write is best-effort */
   }
 }
 

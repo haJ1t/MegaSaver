@@ -90,6 +90,25 @@ describe("maybeRunOverlayGc", () => {
     expect(existsSync(fresh)).toBe(true);
   });
 
+  it("sweeps saver-seen files older than retention", async () => {
+    const ws = encodeWorkspaceKey("/some/project");
+    const dir = join(store, "stats", ws, "saver-seen");
+    mkdirSync(dir, { recursive: true });
+    const old = join(dir, "aaaa.json");
+    const fresh = join(dir, "bbbb.json");
+    writeFileSync(old, JSON.stringify({ version: 1, hashes: ["old"] }));
+    writeFileSync(fresh, JSON.stringify({ version: 1, hashes: ["new"] }));
+    const past = new Date(NOW - 40 * 86_400_000);
+    utimesSync(old, past, past);
+    const ran = await maybeRunOverlayGc(store, {
+      now: () => NOW,
+      prune: async () => ({ removed: 0 }),
+    });
+    expect(ran).toBe(true);
+    expect(existsSync(old)).toBe(false);
+    expect(existsSync(fresh)).toBe(true);
+  });
+
   it("reconciles overlay summaries whose count lags the JSONL (E26 drift)", async () => {
     const wk = encodeWorkspaceKey("/test/proj");
     const id = "live-gc-drift-1";
