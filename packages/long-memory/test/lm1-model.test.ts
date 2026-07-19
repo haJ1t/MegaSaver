@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   type RedactionPort,
+  lm1RecordSchema,
   prepareCapture,
   prepareCaptureInputSchema,
   preparedCaptureSchema,
@@ -77,5 +78,42 @@ describe("LM1 capture model", () => {
         supersedesSnapshotId: null,
       }),
     ).toThrow();
+  });
+
+  it("rejects a direct record with noncanonical capture fields", () => {
+    const prepared = prepareCapture(
+      {
+        workspaceKey,
+        kind: "state_snapshot",
+        observedAt: "2026-07-20T00:00:00.000Z",
+        text: "billing paid",
+        action: null,
+        evidenceIds: [firstEvidenceId, secondEvidenceId],
+        stateKey: "billing.status",
+        representation: "value",
+        supersedesSnapshotId: null,
+      },
+      {
+        version: "redaction-v1",
+        redact: ({ text, action }) => ({ text, action, unresolvedHighRisk: false }),
+      },
+    );
+    const record = {
+      ...prepared,
+      id: "33333333-3333-4333-8333-333333333333",
+      sourceDigest: "a".repeat(64),
+      evidenceBindingDigest: "b".repeat(64),
+      recordedAt: "2026-07-20T00:00:01.000Z",
+      evidenceDigests: ["c".repeat(64), "d".repeat(64)],
+      status: "recorded" as const,
+    };
+
+    expect(
+      lm1RecordSchema.safeParse({
+        ...record,
+        evidenceIds: [secondEvidenceId, firstEvidenceId],
+      }).success,
+    ).toBe(false);
+    expect(lm1RecordSchema.safeParse({ ...record, text: " billing paid " }).success).toBe(false);
   });
 });

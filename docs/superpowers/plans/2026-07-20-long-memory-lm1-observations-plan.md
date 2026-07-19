@@ -227,7 +227,9 @@ const service = createLm1CaptureService({
   store,
   redaction: { version: "r1", redact: ({ text, action }) => ({ text, action, unresolvedHighRisk: false }) },
   evidenceBinding: {
-    verify: async ({ evidenceIds }) => ({ evidenceDigests: evidenceIds.map(() => "a".repeat(64)) }),
+    verify: async ({ evidenceIds }) => ({
+      evidence: evidenceIds.map((evidenceId) => ({ evidenceId, evidenceDigest: "a".repeat(64) })),
+    }),
   },
   evidenceEligibility: {
     resolve: async ({ workspaceKey, evidenceIds }) => evidenceIds.map((evidenceId) => ({
@@ -245,7 +247,7 @@ await expect(service.capturePrepared({
 })).rejects.toMatchObject({ code: "evidence_binding_invalid" });
 ~~~
 
-Cover null, missing, duplicate, extra, and out-of-order binding digest arrays; exact eligibility result matching; foreign workspace; metadata-only/revoked/unresolved statuses; thrown known and unknown port errors; and a changed redaction version that cannot reuse prior authorization. Assert capturePrepared never calls the redactor. Add a public-data fixture port that validates the same canonical digest without a user store.
+Cover null, missing, duplicate, extra, and out-of-order binding id/digest entries; exact eligibility result matching; foreign workspace; metadata-only/revoked/unresolved statuses; thrown known and unknown port errors; and a changed redaction version that cannot reuse prior authorization. Assert capturePrepared never calls the redactor. Add a public-data fixture port that validates the same canonical digest without a user store.
 
 - [x] **Step 2: Run capture tests red**
 
@@ -266,13 +268,13 @@ const binding = await ports.evidenceBinding.verify({
   evidenceIds: prepared.evidenceIds,
   authorization: input.authorization,
 });
-assertOrderedEvidenceDigests(prepared.evidenceIds, binding);
+const evidenceDigests = assertOrderedEvidenceBindings(prepared.evidenceIds, binding);
 const eligibility = await ports.evidenceEligibility.resolve({
   workspaceKey: prepared.workspaceKey,
   evidenceIds: prepared.evidenceIds,
 });
 assertExactEligibleEvidence(prepared, eligibility);
-return store.publish(buildRecord(prepared, binding.evidenceDigests, clock.now()));
+return store.publish(buildRecord(prepared, evidenceDigests, clock.now()));
 ~~~
 
 Map known port errors to their closed codes and unknown failures to store_corrupt. Derive evidenceBindingDigest from the domain-separated canonical object with workspace, canonical capture digest, ordered IDs, and ordered evidence digests. For snapshots, require any superseded record to be a same-workspace/same-stateKey snapshot with a strictly earlier observedAt.
