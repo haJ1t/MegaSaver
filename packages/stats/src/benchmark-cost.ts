@@ -19,15 +19,13 @@ export interface BenchmarkUsage {
   output_tokens?: number;
 }
 
-const PER_TOKEN = 1 / 1_000_000;
-
 export function normalizedCostUsd(usage: BenchmarkUsage): number {
   const r = BENCHMARK_RATES_PER_MTOK;
   return (
     ((usage.input_tokens ?? 0) * r.input +
       (usage.cache_creation_input_tokens ?? 0) * r.cacheCreation +
       (usage.cache_read_input_tokens ?? 0) * r.cacheRead +
-      (usage.output_tokens ?? 0) * r.output) *
-    PER_TOKEN
+      (usage.output_tokens ?? 0) * r.output) /
+    1_000_000
   );
 }
