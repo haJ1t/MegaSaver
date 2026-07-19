@@ -1,26 +1,36 @@
 import { z } from "zod";
 
+export const MAX_OBSERVATION_TEXT_CHARS = 50_000;
+export const MAX_WORKSPACE_KEY_LENGTH = 256;
+export const MAX_EVIDENCE_ID_LENGTH = 512;
+export const MAX_EVIDENCE_IDS = 1_000;
+export const MAX_RECALL_TASK_CHARS = 20_000;
+export const MAX_RECALL_TOKEN_BUDGET = 100_000;
+
 export const observationKindSchema = z.enum(["state_snapshot", "state_transition"]);
 export type ObservationKind = z.infer<typeof observationKindSchema>;
 
 export const observationSchema = z
   .object({
     id: z.string().uuid(),
-    workspaceKey: z.string().min(1),
+    workspaceKey: z.string().trim().min(1).max(MAX_WORKSPACE_KEY_LENGTH),
     sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
     kind: observationKindSchema,
     observedAt: z.string().datetime({ offset: true }),
-    text: z.string().trim().min(1),
-    evidenceIds: z.array(z.string().min(1)).min(1),
+    text: z.string().trim().min(1).max(MAX_OBSERVATION_TEXT_CHARS),
+    evidenceIds: z
+      .array(z.string().trim().min(1).max(MAX_EVIDENCE_ID_LENGTH))
+      .min(1)
+      .max(MAX_EVIDENCE_IDS),
   })
   .strict();
 export type Observation = z.infer<typeof observationSchema>;
 
 export const recallRequestSchema = z
   .object({
-    task: z.string().trim().min(1),
-    workspaceKey: z.string().min(1),
-    tokenBudget: z.number().int().positive(),
+    task: z.string().trim().min(1).max(MAX_RECALL_TASK_CHARS),
+    workspaceKey: z.string().trim().min(1).max(MAX_WORKSPACE_KEY_LENGTH),
+    tokenBudget: z.number().int().positive().max(MAX_RECALL_TOKEN_BUDGET),
   })
   .strict();
 export type RecallRequest = z.infer<typeof recallRequestSchema>;
@@ -79,7 +89,7 @@ export const rpcResponseSchema = z.union([
     .object({
       id: z.string().nullable(),
       ok: z.literal(false),
-      error: z.object({ code: z.literal("invalid_request") }).strict(),
+      error: z.object({ code: z.enum(["invalid_request", "not_found", "internal"]) }).strict(),
     })
     .strict(),
 ]);

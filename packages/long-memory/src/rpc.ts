@@ -1,23 +1,28 @@
-import { rpcRequestSchema, type RpcResponse } from "./model.js";
+import { type RpcRequest, type RpcResponse, rpcRequestSchema } from "./model.js";
 import type { LongMemoryStore } from "./store.js";
 
 export function dispatchRpcLine(line: string, store: LongMemoryStore): string {
+  let request: RpcRequest;
+
   try {
-    const request = rpcRequestSchema.parse(JSON.parse(line));
+    request = rpcRequestSchema.parse(JSON.parse(line));
+  } catch {
+    return errorLine(null, "invalid_request");
+  }
+
+  try {
     const result =
-      request.op === "insert"
-        ? store.insert(request.observation)
-        : store.query(request.request);
+      request.op === "insert" ? store.insert(request.observation) : store.query(request.request);
     const response: RpcResponse = { id: request.id, ok: true, result };
 
     return JSON.stringify(response);
   } catch {
-    const response: RpcResponse = {
-      id: null,
-      ok: false,
-      error: { code: "invalid_request" },
-    };
-
-    return JSON.stringify(response);
+    return errorLine(request.id, "internal");
   }
+}
+
+function errorLine(id: string | null, code: "invalid_request" | "internal"): string {
+  const response: RpcResponse = { id, ok: false, error: { code } };
+
+  return JSON.stringify(response);
 }

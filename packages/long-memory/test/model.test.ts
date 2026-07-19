@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { observationSchema, recallRequestSchema } from "../src/model.js";
+import {
+  MAX_EVIDENCE_IDS,
+  MAX_EVIDENCE_ID_LENGTH,
+  MAX_OBSERVATION_TEXT_CHARS,
+  MAX_RECALL_TASK_CHARS,
+  MAX_RECALL_TOKEN_BUDGET,
+  MAX_WORKSPACE_KEY_LENGTH,
+  observationSchema,
+  recallRequestSchema,
+} from "../src/model.js";
 
 const observation = {
   id: "22222222-2222-4222-8222-222222222222",
@@ -22,7 +31,51 @@ describe("long memory model", () => {
 
   it("rejects a recall request without a positive token budget", () => {
     expect(() =>
-      recallRequestSchema.parse({ task: "Recall billing state", workspaceKey: "workspace-a", tokenBudget: 0 }),
+      recallRequestSchema.parse({
+        task: "Recall billing state",
+        workspaceKey: "workspace-a",
+        tokenBudget: 0,
+      }),
+    ).toThrow();
+  });
+
+  it("bounds observations and recall requests at the public boundary", () => {
+    expect(MAX_OBSERVATION_TEXT_CHARS).toBeGreaterThan(0);
+    expect(MAX_WORKSPACE_KEY_LENGTH).toBeGreaterThan(0);
+    expect(MAX_EVIDENCE_ID_LENGTH).toBeGreaterThan(0);
+    expect(MAX_EVIDENCE_IDS).toBeGreaterThan(0);
+    expect(MAX_RECALL_TASK_CHARS).toBeGreaterThan(0);
+    expect(MAX_RECALL_TOKEN_BUDGET).toBeGreaterThan(0);
+    expect(() =>
+      observationSchema.parse({
+        ...observation,
+        text: "x".repeat(MAX_OBSERVATION_TEXT_CHARS + 1),
+      }),
+    ).toThrow();
+    expect(() =>
+      observationSchema.parse({
+        ...observation,
+        workspaceKey: "x".repeat(MAX_WORKSPACE_KEY_LENGTH + 1),
+      }),
+    ).toThrow();
+    expect(() =>
+      observationSchema.parse({
+        ...observation,
+        evidenceIds: ["x".repeat(MAX_EVIDENCE_ID_LENGTH + 1)],
+      }),
+    ).toThrow();
+    expect(() =>
+      observationSchema.parse({
+        ...observation,
+        evidenceIds: Array.from({ length: MAX_EVIDENCE_IDS + 1 }, () => "evidence"),
+      }),
+    ).toThrow();
+    expect(() =>
+      recallRequestSchema.parse({
+        task: "x".repeat(MAX_RECALL_TASK_CHARS + 1),
+        workspaceKey: "workspace-a",
+        tokenBudget: MAX_RECALL_TOKEN_BUDGET + 1,
+      }),
     ).toThrow();
   });
 });

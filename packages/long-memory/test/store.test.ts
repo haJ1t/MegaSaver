@@ -24,10 +24,36 @@ describe("in-memory long memory store", () => {
     const store = createInMemoryLongMemoryStore();
     store.insert(snapshot);
     expect(
-      store.query({ task: "What is the billing status?", workspaceKey: "workspace-a", tokenBudget: 20 }),
+      store.query({
+        task: "What is the billing status?",
+        workspaceKey: "workspace-a",
+        tokenBudget: 20,
+      }),
     ).toMatchObject({
       items: [{ type: "text", value: "Billing status is paid.", observationId: snapshot.id }],
       receipt: [{ observationId: snapshot.id, evidenceIds: snapshot.evidenceIds, lane: "state" }],
     });
+  });
+
+  it("validates direct public-store calls", () => {
+    const store = createInMemoryLongMemoryStore();
+
+    expect(() => store.insert({ ...snapshot, text: " " })).toThrow();
+    expect(() =>
+      store.query({ task: "billing", workspaceKey: "workspace-a", tokenBudget: 0 }),
+    ).toThrow();
+  });
+
+  it("rejects a workspace-local observation id collision", () => {
+    const store = createInMemoryLongMemoryStore();
+    store.insert(snapshot);
+
+    expect(() =>
+      store.insert({
+        ...snapshot,
+        sourceDigest: "c".repeat(64),
+        text: "Billing status is pending.",
+      }),
+    ).toThrow();
   });
 });

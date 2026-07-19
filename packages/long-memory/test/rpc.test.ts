@@ -36,6 +36,28 @@ describe("dispatchRpcLine", () => {
     });
   });
 
+  it("keeps a valid request id when an operation fails internally", () => {
+    const failingStore = {
+      insert() {
+        throw new Error("store unavailable");
+      },
+      query() {
+        return { items: [], receipt: [] };
+      },
+    };
+
+    const result = dispatchRpcLine(
+      JSON.stringify({ id: "request-3", op: "insert", observation }),
+      failingStore,
+    );
+
+    expect(JSON.parse(result)).toEqual({
+      id: "request-3",
+      ok: false,
+      error: { code: "internal" },
+    });
+  });
+
   it("returns a receipt-bearing bundle for a valid query request", () => {
     const store = createInMemoryLongMemoryStore();
     dispatchRpcLine(JSON.stringify({ id: "request-1", op: "insert", observation }), store);
