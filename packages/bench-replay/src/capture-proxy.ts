@@ -1,3 +1,4 @@
+import { once } from "node:events";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { type IncomingMessage, type Server, createServer } from "node:http";
 import { join } from "node:path";
@@ -30,6 +31,9 @@ export async function startCaptureProxy(input: {
   outDir: string;
 }): Promise<CaptureProxy> {
   mkdirSync(input.outDir, { recursive: true });
+  // seq is assigned after `readBody` completes, so file numbering follows
+  // body-read-completion order, not arrival order. Fine for Claude Code, which
+  // sends /v1/messages requests serially — known ceiling, not enforced.
   let seq = 0;
 
   const server: Server = createServer((req, res) => {
@@ -68,9 +72,27 @@ export async function startCaptureProxy(input: {
           outHeaders[k] = v;
         }
       });
+      // Written before any body bytes flow, so headers land ahead of the first
+      // chunk on the wire — required for the client to start an SSE parse.
       res.writeHead(upstreamRes.status, outHeaders);
-      res.end(Buffer.from(await upstreamRes.arrayBuffer()));
-    })();
+      if (upstreamRes.body) {
+        const reader = upstreamRes.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          // Honor backpressure: wait for the client socket to drain rather than
+          // queuing unbounded chunks in memory when it can't keep up.
+          if (!res.write(Buffer.from(value))) await once(res, "drain");
+        }
+      }
+      res.end();
+    })().catch(() => {
+      // A client that disconnects mid-body (readBody's `for await` throws) or
+      // mid-response must fail only its own request — one broken connection
+      // can't be allowed to take down every other in-flight recording.
+      if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain" });
+      res.end();
+    });
   });
 
   await new Promise<void>((resolve) => server.listen(input.port, "127.0.0.1", resolve));
