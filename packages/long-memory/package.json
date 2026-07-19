@@ -7,6 +7,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "megasaver-long-memory": "./dist/stdio.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
