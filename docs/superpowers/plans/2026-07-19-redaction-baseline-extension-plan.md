@@ -169,7 +169,7 @@ the very task it exists to gate.
     },
     {
       name: "jwt",
-      source: "(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+",
+      source: "(?:(?<![A-Za-z0-9_-])|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+",
       flags: "g",
       replacement: "eyJ[REDACTED]",
       hasValidate: false,
