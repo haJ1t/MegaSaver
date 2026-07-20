@@ -15,6 +15,7 @@ export function writeAnchoredNoClobber(
   anchor: DirectoryAnchor,
   name: string,
   serialized: string,
+  assertMutationAllowed: () => void,
 ): void {
   verifyDirectoryAnchor(anchor);
   const temp = openAnchoredCreateFile(anchor, `.${randomUUID()}.tmp`);
@@ -27,6 +28,7 @@ export function writeAnchoredNoClobber(
     fsyncSync(temp.descriptor);
     verifyAnchoredFile(temp);
     const targetPath = anchoredChildPath(anchor, name);
+    assertMutationAllowed();
     linkSync(temp.path, targetPath);
     const target = lstatSync(targetPath);
     if (target === undefined || !sameFileIdentity(target, temp.stat)) {
