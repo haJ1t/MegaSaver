@@ -3851,3 +3851,32 @@ TDD rework plan is authoritative. No LongMemEval-V2 score is claimed. Source:
 [[concepts/long-memory-runtime]],
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
 `docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md`.
+
+## [2026-07-20 13:10 +03] verification | LM2 quota-ledger integration evidence
+
+Task 5 closed the quota-ledger rework's integration gap without changing LM0,
+LM1, or production code. A real file-backed catalog/index/vector-store fixture
+crosses the 16-document/65,536-code-unit batch boundary, then represents the
+durable published-prefix crash cut with the exact V2 sidecar bytes produced by
+that run. The next real operation returns
+`quotaRecovery: "recovered_pending"`, restores the exact committed allocation
+watermark/count/serialized-byte totals, performs no new embedding call, and a
+pass-through filesystem observer records no `embeddings-v2` namespace
+enumeration. A read of the pending snapshot excludes the uncommitted sidecar.
+The four remaining V1 publication assertions now verify `embeddings-v2`,
+epoch/allocation provenance, and fenced V2 failure semantics. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md`,
+commits `065df3e6`, `20853aac`, `21af7f37`)
+
+Verification evidence: the long-memory package passed 27/27 files and 249/249
+tests with zero type errors, package `tsc -b --noEmit` passed, root `pnpm lint`
+checked 1,582 files, and `pnpm verify` completed all 56 Turbo tasks plus every
+managed conventions check. The accepted guarantee is deliberately bounded:
+exact quotas and recovery apply to compliant ledger-aware writers; a
+well-formed trusted-root ledger rollback performed wholly outside an operation
+cannot be detected in Node's static-symlink model. Final independent
+whole-branch architecture/adversarial review remains required, and no official
+LongMemEval-V2 score is claimed. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md`)

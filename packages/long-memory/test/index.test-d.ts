@@ -1,5 +1,7 @@
 import { expect, expectTypeOf, it } from "vitest";
 import * as longMemory from "../src/index.js";
+import type { Lm2VectorReadResult } from "../src/lm2-model.js";
+import type { Lm2VectorStoreResult } from "../src/lm2-vector-store.js";
 
 it("exports the LM0 package marker", () => {
   expectTypeOf(longMemory.LONG_MEMORY_PACKAGE).toEqualTypeOf<string>();
@@ -96,4 +98,64 @@ it("adds LM2 contracts without removing LM0 or LM1 root imports", () => {
   expectTypeOf<longMemory.HybridReceipt>().toMatchTypeOf<{
     semanticStatus: "not_requested" | "used" | "used_partial_index" | "degraded";
   }>();
+  expectTypeOf<longMemory.Lm2IndexReceipt["outcome"]>().toEqualTypeOf<
+    "complete" | "continue" | "retry" | "expired"
+  >();
+  expectTypeOf<Extract<longMemory.Lm2IndexReceipt, { outcome: "complete" }>>().toMatchTypeOf<{
+    nextCursor: null;
+    retryCursor: null;
+    transientReason: null;
+  }>();
+  expectTypeOf<Extract<longMemory.Lm2IndexReceipt, { outcome: "continue" }>>().toMatchTypeOf<{
+    nextCursor: string;
+    retryCursor: null;
+    transientReason: null;
+  }>();
+  expectTypeOf<Extract<longMemory.Lm2IndexReceipt, { outcome: "retry" }>>().toMatchTypeOf<{
+    nextCursor: null;
+    retryCursor: string | null;
+    transientReason:
+      | "index_busy"
+      | "index_lock_unavailable"
+      | "quota_state_invalid"
+      | "evidence_cap_exhausted"
+      | "remote_approval_denied"
+      | "embedding_failure"
+      | "timeout"
+      | "sidecar_write_failed"
+      | "evidence_changed"
+      | "lock_integrity_lost";
+  }>();
+  expectTypeOf<longMemory.Lm2IndexReceipt["quotaRecovery"]>().toEqualTypeOf<
+    "not_needed" | "recovered_pending" | "blocked_pending"
+  >();
+  expectTypeOf<Lm2VectorStoreResult["reason"]>().toEqualTypeOf<
+    | null
+    | "index_busy"
+    | "index_lock_unavailable"
+    | "storage_limit"
+    | "invalid_vectors"
+    | "port_failure"
+    | "timeout"
+    | "write_failed"
+  >();
+  expectTypeOf<Lm2VectorReadResult["diagnostics"][number]["reason"]>().toEqualTypeOf<
+    | "missing_vectors"
+    | "invalid_vectors"
+    | "vector_read_limit"
+    | "quota_ledger_invalid"
+    | "quota_recovery_pending"
+  >();
+  expectTypeOf<longMemory.HybridSemanticReason>().toEqualTypeOf<
+    | "missing_vectors"
+    | "port_failure"
+    | "invalid_vectors"
+    | "timeout"
+    | "input_limit"
+    | "storage_limit"
+    | "vector_read_limit"
+    | "remote_approval_denied"
+    | "quota_ledger_invalid"
+    | "quota_recovery_pending"
+  >();
 });
