@@ -74,10 +74,16 @@ function validProjection(input: PlanProjection): boolean {
   if (new Set(input.existingIds).size !== input.existingIds.length) return false;
   if (new Set(input.missingIds).size !== input.missingIds.length) return false;
   const classified = [...input.existingIds, ...input.missingIds];
+  const existing = new Set(input.existingIds);
+  const missing = new Set(input.missingIds);
+  const canonicalExisting = candidateIds.filter((id) => existing.has(id));
+  const canonicalMissing = candidateIds.filter((id) => missing.has(id));
   return (
     classified.length === candidateIds.length &&
     classified.every((id) => candidateIds.includes(id)) &&
-    candidateIds.every((id) => classified.includes(id))
+    candidateIds.every((id) => classified.includes(id)) &&
+    canonicalExisting.every((id, index) => id === input.existingIds[index]) &&
+    canonicalMissing.every((id, index) => id === input.missingIds[index])
   );
 }
 
