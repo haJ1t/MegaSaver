@@ -83,6 +83,14 @@ export {
 } from "./lm1-state.js";
 export { createLm1Runtime, type Lm1Runtime } from "./lm1-runtime.js";
 export {
+  createLm2Runtime,
+  type Lm2CaptureService,
+  type Lm2RecallBundle,
+  type Lm2RecallRequest,
+  type Lm2Runtime,
+  type Lm2RuntimeInput,
+} from "./lm2-runtime.js";
+export {
   MAX_EVIDENCE_IDS,
   MAX_EVIDENCE_ID_LENGTH,
   MAX_OBSERVATION_TEXT_CHARS,
