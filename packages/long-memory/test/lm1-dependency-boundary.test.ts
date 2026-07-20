@@ -7,6 +7,7 @@ const lm1Files = [
   "lm1-paths.ts",
   "lm1-store.ts",
   "lm1-capture.ts",
+  "lm1-runtime.ts",
   "lm1-state.ts",
   "lm1-recall.ts",
 ] as const;

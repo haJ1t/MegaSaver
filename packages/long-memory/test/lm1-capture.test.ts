@@ -1,8 +1,10 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLm1CaptureService } from "../src/lm1-capture.js";
+import { Lm1Error } from "../src/lm1-errors.js";
+import { createLm1RecallService } from "../src/lm1-recall.js";
 import { createFileLm1Store } from "../src/lm1-store.js";
 
 const roots: string[] = [];
@@ -11,7 +13,7 @@ const evidenceId = "11111111-1111-4111-8111-111111111111";
 const secondEvidenceId = "22222222-2222-4222-8222-222222222222";
 
 function createRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), "megasaver-lm1-capture-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "megasaver-lm1-capture-")));
   roots.push(root);
   return root;
 }
@@ -21,20 +23,26 @@ function createService(options?: {
   unresolvedHighRisk?: boolean;
   evidenceIds?: readonly string[];
   binding?: readonly { evidenceId: string; evidenceDigest: string }[] | null;
+  bindingError?: unknown;
   eligibility?: unknown;
+  eligibilityError?: unknown;
+  store?: ReturnType<typeof createFileLm1Store>;
+  recordedAt?: string;
+  clock?: { now(): string };
 }) {
   const redact = vi.fn(({ text, action }: { text: string; action: string | null }) => ({
     text,
     action,
     unresolvedHighRisk: false,
   }));
-  const store = createFileLm1Store({ storeRoot: createRoot() });
+  const store = options?.store ?? createFileLm1Store({ storeRoot: createRoot() });
   const service = createLm1CaptureService({
     store,
     redaction: { version: "redaction-v1", redact },
     evidenceBinding: {
-      verify: async ({ evidenceIds }) =>
-        options?.binding === null
+      verify: async ({ evidenceIds }) => {
+        if (options?.bindingError !== undefined) throw options.bindingError;
+        return options?.binding === null
           ? null
           : {
               evidence:
@@ -43,11 +51,13 @@ function createService(options?: {
                   evidenceId: resolvedEvidenceId,
                   evidenceDigest: "a".repeat(64),
                 })),
-            },
+            };
+      },
     },
     evidenceEligibility: {
-      resolve: async ({ workspaceKey: requestedWorkspaceKey, evidenceIds }) =>
-        (options !== undefined && "eligibility" in options
+      resolve: async ({ workspaceKey: requestedWorkspaceKey, evidenceIds }) => {
+        if (options?.eligibilityError !== undefined) throw options.eligibilityError;
+        return (options !== undefined && "eligibility" in options
           ? options.eligibility
           : (options?.evidenceIds ?? evidenceIds).map((resolvedEvidenceId) => ({
               evidenceId: resolvedEvidenceId,
@@ -59,9 +69,10 @@ function createService(options?: {
           workspaceKey: string;
           status: "available" | "retained_metadata_only" | "revoked";
           unresolvedHighRisk: boolean;
-        }[],
+        }[];
+      },
     },
-    clock: { now: () => "2026-07-20T00:00:01.000Z" },
+    clock: options?.clock ?? { now: () => options?.recordedAt ?? "2026-07-20T00:00:01.000Z" },
   });
   return { redact, service };
 }
@@ -102,6 +113,44 @@ describe("LM1 capture service", () => {
     expect(redact).toHaveBeenCalledOnce();
   });
 
+  it("adopts one recorded-at reservation across different-clock retries", async () => {
+    const store = createFileLm1Store({ storeRoot: createRoot() });
+    const first = createService({ store, recordedAt: "2026-07-20T00:00:01.000Z" }).service;
+    const retry = createService({ store, recordedAt: "2026-07-20T00:01:00.000Z" }).service;
+    const prepared = first.prepare(snapshotInput());
+
+    await expect(
+      first.capturePrepared({ prepared, authorization: "signed" }),
+    ).resolves.toMatchObject({
+      inserted: true,
+      record: { recordedAt: "2026-07-20T00:00:01.000Z" },
+    });
+    await expect(
+      retry.capturePrepared({ prepared, authorization: "signed" }),
+    ).resolves.toMatchObject({
+      inserted: false,
+      record: { recordedAt: "2026-07-20T00:00:01.000Z" },
+    });
+
+    const recall = createLm1RecallService({
+      store,
+      evidenceEligibility: {
+        resolve: async ({ evidenceIds, workspaceKey: requestedWorkspaceKey }) =>
+          evidenceIds.map((resolvedEvidenceId) => ({
+            evidenceId: resolvedEvidenceId,
+            workspaceKey: requestedWorkspaceKey,
+            status: "available" as const,
+            unresolvedHighRisk: false,
+          })),
+      },
+    });
+    await expect(
+      recall.recall({ workspaceKey, task: "billing status", tokenBudget: 100 }),
+    ).resolves.toMatchObject({
+      items: [{ value: "Billing status is paid." }],
+    });
+  });
+
   it("rejects a prepared payload whose digest no longer matches", async () => {
     const { service } = createService();
     const prepared = service.prepare(snapshotInput());
@@ -112,6 +161,23 @@ describe("LM1 capture service", () => {
         authorization: "signed",
       }),
     ).rejects.toMatchObject({ code: "evidence_binding_invalid" });
+  });
+
+  it("normalizes hostile public capture request getters", async () => {
+    const { service } = createService();
+
+    await expect(
+      service.capturePrepared(
+        new Proxy(
+          {},
+          {
+            get() {
+              throw new Error("hostile capture request");
+            },
+          },
+        ) as never,
+      ),
+    ).rejects.toMatchObject({ code: "invalid_input" });
   });
 
   it("rejects unavailable and non-exact evidence responses", async () => {
@@ -150,6 +216,81 @@ describe("LM1 capture service", () => {
 
   it("maps a malformed evidence eligibility reply to a closed error", async () => {
     const { service } = createService({ eligibility: null });
+    const prepared = service.prepare(snapshotInput());
+
+    await expect(
+      service.capturePrepared({ prepared, authorization: "signed" }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
+  });
+
+  it("normalizes typed evidence-port failures to a closed error", async () => {
+    const binding = createService({
+      bindingError: new Lm1Error("invalid_transition", "adapter-controlled error"),
+    }).service;
+    const eligibility = createService({
+      eligibilityError: new Lm1Error("write_failed", "adapter-controlled error"),
+    }).service;
+    const prepared = binding.prepare(snapshotInput());
+
+    await expect(
+      binding.capturePrepared({ prepared, authorization: "signed" }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
+    await expect(
+      eligibility.capturePrepared({ prepared, authorization: "signed" }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
+  });
+
+  it("normalizes evidence response getters to a closed error", async () => {
+    const binding = createService({
+      binding: new Proxy([], {
+        get() {
+          throw new Lm1Error("invalid_transition", "adapter-controlled error");
+        },
+      }) as unknown as readonly { evidenceId: string; evidenceDigest: string }[],
+    }).service;
+    const eligibility = createService({
+      eligibility: new Proxy([], {
+        get() {
+          throw new Lm1Error("write_failed", "adapter-controlled error");
+        },
+      }),
+    }).service;
+    const prepared = binding.prepare(snapshotInput());
+
+    await expect(
+      binding.capturePrepared({ prepared, authorization: "signed" }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
+    await expect(
+      eligibility.capturePrepared({ prepared, authorization: "signed" }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
+  });
+
+  it("maps an invalid clock result to a typed closed error", async () => {
+    const { service } = createService({ recordedAt: "not-a-date" });
+    const prepared = service.prepare(snapshotInput());
+
+    await expect(
+      service.capturePrepared({ prepared, authorization: "signed" }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
+  });
+
+  it("rejects a calendar-invalid clock timestamp", async () => {
+    const { service } = createService({ recordedAt: "2026-02-30T00:00:01.000Z" });
+    const prepared = service.prepare(snapshotInput());
+
+    await expect(
+      service.capturePrepared({ prepared, authorization: "signed" }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
+  });
+
+  it("normalizes a typed clock failure to a closed error", async () => {
+    const { service } = createService({
+      clock: {
+        now() {
+          throw new Lm1Error("invalid_input", "clock-controlled error");
+        },
+      },
+    });
     const prepared = service.prepare(snapshotInput());
 
     await expect(

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { Lm1Error } from "./lm1-errors.js";
 import {
   canonicalCaptureDigest,
@@ -20,6 +21,8 @@ import type { FileLm1Store, PublishedLm1Record } from "./lm1-store.js";
 
 export type Lm1Clock = { now(): string };
 
+const clockTimestampSchema = z.string().datetime({ offset: true });
+
 export type Lm1CaptureService = {
   prepare(input: PrepareCaptureInput): PreparedCapture;
   capturePrepared(input: {
@@ -28,8 +31,42 @@ export type Lm1CaptureService = {
   }): Promise<PublishedLm1Record>;
 };
 
+function parseCapturePreparedInput(input: unknown): {
+  prepared: PreparedCapture;
+  authorization: string;
+} {
+  let preparedInput: unknown;
+  let authorization: unknown;
+  try {
+    if (input === null || typeof input !== "object") {
+      throw new Error("Invalid LM1 capture request.");
+    }
+    ({ prepared: preparedInput, authorization } = input as {
+      prepared: unknown;
+      authorization: unknown;
+    });
+  } catch {
+    throw new Lm1Error("invalid_input", "Invalid LM1 capture request.");
+  }
+  let prepared: ReturnType<typeof preparedCaptureSchema.safeParse>;
+  try {
+    prepared = preparedCaptureSchema.safeParse(preparedInput);
+  } catch {
+    throw new Lm1Error("invalid_input", "Invalid LM1 capture request.");
+  }
+  if (!prepared.success || typeof authorization !== "string") {
+    throw new Lm1Error("invalid_input", "Invalid LM1 capture request.");
+  }
+  return { prepared: prepared.data, authorization };
+}
+
 function assertBinding(evidenceIds: readonly string[], binding: unknown): readonly string[] {
-  const parsed = evidenceBindingResultSchema.safeParse(binding);
+  let parsed: ReturnType<typeof evidenceBindingResultSchema.safeParse>;
+  try {
+    parsed = evidenceBindingResultSchema.safeParse(binding);
+  } catch {
+    throw new Lm1Error("store_corrupt", "Evidence binding response is unreadable.");
+  }
   if (!parsed.success || parsed.data.evidence.length !== evidenceIds.length) {
     throw new Lm1Error("evidence_binding_invalid", "Evidence binding is incomplete.");
   }
@@ -48,7 +85,12 @@ function assertEligibility(
   evidenceIds: readonly string[],
   eligibility: unknown,
 ): void {
-  const parsed = evidenceEligibilityResultSchema.safeParse(eligibility);
+  let parsed: ReturnType<typeof evidenceEligibilityResultSchema.safeParse>;
+  try {
+    parsed = evidenceEligibilityResultSchema.safeParse(eligibility);
+  } catch {
+    throw new Lm1Error("store_corrupt", "Evidence eligibility response is unreadable.");
+  }
   if (!parsed.success) {
     throw new Lm1Error("store_corrupt", "Evidence eligibility response is invalid.");
   }
@@ -68,14 +110,19 @@ function assertEligibility(
 }
 
 function mapPortError(error: unknown): never {
-  if (error instanceof Lm1Error) throw error;
+  void error;
   throw new Lm1Error("store_corrupt", "Evidence port failed.");
+}
+
+function mapClockError(error: unknown): never {
+  void error;
+  throw new Lm1Error("store_corrupt", "Long-memory clock failed.");
 }
 
 function buildRecord(
   prepared: PreparedCapture,
   evidenceDigests: readonly string[],
-  recordedAt: string,
+  recordedAt: unknown,
 ): Lm1Record {
   const sourceDigest = canonicalCaptureDigest(prepared);
   if (sourceDigest !== prepared.canonicalCaptureDigest) {
@@ -91,11 +138,23 @@ function buildRecord(
       evidenceIds: prepared.evidenceIds,
       evidenceDigests,
     }),
-    recordedAt: new Date(recordedAt).toISOString(),
+    recordedAt: canonicalRecordedAt(recordedAt),
     evidenceDigests: [...evidenceDigests],
     status: "recorded" as const,
   };
   return record as Lm1Record;
+}
+
+function canonicalRecordedAt(recordedAt: unknown): string {
+  const parsedTimestamp = clockTimestampSchema.safeParse(recordedAt);
+  if (!parsedTimestamp.success) {
+    throw new Lm1Error("store_corrupt", "Long-memory clock returned an invalid timestamp.");
+  }
+  try {
+    return new Date(parsedTimestamp.data).toISOString();
+  } catch {
+    throw new Lm1Error("store_corrupt", "Long-memory clock returned an invalid timestamp.");
+  }
 }
 
 function assertReferences(store: FileLm1Store, prepared: PreparedCapture): void {
@@ -144,41 +203,51 @@ export function createLm1CaptureService(input: {
       return prepareCapture(captureInput, input.redaction);
     },
     async capturePrepared(captureInput) {
-      const prepared = preparedCaptureSchema.safeParse(captureInput.prepared);
-      if (!prepared.success)
-        throw new Lm1Error("evidence_binding_invalid", "Invalid prepared capture.");
-      const sourceDigest = canonicalCaptureDigest(prepared.data);
-      if (sourceDigest !== prepared.data.canonicalCaptureDigest) {
+      const parsedCaptureInput = parseCapturePreparedInput(captureInput);
+      const sourceDigest = canonicalCaptureDigest(parsedCaptureInput.prepared);
+      if (sourceDigest !== parsedCaptureInput.prepared.canonicalCaptureDigest) {
         throw new Lm1Error("evidence_binding_invalid", "Prepared capture digest mismatch.");
       }
 
       let binding: Awaited<ReturnType<EvidenceBindingPort["verify"]>>;
       try {
         binding = await input.evidenceBinding.verify({
-          workspaceKey: prepared.data.workspaceKey,
+          workspaceKey: parsedCaptureInput.prepared.workspaceKey,
           canonicalCaptureDigest: sourceDigest,
-          evidenceIds: prepared.data.evidenceIds,
-          authorization: captureInput.authorization,
+          evidenceIds: parsedCaptureInput.prepared.evidenceIds,
+          authorization: parsedCaptureInput.authorization,
         });
       } catch (error) {
         mapPortError(error);
       }
-      const evidenceDigests = assertBinding(prepared.data.evidenceIds, binding);
+      const evidenceDigests = assertBinding(parsedCaptureInput.prepared.evidenceIds, binding);
 
       let eligibility: Awaited<ReturnType<EvidenceEligibilityPort["resolve"]>>;
       try {
         eligibility = await input.evidenceEligibility.resolve({
-          workspaceKey: prepared.data.workspaceKey,
-          evidenceIds: prepared.data.evidenceIds,
+          workspaceKey: parsedCaptureInput.prepared.workspaceKey,
+          evidenceIds: parsedCaptureInput.prepared.evidenceIds,
         });
       } catch (error) {
         mapPortError(error);
       }
-      assertEligibility(prepared.data.workspaceKey, prepared.data.evidenceIds, eligibility);
+      assertEligibility(
+        parsedCaptureInput.prepared.workspaceKey,
+        parsedCaptureInput.prepared.evidenceIds,
+        eligibility,
+      );
 
-      assertReferences(input.store, prepared.data);
+      assertReferences(input.store, parsedCaptureInput.prepared);
 
-      return input.store.publish(buildRecord(prepared.data, evidenceDigests, input.clock.now()));
+      let recordedAt: string;
+      try {
+        recordedAt = input.clock.now();
+      } catch (error) {
+        mapClockError(error);
+      }
+      return input.store.publish(
+        buildRecord(parsedCaptureInput.prepared, evidenceDigests, recordedAt),
+      );
     },
   };
 }

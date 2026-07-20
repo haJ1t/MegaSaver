@@ -3,7 +3,7 @@ title: Agent Communication Channel
 tags: [runtime, communication]
 status: active
 created: 2026-05-31
-updated: 2026-05-31
+updated: 2026-07-20
 ---
 
 # Agent Communication Channel
@@ -255,6 +255,19 @@ evidence adoption across crashes. Its six-task TDD plan is ready; fresh
 implementation review remains mandatory before merge. Spec/plan:
 `docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`,
 `docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md`.
+
+Status: done
+
+---
+## [2026-07-20 05:40] Codex → All Agents
+
+**LM1 observations release evidence complete.** The private runtime now has
+evidence-bound capture, append-only snapshots/transitions, bounded fail-closed
+recall, and exact record-ID locators for bounded endpoint validation. The final
+fresh code review and adversarial review both approved after two P1 regressions
+were fixed. Evidence: long-memory 106/106, package build, `pnpm verify`, and
+LongMemEval-V2 adapter 7/7. No official LongMemEval-V2 score is claimed.
+Branch: `codex/feat/long-memory-observations`; no merge or push requested.
 
 Status: done
 

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -11,7 +11,7 @@ const workspaceKey = "0123456789abcdef";
 const evidenceId = "11111111-1111-4111-8111-111111111111";
 
 function createService() {
-  const root = mkdtempSync(join(tmpdir(), "megasaver-lm1-transition-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "megasaver-lm1-transition-")));
   roots.push(root);
   return createLm1CaptureService({
     store: createFileLm1Store({ storeRoot: root }),

@@ -16,8 +16,8 @@
 - Use strict Zod boundaries, lowercase UUIDs, 16-lowercase-hex workspace keys, explicit null canonical fields, NFC-plus-trim strings, and offset-aware dates normalized with toISOString().
 - prepareCapture is the only redaction pass. It redacts { text, action } once, seals redactionVersion and canonical digest, and capturePrepared recomputes that digest without redacting.
 - Limits: text 50,000 UTF-16 code units; action 5,000; state key 512; evidence ids 64; token budget 1–100,000; scan 10,000 records; rank 1,000; resolve 512 distinct evidence ids.
-- Persist only append-only files under <storeRoot>/long-memory/v1/<workspaceKey>/{snapshots,transitions}/<sourceDigest>.json. Use atomic no-clobber temp-file publish plus directory fsync; never use the stale-stealable lease lock.
-- Trust only a local non-adversarial store root. Reject static root/parent/record/temp symlinks, but do not claim protection from same-privilege post-check swaps.
+- Persist only append-only files under <storeRoot>/long-memory/v1/<workspaceKey>. A snapshot first reserves its immutable `recordedAt` under reservations/snapshots/<sourceDigest>.json; all racing writers adopt it. Every record then publishes its exact `record-ids/<id>.json` locator, followed by the snapshot's source-digest coverage manifest, correction-closure marker when applicable, and ordered state-key pointer before the raw snapshot, so every crash cut fails closed. Capture resolves an endpoint through its validated exact locator and raw path, never by scanning the record corpus. Recall compares the complete bounded pointer and coverage sets, which detects a missing pointer even beyond the lexical raw-record window. Raw, pointer, coverage, and closure directories use a streaming iterator that stops at budget plus one; an oversized sidecar group is omitted. Use atomic no-clobber temp-file publish plus full directory-chain fsync; never use the stale-stealable lease lock.
+- Trust only a local non-adversarial store root. Reject static root/parent/record/temp symlinks; the exact root-owned macOS `/tmp` → `/private/tmp` and `/var` → `/private/var` aliases are allowed only as ancestors, never as the configured final root. Do not claim protection from same-privilege post-check swaps.
 - A record is eligible only when binding verifies and every cited evidence result is exactly once, same-workspace, available, and free of unresolved high-risk findings.
 - A persisted correction permanently closes its predecessor for normal state recall. If no eligible structural leaf remains, emit omitted_correction_chain_unavailable; never fall back to stale state.
 - Do not call pinEvidence, mutate MemoryEntry, add CLI/MCP, or change the public LongMemEval Python adapter.
@@ -35,6 +35,7 @@
 | packages/long-memory/src/lm1-paths.ts | Workspace-scoped paths and static-symlink validation. |
 | packages/long-memory/src/lm1-store.ts | Parse, list, read, and atomic no-clobber persistence. |
 | packages/long-memory/src/lm1-capture.ts | One-pass prepare and async capture orchestration. |
+| packages/long-memory/src/lm1-runtime.ts | Root-safe composition of private file persistence with evidence-gated capture/recall. |
 | packages/long-memory/src/lm1-recall.ts | Bounded BM25 ranking, state derivation, receipts. |
 | packages/long-memory/src/index.ts | Existing LM0 surface plus explicit LM1 exports. |
 | packages/long-memory/test/lm1-*.test.ts | Unit, restart, boundary, and integration evidence. |
@@ -143,7 +144,7 @@ git commit -m "feat(memory): add LM1 contracts"
 
 **Interfaces:**
 - Consumes: Task 1 Lm1Record, canonical identity helpers, and Lm1Error.
-- Produces: createFileLm1Store({ storeRoot }) with publish(record), getById(workspaceKey, id), getByDigest(workspaceKey, kind, sourceDigest), and list(workspaceKey, limit).
+- Produces: the internal createFileLm1Store({ storeRoot }) persistence adapter with publish(record), getById(workspaceKey, id), getByDigest(workspaceKey, kind, sourceDigest), and list(workspaceKey, limit). The root package instead exposes createLm1Runtime, which owns this adapter and exposes only evidence-gated capture/recall.
 
 - [x] **Step 1: Write failing restart, corrupt-path, symlink, and concurrency tests**
 
@@ -164,7 +165,7 @@ it("rejects a static snapshot-directory symlink", () => {
 });
 ~~~
 
-Add tests for JSON corruption, filename/sourceDigest mismatch, derived-ID mismatch, pre-publish injected failure, valid restarted list ordering, and two child Node processes publishing the same record. The child test must prove one inserted true, one inserted false, and one parseable final record.
+Add tests for JSON corruption, filename/sourceDigest mismatch, derived-ID mismatch, pre-publish injected failure, valid restarted list ordering, direct record-ID lookup that stays bounded despite a corrupt unrelated large-corpus record, and two child Node processes publishing the same record. The child test must prove one inserted true, one inserted false, and one parseable final record.
 
 - [x] **Step 2: Run storage tests red**
 
@@ -399,7 +400,7 @@ expect(result.receipt).toMatchObject({
 });
 ~~~
 
-Prove enumeration by kind then source digest before the 10,000 cap; score/observedAt/UUID tie ordering; zero-score suppression; full-item token-budget omission; 512-distinct-evidence omission; live status recheck after capture; transition endpoint eligibility; correction-chain omission; and stable receipt ordering.
+Prove bounded streaming enumeration (stop before the 10,001st JSON entry) and sorting of the bounded kind/source-digest workset; score/observedAt/UUID tie ordering; zero-score suppression; full-item token-budget omission; 512-distinct-evidence omission; live status recheck after capture; transition endpoint eligibility; correction-chain omission; and stable receipt ordering.
 
 - [x] **Step 2: Run recall tests red**
 
@@ -435,6 +436,54 @@ git add packages/long-memory/src/lm1-recall.ts packages/long-memory/src/index.ts
 git commit -m "feat(memory): recall eligible LM1 state"
 ~~~
 
+### Correctness amendment: bounded closure and current-state selection
+
+Independent adversarial reviews found that scan and lexical caps could expose
+stale state: a correction or independent current leaf may sort beyond the
+10,000-record window, and a current leaf may sort beyond the 1,000 lexical
+record cap or score zero. The approved design therefore adds immutable
+correction-closure markers, source-digest coverage manifests, and ordered
+append-only state-key snapshot pointers.
+A lexical hit on any raw snapshot expands through the pointer index to all
+current-state candidates for its key before selecting the first eligible leaf.
+If the pointer expansion or evidence resolution cannot establish a winner, the
+state is omitted rather than falling back to an older leaf.
+
+The pointer order includes `recordedAt`, which is excluded from source identity.
+The implementation therefore adds an append-only per-source timestamp
+reservation before either semantic sidecar. Sequential and concurrent retries
+with different clocks must adopt the first reservation and leave exactly one
+valid pointer. Recall verifies that each bounded pointer set exactly matches its
+independent source-digest coverage manifest, that every admitted raw snapshot
+is covered by its pointer set, and that every closure marker on a
+pointer-expanded snapshot has a valid indexed successor; a missing pointer
+causes omission, never a stale fallback. The original `FileLm1Store` adapter remains source-compatible;
+state-index capabilities are an internal extended port and recall fails closed
+when they are absent. The root package exports `createLm1Runtime`, not the raw
+file-store factory, so public callers cannot bypass evidence-gated capture.
+
+- [x] Add red regressions for a correction outside the scan window, a current
+  leaf outside the lexical cap, a zero-score current leaf, and an evidence-cap
+  state group.
+- [x] Add closure-marker and state-index persistence, static-symlink,
+  canonical-recordedAt, corrected-historical-query, and 20,000-record
+  independent-current-state regressions.
+- [x] Add sequential and concurrent different-clock retry regressions, partial
+  state-pointer-loss regressions both inside and outside the lexical window,
+  streaming closure/index-budget coverage, verified macOS system-alias-ancestor
+  coverage, and a legacy-adapter type regression.
+- [x] Add branch-crash regressions for closure-only successors both inside and
+  outside the lexical window, plus a root-public-surface regression proving the
+  raw file-store factory is unavailable.
+- [x] Add typed-boundary regressions for throwing/malformed redaction adapters
+  and invalid clock results; both must return `store_corrupt`, never native
+  exceptions.
+- [x] Replace the restart fixture with an evidence-durable/LM1-absent
+  coordinator fixture that load-verifies raw and returned payload digests before
+  authorization, binding, and materialization; include corrupted-payload
+  rejection.
+- [x] Run `pnpm --filter @megasaver/long-memory test` after the amendment.
+
 ### Task 6: Prove integration, preserved LM0 boundaries, and release evidence
 
 **Files:**
@@ -449,7 +498,7 @@ git commit -m "feat(memory): recall eligible LM1 state"
 - Consumes: Tasks 1–5 and the unchanged benchmarks/longmemeval-v2/test_megasaver_memory.py.
 - Produces: reproducible LM1 restart/boundary proof and verified project-memory handoff.
 
-- [ ] **Step 1: Write failing integration and dependency tests**
+- [x] **Step 1: Write failing integration and dependency tests**
 
 ~~~ts
 it("keeps LM1 isolated from LM0 protocol and product packages", () => {
@@ -468,17 +517,17 @@ it("adopts a durable record after a restarted public-data port", async () => {
 
 Add the evidence-durable/no-authorization crash fixture: restart must load existing deterministic evidence through a fake public-data adapter, verify the stored digest commitment, reconstruct the same PreparedCapture, and adopt one LM1 record. Type tests must continue asserting every original LM0 export.
 
-- [ ] **Step 2: Run integration tests red**
+- [x] **Step 2: Run integration tests red**
 
 Run: pnpm --filter @megasaver/long-memory test -- lm1-integration.test.ts lm1-dependency-boundary.test.ts
 
 Expected: FAIL because integration and dependency tests are absent.
 
-- [ ] **Step 3: Add integration fixtures and verified wiki evidence**
+- [x] **Step 3: Add integration fixtures and verified wiki evidence**
 
 Implement only test fixtures and the dependency-boundary assertion. Keep Python adapter source unchanged. Update wiki pages only after facts are measured: focused test totals, pnpm verify result, Python result, external reviewer verdict, branch, and the absence of an official benchmark score.
 
-- [ ] **Step 4: Run the release gate**
+- [x] **Step 4: Run the release gate**
 
 Run:
 ~~~bash
@@ -492,11 +541,11 @@ git status --short
 
 Expected: package tests/build, Python adapter suite, and repository verification pass; status shows only intended LM1 changes.
 
-- [ ] **Step 5: Request fresh independent HIGH-risk implementation review**
+- [x] **Step 5: Request fresh independent HIGH-risk implementation review**
 
 Give the reviewer the approved spec, this plan, task commits, test summary, pnpm verify result, Python result, and dependency-boundary evidence. For every P0/P1 finding, write a failing regression test, make the smallest fix, rerun the affected suite plus pnpm verify, and obtain a re-review approval.
 
-- [ ] **Step 6: Commit release evidence**
+- [x] **Step 6: Commit release evidence**
 
 Run:
 ~~~bash
