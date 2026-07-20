@@ -263,7 +263,12 @@ export async function beginIndexOperation(
         /* Retain the pending transaction for the next locked recovery. */
       }
       return {
-        published: error instanceof Lm2PartialPublicationError ? error.published : published,
+        published:
+          error instanceof Lm2PartialPublicationError
+            ? error.entries
+                .filter((entry) => entry.allocationSequence <= ledger.committedThroughAllocation)
+                .map((entry) => entry.recordId)
+            : published,
         reason:
           error instanceof Lm2Error && error.code === "invalid_vectors"
             ? "invalid_vectors"
