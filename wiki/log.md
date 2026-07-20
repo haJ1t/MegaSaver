@@ -5595,3 +5595,17 @@ foreign-frame UUID before transport. Evidence: focused benchmark Node 27/27,
 long-memory 336/336 with zero type errors, Python official-base plus real built
 transport 26/26, and root `pnpm verify` 56/56. Task 6 was not started and no
 official score is claimed. (source: `.superpowers/sdd/task-5-report.md`)
+
+## [2026-07-20 21:26 +03] fix | LM2 released-corpus truncation closure
+
+Ultimate Task 5 review found that pre-truncation canonicalization could expose
+trailing whitespace at the 50,000-UTF-16-unit boundary. Released enterprise
+trajectory `096432bf`, `states[12]`, reproduced the failure exactly. Projection
+text is now NFC/trim canonicalized after the bounded surrogate-safe cut, with
+UUID and final-text digest regressions. The pinned snapshot matched all released
+checksums; official screenshot preparation and unmodified Small validation
+passed. The README enterprise/Small builder produced an 89-MiB manifest with
+211 questions and 100 trajectories, including a canonical 49,999-unit blocker
+projection and later rows. Long-memory passed 337/337 and Python passed 26/26;
+no harness, judge, Task 6, or score was run. (source:
+`.superpowers/sdd/task-5-report.md`)

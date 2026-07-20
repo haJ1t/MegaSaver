@@ -41,6 +41,13 @@ package root. Task 6 evidence/scoring work was not started.
   `trajectoryId + NUL + sourceKind + NUL + decimalSourceIndex`; a fixed vector
   proves the same bytes and result across languages, and the Python mutation
   remains zero-transport.
+- Ultimate corpus RED reproduced released enterprise trajectory `096432bf`,
+  `states[12]`: the 70,126-character accessibility tree has U+0020 at UTF-16
+  code unit 50,000, so truncation after the original trim exposed trailing
+  whitespace and embedding admission failed. Projection text is now NFC/trim
+  canonicalized after bounded surrogate-safe truncation. The final 49,999-code-
+  unit text preserves the deterministic projection UUID and derives its
+  embedding digest from those exact final bytes.
 - GREEN adds descriptor/path identity checks around the fixed lock, validates
   the locked inode before state writes, and fsyncs the run directory after the
   atomic control rename. The Python backend validates the pinned V1 fields and
@@ -63,15 +70,25 @@ package root. Task 6 evidence/scoring work was not started.
 
 ## Verification
 
-- Focused benchmark Node suite: 6/6 files and 27/27 tests passed with zero type
+- Focused benchmark Node suite: 6/6 files and 28/28 tests passed with zero type
   errors.
-- Long-memory package under root verification: 39/39 files and 336/336 tests
+- Long-memory package under root verification: 39/39 files and 337/337 tests
   passed with zero type errors.
 - Python official-base/installer/LM0 suites: 26/26 passed using Python 3.11,
   the pinned official checkout at commit
   `6f020ac2fc3275e46c706d3406e02c3ed79b7be2`, and the real built Node
   transport; `py_compile` passed.
 - Standalone package build and package typecheck passed.
+- The released revision was downloaded with the pinned checkout's official
+  script. Every required data checksum matched. Official screenshot preparation
+  materialized 1,913 trajectory directories, and unmodified validation passed
+  for Small with screenshot checks enabled: 451 questions, 1,870 trajectories.
+  The README builder command for enterprise/Small produced an 89-MiB canonical
+  manifest with digest
+  `08e0b3f9d2715ada52f17cfe77a796b93f6cdfd79a07c79de43ea0344b15a7ae`.
+  It emitted 211 questions and 100 trajectories; `096432bf` was trajectory
+  index 3 with a canonical 49,999-unit `states[12]`, and index 4 proved the
+  builder continued beyond the former blocker.
 - Root `pnpm verify` passed all 56 Turbo tasks, lint checked 1,631 files, and
   every managed conventions check passed.
 - `git diff --check` passed. Touched source/test/fixture files are at or below
@@ -81,7 +98,9 @@ package root. Task 6 evidence/scoring work was not started.
 ## Environment boundary
 
 The pinned official source checkout and real official `Memory` base were
-available locally. This task did not download or execute the full official
-LongMemEval-V2 dataset, reader, judge, dashboard, or submission builders; those
-are Task 6 evidence gates. No official score or score-equivalence claim is
-made. Fresh independent benchmark-contract re-review remains required.
+available locally. This task downloaded the released data snapshot and executed
+only its preparation, validation, and manifest-building path to close a Task 5
+corpus blocker. It did not execute the official harness, reader, judge,
+dashboard, or submission builders; those remain Task 6 evidence gates. No
+official score or score-equivalence claim is made. Fresh independent
+benchmark-contract re-review remains required.

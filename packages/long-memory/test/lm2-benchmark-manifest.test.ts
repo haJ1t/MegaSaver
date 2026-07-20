@@ -152,4 +152,33 @@ describe("LM2 benchmark V1 manifest", () => {
 
     expect(() => parseBenchmarkManifest(manifest)).toThrow();
   });
+
+  it("canonicalizes text exposed by the corpus truncation boundary", () => {
+    const input = buildInput();
+    const trajectoryId = "096432bf";
+    const expectedText = `${"x".repeat(49_980)}der Fulfillment - 4`;
+    input.domain = "enterprise";
+    input.questions[0].domain = "enterprise";
+    input.haystack["question-1"] = [trajectoryId];
+    input.trajectories = [
+      {
+        id: trajectoryId,
+        domain: "enterprise",
+        states: [
+          ...Array.from({ length: 12 }, (_, index) => ({ text: `state ${index}` })),
+          { accessibility_tree: `${expectedText} Days (Pending - has not started)` },
+        ],
+      } as never,
+    ];
+
+    const manifest = buildBenchmarkManifest(input);
+    const projection = manifest.trajectories[0]?.projections[12];
+
+    expect(projection?.text).toBe(expectedText);
+    expect(projection?.text.length).toBeLessThanOrEqual(50_000);
+    expect(projection?.id).toBe(deriveBenchmarkProjectionId(trajectoryId, "states", 12));
+    expect(projection?.embeddingInputDigest).toBe(
+      embeddingInputDigest({ kind: "state_snapshot", text: expectedText }),
+    );
+  });
 });
