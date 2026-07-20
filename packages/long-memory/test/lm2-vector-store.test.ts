@@ -9,6 +9,9 @@ import {
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
+import { lm2QuotaLedgerSchema } from "../src/lm2-quota-ledger.js";
+import { buildSerializedSidecar } from "../src/lm2-vector-format.js";
+import { vectorNamespacePath, vectorQuotaLedgerPath } from "../src/lm2-vector-paths.js";
 import { type Lm2VectorStoreResult, createLm2VectorStore } from "../src/lm2-vector-store.js";
 import {
   cleanupRoots,
@@ -16,13 +19,25 @@ import {
   createModel,
   createRoot,
   embeddingResult,
-  seedRawSidecar,
-  sidecarPath,
-  sidecarValue,
   workspaceKey,
 } from "./lm2-vector-store-fixtures.js";
 
 afterEach(cleanupRoots);
+
+async function initializeLedger(root: string, model: ReturnType<typeof createModel>) {
+  const operation = await createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
+    workspaceKey,
+    model,
+    deadline: {
+      signal: new AbortController().signal,
+      deadlineAtMs: 1_000,
+      now: () => 0,
+    },
+  });
+  expect(operation.status).toBe("ready");
+  if (operation.status !== "ready") throw new Error("LM2 ledger fixture did not initialize.");
+  await operation.finalize();
+}
 
 describe("LM2 vector sidecar publication", () => {
   it("exposes timeout as a truthful store result", () => {
@@ -56,9 +71,31 @@ describe("LM2 vector sidecar publication", () => {
       ],
       signal: expect.any(AbortSignal),
     });
-    expect(readFileSync(sidecarPath(root, record, model), "utf8")).toBe(
-      `${JSON.stringify(sidecarValue(record, model, [3, 4, 0]))}\n`,
+    const ledger = lm2QuotaLedgerSchema.parse(
+      JSON.parse(readFileSync(vectorQuotaLedgerPath(root, workspaceKey), "utf8")),
     );
+    expect(
+      readFileSync(
+        join(vectorNamespacePath(root, workspaceKey, model), `${record.id}.json`),
+        "utf8",
+      ),
+    ).toBe(
+      buildSerializedSidecar(model, record, [3, 4, 0], {
+        ledgerEpoch: ledger.epoch,
+        allocationSequence: 1,
+      }),
+    );
+    expect(ledger).toMatchObject({
+      committedThroughAllocation: 1,
+      nextAllocationSequence: 2,
+      pending: null,
+      namespaces: [
+        {
+          modelFingerprint: modelDescriptorFingerprint(model),
+          sidecarCount: 1,
+        },
+      ],
+    });
   });
 
   it("performs no egress through symlinked vector parents", async () => {
@@ -68,7 +105,7 @@ describe("LM2 vector sidecar publication", () => {
     const record = createCandidate();
     const workspace = join(root, "long-memory", "v1", workspaceKey);
     mkdirSync(workspace, { recursive: true });
-    symlinkSync(outside, join(workspace, "embeddings"));
+    symlinkSync(outside, join(workspace, "embeddings-v2"));
     const embed = vi.fn();
 
     await expect(
@@ -79,18 +116,15 @@ describe("LM2 vector sidecar publication", () => {
         signal: new AbortController().signal,
         embed,
       }),
-    ).resolves.toEqual({ published: [], reason: "write_failed" });
+    ).resolves.toEqual({ published: [], reason: "index_lock_unavailable" });
     expect(embed).not.toHaveBeenCalled();
 
     const secondRoot = createRoot();
-    const embeddings = join(secondRoot, "long-memory", "v1", workspaceKey, "embeddings");
+    await initializeLedger(secondRoot, model);
+    const embeddings = join(secondRoot, "long-memory", "v1", workspaceKey, "embeddings-v2");
     const outsideNamespace = join(outside, "namespace");
     mkdirSync(embeddings, { recursive: true });
     mkdirSync(outsideNamespace, { recursive: true });
-    writeFileSync(
-      join(outsideNamespace, `${record.id}.json`),
-      `${JSON.stringify(sidecarValue(record, model, [1, 2, 3]))}\n`,
-    );
     symlinkSync(outsideNamespace, join(embeddings, modelDescriptorFingerprint(model)));
     await expect(
       createLm2VectorStore({ storeRoot: secondRoot }).reserveAndPublish({
@@ -117,12 +151,28 @@ describe("LM2 vector sidecar publication", () => {
         records: [record],
         signal: new AbortController().signal,
         embed: async () => {
-          seedRawSidecar(root, record, model, conflicting);
+          const path = join(vectorNamespacePath(root, workspaceKey, model), `${record.id}.json`);
+          mkdirSync(join(path, ".."), { recursive: true });
+          writeFileSync(path, conflicting);
           return embeddingResult(model, [[1, 2, 3]]);
         },
       }),
     ).resolves.toEqual({ published: [], reason: "write_failed" });
-    expect(readFileSync(sidecarPath(root, record, model), "utf8")).toBe(conflicting);
+    expect(
+      readFileSync(
+        join(vectorNamespacePath(root, workspaceKey, model), `${record.id}.json`),
+        "utf8",
+      ),
+    ).toBe(conflicting);
+    expect(
+      lm2QuotaLedgerSchema.parse(
+        JSON.parse(readFileSync(vectorQuotaLedgerPath(root, workspaceKey), "utf8")),
+      ),
+    ).toMatchObject({
+      committedThroughAllocation: 0,
+      nextAllocationSequence: 1,
+      pending: { firstAllocationSequence: 1, lastAllocationSequence: 1 },
+    });
   });
 
   it("fails closed instead of publishing through a parent swapped during egress", async () => {
@@ -130,7 +180,9 @@ describe("LM2 vector sidecar publication", () => {
     const outside = createRoot();
     const model = createModel();
     const record = createCandidate();
-    const namespace = join(sidecarPath(root, record, model), "..");
+    await initializeLedger(root, model);
+    const namespace = vectorNamespacePath(root, workspaceKey, model);
+    mkdirSync(namespace, { recursive: true });
 
     await expect(
       createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
