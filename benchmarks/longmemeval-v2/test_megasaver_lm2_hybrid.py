@@ -7,13 +7,12 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
-import types
 import unittest
 
 BENCHMARK_DIR = Path(__file__).parent
 if str(BENCHMARK_DIR) not in sys.path:
     sys.path.insert(0, str(BENCHMARK_DIR))
-from lm2_test_support import make_fixture, secure_mode
+from lm2_test_support import make_fixture, official_memory_api, secure_mode
 
 
 BACKEND_PATH = BENCHMARK_DIR / "megasaver_lm2_hybrid.py"
@@ -34,29 +33,10 @@ def load_backend():
 class MegaSaverLm2HybridTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        official_root = os.environ.get("LONGMEMEVAL_V2_ROOT")
-        if official_root:
-            root = str(Path(official_root).resolve())
-            if root not in sys.path:
-                sys.path.insert(0, root)
-            for module_name, class_name in {
-                "no_retrieval": "NoRetrievalMemory",
-                "codex": "CodexMemory",
-                "agentrunbook_c": "AgentRunbookC",
-                "agentrunbook_c_v2": "AgentRunbookCV2",
-                "agentrunbook_r": "AgentRunbookR",
-                "rag": "RagMemory",
-            }.items():
-                module = types.ModuleType(f"memory_modules.{module_name}")
-                setattr(module, class_name, type(class_name, (), {}))
-                sys.modules[module.__name__] = module
-            from memory_modules.memory import build_memory, load_memory, save_memory
-
-            cls.build_memory = staticmethod(build_memory)
-            cls.load_memory = staticmethod(load_memory)
-            cls.save_memory = staticmethod(save_memory)
-        else:
-            raise unittest.SkipTest("LONGMEMEVAL_V2_ROOT must name the pinned official checkout")
+        build_memory, load_memory, save_memory = official_memory_api()
+        cls.build_memory = staticmethod(build_memory)
+        cls.load_memory = staticmethod(load_memory)
+        cls.save_memory = staticmethod(save_memory)
         cls.backend = load_backend()
 
     def setUp(self) -> None:
@@ -144,10 +124,8 @@ class MegaSaverLm2HybridTest(unittest.TestCase):
             self.assertEqual(memory.query(query), [])
         self.assertEqual(len(self.requests()), initial_count)
         run = self.fixture["cache_parent"] / f"instance-{memory._instance_token}"
-        telemetry = [
-            json.loads(line)
-            for line in (run / "telemetry/queries.jsonl").read_text().splitlines()
-        ]
+        rejected = self.fixture["cache_parent"] / f"rejected-{memory._rejected_token}" / "queries.jsonl"
+        telemetry = [json.loads(line) for line in rejected.read_text().splitlines()]
         self.assertEqual(len(telemetry), 3)
         self.assertEqual(
             set(telemetry[0]),
@@ -206,6 +184,8 @@ class MegaSaverLm2HybridTest(unittest.TestCase):
             lambda value: value["questions"][0].update(haystackChainDigest="0" * 64),
             lambda value: value["trajectories"][0]["projections"][0].update(id="not-uuid"),
             lambda value: value["trajectories"][0]["projections"][0].update(observedAt=7),
+            lambda value: value["trajectories"][0]["projections"][0].update(observedAt="2026-99-99T99:99:99Z"),
+            lambda value: value["questions"][0].update(questionId=""),
         ]
         original = json.loads(json.dumps(self.fixture["manifest"]))
         for mutate in mutations:
