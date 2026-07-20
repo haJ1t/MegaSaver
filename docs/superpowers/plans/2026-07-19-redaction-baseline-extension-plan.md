@@ -15,9 +15,10 @@
 **Load-bearing facts discovered while writing this plan (verified against source, not assumed):**
 
 - `REDACTION_PATTERNS` is **not** exported from `packages/policy/src/index.ts`. Tests import from `../src/redaction-patterns.js` directly. Do not add an index export.
-- `packages/policy` does **not** typecheck its tests: the script is `tsc -b --noEmit` and `tsconfig.json` excludes `test`. `tsconfig.test.json` exists but nothing invokes it. Task 1 wires it up, matching the `packages/core` and `apps/cli` precedent.
+- `packages/policy` typechecks its tests as of 2026-07-20: the script is `tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit`, wired by the jwt ReDoS fix branch, matching the `packages/core` and `apps/cli` precedent. Task 1's wiring step is therefore already satisfied — verify with `pnpm --filter @megasaver/policy typecheck` and skip the edit.
+- **No edit needed, recorded so the merge is expected rather than investigated:** Task 5's structural ordering test derives leading literals from `pattern.source` with a helper that stops at any `(` which is not `(?:`. The jwt fix changes `leadingLiterals(jwt)` from `["eyJ"]` to `[]` — identical to how the eleven existing lookbehind-gated entries already behave, so the test needs no change.
 - The locked snapshot looks entries up **by name** and asserts the relative order of the original 19 as a filtered subsequence. It deliberately does **not** assert `REDACTION_PATTERNS.length === 19`, which would fail the moment Task 4a lands. Do not add a length assertion.
-- Task 1 pins `private_key_block` in its **current** form so it is green against unmodified source; Task 3 flips that one snapshot entry as part of its own commit. That is the single intended exception to the lock.
+- Task 1 pins `private_key_block` in its **current** form so it is green against unmodified source; Task 3 flips that one snapshot entry as part of its own commit. That is this plan's only intended exception to the lock. There are **two** amended entries overall: `jwt` was already amended on `main` by `docs/superpowers/specs/2026-07-20-jwt-redos-fix-design.md`, so Task 1's snapshot pins the fixed `jwt` source from the start and Task 3 still flips exactly one entry.
 - `packages/policy/test/redaction-detectors.test.ts` is **created by Task 3**. Tasks 4a–4d and 7 append to it.
 - The FP corpus generator uses a fixed LCG (`Math.imul`), never `Math.random` — a corpus that varies between runs is not evidence. Every generated hex/base64 token starts with a digit so the `iban` detector's `[A-Z]{2}` lead can never enter, and generated digests are 40 or 64 characters, outside IBAN's 15–34 window.
 - The corpus test asserts through `redact()`, not `pattern.test()`, so `credit_card`/`iban`/`tr_national_id` are judged **after** their `validate` gates. If a later task hits a corpus failure, the fix is to bump that family's seed base — never to weaken a detector, never to delete the line.
@@ -168,7 +169,7 @@ the very task it exists to gate.
     },
     {
       name: "jwt",
-      source: "eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+",
+      source: "(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+",
       flags: "g",
       replacement: "eyJ[REDACTED]",
       hasValidate: false,
@@ -629,7 +630,8 @@ Today's regex (`packages/policy/src/redaction-patterns.ts:56`) is
 `-----BEGIN PRIVATE KEY-----` header (PKCS#8, the header in every Google
 service-account JSON) does not match and the whole key body is emitted in
 cleartext. `private_key_block` is index 7 of the 19 LOCKED detectors; this is the
-single deliberate exception to the §2 no-behaviour-change invariant.
+only deliberate exception to the §2 no-behaviour-change invariant introduced by
+this plan; the `jwt` amendment landed separately on `main` before Task 1 ran.
 
 ---
 
@@ -2442,12 +2444,11 @@ intended gate.
 import { describe, expect, it } from "vitest";
 import { REDACTION_PATTERNS } from "../src/redaction-patterns.js";
 
-// §9.5 — timed against the NEW detector tier only. The LOCKED `jwt` detector is
-// deliberately excluded: it is already strongly super-linear at these scales
-// (31 / 114 / 437 / 1850 ms against 'eyJaA0'.repeat(n), one run peaking at
-// 7268 ms), a pre-existing exposure this change neither introduces nor is
-// scoped to fix. The design locks the detector and tracks the fix as its own
-// chain; gating it here would fail CI on day one for an out-of-scope defect.
+// §9.5 — timed against the new detector tier AND the locked `jwt` detector. The
+// jwt exclusion this gate originally carved out is gone: the quadratic it named
+// was fixed on 2026-07-20 by a leading (?<![A-Za-z0-9_-]) lookbehind, taking
+// 313 KiB of 'eyJaA0'.repeat(n) from 8,374 ms to 0.45 ms. jwt now clears this
+// ceiling by three orders of magnitude, so there is no reason to exempt it.
 const CEILING_MS = 750;
 const SCALES_KIB = [20, 39, 78, 156] as const;
 const OPENAI_SCALE_KIB = 313;
@@ -2548,6 +2549,25 @@ describe("redos — openai_project_key at the measured blow-up scale (§9.5)", (
   });
 });
 
+// The locked jwt detector, timed here since 2026-07-20 removed its quadratic.
+// Three seeds: narrowing the lookbehind to (?<![A-Za-z0-9]) leaves 'eyJaA0' at
+// 0.46 ms while '-eyJaA' costs 7,494 ms and '_eyJaA' costs 7,561 ms.
+describe("redos — locked jwt detector at the measured blow-up scale (§9.5)", () => {
+  const detector = REDACTION_PATTERNS.find((entry) => entry.name === "jwt");
+  if (detector === undefined) throw new Error("jwt not in REDACTION_PATTERNS");
+
+  for (const seed of ["eyJaA0", "-eyJaA", "_eyJaA"]) {
+    it(`stays under ${CEILING_MS}ms at ${OPENAI_SCALE_KIB} KiB of ${seed}`, () => {
+      const ms = elapsedMs(
+        detector.pattern.source,
+        detector.pattern.flags,
+        padding(seed, OPENAI_SCALE_KIB),
+      );
+      expect(ms).toBeLessThan(CEILING_MS);
+    });
+  }
+});
+
 describe("redos — coverage (§9.5)", () => {
   it("times every detector in the new tier", () => {
     const unseeded = NEW_TIER.map((entry) => entry.name).filter(
@@ -2576,7 +2596,7 @@ more than an order of magnitude.
 pnpm --filter @megasaver/policy test -- test/redaction-redos.test.ts
 ```
 
-Expected: 31 tests pass (28 per-detector + 313 KiB + 2 coverage), under ~2 s
+Expected: 34 tests pass (28 per-detector + 313 KiB + 3 jwt seeds + 2 coverage), under ~2 s
 total. Measured worst case on the dev machine is `gitlab_routable_token` at
 17.8 ms / 156 KiB (linear: 2.46 / 4.49 / 8.98 / 17.83 across the four scales) —
 the `{27,300}` first segment is the widest bounded run in the tier.
@@ -2628,7 +2648,7 @@ per-test timeout tuning is needed.
 ```
 git add packages/policy/test/redaction-redos.test.ts
 git status --short
-git commit -m "test(policy): time new redaction tier for redos" -m "Every detector in the new tier is timed against its own repeated literal prefix at 20/39/78/156 KiB, with openai_project_key additionally at 313 KiB — the scale where the unbounded form of its runs measures 12.3 s against 12.4 ms bounded. The ceiling is deliberately not applied to the original nineteen: the locked jwt detector is already super-linear at these scales, a pre-existing exposure tracked on its own chain, and gating it here would fail CI for a defect out of this change's scope."
+git commit -m "test(policy): time new redaction tier for redos" -m "Every detector in the new tier is timed against its own repeated literal prefix at 20/39/78/156 KiB, with openai_project_key additionally at 313 KiB — the scale where the unbounded form of its runs measures 12.3 s against 12.4 ms bounded. The locked jwt detector is inside the ceiling too: its quadratic was fixed on 2026-07-20 and it now clears the gate by three orders of magnitude, so the exemption this test originally carried has been removed."
 ```
 
 Expected: `git status --short` shows only the one new file staged; commit
