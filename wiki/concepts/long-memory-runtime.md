@@ -130,6 +130,9 @@ backend. Python admission validates pinned manifest identities, row/digest
 bindings, timestamp grammar, nonempty question IDs, and exact local model
 limits before transport. Rejected queries launch no transport and write only
 redacted telemetry through a private random root whose cache-parent, directory,
-and file identities are descriptor-anchored; FIFO, link, and replacement
-substitution fail closed. This is implementation evidence only, not an official
-LongMemEval-V2 score. (source: `.superpowers/sdd/task-5-report.md`)
+and file identities are descriptor-anchored; raw question/context fields are
+omitted. Save-state load acquires the run flock and revalidates its locked
+descriptor, pathname, run root, and identity-bound controls before adoption.
+Busy, FIFO, link, and replacement substitution fail closed. This is
+implementation evidence only, not an official LongMemEval-V2 score. (source:
+`.superpowers/sdd/task-5-report.md`)
