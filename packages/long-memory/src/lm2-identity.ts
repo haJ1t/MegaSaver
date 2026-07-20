@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import { Lm2Error } from "./lm2-errors.js";
-import type { ModelDescriptor } from "./lm2-model.js";
+import {
+  MAX_LM2_CANDIDATE_TEXT_CODE_UNITS,
+  type ModelDescriptor,
+  modelDescriptorSchema,
+} from "./lm2-model.js";
 
 export type Lm2Sha256 = string & { readonly __lm2Sha256: unique symbol };
 
@@ -24,18 +29,47 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(canonicalize(value));
 }
 
+function parseModelDescriptor(input: unknown): ModelDescriptor {
+  try {
+    const parsed = modelDescriptorSchema.safeParse(input);
+    if (parsed.success) return parsed.data;
+  } catch {
+    // Fall through to the closed public boundary below.
+  }
+  throw new Lm2Error("invalid_input", "Invalid model descriptor.");
+}
+
+const embeddingIdentityInputSchema = z
+  .object({
+    kind: z.enum(["state_snapshot", "state_transition"]),
+    text: z.string().min(1).max(MAX_LM2_CANDIDATE_TEXT_CODE_UNITS),
+  })
+  .strict()
+  .refine((input) => input.text === input.text.normalize("NFC").trim(), "must be canonical");
+
+function parseEmbeddingIdentityInput(input: unknown): z.infer<typeof embeddingIdentityInputSchema> {
+  try {
+    const parsed = embeddingIdentityInputSchema.safeParse(input);
+    if (parsed.success) return parsed.data;
+  } catch {
+    // Fall through to the closed public boundary below.
+  }
+  throw new Lm2Error("invalid_input", "Embedding input must be canonical.");
+}
+
 export function modelDescriptorFingerprint(model: ModelDescriptor): Lm2Sha256 {
-  return sha256(canonicalJson(model));
+  return sha256(canonicalJson(parseModelDescriptor(model)));
 }
 
 export function embeddingInputDigest(input: {
   kind: "state_snapshot" | "state_transition";
   text: string;
 }): Lm2Sha256 {
-  if (input.text !== input.text.normalize("NFC").trim() || input.text.length === 0) {
-    throw new Lm2Error("invalid_input", "Embedding input must be canonical.");
-  }
-  return sha256(`megasaver.long-memory.lm2.embedding-input.v1\0${canonicalJson(input)}`);
+  return sha256(
+    `megasaver.long-memory.lm2.embedding-input.v1\0${canonicalJson(
+      parseEmbeddingIdentityInput(input),
+    )}`,
+  );
 }
 
 export function canonicalFloat32(values: readonly number[]): Float32Array {
