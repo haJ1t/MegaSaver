@@ -9,7 +9,7 @@ import {
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
-import { createLm2VectorStore } from "../src/lm2-vector-store.js";
+import { type Lm2VectorStoreResult, createLm2VectorStore } from "../src/lm2-vector-store.js";
 import {
   cleanupRoots,
   createCandidate,
@@ -25,6 +25,11 @@ import {
 afterEach(cleanupRoots);
 
 describe("LM2 vector sidecar publication", () => {
+  it("exposes timeout as a truthful store result", () => {
+    const result = { published: [], reason: "timeout" } satisfies Lm2VectorStoreResult;
+    expect(result).toEqual({ published: [], reason: "timeout" });
+  });
+
   it("publishes canonical identity-bound sidecars without exposing private metadata", async () => {
     const root = createRoot();
     const model = createModel();
