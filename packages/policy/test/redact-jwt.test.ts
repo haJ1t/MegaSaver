@@ -42,14 +42,29 @@ const SCALE_KIB = 313;
 // makes it scan. Measured 0.32 ms.
 const SEEDS = ["eyJaA0", "-eyJaA", "_eyJaA", "%3DeyJaA"] as const;
 
+// Defense-in-depth only — the structural gate above is the real guard (fix spec
+// §6.2a). These four assertions exist to catch a reintroduced quadratic, and a
+// quadratic is slow on EVERY attempt: the narrowed lookbehind costs ~7,400 ms
+// against a 500 ms ceiling, so no number of retries rescues it. What retries do
+// remove is the one thing that has ever flipped them — under a full
+// `turbo test --force` the box is oversubscribed several-fold and a rare
+// multi-hundred-millisecond process stall (GC or scheduler, not the regex) can
+// stretch a 0.5 ms measurement past the ceiling. Measured worst case under 8x
+// CPU oversubscription is 1.8 ms, so a retry is a stall filter and nothing else.
+const TIMING_RETRIES = 3;
+
 describe("jwt detector — ReDoS timing regression (fix spec §6.2)", () => {
   for (const seed of SEEDS) {
-    it(`stays under ${CEILING_MS} ms on ${SCALE_KIB} KiB of ${JSON.stringify(seed)}`, () => {
-      const input = seed.repeat(Math.ceil((SCALE_KIB * 1024) / seed.length));
-      const started = performance.now();
-      apply(input);
-      expect(performance.now() - started).toBeLessThan(CEILING_MS);
-    });
+    it(
+      `stays under ${CEILING_MS} ms on ${SCALE_KIB} KiB of ${JSON.stringify(seed)}`,
+      { retry: TIMING_RETRIES },
+      () => {
+        const input = seed.repeat(Math.ceil((SCALE_KIB * 1024) / seed.length));
+        const started = performance.now();
+        apply(input);
+        expect(performance.now() - started).toBeLessThan(CEILING_MS);
+      },
+    );
   }
 });
 
