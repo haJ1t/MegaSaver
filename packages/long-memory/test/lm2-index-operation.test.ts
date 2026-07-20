@@ -8,6 +8,8 @@ let failNextClose = false;
 let failNextPendingUnlink = false;
 let failEveryClose = false;
 let failCloseAfter: number | null = null;
+const injectedCloseFailures: Error[] = [];
+const injectedPendingUnlinkFailures: Error[] = [];
 
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
@@ -20,7 +22,9 @@ vi.mock("node:fs", async (importOriginal) => {
       if (delayedFailure) failCloseAfter = null;
       if (failEveryClose || failNextClose || delayedFailure) {
         failNextClose = false;
-        throw new Error("injected descriptor close failure");
+        const error = new Error("injected descriptor close failure");
+        injectedCloseFailures.push(error);
+        throw error;
       }
     },
     fsyncSync(descriptor: number) {
@@ -33,7 +37,9 @@ vi.mock("node:fs", async (importOriginal) => {
     unlinkSync(path: import("node:fs").PathLike) {
       if (failNextPendingUnlink && String(path).endsWith(".pending")) {
         failNextPendingUnlink = false;
-        throw new Error("injected pending unlink failure");
+        const error = new Error("injected pending unlink failure");
+        injectedPendingUnlinkFailures.push(error);
+        throw error;
       }
       actual.unlinkSync(path);
     },
@@ -49,8 +55,13 @@ import {
   recordIdentityDigest,
   serializeLm2QuotaLedger,
 } from "../src/lm2-quota-ledger.js";
+import { closeDirectoryAnchor } from "../src/lm2-secure-fs.js";
+import {
+  closeAndRemoveAnchoredTemporary,
+  materializeAnchoredFile,
+} from "../src/lm2-secure-publish.js";
 import { buildSerializedSidecar } from "../src/lm2-vector-format.js";
-import { vectorQuotaLedgerPath } from "../src/lm2-vector-paths.js";
+import { ensureVectorNamespace, vectorQuotaLedgerPath } from "../src/lm2-vector-paths.js";
 import { createLm2VectorStore } from "../src/lm2-vector-store.js";
 import {
   cleanupRoots,
@@ -68,6 +79,8 @@ afterEach(() => {
   failNextPendingUnlink = false;
   failEveryClose = false;
   failCloseAfter = null;
+  injectedCloseFailures.length = 0;
+  injectedPendingUnlinkFailures.length = 0;
   cleanupRoots();
 });
 
@@ -543,6 +556,95 @@ describe("LM2 index operation", () => {
       await expect(operation.finalize()).rejects.toThrow();
     },
   );
+
+  it("retains all independent temporary cleanup failures", () => {
+    const root = createRoot();
+    const namespace = ensureVectorNamespace(root, workspaceKey, createModel());
+    const temporary = materializeAnchoredFile(namespace, "combined.pending", "sidecar");
+    failNextClose = true;
+    failNextPendingUnlink = true;
+    let failure: unknown;
+
+    try {
+      closeAndRemoveAnchoredTemporary(namespace, temporary);
+    } catch (error) {
+      failure = error;
+    }
+    closeDirectoryAnchor(namespace);
+
+    expect(failure).toBeInstanceOf(Error);
+    if (!(failure instanceof Error)) throw new Error("cleanup failure missing");
+    expect(failure.cause).toBeInstanceOf(AggregateError);
+    if (!(failure.cause instanceof AggregateError)) throw new Error("cleanup causes missing");
+    expect(failure.cause.errors).toHaveLength(2);
+    expect(failure.cause.errors[0]).toMatchObject({
+      name: "Lm2Error",
+      code: "store_corrupt",
+      message: "LM2 file descriptor close failed.",
+    });
+    expect(failure.cause.errors[1]).toBe(injectedPendingUnlinkFailures[0]);
+    expect(injectedCloseFailures).toHaveLength(1);
+  });
+
+  it("retains all independent finalization failures and releases the lock", async () => {
+    const root = createRoot();
+    const store = createLm2VectorStore({ storeRoot: root });
+    const model = createModel();
+    const operation = await store.beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: deadline(),
+    });
+    if (operation.status !== "ready") throw new Error("operation unavailable");
+    const receipt = await operation.publishBatch({
+      records: [createCandidate(1)],
+      assertEgressAllowed: async () => true,
+      recheckEvidence: async () => true,
+      embed: async () => {
+        failNextClose = true;
+        return {
+          modelFingerprint: modelDescriptorFingerprint(model),
+          vectors: [[1, 2, 3]],
+        };
+      },
+    });
+    expect(receipt).toEqual({
+      published: [],
+      existing: [],
+      reason: "quota_state_invalid",
+      quotaRecovery: "blocked_pending",
+    });
+    injectedCloseFailures.length = 0;
+    failEveryClose = true;
+
+    const failure = await operation.finalize().catch((error: unknown) => error);
+    failEveryClose = false;
+
+    expect(failure).toBeInstanceOf(Error);
+    if (!(failure instanceof Error)) throw new Error("finalization failure missing");
+    expect(failure.cause).toBeInstanceOf(AggregateError);
+    if (!(failure.cause instanceof AggregateError)) throw new Error("cleanup causes missing");
+    expect(failure.cause.errors).toHaveLength(3);
+    expect(failure.cause.errors[0]).toMatchObject({
+      name: "Lm2CleanupError",
+      message: "LM2 cleanup remains blocked.",
+    });
+    expect(failure.cause.errors[1]).toMatchObject({
+      name: "Lm2Error",
+      code: "store_corrupt",
+      message: "LM2 directory descriptor close failed.",
+    });
+    expect(failure.cause.errors[2]).toMatchObject({
+      name: "Lm2Error",
+      code: "store_corrupt",
+      message: "LM2 file descriptor close failed.",
+    });
+    expect(injectedCloseFailures.length).toBeGreaterThanOrEqual(2);
+
+    const next = await store.beginIndexOperation({ workspaceKey, model, deadline: deadline() });
+    expect(next).toMatchObject({ status: "ready" });
+    if (next.status === "ready") await next.finalize();
+  });
 
   it("marks a ledger replacement temporary close failure blocked on the same operation", async () => {
     const root = createRoot();

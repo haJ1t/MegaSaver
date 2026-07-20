@@ -11,7 +11,7 @@ import {
   unlinkSync,
   writeSync,
 } from "node:fs";
-import { Lm2CleanupError } from "./lm2-cleanup-errors.js";
+import { Lm2CleanupError, combineLm2CleanupFailures } from "./lm2-cleanup-errors.js";
 import { Lm2Error } from "./lm2-errors.js";
 import {
   type AnchoredFile,
@@ -87,7 +87,7 @@ export function closeAndRemoveAnchoredTemporary(anchor: DirectoryAnchor, temp: A
     unlinkSync(temp.path);
     fsyncSync(directoryDescriptor(anchor));
   } catch (error) {
-    failure ??= error;
+    failure = combineLm2CleanupFailures(failure, error);
   }
   if (failure !== undefined) throw new Lm2CleanupError("LM2 temporary cleanup failed.", failure);
 }
@@ -148,7 +148,7 @@ export function replaceAnchoredFile(
   try {
     closeAnchoredFile(temp);
   } catch (error) {
-    cleanupFailure ??= error;
+    cleanupFailure = combineLm2CleanupFailures(cleanupFailure, error);
   }
   if (cleanupFailure !== undefined) {
     throw new Lm2CleanupError(
