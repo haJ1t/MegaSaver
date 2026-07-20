@@ -45,7 +45,7 @@ export function createLm2OperationPublisher(input: {
   assertGuard(): void;
   isFinalized(): boolean;
   cleanupBlocked(): boolean;
-  blockCleanup(): void;
+  blockCleanup(failure: unknown): void;
 }): Lm2OperationPublisher {
   const fingerprint = modelDescriptorFingerprint(input.operation.model);
   const planSequence = createLm2IndexPlanSequence({
@@ -196,12 +196,16 @@ export function createLm2OperationPublisher(input: {
       return { ...result, existing };
     } catch (error) {
       if (isLm2CleanupError(error)) {
-        input.blockCleanup();
+        input.blockCleanup(error);
       } else {
         try {
-          if (!input.settlePending()) input.blockCleanup();
-        } catch {
-          input.blockCleanup();
+          if (!input.settlePending()) {
+            input.blockCleanup(new Lm2CleanupError("LM2 pending cleanup remains blocked.", error));
+          }
+        } catch (settleError) {
+          input.blockCleanup(
+            new AggregateError([error, settleError], "LM2 publication recovery failed."),
+          );
         }
       }
       const ledger = input.ledger();
