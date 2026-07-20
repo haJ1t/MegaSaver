@@ -1,7 +1,7 @@
 import { normalizedCostUsd } from "@megasaver/stats";
 import { buildVerdict, costRatioOf, orderSensitive } from "./report.js";
-import { assertUncompressedRecording, transformRequest } from "./transform.js";
-import type { ApplySaver } from "./transform.js";
+import { prepareArms } from "./transform.js";
+import type { ApplySaver, PreparedArms } from "./transform.js";
 import type {
   Arm,
   ArmUsage,
@@ -12,8 +12,6 @@ import type {
   ReplayOrder,
   ReplayVerdict,
   RequestUsage,
-  SaverOutcomes,
-  ToolResultBytes,
 } from "./types.js";
 
 // The API response fields we consume. Injected `send` keeps unit tests offline;
@@ -26,58 +24,16 @@ export type SendResult = {
 };
 export type Send = (body: RecordedRequest) => Promise<SendResult>;
 
-// In production the PostToolUse hook fires ONCE per tool call and the compressed
-// text then sits in the transcript byte-for-byte forever, so every later request
-// carries the same bytes and the prompt cache stays warm. A recorded Messages
-// API conversation resends its whole history each turn, so calling the saver per
-// request would invoke it once per (request × tool_result) — and the real saver
-// is stateful (first-sight ledger) and non-deterministic (a randomUUID chunk-set
-// id lands in the returned text). The megasaver arm's prefix would mutate every
-// turn and pay cache_creation ($10/Mtok) where baseline pays cache_read
-// ($0.50/Mtok): a ~20x penalty manufactured by the harness, condemning the very
-// feature built to prevent prefix churn. Memoizing per tool_use_id restores
-// production semantics exactly.
-function memoize(
-  applySaver: ApplySaver,
-  outcomes: SaverOutcomes,
-  bytes: ToolResultBytes,
-): ApplySaver {
-  const decisions = new Map<string, string | null>();
-  return (raw, ctx) => {
-    const memoized = decisions.get(ctx.toolUseId);
-    if (memoized !== undefined) return memoized; // a memoized null is reused AS null
-    let decision: string | null;
-    try {
-      decision = applySaver(raw, ctx);
-    } catch (cause) {
-      outcomes.failed++;
-      throw cause;
-    }
-    if (decision === null) outcomes.passthrough++;
-    else outcomes.applied++;
-    // Accumulated here rather than at the request loop because this is the one
-    // place that sees each tool call exactly once — the same cardinality
-    // production's PostToolUse hook fires at. Summing per request would count a
-    // resent history N times and inflate both sides.
-    bytes.original += Buffer.byteLength(raw, "utf8");
-    bytes.transformed += Buffer.byteLength(decision ?? raw, "utf8");
-    decisions.set(ctx.toolUseId, decision);
-    return decision;
-  };
-}
-
+// A PURE byte-replay of one precomputed sequence. It never consults the saver:
+// the transform ran once, up front, in `prepareArms`. That is what lets the two
+// pairs send byte-identical bodies for the same arm, which is the only thing
+// that makes comparing their two orders meaningful.
 export async function replayArm(input: {
   arm: Arm;
-  requests: readonly RecordedRequest[];
-  applySaver: ApplySaver;
+  bodies: readonly RecordedRequest[];
   send: Send;
   now?: () => number;
 }): Promise<ArmUsage> {
-  // Checked here rather than in the pair runners because this is the single
-  // choke point every replay routes through — a contaminated recording cannot
-  // reach the API by any path.
-  assertUncompressedRecording(input.requests);
-
   const now = input.now ?? Date.now;
   const startedAtMs = now();
   const total = {
@@ -87,26 +43,10 @@ export async function replayArm(input: {
     outputTokens: 0,
   };
   const perRequest: RequestUsage[] = [];
-  const saver: SaverOutcomes = { applied: 0, passthrough: 0, failed: 0 };
-  const bytes: ToolResultBytes = { original: 0, transformed: 0 };
-  const applySaver = memoize(input.applySaver, saver, bytes);
 
   // Sequential on purpose: the API's prompt cache is order-dependent, so
   // parallelising would measure a different (and meaningless) cache pattern.
-  for (const [index, request] of input.requests.entries()) {
-    let body: RecordedRequest;
-    try {
-      body = transformRequest(request, input.arm, applySaver);
-    } catch (cause) {
-      // A saver that could not be consulted is NOT a passthrough. Continuing
-      // would report an inert megasaver arm as a measurement, so abort with the
-      // counts that explain it — no retry.
-      const reason = cause instanceof Error ? cause.message : String(cause);
-      throw new Error(
-        `replayArm(${input.arm}): saver failed on request ${index} (applied=${saver.applied} passthrough=${saver.passthrough} failed=${saver.failed}): ${reason}`,
-        { cause },
-      );
-    }
+  for (const [index, body] of input.bodies.entries()) {
     let usage: SendResult;
     try {
       usage = await input.send(body);
@@ -141,8 +81,6 @@ export async function replayArm(input: {
       cache_read_input_tokens: total.cacheReadTokens,
       output_tokens: total.outputTokens,
     }),
-    saver,
-    bytes,
     startedAtMs,
     finishedAtMs: now(),
     perRequest,
@@ -158,8 +96,7 @@ export async function replayArm(input: {
 // therefore CANNOT produce a trustworthy ratio on its own; use
 // `replayBothOrders`, which is the only path to a verdict.
 export async function replayPair(input: {
-  requests: readonly RecordedRequest[];
-  applySaver: ApplySaver;
+  arms: PreparedArms;
   send: Send;
   order: ReplayOrder;
   now?: () => number;
@@ -167,8 +104,7 @@ export async function replayPair(input: {
   const run = (arm: Arm): Promise<ArmUsage> =>
     replayArm({
       arm,
-      requests: input.requests,
-      applySaver: input.applySaver,
+      bodies: input.arms[arm],
       send: input.send,
       ...(input.now === undefined ? {} : { now: input.now }),
     });
@@ -210,16 +146,20 @@ export async function replayBothOrders(input: {
   baselineDriftSmoke?: DriftSmokeResult;
 }): Promise<ReplayVerdict> {
   const clock = input.now === undefined ? {} : { now: input.now };
+  // ONCE, before anything is sent. All four arm runs below are byte-replays of
+  // these two sequences, so the saver's statefulness and its randomUUID cannot
+  // reach the measurement — and the hook is spawned once per tool call for the
+  // whole gate rather than once per megasaver arm.
+  const arms = prepareArms({ requests: input.requests, applySaver: input.applySaver });
+
   const baselineFirst = await replayPair({
-    requests: input.requests,
-    applySaver: input.applySaver,
+    arms,
     send: input.send,
     order: "baseline-first",
     ...clock,
   });
   const megasaverFirst = await replayPair({
-    requests: input.requests,
-    applySaver: input.applySaver,
+    arms,
     send: input.send,
     order: "megasaver-first",
     ...clock,
@@ -239,9 +179,11 @@ export async function replayBothOrders(input: {
     tolerance: input.orderTolerance,
     combinedRatio: (a + b) / 2,
   };
-  // Arms from the baseline-first run are the ones reported; the ratio quoted is
-  // the combination of both, since neither single order is free of the bias.
-  return buildVerdict(input.task, baselineFirst.baseline, baselineFirst.megasaver, {
+  // BOTH pairs are reported, because the quoted ratio is the mean of both.
+  // Handing the verdict one pair's arms next to a two-pair number is how a
+  // reader ends up checking guards against data other than what they are
+  // reading.
+  return buildVerdict(input.task, [baselineFirst, megasaverFirst], arms, {
     order,
     ...(input.baselineDriftSmoke === undefined
       ? {}

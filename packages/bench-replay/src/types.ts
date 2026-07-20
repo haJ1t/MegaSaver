@@ -34,11 +34,14 @@ export type RequestUsage = {
   outputTokens: number;
 };
 
+// What the saver did, for the whole gate. Computed once by `prepareArms`, never
+// per arm run: the saver is consulted before a single request is sent, and all
+// four arm runs then replay the SAME two frozen byte sequences.
+export type TransformSummary = { saver: SaverOutcomes; bytes: ToolResultBytes };
+
 export type ArmUsage = RequestUsage & {
   arm: Arm;
   normalizedCostUsd: number;
-  saver: SaverOutcomes;
-  bytes: ToolResultBytes;
   // The size of the prompt-cache discount the second arm inherits depends
   // entirely on the wall-clock gap since the first arm warmed the shared prefix.
   // Left unrecorded, that gap is an unmeasured input to every ratio here.
@@ -97,8 +100,11 @@ export type PairResult = {
 
 export type ReplayVerdict = {
   task: string;
-  baseline: ArmUsage;
-  megasaver: ArmUsage;
+  // EVERY pair the reported ratio was derived from, in run order. Carrying one
+  // pair's arms next to a two-pair average is how a reader ends up checking
+  // guards against data other than the number they are reading.
+  pairs: readonly PairResult[];
+  transform: TransformSummary;
   // baseline ÷ megasaver on normalized cost; >1 means megasaver is cheaper.
   costRatio: number;
   verified: VerdictVerification;

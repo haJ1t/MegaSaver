@@ -12,13 +12,16 @@ export {
   type RequestUsage,
   type SaverOutcomes,
   type ToolResultBytes,
+  type TransformSummary,
   type VerdictVerification,
 } from "./types.js";
 export { startCaptureProxy, type CaptureProxy } from "./capture-proxy.js";
 export {
   assertUncompressedRecording,
+  prepareArms,
   transformRequest,
   type ApplySaver,
+  type PreparedArms,
   type ToolCallContext,
 } from "./transform.js";
 export {
@@ -38,7 +41,7 @@ export {
   MIN_DRIFT_SMOKE_TOLERANCE,
   baselineDriftSmokeOk,
   buildVerdict,
-  checkArmIntegrity,
+  checkTransformIntegrity,
   costRatioOf,
   orderSensitive,
   pooledCostRatio,

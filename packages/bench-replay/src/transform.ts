@@ -1,4 +1,10 @@
-import type { Arm, RecordedRequest } from "./types.js";
+import type {
+  Arm,
+  RecordedRequest,
+  SaverOutcomes,
+  ToolResultBytes,
+  TransformSummary,
+} from "./types.js";
 
 // The tool call a tool_result belongs to, recovered from the recording. The
 // saver's decision depends on all three: compression floors are per-tool
@@ -128,8 +134,8 @@ export function assertUncompressedRecording(requests: readonly RecordedRequest[]
 // mean anything.
 //
 // Pure per-request by design: applying the saver at most once per tool call
-// across the whole sequence is the REPLAY loop's job (it is the only layer that
-// knows the sequence), so this function stays trivially testable.
+// across the whole sequence is `prepareArms`' job, so this function stays
+// trivially testable.
 export function transformRequest(
   body: RecordedRequest,
   arm: Arm,
@@ -159,4 +165,95 @@ export function transformRequest(
     }
   }
   return copy;
+}
+
+// In production the PostToolUse hook fires ONCE per tool call and the compressed
+// text then sits in the transcript byte-for-byte forever, so every later request
+// carries the same bytes and the prompt cache stays warm. A recorded Messages
+// API conversation resends its whole history each turn, so consulting the saver
+// per request would invoke it once per (request × tool_result) — and the real
+// saver is stateful (first-sight ledger) and non-deterministic (a randomUUID
+// chunk-set id lands in the returned text). Memoizing per tool_use_id restores
+// production semantics exactly.
+function memoize(
+  applySaver: ApplySaver,
+  outcomes: SaverOutcomes,
+  bytes: ToolResultBytes,
+): ApplySaver {
+  const decisions = new Map<string, string | null>();
+  return (raw, ctx) => {
+    const memoized = decisions.get(ctx.toolUseId);
+    if (memoized !== undefined) return memoized; // a memoized null is reused AS null
+    let decision: string | null;
+    try {
+      decision = applySaver(raw, ctx);
+    } catch (cause) {
+      outcomes.failed++;
+      throw cause;
+    }
+    if (decision === null) outcomes.passthrough++;
+    else outcomes.applied++;
+    // Accumulated here rather than at the request loop because this is the one
+    // place that sees each tool call exactly once — the same cardinality
+    // production's PostToolUse hook fires at. Summing per request would count a
+    // resent history N times and inflate both sides.
+    bytes.original += Buffer.byteLength(raw, "utf8");
+    bytes.transformed += Buffer.byteLength(decision ?? raw, "utf8");
+    decisions.set(ctx.toolUseId, decision);
+    return decision;
+  };
+}
+
+export type PreparedArms = TransformSummary & {
+  baseline: readonly RecordedRequest[];
+  megasaver: readonly RecordedRequest[];
+};
+
+// Separates TRANSFORMING from SENDING, and is the reason the gate can be
+// trusted. The saver runs here — exactly once per distinct tool_use_id, before
+// a single request goes out — and the two frozen sequences it produces are
+// what every arm run replays, byte for byte.
+//
+// Memoizing inside a single arm run is NOT enough: `replayBothOrders` runs four
+// arm runs, so a per-run memo hands the two megasaver arms two different byte
+// sequences while baseline (a pure structuredClone) is identical in both pairs.
+// Megasaver then pays cache_creation ($10/Mtok) in both pairs where baseline
+// reads its own bytes back at cache_read ($0.50/Mtok) — a ~20x penalty invented
+// by the harness, and one the order check structurally cannot see, because it
+// lands on megasaver in BOTH orders and moves the two ratios together.
+//
+// It also takes the saver out of the measurement loop entirely: the hook is
+// superlinear (40 KB → 5.2s, 100 KB → 27.3s) and used to run twice per tool call.
+export function prepareArms(input: {
+  requests: readonly RecordedRequest[];
+  applySaver: ApplySaver;
+}): PreparedArms {
+  // Checked here rather than in the replay loop because this is the single
+  // choke point every replay routes through — and the only layer that still
+  // sees the RAW recording. Downstream, the megasaver bodies legitimately carry
+  // the saver's footer, so the check could not tell contamination from work.
+  assertUncompressedRecording(input.requests);
+
+  const saver: SaverOutcomes = { applied: 0, passthrough: 0, failed: 0 };
+  const bytes: ToolResultBytes = { original: 0, transformed: 0 };
+  const applySaver = memoize(input.applySaver, saver, bytes);
+
+  const baseline: RecordedRequest[] = [];
+  const megasaver: RecordedRequest[] = [];
+  for (const [index, request] of input.requests.entries()) {
+    baseline.push(transformRequest(request, "baseline", applySaver));
+    try {
+      megasaver.push(transformRequest(request, "megasaver", applySaver));
+    } catch (cause) {
+      // A saver that could not be consulted is NOT a passthrough. Continuing
+      // would report an inert megasaver arm as a measurement, so abort with the
+      // counts that explain it — no retry, and before a cent is spent.
+      const reason = cause instanceof Error ? cause.message : String(cause);
+      throw new Error(
+        `prepareArms: saver failed on request ${index} (applied=${saver.applied} passthrough=${saver.passthrough} failed=${saver.failed}): ${reason}`,
+        { cause },
+      );
+    }
+  }
+  return { baseline, megasaver, saver, bytes };
 }

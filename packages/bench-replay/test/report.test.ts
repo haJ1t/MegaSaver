@@ -3,10 +3,12 @@ import {
   MIN_DRIFT_SMOKE_TOLERANCE,
   baselineDriftSmokeOk,
   buildVerdict,
-  checkArmIntegrity,
+  checkTransformIntegrity,
+  costRatioOf,
   pooledCostRatio,
   verdictStable,
 } from "../src/report.js";
+import type { PairResult, ReplayOrder } from "../src/types.js";
 
 const arm = (cost: number) => ({
   arm: "baseline" as const,
@@ -15,30 +17,78 @@ const arm = (cost: number) => ({
   cacheReadTokens: 0,
   outputTokens: 0,
   normalizedCostUsd: cost,
-  saver: { applied: 1, passthrough: 0, failed: 0 },
-  // Fix B: a verdict is only constructible for an arm whose transform actually
-  // shrank the payload, so the shared fixture has to carry real compression.
-  bytes: { original: 1000, transformed: 400 },
   startedAtMs: 0,
   finishedAtMs: 1,
   perRequest: [],
 });
 
+// Fix B: a verdict is only constructible for a transform that actually shrank
+// the payload, so the shared fixture has to carry real compression.
+const transform = {
+  saver: { applied: 1, passthrough: 0, failed: 0 },
+  bytes: { original: 1000, transformed: 400 },
+};
+
+// One pair, ratio = baselineCost ÷ megasaverCost.
+const pair = (
+  baselineCost: number,
+  megasaverCost: number,
+  order: ReplayOrder = "baseline-first",
+): PairResult => {
+  const baseline = arm(baselineCost);
+  const megasaver = { ...arm(megasaverCost), arm: "megasaver" as const };
+  return { order, baseline, megasaver, costRatio: costRatioOf(baseline, megasaver) };
+};
+
 describe("buildVerdict", () => {
   it("ratio is baseline ÷ megasaver (>1 = megasaver cheaper)", () => {
-    const v = buildVerdict("task_1", arm(1.0), { ...arm(0.8), arm: "megasaver" });
+    const v = buildVerdict("task_1", [pair(1.0, 0.8)], transform);
     expect(v.costRatio).toBeCloseTo(1.25, 6);
   });
 
   it("a zero-cost megasaver arm yields Infinity rather than NaN", () => {
-    const v = buildVerdict("task_1", arm(1.0), { ...arm(0), arm: "megasaver" });
+    const v = buildVerdict("task_1", [pair(1.0, 0)], transform);
     expect(v.costRatio).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it("refuses to report anything when no pair was replayed", () => {
+    expect(() => buildVerdict("task_1", [], transform)).toThrow(/no pair was replayed/);
+  });
+
+  // The reported number must be accounted for by the arms shown beside it. A
+  // multi-pair run is only collapsible into one ratio by the order check that
+  // combined them; without it, quoting any single pair's ratio would be
+  // reporting a number the other pair's arms contradict.
+  it("refuses a multi-pair verdict that no order check combined", () => {
+    expect(() =>
+      buildVerdict("task_1", [pair(1.0, 0.8), pair(1.0, 0.8, "megasaver-first")], transform),
+    ).toThrow(/no order check combined them/);
+  });
+
+  it("reports every pair it was given alongside the combined ratio", () => {
+    const v = buildVerdict(
+      "task_1",
+      [pair(1.0, 0.8), pair(1.0, 0.5, "megasaver-first")],
+      transform,
+      {
+        order: {
+          ratioBaselineFirst: 1.25,
+          ratioMegasaverFirst: 2,
+          spread: 0.6,
+          tolerance: 0.75,
+          combinedRatio: 1.625,
+        },
+      },
+    );
+    expect(v.pairs.map((p) => p.order)).toEqual(["baseline-first", "megasaver-first"]);
+    expect(v.costRatio).toBeCloseTo(1.625, 6);
+    // The counters shown belong to the one transform both pairs replayed.
+    expect(v.transform).toEqual(transform);
   });
 });
 
 describe("pooledCostRatio", () => {
-  const verdict = (ratio: number) =>
-    buildVerdict("t", arm(ratio), { ...arm(1), arm: "megasaver" as const });
+  const verdict = (ratio: number) => buildVerdict("t", [pair(ratio, 1)], transform);
 
   it("is the geometric mean of the per-task ratios", () => {
     expect(pooledCostRatio([verdict(4), verdict(1)])).toBeCloseTo(2, 9);
@@ -53,7 +103,7 @@ describe("pooledCostRatio", () => {
   });
 
   it("refuses to pool when any task ratio is not finite and positive", () => {
-    const infinite = buildVerdict("t", arm(1), { ...arm(0), arm: "megasaver" as const });
+    const infinite = buildVerdict("t", [pair(1, 0)], transform);
     expect(pooledCostRatio([verdict(2), infinite])).toBeNaN();
   });
 });
@@ -132,70 +182,67 @@ describe("verdictStable", () => {
   });
 });
 
-// Fix 2: a megasaver arm that compressed nothing is not a measurement — it is a
-// second baseline. Reporting its costRatio ≈ 1.00 as "the saver has no effect"
-// is the exact failure mode this harness exists to avoid, so the refusal lives
-// in the only constructor of a verdict rather than in a caller that can skip it.
-describe("buildVerdict refuses an inert megasaver arm", () => {
-  const msArm = (applied: number) => ({
-    ...arm(1),
-    arm: "megasaver" as const,
-    saver: { applied, passthrough: 5, failed: 0 },
+// Fix 2: a transform that compressed nothing is not a measurement — it makes
+// the megasaver arm a second baseline. Reporting its costRatio ≈ 1.00 as "the
+// saver has no effect" is the exact failure mode this harness exists to avoid,
+// so the refusal lives in the only constructor of a verdict rather than in a
+// caller that can skip it.
+describe("buildVerdict refuses an inert transform", () => {
+  const applied = (n: number) => ({
+    saver: { applied: n, passthrough: 5, failed: 0 },
+    bytes: { original: 1000, transformed: 400 },
   });
 
-  it("throws when the megasaver arm applied the saver zero times", () => {
-    expect(() => buildVerdict("t", arm(1), msArm(0))).toThrow(/applied the saver 0 times/);
+  it("throws when the saver was applied zero times", () => {
+    expect(() => buildVerdict("t", [pair(1, 1)], applied(0))).toThrow(/applied the saver 0 times/);
   });
 
   it("emits a verdict once the saver was applied at least once", () => {
-    expect(buildVerdict("t", arm(1), msArm(1)).costRatio).toBe(1);
+    expect(buildVerdict("t", [pair(1, 1)], applied(1)).costRatio).toBe(1);
   });
 });
 
-// Fix B: `applied > 0` only proves the saver RETURNED something. An arm whose
-// transform gave back the same bytes (or more) measures nothing, and the guard
-// that used to sit here watched the baseline arm — the one with no moving parts.
-describe("checkArmIntegrity", () => {
+// Fix B: `applied > 0` only proves the saver RETURNED something. A transform
+// that gave back the same bytes (or more) measures nothing. It runs once for the
+// whole gate, so this one check necessarily covers every pair's megasaver arm.
+describe("checkTransformIntegrity", () => {
   const ms = (original: number, transformed: number, applied = 2) => ({
-    ...arm(1),
-    arm: "megasaver" as const,
     saver: { applied, passthrough: 0, failed: 0 },
     bytes: { original, transformed },
   });
 
   it("passes and reports the byte ratio when the transform shrank the payload", () => {
-    const r = checkArmIntegrity(ms(1000, 250));
+    const r = checkTransformIntegrity(ms(1000, 250));
     expect(r.ok).toBe(true);
     expect(r.byteRatio).toBeCloseTo(0.25, 6);
   });
 
   it("fails when the transformed bytes are not strictly less than the original", () => {
-    expect(checkArmIntegrity(ms(1000, 1000)).ok).toBe(false);
-    expect(checkArmIntegrity(ms(1000, 1200)).ok).toBe(false);
+    expect(checkTransformIntegrity(ms(1000, 1000)).ok).toBe(false);
+    expect(checkTransformIntegrity(ms(1000, 1200)).ok).toBe(false);
   });
 
   it("fails when the saver was never applied", () => {
-    expect(checkArmIntegrity(ms(1000, 250, 0)).ok).toBe(false);
+    expect(checkTransformIntegrity(ms(1000, 250, 0)).ok).toBe(false);
   });
 
   it("fails when there were no tool_result bytes to compress at all", () => {
-    expect(checkArmIntegrity(ms(0, 0)).ok).toBe(false);
+    expect(checkTransformIntegrity(ms(0, 0)).ok).toBe(false);
   });
 });
 
 describe("buildVerdict integrity refusal and verification metadata", () => {
   const inert = {
-    ...arm(0.8),
-    arm: "megasaver" as const,
+    saver: { applied: 1, passthrough: 0, failed: 0 },
     bytes: { original: 1000, transformed: 1000 },
   };
 
-  it("refuses a verdict when the megasaver arm produced no byte reduction", () => {
-    expect(() => buildVerdict("t", arm(1), inert)).toThrow(/no byte reduction/);
+  it("refuses a verdict when the transform produced no byte reduction", () => {
+    expect(() => buildVerdict("t", [pair(1, 0.8)], inert)).toThrow(/no byte reduction/);
   });
 
   it("carries what was verified so a smoke-tested number cannot read as calibrated", () => {
-    const v = buildVerdict("t", arm(1), { ...arm(0.8), arm: "megasaver" as const });
+    const v = buildVerdict("t", [pair(1, 0.8)], transform);
     expect(v.verified.integrity.ok).toBe(true);
     expect(v.verified.integrity.byteRatio).toBeCloseTo(0.4, 6);
     // Not run unless the caller ran them and passed the results in — an absent
@@ -205,12 +252,9 @@ describe("buildVerdict integrity refusal and verification metadata", () => {
   });
 
   it("records a drift smoke result and its tolerance when the caller ran one", () => {
-    const v = buildVerdict(
-      "t",
-      arm(1),
-      { ...arm(0.8), arm: "megasaver" as const },
-      { baselineDriftSmoke: { ok: true, tolerance: 0.25 } },
-    );
+    const v = buildVerdict("t", [pair(1, 0.8)], transform, {
+      baselineDriftSmoke: { ok: true, tolerance: 0.25 },
+    });
     expect(v.verified.baselineDriftSmoke).toEqual({ ok: true, tolerance: 0.25 });
   });
 });

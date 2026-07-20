@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { replayArm } from "../src/replay.js";
+import { prepareArms } from "../src/transform.js";
+import type { RecordedRequest } from "../src/types.js";
 
-const recorded = [
+const recorded: RecordedRequest[] = [
   {
     model: "m",
     messages: [
@@ -12,13 +14,21 @@ const recorded = [
   { model: "m", messages: [{ role: "user", content: "second" }] },
 ];
 
+const zeroUsage = {
+  input_tokens: 0,
+  cache_creation_input_tokens: 0,
+  cache_read_input_tokens: 0,
+  output_tokens: 0,
+};
+
+// replayArm is a PURE byte-replay of a precomputed sequence — it never consults
+// the saver. Everything the saver decides is `prepareArms`' business, below.
 describe("replayArm", () => {
-  it("sends every recorded request in order and sums usage", async () => {
+  it("sends every precomputed body in order and sums usage", async () => {
     const sent: unknown[] = [];
     const usage = await replayArm({
       arm: "baseline",
-      requests: recorded,
-      applySaver: () => null,
+      bodies: recorded,
       send: async (body) => {
         sent.push(body);
         return {
@@ -38,20 +48,15 @@ describe("replayArm", () => {
     expect(usage.normalizedCostUsd).toBeCloseTo(0.00315, 8);
   });
 
-  it("megasaver arm sends transformed tool_result content", async () => {
+  it("sends the bodies it was handed verbatim, applying no transform of its own", async () => {
     const sent: string[] = [];
+    const arms = prepareArms({ requests: recorded, applySaver: () => "SHORT" });
     await replayArm({
       arm: "megasaver",
-      requests: recorded,
-      applySaver: () => "SHORT",
+      bodies: arms.megasaver,
       send: async (body) => {
         sent.push(JSON.stringify(body));
-        return {
-          input_tokens: 0,
-          cache_creation_input_tokens: 0,
-          cache_read_input_tokens: 0,
-          output_tokens: 0,
-        };
+        return zeroUsage;
       },
     });
     expect(sent[0]).toContain("SHORT");
@@ -64,20 +69,14 @@ describe("replayArm", () => {
     const order: number[] = [];
     await replayArm({
       arm: "baseline",
-      requests: recorded,
-      applySaver: () => null,
-      send: async (body) => {
+      bodies: recorded,
+      send: async () => {
         inFlight++;
         maxInFlight = Math.max(maxInFlight, inFlight);
         order.push(order.length);
         await new Promise((resolve) => setTimeout(resolve, 0));
         inFlight--;
-        return {
-          input_tokens: 0,
-          cache_creation_input_tokens: 0,
-          cache_read_input_tokens: 0,
-          output_tokens: 0,
-        };
+        return zeroUsage;
       },
     });
     expect(maxInFlight).toBe(1);
@@ -96,9 +95,9 @@ describe("replayArm", () => {
         output_tokens: 0,
       };
     };
-    await expect(
-      replayArm({ arm: "baseline", requests: recorded, applySaver: () => null, send }),
-    ).rejects.toThrow(/network blew up/);
+    await expect(replayArm({ arm: "baseline", bodies: recorded, send })).rejects.toThrow(
+      /network blew up/,
+    );
     // must not have gone on to send further requests after the failure
     expect(calls).toBe(2);
   });
@@ -111,8 +110,8 @@ describe("replayArm", () => {
 // the prompt cache warm. Re-invoking the (stateful, non-deterministic) saver per
 // request would churn the megasaver arm's prefix and manufacture a ~20x
 // cache_creation penalty the product does not actually have.
-describe("replayArm saver memoization (once per tool_use_id)", () => {
-  const growing = [
+describe("prepareArms saver memoization (once per tool_use_id)", () => {
+  const growing: RecordedRequest[] = [
     {
       model: "m",
       messages: [
@@ -142,13 +141,6 @@ describe("replayArm saver memoization (once per tool_use_id)", () => {
     },
   ];
 
-  const zeroUsage = {
-    input_tokens: 0,
-    cache_creation_input_tokens: 0,
-    cache_read_input_tokens: 0,
-    output_tokens: 0,
-  };
-
   function toolResultContentFor(body: unknown, id: string): unknown {
     const msgs = (body as { messages: unknown[] }).messages;
     for (const m of msgs) {
@@ -162,52 +154,49 @@ describe("replayArm saver memoization (once per tool_use_id)", () => {
     return undefined;
   }
 
-  it("invokes the saver once per distinct tool_use_id and reuses its text verbatim", async () => {
+  it("invokes the saver once per distinct tool_use_id and reuses its text verbatim", () => {
     // Counter-based on purpose: mirrors the real saver's non-determinism (a
     // randomUUID chunk-set id is embedded in the returned text), so a regression
     // to per-request application fails loudly instead of coincidentally matching.
     let calls = 0;
-    const sent: unknown[] = [];
-    await replayArm({
-      arm: "megasaver",
+    const arms = prepareArms({
       requests: growing,
       applySaver: (raw) => {
         calls++;
         return `COMPRESSED(${raw})#${calls}`;
       },
-      send: async (body) => {
-        sent.push(body);
-        return zeroUsage;
-      },
     });
 
     expect(calls).toBe(3);
-    const a0 = toolResultContentFor(sent[0], "a");
+    const bodies = arms.megasaver;
+    const a0 = toolResultContentFor(bodies[0], "a");
     expect(a0).toBe("COMPRESSED(RAW-A)#1");
-    expect(toolResultContentFor(sent[1], "a")).toBe(a0);
-    expect(toolResultContentFor(sent[2], "a")).toBe(a0);
-    const b1 = toolResultContentFor(sent[1], "b");
-    expect(toolResultContentFor(sent[2], "b")).toBe(b1);
+    expect(toolResultContentFor(bodies[1], "a")).toBe(a0);
+    expect(toolResultContentFor(bodies[2], "a")).toBe(a0);
+    const b1 = toolResultContentFor(bodies[1], "b");
+    expect(toolResultContentFor(bodies[2], "b")).toBe(b1);
   });
 
-  it("reuses a memoized passthrough (null) without re-invoking the saver", async () => {
+  it("reuses a memoized passthrough (null) without re-invoking the saver", () => {
     let calls = 0;
-    await replayArm({
-      arm: "megasaver",
+    prepareArms({
       requests: growing,
       applySaver: () => {
         calls++;
         return null;
       },
-      send: async () => zeroUsage,
     });
     expect(calls).toBe(3);
   });
 
-  it("passes the real tool identity to the saver, resolved from the tool_use block", async () => {
+  it("leaves the baseline sequence a byte-for-byte copy of the recording", () => {
+    const arms = prepareArms({ requests: growing, applySaver: () => "SHORT" });
+    expect(arms.baseline).toEqual(growing);
+  });
+
+  it("passes the real tool identity to the saver, resolved from the tool_use block", () => {
     const seen: { toolUseId: string; toolName: string; toolInput: unknown }[] = [];
-    await replayArm({
-      arm: "megasaver",
+    prepareArms({
       requests: [
         {
           model: "m",
@@ -229,7 +218,6 @@ describe("replayArm saver memoization (once per tool_use_id)", () => {
         seen.push(ctx);
         return null;
       },
-      send: async () => zeroUsage,
     });
     expect(seen).toEqual([
       { toolUseId: "t1", toolName: "Read", toolInput: { file_path: "/repo/a.ts" } },
@@ -241,9 +229,10 @@ describe("replayArm saver memoization (once per tool_use_id)", () => {
 // decision. A missing binary, a crashed hook or a maxBuffer overrun would turn
 // the megasaver arm into a second baseline and report costRatio ≈ 1.00 as a
 // clean "the saver has no effect" measurement. Failures must be counted and
-// must abort.
-describe("replayArm saver outcome accounting", () => {
-  const one = [
+// must abort — before a single request is sent, now that the transform runs up
+// front.
+describe("prepareArms saver outcome accounting", () => {
+  const one: RecordedRequest[] = [
     {
       model: "m",
       messages: [
@@ -254,79 +243,48 @@ describe("replayArm saver outcome accounting", () => {
       ],
     },
   ];
-  const zeroUsage = {
-    input_tokens: 0,
-    cache_creation_input_tokens: 0,
-    cache_read_input_tokens: 0,
-    output_tokens: 0,
-  };
 
-  it("aborts loudly when the saver fails instead of silently passing through", async () => {
-    let sends = 0;
-    await expect(
-      replayArm({
-        arm: "megasaver",
+  it("aborts loudly when the saver fails instead of silently passing through", () => {
+    expect(() =>
+      prepareArms({
         requests: one,
         applySaver: () => {
           throw new Error("spawn ENOENT");
         },
-        send: async () => {
-          sends++;
-          return zeroUsage;
-        },
       }),
-    ).rejects.toThrow(/spawn ENOENT/);
-    expect(sends).toBe(0);
+    ).toThrow(/spawn ENOENT/);
   });
 
-  it("counts applied vs passthrough decisions per arm", async () => {
-    const usage = await replayArm({
-      arm: "megasaver",
+  it("counts applied vs passthrough decisions", () => {
+    const arms = prepareArms({
       requests: one,
       applySaver: (raw) => (raw === "RAW-A" ? "SHORT" : null),
-      send: async () => zeroUsage,
     });
-    expect(usage.saver).toEqual({ applied: 1, passthrough: 1, failed: 0 });
+    expect(arms.saver).toEqual({ applied: 1, passthrough: 1, failed: 0 });
   });
 
-  it("surfaces an entirely inert megasaver arm as applied === 0", async () => {
-    const usage = await replayArm({
-      arm: "megasaver",
-      requests: one,
-      applySaver: () => null,
-      send: async () => zeroUsage,
-    });
-    expect(usage.saver.applied).toBe(0);
-    expect(usage.saver.passthrough).toBe(2);
+  it("surfaces an entirely inert transform as applied === 0", () => {
+    const arms = prepareArms({ requests: one, applySaver: () => null });
+    expect(arms.saver.applied).toBe(0);
+    expect(arms.saver.passthrough).toBe(2);
   });
 
   // Fix B: the integrity guard is only as good as the bytes fed to it, and they
   // are accumulated once per distinct tool call — not once per request, which a
   // resent conversation history would inflate.
-  it("accumulates original vs transformed tool_result bytes per tool call", async () => {
-    const usage = await replayArm({
-      arm: "megasaver",
-      requests: one,
-      applySaver: () => "S",
-      send: async () => zeroUsage,
-    });
-    expect(usage.bytes).toEqual({ original: 10, transformed: 2 }); // "RAW-A" + "RAW-B" → "S" + "S"
+  it("accumulates original vs transformed tool_result bytes per tool call", () => {
+    const arms = prepareArms({ requests: one, applySaver: () => "S" });
+    expect(arms.bytes).toEqual({ original: 10, transformed: 2 }); // "RAW-A" + "RAW-B" → "S" + "S"
   });
 
-  it("counts a passthrough as its own bytes unchanged, not as a saving", async () => {
-    const usage = await replayArm({
-      arm: "megasaver",
-      requests: one,
-      applySaver: () => null,
-      send: async () => zeroUsage,
-    });
-    expect(usage.bytes).toEqual({ original: 10, transformed: 10 });
+  it("counts a passthrough as its own bytes unchanged, not as a saving", () => {
+    const arms = prepareArms({ requests: one, applySaver: () => null });
+    expect(arms.bytes).toEqual({ original: 10, transformed: 10 });
   });
 
-  it("aborts when a tool_result has no matching tool_use block rather than guessing", async () => {
-    await expect(
-      replayArm({
-        arm: "megasaver",
+  it("aborts when a tool_result has no matching tool_use block rather than guessing", () => {
+    expect(() =>
+      prepareArms({
         requests: [
           {
             model: "m",
@@ -339,9 +297,8 @@ describe("replayArm saver outcome accounting", () => {
           },
         ],
         applySaver: () => "SHORT",
-        send: async () => zeroUsage,
       }),
-    ).rejects.toThrow(/orphan/);
+    ).toThrow(/orphan/);
   });
 });
 
@@ -353,8 +310,7 @@ describe("replayArm per-request usage", () => {
     let n = 0;
     const usage = await replayArm({
       arm: "baseline",
-      requests: recorded,
-      applySaver: () => null,
+      bodies: recorded,
       send: async () => {
         n++;
         return {

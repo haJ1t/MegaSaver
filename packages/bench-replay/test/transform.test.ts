@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { replayArm } from "../src/replay.js";
-import { assertUncompressedRecording, transformRequest } from "../src/transform.js";
+import { assertUncompressedRecording, prepareArms, transformRequest } from "../src/transform.js";
 
 const body = {
   model: "claude-opus-4-8",
@@ -181,12 +180,16 @@ describe("assertUncompressedRecording", () => {
   });
 });
 
-describe("replayArm refuses a contaminated recording", () => {
-  it("aborts before sending anything when the recording was captured with the saver on", async () => {
-    let sends = 0;
-    await expect(
-      replayArm({
-        arm: "baseline",
+// The check lives in prepareArms, the last layer that still sees the RAW
+// recording: downstream the megasaver bodies legitimately carry the saver's
+// footer, so the same check there could not tell contamination from work.
+// prepareArms runs before a single request is sent, so a contaminated recording
+// still cannot reach the API by any path.
+describe("prepareArms refuses a contaminated recording", () => {
+  it("aborts when the recording was captured with the saver on", () => {
+    let saverCalls = 0;
+    expect(() =>
+      prepareArms({
         requests: [
           {
             model: "m",
@@ -208,13 +211,12 @@ describe("replayArm refuses a contaminated recording", () => {
             ],
           },
         ],
-        applySaver: () => null,
-        send: async () => {
-          sends += 1;
-          return {};
+        applySaver: () => {
+          saverCalls += 1;
+          return null;
         },
       }),
-    ).rejects.toThrow(/already compressed/i);
-    expect(sends).toBe(0);
+    ).toThrow(/already compressed/i);
+    expect(saverCalls).toBe(0);
   });
 });

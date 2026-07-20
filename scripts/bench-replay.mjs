@@ -343,16 +343,19 @@ async function replay(values) {
 
     // The drift check needs the replayed cost, which only exists after the
     // replay, so the verdict is rebuilt through its one constructor with the
-    // order check carried over rather than re-derived.
+    // order check carried over rather than re-derived. The drift reference is a
+    // single end-to-end run, so it is compared against the FIRST pair's baseline
+    // arm — and printVerdict says which pair that is.
     const realBaselineUsd = referenceCostUsd(taskDir);
+    const driftBaselineUsd = base.pairs[0].baseline.normalizedCostUsd;
     const verdict =
       realBaselineUsd === null
         ? base
-        : buildVerdict(task, base.baseline, base.megasaver, {
+        : buildVerdict(task, base.pairs, base.transform, {
             ...(base.verified.order ? { order: base.verified.order } : {}),
             baselineDriftSmoke: {
               ok: baselineDriftSmokeOk({
-                replayedBaselineUsd: base.baseline.normalizedCostUsd,
+                replayedBaselineUsd: driftBaselineUsd,
                 realBaselineUsd,
                 tolerance: driftTolerance,
               }),
@@ -374,11 +377,7 @@ const int = (n) => n.toLocaleString("en-US");
 function printArm(arm) {
   console.log(
     `  ${arm.arm.padEnd(9)} input=${int(arm.inputTokens)} cache_creation=${int(arm.cacheCreationTokens)} ` +
-      `cache_read=${int(arm.cacheReadTokens)} output=${int(arm.outputTokens)} cost=${usd(arm.normalizedCostUsd)}`,
-  );
-  console.log(
-    `             saver applied=${arm.saver.applied} passthrough=${arm.saver.passthrough} failed=${arm.saver.failed} ` +
-      `tool_result bytes ${int(arm.bytes.original)}->${int(arm.bytes.transformed)} ` +
+      `cache_read=${int(arm.cacheReadTokens)} output=${int(arm.outputTokens)} cost=${usd(arm.normalizedCostUsd)} ` +
       `wall=${((arm.finishedAtMs - arm.startedAtMs) / 1000).toFixed(1)}s`,
   );
   for (const [i, r] of arm.perRequest.entries()) {
@@ -391,8 +390,17 @@ function printArm(arm) {
 
 function printVerdict(verdict, realBaselineUsd) {
   console.log(`\n--- ${verdict.task} ---`);
-  printArm(verdict.baseline);
-  printArm(verdict.megasaver);
+  // Every pair, not just the first: the ratio below is the mean of all of them,
+  // and a reader must be able to see the arms it came from.
+  const { saver, bytes } = verdict.transform;
+  console.log(
+    `  saver applied=${saver.applied} passthrough=${saver.passthrough} failed=${saver.failed} tool_result bytes ${int(bytes.original)}->${int(bytes.transformed)} (one transform, replayed byte-identically by every pair)`,
+  );
+  for (const pair of verdict.pairs) {
+    console.log(`  [${pair.order}] ratio ${pair.costRatio.toFixed(4)}x`);
+    printArm(pair.baseline);
+    printArm(pair.megasaver);
+  }
   console.log(`  cost ratio (baseline / megasaver): ${verdict.costRatio.toFixed(4)}x`);
 
   const { integrity, order, baselineDriftSmoke } = verdict.verified;
@@ -415,9 +423,12 @@ function printVerdict(verdict, realBaselineUsd) {
     console.log("  drift check: NOT RUN (no end-to-end.json reference) — UNVERIFIED, not passed");
   } else {
     console.log(
-      `  drift check: replayed baseline ${usd(verdict.baseline.normalizedCostUsd)} vs same-conversation ` +
+      `  drift check: replayed baseline ${usd(verdict.pairs[0].baseline.normalizedCostUsd)} vs same-conversation ` +
         `end-to-end reference ${usd(realBaselineUsd)} -> ok=${baselineDriftSmoke.ok} ` +
         `(tolerance ${(baselineDriftSmoke.tolerance * 100).toFixed(0)}%)`,
+    );
+    console.log(
+      `    SCOPE: the replayed figure is the ${verdict.pairs[0].order} pair's baseline arm alone, not the ratio above.`,
     );
     console.log(
       "    LIMITS: the reference is the SAME conversation, so this catches a stale recording, a broken",

@@ -3,7 +3,9 @@ import type {
   ArmUsage,
   DriftSmokeResult,
   OrderCheck,
+  PairResult,
   ReplayVerdict,
+  TransformSummary,
 } from "./types.js";
 
 export function costRatioOf(baseline: ArmUsage, megasaver: ArmUsage): number {
@@ -12,19 +14,20 @@ export function costRatioOf(baseline: ArmUsage, megasaver: ArmUsage): number {
     : baseline.normalizedCostUsd / megasaver.normalizedCostUsd;
 }
 
-// The guard that watches the arm which can actually fail. Every moving part of
-// this harness lives in the megasaver arm; the baseline arm is a byte-for-byte
-// replay with no transform applied. `applied > 0` only proves the hook returned
-// SOMETHING — an arm that handed back the same bytes is as meaningless as an
-// inert one, and its costRatio ≈ 1.00 reads as a healthy "no effect" result.
-export function checkArmIntegrity(megasaver: ArmUsage): ArmIntegrity {
-  const { original, transformed } = megasaver.bytes;
+// The guard that watches the only part of this harness that can fail: the
+// transform. It runs once for the whole gate, so this single check covers every
+// pair — no arm run can quietly measure a different one. `applied > 0` only
+// proves the hook returned SOMETHING; a transform that handed back the same
+// bytes is as meaningless as an inert one, and its costRatio ≈ 1.00 reads as a
+// healthy "no effect" result.
+export function checkTransformIntegrity(transform: TransformSummary): ArmIntegrity {
+  const { original, transformed } = transform.bytes;
   return {
-    applied: megasaver.saver.applied,
+    applied: transform.saver.applied,
     originalBytes: original,
     transformedBytes: transformed,
     byteRatio: original === 0 ? Number.NaN : transformed / original,
-    ok: megasaver.saver.applied > 0 && original > 0 && transformed < original,
+    ok: transform.saver.applied > 0 && original > 0 && transformed < original,
   };
 }
 
@@ -58,19 +61,34 @@ export function baselineDriftSmokeOk(input: {
 
 // The ONLY constructor of a ReplayVerdict, so the refusals below cannot be
 // skipped by a caller. Checks the caller did not run are recorded as null —
-// never as passed.
+// never as passed. `transform` is the ONE saver pass both pairs replayed, so
+// the integrity refusal below necessarily covers whatever the reported ratio
+// was derived from.
 export function buildVerdict(
   task: string,
-  baseline: ArmUsage,
-  megasaver: ArmUsage,
+  pairs: readonly PairResult[],
+  transform: TransformSummary,
   checks?: { order?: OrderCheck; baselineDriftSmoke?: DriftSmokeResult },
 ): ReplayVerdict {
-  if (megasaver.saver.applied === 0) {
+  const first = pairs[0];
+  if (first === undefined) {
+    throw new Error(`buildVerdict(${task}): no pair was replayed, so there is no ratio to report`);
+  }
+  // A multi-pair run's number is the order check's combination of them. Without
+  // that check there is no defensible way to collapse several pairs into one
+  // ratio, and quoting any single pair's would be reporting a number the shown
+  // arms do not account for.
+  if (checks?.order === undefined && pairs.length > 1) {
     throw new Error(
-      `buildVerdict(${task}): the megasaver arm applied the saver 0 times (passthrough=${megasaver.saver.passthrough}, failed=${megasaver.saver.failed}) — it is identical to baseline, so there is no verdict to report`,
+      `buildVerdict(${task}): ${pairs.length} pairs were replayed but no order check combined them — there is no single ratio these arms justify`,
     );
   }
-  const integrity = checkArmIntegrity(megasaver);
+  if (transform.saver.applied === 0) {
+    throw new Error(
+      `buildVerdict(${task}): the megasaver arm applied the saver 0 times (passthrough=${transform.saver.passthrough}, failed=${transform.saver.failed}) — it is identical to baseline, so there is no verdict to report`,
+    );
+  }
+  const integrity = checkTransformIntegrity(transform);
   if (!integrity.ok) {
     throw new Error(
       `buildVerdict(${task}): the megasaver arm applied the saver ${integrity.applied} times but produced no byte reduction (${integrity.originalBytes}→${integrity.transformedBytes} B) — nothing was measured`,
@@ -78,9 +96,9 @@ export function buildVerdict(
   }
   return {
     task,
-    baseline,
-    megasaver,
-    costRatio: checks?.order?.combinedRatio ?? costRatioOf(baseline, megasaver),
+    pairs,
+    transform: { saver: transform.saver, bytes: transform.bytes },
+    costRatio: checks?.order?.combinedRatio ?? first.costRatio,
     verified: {
       integrity,
       order: checks?.order ?? null,
@@ -91,9 +109,9 @@ export function buildVerdict(
 
 // Pools the per-task ratios into one headline number. A geometric mean of each
 // verdict's costRatio rather than a cost-weighted sum of arm dollars: costRatio
-// is already the mean of BOTH replay orders, while `baseline`/`megasaver` carry
-// the baseline-first pair alone, so summing those dollars would quietly
-// reintroduce the cache-warming bias that running both orders exists to remove.
+// is already the mean of BOTH replay orders, while any single pair's dollars
+// carry that pair's cache-warming asymmetry, so summing them would quietly
+// reintroduce the bias that running both orders exists to remove.
 // Unweighted by design — an expensive task counts the same as a cheap one — and
 // fails closed to NaN rather than pooling a ratio it cannot stand behind.
 export function pooledCostRatio(verdicts: readonly ReplayVerdict[]): number {
