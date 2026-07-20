@@ -113,9 +113,13 @@ canonical empty catalog. Either V1 pathname is explicitly unsupported and is
 left byte-identical. Process-level regressions cover idle and held lock-path
 replacement with actual API writers, V1 admission after lock acquisition,
 catalog symlinks, descriptor-close failure, both named crash cuts, and
-concurrent appenders. V1 absence is fenced again at acquisition, each mutation
-and publication callback, and release. Independent Task 3 re-review remains
-pending.
+concurrent appenders. V1 absence is fenced immediately after the OS flock and
+before bootstrap token publication, then again at each mutation/publication
+callback and release. The deterministic bootstrap regression requires the V2
+lock to remain empty and the control/catalog paths absent when V1 arrives in
+that interval. Catalog coverage is split into focused files, and every Task 3
+source, test, and fixture remains below 300 lines. Independent Task 3 re-review
+remains pending.
 (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
 `.superpowers/sdd/task-3-report.md`)

@@ -6,6 +6,7 @@ type ChildInput = {
     | "append"
     | "append-after-barrier"
     | "append-observe-flock"
+    | "append-pause-after-flock"
     | "append-pause-before-publish"
     | "append-with-anchor-close-failure"
     | "replace-lock-and-append";
@@ -18,7 +19,11 @@ const encoded = process.argv[2];
 if (encoded === undefined) throw new Error("Missing catalog child input.");
 const input = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as ChildInput;
 
-if (input.mode === "append-with-anchor-close-failure" || input.mode === "append-observe-flock") {
+if (
+  input.mode === "append-with-anchor-close-failure" ||
+  input.mode === "append-observe-flock" ||
+  input.mode === "append-pause-after-flock"
+) {
   const require = createRequire(import.meta.url);
   const fsExt = require("fs-ext") as { flockSync(descriptor: number, operation: string): void };
   const actualFlock = fsExt.flockSync;
@@ -31,6 +36,13 @@ if (input.mode === "append-with-anchor-close-failure" || input.mode === "append-
       process.stdout.write("flocking\n");
     }
     actualFlock(descriptor, operation);
+    if (input.mode === "append-pause-after-flock" && operation.startsWith("ex") && !armed) {
+      if (input.gatePath === undefined) throw new Error("Missing post-flock gate.");
+      armed = true;
+      process.stdout.write("flocked\n");
+      const wait = new Int32Array(new SharedArrayBuffer(4));
+      while (!fs.existsSync(input.gatePath)) Atomics.wait(wait, 0, 0, 10);
+    }
     if (input.mode === "append-with-anchor-close-failure" && operation.startsWith("ex")) {
       armed = true;
     }

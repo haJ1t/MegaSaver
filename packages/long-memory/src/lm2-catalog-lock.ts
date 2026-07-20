@@ -205,6 +205,7 @@ export function acquireCatalogLock(storage: CatalogStorage): CatalogLockGuard {
     if (beforeControl !== null) assertBinding(storage, file, beforeControl);
     flockSync(file.descriptor, beforeCatalog === null ? "exnb" : "ex");
     acquired = true;
+    assertNoV1CatalogState(storage);
     const lockedControl = readCatalogControl(storage);
     const lockedCatalog = readStoredCatalog(storage);
     let control: Lm2CatalogControl;
