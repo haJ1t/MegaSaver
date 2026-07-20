@@ -156,8 +156,9 @@ kind-specific fields, a non-empty `redactionVersion`, and its SHA-256
 `canonicalCaptureDigest`. It has no `id`, `recordedAt`, authorization, binding
 digest, or untyped fields. A durable record preserves those capture fields and
 adds a deterministic lowercase UUID `id`, SHA-256 `sourceDigest`, SHA-256
-`evidenceBindingDigest`, `recordedAt`, same-length ordered `evidenceDigests`,
-and immutable transaction status `recorded`. `text` is at most 50,000 UTF-16
+`evidenceBindingDigest`, canonical UTC `recordedAt` rendered exactly by
+`Date.prototype.toISOString()`, same-length ordered `evidenceDigests`, and
+immutable transaction status `recorded`. `text` is at most 50,000 UTF-16
 code units; there are at most 64 lowercase UUID evidence ids.
 
 A `state_snapshot` additionally contains a 1–512 UTF-16-code-unit `stateKey`,
@@ -204,8 +205,42 @@ remaining eligible structural leaves for one `stateKey`, the winner is greatest
 resolves branches and timestamp ties deterministically. If a correction chain
 has no eligible leaf, normal state recall returns no state and records
 `omitted_correction_chain_unavailable`; it never falls back to a superseded
-predecessor. LM1 persists no mutable current-state index; a rebuildable index is
-later scope.
+predecessor. LM1 persists no mutable current-state index. Before any semantic
+sidecar, a snapshot atomically reserves its one durable `recordedAt` under its
+source digest. Every racing retry adopts that reservation, so its ordered
+state-key pointer can never disagree with the eventual raw record. LM1 then
+publishes immutable, append-only correctness sidecars before the raw snapshot:
+a source-digest coverage manifest, a correction-closure marker, and a state-key
+snapshot pointer. The coverage manifest records the canonical snapshot ID for
+every pointer-eligible state snapshot. State-key pointers
+are ordered by the current-state comparator and identify the canonical snapshot
+path, state key, observation time, reserved recording time, and supersession
+edge. A lexical hit on any in-window snapshot therefore expands through the
+pointer index to every relevant current-state candidate, including an
+independent or correcting snapshot outside the 10,000-record lexical scan. A
+crash after the reservation but before a semantic sidecar leaves no new raw
+state; a crash after a semantic sidecar but before its raw record makes the
+state-key group incomplete and therefore omitted. Neither cut can resurface
+stale state. Semantic sidecars are rebuildable from immutable snapshots and are
+not mutable current state. After any applicable snapshot reservation and before
+the raw file, LM1 also publishes one append-only `record-ids/<id>.json` locator
+for every record. The locator carries the workspace key, deterministic ID, kind,
+and source digest. Capture endpoint validation reads and verifies that exact
+locator and then its exact raw path; it never scans or materializes an
+unbounded record directory. A locator whose raw record is absent or disagrees
+fails closed. A raw snapshot with no state-key pointer, or an
+in-window raw snapshot whose pointer coverage is incomplete, is incomplete for
+recall and is omitted rather than being treated as a safe legacy fallback.
+Recall compares every bounded state-key pointer set with its independently
+persisted coverage-manifest set, so a missing pointer is detected even when its
+raw snapshot lies outside the lexical scan window.
+Raw-record, pointer, coverage, and closure-marker directories are consumed with
+a streaming iterator that stops at the configured budget plus one entry. An
+oversized pointer, coverage, or closure set is incomplete and its state group
+is omitted; no unbounded metadata materialization is permitted during recall.
+Closure markers are checked for every pointer-expanded snapshot, not only the
+lexical corpus: every declared successor must have a valid pointer and raw
+snapshot in that state-key group, otherwise the whole group is omitted.
 
 ## Evidence-first coordinator protocol
 
@@ -261,19 +296,44 @@ Observation data lives under a validated shared workspace-key directory:
 <storeRoot>/long-memory/v1/<workspaceKey>/
   snapshots/<sourceDigest>.json
   transitions/<sourceDigest>.json
+  record-ids/<id>.json
+  reservations/snapshots/<sourceDigest>.json
+  closures/<predecessorSnapshotId>/<successorSnapshotId>.json
+  state-index/<sha256(stateKey)>/coverage/<sourceDigest>.json
+  state-index/<sha256(stateKey)>/<current-order>-<id>-<sourceDigest>.json
 ```
 
 LM1 deliberately uses no lease lock: the available shared lock can be stolen
 from a paused live owner, so it cannot safely protect a durable write. Immutable
 content-addressed paths make a lock unnecessary. Different records have
 different paths; identical records use atomic no-clobber temp-file publish
-(link/create semantics, followed by directory fsync). An existing target is
-parsed and compared with the canonical identity, payload, and binding fields
-before returning idempotent success. `recordedAt` is deliberately excluded from
-that duplicate comparison: the first persisted record wins and is returned
-unchanged on retry. A digest/path mismatch or parse error is `store_corrupt` and
-is never overwritten. Concurrent equal capture therefore converges without
-writer-lock stealing.
+(link/create semantics, followed by directory fsync). A snapshot first reserves
+`recordedAt` at its deterministic source-digest path; it then publishes its
+exact record-ID locator, coverage manifest, closure marker when correcting,
+immutable state-key pointer, and only then the raw snapshot. Every duplicate or concurrent writer
+adopts the first reservation before it can write either semantic sidecar, so
+the pointer and raw record have identical recording times. An existing target
+is parsed and compared with the canonical identity, payload, binding fields,
+and, for snapshots, its durable reservation before returning idempotent success.
+`recordedAt` is deliberately excluded from source identity but the first durable
+reservation wins and is returned unchanged on retry. A digest/path mismatch or
+parse error is `store_corrupt` and is never overwritten. Concurrent equal
+capture therefore converges without writer-lock stealing.
+
+The filesystem trust boundary excludes world-writable alias endpoints. On
+macOS, `/tmp` → `/private/tmp` and `/var` → `/private/var` are accepted only
+as verified root-owned ancestors of a separately trusted store root; neither
+alias may itself be the configured store root. Every persistence-path setup
+fsyncs its full existing directory chain so a concurrent writer can make an
+earlier creator's directory entries durable before publishing its record.
+
+The raw `createFileLm1Store` factory is an internal persistence primitive and
+is deliberately not exported from the package root: accepting a self-hashed
+record there would bypass evidence authorization, eligibility, and reference
+validation. The root-level `createLm1Runtime` constructs that store privately
+and exposes only the evidence-gated capture and recall services. Structural
+test adapters can still implement the four-method `FileLm1Store` port; missing
+state-index capability makes state recall fail closed.
 
 `storeRoot` is a trusted, non-adversarial local directory selected by Mega
 Saver, with filesystem access controls excluding hostile concurrent writers.
@@ -301,13 +361,22 @@ Evidence Ledger; disabling LM1 stops capture/recall and leaves history inert.
 
 ## Retrieval and receipts
 
-LM1 uses deterministic lexical ranking and the LM0 1–100,000 hard token-budget
-contract, but its durable records and contracts remain separate from LM0. It
-loads at most 10,000 valid immutable records per recall, enumerated by ascending
-kind then ascending source digest. It ranks at most 1,000 lexical candidates by
-descending score, then descending `observedAt`, then ascending UUID, and
-resolves at most 512 distinct evidence ids. A candidate that would exceed the
-evidence-lookup cap is omitted as `omitted_evidence_limit`.
+LM1 uses deterministic ranking within a bounded lexical corpus and the LM0
+1–100,000 hard token-budget contract, but its durable records and contracts
+remain separate from LM0. It streams each kind directory and stops before a
+10,001st JSON entry; it sorts only that bounded workset by kind and source
+digest. It ranks at most 1,000 lexical record candidates by descending score,
+then descending `observedAt`, then
+ascending UUID. A lexical hit on any state snapshot admits that snapshot's
+state-key group and consults append-only state-index pointers in current order;
+direct canonical reads of pointed snapshots are separately bounded to 10,000
+records across the recall. This prevents a matching historical value from
+causing a newer, lower-score, independent, or out-of-window value to be skipped.
+If pointer expansion is incomplete, or the evidence cap is reached before a
+winner is established, the entire group is omitted; it never falls back to an
+older leaf. Transitions remain individual lexical candidates. LM1 resolves at
+most 512 distinct evidence ids. A candidate that would exceed the evidence-
+lookup cap is omitted as `omitted_evidence_limit`.
 
 A record participates only when all cited evidence is eligible. The public
 receipt is exactly `{ selected: { id, score, tokenCount }[], omitted:
@@ -344,12 +413,15 @@ The implementation must prove:
    never reactivates its superseded predecessor;
 5. exact-digest retries, concurrent duplicate capture, restart durability, and
    simulated pre-publish failure converge without a parseable partial record;
-   corrupt digest/path records and static symlink paths fail closed;
+   record-ID endpoint lookup remains exact and bounded even when a large raw
+   directory contains a corrupt unrelated file; corrupt digest/path/locator
+   records and static symlink paths fail closed;
 6. an evidence-durable / authorization-and-LM-absent crash retry loads the
    original evidence before materializing chunks, re-verifies its stored refs
    against raw/returned digests, and adopts one original LM1 record;
-7. bounded recall has exact scan, candidate, evidence-lookup, score, tie-break,
-   budget, and receipt behavior and only returns eligible facts;
+7. bounded recall has exact scan, closure-sidecar, candidate, evidence-lookup,
+   score, tie-break, budget, and receipt behavior and only returns eligible,
+   current facts;
 8. a public-data evidence/binding port exercises the identical capture API
    without opening a Mega Saver user store; and
 9. package dependencies prove LM1 has no Core, connector, benchmark, or LM0
