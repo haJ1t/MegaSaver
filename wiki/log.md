@@ -3880,3 +3880,19 @@ whole-branch architecture/adversarial review remains required, and no official
 LongMemEval-V2 score is claimed. (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
 `docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md`)
+
+## [2026-07-20 16:55 +03] implementation | LM2 V2 candidate catalog hardening
+
+Completion Task 3 split the candidate catalog into schema/cursor, anchored
+storage, fixed-inode/token lock, and orchestration modules. V2 uses only its
+catalog/control/lock names, leaves either V1 pathname untouched with
+`catalog_schema_unsupported`, binds the immutable control record to the lock's
+device/inode/token, and recovers only orphan-lock and control-before-empty
+crash cuts. Process-level TDD covers symlinked catalog paths, idle/held lock
+replacement, an injected anchor-close failure, and two concurrent appenders.
+The package passed 27/27 files and 288/288 tests with zero type errors; package
+typecheck and root lint also passed. Fresh independent implementation review
+remains pending; no official LongMemEval-V2 score is claimed. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-runtime-security-completion-plan.md`,
+`.superpowers/sdd/task-3-report.md`)
