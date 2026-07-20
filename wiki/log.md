@@ -3899,3 +3899,35 @@ mitigated by a printed per-model histogram, not by repricing.
 Stage A (`feat/net-positive-stage-a`) remains parked and UNGATED. Running the
 gate needs an `ANTHROPIC_API_KEY` (Claude Code's OAuth is not usable by a
 separate HTTP client).
+
+
+## [2026-07-20] fix | jwt detector ReDoS fixed (CRITICAL)
+
+One-line fix on `packages/policy/src/redaction-patterns.ts`: a leading
+`(?<![A-Za-z0-9_-])` on the LOCKED `jwt` detector. 313 KiB of
+`'eyJaA0'.repeat(n)` goes from 8,374 ms to 0.45 ms — quadratic to linear,
+~17,400x. Root cause is start-position count, not run length: 39 KiB with 6,800
+`eyJ` starts costs 204 ms, the same 39 KiB with one start costs 0.0 ms.
+
+**Supersedes the severity claim in the entry above.** That entry filed this as
+"reachable from ordinary base64-heavy logs". Re-measured, that is wrong: a
+24.6 KiB unbroken base64 run costs 0.00 ms, because random base64url holds `eyJ`
+about once per 262,144 positions. Text full of real JWTs is fast too — the dots
+satisfy the mandatory separator immediately. The correct classification is
+**adversarially reachable, not ordinarily reachable**: it needs a crafted
+payload with many `eyJ` occurrences and no dots. It stays CRITICAL-tier because
+the redactor sits on untrusted agent output, tool results, and Hot Handoff
+packets, where a crafted payload stalls every sink.
+
+The earlier note's stated root cause ("the separator is not excluded from the
+character class") was also wrong — `[A-Za-z0-9_-]` does not match `.`.
+
+Accepted trade-off (spec §5): a JWT glued to a base64url character, including
+`-` and `_`, no longer redacts; `session-<jwt>` and `id_token_<jwt>` stay in
+cleartext, asserted explicitly so nobody narrows the class back into the
+quadratic. BB3 §5a lock table amended with a footnote in the same commit. The
+unexecuted redaction-baseline extension plan was retargeted: snapshot literal,
+single-exception framing, and the ReDoS gate's jwt exclusion (comment and
+committed commit-message body) all updated, and `jwt` brought into that gate's
+scope. Sources:
+[[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]], [[entities/policy]].
