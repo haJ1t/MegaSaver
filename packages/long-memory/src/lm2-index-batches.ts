@@ -4,15 +4,16 @@ import {
   isOrderedCanonicalProjectionSubset,
 } from "./lm2-index-admission.js";
 import { Lm2ApprovalTimeoutError, type Lm2ReadyIndexOperation } from "./lm2-lock.js";
-import type {
-  EmbeddingPort,
-  Lm2IndexReceipt,
-  ModelDescriptor,
-  RemoteEmbeddingApprovalPort,
-} from "./lm2-model.js";
+import type { EmbeddingPort, ModelDescriptor, RemoteEmbeddingApprovalPort } from "./lm2-model.js";
 import { snapshotLm2PortValue } from "./lm2-port-safety.js";
 import { approvalBeforeAbort } from "./lm2-secure-publish.js";
 import { canonicalEmbeddingInput } from "./lm2-vector-format.js";
+
+export {
+  expiredIndexReceipt,
+  retryIndexReceipt,
+  terminalIndexReceipt,
+} from "./lm2-index-receipts.js";
 export type Lm2PendingIndexRecord = Lm2AdmittedIndexRecord & {
   cursorBefore: string | null;
   cursorAfter: string | null;
@@ -33,57 +34,6 @@ export type Lm2IndexBatchResult = {
 };
 
 type BatchTransientReason = Exclude<Lm2IndexBatchResult["transientReason"], null>;
-
-type QuotaRecovery = Lm2IndexReceipt["quotaRecovery"];
-type RetryReason = Extract<Lm2IndexReceipt, { outcome: "retry" }>["transientReason"];
-
-export function retryIndexReceipt(input: {
-  indexedCount?: number;
-  omitted?: readonly { id: string; reason: string }[];
-  retryCursor: string | null;
-  reason: RetryReason;
-  quotaRecovery: QuotaRecovery;
-}): Lm2IndexReceipt {
-  return {
-    indexedCount: input.indexedCount ?? 0,
-    omitted: [...(input.omitted ?? [])],
-    outcome: "retry",
-    nextCursor: null,
-    retryCursor: input.retryCursor,
-    transientReason: input.reason,
-    quotaRecovery: input.quotaRecovery,
-  };
-}
-
-export function terminalIndexReceipt(input: {
-  indexedCount: number;
-  omitted: readonly { id: string; reason: string }[];
-  nextCursor: string | null;
-  quotaRecovery: QuotaRecovery;
-}): Lm2IndexReceipt {
-  const fields = {
-    indexedCount: input.indexedCount,
-    omitted: [...input.omitted],
-    retryCursor: null,
-    transientReason: null,
-    quotaRecovery: input.quotaRecovery,
-  };
-  return input.nextCursor === null
-    ? { ...fields, outcome: "complete", nextCursor: null }
-    : { ...fields, outcome: "continue", nextCursor: input.nextCursor };
-}
-
-export function expiredIndexReceipt(quotaRecovery: QuotaRecovery): Lm2IndexReceipt {
-  return {
-    indexedCount: 0,
-    omitted: [],
-    outcome: "expired",
-    nextCursor: null,
-    retryCursor: null,
-    transientReason: null,
-    quotaRecovery,
-  };
-}
 
 function sameModel(left: ModelDescriptor, right: ModelDescriptor): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
