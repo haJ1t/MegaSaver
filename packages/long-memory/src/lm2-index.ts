@@ -2,10 +2,15 @@ import { performance } from "node:perf_hooks";
 import type { EvidenceEligibilityPort } from "./lm1-model.js";
 import type { FileLm1Store } from "./lm1-store.js";
 import type { Lm2CandidateCatalog } from "./lm2-catalog.js";
+import { combineLm2CleanupFailures } from "./lm2-cleanup-errors.js";
 import { Lm2Error } from "./lm2-errors.js";
 import { parseLm2IndexFactory } from "./lm2-index-admission.js";
 import { MAX_CATALOG_ENTRIES_PER_CALL, processLm2IndexPage } from "./lm2-index-page.js";
-import { expiredIndexReceipt, retryIndexReceipt } from "./lm2-index-receipts.js";
+import {
+  expiredIndexReceipt,
+  retryIndexReceipt,
+  withLm2IndexReceiptCause,
+} from "./lm2-index-receipts.js";
 import {
   type EmbeddingPort,
   type Lm2IndexReceipt,
@@ -123,29 +128,34 @@ export function createLm2IndexService(input: IndexServiceInput): Lm2IndexService
       }
       clearTimeout(timer);
       controller.abort();
-      let finalizeFailed = false;
+      let finalizeFailure: unknown;
       try {
         await operation.finalize();
-      } catch {
-        finalizeFailed = true;
+      } catch (error) {
+        finalizeFailure = error;
+      }
+      if (finalizeFailure !== undefined) {
+        const retryCursor =
+          receipt?.outcome === "continue"
+            ? receipt.nextCursor
+            : receipt?.outcome === "retry"
+              ? receipt.retryCursor
+              : origin;
+        return withLm2IndexReceiptCause(
+          retryIndexReceipt({
+            indexedCount: receipt?.indexedCount ?? 0,
+            omitted: receipt?.omitted ?? [],
+            retryCursor,
+            reason: "quota_state_invalid",
+            quotaRecovery: "blocked_pending",
+          }),
+          combineLm2CleanupFailures(failure, finalizeFailure),
+        );
       }
       if (failure !== undefined) throw failure;
       if (receipt === undefined)
         throw new Lm2Error("write_failed", "LM2 index receipt is missing.");
-      if (!finalizeFailed) return receipt;
-      const retryCursor =
-        receipt.outcome === "continue"
-          ? receipt.nextCursor
-          : receipt.outcome === "retry"
-            ? receipt.retryCursor
-            : origin;
-      return retryIndexReceipt({
-        indexedCount: receipt.indexedCount,
-        omitted: receipt.omitted,
-        retryCursor,
-        reason: "quota_state_invalid",
-        quotaRecovery: "blocked_pending",
-      });
+      return receipt;
     },
   };
 }
