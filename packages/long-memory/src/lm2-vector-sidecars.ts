@@ -78,6 +78,8 @@ export function prepareLm2LedgerOperation(input: {
         schemaVersion: 1,
         workspaceKey: input.workspaceKey,
         epoch: randomBytes(32).toString("hex"),
+        lockIdentity: input.lockIdentity,
+        lockToken: input.lockToken,
         generation: 0,
         namespaces: [],
         committedThroughAllocation: 0,
@@ -92,12 +94,10 @@ export function prepareLm2LedgerOperation(input: {
     const ledger = parseLm2QuotaLedger(read.raw, input.workspaceKey);
     if (ledger === null) return { status: "invalid" };
     input.adoptExistingLedger(read.stat);
-    const prior = ledger.activeOperation;
     if (
-      prior !== null &&
-      (prior.lockToken !== input.lockToken ||
-        prior.lockIdentity.device !== input.lockIdentity.device ||
-        prior.lockIdentity.inode !== input.lockIdentity.inode)
+      ledger.lockToken !== input.lockToken ||
+      ledger.lockIdentity.device !== input.lockIdentity.device ||
+      ledger.lockIdentity.inode !== input.lockIdentity.inode
     ) {
       return { status: "invalid" };
     }

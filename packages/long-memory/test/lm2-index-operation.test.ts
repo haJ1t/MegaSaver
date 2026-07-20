@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { embeddingInputDigest, modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import {
+  lm2PendingTemporaryName,
   lm2QuotaLedgerSchema,
   recordIdentityDigest,
   serializeLm2QuotaLedger,
@@ -145,6 +146,64 @@ describe("LM2 index operation", () => {
     }
   });
 
+  it("reports the committed prefix when a later publication fails", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const fingerprint = modelDescriptorFingerprint(model);
+    const records = [createCandidate(1), createCandidate(2)];
+    const store = createLm2VectorStore({ storeRoot: root });
+    const operation = await store.beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: deadline(),
+    });
+    expect(operation.status).toBe("ready");
+    if (operation.status !== "ready") return;
+    let evidenceChecks = 0;
+    const conflictingPath = join(
+      root,
+      "long-memory",
+      "v1",
+      workspaceKey,
+      "embeddings-v2",
+      fingerprint,
+      `${records[1]?.id}.json`,
+    );
+
+    const publish = await operation.publishBatch({
+      records,
+      assertEgressAllowed: async () => true,
+      recheckEvidence: async () => {
+        evidenceChecks += 1;
+        if (evidenceChecks === 2) writeFileSync(conflictingPath, "foreign\n");
+        return true;
+      },
+      embed: async () => ({
+        modelFingerprint: fingerprint,
+        vectors: [
+          [1, 2, 3],
+          [4, 5, 6],
+        ],
+      }),
+    });
+    expect(publish).toEqual({ published: [records[0]?.id], reason: "write_failed" });
+    expect(readFileSync(conflictingPath, "utf8")).toBe("foreign\n");
+    const firstPath = join(dirname(conflictingPath), `${records[0]?.id}.json`);
+    expect(existsSync(firstPath)).toBe(true);
+    const ledger = lm2QuotaLedgerSchema.parse(
+      JSON.parse(readFileSync(vectorQuotaLedgerPath(root, workspaceKey), "utf8")),
+    );
+    expect(ledger).toMatchObject({
+      committedThroughAllocation: 1,
+      nextAllocationSequence: 2,
+      pending: { firstAllocationSequence: 2, lastAllocationSequence: 2 },
+    });
+    await operation.finalize();
+    await expect(
+      store.beginIndexOperation({ workspaceKey, model, deadline: deadline() }),
+    ).resolves.toEqual({ status: "invalid", quotaRecovery: "blocked_pending" });
+  });
+
   it("recovers an exact named prefix and a proven-absent suffix", async () => {
     const root = createRoot();
     const model = createModel();
@@ -189,7 +248,7 @@ describe("LM2 index operation", () => {
       reservedBytes: 24 * 1024,
       expectedSidecarDigest: index === 0 ? createHash("sha256").update(exact).digest("hex") : null,
       serializedBytes: index === 0 ? Buffer.byteLength(exact) : null,
-      temporaryName: `.crash-${index}.tmp`,
+      temporaryName: lm2PendingTemporaryName(operationId, index + 1),
       finalName: `${record.id}.json`,
       phase: index === 0 ? "published" : "reserved",
     }));
@@ -197,6 +256,8 @@ describe("LM2 index operation", () => {
       schemaVersion: 1,
       workspaceKey,
       epoch,
+      lockIdentity: { device: lockStat.dev, inode: lockStat.ino },
+      lockToken: token,
       generation: 1,
       namespaces: [],
       committedThroughAllocation: 0,
@@ -234,6 +295,100 @@ describe("LM2 index operation", () => {
       namespaces: [{ modelFingerprint: fingerprint, sidecarCount: 1 }],
     });
     await recovered.finalize();
+  });
+
+  it("rejects a pending temporary name aimed at a committed sidecar without deleting it", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const fingerprint = modelDescriptorFingerprint(model);
+    const committedRecord = createCandidate(1);
+    const pendingRecord = createCandidate(2);
+    const token = "b".repeat(64);
+    const lockPath = indexLockPath(root);
+    mkdirSync(dirname(lockPath), { recursive: true });
+    writeFileSync(lockPath, `${token}\n`);
+    const lockStat = statSync(lockPath);
+    const epoch = "a".repeat(64);
+    const committed = buildSerializedSidecar(model, committedRecord, [1, 2, 3], {
+      ledgerEpoch: epoch,
+      allocationSequence: 1,
+    });
+    const committedPath = join(
+      root,
+      "long-memory",
+      "v1",
+      workspaceKey,
+      "embeddings-v2",
+      fingerprint,
+      `${committedRecord.id}.json`,
+    );
+    mkdirSync(dirname(committedPath), { recursive: true });
+    writeFileSync(committedPath, committed);
+    const operationId = "11111111-1111-4111-8111-111111111111";
+    const ledgerPath = vectorQuotaLedgerPath(root, workspaceKey);
+    const rawLedger = {
+      schemaVersion: 1,
+      workspaceKey,
+      epoch,
+      lockIdentity: { device: lockStat.dev, inode: lockStat.ino },
+      lockToken: token,
+      generation: 1,
+      namespaces: [
+        {
+          modelFingerprint: fingerprint,
+          sidecarCount: 1,
+          serializedBytes: Buffer.byteLength(committed),
+        },
+      ],
+      committedThroughAllocation: 1,
+      nextAllocationSequence: 2,
+      activeOperation: {
+        operationId,
+        expectedGeneration: 1,
+        lockIdentity: { device: lockStat.dev, inode: lockStat.ino },
+        lockToken: token,
+      },
+      pending: {
+        operationId,
+        expectedGeneration: 1,
+        firstAllocationSequence: 2,
+        lastAllocationSequence: 2,
+        entries: [
+          {
+            allocationSequence: 2,
+            modelFingerprint: fingerprint,
+            recordId: pendingRecord.id,
+            recordIdentityDigest: recordIdentityDigest({
+              workspaceKey,
+              id: pendingRecord.id,
+              kind: pendingRecord.kind,
+              sourceDigest: pendingRecord.sourceDigest,
+              embeddingInputDigest: embeddingInputDigest({
+                kind: pendingRecord.kind,
+                text: pendingRecord.text,
+              }),
+              modelFingerprint: fingerprint,
+            }),
+            reservedBytes: 24 * 1024,
+            expectedSidecarDigest: null,
+            serializedBytes: null,
+            temporaryName: `${committedRecord.id}.json`,
+            finalName: `${pendingRecord.id}.json`,
+            phase: "reserved",
+          },
+        ],
+      },
+    };
+    writeFileSync(ledgerPath, `${JSON.stringify(rawLedger)}\n`);
+
+    await expect(
+      createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
+        workspaceKey,
+        model,
+        deadline: deadline(),
+      }),
+    ).resolves.toEqual({ status: "invalid", quotaRecovery: "not_needed" });
+    expect(readFileSync(committedPath, "utf8")).toBe(committed);
   });
 
   it("fails closed for malformed, oversize, and unledgered v2 state", async () => {
