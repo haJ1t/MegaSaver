@@ -111,8 +111,11 @@ rechecks that binding. The only automatic crash recovery states are an orphan
 lock before control/catalog publication and a valid control record before the
 canonical empty catalog. Either V1 pathname is explicitly unsupported and is
 left byte-identical. Process-level regressions cover idle and held lock-path
-replacement, catalog symlinks, descriptor-close failure, both named crash
-cuts, and concurrent appenders. Independent Task 3 review remains pending.
+replacement with actual API writers, V1 admission after lock acquisition,
+catalog symlinks, descriptor-close failure, both named crash cuts, and
+concurrent appenders. V1 absence is fenced again at acquisition, each mutation
+and publication callback, and release. Independent Task 3 re-review remains
+pending.
 (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
 `.superpowers/sdd/task-3-report.md`)

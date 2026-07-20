@@ -5522,3 +5522,17 @@ remains pending; no official LongMemEval-V2 score is claimed. (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
 `docs/superpowers/plans/2026-07-20-long-memory-lm2-runtime-security-completion-plan.md`,
 `.superpowers/sdd/task-3-report.md`)
+
+## [2026-07-20 17:10 +03] fix | LM2 catalog V1-admission race
+
+Fresh Task 3 review found that V1 absence was checked only when anchored
+storage opened, allowing a legacy writer to create V1 after V2 acquired its
+separate lock and before V2 publication. A deterministic spawned-writer RED
+reproduced the false-success V2 mutation. V1 absence is now fenced again on
+established acquisition, bootstrap/control/catalog publication callbacks,
+normal mutation, post-publication validation, and release. The previous
+descriptor-only old-inode test was also replaced: real old- and new-inode
+processes both call `appendPublished`, both fail, and catalog bytes remain
+unchanged. Fresh re-review remains pending. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
+`.superpowers/sdd/task-3-report.md`)

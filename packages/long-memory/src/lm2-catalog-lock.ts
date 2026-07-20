@@ -20,6 +20,7 @@ import {
 import {
   type CatalogStorage,
   LM2_CATALOG_LOCK_NAME,
+  assertNoV1CatalogState,
   catalogLockPath,
   createCatalogControl,
   createCatalogFile,
@@ -117,6 +118,7 @@ function assertSafeIdentity(stat: import("node:fs").Stats): void {
 }
 
 function assertBinding(storage: CatalogStorage, file: LockFile, control: Lm2CatalogControl): void {
+  assertNoV1CatalogState(storage);
   const descriptorStat = fstatSync(file.descriptor);
   const namedStat = lstatSync(anchoredChildPath(storage.anchor, LM2_CATALOG_LOCK_NAME));
   if (
@@ -144,7 +146,7 @@ function bootstrap(
     if (priorControl.emptyCatalogDigest !== catalogContentDigest(emptySerialized)) {
       throw new Lm2Error("store_corrupt", "LM2 catalog recovery digest is invalid.");
     }
-    createCatalogFile(storage, empty);
+    createCatalogFile(storage, empty, () => assertBinding(storage, file, priorControl));
     assertBinding(storage, file, priorControl);
     return priorControl;
   }
@@ -155,9 +157,20 @@ function bootstrap(
     catalogLock: { device: file.stat.dev, inode: file.stat.ino, token },
     emptyCatalogDigest: catalogContentDigest(emptySerialized),
   };
-  createCatalogControl(storage, control);
+  createCatalogControl(storage, control, () => {
+    assertNoV1CatalogState(storage);
+    const descriptorStat = fstatSync(file.descriptor);
+    const namedStat = lstatSync(file.path);
+    if (
+      !sameFileIdentity(descriptorStat, file.stat) ||
+      !sameFileIdentity(namedStat, file.stat) ||
+      readToken(file.descriptor) !== token
+    ) {
+      throw new Lm2Error("store_corrupt", "LM2 catalog lock binding changed.");
+    }
+  });
   assertBinding(storage, file, control);
-  createCatalogFile(storage, empty);
+  createCatalogFile(storage, empty, () => assertBinding(storage, file, control));
   assertBinding(storage, file, control);
   return control;
 }

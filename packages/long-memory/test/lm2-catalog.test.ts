@@ -251,6 +251,48 @@ function startBarrierAppender(root: string, record: Lm1Record): Promise<() => Pr
   });
 }
 
+function startSignaledAppender(
+  root: string,
+  record: Lm1Record,
+  mode: "append-observe-flock" | "append-pause-before-publish" | "replace-lock-and-append",
+  signal: string,
+  gatePath?: string,
+): Promise<() => Promise<boolean>> {
+  const encoded = Buffer.from(JSON.stringify({ mode, storeRoot: root, record, gatePath })).toString(
+    "base64url",
+  );
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [tsxCli, catalogChild, encoded], {
+      cwd: packageDirectory,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let signaled = false;
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.once("error", reject);
+    const completed = new Promise<boolean>((finish, rejectFinish) => {
+      child.once("error", rejectFinish);
+      child.once("close", (code) => {
+        if (code !== 0) {
+          rejectFinish(new Error(stderr));
+          return;
+        }
+        const result = stdout.slice(`${signal}\n`.length).trim();
+        finish((JSON.parse(result) as { result: boolean }).result);
+      });
+    });
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+      if (signaled || !stdout.startsWith(`${signal}\n`)) return;
+      signaled = true;
+      resolve(() => completed);
+    });
+  });
+}
+
 function writeV2Control(root: string): void {
   const paths = v2Paths(root);
   const stat = statSync(paths.lock);
@@ -380,19 +422,55 @@ describe("LM2 candidate catalog", () => {
     ).toThrow(expect.objectContaining({ code: "store_corrupt" }));
   });
 
-  it("rejects a new-inode writer while the old catalog-lock inode is held", async () => {
+  it("rejects real old-inode and replacement-inode API writers without mutation", async () => {
     const root = createRoot();
     expect(await runCatalogChild(root, createRecord())).toBe(true);
     const paths = v2Paths(root);
+    const before = readFileSync(paths.catalog, "utf8");
     const release = await holdCatalogLock(paths.lock);
+    const finishOldWriter = await startSignaledAppender(
+      root,
+      createRecord(1),
+      "append-observe-flock",
+      "flocking",
+    );
     try {
-      renameSync(paths.lock, `${paths.lock}.displaced`);
-      writeFileSync(paths.lock, `${"c".repeat(64)}\n`, { mode: 0o600 });
-      expect(await runCatalogChild(root, createRecord(1))).toBe(false);
+      const finishReplacementWriter = await startSignaledAppender(
+        root,
+        createRecord(2),
+        "replace-lock-and-append",
+        "replacement-locked",
+      );
+      expect(await finishReplacementWriter()).toBe(false);
     } finally {
       await release();
     }
-    expect(JSON.parse(readFileSync(paths.catalog, "utf8"))).toMatchObject({ generation: 1 });
+    expect(await finishOldWriter()).toBe(false);
+    expect(readFileSync(paths.catalog, "utf8")).toBe(before);
+    expect(JSON.parse(before)).toMatchObject({ generation: 1 });
+  });
+
+  it("fails before V2 publication when V1 appears after lock acquisition", async () => {
+    const root = createRoot();
+    expect(await runCatalogChild(root, createRecord())).toBe(true);
+    const paths = v2Paths(root);
+    const before = readFileSync(paths.catalog, "utf8");
+    const gatePath = join(root, "publish-gate");
+    const finish = await startSignaledAppender(
+      root,
+      createRecord(1),
+      "append-pause-before-publish",
+      "prepared",
+      gatePath,
+    );
+    const v1Path = join(paths.directory, "candidate-catalog-v1.json");
+    const v1 = "legacy-writer-arrived\n";
+    writeFileSync(v1Path, v1);
+    writeFileSync(gatePath, "go\n");
+
+    expect(await finish()).toBe(false);
+    expect(readFileSync(paths.catalog, "utf8")).toBe(before);
+    expect(readFileSync(v1Path, "utf8")).toBe(v1);
   });
 
   it("releases the catalog flock before reporting an anchor-close failure", async () => {
