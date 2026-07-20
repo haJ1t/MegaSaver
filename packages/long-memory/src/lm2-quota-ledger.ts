@@ -37,6 +37,10 @@ const sidecarNameSchema = z
     "must be a canonical basename",
   );
 
+export function lm2PendingTemporaryName(operationId: string, allocationSequence: number): string {
+  return `.lm2-${operationId}-${allocationSequence}.pending`;
+}
+
 const recordIdentityInputSchema = z
   .object({
     workspaceKey: workspaceKeySchema,
@@ -97,16 +101,18 @@ export const lm2PendingAllocationSchema = z
   });
 export type Lm2PendingAllocation = z.infer<typeof lm2PendingAllocationSchema>;
 
+const lockIdentitySchema = z
+  .object({
+    device: nonnegativeSafeIntegerSchema,
+    inode: nonnegativeSafeIntegerSchema,
+  })
+  .strict();
+
 const activeOperationSchema = z
   .object({
     operationId: lowercaseUuidSchema,
     expectedGeneration: nonnegativeSafeIntegerSchema,
-    lockIdentity: z
-      .object({
-        device: nonnegativeSafeIntegerSchema,
-        inode: nonnegativeSafeIntegerSchema,
-      })
-      .strict(),
+    lockIdentity: lockIdentitySchema,
     lockToken: sha256Schema,
   })
   .strict();
@@ -126,6 +132,8 @@ export const lm2QuotaLedgerSchema = z
     schemaVersion: z.literal(1),
     workspaceKey: workspaceKeySchema,
     epoch: sha256Schema,
+    lockIdentity: lockIdentitySchema,
+    lockToken: sha256Schema,
     generation: nonnegativeSafeIntegerSchema,
     namespaces: z.array(lm2NamespaceAllocationSchema).max(MAX_LM2_VECTOR_NAMESPACES),
     committedThroughAllocation: nonnegativeSafeIntegerSchema,
@@ -155,9 +163,12 @@ export const lm2QuotaLedgerSchema = z
     }
     if (
       ledger.activeOperation !== null &&
-      ledger.activeOperation.expectedGeneration !== ledger.generation
+      (ledger.activeOperation.expectedGeneration !== ledger.generation ||
+        ledger.activeOperation.lockIdentity.device !== ledger.lockIdentity.device ||
+        ledger.activeOperation.lockIdentity.inode !== ledger.lockIdentity.inode ||
+        ledger.activeOperation.lockToken !== ledger.lockToken)
     ) {
-      context.addIssue({ code: "custom", message: "active fence must match ledger generation" });
+      context.addIssue({ code: "custom", message: "active fence must match the permanent fence" });
     }
     const pending = ledger.pending;
     const committedSidecarCount = ledger.namespaces.reduce(
@@ -196,6 +207,15 @@ export const lm2QuotaLedgerSchema = z
       )
     ) {
       context.addIssue({ code: "custom", message: "pending allocation range must be consecutive" });
+    }
+    if (
+      pending.entries.some(
+        (entry) =>
+          entry.temporaryName !==
+          lm2PendingTemporaryName(pending.operationId, entry.allocationSequence),
+      )
+    ) {
+      context.addIssue({ code: "custom", message: "pending temporary name must match its fence" });
     }
     const identities = pending.entries.map((entry) => entry.recordIdentityDigest);
     const targets = pending.entries.map((entry) => `${entry.modelFingerprint}\0${entry.recordId}`);

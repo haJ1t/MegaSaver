@@ -3,6 +3,7 @@ import type { Lm2Candidate } from "./lm2-model.js";
 import {
   type Lm2PendingAllocation,
   type Lm2QuotaLedger,
+  lm2PendingTemporaryName,
   lm2QuotaLedgerSchema,
   recordIdentityDigest,
   serializeLm2QuotaLedger,
@@ -73,7 +74,10 @@ export function createPendingAllocations(input: {
     reservedBytes: 24 * 1024,
     expectedSidecarDigest: null,
     serializedBytes: null,
-    temporaryName: `.${input.operationId}-${input.firstAllocationSequence + index}.tmp`,
+    temporaryName: lm2PendingTemporaryName(
+      input.operationId,
+      input.firstAllocationSequence + index,
+    ),
     finalName: vectorSidecarName(record.id),
     phase: "reserved",
   }));

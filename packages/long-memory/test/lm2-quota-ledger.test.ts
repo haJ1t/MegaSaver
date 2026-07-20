@@ -33,7 +33,7 @@ function pendingEntry(allocationSequence: number) {
     reservedBytes: LM2_PENDING_SIDECAR_RESERVATION_BYTES,
     expectedSidecarDigest: null,
     serializedBytes: null,
-    temporaryName: `${recordId}.${operationId}.tmp`,
+    temporaryName: `.lm2-${operationId}-${allocationSequence}.pending`,
     finalName: `${recordId}.json`,
     phase: "reserved" as const,
   };
@@ -44,6 +44,8 @@ function validLedger() {
     schemaVersion: 1 as const,
     workspaceKey,
     epoch,
+    lockIdentity: { device: 10, inode: 20 },
+    lockToken: "e".repeat(64),
     generation: 7,
     namespaces: [{ modelFingerprint, sidecarCount: 3, serializedBytes: 4_096 }],
     committedThroughAllocation: 3,
@@ -125,6 +127,26 @@ describe("LM2 quota ledger contract", () => {
         ...ledger,
         pending: null,
         activeOperation: { ...ledger.activeOperation, expectedGeneration: 6 },
+      }),
+    ).toThrow();
+  });
+
+  it("persists one permanent lock fence across inactive generations", () => {
+    const inactive = { ...validLedger(), activeOperation: null, pending: null };
+    expect(lm2QuotaLedgerSchema.parse(inactive)).toEqual(inactive);
+    expect(() =>
+      lm2QuotaLedgerSchema.parse({
+        ...validLedger(),
+        activeOperation: {
+          ...validLedger().activeOperation,
+          lockIdentity: { device: 10, inode: 21 },
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      lm2QuotaLedgerSchema.parse({
+        ...validLedger(),
+        activeOperation: { ...validLedger().activeOperation, lockToken: "f".repeat(64) },
       }),
     ).toThrow();
   });
@@ -259,12 +281,30 @@ describe("LM2 quota ledger contract", () => {
     ).toThrow();
   });
 
+  it("rejects a pending temporary name aimed at a committed sidecar", () => {
+    const ledger = validLedger();
+    expect(() =>
+      lm2QuotaLedgerSchema.parse({
+        ...ledger,
+        pending: {
+          ...ledger.pending,
+          entries: [
+            { ...pendingEntry(4), temporaryName: pendingEntry(3).finalName },
+            pendingEntry(5),
+          ],
+        },
+      }),
+    ).toThrow();
+  });
+
   it("serializes fields in canonical order", () => {
     const serialized = serializeLm2QuotaLedger(validLedger());
     expect(Object.keys(JSON.parse(serialized))).toEqual([
       "schemaVersion",
       "workspaceKey",
       "epoch",
+      "lockIdentity",
+      "lockToken",
       "generation",
       "namespaces",
       "committedThroughAllocation",
