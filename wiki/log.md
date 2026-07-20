@@ -5867,3 +5867,21 @@ and 290/290 tests with zero type errors, plus root `pnpm verify`. Fresh
 independent re-review remains pending. (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
 `.superpowers/sdd/task-3-report.md`)
+
+## [2026-07-20 19:07 +03] implementation | LM2 benchmark backend and transport
+
+Completion Task 5 added a separately built, non-root-exported LongMemEval-V2
+transport plus the pinned Python `Memory` backend, manifest builder, and
+allowlisted official-checkout installer. Admission is bound to canonical
+source/input digests, exact projected trajectories, an ordered durable insert
+chain, and a question allowlist; rejected or poisoned queries launch no
+transport. The backend accepts only local benchmark embeddings, persists one
+random instance identity across the official save/load lifecycle, and returns
+only non-empty text items. Evidence: repository `pnpm verify` completed all
+56 Turbo tasks; long-memory passed 38/38 files and 330/330 tests; the combined
+Python suites passed 15/15 against the real pinned official `Memory` base,
+including a Python-to-built-Node round trip and installer import smoke test.
+No official LongMemEval-V2 score was run or claimed, and independent
+benchmark-contract review remains pending. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-runtime-security-completion-plan.md`)
