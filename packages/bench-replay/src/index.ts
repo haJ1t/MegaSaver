@@ -17,6 +17,7 @@ export {
 } from "./types.js";
 export { startCaptureProxy, type CaptureProxy } from "./capture-proxy.js";
 export {
+  GENERATION_CAP_TOKENS,
   assertUncompressedRecording,
   prepareArms,
   transformRequest,
@@ -38,6 +39,9 @@ export {
   type SendResult,
 } from "./replay.js";
 export {
+  MAX_BYTE_RATIO,
+  MIN_APPLIED_FRACTION,
+  MIN_BYTE_RATIO,
   MIN_DRIFT_SMOKE_TOLERANCE,
   baselineDriftSmokeOk,
   buildVerdict,

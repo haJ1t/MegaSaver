@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_BYTE_RATIO,
+  MIN_APPLIED_FRACTION,
+  MIN_BYTE_RATIO,
   MIN_DRIFT_SMOKE_TOLERANCE,
   baselineDriftSmokeOk,
   buildVerdict,
@@ -8,6 +11,7 @@ import {
   pooledCostRatio,
   verdictStable,
 } from "../src/report.js";
+import { GENERATION_CAP_TOKENS } from "../src/transform.js";
 import type { PairResult, ReplayOrder } from "../src/types.js";
 
 const arm = (cost: number) => ({
@@ -70,15 +74,7 @@ describe("buildVerdict", () => {
       "task_1",
       [pair(1.0, 0.8), pair(1.0, 0.5, "megasaver-first")],
       transform,
-      {
-        order: {
-          ratioBaselineFirst: 1.25,
-          ratioMegasaverFirst: 2,
-          spread: 0.6,
-          tolerance: 0.75,
-          combinedRatio: 1.625,
-        },
-      },
+      { orderTolerance: 0.75 },
     );
     expect(v.pairs.map((p) => p.order)).toEqual(["baseline-first", "megasaver-first"]);
     expect(v.costRatio).toBeCloseTo(1.625, 6);
@@ -238,7 +234,7 @@ describe("buildVerdict integrity refusal and verification metadata", () => {
   };
 
   it("refuses a verdict when the transform produced no byte reduction", () => {
-    expect(() => buildVerdict("t", [pair(1, 0.8)], inert)).toThrow(/no byte reduction/);
+    expect(() => buildVerdict("t", [pair(1, 0.8)], inert)).toThrow(/measured nothing/);
   });
 
   it("carries what was verified so a smoke-tested number cannot read as calibrated", () => {
@@ -256,5 +252,98 @@ describe("buildVerdict integrity refusal and verification metadata", () => {
       baselineDriftSmoke: { ok: true, tolerance: 0.25 },
     });
     expect(v.verified.baselineDriftSmoke).toEqual({ ok: true, tolerance: 0.25 });
+  });
+});
+
+// DEFECT 2: `ok: applied > 0 && transformed < original` is one-sided — a ceiling
+// on transformed bytes with no floor, and no floor at all on the applied
+// fraction. Both escapes below were measured printing a healthy verdict.
+describe("checkTransformIntegrity two-sided band", () => {
+  // An empty-string saver satisfies `transformed < original` as strongly as
+  // possible. Measured {applied:100, 51390->0, byteRatio:0, ok:true} and printed
+  // at costRatio 3.6883x — content destruction certified as a 3.7x win.
+  const destroyed = {
+    saver: { applied: 100, passthrough: 0, failed: 0 },
+    bytes: { original: 51390, transformed: 0 },
+  };
+
+  // 1 block of 100 rewritten, shrunk 3 bytes. Measured {applied:1,
+  // passthrough:99, byteRatio 0.999942, ok:true} at costRatio 1.000081 — a
+  // 99%-broken saver certified as a real "no effect" finding.
+  const nearInert = {
+    saver: { applied: 1, passthrough: 99, failed: 0 },
+    bytes: { original: 51390, transformed: 51387 },
+  };
+
+  it("fails an empty-string saver instead of scoring it the strongest pass", () => {
+    const r = checkTransformIntegrity(destroyed);
+    expect(r.byteRatio).toBe(0);
+    expect(r.ok).toBe(false);
+  });
+
+  it("fails a near-inert saver on both the applied fraction and the byte ratio", () => {
+    const r = checkTransformIntegrity(nearInert);
+    expect(r.appliedFraction).toBeCloseTo(0.01, 6);
+    expect(r.ok).toBe(false);
+  });
+
+  it("reports the applied fraction so a passthrough-heavy run is visible", () => {
+    expect(
+      checkTransformIntegrity({
+        saver: { applied: 3, passthrough: 1, failed: 0 },
+        bytes: { original: 1000, transformed: 400 },
+      }).appliedFraction,
+    ).toBeCloseTo(0.75, 6);
+  });
+
+  it("exposes the band it enforces rather than burying the thresholds", () => {
+    expect(MIN_APPLIED_FRACTION).toBeGreaterThan(0.01);
+    expect(MIN_BYTE_RATIO).toBeGreaterThan(0);
+    expect(MAX_BYTE_RATIO).toBeLessThan(1);
+  });
+
+  it("refuses a verdict for either escape rather than printing one", () => {
+    expect(() => buildVerdict("t", [pair(3.7, 1)], destroyed)).toThrow(/measured nothing/);
+    expect(() => buildVerdict("t", [pair(1.000081, 1)], nearInert)).toThrow(/measured nothing/);
+  });
+});
+
+// DEFECT 3: buildVerdict never checked that the OrderCheck it was handed was
+// computed from the pairs it was handed. A reviewer passed pairs with ratios
+// 1.05 and 1.06 plus OrderCheck{combinedRatio: 9} and got a verdict reporting
+// costRatio 9 beside those pairs, with no refusal. The fix is structural: the
+// caller passes a tolerance, never a number, so there is nothing to mismatch.
+describe("buildVerdict derives its order check from the pairs", () => {
+  it("computes the combined ratio from the pairs it was given", () => {
+    const v = buildVerdict("t", [pair(1.05, 1), pair(1.06, 1, "megasaver-first")], transform, {
+      orderTolerance: 0.05,
+    });
+    expect(v.costRatio).toBeCloseTo(1.055, 9);
+    expect(v.verified.order?.ratioBaselineFirst).toBeCloseTo(1.05, 9);
+    expect(v.verified.order?.ratioMegasaverFirst).toBeCloseTo(1.06, 9);
+  });
+
+  it("refuses when the pairs are not one of each order", () => {
+    expect(() =>
+      buildVerdict("t", [pair(1.05, 1), pair(1.06, 1)], transform, { orderTolerance: 0.05 }),
+    ).toThrow(/one baseline-first and one megasaver-first/);
+  });
+
+  it("refuses order-sensitive pairs at the one place a verdict is constructed", () => {
+    expect(() =>
+      buildVerdict("t", [pair(1.25, 1), pair(1.0, 1, "megasaver-first")], transform, {
+        orderTolerance: 0.05,
+      }),
+    ).toThrow(/order-sensitive/);
+  });
+});
+
+// BLOCKER visibility: a reader must not mistake a generation-capped, input-side
+// ratio for an end-to-end cost comparison.
+describe("buildVerdict carries the generation cap", () => {
+  it("states the cap the arms were replayed under", () => {
+    const cap = buildVerdict("t", [pair(1, 0.8)], transform).generationCapTokens;
+    expect(cap).toBe(GENERATION_CAP_TOKENS);
+    expect(cap).toBeGreaterThan(0);
   });
 });

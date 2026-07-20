@@ -55,9 +55,14 @@ export type ArmUsage = RequestUsage & {
 
 export type ArmIntegrity = {
   applied: number;
+  // applied ÷ (applied + passthrough). `applied > 0` alone let a saver that
+  // rewrote 1 tool call in 100 report a healthy "no effect" verdict, so the
+  // share the saver actually touched is part of the check, not just its count.
+  appliedFraction: number;
   originalBytes: number;
   transformedBytes: number;
-  // transformed ÷ original; < 1 is the only value that means the arm did work.
+  // transformed ÷ original. Bounded on BOTH sides: a ceiling alone passes an
+  // empty-string saver (ratio 0) as the strongest possible result.
   byteRatio: number;
   ok: boolean;
 };
@@ -107,5 +112,11 @@ export type ReplayVerdict = {
   transform: TransformSummary;
   // baseline ÷ megasaver on normalized cost; >1 means megasaver is cheaper.
   costRatio: number;
+  // The `max_tokens` BOTH arms were replayed under. Generation is capped because
+  // the replay never uses the model's output, so `costRatio` above is an
+  // INPUT-SIDE comparison (cache_creation + cache_read + input), NOT an
+  // end-to-end cost comparison. Carried on the verdict so a consumer cannot read
+  // the ratio without the caveat attached to it.
+  generationCapTokens: number;
   verified: VerdictVerification;
 };

@@ -1,3 +1,4 @@
+import { GENERATION_CAP_TOKENS } from "./transform.js";
 import type {
   ArmIntegrity,
   ArmUsage,
@@ -14,20 +15,52 @@ export function costRatioOf(baseline: ArmUsage, megasaver: ArmUsage): number {
     : baseline.normalizedCostUsd / megasaver.normalizedCostUsd;
 }
 
+// The saver's decision is per tool call and its compression floors are per tool,
+// so outputs below those floors legitimately pass through and a passthrough-heavy
+// run is normal — a high floor here would refuse honest measurements. This bound
+// exists only to catch the measured escape where 1 tool call of 100 was rewritten
+// (fraction 0.01) and the resulting costRatio 1.000081 printed as a real "no
+// effect" finding.
+export const MIN_APPLIED_FRACTION = 0.1;
+
+// The ceiling. A transform that moved less than 2% of the tool_result bytes moved
+// less than this harness can resolve at all — it exists for a ≤5% COST effect and
+// tool_result bytes are only a fraction of the prompt — so there is nothing to
+// measure and no verdict to report. Catches the near-inert escape measured at
+// byteRatio 0.999942, which the old `transformed < original` test passed.
+export const MAX_BYTE_RATIO = 0.98;
+
+// The floor, which the ceiling-only check had none of: an empty-string saver
+// measured byteRatio 0 — the strongest possible pass — and was certified at
+// costRatio 3.6883x. The real saver appends a recovery footer and a chunk summary
+// to every output it compresses, so a whole conversation has no path to a 20x
+// reduction. Below this, the arm measured the ABSENCE of content, not compression
+// — the exact failure class this harness must catch.
+export const MIN_BYTE_RATIO = 0.05;
+
 // The guard that watches the only part of this harness that can fail: the
 // transform. It runs once for the whole gate, so this single check covers every
-// pair — no arm run can quietly measure a different one. `applied > 0` only
-// proves the hook returned SOMETHING; a transform that handed back the same
-// bytes is as meaningless as an inert one, and its costRatio ≈ 1.00 reads as a
-// healthy "no effect" result.
+// pair — no arm run can quietly measure a different one. Two-sided on both axes,
+// and fails closed: NaN comparisons are false, so a degenerate transform never
+// reads as healthy.
 export function checkTransformIntegrity(transform: TransformSummary): ArmIntegrity {
   const { original, transformed } = transform.bytes;
+  const { applied, passthrough } = transform.saver;
+  const consulted = applied + passthrough;
+  const appliedFraction = consulted === 0 ? Number.NaN : applied / consulted;
+  const byteRatio = original === 0 ? Number.NaN : transformed / original;
   return {
-    applied: transform.saver.applied,
+    applied,
+    appliedFraction,
     originalBytes: original,
     transformedBytes: transformed,
-    byteRatio: original === 0 ? Number.NaN : transformed / original,
-    ok: transform.saver.applied > 0 && original > 0 && transformed < original,
+    byteRatio,
+    ok:
+      applied > 0 &&
+      original > 0 &&
+      appliedFraction >= MIN_APPLIED_FRACTION &&
+      byteRatio <= MAX_BYTE_RATIO &&
+      byteRatio >= MIN_BYTE_RATIO,
   };
 }
 
@@ -59,6 +92,40 @@ export function baselineDriftSmokeOk(input: {
   return drift <= input.tolerance;
 }
 
+// COMPUTED from the pairs, never accepted from a caller. Handed an OrderCheck as
+// data, `buildVerdict` had no way to tell whether it described the pairs beside
+// it: pairs with ratios 1.05 and 1.06 plus OrderCheck{combinedRatio: 9} yielded a
+// verdict reporting 9, no refusal. Deriving it here removes the convention rather
+// than documenting it — the caller supplies a tolerance, so there is no number to
+// mismatch.
+function deriveOrderCheck(
+  task: string,
+  pairs: readonly PairResult[],
+  tolerance: number,
+): OrderCheck {
+  const baselineFirst = pairs.find((p) => p.order === "baseline-first");
+  const megasaverFirst = pairs.find((p) => p.order === "megasaver-first");
+  if (pairs.length !== 2 || baselineFirst === undefined || megasaverFirst === undefined) {
+    throw new Error(
+      `buildVerdict(${task}): an order check combines exactly one baseline-first and one megasaver-first pair, but the pairs given were [${pairs.map((p) => p.order).join(", ")}]`,
+    );
+  }
+  const a = baselineFirst.costRatio;
+  const b = megasaverFirst.costRatio;
+  if (orderSensitive(a, b, tolerance)) {
+    throw new Error(
+      `buildVerdict(${task}): the run is order-sensitive — baseline-first gave ${a} and megasaver-first gave ${b} (tolerance ${tolerance}). The gap is prompt-cache warming, not saver behaviour, so there is no verdict to report`,
+    );
+  }
+  return {
+    ratioBaselineFirst: a,
+    ratioMegasaverFirst: b,
+    spread: a === b ? 0 : Math.abs(a - b) / a,
+    tolerance,
+    combinedRatio: (a + b) / 2,
+  };
+}
+
 // The ONLY constructor of a ReplayVerdict, so the refusals below cannot be
 // skipped by a caller. Checks the caller did not run are recorded as null —
 // never as passed. `transform` is the ONE saver pass both pairs replayed, so
@@ -68,17 +135,21 @@ export function buildVerdict(
   task: string,
   pairs: readonly PairResult[],
   transform: TransformSummary,
-  checks?: { order?: OrderCheck; baselineDriftSmoke?: DriftSmokeResult },
+  checks?: { orderTolerance?: number; baselineDriftSmoke?: DriftSmokeResult },
 ): ReplayVerdict {
   const first = pairs[0];
   if (first === undefined) {
     throw new Error(`buildVerdict(${task}): no pair was replayed, so there is no ratio to report`);
   }
+  const order =
+    checks?.orderTolerance === undefined
+      ? null
+      : deriveOrderCheck(task, pairs, checks.orderTolerance);
   // A multi-pair run's number is the order check's combination of them. Without
   // that check there is no defensible way to collapse several pairs into one
   // ratio, and quoting any single pair's would be reporting a number the shown
   // arms do not account for.
-  if (checks?.order === undefined && pairs.length > 1) {
+  if (order === null && pairs.length > 1) {
     throw new Error(
       `buildVerdict(${task}): ${pairs.length} pairs were replayed but no order check combined them — there is no single ratio these arms justify`,
     );
@@ -91,17 +162,18 @@ export function buildVerdict(
   const integrity = checkTransformIntegrity(transform);
   if (!integrity.ok) {
     throw new Error(
-      `buildVerdict(${task}): the megasaver arm applied the saver ${integrity.applied} times but produced no byte reduction (${integrity.originalBytes}→${integrity.transformedBytes} B) — nothing was measured`,
+      `buildVerdict(${task}): the transform measured nothing — the saver was applied to ${integrity.applied} of ${transform.saver.applied + transform.saver.passthrough} tool calls (fraction ${integrity.appliedFraction}, floor ${MIN_APPLIED_FRACTION}) and moved ${integrity.originalBytes}→${integrity.transformedBytes} B (byteRatio ${integrity.byteRatio}, required band ${MIN_BYTE_RATIO}–${MAX_BYTE_RATIO}). Above the ceiling the transform is inert; below the floor it destroyed content rather than compressing it.`,
     );
   }
   return {
     task,
     pairs,
     transform: { saver: transform.saver, bytes: transform.bytes },
-    costRatio: checks?.order?.combinedRatio ?? first.costRatio,
+    costRatio: order?.combinedRatio ?? first.costRatio,
+    generationCapTokens: GENERATION_CAP_TOKENS,
     verified: {
       integrity,
-      order: checks?.order ?? null,
+      order,
       baselineDriftSmoke: checks?.baselineDriftSmoke ?? null,
     },
   };

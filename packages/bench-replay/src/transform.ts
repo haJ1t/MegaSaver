@@ -204,6 +204,53 @@ function memoize(
   };
 }
 
+// The replay never USES generated text: assistant turns come from the recording
+// and are replayed verbatim, and the saver's whole effect is on the INPUT side
+// (cache_creation / cache_read / input). Resampled output is therefore pure cost
+// and pure noise — at a realistic warm-cache mix it is ~26% of arm cost at
+// $25/Mtok, and 200 simulated runs against a true 5% input-side saving measured
+// sd 3.78% on the combined ratio, reporting the saver as a net LOSS in 15.5% of
+// them. Capping generation deletes that channel.
+//
+// 1 rather than 0: `max_tokens: 0` is rejected outright when `stream: true`,
+// which every recorded body carries, and flipping `stream` would change the
+// response shape the usage assembler reads — a second difference from the
+// recording, in exchange for one token.
+//
+// SAFE FOR THE MEASUREMENT because `max_tokens` takes no part in the prompt
+// cache key: that key is the rendered prefix — `tools` -> `system` -> `messages`
+// — and sampling parameters are not rendered into it. The bytes both arms share
+// are untouched, which is the only reason this cap does not change the thing
+// being measured.
+export const GENERATION_CAP_TOKENS = 1;
+
+// Applied to BOTH arms through this one function, so the symmetry is structural
+// rather than a convention two call sites happen to honour. Any asymmetry here
+// would reintroduce exactly the bias class this harness exists to eliminate.
+//
+// Extended thinking reserves `budget_tokens` out of `max_tokens` and the API
+// rejects `budget_tokens >= max_tokens`, so a recording captured with it on
+// cannot be replayed under the cap at all. Caught here, before a request is
+// sent, rather than as a 400 four arm runs deep.
+function capGeneration(body: RecordedRequest, index: number): RecordedRequest {
+  // A named view of the only two fields this touches. The schema is a
+  // passthrough, so both reach us through an index signature; declaring them
+  // keeps the access dotted, which is what the lint and the type-checker each
+  // insist on for the other's form.
+  const capped = body as RecordedRequest & { thinking?: unknown; max_tokens?: unknown };
+  const { thinking } = capped;
+  if (typeof thinking === "object" && thinking !== null) {
+    const budget = (thinking as { budget_tokens?: unknown }).budget_tokens;
+    if (typeof budget === "number") {
+      throw new Error(
+        `prepareArms: request ${index} was recorded with thinking.budget_tokens=${budget}, which cannot fit under the ${GENERATION_CAP_TOKENS}-token generation cap (the API requires budget_tokens < max_tokens). Re-record with adaptive thinking; the cap cannot be applied to this conversation.`,
+      );
+    }
+  }
+  capped.max_tokens = GENERATION_CAP_TOKENS;
+  return capped;
+}
+
 export type PreparedArms = TransformSummary & {
   baseline: readonly RecordedRequest[];
   megasaver: readonly RecordedRequest[];
@@ -241,9 +288,9 @@ export function prepareArms(input: {
   const baseline: RecordedRequest[] = [];
   const megasaver: RecordedRequest[] = [];
   for (const [index, request] of input.requests.entries()) {
-    baseline.push(transformRequest(request, "baseline", applySaver));
+    baseline.push(capGeneration(transformRequest(request, "baseline", applySaver), index));
     try {
-      megasaver.push(transformRequest(request, "megasaver", applySaver));
+      megasaver.push(capGeneration(transformRequest(request, "megasaver", applySaver), index));
     } catch (cause) {
       // A saver that could not be consulted is NOT a passthrough. Continuing
       // would report an inert megasaver arm as a measurement, so abort with the

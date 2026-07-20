@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { replayArm } from "../src/replay.js";
-import { prepareArms } from "../src/transform.js";
+import { GENERATION_CAP_TOKENS, prepareArms } from "../src/transform.js";
 import type { RecordedRequest } from "../src/types.js";
 
 const recorded: RecordedRequest[] = [
@@ -189,9 +189,17 @@ describe("prepareArms saver memoization (once per tool_use_id)", () => {
     expect(calls).toBe(3);
   });
 
-  it("leaves the baseline sequence a byte-for-byte copy of the recording", () => {
+  // The baseline arm is the recording plus ONE field: the generation cap, which
+  // lands identically on both arms and takes no part in the prompt-cache key.
+  // Everything that does — model, system, tools, messages — must still round-trip
+  // untouched, or the harness would be changing the thing it measures.
+  it("leaves the baseline sequence identical to the recording apart from the cap", () => {
     const arms = prepareArms({ requests: growing, applySaver: () => "SHORT" });
-    expect(arms.baseline).toEqual(growing);
+    expect(arms.baseline.map((b) => ({ ...b, max_tokens: undefined }))).toEqual(
+      growing.map((b) => ({ ...b, max_tokens: undefined })),
+    );
+    const maxTokensOf = (b: unknown) => (b as { max_tokens?: unknown }).max_tokens;
+    expect(arms.baseline.every((b) => maxTokensOf(b) === GENERATION_CAP_TOKENS)).toBe(true);
   });
 
   it("passes the real tool identity to the saver, resolved from the tool_use block", () => {

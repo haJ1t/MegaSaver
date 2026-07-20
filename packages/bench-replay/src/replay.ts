@@ -1,12 +1,11 @@
 import { normalizedCostUsd } from "@megasaver/stats";
-import { buildVerdict, costRatioOf, orderSensitive } from "./report.js";
+import { buildVerdict, costRatioOf } from "./report.js";
 import { prepareArms } from "./transform.js";
 import type { ApplySaver, PreparedArms } from "./transform.js";
 import type {
   Arm,
   ArmUsage,
   DriftSmokeResult,
-  OrderCheck,
   PairResult,
   RecordedRequest,
   ReplayOrder,
@@ -165,26 +164,14 @@ export async function replayBothOrders(input: {
     ...clock,
   });
 
-  const a = baselineFirst.costRatio;
-  const b = megasaverFirst.costRatio;
-  if (orderSensitive(a, b, input.orderTolerance)) {
-    throw new Error(
-      `replayBothOrders(${input.task}): the run is order-sensitive — baseline-first gave ${a} and megasaver-first gave ${b} (tolerance ${input.orderTolerance}). The gap is prompt-cache warming, not saver behaviour, so there is no verdict to report`,
-    );
-  }
-  const order: OrderCheck = {
-    ratioBaselineFirst: a,
-    ratioMegasaverFirst: b,
-    spread: a === b ? 0 : Math.abs(a - b) / a,
-    tolerance: input.orderTolerance,
-    combinedRatio: (a + b) / 2,
-  };
   // BOTH pairs are reported, because the quoted ratio is the mean of both.
   // Handing the verdict one pair's arms next to a two-pair number is how a
   // reader ends up checking guards against data other than what they are
-  // reading.
+  // reading. Only the TOLERANCE crosses this boundary: `buildVerdict` derives
+  // the order check — and its refusal — from the very pairs it reports, so the
+  // number and the arms shown beside it cannot come from different data.
   return buildVerdict(input.task, [baselineFirst, megasaverFirst], arms, {
-    order,
+    orderTolerance: input.orderTolerance,
     ...(input.baselineDriftSmoke === undefined
       ? {}
       : { baselineDriftSmoke: input.baselineDriftSmoke }),

@@ -177,6 +177,10 @@ describe("replayBothOrders", () => {
 // two ratios move together. The only structural fix is to precompute both
 // request sequences ONCE and make every arm run a pure byte-replay.
 describe("replayBothOrders transforms once for the whole gate", () => {
+  // ~1/3 of the raw size, mirroring the real saver's measured 34.4% compression,
+  // and unique per call so a per-arm memo cannot coincidentally match.
+  const compressed = (n: number) => `C${n}-${"compressed ".repeat(13)}`;
+
   const RAW_A = `A-${"raw output ".repeat(40)}`;
   const RAW_B = `B-${"raw output ".repeat(40)}`;
 
@@ -224,8 +228,10 @@ describe("replayBothOrders transforms once for the whole gate", () => {
       task: "task_1",
       requests: growing,
       // Call-counting and non-deterministic, mirroring the randomUUID the real
-      // saver embeds: a per-arm memo cannot coincidentally match.
-      applySaver: () => `C${++calls}`,
+      // saver embeds: a per-arm memo cannot coincidentally match. The payload is
+      // realistically compressed rather than 2 bytes, so it clears the integrity
+      // band instead of tripping the content-destruction floor.
+      applySaver: () => compressed(++calls),
       send,
       orderTolerance: 0.05,
       now: () => 0,
@@ -239,7 +245,7 @@ describe("replayBothOrders transforms once for the whole gate", () => {
     await replayBothOrders({
       task: "task_1",
       requests: growing,
-      applySaver: () => `C${++calls}`,
+      applySaver: () => compressed(++calls),
       send,
       orderTolerance: 0.05,
       now: () => 0,

@@ -277,8 +277,11 @@ function makeSender(baseUrl, apiKey) {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
       },
-      // Sent exactly as recorded, `"stream": true` included: flipping it would
-      // change what the API bills and make the replay a different request.
+      // Sent exactly as prepared: `"stream": true` stays as recorded (flipping it
+      // would change what the API bills and make the replay a different request),
+      // and `max_tokens` was already capped identically on both arms upstream in
+      // prepareArms — nothing that participates in the prompt-cache key differs
+      // from the recording.
       body: JSON.stringify(body),
     });
     const text = await response.text();
@@ -348,11 +351,14 @@ async function replay(values) {
     // arm — and printVerdict says which pair that is.
     const realBaselineUsd = referenceCostUsd(taskDir);
     const driftBaselineUsd = base.pairs[0].baseline.normalizedCostUsd;
+    // The order check is NOT carried over — `buildVerdict` re-derives it from the
+    // pairs passed here, so the reported ratio and the arms shown beside it
+    // cannot come from different data. Only the tolerance crosses.
     const verdict =
       realBaselineUsd === null
         ? base
         : buildVerdict(task, base.pairs, base.transform, {
-            ...(base.verified.order ? { order: base.verified.order } : {}),
+            orderTolerance,
             baselineDriftSmoke: {
               ok: baselineDriftSmokeOk({
                 replayedBaselineUsd: driftBaselineUsd,
@@ -402,10 +408,27 @@ function printVerdict(verdict, realBaselineUsd) {
     printArm(pair.megasaver);
   }
   console.log(`  cost ratio (baseline / megasaver): ${verdict.costRatio.toFixed(4)}x`);
+  console.log(
+    `    SCOPE: generation was capped to max_tokens=${verdict.generationCapTokens} on BOTH arms, so the model resampled`,
+  );
+  console.log(
+    "    nothing and the ratio above is an INPUT-SIDE comparison (input + cache_creation + cache_read).",
+  );
+  console.log(
+    "    It is NOT an end-to-end cost comparison: the output tokens counted into it are an artifact of",
+  );
+  console.log(
+    "    the cap, not of real generation. The saver only ever acts on the input side, which is why the",
+  );
+  console.log(
+    "    cap is sound — it removes $25/Mtok of resampling noise that swamped the effect being measured.",
+  );
 
   const { integrity, order, baselineDriftSmoke } = verdict.verified;
   console.log(
-    `  integrity: applied=${integrity.applied} bytes ${int(integrity.originalBytes)}->${int(integrity.transformedBytes)} ` +
+    `  integrity: applied=${integrity.applied}/${saver.applied + saver.passthrough} ` +
+      `(fraction ${integrity.appliedFraction.toFixed(4)}) ` +
+      `bytes ${int(integrity.originalBytes)}->${int(integrity.transformedBytes)} ` +
       `(byteRatio ${integrity.byteRatio.toFixed(4)}) ok=${integrity.ok}`,
   );
 

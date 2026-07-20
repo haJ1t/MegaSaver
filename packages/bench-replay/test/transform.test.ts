@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { assertUncompressedRecording, prepareArms, transformRequest } from "../src/transform.js";
+import {
+  GENERATION_CAP_TOKENS,
+  assertUncompressedRecording,
+  prepareArms,
+  transformRequest,
+} from "../src/transform.js";
 
 const body = {
   model: "claude-opus-4-8",
@@ -218,5 +223,63 @@ describe("prepareArms refuses a contaminated recording", () => {
       }),
     ).toThrow(/already compressed/i);
     expect(saverCalls).toBe(0);
+  });
+});
+
+// BLOCKER: the recorded bodies were sent verbatim, `"stream": true` included, so
+// the model resampled freely on all four arm runs. The replay never USES that
+// output — assistant turns come from the recording — yet at $25/Mtok it is ~26%
+// of arm cost and pure noise: a reviewer's 200-run simulation against a true 5%
+// input-side saving measured sd 3.78% and reported the saver as a net LOSS in
+// 15.5% of runs. Capping generation is only sound if it lands on BOTH arms and
+// leaves the cached prefix alone.
+describe("prepareArms generation cap", () => {
+  const recorded = [
+    {
+      model: "claude-opus-4-8",
+      stream: true,
+      max_tokens: 32000,
+      system: [{ type: "text", text: "sys", cache_control: { type: "ephemeral" } }],
+      tools: [{ name: "Bash", input_schema: { type: "object" } }],
+      messages: [
+        { role: "assistant", content: [{ type: "tool_use", id: "t1", name: "Bash", input: {} }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "RAW" }] },
+      ],
+    },
+  ];
+
+  const maxTokensOf = (body: unknown) => (body as { max_tokens?: unknown }).max_tokens;
+
+  it("caps max_tokens to the same value on both arms", () => {
+    const arms = prepareArms({ requests: recorded, applySaver: () => "SHORT" });
+    expect(GENERATION_CAP_TOKENS).toBe(1);
+    expect(arms.baseline.map(maxTokensOf)).toEqual([GENERATION_CAP_TOKENS]);
+    expect(arms.megasaver.map(maxTokensOf)).toEqual([GENERATION_CAP_TOKENS]);
+  });
+
+  // max_tokens is not part of the prompt-cache key — the key is the rendered
+  // prefix (tools -> system -> messages). Changing anything that IS would change
+  // the very thing being measured, so the cap must be the ONLY difference from
+  // the recording.
+  it("leaves every cache-keyed field byte-identical to the recording", () => {
+    const arms = prepareArms({ requests: recorded, applySaver: () => null });
+    const sent = arms.baseline[0] as Record<string, unknown>;
+    const original = recorded[0] as Record<string, unknown>;
+    for (const key of ["model", "stream", "system", "tools", "messages"]) {
+      expect(sent[key]).toEqual(original[key]);
+    }
+    expect(Object.keys(sent).sort()).toEqual(Object.keys(original).sort());
+  });
+
+  // Extended thinking reserves budget_tokens out of max_tokens, so the API
+  // rejects budget_tokens >= max_tokens. Detected before a request is sent
+  // rather than as a 400 four arm runs deep.
+  it("refuses a recording whose thinking budget cannot fit under the cap", () => {
+    expect(() =>
+      prepareArms({
+        requests: [{ ...recorded[0], thinking: { type: "enabled", budget_tokens: 8000 } } as never],
+        applySaver: () => "SHORT",
+      }),
+    ).toThrow(/budget_tokens/);
   });
 });

@@ -12,8 +12,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const REPO_ROOT = join(import.meta.dirname, "..", "..", "..");
 const RUNNER = join(REPO_ROOT, "scripts", "bench-replay.mjs");
 
-const RAW_TOOL_OUTPUT = "RAW_OUTPUT_LINE ".repeat(200); // 3200 B, and contains no "SHORT"
-const COMPRESSED = "SHORT"; // 5 B
+const RAW_TOOL_OUTPUT = "RAW_OUTPUT_LINE ".repeat(200); // 3200 B
+// 1104 B — a 0.345 byte ratio, mirroring the real saver's measured 34.4%
+// compression. NOT a token like "SHORT": a 5 B stand-in for 3200 B of output is
+// content destruction, and the integrity band now refuses it (byteRatio floor
+// 0.05) rather than certifying it as an enormous win. Shares no substring with
+// RAW_TOOL_OUTPUT, so the fake upstream can still tell the arms apart.
+const COMPRESSED = "COMPRESSED_LINE ".repeat(69);
 
 // Scripted so both arms are hand-computable. message_start's output_tokens is 3
 // while the final message_delta says 500/400: reading output from message_start
@@ -126,7 +131,7 @@ else if (argv.startsWith("hooks saver")) {
 let root: string;
 let server: Server;
 let baseUrl: string;
-const seen: { authed: boolean; stream: unknown }[] = [];
+const seen: { authed: boolean; stream: unknown; maxTokens: unknown }[] = [];
 
 beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), "bench-replay-pipeline-"));
@@ -137,9 +142,11 @@ beforeAll(async () => {
     req.on("data", (c: Buffer) => chunks.push(c));
     req.on("end", () => {
       const body = Buffer.concat(chunks).toString("utf8");
+      const parsed = JSON.parse(body);
       seen.push({
         authed: typeof req.headers["x-api-key"] === "string",
-        stream: JSON.parse(body).stream,
+        stream: parsed.stream,
+        maxTokens: parsed.max_tokens,
       });
       res.writeHead(200, { "content-type": "text/event-stream" });
       res.end(sse(body.includes(COMPRESSED) ? "megasaver" : "baseline"));
@@ -219,8 +226,12 @@ describe("bench-replay.mjs replay against a fake upstream", () => {
     expect(out).toContain("req   2  input=500 cache_creation=1,000 cache_read=2,000 output=400");
 
     // One tool_use_id, memoized: applied exactly once per arm replay.
-    expect(out).toContain("saver applied=1 passthrough=0 failed=0 tool_result bytes 3,200->5");
-    expect(out).toContain("integrity: applied=1 bytes 3,200->5 (byteRatio 0.0016) ok=true");
+    expect(out).toContain("saver applied=1 passthrough=0 failed=0 tool_result bytes 3,200->1,104");
+    // 1104/3200 = 0.345 — inside the two-sided integrity band, and the applied
+    // fraction (1 of 1 tool call) is reported alongside it.
+    expect(out).toContain(
+      "integrity: applied=1/1 (fraction 1.0000) bytes 3,200->1,104 (byteRatio 0.3450) ok=true",
+    );
 
     // Fake upstream is order-blind, so both orders must land on the same ratio.
     expect(out).toContain(
@@ -238,6 +249,12 @@ describe("bench-replay.mjs replay against a fake upstream", () => {
     expect(seen).toHaveLength(8);
     expect(seen.every((r) => r.authed)).toBe(true);
     expect(seen.every((r) => r.stream === true)).toBe(true);
+    // Generation capped on every request of BOTH arms — any asymmetry here would
+    // reintroduce the bias class this harness exists to eliminate — and the
+    // printed verdict has to say so rather than reading as end-to-end.
+    expect(seen.every((r) => r.maxTokens === 1)).toBe(true);
+    expect(out).toContain("generation was capped to max_tokens=1 on BOTH arms");
+    expect(out).toContain("INPUT-SIDE comparison");
   });
 
   it("refuses a recording that does not parse as a /v1/messages body", async () => {
