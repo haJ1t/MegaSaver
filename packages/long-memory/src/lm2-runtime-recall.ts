@@ -32,24 +32,8 @@ export async function recallLm2Adaptive(input: {
     catalog: input.catalog,
     store: input.store,
   });
-  let degradedReason: HybridSemanticReason | undefined =
+  const degradedReason: HybridSemanticReason | undefined =
     input.capability.status === "unavailable" ? input.capability.reason : undefined;
-  if (input.capability.status === "available" && input.capability.embedding.egress === "remote") {
-    if (input.approvalRef === undefined) degradedReason = "remote_approval_denied";
-    else {
-      try {
-        const current = await input.capability.approval?.assertCurrent({
-          workspaceKey: input.request.workspaceKey,
-          modelFingerprint: input.config.activeRecallModelFingerprint,
-          purpose: "query",
-          approvalRef: input.approvalRef,
-        });
-        if (current !== "approved") degradedReason = "remote_approval_denied";
-      } catch {
-        degradedReason = "remote_approval_denied";
-      }
-    }
-  }
   const rank = await rankLm2Candidates({
     candidates: projection.candidates,
     request: {
