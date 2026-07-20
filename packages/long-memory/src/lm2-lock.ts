@@ -6,6 +6,10 @@ const BUSY_CODES = new Set(["EAGAIN", "EWOULDBLOCK"]);
 
 export type WorkspaceFlock = (descriptor: number) => void;
 
+export type WorkspaceIndexLockGuard = {
+  assertIntact(): void;
+};
+
 function exclusiveNonBlocking(descriptor: number): void {
   flockSync(descriptor, "exnb");
 }
@@ -26,7 +30,7 @@ function lockError(error: unknown): Lm2Error {
 
 export async function withWorkspaceIndexLock<T>(
   path: string,
-  work: () => Promise<T>,
+  work: (guard: WorkspaceIndexLockGuard) => Promise<T>,
   flock: WorkspaceFlock = exclusiveNonBlocking,
 ): Promise<T> {
   let file: ReturnType<typeof openAnchoredUpdateFile> | undefined;
@@ -48,15 +52,25 @@ export async function withWorkspaceIndexLock<T>(
   if (file === undefined) {
     throw new Lm2Error("index_lock_unavailable", "LM2 workspace index lock is unavailable.");
   }
+  const lockedFile = file;
+  const guard: WorkspaceIndexLockGuard = {
+    assertIntact() {
+      try {
+        verifyAnchoredFile(lockedFile);
+      } catch (error) {
+        throw lockError(error);
+      }
+    },
+  };
   let result: T | undefined;
   let failure: unknown;
   try {
-    result = await work();
+    result = await work(guard);
   } catch (error) {
     failure = error;
   }
   try {
-    closeAnchoredFile(file);
+    closeAnchoredFile(lockedFile);
   } catch (error) {
     failure ??= error;
   }

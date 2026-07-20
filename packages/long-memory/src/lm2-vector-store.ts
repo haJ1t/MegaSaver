@@ -1,6 +1,6 @@
 import { Lm2Error } from "./lm2-errors.js";
 import { modelDescriptorFingerprint } from "./lm2-identity.js";
-import { withWorkspaceIndexLock } from "./lm2-lock.js";
+import { type WorkspaceIndexLockGuard, withWorkspaceIndexLock } from "./lm2-lock.js";
 import type { EmbeddingPort, Lm2Candidate, ModelDescriptor } from "./lm2-model.js";
 import { closeDirectoryAnchor } from "./lm2-secure-fs.js";
 import {
@@ -84,6 +84,15 @@ function resultShape(result: unknown): {
   }
 }
 
+function lockIsIntact(guard: WorkspaceIndexLockGuard): boolean {
+  try {
+    guard.assertIntact();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createLm2VectorStore({ storeRoot }: { storeRoot: string }): Lm2VectorStore {
   return {
     async readVerified({ workspaceKey, model, candidates, maxDecodedBytes, signal }) {
@@ -128,7 +137,7 @@ export function createLm2VectorStore({ storeRoot }: { storeRoot: string }): Lm2V
       }
 
       try {
-        return await withWorkspaceIndexLock(lockPath, async () => {
+        return await withWorkspaceIndexLock(lockPath, async (lock) => {
           const fingerprint = modelDescriptorFingerprint(model);
           let quota: ReturnType<typeof inspectVectorQuota>;
           const planned: Lm2Candidate[] = [];
@@ -160,6 +169,9 @@ export function createLm2VectorStore({ storeRoot }: { storeRoot: string }): Lm2V
             return { published: [], reason: "storage_limit" } as const;
           }
           if (input.signal.aborted) return { published: [], reason: "port_failure" } as const;
+          if (!lockIsIntact(lock)) {
+            return { published: [], reason: "index_lock_unavailable" } as const;
+          }
 
           let namespace: ReturnType<typeof ensureVectorNamespace>;
           try {
@@ -168,6 +180,9 @@ export function createLm2VectorStore({ storeRoot }: { storeRoot: string }): Lm2V
             return { published: [], reason: "write_failed" } as const;
           }
           try {
+            if (!lockIsIntact(lock)) {
+              return { published: [], reason: "index_lock_unavailable" } as const;
+            }
             let portResult: unknown;
             try {
               portResult = await input.embed({
@@ -178,6 +193,9 @@ export function createLm2VectorStore({ storeRoot }: { storeRoot: string }): Lm2V
               });
             } catch {
               return { published: [], reason: "port_failure" } as const;
+            }
+            if (!lockIsIntact(lock)) {
+              return { published: [], reason: "index_lock_unavailable" } as const;
             }
             if (input.signal.aborted) return { published: [], reason: "port_failure" } as const;
             const shaped = resultShape(portResult);
@@ -207,13 +225,20 @@ export function createLm2VectorStore({ storeRoot }: { storeRoot: string }): Lm2V
             const published: string[] = [];
             for (let index = 0; index < planned.length; index += 1) {
               if (input.signal.aborted) return { published, reason: "port_failure" } as const;
+              if (!lockIsIntact(lock)) {
+                return { published, reason: "index_lock_unavailable" } as const;
+              }
               try {
                 publishVectorSidecar(
                   namespace,
                   (planned[index] as Lm2Candidate).id,
                   serialized[index] as string,
+                  lock.assertIntact,
                 );
-              } catch {
+              } catch (error) {
+                if (error instanceof Lm2Error && error.code === "index_lock_unavailable") {
+                  return { published, reason: "index_lock_unavailable" } as const;
+                }
                 return { published, reason: "write_failed" } as const;
               }
               published.push((planned[index] as Lm2Candidate).id);

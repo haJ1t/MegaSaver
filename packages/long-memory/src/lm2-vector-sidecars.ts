@@ -167,6 +167,7 @@ export function publishVectorSidecar(
   anchor: DirectoryAnchor,
   candidateId: string,
   serialized: string,
+  assertLockIntact: () => void,
 ): void {
-  writeAnchoredNoClobber(anchor, vectorSidecarName(candidateId), serialized);
+  writeAnchoredNoClobber(anchor, vectorSidecarName(candidateId), serialized, assertLockIntact);
 }
