@@ -149,7 +149,9 @@ export function createLm2IndexService(input: IndexServiceInput): Lm2IndexService
             reason: "quota_state_invalid",
             quotaRecovery: "blocked_pending",
           }),
-          combineLm2CleanupFailures(failure, finalizeFailure),
+          failure === undefined
+            ? new AggregateError([finalizeFailure], "LM2 index finalization failed.")
+            : combineLm2CleanupFailures(failure, finalizeFailure),
         );
       }
       if (failure !== undefined) throw failure;

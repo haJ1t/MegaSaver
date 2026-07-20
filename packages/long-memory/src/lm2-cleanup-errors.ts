@@ -11,12 +11,15 @@ export class Lm2CleanupError extends Error {
 }
 
 export function isLm2CleanupError(error: unknown): boolean {
-  let current = error;
+  const pending = [error];
   const seen = new Set<object>();
-  while (current instanceof Error && !seen.has(current)) {
+  while (pending.length > 0) {
+    const current = pending.pop();
     if (current instanceof Lm2CleanupError) return true;
+    if (!(current instanceof Error) || seen.has(current)) continue;
     seen.add(current);
-    current = current.cause;
+    if (current.cause !== undefined) pending.push(current.cause);
+    if (current instanceof AggregateError) pending.push(...current.errors);
   }
   return false;
 }

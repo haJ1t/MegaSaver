@@ -69,6 +69,7 @@ export async function beginIndexOperation(
   let metadataReads = 0;
   let finalized = false;
   let cleanupBlocked = false;
+  let cleanupFailure: unknown;
   const assertFence = () => {
     if (finalized) throw new Error("stale operation");
     lock.assertIntact();
@@ -184,8 +185,9 @@ export async function beginIndexOperation(
     assertGuard,
     isFinalized: () => finalized,
     cleanupBlocked: () => cleanupBlocked,
-    blockCleanup: () => {
+    blockCleanup: (failure) => {
       cleanupBlocked = true;
+      cleanupFailure = combineLm2CleanupFailures(cleanupFailure, failure);
     },
   });
   return {
@@ -199,10 +201,16 @@ export async function beginIndexOperation(
       }
       let failure: unknown;
       try {
-        if (cleanupBlocked) throw new Lm2CleanupError("LM2 cleanup remains blocked.", undefined);
+        if (cleanupBlocked) {
+          throw new Lm2CleanupError("LM2 cleanup remains blocked.", cleanupFailure);
+        }
         if (ledger.pending !== null && !settlePending()) {
           cleanupBlocked = true;
-          throw new Lm2CleanupError("LM2 pending cleanup remains blocked.", undefined);
+          cleanupFailure = new Lm2CleanupError(
+            "LM2 pending cleanup remains blocked.",
+            cleanupFailure,
+          );
+          throw cleanupFailure;
         }
         if (ledger.pending === null) persist(advanceLm2Ledger({ ledger, fence: null }));
       } catch (error) {
