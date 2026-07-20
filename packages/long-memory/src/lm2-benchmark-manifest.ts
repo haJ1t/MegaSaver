@@ -178,10 +178,16 @@ export function parseBenchmarkManifest(value: unknown): BenchmarkManifest {
     trajectoryDigests.set(trajectory.id, trajectory.fullObjectDigest);
     for (const projection of trajectory.projections) {
       if (
+        projection.id !==
+          deriveBenchmarkProjectionId(
+            trajectory.id,
+            projection.sourceKind,
+            projection.sourceIndex,
+          ) ||
         projection.embeddingInputDigest !==
-        embeddingInputDigest({ kind: projection.kind, text: projection.text })
+          embeddingInputDigest({ kind: projection.kind, text: projection.text })
       ) {
-        throw new Error("Projection embedding digest mismatch.");
+        throw new Error("Projection identity or embedding digest mismatch.");
       }
     }
   }

@@ -1,9 +1,16 @@
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { pathToFileURL } from "node:url";
+import { beforeAll, describe, expect, it } from "vitest";
 
 const benchmarkRoot = join(import.meta.dirname, "../../../benchmarks/longmemeval-v2");
+const packageRoot = join(import.meta.dirname, "..");
+
+beforeAll(() => {
+  execFileSync("pnpm", ["build"], { cwd: packageRoot, stdio: "pipe" });
+});
 
 describe("LM2 pinned benchmark preparation tools", () => {
   it("publishes the exact official and data contract", () => {
@@ -44,5 +51,50 @@ describe("LM2 pinned benchmark preparation tools", () => {
       },
       allowedDirtyPaths: ["memory_modules/megasaver_lm2_hybrid.py", "memory_modules/memory.py"],
     });
+  });
+
+  it("runs the normal builder path against emitted private entrypoints", async () => {
+    const root = mkdtempSync(join(tmpdir(), "megasaver-lm2-builder-"));
+    const officialRoot = join(root, "official");
+    const dataRoot = join(root, "data");
+    mkdirSync(officialRoot);
+    mkdirSync(dataRoot);
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(benchmarkRoot, "build-lm2-manifest.mjs"),
+        "--official-root",
+        officialRoot,
+        "--data-root",
+        dataRoot,
+        "--domain",
+        "web",
+        "--tier",
+        "small",
+        "--output",
+        join(root, "manifest.json"),
+      ],
+      { encoding: "utf8" },
+    );
+    rmSync(root, { recursive: true, force: true });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).not.toContain("ERR_MODULE_NOT_FOUND");
+    const manifestEntry = join(packageRoot, "dist/lm2-benchmark-manifest.js");
+    const canonicalEntry = join(packageRoot, "dist/lm2-benchmark-canonical.js");
+    expect([existsSync(manifestEntry), existsSync(canonicalEntry)]).toEqual([true, true]);
+    const [manifestModule, canonicalModule] = await Promise.all([
+      import(pathToFileURL(manifestEntry).href),
+      import(pathToFileURL(canonicalEntry).href),
+    ]);
+    expect(manifestModule.buildBenchmarkManifest).toBeTypeOf("function");
+    expect(canonicalModule.canonicalSha256).toBeTypeOf("function");
+
+    const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+    expect(Object.keys(packageJson.exports)).toEqual(["."]);
+    expect(Object.keys(packageJson.bin)).toEqual([
+      "megasaver-long-memory",
+      "megasaver-long-memory-lm2-benchmark",
+    ]);
   });
 });
