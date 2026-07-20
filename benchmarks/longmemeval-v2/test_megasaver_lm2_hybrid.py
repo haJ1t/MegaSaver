@@ -174,6 +174,12 @@ class MegaSaverLm2HybridTest(unittest.TestCase):
             "2db8d44b938ffc1b07dce0a4cdf863003895af71dcf8a13c2d00f271e5816b8b",
         )
 
+    def test_python_projection_id_matches_the_typescript_vector(self) -> None:
+        self.assertEqual(
+            self.backend._projection_id("trajectory-1", "states", 2),
+            "32f31c63-ec59-5f18-bcb6-bb6320e2d6f7",
+        )
+
     def test_rejects_self_consistent_manifest_substitution_without_transport(self) -> None:
         mutations = [
             lambda value: value.update(officialCommit="0" * 40),
@@ -186,6 +192,9 @@ class MegaSaverLm2HybridTest(unittest.TestCase):
             lambda value: value["trajectories"][0]["projections"][0].update(observedAt=7),
             lambda value: value["trajectories"][0]["projections"][0].update(observedAt="2026-99-99T99:99:99Z"),
             lambda value: value["questions"][0].update(questionId=""),
+            lambda value: value["trajectories"][0]["projections"][0].update(
+                id="306c9e5f-7b55-51fa-a3d1-02ac2ad096be", sourceIndex=1
+            ),
         ]
         original = json.loads(json.dumps(self.fixture["manifest"]))
         for mutate in mutations:
