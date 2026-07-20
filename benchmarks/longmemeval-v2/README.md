@@ -95,7 +95,8 @@ node benchmarks/longmemeval-v2/build-lm2-manifest.mjs \
 ```
 
 The command prints the independently configured `manifestDigest`. Copy
-`megasaver_lm2_hybrid.json`, replace its absolute paths and digest, and keep
+`megasaver_lm2_hybrid.json`, replace its absolute paths, manifest digest, and
+`megasaver_commit` with the exact 40-character commit that built the transport, and keep
 `embedding_egress` and the model provider set to `local`. Remote endpoints,
 remote acknowledgements, and destination fields are rejected.
 
@@ -120,3 +121,36 @@ context. Save/load succeeds only from the original save directory identity.
 No LongMemEval-V2 accuracy, latency, LAFS, or leaderboard score is claimed by
 these files. Such a claim requires completed web and enterprise runs plus the
 official artifact gate implemented separately from this Task 5 transport.
+
+## Official evidence qualification
+
+Inspection authenticates a recorded bundle but is deliberately ineligible for
+an official score:
+
+```bash
+node benchmarks/longmemeval-v2/verify-official-artifacts.mjs \
+  --inspect \
+  --evidence /absolute/path/to/evidence.json
+```
+
+Only full verification can emit `officialScoreEligible: true`. It requires the
+pinned installed checkout and released public data, executes the evidence JSON
+Schema, reruns the official data validator and aggregate/combined-metric code,
+rebuilds both domain manifests from the trajectories, verifies the exact
+transport executable and Mega Saver commit, cross-binds telemetry IDs and
+latencies to harness rows, and deterministically reruns both official
+leaderboard builders. The rebuilt package, overview/LAFS, and tar contents must
+match the recorded bytes:
+
+```bash
+pnpm --filter @megasaver/long-memory build
+node benchmarks/longmemeval-v2/verify-official-artifacts.mjs \
+  --evidence /absolute/path/to/evidence.json \
+  --official-root "$LME_ROOT" \
+  --data-root "$DATA_ROOT" \
+  --python /absolute/path/to/python3.11
+```
+
+The verifier does not turn locally fabricated fixtures into benchmark results.
+Without real completed web and enterprise harness artifacts, it fails closed
+and no score, dashboard, latency, or LAFS claim is valid.

@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { workspaceKeySchema } from "@megasaver/shared";
-import { createLm2Runtime, modelDescriptorFingerprint } from "./index.js";
+import { Lm2BenchmarkContextBuilder } from "./lm2-benchmark-context.js";
 import type { BenchmarkProjection } from "./lm2-benchmark-manifest.js";
 import type { BenchmarkConfig } from "./lm2-benchmark-protocol.js";
-
-function evidenceDigest(id: string): string {
-  return createHash("sha256").update(`megasaver.lm2.benchmark.evidence.v1\0${id}`).digest("hex");
-}
+import { modelDescriptorFingerprint } from "./lm2-identity.js";
+import type { EmbeddingPort, Lm2Candidate } from "./lm2-model.js";
+import { rankLm2Candidates } from "./lm2-ranker.js";
+import { createLm2VectorStore } from "./lm2-vector-store.js";
 
 function hashVector(text: string, dimensions: number): number[] {
   const vector: number[] = Array.from({ length: dimensions }, () => 0);
@@ -35,6 +35,20 @@ function workspaceKey(
     .slice(0, 16);
 }
 
+function publicCandidates(
+  key: Lm2Candidate["workspaceKey"],
+  projections: readonly BenchmarkProjection[],
+): Lm2Candidate[] {
+  return projections.map((projection) => ({
+    id: projection.id,
+    workspaceKey: key,
+    observedAt: projection.observedAt,
+    kind: projection.kind,
+    text: projection.text,
+    sourceDigest: projection.sourceDigest,
+  }));
+}
+
 export function createBenchmarkRuntime(input: {
   config: BenchmarkConfig;
   storeRoot: string;
@@ -45,94 +59,58 @@ export function createBenchmarkRuntime(input: {
     workspaceKey(input.config, input.instanceToken, input.sentinelToken),
   );
   const fingerprint = modelDescriptorFingerprint(input.config.model);
-  const evidence = new Map<string, string>();
-  const runtime = createLm2Runtime({
-    storeRoot: input.storeRoot,
-    redaction: {
-      version: "benchmark-public-v1",
-      redact: ({ text, action }) => ({ text, action, unresolvedHighRisk: false }),
+  const vectors = createLm2VectorStore({ storeRoot: input.storeRoot });
+  const embedding: EmbeddingPort = {
+    egress: "local",
+    async embed({ texts }) {
+      return {
+        modelFingerprint: fingerprint,
+        vectors: texts.map((text) => hashVector(text, input.config.model.dimensions)),
+      };
     },
-    evidenceBinding: {
-      async verify({ evidenceIds }) {
-        return {
-          evidence: evidenceIds.map((evidenceId) => ({
-            evidenceId,
-            evidenceDigest: evidence.get(evidenceId) ?? evidenceDigest(evidenceId),
-          })),
-        };
-      },
-    },
-    evidenceEligibility: {
-      async resolve({ evidenceIds }) {
-        return evidenceIds.map((evidenceId) => ({
-          evidenceId,
-          workspaceKey: key,
-          status: "available" as const,
-          unresolvedHighRisk: false,
-        }));
-      },
-    },
-    clock: { now: () => new Date().toISOString() },
-    monotonicClock: { now: () => performance.now() },
-    embedding: {
-      egress: "local",
-      async embed({ texts }) {
-        return {
-          modelFingerprint: fingerprint,
-          vectors: texts.map((text) => hashVector(text, input.config.model.dimensions)),
-        };
-      },
-    },
-    config: {
-      admittedModels: [input.config.model],
-      activeRecallModelFingerprint: fingerprint,
-      embeddingEgress: "local",
-      remoteApprovals: [],
-      queryTimeoutMs: input.config.queryTimeoutMs,
-      indexBatchTimeoutMs: input.config.indexBatchTimeoutMs,
-    },
-  });
+  };
+  const context = new Lm2BenchmarkContextBuilder();
 
   return {
     workspaceKey: key,
     async insert(projections: readonly BenchmarkProjection[]): Promise<void> {
-      for (const projection of projections) {
-        evidence.set(projection.id, projection.sourceDigest);
-        const prepared = runtime.capture.prepare({
-          workspaceKey: key,
-          kind: "state_snapshot",
-          observedAt: projection.observedAt,
-          text: projection.text,
-          action: null,
-          evidenceIds: [projection.id],
-          stateKey: `benchmark.${projection.id}`,
-          representation: "value",
-          supersedesSnapshotId: null,
-        });
-        await runtime.capture.capturePrepared({ prepared, authorization: "public-manifest" });
-      }
-      let cursor: string | undefined;
-      for (;;) {
-        const receipt = await runtime.index({
-          workspaceKey: key,
-          modelFingerprint: fingerprint,
-          maxRecords: 256,
-          ...(cursor === undefined ? {} : { cursor }),
-          timeoutMs: input.config.indexBatchTimeoutMs,
-        });
-        if (receipt.outcome === "complete") return;
-        if (receipt.outcome !== "continue") throw new Error("Benchmark indexing did not complete.");
-        cursor = receipt.nextCursor;
-      }
-    },
-    async query(task: string) {
-      return runtime.recall({
+      const result = await vectors.reserveAndPublish({
         workspaceKey: key,
-        task,
-        tokenBudget: input.config.tokenBudget,
-        profile: input.config.profile,
-        timeoutMs: input.config.queryTimeoutMs,
+        model: input.config.model,
+        records: publicCandidates(key, projections),
+        signal: new AbortController().signal,
+        embed: embedding.embed,
       });
+      if (result.reason !== null) throw new Error("Benchmark indexing did not complete.");
+    },
+    async query(task: string, projections: readonly BenchmarkProjection[]) {
+      const candidates = publicCandidates(key, projections);
+      const rank = await rankLm2Candidates({
+        candidates,
+        request: {
+          workspaceKey: key,
+          task,
+          profile: input.config.profile,
+          ...(input.config.profile === "adaptive" ? { model: input.config.model } : {}),
+          timeoutMs: input.config.queryTimeoutMs,
+        },
+        vectors,
+        embedding,
+        clock: { now: () => performance.now() },
+        adaptiveCandidateScope: "benchmark_run_cache",
+      });
+      const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+      const orderedCandidates = rank.scores.map(({ id, score }) => {
+        const candidate = byId.get(id);
+        if (candidate === undefined) throw new Error("Benchmark rank result is invalid.");
+        return { candidate, score };
+      });
+      const built = context.build({
+        workspaceKey: key,
+        tokenBudget: input.config.tokenBudget,
+        orderedCandidates,
+      });
+      return { ...built, receipt: { context: built.receipt, hybrid: rank.hybrid } };
     },
   };
 }
