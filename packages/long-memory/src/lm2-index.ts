@@ -32,9 +32,7 @@ const MAX_CATALOG_ENTRIES_PER_CALL = 1_024;
 const MAX_DOCUMENTS_PER_BATCH = 16;
 const MAX_BATCH_INPUT_CODE_UNITS = 65_536;
 
-export type Lm2IndexService = {
-  index(request: Lm2IndexRequest): Promise<Lm2IndexReceipt>;
-};
+export type Lm2IndexService = { index(request: Lm2IndexRequest): Promise<Lm2IndexReceipt> };
 
 type IndexServiceInput = {
   catalog: Lm2CandidateCatalog;
@@ -49,7 +47,6 @@ type IndexServiceInput = {
 };
 
 type QuotaRecovery = Lm2IndexReceipt["quotaRecovery"];
-
 async function processPage(input: {
   page: Lm2CatalogPage;
   origin: string | null;
@@ -58,6 +55,7 @@ async function processPage(input: {
   quotaRecovery: QuotaRecovery;
   service: IndexServiceInput;
   signal: AbortSignal;
+  deadlineReached(): boolean;
   expired: Promise<void>;
 }): Promise<Lm2IndexReceipt> {
   if (input.page.entries.length > MAX_CATALOG_ENTRIES_PER_CALL) {
@@ -67,7 +65,7 @@ async function processPage(input: {
     workspaceKey: input.request.workspaceKey,
     store: input.service.store,
     evidenceEligibility: input.service.evidenceEligibility,
-    signal: input.signal,
+    deadlineReached: input.deadlineReached,
     expired: input.expired,
   });
   const omitted: { id: string; reason: string }[] = [];
@@ -86,7 +84,6 @@ async function processPage(input: {
       embedding: input.service.embedding,
       workspaceKey: input.request.workspaceKey,
       signal: input.signal,
-      expired: input.expired,
       pageOrigin: input.origin,
       ...(input.service.remoteApproval === undefined
         ? {}
@@ -199,6 +196,7 @@ export function createLm2IndexService(input: IndexServiceInput): Lm2IndexService
       });
       const timeout = parsed.data.timeoutMs ?? input.defaultTimeoutMs;
       const deadlineAtMs = performance.now() + timeout;
+      const deadlineReached = () => controller.signal.aborted || performance.now() >= deadlineAtMs;
       const timer = setTimeout(() => {
         controller.abort();
         expire();
@@ -248,16 +246,23 @@ export function createLm2IndexService(input: IndexServiceInput): Lm2IndexService
           cursor: origin,
           limit: MAX_CATALOG_ENTRIES_PER_CALL,
         });
-        receipt = await processPage({
-          page,
-          origin,
-          request: parsed.data,
-          operation,
-          quotaRecovery: operation.quotaRecovery,
-          service,
-          signal: controller.signal,
-          expired,
-        });
+        receipt = deadlineReached()
+          ? retryIndexReceipt({
+              retryCursor: origin,
+              reason: "timeout",
+              quotaRecovery: operation.quotaRecovery,
+            })
+          : await processPage({
+              page,
+              origin,
+              request: parsed.data,
+              operation,
+              quotaRecovery: operation.quotaRecovery,
+              service,
+              signal: controller.signal,
+              deadlineReached,
+              expired,
+            });
       } catch (error) {
         if (error instanceof Lm2Error && error.code === "cursor_expired") {
           receipt = expiredIndexReceipt(operation.quotaRecovery);

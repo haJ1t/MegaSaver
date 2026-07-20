@@ -30,6 +30,7 @@ export type Lm2IndexDeadline = {
 
 export type Lm2PublishBatchResult = {
   published: readonly string[];
+  existing: readonly string[];
   reason:
     | null
     | "storage_limit"

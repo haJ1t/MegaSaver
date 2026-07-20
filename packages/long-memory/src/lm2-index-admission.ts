@@ -179,13 +179,12 @@ function currentEligibility(
   }
   return "current";
 }
-
 async function resolveBeforeDeadline(input: {
   resolve(): Promise<unknown>;
-  signal: AbortSignal;
+  deadlineReached(): boolean;
   expired: Promise<void>;
 }): Promise<{ type: "value"; value: unknown } | { type: "error" } | { type: "timeout" }> {
-  if (input.signal.aborted) return { type: "timeout" };
+  if (input.deadlineReached()) return { type: "timeout" };
   const resolution = input
     .resolve()
     .then((value) => ({ type: "value" as const, value }))
@@ -194,14 +193,13 @@ async function resolveBeforeDeadline(input: {
     resolution,
     input.expired.then(() => ({ type: "timeout" as const })),
   ]);
-  return input.signal.aborted ? { type: "timeout" } : result;
+  return input.deadlineReached() ? { type: "timeout" } : result;
 }
-
 export function createLm2IndexAdmission(input: {
   workspaceKey: string;
   store: FileLm1Store;
   evidenceEligibility: EvidenceEligibilityPort;
-  signal: AbortSignal;
+  deadlineReached(): boolean;
   expired: Promise<void>;
 }) {
   const recordCache = new Map<string, Lm1Record>();
@@ -235,7 +233,7 @@ export function createLm2IndexAdmission(input: {
     evidenceIds: readonly string[],
   ): Promise<"current" | "ineligible" | "invalid" | "timeout"> => {
     const result = await resolveBeforeDeadline({
-      signal: input.signal,
+      deadlineReached: input.deadlineReached,
       expired: input.expired,
       resolve: () =>
         input.evidenceEligibility.resolve({ workspaceKey: input.workspaceKey, evidenceIds }),
@@ -246,8 +244,9 @@ export function createLm2IndexAdmission(input: {
 
   return {
     async admit(entry: Lm2CatalogEntry): Promise<Lm2IndexAdmissionResult> {
-      if (input.signal.aborted) return { type: "retry", reason: "timeout" };
+      if (input.deadlineReached()) return { type: "retry", reason: "timeout" };
       const primary = readRecord(entry.id);
+      if (input.deadlineReached()) return { type: "retry", reason: "timeout" };
       if (primary.type === "capacity") return { type: "capacity" };
       if (primary.type === "missing" || !catalogTupleMatches(entry, primary.record)) {
         return { type: "terminal", reason: "record_unavailable" };
@@ -261,6 +260,7 @@ export function createLm2IndexAdmission(input: {
       if (primary.record.kind === "state_transition") {
         const pre = readRecord(primary.record.preSnapshotId);
         const post = readRecord(primary.record.postSnapshotId);
+        if (input.deadlineReached()) return { type: "retry", reason: "timeout" };
         if (pre.type === "capacity" || post.type === "capacity") return { type: "capacity" };
         if (
           pre.type === "missing" ||
@@ -281,19 +281,19 @@ export function createLm2IndexAdmission(input: {
       if (resolvedEvidenceIds.size + unseen.length > MAX_DISTINCT_EVIDENCE) {
         return { type: "retry", reason: "evidence_cap_exhausted" };
       }
+      for (const id of unseen) resolvedEvidenceIds.add(id);
       const eligibility = await resolveEvidence(requiredEvidenceIds);
       if (eligibility === "timeout") return { type: "retry", reason: "timeout" };
       if (eligibility === "invalid") return { type: "retry", reason: "evidence_changed" };
       if (eligibility === "ineligible") {
         return { type: "terminal", reason: "evidence_ineligible" };
       }
-      for (const id of unseen) resolvedEvidenceIds.add(id);
       evidenceByCandidate.set(candidate.id, requiredEvidenceIds);
       return { type: "eligible", record: { candidate, requiredEvidenceIds } };
     },
     async recheck(candidate: Lm2Candidate): Promise<boolean> {
       const evidenceIds = evidenceByCandidate.get(candidate.id);
-      if (evidenceIds === undefined || input.signal.aborted) return false;
+      if (evidenceIds === undefined || input.deadlineReached()) return false;
       return (await resolveEvidence(evidenceIds)) === "current";
     },
   };
