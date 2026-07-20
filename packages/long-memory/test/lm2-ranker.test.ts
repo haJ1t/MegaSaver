@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
-import type { Lm2Candidate, ModelDescriptor } from "../src/lm2-model.js";
+import type { Lm2Candidate, Lm2VectorReadResult, ModelDescriptor } from "../src/lm2-model.js";
 import { rankLm2Candidates } from "../src/lm2-ranker.js";
 
 const workspaceKey = "0123456789abcdef";
@@ -28,11 +28,12 @@ function candidate(index: number, text: string, observedAt = "2026-01-01T00:00:0
 function adaptiveInput(
   candidates: readonly Lm2Candidate[],
   vectors: readonly { candidateId: string; vector: readonly number[]; decodedBytes: number }[],
+  diagnostics: Lm2VectorReadResult["diagnostics"] = [],
 ) {
   return {
     candidates,
     request: { workspaceKey, task: "billing payment", profile: "adaptive" as const, model },
-    vectors: { readVerified: vi.fn(async () => vectors) },
+    vectors: { read: vi.fn(async () => ({ vectors, diagnostics })) },
     embedding: {
       egress: "local" as const,
       embed: vi.fn(async () => ({
@@ -108,7 +109,7 @@ describe("LM2 hybrid ranker", () => {
   });
 
   it("keeps Safe lexical-only and makes zero embedding or sidecar calls", async () => {
-    const vectors = { readVerified: vi.fn() };
+    const vectors = { read: vi.fn() };
     const embedding = { egress: "remote" as const, embed: vi.fn() };
     const records = [candidate(1, "billing billing"), candidate(2, "billing")];
 
@@ -122,7 +123,7 @@ describe("LM2 hybrid ranker", () => {
 
     expect(result.orderedCandidateIds).toEqual(records.map((entry) => entry.id));
     expect(result.hybrid.semanticStatus).toBe("not_requested");
-    expect(vectors.readVerified).not.toHaveBeenCalled();
+    expect(vectors.read).not.toHaveBeenCalled();
     expect(embedding.embed).not.toHaveBeenCalled();
   });
 
@@ -136,7 +137,7 @@ describe("LM2 hybrid ranker", () => {
       semanticStatus: "degraded",
       semanticReasons: ["input_limit"],
     });
-    expect(input.vectors.readVerified).not.toHaveBeenCalled();
+    expect(input.vectors.read).not.toHaveBeenCalled();
     expect(input.embedding.embed).not.toHaveBeenCalled();
   });
 
@@ -155,6 +156,170 @@ describe("LM2 hybrid ranker", () => {
       indexedVectorCount: 1,
       missingVectorCount: 2,
     });
+  });
+
+  it("preserves invalid and quota-ledger diagnostics without synthesizing missing", async () => {
+    const indexed = candidate(1, "billing");
+    const invalid = candidate(2, "billing");
+    const ledgerBlocked = candidate(3, "billing");
+    const input = adaptiveInput(
+      [indexed, invalid, ledgerBlocked],
+      [{ candidateId: indexed.id, vector: [1, 0], decodedBytes: 8 }],
+      [
+        { candidateId: invalid.id, reason: "invalid_vectors" },
+        { candidateId: ledgerBlocked.id, reason: "quota_ledger_invalid" },
+      ],
+    );
+
+    const result = await rankLm2Candidates(input);
+
+    expect(result.hybrid).toMatchObject({
+      semanticStatus: "used_partial_index",
+      semanticReasons: ["invalid_vectors", "quota_ledger_invalid"],
+      indexedVectorCount: 1,
+      missingVectorCount: 0,
+      invalidVectorCount: 1,
+    });
+  });
+
+  it("reports recovery-pending without reclassifying it as missing", async () => {
+    const record = candidate(1, "billing");
+    const input = adaptiveInput(
+      [record],
+      [],
+      [{ candidateId: record.id, reason: "quota_recovery_pending" }],
+    );
+
+    const result = await rankLm2Candidates(input);
+
+    expect(result.hybrid).toMatchObject({
+      semanticStatus: "degraded",
+      semanticReasons: ["quota_recovery_pending"],
+      missingVectorCount: 0,
+    });
+    expect(input.embedding.embed).not.toHaveBeenCalled();
+  });
+
+  it("maps and de-duplicates vector-read diagnostics in sorted order", async () => {
+    const first = candidate(1, "billing");
+    const second = candidate(2, "billing");
+    const input = adaptiveInput(
+      [first, second],
+      [],
+      [
+        { candidateId: second.id, reason: "vector_read_limit" },
+        { candidateId: first.id, reason: "missing_vectors" },
+        { candidateId: second.id, reason: "vector_read_limit" },
+      ],
+    );
+
+    const result = await rankLm2Candidates(input);
+
+    expect(result.hybrid).toMatchObject({
+      semanticReasons: ["missing_vectors", "vector_read_limit"],
+      missingVectorCount: 1,
+    });
+  });
+
+  it.each([
+    {
+      name: "candidate membership",
+      vector: {
+        candidateId: "00000000-0000-4000-8000-999999999999",
+        vector: [1, 0],
+        decodedBytes: 8,
+      },
+    },
+    {
+      name: "duplicate identity",
+      vector: null,
+    },
+    {
+      name: "descriptor dimension",
+      vector: { candidateId: candidate(1, "billing").id, vector: [1], decodedBytes: 4 },
+    },
+    {
+      name: "decoded-byte claim",
+      vector: { candidateId: candidate(1, "billing").id, vector: [1, 0], decodedBytes: 4 },
+    },
+    {
+      name: "finite components",
+      vector: { candidateId: candidate(1, "billing").id, vector: [Number.NaN, 0], decodedBytes: 8 },
+    },
+  ])("rejects invalid returned-vector $name before query embedding", async ({ name, vector }) => {
+    const record = candidate(1, "billing");
+    const returned =
+      name === "duplicate identity"
+        ? [
+            { candidateId: record.id, vector: [1, 0], decodedBytes: 8 },
+            { candidateId: record.id, vector: [1, 0], decodedBytes: 8 },
+          ]
+        : [vector as { candidateId: string; vector: readonly number[]; decodedBytes: number }];
+    const input = adaptiveInput([record], returned);
+
+    const result = await rankLm2Candidates(input);
+
+    expect(result.hybrid).toMatchObject({
+      semanticStatus: "degraded",
+      semanticReasons: ["invalid_vectors"],
+    });
+    expect(result.orderedCandidateIds).toEqual([record.id]);
+    expect(input.embedding.embed).not.toHaveBeenCalled();
+  });
+
+  it("passes a monotonic deadline through the bounded vector read", async () => {
+    const record = candidate(1, "billing");
+    const input = adaptiveInput(
+      [record],
+      [{ candidateId: record.id, vector: [1, 0], decodedBytes: 8 }],
+    );
+    input.clock.now = vi.fn(() => 10);
+
+    await rankLm2Candidates(input);
+
+    expect(input.vectors.read).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deadlineAtMs: 1_510,
+        now: expect.any(Function),
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("ends a completed vector read at the monotonic deadline", async () => {
+    const record = candidate(1, "billing");
+    const input = adaptiveInput(
+      [record],
+      [{ candidateId: record.id, vector: [1, 0], decodedBytes: 8 }],
+    );
+    input.clock.now = vi
+      .fn()
+      .mockReturnValueOnce(10)
+      .mockReturnValueOnce(10)
+      .mockReturnValue(1_510);
+
+    const result = await rankLm2Candidates(input);
+
+    expect(result.hybrid).toMatchObject({
+      semanticStatus: "degraded",
+      semanticReasons: ["timeout"],
+    });
+    expect(input.embedding.embed).not.toHaveBeenCalled();
+  });
+
+  it("uses only the canonical public query as embedding input", async () => {
+    const record = candidate(1, "billing");
+    const input = adaptiveInput(
+      [record],
+      [{ candidateId: record.id, vector: [1, 0], decodedBytes: 8 }],
+    );
+    input.request.task = "  billing  ";
+
+    await rankLm2Candidates(input);
+
+    expect(input.embedding.embed).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: "query", texts: ["billing"] }),
+    );
   });
 
   it("checks current remote query approval immediately before egress", async () => {
@@ -190,6 +355,7 @@ describe("LM2 hybrid ranker", () => {
       [{ candidateId: record.id, vector: [1, 0], decodedBytes: 8 }],
     );
     input.request.timeoutMs = 5;
+    input.clock.now = vi.fn(() => 10);
     input.embedding.embed = vi.fn(
       ({ signal }) =>
         new Promise((resolve) => {
@@ -207,6 +373,37 @@ describe("LM2 hybrid ranker", () => {
       semanticReasons: ["timeout"],
     });
     expect(result.orderedCandidateIds).toEqual([record.id]);
+  });
+
+  it("aborts a stalled vector read and preserves lexical ranking", async () => {
+    let resolveRead!: (value: Lm2VectorReadResult) => void;
+    let readSignal: AbortSignal | undefined;
+    const record = candidate(1, "billing");
+    const input = adaptiveInput([record], []);
+    input.request.timeoutMs = 5;
+    input.clock.now = vi.fn(() => 10);
+    input.vectors.read = vi.fn(
+      ({ signal }) =>
+        new Promise((resolve) => {
+          readSignal = signal;
+          resolveRead = resolve;
+        }),
+    );
+
+    const result = await rankLm2Candidates(input);
+    resolveRead({
+      vectors: [{ candidateId: record.id, vector: [1, 0], decodedBytes: 8 }],
+      diagnostics: [],
+    });
+    await Promise.resolve();
+
+    expect(readSignal?.aborted).toBe(true);
+    expect(result.hybrid).toMatchObject({
+      semanticStatus: "degraded",
+      semanticReasons: ["timeout"],
+    });
+    expect(result.orderedCandidateIds).toEqual([record.id]);
+    expect(input.embedding.embed).not.toHaveBeenCalled();
   });
 
   it("rejects private or unvalidated candidate fields at its boundary", async () => {
