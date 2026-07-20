@@ -1,7 +1,7 @@
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
 from hashlib import sha256
-import json, math, os, re, secrets, stat, subprocess, threading, unicodedata
+import fcntl, json, math, os, re, secrets, stat, subprocess, threading, unicodedata
 from pathlib import Path
 from typing import Any
 from memory_modules.memory import Memory, MemoryContextItem, register_memory
@@ -203,8 +203,8 @@ class MegaSaverLm2HybridMemory(Memory):
         if not isinstance(questions, list): return None
         normalized = query.strip()
         return next((row for row in questions if isinstance(row, dict) and row.get("questionId") == question_id and row.get("questionText") == normalized and row.get("questionTextDigest") == _digest(normalized) and row.get("haystackChainDigest") == self._chain_digest), None)
-    def _rejected_telemetry(self, question_id: str, image_present: bool) -> dict[str, object]:
-        telemetry = {"profile": self.memory_params["profile"], "semanticStatus": "rejected", "modelFingerprint": _digest(self.memory_params["model"]), "candidateCount": 0, "selectionCount": 0, "latencyMs": 0, "questionId": question_id, "questionType": "unknown", "imagePresent": image_present, "imageUsed": False}
+    def _rejected_telemetry(self, image_present: bool) -> dict[str, object]:
+        telemetry = {"profile": self.memory_params["profile"], "semanticStatus": "rejected", "rejectionReason": "not_admitted", "observedAt": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"), "auditId": secrets.token_hex(16), "modelFingerprint": _digest(self.memory_params["model"]), "candidateCount": 0, "selectionCount": 0, "latencyMs": 0, "questionType": "unknown", "imagePresent": image_present, "imageUsed": False}
         parent, root, target = None, None, None
         try:
             parent, parent_info = _anchor_dir(Path(str(self.memory_params["cache_parent"])))
@@ -239,8 +239,7 @@ class MegaSaverLm2HybridMemory(Memory):
         with self._lock:
             question = self._admitted_question(query)
             if question is None:
-                context = self.get_query_context(); question_id = context.get("question_id")
-                self._query_metadata.value = self._rejected_telemetry(question_id if isinstance(question_id, str) else "missing", query_image is not None)
+                self._query_metadata.value = self._rejected_telemetry(query_image is not None)
                 return []
             self._ensure_open()
             result = self._call({"op": "query", "config": self._transport_config(), "instanceToken": self._instance_token, "sentinelToken": self._sentinel_token, "expectedChainDigest": self._chain_digest, "questionId": question["questionId"], "query": query.strip(), "queryImagePresent": query_image is not None})
@@ -271,29 +270,27 @@ class MegaSaverLm2HybridMemory(Memory):
                 os.close(descriptor); os.close(parent_descriptor)
     def _load_backend(self, input_dir: Path) -> None:
         with self._lock:
-            _safe_dir(input_dir)
-            canonical_dir = input_dir.resolve(strict=True); info = canonical_dir.stat()
-            control = _json_file(canonical_dir / CONTROL_NAME)
-            required = {"schemaVersion", "manifestDigest", "dataRevision", "instanceToken", "sentinelToken", "chain", "chainDigest", "saveRealpath", "saveDevice", "saveInode"}
-            _require(isinstance(control, dict) and set(control) == required, "LM2 saved control fields mismatch")
-            _require(control["saveRealpath"] == str(canonical_dir) and control["saveDevice"] == str(info.st_dev) and control["saveInode"] == str(info.st_ino), "LM2 save directory identity mismatch")
-            chain = control["chain"]
-            token = lambda value: isinstance(value, str) and len(value) == 32 and all(char in "0123456789abcdef" for char in value)
+            _safe_dir(input_dir); canonical_dir = input_dir.resolve(strict=True); info = canonical_dir.stat()
+            control = _json_file(canonical_dir / CONTROL_NAME); required = {"schemaVersion", "manifestDigest", "dataRevision", "instanceToken", "sentinelToken", "chain", "chainDigest", "saveRealpath", "saveDevice", "saveInode"}
+            _require(isinstance(control, dict) and set(control) == required, "LM2 saved control fields mismatch"); _require(control["saveRealpath"] == str(canonical_dir) and control["saveDevice"] == str(info.st_dev) and control["saveInode"] == str(info.st_ino), "LM2 save directory identity mismatch")
+            chain = control["chain"]; token = lambda value: isinstance(value, str) and len(value) == 32 and all(char in "0123456789abcdef" for char in value)
             _require(control["schemaVersion"] == "megasaver-lm2-python-control-v1" and token(control["instanceToken"]) and token(control["sentinelToken"]), "LM2 saved control identity mismatch")
             _require(control["manifestDigest"] == self.memory_params["manifest_digest"] and control["dataRevision"] == DATA_REVISION and isinstance(chain, list) and all(_ref(row) for row in chain) and control["chainDigest"] == _digest(chain), "LM2 saved control binding mismatch")
-            manifest = self._manifest()
-            _require(any(question["trajectories"][:len(chain)] == chain for question in manifest["questions"]), "LM2 saved chain is not admitted")
-            run = Path(str(self.memory_params["cache_parent"])) / f"instance-{control['instanceToken']}"
-            run_info = _safe_dir(run)
-            lock_descriptor, lock_info = _open_file(run / "run.lock")
-            os.close(lock_descriptor)
-            sentinel = _json_file(run / "sentinel.json"); run_control = _json_file(run / "control.json")
-            run_keys = {"schemaVersion", "manifestDigest", "dataRevision", "instanceToken", "sentinelToken", "device", "inode", "lockDevice", "lockInode", "chain", "chainDigest"}
-            def run_identity(value: dict[str, Any]) -> bool:
-                return _exact(value, run_keys) and value["schemaVersion"] == "megasaver-lm2-run-v1" and value["manifestDigest"] == control["manifestDigest"] and value["dataRevision"] == DATA_REVISION and value["instanceToken"] == control["instanceToken"] and value["sentinelToken"] == control["sentinelToken"] and value["device"] == str(run_info.st_dev) and value["inode"] == str(run_info.st_ino) and value["lockDevice"] == str(lock_info.st_dev) and value["lockInode"] == str(lock_info.st_ino)
-            _require(run_identity(sentinel) and sentinel["chain"] == [] and sentinel["chainDigest"] == _digest([]), "LM2 run sentinel mismatch")
-            _require(run_identity(run_control) and run_control["chain"] == chain and run_control["chainDigest"] == control["chainDigest"], "LM2 run control mismatch")
-            self._instance_token = control["instanceToken"]
-            self._sentinel_token = control["sentinelToken"]
-            self._chain = control["chain"]
-            self._chain_digest = control["chainDigest"]
+            manifest = self._manifest(); _require(any(question["trajectories"][:len(chain)] == chain for question in manifest["questions"]), "LM2 saved chain is not admitted")
+            run = Path(str(self.memory_params["cache_parent"])) / f"instance-{control['instanceToken']}"; run_info = _safe_dir(run); lock_path = run / "run.lock"
+            lock_descriptor, lock_info = _open_file(lock_path); locked = False
+            try:
+                try: fcntl.flock(lock_descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except OSError as error: raise RuntimeError("LM2 run is busy") from error
+                locked = True; current = lock_path.lstat(); _require((current.st_dev, current.st_ino) == (lock_info.st_dev, lock_info.st_ino), "LM2 run lock identity changed")
+                sentinel = _json_file(run / "sentinel.json"); run_control = _json_file(run / "control.json"); run_keys = {"schemaVersion", "manifestDigest", "dataRevision", "instanceToken", "sentinelToken", "device", "inode", "lockDevice", "lockInode", "chain", "chainDigest"}
+                def run_identity(value: dict[str, Any]) -> bool:
+                    return _exact(value, run_keys) and value["schemaVersion"] == "megasaver-lm2-run-v1" and value["manifestDigest"] == control["manifestDigest"] and value["dataRevision"] == DATA_REVISION and value["instanceToken"] == control["instanceToken"] and value["sentinelToken"] == control["sentinelToken"] and value["device"] == str(run_info.st_dev) and value["inode"] == str(run_info.st_ino) and value["lockDevice"] == str(lock_info.st_dev) and value["lockInode"] == str(lock_info.st_ino)
+                _require(run_identity(sentinel) and sentinel["chain"] == [] and sentinel["chainDigest"] == _digest([]), "LM2 run sentinel mismatch"); _require(run_identity(run_control) and run_control["chain"] == chain and run_control["chainDigest"] == control["chainDigest"], "LM2 run control mismatch")
+                final = os.fstat(lock_descriptor); current = lock_path.lstat(); run_current = run.lstat()
+                _require(stat.S_ISREG(final.st_mode) and final.st_nlink == 1 and stat.S_IMODE(final.st_mode) == 0o600 and (final.st_dev, final.st_ino) == (lock_info.st_dev, lock_info.st_ino) == (current.st_dev, current.st_ino) and stat.S_ISDIR(run_current.st_mode) and stat.S_IMODE(run_current.st_mode) == 0o700 and (run_current.st_dev, run_current.st_ino) == (run_info.st_dev, run_info.st_ino) and (not hasattr(os, "geteuid") or (final.st_uid == os.geteuid() and run_current.st_uid == os.geteuid())), "LM2 run identity changed")
+                self._instance_token = control["instanceToken"]; self._sentinel_token = control["sentinelToken"]; self._chain = control["chain"]; self._chain_digest = control["chainDigest"]
+            finally:
+                try:
+                    if locked: fcntl.flock(lock_descriptor, fcntl.LOCK_UN)
+                finally: os.close(lock_descriptor)
