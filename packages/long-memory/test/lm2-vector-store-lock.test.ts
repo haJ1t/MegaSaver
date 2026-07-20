@@ -60,7 +60,7 @@ describe("LM2 fixed operation lock", () => {
         assertEgressAllowed: async () => true,
         recheckEvidence: async () => true,
       }),
-    ).resolves.toEqual({ published: [], reason: "lock_integrity_lost" });
+    ).resolves.toEqual({ published: [], existing: [], reason: "lock_integrity_lost" });
     expect(embed).not.toHaveBeenCalled();
     await expect(first.finalize()).rejects.toThrow();
     await expect(

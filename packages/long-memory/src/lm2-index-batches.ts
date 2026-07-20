@@ -94,15 +94,23 @@ function validatePortResult(
   count: number,
   dimensions: number,
 ): { modelFingerprint: string; vectors: readonly (readonly number[])[] } {
+  if (typeof value !== "object" || value === null) throw new Error("invalid embedding result");
+  const keys = Reflect.ownKeys(value);
+  const fingerprintField = Reflect.getOwnPropertyDescriptor(value, "modelFingerprint");
+  const vectorsField = Reflect.getOwnPropertyDescriptor(value, "vectors");
   if (
-    typeof value !== "object" ||
-    value === null ||
-    Object.keys(value).sort().join("\0") !== "modelFingerprint\0vectors"
-  ) {
+    keys.length !== 2 ||
+    keys.some((key) => key !== "modelFingerprint" && key !== "vectors") ||
+    fingerprintField === undefined ||
+    vectorsField === undefined ||
+    !fingerprintField.enumerable ||
+    !vectorsField.enumerable ||
+    !("value" in fingerprintField) ||
+    !("value" in vectorsField)
+  )
     throw new Error("invalid embedding result");
-  }
-  const returnedFingerprint: unknown = Reflect.get(value, "modelFingerprint");
-  const returnedVectors: unknown = Reflect.get(value, "vectors");
+  const returnedFingerprint: unknown = fingerprintField.value;
+  const returnedVectors: unknown = vectorsField.value;
   if (returnedFingerprint !== fingerprint || !Array.isArray(returnedVectors)) {
     throw new Error("invalid embedding result");
   }
@@ -145,25 +153,19 @@ function transientReason(
 
 function retryPosition(
   records: readonly Lm2PendingIndexRecord[],
-  published: ReadonlySet<string>,
+  committed: ReadonlySet<string>,
   pageOrigin: string | null,
 ): string | null {
-  let lastPublishedIndex = -1;
-  records.forEach((record, index) => {
-    if (published.has(record.candidate.id)) lastPublishedIndex = index;
-  });
-  return (
-    records.slice(lastPublishedIndex + 1).find((record) => !published.has(record.candidate.id))
-      ?.cursorBefore ?? pageOrigin
-  );
+  return records.find((record) => !committed.has(record.candidate.id))?.cursorBefore ?? pageOrigin;
 }
 
 function transientBatchResult(
   publishedIds: readonly string[],
+  omissions: readonly { id: string; reason: string }[],
   retryCursor: string | null,
   transientReason: BatchTransientReason,
 ): Lm2IndexBatchResult {
-  return { publishedIds, omissions: [], retryCursor, transientReason };
+  return { publishedIds, omissions, retryCursor, transientReason };
 }
 
 export async function publishLm2IndexBatch(input: {
@@ -173,7 +175,6 @@ export async function publishLm2IndexBatch(input: {
   embedding: EmbeddingPort;
   workspaceKey: string;
   signal: AbortSignal;
-  expired: Promise<void>;
   pageOrigin: string | null;
   remoteApproval?: RemoteEmbeddingApprovalPort;
   approvalRef?: string;
@@ -221,79 +222,76 @@ export async function publishLm2IndexBatch(input: {
       return validatePortResult(result, fingerprint, call.texts.length, input.model.dimensions);
     },
   });
-  const settled = work
-    .then((result) => ({ type: "result" as const, result }))
-    .catch(() => ({ type: "error" as const }));
-  const outcome = await Promise.race([
-    settled,
-    input.expired.then(() => ({ type: "timeout" as const })),
-  ]);
-  if (outcome.type === "timeout") {
-    work.catch(() => undefined);
-    return transientBatchResult([], input.records[0]?.cursorBefore ?? input.pageOrigin, "timeout");
-  }
-  if (outcome.type === "error") {
+  let result: Awaited<ReturnType<Lm2ReadyIndexOperation["publishBatch"]>>;
+  try {
+    result = await work;
+  } catch {
     return transientBatchResult(
+      [],
       [],
       input.records[0]?.cursorBefore ?? input.pageOrigin,
       input.signal.aborted ? "timeout" : "sidecar_write_failed",
     );
   }
-  const published = new Set(outcome.result.published);
+  const published = new Set(result.published);
+  const existing = new Set(result.existing);
   if (
-    published.size !== outcome.result.published.length ||
-    outcome.result.published.some((id) => !expectedIds.has(id))
+    published.size !== result.published.length ||
+    existing.size !== result.existing.length ||
+    result.published.some((id) => !expectedIds.has(id) || existing.has(id)) ||
+    result.existing.some((id) => !expectedIds.has(id))
   ) {
     return transientBatchResult(
+      [],
       [],
       input.records[0]?.cursorBefore ?? input.pageOrigin,
       "sidecar_write_failed",
     );
   }
-  const unpublished = input.records.filter(({ candidate }) => !published.has(candidate.id));
-  if (outcome.result.reason === "storage_limit") {
+  const committed = new Set([...published, ...existing]);
+  const existingOmissions = input.records
+    .filter(({ candidate }) => existing.has(candidate.id))
+    .map(({ candidate }) => ({ id: candidate.id, reason: "already_indexed" }));
+  const uncommitted = input.records.filter(({ candidate }) => !committed.has(candidate.id));
+  if (input.signal.aborted && uncommitted.length > 0) {
+    return transientBatchResult(
+      [...published],
+      existingOmissions,
+      retryPosition(input.records, committed, input.pageOrigin),
+      "timeout",
+    );
+  }
+  if (result.reason === "storage_limit") {
     return {
       publishedIds: [...published],
-      omissions: unpublished.map(({ candidate }) => ({
-        id: candidate.id,
-        reason: "storage_limit",
-      })),
+      omissions: [
+        ...existingOmissions,
+        ...uncommitted.map(({ candidate }) => ({ id: candidate.id, reason: "storage_limit" })),
+      ],
       retryCursor: null,
       transientReason: null,
     };
   }
-  if (outcome.result.reason !== null) {
-    let retryCursor = retryPosition(input.records, published, input.pageOrigin);
-    if (outcome.result.reason === "remote_approval_denied") {
-      for (const record of input.records) {
-        try {
-          const probe = await input.operation.publishBatch({
-            records: [record.candidate],
-            assertEgressAllowed: async () => false,
-            recheckEvidence: input.recheckEvidence,
-            embed: async () => {
-              throw new Error("denied probe cannot egress");
-            },
-          });
-          if (probe.reason === null) continue;
-        } catch {}
-        retryCursor = record.cursorBefore;
-        break;
-      }
-    }
+  if (uncommitted.length === 0) {
+    return {
+      publishedIds: [...published],
+      omissions: existingOmissions,
+      retryCursor: null,
+      transientReason: null,
+    };
+  }
+  if (result.reason !== null) {
     return transientBatchResult(
       [...published],
-      retryCursor,
-      transientReason(outcome.result.reason, input.signal.aborted),
+      existingOmissions,
+      retryPosition(input.records, committed, input.pageOrigin),
+      transientReason(result.reason, false),
     );
   }
-  return {
-    publishedIds: [...published],
-    omissions: unpublished.map(({ candidate }) => ({
-      id: candidate.id,
-      reason: "already_indexed",
-    })),
-    retryCursor: null,
-    transientReason: null,
-  };
+  return transientBatchResult(
+    [...published],
+    existingOmissions,
+    retryPosition(input.records, committed, input.pageOrigin),
+    "sidecar_write_failed",
+  );
 }
