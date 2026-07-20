@@ -5769,3 +5769,13 @@ enterprise artifacts plus leaderboard `submission_overview.json` before a LAFS
 claim. This design has no production implementation yet; TDD planning and user
 design approval remain required. Source: [[concepts/long-memory-runtime]],
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md`.
+
+## [2026-07-20] plan | Long Memory LM2 hybrid recall
+
+The LM2 TDD plan breaks implementation into strict contracts, bounded catalog
+and direct-ID reads, locked quota-safe vector sidecars, deterministic hybrid
+ranking, explicit evidence-admitted indexing, LM1-preserving runtime
+composition, public LongMemEval transport/backend, and independent plus
+official evidence gates. No production implementation or official score is
+claimed by this planning entry. Source: [[concepts/long-memory-runtime]],
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-hybrid-recall-plan.md`.
