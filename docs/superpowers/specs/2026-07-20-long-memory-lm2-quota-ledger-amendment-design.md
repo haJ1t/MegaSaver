@@ -34,6 +34,8 @@ fsynced with its file and parent directory, and capped at 64 KiB. It contains:
   allocated `sidecarCount` and `serializedBytes` counters;
 - one workspace-wide `committedThroughAllocation` sequence and the next
   allocation sequence;
+- one immutable fixed-lock identity (`device`, `inode`) and random lock token
+  persisted in the ledger from initialization onward;
 - zero or one pending transaction with a non-transferable operation id, expected
   ledger generation, allocation sequence range, and at most 16 entries;
 - one active-operation fence with operation id, expected generation, and the
@@ -61,24 +63,26 @@ lock. An externally removed or corrupt committed sidecar remains allocated;
 this can over-reserve but never undercounts capacity.
 
 LM2 writers create the fixed advisory lock inode during ledger initialization
-and never replace or delete it. The ledger's active operation fence is written
-before any catalog work, is tied to the expected generation and operation id,
-and makes compliant writers reject a replacement lock pathname or re-entry
-before scans. The static-symlink model treats out-of-band replacement of a
-trusted-root lock or ledger as tampering: descriptor/path guard failure returns
-`lock_integrity_lost`, never a second mutation authority. LM2 is pre-1.0:
-mixed old/new writers and unledgered non-empty embeddings are invalid state, not
-compatibility cases.
+and never replace or delete it. The immutable lock identity and token are
+persisted independently of an active operation, so every later acquisition
+rejects a replacement pathname even after a clean finalization. The ledger's
+active operation fence is written before any catalog work, is tied to the
+expected generation and operation id, and makes compliant writers reject
+re-entry before scans. The static-symlink model treats out-of-band replacement
+of a trusted-root lock or ledger as tampering: descriptor/path guard failure
+returns `lock_integrity_lost`, never a second mutation authority. LM2 is
+pre-1.0: mixed old/new writers and unledgered non-empty embeddings are invalid
+state, not compatibility cases.
 
-The active-operation fence stores the fixed lock inode identity (`device`,
-`inode`) and an immutable random token that also lives in the lock file. The
-next writer may perform fence-only crash recovery only after it flocks that same
-inode and validates the same token and generation; a recreated pathname fails
-before scans. Node cannot detect a well-formed ledger rollback installed wholly
-outside an open operation without a native anti-rollback anchor. That trusted-
-root tampering is outside LM2's static-symlink threat model; exact allocation
-guarantees apply to compliant ledger-aware writers, while in-operation path
-changes fail closed.
+The active-operation fence repeats the persisted fixed lock inode identity
+(`device`, `inode`) and immutable random token that also lives in the lock
+file. The next writer may perform fence-only crash recovery only after it
+flocks that same inode and validates the same token and generation; a recreated
+pathname fails before scans. Node cannot detect a well-formed ledger rollback
+installed wholly outside an open operation without a native anti-rollback
+anchor. That trusted-root tampering is outside LM2's static-symlink threat
+model; exact allocation guarantees apply to compliant ledger-aware writers,
+while in-operation path changes fail closed.
 
 Pending entries publish strictly in ascending allocation sequence. A normal
 cancellation or a proven-absent suffix resets `nextAllocationSequence` to that
@@ -157,10 +161,15 @@ failure or crash, synchronous recovery commits the exact contiguous published
 prefix, cancels only a proven-absent suffix, and retains a conflicting,
 unreadable, or exact artifact after a gap as `blocked_pending`; it never
 reuses a canceled sequence while any higher named artifact exists. It never
-creates an unledgered sidecar or clears a conflicting transaction. Temporary
+creates an unledgered sidecar or clears a conflicting transaction. The returned
+published IDs and indexed count are reconciled from the post-recovery committed
+watermark, so a sidecar made visible just before a durability failure is
+reported exactly once after recovery. Temporary
 files, expected final paths, operation id, and phase are named in pending state
 so recovery covers temporary-file creation/fsync/link/unlink and partial batch
-publication without a directory scan.
+publication without a directory scan. A temporary filename is exactly
+`.lm2-<operationId>-<allocationSequence>.pending`; recovery rejects every other
+name before an unlink and therefore cannot target a committed final sidecar.
 
 Crash recovery reads only the at-most-16 pending target paths and charges those
 reads to the operation budget. An absent target cancels its reservation; an
