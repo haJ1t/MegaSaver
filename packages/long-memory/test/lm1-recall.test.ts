@@ -1,8 +1,9 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLm1CaptureService } from "../src/lm1-capture.js";
+import { Lm1Error } from "../src/lm1-errors.js";
 import { type Lm1Record, lm1RecordSchema } from "../src/lm1-model.js";
 import { createLm1RecallService } from "../src/lm1-recall.js";
 import { type FileLm1Store, createFileLm1Store } from "../src/lm1-store.js";
@@ -13,7 +14,7 @@ const firstEvidenceId = "11111111-1111-4111-8111-111111111111";
 const secondEvidenceId = "22222222-2222-4222-8222-222222222222";
 
 function createServices() {
-  const root = mkdtempSync(join(tmpdir(), "megasaver-lm1-recall-"));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "megasaver-lm1-recall-")));
   roots.push(root);
   const statuses = new Map<string, "available" | "retained_metadata_only" | "revoked">();
   statuses.set(firstEvidenceId, "available");
@@ -71,8 +72,10 @@ function snapshotRecord(input: {
   id: string;
   stateKey: string;
   observedAt?: string;
+  recordedAt?: string;
   text: string;
   evidenceIds?: readonly string[];
+  supersedesSnapshotId?: string | null;
 }): Extract<Lm1Record, { kind: "state_snapshot" }> {
   const evidenceIds = input.evidenceIds ?? [firstEvidenceId];
   return lm1RecordSchema.parse({
@@ -81,7 +84,7 @@ function snapshotRecord(input: {
     sourceDigest: "a".repeat(64),
     canonicalCaptureDigest: "a".repeat(64),
     evidenceBindingDigest: "b".repeat(64),
-    recordedAt: "2026-07-20T00:00:02.000Z",
+    recordedAt: input.recordedAt ?? "2026-07-20T00:00:02.000Z",
     evidenceDigests: evidenceIds.map(() => "c".repeat(64)),
     status: "recorded",
     workspaceKey,
@@ -92,7 +95,7 @@ function snapshotRecord(input: {
     evidenceIds,
     stateKey: input.stateKey,
     representation: "value",
-    supersedesSnapshotId: null,
+    supersedesSnapshotId: input.supersedesSnapshotId ?? null,
     redactionVersion: "redaction-v1",
   });
 }
@@ -129,9 +132,37 @@ function transitionRecord(input: {
 function recallFromRecords(
   records: readonly Lm1Record[],
   statuses = new Map<string, "available" | "retained_metadata_only" | "revoked">(),
+  closedSnapshotIds: readonly string[] = [],
 ) {
   const store = {
     list: () => records,
+    closureSuccessorIds: () => ({
+      successorIdsBySnapshotId: new Map<string, readonly string[]>(),
+      incompletePredecessorSnapshotIds: new Set<string>(),
+    }),
+    stateSnapshotsForStateKeys: (_workspaceKey: string, stateKeys: readonly string[]) => ({
+      snapshotsByStateKey: new Map(
+        stateKeys.map((stateKey) => [
+          stateKey,
+          records.filter(
+            (record): record is Extract<Lm1Record, { kind: "state_snapshot" }> =>
+              record.kind === "state_snapshot" && record.stateKey === stateKey,
+          ),
+        ]),
+      ),
+      indexedStateKeys: new Set(
+        stateKeys.filter(
+          (stateKey) =>
+            !records.some(
+              (record) =>
+                record.kind === "state_snapshot" &&
+                record.stateKey === stateKey &&
+                closedSnapshotIds.includes(record.id),
+            ),
+        ),
+      ),
+      incompleteStateKeys: new Set<string>(),
+    }),
   } as FileLm1Store;
   const evidenceEligibility = {
     resolve: async ({
@@ -161,6 +192,23 @@ afterEach(() => {
 });
 
 describe("LM1 recall", () => {
+  it("normalizes hostile public recall-request getters", async () => {
+    const { recall } = createServices();
+
+    await expect(
+      recall.recall(
+        new Proxy(
+          {},
+          {
+            get() {
+              throw new Error("hostile recall request");
+            },
+          },
+        ) as never,
+      ),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+  });
+
   it("rejects unexpected fields at the recall boundary", async () => {
     const { recall } = createServices();
 
@@ -189,6 +237,20 @@ describe("LM1 recall", () => {
       items: [{ observationId: pending.id, value: "Billing status is pending." }],
       receipt: { selected: [{ id: pending.id }], scannedRecordCount: 2 },
     });
+  });
+
+  it("uses a superseded lexical snapshot to retrieve its current state", async () => {
+    const { capture, recall } = createServices();
+    const paid = await captureSnapshot(capture, { text: "Billing status is paid." });
+    const settled = await captureSnapshot(capture, {
+      observedAt: "2026-07-20T00:00:01.000Z",
+      text: "The account has been reconciled.",
+      supersedesSnapshotId: paid.id,
+    });
+
+    await expect(
+      recall.recall({ workspaceKey, task: "billing status", tokenBudget: 100 }),
+    ).resolves.toMatchObject({ items: [{ observationId: settled.id }] });
   });
 
   it("chooses the latest independent structural leaf for one state key", async () => {
@@ -220,6 +282,197 @@ describe("LM1 recall", () => {
       recall.recall({ workspaceKey, task: "What is the billing status?", tokenBudget: 20 }),
     ).resolves.toMatchObject({
       items: [{ observationId: paid.id, value: "Billing status is paid." }],
+    });
+  });
+
+  it("returns the current leaf when only an older independent leaf matches lexically", async () => {
+    const older = snapshotRecord({
+      id: uuid(1_101),
+      stateKey: "billing.status",
+      observedAt: "2026-07-20T00:00:00.000Z",
+      text: "Billing status is paid.",
+    });
+    const current = snapshotRecord({
+      id: uuid(1_102),
+      stateKey: "billing.status",
+      observedAt: "2026-07-20T00:00:01.000Z",
+      text: "The account balance has been reconciled.",
+    });
+    const recall = recallFromRecords([older, current]);
+
+    await expect(
+      recall.recall({ workspaceKey, task: "billing status", tokenBudget: 100 }),
+    ).resolves.toMatchObject({ items: [{ observationId: current.id }] });
+  });
+
+  it("retains the current state winner when its lexical leaf is beyond the candidate cap", async () => {
+    const records = Array.from({ length: 1_001 }, (_, index) =>
+      snapshotRecord({
+        id: uuid(index + 20_000),
+        stateKey: "billing.status",
+        text: "billing status is current",
+        recordedAt: index === 1_000 ? "2026-07-20T00:00:03.000Z" : "2026-07-20T00:00:02.000Z",
+      }),
+    );
+    const winner = records[1_000];
+    if (winner === undefined) throw new Error("Expected a current-state winner.");
+    const recall = recallFromRecords(records);
+
+    const result = await recall.recall({
+      workspaceKey,
+      task: "billing status",
+      tokenBudget: 100,
+    });
+
+    expect(result.receipt.candidateCount).toBe(1_000);
+    expect(result.items).toEqual([expect.objectContaining({ observationId: winner.id })]);
+  });
+
+  it("does not fall back to an older state when verifying newer leaves exhausts the evidence cap", async () => {
+    const records = Array.from({ length: 9 }, (_, recordIndex) =>
+      snapshotRecord({
+        id: uuid(recordIndex + 22_000),
+        stateKey: "billing.status",
+        observedAt: `2026-07-20T00:00:0${recordIndex}.000Z`,
+        text: "billing status is current",
+        evidenceIds: Array.from({ length: 64 }, (_, evidenceIndex) =>
+          uuid(40_000 + recordIndex * 64 + evidenceIndex),
+        ),
+      }),
+    );
+    const statuses = new Map(
+      records
+        .slice(1)
+        .flatMap((record) =>
+          record.evidenceIds.map((evidenceId) => [evidenceId, "revoked"] as const),
+        ),
+    );
+    const anchor = records[8];
+    if (anchor === undefined) throw new Error("Expected a lexical state anchor.");
+    const recall = recallFromRecords(records, statuses);
+
+    await expect(
+      recall.recall({ workspaceKey, task: "billing status", tokenBudget: 100 }),
+    ).resolves.toMatchObject({
+      items: [],
+      receipt: {
+        evidenceLookupCount: 512,
+        omitted: [{ id: anchor.id, reason: "omitted_evidence_limit" }],
+      },
+    });
+  });
+
+  it("omits a scanned snapshot closed by a correction outside the scan window", async () => {
+    const predecessor = snapshotRecord({
+      id: uuid(1_201),
+      stateKey: "billing.status",
+      text: "Billing status is paid.",
+    });
+    const recall = recallFromRecords([predecessor], undefined, [predecessor.id]);
+
+    await expect(
+      recall.recall({ workspaceKey, task: "billing status", tokenBudget: 100 }),
+    ).resolves.toMatchObject({
+      items: [],
+      receipt: {
+        omitted: [{ id: predecessor.id, reason: "omitted_correction_chain_unavailable" }],
+      },
+    });
+  });
+
+  it("omits a pointer-expanded branch when its next correction only has a closure marker", async () => {
+    const inWindow = snapshotRecord({
+      id: uuid(1_301),
+      stateKey: "billing.status",
+      text: "Billing status is paid.",
+    });
+    const expanded = snapshotRecord({
+      id: uuid(1_302),
+      stateKey: "billing.status",
+      observedAt: "2026-07-20T00:00:01.000Z",
+      text: "Billing status is completed.",
+      supersedesSnapshotId: inWindow.id,
+    });
+    const interruptedSuccessorId = uuid(1_303);
+    const store = {
+      list: () => [inWindow],
+      closureSuccessorIds: (_workspaceKey: string, snapshotIds: readonly string[]) =>
+        snapshotIds.includes(expanded.id)
+          ? {
+              successorIdsBySnapshotId: new Map([[expanded.id, [interruptedSuccessorId]]]),
+              incompletePredecessorSnapshotIds: new Set<string>(),
+            }
+          : {
+              successorIdsBySnapshotId: new Map<string, readonly string[]>(),
+              incompletePredecessorSnapshotIds: new Set<string>(),
+            },
+      stateSnapshotsForStateKeys: () => ({
+        snapshotsByStateKey: new Map([[inWindow.stateKey, [inWindow, expanded]]]),
+        indexedStateKeys: new Set([inWindow.stateKey]),
+        incompleteStateKeys: new Set<string>(),
+      }),
+    } as FileLm1Store;
+    const recall = createLm1RecallService({
+      store,
+      evidenceEligibility: {
+        resolve: async ({ evidenceIds, workspaceKey: requestedWorkspaceKey }) =>
+          evidenceIds.map((evidenceId) => ({
+            evidenceId,
+            workspaceKey: requestedWorkspaceKey,
+            status: "available" as const,
+            unresolvedHighRisk: false,
+          })),
+      },
+    });
+
+    await expect(
+      recall.recall({ workspaceKey, task: "billing status", tokenBudget: 100 }),
+    ).resolves.toMatchObject({
+      items: [],
+      receipt: {
+        omitted: [{ id: inWindow.id, reason: "omitted_correction_chain_unavailable" }],
+      },
+    });
+  });
+
+  it("omits a state group when its correction-closure read budget is exhausted", async () => {
+    const record = snapshotRecord({
+      id: uuid(1_304),
+      stateKey: "billing.status",
+      text: "Billing status is paid.",
+    });
+    const store = {
+      list: () => [record],
+      closureSuccessorIds: () => ({
+        successorIdsBySnapshotId: new Map<string, readonly string[]>(),
+        incompletePredecessorSnapshotIds: new Set([record.id]),
+      }),
+      stateSnapshotsForStateKeys: () => ({
+        snapshotsByStateKey: new Map([[record.stateKey, [record]]]),
+        indexedStateKeys: new Set([record.stateKey]),
+        incompleteStateKeys: new Set<string>(),
+      }),
+    } as FileLm1Store;
+    const recall = createLm1RecallService({
+      store,
+      evidenceEligibility: {
+        resolve: async ({ evidenceIds, workspaceKey: requestedWorkspaceKey }) =>
+          evidenceIds.map((evidenceId) => ({
+            evidenceId,
+            workspaceKey: requestedWorkspaceKey,
+            status: "available" as const,
+            unresolvedHighRisk: false,
+          })),
+      },
+    });
+
+    await expect(
+      recall.recall({ workspaceKey, task: "billing status", tokenBudget: 100 }),
+    ).resolves.toMatchObject({
+      items: [],
+      receipt: {
+        omitted: [{ id: record.id, reason: "omitted_correction_chain_unavailable" }],
+      },
     });
   });
 
@@ -413,13 +666,91 @@ describe("LM1 recall", () => {
       stateKey: "billing.status",
       text: "billing status is current",
     });
-    const store = { list: () => [record] } as FileLm1Store;
+    const store = {
+      list: () => [record],
+      closureSuccessorIds: () => ({
+        successorIdsBySnapshotId: new Map<string, readonly string[]>(),
+        incompletePredecessorSnapshotIds: new Set<string>(),
+      }),
+      stateSnapshotsForStateKeys: () => ({
+        snapshotsByStateKey: new Map([[record.stateKey, [record]]]),
+        indexedStateKeys: new Set([record.stateKey]),
+        incompleteStateKeys: new Set<string>(),
+      }),
+    } as FileLm1Store;
     const recall = createLm1RecallService({
       store,
       evidenceEligibility: {
         resolve: async () => {
           throw new Error("public evidence adapter unavailable");
         },
+      },
+    });
+
+    await expect(
+      recall.recall({ workspaceKey, task: "billing status", tokenBudget: 100 }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
+  });
+
+  it("normalizes a typed evidence eligibility failure to a closed error", async () => {
+    const record = snapshotRecord({
+      id: uuid(9_002),
+      stateKey: "billing.status",
+      text: "billing status is current",
+    });
+    const store = {
+      list: () => [record],
+      closureSuccessorIds: () => ({
+        successorIdsBySnapshotId: new Map<string, readonly string[]>(),
+        incompletePredecessorSnapshotIds: new Set<string>(),
+      }),
+      stateSnapshotsForStateKeys: () => ({
+        snapshotsByStateKey: new Map([[record.stateKey, [record]]]),
+        indexedStateKeys: new Set([record.stateKey]),
+        incompleteStateKeys: new Set<string>(),
+      }),
+    } as FileLm1Store;
+    const recall = createLm1RecallService({
+      store,
+      evidenceEligibility: {
+        resolve: async () => {
+          throw new Lm1Error("invalid_transition", "adapter-controlled error");
+        },
+      },
+    });
+
+    await expect(
+      recall.recall({ workspaceKey, task: "billing status", tokenBudget: 100 }),
+    ).rejects.toMatchObject({ code: "store_corrupt" });
+  });
+
+  it("normalizes an evidence eligibility response getter to a closed error", async () => {
+    const record = snapshotRecord({
+      id: uuid(9_003),
+      stateKey: "billing.status",
+      text: "billing status is current",
+    });
+    const store = {
+      list: () => [record],
+      closureSuccessorIds: () => ({
+        successorIdsBySnapshotId: new Map<string, readonly string[]>(),
+        incompletePredecessorSnapshotIds: new Set<string>(),
+      }),
+      stateSnapshotsForStateKeys: () => ({
+        snapshotsByStateKey: new Map([[record.stateKey, [record]]]),
+        indexedStateKeys: new Set([record.stateKey]),
+        incompleteStateKeys: new Set<string>(),
+      }),
+    } as FileLm1Store;
+    const recall = createLm1RecallService({
+      store,
+      evidenceEligibility: {
+        resolve: async () =>
+          new Proxy([], {
+            get() {
+              throw new Lm1Error("invalid_transition", "adapter-controlled error");
+            },
+          }) as never,
       },
     });
 

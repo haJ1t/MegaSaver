@@ -75,6 +75,7 @@ function validateCanonicalCaptureFields(
     action: string | null;
     redactionVersion: string;
     stateKey?: string;
+    recordedAt?: string;
   },
   context: z.RefinementCtx,
 ): void {
@@ -90,11 +91,12 @@ function validateCanonicalCaptureFields(
     });
   }
   if (
-    capture.observedAt !== normalizeDate(capture.observedAt) ||
+    !isCanonicalDate(capture.observedAt) ||
     capture.text !== normalizeText(capture.text) ||
     (capture.action !== null && capture.action !== normalizeText(capture.action)) ||
     capture.redactionVersion !== normalizeText(capture.redactionVersion) ||
-    (capture.stateKey !== undefined && capture.stateKey !== normalizeText(capture.stateKey))
+    (capture.stateKey !== undefined && capture.stateKey !== normalizeText(capture.stateKey)) ||
+    (capture.recordedAt !== undefined && !isCanonicalDate(capture.recordedAt))
   ) {
     context.addIssue({
       code: "custom",
@@ -143,6 +145,15 @@ export type RedactionPort = {
   };
 };
 
+const redactionResultSchema = z
+  .object({
+    text: z.string(),
+    action: z.string().nullable(),
+    unresolvedHighRisk: z.boolean(),
+  })
+  .strict();
+const redactionVersionSchema = z.string().trim().min(1);
+
 function normalizeText(value: string): string {
   return value.normalize("NFC").trim();
 }
@@ -151,10 +162,28 @@ function normalizeDate(value: string): string {
   return new Date(value).toISOString();
 }
 
+function isCanonicalDate(value: string): boolean {
+  try {
+    return value === normalizeDate(value);
+  } catch {
+    return false;
+  }
+}
+
 function parseInput(input: PrepareCaptureInput): PrepareCaptureInput {
-  const parsed = prepareCaptureInputSchema.safeParse(input);
+  let parsed: ReturnType<typeof prepareCaptureInputSchema.safeParse>;
+  try {
+    parsed = prepareCaptureInputSchema.safeParse(input);
+  } catch {
+    throw new Lm1Error("invalid_input", "Invalid LM1 capture input.");
+  }
   if (!parsed.success) throw new Lm1Error("invalid_input", "Invalid LM1 capture input.");
   return parsed.data;
+}
+
+function mapRedactorError(error: unknown): never {
+  void error;
+  throw new Lm1Error("store_corrupt", "Long-memory redaction adapter failed.");
 }
 
 export function prepareCapture(
@@ -162,27 +191,68 @@ export function prepareCapture(
   redactor: RedactionPort,
 ): PreparedCapture {
   const parsed = parseInput(input);
-  const redacted = redactor.redact({ text: parsed.text, action: parsed.action });
-  if (redacted.unresolvedHighRisk) {
+  let redactorResult: unknown;
+  try {
+    redactorResult = redactor.redact({ text: parsed.text, action: parsed.action });
+  } catch (error) {
+    mapRedactorError(error);
+  }
+  let redacted: ReturnType<typeof redactionResultSchema.safeParse>;
+  try {
+    redacted = redactionResultSchema.safeParse(redactorResult);
+  } catch (error) {
+    mapRedactorError(error);
+  }
+  if (!redacted.success) {
+    throw new Lm1Error(
+      "store_corrupt",
+      "Long-memory redaction adapter returned an invalid result.",
+    );
+  }
+  let redactorVersion: unknown;
+  try {
+    redactorVersion = redactor.version;
+  } catch (error) {
+    mapRedactorError(error);
+  }
+  const redactionVersion = redactionVersionSchema.safeParse(redactorVersion);
+  if (!redactionVersion.success) {
+    throw new Lm1Error("store_corrupt", "Long-memory redaction adapter has an invalid version.");
+  }
+  if (redacted.data.unresolvedHighRisk) {
     throw new Lm1Error("invalid_input", "Unresolved high-risk content.");
   }
 
+  let observedAt: string;
+  try {
+    observedAt = normalizeDate(parsed.observedAt);
+  } catch {
+    throw new Lm1Error("invalid_input", "Invalid LM1 capture input.");
+  }
   const normalized = {
     ...parsed,
-    observedAt: normalizeDate(parsed.observedAt),
-    text: normalizeText(redacted.text),
-    action: redacted.action === null ? null : normalizeText(redacted.action),
+    observedAt,
+    text: normalizeText(redacted.data.text),
+    action: redacted.data.action === null ? null : normalizeText(redacted.data.action),
     evidenceIds: [...new Set(parsed.evidenceIds)].sort(),
     ...(parsed.kind === "state_snapshot" ? { stateKey: normalizeText(parsed.stateKey) } : {}),
   };
-  const redactionVersion = normalizeText(redactor.version);
-  const unsigned = { ...normalized, schemaVersion: LM1_SCHEMA_VERSION, redactionVersion };
+  const unsigned = {
+    ...normalized,
+    schemaVersion: LM1_SCHEMA_VERSION,
+    redactionVersion: normalizeText(redactionVersion.data),
+  };
   const canonicalDigest = canonicalCaptureDigest(unsigned as PreparedCapture);
   const result = preparedCaptureSchema.safeParse({
     ...unsigned,
     canonicalCaptureDigest: canonicalDigest,
   });
-  if (!result.success) throw new Lm1Error("invalid_input", "Invalid redacted LM1 capture.");
+  if (!result.success) {
+    throw new Lm1Error(
+      "store_corrupt",
+      "Long-memory redaction adapter returned invalid capture fields.",
+    );
+  }
   return result.data;
 }
 
