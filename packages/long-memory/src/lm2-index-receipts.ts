@@ -50,3 +50,13 @@ export function expiredIndexReceipt(quotaRecovery: QuotaRecovery): Lm2IndexRecei
     quotaRecovery,
   };
 }
+
+export function withLm2IndexReceiptCause<T extends Lm2IndexReceipt>(receipt: T, cause: unknown): T {
+  Object.defineProperty(receipt, "cause", {
+    configurable: false,
+    enumerable: false,
+    value: cause,
+    writable: false,
+  });
+  return receipt;
+}

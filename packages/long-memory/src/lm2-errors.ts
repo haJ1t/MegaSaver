@@ -16,8 +16,8 @@ export type Lm2ErrorCode = z.infer<typeof lm2ErrorCodeSchema>;
 export class Lm2Error extends Error {
   readonly code: Lm2ErrorCode;
 
-  constructor(code: Lm2ErrorCode, message: string) {
-    super(message);
+  constructor(code: Lm2ErrorCode, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "Lm2Error";
     this.code = code;
   }
