@@ -5,6 +5,7 @@ import {
   fstatSync,
   lstatSync,
   openSync,
+  opendirSync,
   readSync,
   readdirSync,
 } from "node:fs";
@@ -29,7 +30,7 @@ export type AnchoredFile = {
 export type BoundedFileRead =
   | { status: "missing" }
   | { status: "invalid" }
-  | { status: "valid"; raw: Buffer };
+  | { status: "valid"; raw: Buffer; stat: Stats };
 
 function errorCode(error: unknown): string | undefined {
   return error instanceof Error && "code" in error && typeof error.code === "string"
@@ -138,6 +139,21 @@ export function listAnchoredDirectory(anchor: DirectoryAnchor): string[] {
   } catch (error) {
     if (error instanceof Lm2Error) throw error;
     throw new Lm2Error("store_corrupt", "LM2 directory traversal is indeterminate.");
+  }
+}
+
+export function anchoredDirectoryIsEmpty(anchor: DirectoryAnchor): boolean {
+  verifyDirectoryAnchor(anchor);
+  const directory = opendirSync(anchor.path);
+  try {
+    const empty = directory.readSync() === null;
+    verifyDirectoryAnchor(anchor);
+    return empty;
+  } catch (error) {
+    if (error instanceof Lm2Error) throw error;
+    throw new Lm2Error("store_corrupt", "LM2 directory probe is indeterminate.");
+  } finally {
+    directory.closeSync();
   }
 }
 
@@ -262,7 +278,7 @@ export function readAnchoredFile(
       throw new Lm2Error("store_corrupt", "LM2 sidecar read is indeterminate.");
     }
     if (total > maximumBytes) return { status: "invalid" };
-    return { status: "valid", raw: Buffer.concat(chunks, total) };
+    return { status: "valid", raw: Buffer.concat(chunks, total), stat: file.stat };
   } catch (error) {
     if (error instanceof Lm2Error) throw error;
     throw new Lm2Error("store_corrupt", "LM2 sidecar read is indeterminate.");
