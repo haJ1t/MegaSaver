@@ -166,21 +166,22 @@ export async function beginIndexOperation(
     };
   }
   ledger = prepared.ledger;
-
   const publishBatch: Lm2ReadyIndexOperation["publishBatch"] = async (request) => {
     const published: string[] = [];
+    const existing: string[] = [];
     let records: Lm2Candidate[];
     try {
       assertGuard();
       records = parseCandidates(input.workspaceKey, request.records, MAX_LM2_PENDING_ALLOCATIONS);
     } catch {
-      return { published, reason: "lock_integrity_lost" };
+      return { published, existing, reason: "lock_integrity_lost" };
     }
     const fingerprint = modelDescriptorFingerprint(input.model);
     const planned: Lm2Candidate[] = [];
     try {
       for (const record of records) {
-        if (metadataReads >= MAX_METADATA_READS) return { published, reason: "write_failed" };
+        if (metadataReads >= MAX_METADATA_READS)
+          return { published, existing, reason: "write_failed" };
         metadataReads += 1;
         const state = existingVectorState({
           storeRoot: input.storeRoot,
@@ -190,10 +191,11 @@ export async function beginIndexOperation(
           candidate: record,
           ledger,
         });
-        if (state === "invalid") return { published, reason: "write_failed" };
+        if (state === "invalid") return { published, existing, reason: "write_failed" };
         if (state === "missing") planned.push(record);
+        else existing.push(record.id);
       }
-      if (planned.length === 0) return { published, reason: null };
+      if (planned.length === 0) return { published, existing, reason: null };
       const first = ledger.nextAllocationSequence;
       const entries = createPendingAllocations({
         records: planned,
@@ -212,10 +214,10 @@ export async function beginIndexOperation(
       try {
         reservedLedger = advanceLm2Ledger({ ledger: { ...ledger, pending }, fence, pending });
       } catch {
-        return { published, reason: "storage_limit" };
+        return { published, existing, reason: "storage_limit" };
       }
       persist(reservedLedger);
-      return await publishLm2ReservedBatch({
+      const result = await publishLm2ReservedBatch({
         storeRoot: input.storeRoot,
         workspaceKey: input.workspaceKey,
         model: input.model,
@@ -256,6 +258,7 @@ export async function beginIndexOperation(
         },
         commitFirst: () => persist(commitFirstPendingAllocation({ ledger, fence })),
       });
+      return { ...result, existing };
     } catch (error) {
       try {
         settlePending();
@@ -269,6 +272,7 @@ export async function beginIndexOperation(
                 .filter((entry) => entry.allocationSequence <= ledger.committedThroughAllocation)
                 .map((entry) => entry.recordId)
             : published,
+        existing,
         reason:
           error instanceof Lm2Error && error.code === "invalid_vectors"
             ? "invalid_vectors"

@@ -124,7 +124,11 @@ describe("LM2 index operation", () => {
         ],
       }),
     });
-    expect(publish).toEqual({ published: records.map(({ id }) => id), reason: null });
+    expect(publish).toEqual({
+      published: records.map(({ id }) => id),
+      existing: [],
+      reason: null,
+    });
     await result.finalize();
 
     const ledger = JSON.parse(
@@ -206,7 +210,11 @@ describe("LM2 index operation", () => {
         ],
       }),
     });
-    expect(publish).toEqual({ published: [records[0]?.id], reason: "write_failed" });
+    expect(publish).toEqual({
+      published: [records[0]?.id],
+      existing: [],
+      reason: "write_failed",
+    });
     expect(readFileSync(conflictingPath, "utf8")).toBe("foreign\n");
     const firstPath = join(dirname(conflictingPath), `${records[0]?.id}.json`);
     expect(existsSync(firstPath)).toBe(true);
@@ -249,7 +257,7 @@ describe("LM2 index operation", () => {
         vectors: [[1, 2, 3]],
       }),
     });
-    expect(publish).toEqual({ published: [record.id], reason: "write_failed" });
+    expect(publish).toEqual({ published: [record.id], existing: [], reason: "write_failed" });
 
     const ledgerPath = vectorQuotaLedgerPath(root, workspaceKey);
     expect(lm2QuotaLedgerSchema.parse(JSON.parse(readFileSync(ledgerPath, "utf8")))).toMatchObject({
@@ -265,7 +273,7 @@ describe("LM2 index operation", () => {
         recheckEvidence: async () => true,
         embed: retryEmbed,
       }),
-    ).resolves.toEqual({ published: [], reason: null });
+    ).resolves.toEqual({ published: [], existing: [record.id], reason: null });
     expect(retryEmbed).not.toHaveBeenCalled();
     expect(lm2QuotaLedgerSchema.parse(JSON.parse(readFileSync(ledgerPath, "utf8")))).toMatchObject({
       committedThroughAllocation: 1,
@@ -508,7 +516,7 @@ describe("LM2 index operation", () => {
         assertEgressAllowed: async () => true,
         recheckEvidence: async () => true,
       }),
-    ).resolves.toEqual({ published: [], reason: "lock_integrity_lost" });
+    ).resolves.toEqual({ published: [], existing: [], reason: "lock_integrity_lost" });
     expect(embed).not.toHaveBeenCalled();
   });
 
@@ -531,7 +539,7 @@ describe("LM2 index operation", () => {
         assertEgressAllowed: async () => false,
         recheckEvidence: async () => true,
       }),
-    ).resolves.toEqual({ published: [], reason: "remote_approval_denied" });
+    ).resolves.toEqual({ published: [], existing: [], reason: "remote_approval_denied" });
     expect(deniedEmbed).not.toHaveBeenCalled();
     await denied.finalize();
 
@@ -556,7 +564,7 @@ describe("LM2 index operation", () => {
         assertEgressAllowed: async () => true,
         recheckEvidence: async () => true,
       }),
-    ).resolves.toEqual({ published: [], reason: "port_failure" });
+    ).resolves.toEqual({ published: [], existing: [], reason: "port_failure" });
     expect(
       existsSync(
         join(
@@ -571,5 +579,47 @@ describe("LM2 index operation", () => {
       ),
     ).toBe(false);
     await late.finalize();
+  });
+
+  it("reports existing progress from the original denied batch", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const existing = createCandidate(1);
+    const missing = createCandidate(2);
+    const store = createLm2VectorStore({ storeRoot: root });
+    const first = await store.beginIndexOperation({ workspaceKey, model, deadline: deadline() });
+    if (first.status !== "ready") throw new Error("operation unavailable");
+    await first.publishBatch({
+      records: [existing],
+      assertEgressAllowed: async () => true,
+      recheckEvidence: async () => true,
+      embed: async () => ({
+        modelFingerprint: modelDescriptorFingerprint(model),
+        vectors: [[1, 2, 3]],
+      }),
+    });
+    await first.finalize();
+    const operation = await store.beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: deadline(),
+    });
+    if (operation.status !== "ready") throw new Error("operation unavailable");
+    const embed = vi.fn();
+
+    const result = await operation.publishBatch({
+      records: [existing, missing],
+      assertEgressAllowed: async () => false,
+      recheckEvidence: async () => true,
+      embed,
+    });
+
+    expect(result).toMatchObject({
+      published: [],
+      existing: [existing.id],
+      reason: "remote_approval_denied",
+    });
+    expect(embed).not.toHaveBeenCalled();
+    await operation.finalize();
   });
 });

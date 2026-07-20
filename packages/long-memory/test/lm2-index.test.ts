@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
+import { performance } from "node:perf_hooks";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Lm1Record } from "../src/lm1-model.js";
 import type { FileLm1Store } from "../src/lm1-store.js";
@@ -25,7 +26,10 @@ const evidenceIds = Array.from(
   (_, index) => `10000000-0000-4000-8000-${index.toString().padStart(12, "0")}`,
 );
 
-afterEach(cleanupRoots);
+afterEach(() => {
+  vi.restoreAllMocks();
+  cleanupRoots();
+});
 
 function evidenceId(index: number): string {
   const id = evidenceIds[index];
@@ -184,7 +188,7 @@ function harness(records: readonly Lm1Record[], input: { remote?: boolean } = {}
       >["publishBatch"]
     >[0]) => {
       if (!(await assertEgressAllowed())) {
-        return { published: [], reason: "remote_approval_denied" as const };
+        return { published: [], existing: [], reason: "remote_approval_denied" as const };
       }
       let result: Awaited<ReturnType<typeof embed>>;
       try {
@@ -195,12 +199,12 @@ function harness(records: readonly Lm1Record[], input: { remote?: boolean } = {}
           signal: operationSignal,
         });
       } catch {
-        return { published: [], reason: "port_failure" as const };
+        return { published: [], existing: [], reason: "port_failure" as const };
       }
       const published: string[] = [];
       for (const record of batch) {
         if (!(await recheckEvidence(record))) {
-          return { published, reason: "evidence_changed" as const };
+          return { published, existing: [], reason: "evidence_changed" as const };
         }
         published.push(record.id);
       }
@@ -210,6 +214,7 @@ function harness(records: readonly Lm1Record[], input: { remote?: boolean } = {}
           result.modelFingerprint === modelDescriptorFingerprint(model)
             ? published
             : [],
+        existing: [],
         reason: null,
       };
     },
@@ -365,6 +370,33 @@ describe("LM2 explicit indexer", () => {
       indexedCount: 128,
       transientReason: "evidence_cap_exhausted",
     });
+    expect(cursorSequence(receipt.retryCursor)).toBe(129);
+  });
+
+  it("charges rejected evidence before resolving the next distinct id", async () => {
+    const records = Array.from({ length: 129 }, (_, index) =>
+      snapshot(index, {
+        evidenceIds: [evidenceId(index * 2), evidenceId(index * 2 + 1)],
+        evidenceDigests: ["c".repeat(64), "d".repeat(64)],
+      }),
+    );
+    const test = harness(records);
+    for (const record of records) {
+      for (const id of record.evidenceIds) test.eligibility.set(id, "revoked");
+    }
+
+    const receipt = await test.index.index({
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 256,
+    });
+
+    expect(test.evidenceEligibility.resolve).toHaveBeenCalledTimes(128);
+    expect(receipt).toMatchObject({
+      outcome: "retry",
+      transientReason: "evidence_cap_exhausted",
+    });
+    expect(receipt.omitted).toHaveLength(128);
     expect(cursorSequence(receipt.retryCursor)).toBe(129);
   });
 
@@ -576,10 +608,19 @@ describe("LM2 explicit indexer", () => {
     await operation.finalize();
     test.embedding.embed.mockClear();
     test.remoteApproval.assertCurrent.mockResolvedValue("revoked");
+    let indexPublish: ReturnType<typeof vi.fn> | undefined;
+    const indexedVectors: Pick<Lm2VectorStore, "beginIndexOperation"> = {
+      async beginIndexOperation(request) {
+        const ready = await vectors.beginIndexOperation(request);
+        if (ready.status !== "ready") return ready;
+        indexPublish = vi.fn(ready.publishBatch);
+        return { ...ready, publishBatch: indexPublish };
+      },
+    };
     const index = createLm2IndexService({
       catalog: test.catalog,
       store: test.store,
-      vectors,
+      vectors: indexedVectors,
       evidenceEligibility: test.evidenceEligibility,
       embedding: test.embedding,
       model,
@@ -601,6 +642,48 @@ describe("LM2 explicit indexer", () => {
     });
     expect(cursorSequence(receipt.retryCursor)).toBe(2);
     expect(test.embedding.embed).not.toHaveBeenCalled();
+    expect(indexPublish).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses original-batch existing progress for a non-denial transient", async () => {
+    const existing = snapshot(0);
+    const missing = snapshot(1);
+    const test = harness([existing, missing]);
+    test.publishBatch.mockImplementationOnce(async () => ({
+      published: [],
+      existing: [existing.id],
+      reason: "port_failure" as const,
+    }));
+
+    const receipt = await test.index.index({
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 256,
+    });
+
+    expect(receipt.omitted).toEqual([{ id: existing.id, reason: "already_indexed" }]);
+    expect(receipt).toMatchObject({ outcome: "retry", transientReason: "embedding_failure" });
+    expect(cursorSequence(receipt.retryCursor)).toBe(2);
+    expect(test.publishBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("advances after every planned record committed before a later error", async () => {
+    const records = [snapshot(0), snapshot(1)];
+    const test = harness(records);
+    test.publishBatch.mockImplementationOnce(async () => ({
+      published: records.map(({ id }) => id),
+      existing: [],
+      reason: "write_failed" as const,
+    }));
+
+    const receipt = await test.index.index({
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 256,
+    });
+
+    expect(receipt).toMatchObject({ outcome: "complete", indexedCount: 2 });
+    expect(receipt.transientReason).toBeNull();
   });
 
   it("never sends more than 16 documents, 65,536 units, or an 8,192-unit projection", async () => {
@@ -657,12 +740,19 @@ describe("LM2 explicit indexer", () => {
   it("aborts timed-out embedding and cannot publish a late result", async () => {
     const record = snapshot(0);
     const test = harness([record]);
-    let resolveEmbedding!: (value: { modelFingerprint: string; vectors: number[][] }) => void;
     test.embedding.embed.mockImplementationOnce(
       ({ signal }) =>
         new Promise((resolve) => {
           expect(signal).toBeInstanceOf(AbortSignal);
-          resolveEmbedding = resolve;
+          signal.addEventListener(
+            "abort",
+            () =>
+              resolve({
+                modelFingerprint: modelDescriptorFingerprint(model),
+                vectors: [[1, 0]],
+              }),
+            { once: true },
+          );
         }),
     );
 
@@ -672,8 +762,6 @@ describe("LM2 explicit indexer", () => {
       maxRecords: 256,
       timeoutMs: 5,
     });
-    resolveEmbedding({ modelFingerprint: modelDescriptorFingerprint(model), vectors: [[1, 0]] });
-    await Promise.resolve();
 
     expect(receipt).toEqual({
       indexedCount: 0,
@@ -685,6 +773,67 @@ describe("LM2 explicit indexer", () => {
       quotaRecovery: "not_needed",
     });
     expect(test.finalize).toHaveBeenCalledTimes(1);
+  });
+
+  it("drains a timed-out live publication before finalizing and reports its committed prefix", async () => {
+    const records = [snapshot(0), snapshot(1)];
+    const test = harness(records);
+    let release = () => {};
+    let started = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const publicationStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    test.publishBatch.mockImplementationOnce(async () => {
+      started();
+      await gate;
+      return { published: [records[0]?.id], existing: [], reason: "port_failure" as const };
+    });
+
+    const pending = test.index.index({
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 256,
+      timeoutMs: 5,
+    });
+    await publicationStarted;
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    const finalizedBeforeDrain = test.finalize.mock.calls.length;
+    release();
+    const receipt = await pending;
+
+    expect(finalizedBeforeDrain).toBe(0);
+    expect(test.finalize).toHaveBeenCalledTimes(1);
+    expect(receipt).toMatchObject({
+      outcome: "retry",
+      indexedCount: 1,
+      transientReason: "timeout",
+    });
+    expect(cursorSequence(receipt.retryCursor)).toBe(2);
+  });
+
+  it("checks the absolute deadline after a synchronous catalog snapshot", async () => {
+    const test = harness([snapshot(0)]);
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    vi.mocked(test.catalog.page).mockImplementationOnce(() => {
+      now = 101;
+      return { generation: 1, entries: [], nextCursor: null };
+    });
+
+    const receipt = await test.index.index({
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 256,
+      timeoutMs: 100,
+    });
+
+    expect(receipt).toMatchObject({ outcome: "retry", transientReason: "timeout" });
+    expect(test.store.getById).not.toHaveBeenCalled();
+    expect(test.evidenceEligibility.resolve).not.toHaveBeenCalled();
+    expect(test.publishBatch).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -719,6 +868,29 @@ describe("LM2 explicit indexer", () => {
       transientReason: "embedding_failure",
     });
   });
+
+  it.each(["symbol", "non-enumerable"])(
+    "rejects an embedding result with an unexpected %s key",
+    async (kind) => {
+      const test = harness([snapshot(0)]);
+      const result = {
+        modelFingerprint: modelDescriptorFingerprint(model),
+        vectors: [[1, 0]],
+      };
+      if (kind === "symbol") Reflect.defineProperty(result, Symbol("candidateIds"), { value: [] });
+      else Reflect.defineProperty(result, "candidateIds", { value: [], enumerable: false });
+      test.embedding.embed.mockImplementationOnce(async () => result);
+
+      const receipt = await test.index.index({
+        workspaceKey,
+        modelFingerprint: modelDescriptorFingerprint(model),
+        maxRecords: 256,
+      });
+
+      expect(receipt).toMatchObject({ outcome: "retry", transientReason: "embedding_failure" });
+      expect(receipt.indexedCount).toBe(0);
+    },
+  );
 
   it("rejects remote configuration without an approval reference", () => {
     const test = harness([snapshot(0)]);
