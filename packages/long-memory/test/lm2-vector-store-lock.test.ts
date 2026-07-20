@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, symlinkSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, symlinkSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { flockSync } from "fs-ext";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import { withWorkspaceIndexLock } from "../src/lm2-lock.js";
 import { MAX_LM2_SIDECARS_PER_NAMESPACE, createLm2VectorStore } from "../src/lm2-vector-store.js";
 import {
@@ -65,6 +66,43 @@ describe("LM2 workspace index lock", () => {
     expect(existsSync(sidecarPath(root, second, model))).toBe(false);
     await expect(releaseFirst()).resolves.toEqual({ published: [first.id], reason: null });
     expect(existsSync(sidecarPath(root, first, model))).toBe(true);
+  }, 30_000);
+
+  it("rejects a stalled indexer after its lock pathname is replaced", async () => {
+    const root = createRoot();
+    const model = createModel(0, 1);
+    for (let index = 0; index < MAX_LM2_SIDECARS_PER_NAMESPACE - 1; index += 1) {
+      seedSidecar(root, createCandidate(index), model, [1]);
+    }
+    const first = createCandidate(MAX_LM2_SIDECARS_PER_NAMESPACE - 1);
+    const second = createCandidate(MAX_LM2_SIDECARS_PER_NAMESPACE);
+    const releaseFirst = await startRealIndexer(root, model, first);
+    const lockPath = indexLockPath(root);
+    renameSync(lockPath, `${lockPath}.displaced`);
+
+    await expect(
+      createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
+        workspaceKey,
+        model,
+        records: [second],
+        signal: new AbortController().signal,
+        embed: async () => ({
+          modelFingerprint: modelDescriptorFingerprint(model),
+          vectors: [[1]],
+        }),
+      }),
+    ).resolves.toEqual({ published: [second.id], reason: null });
+    await expect(releaseFirst()).resolves.toEqual({
+      published: [],
+      reason: "index_lock_unavailable",
+    });
+    expect(existsSync(sidecarPath(root, first, model))).toBe(false);
+    expect(existsSync(sidecarPath(root, second, model))).toBe(true);
+    expect(
+      readdirSync(dirname(sidecarPath(root, second, model))).filter((name) =>
+        name.endsWith(".json"),
+      ),
+    ).toHaveLength(MAX_LM2_SIDECARS_PER_NAMESPACE);
   }, 30_000);
 
   it("returns index_lock_unavailable when the lock cannot open", async () => {
