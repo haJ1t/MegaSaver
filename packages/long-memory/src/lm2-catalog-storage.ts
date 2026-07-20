@@ -65,17 +65,20 @@ export function openCatalogStorage(storeRoot: string, workspaceKey: string): Cat
   const anchor = openDirectoryAnchor(directory, false);
   if (anchor === null) throw new Lm2Error("store_corrupt", "LM2 catalog directory is missing.");
   try {
-    if (V1_NAMES.some((name) => childExists(anchor, name))) {
-      throw new Lm2Error(
-        "catalog_schema_unsupported",
-        "LM2 candidate catalog V1 requires an explicit migration.",
-      );
-    }
+    assertNoV1CatalogState({ anchor });
     return { anchor };
   } catch (error) {
     closeDirectoryAnchor(anchor);
     throw error;
   }
+}
+
+export function assertNoV1CatalogState(storage: CatalogStorage): void {
+  if (!V1_NAMES.some((name) => childExists(storage.anchor, name))) return;
+  throw new Lm2Error(
+    "catalog_schema_unsupported",
+    "LM2 candidate catalog V1 requires an explicit migration.",
+  );
 }
 
 export function closeCatalogStorage(storage: CatalogStorage): void {
@@ -105,7 +108,12 @@ export function readStoredCatalog(storage: CatalogStorage): StoredCatalog | null
   return read === null ? null : { value: parseLm2Catalog(read.raw), stat: read.stat };
 }
 
-function createSerialized(storage: CatalogStorage, name: string, serialized: string): void {
+function createSerialized(
+  storage: CatalogStorage,
+  name: string,
+  serialized: string,
+  assertMutationAllowed: () => void,
+): void {
   const temp = materializeAnchoredFile(
     storage.anchor,
     `.${randomUUID()}.catalog-create`,
@@ -113,9 +121,7 @@ function createSerialized(storage: CatalogStorage, name: string, serialized: str
   );
   let failure: unknown;
   try {
-    publishAnchoredTemporary(storage.anchor, temp, name, () =>
-      verifyDirectoryAnchor(storage.anchor),
-    );
+    publishAnchoredTemporary(storage.anchor, temp, name, assertMutationAllowed);
   } catch (error) {
     failure = error;
   }
@@ -127,12 +133,25 @@ function createSerialized(storage: CatalogStorage, name: string, serialized: str
   if (failure !== undefined) throw failure;
 }
 
-export function createCatalogControl(storage: CatalogStorage, control: Lm2CatalogControl): void {
-  createSerialized(storage, LM2_CATALOG_CONTROL_NAME, serializeLm2CatalogControl(control));
+export function createCatalogControl(
+  storage: CatalogStorage,
+  control: Lm2CatalogControl,
+  assertMutationAllowed: () => void,
+): void {
+  createSerialized(
+    storage,
+    LM2_CATALOG_CONTROL_NAME,
+    serializeLm2CatalogControl(control),
+    assertMutationAllowed,
+  );
 }
 
-export function createCatalogFile(storage: CatalogStorage, catalog: Lm2Catalog): void {
-  createSerialized(storage, LM2_CATALOG_NAME, serializeLm2Catalog(catalog));
+export function createCatalogFile(
+  storage: CatalogStorage,
+  catalog: Lm2Catalog,
+  assertMutationAllowed: () => void,
+): void {
+  createSerialized(storage, LM2_CATALOG_NAME, serializeLm2Catalog(catalog), assertMutationAllowed);
 }
 
 export function replaceCatalogFile(
