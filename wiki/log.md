@@ -3899,3 +3899,50 @@ mitigated by a printed per-model histogram, not by repricing.
 Stage A (`feat/net-positive-stage-a`) remains parked and UNGATED. Running the
 gate needs an `ANTHROPIC_API_KEY` (Claude Code's OAuth is not usable by a
 separate HTTP client).
+
+## [2026-07-20] fix | output-filter — close review on the quadratic signal regexes
+
+Five code-review items closed on `fix/rank-quadratic` (commits `a1bf5983`,
+`47dab116`). New page: [[concepts/unbounded-run-redos]].
+
+**Two more instances of the same class were still live.** `STACKTRACE`
+(`rank.ts`) and `SIGNATURE` (`parsers/stacktrace.ts`) had the identical shape
+plus a second driver — `\s+` and `.+` both accept whitespace, so the split is
+ambiguous at every offset of a whitespace run. Bounded to
+`\s{1,64}at\s{1,8}.{1,512}` (+ `\(.{1,512}` for SIGNATURE). Derived, not taken
+from the review: the gap bound is the tight one because only the gap
+multiplies, and `.{1,512}` absorbs a wide gap anyway, so `\s{1,8}` costs no
+reach (divergence only past 515 gap chars). Equivalence verified on 20 real
+frames — node with/without parens, tab-indented, deep monorepo, nested v8 eval,
+java, python, go, rust — before and after, all identical.
+
+**Correction to the review's attribution.** The reviewer measured 42 s for
+`  at ` + spaces through `filterOutput` and attributed it to
+STACKTRACE/SIGNATURE. Stage-level profiling says otherwise: on that shape the
+cost is `redactWithFindings` (16-24 s), from three variable-length lookbehinds
+in `@megasaver/policy` — `aws_secret_key` 6,132 ms, `basic_auth_header`
+4,598 ms, `api_key_header` 4,156 ms. Same defect class, third variant, now
+recorded and **still open**. The output-filter patterns were genuinely
+quadratic (32.9 s and 16.5 s through their own call sites), but they were not
+what the 42 s measured.
+
+**The guard test was not guarding.** It ran at 50 KB with a 5 s ceiling, where
+four of the five reverted patterns cost 2.9-4.7 s and stayed green — so only
+STACKTRACE's reversion would ever have failed it. And it drove only
+`scoreChunk`, which never reaches `normalize.ts`, so its claim to cover
+`POSITION` was false (the reviewer proved this; confirmed). Fix: SIZE 50 KB →
+100 KB (quadratic vs linear, so size is the cheap separator), and one timing
+block per pattern through its real call site. Each of the five now goes red
+alone when its bound is reverted: 16.1 / 19.3 / 32.9 / 16.5 / 12.2 s.
+
+**Changeset corrected.** "No behavior change" softened to "no realistic input"
+with the exact thresholds. Two of the five turn out to have no length
+divergence at all — `FILE_PATH`'s start class equals its continuation class, so
+a longer run restarts the match later rather than failing. The 236 s `saver-run`
+baseline is noted as load-dependent (160 s idle) rather than silently swapped.
+
+**Deferred, unchanged:** the `email` observer (`redaction-patterns.ts:171`),
+LOCKED §9d baseline, needs its own spec → security-reviewer chain. It is
+count-only and never modifies text, so a size gate on the observer loop may be
+cheaper than touching the locked pattern. Recorded as an option in
+[[concepts/unbounded-run-redos]]; not acted on.

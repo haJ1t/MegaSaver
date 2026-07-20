@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-07-19
+updated: 2026-07-20
 ---
 
 # Wiki Index — Mega Saver
@@ -22,6 +22,7 @@ updated: 2026-07-19
 - [[concepts/contextops]] — what "ContextOps" means; product category.
 - [[concepts/agent-agnostic-core]] — non-negotiable: agents connect to core, never reverse.
 - [[concepts/risk-aware-development]] — LOW / MEDIUM / HIGH / CRITICAL gating skills.
+- [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; 5 instances, 2 still open.
 - [[concepts/superpowers-discipline]] — mandatory chain on every feature.
 - [[concepts/wiki-first-token-discipline]] — wiki is the only sanctioned project memory; question → entry mapping; hard rules to avoid raw spec/code reads.
 - [[concepts/context-gate-pipeline]] — Mega Saver Mode: redact → chunk → rank → fit → summarize; redaction flow; AA1 package roles + cycle direction.
@@ -164,6 +165,7 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 | How does memory approval / the team gate work?     | [[concepts/structured-memory-engine#approval-gate]] |
 | What are the 25 MCP tools?                          | [[entities/mcp-bridge]]                          |
 | Is Windows supported / how?                         | [[concepts/windows-support]]                    |
+| Why did a regex make the suite time out?            | [[concepts/unbounded-run-redos]]                |
 
 ## Status
 

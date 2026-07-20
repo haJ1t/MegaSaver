@@ -8,7 +8,7 @@ sources:
   - docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md
 status: active
 created: 2026-05-11
-updated: 2026-06-26
+updated: 2026-07-20
 ---
 
 # `@megasaver/output-filter`
@@ -172,3 +172,36 @@ naive line slices, so ranking scores coherent declarations
   zero `typescript` modules load on import.
 - New dep: `@megasaver/indexer` (cycle-safe), relaxing §3c's prior
   shared+policy-only rule for this one edge.
+
+## ReDoS bounds on the signal regexes (2026-07-20)
+
+Five signal-extraction patterns in this package were quadratic on long runs —
+see [[concepts/unbounded-run-redos]] for the shared defect shape and the full
+instance list. All five are now bounded and each is guarded independently by
+`test/rank-redos.test.ts`:
+
+| pattern | file | bound | unbounded cost |
+|---------|------|-------|----------------|
+| `EXCEPTION_NAME` | `src/rank.ts` | `[A-Za-z]{0,64}` | 16.1 s |
+| `FILE_PATH` | `src/rank.ts` | `[\w./-]{1,256}` | 19.3 s |
+| `STACKTRACE` | `src/rank.ts` | `\s{1,64}at\s{1,8}.{1,512}` | 32.9 s |
+| `POSITION` | `src/normalize.ts` | `[\w./-]{0,256}` | 12.2 s |
+| `SIGNATURE` | `src/parsers/stacktrace.ts` | `\s{1,64}at\s{1,8}.{1,512}\(.{1,512}` | 16.5 s |
+
+Measured through each pattern's real call site (`scoreChunk`, `collapseSimilar`,
+`detectStacktrace`) on 100 KB of the shape that drives it; bounded, the whole
+20-test suite runs in ~450 ms.
+
+Two facts a future reader will otherwise re-derive:
+
+- **`normalize` strips trailing whitespace**, so a trailing whitespace run never
+  reaches the scorer. Only a run with something after it does — the guard test's
+  trailing `x` is load-bearing.
+- **`POSITION` is unreachable from `scoreChunk`.** `rank.ts` never calls
+  `normalize.ts`; its driver is `collapseSimilar`. An earlier guard test claimed
+  to cover it and did not.
+
+Divergence thresholds (no realistic input, but they exist): `EXCEPTION_NAME` at
+65 filler chars, `POSITION` at 257, `STACKTRACE`/`SIGNATURE` past 512 body chars
+and 64 indent chars. `FILE_PATH` cannot diverge at any length — its start class
+equals its continuation class, so a longer run just starts the match later.
