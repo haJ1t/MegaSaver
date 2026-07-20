@@ -164,3 +164,9 @@ export {
   type StoredBudget,
   writeBudget,
 } from "./budget.js";
+
+export {
+  BENCHMARK_RATES_PER_MTOK,
+  normalizedCostUsd,
+  type BenchmarkUsage,
+} from "./benchmark-cost.js";

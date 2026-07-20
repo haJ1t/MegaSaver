@@ -1,9 +1,9 @@
 {
-  "name": "@megasaver/policy",
-  "version": "1.2.2",
+  "name": "@megasaver/bench-replay",
+  "version": "0.1.0",
   "license": "MIT",
   "private": true,
-  "description": "Command, path-read, and redaction policy gate for Mega Saver.",
+  "description": "Record/replay benchmark harness: freezes one conversation's request bodies and replays baseline vs megasaver arms for deterministic cost comparison.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,15 +20,14 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "typecheck": "tsc -b --noEmit",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@megasaver/shared": "workspace:*",
+    "@megasaver/stats": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/node": "^22.19.17",
-    "fast-check": "^3.23.2"
+    "@types/node": "^22.19.17"
   }
 }

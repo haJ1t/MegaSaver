@@ -1,7 +1,13 @@
 # `jwt` Detector ReDoS Fix — Design
 
 - **Date:** 2026-07-20
-- **Status:** user-approved design; approach and trade-off re-confirmed
+- **Status:** **AMENDED 2026-07-20b — see §0 before reading further.**
+  Three review passes found the §5 scope claim false, the §5 cost
+  argument inapplicable to the percent class, the §1b severity
+  understated, and the §6 suite unable to fence the next edit. §0, §1b,
+  §2, §5, §6 and §9 are corrected; superseded text is preserved inline
+  in `<details>` blocks rather than deleted.
+- **Status (original, 2026-07-20):** user-approved design; approach and trade-off re-confirmed
   2026-07-20 against the **corrected** trade-off table, after the security
   gate showed the loss is larger than first presented (§5). Architect pass
   **APPROVE_WITH_FIXES** and security-reviewer pass **APPROVE_WITH_FIXES**
@@ -20,6 +26,170 @@
   extension spec and recorded as a follow-up in
   `2026-07-19-redaction-baseline-extension-design.md` §14. Pre-existing in
   shipped code; no in-flight branch introduced it.
+
+## 0. Amendment 2026-07-20b — scope correction and percent recovery
+
+**Status:** amends the 2026-07-20 approved design after three further
+review passes. The original record below is kept intact; the sections it
+corrects are marked. Nothing here reverses the fix — it widens it and
+restates its cost honestly.
+
+Three things in the original were wrong or understated:
+
+1. **§5's scope claim was false.** It asserted that "every standard JWT
+   carrier uses `=`, `:`, `"`, `;`, whitespace, or start-of-string as its
+   delimiter, and all are preserved." Percent-escapes break that claim
+   outright, and they are among the most common carriers in the agent
+   output this detector exists to scrub. Corrected in §5.
+2. **§5's cost argument did not transfer to the percent class.** The
+   "too expensive to recover" measurement was taken for `-`/`_`, which
+   sit *inside* the run character class. `%` does not, so it terminates
+   the dotless run and recovery is nearly free. Corrected in §5.
+3. **§1b's severity was wrong in the other direction.** The blowup is
+   **ordinarily reachable**, not merely adversarially reachable.
+   Corrected in §1b.
+
+**The amended pattern** — this is what ships:
+
+```
+/(?:(?<![A-Za-z0-9_-])|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g
+```
+
+The tail after the alternation is byte-identical to the shipped pattern's
+tail; the only change is that the single lookbehind becomes a two-branch
+alternation, adding `(?<=%[0-9A-Fa-f][0-9A-Fa-f])`.
+
+**Changeset is `minor`, not `patch`** (§9 corrected). A reduction in
+redaction coverage must not ride in on an auto-merged patch, even though
+the public API is unchanged.
+
+### 0a. What is recovered, and what is still lost
+
+**Recovered:** a JWT immediately preceded by a percent-escape. Verified
+across **all 512 `%XY` forms** (256 byte values x upper- and lower-case
+hex): 0/512 redact under the shipped pattern, 512/512 under the amended
+one.
+
+**Branch 2 matches one complete escape, not percent-encoding in general.**
+Read the 512-form result above as covering a single well-formed `%XY`
+immediately before the JWT — nothing wider. Two residual percent carriers
+stay in the loss class below because their predecessor byte is itself a
+raw base64url character: a **double-encoded** escape (`%253D`, `%2520` —
+the byte before `eyJ` is `D`/`0`, and the byte three back is `5`, not
+`%`), and an escape **truncated at a buffer boundary** (`q=%3` + JWT —
+the byte before `eyJ` is `3`). Both were re-confirmed through the full
+sequential-replacement pipeline: no detector fires at all and the
+complete signature stays in cleartext. Double-encoding is routine in
+redirect-chain logs, and boundary truncation is exactly what a streaming
+redaction sink sees.
+
+**Still lost — the true loss class.** Any JWT immediately preceded by a
+*raw base64url character*, i.e. exactly `[A-Za-z0-9_-]`. A 256-byte
+predecessor sweep confirms the boundary is exactly those 64 bytes and no
+others (192 of 256 bytes admit a match). The concrete shapes:
+
+| shape | example | other detector covers the JWT bytes? |
+|---|---|---|
+| `session-` glue | `session-<jwt>` | no detector matches at all |
+| `id_token_` glue | `id_token_<jwt>` | no detector matches at all |
+| `Bearer` with no space | `Authorization: Bearer<jwt>` | no — `bearer_token` requires `\s+` |
+| GitHub App installation token | `ghs_<appid>_<jwt>` | `github_token` fires but stops at the `_`; JWT bytes leak |
+| raw base64 run glue | `QUJDREVGRw<jwt>` | no detector matches at all |
+
+**No other detector provides fallback coverage for any of these.** Run
+through the real sequential-replacement pipeline (all 20 baseline
+patterns, declaration order, faithful to `redactWithFindings`), every row
+above leaves the complete signature `SflKxwRJSMeKKF2QT4` in cleartext.
+The `ghs_` row is the sharpest: `github_token` *does* fire, which makes
+`findings` non-empty and the leak easy to miss, but it redacts only the
+`ghs_...` prefix and the whole JWT survives. `url_query_secret` cannot
+rescue any of them — its own lookbehind needs a literal `=`.
+
+### 0b. Escaped-equals forms — measured, not assumed
+
+The review flagged `\x3d`-style escaped equals alongside the percent
+forms. Measured individually, they do **not** behave alike:
+
+| form | example | shipped | amended | why |
+|---|---|---|---|---|
+| `%3D` / `%3d` | `state=x%3D<jwt>` | lost | **recovered** | `%` is outside the run class |
+| `\x3d` / `\x3D` | `state=x\x3d<jwt>` | lost | **still lost** | predecessor byte is `d`/`D`, a base64url char |
+| `\u003d` | `state=x\u003d<jwt>` | lost | **still lost** | predecessor byte is `d` |
+| `&#61;` | `state=x&#61;<jwt>` | **already redacted** | redacted | predecessor byte is `;`, a preserved delimiter |
+
+So: the percent branch recovers the percent class only. `\x3d` and
+`\u003d` remain in the accepted-loss class of §5 and are named there.
+`&#61;` was never affected — the review's grouping of it with the others
+was incorrect.
+
+### 0c. Cost of the recovery — why the original rejection did not transfer
+
+The original §5 rejected a hybrid alternation at **49.7 ms** per 313 KiB
+versus 0.4 ms for the simple fix. That measurement was for a
+bounded-header branch after `-`/`_`, both of which are *inside*
+`[A-Za-z0-9_-]`, so an admitted start still scans a long dotless run.
+`%` is not in the class, so it terminates the run and each admitted start
+costs O(its own token).
+
+Measured on this branch (Node 22, best of 3, 313 KiB):
+
+| seed | shipped | amended |
+|---|---|---|
+| `eyJaA0` | 0.47 ms | 0.51 ms |
+| `-eyJaA` | 0.15 ms | 0.25 ms |
+| `_eyJaA` | 0.15 ms | 0.24 ms |
+| `%3DeyJaA` | 0.13 ms | 0.32 ms |
+
+Two orders of magnitude under the 49.7 ms hybrid, four under the
+7,481 ms original. The percent branch adds a constant, never a factor of
+input length.
+
+### 0d. Linearity of the new branch — attacked, not assumed
+
+The second lookbehind branch is new, so it is the likeliest place to
+reintroduce cost. Thirteen seeds across 156 / 313 / 626 / 1252 KiB, best
+of 3 (ms):
+
+| seed | 156K | 313K | 626K | 1252K | doubling |
+|---|---|---|---|---|---|
+| `eyJaA0` | 0.25 | 0.53 | 1.06 | 1.98 | 2.16 / 1.99 / 1.87 |
+| `-eyJaA` | 0.13 | 0.23 | 0.48 | 0.96 | 1.73 / 2.11 / 1.98 |
+| `_eyJaA` | 0.12 | 0.23 | 0.45 | 1.00 | 1.97 / 1.99 / 2.21 |
+| `%3DeyJaA` | 0.17 | 0.34 | 0.63 | 1.25 | 1.94 / 1.87 / 2.00 |
+| `%41eyJaA` | 0.16 | 0.31 | 0.61 | 1.39 | 1.93 / 2.01 / 2.27 |
+| `%3deyJ`+64 dotless | 0.23 | 0.47 | 1.07 | 1.95 | 2.04 / 2.27 / 1.81 |
+| two-segment fail | 0.60 | 1.24 | 2.55 | 4.88 | 2.05 / 2.06 / 1.92 |
+| `%3D` two-segment fail | 0.59 | 1.20 | 2.30 | 4.80 | 2.04 / 1.92 / 2.09 |
+| `.`-separated starts | 0.17 | 0.48 | 0.60 | 1.28 | 2.83 / 1.24 / 2.14 |
+| near-miss JWTs | 0.26 | 0.61 | 1.04 | 2.11 | 2.34 / 1.70 / 2.03 |
+| 4 KiB dotless run + `%3DeyJ` | 0.17 | 0.42 | 0.69 | 1.39 | 2.40 / 1.67 / 2.00 |
+| `%3D` dense | 0.04 | 0.08 | 0.15 | 0.30 | 2.00 / 1.99 / 2.00 |
+| `%3DeyJ` dense | 0.14 | 0.29 | 0.58 | 1.20 | 2.01 / 2.00 / 2.07 |
+
+Every ratio sits at ~2.0 per doubling: linear. A segment-length sweep
+from 1 to 65,536 at 1252 KiB peaks at **4.72 ms** (segment length 64,
+~3.87 ms/MiB) — statistically the same as the shipped pattern's own worst
+case of 4.94 ms on the equivalent shape. Twelve pathological `%` shapes
+(`%%3D`, `%3D%3D`, invalid hex `%GG`, `%0A`, bare `%`) all land between
+0.03 and 0.71 ms per 313 KiB. A 500-seed randomized fuzz comparing 313 to
+626 KiB produced a maximum ratio of 2.94x with **zero** seeds above 3x.
+
+Nothing super-linear was found.
+
+### 0e. No new false positives
+
+The amended pattern is a strict superset of the shipped one and a strict
+subset of the pre-fix one. Across 441,957 candidate matches drawn from
+300,000 randomized inputs, **every** match was also a structurally valid
+match for the pre-fix pattern — the percent branch changes only *where a
+match may start*, never *what counts as a token*. Twelve
+deliberately-crafted near-miss strings (`%3Deyjnotatoken`, `%3DeyJ..`,
+`%3DeyJonly.onedot`, `100%3Done`, ...) fire zero times. A 256-byte
+single-predecessor sweep shows zero verdict drift between shipped and
+amended, confirming the new branch fires only on a genuine two-character
+hex escape.
+
+---
 
 ## 1. Problem
 
@@ -65,7 +235,68 @@ starts: **204.2 ms**. At the same 39 KiB with exactly **one** `eyJ` start:
 **0.0 ms**. The driver is the number of start positions, not the length of
 any single run.
 
-### 1b. Severity — corrected
+### 1b. Severity — corrected, then corrected again (Amendment 2026-07-20b)
+
+> **This section's original conclusion — "adversarially reachable, not
+> ordinarily reachable" — is WRONG and is superseded.** Measurement below
+> refutes it. The original text is retained after the correction as a
+> record of what was believed at approval time.
+
+**Corrected classification: ordinarily reachable.**
+
+The original reasoning assumed random base64 rarely contains `eyJ`. That
+is true, but it is the wrong population. Base64 of *JSON* is not random:
+JSON objects begin `{"`, which encodes to `eyJ`, so every encoded JSON
+value contributes an `eyJ` at a predictable alignment. Encoded-JSON
+payloads are routine in agent output.
+
+What actually decides the cost is whether the encoded text forms one long
+**dotless run of `[A-Za-z0-9_-]`**. Measured at 320 KiB with the pre-fix
+pattern:
+
+| shape | `eyJ` count | longest run | pre-fix | amended |
+|---|---|---|---|---|
+| base64 (`+/`), newline-separated | 3,430 | 94 | 0.8 ms | 0.45 ms |
+| base64 (`+/`), no separator | 3,466 | 11,866 | 5.6 ms | 0.46 ms |
+| **base64url (`-_`), newline-separated** | 3,479 | 94 | 0.4 ms | 0.45 ms |
+| **base64url (`-_`), no separator** | 3,516 | 327,680 | **575.9 ms** | **0.31 ms** |
+| base64url, no separator, larger records | 695 | 327,680 | 113.4 ms | 0.41 ms |
+
+The hazard is **base64url with no separator**, and it scales cleanly
+quadratically — 85 / 171 / 341 / 683 KiB costs 40.6 / 165.6 / 637.6 /
+2,555.5 ms, a clean 4x per doubling.
+
+This is an ordinary shape, not a crafted one: `Buffer.toString("base64url")`
+of any JSON payload produces it, and a single-line log record carrying one
+long base64url field is exactly this. Standard base64 (`+` and `/` break
+the run) and any newline wrapping are both benign — which is the honest
+boundary of the claim.
+
+**Two review examples do not hold.** Kubernetes Secrets and Docker
+`config.json` auth blobs were cited as instances. Both use *standard*
+base64 and are newline-wrapped in practice; measured at ~320 KiB they
+cost **1.0 ms** and **2.1 ms** respectively under the pre-fix pattern.
+They are not the vector. The vector is base64url-without-separators.
+
+**No effective size cap sits in front of redaction.** The high-volume
+sinks redact the full raw capture before any truncation:
+`output-filter/src/types.ts:182` (`redactWithFindings(raw)`, ahead of
+`maxReturnedBytes`), `context-gate/src/record-output.ts:158`
+(`redact(input.raw)`), and `context-gate/src/run-command.ts:305,574`
+(where the `.slice(0, 4000)` is applied to the *result* of `redact()`,
+deliberately, so a truncated fragment is not left unrecognised). The
+caps that do exist are the 20 MB capture ceiling
+(`DEFAULT_MAX_BYTES = 20_000_000` in `apps/cli/src/commands/output/exec.ts`
+and `bench.ts`) and the daemon's 16 MB body limit — both far above the
+683 KiB that already costs 2.5 s, so under the pre-fix pattern they bound
+nothing that matters.
+
+It remains worth fixing on the CRITICAL tier for the original reason as
+well: the redactor processes untrusted agent output, tool results, and —
+since Hot Handoff — the contents of packets authored elsewhere.
+
+<details>
+<summary>Original §1b text as approved 2026-07-20 (superseded)</summary>
 
 The follow-up note claimed the blowup is "reachable from ordinary
 base64-heavy logs," citing 9.93 ms for a 24.6 KiB unbroken base64 run.
@@ -83,6 +314,8 @@ untrusted agent output, tool results, and — since Hot Handoff — the
 contents of packets authored elsewhere. A crafted payload stalls every
 sink, and the redaction path is exactly where an attacker would aim.
 
+</details>
+
 ## 2. Goal and invariant
 
 Make the detector linear without losing coverage of real JWTs.
@@ -93,7 +326,37 @@ Make the detector linear without losing coverage of real JWTs.
 > real JWT — produces byte-identical output. No other detector, and no
 > function signature, changes.
 
+**Amended 2026-07-20b — the invariant above needs one carve-out, stated
+exactly.** Hex digits are themselves base64url characters, so a
+percent-escape ends in a character that is *in* the class. The amended
+pattern still matches there. The precise invariant is:
+
+> A JWT no longer matches when it is immediately preceded by a raw
+> base64url character, **except** where that character is the final digit
+> of a two-digit percent-escape (`%XY`), in which case it still matches.
+> Everything else is byte-identical to the pre-fix pattern.
+
+Verified two ways: a 256-byte single-predecessor sweep (exactly the 64
+base64url bytes block, the other 192 admit, zero drift from the
+single-lookbehind pattern), and a 300,000-input randomized differential in
+which all 441,957 amended-pattern matches were also structurally valid
+pre-fix matches. The amended pattern is a strict superset of the shipped
+one and a strict subset of the pre-fix one.
+
+Worth recording plainly: the invariant **as originally written was false
+for the stage-one pattern** — it lost the percent carriers too, and the
+sentence did not say so. That gap is what Amendment 2026-07-20b exists to
+close.
+
 ## 3. The fix
+
+> **Amended 2026-07-20b — this is stage one, not what ships.**
+> The pattern in this section removes the quadratic but loses the
+> percent-escaped carriers. The shipping pattern adds a second
+> lookbehind branch and is stated in §0. Everything below about
+> *why* the lookbehind makes the scan linear still applies
+> unchanged to both branches.
+
 
 ```
 /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g
@@ -155,7 +418,66 @@ atomic form misses. But it **does not fix the performance**: 5,870 ms at
 is scanning the run at every start position, and the lookahead still
 scans. Rejected — and recorded here because it is the natural first idea.
 
-## 5. Accepted trade-off
+## 5. Accepted trade-off — corrected (Amendment 2026-07-20b)
+
+> **The original §5 overstated what is preserved.** Its claim that "every
+> standard JWT carrier uses `=`, `:`, `"`, `;`, whitespace, or
+> start-of-string as its delimiter, and all are preserved" is **false**:
+> percent-escaped carriers were not considered, and they are common. The
+> original text is retained at the end of this section as a record of the
+> approved decision; the corrected statement is what governs.
+
+**The loss class, stated precisely.** A JWT is not redacted when it is
+immediately preceded by a **raw base64url character** — exactly
+`[A-Za-z0-9_-]`, all 64 of them. A 256-byte predecessor sweep confirms
+those 64 bytes block and the other 192 admit; there is no other blocking
+byte and no other exception.
+
+Percent-escaped predecessors, which the original section missed entirely,
+are **recovered** by the amended pattern (§0a). All 512 `%XY` forms
+redact.
+
+**The concrete shapes still lost**, each verified through the full
+sequential-replacement pipeline with **no other detector covering the JWT
+bytes** (§0a has the table):
+
+```
+session-eyJhbGci....eyJ....sig
+id_token_eyJhbGci....eyJ....sig
+Authorization: Bearer<jwt>          (bearer_token needs \s+)
+ghs_<appid>_<jwt>                   (github_token fires, stops at the _)
+QUJDREVGRw<jwt>                     (raw base64 run glue)
+state=x\x3d<jwt>                    (escaped equals; predecessor is `d`)
+state=x\u003d<jwt>                  (same)
+```
+
+`&#61;`-escaped equals is **not** in this class — its predecessor is `;`,
+a preserved delimiter, and it redacts (§0b).
+
+**Why these cannot be recovered the way the percent class was.** The
+percent class is cheap precisely because `%` lies *outside*
+`[A-Za-z0-9_-]`, so it terminates the dotless run and each admitted start
+costs O(its own token). Every shape above is preceded by a character
+*inside* the class. Admitting them means an admitted start can scan an
+arbitrarily long dotless run, which is the quadratic itself. Narrowing
+the lookbehind to `(?<![A-Za-z0-9])` — the obvious "fix" — restores
+`session-` and `id_token_` and restores the full quadratic with them:
+measured on this branch at 313 KiB, **7,728 ms** against
+`'-eyJaA'.repeat(n)` and **7,416 ms** against `'_eyJaA'.repeat(n)`, while
+the `'eyJaA0'` seed still reads 0.6 ms and would sail through any
+ceiling. The `-` and `_` must stay in the lookbehind class. §6 pins this
+with dedicated timing seeds, because it is exactly the edit a future
+maintainer would make to close this section.
+
+**This is a real, disclosed coverage reduction.** It is not "nothing
+would parse it as a token either" — `session-<jwt>` and `ghs_<appid>_<jwt>`
+are live token shapes. It is accepted because the alternative is a
+quadratic ReDoS in a CRITICAL redaction path that is, per corrected §1b,
+ordinarily reachable. The changeset is **minor** (§9) so the reduction is
+visible at release rather than auto-merged as a patch.
+
+<details>
+<summary>Original §5 text as approved 2026-07-20 (superseded — contains the false scope claim)</summary>
 
 A JWT preceded directly by any base64url character — `[A-Za-z0-9_-]`,
 **including `-` and `_`** — no longer redacts.
@@ -197,7 +519,209 @@ in front of the approver.
 §6.3 asserts both non-matches explicitly, so a future reader sees an
 intended boundary rather than a gap.
 
-## 6. Testing
+</details>
+
+## 6. Testing — amended (Amendment 2026-07-20b)
+
+> **The original §6 plan produced a suite that does not fence the next
+> edit.** Mutation testing (below) found that of the 21 assertions that
+> shipped, the *only* one killing any structural mutant is the
+> source-prefix string check — and that check breaks on the amended
+> pattern itself. Once it is updated, **four of five mutants survive the
+> whole suite**. The original text is retained at the end of this section.
+
+### 6.0 Mutation evidence (why this section changed)
+
+Five mutants applied to the amended pattern, run against the 21
+assertions currently in `packages/policy/test/redact-jwt.test.ts`:
+
+| mutant | killed by current 21? | killed by behavioural 20 only? |
+|---|---|---|
+| M1 delete the `/g` flag | only by the source-prefix check | **survives** |
+| M2 signature class to `[A-Za-z0-9]` | only by the source-prefix check | **survives** |
+| M3 header class to `[A-Za-z0-9]` | only by the source-prefix check | **survives** |
+| M4 payload class to `[A-Za-z0-9]` | only by the source-prefix check | **survives** |
+| M5 segment bounds `{15,}/{20,}/{15,}` | only by the source-prefix check | **survives** |
+
+The source-prefix check is doing all the work, and it is doing it for the
+wrong reason: it pins a *string prefix of the source*, not any behaviour.
+It also fails against the amended pattern, which no longer *starts with*
+`(?<![A-Za-z0-9_-])`.
+
+Root cause of the behavioural blindness, measured on the existing corpus:
+the 14 equivalence inputs contain only **47 of the 64** base64url
+characters, missing `C E L V X Z m p q s v 5 6 7 8 - _`. In particular
+**no fixture token contains `-` or `_` in any segment** — which is why
+narrowing any segment class to `[A-Za-z0-9]` is invisible. M2 alone would
+put 43 characters of live signature into cleartext.
+
+### 6.1 Required assertions
+
+Everything in the original plan stands, plus the following. Each line
+names the mutant it kills; all were verified to kill it.
+
+1. **Structural gate — rewritten for the two-branch pattern.** The old
+   `startsWith("(?<![A-Za-z0-9_-])")` no longer holds. Replace with:
+
+   ```ts
+   expect(jwtEntry.pattern.source.startsWith(
+     "(?:(?<![A-Za-z0-9_-])|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))",
+   )).toBe(true);
+   ```
+
+   Verified: true for the amended pattern, **false** for both the
+   narrowed-lookbehind mutant and the pre-amendment shipped pattern, so
+   it still catches the edit §5 warns about.
+
+2. **Flag assertion — new.** No test in the repo asserts `.flags` on any
+   pattern, and `redact()` derives `count` from a global replace, so
+   dropping `/g` silently under-reports every finding and leaves every
+   JWT after the first in cleartext.
+
+   ```ts
+   expect(jwtEntry.pattern.flags).toBe("g");
+   ```
+
+   Kills **M1**.
+
+3. **A fixture whose header, payload and signature each contain `-` and
+   `_`.** This is the single highest-value addition; the corpus has no
+   such token today.
+
+   ```
+   eyJhbGciOiJIUzI1NiJ9-_x.eyJzdWIiOiIxMjM0NTY3ODkwIn0-_y.SflKxw-RJSMeKKF_2QT4
+   ```
+
+   Kills **M2, M3 and M4**. (One fixture covers all three. If per-segment
+   diagnosis is wanted, split it into three; the kill is equivalent.)
+
+4. **A minimal `alg:none` token.**
+
+   ```
+   eyJhbGciOiJub25lIn0.eyJhIjoxfQ.X
+   ```
+
+   Kills **M5** — segment length bounds drop it, and it is a real shape
+   (an unsigned token is precisely the one an attacker forges).
+
+5. **Two JWTs in one input**, asserting both are replaced.
+
+   ```
+   a=<jwt> b=<jwt>   ->   a=eyJ[REDACTED] b=eyJ[REDACTED]
+   ```
+
+   Kills **M1** behaviourally, independent of the flag assertion.
+
+6. **Percent-encoded equivalence cases** — the recovery this amendment
+   ships, so it cannot silently regress. At minimum `%3D` (upper hex),
+   `%3d` (lower hex), `%26` and `%20`:
+
+   ```
+   state=x%3D<jwt>  ->  state=x%3DeyJ[REDACTED]
+   state=x%3d<jwt>  ->  state=x%3deyJ[REDACTED]
+   a=b%26<jwt>      ->  a=b%26eyJ[REDACTED]
+   q=%20<jwt>       ->  q=%20eyJ[REDACTED]
+   ```
+
+   Both hex cases are required: a mutant restricting the branch to
+   `[0-9A-F]` would otherwise pass.
+
+7. **A `%`-shaped timing seed** added to the existing three:
+   `'%3DeyJaA'.repeat(n)` at the 313 KiB rung. Measured 0.32 ms.
+
+   Be honest about what this seed does: it does **not** discriminate the
+   narrowed-lookbehind mutant (0.3 ms either way). Its job is to guard
+   the *new* branch against a future edit that makes branch 2 scan, which
+   is the one structural risk this amendment introduces. The existing
+   `-eyJaA` and `_eyJaA` seeds remain the ones that catch the §5
+   narrowing (7,728 ms and 7,416 ms), and must not be removed.
+
+8. **Non-match assertions extended** to the full loss class of corrected
+   §5 — add `Bearer<jwt>` (no space), `ghs_<appid>_<jwt>`, and
+   `state=x\x3d<jwt>` alongside the existing three, each with a comment
+   naming §5. The `ghs_` case should assert the JWT bytes specifically,
+   not merely that the string changed: `github_token` fires on that input
+   and makes a naive "was it modified?" assertion pass while the token
+   leaks.
+
+9. **Existing suites unmodified**, as originally specified.
+
+### 6.2 Note for the implementer
+
+The old expected-value literals in the equivalence corpus stay valid —
+all 14 were re-verified byte-for-byte against the amended pattern, and
+against the pre-fix reference, on this branch. The amendment adds cases;
+it does not rewrite existing ones.
+
+### 6.2a Timing-gate flake and the mutation gap (added 2026-07-20b, round 2)
+
+Two round-2 `verifier` findings against §6 are closed here.
+
+**The timing tests flaked — once, and not reproducibly.** One
+`turbo test --force` run in five reported
+`@megasaver/policy: 2 failed | 205 passed`. Diagnosis on this branch
+could **not** reproduce it, and this is stated plainly because the
+mechanism was never confirmed:
+
+- CPU contention does not explain it. At 8x oversubscription (load
+  average 77 on 10 cores) the four measurements stayed at 0.3–1.8 ms
+  against the 500 ms ceiling, and 15 consecutive runs of the file under
+  that load were green.
+- Six further `turbo test --force` runs put `@megasaver/policy` at
+  **213 passed (213), 6 of 6**, with `redact-jwt.test.ts` completing in
+  6–167 ms each time.
+
+All six of those runs *did* fail — every one on the same
+`@megasaver/cli` test, `saver-run.test.ts > makeRecord > real daemon
+/excerpt`, with `Test timed out in 30000ms`. That failure is **not**
+this branch's and **not** a flake: `apps/cli` is byte-identical to
+`main` here, the only source change on the branch is the `jwt` pattern
+itself (which is strictly faster), and the test also fails in isolation
+on an idle box, 2 for 2. It is tracked separately.
+
+So the residual mechanism for the original single policy failure is a
+rare whole-process stall (GC or scheduler) under a saturated box — the
+only candidate left standing, not a demonstrated cause. The fix below is
+therefore a precaution whose cost in discriminating power is provably
+zero, not a repair of a confirmed defect.
+
+**Fix: `{ retry: 3 }` on the four timing tests, ceiling unchanged at
+500 ms.** This costs nothing in discriminating power, because a
+reintroduced quadratic is slow on *every* attempt. Verified by mutation
+on this branch, with retries enabled:
+
+| mutant | seeds that fire | measured per attempt | attempts failed |
+|---|---|---|---|
+| narrowed lookbehind `(?<![A-Za-z0-9])` | `-eyJaA`, `_eyJaA` | 38.0–41.8 s | 4 of 4, both seeds |
+| fully reverted (pre-fix) pattern | `eyJaA0`, `-eyJaA`, `_eyJaA` | 34.2–40.3 s | 4 of 4, all three seeds |
+
+Both also trip the §6.1 structural gate independently, which is the
+point of §6.2 being defense-in-depth rather than the primary guard. Note
+these figures are ~5x the 7,416/7,728 ms recorded elsewhere in this spec:
+the runtime here is Node 25.8.2, not the pinned Node 22 — see §9a. The
+discrepancy runs in the safe direction and the ~70x minimum margin over
+the ceiling holds regardless.
+
+**The equivalence corpus could not see two mutant classes.** Every one of
+its 21 fixtures carries an `eyJ`-prefixed payload, because real JWTs do.
+So dropping the payload's own `eyJ` anchor, or relaxing any segment's `+`
+to `*`, passed all 34 assertions while silently *widening* what redacts —
+`trace eyJhbGciOiJIUzI1NiJ9.session.abc123` and `see eyJlogger.v2.min
+bundle` both start being redacted. That breaks the strict-subset-of-the-
+pre-fix-pattern invariant the corpus exists to protect, and
+over-redaction is a real cost here: Mega Saver's stated principle is that
+it never strips what the model needs to decide.
+
+Six non-match assertions now fence this, each killed by exactly the
+mutant it targets: two non-`eyJ` payloads (payload-anchor mutant), and
+one empty segment in each of the three positions plus the all-empty
+`eyJ.eyJ.` (segment `+`->`*` mutants). `eyJ.eyJ.` alone is **not**
+sufficient — measured, it is left unchanged by each single-position
+mutant and only redacts when all three quantifiers are relaxed at once,
+so the three positional fixtures are what carry the guarantee.
+
+<details>
+<summary>Original §6 text as approved 2026-07-20 (superseded)</summary>
 
 1. **Equivalence corpus — expected outputs frozen, old pattern not
    shipped into CI.** The 14-case corpus becomes a test, but the old
@@ -249,6 +773,8 @@ intended boundary rather than a gap.
    positive), `redact-pii.test.ts`, `redact-unstructured.test.ts`, and
    `redact.property.test.ts` all pass untouched.
 
+</details>
+
 ## 7. Consumers and the lock record
 
 No signature changes. `redact`, `redactWithFindings`, and
@@ -273,9 +799,14 @@ loosely — so amend, never silently rewrite.
 **A WHY comment goes at the regex itself**, not only in the test. Seven
 sibling entries in `redaction-patterns.ts` carry multi-line WHY comments
 for exactly this kind of non-obvious constraint, and that is the file's
-convention. Two or three lines naming both facts: the lookbehind
-collapses O(n) useless start positions to O(1), and the `-`/`_` loss is
-an accepted trade-off per §5 of this spec.
+convention. Two or three lines naming three facts: the first lookbehind branch
+collapses O(n) useless start positions to O(1); the second branch
+recovers percent-escaped carriers cheaply *because* `%` sits outside
+the run class; and the remaining raw-base64url-predecessor loss is an
+accepted trade-off per corrected §5. The existing comment's line
+"Narrowing the class to [A-Za-z0-9] recovers those two" must be kept —
+it is the anti-regression note — but its "see test/redact-jwt.test.ts"
+pointer now also covers the percent cases.
 
 ## 8. Interaction with the redaction-baseline extension
 
@@ -326,14 +857,58 @@ pass → `writing-plans` → worktree → TDD → `pnpm verify` + reproduction
 evidence → `code-reviewer` AND `critic` (separate passes, author ≠
 reviewer) → `omc:tracer` evidence loop → verifier.
 
-Changeset: `@megasaver/policy` **patch** — the API is unchanged and the
-package is past 1.0, so the version is right. The changeset **body must
-state the behavior change in one sentence**: a JWT preceded directly by a
-base64url character (including `-` and `_`) no longer redacts, and why
-that is intended per §5. Patch is defensible; silence about a
-security-relevant behavior change is not.
+Changeset: `@megasaver/policy` **minor** — amended 2026-07-20b. The
+public API is unchanged, so `patch` was defensible on API grounds, but
+this ships a **reduction in redaction coverage** (corrected §5), and a
+security-relevant coverage reduction must not ride in on an auto-merged
+patch. `minor` forces it to be seen at release. The changeset body must
+state, in one sentence each: (a) a JWT preceded directly by a raw
+base64url character — including `-` and `_` — no longer redacts, and no
+other detector covers those shapes; (b) percent-escaped carriers are
+recovered; (c) the quadratic ReDoS is removed.
 
-Wiki: update `entities/policy` and append to `log.md`, including the
-corrected severity classification (adversarially reachable, not triggered
-by ordinary base64 logs) so the record does not carry the original
-overstatement.
+Wiki: update `entities/policy` and append to `log.md`. **Amended
+2026-07-20b:** the severity line must read **ordinarily reachable**, not
+"adversarially reachable". The wiki text currently on this branch says
+the latter and is wrong — see corrected §1b for the base64url
+measurement (575.9 ms at 320 KiB, clean 4x-per-doubling scaling) and the
+absence of any effective size cap in front of the redaction sinks.
+
+## 9a. Review trail — round 2 record (2026-07-20)
+
+§12 CRITICAL requires `code-reviewer` **and** `critic` as separate
+passes, plus `security-reviewer`, plus a verifier with reproduction
+evidence. All of those ran; until now only the round-1 architect and
+security-reviewer passes were recorded above, so the audit trail was
+incomplete. The full list, in order:
+
+| # | pass | target | verdict | what it found |
+|---|---|---|---|---|
+| 1 | spec-compliance review | round-1 pattern | **SPEC COMPLIANT** | independently reproduced linearity at ~2.0x per doubling; confirmed 12/12 carriers still redact |
+| 2 | code-quality review | round 1 | **CHANGES_REQUESTED** | the 39 KiB comment had dropped the spec's 50 ms figure, leaving the claim false and self-contradictory; `O(1)` was wrong — the *per-start* cost is O(1), the scan is O(n). Both fixed |
+| 3 | `code-reviewer` | round-1 pattern | **APPROVED_WITH_NITS** | a length-bound regression that CI would have shown green; identified `ghs_<appid>_<jwt>` as the glued shape that matters |
+| 4 | `critic` | round 1 | **APPROVE_WITH_FIXES** | the percent-escape class (all 512 `%XY` forms blocked); deleting `/g` still passed the whole suite; no test JWT contained `-` or `_`. **Drove the round-2 amendment** |
+| 5 | `security-reviewer` | round 1 | **APPROVE** | 14 shapes x 4 scales + 600 fuzz seeds, nothing super-linear; refuted the wiki's "adversarially reachable" claim by measuring `base64(JSONL)` at 506 ms / 320 KiB; found the high-volume sinks uncapped |
+| 6 | `critic` | round 2, shipped pattern | **APPROVE_WITH_FIXES** | linearity of branch 2 held under `%`-saturated adversarial input; zero false positives; loss class exactly 64 bytes; found the surviving payload-`eyJ`-anchor mutant and the `+`->`*` segment mutants |
+| 7 | `verifier` | round 2 | **NOT DONE** | the timing tests flaked 1 run in 5 under `turbo test --force`; items 1, 2, 4, 5 and this section were open |
+
+Pass 7's findings are closed by the round-2 follow-up commits on this
+branch: the mutants from pass 6 are fenced by
+`test/redact-jwt.test.ts`'s no-over-redaction block, the timing flake is
+addressed in §6.2a, the residual percent carriers are named in §0a, and
+the plan carries its own round-2 section.
+
+**User approval on record.** The user explicitly approved, on
+**2026-07-20**, both the round-2 amendment (recovering the percent-escape
+class) and the **minor** — not patch — changeset bump, after being shown
+the corrected loss scope: the percent-escape class, `Bearer<jwt>` with no
+space, and `ghs_<appid>_<jwt>`. This satisfies the §12 CRITICAL
+"manual user confirmation in spec" requirement.
+
+**Runtime caveat on the measurements.** One reviewer's figures were taken
+on **Node 25.8.2** while `.nvmrc` pins **Node 22**, so the absolute
+catastrophic-backtracking numbers in this spec are runtime-bound rather
+than portable constants. The discrepancy ran in the *safe* direction —
+the vulnerability measured worse than documented, not better. The
+ratios, and the 500 ms ceiling's ~1000x margin over the fixed pattern,
+hold on either runtime.

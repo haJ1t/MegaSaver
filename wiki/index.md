@@ -125,6 +125,7 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 | Question                                          | Read                                            |
 |---------------------------------------------------|-------------------------------------------------|
 | What is Mega Saver?                               | [[syntheses/mega-saver-product]]                |
+| Can I trust a benchmark number?                   | [[syntheses/variance-controlled-benchmark]]     |
 | What did we decide for the bootstrap?             | [[decisions/bootstrap-matrix]]                  |
 | Why is the core agent-agnostic?                   | [[concepts/agent-agnostic-core]]                |
 | What process do I follow for a new feature?       | [[concepts/superpowers-discipline]]             |
