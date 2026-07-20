@@ -23,7 +23,19 @@ export function vectorWorkspacePath(storeRoot: string, workspaceKey: string): st
 }
 
 export function embeddingsPath(storeRoot: string, workspaceKey: string): string {
+  return join(vectorWorkspacePath(storeRoot, workspaceKey), "embeddings-v2");
+}
+
+export function legacyEmbeddingsPath(storeRoot: string, workspaceKey: string): string {
   return join(vectorWorkspacePath(storeRoot, workspaceKey), "embeddings");
+}
+
+export function vectorQuotaLedgerPath(storeRoot: string, workspaceKey: string): string {
+  return join(vectorWorkspacePath(storeRoot, workspaceKey), ".lm2", "vector-quota-ledger-v1.json");
+}
+
+export function vectorOperationLockPath(storeRoot: string, workspaceKey: string): string {
+  return join(vectorWorkspacePath(storeRoot, workspaceKey), ".lm2", "index-v1.lock");
 }
 
 export function vectorNamespacePath(
@@ -82,7 +94,7 @@ export function ensureIndexLockPath(storeRoot: string, workspaceKey: string): st
   const directory = join(workspace, ".lm2");
   const anchor = ensureDirectory(directory);
   closeDirectoryAnchor(anchor);
-  return join(directory, "index-v1.lock");
+  return vectorOperationLockPath(storeRoot, workspaceKey);
 }
 
 export function ensureVectorNamespace(

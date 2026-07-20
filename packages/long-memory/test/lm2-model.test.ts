@@ -6,9 +6,11 @@ import {
   MAX_LM2_QUERY_TIMEOUT_MS,
   hybridReceiptSchema,
   lm2CandidateSchema,
+  lm2IndexReceiptSchema,
   lm2IndexRequestSchema,
   lm2RankRequestSchema,
   lm2RuntimeConfigSchema,
+  lm2VectorReadResultSchema,
   modelDescriptorSchema,
 } from "../src/lm2-model.js";
 
@@ -143,6 +145,69 @@ describe("LM2 model contracts", () => {
     expect(() => hybridReceiptSchema.parse({ ...receipt, semanticReasons: [] })).toThrow();
     expect(() =>
       hybridReceiptSchema.parse({ ...receipt, semanticReasons: ["timeout", "timeout"] }),
+    ).toThrow();
+    expect(
+      hybridReceiptSchema.parse({
+        ...receipt,
+        semanticReasons: ["quota_ledger_invalid", "quota_recovery_pending"],
+      }).semanticReasons,
+    ).toEqual(["quota_ledger_invalid", "quota_recovery_pending"]);
+  });
+
+  it("enforces complete, continue, retry, and expired index receipt discriminants", () => {
+    const base = {
+      indexedCount: 0,
+      omitted: [],
+      quotaRecovery: "not_needed" as const,
+    };
+    const complete = {
+      ...base,
+      outcome: "complete" as const,
+      nextCursor: null,
+      retryCursor: null,
+      transientReason: null,
+    };
+    const continuing = { ...complete, outcome: "continue" as const, nextCursor: "cursor-2" };
+    const retrying = {
+      ...complete,
+      outcome: "retry" as const,
+      retryCursor: null,
+      transientReason: "index_busy" as const,
+      quotaRecovery: "blocked_pending" as const,
+    };
+    const expired = { ...complete, outcome: "expired" as const };
+
+    expect(lm2IndexReceiptSchema.parse(complete)).toEqual(complete);
+    expect(lm2IndexReceiptSchema.parse(continuing)).toEqual(continuing);
+    expect(lm2IndexReceiptSchema.parse(retrying)).toEqual(retrying);
+    expect(lm2IndexReceiptSchema.parse(expired)).toEqual(expired);
+    expect(() =>
+      lm2IndexReceiptSchema.parse({ ...complete, outcome: "continue", nextCursor: null }),
+    ).toThrow();
+    expect(() =>
+      lm2IndexReceiptSchema.parse({ ...complete, outcome: "retry", transientReason: null }),
+    ).toThrow();
+    expect(() => lm2IndexReceiptSchema.parse({ ...expired, retryCursor: "cursor-1" })).toThrow();
+  });
+
+  it("keeps vector read diagnostics strict and ledger-specific", () => {
+    const result = {
+      vectors: [
+        { candidateId: "11111111-1111-4111-8111-111111111111", vector: [1, 2], decodedBytes: 8 },
+      ],
+      diagnostics: [
+        {
+          candidateId: "22222222-2222-4222-8222-222222222222",
+          reason: "quota_recovery_pending" as const,
+        },
+      ],
+    };
+    expect(lm2VectorReadResultSchema.parse(result)).toEqual(result);
+    expect(() =>
+      lm2VectorReadResultSchema.parse({
+        ...result,
+        diagnostics: [{ ...result.diagnostics[0], reason: "storage_limit" }],
+      }),
     ).toThrow();
   });
 
