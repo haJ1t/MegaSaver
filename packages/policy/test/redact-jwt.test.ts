@@ -58,3 +58,39 @@ describe("jwt detector — accepted §5 trade-off, do not narrow the lookbehind"
     });
   }
 });
+
+const jwtOf = (headerPad: number, payloadPad: number, sigLen: number): string => {
+  const header = `eyJhbGciOiJIUzI1NiJ9${"H".repeat(headerPad)}`;
+  const payload = `eyJzdWIiOiIxMjM0NTY3ODkwIn0${"P".repeat(payloadPad)}`;
+  return `${header}.${payload}.${"S".repeat(sigLen)}`;
+};
+
+// Expected values were captured by running the PRE-FIX quadratic pattern over
+// these same inputs outside the repo (fix spec §6.1) and frozen as literals, so
+// the old pattern never enters CI. Assertions are pattern-level, not through
+// redact(): bearer_token sits at index 5 and jwt at index 6, so in the real
+// pipeline bearer_token consumes the Authorization case before jwt sees it.
+const EQUIVALENCE: ReadonlyArray<readonly [string, string, string]> = [
+  ["hs256_minimal", SAMPLE_JWT, "eyJ[REDACTED]"],
+  ["rs256_typical", jwtOf(40, 120, 342), "eyJ[REDACTED]"],
+  ["rs512_large_sig", jwtOf(40, 120, 684), "eyJ[REDACTED]"],
+  ["id_token_8kb_payload", jwtOf(40, 8192, 342), "eyJ[REDACTED]"],
+  ["payload_16kb", jwtOf(40, 16384, 342), "eyJ[REDACTED]"],
+  ["x5c_header_3kb", jwtOf(3072, 120, 342), "eyJ[REDACTED]"],
+  ["carrier_equals", `token=${SAMPLE_JWT}`, "token=eyJ[REDACTED]"],
+  ["carrier_colon", `token:${SAMPLE_JWT}`, "token:eyJ[REDACTED]"],
+  ["carrier_dquote", `"${SAMPLE_JWT}"`, '"eyJ[REDACTED]"'],
+  ["carrier_semicolon", `a=1;${SAMPLE_JWT}`, "a=1;eyJ[REDACTED]"],
+  ["carrier_space", `token ${SAMPLE_JWT}`, "token eyJ[REDACTED]"],
+  ["carrier_newline", `line1\n${SAMPLE_JWT}`, "line1\neyJ[REDACTED]"],
+  ["carrier_start_of_string", `${SAMPLE_JWT} trailing`, "eyJ[REDACTED] trailing"],
+  ["bearer_header", `Authorization: Bearer ${SAMPLE_JWT}`, "Authorization: Bearer eyJ[REDACTED]"],
+];
+
+describe("jwt detector — output frozen against the pre-fix pattern (fix spec §6.1)", () => {
+  for (const [label, input, expected] of EQUIVALENCE) {
+    it(`redacts ${label} byte-identically to the pre-fix pattern`, () => {
+      expect(apply(input)).toBe(expected);
+    });
+  }
+});
