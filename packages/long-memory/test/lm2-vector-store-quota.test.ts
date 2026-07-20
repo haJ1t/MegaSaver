@@ -1,180 +1,112 @@
-import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import {
+  type Lm2QuotaLedger,
   MAX_LM2_SIDECARS_PER_NAMESPACE,
-  MAX_LM2_SIDECAR_BYTES,
   MAX_LM2_WORKSPACE_VECTOR_BYTES,
-  createLm2VectorStore,
-} from "../src/lm2-vector-store.js";
+  serializeLm2QuotaLedger,
+} from "../src/lm2-quota-ledger.js";
+import { vectorQuotaLedgerPath } from "../src/lm2-vector-paths.js";
+import { createLm2VectorStore } from "../src/lm2-vector-store.js";
 import {
   cleanupRoots,
   createCandidate,
   createModel,
   createRoot,
-  embeddingResult,
-  seedRawSidecar,
-  seedSidecar,
-  sidecarPath,
-  sidecarValue,
   workspaceKey,
 } from "./lm2-vector-store-fixtures.js";
 
 afterEach(cleanupRoots);
 
-describe("LM2 vector quotas", () => {
-  it("does not egress when a third descriptor namespace exceeds quota", async () => {
-    const root = createRoot();
-    seedSidecar(root, createCandidate(1), createModel(1), [1, 2, 3]);
-    seedSidecar(root, createCandidate(2), createModel(2), [1, 2, 3]);
-    const embed = vi.fn();
+function seedLedger(root: string, namespaces: Lm2QuotaLedger["namespaces"]): void {
+  const committed = namespaces.reduce((sum, entry) => sum + entry.sidecarCount, 0);
+  const ledger: Lm2QuotaLedger = {
+    schemaVersion: 1,
+    workspaceKey,
+    epoch: "a".repeat(64),
+    generation: 1,
+    namespaces,
+    committedThroughAllocation: committed,
+    nextAllocationSequence: committed + 1,
+    activeOperation: null,
+    pending: null,
+  };
+  const path = vectorQuotaLedgerPath(root, workspaceKey);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, serializeLm2QuotaLedger(ledger));
+}
 
-    await expect(
-      createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
-        workspaceKey,
-        model: createModel(3),
-        records: [createCandidate(3)],
-        signal: new AbortController().signal,
-        embed,
-      }),
-    ).resolves.toEqual({ published: [], reason: "storage_limit" });
+async function attempt(root: string, model = createModel()) {
+  const embed = vi.fn(async () => ({
+    modelFingerprint: modelDescriptorFingerprint(model),
+    vectors: [[1, 2, 3]],
+  }));
+  const operation = await createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
+    workspaceKey,
+    model,
+    deadline: { signal: new AbortController().signal, deadlineAtMs: 1, now: () => 0 },
+  });
+  expect(operation.status).toBe("ready");
+  if (operation.status !== "ready") return { result: null, embed };
+  const result = await operation.publishBatch({
+    records: [createCandidate(99)],
+    embed,
+    assertEgressAllowed: async () => true,
+    recheckEvidence: async () => true,
+  });
+  await operation.finalize();
+  return { result, embed };
+}
+
+describe("LM2 ledger quotas", () => {
+  it("rejects a third namespace before egress without enumerating 20,000 sidecars", async () => {
+    const root = createRoot();
+    const first = modelDescriptorFingerprint(createModel(1));
+    const second = modelDescriptorFingerprint(createModel(2));
+    seedLedger(
+      root,
+      [
+        { modelFingerprint: first, sidecarCount: 10_000, serializedBytes: 10_000 },
+        { modelFingerprint: second, sidecarCount: 10_000, serializedBytes: 10_000 },
+      ].sort((left, right) => left.modelFingerprint.localeCompare(right.modelFingerprint)),
+    );
+
+    const { result, embed } = await attempt(root, createModel(3));
+    expect(result).toEqual({ published: [], reason: "storage_limit" });
     expect(embed).not.toHaveBeenCalled();
   });
 
-  it("does not let crash partials or malformed sidecars reserve namespace quota", async () => {
+  it("rejects the 10,001st allocation in one namespace before egress", async () => {
     const root = createRoot();
-    const first = createModel(1);
-    const second = createModel(2);
-    const requested = createModel(3);
-    const firstDirectory = join(sidecarPath(root, createCandidate(1), first), "..");
-    const secondDirectory = join(sidecarPath(root, createCandidate(2), second), "..");
-    mkdirSync(firstDirectory, { recursive: true });
-    mkdirSync(secondDirectory, { recursive: true });
-    writeFileSync(join(firstDirectory, ".crash.tmp"), "partial");
-    writeFileSync(join(secondDirectory, `${createCandidate(2).id}.json`), "{invalid");
+    const model = createModel();
+    seedLedger(root, [
+      {
+        modelFingerprint: modelDescriptorFingerprint(model),
+        sidecarCount: MAX_LM2_SIDECARS_PER_NAMESPACE,
+        serializedBytes: MAX_LM2_SIDECARS_PER_NAMESPACE,
+      },
+    ]);
 
-    await expect(
-      createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
-        workspaceKey,
-        model: requested,
-        records: [createCandidate(3)],
-        signal: new AbortController().signal,
-        embed: async () => embeddingResult(requested, [[1, 2, 3]]),
-      }),
-    ).resolves.toEqual({ published: [createCandidate(3).id], reason: null });
-  });
-
-  it("reserves worst-case bytes before crossing the 10,000-record cap", async () => {
-    const root = createRoot();
-    const model = createModel(0, 1);
-    for (let index = 0; index < MAX_LM2_SIDECARS_PER_NAMESPACE; index += 1) {
-      seedSidecar(root, createCandidate(index), model, [1]);
-    }
-    const embed = vi.fn();
-
-    await expect(
-      createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
-        workspaceKey,
-        model,
-        records: [createCandidate(MAX_LM2_SIDECARS_PER_NAMESPACE)],
-        signal: new AbortController().signal,
-        embed,
-      }),
-    ).resolves.toEqual({ published: [], reason: "storage_limit" });
+    const { result, embed } = await attempt(root, model);
+    expect(result).toEqual({ published: [], reason: "storage_limit" });
     expect(embed).not.toHaveBeenCalled();
   });
 
-  it("reserves 24 KiB before crossing the 128-MiB workspace cap", async () => {
+  it("reserves 24 KiB against the exact workspace byte counter before egress", async () => {
     const root = createRoot();
-    const model = createModel(0, 4_096);
-    const vector = Array.from({ length: model.dimensions }, () => 1);
-    let serializedBytes = 0;
-    let index = 0;
-    while (serializedBytes <= MAX_LM2_WORKSPACE_VECTOR_BYTES - MAX_LM2_SIDECAR_BYTES) {
-      const candidate = createCandidate(index);
-      const raw = `${JSON.stringify(sidecarValue(candidate, model, vector))}\n`;
-      seedRawSidecar(root, candidate, model, raw);
-      serializedBytes += Buffer.byteLength(raw, "utf8");
-      index += 1;
-    }
-    const embed = vi.fn();
+    const model = createModel();
+    seedLedger(root, [
+      {
+        modelFingerprint: modelDescriptorFingerprint(model),
+        sidecarCount: 1,
+        serializedBytes: MAX_LM2_WORKSPACE_VECTOR_BYTES - 24 * 1024 + 1,
+      },
+    ]);
 
-    await expect(
-      createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
-        workspaceKey,
-        model,
-        records: [createCandidate(index)],
-        signal: new AbortController().signal,
-        embed,
-      }),
-    ).resolves.toEqual({ published: [], reason: "storage_limit" });
-    expect(embed).not.toHaveBeenCalled();
-  }, 30_000);
-
-  it("fails closed for an unreadable descriptor namespace", async () => {
-    const root = createRoot();
-    const occupiedModel = createModel(1);
-    const occupiedPath = sidecarPath(root, createCandidate(1), occupiedModel);
-    seedSidecar(root, createCandidate(1), occupiedModel, [1, 2, 3]);
-    chmodSync(join(occupiedPath, ".."), 0o000);
-    const embed = vi.fn();
-    try {
-      await expect(
-        createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
-          workspaceKey,
-          model: createModel(2),
-          records: [createCandidate(2)],
-          signal: new AbortController().signal,
-          embed,
-        }),
-      ).resolves.toEqual({ published: [], reason: "write_failed" });
-      expect(embed).not.toHaveBeenCalled();
-    } finally {
-      chmodSync(join(occupiedPath, ".."), 0o700);
-    }
-  });
-
-  it("fails closed when a durable sidecar cannot be read", async () => {
-    const root = createRoot();
-    const occupiedModel = createModel(1);
-    const occupiedPath = sidecarPath(root, createCandidate(1), occupiedModel);
-    seedSidecar(root, createCandidate(1), occupiedModel, [1, 2, 3]);
-    chmodSync(occupiedPath, 0o000);
-    const embed = vi.fn();
-    try {
-      await expect(
-        createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
-          workspaceKey,
-          model: createModel(2),
-          records: [createCandidate(2)],
-          signal: new AbortController().signal,
-          embed,
-        }),
-      ).resolves.toEqual({ published: [], reason: "write_failed" });
-      expect(embed).not.toHaveBeenCalled();
-    } finally {
-      chmodSync(occupiedPath, 0o600);
-    }
-  });
-
-  it("fails closed when any descriptor namespace is a symlink", async () => {
-    const root = createRoot();
-    const outside = createRoot();
-    const embeddings = join(root, "long-memory", "v1", workspaceKey, "embeddings");
-    mkdirSync(embeddings, { recursive: true });
-    symlinkSync(outside, join(embeddings, modelDescriptorFingerprint(createModel(1))));
-    const embed = vi.fn();
-
-    await expect(
-      createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
-        workspaceKey,
-        model: createModel(2),
-        records: [createCandidate(2)],
-        signal: new AbortController().signal,
-        embed,
-      }),
-    ).resolves.toEqual({ published: [], reason: "write_failed" });
+    const { result, embed } = await attempt(root, model);
+    expect(result).toEqual({ published: [], reason: "storage_limit" });
     expect(embed).not.toHaveBeenCalled();
   });
 });
