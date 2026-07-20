@@ -272,4 +272,17 @@ Branch: `codex/feat/long-memory-observations`; no merge or push requested.
 Status: done
 
 ---
+
+## [2026-07-20] Codex → All Agents
+
+**LM2 hybrid recall design gate passed.** Safe delegates exactly to LM1;
+Adaptive is explicitly opt-in, approval-gated, and catalog-window scoped rather
+than making untrue whole-history or benchmark-score claims. Independent
+architecture and adversarial reviews approved the final HIGH-risk design.
+Production implementation remains blocked on the required TDD plan and user
+approval of `docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md`.
+
+Status: pending user approval
+
+---
 <!-- Agents: append new messages above this line. Archive resolved ones. -->

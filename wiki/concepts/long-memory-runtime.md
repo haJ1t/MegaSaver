@@ -8,7 +8,8 @@ sources:
   - docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md
   - docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md
   - docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md
-status: LM0 implementation verified; LM1 observations implementation verified; official LongMemEval-V2 score pending
+  - docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md
+status: LM0 and LM1 verified; LM2 hybrid design independently approved; LM2 implementation and official LongMemEval-V2 score pending
 created: 2026-07-19
 updated: 2026-07-20
 ---
@@ -54,3 +55,17 @@ independent code and adversarial reviews approved the final locator-backed
 implementation. This is not an official LongMemEval-V2 harness score; LM1 is
 text-only with multimodal and hybrid retrieval deferred to later increments.
 (source: `docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md`)
+
+LM2's reviewed design adds an explicit hybrid Safe/Adaptive retrieval boundary.
+Safe delegates exactly to LM1. Adaptive adds optional semantic RRF only through
+configured, approved embedding ports, bounded pre-materialized vector sidecars,
+and LM1's existing correction/evidence selector. It does not claim whole-LM1
+semantic coverage: Adaptive ranks only the bounded catalog of records captured
+through the explicit LM2 runtime, while legacy records stay available through
+Safe. Remote embedding requires a current workspace/model approval, and
+revocation after dispatch prevents persistence but cannot retract already-sent
+input. LongMemEval-V2 remains an evidence gate: official web/enterprise runs
+plus a leaderboard `submission_overview.json` are required before any LAFS
+claim. Independent architecture and adversarial reviews approved the design;
+implementation is still blocked on a TDD plan and user design approval. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md`)

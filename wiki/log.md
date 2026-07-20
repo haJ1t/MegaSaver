@@ -5755,3 +5755,17 @@ an official LongMemEval-V2 harness score; LM1 remains text-only and LM2/LM3
 capabilities are explicitly deferred. Source:
 [[concepts/long-memory-runtime]],
 `docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`.
+
+## [2026-07-20] design | Long Memory LM2 hybrid recall approved
+
+LM2's HIGH-risk design passed independent architecture and adversarial review.
+Safe preserves exact LM1 behavior. Adaptive adds only opt-in semantic RRF over
+an LM2-owned bounded capture catalog, with explicit current remote-embedding
+approval, pre-embedding evidence admission, direct-ID verification, sidecar
+quotas/locking, cancellation, and correction/evidence-safe final selection.
+The catalog deliberately does not backfill legacy LM1 directories, so receipts
+state its limited coverage. The LongMemEval-V2 gate requires official web and
+enterprise artifacts plus leaderboard `submission_overview.json` before a LAFS
+claim. This design has no production implementation yet; TDD planning and user
+design approval remain required. Source: [[concepts/long-memory-runtime]],
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md`.
