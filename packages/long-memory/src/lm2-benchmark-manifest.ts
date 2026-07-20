@@ -131,7 +131,9 @@ function projectionText(sourceKind: "states" | "content", value: unknown): strin
     text = observation.text;
   }
   if (typeof text !== "string" || !text.trim()) throw new Error("Projection text is missing.");
-  return truncateUtf16(text.normalize("NFC").trim(), BENCHMARK_MAX_TEXT_CODE_UNITS);
+  return truncateUtf16(text.normalize("NFC").trim(), BENCHMARK_MAX_TEXT_CODE_UNITS)
+    .normalize("NFC")
+    .trim();
 }
 
 function projectTrajectory(
