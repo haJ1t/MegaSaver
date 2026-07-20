@@ -3824,3 +3824,78 @@ the shared prompt-cache prefix; and array-form `tool_result` blocks (14.4% of
 verdict exists; `feat/net-positive-stage-a` remains parked and ungated.
 Sources: code-reviewer + critic passes 2026-07-20, direct inspection of
 `/tmp/stagea-run{1,2}-results`.
+
+## 2026-07-20 — bench-replay merged to main after four adversarial review rounds
+
+`feat/bench-replay` merged (`3c1e23ca`), `pnpm verify` exit 0, 56/56 turbo tasks,
+139 package tests. **Merged as tested infrastructure, NOT as a source of
+quotable numbers** — see [[syntheses/variance-controlled-benchmark]] and
+`packages/bench-replay/README.md`.
+
+### Four rounds, four real defects — each a fix of the instance, not the class
+
+1. **FATAL** — saver applied per request. A Messages API conversation resends
+   its whole history each turn, so a stateless transform re-invoked the saver on
+   the same `tool_result` once per containing request. Would have made the
+   megasaver arm's prefix mutate every turn, paying `cache_creation` ($10/Mtok)
+   where baseline paid `cache_read` ($0.50/Mtok) — a ~20x manufactured penalty
+   that would have condemned Stage A for causing the very prefix churn it exists
+   to prevent.
+2. **Same defect, relocated** — the memo was scoped inside `replayArm` (one arm),
+   but the verdict path runs four arm runs. Measured 6 saver invocations for 3
+   tool calls; pair 1's megasaver bytes differed from pair 2's. `orderSensitive`
+   structurally could not detect it (both orders penalised equally → ratios agree
+   → spread 0 → guard passes).
+3. **BLOCKER** — output-token sampling noise. The model resampled freely on all
+   four arms; output is ~26% of arm cost at $25/Mtok. Simulation against a TRUE
+   5% saving: sd 3.78%, and **15.5% of runs reported the wrong SIGN**. Fixed by
+   capping generation to 1 token on both arms (`max_tokens` is not in the
+   prompt-cache key; the replay never uses generated output). Output share falls
+   to f≈0.00071 with c≈0.
+4. **Aggregate-vs-per-call** — the two-sided integrity band constrained
+   conversation-wide aggregates while a saver breaks per call, and the two axes
+   traded off freely. `() => ""` on half the calls scored frac 0.500 /
+   byteRatio 0.500, `ok=true`, reporting a fake **2.0x win**; emptying the 11
+   largest of 100 reported **3.3x**.
+
+### Final fix — structural, not another threshold
+
+Per-call contract validation inside `memoize`, using the saver's own invariant
+(confirmed in `record-output.ts:188,218-228`): every applied output carries
+`[Mega Saver: compressed ` AND is strictly smaller than the raw. Throws before
+any request is sent, naming each offending `tool_use_id`. Catches one bad call
+among ninety-nine, which no aggregate can. Both aggregate floors were then
+removed as redundant-or-harmful (`MIN_BYTE_RATIO` refused honest aggressive-mode
+runs at byteRatio 0.039; `MIN_APPLIED_FRACTION` refused honest runs where the
+saver legitimately fires on few large outputs). One aggregate threshold remains,
+`MAX_BYTE_RATIO = 0.95`, derived: above it a transform provably cannot reach the
+≤5% band even if tool_results were the entire prompt.
+
+### What it measures, and what it does not
+
+- **Measures:** the saver's direct input-side token/cache effect on one frozen
+  conversation. Turn count is identical across arms by construction. Compounding
+  IS captured (history resend means a turn-3 compression shrinks every later
+  request).
+- **Does NOT measure:** any effect on agent behaviour (fewer/more turns because
+  compressed output read differently) — the larger prize, needing high-N
+  end-to-end.
+- **As a proxy for live savings the ratio is an UPPER BOUND**, not an estimate:
+  the harness omits the saver's main cost channel (compression removes bytes the
+  agent may need, and the footer invites it to fetch them — each recovery is a
+  full extra request at full history price) while counting all its savings.
+
+### Known-unvalidated at merge
+
+Never run against the real API. Prompt-cache nondeterminism (best-effort caching
+can return `cache_creation` for bytes that returned `cache_read` moments earlier
+— 20x on that segment) is untested and unmeasured by anything in the harness, so
+residual input-side variance is unknown and **no ≤5% claim is supportable yet**.
+The record path (`capture-proxy.ts`, `record-command.ts`) and the cost function
+have never been adversarially reviewed. `normalizedCostUsd` is model-blind —
+sidecar Haiku calls are priced as Opus (~6x) and dilute the ratio toward 1.00;
+mitigated by a printed per-model histogram, not by repricing.
+
+Stage A (`feat/net-positive-stage-a`) remains parked and UNGATED. Running the
+gate needs an `ANTHROPIC_API_KEY` (Claude Code's OAuth is not usable by a
+separate HTTP client).
