@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { workspaceKeySchema } from "@megasaver/shared";
 import { z } from "zod";
 import { Lm2Error } from "./lm2-errors.js";
@@ -60,6 +61,7 @@ export const lm2V2SidecarSchema = z
     ledgerEpoch: sha256Schema,
     allocationSequence: positiveSafeIntegerSchema,
     vectorBase64: z.string().min(1).max(32_768),
+    provenanceDigest: sha256Schema,
   })
   .strict();
 export type Lm2V2Sidecar = z.infer<typeof lm2V2SidecarSchema>;
@@ -130,6 +132,14 @@ function serializeSidecar(sidecar: VectorSidecar): string {
   return `${JSON.stringify(sidecar)}\n`;
 }
 
+type SidecarProvenance = Omit<Lm2V2Sidecar, "provenanceDigest">;
+
+function sidecarProvenanceDigest(sidecar: SidecarProvenance): string {
+  return createHash("sha256")
+    .update(`megasaver.long-memory.lm2.sidecar-provenance.v2\0${JSON.stringify(sidecar)}`, "utf8")
+    .digest("hex");
+}
+
 export function parseSidecarMetadata(
   raw: Buffer,
   expectedFingerprint: string,
@@ -144,7 +154,9 @@ export function parseSidecarMetadata(
   }
   const parsed = lm2V2SidecarSchema.safeParse(value);
   if (!parsed.success || serializeSidecar(parsed.data) !== text) return null;
+  const { provenanceDigest, ...provenance } = parsed.data;
   if (
+    sidecarProvenanceDigest(provenance) !== provenanceDigest ||
     parsed.data.dimension !== parsed.data.model.dimensions ||
     modelDescriptorFingerprint(parsed.data.model) !== expectedFingerprint ||
     !isCanonicalBase64(parsed.data.vectorBase64, parsed.data.dimension * 4)
@@ -188,6 +200,7 @@ export function decodeSidecarVector(metadata: SidecarMetadata): Float32Array | n
   const bytes = Buffer.from(vectorBase64, "base64");
   if (bytes.byteLength !== dimension * 4 || bytes.toString("base64") !== vectorBase64) return null;
   const values = Array.from({ length: dimension }, (_, index) => bytes.readFloatLE(index * 4));
+  if (values.some((value) => Object.is(value, -0))) return null;
   try {
     return canonicalFloat32(values);
   } catch {
@@ -214,11 +227,14 @@ export function buildSerializedSidecar(
     throw new Lm2Error("invalid_vectors", "Invalid embedding vector tuple.");
   }
   const vector = canonicalFloat32(values as readonly number[]);
+  if ([...vector].some((value) => Object.is(value, -0))) {
+    throw new Lm2Error("invalid_vectors", "Invalid embedding vector tuple.");
+  }
   const parsedProvenance = lm2SidecarProvenanceSchema.safeParse(provenance);
   if (!parsedProvenance.success) {
     throw new Lm2Error("write_failed", "LM2 v2 sidecar provenance is required.");
   }
-  const serialized = serializeSidecar({
+  const sidecarProvenance = {
     schemaVersion: 2,
     workspaceKey: candidate.workspaceKey,
     recordId: candidate.id,
@@ -230,6 +246,10 @@ export function buildSerializedSidecar(
     ledgerEpoch: parsedProvenance.data.ledgerEpoch,
     allocationSequence: parsedProvenance.data.allocationSequence,
     vectorBase64: encodeVector(vector),
+  } as const satisfies SidecarProvenance;
+  const serialized = serializeSidecar({
+    ...sidecarProvenance,
+    provenanceDigest: sidecarProvenanceDigest(sidecarProvenance),
   });
   if (Buffer.byteLength(serialized, "utf8") > MAX_LM2_SIDECAR_BYTES) {
     throw new Lm2Error("write_failed", "LM2 vector sidecar exceeds its storage limit.");

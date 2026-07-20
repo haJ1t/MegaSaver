@@ -8,6 +8,11 @@ let failNextClose = false;
 let failNextPendingUnlink = false;
 let failEveryClose = false;
 let failCloseAfter: number | null = null;
+let replaceLedgerContentAfterRename = false;
+let replacedLedgerIdentity: {
+  before: { dev: number; ino: number };
+  after: { dev: number; ino: number };
+} | null = null;
 const injectedCloseFailures: Error[] = [];
 const injectedFsyncFailures: Error[] = [];
 const injectedPendingUnlinkFailures: Error[] = [];
@@ -36,6 +41,26 @@ vi.mock("node:fs", async (importOriginal) => {
         throw error;
       }
       actual.fsyncSync(descriptor);
+    },
+    renameSync(oldPath: import("node:fs").PathLike, newPath: import("node:fs").PathLike) {
+      actual.renameSync(oldPath, newPath);
+      if (
+        replaceLedgerContentAfterRename &&
+        String(newPath).endsWith("vector-quota-ledger-v1.json")
+      ) {
+        replaceLedgerContentAfterRename = false;
+        const before = actual.statSync(newPath);
+        const ledger = JSON.parse(actual.readFileSync(newPath, "utf8"));
+        ledger.generation += 1;
+        if (ledger.activeOperation !== null) ledger.activeOperation.expectedGeneration += 1;
+        if (ledger.pending !== null) ledger.pending.expectedGeneration += 1;
+        actual.writeFileSync(newPath, `${JSON.stringify(ledger)}\n`);
+        const after = actual.statSync(newPath);
+        replacedLedgerIdentity = {
+          before: { dev: before.dev, ino: before.ino },
+          after: { dev: after.dev, ino: after.ino },
+        };
+      }
     },
     unlinkSync(path: import("node:fs").PathLike) {
       if (failNextPendingUnlink && String(path).endsWith(".pending")) {
@@ -92,6 +117,8 @@ afterEach(() => {
   failNextPendingUnlink = false;
   failEveryClose = false;
   failCloseAfter = null;
+  replaceLedgerContentAfterRename = false;
+  replacedLedgerIdentity = null;
   injectedCloseFailures.length = 0;
   injectedFsyncFailures.length = 0;
   injectedPendingUnlinkFailures.length = 0;
@@ -572,10 +599,52 @@ describe("LM2 index operation", () => {
       );
       if (failure === "close") {
         expect(readdirSync(namespace).some((name) => name.endsWith(".pending"))).toBe(false);
+      } else {
+        const ledger = lm2QuotaLedgerSchema.parse(
+          JSON.parse(readFileSync(vectorQuotaLedgerPath(root, workspaceKey), "utf8")),
+        );
+        expect(ledger.pending?.entries).toEqual([
+          expect.objectContaining({
+            recordId: createCandidate(1).id,
+            temporaryName: lm2PendingTemporaryName(
+              ledger.pending?.operationId ?? "missing-operation",
+              1,
+            ),
+          }),
+        ]);
+        expect(readdirSync(namespace)).toContain(ledger.pending?.entries[0]?.temporaryName);
       }
       await expect(operation.finalize()).rejects.toThrow();
     },
   );
+
+  it("rejects post-rename ledger content replacement without adopting its identity", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const operation = await createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: deadline(),
+    });
+    if (operation.status !== "ready") throw new Error("operation unavailable");
+    const before = readFileSync(vectorQuotaLedgerPath(root, workspaceKey), "utf8");
+    const embed = vi.fn();
+    replaceLedgerContentAfterRename = true;
+
+    const result = await operation.publishBatch({
+      records: [createCandidate(1)],
+      assertEgressAllowed: async () => true,
+      recheckEvidence: async () => true,
+      embed,
+    });
+
+    expect(result).toEqual({ published: [], existing: [], reason: "lock_integrity_lost" });
+    expect(embed).not.toHaveBeenCalled();
+    expect(replacedLedgerIdentity).not.toBeNull();
+    expect(replacedLedgerIdentity?.after).toEqual(replacedLedgerIdentity?.before);
+    expect(readFileSync(vectorQuotaLedgerPath(root, workspaceKey), "utf8")).not.toBe(before);
+    await operation.finalize();
+  });
 
   it("retains all independent temporary cleanup failures", () => {
     const root = createRoot();
