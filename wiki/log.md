@@ -5916,3 +5916,17 @@ durable stream below a random private root using component-anchored descriptors,
 nonblocking no-follow opens, link/mode/owner checks, and descriptor/path identity
 checks. Python official-base/installer/LM0 coverage is 23/23 with the real built
 transport; no official score is claimed. (source: `.superpowers/sdd/task-5-report.md`)
+
+## [2026-07-20 20:32 +03] fix | LM2 telemetry and load-state closure
+
+Final Task 5 closure review found that rejected telemetry still persisted raw
+untrusted question IDs and that Python load inspected `run.lock` without taking
+its flock. REDs reproduced the raw field, successful load under a concurrently
+held lock, and successful state adoption after the lock pathname was replaced
+during the state read. Telemetry now omits raw question/context data while
+retaining a durable reason, canonical timestamp, random audit ID, and aggregate
+metadata. Load takes the real flock nonblocking, reads identity-bound state
+under it, revalidates run/lock descriptor-path identity before adoption, and
+releases the original inode on every path. Python coverage is 25/25 against the
+pinned official base and built transport; no official score is claimed.
+(source: `.superpowers/sdd/task-5-report.md`)

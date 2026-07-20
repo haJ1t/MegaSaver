@@ -130,9 +130,9 @@ class MegaSaverLm2HybridTest(unittest.TestCase):
         self.assertEqual(
             set(telemetry[0]),
             {
-                "profile", "semanticStatus", "modelFingerprint", "candidateCount",
-                "selectionCount", "latencyMs", "questionId", "questionType",
-                "imagePresent", "imageUsed",
+                "profile", "semanticStatus", "rejectionReason", "observedAt", "auditId",
+                "modelFingerprint", "candidateCount", "selectionCount", "latencyMs",
+                "questionType", "imagePresent", "imageUsed",
             },
         )
         self.assertNotIn("poison", json.dumps(telemetry))
