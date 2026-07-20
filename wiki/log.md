@@ -3931,3 +3931,48 @@ single-exception framing, and the ReDoS gate's jwt exclusion (comment and
 committed commit-message body) all updated, and `jwt` brought into that gate's
 scope. Sources:
 [[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]], [[entities/policy]].
+
+## [2026-07-20] fix | jwt detector: percent carriers recovered, severity corrected (CRITICAL)
+
+**Supersedes the severity claim in the entry above.** That entry classified the
+jwt ReDoS as "adversarially reachable, not ordinarily reachable". Measurement
+refutes it: the correct classification is **ordinarily reachable**. The earlier
+reasoning used the wrong population — base64 of *JSON* is not random. JSON
+objects begin `{"`, which encodes to `eyJ`, so every encoded JSON value
+contributes an `eyJ` at a predictable alignment, and encoded-JSON payloads are
+routine in agent output.
+
+The vector is **base64url with no separator**: 320 KiB of it costs **575.9 ms**
+under the pre-fix pattern (327,680-char dotless run), scaling cleanly
+quadratically — 85 / 171 / 341 / 683 KiB at 40.6 / 165.6 / 637.6 / 2,555.5 ms.
+`Buffer.toString("base64url")` of any JSON payload produces this shape, and no
+effective size cap sits in front of redaction. Standard base64 and newline
+wrapping are both benign, which is the honest boundary. **Kubernetes Secrets and
+Docker `config.json` auth blobs are NOT the vector** — both use standard base64,
+whose `+` and `/` break the run, and measure 1.0 ms and 2.1 ms at ~320 KiB.
+
+**Second correction: the first fix silently lost the percent-escaped carriers.**
+Every hex digit is a base64url character, so a `%XY` predecessor blocked
+redaction — taking URL query strings and fragments, among the most common places
+a JWT appears in agent output, with it. The scope sentence in the original spec
+§5 did not say so. Recovered by a second lookbehind branch,
+`(?<=%[0-9A-Fa-f][0-9A-Fa-f])`: 0/512 `%XY` forms redacted before, 512/512 now.
+Nearly free, because `%` sits outside the run class and terminates the dotless
+run — 0.32 ms per 313 KiB, linear. The earlier 49.7 ms rejection of a hybrid
+alternation did not transfer: it measured a branch after `-`/`_`, which are
+inside the class and still scan.
+
+Remaining disclosed loss, unchanged in kind but stated correctly: a JWT preceded
+by a **raw** base64url character. `session-<jwt>`, `id_token_<jwt>`,
+`Bearer<jwt>`, `ghs_<body>_<jwt>`, base64-run glue, and `\x3d` / `\u003d`
+escaped equals. **No other detector covers those bytes** — verified through the
+full pipeline. `&#61;` was never affected (predecessor `;`). Released as
+**minor**, not patch, so the coverage reduction is visible at release.
+
+The test suite was rebuilt: mutation testing showed the shipped 21 assertions
+killed all five structural mutants through a single `pattern.source` prefix
+check, which tests no behaviour and breaks on the amended pattern — update it
+naively and four of five mutants survive. The corpus held no `-` or `_` in any
+segment, making segment-class narrowing invisible. Six mutants now verified red,
+each behaviourally. Sources:
+[[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]] §0, [[entities/policy]].
