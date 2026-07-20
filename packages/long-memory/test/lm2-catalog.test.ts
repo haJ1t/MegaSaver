@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -31,10 +32,10 @@ function createRoot(): string {
   return root;
 }
 
-function createRecord(index = 0): Lm1Record {
+function createRecord(index = 0, requestedWorkspaceKey = workspaceKey): Lm1Record {
   const capture = {
     schemaVersion: 1 as const,
-    workspaceKey,
+    workspaceKey: requestedWorkspaceKey,
     kind: "state_snapshot" as const,
     observedAt: new Date(Date.UTC(2026, 6, 20, 0, 0, index % 60)).toISOString(),
     text: `Billing status ${index} is paid.`,
@@ -48,11 +49,11 @@ function createRecord(index = 0): Lm1Record {
   const sourceDigest = canonicalCaptureDigest(capture);
   return {
     ...capture,
-    id: deriveLm1RecordId(workspaceKey, "state_snapshot", sourceDigest),
+    id: deriveLm1RecordId(requestedWorkspaceKey, "state_snapshot", sourceDigest),
     sourceDigest,
     canonicalCaptureDigest: sourceDigest,
     evidenceBindingDigest: deriveEvidenceBindingDigest({
-      workspaceKey,
+      workspaceKey: requestedWorkspaceKey,
       canonicalCaptureDigest: sourceDigest,
       evidenceIds,
       evidenceDigests,
@@ -73,12 +74,13 @@ function catalogEntry(record: Lm1Record, captureSequence: number) {
   };
 }
 
-function writeCatalog(root: string, entries: readonly ReturnType<typeof catalogEntry>[]): void {
+function writeCatalog(
+  root: string,
+  entries: readonly ReturnType<typeof catalogEntry>[],
+  generation = entries.length,
+): void {
   const path = lm2CandidateCatalogPath(root, workspaceKey);
-  writeFileSync(
-    path,
-    `${JSON.stringify({ schemaVersion: 1, generation: entries.length, entries })}\n`,
-  );
+  writeFileSync(path, `${JSON.stringify({ schemaVersion: 1, generation, entries })}\n`);
 }
 
 afterEach(() => {
@@ -97,6 +99,25 @@ describe("LM2 candidate catalog", () => {
       inserted: true,
       record,
     });
+  });
+
+  it("recovers a durably fenced stale lock but never removes a live owner's lock", () => {
+    const root = createRoot();
+    const path = lm2CandidateCatalogLockPath(root, workspaceKey);
+    const catalog = createLm2CandidateCatalog({ storeRoot: root });
+    writeFileSync(
+      path,
+      '{"schemaVersion":1,"pid":999999,"owner":"11111111-1111-4111-8111-111111111111"}\n',
+    );
+
+    expect(catalog.appendPublished(createRecord())).toBe(true);
+    expect(existsSync(path)).toBe(false);
+    writeFileSync(
+      path,
+      `{"schemaVersion":1,"pid":${process.pid},"owner":"22222222-2222-4222-8222-222222222222"}\n`,
+    );
+    expect(catalog.appendPublished(createRecord(1))).toBe(false);
+    expect(existsSync(path)).toBe(true);
   });
 
   it("stores only bounded metadata for an LM1 capture", () => {
@@ -217,6 +238,37 @@ describe("LM2 candidate catalog", () => {
     );
   });
 
+  it("rejects a catalog with nonconsecutive retained capture sequences", () => {
+    const root = createRoot();
+    const first = createRecord();
+    const second = createRecord(1);
+    writeCatalog(root, [catalogEntry(first, 5), catalogEntry(second, 7)]);
+    const catalog = createLm2CandidateCatalog({ storeRoot: root });
+
+    expect(() => catalog.page({ workspaceKey, cursor: null, limit: 10 })).toThrow(
+      expect.objectContaining({ code: "store_corrupt" }),
+    );
+  });
+
+  it("expires structurally valid cursors outside the retained or future generation", () => {
+    const root = createRoot();
+    const first = createRecord();
+    const second = createRecord(1);
+    writeCatalog(root, [catalogEntry(first, 1), catalogEntry(second, 2)], 2);
+    const catalog = createLm2CandidateCatalog({ storeRoot: root });
+    const cursor = catalog.page({ workspaceKey, cursor: null, limit: 1 }).nextCursor;
+
+    expect(cursor).not.toBeNull();
+    writeCatalog(root, [catalogEntry(first, 5), catalogEntry(second, 6)], 2);
+    expect(() => catalog.page({ workspaceKey, cursor, limit: 1 })).toThrow(
+      expect.objectContaining({ code: "cursor_expired" }),
+    );
+    writeCatalog(root, [catalogEntry(first, 5), catalogEntry(second, 6)], 1);
+    expect(() => catalog.page({ workspaceKey, cursor, limit: 1 })).toThrow(
+      expect.objectContaining({ code: "cursor_expired" }),
+    );
+  });
+
   it("rejects malformed or cross-workspace opaque cursors", () => {
     const root = createRoot();
     const catalog = createLm2CandidateCatalog({ storeRoot: root });
@@ -246,8 +298,10 @@ describe("LM2 candidate catalog", () => {
     };
     const record = createRecord();
     const second = createRecord(1);
+    const otherWorkspaceRecord = createRecord(2, "fedcba9876543210");
     store.publish(record);
     store.publish(second);
+    store.publish(otherWorkspaceRecord);
     const snapshots = join(root, "long-memory", "v1", workspaceKey, "snapshots");
     writeFileSync(join(snapshots, `${"c".repeat(64)}.json`), "{corrupt");
 
@@ -262,5 +316,17 @@ describe("LM2 candidate catalog", () => {
         1,
       ),
     ).toThrow(expect.objectContaining({ code: "store_corrupt" }));
+    expect(() => store.getByIds("fedcba9876543210", [catalogEntry(record, 1)], 1)).toThrow(
+      expect.objectContaining({ code: "store_corrupt" }),
+    );
+    expect(() =>
+      store.getByIds(workspaceKey, [{ ...catalogEntry(record, 1), id: second.id }], 1),
+    ).toThrow(expect.objectContaining({ code: "store_corrupt" }));
+    expect(() =>
+      store.getByIds(workspaceKey, [{ ...catalogEntry(record, 1), kind: "state_transition" }], 1),
+    ).toThrow(expect.objectContaining({ code: "store_corrupt" }));
+    expect(() => store.getByIds(workspaceKey, [catalogEntry(record, 1)], 10_001)).toThrow(
+      expect.objectContaining({ code: "invalid_input" }),
+    );
   });
 });
