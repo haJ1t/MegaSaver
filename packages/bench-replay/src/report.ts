@@ -40,15 +40,7 @@ export function costRatioOf(baseline: ArmUsage, megasaver: ArmUsage): number {
     : baseline.normalizedCostUsd / megasaver.normalizedCostUsd;
 }
 
-// The saver's decision is per tool call and its compression floors are per tool,
-// so outputs below those floors legitimately pass through and a passthrough-heavy
-// run is normal — a high floor here would refuse honest measurements. This bound
-// exists only to catch the measured escape where 1 tool call of 100 was rewritten
-// (fraction 0.01) and the resulting costRatio 1.000081 printed as a real "no
-// effect" finding.
-export const MIN_APPLIED_FRACTION = 0.1;
-
-// The ceiling, and the ONE question that is legitimately aggregate: not "is each
+// The ONE question that is legitimately aggregate: not "is each
 // call a real compression?" (that is `prepareArms`' per-call contract) but "is
 // there enough here for this instrument to resolve at all?"
 //
@@ -67,13 +59,26 @@ export const MAX_BYTE_RATIO = 0.95;
 // pair — no arm run can quietly measure a different one. Fails closed: NaN
 // comparisons are false, so a degenerate transform never reads as healthy.
 //
-// NOT the destructiveness guard. There was a byte FLOOR here (0.05) standing in
-// for "this is a real compression, not content deletion"; `prepareArms` now
-// answers that question directly and per call, and the floor's only remaining
-// effect was to refuse honest measurements — the saver fits output to an ABSOLUTE
-// budget (aggressive 4000 B), so byteRatio ~ budget/original and FALLS as outputs
-// grow. A conversation of 100 KB outputs in aggressive mode measures 0.039 and
-// was being rejected, which is precisely the regime the saver performs best in.
+// ONE threshold, deliberately. Two aggregate floors used to live here and both
+// were removed for the same reason: each stood in for a question it could not
+// answer, and each refused honest measurements as a side effect.
+//
+//   - The byte FLOOR (0.05) meant "a real compression, not content deletion".
+//     `prepareArms` now answers that per call. The floor's only remaining effect
+//     was to reject the regime the saver is BEST in — it fits output to an
+//     ABSOLUTE budget (aggressive 4000 B), so byteRatio ~ budget/original falls
+//     as outputs grow, and 100 KB outputs measure 0.039.
+//   - The applied-FRACTION floor (0.1) meant "the saver actually did something".
+//     It was redundant where it fired correctly — 1 tiny call of 100 lands at
+//     byteRatio ~0.999 and the ceiling already refuses it — and wrong where it
+//     fired at all: 1 HUGE call of 100 can reach byteRatio 0.5, which is
+//     squarely resolvable and an honest measurement. That shape is normal, not
+//     exotic: the saver's per-tool `minBytesFor` floors mean most small outputs
+//     legitimately pass through.
+//
+// `appliedFraction` is still computed and reported — a passthrough-heavy run is
+// worth seeing — it just no longer decides anything. Fails closed: NaN
+// comparisons are false, so a degenerate transform never reads as healthy.
 export function checkTransformIntegrity(transform: TransformSummary): ArmIntegrity {
   const { original, transformed } = transform.bytes;
   const { applied, passthrough } = transform.saver;
@@ -86,11 +91,7 @@ export function checkTransformIntegrity(transform: TransformSummary): ArmIntegri
     originalBytes: original,
     transformedBytes: transformed,
     byteRatio,
-    ok:
-      applied > 0 &&
-      original > 0 &&
-      appliedFraction >= MIN_APPLIED_FRACTION &&
-      byteRatio <= MAX_BYTE_RATIO,
+    ok: applied > 0 && original > 0 && byteRatio <= MAX_BYTE_RATIO,
   };
 }
 
@@ -192,7 +193,7 @@ export function buildVerdict(
   const integrity = checkTransformIntegrity(transform);
   if (!integrity.ok) {
     throw new Error(
-      `buildVerdict(${task}): the transform measured nothing this instrument can resolve — the saver was applied to ${integrity.applied} of ${transform.saver.applied + transform.saver.passthrough} tool calls (fraction ${integrity.appliedFraction}, floor ${MIN_APPLIED_FRACTION}) and moved ${integrity.originalBytes}→${integrity.transformedBytes} B (byteRatio ${integrity.byteRatio}, ceiling ${MAX_BYTE_RATIO}). Removing ${((1 - integrity.byteRatio) * 100).toFixed(2)}% of the tool_result bytes bounds the input-side cost effect below the ≤5% band this harness exists to resolve, so any ratio derived from it would be noise. Whether each applied call was a real compression is checked per call, in prepareArms.`,
+      `buildVerdict(${task}): the transform measured nothing this instrument can resolve — the saver was applied to ${integrity.applied} of ${transform.saver.applied + transform.saver.passthrough} tool calls (fraction ${integrity.appliedFraction}) and moved ${integrity.originalBytes}→${integrity.transformedBytes} B (byteRatio ${integrity.byteRatio}, ceiling ${MAX_BYTE_RATIO}). Removing ${((1 - integrity.byteRatio) * 100).toFixed(2)}% of the tool_result bytes bounds the input-side cost effect below the ≤5% band this harness exists to resolve, so any ratio derived from it would be noise. The fraction is reported, not enforced — a low one beside a large byte movement is a normal, resolvable run. Whether each applied call was a real compression is checked per call, in prepareArms.`,
     );
   }
   return {

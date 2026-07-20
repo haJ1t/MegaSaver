@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_BYTE_RATIO,
-  MIN_APPLIED_FRACTION,
   MIN_DRIFT_SMOKE_TOLERANCE,
   baselineDriftSmokeOk,
   buildVerdict,
@@ -274,10 +273,39 @@ describe("checkTransformIntegrity resolution ceiling", () => {
     bytes: { original: 51390, transformed: 51387 },
   };
 
-  it("fails a near-inert saver on both the applied fraction and the byte ratio", () => {
+  // Refused by the CEILING alone now. The applied fraction is still reported
+  // (0.01 is worth seeing) but no longer decides anything — a fraction floor was
+  // redundant here, since 1 tiny call of 100 lands at byteRatio ~0.999 anyway.
+  it("fails a near-inert saver on the byte ratio, and still reports the fraction", () => {
     const r = checkTransformIntegrity(nearInert);
     expect(r.appliedFraction).toBeCloseTo(0.01, 6);
+    expect(r.byteRatio).toBeCloseTo(0.999942, 6);
     expect(r.ok).toBe(false);
+  });
+
+  // The other half of that pair, and why the fraction floor had to go: the SAME
+  // 1-of-100 fraction, but the one call the saver fired on was huge. byteRatio
+  // 0.5 is squarely resolvable, so this is an honest measurement — and the floor
+  // would have refused it. Not exotic either: the real saver's per-tool
+  // `minBytesFor` floors mean most small outputs legitimately pass through, so a
+  // low applied fraction beside a large byte movement is the NORMAL shape.
+  it("accepts a low applied fraction when the bytes it moved are substantial", () => {
+    const r = checkTransformIntegrity({
+      saver: { applied: 1, passthrough: 99, failed: 0 },
+      bytes: { original: 200_000, transformed: 100_000 },
+    });
+    expect(r.appliedFraction).toBeCloseTo(0.01, 6);
+    expect(r.byteRatio).toBeCloseTo(0.5, 6);
+    expect(r.ok).toBe(true);
+  });
+
+  it("emits a verdict for that run rather than refusing it", () => {
+    const v = buildVerdict("t", [pair(1.4, 1)], {
+      saver: { applied: 1, passthrough: 99, failed: 0 },
+      bytes: { original: 200_000, transformed: 100_000 },
+    });
+    expect(v.costRatio).toBeCloseTo(1.4, 6);
+    expect(v.verified.integrity.appliedFraction).toBeCloseTo(0.01, 6);
   });
 
   // The ceiling is derived from the question being asked, not fitted to an
@@ -313,8 +341,7 @@ describe("checkTransformIntegrity resolution ceiling", () => {
     ).toBeCloseTo(0.75, 6);
   });
 
-  it("exposes the thresholds it enforces rather than burying them", () => {
-    expect(MIN_APPLIED_FRACTION).toBeGreaterThan(0.01);
+  it("exposes the one threshold it enforces rather than burying it", () => {
     expect(MAX_BYTE_RATIO).toBeLessThanOrEqual(0.95);
   });
 

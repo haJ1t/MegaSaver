@@ -154,15 +154,27 @@ ones surround it, and the refusal names the offending `tool_use_id`s.
 from above, so a transform that moved under 5% of the tool_result bytes cannot
 reach the band this harness exists to resolve, whatever number it would print.
 Hence `MAX_BYTE_RATIO = 0.95`, derived from the question rather than fitted to an
-escape.
+escape. It is the **only** aggregate threshold, deliberately. Two others were
+removed for the same reason — each stood in for a question it could not answer,
+and each refused honest measurements as a side effect:
 
-There is deliberately **no byte floor**. One used to stand in for "this is a real
-compression rather than deletion"; the per-call contract answers that directly,
-and the floor's only remaining effect was to refuse honest measurements — the
-saver fits output to an *absolute* budget (aggressive 4000 B), so `byteRatio ≈
-budget/original` falls as outputs grow, and a conversation of 100 KB outputs in
-aggressive mode measures 0.039. That is the regime the saver performs best in,
-and it was being rejected.
+- **No byte floor.** It meant "a real compression rather than deletion"; the
+  per-call contract answers that directly. Its only remaining effect was to
+  reject the regime the saver is best in — the saver fits output to an
+  *absolute* budget (aggressive 4000 B), so `byteRatio ≈ budget/original` falls
+  as outputs grow, and a conversation of 100 KB outputs measures 0.039.
+- **No applied-fraction floor.** It meant "the saver actually did something", and
+  was redundant wherever it fired correctly: 1 tiny call of 100 lands at
+  `byteRatio ≈ 0.999` and the ceiling refuses it anyway. Where it fired at all it
+  was wrong — the same 1-of-100 fraction with one *large* output reaches
+  `byteRatio 0.5`, which is squarely resolvable. That shape is the normal one,
+  not an exotic case: the saver's per-tool `minBytesFor` floors mean most small
+  outputs legitimately pass through, so a low applied fraction beside a large
+  byte movement is what a healthy run looks like.
+
+`applied` / `passthrough` counts and the applied fraction are still **reported**
+on every verdict — a passthrough-heavy run is worth seeing. They just do not
+decide anything.
 
 ---
 

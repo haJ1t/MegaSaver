@@ -42,7 +42,6 @@ export {
 } from "./replay.js";
 export {
   MAX_BYTE_RATIO,
-  MIN_APPLIED_FRACTION,
   MIN_DRIFT_SMOKE_TOLERANCE,
   baselineDriftSmokeOk,
   buildVerdict,
