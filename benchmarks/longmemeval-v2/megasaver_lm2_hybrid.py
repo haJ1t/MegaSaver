@@ -13,7 +13,7 @@ REPO_ID = "xiaowu0162/longmemeval-v2"
 CHECKSUMS = {"schema": "0672cf47cf16c30365648770628b433076bb3f5b73edded673af7dd6d5f3246f", "questions": "0a3ae5ebea938c24d7800e1e0b0828e08ae1646f939a53853b2b8cdc08e292b7", "trajectories": "363cec9a8e87aa8d9101ce4e600aadbf7031d674056ebe4f969e8424abc5f3c6"}
 HAYSTACK_CHECKSUMS = {"small": "9b5301defb23a088a5f06e45ff8d5f35e569d78305a66d492046a9fff9b46593", "medium": "4756d5126347f0d18f045bb6c47b08cb3b23e9db24386cc48a9b2879e7969b59"}
 CONTROL_NAME = "megasaver_lm2_control_v1.json"
-CONFIG_KEYS = {"manifest_path", "manifest_digest", "data_revision", "cache_parent", "transport_command", "profile", "embedding_egress", "model", "token_budget", "query_timeout_ms", "index_batch_timeout_ms", "rpc_timeout_seconds"}
+CONFIG_KEYS = {"manifest_path", "manifest_digest", "data_revision", "megasaver_commit", "cache_parent", "transport_command", "profile", "embedding_egress", "model", "token_budget", "query_timeout_ms", "index_batch_timeout_ms", "rpc_timeout_seconds"}
 def _require(condition: bool, message: str) -> None:
     if not condition: raise RuntimeError(message)
 def _number(value: int | float) -> str:
@@ -141,10 +141,11 @@ class MegaSaverLm2HybridMemory(Memory):
     def __init__(self, memory_params: dict[str, object]) -> None:
         super().__init__(memory_params)
         if set(memory_params) != CONFIG_KEYS: raise ValueError("LM2 benchmark config fields mismatch")
-        string_fields = ["manifest_path", "manifest_digest", "data_revision", "cache_parent", "profile", "embedding_egress"]
+        string_fields = ["manifest_path", "manifest_digest", "data_revision", "megasaver_commit", "cache_parent", "profile", "embedding_egress"]
         if not all(isinstance(memory_params.get(key), str) for key in string_fields): raise ValueError("LM2 benchmark config strings are invalid")
         if not Path(str(memory_params["manifest_path"])).is_absolute() or not Path(str(memory_params["cache_parent"])).is_absolute(): raise ValueError("LM2 benchmark paths must be absolute")
         if not _sha(memory_params["manifest_digest"]): raise ValueError("LM2 benchmark manifest digest is invalid")
+        if not isinstance(memory_params["megasaver_commit"], str) or re.fullmatch(r"[0-9a-f]{40}", memory_params["megasaver_commit"]) is None: raise ValueError("LM2 benchmark Mega Saver commit is invalid")
         if memory_params["data_revision"] != DATA_REVISION: raise ValueError("LM2 benchmark data revision mismatch")
         if memory_params["embedding_egress"] != "local" or memory_params["profile"] not in {"safe", "adaptive"}: raise ValueError("LM2 benchmark embeddings must be local")
         command = memory_params.get("transport_command"); model = memory_params.get("model")

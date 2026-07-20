@@ -76,6 +76,16 @@ class MegaSaverLm2HybridTest(unittest.TestCase):
             self.build_memory(remote)
         self.assertEqual(self.requests(), [])
 
+    def test_constructor_requires_exact_megasaver_commit_binding(self) -> None:
+        invalid = json.loads(json.dumps(self.memory_config))
+        invalid["memory_params"]["megasaver_commit"] = "not-a-commit"
+        with self.assertRaisesRegex(ValueError, "commit"):
+            self.build_memory(invalid)
+
+        del invalid["memory_params"]["megasaver_commit"]
+        with self.assertRaises(ValueError):
+            self.build_memory(invalid)
+
     def test_insert_and_admitted_query_use_one_process_per_operation(self) -> None:
         memory = self.build_indexed()
         memory.set_query_context(
