@@ -16,6 +16,57 @@
 
 ---
 
+## Round 2 — amended 2026-07-20b (read before executing any task below)
+
+**This plan was written for the round-1 fix and was never amended while
+round 2 shipped.** The eight tasks below are kept as the historical
+record of what was planned and executed first; this section records what
+actually shipped and where it diverges. Three round-1 pattern literals
+inside those tasks now carry an inline `Superseded 2026-07-20b` marker.
+
+**What shipped:**
+
+```ts
+/(?:(?<![A-Za-z0-9_-])|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g
+```
+
+**Why it diverged from the original eight tasks.** The round-1 `critic`
+pass found that a single leading `(?<![A-Za-z0-9_-])` blocks the entire
+percent-escape carrier class — all 512 `%XY` forms — which covers URL
+query strings and fragments, among the most common places a JWT appears
+in agent output. Recovering that class needed a second lookbehind branch,
+`(?<=%[0-9A-Fa-f][0-9A-Fa-f])`, which is nearly free (0.32 ms per 313
+KiB) precisely because `%` sits outside the run class. The spec was
+amended first (§0), then the code. The original tasks could not have
+anticipated this: it was found by review, not by planning.
+
+**Task-by-task divergence:**
+
+| task | round-1 outcome | round 2 |
+|---|---|---|
+| 1 worktree + typecheck wiring + baseline | executed as written | unchanged |
+| 2 capture pre-fix outputs | executed as written | unchanged — the captured byte literals are pattern-independent |
+| 3 structural + timing tests | executed as written | **re-executed**: the structural gate now pins *both* branches, and a `/g` flag assertion was added after the critic showed that deleting `/g` passed the whole suite |
+| 4 §5 trade-off non-match tests | executed as written | **re-executed**: `Bearer<jwt>`, `ghs_<appid>_<jwt>` and `\x3d` rows added; a real-pipeline test added because `github_token` fires on the `ghs_` shape and masks the leak |
+| 5 the fix + WHY comment + lock table | executed as written | **re-executed** with the two-branch pattern; WHY comment rewritten; §5a lock table and footnote re-amended |
+| 6 equivalence corpus | executed as written | **extended**: dash/underscore segments, `alg:none`, and four percent carriers — the round-1 corpus contained no `-` or `_` in any segment |
+| 7 sibling extension plan edits | executed as written | **re-executed**: the snapshot literal re-pinned to the shipped bytes |
+| 8 changeset + wiki + verification | executed as written | **rewritten**: bumped `patch` -> `minor` (user-approved), coverage-reduction paragraph added, wiki severity corrected to *ordinarily reachable* |
+
+**Beyond the original eight tasks**, closing the round-2 `verifier`
+findings: a no-over-redaction block fencing the payload `eyJ` anchor and
+the three segment `+` quantifiers (the equivalence corpus could not see
+those mutants), the timing-gate deflake in spec §6.2a, the residual
+percent carriers named in spec §0a, and the review trail in spec §9a.
+
+**Checkboxes.** Every step box below is now checked: all eight tasks were
+executed, in order, and landed as the commits `8a915bf2` through
+`d20d4522` on `fix/jwt-redos`. A checked box means "this step ran",
+not "this step's text is still current" — for Tasks 3–8 read the
+divergence table above alongside the step text.
+
+---
+
 ## Load-bearing facts (verified against source while writing this plan, not assumed)
 
 - `REDACTION_PATTERNS` is **not** exported from `packages/policy/src/index.ts`. Tests import from `../src/redaction-patterns.js` directly. Do not add an index export.
@@ -54,7 +105,7 @@ The last three rows are why §6.2 seeds three strings: the narrowing a future ma
 
 ---
 
-- [ ] **Step 1: Create the worktree.**
+- [x] **Step 1: Create the worktree.**
 
 ```
 cd /Users/halitozger/Desktop/MegaSaver
@@ -65,7 +116,7 @@ pnpm install --frozen-lockfile
 
 Expected: `Preparing worktree (new branch 'fix/jwt-redos')`, then pnpm resolves from the existing store. All later commands in this plan run from `/Users/halitozger/Desktop/MegaSaver/.worktrees/jwt-redos`.
 
-- [ ] **Step 2: Confirm the baseline is green before touching anything.**
+- [x] **Step 2: Confirm the baseline is green before touching anything.**
 
 ```
 pnpm --filter @megasaver/policy test
@@ -73,7 +124,7 @@ pnpm --filter @megasaver/policy test
 
 Expected: all existing policy suites pass — `redact.test.ts`, `redact-pii.test.ts`, `redact-unstructured.test.ts`, `redact.property.test.ts`, `deny-code.test.ts`, `dependency-graph.test.ts`, `evaluate-command.test.ts`, `evaluate-path-read.test.ts`, `parse-project-permissions.test.ts`, `pii-validators.test.ts`. If anything is already red, stop — this plan assumes a green baseline.
 
-- [ ] **Step 3: Wire the test tsconfig into the package typecheck script.**
+- [x] **Step 3: Wire the test tsconfig into the package typecheck script.**
 
 In `packages/policy/package.json`, replace:
 
@@ -87,7 +138,7 @@ with:
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
 ```
 
-- [ ] **Step 4: Verify the wiring passes against unmodified tests.**
+- [x] **Step 4: Verify the wiring passes against unmodified tests.**
 
 ```
 pnpm --filter @megasaver/policy typecheck
@@ -95,7 +146,7 @@ pnpm --filter @megasaver/policy typecheck
 
 Expected: exit 0, no output. If this fails, the existing tests have latent type errors — fix those in this commit before proceeding, since every later step depends on this gate being meaningful.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```
 git add packages/policy/package.json
@@ -115,7 +166,7 @@ Spec §6.1 is explicit: the old quadratic pattern must **not** be compiled insid
 
 ---
 
-- [ ] **Step 1: Write the capture script in the scratchpad.**
+- [x] **Step 1: Write the capture script in the scratchpad.**
 
 ```
 mkdir -p /private/tmp/claude-501/-Users-halitozger-Desktop-MegaSaver/10f63fff-dcd2-405d-938b-5e719f5b1c34/scratchpad
@@ -183,7 +234,7 @@ for (const [label, re] of [["old", OLD], ["fixed", NEW], ["narrowed", NARROWED]]
 SCRIPT
 ```
 
-- [ ] **Step 2: Run it and keep the full output.**
+- [x] **Step 2: Run it and keep the full output.**
 
 ```
 node /private/tmp/claude-501/-Users-halitozger-Desktop-MegaSaver/10f63fff-dcd2-405d-938b-5e719f5b1c34/scratchpad/capture-jwt-redos.mjs
@@ -214,7 +265,7 @@ Then three `DIFF`-shaped trade-off blocks where every `new=` line shows the toke
 
 **Gate:** `diffs=0` is mandatory. A non-zero count means the corpus or the fix diverged from the spec's §2 invariant — stop and reconcile before writing any test.
 
-- [ ] **Step 3: Record the evidence.**
+- [x] **Step 3: Record the evidence.**
 
 Paste the full stdout into the branch's evidence notes (the PR body, or the verifier hand-off). It is the reproduction evidence the CRITICAL chain requires: it demonstrates the vulnerability (8,374 ms), demonstrates the fix (0.45 ms), pins the equivalence, and shows the §5 loss is exactly three shapes and nothing else. Nothing from this step is committed.
 
@@ -227,7 +278,7 @@ Paste the full stdout into the branch's evidence notes (the PR body, or the veri
 
 ---
 
-- [ ] **Step 1: Write the failing test file.**
+- [x] **Step 1: Write the failing test file.**
 
 Create `packages/policy/test/redact-jwt.test.ts`:
 
@@ -270,7 +321,7 @@ describe("jwt detector — ReDoS timing regression (fix spec §6.2)", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and confirm RED.**
+- [x] **Step 2: Run it and confirm RED.**
 
 ```
 pnpm --filter @megasaver/policy test -- redact-jwt
@@ -296,7 +347,7 @@ Written before the fix so the assertions are genuinely RED against shipped behav
 
 ---
 
-- [ ] **Step 1: Append the non-match block.**
+- [x] **Step 1: Append the non-match block.**
 
 Append to the end of `packages/policy/test/redact-jwt.test.ts`:
 
@@ -324,7 +375,7 @@ describe("jwt detector — accepted §5 trade-off, do not narrow the lookbehind"
 });
 ```
 
-- [ ] **Step 2: Run it and confirm RED.**
+- [x] **Step 2: Run it and confirm RED.**
 
 ```
 pnpm --filter @megasaver/policy test -- redact-jwt
@@ -350,7 +401,7 @@ Spec §7 requires the §5a lock-table amendment in the **same commit** as the re
 
 ---
 
-- [ ] **Step 1: Apply the fix with its WHY comment.**
+- [x] **Step 1: Apply the fix with its WHY comment.**
 
 In `packages/policy/src/redaction-patterns.ts`, replace lines 49–53:
 
@@ -380,7 +431,9 @@ with:
   },
 ```
 
-- [ ] **Step 2: Run the tests and confirm GREEN.**
+> **Superseded 2026-07-20b.** The pattern above is the round-1 single-lookbehind form. What actually shipped for the WHY comment and both lookbehind branches is the two-branch alternation — see the Round 2 section at the top of this plan for the exact bytes and for why it diverged.
+
+- [x] **Step 2: Run the tests and confirm GREEN.**
 
 ```
 pnpm --filter @megasaver/policy test -- redact-jwt
@@ -388,7 +441,7 @@ pnpm --filter @megasaver/policy test -- redact-jwt
 
 Expected: 7 passed, 0 failed, and the whole file now completes in well under a second — the three timing tests drop from ~8.3 s each to sub-millisecond, so total runtime falls from ~25 s to under 1 s. That runtime collapse is itself the fix's smoke evidence.
 
-- [ ] **Step 3: Confirm no existing suite regressed.**
+- [x] **Step 3: Confirm no existing suite regressed.**
 
 ```
 pnpm --filter @megasaver/policy test
@@ -396,7 +449,7 @@ pnpm --filter @megasaver/policy test
 
 Expected: every existing suite still passes untouched, including `redact.test.ts:11`, which carries `eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4` at start-of-string — a preserved carrier per §5.
 
-- [ ] **Step 4: Amend the §5a lock table.**
+- [x] **Step 4: Amend the §5a lock table.**
 
 In `docs/superpowers/specs/2026-05-10-bb3-policy-design.md`, replace line 316:
 
@@ -410,7 +463,9 @@ with:
 | jwt †             | `(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+` | `eyJ[REDACTED]` |
 ```
 
-- [ ] **Step 5: Add the footnote under the table.**
+> **Superseded 2026-07-20b.** The pattern above is the round-1 single-lookbehind form. What actually shipped for the §5a lock table row is the two-branch alternation — see the Round 2 section at the top of this plan for the exact bytes and for why it diverged.
+
+- [x] **Step 5: Add the footnote under the table.**
 
 The table's last row is `db_url` on line 319 and line 320 is blank. Insert the footnote as a new paragraph on line 320, so line 321's blank line separates it from `Order is application order`:
 
@@ -423,7 +478,7 @@ directly by a base64url character, including `-` and `_`, no longer redacts.
 The lock otherwise stands; amend this row, never rewrite it silently.
 ```
 
-- [ ] **Step 6: Lint and typecheck.**
+- [x] **Step 6: Lint and typecheck.**
 
 ```
 pnpm --filter @megasaver/policy lint:fix
@@ -432,7 +487,7 @@ pnpm --filter @megasaver/policy typecheck
 
 Expected: biome reports the files as formatted (the pattern line is 88 characters, inside the repo's 100 `lineWidth`), and typecheck exits 0 — now covering `test/` because of Task 1.
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```
 git add packages/policy/src/redaction-patterns.ts packages/policy/test/redact-jwt.test.ts docs/superpowers/specs/2026-05-10-bb3-policy-design.md
@@ -453,7 +508,7 @@ Expected: `git status --short` shows exactly three paths staged. Subject is 37 c
 
 ---
 
-- [ ] **Step 1: Append the equivalence corpus.**
+- [x] **Step 1: Append the equivalence corpus.**
 
 Append to the end of `packages/policy/test/redact-jwt.test.ts`:
 
@@ -495,7 +550,7 @@ describe("jwt detector — output frozen against the pre-fix pattern (fix spec �
 });
 ```
 
-- [ ] **Step 2: Run and confirm GREEN.**
+- [x] **Step 2: Run and confirm GREEN.**
 
 ```
 pnpm --filter @megasaver/policy test -- redact-jwt
@@ -503,7 +558,7 @@ pnpm --filter @megasaver/policy test -- redact-jwt
 
 Expected: 21 passed, 0 failed (1 structural + 3 timing + 3 non-match + 14 equivalence), completing in under a second.
 
-- [ ] **Step 3: Prove the corpus is not vacuous.**
+- [x] **Step 3: Prove the corpus is not vacuous.**
 
 A corpus of all-identical expected strings is worth nothing if `apply` silently no-ops. Temporarily change `carrier_equals`'s expected value from `"token=eyJ[REDACTED]"` to `"token=NOPE"`, re-run, and confirm exactly one failure:
 
@@ -513,7 +568,7 @@ AssertionError: expected 'token=eyJ[REDACTED]' to be 'token=NOPE'
 
 Then restore the literal and re-run to 21 passed. Do not commit the mutated value.
 
-- [ ] **Step 4: Lint, typecheck, commit.**
+- [x] **Step 4: Lint, typecheck, commit.**
 
 ```
 pnpm --filter @megasaver/policy lint:fix
@@ -536,7 +591,7 @@ Spec §8: that plan is written, hardcoded, and unexecuted, so drift is silent un
 
 ---
 
-- [ ] **Step 1: §8 edit 1 — the Task 1 snapshot literal (line 171).**
+- [x] **Step 1: §8 edit 1 — the Task 1 snapshot literal (line 171).**
 
 Replace:
 
@@ -550,9 +605,11 @@ with:
       source: "(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+",
 ```
 
+> **Superseded 2026-07-20b.** The pattern above is the round-1 single-lookbehind form. What actually shipped for the sibling extension plan's snapshot literal is the two-branch alternation — see the Round 2 section at the top of this plan for the exact bytes and for why it diverged.
+
 Without this, that plan's Task 1 asserts GREEN against unmodified source and fails, looking like a broken snapshot rather than a landed fix.
 
-- [ ] **Step 2: §8 edit 2 — the "single intended exception" framing (line 20).**
+- [x] **Step 2: §8 edit 2 — the "single intended exception" framing (line 20).**
 
 Replace:
 
@@ -581,7 +638,7 @@ this plan; the `jwt` amendment landed separately on `main` before Task 1 ran.
 
 Task 3's mutation check itself needs no change — it exercises `aws_access_key` (`{16}` → `{15}`), not `jwt`, so its calibration survives.
 
-- [ ] **Step 3: §8 edit 3a — the Task 6 §9.5 exclusion comment (lines 2445–2450).**
+- [x] **Step 3: §8 edit 3a — the Task 6 §9.5 exclusion comment (lines 2445–2450).**
 
 Replace:
 
@@ -637,7 +694,7 @@ That plan's Step 4 currently expects `31 tests pass (28 per-detector + 313 KiB +
 2 coverage)` at line 2579. Update it to `34 tests pass (28 per-detector +
 313 KiB + 3 jwt seeds + 2 coverage)`, or its own expected output goes stale.
 
-- [ ] **Step 4: §8 edit 3b — the Task 6 commit-message body (line 2631).**
+- [x] **Step 4: §8 edit 3b — the Task 6 commit-message body (line 2631).**
 
 That body ships a falsehood into git history the moment it is executed. Replace the `-m` body with:
 
@@ -645,7 +702,7 @@ That body ships a falsehood into git history the moment it is executed. Replace 
 Every detector in the new tier is timed against its own repeated literal prefix at 20/39/78/156 KiB, with openai_project_key additionally at 313 KiB — the scale where the unbounded form of its runs measures 12.3 s against 12.4 ms bounded. The locked jwt detector is inside the ceiling too: its quadratic was fixed on 2026-07-20 and it now clears the gate by three orders of magnitude, so the exemption this test originally carried has been removed.
 ```
 
-- [ ] **Step 5: Additional edit (beyond §8) — the typecheck-wiring fact.**
+- [x] **Step 5: Additional edit (beyond §8) — the typecheck-wiring fact.**
 
 Task 1 of *this* plan already wired `tsc -p tsconfig.test.json --noEmit`, so that plan's line 18 fact is stale and its Task 1 wiring step will not find its old string. Replace line 18:
 
@@ -659,7 +716,7 @@ with:
 - `packages/policy` typechecks its tests as of 2026-07-20: the script is `tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit`, wired by the jwt ReDoS fix branch, matching the `packages/core` and `apps/cli` precedent. Task 1's wiring step is therefore already satisfied — verify with `pnpm --filter @megasaver/policy typecheck` and skip the edit.
 ```
 
-- [ ] **Step 6: Record the collision that needs no edit.**
+- [x] **Step 6: Record the collision that needs no edit.**
 
 Append to that plan's load-bearing facts list (after the line edited in Step 5):
 
@@ -667,7 +724,7 @@ Append to that plan's load-bearing facts list (after the line edited in Step 5):
 - **No edit needed, recorded so the merge is expected rather than investigated:** Task 5's structural ordering test derives leading literals from `pattern.source` with a helper that stops at any `(` which is not `(?:`. The jwt fix changes `leadingLiterals(jwt)` from `["eyJ"]` to `[]` — identical to how the eleven existing lookbehind-gated entries already behave, so the test needs no change.
 ```
 
-- [ ] **Step 7: Verify no stale claim survives.**
+- [x] **Step 7: Verify no stale claim survives.**
 
 ```
 grep -n "super-linear" docs/superpowers/plans/2026-07-19-redaction-baseline-extension-plan.md
@@ -675,7 +732,7 @@ grep -n "super-linear" docs/superpowers/plans/2026-07-19-redaction-baseline-exte
 
 Expected: only lines inside that plan's **Task 10 wiki bodies** (around lines 3340, 3385, 3453) still say `super-linear`. Those are wiki text the plan writes when *it* executes, and Task 8 of this plan writes the corrected record to the same wiki pages first. Leave them: rewriting another plan's wiki payload is out of §8's scope, and Task 8's superseding entry is what the reader lands on. Note the three line numbers in the PR body so the reviewer sees the choice was deliberate.
 
-- [ ] **Step 8: Commit.**
+- [x] **Step 8: Commit.**
 
 ```
 git add docs/superpowers/plans/2026-07-19-redaction-baseline-extension-plan.md
@@ -696,7 +753,7 @@ Expected: one file staged; subject is 48 characters.
 
 ---
 
-- [ ] **Step 1: Write the changeset.**
+- [x] **Step 1: Write the changeset.**
 
 Create `.changeset/jwt-redos-fix.md`:
 
@@ -724,7 +781,7 @@ Patch rather than minor: no API surface changes. `redact`,
 name are all unchanged.
 ```
 
-- [ ] **Step 2: Update `wiki/entities/policy.md`.**
+- [x] **Step 2: Update `wiki/entities/policy.md`.**
 
 Append a new section at the end of the file, matching the existing `## v1.1 / post-v1.0 (2026-06-03)` section's style:
 
@@ -777,7 +834,7 @@ Sources: [[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]],
 [[docs/superpowers/specs/2026-05-10-bb3-policy-design]].
 ```
 
-- [ ] **Step 3: Append to `wiki/log.md`.**
+- [x] **Step 3: Append to `wiki/log.md`.**
 
 `wiki/log.md` is `type: append-only` — do **not** edit the existing
 `## [2026-07-20] plan | Redaction baseline extension planned (CRITICAL)` entry
@@ -816,7 +873,7 @@ scope. Sources:
 [[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]], [[entities/policy]].
 ```
 
-- [ ] **Step 4: Run full verification.**
+- [x] **Step 4: Run full verification.**
 
 ```
 pnpm verify
@@ -824,7 +881,7 @@ pnpm verify
 
 Expected: `pnpm lint` (biome check .) clean, `pnpm typecheck` (turbo typecheck — now including `tsc -p tsconfig.test.json` for policy) clean, `pnpm test` (turbo test) all packages green, `pnpm conventions:check` clean (no `docs/conventions/` file was touched, so no mirror can have drifted).
 
-- [ ] **Step 5: Capture the feature smoke evidence.**
+- [x] **Step 5: Capture the feature smoke evidence.**
 
 Record for the verifier, alongside Task 2's capture output:
 
@@ -834,7 +891,7 @@ pnpm --filter @megasaver/policy test -- redact-jwt
 
 Expected: `21 passed (21)` with a total duration under one second. The contrast against Task 3's ~25-second RED run is the smoke evidence that the vulnerability was present and is gone.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```
 git add .changeset/jwt-redos-fix.md wiki/entities/policy.md wiki/log.md
