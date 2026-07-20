@@ -2618,7 +2618,7 @@ git checkout -- packages/policy/src/redaction-patterns.ts
 pnpm --filter @megasaver/policy test -- test/redaction-redos.test.ts
 ```
 
-Expected: 31 tests pass.
+Expected: 34 tests pass.
 
 - [ ] **Step 6: Type-check and lint the new file** — run:
 
