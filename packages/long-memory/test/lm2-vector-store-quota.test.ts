@@ -82,7 +82,7 @@ describe("LM2 ledger quotas", () => {
     );
 
     const { result, embed } = await attempt(root, createModel(3));
-    expect(result).toEqual({ published: [], reason: "storage_limit" });
+    expect(result).toEqual({ published: [], existing: [], reason: "storage_limit" });
     expect(embed).not.toHaveBeenCalled();
   });
 
@@ -98,7 +98,7 @@ describe("LM2 ledger quotas", () => {
     ]);
 
     const { result, embed } = await attempt(root, model);
-    expect(result).toEqual({ published: [], reason: "storage_limit" });
+    expect(result).toEqual({ published: [], existing: [], reason: "storage_limit" });
     expect(embed).not.toHaveBeenCalled();
   });
 
@@ -114,7 +114,7 @@ describe("LM2 ledger quotas", () => {
     ]);
 
     const { result, embed } = await attempt(root, model);
-    expect(result).toEqual({ published: [], reason: "storage_limit" });
+    expect(result).toEqual({ published: [], existing: [], reason: "storage_limit" });
     expect(embed).not.toHaveBeenCalled();
   });
 });
