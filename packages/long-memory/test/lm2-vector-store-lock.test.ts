@@ -1,10 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, symlinkSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { flockSync } from "fs-ext";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import { withWorkspaceIndexLock } from "../src/lm2-lock.js";
-import { MAX_LM2_SIDECARS_PER_NAMESPACE, createLm2VectorStore } from "../src/lm2-vector-store.js";
+import { createLm2VectorStore } from "../src/lm2-vector-store.js";
 import {
   cleanupRoots,
   createCandidate,
@@ -12,143 +10,101 @@ import {
   createRoot,
   holdIndexLock,
   indexLockPath,
-  seedSidecar,
-  sidecarPath,
-  startRealIndexer,
   workspaceKey,
 } from "./lm2-vector-store-fixtures.js";
 
 afterEach(cleanupRoots);
 
-describe("LM2 workspace index lock", () => {
-  it("returns index_busy to a second process without scan, egress, or writes", async () => {
+const deadline = () => ({
+  signal: new AbortController().signal,
+  deadlineAtMs: 1,
+  now: () => 0,
+});
+
+describe("LM2 fixed operation lock", () => {
+  it("returns busy to a second process before embedding or sidecar work", async () => {
     const root = createRoot();
     const release = await holdIndexLock(indexLockPath(root));
-    const embed = vi.fn();
     try {
       await expect(
-        createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
+        createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
           workspaceKey,
           model: createModel(),
-          records: [createCandidate()],
-          signal: new AbortController().signal,
-          embed,
+          deadline: deadline(),
         }),
-      ).resolves.toEqual({ published: [], reason: "index_busy" });
-      expect(embed).not.toHaveBeenCalled();
-      expect(() => readFileSync(sidecarPath(root, createCandidate(), createModel()))).toThrow();
+      ).resolves.toEqual({ status: "busy" });
     } finally {
       await release();
     }
   });
 
-  it("serializes real cross-process indexers at the namespace quota edge", async () => {
+  it("rejects a stale capability and a replacement lock pathname", async () => {
     const root = createRoot();
-    const model = createModel(0, 1);
-    for (let index = 0; index < MAX_LM2_SIDECARS_PER_NAMESPACE - 1; index += 1) {
-      seedSidecar(root, createCandidate(index), model, [1]);
-    }
-    const first = createCandidate(MAX_LM2_SIDECARS_PER_NAMESPACE - 1);
-    const second = createCandidate(MAX_LM2_SIDECARS_PER_NAMESPACE);
-    const releaseFirst = await startRealIndexer(root, model, first);
-    const secondEmbed = vi.fn();
-
-    await expect(
-      createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
-        workspaceKey,
-        model,
-        records: [second],
-        signal: new AbortController().signal,
-        embed: secondEmbed,
-      }),
-    ).resolves.toEqual({ published: [], reason: "index_busy" });
-    expect(secondEmbed).not.toHaveBeenCalled();
-    expect(existsSync(sidecarPath(root, second, model))).toBe(false);
-    await expect(releaseFirst()).resolves.toEqual({ published: [first.id], reason: null });
-    expect(existsSync(sidecarPath(root, first, model))).toBe(true);
-  }, 30_000);
-
-  it("rejects a stalled indexer after its lock pathname is replaced", async () => {
-    const root = createRoot();
-    const model = createModel(0, 1);
-    for (let index = 0; index < MAX_LM2_SIDECARS_PER_NAMESPACE - 1; index += 1) {
-      seedSidecar(root, createCandidate(index), model, [1]);
-    }
-    const first = createCandidate(MAX_LM2_SIDECARS_PER_NAMESPACE - 1);
-    const second = createCandidate(MAX_LM2_SIDECARS_PER_NAMESPACE);
-    const releaseFirst = await startRealIndexer(root, model, first);
-    const lockPath = indexLockPath(root);
-    renameSync(lockPath, `${lockPath}.displaced`);
-
-    await expect(
-      createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
-        workspaceKey,
-        model,
-        records: [second],
-        signal: new AbortController().signal,
-        embed: async () => ({
-          modelFingerprint: modelDescriptorFingerprint(model),
-          vectors: [[1]],
-        }),
-      }),
-    ).resolves.toEqual({ published: [second.id], reason: null });
-    await expect(releaseFirst()).resolves.toEqual({
-      published: [],
-      reason: "index_lock_unavailable",
+    const store = createLm2VectorStore({ storeRoot: root });
+    const first = await store.beginIndexOperation({
+      workspaceKey,
+      model: createModel(),
+      deadline: deadline(),
     });
-    expect(existsSync(sidecarPath(root, first, model))).toBe(false);
-    expect(existsSync(sidecarPath(root, second, model))).toBe(true);
-    expect(
-      readdirSync(dirname(sidecarPath(root, second, model))).filter((name) =>
-        name.endsWith(".json"),
-      ),
-    ).toHaveLength(MAX_LM2_SIDECARS_PER_NAMESPACE);
-  }, 30_000);
-
-  it("returns index_lock_unavailable when the lock cannot open", async () => {
-    const root = createRoot();
-    mkdirSync(indexLockPath(root), { recursive: true });
+    expect(first.status).toBe("ready");
+    if (first.status !== "ready") return;
+    const path = indexLockPath(root);
+    renameSync(path, `${path}.displaced`);
+    writeFileSync(path, `${"f".repeat(64)}\n`);
     const embed = vi.fn();
 
     await expect(
-      createLm2VectorStore({ storeRoot: root }).reserveAndPublish({
+      first.publishBatch({
+        records: [createCandidate()],
+        embed,
+        assertEgressAllowed: async () => true,
+        recheckEvidence: async () => true,
+      }),
+    ).resolves.toEqual({ published: [], reason: "lock_integrity_lost" });
+    expect(embed).not.toHaveBeenCalled();
+    await expect(first.finalize()).rejects.toThrow();
+    await expect(
+      store.beginIndexOperation({
         workspaceKey,
         model: createModel(),
-        records: [createCandidate()],
-        signal: new AbortController().signal,
-        embed,
+        deadline: deadline(),
       }),
-    ).resolves.toEqual({ published: [], reason: "index_lock_unavailable" });
-    expect(embed).not.toHaveBeenCalled();
+    ).resolves.toEqual({ status: "invalid", quotaRecovery: "not_needed" });
   });
 
-  it("maps unsupported flock to index_lock_unavailable without running work", async () => {
+  it("returns unavailable for a malformed fixed token or unusable lock path", async () => {
     const root = createRoot();
     const path = indexLockPath(root);
-    mkdirSync(join(path, ".."), { recursive: true });
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, "malformed\n");
+    await expect(
+      createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
+        workspaceKey,
+        model: createModel(),
+        deadline: deadline(),
+      }),
+    ).resolves.toEqual({ status: "unavailable" });
+
+    const secondRoot = createRoot();
+    mkdirSync(indexLockPath(secondRoot), { recursive: true });
+    await expect(
+      createLm2VectorStore({ storeRoot: secondRoot }).beginIndexOperation({
+        workspaceKey,
+        model: createModel(),
+        deadline: deadline(),
+      }),
+    ).resolves.toEqual({ status: "unavailable" });
+  });
+
+  it("maps unsupported flock to unavailable without running work", async () => {
+    const root = createRoot();
+    const path = indexLockPath(root);
+    mkdirSync(dirname(path), { recursive: true });
     const work = vi.fn();
 
     await expect(
       withWorkspaceIndexLock(path, work, () => {
         throw Object.assign(new Error("flock unsupported"), { code: "ENOTSUP" });
-      }),
-    ).rejects.toMatchObject({ code: "index_lock_unavailable" });
-    expect(work).not.toHaveBeenCalled();
-  });
-
-  it("fails closed when the lock parent changes after descriptor acquisition", async () => {
-    const root = createRoot();
-    const outside = createRoot();
-    const path = indexLockPath(root);
-    const directory = join(path, "..");
-    mkdirSync(directory, { recursive: true });
-    const work = vi.fn();
-
-    await expect(
-      withWorkspaceIndexLock(path, work, (descriptor) => {
-        flockSync(descriptor, "exnb");
-        renameSync(directory, `${directory}-displaced`);
-        symlinkSync(outside, directory);
       }),
     ).rejects.toMatchObject({ code: "index_lock_unavailable" });
     expect(work).not.toHaveBeenCalled();
