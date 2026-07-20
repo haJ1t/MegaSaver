@@ -3761,3 +3761,35 @@ Safety gates land before the detectors: frozen snapshot of the original
 structural), and a ReDoS timing regression scoped to the new tier.
 Separately filed: a live ReDoS in the shipped `jwt` detector
 (1850 ms at 156 KiB, reachable from ordinary base64-heavy logs).
+
+## 2026-07-20 — `mega doctor` saver-liveness fixed (merged to main)
+
+`saver-liveness` failed permanently and never self-healed. Root cause: doctor
+reused the heartbeat ledger's **stats retention** window (`TTL_MS` = 30 days)
+as if it were a **liveness recency** window. `LIVENESS_GAP_GRACE_MS` (5 min)
+only bounds the invocation-vs-completion delta, never how recent the invocation
+is — so any workspace with `completion === null` failed the check from the
+moment it died until it aged out 30 days later. The code stated the false
+premise in a comment ("computeView already prunes stale invocations, so any
+survivor here is recent enough").
+
+Real ledger evidence: 67 workspace keys with an invocation, 30 with a
+completion, **37 with none**. The reported key `5fe7a040a2e5a5b8` was a dead
+temp dir from `2026-07-14`. Neither suggested remedy worked — re-running doctor
+left the key, and `mega hooks install` does not clear history.
+
+Fix (`829ddb3e`): dedicated `LIVENESS_WINDOW_MS` (24h) in `doctor-saver.ts`,
+applied to **both** the gap scan and the sibling `failures` scan (the failures
+branch had the identical defect). `TTL_MS` and `packages/context-gate` left
+untouched — retention and liveness are different questions, and conflating them
+was the bug. The user's ledger is not mutated; stale entries remain and are
+simply ignored.
+
+Verified: `10 PASS / 0 FAIL` on the real store; 19/19 doctor tests; `pnpm verify`
+exit 0; `bundle-smoke` green against a real bundle. Review APPROVED with no
+findings, having independently reproduced the before/after test split and
+mutation-tested the boundary operator.
+
+Correction to an earlier claim in this session: `bundle-smoke` **skips** when no
+bundle exists, so `main` was not red for everyone — only for anyone with a built
+bundle on disk.
