@@ -20,3 +20,9 @@ export function isLm2CleanupError(error: unknown): boolean {
   }
   return false;
 }
+
+export function combineLm2CleanupFailures(current: unknown, next: unknown): unknown {
+  if (current === undefined) return next;
+  const failures = current instanceof AggregateError ? [...current.errors, next] : [current, next];
+  return new AggregateError(failures, "Multiple LM2 cleanup failures.");
+}
