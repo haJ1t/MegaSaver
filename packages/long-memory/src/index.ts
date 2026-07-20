@@ -1,6 +1,44 @@
 export const LONG_MEMORY_PACKAGE = "@megasaver/long-memory";
 export { createInMemoryLongMemoryStore, type LongMemoryStore } from "./store.js";
 export { dispatchRpcLine } from "./rpc.js";
+export { Lm2Error, lm2ErrorCodeSchema, type Lm2ErrorCode } from "./lm2-errors.js";
+export {
+  MAX_LM2_ADMITTED_MODELS,
+  MAX_LM2_CANDIDATE_TEXT_CODE_UNITS,
+  MAX_LM2_DIMENSIONS,
+  MAX_LM2_INDEX_BATCH_TIMEOUT_MS,
+  MAX_LM2_INDEX_RECORDS,
+  MAX_LM2_QUERY_TIMEOUT_MS,
+  embeddingEgressSchema,
+  embeddingPurposeSchema,
+  hybridReceiptSchema,
+  lm2CandidateSchema,
+  lm2IndexReceiptSchema,
+  lm2IndexRequestSchema,
+  lm2ProfileSchema,
+  lm2RankRequestSchema,
+  lm2RuntimeConfigSchema,
+  modelDescriptorSchema,
+  type EmbeddingEgress,
+  type EmbeddingPort,
+  type EmbeddingPurpose,
+  type HybridReceipt,
+  type HybridSemanticReason,
+  type Lm2Candidate,
+  type Lm2IndexReceipt,
+  type Lm2IndexRequest,
+  type Lm2Profile,
+  type Lm2RankRequest,
+  type Lm2RuntimeConfig,
+  type ModelDescriptor,
+  type RemoteEmbeddingApprovalPort,
+} from "./lm2-model.js";
+export {
+  canonicalFloat32,
+  embeddingInputDigest,
+  modelDescriptorFingerprint,
+  type Lm2Sha256,
+} from "./lm2-identity.js";
 export { Lm1Error, lm1ErrorCodeSchema, type Lm1ErrorCode } from "./lm1-errors.js";
 export {
   LM1_SCHEMA_VERSION,
