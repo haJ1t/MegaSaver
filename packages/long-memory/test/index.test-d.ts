@@ -61,3 +61,39 @@ it("preserves LM0 exports while adding LM1 contracts", () => {
   expect(longMemory).not.toHaveProperty("createLm1RecallService");
   expectTypeOf(longMemory.createLm1Runtime).toBeFunction();
 });
+
+it("adds LM2 contracts without removing LM0 or LM1 root imports", () => {
+  expectTypeOf(longMemory.Lm2Error).toMatchTypeOf<
+    new (
+      code: longMemory.Lm2ErrorCode,
+      message: string,
+    ) => Error
+  >();
+  expectTypeOf(longMemory.modelDescriptorSchema).toBeObject();
+  expectTypeOf(longMemory.lm2RuntimeConfigSchema).toBeObject();
+  expectTypeOf(longMemory.lm2CandidateSchema).toBeObject();
+  expectTypeOf(longMemory.lm2RankRequestSchema).toBeObject();
+  expectTypeOf(longMemory.lm2IndexRequestSchema).toBeObject();
+  expectTypeOf(longMemory.hybridReceiptSchema).toBeObject();
+  expectTypeOf(longMemory.modelDescriptorFingerprint).toBeFunction();
+  expectTypeOf(longMemory.embeddingInputDigest).toBeFunction();
+  expectTypeOf(longMemory.canonicalFloat32).toBeFunction();
+  expectTypeOf<longMemory.ModelDescriptor>().toMatchTypeOf<{
+    provider: string;
+    dimensions: number;
+  }>();
+  expectTypeOf<longMemory.EmbeddingPort>().toMatchTypeOf<{
+    egress: "local" | "remote";
+  }>();
+  expectTypeOf<longMemory.RemoteEmbeddingApprovalPort>().toMatchTypeOf<{
+    assertCurrent: (input: {
+      workspaceKey: string;
+      modelFingerprint: string;
+      purpose: "document" | "query";
+      approvalRef: string;
+    }) => Promise<"approved" | "denied" | "revoked" | "unreadable">;
+  }>();
+  expectTypeOf<longMemory.HybridReceipt>().toMatchTypeOf<{
+    semanticStatus: "not_requested" | "used" | "used_partial_index" | "degraded";
+  }>();
+});
