@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { workspaceKeySchema } from "@megasaver/shared";
 import { z } from "zod";
 
@@ -95,6 +96,13 @@ const remoteApprovalSchema = z
   })
   .strict();
 
+function canonicalModelFingerprint(model: ModelDescriptor): string {
+  const canonicalModel = Object.fromEntries(
+    Object.entries(model).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  return createHash("sha256").update(JSON.stringify(canonicalModel), "utf8").digest("hex");
+}
+
 export const lm2RuntimeConfigSchema = z
   .object({
     admittedModels: z.array(modelDescriptorSchema).min(1).max(MAX_LM2_ADMITTED_MODELS),
@@ -103,7 +111,36 @@ export const lm2RuntimeConfigSchema = z
     queryTimeoutMs: z.number().int().min(1).max(MAX_LM2_QUERY_TIMEOUT_MS),
     indexBatchTimeoutMs: z.number().int().min(1).max(MAX_LM2_INDEX_BATCH_TIMEOUT_MS),
   })
-  .strict();
+  .strict()
+  .superRefine((config, context) => {
+    const admittedFingerprints = config.admittedModels.map(canonicalModelFingerprint);
+    const admittedFingerprintSet = new Set(admittedFingerprints);
+    if (admittedFingerprintSet.size !== admittedFingerprints.length) {
+      context.addIssue({ code: "custom", message: "admitted models must be unique" });
+    }
+    if (config.embeddingEgress === "local" && config.remoteApprovals.length > 0) {
+      context.addIssue({ code: "custom", message: "local egress cannot have remote approvals" });
+    }
+    const approvalKeys = new Set<string>();
+    for (const approval of config.remoteApprovals) {
+      if (!admittedFingerprintSet.has(approval.modelFingerprint)) {
+        context.addIssue({
+          code: "custom",
+          message: "remote approval must reference an admitted model",
+          path: ["remoteApprovals"],
+        });
+      }
+      const approvalKey = `${approval.workspaceKey}\0${approval.modelFingerprint}`;
+      if (approvalKeys.has(approvalKey)) {
+        context.addIssue({
+          code: "custom",
+          message: "remote approvals must be unique",
+          path: ["remoteApprovals"],
+        });
+      }
+      approvalKeys.add(approvalKey);
+    }
+  });
 export type Lm2RuntimeConfig = z.infer<typeof lm2RuntimeConfigSchema>;
 
 const semanticReasonSchema = z.enum([

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Lm2Error } from "../src/lm2-errors.js";
+import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import {
   MAX_LM2_INDEX_BATCH_TIMEOUT_MS,
   MAX_LM2_QUERY_TIMEOUT_MS,
@@ -46,6 +47,38 @@ describe("LM2 model contracts", () => {
       lm2RuntimeConfigSchema.parse({ ...config, admittedModels: [model, model, model] }),
     ).toThrow();
     expect(() => lm2RuntimeConfigSchema.parse({ ...config, unknown: true })).toThrow();
+  });
+
+  it("binds remote approvals to admitted models and forbids them for local egress", () => {
+    const remoteApproval = {
+      workspaceKey: "0123456789abcdef",
+      modelFingerprint: modelDescriptorFingerprint(model),
+      approvalRef: "approval-1",
+    };
+    const remoteConfig = {
+      admittedModels: [model],
+      embeddingEgress: "remote" as const,
+      remoteApprovals: [remoteApproval],
+      queryTimeoutMs: MAX_LM2_QUERY_TIMEOUT_MS,
+      indexBatchTimeoutMs: MAX_LM2_INDEX_BATCH_TIMEOUT_MS,
+    };
+
+    expect(lm2RuntimeConfigSchema.parse(remoteConfig)).toEqual(remoteConfig);
+    expect(() =>
+      lm2RuntimeConfigSchema.parse({
+        ...remoteConfig,
+        remoteApprovals: [{ ...remoteApproval, modelFingerprint: "b".repeat(64) }],
+      }),
+    ).toThrow();
+    expect(() =>
+      lm2RuntimeConfigSchema.parse({ ...remoteConfig, embeddingEgress: "local" }),
+    ).toThrow();
+    expect(() =>
+      lm2RuntimeConfigSchema.parse({
+        ...remoteConfig,
+        remoteApprovals: [remoteApproval, remoteApproval],
+      }),
+    ).toThrow();
   });
 
   it("keeps candidates and rank/index requests inside their strict public bounds", () => {

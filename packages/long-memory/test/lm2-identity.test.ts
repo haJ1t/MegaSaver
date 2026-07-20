@@ -21,11 +21,38 @@ describe("LM2 canonical identity", () => {
     expect(modelDescriptorFingerprint({ ...model })).toBe(modelDescriptorFingerprint(model));
   });
 
+  it("strictly parses descriptors before canonicalizing independently ordered fields", () => {
+    const reordered = {
+      revision: "r1",
+      dimensions: 3,
+      embeddingInputVersion: "lm2-v1",
+      provider: "local",
+      modelId: "mini",
+    };
+
+    expect(modelDescriptorFingerprint(reordered as never)).toBe(modelDescriptorFingerprint(model));
+    expect(() => modelDescriptorFingerprint({ ...model, unknown: true } as never)).toThrow(
+      expect.objectContaining({ code: "invalid_input" }),
+    );
+    expect(() => modelDescriptorFingerprint({ ...model, dimensions: 0 } as never)).toThrow(
+      expect.objectContaining({ code: "invalid_input" }),
+    );
+  });
+
   it("binds canonical embedding input text and public kind", () => {
     expect(embeddingInputDigest({ kind: "state_snapshot", text: "Café paid" })).toBe(
       "6c7c437bdcbabc2aba2ac4dbb8e238b7052f657dfd48e4f17bc590a6951c51d7",
     );
     expect(() => embeddingInputDigest({ kind: "state_snapshot", text: " Cafe paid" })).toThrow();
+  });
+
+  it("strictly parses embedding identity inputs", () => {
+    expect(() => embeddingInputDigest({ kind: "other", text: "Café paid" } as never)).toThrow(
+      expect.objectContaining({ code: "invalid_input" }),
+    );
+    expect(() =>
+      embeddingInputDigest({ kind: "state_snapshot", text: "Café paid", unknown: true } as never),
+    ).toThrow(expect.objectContaining({ code: "invalid_input" }));
   });
 
   it("rejects Float32 overflow, nonfinite values, and zero norm", () => {
