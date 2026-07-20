@@ -1,5 +1,5 @@
+import { spawn } from "node:child_process";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   canonicalCaptureDigest,
@@ -25,6 +26,7 @@ const roots: string[] = [];
 const workspaceKey = "0123456789abcdef";
 const evidenceIds = ["11111111-1111-4111-8111-111111111111"];
 const evidenceDigests = ["a".repeat(64)];
+const packageDirectory = fileURLToPath(new URL("..", import.meta.url));
 
 function createRoot(): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "megasaver-lm2-catalog-")));
@@ -83,41 +85,75 @@ function writeCatalog(
   writeFileSync(path, `${JSON.stringify({ schemaVersion: 1, generation, entries })}\n`);
 }
 
+function holdCatalogLock(path: string): Promise<() => Promise<void>> {
+  const script = [
+    'import { closeSync, openSync } from "node:fs";',
+    'import { flockSync } from "fs-ext";',
+    'const descriptor = openSync(process.argv[1], "a+");',
+    'flockSync(descriptor, "exnb");',
+    'process.stdout.write("locked\\n");',
+    'process.stdin.once("data", () => { closeSync(descriptor); process.exit(0); });',
+  ].join("\n");
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ["--input-type=module", "--eval", script, path], {
+      cwd: packageDirectory,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.once("error", reject);
+    child.stdout.once("data", (chunk: Buffer) => {
+      if (chunk.toString() !== "locked\n") {
+        reject(new Error(`Catalog lock child did not acquire lock: ${stderr}`));
+        return;
+      }
+      resolve(
+        () =>
+          new Promise<void>((release, rejectRelease) => {
+            child.once("error", rejectRelease);
+            child.once("close", (code) => {
+              if (code === 0) release();
+              else rejectRelease(new Error(stderr));
+            });
+            child.stdin.end("release\n");
+          }),
+      );
+    });
+  });
+}
+
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
 describe("LM2 candidate catalog", () => {
-  it("keeps a published LM1 record usable when catalog persistence cannot acquire its lock", () => {
+  it("does not treat an existing catalog lock file as an active lock", () => {
     const root = createRoot();
     const catalog = createLm2CandidateCatalog({ storeRoot: root });
     const record = createRecord();
     writeFileSync(lm2CandidateCatalogLockPath(root, workspaceKey), "held\n");
 
-    expect(catalog.appendPublished(record)).toBe(false);
+    expect(catalog.appendPublished(record)).toBe(true);
     expect(createFileLm1Store({ storeRoot: root }).publish(record)).toMatchObject({
       inserted: true,
       record,
     });
   });
 
-  it("recovers a durably fenced stale lock but never removes a live owner's lock", () => {
+  it("fails closed without catalog writes while another process holds the advisory lock", async () => {
     const root = createRoot();
     const path = lm2CandidateCatalogLockPath(root, workspaceKey);
     const catalog = createLm2CandidateCatalog({ storeRoot: root });
-    writeFileSync(
-      path,
-      '{"schemaVersion":1,"pid":999999,"owner":"11111111-1111-4111-8111-111111111111"}\n',
-    );
-
+    const release = await holdCatalogLock(path);
+    try {
+      expect(catalog.appendPublished(createRecord())).toBe(false);
+      expect(() => readFileSync(lm2CandidateCatalogPath(root, workspaceKey), "utf8")).toThrow();
+    } finally {
+      await release();
+    }
     expect(catalog.appendPublished(createRecord())).toBe(true);
-    expect(existsSync(path)).toBe(false);
-    writeFileSync(
-      path,
-      `{"schemaVersion":1,"pid":${process.pid},"owner":"22222222-2222-4222-8222-222222222222"}\n`,
-    );
-    expect(catalog.appendPublished(createRecord(1))).toBe(false);
-    expect(existsSync(path)).toBe(true);
   });
 
   it("stores only bounded metadata for an LM1 capture", () => {
