@@ -153,3 +153,27 @@ describe("jwt detector — output frozen against the pre-fix pattern (fix spec �
     });
   }
 });
+
+// Every fixture in the equivalence corpus above carries an `eyJ`-prefixed
+// payload, because real JWTs do — so none of them notices if the payload's
+// `eyJ` anchor or a segment's `+` is dropped. Both mutations only ever ADD
+// matches, which is exactly what the corpus cannot see and what the
+// strict-subset-of-the-pre-fix-pattern invariant forbids: over-redaction strips
+// evidence the model needs to decide. Each row here is redacted by one such
+// mutant and left untouched by the shipped and pre-fix patterns alike.
+describe("jwt detector — strict subset of the pre-fix pattern, no over-redaction", () => {
+  const nonMatches: ReadonlyArray<readonly [string, string]> = [
+    ["a dotted non-eyJ payload", "trace eyJhbGciOiJIUzI1NiJ9.session.abc123"],
+    ["a dotted bundle filename", "see eyJlogger.v2.min bundle"],
+    ["an empty header segment", "eyJ.eyJa.b"],
+    ["an empty payload segment", "eyJa.eyJ.b"],
+    ["an empty signature segment", "eyJa.eyJb."],
+    ["every segment empty", "eyJ.eyJ."],
+  ];
+
+  for (const [label, input] of nonMatches) {
+    it(`leaves ${label} untouched`, () => {
+      expect(apply(input)).toBe(input);
+    });
+  }
+});
