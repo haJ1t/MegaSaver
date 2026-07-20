@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { workspaceKeySchema } from "@megasaver/shared";
+import { flockSync } from "fs-ext";
 import { z } from "zod";
 import { Lm1Error } from "./lm1-errors.js";
 import { type Lm1Record, lm1KindSchema, lm1RecordSchema } from "./lm1-model.js";
@@ -55,15 +56,6 @@ const cursorSchema = z
   .strict();
 type CatalogCursor = z.infer<typeof cursorSchema>;
 
-const catalogLockOwnerSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    pid: z.number().int().positive(),
-    owner: lowercaseUuidSchema,
-  })
-  .strict();
-type CatalogLockOwner = z.infer<typeof catalogLockOwnerSchema>;
-
 const pageRequestSchema = z
   .object({
     workspaceKey: workspaceKeySchema,
@@ -95,10 +87,6 @@ function catalogError(error: unknown): Lm2Error {
 
 function isNotFound(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
-}
-
-function isAlreadyExists(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error && error.code === "EEXIST";
 }
 
 function fsyncFile(path: string): void {
@@ -197,131 +185,22 @@ function writeCatalog(storeRoot: string, workspaceKey: string, catalog: Lm2Catal
   }
 }
 
-function sameLockOwner(left: CatalogLockOwner, right: CatalogLockOwner): boolean {
-  return left.pid === right.pid && left.owner === right.owner;
-}
-
-function serializeLockOwner(owner: CatalogLockOwner): string {
-  return `${JSON.stringify(owner)}\n`;
-}
-
-function readLockOwner(path: string): CatalogLockOwner {
-  assertLm1PathIsNotSymlink(path);
-  let raw: string;
-  try {
-    raw = readFileSync(path, "utf8");
-  } catch (error) {
-    throw catalogError(error);
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Lm2Error("write_failed", "LM2 candidate catalog lock is unreadable.");
-  }
-  const result = catalogLockOwnerSchema.safeParse(parsed);
-  if (!result.success || raw !== serializeLockOwner(result.data)) {
-    throw new Lm2Error("write_failed", "LM2 candidate catalog lock is invalid.");
-  }
-  return result.data;
-}
-
-function isKnownDeadProcess(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return false;
-  } catch (error) {
-    return error instanceof Error && "code" in error && error.code === "ESRCH";
-  }
-}
-
-function retireLock(path: string, expectedOwner: CatalogLockOwner): void {
-  const owner = readLockOwner(path);
-  if (!sameLockOwner(owner, expectedOwner)) {
-    throw new Lm2Error("write_failed", "LM2 candidate catalog lock ownership changed.");
-  }
-  const directory = dirname(path);
-  const retiredPath = join(directory, `.candidate-catalog-${expectedOwner.owner}.retired`);
-  assertLm1PathIsNotSymlink(retiredPath);
-  try {
-    renameSync(path, retiredPath);
-    fsyncDirectory(directory);
-    const retiredOwner = readLockOwner(retiredPath);
-    if (!sameLockOwner(retiredOwner, expectedOwner)) {
-      throw new Lm2Error("write_failed", "LM2 candidate catalog lock ownership changed.");
-    }
-    rmSync(retiredPath);
-    fsyncDirectory(directory);
-  } catch (error) {
-    throw catalogError(error);
-  }
-}
-
-function discardCreatedLock(path: string, owner: CatalogLockOwner): void {
-  const directory = dirname(path);
-  const retiredPath = join(directory, `.candidate-catalog-${owner.owner}.discarded`);
-  assertLm1PathIsNotSymlink(retiredPath);
-  try {
-    renameSync(path, retiredPath);
-    fsyncDirectory(directory);
-    rmSync(retiredPath);
-    fsyncDirectory(directory);
-  } catch (error) {
-    throw catalogError(error);
-  }
-}
-
-function createCatalogLock(path: string, owner: CatalogLockOwner): void {
-  let descriptor: number | undefined;
-  descriptor = openSync(path, "wx", 0o600);
-  let failure: unknown;
-  let closed = false;
-  try {
-    writeFileSync(descriptor, serializeLockOwner(owner));
-    fsyncSync(descriptor);
-  } catch (error) {
-    failure = error;
-  }
-  try {
-    closeSync(descriptor);
-    closed = true;
-  } catch (error) {
-    failure ??= error;
-  }
-  if (failure === undefined) return;
-  if (!closed) throw catalogError(failure);
-  try {
-    discardCreatedLock(path, owner);
-  } catch (cleanupError) {
-    throw catalogError(cleanupError);
-  }
-  throw catalogError(failure);
-}
-
-function acquireCatalogLock(path: string): CatalogLockOwner {
-  const owner: CatalogLockOwner = { schemaVersion: 1, pid: process.pid, owner: randomUUID() };
-  try {
-    createCatalogLock(path, owner);
-    return owner;
-  } catch (error) {
-    if (!isAlreadyExists(error)) throw catalogError(error);
-  }
-  const priorOwner = readLockOwner(path);
-  if (!isKnownDeadProcess(priorOwner.pid)) {
-    throw new Lm2Error("write_failed", "LM2 candidate catalog lock is held or ambiguous.");
-  }
-  retireLock(path, priorOwner);
-  try {
-    createCatalogLock(path, owner);
-    return owner;
-  } catch (error) {
-    throw catalogError(error);
-  }
-}
-
 function withCatalogLock<T>(storeRoot: string, workspaceKey: string, work: () => T): T {
   const path = lm2CandidateCatalogLockPath(storeRoot, workspaceKey);
-  const owner = acquireCatalogLock(path);
+  let descriptor: number | undefined;
+  try {
+    descriptor = openSync(path, "a+", 0o600);
+    flockSync(descriptor, "exnb");
+  } catch (error) {
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor);
+      } catch (closeError) {
+        throw catalogError(closeError);
+      }
+    }
+    throw catalogError(error);
+  }
   let result: T | undefined;
   let workFailure: unknown;
   try {
@@ -329,11 +208,18 @@ function withCatalogLock<T>(storeRoot: string, workspaceKey: string, work: () =>
   } catch (error) {
     workFailure = error;
   }
+  let releaseFailure: unknown;
   try {
-    retireLock(path, owner);
+    flockSync(descriptor, "un");
   } catch (error) {
-    throw catalogError(error);
+    releaseFailure = error;
   }
+  try {
+    closeSync(descriptor);
+  } catch (error) {
+    releaseFailure ??= error;
+  }
+  if (releaseFailure !== undefined) throw catalogError(releaseFailure);
   if (workFailure !== undefined) throw workFailure;
   return result as T;
 }

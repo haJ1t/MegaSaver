@@ -30,6 +30,7 @@ it("keeps LM1 package dependencies limited to its approved contracts", () => {
   expect(manifest.dependencies).toEqual({
     "@megasaver/retrieval": "workspace:*",
     "@megasaver/shared": "workspace:*",
+    "fs-ext": "^2.1.1",
     zod: "^3.24.1",
   });
 });
