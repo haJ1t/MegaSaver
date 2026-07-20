@@ -316,6 +316,85 @@ describe("runSaverChecks", () => {
     expect(c?.reason).toContain("mega proxy enable");
   });
 
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  it("PASSes liveness when the only gap is a workspace older than the window", () => {
+    const bin = fakeBinary();
+    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    // A dead worktree from six days ago: invoked, never completed. This is the
+    // reported bug — it used to fail the check forever.
+    const stale = NOW - 6 * DAY_MS;
+    recordInvocationHeartbeat(storeRoot, "wk-dead", iso(stale), stale);
+    const checks = runSaverChecks({
+      settingsPath,
+      storeRoot,
+      spawn: advancingSpawn,
+      now: () => NOW,
+    });
+    expect(find(checks, "saver-liveness")?.pass).toBe(true);
+  });
+
+  it("still FAILs liveness for a gap inside the window", () => {
+    const bin = fakeBinary();
+    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const recent = NOW - 60_000;
+    recordInvocationHeartbeat(storeRoot, "wk-live", iso(recent), recent);
+    const checks = runSaverChecks({
+      settingsPath,
+      storeRoot,
+      spawn: () => ({ status: 0 }),
+      now: () => NOW,
+    });
+    const liveness = find(checks, "saver-liveness");
+    expect(liveness?.pass).toBe(false);
+    expect(liveness?.value).toContain("wk-live");
+  });
+
+  it("ignores a stale gap even when a healthy recent workspace exists", () => {
+    const bin = fakeBinary();
+    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const stale = NOW - 6 * DAY_MS;
+    recordInvocationHeartbeat(storeRoot, "wk-dead", iso(stale), stale);
+    recordInvocationHeartbeat(storeRoot, "wk-ok", iso(NOW - 1000), NOW - 1000);
+    recordCompletionHeartbeat(storeRoot, "wk-ok", iso(NOW - 900), NOW - 900);
+    const checks = runSaverChecks({
+      settingsPath,
+      storeRoot,
+      spawn: advancingSpawn,
+      now: () => NOW,
+    });
+    expect(find(checks, "saver-liveness")?.pass).toBe(true);
+  });
+
+  it("PASSes liveness for a failure older than the window", () => {
+    const bin = fakeBinary();
+    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const stale = NOW - 6 * DAY_MS;
+    recordInvocationHeartbeat(storeRoot, "wk-old", iso(stale), stale);
+    recordFailureHeartbeat(storeRoot, "wk-old", "record", iso(stale), stale);
+    const checks = runSaverChecks({
+      settingsPath,
+      storeRoot,
+      spawn: advancingSpawn,
+      now: () => NOW,
+    });
+    expect(find(checks, "saver-liveness")?.pass).toBe(true);
+  });
+
+  it("treats an invocation exactly at the window edge as inside it", () => {
+    const bin = fakeBinary();
+    const settingsPath = writeHookSettings(`${bin} hooks saver`);
+    const edge = NOW - DAY_MS;
+    recordInvocationHeartbeat(storeRoot, "wk-edge", iso(edge), edge);
+    const checks = runSaverChecks({
+      settingsPath,
+      storeRoot,
+      spawn: () => ({ status: 0 }),
+      now: () => NOW,
+    });
+    expect(find(checks, "saver-liveness")?.pass).toBe(false);
+  });
+
   it("saver-proxy-route: WARNs (pass + churn note) when routeReapplies > 0", () => {
     const settingsPath = writeHookSettings(`${fakeBinary()} hooks saver`);
     writeControlState(storeRoot, proxyControl({}));
