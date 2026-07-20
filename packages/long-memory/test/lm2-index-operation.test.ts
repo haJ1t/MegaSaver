@@ -2,6 +2,23 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+let failNextFsync = false;
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    fsyncSync(descriptor: number) {
+      if (failNextFsync) {
+        failNextFsync = false;
+        throw new Error("injected post-link fsync failure");
+      }
+      actual.fsyncSync(descriptor);
+    },
+  };
+});
+
 import { embeddingInputDigest, modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import {
   lm2PendingTemporaryName,
@@ -22,7 +39,10 @@ import {
   workspaceKey,
 } from "./lm2-vector-store-fixtures.js";
 
-afterEach(cleanupRoots);
+afterEach(() => {
+  failNextFsync = false;
+  cleanupRoots();
+});
 
 function deadline() {
   const controller = new AbortController();
@@ -202,6 +222,57 @@ describe("LM2 index operation", () => {
     await expect(
       store.beginIndexOperation({ workspaceKey, model, deadline: deadline() }),
     ).resolves.toEqual({ status: "invalid", quotaRecovery: "blocked_pending" });
+  });
+
+  it("reports a publication committed by post-link recovery exactly once", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const record = createCandidate(1);
+    const store = createLm2VectorStore({ storeRoot: root });
+    const operation = await store.beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: deadline(),
+    });
+    expect(operation.status).toBe("ready");
+    if (operation.status !== "ready") return;
+
+    const publish = await operation.publishBatch({
+      records: [record],
+      assertEgressAllowed: async () => true,
+      recheckEvidence: async () => {
+        failNextFsync = true;
+        return true;
+      },
+      embed: async () => ({
+        modelFingerprint: modelDescriptorFingerprint(model),
+        vectors: [[1, 2, 3]],
+      }),
+    });
+    expect(publish).toEqual({ published: [record.id], reason: "write_failed" });
+
+    const ledgerPath = vectorQuotaLedgerPath(root, workspaceKey);
+    expect(lm2QuotaLedgerSchema.parse(JSON.parse(readFileSync(ledgerPath, "utf8")))).toMatchObject({
+      committedThroughAllocation: 1,
+      nextAllocationSequence: 2,
+      pending: null,
+    });
+    const retryEmbed = vi.fn();
+    await expect(
+      operation.publishBatch({
+        records: [record],
+        assertEgressAllowed: async () => true,
+        recheckEvidence: async () => true,
+        embed: retryEmbed,
+      }),
+    ).resolves.toEqual({ published: [], reason: null });
+    expect(retryEmbed).not.toHaveBeenCalled();
+    expect(lm2QuotaLedgerSchema.parse(JSON.parse(readFileSync(ledgerPath, "utf8")))).toMatchObject({
+      committedThroughAllocation: 1,
+      nextAllocationSequence: 2,
+      pending: null,
+    });
+    await operation.finalize();
   });
 
   it("recovers an exact named prefix and a proven-absent suffix", async () => {
