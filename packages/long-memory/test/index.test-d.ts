@@ -62,6 +62,7 @@ it("preserves LM0 exports while adding LM1 contracts", () => {
   expect(longMemory).not.toHaveProperty("createLm1CaptureService");
   expect(longMemory).not.toHaveProperty("createLm1RecallService");
   expectTypeOf(longMemory.createLm1Runtime).toBeFunction();
+  expectTypeOf(longMemory.createLm2Runtime).toBeFunction();
 });
 
 it("adds LM2 contracts without removing LM0 or LM1 root imports", () => {
@@ -84,6 +85,15 @@ it("adds LM2 contracts without removing LM0 or LM1 root imports", () => {
     provider: string;
     dimensions: number;
   }>();
+  expectTypeOf<longMemory.Lm2RuntimeConfig>().toMatchTypeOf<{
+    activeRecallModelFingerprint: string;
+  }>();
+  expectTypeOf<longMemory.Lm2RuntimeInput["embedding"]>().toEqualTypeOf<
+    longMemory.EmbeddingPort | undefined
+  >();
+  expectTypeOf<longMemory.Lm2RuntimeInput["remoteApproval"]>().toEqualTypeOf<
+    longMemory.RemoteEmbeddingApprovalPort | undefined
+  >();
   expectTypeOf<longMemory.EmbeddingPort>().toMatchTypeOf<{
     egress: "local" | "remote";
   }>();
@@ -157,5 +167,8 @@ it("adds LM2 contracts without removing LM0 or LM1 root imports", () => {
     | "remote_approval_denied"
     | "quota_ledger_invalid"
     | "quota_recovery_pending"
+    | "embedding_port_unreadable"
+    | "embedding_egress_mismatch"
+    | "approval_port_unreadable"
   >();
 });
