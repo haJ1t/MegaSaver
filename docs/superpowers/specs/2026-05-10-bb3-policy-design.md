@@ -313,10 +313,17 @@ tuple-pinned enum in BB3 (the epic §17 table lists no
 | aws_access_key    | `AKIA[0-9A-Z]{16}`                                     | `AKIA[REDACTED]`           |
 | aws_secret_key    | `(?<=aws_secret_access_key\s*=\s*)[A-Za-z0-9/+]{40}`   | `[REDACTED]`               |
 | bearer_token      | `(?i:bearer\s+)[A-Za-z0-9\-._~+/=]{20,}`               | `Bearer [REDACTED]`        |
-| jwt               | `eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+` | `eyJ[REDACTED]`            |
+| jwt †             | `(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+` | `eyJ[REDACTED]` |
 | private_key_block | `-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]+?-----END`   | `[REDACTED PRIVATE KEY]`   |
 | env_value         | `(?<=^[A-Z_]+=)["'].+?["']`                            | `"[REDACTED]"`             |
 | db_url            | `(?:postgres|postgresql|mysql|mongodb)://[^\s/]+:[^\s@]+@\S+` | `[scheme]://[REDACTED]@[host]` |
+
+† `jwt` amended 2026-07-20 by
+[[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]] — a leading
+lookbehind was added to remove a quadratic ReDoS (8.4 s at 313 KiB). The
+behavior difference is intended and scoped by that spec §5: a JWT preceded
+directly by a base64url character, including `-` and `_`, no longer redacts.
+The lock otherwise stands; amend this row, never rewrite it silently.
 
 Order is application order (longest/most-specific guards run such
 that `anthropic_key` is attempted before `openai_key` since
