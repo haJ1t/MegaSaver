@@ -5973,3 +5973,22 @@ or claimed. Trusted-root compromise remains an explicit limitation. (source:
 `benchmarks/longmemeval-v2/verify-official-artifacts.mjs`,
 `benchmarks/longmemeval-v2/evidence-schema.json`,
 `packages/long-memory/test/lm2-completion-integration.test.ts`)
+
+## [2026-07-20 23:02 +03] fix | LM2 architecture and evidence closure
+
+Release-blocker review found that the benchmark runtime still traversed the
+product LM2/LM1 selector, three LM1 source files exceeded the repository limit,
+and full evidence qualification could accept self-described manifests,
+transport, aggregate, and builder artifacts. The benchmark path now ranks raw
+public projections and formats them only through `Lm2BenchmarkContextBuilder`;
+a cross-path regression preserves the explicit difference from LM1 correction
+selection. LM1 internals are split behind compatible facades and a source gate
+covers all production long-memory TypeScript and benchmark scripts. Full
+qualification now executes the JSON Schema, rebuilds both manifests from pinned
+trajectories, binds the exact transport executable and Mega Saver commit,
+recomputes official domain/combined metrics and latency summaries, cross-binds
+telemetry, and byte-compares freshly built package, overview/LAFS, and tar
+contents. Evidence: 42/42 long-memory files and 361/361 tests, 26 Python tests
+plus one optional skip, and root `pnpm verify` 56/56. No authoritative completed
+two-domain run was available, so no official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)
