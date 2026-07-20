@@ -5903,3 +5903,16 @@ verify` 56/56. No official score was run or claimed; fresh independent
 benchmark-contract re-review remains pending. (source:
 `.superpowers/sdd/task-5-report.md`,
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`)
+
+## [2026-07-20 20:14 +03] fix | LM2 benchmark final closure hardening
+
+The next Task 5 closure review found two remaining Python admission gaps and an
+unsafe rejected-query telemetry path. Regression REDs showed invalid canonical
+timestamps, empty question IDs, and malformed local-model values crossing the
+Python boundary; pre-open rejections were not durable, and FIFO/cache-parent
+substitution did not fail closed. Admission now validates those pinned fields
+and UTF-16 model limits before transport. Rejected queries create a redacted,
+durable stream below a random private root using component-anchored descriptors,
+nonblocking no-follow opens, link/mode/owner checks, and descriptor/path identity
+checks. Python official-base/installer/LM0 coverage is 23/23 with the real built
+transport; no official score is claimed. (source: `.superpowers/sdd/task-5-report.md`)

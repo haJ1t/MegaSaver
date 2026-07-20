@@ -1,6 +1,7 @@
 from __future__ import annotations
+from datetime import datetime
 from hashlib import sha256
-import json, math, os, secrets, stat, subprocess, threading, unicodedata
+import json, math, os, re, secrets, stat, subprocess, threading, unicodedata
 from pathlib import Path
 from typing import Any
 from memory_modules.memory import Memory, MemoryContextItem, register_memory
@@ -13,28 +14,21 @@ HAYSTACK_CHECKSUMS = {"small": "9b5301defb23a088a5f06e45ff8d5f35e569d78305a66d49
 CONTROL_NAME = "megasaver_lm2_control_v1.json"
 CONFIG_KEYS = {"manifest_path", "manifest_digest", "data_revision", "cache_parent", "transport_command", "profile", "embedding_egress", "model", "token_budget", "query_timeout_ms", "index_batch_timeout_ms", "rpc_timeout_seconds"}
 def _require(condition: bool, message: str) -> None:
-    if not condition:
-        raise RuntimeError(message)
+    if not condition: raise RuntimeError(message)
 def _number(value: int | float) -> str:
     if isinstance(value, int):
-        _require(abs(value) <= 9_007_199_254_740_991, "Unsafe benchmark integer")
-        return str(value)
+        _require(abs(value) <= 9_007_199_254_740_991, "Unsafe benchmark integer"); return str(value)
     _require(math.isfinite(value), "Non-finite benchmark value")
     if value == 0: return "0"
-    sign = "-" if value < 0 else ""
-    text = repr(abs(value)).lower()
+    sign = "-" if value < 0 else ""; text = repr(abs(value)).lower()
     if "e" not in text: return sign + (text[:-2] if text.endswith(".0") else text)
-    coefficient, exponent_text = text.split("e")
-    exponent = int(exponent_text)
-    integer, _, fraction = coefficient.partition(".")
-    digits = integer + fraction
-    point = len(integer) + exponent
+    coefficient, exponent_text = text.split("e"); exponent = int(exponent_text)
+    integer, _, fraction = coefficient.partition("."); digits = integer + fraction; point = len(integer) + exponent
     if 1e-6 <= abs(value) < 1e21:
         if point <= 0: return sign + "0." + "0" * (-point) + digits
         if point >= len(digits): return sign + digits + "0" * (point - len(digits))
         return sign + digits[:point] + "." + digits[point:]
-    mantissa = digits[0] + (("." + digits[1:]) if len(digits) > 1 else "")
-    scientific_exponent = point - 1
+    mantissa = digits[0] + (("." + digits[1:]) if len(digits) > 1 else ""); scientific_exponent = point - 1
     return sign + mantissa + "e" + ("+" if scientific_exponent >= 0 else "") + str(scientific_exponent)
 def _canonical(value: Any) -> str:
     if value is None: return "null"
@@ -52,45 +46,46 @@ def _open_file(path: Path) -> tuple[int, os.stat_result]:
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
         descriptor = os.open(path, flags)
-    except OSError as error:
-        raise RuntimeError("Benchmark file is unavailable") from error
+    except OSError as error: raise RuntimeError("Benchmark file is unavailable") from error
     info = os.fstat(descriptor)
     try:
-        _require(stat.S_ISREG(info.st_mode), "Benchmark file is not regular")
-        _require(info.st_nlink == 1, "Benchmark file has aliases")
-        _require(stat.S_IMODE(info.st_mode) == 0o600, "Benchmark file mode is unsafe")
+        _require(stat.S_ISREG(info.st_mode), "Benchmark file is not regular"); _require(info.st_nlink == 1, "Benchmark file has aliases"); _require(stat.S_IMODE(info.st_mode) == 0o600, "Benchmark file mode is unsafe")
         if hasattr(os, "geteuid"): _require(info.st_uid == os.geteuid(), "Benchmark file owner mismatch")
-        current = path.lstat()
-        _require((current.st_dev, current.st_ino) == (info.st_dev, info.st_ino), "Benchmark file identity changed")
+        current = path.lstat(); _require((current.st_dev, current.st_ino) == (info.st_dev, info.st_ino), "Benchmark file identity changed")
         return descriptor, info
     except BaseException:
         os.close(descriptor); raise
 def _safe_file(path: Path, maximum: int = 64 * 1024 * 1024) -> bytes:
     descriptor, info = _open_file(path)
     try:
-        _require(info.st_size <= maximum, "Benchmark file is too large")
-        chunks: list[bytes] = []
-        remaining = info.st_size
+        _require(info.st_size <= maximum, "Benchmark file is too large"); chunks: list[bytes] = []; remaining = info.st_size
         while remaining:
-            chunk = os.read(descriptor, min(1024 * 1024, remaining))
-            _require(chunk != b"", "Benchmark file changed while reading")
-            chunks.append(chunk)
-            remaining -= len(chunk)
+            chunk = os.read(descriptor, min(1024 * 1024, remaining)); _require(chunk != b"", "Benchmark file changed while reading"); chunks.append(chunk); remaining -= len(chunk)
         return b"".join(chunks)
-    finally:
-        os.close(descriptor)
+    finally: os.close(descriptor)
 def _safe_dir(path: Path) -> os.stat_result:
     try:
         info = path.lstat()
-    except OSError as error:
-        raise RuntimeError("Benchmark directory is unavailable") from error
-    _require(stat.S_ISDIR(info.st_mode) and not path.is_symlink(), "Unsafe benchmark directory")
-    _require(stat.S_IMODE(info.st_mode) == 0o700, "Benchmark directory mode is unsafe")
+    except OSError as error: raise RuntimeError("Benchmark directory is unavailable") from error
+    _require(stat.S_ISDIR(info.st_mode) and not path.is_symlink(), "Unsafe benchmark directory"); _require(stat.S_IMODE(info.st_mode) == 0o700, "Benchmark directory mode is unsafe")
     if hasattr(os, "geteuid"): _require(info.st_uid == os.geteuid(), "Benchmark directory owner mismatch")
     return info
+def _anchor_dir(path: Path) -> tuple[int, os.stat_result]:
+    descriptor: int | None = None
+    try:
+        _require(path.is_absolute() and ".." not in path.parts, "Benchmark directory path is unsafe")
+        flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0); descriptor = os.open(path.anchor, flags)
+        for part in path.parts[1:]:
+            child = os.open(part, flags, dir_fd=descriptor); os.close(descriptor); descriptor = child
+        info = os.fstat(descriptor); _require(stat.S_ISDIR(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o700, "Benchmark directory mode is unsafe")
+        if hasattr(os, "geteuid"): _require(info.st_uid == os.geteuid(), "Benchmark directory owner mismatch")
+        return descriptor, info
+    except BaseException as error:
+        if descriptor is not None: os.close(descriptor)
+        if isinstance(error, OSError): raise RuntimeError("Benchmark directory is unavailable") from error
+        raise
 def _json_file(path: Path) -> dict[str, Any]:
-    raw = _safe_file(path)
-    value = json.loads(raw)
+    raw = _safe_file(path); value = json.loads(raw)
     _require(isinstance(value, dict) and raw == (_canonical(value) + "\n").encode(), "Benchmark JSON is not canonical")
     return value
 def _sha(value: object) -> bool:
@@ -99,39 +94,39 @@ def _exact(value: object, keys: set[str]) -> bool:
     return isinstance(value, dict) and set(value) == keys
 def _ref(value: object) -> bool:
     return _exact(value, {"id", "fullObjectDigest"}) and isinstance(value["id"], str) and bool(value["id"].strip()) and _sha(value["fullObjectDigest"])
+def _timestamp(value: object) -> bool:
+    if not isinstance(value, str) or re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)", value) is None: return False
+    try: datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError: return False
+    return True
 def _validate_manifest(manifest: object) -> dict[str, Any]:
     root_keys = {"schemaVersion", "officialCommit", "data", "domain", "tier", "questions", "trajectories"}
     _require(_exact(manifest, root_keys), "LM2 manifest fields mismatch")
-    data = manifest["data"]
-    _require(_exact(data, {"repoId", "revision", "checksums"}), "LM2 manifest data mismatch")
-    tier = manifest["tier"]
-    expected_checksums = {**CHECKSUMS, "haystack": HAYSTACK_CHECKSUMS.get(tier)}
+    data = manifest["data"]; _require(_exact(data, {"repoId", "revision", "checksums"}), "LM2 manifest data mismatch")
+    tier = manifest["tier"]; expected_checksums = {**CHECKSUMS, "haystack": HAYSTACK_CHECKSUMS.get(tier)}
     _require(manifest["schemaVersion"] == MANIFEST_VERSION and manifest["officialCommit"] == OFFICIAL_COMMIT, "LM2 manifest version mismatch")
     _require(data == {"repoId": REPO_ID, "revision": DATA_REVISION, "checksums": expected_checksums}, "LM2 manifest data contract mismatch")
     _require(manifest["domain"] in {"web", "enterprise"} and tier in HAYSTACK_CHECKSUMS, "LM2 manifest selection mismatch")
     trajectories, questions = manifest["trajectories"], manifest["questions"]
     _require(isinstance(trajectories, list) and trajectories and isinstance(questions, list) and questions, "LM2 manifest rows missing")
-    trajectory_digests: dict[str, str] = {}
-    projection_keys = {"id", "kind", "sourceKind", "sourceIndex", "text", "observedAt", "sourceDigest", "embeddingInputDigest"}
+    trajectory_digests: dict[str, str] = {}; projection_keys = {"id", "kind", "sourceKind", "sourceIndex", "text", "observedAt", "sourceDigest", "embeddingInputDigest"}
     for row in trajectories:
         _require(_exact(row, {"id", "fullObjectDigest", "projections"}) and _ref({"id": row["id"], "fullObjectDigest": row["fullObjectDigest"]}), "LM2 trajectory row mismatch")
         _require(row["id"] not in trajectory_digests and isinstance(row["projections"], list) and row["projections"], "LM2 trajectory duplicate or empty")
         trajectory_digests[row["id"]] = row["fullObjectDigest"]
         for projection in row["projections"]:
             _require(_exact(projection, projection_keys), "LM2 projection fields mismatch")
-            text, projection_id = projection["text"], projection["id"]
-            _require(projection["kind"] == "state_snapshot" and projection["sourceKind"] in {"states", "content"}, "LM2 projection kind mismatch")
+            text, projection_id = projection["text"], projection["id"]; _require(projection["kind"] == "state_snapshot" and projection["sourceKind"] in {"states", "content"}, "LM2 projection kind mismatch")
             _require(isinstance(projection["sourceIndex"], int) and not isinstance(projection["sourceIndex"], bool) and projection["sourceIndex"] >= 0, "LM2 projection index mismatch")
-            _require(isinstance(projection_id, str) and len(projection_id) == 36 and projection_id == projection_id.lower() and projection_id[14] == "5" and projection_id[19] in "89ab" and all(char in "0123456789abcdef" for char in projection_id.replace("-", "")) and isinstance(projection["observedAt"], str), "LM2 projection identity mismatch")
+            _require(isinstance(projection_id, str) and len(projection_id) == 36 and projection_id == projection_id.lower() and projection_id[14] == "5" and projection_id[19] in "89ab" and all(char in "0123456789abcdef" for char in projection_id.replace("-", "")) and _timestamp(projection["observedAt"]), "LM2 projection identity mismatch")
             _require(isinstance(text, str) and text and len(text.encode("utf-16-le")) // 2 <= 50_000 and _sha(projection["sourceDigest"]), "LM2 projection content mismatch")
             embedding = sha256(("megasaver.long-memory.lm2.embedding-input.v1\0" + _canonical({"kind": "state_snapshot", "text": text})).encode()).hexdigest()
             _require(projection["embeddingInputDigest"] == embedding, "LM2 projection embedding mismatch")
-    question_keys = {"questionId", "domain", "tier", "questionType", "questionText", "questionTextDigest", "imagePresent", "trajectories", "haystackChainDigest"}
-    seen: set[str] = set()
+    question_keys = {"questionId", "domain", "tier", "questionType", "questionText", "questionTextDigest", "imagePresent", "trajectories", "haystackChainDigest"}; seen: set[str] = set()
     for question in questions:
         _require(_exact(question, question_keys), "LM2 question fields mismatch")
         refs = question["trajectories"]
-        _require(isinstance(question["questionId"], str) and question["questionId"] not in seen and question["domain"] == manifest["domain"] and question["tier"] == tier, "LM2 question selection mismatch")
+        _require(isinstance(question["questionId"], str) and question["questionId"] == question["questionId"].strip() and bool(question["questionId"]) and question["questionId"] not in seen and question["domain"] == manifest["domain"] and question["tier"] == tier, "LM2 question selection mismatch")
         _require(isinstance(question["questionType"], str) and question["questionType"].strip() and isinstance(question["questionText"], str) and question["questionText"].strip(), "LM2 question text mismatch")
         _require(isinstance(question["imagePresent"], bool) and isinstance(refs, list) and all(_ref(ref) and trajectory_digests.get(ref["id"]) == ref["fullObjectDigest"] for ref in refs), "LM2 question trajectory mismatch")
         _require(question["questionTextDigest"] == _digest(question["questionText"]) and question["haystackChainDigest"] == _digest(refs), "LM2 question digest mismatch")
@@ -149,50 +144,39 @@ class MegaSaverLm2HybridMemory(Memory):
         if not _sha(memory_params["manifest_digest"]): raise ValueError("LM2 benchmark manifest digest is invalid")
         if memory_params["data_revision"] != DATA_REVISION: raise ValueError("LM2 benchmark data revision mismatch")
         if memory_params["embedding_egress"] != "local" or memory_params["profile"] not in {"safe", "adaptive"}: raise ValueError("LM2 benchmark embeddings must be local")
-        command = memory_params.get("transport_command")
-        model = memory_params.get("model")
+        command = memory_params.get("transport_command"); model = memory_params.get("model")
         if not isinstance(command, list) or not 1 <= len(command) <= 16 or not all(isinstance(part, str) and part for part in command): raise ValueError("LM2 benchmark transport command is invalid")
-        if not isinstance(model, dict) or set(model) != {"provider", "modelId", "revision", "dimensions", "embeddingInputVersion"} or model.get("provider") != "local": raise ValueError("LM2 benchmark model must be local")
+        model_keys = {"provider", "modelId", "revision", "dimensions", "embeddingInputVersion"}; canonical_model_string = lambda key, limit: isinstance(model.get(key), str) and 0 < len(model[key].encode("utf-16-le")) // 2 <= limit and model[key] == unicodedata.normalize("NFC", model[key]).strip()
+        if not isinstance(model, dict) or set(model) != model_keys or model.get("provider") != "local" or not canonical_model_string("provider", 128) or not canonical_model_string("modelId", 256) or not canonical_model_string("revision", 256) or not isinstance(model.get("dimensions"), int) or isinstance(model.get("dimensions"), bool) or not 1 <= model["dimensions"] <= 4096 or model.get("embeddingInputVersion") != "lm2-v1": raise ValueError("LM2 benchmark model must be local and canonical")
         integer_bounds = {"token_budget": 100_000, "query_timeout_ms": 2_000, "index_batch_timeout_ms": 15_000}
         if any(not isinstance(memory_params.get(key), int) or isinstance(memory_params.get(key), bool) or not 1 <= memory_params[key] <= bound for key, bound in integer_bounds.items()): raise ValueError("LM2 benchmark numeric config is invalid")
         timeout = memory_params.get("rpc_timeout_seconds")
         if not isinstance(timeout, (int, float)) or isinstance(timeout, bool) or timeout <= 0: raise ValueError("LM2 benchmark RPC timeout is invalid")
-        self._instance_token = secrets.token_hex(16)
-        self._sentinel_token: str | None = None
-        self._chain: list[dict[str, str]] = []
-        self._chain_digest = _digest([])
-        self._lock = threading.RLock()
-        self._query_metadata = threading.local()
-        self._request_number = 0
+        self._instance_token = secrets.token_hex(16); self._rejected_token = secrets.token_hex(16)
+        self._rejected_identity: tuple[tuple[int, int], tuple[int, int], tuple[int, int]] | None = None
+        self._sentinel_token: str | None = None; self._chain: list[dict[str, str]] = []; self._chain_digest = _digest([])
+        self._lock = threading.RLock(); self._query_metadata = threading.local(); self._request_number = 0
     def _transport_config(self) -> dict[str, object]:
         mapping = {"manifestPath": "manifest_path", "manifestDigest": "manifest_digest", "dataRevision": "data_revision", "cacheParent": "cache_parent", "profile": "profile", "embeddingEgress": "embedding_egress", "model": "model", "tokenBudget": "token_budget", "queryTimeoutMs": "query_timeout_ms", "indexBatchTimeoutMs": "index_batch_timeout_ms"}
         return {target: self.memory_params[source] for target, source in mapping.items()}
     def _call(self, payload: dict[str, object]) -> dict[str, Any]:
-        self._request_number += 1
-        request_id = f"lm2-{self._request_number}"
-        request = {"id": request_id, **payload}
+        self._request_number += 1; request_id = f"lm2-{self._request_number}"; request = {"id": request_id, **payload}
         completed = subprocess.run(list(self.memory_params["transport_command"]), input=json.dumps(request, separators=(",", ":")) + "\n", text=True, capture_output=True, timeout=float(self.memory_params["rpc_timeout_seconds"]), check=False)
         _require(completed.returncode == 0, "LM2 benchmark transport failed")
-        lines = completed.stdout.splitlines()
-        _require(len(lines) == 1, "LM2 benchmark transport returned invalid output")
-        response = json.loads(lines[0])
+        lines = completed.stdout.splitlines(); _require(len(lines) == 1, "LM2 benchmark transport returned invalid output"); response = json.loads(lines[0])
         _require(isinstance(response, dict) and response.get("id") == request_id and response.get("ok") is True, "LM2 benchmark transport rejected the operation")
-        result = response.get("result")
-        _require(isinstance(result, dict), "LM2 benchmark transport result is invalid")
+        result = response.get("result"); _require(isinstance(result, dict), "LM2 benchmark transport result is invalid")
         return result
     def _ensure_open(self) -> None:
         if self._sentinel_token is not None: return
         result = self._call({"op": "open", "config": self._transport_config(), "instanceToken": self._instance_token})
-        token = result.get("sentinelToken")
-        chain_digest = result.get("chainDigest")
+        token = result.get("sentinelToken"); chain_digest = result.get("chainDigest")
         _require(isinstance(token, str) and len(token) == 32 and isinstance(chain_digest, str), "LM2 open result is invalid")
-        self._sentinel_token = token
-        self._chain_digest = chain_digest
+        self._sentinel_token = token; self._chain_digest = chain_digest
     def _manifest(self) -> dict[str, Any]:
         raw = _safe_file(Path(str(self.memory_params["manifest_path"])), 2 * 1024 * 1024 * 1024)
         _require(raw.endswith(b"\n") and sha256(raw[:-1]).hexdigest() == self.memory_params["manifest_digest"], "LM2 manifest digest mismatch")
-        manifest = json.loads(raw)
-        _require((_canonical(manifest) + "\n").encode() == raw, "LM2 manifest is not canonical")
+        manifest = json.loads(raw); _require((_canonical(manifest) + "\n").encode() == raw, "LM2 manifest is not canonical")
         return _validate_manifest(manifest)
     def _next_trajectory(self, trajectory: dict[str, object]) -> dict[str, str] | None:
         manifest = self._manifest()
@@ -221,18 +205,34 @@ class MegaSaverLm2HybridMemory(Memory):
         return next((row for row in questions if isinstance(row, dict) and row.get("questionId") == question_id and row.get("questionText") == normalized and row.get("questionTextDigest") == _digest(normalized) and row.get("haystackChainDigest") == self._chain_digest), None)
     def _rejected_telemetry(self, question_id: str, image_present: bool) -> dict[str, object]:
         telemetry = {"profile": self.memory_params["profile"], "semanticStatus": "rejected", "modelFingerprint": _digest(self.memory_params["model"]), "candidateCount": 0, "selectionCount": 0, "latencyMs": 0, "questionId": question_id, "questionType": "unknown", "imagePresent": image_present, "imageUsed": False}
-        if self._sentinel_token is not None:
-            run = Path(str(self.memory_params["cache_parent"])) / f"instance-{self._instance_token}"
-            _safe_dir(run); _safe_dir(run / "telemetry")
-            path = run / "telemetry" / "queries.jsonl"
-            descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0))
-            try:
-                info = os.fstat(descriptor)
-                _require(stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600, "LM2 telemetry file is unsafe")
-                if hasattr(os, "geteuid"): _require(info.st_uid == os.geteuid(), "LM2 telemetry owner mismatch")
-                os.write(descriptor, (_canonical(telemetry) + "\n").encode()); os.fsync(descriptor)
-            finally:
-                os.close(descriptor)
+        parent, root, target = None, None, None
+        try:
+            parent, parent_info = _anchor_dir(Path(str(self.memory_params["cache_parent"])))
+            parent_id = (parent_info.st_dev, parent_info.st_ino); creating = self._rejected_identity is None
+            if not creating: _require(parent_id == self._rejected_identity[0], "LM2 telemetry parent identity changed")
+            root_name = f"rejected-{self._rejected_token}"
+            if creating: os.mkdir(root_name, 0o700, dir_fd=parent); os.fsync(parent)
+            root = os.open(root_name, os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0), dir_fd=parent)
+            root_info = os.fstat(root); root_current = os.stat(root_name, dir_fd=parent, follow_symlinks=False); root_id = (root_info.st_dev, root_info.st_ino)
+            _require(stat.S_ISDIR(root_info.st_mode) and stat.S_IMODE(root_info.st_mode) == 0o700 and root_id == (root_current.st_dev, root_current.st_ino), "LM2 telemetry directory is unsafe")
+            if hasattr(os, "geteuid"): _require(root_info.st_uid == os.geteuid(), "LM2 telemetry directory owner mismatch")
+            if not creating: _require(root_id == self._rejected_identity[1], "LM2 telemetry directory identity changed")
+            flags = os.O_WRONLY | os.O_APPEND | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
+            if creating: flags |= os.O_CREAT | os.O_EXCL
+            target = os.open("queries.jsonl", flags, 0o600, dir_fd=root)
+            info = os.fstat(target); current = os.stat("queries.jsonl", dir_fd=root, follow_symlinks=False); file_id = (info.st_dev, info.st_ino)
+            _require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o600 and file_id == (current.st_dev, current.st_ino), "LM2 telemetry file is unsafe")
+            if hasattr(os, "geteuid"): _require(info.st_uid == os.geteuid(), "LM2 telemetry owner mismatch")
+            if not creating: _require(file_id == self._rejected_identity[2], "LM2 telemetry file identity changed")
+            raw = (_canonical(telemetry) + "\n").encode(); _require(os.write(target, raw) == len(raw), "LM2 telemetry write was incomplete"); os.fsync(target)
+            final = os.fstat(target); after = os.stat("queries.jsonl", dir_fd=root, follow_symlinks=False); root_final = os.fstat(root); root_after = os.stat(root_name, dir_fd=parent, follow_symlinks=False)
+            _require(final.st_nlink == 1 and stat.S_IMODE(final.st_mode) == 0o600 and file_id == (final.st_dev, final.st_ino) == (after.st_dev, after.st_ino) and root_id == (root_final.st_dev, root_final.st_ino) == (root_after.st_dev, root_after.st_ino) and stat.S_IMODE(root_final.st_mode) == 0o700 and (not hasattr(os, "geteuid") or (final.st_uid == os.geteuid() and root_final.st_uid == os.geteuid())), "LM2 telemetry identity changed")
+            if creating: os.fsync(root); self._rejected_identity = (parent_id, root_id, file_id)
+        except OSError as error:
+            raise RuntimeError("LM2 rejected-query telemetry is unavailable") from error
+        finally:
+            for descriptor in (target, root, parent):
+                if descriptor is not None: os.close(descriptor)
         return telemetry
     def query(self, query: str, query_image: str | None = None) -> list[MemoryContextItem]:
         if not isinstance(query, str) or not query.strip(): raise ValueError("LM2 benchmark query must be non-empty")

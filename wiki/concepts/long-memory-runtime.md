@@ -18,7 +18,7 @@ sources:
   - commit 20853aac (LM2 fenced recovery receipts)
   - commit 65de9013 (LM2 bounded semantic deadlines)
   - commit 21af7f37 (LM2 bounded approval waits)
-status: LM0 and LM1 verified; LM2 quota-ledger and candidate-catalog hardening implemented; final whole-branch review and official LongMemEval-V2 score pending
+status: LM0 and LM1 verified; LM2 runtime and benchmark hardening implemented; final whole-branch review and official LongMemEval-V2 score pending
 created: 2026-07-19
 updated: 2026-07-20
 ---
@@ -123,3 +123,13 @@ remains pending.
 (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
 `.superpowers/sdd/task-3-report.md`)
+
+The Task 5 LongMemEval-V2 integration is a separate, non-root-exported
+transport with a pinned official-checkout installer and Python `Memory`
+backend. Python admission validates pinned manifest identities, row/digest
+bindings, timestamp grammar, nonempty question IDs, and exact local model
+limits before transport. Rejected queries launch no transport and write only
+redacted telemetry through a private random root whose cache-parent, directory,
+and file identities are descriptor-anchored; FIFO, link, and replacement
+substitution fail closed. This is implementation evidence only, not an official
+LongMemEval-V2 score. (source: `.superpowers/sdd/task-5-report.md`)
