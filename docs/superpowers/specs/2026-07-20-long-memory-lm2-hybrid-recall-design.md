@@ -1,11 +1,12 @@
 ---
 topic: long-memory-lm2-hybrid-recall
-status: draft; implementation blocked pending user review
+status: approved; quota-ledger amendment implementation pending review
 risk: HIGH
 date: 2026-07-20
 sources:
   - docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md
   - docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md
+  - docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md
   - wiki/sources/longmemeval-v2.md
   - wiki/syntheses/solo-developer-roadmap.md
   - https://github.com/xiaowu0162/LongMemEval-V2
@@ -25,6 +26,11 @@ The default **Safe** profile remains offline and deterministic. The opt-in
 **Adaptive** profile may call a caller-supplied embedding port. It never
 generates, rewrites, summarizes, or approves a memory claim. A failed semantic
 lane degrades to Safe and reports that degradation in the receipt.
+
+**Implementation amendment (2026-07-20).** The quota-ledger amendment is part
+of this design and controls where it conflicts with the original sidecar quota
+wording. It makes the 1,024-sidecar-metadata index budget and exact quota
+reservation jointly enforceable without an unbounded recovery scan.
 
 This is the recommended path because it improves semantic recall for both the
 developer product and LongMemEval-V2 without adopting a benchmark-only
@@ -169,7 +175,22 @@ type Lm2VectorStore = {
     candidates: readonly Lm2Candidate[];
     maxDecodedBytes: number;
     signal: AbortSignal;
-  }): Promise<readonly Lm2VerifiedVector[]>;
+    deadlineAtMs: number;
+    now: () => number;
+  }): Promise<Lm2VectorReadResult>;
+};
+
+type Lm2VectorReadResult = {
+  vectors: readonly Lm2VerifiedVector[];
+  diagnostics: readonly {
+    candidateId: string;
+    reason:
+      | "missing_vectors"
+      | "invalid_vectors"
+      | "vector_read_limit"
+      | "quota_ledger_invalid"
+      | "quota_recovery_pending";
+  }[];
 };
 
 type Lm2VerifiedVector = {
@@ -189,7 +210,22 @@ type Lm2IndexRequest = {
 type Lm2IndexReceipt = {
   indexedCount: number;
   omitted: readonly { id: string; reason: string }[];
+  outcome: "complete" | "continue" | "retry" | "expired";
   nextCursor: string | null;
+  retryCursor: string | null;
+  transientReason:
+    | null
+    | "index_busy"
+    | "index_lock_unavailable"
+    | "quota_state_invalid"
+    | "evidence_cap_exhausted"
+    | "remote_approval_denied"
+    | "embedding_failure"
+    | "timeout"
+    | "sidecar_write_failed"
+    | "evidence_changed"
+    | "lock_integrity_lost";
+  quotaRecovery: "not_needed" | "recovered_pending" | "blocked_pending";
 };
 
 type Lm2CaptureService = {
@@ -417,12 +453,13 @@ the canonical JSON `ModelDescriptor`, not a caller-provided model id:
 
 ```text
 <storeRoot>/long-memory/v1/<workspaceKey>/
-  embeddings/<sha256(canonical-model-descriptor)>/<recordId>.json
+  embeddings-v2/<sha256(canonical-model-descriptor)>/<recordId>.json
 ```
 
 Each sidecar contains the workspace key, record id, record kind, source digest,
 canonical embedding-input digest, canonical model descriptor, vector dimension,
-and a canonical base64 float32 vector. The embedding input is exactly a
+ledger epoch, allocation sequence, and a canonical base64 float32 vector. The
+embedding input is exactly a
 versioned canonical projection of the already-redacted record `text` plus its
 public `kind`; it contains no `stateKey`, action, evidence id, correction
 pointer, source path, workspace key, or other metadata. The sidecar filename
@@ -478,20 +515,22 @@ only that no sidecar survives. A stronger egress lease/pin requires an Evidence
 Ledger capability outside LM2 scope. The benchmark adapter has no LM1 evidence
 identifiers and uses its separately stated public-data admission rule.
 
-There is no background scanner, implicit re-embedding, or migration. Trusted
-configuration admits at most two model-descriptor namespaces per workspace. The
-aggregate serialized sidecar quota is 128 MiB per workspace and the per-model
-record cap is 10,000. The trusted vector store acquires a workspace-scoped,
-OS-backed advisory index lock before capacity admission and holds it through
-remote embedding and every sidecar publish. Under that lock it computes the
-exact current namespace count, record count, and UTF-8 serialized byte total;
-it reserves a 24-KiB worst-case allocation for every planned sidecar before
-egress and then writes with no-clobber publish. A second process receives
-`index_busy` and performs no scan, egress, or write. The operating system
-releases the lock on process crash; the next holder recomputes quotas from
-durable sidecars, so a partially written entry is ignored by static validation
-and cannot reserve capacity forever. If a
-platform cannot provide the advisory lock, indexing returns `index_lock_unavailable`
+There is no background scanner, implicit re-embedding, migration, or
+directory-rebuild recovery. Trusted configuration admits at most two
+model-descriptor namespaces per workspace. The aggregate serialized sidecar
+quota is 128 MiB per workspace and the per-model record cap is 10,000. A
+canonical, bounded workspace quota ledger is the durable allocation authority:
+under one workspace-scoped OS advisory index lock it records exact allocated
+namespace counts and serialized bytes plus at most one 16-record pending batch.
+It reserves 24 KiB for each planned sidecar before egress, then commits an
+actual no-clobber sidecar and its exact serialized allocation through the
+ledger's recoverable transaction protocol. The index acquires this lock before any catalog,
+record, evidence, or sidecar work and holds it through final ledger commit; a
+second process returns `index_busy` before scan, egress, or write. Crash
+recovery inspects only the pending batch's named sidecars. A missing, corrupt,
+or unledgered non-empty embeddings state is `quota_state_invalid` and fails
+closed without a directory scan, automatic repair, or egress. If a platform
+cannot provide the advisory lock, indexing returns `index_lock_unavailable`
 without egress or a process-local fallback.
 
 The index rejects a new namespace or sidecar exceeding any quota before egress
@@ -592,6 +631,8 @@ type HybridReceipt = {
     | "storage_limit"
     | "vector_read_limit"
     | "remote_approval_denied"
+    | "quota_ledger_invalid"
+    | "quota_recovery_pending"
   )[];
   indexedVectorCount: number;
   missingVectorCount: number;

@@ -5431,3 +5431,17 @@ composition, public LongMemEval transport/backend, and independent plus
 official evidence gates. No production implementation or official score is
 claimed by this planning entry. Source: [[concepts/long-memory-runtime]],
 `docs/superpowers/plans/2026-07-20-long-memory-lm2-hybrid-recall-plan.md`.
+
+## [2026-07-20] design | LM2 quota-ledger amendment approved
+
+Implementation review found a real contradiction between the one-index-call
+1,024 sidecar-metadata-read cap and directory-wide exact quota recomputation.
+The HIGH-risk amendment replaces scans with a bounded v2 allocation ledger,
+fenced operation-scoped advisory locking, epoch/allocation sidecar provenance,
+bounded pending recovery, and discriminated index retry/expired receipts.
+Independent architecture and adversarial design reviews approved the corrected
+amendment. The prior Task 3/4 code is implementation evidence only; the new
+TDD rework plan is authoritative. No LongMemEval-V2 score is claimed. Source:
+[[concepts/long-memory-runtime]],
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md`.
