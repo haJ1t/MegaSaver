@@ -1,0 +1,10 @@
+{
+  "officialCommit": "6f020ac2fc3275e46c706d3406e02c3ed79b7be2",
+  "files": {
+    "memory_modules/memory.py": "512d48d93ff78208127c85ffd90ea4c63f1f9ccea3427f0a7b6928a39bdc6a59",
+    "evaluation/harness.py": "4a508fde65e382c45669fe7243348944628054c9ce6416d78c0a395ce1c3abcd",
+    "leaderboard/build_submission_step_1_single_operating_point.py": "8c197c28231a14b303ec8a11a5cd5ddbbe70a5e9072f1f97c28f30f484d8f078",
+    "leaderboard/build_submission_step_2_build_package.py": "ae727018666e7131d6f1415515405f51ab91365ac9929ad0990d083a8bcf4907"
+  },
+  "allowedDirtyPaths": ["memory_modules/megasaver_lm2_hybrid.py", "memory_modules/memory.py"]
+}

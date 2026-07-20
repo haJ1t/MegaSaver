@@ -8,7 +8,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "megasaver-long-memory": "./dist/stdio.js"
+    "megasaver-long-memory": "./dist/stdio.js",
+    "megasaver-long-memory-lm2-benchmark": "./dist/lm2-benchmark.js"
   },
   "exports": {
     ".": {

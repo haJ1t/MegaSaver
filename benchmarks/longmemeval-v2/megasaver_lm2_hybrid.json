@@ -1,0 +1,26 @@
+{
+  "memory_type": "megasaver_lm2_hybrid",
+  "memory_params": {
+    "manifest_path": "/absolute/path/to/megasaver-lm2-manifest-v1.json",
+    "manifest_digest": "replace-with-the-64-character-manifest-sha256-digest",
+    "data_revision": "f152293e235517d504809563c833d7190b8c713b",
+    "cache_parent": "/absolute/path/to/private-megasaver-lm2-cache",
+    "transport_command": [
+      "node",
+      "/absolute/path/to/MegaSaver/packages/long-memory/dist/lm2-benchmark.js"
+    ],
+    "profile": "adaptive",
+    "embedding_egress": "local",
+    "model": {
+      "provider": "local",
+      "modelId": "megasaver-hash-embedding",
+      "revision": "v1",
+      "dimensions": 64,
+      "embeddingInputVersion": "lm2-v1"
+    },
+    "token_budget": 2000,
+    "query_timeout_ms": 1500,
+    "index_batch_timeout_ms": 15000,
+    "rpc_timeout_seconds": 30
+  }
+}
