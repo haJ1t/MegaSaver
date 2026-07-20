@@ -8,6 +8,7 @@ export const lm2ErrorCodeSchema = z.enum([
   "index_busy",
   "index_lock_unavailable",
   "cursor_expired",
+  "catalog_schema_unsupported",
   "store_corrupt",
   "write_failed",
 ]);
