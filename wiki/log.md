@@ -5582,3 +5582,16 @@ under it, revalidates run/lock descriptor-path identity before adoption, and
 releases the original inode on every path. Python coverage is 25/25 against the
 pinned official base and built transport; no official score is claimed.
 (source: `.superpowers/sdd/task-5-report.md`)
+
+## [2026-07-20 20:58 +03] fix | LM2 builder and projection identity closure
+
+Fresh Task 5 re-review found that the normal package build omitted two private
+artifacts imported by the non-contract manifest builder, and that both language
+boundaries checked only the shape of projection UUIDs. The build now emits the
+private canonical and manifest entrypoints without changing package-root
+exports or bins. TypeScript and Python recompute UUIDv5 from the exact
+trajectory/source/index frame, share a fixed vector, and reject a valid but
+foreign-frame UUID before transport. Evidence: focused benchmark Node 27/27,
+long-memory 336/336 with zero type errors, Python official-base plus real built
+transport 26/26, and root `pnpm verify` 56/56. Task 6 was not started and no
+official score is claimed. (source: `.superpowers/sdd/task-5-report.md`)

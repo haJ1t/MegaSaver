@@ -4,6 +4,7 @@ from hashlib import sha256
 import fcntl, json, math, os, re, secrets, stat, subprocess, threading, unicodedata
 from pathlib import Path
 from typing import Any
+from uuid import UUID, uuid5
 from memory_modules.memory import Memory, MemoryContextItem, register_memory
 DATA_REVISION = "f152293e235517d504809563c833d7190b8c713b"
 MANIFEST_VERSION = "megasaver-lm2-manifest-v1"
@@ -42,6 +43,8 @@ def _canonical(value: Any) -> str:
     return "{" + ",".join(_canonical(key) + ":" + _canonical(item) for key, item in sorted(pairs)) + "}"
 def _digest(value: Any) -> str:
     return sha256(_canonical(value).encode("utf-8")).hexdigest()
+def _projection_id(trajectory_id: str, source_kind: str, source_index: int) -> str:
+    return str(uuid5(UUID("7d20f05d-6a18-52b8-98e0-8f6c933b3484"), f"{trajectory_id}\0{source_kind}\0{source_index}"))
 def _open_file(path: Path) -> tuple[int, os.stat_result]:
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -118,7 +121,7 @@ def _validate_manifest(manifest: object) -> dict[str, Any]:
             _require(_exact(projection, projection_keys), "LM2 projection fields mismatch")
             text, projection_id = projection["text"], projection["id"]; _require(projection["kind"] == "state_snapshot" and projection["sourceKind"] in {"states", "content"}, "LM2 projection kind mismatch")
             _require(isinstance(projection["sourceIndex"], int) and not isinstance(projection["sourceIndex"], bool) and projection["sourceIndex"] >= 0, "LM2 projection index mismatch")
-            _require(isinstance(projection_id, str) and len(projection_id) == 36 and projection_id == projection_id.lower() and projection_id[14] == "5" and projection_id[19] in "89ab" and all(char in "0123456789abcdef" for char in projection_id.replace("-", "")) and _timestamp(projection["observedAt"]), "LM2 projection identity mismatch")
+            _require(isinstance(projection_id, str) and projection_id == _projection_id(row["id"], projection["sourceKind"], projection["sourceIndex"]) and _timestamp(projection["observedAt"]), "LM2 projection identity mismatch")
             _require(isinstance(text, str) and text and len(text.encode("utf-16-le")) // 2 <= 50_000 and _sha(projection["sourceDigest"]), "LM2 projection content mismatch")
             embedding = sha256(("megasaver.long-memory.lm2.embedding-input.v1\0" + _canonical({"kind": "state_snapshot", "text": text})).encode()).hexdigest()
             _require(projection["embeddingInputDigest"] == embedding, "LM2 projection embedding mismatch")

@@ -31,6 +31,16 @@ package root. Task 6 evidence/scoring work was not started.
 - Review RED proved a symlink alias of the original save directory loaded.
   The same state matrix now rejects corrupt control literals, empty-chain
   replay, a foreign trajectory digest, and a copied replacement run root.
+- Final packaging RED ran the normal, non-contract manifest builder after a
+  package build and proved its two internal imports were absent from `dist/`.
+  The builder now consumes emitted private manifest/canonical entrypoints while
+  the package-root export and both existing bins remain unchanged.
+- Final identity RED proved both TypeScript and Python accepted a syntactically
+  valid UUIDv5 derived from a foreign trajectory/source/index frame. Both
+  admission paths now recompute the exact namespace UUIDv5 over
+  `trajectoryId + NUL + sourceKind + NUL + decimalSourceIndex`; a fixed vector
+  proves the same bytes and result across languages, and the Python mutation
+  remains zero-transport.
 - GREEN adds descriptor/path identity checks around the fixed lock, validates
   the locked inode before state writes, and fsyncs the run directory after the
   atomic control rename. The Python backend validates the pinned V1 fields and
@@ -53,11 +63,11 @@ package root. Task 6 evidence/scoring work was not started.
 
 ## Verification
 
-- Focused benchmark Node suite: 6/6 files and 25/25 tests passed with zero type
+- Focused benchmark Node suite: 6/6 files and 27/27 tests passed with zero type
   errors.
-- Long-memory package under root verification: 39/39 files and 334/334 tests
+- Long-memory package under root verification: 39/39 files and 336/336 tests
   passed with zero type errors.
-- Python official-base/installer/LM0 suites: 25/25 passed using Python 3.11,
+- Python official-base/installer/LM0 suites: 26/26 passed using Python 3.11,
   the pinned official checkout at commit
   `6f020ac2fc3275e46c706d3406e02c3ed79b7be2`, and the real built Node
   transport; `py_compile` passed.
@@ -65,7 +75,8 @@ package root. Task 6 evidence/scoring work was not started.
 - Root `pnpm verify` passed all 56 Turbo tasks, lint checked 1,631 files, and
   every managed conventions check passed.
 - `git diff --check` passed. Touched source/test/fixture files are at or below
-  300 lines; the Python backend is 296 lines and the largest test is 272.
+  300 lines; the Python backend is 299 lines and the largest touched test is
+  281.
 
 ## Environment boundary
 
