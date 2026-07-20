@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://megasaver.dev/schemas/lm2-official-evidence-v1.json",
+  "title": "Mega Saver LM2 official LongMemEval-V2 evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "official",
+    "installation",
+    "configuration",
+    "hardware",
+    "implementation",
+    "runs",
+    "combined",
+    "leaderboard"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "megasaver-lm2-official-evidence-v1" },
+    "official": { "$ref": "#/$defs/official" },
+    "installation": { "$ref": "#/$defs/installation" },
+    "configuration": { "$ref": "#/$defs/configuration" },
+    "hardware": { "$ref": "#/$defs/hardware" },
+    "implementation": { "$ref": "#/$defs/implementation" },
+    "runs": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/$defs/run" },
+      "allOf": [
+        { "contains": { "properties": { "domain": { "const": "web" } }, "required": ["domain"] } },
+        {
+          "contains": {
+            "properties": { "domain": { "const": "enterprise" } },
+            "required": ["domain"]
+          }
+        }
+      ]
+    },
+    "combined": { "$ref": "#/$defs/combined" },
+    "leaderboard": { "$ref": "#/$defs/leaderboard" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "gitCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "safeRelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/safeRelativePath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "countedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "rowCount"],
+      "properties": {
+        "path": { "$ref": "#/$defs/safeRelativePath" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "rowCount": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "official": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "data"],
+      "properties": {
+        "repository": { "const": "https://github.com/xiaowu0162/LongMemEval-V2" },
+        "commit": { "const": "6f020ac2fc3275e46c706d3406e02c3ed79b7be2" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repoId", "revision", "preparationMode", "checksums", "validator"],
+          "properties": {
+            "repoId": { "const": "xiaowu0162/longmemeval-v2" },
+            "revision": { "const": "f152293e235517d504809563c833d7190b8c713b" },
+            "preparationMode": { "enum": ["symlink", "copy"] },
+            "checksums": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["schema", "questions", "trajectories", "haystack"],
+              "properties": {
+                "schema": {
+                  "const": "0672cf47cf16c30365648770628b433076bb3f5b73edded673af7dd6d5f3246f"
+                },
+                "questions": {
+                  "const": "0a3ae5ebea938c24d7800e1e0b0828e08ae1646f939a53853b2b8cdc08e292b7"
+                },
+                "trajectories": {
+                  "const": "363cec9a8e87aa8d9101ce4e600aadbf7031d674056ebe4f969e8424abc5f3c6"
+                },
+                "haystack": {
+                  "enum": [
+                    "9b5301defb23a088a5f06e45ff8d5f35e569d78305a66d492046a9fff9b46593",
+                    "4756d5126347f0d18f045bb6c47b08cb3b23e9db24386cc48a9b2879e7969b59"
+                  ]
+                }
+              }
+            },
+            "validator": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["command", "arguments", "exitCode", "stdoutSha256"],
+              "properties": {
+                "command": { "const": "data/validate_data.py" },
+                "arguments": {
+                  "type": "array",
+                  "minItems": 2,
+                  "items": { "type": "string", "minLength": 1 }
+                },
+                "exitCode": { "const": 0 },
+                "stdoutSha256": { "$ref": "#/$defs/sha256" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "installation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preInstallState",
+        "preInstallHashes",
+        "postInstallDirtyPaths",
+        "postInstallHashes",
+        "postInstallDiffs"
+      ],
+      "properties": {
+        "preInstallState": { "enum": ["baseline", "installed"] },
+        "preInstallHashes": { "$ref": "#/$defs/digestMap" },
+        "postInstallDirtyPaths": {
+          "const": ["memory_modules/megasaver_lm2_hybrid.py", "memory_modules/memory.py"]
+        },
+        "postInstallHashes": { "$ref": "#/$defs/digestMap" },
+        "postInstallDiffs": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "$ref": "#/$defs/artifact" }
+        }
+      }
+    },
+    "digestMap": {
+      "type": "object",
+      "minProperties": 2,
+      "additionalProperties": { "$ref": "#/$defs/sha256" }
+    },
+    "modelConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "parameters"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "parameters": { "type": "object" }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reader", "judge", "embedding"],
+      "properties": {
+        "reader": { "$ref": "#/$defs/modelConfiguration" },
+        "judge": { "$ref": "#/$defs/modelConfiguration" },
+        "embedding": { "$ref": "#/$defs/embeddingConfiguration" }
+      }
+    },
+    "embeddingConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "egress", "parameters"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "egress": { "const": "local" },
+        "parameters": { "type": "object" }
+      }
+    },
+    "hardware": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capturedAt",
+        "os",
+        "architecture",
+        "cpuModel",
+        "logicalCpuCount",
+        "memoryBytes",
+        "accelerators",
+        "software"
+      ],
+      "properties": {
+        "capturedAt": { "type": "string", "format": "date-time" },
+        "os": { "type": "string", "minLength": 1 },
+        "architecture": { "type": "string", "minLength": 1 },
+        "cpuModel": { "type": "string", "minLength": 1 },
+        "logicalCpuCount": { "type": "integer", "minimum": 1 },
+        "memoryBytes": { "type": "integer", "minimum": 1 },
+        "accelerators": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "memoryBytes"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "memoryBytes": { "type": ["integer", "null"], "minimum": 1 }
+            }
+          }
+        },
+        "software": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["node", "python"],
+          "properties": {
+            "node": { "type": "string", "minLength": 1 },
+            "python": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["megaSaverCommit", "adapter", "transport"],
+      "properties": {
+        "megaSaverCommit": { "$ref": "#/$defs/gitCommit" },
+        "adapter": { "$ref": "#/$defs/artifact" },
+        "transport": { "$ref": "#/$defs/artifact" }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "domain",
+        "tier",
+        "command",
+        "arguments",
+        "outputDirectory",
+        "runArgs",
+        "aggregatedMetrics",
+        "perQuestion",
+        "runtimeInputs",
+        "telemetry",
+        "rawLatencySamplesSeconds",
+        "failures"
+      ],
+      "properties": {
+        "domain": { "enum": ["web", "enterprise"] },
+        "tier": { "enum": ["small", "medium"] },
+        "command": { "type": "string", "minLength": 1 },
+        "arguments": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "outputDirectory": { "$ref": "#/$defs/safeRelativePath" },
+        "runArgs": { "$ref": "#/$defs/artifact" },
+        "aggregatedMetrics": { "$ref": "#/$defs/artifact" },
+        "perQuestion": { "$ref": "#/$defs/countedArtifact" },
+        "runtimeInputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["questions", "haystack", "memoryConfig"],
+          "properties": {
+            "questions": { "$ref": "#/$defs/artifact" },
+            "haystack": { "$ref": "#/$defs/artifact" },
+            "memoryConfig": { "$ref": "#/$defs/artifact" }
+          }
+        },
+        "telemetry": { "$ref": "#/$defs/countedArtifact" },
+        "rawLatencySamplesSeconds": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "number", "minimum": 0 }
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["questionId", "stage", "code", "messageSha256"],
+            "properties": {
+              "questionId": { "type": "string", "minLength": 1 },
+              "stage": { "type": "string", "minLength": 1 },
+              "code": { "type": "string", "minLength": 1 },
+              "messageSha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        }
+      }
+    },
+    "dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "overallFullSet",
+        "gotchasAccuracy",
+        "staticAccuracy",
+        "dynamicAccuracy",
+        "procedureAccuracy"
+      ],
+      "properties": {
+        "overallFullSet": { "type": "number", "minimum": 0, "maximum": 1 },
+        "gotchasAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
+        "staticAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
+        "dynamicAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
+        "procedureAccuracy": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "combined": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metrics", "dashboard"],
+      "properties": {
+        "metrics": { "$ref": "#/$defs/artifact" },
+        "dashboard": { "$ref": "#/$defs/dashboard" }
+      }
+    },
+    "builderInvocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exitCode", "arguments"],
+      "properties": {
+        "exitCode": { "const": 0 },
+        "arguments": { "type": "array", "minItems": 4, "items": { "type": "string" } }
+      }
+    },
+    "leaderboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "submissionName",
+        "operatingPointName",
+        "systemDescription",
+        "codeArtifact",
+        "packageDirectory",
+        "packageFiles",
+        "submissionOverview",
+        "tarball",
+        "step1",
+        "step2"
+      ],
+      "properties": {
+        "submissionName": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "operatingPointName": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "systemDescription": { "$ref": "#/$defs/artifact" },
+        "codeArtifact": { "$ref": "#/$defs/artifact" },
+        "packageDirectory": { "$ref": "#/$defs/safeRelativePath" },
+        "packageFiles": {
+          "type": "array",
+          "minItems": 17,
+          "items": { "$ref": "#/$defs/artifact" }
+        },
+        "submissionOverview": { "$ref": "#/$defs/artifact" },
+        "tarball": { "$ref": "#/$defs/artifact" },
+        "step1": { "$ref": "#/$defs/builderInvocation" },
+        "step2": { "$ref": "#/$defs/builderInvocation" }
+      }
+    }
+  }
+}

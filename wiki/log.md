@@ -5957,3 +5957,19 @@ passed. The README enterprise/Small builder produced an 89-MiB manifest with
 projection and later rows. Long-memory passed 337/337 and Python passed 26/26;
 no harness, judge, Task 6, or score was run. (source:
 `.superpowers/sdd/task-5-report.md`)
+
+## [2026-07-20 22:05 +03] test | LM2 official evidence gate
+
+Added a strict official-evidence schema and standalone verifier with separate
+inspection, pristine-checkout preflight, and full-verification modes. Inspection
+and preflight are structurally unable to mark a score eligible; full mode also
+requires pinned data validation, allowlisted installation diffs, recomputed
+official aggregates, raw latency samples, both domains, and freshly rebuilt
+leaderboard artifacts. Evidence: gate regressions 13/13; long-memory 350/350
+with no type errors; official-base Python 26/26 with the built transport; root
+`pnpm verify` 56/56. Real pinned-checkout preflight passed and returned
+`officialScoreEligible: false`. No official web plus enterprise score was run
+or claimed. Trusted-root compromise remains an explicit limitation. (source:
+`benchmarks/longmemeval-v2/verify-official-artifacts.mjs`,
+`benchmarks/longmemeval-v2/evidence-schema.json`,
+`packages/long-memory/test/lm2-completion-integration.test.ts`)

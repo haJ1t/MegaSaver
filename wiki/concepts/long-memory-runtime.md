@@ -14,11 +14,14 @@ sources:
   - docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md
   - docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md
   - docs/superpowers/plans/2026-07-20-long-memory-lm2-runtime-security-completion-plan.md
+  - benchmarks/longmemeval-v2/evidence-schema.json
+  - benchmarks/longmemeval-v2/verify-official-artifacts.mjs
+  - packages/long-memory/test/lm2-completion-integration.test.ts
   - commit 065df3e6 (LM2 ledger invariants)
   - commit 20853aac (LM2 fenced recovery receipts)
   - commit 65de9013 (LM2 bounded semantic deadlines)
   - commit 21af7f37 (LM2 bounded approval waits)
-status: LM0 and LM1 verified; LM2 runtime and benchmark hardening implemented; final whole-branch review and official LongMemEval-V2 score pending
+status: LM0 and LM1 verified; LM2 implementation and local completion gate verified; final whole-branch review and official LongMemEval-V2 score pending
 created: 2026-07-19
 updated: 2026-07-20
 ---
@@ -145,3 +148,35 @@ descriptor, pathname, run root, and identity-bound controls before adoption.
 Busy, FIFO, link, and replacement substitution fail closed. This is
 implementation evidence only, not an official LongMemEval-V2 score. (source:
 `.superpowers/sdd/task-5-report.md`)
+
+LM2 completion now has a strict evidence schema and a standalone official-
+artifact verifier. Inspection can authenticate a complete recorded two-domain
+bundle, while preflight authenticates a pristine official checkout at commit
+`6f020ac2fc3275e46c706d3406e02c3ed79b7be2`; both modes always report
+`officialScoreEligible: false`. Only full verification can report `true`, and
+it additionally requires the pinned data revision and checksums, official data
+validator output, the allowlisted installed checkout diff, recomputed official
+aggregates from raw per-question results, exact raw latency samples, both web
+and enterprise runs, and freshly rebuilt leaderboard artifacts. Reader, judge,
+local embedding, hardware/software, adapter, transport, telemetry, failure,
+package-inventory, submission-overview, and tarball evidence are all bound into
+the same bundle. (source: `benchmarks/longmemeval-v2/evidence-schema.json`,
+`benchmarks/longmemeval-v2/verify-official-artifacts.mjs`)
+
+Local completion evidence is green: the strict gate regressions passed 13/13,
+the long-memory package passed 40/40 files and 350/350 tests with no type
+errors, the official-base Python suite passed 26/26 with the built transport,
+and repository `pnpm verify` completed 56/56 Turbo tasks. A real pinned-checkout
+preflight passed but remained explicitly ineligible. No official web plus
+enterprise harness/judge run was available, so no official score or dashboard
+claim exists. (source:
+`packages/long-memory/test/lm2-completion-integration.test.ts`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-runtime-security-completion-plan.md`)
+
+The verifier fails closed on every detected malformed, stale, symlinked, or
+identity-mismatched artifact. It does not supply a native anti-tamper anchor:
+an actor already able to rewrite the trusted evidence root can also rewrite a
+matching lock, ledger, and sidecar set. That trusted-root compromise remains an
+explicit threat-model limitation, not an authenticated official-score claim.
+(source: `benchmarks/longmemeval-v2/verify-official-artifacts.mjs`,
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`)
