@@ -81,6 +81,84 @@ describe("LM2 committed vector reads", () => {
     });
   });
 
+  it("rejects a sidecar whose exact candidate provenance was rewritten", async () => {
+    const root = createRoot();
+    const candidates = [createCandidate(1), createCandidate(2)];
+    const { model, store } = await publish(root, candidates);
+    const path = sidecarPath(root, model, candidates[0]?.id);
+    const original = JSON.parse(readFileSync(path, "utf8"));
+    expect(original.provenanceDigest).toMatch(/^[0-9a-f]{64}$/);
+
+    for (const mutate of [
+      (sidecar: typeof original) => {
+        sidecar.recordId = candidates[1]?.id;
+      },
+      (sidecar: typeof original) => {
+        sidecar.sourceDigest = "f".repeat(64);
+      },
+      (sidecar: typeof original) => {
+        sidecar.embeddingInputDigest = "e".repeat(64);
+      },
+      (sidecar: typeof original) => {
+        sidecar.model.revision = "stale";
+      },
+      (sidecar: typeof original) => {
+        sidecar.ledgerEpoch = "d".repeat(64);
+      },
+      (sidecar: typeof original) => {
+        sidecar.allocationSequence = 2;
+      },
+      (sidecar: typeof original) => {
+        sidecar.dimension = 2;
+      },
+    ]) {
+      const rewritten = structuredClone(original);
+      mutate(rewritten);
+      writeFileSync(path, `${JSON.stringify(rewritten)}\n`);
+
+      const result = await store.read({
+        workspaceKey,
+        model,
+        candidates: [candidates[0] as (typeof candidates)[number]],
+        maxDecodedBytes: 64,
+        signal: new AbortController().signal,
+        ...readDeadline(),
+      });
+
+      expect(result.vectors).toEqual([]);
+      expect(result.diagnostics).toEqual([
+        { candidateId: candidates[0]?.id, reason: "invalid_vectors" },
+      ]);
+    }
+
+    const noncanonical = structuredClone(original);
+    const vectorBytes = Buffer.from(noncanonical.vectorBase64, "base64");
+    vectorBytes.writeFloatLE(-0, 0);
+    noncanonical.vectorBase64 = vectorBytes.toString("base64");
+    const { provenanceDigest: _, ...provenance } = noncanonical;
+    noncanonical.provenanceDigest = createHash("sha256")
+      .update(
+        `megasaver.long-memory.lm2.sidecar-provenance.v2\0${JSON.stringify(provenance)}`,
+        "utf8",
+      )
+      .digest("hex");
+    writeFileSync(path, `${JSON.stringify(noncanonical)}\n`);
+
+    await expect(
+      store.read({
+        workspaceKey,
+        model,
+        candidates: [candidates[0] as (typeof candidates)[number]],
+        maxDecodedBytes: 64,
+        signal: new AbortController().signal,
+        ...readDeadline(),
+      }),
+    ).resolves.toEqual({
+      vectors: [],
+      diagnostics: [{ candidateId: candidates[0]?.id, reason: "invalid_vectors" }],
+    });
+  });
+
   it("excludes pending allocations and reports recovery separately", async () => {
     const root = createRoot();
     const model = createModel();

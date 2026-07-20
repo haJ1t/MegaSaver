@@ -229,9 +229,11 @@ export function createLm2OperationPublisher(input: {
         reason:
           error instanceof Lm2ApprovalTimeoutError
             ? "timeout"
-            : error instanceof Lm2Error && error.code === "invalid_vectors"
-              ? "invalid_vectors"
-              : "write_failed",
+            : error instanceof Lm2Error && error.code === "index_lock_unavailable"
+              ? "lock_integrity_lost"
+              : error instanceof Lm2Error && error.code === "invalid_vectors"
+                ? "invalid_vectors"
+                : "write_failed",
       };
     }
   };

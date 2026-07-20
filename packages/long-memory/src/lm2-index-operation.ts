@@ -1,11 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { type Stats, lstatSync } from "node:fs";
 import { dirname } from "node:path";
 import { combineLm2CleanupFailures } from "./lm2-cleanup-errors.js";
+import { Lm2Error } from "./lm2-errors.js";
 import { createLm2OperationPublisher } from "./lm2-index-operation-publish.js";
 import {
   type Lm2OperationFence,
   advanceLm2Ledger,
+  parseLm2QuotaLedger,
   recoverLm2Pending,
 } from "./lm2-ledger-recovery.js";
 import {
@@ -69,9 +71,13 @@ export async function beginIndexOperation(
   let metadataReads = 0;
   let finalized = false;
   let cleanupBlocked = false;
+  let ledgerIntegrityLost = false;
   let cleanupFailure: unknown;
   const assertFence = () => {
     if (finalized) throw new Error("stale operation");
+    if (ledgerIntegrityLost) {
+      throw new Lm2Error("index_lock_unavailable", "LM2 ledger integrity was lost.");
+    }
     lock.assertIntact();
     if (ledgerIdentity !== null) {
       const currentLedgerIdentity = lstatSync(ledgerPath);
@@ -93,9 +99,36 @@ export async function beginIndexOperation(
     const serialized = serializeLm2QuotaLedger(next);
     if (Buffer.byteLength(serialized, "utf8") > MAX_LM2_QUOTA_LEDGER_BYTES)
       throw new Error("oversize ledger");
-    replaceAnchoredFile(ledgerAnchor, "vector-quota-ledger-v1.json", serialized, assertFence);
-    ledgerIdentity = lstatSync(ledgerPath);
-    ledger = next;
+    const expectedContentDigest = createHash("sha256").update(serialized).digest("hex");
+    try {
+      const replacement = replaceAnchoredFile(
+        ledgerAnchor,
+        "vector-quota-ledger-v1.json",
+        serialized,
+        expectedContentDigest,
+        MAX_LM2_QUOTA_LEDGER_BYTES,
+        assertFence,
+      );
+      const verified = parseLm2QuotaLedger(replacement.raw, input.workspaceKey);
+      if (
+        verified === null ||
+        replacement.contentDigest !== expectedContentDigest ||
+        verified.generation !== next.generation ||
+        verified.epoch !== next.epoch ||
+        verified.lockToken !== next.lockToken ||
+        verified.lockIdentity.device !== next.lockIdentity.device ||
+        verified.lockIdentity.inode !== next.lockIdentity.inode
+      ) {
+        throw new Lm2Error("index_lock_unavailable", "LM2 ledger replacement changed.");
+      }
+      ledgerIdentity = replacement.stat;
+      ledger = verified;
+    } catch (error) {
+      if (error instanceof Lm2Error && error.code === "index_lock_unavailable") {
+        ledgerIntegrityLost = true;
+      }
+      throw error;
+    }
   };
   const inspect = (
     entry: Pick<Lm2PendingAllocation, "modelFingerprint" | "finalName">,
@@ -204,15 +237,17 @@ export async function beginIndexOperation(
         if (cleanupBlocked) {
           throw new Lm2CleanupError("LM2 cleanup remains blocked.", cleanupFailure);
         }
-        if (ledger.pending !== null && !settlePending()) {
-          cleanupBlocked = true;
-          cleanupFailure = new Lm2CleanupError(
-            "LM2 pending cleanup remains blocked.",
-            cleanupFailure,
-          );
-          throw cleanupFailure;
+        if (!ledgerIntegrityLost) {
+          if (ledger.pending !== null && !settlePending()) {
+            cleanupBlocked = true;
+            cleanupFailure = new Lm2CleanupError(
+              "LM2 pending cleanup remains blocked.",
+              cleanupFailure,
+            );
+            throw cleanupFailure;
+          }
+          if (ledger.pending === null) persist(advanceLm2Ledger({ ledger, fence: null }));
         }
-        if (ledger.pending === null) persist(advanceLm2Ledger({ ledger, fence: null }));
       } catch (error) {
         failure = error;
       }
