@@ -195,6 +195,7 @@ function canonicalModelFingerprint(model: ModelDescriptor): string {
 export const lm2RuntimeConfigSchema = z
   .object({
     admittedModels: z.array(modelDescriptorSchema).min(1).max(MAX_LM2_ADMITTED_MODELS),
+    activeRecallModelFingerprint: sha256Schema,
     embeddingEgress: embeddingEgressSchema,
     remoteApprovals: z.array(remoteApprovalSchema).max(MAX_LM2_ADMITTED_MODELS),
     queryTimeoutMs: z.number().int().min(1).max(MAX_LM2_QUERY_TIMEOUT_MS),
@@ -206,6 +207,13 @@ export const lm2RuntimeConfigSchema = z
     const admittedFingerprintSet = new Set(admittedFingerprints);
     if (admittedFingerprintSet.size !== admittedFingerprints.length) {
       context.addIssue({ code: "custom", message: "admitted models must be unique" });
+    }
+    if (!admittedFingerprintSet.has(config.activeRecallModelFingerprint)) {
+      context.addIssue({
+        code: "custom",
+        message: "active recall model must be admitted",
+        path: ["activeRecallModelFingerprint"],
+      });
     }
     if (config.embeddingEgress === "local" && config.remoteApprovals.length > 0) {
       context.addIssue({ code: "custom", message: "local egress cannot have remote approvals" });
@@ -243,6 +251,9 @@ const semanticReasonSchema = z.enum([
   "remote_approval_denied",
   "quota_ledger_invalid",
   "quota_recovery_pending",
+  "embedding_port_unreadable",
+  "embedding_egress_mismatch",
+  "approval_port_unreadable",
 ]);
 export type HybridSemanticReason = z.infer<typeof semanticReasonSchema>;
 
