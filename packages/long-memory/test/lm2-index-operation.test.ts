@@ -642,8 +642,100 @@ describe("LM2 index operation", () => {
     expect(embed).not.toHaveBeenCalled();
     expect(replacedLedgerIdentity).not.toBeNull();
     expect(replacedLedgerIdentity?.after).toEqual(replacedLedgerIdentity?.before);
-    expect(readFileSync(vectorQuotaLedgerPath(root, workspaceKey), "utf8")).not.toBe(before);
-    await operation.finalize();
+    const replacementEvidence = readFileSync(vectorQuotaLedgerPath(root, workspaceKey), "utf8");
+    expect(replacementEvidence).not.toBe(before);
+    await expect(operation.finalize()).rejects.toMatchObject({
+      cause: { code: "index_lock_unavailable" },
+    });
+    expect(readFileSync(vectorQuotaLedgerPath(root, workspaceKey), "utf8")).toBe(
+      replacementEvidence,
+    );
+  });
+
+  it("revalidates exact ledger content after approval and immediately before egress", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const record = createCandidate(1);
+    const store = createLm2VectorStore({ storeRoot: root });
+    const operation = await store.beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: deadline(),
+    });
+    if (operation.status !== "ready") throw new Error("operation unavailable");
+    const ledgerPath = vectorQuotaLedgerPath(root, workspaceKey);
+    let replacementEvidence = "";
+    let replacementIdentity:
+      | { before: { dev: number; ino: number }; after: { dev: number; ino: number } }
+      | undefined;
+    const embed = vi.fn(async () => ({
+      modelFingerprint: modelDescriptorFingerprint(model),
+      vectors: [[1, 2, 3]],
+    }));
+
+    const result = await operation.publishBatch({
+      records: [record],
+      assertEgressAllowed: async () => {
+        const before = statSync(ledgerPath);
+        const ledger = lm2QuotaLedgerSchema.parse(JSON.parse(readFileSync(ledgerPath, "utf8")));
+        const generation = ledger.generation + 1;
+        replacementEvidence = serializeLm2QuotaLedger({
+          ...ledger,
+          generation,
+          activeOperation:
+            ledger.activeOperation === null
+              ? null
+              : { ...ledger.activeOperation, expectedGeneration: generation },
+          pending:
+            ledger.pending === null ? null : { ...ledger.pending, expectedGeneration: generation },
+        });
+        writeFileSync(ledgerPath, replacementEvidence);
+        const after = statSync(ledgerPath);
+        replacementIdentity = {
+          before: { dev: before.dev, ino: before.ino },
+          after: { dev: after.dev, ino: after.ino },
+        };
+        return true;
+      },
+      recheckEvidence: async () => true,
+      embed,
+    });
+
+    expect(result).toEqual({
+      published: [],
+      existing: [],
+      reason: "quota_state_invalid",
+      quotaRecovery: "blocked_pending",
+    });
+    expect(embed).not.toHaveBeenCalled();
+    expect(replacementIdentity?.after).toEqual(replacementIdentity?.before);
+    expect(existsSync(join(dirname(ledgerPath), "..", "embeddings-v2"))).toBe(false);
+    const retryEmbed = vi.fn();
+    await expect(
+      operation.publishBatch({
+        records: [record],
+        assertEgressAllowed: async () => true,
+        recheckEvidence: async () => true,
+        embed: retryEmbed,
+      }),
+    ).resolves.toEqual({
+      published: [],
+      existing: [],
+      reason: "quota_state_invalid",
+      quotaRecovery: "blocked_pending",
+    });
+    expect(retryEmbed).not.toHaveBeenCalled();
+
+    const finalizeFailure = await operation.finalize().catch((error: unknown) => error);
+    expect(finalizeFailure).toBeInstanceOf(Error);
+    expect(exactCleanupRoots(finalizeFailure)).toEqual([
+      expect.objectContaining({ name: "Lm2Error", code: "index_lock_unavailable" }),
+      expect.objectContaining({ name: "Lm2Error", code: "index_lock_unavailable" }),
+    ]);
+    expect(readFileSync(ledgerPath, "utf8")).toBe(replacementEvidence);
+    const next = await store.beginIndexOperation({ workspaceKey, model, deadline: deadline() });
+    expect(next.status).toBe("ready");
+    if (next.status === "ready") await next.finalize();
   });
 
   it("retains all independent temporary cleanup failures", () => {
@@ -838,14 +930,14 @@ describe("LM2 index operation", () => {
     expect(diagnostic).toMatchObject({ enumerable: false });
     expect(diagnostic?.value).toBeInstanceOf(AggregateError);
     expect(exactCleanupRoots(diagnostic?.value)).toEqual([
-      injectedFsyncFailures[0],
       injectedCloseFailures[0],
+      injectedFsyncFailures[0],
     ]);
     expect(JSON.parse(JSON.stringify(receipt))).toEqual(receipt);
 
     const recovered = await index.index(request);
     expect(recovered).toMatchObject({ outcome: "complete" });
-    expect(embedding.embed).toHaveBeenCalledTimes(1);
+    expect(embedding.embed).toHaveBeenCalledTimes(2);
   });
 
   it("retains all independent finalization failures and releases the lock", async () => {

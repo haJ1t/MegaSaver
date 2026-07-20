@@ -155,6 +155,7 @@ export function createLm2OperationPublisher(input: {
               ) {
                 throw new Error("LM2 batch plan projection changed.");
               }
+              input.assertGuard();
               return request.embed({ ...call, texts });
             },
           });

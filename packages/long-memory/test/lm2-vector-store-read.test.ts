@@ -220,7 +220,18 @@ describe("LM2 committed vector reads", () => {
       { candidateId: candidate.id, reason: "invalid_vectors" },
       { candidateId: candidate.id, reason: "quota_recovery_pending" },
     ]);
-    await operation.finalize();
+    const finalizeFailure = await operation.finalize().catch((error: unknown) => error);
+    expect(finalizeFailure).toMatchObject({
+      name: "Lm2CleanupError",
+      cause: { code: "index_lock_unavailable" },
+    });
+    const recovered = await store.beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: deadline(),
+    });
+    expect(recovered.status).toBe("ready");
+    if (recovered.status === "ready") await recovered.finalize();
   });
 
   it("reports invalid unledgered v2 state without mutation", async () => {
