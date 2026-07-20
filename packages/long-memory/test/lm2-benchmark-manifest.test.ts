@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalSha256 } from "../src/lm2-benchmark-canonical.js";
+import { canonicalSha256, deriveBenchmarkProjectionId } from "../src/lm2-benchmark-canonical.js";
 import {
   BENCHMARK_DATA_REVISION,
   BENCHMARK_OFFICIAL_COMMIT,
@@ -141,5 +141,15 @@ describe("LM2 benchmark V1 manifest", () => {
     if (first === undefined) throw new Error("Missing fixture trajectory.");
     first.fullObjectDigest = "0".repeat(64);
     expect(() => parseBenchmarkManifest(mutated)).toThrow();
+  });
+
+  it("rejects a valid UUIDv5 derived from the wrong projection frame", () => {
+    const manifest = buildBenchmarkManifest(buildInput());
+    const projection = manifest.trajectories[0]?.projections[0];
+    if (projection === undefined) throw new Error("Missing fixture projection.");
+    projection.sourceIndex = 1;
+    projection.id = deriveBenchmarkProjectionId("foreign-trajectory", "states", 1);
+
+    expect(() => parseBenchmarkManifest(manifest)).toThrow();
   });
 });

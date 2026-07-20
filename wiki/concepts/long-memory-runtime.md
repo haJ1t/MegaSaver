@@ -128,7 +128,12 @@ The Task 5 LongMemEval-V2 integration is a separate, non-root-exported
 transport with a pinned official-checkout installer and Python `Memory`
 backend. Python admission validates pinned manifest identities, row/digest
 bindings, timestamp grammar, nonempty question IDs, and exact local model
-limits before transport. Rejected queries launch no transport and write only
+limits before transport. Normal package builds also emit the private canonical
+and manifest entrypoints consumed by the non-contract builder, without adding
+package-root exports or bins. TypeScript and Python recompute every projection
+UUIDv5 from the exact `trajectoryId + NUL + sourceKind + NUL + sourceIndex`
+frame, with a shared fixed vector and zero-transport substitution regression.
+Rejected queries launch no transport and write only
 redacted telemetry through a private random root whose cache-parent, directory,
 and file identities are descriptor-anchored; raw question/context fields are
 omitted. Save-state load acquires the run flock and revalidates its locked
