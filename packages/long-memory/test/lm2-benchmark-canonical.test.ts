@@ -44,4 +44,22 @@ describe("LM2 benchmark canonical values", () => {
   it("hashes canonical values rather than host object order", () => {
     expect(canonicalSha256({ b: 2, a: 1 })).toBe(canonicalSha256({ a: 1, b: 2 }));
   });
+
+  it("uses ECMAScript scientific notation at canonical number thresholds", () => {
+    const value = {
+      tiny: 1e-7,
+      threshold: 1e-6,
+      large: 1e20,
+      scientific: 1e21,
+      negativeZero: -0,
+      nested: [1.25e-8],
+    };
+
+    expect(canonicalJson(value)).toBe(
+      '{"large":100000000000000000000,"negativeZero":0,"nested":[1.25e-8],"scientific":1e+21,"threshold":0.000001,"tiny":1e-7}',
+    );
+    expect(canonicalSha256(value)).toBe(
+      "3071e817c07df80c3e924429ecff57c1354a774972a68e8d8df1e212f5d64261",
+    );
+  });
 });
