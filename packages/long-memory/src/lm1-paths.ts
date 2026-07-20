@@ -141,6 +141,10 @@ function workspaceDirectory(storeRoot: string, workspaceKey: string): string {
   return workspace;
 }
 
+export function lm1WorkspaceDirectory(storeRoot: string, workspaceKey: string): string {
+  return workspaceDirectory(storeRoot, parseWorkspaceKey(workspaceKey));
+}
+
 function existingDirectory(path: string): boolean {
   try {
     const stat = lstatSync(path);
