@@ -12,6 +12,7 @@ import {
   writeSync,
 } from "node:fs";
 import { Lm2Error } from "./lm2-errors.js";
+import { Lm2ApprovalTimeoutError } from "./lm2-lock.js";
 import type { EmbeddingPort, Lm2Candidate, ModelDescriptor } from "./lm2-model.js";
 import type { Lm2PendingAllocation } from "./lm2-quota-ledger.js";
 import {
@@ -27,13 +28,32 @@ import {
 } from "./lm2-secure-fs.js";
 import { buildSerializedSidecar, canonicalEmbeddingInput } from "./lm2-vector-format.js";
 import { ensureVectorNamespace } from "./lm2-vector-paths.js";
-
+export async function approvalBeforeAbort(
+  approval: Promise<unknown>,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const settled = approval.then(
+    (value) => value === "approved",
+    () => false,
+  );
+  if (signal.aborted) throw new Lm2ApprovalTimeoutError();
+  let rejectAbort!: () => void;
+  const aborted = new Promise<never>((_, reject) => {
+    rejectAbort = () => reject(new Lm2ApprovalTimeoutError());
+    signal.addEventListener("abort", rejectAbort, { once: true });
+  });
+  if (signal.aborted) rejectAbort();
+  try {
+    return await Promise.race([settled, aborted]);
+  } finally {
+    signal.removeEventListener("abort", rejectAbort);
+  }
+}
 function directoryDescriptor(anchor: DirectoryAnchor): number {
   const descriptor = anchor.chain.at(-1)?.descriptor;
   if (descriptor === undefined) throw new Lm2Error("write_failed", "LM2 anchor is incomplete.");
   return descriptor;
 }
-
 export function materializeAnchoredFile(
   anchor: DirectoryAnchor,
   name: string,
@@ -54,7 +74,6 @@ export function materializeAnchoredFile(
     throw error;
   }
 }
-
 export function publishAnchoredTemporary(
   anchor: DirectoryAnchor,
   temp: AnchoredFile,
@@ -71,7 +90,6 @@ export function publishAnchoredTemporary(
   fsyncSync(directoryDescriptor(anchor));
   verifyDirectoryAnchor(anchor);
 }
-
 export function closeAndRemoveAnchoredTemporary(anchor: DirectoryAnchor, temp: AnchoredFile): void {
   closeAnchoredFile(temp);
   try {
@@ -82,7 +100,6 @@ export function closeAndRemoveAnchoredTemporary(anchor: DirectoryAnchor, temp: A
     // Recovery owns the exact named temporary path if cleanup is interrupted.
   }
 }
-
 export function unlinkAnchoredFile(anchor: DirectoryAnchor, name: string): void {
   verifyDirectoryAnchor(anchor);
   const path = anchoredChildPath(anchor, name);
@@ -106,7 +123,6 @@ export function unlinkAnchoredFile(anchor: DirectoryAnchor, name: string): void 
     throw new Lm2Error("store_corrupt", "LM2 child removal is indeterminate.");
   }
 }
-
 export function replaceAnchoredFile(
   anchor: DirectoryAnchor,
   name: string,

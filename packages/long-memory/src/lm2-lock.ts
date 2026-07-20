@@ -28,6 +28,13 @@ export type Lm2IndexDeadline = {
   now(): number;
 };
 
+export class Lm2ApprovalTimeoutError extends Error {
+  constructor() {
+    super("LM2 remote approval wait expired.");
+    this.name = "Lm2ApprovalTimeoutError";
+  }
+}
+
 export type Lm2PublishBatchResult = {
   published: readonly string[];
   existing: readonly string[];
@@ -39,6 +46,7 @@ export type Lm2PublishBatchResult = {
     | "remote_approval_denied"
     | "write_failed"
     | "evidence_changed"
+    | "timeout"
     | "lock_integrity_lost";
 };
 
