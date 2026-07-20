@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -17,8 +18,10 @@ from test_megasaver_lm2_hybrid import load_backend
 class MegaSaverLm2ClosureTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        build_memory, _, _ = official_memory_api()
+        build_memory, load_memory, save_memory = official_memory_api()
         cls.build_memory = staticmethod(build_memory)
+        cls.load_memory = staticmethod(load_memory)
+        cls.save_memory = staticmethod(save_memory)
         cls.backend = load_backend()
 
     def setUp(self) -> None:
@@ -47,22 +50,40 @@ class MegaSaverLm2ClosureTest(unittest.TestCase):
             / "queries.jsonl"
         )
 
+    def build_indexed(self):
+        memory = self.build_memory(self.memory_config)
+        for trajectory in self.fixture["trajectories"]:
+            memory.insert(trajectory)
+        return memory
+
     def test_pre_open_rejection_writes_durable_redacted_telemetry_without_transport(self) -> None:
         memory = self.build_memory(self.memory_config)
+        raw_question_id = "raw-private-question-id-37"
         memory.set_query_context(
-            question_id="unknown",
+            question_id=raw_question_id,
             question_item={"answer": "poison", "eval_function": str(self.root)},
         )
 
-        self.assertEqual(memory.query("Substituted question", query_image="/private.png"), [])
+        context = memory.query("Substituted question", query_image="/private.png")
+        self.assertEqual(context, [])
+        metadata = memory.post_query_hook(
+            query="Substituted question", query_image="/private.png", memory_context=context
+        )
 
         telemetry_path = self.rejected_path(memory)
         self.assertEqual(secure_mode(telemetry_path), 0o600)
-        telemetry = json.loads(telemetry_path.read_text())
+        raw_telemetry = telemetry_path.read_text()
+        telemetry = json.loads(raw_telemetry)
         self.assertEqual(telemetry["semanticStatus"], "rejected")
+        self.assertEqual(telemetry["rejectionReason"], "not_admitted")
+        self.assertTrue(self.backend._timestamp(telemetry["observedAt"]))
+        self.assertRegex(telemetry["auditId"], r"^[0-9a-f]{32}$")
         self.assertEqual(telemetry["imagePresent"], True)
+        self.assertNotIn("questionId", telemetry)
+        self.assertNotIn(raw_question_id, raw_telemetry)
         self.assertNotIn("poison", json.dumps(telemetry))
         self.assertNotIn(str(self.root), json.dumps(telemetry))
+        self.assertEqual(metadata, telemetry)
         self.assertEqual(self.requests(), [])
 
     def test_fifo_rejected_telemetry_path_fails_without_blocking_or_transport(self) -> None:
@@ -128,6 +149,59 @@ class MegaSaverLm2ClosureTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.build_memory(config)
         self.assertEqual(self.requests(), [])
+
+    def test_load_rejects_a_concurrently_held_run_lock_without_transport(self) -> None:
+        memory = self.build_indexed()
+        save_dir = self.root / "saved-held-lock"
+        self.save_memory(memory, save_dir)
+        initial_requests = len(self.requests())
+        lock_path = self.fixture["cache_parent"] / f"instance-{memory._instance_token}" / "run.lock"
+        descriptor = os.open(lock_path, os.O_RDONLY)
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            with self.assertRaises(RuntimeError):
+                self.load_memory(save_dir, requested_config=self.memory_config)
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)
+        self.assertEqual(len(self.requests()), initial_requests)
+
+    def test_load_rejects_lock_replacement_during_state_read_and_releases_lock(self) -> None:
+        memory = self.build_indexed()
+        save_dir = self.root / "saved-lock-race"
+        self.save_memory(memory, save_dir)
+        initial_requests = len(self.requests())
+        run = self.fixture["cache_parent"] / f"instance-{memory._instance_token}"
+        lock_path = run / "run.lock"
+        displaced = run / "displaced.lock"
+        replacement = run / "replacement.lock"
+        replacement.write_bytes(b"")
+        os.chmod(replacement, 0o600)
+        original_json_file = self.backend._json_file
+        replaced = False
+
+        def replace_lock_then_read(path):
+            nonlocal replaced
+            if path.name == "sentinel.json" and not replaced:
+                lock_path.rename(displaced)
+                replacement.rename(lock_path)
+                replaced = True
+            return original_json_file(path)
+
+        self.backend._json_file = replace_lock_then_read
+        try:
+            with self.assertRaises(RuntimeError):
+                self.load_memory(save_dir, requested_config=self.memory_config)
+        finally:
+            self.backend._json_file = original_json_file
+        self.assertTrue(replaced)
+        descriptor = os.open(displaced, os.O_RDONLY)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
+        self.assertEqual(len(self.requests()), initial_requests)
 
 
 if __name__ == "__main__":

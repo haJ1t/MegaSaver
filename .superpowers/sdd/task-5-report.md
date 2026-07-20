@@ -24,6 +24,10 @@ package root. Task 6 evidence/scoring work was not started.
 - Closure RED also proved pre-open rejected queries had no durable telemetry,
   while FIFO and cache-parent replacement could reach the old pathname-based
   writer without a fail-closed identity boundary.
+- Final closure RED proved rejected telemetry persisted a raw untrusted
+  `question_id`, and load adopted state while another process held the run
+  flock. A deterministic replacement during the locked-state read also proved
+  the old lock pathname was not revalidated before adoption.
 - Review RED proved a symlink alias of the original save directory loaded.
   The same state matrix now rejects corrupt control literals, empty-chain
   replay, a foreign trajectory digest, and a copied replacement run root.
@@ -36,7 +40,13 @@ package root. Task 6 evidence/scoring work was not started.
 - Rejected queries now create a separate durable, redacted telemetry stream
   before any transport run exists. Component-anchored directory traversal,
   nonblocking no-follow file opens, link/mode/owner checks, and before/after
-  descriptor-path identity checks reject FIFO or parent substitution.
+  descriptor-path identity checks reject FIFO or parent substitution. The
+  stream omits raw question/context data and retains only a reason, canonical
+  timestamp, random audit ID, and bounded aggregate metadata.
+- Load acquires the real run flock nonblocking before reading run state, binds
+  sentinel/control values to that descriptor, and revalidates lock/run
+  descriptor-path identity immediately before adoption. Busy or replaced state
+  fails before transport; every success and failure path releases the flock.
 - The fixed TypeScript numeric vector is shared with Python, and the real built
   transport accepts a full trajectory containing `1e-7` and `1e20`, proving the
   full-object digest across the language boundary.
@@ -47,7 +57,7 @@ package root. Task 6 evidence/scoring work was not started.
   errors.
 - Long-memory package under root verification: 39/39 files and 334/334 tests
   passed with zero type errors.
-- Python official-base/installer/LM0 suites: 23/23 passed using Python 3.11,
+- Python official-base/installer/LM0 suites: 25/25 passed using Python 3.11,
   the pinned official checkout at commit
   `6f020ac2fc3275e46c706d3406e02c3ed79b7be2`, and the real built Node
   transport; `py_compile` passed.
@@ -55,7 +65,7 @@ package root. Task 6 evidence/scoring work was not started.
 - Root `pnpm verify` passed all 56 Turbo tasks, lint checked 1,631 files, and
   every managed conventions check passed.
 - `git diff --check` passed. Touched source/test/fixture files are at or below
-  300 lines; the Python backend is 299 lines and the largest test is 272.
+  300 lines; the Python backend is 296 lines and the largest test is 272.
 
 ## Environment boundary
 
