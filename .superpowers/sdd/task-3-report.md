@@ -16,10 +16,14 @@ later runtime/benchmark work were not started.
   before the `0600` fixed-lock check was added.
 - Review RED: a real-process V2 writer paused after replacement materialization,
   admitted a newly created V1 catalog, returned true, and changed V2 bytes.
+- Closure RED: a real bootstrap writer paused immediately after acquiring its
+  OS flock, then admitted a newly created V1 catalog and wrote the 65-byte V2
+  lock token before failing. The regression requires no V2 token, control, or
+  catalog bytes when V1 appears in that interval.
 - Review coverage correction: both the old-inode writer and replacement-inode
   writer now invoke `appendPublished` through the catalog API while holding
   their respective real OS flocks; both fail without changing catalog bytes.
-- GREEN: the focused catalog suite passes 26/26 with zero type errors.
+- GREEN: the focused catalog suite passes 27/27 with zero type errors.
 
 ## Implementation
 
@@ -29,23 +33,29 @@ later runtime/benchmark work were not started.
   identity-checked durable replacement, and explicit V1 invalidation.
 - `lm2-catalog-lock.ts`: permanent `0600` lock inode/token binding, immutable
   control validation, blocking established-writer serialization, named crash
-  recovery, V1 absence checks at acquisition/mutation/publication/release, and
-  independent release cleanup.
+  recovery, a post-flock V1 fence before bootstrap token publication, V1
+  absence checks at mutation/publication/release, and independent release
+  cleanup.
 - `lm2-catalog.ts`: public append/page orchestration with the existing API and
   post-publication boolean failure contract.
+- Catalog tests are split by core behavior, process security, index recovery,
+  and exact LM1 locator behavior, with shared data and process fixtures.
 
-Every catalog source module is below 300 lines. The durable paths are exactly
-`candidate-catalog-v2.json`, `candidate-catalog-v2.control.json`, and
-`candidate-catalog-v2.lock` under the workspace `.lm2` directory.
+Every Task 3 source, test, and fixture file is below 300 lines. The durable
+paths are exactly `candidate-catalog-v2.json`,
+`candidate-catalog-v2.control.json`, and `candidate-catalog-v2.lock` under the
+workspace `.lm2` directory.
 
 ## Verification
 
-- `pnpm exec vitest run test/lm2-catalog.test.ts`: 26/26 passed.
-- `pnpm test`: 27/27 files and 289/289 tests passed with zero type errors.
-- `pnpm typecheck`: passed.
-- Root `pnpm lint`: checked 1,595 files with no fixes or errors.
+- Focused four-file catalog suite: 27/27 passed with zero type errors.
+- Package `pnpm exec vitest run --reporter=dot`: 30/30 files and 290/290
+  tests passed with zero type errors.
+- Root `pnpm verify`: passed lint, all workspace typechecks/tests, and the
+  conventions drift check; lint checked 1,600 files with no fixes or errors.
 - `git diff --check`: passed.
-- Source LOC audit: catalog 178, schema 171, storage 186, lock 266.
+- LOC audit: production catalog 178, schema 171, storage 186, lock 267;
+  test/fixture files 110, 226, 61, 167, 243, 212, and 112.
 
 Independent review remains the final Task 3 completion gate. No official
 LongMemEval-V2 score is claimed.
