@@ -10,6 +10,7 @@ import type {
   ModelDescriptor,
   RemoteEmbeddingApprovalPort,
 } from "./lm2-model.js";
+import { snapshotLm2PortValue } from "./lm2-port-safety.js";
 import { approvalBeforeAbort } from "./lm2-secure-publish.js";
 import { canonicalEmbeddingInput } from "./lm2-vector-format.js";
 export type Lm2PendingIndexRecord = Lm2AdmittedIndexRecord & {
@@ -27,7 +28,8 @@ export type Lm2IndexBatchResult = {
     | "timeout"
     | "sidecar_write_failed"
     | "evidence_changed"
-    | "lock_integrity_lost";
+    | "lock_integrity_lost"
+    | "quota_state_invalid";
 };
 
 type BatchTransientReason = Exclude<Lm2IndexBatchResult["transientReason"], null>;
@@ -93,10 +95,13 @@ function validatePortResult(
   count: number,
   dimensions: number,
 ): { modelFingerprint: string; vectors: readonly (readonly number[])[] } {
-  if (typeof value !== "object" || value === null) throw new Error("invalid embedding result");
-  const keys = Reflect.ownKeys(value);
-  const fingerprintField = Reflect.getOwnPropertyDescriptor(value, "modelFingerprint");
-  const vectorsField = Reflect.getOwnPropertyDescriptor(value, "vectors");
+  const snapshot = snapshotLm2PortValue(value);
+  if (snapshot.status === "unreadable") throw new Error("invalid embedding result");
+  const result = snapshot.value;
+  if (typeof result !== "object" || result === null) throw new Error("invalid embedding result");
+  const keys = Reflect.ownKeys(result);
+  const fingerprintField = Reflect.getOwnPropertyDescriptor(result, "modelFingerprint");
+  const vectorsField = Reflect.getOwnPropertyDescriptor(result, "vectors");
   if (
     keys.length !== 2 ||
     keys.some((key) => key !== "modelFingerprint" && key !== "vectors") ||
@@ -145,6 +150,8 @@ function transientReason(
       return "evidence_changed";
     case "lock_integrity_lost":
       return "lock_integrity_lost";
+    case "quota_state_invalid":
+      return "quota_state_invalid";
     case "timeout":
       return "timeout";
     case "storage_limit":
@@ -184,6 +191,7 @@ export async function publishLm2IndexBatch(input: {
   const fingerprint = modelDescriptorFingerprint(input.model);
   const expectedTexts = input.records.map(({ candidate }) => canonicalEmbeddingInput(candidate));
   const expectedIds = new Set(input.records.map(({ candidate }) => candidate.id));
+  let egressConsumed = false;
   const work = input.operation.publishBatch({
     records: input.records.map(({ candidate }) => candidate),
     assertEgressAllowed: async () => {
@@ -207,6 +215,7 @@ export async function publishLm2IndexBatch(input: {
     recheckEvidence: input.recheckEvidence,
     embed: async (call) => {
       if (
+        egressConsumed ||
         input.signal.aborted ||
         call.signal !== input.signal ||
         call.purpose !== "document" ||
@@ -215,6 +224,7 @@ export async function publishLm2IndexBatch(input: {
       ) {
         throw new Error("unbound embedding call");
       }
+      egressConsumed = true;
       const result: unknown = await input.embedding.embed({
         model: input.model,
         purpose: "document",
@@ -262,6 +272,14 @@ export async function publishLm2IndexBatch(input: {
       existingOmissions,
       retryPosition(input.records, committed, input.pageOrigin),
       "timeout",
+    );
+  }
+  if (result.reason === "quota_state_invalid") {
+    return transientBatchResult(
+      [...published],
+      existingOmissions,
+      retryPosition(input.records, committed, input.pageOrigin),
+      "quota_state_invalid",
     );
   }
   if (result.reason === "storage_limit") {

@@ -158,6 +158,52 @@ describe("LM2 hybrid ranker", () => {
     });
   });
 
+  it("degrades when the vector port returns a throwing top-level proxy", async () => {
+    const record = candidate(1, "billing");
+    const input = adaptiveInput([record], []);
+    input.vectors.read.mockResolvedValueOnce(
+      new Proxy(
+        {},
+        {
+          ownKeys() {
+            throw new Error("hostile vector result");
+          },
+        },
+      ) as Lm2VectorReadResult,
+    );
+
+    await expect(rankLm2Candidates(input)).resolves.toMatchObject({
+      orderedCandidateIds: [record.id],
+      hybrid: { semanticStatus: "degraded", semanticReasons: ["invalid_vectors"] },
+    });
+    expect(input.embedding.embed).not.toHaveBeenCalled();
+  });
+
+  it("degrades when the embedding result contains a throwing nested getter", async () => {
+    const record = candidate(1, "billing");
+    const input = adaptiveInput(
+      [record],
+      [{ candidateId: record.id, vector: [1, 0], decodedBytes: 8 }],
+    );
+    const vector: unknown[] = [];
+    Object.defineProperty(vector, "0", {
+      enumerable: true,
+      get() {
+        throw new Error("hostile embedding component");
+      },
+    });
+    vector.length = 2;
+    input.embedding.embed.mockResolvedValueOnce({
+      modelFingerprint: modelDescriptorFingerprint(model),
+      vectors: [vector as number[]],
+    });
+
+    await expect(rankLm2Candidates(input)).resolves.toMatchObject({
+      orderedCandidateIds: [record.id],
+      hybrid: { semanticStatus: "degraded", semanticReasons: ["invalid_vectors"] },
+    });
+  });
+
   it("preserves invalid and quota-ledger diagnostics without synthesizing missing", async () => {
     const indexed = candidate(1, "billing");
     const invalid = candidate(2, "billing");

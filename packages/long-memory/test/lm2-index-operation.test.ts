@@ -1,14 +1,28 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 let failNextFsync = false;
+let failNextClose = false;
+let failNextPendingUnlink = false;
+let failEveryClose = false;
+let failCloseAfter: number | null = null;
 
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return {
     ...actual,
+    closeSync(descriptor: number) {
+      actual.closeSync(descriptor);
+      const delayedFailure = failCloseAfter === 0;
+      if (failCloseAfter !== null && failCloseAfter > 0) failCloseAfter -= 1;
+      if (delayedFailure) failCloseAfter = null;
+      if (failEveryClose || failNextClose || delayedFailure) {
+        failNextClose = false;
+        throw new Error("injected descriptor close failure");
+      }
+    },
     fsyncSync(descriptor: number) {
       if (failNextFsync) {
         failNextFsync = false;
@@ -16,10 +30,19 @@ vi.mock("node:fs", async (importOriginal) => {
       }
       actual.fsyncSync(descriptor);
     },
+    unlinkSync(path: import("node:fs").PathLike) {
+      if (failNextPendingUnlink && String(path).endsWith(".pending")) {
+        failNextPendingUnlink = false;
+        throw new Error("injected pending unlink failure");
+      }
+      actual.unlinkSync(path);
+    },
   };
 });
 
 import { embeddingInputDigest, modelDescriptorFingerprint } from "../src/lm2-identity.js";
+import { createLm2IndexPlanSequence } from "../src/lm2-index-plan.js";
+import type { Lm2Candidate } from "../src/lm2-model.js";
 import {
   lm2PendingTemporaryName,
   lm2QuotaLedgerSchema,
@@ -41,6 +64,10 @@ import {
 
 afterEach(() => {
   failNextFsync = false;
+  failNextClose = false;
+  failNextPendingUnlink = false;
+  failEveryClose = false;
+  failCloseAfter = null;
   cleanupRoots();
 });
 
@@ -50,6 +77,278 @@ function deadline() {
 }
 
 describe("LM2 index operation", () => {
+  it("consumes only the exact one-shot batch plan under its originating operation", async () => {
+    const model = createModel();
+    const records = [createCandidate(1), createCandidate(2)];
+    const context = {
+      operationId: "11111111-1111-4111-8111-111111111111",
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      deadlineAtMs: 100,
+    };
+    const sequence = createLm2IndexPlanSequence(context);
+    const foreign = createLm2IndexPlanSequence({
+      ...context,
+      operationId: "22222222-2222-4222-8222-222222222222",
+    });
+    const egress = vi.fn(async () => "sent");
+    const plan = sequence.mint({
+      generation: 7,
+      candidates: records,
+      existingIds: [],
+      missingIds: records.map(({ id }) => id),
+    });
+
+    expect(
+      await foreign.consume(plan, {
+        generation: 7,
+        candidates: records,
+        existingIds: [],
+        missingIds: records.map(({ id }) => id),
+        now: 0,
+        egress,
+      }),
+    ).toEqual({ status: "rejected" });
+    for (const attempt of [
+      { candidates: records.slice(0, 1), missingIds: [records[0]?.id] },
+      { candidates: [...records].reverse(), missingIds: records.map(({ id }) => id).reverse() },
+      { candidates: [records[0], records[0]], missingIds: [records[0]?.id, records[0]?.id] },
+    ]) {
+      expect(
+        await sequence.consume(plan, {
+          generation: 7,
+          candidates: attempt.candidates.filter(
+            (record): record is (typeof records)[number] => record !== undefined,
+          ),
+          existingIds: [],
+          missingIds: attempt.missingIds.filter((id): id is string => id !== undefined),
+          now: 0,
+          egress,
+        }),
+      ).toEqual({ status: "rejected" });
+    }
+    expect(egress).not.toHaveBeenCalled();
+
+    const consumed = await sequence.consume(plan, {
+      generation: 7,
+      candidates: records,
+      existingIds: [],
+      missingIds: records.map(({ id }) => id),
+      now: 0,
+      egress,
+    });
+    expect(consumed).toEqual({ status: "consumed", value: "sent" });
+    expect(() =>
+      sequence.mint({
+        generation: 8,
+        candidates: records,
+        existingIds: [],
+        missingIds: records.map(({ id }) => id),
+      }),
+    ).toThrow();
+    await expect(
+      sequence.consume(plan, {
+        generation: 7,
+        candidates: records,
+        existingIds: [],
+        missingIds: records.map(({ id }) => id),
+        now: 0,
+        egress,
+      }),
+    ).resolves.toEqual({ status: "rejected" });
+    expect(egress).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects post-plan mutation and expiry without egress", async () => {
+    const record = createCandidate(1);
+    const sequence = createLm2IndexPlanSequence({
+      operationId: "11111111-1111-4111-8111-111111111111",
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(createModel()),
+      deadlineAtMs: 100,
+    });
+    const egress = vi.fn();
+    const plan = sequence.mint({
+      generation: 1,
+      candidates: [record],
+      existingIds: [],
+      missingIds: [record.id],
+    });
+    record.text = "mutated after planning";
+    await expect(
+      sequence.consume(plan, {
+        generation: 1,
+        candidates: [record],
+        existingIds: [],
+        missingIds: [record.id],
+        now: 0,
+        egress,
+      }),
+    ).resolves.toEqual({ status: "rejected" });
+    const expiring = createLm2IndexPlanSequence({
+      operationId: "22222222-2222-4222-8222-222222222222",
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(createModel()),
+      deadlineAtMs: 100,
+    });
+    const fresh = createCandidate(2);
+    const expired = expiring.mint({
+      generation: 1,
+      candidates: [fresh],
+      existingIds: [],
+      missingIds: [fresh.id],
+    });
+    await expect(
+      expiring.consume(expired, {
+        generation: 1,
+        candidates: [fresh],
+        existingIds: [],
+        missingIds: [fresh.id],
+        now: 100,
+        egress,
+      }),
+    ).resolves.toEqual({ status: "rejected" });
+    expect(egress).not.toHaveBeenCalled();
+  });
+
+  it("consumes a 17-record sequence only as batches of sixteen then one", async () => {
+    const records = Array.from({ length: 17 }, (_, index) => createCandidate(index + 1));
+    const sequence = createLm2IndexPlanSequence({
+      operationId: "11111111-1111-4111-8111-111111111111",
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(createModel()),
+      deadlineAtMs: 100,
+    });
+    const egress = vi.fn(async (batch: readonly Lm2Candidate[]) => batch.map(({ id }) => id));
+    const firstRecords = records.slice(0, 16);
+    const first = sequence.mint({
+      generation: 1,
+      candidates: firstRecords,
+      existingIds: [],
+      missingIds: firstRecords.map(({ id }) => id),
+    });
+    await sequence.consume(first, {
+      generation: 1,
+      candidates: firstRecords,
+      existingIds: [],
+      missingIds: firstRecords.map(({ id }) => id),
+      now: 0,
+      egress,
+    });
+    await expect(
+      sequence.consume(first, {
+        generation: 1,
+        candidates: firstRecords,
+        existingIds: [],
+        missingIds: firstRecords.map(({ id }) => id),
+        now: 0,
+        egress,
+      }),
+    ).resolves.toEqual({ status: "rejected" });
+    expect(() =>
+      sequence.mint({
+        generation: 2,
+        candidates: firstRecords,
+        existingIds: [],
+        missingIds: firstRecords.map(({ id }) => id),
+      }),
+    ).toThrow();
+    const secondRecords = records.slice(16);
+    const second = sequence.mint({
+      generation: 2,
+      candidates: secondRecords,
+      existingIds: [],
+      missingIds: secondRecords.map(({ id }) => id),
+    });
+    await sequence.consume(second, {
+      generation: 2,
+      candidates: secondRecords,
+      existingIds: [],
+      missingIds: secondRecords.map(({ id }) => id),
+      now: 0,
+      egress,
+    });
+
+    expect(egress.mock.calls.map(([batch]) => batch.length)).toEqual([16, 1]);
+  });
+
+  it("rejects a concurrent batch before reservation or egress", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const operation = await createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: deadline(),
+    });
+    if (operation.status !== "ready") throw new Error("operation unavailable");
+    let releaseFirst!: () => void;
+    let markStarted!: () => void;
+    const firstStarted = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const first = operation.publishBatch({
+      records: [createCandidate(1)],
+      assertEgressAllowed: async () => true,
+      recheckEvidence: async () => true,
+      embed: async () => {
+        markStarted();
+        await firstGate;
+        return {
+          modelFingerprint: modelDescriptorFingerprint(model),
+          vectors: [[1, 2, 3]],
+        };
+      },
+    });
+    await firstStarted;
+    const secondEmbed = vi.fn();
+
+    await expect(
+      operation.publishBatch({
+        records: [createCandidate(2)],
+        assertEgressAllowed: async () => true,
+        recheckEvidence: async () => true,
+        embed: secondEmbed,
+      }),
+    ).resolves.toEqual({ published: [], existing: [], reason: "lock_integrity_lost" });
+    expect(secondEmbed).not.toHaveBeenCalled();
+    releaseFirst();
+    await expect(first).resolves.toMatchObject({ reason: null });
+    await operation.finalize();
+  });
+
+  it("publishes 17 real records as sixteen then one without replay egress", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const records = Array.from({ length: 17 }, (_, index) => createCandidate(index + 1));
+    const operation = await createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: deadline(),
+    });
+    if (operation.status !== "ready") throw new Error("operation unavailable");
+    const embed = vi.fn(async ({ texts }: { texts: readonly string[] }) => ({
+      modelFingerprint: modelDescriptorFingerprint(model),
+      vectors: texts.map(() => [1, 2, 3]),
+    }));
+    const publish = (batch: readonly Lm2Candidate[]) =>
+      operation.publishBatch({
+        records: batch,
+        assertEgressAllowed: async () => true,
+        recheckEvidence: async () => true,
+        embed,
+      });
+
+    await expect(publish(records.slice(0, 16))).resolves.toMatchObject({ reason: null });
+    await expect(publish(records.slice(16))).resolves.toMatchObject({ reason: null });
+    await expect(publish(records.slice(0, 16))).resolves.toMatchObject({ reason: null });
+
+    expect(embed.mock.calls.map(([call]) => call.texts.length)).toEqual([16, 1]);
+    await operation.finalize();
+  });
+
   it("initializes one fenced ledger before returning a ready capability", async () => {
     const root = createRoot();
     const result = await createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
@@ -170,7 +469,133 @@ describe("LM2 index operation", () => {
     }
   });
 
-  it("reports the committed prefix when a later publication fails", async () => {
+  it.each(["close", "unlink"] as const)(
+    "keeps a failed temporary %s cleanup blocked on the same operation",
+    async (failure) => {
+      const root = createRoot();
+      const model = createModel();
+      const operation = await createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
+        workspaceKey,
+        model,
+        deadline: deadline(),
+      });
+      if (operation.status !== "ready") throw new Error("operation unavailable");
+
+      const result = await operation.publishBatch({
+        records: [createCandidate(1)],
+        assertEgressAllowed: async () => true,
+        recheckEvidence: async () => {
+          if (failure === "close") failNextClose = true;
+          else failNextPendingUnlink = true;
+          return true;
+        },
+        embed: async () => ({
+          modelFingerprint: modelDescriptorFingerprint(model),
+          vectors: [[1, 2, 3]],
+        }),
+      });
+
+      expect(result).toEqual({
+        published: [],
+        existing: [],
+        reason: "quota_state_invalid",
+        quotaRecovery: "blocked_pending",
+      });
+      const namespace = dirname(
+        join(
+          root,
+          "long-memory",
+          "v1",
+          workspaceKey,
+          "embeddings-v2",
+          modelDescriptorFingerprint(model),
+          `${createCandidate(1).id}.json`,
+        ),
+      );
+      if (failure === "close") {
+        expect(readdirSync(namespace).some((name) => name.endsWith(".pending"))).toBe(false);
+      }
+      await expect(operation.finalize()).rejects.toThrow();
+    },
+  );
+
+  it("marks a ledger replacement temporary close failure blocked on the same operation", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const operation = await createLm2VectorStore({ storeRoot: root }).beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: deadline(),
+    });
+    if (operation.status !== "ready") throw new Error("operation unavailable");
+
+    const result = await operation.publishBatch({
+      records: [createCandidate(1)],
+      assertEgressAllowed: async () => true,
+      recheckEvidence: async () => true,
+      embed: async () => {
+        failNextClose = true;
+        return {
+          modelFingerprint: modelDescriptorFingerprint(model),
+          vectors: [[1, 2, 3]],
+        };
+      },
+    });
+
+    expect(result).toEqual({
+      published: [],
+      existing: [],
+      reason: "quota_state_invalid",
+      quotaRecovery: "blocked_pending",
+    });
+    const secondEmbed = vi.fn();
+    await expect(
+      operation.publishBatch({
+        records: [createCandidate(2)],
+        assertEgressAllowed: async () => true,
+        recheckEvidence: async () => true,
+        embed: secondEmbed,
+      }),
+    ).resolves.toEqual({
+      published: [],
+      existing: [],
+      reason: "quota_state_invalid",
+      quotaRecovery: "blocked_pending",
+    });
+    expect(secondEmbed).not.toHaveBeenCalled();
+    await expect(operation.finalize()).rejects.toThrow();
+  });
+
+  it.each(["ledger-anchor", "lock", "multiple"] as const)(
+    "attempts lock release after %s cleanup failure",
+    async (failure) => {
+      const root = createRoot();
+      const store = createLm2VectorStore({ storeRoot: root });
+      const operation = await store.beginIndexOperation({
+        workspaceKey,
+        model: createModel(),
+        deadline: deadline(),
+      });
+      if (operation.status !== "ready") throw new Error("operation unavailable");
+      if (failure === "multiple") failEveryClose = true;
+      else if (failure === "lock") {
+        failCloseAfter =
+          dirname(vectorQuotaLedgerPath(root, workspaceKey)).split("/").filter(Boolean).length + 1;
+      } else failNextClose = true;
+
+      await expect(operation.finalize()).rejects.toThrow();
+      failEveryClose = false;
+      const next = await store.beginIndexOperation({
+        workspaceKey,
+        model: createModel(),
+        deadline: deadline(),
+      });
+      expect(next).toMatchObject({ status: "ready" });
+      if (next.status === "ready") await next.finalize();
+    },
+  );
+
+  it("reports blocked recovery on the same result with its committed prefix", async () => {
     const root = createRoot();
     const model = createModel();
     const fingerprint = modelDescriptorFingerprint(model);
@@ -213,7 +638,8 @@ describe("LM2 index operation", () => {
     expect(publish).toEqual({
       published: [records[0]?.id],
       existing: [],
-      reason: "write_failed",
+      reason: "quota_state_invalid",
+      quotaRecovery: "blocked_pending",
     });
     expect(readFileSync(conflictingPath, "utf8")).toBe("foreign\n");
     const firstPath = join(dirname(conflictingPath), `${records[0]?.id}.json`);
@@ -226,7 +652,7 @@ describe("LM2 index operation", () => {
       nextAllocationSequence: 2,
       pending: { firstAllocationSequence: 2, lastAllocationSequence: 2 },
     });
-    await operation.finalize();
+    await expect(operation.finalize()).rejects.toThrow();
     await expect(
       store.beginIndexOperation({ workspaceKey, model, deadline: deadline() }),
     ).resolves.toEqual({ status: "invalid", quotaRecovery: "blocked_pending" });

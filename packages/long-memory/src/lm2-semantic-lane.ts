@@ -8,6 +8,7 @@ import {
   type RemoteEmbeddingApprovalPort,
   lm2VectorReadResultSchema,
 } from "./lm2-model.js";
+import { snapshotLm2PortValue } from "./lm2-port-safety.js";
 import { type Lm2ScoredVector, normalizeLm2Vector } from "./lm2-ranking-core.js";
 import type { Lm2VectorStore } from "./lm2-vector-store.js";
 
@@ -62,7 +63,9 @@ function parseVectorRead(input: {
   candidates: readonly Lm2Candidate[];
   dimensions: number;
 }): ParsedVectorRead {
-  const parsed = lm2VectorReadResultSchema.safeParse(input.value);
+  const snapshot = snapshotLm2PortValue(input.value);
+  if (snapshot.status === "unreadable") return { status: "invalid", reason: "invalid_vectors" };
+  const parsed = lm2VectorReadResultSchema.safeParse(snapshot.value);
   if (!parsed.success) return { status: "invalid", reason: "invalid_vectors" };
   const candidateIds = new Set(input.candidates.map(({ id }) => id));
   const vectorIds = new Set<string>();
@@ -221,7 +224,11 @@ async function executeSemantic(input: {
     return degraded(coverage, [...coverage.reasons, isExpired() ? "timeout" : "port_failure"]);
   }
   if (isExpired()) return degraded(coverage, [...coverage.reasons, "timeout"]);
-  const parsed = embeddingOutputSchema.safeParse(output);
+  const snapshot = snapshotLm2PortValue(output);
+  if (snapshot.status === "unreadable") {
+    return degraded(coverage, [...coverage.reasons, "invalid_vectors"]);
+  }
+  const parsed = embeddingOutputSchema.safeParse(snapshot.value);
   const queryVector = parsed.success ? parsed.data.vectors[0] : undefined;
   if (
     !parsed.success ||

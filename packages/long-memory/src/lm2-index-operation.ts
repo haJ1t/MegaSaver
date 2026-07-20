@@ -3,6 +3,7 @@ import { type Stats, lstatSync } from "node:fs";
 import { dirname } from "node:path";
 import { Lm2Error } from "./lm2-errors.js";
 import { modelDescriptorFingerprint } from "./lm2-identity.js";
+import { createLm2IndexPlanSequence } from "./lm2-index-plan.js";
 import {
   type Lm2OperationFence,
   advanceLm2Ledger,
@@ -14,6 +15,7 @@ import {
   type BeginLm2IndexOperationInput,
   Lm2ApprovalTimeoutError,
   type Lm2IndexOperationResult,
+  type Lm2PublishBatchResult,
   type Lm2ReadyIndexOperation,
   acquireWorkspaceIndexLock,
 } from "./lm2-lock.js";
@@ -27,11 +29,14 @@ import {
 } from "./lm2-quota-ledger.js";
 import { closeDirectoryAnchor, openDirectoryAnchor, sameFileIdentity } from "./lm2-secure-fs.js";
 import {
+  Lm2CleanupError,
   Lm2PartialPublicationError,
+  isLm2CleanupError,
   publishLm2ReservedBatch,
   replaceAnchoredFile,
 } from "./lm2-secure-publish.js";
 import { parseCandidates } from "./lm2-vector-format.js";
+import { canonicalEmbeddingInput } from "./lm2-vector-format.js";
 import { ensureIndexLockPath, vectorQuotaLedgerPath } from "./lm2-vector-paths.js";
 import {
   type NamedSidecarState,
@@ -69,13 +74,18 @@ export async function beginIndexOperation(
   const ledgerPath = vectorQuotaLedgerPath(input.storeRoot, input.workspaceKey);
   const ledgerAnchor = openDirectoryAnchor(dirname(ledgerPath), false);
   if (ledgerAnchor === null) {
-    lock.release();
+    try {
+      lock.release();
+    } catch {
+      return { status: "invalid", quotaRecovery: "blocked_pending" };
+    }
     return { status: "unavailable" };
   }
   let ledgerIdentity: Stats | null = null;
   let ledger: Lm2QuotaLedger;
   let metadataReads = 0;
   let finalized = false;
+  let cleanupBlocked = false;
   const assertFence = () => {
     if (finalized) throw new Error("stale operation");
     lock.assertIntact();
@@ -157,15 +167,34 @@ export async function beginIndexOperation(
     recover: recoverPending,
   });
   if (prepared.status !== "ready") {
-    closeDirectoryAnchor(ledgerAnchor);
-    lock.release();
+    let cleanupFailed = false;
+    try {
+      closeDirectoryAnchor(ledgerAnchor);
+    } catch {
+      cleanupFailed = true;
+    }
+    try {
+      lock.release();
+    } catch {
+      cleanupFailed = true;
+    }
     return {
       status: "invalid",
-      quotaRecovery: prepared.status === "blocked" ? "blocked_pending" : "not_needed",
+      quotaRecovery:
+        cleanupFailed || prepared.status === "blocked" ? "blocked_pending" : "not_needed",
     };
   }
   ledger = prepared.ledger;
-  const publishBatch: Lm2ReadyIndexOperation["publishBatch"] = async (request) => {
+  const planSequence = createLm2IndexPlanSequence({
+    operationId,
+    workspaceKey: input.workspaceKey,
+    modelFingerprint: modelDescriptorFingerprint(input.model),
+    deadlineAtMs: input.deadline.deadlineAtMs,
+  });
+  let publishInFlight = false;
+  const performPublishBatch = async (
+    request: Parameters<Lm2ReadyIndexOperation["publishBatch"]>[0],
+  ): Promise<Lm2PublishBatchResult> => {
     const published: string[] = [];
     const existing: string[] = [];
     let records: Lm2Candidate[];
@@ -216,6 +245,13 @@ export async function beginIndexOperation(
         return { published, existing, reason: "storage_limit" };
       }
       persist(reservedLedger);
+      const planGeneration = ledger.generation;
+      const plan = planSequence.mint({
+        generation: planGeneration,
+        candidates: records,
+        existingIds: existing,
+        missingIds: planned.map(({ id }) => id),
+      });
       const result = await publishLm2ReservedBatch({
         storeRoot: input.storeRoot,
         workspaceKey: input.workspaceKey,
@@ -227,7 +263,33 @@ export async function beginIndexOperation(
         signal: input.deadline.signal,
         deadlineAtMs: input.deadline.deadlineAtMs,
         now: input.deadline.now,
-        embed: request.embed,
+        embed: async (call) => {
+          let now: number;
+          try {
+            now = input.deadline.now();
+          } catch {
+            throw new Error("LM2 batch plan clock failed.");
+          }
+          const consumed = await planSequence.consume(plan, {
+            generation: planGeneration,
+            candidates: records,
+            existingIds: existing,
+            missingIds: planned.map(({ id }) => id),
+            now,
+            egress: async (frozenMissing) => {
+              const texts = frozenMissing.map(canonicalEmbeddingInput);
+              if (
+                call.texts.length !== texts.length ||
+                call.texts.some((text, index) => text !== texts[index])
+              ) {
+                throw new Error("LM2 batch plan projection changed.");
+              }
+              return request.embed({ ...call, texts });
+            },
+          });
+          if (consumed.status !== "consumed") throw new Error("LM2 batch plan was rejected.");
+          return consumed.value;
+        },
         assertEgressAllowed: request.assertEgressAllowed,
         recheckEvidence: request.recheckEvidence,
         assertGuard,
@@ -259,10 +321,32 @@ export async function beginIndexOperation(
       });
       return { ...result, existing };
     } catch (error) {
-      try {
-        settlePending();
-      } catch {
-        /* Retain the pending transaction for the next locked recovery. */
+      if (isLm2CleanupError(error)) {
+        cleanupBlocked = true;
+      } else {
+        try {
+          if (!settlePending()) cleanupBlocked = true;
+        } catch {
+          cleanupBlocked = true;
+        }
+      }
+      if (cleanupBlocked) {
+        const committed =
+          error instanceof Lm2PartialPublicationError
+            ? error.entries
+                .filter((entry) => entry.allocationSequence <= ledger.committedThroughAllocation)
+                .map((entry) => entry.recordId)
+            : error instanceof Lm2CleanupError
+              ? error.entries
+                  .filter((entry) => entry.allocationSequence <= ledger.committedThroughAllocation)
+                  .map((entry) => entry.recordId)
+              : [];
+        return {
+          published: committed,
+          existing,
+          reason: "quota_state_invalid",
+          quotaRecovery: "blocked_pending",
+        };
       }
       return {
         published:
@@ -281,20 +365,58 @@ export async function beginIndexOperation(
       };
     }
   };
+  const publishBatch: Lm2ReadyIndexOperation["publishBatch"] = async (request) => {
+    if (cleanupBlocked) {
+      return {
+        published: [],
+        existing: [],
+        reason: "quota_state_invalid",
+        quotaRecovery: "blocked_pending",
+      };
+    }
+    if (publishInFlight || finalized) {
+      return { published: [], existing: [], reason: "lock_integrity_lost" };
+    }
+    publishInFlight = true;
+    try {
+      return await performPublishBatch(request);
+    } finally {
+      publishInFlight = false;
+    }
+  };
   return {
     status: "ready",
     quotaRecovery: prepared.quotaRecovery,
     publishBatch,
     async finalize() {
       if (finalized) return;
-      try {
-        if (ledger.pending !== null) settlePending();
-        if (ledger.pending === null) persist(advanceLm2Ledger({ ledger, fence: null }));
-      } finally {
-        finalized = true;
-        closeDirectoryAnchor(ledgerAnchor);
-        lock.release();
+      if (publishInFlight) {
+        throw new Lm2CleanupError("LM2 publication is still in flight.", undefined);
       }
+      let failure: unknown;
+      try {
+        if (cleanupBlocked) throw new Lm2CleanupError("LM2 cleanup remains blocked.", undefined);
+        if (ledger.pending !== null && !settlePending()) {
+          cleanupBlocked = true;
+          throw new Lm2CleanupError("LM2 pending cleanup remains blocked.", undefined);
+        }
+        if (ledger.pending === null) persist(advanceLm2Ledger({ ledger, fence: null }));
+      } catch (error) {
+        failure = error;
+      }
+      finalized = true;
+      try {
+        closeDirectoryAnchor(ledgerAnchor);
+      } catch (error) {
+        failure ??= error;
+      }
+      try {
+        lock.release();
+      } catch (error) {
+        failure ??= error;
+      }
+      if (failure !== undefined)
+        throw new Lm2CleanupError("LM2 operation cleanup failed.", failure);
     },
   };
 }
