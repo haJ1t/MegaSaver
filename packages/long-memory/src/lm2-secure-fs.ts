@@ -10,6 +10,7 @@ import {
   readdirSync,
 } from "node:fs";
 import { basename, dirname, join, parse, relative, resolve, sep } from "node:path";
+import { combineLm2CleanupFailures } from "./lm2-cleanup-errors.js";
 import { Lm2Error } from "./lm2-errors.js";
 
 type AnchoredIdentity = { path: string; descriptor: number; stat: Stats };
@@ -60,11 +61,13 @@ function closeDescriptors(chain: readonly AnchoredIdentity[]): void {
     try {
       closeSync(entry.descriptor);
     } catch (error) {
-      failure ??= error;
+      failure = combineLm2CleanupFailures(failure, error);
     }
   }
   if (failure !== undefined) {
-    throw new Lm2Error("store_corrupt", "LM2 directory descriptor close failed.");
+    throw new Lm2Error("store_corrupt", "LM2 directory descriptor close failed.", {
+      cause: failure,
+    });
   }
 }
 
@@ -231,11 +234,11 @@ export function closeAnchoredFile(file: AnchoredFile): void {
     try {
       closeDirectoryAnchor(file.parent);
     } catch (error) {
-      failure ??= error;
+      failure = combineLm2CleanupFailures(failure, error);
     }
   }
   if (failure !== undefined) {
-    throw new Lm2Error("store_corrupt", "LM2 file descriptor close failed.");
+    throw new Lm2Error("store_corrupt", "LM2 file descriptor close failed.", { cause: failure });
   }
 }
 
