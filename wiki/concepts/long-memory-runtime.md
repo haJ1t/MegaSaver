@@ -149,29 +149,39 @@ Busy, FIFO, link, and replacement substitution fail closed. This is
 implementation evidence only, not an official LongMemEval-V2 score. (source:
 `.superpowers/sdd/task-5-report.md`)
 
-LM2 completion now has a strict evidence schema and a standalone official-
-artifact verifier. Inspection can authenticate a complete recorded two-domain
-bundle, while preflight authenticates a pristine official checkout at commit
-`6f020ac2fc3275e46c706d3406e02c3ed79b7be2`; both modes always report
-`officialScoreEligible: false`. Only full verification can report `true`, and
-it additionally requires the pinned data revision and checksums, official data
-validator output, the allowlisted installed checkout diff, recomputed official
-aggregates from raw per-question results, exact raw latency samples, both web
-and enterprise runs, and freshly rebuilt leaderboard artifacts. Reader, judge,
-local embedding, hardware/software, adapter, transport, telemetry, failure,
-package-inventory, submission-overview, and tarball evidence are all bound into
-the same bundle. (source: `benchmarks/longmemeval-v2/evidence-schema.json`,
-`benchmarks/longmemeval-v2/verify-official-artifacts.mjs`)
+The benchmark context boundary is now deliberately separate from the product
+selector. `Lm2BenchmarkContextBuilder` receives already ordered public
+candidates and the harness token budget; it never calls or imitates LM1
+capture, correction closure, evidence authorization, or recall. A shared-
+candidate fixture proves the intended difference: the benchmark path can emit
+a raw superseded projection while LM1 returns its current evidence-valid
+correction. LM1 model/path/store internals were split behind compatible public
+facades, and an automated source gate keeps every production long-memory
+TypeScript and benchmark script at 300 lines or fewer. (source:
+`packages/long-memory/src/lm2-benchmark-context.ts`,
+`packages/long-memory/test/lm2-benchmark-context.test.ts`,
+`packages/long-memory/test/source-size.test.ts`)
 
-Local completion evidence is green: the strict gate regressions passed 13/13,
-the long-memory package passed 40/40 files and 350/350 tests with no type
-errors, the official-base Python suite passed 26/26 with the built transport,
-and repository `pnpm verify` completed 56/56 Turbo tasks. A real pinned-checkout
-preflight passed but remained explicitly ineligible. No official web plus
-enterprise harness/judge run was available, so no official score or dashboard
-claim exists. (source:
-`packages/long-memory/test/lm2-completion-integration.test.ts`,
-`docs/superpowers/plans/2026-07-20-long-memory-lm2-runtime-security-completion-plan.md`)
+LM2 completion now executes its strict evidence JSON Schema rather than using
+it as documentation only. Inspection and pinned-checkout preflight remain
+ineligible. Full verification alone can report `officialScoreEligible: true`,
+after binding each run to a rebuilt canonical domain manifest, exact transport
+command/executable digest, and Mega Saver commit; recomputing official domain
+and combined metrics plus all five latency aggregates; cross-binding telemetry
+IDs/latencies to harness rows; and deterministically rerunning both pinned
+leaderboard builders. The fresh package, overview/LAFS reference frontier, and
+extracted tar contents must be byte-identical to the recorded artifacts.
+(source: `benchmarks/longmemeval-v2/evidence-schema.json`,
+`benchmarks/longmemeval-v2/verify-official-artifacts.mjs`,
+`benchmarks/longmemeval-v2/official-evidence-freshness.mjs`)
+
+Local closure evidence is green: evidence regressions passed 20/20, the long-
+memory package passed 42/42 files and 361/361 tests with zero type errors, the
+pinned official-base Python suite passed 26 tests with one optional transport
+test skipped, and repository `pnpm verify` completed 56/56 Turbo tasks. No
+authoritative completed web plus enterprise harness/judge bundle was available,
+so full qualification was not run and no official score, dashboard, latency,
+or LAFS claim exists. (source: `.superpowers/sdd/task-6-report.md`)
 
 The verifier fails closed on every detected malformed, stale, symlinked, or
 identity-mismatched artifact. It does not supply a native anti-tamper anchor:

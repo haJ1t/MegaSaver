@@ -4,6 +4,7 @@
     "manifest_path": "/absolute/path/to/megasaver-lm2-manifest-v1.json",
     "manifest_digest": "replace-with-the-64-character-manifest-sha256-digest",
     "data_revision": "f152293e235517d504809563c833d7190b8c713b",
+    "megasaver_commit": "replace-with-the-40-character-megasaver-git-commit",
     "cache_parent": "/absolute/path/to/private-megasaver-lm2-cache",
     "transport_command": [
       "node",

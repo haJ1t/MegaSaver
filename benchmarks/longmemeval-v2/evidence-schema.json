@@ -43,6 +43,15 @@
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "gitCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "absoluteArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
     "safeRelativePath": {
       "type": "string",
       "minLength": 1,
@@ -230,11 +239,12 @@
     "implementation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["megaSaverCommit", "adapter", "transport"],
+      "required": ["megaSaverCommit", "adapter", "transport", "transportExecutable"],
       "properties": {
         "megaSaverCommit": { "$ref": "#/$defs/gitCommit" },
         "adapter": { "$ref": "#/$defs/artifact" },
-        "transport": { "$ref": "#/$defs/artifact" }
+        "transport": { "$ref": "#/$defs/artifact" },
+        "transportExecutable": { "$ref": "#/$defs/absoluteArtifact" }
       }
     },
     "run": {
@@ -266,11 +276,12 @@
         "runtimeInputs": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["questions", "haystack", "memoryConfig"],
+          "required": ["questions", "haystack", "memoryConfig", "manifest"],
           "properties": {
             "questions": { "$ref": "#/$defs/artifact" },
             "haystack": { "$ref": "#/$defs/artifact" },
-            "memoryConfig": { "$ref": "#/$defs/artifact" }
+            "memoryConfig": { "$ref": "#/$defs/artifact" },
+            "manifest": { "$ref": "#/$defs/artifact" }
           }
         },
         "telemetry": { "$ref": "#/$defs/countedArtifact" },
@@ -347,14 +358,14 @@
         "step2"
       ],
       "properties": {
-        "submissionName": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
-        "operatingPointName": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "submissionName": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+        "operatingPointName": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
         "systemDescription": { "$ref": "#/$defs/artifact" },
         "codeArtifact": { "$ref": "#/$defs/artifact" },
         "packageDirectory": { "$ref": "#/$defs/safeRelativePath" },
         "packageFiles": {
           "type": "array",
-          "minItems": 17,
+          "minItems": 19,
           "items": { "$ref": "#/$defs/artifact" }
         },
         "submissionOverview": { "$ref": "#/$defs/artifact" },

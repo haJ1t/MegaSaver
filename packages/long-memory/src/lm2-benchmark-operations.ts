@@ -53,6 +53,20 @@ function admittedQuestion(input: {
   return question;
 }
 
+function insertedProjections(
+  manifest: BenchmarkManifest,
+  chain: readonly { id: string; fullObjectDigest: string }[],
+) {
+  return chain.flatMap((entry) => {
+    const trajectory = manifest.trajectories.find(
+      (candidate) =>
+        candidate.id === entry.id && candidate.fullObjectDigest === entry.fullObjectDigest,
+    );
+    if (trajectory === undefined) throw new BenchmarkTransportError("state_rejected");
+    return trajectory.projections;
+  });
+}
+
 export async function runBenchmarkOperation(request: BenchmarkRequest): Promise<unknown> {
   const manifest = readBenchmarkManifest(request.config);
   if (request.op === "open") {
@@ -108,7 +122,10 @@ export async function runBenchmarkOperation(request: BenchmarkRequest): Promise<
         sentinelToken: request.sentinelToken,
       });
       const started = performance.now();
-      const recalled = await runtime.query(request.query);
+      const recalled = await runtime.query(
+        request.query,
+        insertedProjections(manifest, control.chain),
+      );
       const latencyMs = performance.now() - started;
       const items = recalled.items
         .filter((item) => item.type === "text" && item.value.trim())

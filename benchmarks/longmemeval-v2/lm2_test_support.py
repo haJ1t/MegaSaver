@@ -209,6 +209,7 @@ def make_fixture(root: Path) -> dict[str, object]:
         "manifest_path": str(manifest_path),
         "manifest_digest": digest(manifest),
         "data_revision": DATA_REVISION,
+        "megasaver_commit": "e" * 40,
         "cache_parent": str(cache_parent),
         "transport_command": [os.environ.get("PYTHON", os.sys.executable), str(fake_transport), str(request_log)],
         "profile": "adaptive",
