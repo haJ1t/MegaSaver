@@ -243,6 +243,7 @@ Run: `git add packages/long-memory/src/lm2-{index-admission,index-batches,index}
 **Files:**
 - Modify: `packages/long-memory/test/lm2-catalog.test.ts`
 - Modify: `packages/long-memory/test/index.test-d.ts`
+- Modify: `packages/long-memory/test/lm2-vector-store.test.ts`
 - Modify: `wiki/concepts/long-memory-runtime.md`
 - Modify: `wiki/log.md`
 - Modify: `wiki/agent-channel.md`
@@ -260,7 +261,7 @@ it("serializes a multi-batch index and recovers a published pending prefix witho
 
 - [ ] **Step 2: Verify RED**
 
-Run: `pnpm --filter @megasaver/long-memory test -- lm2-catalog.test.ts index.test-d.ts`
+Run: `pnpm --filter @megasaver/long-memory test -- lm2-catalog.test.ts lm2-vector-store.test.ts index.test-d.ts`
 
 Expected: FAIL until the reworked contracts are wired through all integration fixtures and root type expectations.
 
