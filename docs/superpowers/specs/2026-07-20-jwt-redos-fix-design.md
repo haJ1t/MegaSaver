@@ -657,17 +657,33 @@ it does not rewrite existing ones.
 
 Two round-2 `verifier` findings against §6 are closed here.
 
-**The timing tests flaked.** One `turbo test --force` run in five
-reported `@megasaver/policy: 2 failed | 205 passed`. Diagnosis on this
-branch could not reproduce it by CPU contention: at 8x oversubscription
-(load average 77 on 10 cores) the four measurements stayed at 0.3–1.8 ms
-against the 500 ms ceiling, and 15 consecutive runs of the file under
-that load were green. Two full `turbo test --force` runs each surfaced a
-*different* failure — `@megasaver/cli`'s `saver-run.test.ts` real-daemon
-HTTP test, at 74 s — which is a pre-existing flake unrelated to this
-branch. The residual mechanism is therefore a rare multi-hundred-
-millisecond whole-process stall (GC or scheduler) under a saturated box,
-not anything the regex does.
+**The timing tests flaked — once, and not reproducibly.** One
+`turbo test --force` run in five reported
+`@megasaver/policy: 2 failed | 205 passed`. Diagnosis on this branch
+could **not** reproduce it, and this is stated plainly because the
+mechanism was never confirmed:
+
+- CPU contention does not explain it. At 8x oversubscription (load
+  average 77 on 10 cores) the four measurements stayed at 0.3–1.8 ms
+  against the 500 ms ceiling, and 15 consecutive runs of the file under
+  that load were green.
+- Six further `turbo test --force` runs put `@megasaver/policy` at
+  **213 passed (213), 6 of 6**, with `redact-jwt.test.ts` completing in
+  6–167 ms each time.
+
+All six of those runs *did* fail — every one on the same
+`@megasaver/cli` test, `saver-run.test.ts > makeRecord > real daemon
+/excerpt`, with `Test timed out in 30000ms`. That failure is **not**
+this branch's and **not** a flake: `apps/cli` is byte-identical to
+`main` here, the only source change on the branch is the `jwt` pattern
+itself (which is strictly faster), and the test also fails in isolation
+on an idle box, 2 for 2. It is tracked separately.
+
+So the residual mechanism for the original single policy failure is a
+rare whole-process stall (GC or scheduler) under a saturated box — the
+only candidate left standing, not a demonstrated cause. The fix below is
+therefore a precaution whose cost in discriminating power is provably
+zero, not a repair of a confirmed defect.
 
 **Fix: `{ retry: 3 }` on the four timing tests, ceiling unchanged at
 500 ms.** This costs nothing in discriminating power, because a
