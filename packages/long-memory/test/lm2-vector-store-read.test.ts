@@ -3,7 +3,11 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
-import { lm2QuotaLedgerSchema, serializeLm2QuotaLedger } from "../src/lm2-quota-ledger.js";
+import {
+  lm2PendingTemporaryName,
+  lm2QuotaLedgerSchema,
+  serializeLm2QuotaLedger,
+} from "../src/lm2-quota-ledger.js";
 import { buildSerializedSidecar } from "../src/lm2-vector-format.js";
 import { vectorQuotaLedgerPath } from "../src/lm2-vector-paths.js";
 import { createLm2VectorStore } from "../src/lm2-vector-store.js";
@@ -111,7 +115,7 @@ describe("LM2 committed vector reads", () => {
           reservedBytes: 24 * 1024,
           expectedSidecarDigest: createHash("sha256").update(serialized).digest("hex"),
           serializedBytes: Buffer.byteLength(serialized),
-          temporaryName: ".pending.tmp",
+          temporaryName: lm2PendingTemporaryName(ledger.activeOperation.operationId, 1),
           finalName: `${candidate.id}.json`,
           phase: "published",
         },

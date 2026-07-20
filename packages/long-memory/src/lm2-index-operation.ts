@@ -25,7 +25,11 @@ import {
   serializeLm2QuotaLedger,
 } from "./lm2-quota-ledger.js";
 import { closeDirectoryAnchor, openDirectoryAnchor, sameFileIdentity } from "./lm2-secure-fs.js";
-import { publishLm2ReservedBatch, replaceAnchoredFile } from "./lm2-secure-publish.js";
+import {
+  Lm2PartialPublicationError,
+  publishLm2ReservedBatch,
+  replaceAnchoredFile,
+} from "./lm2-secure-publish.js";
 import { parseCandidates } from "./lm2-vector-format.js";
 import { ensureIndexLockPath, vectorQuotaLedgerPath } from "./lm2-vector-paths.js";
 import {
@@ -259,7 +263,7 @@ export async function beginIndexOperation(
         /* Retain the pending transaction for the next locked recovery. */
       }
       return {
-        published,
+        published: error instanceof Lm2PartialPublicationError ? error.published : published,
         reason:
           error instanceof Lm2Error && error.code === "invalid_vectors"
             ? "invalid_vectors"

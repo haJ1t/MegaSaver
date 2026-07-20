@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
@@ -15,6 +15,7 @@ import {
   createCandidate,
   createModel,
   createRoot,
+  indexLockPath,
   workspaceKey,
 } from "./lm2-vector-store-fixtures.js";
 
@@ -22,10 +23,17 @@ afterEach(cleanupRoots);
 
 function seedLedger(root: string, namespaces: Lm2QuotaLedger["namespaces"]): void {
   const committed = namespaces.reduce((sum, entry) => sum + entry.sidecarCount, 0);
+  const lockPath = indexLockPath(root);
+  const lockToken = "e".repeat(64);
+  mkdirSync(dirname(lockPath), { recursive: true });
+  writeFileSync(lockPath, `${lockToken}\n`);
+  const lockStat = statSync(lockPath);
   const ledger: Lm2QuotaLedger = {
     schemaVersion: 1,
     workspaceKey,
     epoch: "a".repeat(64),
+    lockIdentity: { device: lockStat.dev, inode: lockStat.ino },
+    lockToken,
     generation: 1,
     namespaces,
     committedThroughAllocation: committed,

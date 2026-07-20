@@ -72,6 +72,32 @@ describe("LM2 fixed operation lock", () => {
     ).resolves.toEqual({ status: "invalid", quotaRecovery: "not_needed" });
   });
 
+  it("rejects a replacement lock pathname after a clean finalization", async () => {
+    const root = createRoot();
+    const store = createLm2VectorStore({ storeRoot: root });
+    const first = await store.beginIndexOperation({
+      workspaceKey,
+      model: createModel(),
+      deadline: deadline(),
+    });
+    expect(first.status).toBe("ready");
+    if (first.status !== "ready") return;
+    await first.finalize();
+
+    const path = indexLockPath(root);
+    renameSync(path, `${path}.displaced`);
+    writeFileSync(path, `${"a".repeat(64)}\n`);
+    const embed = vi.fn();
+    await expect(
+      store.beginIndexOperation({
+        workspaceKey,
+        model: createModel(),
+        deadline: deadline(),
+      }),
+    ).resolves.toEqual({ status: "invalid", quotaRecovery: "not_needed" });
+    expect(embed).not.toHaveBeenCalled();
+  });
+
   it("returns unavailable for a malformed fixed token or unusable lock path", async () => {
     const root = createRoot();
     const path = indexLockPath(root);
