@@ -3,6 +3,13 @@ import { replayBothOrders, replayPair } from "../src/replay.js";
 import { orderSensitive } from "../src/report.js";
 import { prepareArms } from "../src/transform.js";
 import type { Arm, RecordedRequest } from "../src/types.js";
+import { rawOutput, savedOutput } from "./saver-output-fixture.js";
+
+// prepareArms verifies the saver's contract per call, so the fake has to honour
+// it: a raw big enough to compress, and a replacement carrying the recovery
+// footer and strictly smaller than that raw.
+const RAW_BYTES = 4000;
+const SAVED = savedOutput(RAW_BYTES, 1000);
 
 // One request per arm run keeps the scripted `send` queue a 1:1 map onto arm
 // runs, so a test can pin exactly which arm ran in which position.
@@ -11,17 +18,20 @@ const recorded: RecordedRequest[] = [
     model: "m",
     messages: [
       { role: "assistant", content: [{ type: "tool_use", id: "t", name: "Bash", input: {} }] },
-      { role: "user", content: [{ type: "tool_result", tool_use_id: "t", content: "RAW-OUTPUT" }] },
+      {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "t", content: rawOutput("t", RAW_BYTES) }],
+      },
     ],
   },
 ];
 
-const applySaver = () => "SHORT";
+const applySaver = () => SAVED;
 
 // The megasaver arm is the only one whose body carries the transformed text, so
 // the arm is recoverable from the wire body alone — no back channel needed.
 function armOf(body: unknown): Arm {
-  return JSON.stringify(body).includes("SHORT") ? "megasaver" : "baseline";
+  return JSON.stringify(body).includes("Mega Saver: compressed") ? "megasaver" : "baseline";
 }
 
 // Scripts input_tokens per arm run in send order and records the arms it saw.
@@ -177,12 +187,14 @@ describe("replayBothOrders", () => {
 // two ratios move together. The only structural fix is to precompute both
 // request sequences ONCE and make every arm run a pure byte-replay.
 describe("replayBothOrders transforms once for the whole gate", () => {
-  // ~1/3 of the raw size, mirroring the real saver's measured 34.4% compression,
-  // and unique per call so a per-arm memo cannot coincidentally match.
-  const compressed = (n: number) => `C${n}-${"compressed ".repeat(13)}`;
+  const GATE_RAW_BYTES = 4400;
+  const RAW_A = rawOutput("A", GATE_RAW_BYTES);
+  const RAW_B = rawOutput("B", GATE_RAW_BYTES);
 
-  const RAW_A = `A-${"raw output ".repeat(40)}`;
-  const RAW_B = `B-${"raw output ".repeat(40)}`;
+  // ~1/3 of the raw size, mirroring the real saver's measured 34.4% compression,
+  // and unique per call so a per-arm memo cannot coincidentally match. Carries the
+  // recovery footer, because prepareArms now verifies that per call.
+  const compressed = (n: number) => savedOutput(GATE_RAW_BYTES, 1500 + n);
 
   // A growing history, as the Messages API actually resends it: tool_result "a"
   // reappears in request 2 verbatim.
@@ -267,7 +279,7 @@ describe("replayBothOrders transforms once for the whole gate", () => {
     await replayBothOrders({
       task: "task_1",
       requests: recorded,
-      applySaver: () => (++calls === 1 ? "SHORT" : null),
+      applySaver: () => (++calls === 1 ? SAVED : null),
       send,
       orderTolerance: 0.05,
       now: () => 0,

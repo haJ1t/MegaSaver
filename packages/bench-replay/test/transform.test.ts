@@ -5,6 +5,7 @@ import {
   prepareArms,
   transformRequest,
 } from "../src/transform.js";
+import { rawOutput, savedOutput } from "./saver-output-fixture.js";
 
 const body = {
   model: "claude-opus-4-8",
@@ -234,6 +235,10 @@ describe("prepareArms refuses a contaminated recording", () => {
 // 15.5% of runs. Capping generation is only sound if it lands on BOTH arms and
 // leaves the cached prefix alone.
 describe("prepareArms generation cap", () => {
+  const CAP_RAW_BYTES = 4000;
+  const CAP_RAW = rawOutput("cap", CAP_RAW_BYTES);
+  const CAP_SAVED = savedOutput(CAP_RAW_BYTES, 1000);
+
   const recorded = [
     {
       model: "claude-opus-4-8",
@@ -243,7 +248,10 @@ describe("prepareArms generation cap", () => {
       tools: [{ name: "Bash", input_schema: { type: "object" } }],
       messages: [
         { role: "assistant", content: [{ type: "tool_use", id: "t1", name: "Bash", input: {} }] },
-        { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "RAW" }] },
+        {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: "t1", content: CAP_RAW }],
+        },
       ],
     },
   ];
@@ -251,7 +259,7 @@ describe("prepareArms generation cap", () => {
   const maxTokensOf = (body: unknown) => (body as { max_tokens?: unknown }).max_tokens;
 
   it("caps max_tokens to the same value on both arms", () => {
-    const arms = prepareArms({ requests: recorded, applySaver: () => "SHORT" });
+    const arms = prepareArms({ requests: recorded, applySaver: () => CAP_SAVED });
     expect(GENERATION_CAP_TOKENS).toBe(1);
     expect(arms.baseline.map(maxTokensOf)).toEqual([GENERATION_CAP_TOKENS]);
     expect(arms.megasaver.map(maxTokensOf)).toEqual([GENERATION_CAP_TOKENS]);
@@ -278,7 +286,7 @@ describe("prepareArms generation cap", () => {
     expect(() =>
       prepareArms({
         requests: [{ ...recorded[0], thinking: { type: "enabled", budget_tokens: 8000 } } as never],
-        applySaver: () => "SHORT",
+        applySaver: () => CAP_SAVED,
       }),
     ).toThrow(/budget_tokens/);
   });

@@ -13,12 +13,22 @@ const REPO_ROOT = join(import.meta.dirname, "..", "..", "..");
 const RUNNER = join(REPO_ROOT, "scripts", "bench-replay.mjs");
 
 const RAW_TOOL_OUTPUT = "RAW_OUTPUT_LINE ".repeat(200); // 3200 B
-// 1104 B — a 0.345 byte ratio, mirroring the real saver's measured 34.4%
-// compression. NOT a token like "SHORT": a 5 B stand-in for 3200 B of output is
-// content destruction, and the integrity band now refuses it (byteRatio floor
-// 0.05) rather than certifying it as an enormous win. Shares no substring with
-// RAW_TOOL_OUTPUT, so the fake upstream can still tell the arms apart.
-const COMPRESSED = "COMPRESSED_LINE ".repeat(69);
+
+// The fake saver has to honour the REAL saver's per-call contract, because
+// prepareArms now verifies it on every applied call: the output carries the
+// recovery footer and is strictly smaller than the raw it replaced. A footerless
+// stand-in is content loss, not compression, and is refused before a request is
+// sent — which is the point of the check.
+const FOOTER = `\n\n[Mega Saver: compressed 3200→1104 B (~800→276 tokens, 65.5%). Full output recoverable — run: mega output chunk "pipeline-fixture" "0".]`;
+// Padded to exactly 1104 B — a 0.345 byte ratio, mirroring the real saver's
+// measured 34.4% compression.
+const COMPRESSED =
+  "COMPRESSED_LINE ".repeat(70).slice(0, 1104 - Buffer.byteLength(FOOTER, "utf8")) + FOOTER;
+// The arm discriminator the fake upstream matches on. Plain ASCII with no quotes
+// or newlines, so it survives JSON encoding inside the request body — the footer
+// itself does not, and matching on COMPRESSED would silently score every request
+// as baseline.
+const COMPRESSED_MARKER = "COMPRESSED_LINE";
 
 // Scripted so both arms are hand-computable. message_start's output_tokens is 3
 // while the final message_delta says 500/400: reading output from message_start
@@ -149,7 +159,7 @@ beforeAll(async () => {
         maxTokens: parsed.max_tokens,
       });
       res.writeHead(200, { "content-type": "text/event-stream" });
-      res.end(sse(body.includes(COMPRESSED) ? "megasaver" : "baseline"));
+      res.end(sse(body.includes(COMPRESSED_MARKER) ? "megasaver" : "baseline"));
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -255,6 +265,37 @@ describe("bench-replay.mjs replay against a fake upstream", () => {
     expect(seen.every((r) => r.maxTokens === 1)).toBe(true);
     expect(out).toContain("generation was capped to max_tokens=1 on BOTH arms");
     expect(out).toContain("INPUT-SIDE comparison");
+
+    // Fix 2: the recording's model composition is printed, so a reader can bound
+    // the single-rate-card mispricing instead of inheriting it invisibly. One
+    // model here, so the dilution NOTE stays off.
+    expect(out).toContain("models: claude-test=2 (100.0%)");
+    expect(out).not.toContain("this recording spans");
+
+    // Fix 3: the caveat travels with the number, not only in the README.
+    expect(out).toContain("COUNTERFACTUAL TRAJECTORY");
+    expect(out).toContain("UPPER BOUND");
+  });
+
+  // Fix 2: a real recording holds Claude Code's sidecar Haiku calls too. They
+  // carry no tool_result, so they are identical in both arms and drag the ratio
+  // toward 1.00 while priced as the primary model — the runner has to say so.
+  it("flags a mixed-model recording as understating the effect", async () => {
+    const recordings = join(root, "mixed-model");
+    const dir = writeRecording(recordings);
+    writeFileSync(
+      join(dir, "req-003.json"),
+      JSON.stringify({
+        model: "claude-haiku-sidecar",
+        stream: true,
+        messages: [{ role: "user", content: "title this conversation" }],
+      }),
+    );
+    const run = await runReplay(recordings);
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stdout).toContain("models: claude-test=2 (66.7%) claude-haiku-sidecar=1 (33.3%)");
+    expect(run.stdout).toContain("this recording spans 2 models");
+    expect(run.stdout).toContain("UNDERSTATED");
   });
 
   it("refuses a recording that does not parse as a /v1/messages body", async () => {

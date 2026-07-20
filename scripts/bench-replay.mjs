@@ -32,6 +32,7 @@ import {
   buildRecordCommand,
   buildVerdict,
   makeSpawnedSaver,
+  modelHistogram,
   pooledCostRatio,
   prepareSaverStore,
   recordedRequestSchema,
@@ -336,6 +337,7 @@ async function replay(values) {
     });
 
     console.log(`=== replaying ${task} (${requests.length} requests, mode ${values.mode}) ===`);
+    printModelHistogram(requests);
     const base = await replayBothOrders({
       task,
       requests,
@@ -394,6 +396,34 @@ function printArm(arm) {
   }
 }
 
+// Every /v1/messages call the agent made is in the recording, including Claude
+// Code's sidecar Haiku calls, and normalizedCostUsd prices them all at ONE rate
+// card. Those calls carry no tool_result, so they are byte-identical in both arms
+// and drag the ratio toward 1.00 while priced at ~6x their true cost. Printed
+// rather than corrected: the direction is conservative and a reader who can see
+// the split can bound the dilution, whereas repricing means per-model rate cards
+// inside a cost function three other benchmarks share.
+function printModelHistogram(requests) {
+  const histogram = modelHistogram(requests);
+  const rows = histogram
+    .map((r) => `${r.model}=${r.requests} (${((r.requests / requests.length) * 100).toFixed(1)}%)`)
+    .join(" ");
+  console.log(`  models: ${rows}`);
+  if (histogram.length > 1) {
+    console.log(
+      `    NOTE: costs below price ALL ${requests.length} requests at one flat rate card` +
+        ` (scripts/benchmark-rates.json), but this recording spans ${histogram.length} models.`,
+    );
+    console.log(
+      "    Sidecar calls (titling and similar) carry no tool_result, so they are identical in both",
+    );
+    console.log(
+      "    arms and pull the ratio toward 1.00 at inflated weight — the reported effect is therefore",
+    );
+    console.log("    UNDERSTATED, by at most the share above.");
+  }
+}
+
 function printVerdict(verdict, realBaselineUsd) {
   console.log(`\n--- ${verdict.task} ---`);
   // Every pair, not just the first: the ratio below is the mean of all of them,
@@ -422,6 +452,30 @@ function printVerdict(verdict, realBaselineUsd) {
   );
   console.log(
     "    cap is sound — it removes $25/Mtok of resampling noise that swamped the effect being measured.",
+  );
+  console.log(
+    "    COUNTERFACTUAL TRAJECTORY: the recorded assistant turns were produced by an agent reading",
+  );
+  console.log(
+    "    UNCOMPRESSED tool output, and the megasaver arm replays those same turns while feeding it",
+  );
+  console.log(
+    "    COMPRESSED output. That conversation never happened. It costs the ratio nothing as an",
+  );
+  console.log(
+    "    input-side measurement — the turn sequence is held identical across both arms, so the only",
+  );
+  console.log(
+    "    difference priced is the bytes the saver removed — but it makes the ratio an UPPER BOUND on",
+  );
+  console.log(
+    "    real-session savings, not an estimate: a live compressed agent can spend extra turns fetching",
+  );
+  console.log(
+    "    elided detail (the footer advertises `mega output chunk`), and each recovery turn resends the",
+  );
+  console.log(
+    "    whole history at full price. A frozen trajectory has zero of them. See packages/bench-replay/README.md.",
   );
 
   const { integrity, order, baselineDriftSmoke } = verdict.verified;

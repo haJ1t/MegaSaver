@@ -94,6 +94,58 @@ function rewriteToolResultContent(
 // Only the fixed head is matched; everything after it is interpolated byte counts.
 const SAVER_FOOTER_MARKER = "[Mega Saver: compressed ";
 
+export type SaverCallViolation = {
+  toolUseId: string;
+  toolName: string;
+  originalBytes: number;
+  transformedBytes: number;
+  reason: "missing-recovery-footer" | "not-smaller-than-original";
+};
+
+// What the REAL saver guarantees about every output it applies. Checked per
+// call, because a saver breaks per call: every aggregate this harness had could
+// be satisfied by any destructive transform simply by shrinking its blast radius
+// — half the calls emptied measured fraction 0.500 / byteRatio 0.500 and
+// reported a 2.0x "win". One bad call has to be detectable regardless of how
+// many good ones surround it, and only a per-call check has that property.
+//
+// Both halves are enforced by the saver itself, so a violation means the arm
+// does not contain the saver's work:
+//   - apps/cli/src/hooks/saver.ts passes includeFooter:true + storeRawOutput:true
+//     and returns updatedToolOutput ONLY for a "compressed" decision, so
+//     record-output.ts appends buildRecoveryFooter to every applied output. An
+//     applied output without it is content loss, not compression — the elided
+//     bytes are not recoverable because nothing told the agent how to fetch them.
+//   - record-output.ts's net-negative guard degrades to passthrough whenever the
+//     replacement (footer included) is >= the raw, so it never returns one that
+//     is not strictly smaller.
+function contractViolation(
+  decision: string,
+  originalBytes: number,
+  transformedBytes: number,
+): SaverCallViolation["reason"] | null {
+  if (!decision.includes(SAVER_FOOTER_MARKER)) return "missing-recovery-footer";
+  if (transformedBytes >= originalBytes) return "not-smaller-than-original";
+  return null;
+}
+
+// Long recordings can violate on every call (an empty-string saver violates 100
+// times), and an unreadable error is a broken guard. The full count is always
+// stated; only the enumeration is capped.
+const MAX_LISTED_VIOLATIONS = 10;
+
+function describeViolations(violations: readonly SaverCallViolation[]): string {
+  const listed = violations
+    .slice(0, MAX_LISTED_VIOLATIONS)
+    .map(
+      (v) =>
+        `${JSON.stringify(v.toolUseId)} (${v.toolName}, ${v.originalBytes}→${v.transformedBytes} B): ${v.reason}`,
+    )
+    .join("; ");
+  const rest = violations.length - MAX_LISTED_VIOLATIONS;
+  return rest > 0 ? `${listed}; and ${rest} more` : listed;
+}
+
 function toolResultText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -179,6 +231,7 @@ function memoize(
   applySaver: ApplySaver,
   outcomes: SaverOutcomes,
   bytes: ToolResultBytes,
+  violations: SaverCallViolation[],
 ): ApplySaver {
   const decisions = new Map<string, string | null>();
   return (raw, ctx) => {
@@ -197,8 +250,24 @@ function memoize(
     // place that sees each tool call exactly once — the same cardinality
     // production's PostToolUse hook fires at. Summing per request would count a
     // resent history N times and inflate both sides.
-    bytes.original += Buffer.byteLength(raw, "utf8");
-    bytes.transformed += Buffer.byteLength(decision ?? raw, "utf8");
+    const originalBytes = Buffer.byteLength(raw, "utf8");
+    const transformedBytes = Buffer.byteLength(decision ?? raw, "utf8");
+    bytes.original += originalBytes;
+    bytes.transformed += transformedBytes;
+    // The same place, for the same reason: it is the only layer that holds a raw
+    // beside the single replacement that will be replayed for it.
+    if (decision !== null) {
+      const reason = contractViolation(decision, originalBytes, transformedBytes);
+      if (reason !== null) {
+        violations.push({
+          toolUseId: ctx.toolUseId,
+          toolName: ctx.toolName,
+          originalBytes,
+          transformedBytes,
+          reason,
+        });
+      }
+    }
     decisions.set(ctx.toolUseId, decision);
     return decision;
   };
@@ -283,7 +352,8 @@ export function prepareArms(input: {
 
   const saver: SaverOutcomes = { applied: 0, passthrough: 0, failed: 0 };
   const bytes: ToolResultBytes = { original: 0, transformed: 0 };
-  const applySaver = memoize(input.applySaver, saver, bytes);
+  const violations: SaverCallViolation[] = [];
+  const applySaver = memoize(input.applySaver, saver, bytes, violations);
 
   const baseline: RecordedRequest[] = [];
   const megasaver: RecordedRequest[] = [];
@@ -301,6 +371,16 @@ export function prepareArms(input: {
         { cause },
       );
     }
+  }
+  // AFTER the loop, so one run reports every offending call rather than only the
+  // first, and BEFORE anything is sent, so a broken saver costs nothing. Refusing
+  // here rather than at `buildVerdict` is deliberate: this is the last layer that
+  // still holds each raw beside its replacement, and the four arm runs that would
+  // otherwise have to happen first are the expensive part.
+  if (violations.length > 0) {
+    throw new Error(
+      `prepareArms: the saver reported applying a compression that does not look like one, on ${violations.length} of ${saver.applied} applied tool call(s): ${describeViolations(violations)}. Every output the real saver applies carries the "${SAVER_FOOTER_MARKER}" recovery footer and is strictly smaller than the raw it replaced (its own net-negative guard degrades to passthrough otherwise), so these calls measured content loss or a different transform — not compression. No verdict can be derived from them.`,
+    );
   }
   return { baseline, megasaver, saver, bytes };
 }

@@ -3,11 +3,36 @@ import type {
   ArmIntegrity,
   ArmUsage,
   DriftSmokeResult,
+  ModelRequestCount,
   OrderCheck,
   PairResult,
+  RecordedRequest,
   ReplayVerdict,
   TransformSummary,
 } from "./types.js";
+
+// `normalizedCostUsd` prices every request at ONE flat rate card, but a recording
+// holds every /v1/messages call the agent made — including Claude Code's sidecar
+// Haiku calls (conversation titling and similar), which are replayed at their
+// recorded model and priced as the primary one, roughly 6x their true cost. They
+// carry no tool_result, so they are byte-identical in both arms and drag the
+// ratio toward 1.00 carrying inflated weight.
+//
+// The direction is conservative (it UNDER-reports the saver) and nothing here can
+// be fixed by a better ratio, so the fix is to stop the error being invisible:
+// printed beside the verdict, this histogram lets a reader bound the dilution
+// themselves. Pricing per model would mean per-model rate cards inside
+// @megasaver/stats, which three other benchmarks share — a wide change for a
+// sub-1% correction in the safe direction. Excluding the sidecar calls outright
+// would mean silently dropping recorded traffic from a replay, which is the exact
+// drift class this harness must not have.
+export function modelHistogram(requests: readonly RecordedRequest[]): ModelRequestCount[] {
+  const counts = new Map<string, number>();
+  for (const request of requests) counts.set(request.model, (counts.get(request.model) ?? 0) + 1);
+  return [...counts]
+    .map(([model, n]) => ({ model, requests: n }))
+    .sort((a, b) => b.requests - a.requests || a.model.localeCompare(b.model));
+}
 
 export function costRatioOf(baseline: ArmUsage, megasaver: ArmUsage): number {
   return megasaver.normalizedCostUsd === 0
@@ -23,26 +48,32 @@ export function costRatioOf(baseline: ArmUsage, megasaver: ArmUsage): number {
 // effect" finding.
 export const MIN_APPLIED_FRACTION = 0.1;
 
-// The ceiling. A transform that moved less than 2% of the tool_result bytes moved
-// less than this harness can resolve at all — it exists for a ≤5% COST effect and
-// tool_result bytes are only a fraction of the prompt — so there is nothing to
-// measure and no verdict to report. Catches the near-inert escape measured at
-// byteRatio 0.999942, which the old `transformed < original` test passed.
-export const MAX_BYTE_RATIO = 0.98;
-
-// The floor, which the ceiling-only check had none of: an empty-string saver
-// measured byteRatio 0 — the strongest possible pass — and was certified at
-// costRatio 3.6883x. The real saver appends a recovery footer and a chunk summary
-// to every output it compresses, so a whole conversation has no path to a 20x
-// reduction. Below this, the arm measured the ABSENCE of content, not compression
-// — the exact failure class this harness must catch.
-export const MIN_BYTE_RATIO = 0.05;
+// The ceiling, and the ONE question that is legitimately aggregate: not "is each
+// call a real compression?" (that is `prepareArms`' per-call contract) but "is
+// there enough here for this instrument to resolve at all?"
+//
+// DERIVED, not fitted to an observed escape. `1 - byteRatio` is the share of
+// tool_result bytes removed; tool_result bytes are a subset of prompt bytes, so
+// prompt shrinkage <= `1 - byteRatio`, and input-side cost moves with prompt
+// tokens. A transform above this ceiling therefore CANNOT produce a cost effect
+// inside the <=5% band this harness exists to resolve, even under the absurdly
+// generous assumption that tool_results are the entire prompt. Whatever number it
+// printed would be noise wearing a decimal point — the near-inert escape measured
+// byteRatio 0.970 and reported a 3.1% "effect" against a 5% question.
+export const MAX_BYTE_RATIO = 0.95;
 
 // The guard that watches the only part of this harness that can fail: the
 // transform. It runs once for the whole gate, so this single check covers every
-// pair — no arm run can quietly measure a different one. Two-sided on both axes,
-// and fails closed: NaN comparisons are false, so a degenerate transform never
-// reads as healthy.
+// pair — no arm run can quietly measure a different one. Fails closed: NaN
+// comparisons are false, so a degenerate transform never reads as healthy.
+//
+// NOT the destructiveness guard. There was a byte FLOOR here (0.05) standing in
+// for "this is a real compression, not content deletion"; `prepareArms` now
+// answers that question directly and per call, and the floor's only remaining
+// effect was to refuse honest measurements — the saver fits output to an ABSOLUTE
+// budget (aggressive 4000 B), so byteRatio ~ budget/original and FALLS as outputs
+// grow. A conversation of 100 KB outputs in aggressive mode measures 0.039 and
+// was being rejected, which is precisely the regime the saver performs best in.
 export function checkTransformIntegrity(transform: TransformSummary): ArmIntegrity {
   const { original, transformed } = transform.bytes;
   const { applied, passthrough } = transform.saver;
@@ -59,8 +90,7 @@ export function checkTransformIntegrity(transform: TransformSummary): ArmIntegri
       applied > 0 &&
       original > 0 &&
       appliedFraction >= MIN_APPLIED_FRACTION &&
-      byteRatio <= MAX_BYTE_RATIO &&
-      byteRatio >= MIN_BYTE_RATIO,
+      byteRatio <= MAX_BYTE_RATIO,
   };
 }
 
@@ -162,7 +192,7 @@ export function buildVerdict(
   const integrity = checkTransformIntegrity(transform);
   if (!integrity.ok) {
     throw new Error(
-      `buildVerdict(${task}): the transform measured nothing — the saver was applied to ${integrity.applied} of ${transform.saver.applied + transform.saver.passthrough} tool calls (fraction ${integrity.appliedFraction}, floor ${MIN_APPLIED_FRACTION}) and moved ${integrity.originalBytes}→${integrity.transformedBytes} B (byteRatio ${integrity.byteRatio}, required band ${MIN_BYTE_RATIO}–${MAX_BYTE_RATIO}). Above the ceiling the transform is inert; below the floor it destroyed content rather than compressing it.`,
+      `buildVerdict(${task}): the transform measured nothing this instrument can resolve — the saver was applied to ${integrity.applied} of ${transform.saver.applied + transform.saver.passthrough} tool calls (fraction ${integrity.appliedFraction}, floor ${MIN_APPLIED_FRACTION}) and moved ${integrity.originalBytes}→${integrity.transformedBytes} B (byteRatio ${integrity.byteRatio}, ceiling ${MAX_BYTE_RATIO}). Removing ${((1 - integrity.byteRatio) * 100).toFixed(2)}% of the tool_result bytes bounds the input-side cost effect below the ≤5% band this harness exists to resolve, so any ratio derived from it would be noise. Whether each applied call was a real compression is checked per call, in prepareArms.`,
     );
   }
   return {

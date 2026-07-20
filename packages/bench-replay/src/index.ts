@@ -4,6 +4,7 @@ export {
   type ArmIntegrity,
   type ArmUsage,
   type DriftSmokeResult,
+  type ModelRequestCount,
   type OrderCheck,
   type PairResult,
   type RecordedRequest,
@@ -23,6 +24,7 @@ export {
   transformRequest,
   type ApplySaver,
   type PreparedArms,
+  type SaverCallViolation,
   type ToolCallContext,
 } from "./transform.js";
 export {
@@ -41,12 +43,12 @@ export {
 export {
   MAX_BYTE_RATIO,
   MIN_APPLIED_FRACTION,
-  MIN_BYTE_RATIO,
   MIN_DRIFT_SMOKE_TOLERANCE,
   baselineDriftSmokeOk,
   buildVerdict,
   checkTransformIntegrity,
   costRatioOf,
+  modelHistogram,
   orderSensitive,
   pooledCostRatio,
   verdictStable,

@@ -69,6 +69,11 @@ export type ArmIntegrity = {
 
 export type DriftSmokeResult = { ok: boolean; tolerance: number };
 
+// How many recorded requests carry each `model`. The cost model prices them all
+// at one rate card, so this is what lets a reader see the mispricing rather than
+// inherit it silently — see `modelHistogram`.
+export type ModelRequestCount = { model: string; requests: number };
+
 export type ReplayOrder = "baseline-first" | "megasaver-first";
 
 // Both arms share a byte-identical system+tools prefix, so whichever runs first

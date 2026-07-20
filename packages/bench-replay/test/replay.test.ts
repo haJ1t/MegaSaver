@@ -2,13 +2,25 @@ import { describe, expect, it } from "vitest";
 import { replayArm } from "../src/replay.js";
 import { GENERATION_CAP_TOKENS, prepareArms } from "../src/transform.js";
 import type { RecordedRequest } from "../src/types.js";
+import { rawOutput, savedOutput } from "./saver-output-fixture.js";
+
+// prepareArms verifies the saver's contract PER CALL now (recovery footer +
+// strictly smaller than the raw), so these fixtures have to look like real tool
+// output rather than a 3 B token: a footer-bearing replacement cannot be smaller
+// than a raw of "RAW". `savedOutput` is the fake that honours the contract.
+const RAW_BYTES = 4000;
+const RAW = rawOutput("t", RAW_BYTES);
+const RAW_A = rawOutput("A", RAW_BYTES);
+const RAW_B = rawOutput("B", RAW_BYTES);
+const RAW_C = rawOutput("C", RAW_BYTES);
+const SAVED = savedOutput(RAW_BYTES, 1000);
 
 const recorded: RecordedRequest[] = [
   {
     model: "m",
     messages: [
       { role: "assistant", content: [{ type: "tool_use", id: "t", name: "Bash", input: {} }] },
-      { role: "user", content: [{ type: "tool_result", tool_use_id: "t", content: "RAW" }] },
+      { role: "user", content: [{ type: "tool_result", tool_use_id: "t", content: RAW }] },
     ],
   },
   { model: "m", messages: [{ role: "user", content: "second" }] },
@@ -50,7 +62,7 @@ describe("replayArm", () => {
 
   it("sends the bodies it was handed verbatim, applying no transform of its own", async () => {
     const sent: string[] = [];
-    const arms = prepareArms({ requests: recorded, applySaver: () => "SHORT" });
+    const arms = prepareArms({ requests: recorded, applySaver: () => SAVED });
     await replayArm({
       arm: "megasaver",
       bodies: arms.megasaver,
@@ -59,8 +71,8 @@ describe("replayArm", () => {
         return zeroUsage;
       },
     });
-    expect(sent[0]).toContain("SHORT");
-    expect(sent[0]).not.toContain("RAW");
+    expect(sent[0]).toContain("Mega Saver: compressed");
+    expect(sent[0]).not.toContain("RAW-t-");
   });
 
   it("sends requests one at a time, not concurrently (cache measurement requires ordering)", async () => {
@@ -116,27 +128,27 @@ describe("prepareArms saver memoization (once per tool_use_id)", () => {
       model: "m",
       messages: [
         { role: "assistant", content: [{ type: "tool_use", id: "a", name: "Bash", input: {} }] },
-        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "RAW-A" }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: RAW_A }] },
       ],
     },
     {
       model: "m",
       messages: [
         { role: "assistant", content: [{ type: "tool_use", id: "a", name: "Bash", input: {} }] },
-        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "RAW-A" }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: RAW_A }] },
         { role: "assistant", content: [{ type: "tool_use", id: "b", name: "Bash", input: {} }] },
-        { role: "user", content: [{ type: "tool_result", tool_use_id: "b", content: "RAW-B" }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "b", content: RAW_B }] },
       ],
     },
     {
       model: "m",
       messages: [
         { role: "assistant", content: [{ type: "tool_use", id: "a", name: "Bash", input: {} }] },
-        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "RAW-A" }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: RAW_A }] },
         { role: "assistant", content: [{ type: "tool_use", id: "b", name: "Bash", input: {} }] },
-        { role: "user", content: [{ type: "tool_result", tool_use_id: "b", content: "RAW-B" }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "b", content: RAW_B }] },
         { role: "assistant", content: [{ type: "tool_use", id: "c", name: "Bash", input: {} }] },
-        { role: "user", content: [{ type: "tool_result", tool_use_id: "c", content: "RAW-C" }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "c", content: RAW_C }] },
       ],
     },
   ];
@@ -163,14 +175,16 @@ describe("prepareArms saver memoization (once per tool_use_id)", () => {
       requests: growing,
       applySaver: (raw) => {
         calls++;
-        return `COMPRESSED(${raw})#${calls}`;
+        // Size varies per call, so the three decisions are distinguishable and a
+        // regression to per-request application cannot coincidentally match.
+        return savedOutput(Buffer.byteLength(raw, "utf8"), 1000 + calls);
       },
     });
 
     expect(calls).toBe(3);
     const bodies = arms.megasaver;
     const a0 = toolResultContentFor(bodies[0], "a");
-    expect(a0).toBe("COMPRESSED(RAW-A)#1");
+    expect(a0).toBe(savedOutput(RAW_BYTES, 1001));
     expect(toolResultContentFor(bodies[1], "a")).toBe(a0);
     expect(toolResultContentFor(bodies[2], "a")).toBe(a0);
     const b1 = toolResultContentFor(bodies[1], "b");
@@ -194,7 +208,7 @@ describe("prepareArms saver memoization (once per tool_use_id)", () => {
   // Everything that does — model, system, tools, messages — must still round-trip
   // untouched, or the harness would be changing the thing it measures.
   it("leaves the baseline sequence identical to the recording apart from the cap", () => {
-    const arms = prepareArms({ requests: growing, applySaver: () => "SHORT" });
+    const arms = prepareArms({ requests: growing, applySaver: () => SAVED });
     expect(arms.baseline.map((b) => ({ ...b, max_tokens: undefined }))).toEqual(
       growing.map((b) => ({ ...b, max_tokens: undefined })),
     );
@@ -245,9 +259,9 @@ describe("prepareArms saver outcome accounting", () => {
       model: "m",
       messages: [
         { role: "assistant", content: [{ type: "tool_use", id: "a", name: "Bash", input: {} }] },
-        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "RAW-A" }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: RAW_A }] },
         { role: "assistant", content: [{ type: "tool_use", id: "b", name: "Bash", input: {} }] },
-        { role: "user", content: [{ type: "tool_result", tool_use_id: "b", content: "RAW-B" }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "b", content: RAW_B }] },
       ],
     },
   ];
@@ -266,7 +280,7 @@ describe("prepareArms saver outcome accounting", () => {
   it("counts applied vs passthrough decisions", () => {
     const arms = prepareArms({
       requests: one,
-      applySaver: (raw) => (raw === "RAW-A" ? "SHORT" : null),
+      applySaver: (raw) => (raw === RAW_A ? SAVED : null),
     });
     expect(arms.saver).toEqual({ applied: 1, passthrough: 1, failed: 0 });
   });
@@ -281,13 +295,13 @@ describe("prepareArms saver outcome accounting", () => {
   // are accumulated once per distinct tool call — not once per request, which a
   // resent conversation history would inflate.
   it("accumulates original vs transformed tool_result bytes per tool call", () => {
-    const arms = prepareArms({ requests: one, applySaver: () => "S" });
-    expect(arms.bytes).toEqual({ original: 10, transformed: 2 }); // "RAW-A" + "RAW-B" → "S" + "S"
+    const arms = prepareArms({ requests: one, applySaver: () => SAVED });
+    expect(arms.bytes).toEqual({ original: 2 * RAW_BYTES, transformed: 2 * 1000 });
   });
 
   it("counts a passthrough as its own bytes unchanged, not as a saving", () => {
     const arms = prepareArms({ requests: one, applySaver: () => null });
-    expect(arms.bytes).toEqual({ original: 10, transformed: 10 });
+    expect(arms.bytes).toEqual({ original: 2 * RAW_BYTES, transformed: 2 * RAW_BYTES });
   });
 
   it("aborts when a tool_result has no matching tool_use block rather than guessing", () => {
@@ -304,7 +318,7 @@ describe("prepareArms saver outcome accounting", () => {
             ],
           },
         ],
-        applySaver: () => "SHORT",
+        applySaver: () => SAVED,
       }),
     ).toThrow(/orphan/);
   });

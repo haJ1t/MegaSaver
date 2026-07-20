@@ -2,17 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_BYTE_RATIO,
   MIN_APPLIED_FRACTION,
-  MIN_BYTE_RATIO,
   MIN_DRIFT_SMOKE_TOLERANCE,
   baselineDriftSmokeOk,
   buildVerdict,
   checkTransformIntegrity,
   costRatioOf,
+  modelHistogram,
   pooledCostRatio,
   verdictStable,
 } from "../src/report.js";
 import { GENERATION_CAP_TOKENS } from "../src/transform.js";
-import type { PairResult, ReplayOrder } from "../src/types.js";
+import type { PairResult, RecordedRequest, ReplayOrder } from "../src/types.js";
 
 const arm = (cost: number) => ({
   arm: "baseline" as const,
@@ -255,18 +255,17 @@ describe("buildVerdict integrity refusal and verification metadata", () => {
   });
 });
 
-// DEFECT 2: `ok: applied > 0 && transformed < original` is one-sided — a ceiling
-// on transformed bytes with no floor, and no floor at all on the applied
-// fraction. Both escapes below were measured printing a healthy verdict.
-describe("checkTransformIntegrity two-sided band", () => {
-  // An empty-string saver satisfies `transformed < original` as strongly as
-  // possible. Measured {applied:100, 51390->0, byteRatio:0, ok:true} and printed
-  // at costRatio 3.6883x — content destruction certified as a 3.7x win.
-  const destroyed = {
-    saver: { applied: 100, passthrough: 0, failed: 0 },
-    bytes: { original: 51390, transformed: 0 },
-  };
-
+// DEFECT 2 (round 3) put a two-sided band here. ROUND 4 showed why that could
+// never work: both axes are conversation-wide AGGREGATES while a saver breaks per
+// call, so any destructive transform could be moved inside the band by shrinking
+// its blast radius. Destructiveness moved to a per-call contract in prepareArms
+// (see saver-call-contract.test.ts) and the byte FLOOR was removed with it — it
+// was standing in for a question it could not answer, while refusing the
+// aggressive/large-output regime the saver performs best in.
+//
+// What remains here is the one question that IS aggregate: is there enough
+// movement for this instrument to resolve anything at all?
+describe("checkTransformIntegrity resolution ceiling", () => {
   // 1 block of 100 rewritten, shrunk 3 bytes. Measured {applied:1,
   // passthrough:99, byteRatio 0.999942, ok:true} at costRatio 1.000081 — a
   // 99%-broken saver certified as a real "no effect" finding.
@@ -275,16 +274,34 @@ describe("checkTransformIntegrity two-sided band", () => {
     bytes: { original: 51390, transformed: 51387 },
   };
 
-  it("fails an empty-string saver instead of scoring it the strongest pass", () => {
-    const r = checkTransformIntegrity(destroyed);
-    expect(r.byteRatio).toBe(0);
-    expect(r.ok).toBe(false);
-  });
-
   it("fails a near-inert saver on both the applied fraction and the byte ratio", () => {
     const r = checkTransformIntegrity(nearInert);
     expect(r.appliedFraction).toBeCloseTo(0.01, 6);
     expect(r.ok).toBe(false);
+  });
+
+  // The ceiling is derived from the question being asked, not fitted to an
+  // escape: `1 - byteRatio` bounds the input-side cost effect from above, so
+  // anything above 0.95 cannot reach the ≤5% band at all.
+  it("refuses a transform whose maximum possible cost effect is under 5%", () => {
+    const r = checkTransformIntegrity({
+      saver: { applied: 20, passthrough: 80, failed: 0 },
+      bytes: { original: 500_000, transformed: 485_000 },
+    });
+    expect(r.byteRatio).toBeCloseTo(0.97, 6);
+    expect(r.ok).toBe(false);
+  });
+
+  // The escape the removed floor used to cause. An absolute-budget saver on large
+  // outputs lands here legitimately, and refusing it refused the measurement the
+  // harness most wants.
+  it("accepts a very high compression ratio instead of mistaking it for content loss", () => {
+    const r = checkTransformIntegrity({
+      saver: { applied: 10, passthrough: 0, failed: 0 },
+      bytes: { original: 1_024_000, transformed: 40_000 },
+    });
+    expect(r.byteRatio).toBeCloseTo(0.039, 3);
+    expect(r.ok).toBe(true);
   });
 
   it("reports the applied fraction so a passthrough-heavy run is visible", () => {
@@ -296,14 +313,12 @@ describe("checkTransformIntegrity two-sided band", () => {
     ).toBeCloseTo(0.75, 6);
   });
 
-  it("exposes the band it enforces rather than burying the thresholds", () => {
+  it("exposes the thresholds it enforces rather than burying them", () => {
     expect(MIN_APPLIED_FRACTION).toBeGreaterThan(0.01);
-    expect(MIN_BYTE_RATIO).toBeGreaterThan(0);
-    expect(MAX_BYTE_RATIO).toBeLessThan(1);
+    expect(MAX_BYTE_RATIO).toBeLessThanOrEqual(0.95);
   });
 
-  it("refuses a verdict for either escape rather than printing one", () => {
-    expect(() => buildVerdict("t", [pair(3.7, 1)], destroyed)).toThrow(/measured nothing/);
+  it("refuses a verdict for a transform it cannot resolve rather than printing one", () => {
     expect(() => buildVerdict("t", [pair(1.000081, 1)], nearInert)).toThrow(/measured nothing/);
   });
 });
@@ -345,5 +360,49 @@ describe("buildVerdict carries the generation cap", () => {
     const cap = buildVerdict("t", [pair(1, 0.8)], transform).generationCapTokens;
     expect(cap).toBe(GENERATION_CAP_TOKENS);
     expect(cap).toBeGreaterThan(0);
+  });
+});
+
+// MODEL-BLIND COST: the cost model prices every request at one flat rate card,
+// but a recording holds every /v1/messages call the agent made — including Claude
+// Code's sidecar Haiku calls, which carry no tool_result, are byte-identical in
+// both arms, and drag the ratio toward 1.00 at ~6x their true weight. Nothing
+// downstream read `model` at all, so the error was unbounded AND invisible. It
+// stays unpriced; it stops being invisible.
+describe("modelHistogram", () => {
+  const req = (model: string): RecordedRequest => ({ model, messages: [] });
+
+  it("counts requests per model, busiest first", () => {
+    expect(
+      modelHistogram([
+        req("claude-opus-4-8"),
+        req("claude-haiku-4-5"),
+        req("claude-opus-4-8"),
+        req("claude-opus-4-8"),
+      ]),
+    ).toEqual([
+      { model: "claude-opus-4-8", requests: 3 },
+      { model: "claude-haiku-4-5", requests: 1 },
+    ]);
+  });
+
+  it("makes a sidecar-diluted recording visible as more than one row", () => {
+    const requests = [
+      ...Array.from({ length: 97 }, () => req("claude-opus-4-8")),
+      ...Array.from({ length: 34 }, () => req("claude-haiku-4-5")),
+    ];
+    const histogram = modelHistogram(requests);
+    expect(histogram).toHaveLength(2);
+    // A reader can bound the dilution from this alone: 26% of requests are priced
+    // at ~6x their true cost, and they move the ratio toward 1.00.
+    expect(histogram[1]).toEqual({ model: "claude-haiku-4-5", requests: 34 });
+  });
+
+  it("ties break on model name so the printed order is stable across runs", () => {
+    expect(modelHistogram([req("b"), req("a")]).map((r) => r.model)).toEqual(["a", "b"]);
+  });
+
+  it("returns nothing for an empty recording rather than inventing a row", () => {
+    expect(modelHistogram([])).toEqual([]);
   });
 });
