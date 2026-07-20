@@ -55,6 +55,11 @@ export type FileLm1Store = {
   publish(record: Lm1Record): PublishedLm1Record;
   getByDigest(workspaceKey: string, kind: Lm1Kind, sourceDigest: string): Lm1Record;
   getById(workspaceKey: string, id: string): Lm1Record;
+  getByIds?(
+    workspaceKey: string,
+    entries: readonly Pick<Lm1Record, "id" | "kind" | "sourceDigest">[],
+    limit: number,
+  ): readonly Lm1Record[];
   list(workspaceKey: string, limit: number): readonly Lm1Record[];
 };
 
@@ -827,6 +832,55 @@ export function createFileLm1Store(input: { storeRoot: string }): FileLm1Store {
         );
       }
       return record;
+    },
+    getByIds(workspaceKey, entries, limit) {
+      if (!Number.isInteger(limit) || limit < 1) {
+        throw new Lm1Error("invalid_input", "Invalid LM1 direct record read limit.");
+      }
+      const records: Lm1Record[] = [];
+      for (const entry of entries.slice(0, limit)) {
+        const expected = recordIdLocatorSchema.safeParse({
+          workspaceKey,
+          id: entry.id,
+          kind: entry.kind,
+          sourceDigest: entry.sourceDigest,
+        });
+        if (!expected.success) {
+          throw new Lm1Error("invalid_input", "Invalid LM1 direct record locator.");
+        }
+        const locator = parseRecordIdLocator(
+          lm1RecordIdLocatorPath(input.storeRoot, workspaceKey, expected.data.id),
+          { workspaceKey, id: expected.data.id },
+        );
+        if (
+          locator.kind !== expected.data.kind ||
+          locator.sourceDigest !== expected.data.sourceDigest
+        ) {
+          throw new Lm1Error("store_corrupt", "Long-memory record locator does not match request.");
+        }
+        let record: Lm1Record;
+        try {
+          record = parseRecord(
+            lm1RecordPath(input.storeRoot, workspaceKey, locator.kind, locator.sourceDigest),
+            { workspaceKey, kind: locator.kind, sourceDigest: locator.sourceDigest },
+          );
+        } catch (error) {
+          if (error instanceof Lm1Error && error.code === "not_found") {
+            throw new Lm1Error("store_corrupt", "Long-memory record locator has no record.");
+          }
+          throw error;
+        }
+        if (
+          record.id !== expected.data.id ||
+          record.workspaceKey !== workspaceKey ||
+          record.kind !== expected.data.kind ||
+          record.sourceDigest !== expected.data.sourceDigest
+        ) {
+          throw new Lm1Error("store_corrupt", "Long-memory direct record does not match request.");
+        }
+        records.push(record);
+      }
+      return records;
     },
     list(workspaceKey, limit) {
       if (!Number.isInteger(limit) || limit < 1) {
