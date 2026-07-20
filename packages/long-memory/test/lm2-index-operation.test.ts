@@ -159,6 +159,31 @@ describe("LM2 index operation", () => {
     expect(egress).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    {
+      existingIds: [createCandidate(2).id, createCandidate(1).id],
+      missingIds: [createCandidate(3).id],
+    },
+    {
+      existingIds: [createCandidate(1).id],
+      missingIds: [createCandidate(3).id, createCandidate(2).id],
+    },
+  ])("rejects a noncanonical ordered projection before egress", ({ existingIds, missingIds }) => {
+    const records = [createCandidate(1), createCandidate(2), createCandidate(3)];
+    const sequence = createLm2IndexPlanSequence({
+      operationId: "11111111-1111-4111-8111-111111111111",
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(createModel()),
+      deadlineAtMs: 100,
+    });
+    const egress = vi.fn();
+
+    expect(() =>
+      sequence.mint({ generation: 1, candidates: records, existingIds, missingIds }),
+    ).toThrow();
+    expect(egress).not.toHaveBeenCalled();
+  });
+
   it("rejects post-plan mutation and expiry without egress", async () => {
     const record = createCandidate(1);
     const sequence = createLm2IndexPlanSequence({
