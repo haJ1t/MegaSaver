@@ -184,7 +184,6 @@ async function executeSemantic(input: {
   }
   const { coverage } = parsedRead;
   input.setCoverage(coverage);
-  if (coverage.vectors.length === 0) return degraded(coverage, coverage.reasons);
 
   const fingerprint = modelDescriptorFingerprint(input.request.model);
   if (input.embedding.egress === "remote") {
@@ -211,6 +210,7 @@ async function executeSemantic(input: {
     }
   }
 
+  if (coverage.vectors.length === 0) return degraded(coverage, coverage.reasons);
   if (isExpired()) return degraded(coverage, [...coverage.reasons, "timeout"]);
   let output: unknown;
   try {
