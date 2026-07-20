@@ -10,7 +10,9 @@ sources:
   - docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md
   - docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md
   - docs/superpowers/plans/2026-07-20-long-memory-lm2-hybrid-recall-plan.md
-status: LM0 and LM1 verified; LM2 hybrid design independently approved; LM2 implementation and official LongMemEval-V2 score pending
+  - docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md
+  - docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md
+status: LM0 and LM1 verified; LM2 quota-ledger amendment independently approved; LM2 rework implementation and official LongMemEval-V2 score pending
 created: 2026-07-19
 updated: 2026-07-20
 ---
@@ -71,9 +73,12 @@ claim. Independent architecture and adversarial reviews approved the design;
 implementation must follow its dedicated TDD plan and release gates. (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md`)
 
-The LM2 implementation plan is now ready. It sequences strict contracts,
-bounded catalog/direct-ID reads, locked vector sidecars, explicit evidence-gated
-indexing, literal Safe/LM1 delegation, a separate public benchmark transport,
-and independent/official evidence gates. The plan does not treat its existence
-as implementation or a benchmark result. (source:
-`docs/superpowers/plans/2026-07-20-long-memory-lm2-hybrid-recall-plan.md`)
+Task 4 review found that a directory-wide sidecar quota scan could violate the
+same index call's 1,024 sidecar-metadata-read cap. The approved amendment
+replaces that path with a bounded v2 quota ledger, a single operation-scoped
+advisory lock, fenced epoch/allocation sidecars, explicit retry/expired index
+receipts, and no-scan pending recovery. The initial Task 3/4 implementation
+commits are not accepted behavior; the dedicated rework plan governs the next
+TDD cycle. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md`)

@@ -8,6 +8,11 @@
 
 **Tech Stack:** TypeScript strict/ESM, Node 22 filesystem/crypto/AbortController, Zod, Vitest, @megasaver/retrieval, fs-ext, Python 3.11, official LongMemEval-V2.
 
+> **Supersession note (2026-07-20):** The accepted quota-ledger amendment and
+> [rework plan](2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md)
+> supersede Tasks 3–4's vector quota, operation-lock, ranker, and index steps.
+> Commits through `0ae93e7d` are implementation evidence, not accepted behavior.
+
 ## Global Constraints
 
 - HIGH risk: stay in codex/feat/long-memory-hybrid-recall; no merge/push; require independent architecture and adversarial implementation reviews.
