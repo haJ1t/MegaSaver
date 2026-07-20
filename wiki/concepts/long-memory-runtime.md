@@ -12,7 +12,11 @@ sources:
   - docs/superpowers/plans/2026-07-20-long-memory-lm2-hybrid-recall-plan.md
   - docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md
   - docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md
-status: LM0 and LM1 verified; LM2 quota-ledger amendment independently approved; LM2 rework implementation and official LongMemEval-V2 score pending
+  - commit 065df3e6 (LM2 ledger invariants)
+  - commit 20853aac (LM2 fenced recovery receipts)
+  - commit 65de9013 (LM2 bounded semantic deadlines)
+  - commit 21af7f37 (LM2 bounded approval waits)
+status: LM0 and LM1 verified; LM2 quota-ledger architecture accepted and integration evidence implemented; final whole-branch review and official LongMemEval-V2 score pending
 created: 2026-07-19
 updated: 2026-07-20
 ---
@@ -74,11 +78,26 @@ implementation must follow its dedicated TDD plan and release gates. (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md`)
 
 Task 4 review found that a directory-wide sidecar quota scan could violate the
-same index call's 1,024 sidecar-metadata-read cap. The approved amendment
-replaces that path with a bounded v2 quota ledger, a single operation-scoped
-advisory lock, fenced epoch/allocation sidecars, explicit retry/expired index
-receipts, and no-scan pending recovery. The initial Task 3/4 implementation
-commits are not accepted behavior; the dedicated rework plan governs the next
-TDD cycle. (source:
+same index call's 1,024 sidecar-metadata-read cap. The accepted rework replaces
+that path with one canonical, at-most-64-KiB workspace allocation ledger under
+one fixed-inode, token-bound operation lock. `embeddings-v2` sidecars carry the
+ledger epoch and a contiguous allocation sequence; exact namespace counts and
+serialized-byte totals replace per-sidecar quota recomputation. The indexer
+acquires the operation before catalog work, keeps it through every batch and
+final ledger commit, and returns discriminated complete/continue/retry/expired
+receipts with explicit recovery state. Pending recovery reads only its at-most
+16 named targets, never enumerates an embeddings namespace, and read-only
+Adaptive access excludes every sidecar above the committed watermark. (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
-`docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md`)
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md`,
+commits `065df3e6`, `20853aac`, `65de9013`, `21af7f37`)
+
+The quota and contiguous-publication guarantees apply to compliant,
+ledger-aware writers serialized by that lock. A well-formed trusted-root
+ledger rollback performed wholly outside an operation cannot be detected in
+Node's static-symlink model because no native anti-rollback anchor exists.
+During an operation, descriptor/path, inode, token, generation, operation-id,
+deadline, and evidence checks still fail closed; the external rollback case is
+an explicit threat-model limitation, not a recovery claim. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
+commits `20853aac`, `21af7f37`)
