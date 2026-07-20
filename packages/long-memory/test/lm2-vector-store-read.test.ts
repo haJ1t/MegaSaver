@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import {
   lm2PendingTemporaryName,
@@ -26,6 +26,8 @@ const deadline = () => ({
   deadlineAtMs: 1,
   now: () => 0,
 });
+
+const readDeadline = () => ({ deadlineAtMs: 1, now: () => 0 });
 
 async function publish(root: string, records = [createCandidate()]) {
   const model = createModel();
@@ -71,6 +73,7 @@ describe("LM2 committed vector reads", () => {
         candidates: [candidate],
         maxDecodedBytes: 64,
         signal: new AbortController().signal,
+        ...readDeadline(),
       }),
     ).resolves.toEqual({
       vectors: [{ candidateId: candidate.id, vector: [1, 2, 3], decodedBytes: 12 }],
@@ -132,6 +135,7 @@ describe("LM2 committed vector reads", () => {
       candidates: [candidate],
       maxDecodedBytes: 64,
       signal: new AbortController().signal,
+      ...readDeadline(),
     });
     expect(result.vectors).toEqual([]);
     expect(result.diagnostics).toEqual([
@@ -157,6 +161,7 @@ describe("LM2 committed vector reads", () => {
         candidates: [candidate],
         maxDecodedBytes: 64,
         signal: new AbortController().signal,
+        ...readDeadline(),
       }),
     ).resolves.toEqual({
       vectors: [],
@@ -175,9 +180,43 @@ describe("LM2 committed vector reads", () => {
       candidates,
       maxDecodedBytes: 12,
       signal: new AbortController().signal,
+      ...readDeadline(),
     });
 
     expect(result.vectors).toHaveLength(1);
+    expect(result.diagnostics).toEqual([
+      { candidateId: candidates[1]?.id, reason: "vector_read_limit" },
+    ]);
+  });
+
+  it("stops before a later named sidecar read at the monotonic deadline", async () => {
+    const root = createRoot();
+    const candidates = [createCandidate(1), createCandidate(2)];
+    const { model, store } = await publish(root, candidates);
+    writeFileSync(sidecarPath(root, model, candidates[1]?.id), "{must-not-be-read\n");
+    const now = vi
+      .fn()
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValue(5);
+
+    const result = await store.read({
+      workspaceKey,
+      model,
+      candidates,
+      maxDecodedBytes: 64,
+      signal: new AbortController().signal,
+      deadlineAtMs: 5,
+      now,
+    });
+
+    expect(result.vectors).toEqual([
+      { candidateId: candidates[0]?.id, vector: [1, 2, 3], decodedBytes: 12 },
+    ]);
     expect(result.diagnostics).toEqual([
       { candidateId: candidates[1]?.id, reason: "vector_read_limit" },
     ]);
@@ -193,6 +232,7 @@ describe("LM2 committed vector reads", () => {
         candidates: [candidate],
         maxDecodedBytes: 64,
         signal: new AbortController().signal,
+        ...readDeadline(),
       }),
     ).resolves.toEqual({
       vectors: [],

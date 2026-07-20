@@ -5,26 +5,16 @@ import {
   type HybridSemanticReason,
   type Lm2Candidate,
   type Lm2RankRequest,
-  type Lm2VectorReadResult,
   type RemoteEmbeddingApprovalPort,
   lm2VectorReadResultSchema,
 } from "./lm2-model.js";
 import { type Lm2ScoredVector, normalizeLm2Vector } from "./lm2-ranking-core.js";
+import type { Lm2VectorStore } from "./lm2-vector-store.js";
 
 const MAX_DECODED_VECTOR_BYTES = 64 * 1024 * 1024;
 
 export type Lm2SemanticClock = { now(): number };
-export type Lm2RankVectorReader = {
-  read(input: {
-    workspaceKey: string;
-    model: NonNullable<Lm2RankRequest["model"]>;
-    candidates: readonly Lm2Candidate[];
-    maxDecodedBytes: number;
-    signal: AbortSignal;
-    deadlineAtMs: number;
-    now: () => number;
-  }): Promise<Lm2VectorReadResult>;
-};
+export type Lm2RankVectorReader = Pick<Lm2VectorStore, "read">;
 
 export type Lm2SemanticCoverage = {
   vectors: readonly Lm2ScoredVector[];
@@ -257,13 +247,30 @@ export async function runLm2SemanticLane(input: {
 }): Promise<Lm2SemanticOutcome> {
   const controller = new AbortController();
   const deadlineAtMs = input.startedAtMs + input.timeoutMs;
+  let current: number;
+  try {
+    current = input.clock.now();
+  } catch {
+    controller.abort();
+    return degraded(emptyCoverage(), ["timeout"]);
+  }
+  if (
+    !Number.isFinite(deadlineAtMs) ||
+    !Number.isFinite(current) ||
+    current < input.startedAtMs ||
+    current >= deadlineAtMs
+  ) {
+    controller.abort();
+    return degraded(emptyCoverage(), ["timeout"]);
+  }
+  const remainingMs = Math.max(0, deadlineAtMs - current);
   let latestCoverage = emptyCoverage();
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<Lm2SemanticOutcome>((resolve) => {
     timeoutHandle = setTimeout(() => {
       controller.abort();
       resolve(degraded(latestCoverage, [...latestCoverage.reasons, "timeout"]));
-    }, input.timeoutMs);
+    }, remainingMs);
   });
   const operation = executeSemantic({
     ...input,
