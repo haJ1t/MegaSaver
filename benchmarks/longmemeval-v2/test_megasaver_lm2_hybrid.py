@@ -176,6 +176,50 @@ class MegaSaverLm2HybridTest(unittest.TestCase):
             memory.insert(self.fixture["trajectories"][0])
         self.assertEqual(self.requests(), [])
 
+    def test_python_canonical_numbers_match_the_typescript_vector(self) -> None:
+        value = {
+            "tiny": 1e-7, "threshold": 1e-6, "large": 1e20,
+            "scientific": 1e21, "negativeZero": -0.0, "nested": [1.25e-8],
+        }
+        expected = (
+            '{"large":100000000000000000000,"negativeZero":0,'
+            '"nested":[1.25e-8],"scientific":1e+21,'
+            '"threshold":0.000001,"tiny":1e-7}'
+        )
+        self.assertEqual(self.backend._canonical(value), expected)
+        self.assertEqual(
+            self.backend._digest(value),
+            "3071e817c07df80c3e924429ecff57c1354a774972a68e8d8df1e212f5d64261",
+        )
+        self.assertEqual(
+            self.backend._digest(self.fixture["trajectories"][0]),
+            "2db8d44b938ffc1b07dce0a4cdf863003895af71dcf8a13c2d00f271e5816b8b",
+        )
+
+    def test_rejects_self_consistent_manifest_substitution_without_transport(self) -> None:
+        mutations = [
+            lambda value: value.update(officialCommit="0" * 40),
+            lambda value: value["data"].update(repoId="attacker/private"),
+            lambda value: value["data"]["checksums"].update(schema="0" * 64),
+            lambda value: value.update(tier="medium"),
+            lambda value: value["questions"][0].update(extra="poison"),
+            lambda value: value["questions"][0].update(haystackChainDigest="0" * 64),
+            lambda value: value["trajectories"][0]["projections"][0].update(id="not-uuid"),
+            lambda value: value["trajectories"][0]["projections"][0].update(observedAt=7),
+        ]
+        original = json.loads(json.dumps(self.fixture["manifest"]))
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                manifest = json.loads(json.dumps(original))
+                mutate(manifest)
+                raw = self.backend._canonical(manifest) + "\n"
+                self.fixture["manifest_path"].write_text(raw, encoding="utf-8")
+                self.fixture["config"]["manifest_digest"] = self.backend._digest(manifest)
+                memory = self.build_memory(self.memory_config)
+                with self.assertRaises(RuntimeError):
+                    memory.insert(self.fixture["trajectories"][0])
+                self.assertEqual(self.requests(), [])
+
     def test_official_save_load_accepts_only_original_directory_identity(self) -> None:
         memory = self.build_indexed()
         save_dir = self.root / "saved"
@@ -203,6 +247,45 @@ class MegaSaverLm2HybridTest(unittest.TestCase):
         save_dir.rename(moved)
         with self.assertRaises(RuntimeError):
             self.load_memory(moved, requested_config=self.memory_config)
+
+    def test_load_rejects_alias_corrupt_control_chain_and_replaced_run(self) -> None:
+        memory = self.build_indexed()
+        save_dir = self.root / "saved-security"
+        self.save_memory(memory, save_dir)
+        initial_requests = len(self.requests())
+
+        alias = self.root / "saved-alias"
+        alias.symlink_to(save_dir, target_is_directory=True)
+        with self.assertRaises(RuntimeError):
+            self.load_memory(alias, requested_config=self.memory_config)
+
+        control_path = save_dir / "megasaver_lm2_control_v1.json"
+        original = json.loads(control_path.read_text())
+        corruptions = [
+            {**original, "schemaVersion": "attacker-control"},
+            {**original, "chain": [], "chainDigest": self.backend._digest([])},
+            {
+                **original,
+                "chain": [{"id": "trajectory-one", "fullObjectDigest": "0" * 64}],
+                "chainDigest": self.backend._digest(
+                    [{"id": "trajectory-one", "fullObjectDigest": "0" * 64}]
+                ),
+            },
+        ]
+        for control in corruptions:
+            with self.subTest(control=control):
+                control_path.write_text(self.backend._canonical(control) + "\n")
+                with self.assertRaises(RuntimeError):
+                    self.load_memory(save_dir, requested_config=self.memory_config)
+        control_path.write_text(self.backend._canonical(original) + "\n")
+
+        run = self.fixture["cache_parent"] / f"instance-{memory._instance_token}"
+        displaced = self.root / "displaced-run"
+        run.rename(displaced)
+        shutil.copytree(displaced, run)
+        with self.assertRaises(RuntimeError):
+            self.load_memory(save_dir, requested_config=self.memory_config)
+        self.assertEqual(len(self.requests()), initial_requests)
 
 
 if __name__ == "__main__":

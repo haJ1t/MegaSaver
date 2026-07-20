@@ -12,8 +12,41 @@ from uuid import UUID, uuid5
 DATA_REVISION = "f152293e235517d504809563c833d7190b8c713b"
 
 
+def number(value: int | float) -> str:
+    if isinstance(value, int):
+        return str(value)
+    if value == 0:
+        return "0"
+    sign = "-" if value < 0 else ""
+    text = repr(abs(value)).lower()
+    if "e" not in text:
+        return sign + (text[:-2] if text.endswith(".0") else text)
+    coefficient, exponent_text = text.split("e")
+    integer, _, fraction = coefficient.partition(".")
+    digits = integer + fraction
+    point = len(integer) + int(exponent_text)
+    if 1e-6 <= abs(value) < 1e21:
+        if point <= 0:
+            return sign + "0." + "0" * (-point) + digits
+        if point >= len(digits):
+            return sign + digits + "0" * (point - len(digits))
+        return sign + digits[:point] + "." + digits[point:]
+    exponent = point - 1
+    return sign + digits[0] + (("." + digits[1:]) if len(digits) > 1 else "") + "e" + ("+" if exponent >= 0 else "") + str(exponent)
+
+
 def canonical(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return number(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, list):
+        return "[" + ",".join(canonical(item) for item in value) + "]"
+    return "{" + ",".join(canonical(key) + ":" + canonical(value[key]) for key in sorted(value)) + "}"
 
 
 def digest(value: object) -> str:
@@ -45,7 +78,11 @@ def make_fixture(root: Path) -> dict[str, object]:
     cache_parent = root / "cache"
     cache_parent.mkdir(mode=0o700)
     trajectories = [
-        {"id": "trajectory-one", "states": [{"accessibility_tree": "billing paid"}]},
+        {
+            "id": "trajectory-one",
+            "scientific": {"tiny": 1e-7, "large": 1e20},
+            "states": [{"accessibility_tree": "billing paid"}],
+        },
         {"id": "trajectory-two", "content": [{"observation": {"text": "approval pending"}}]},
     ]
     refs = [{"id": row["id"], "fullObjectDigest": digest(row)} for row in trajectories]
@@ -119,14 +156,25 @@ def make_fixture(root: Path) -> dict[str, object]:
                 run.mkdir(mode=0o700)
                 (run / "cache").mkdir(mode=0o700)
                 (run / "telemetry").mkdir(mode=0o700)
+                (run / "run.lock").write_text("", encoding="utf-8")
+                (run / "run.lock").chmod(0o600)
                 (run / "telemetry" / "queries.jsonl").write_text("", encoding="utf-8")
                 (run / "telemetry" / "queries.jsonl").chmod(0o600)
-                sentinel = {{"instanceToken": request["instanceToken"], "sentinelToken": token, "manifestDigest": request["config"]["manifestDigest"]}}
+                run_info = run.stat()
+                lock_info = (run / "run.lock").stat()
+                sentinel = {{"schemaVersion": "megasaver-lm2-run-v1", "manifestDigest": request["config"]["manifestDigest"], "dataRevision": request["config"]["dataRevision"], "instanceToken": request["instanceToken"], "sentinelToken": token, "device": str(run_info.st_dev), "inode": str(run_info.st_ino), "lockDevice": str(lock_info.st_dev), "lockInode": str(lock_info.st_ino), "chain": [], "chainDigest": "{digest([])}"}}
                 (run / "sentinel.json").write_text(json.dumps(sentinel, separators=(",", ":"), sort_keys=True) + "\\n", encoding="utf-8")
                 (run / "sentinel.json").chmod(0o600)
+                (run / "control.json").write_text(json.dumps(sentinel, separators=(",", ":"), sort_keys=True) + "\\n", encoding="utf-8")
+                (run / "control.json").chmod(0o600)
                 result = {{"sentinelToken": token, "chainDigest": "{digest([])}", "insertedCount": 0}}
             elif request["op"] == "insert":
                 count = 1 if request["trajectory"]["id"] == "trajectory-one" else 2
+                run = Path(request["config"]["cacheParent"]) / ("instance-" + request["instanceToken"])
+                control = json.loads((run / "control.json").read_text())
+                control["chain"] = {json.dumps(refs)}[:count]
+                control["chainDigest"] = "{first_digest}" if count == 1 else "{full_digest}"
+                (run / "control.json").write_text(json.dumps(control, separators=(",", ":"), sort_keys=True) + "\\n", encoding="utf-8")
                 result = {{"chainDigest": "{first_digest}" if count == 1 else "{full_digest}", "insertedCount": count, "indexingComplete": True}}
             else:
                 result = {{"items": [{{"type": "text", "value": "billing paid"}}, {{"type": "text", "value": ""}}, {{"type": "image", "value": "/private.png"}}], "telemetry": {{"semanticStatus": "used"}}}}

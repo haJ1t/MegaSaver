@@ -118,6 +118,18 @@ describe("LM2 benchmark V1 manifest", () => {
     expect(() => buildBenchmarkManifest(poisoned)).toThrow();
   });
 
+  it("binds each haystack checksum to its selected tier", () => {
+    const mediumWithSmallHaystack = buildInput();
+    mediumWithSmallHaystack.tier = "medium";
+    expect(() => buildBenchmarkManifest(mediumWithSmallHaystack)).toThrow();
+
+    const manifest = buildBenchmarkManifest(buildInput());
+    const substituted = structuredClone(manifest);
+    substituted.data.checksums.haystack =
+      "4756d5126347f0d18f045bb6c47b08cb3b23e9db24386cc48a9b2879e7969b59";
+    expect(() => parseBenchmarkManifest(substituted)).toThrow();
+  });
+
   it("rejects full-object mutation and unsupported projection shapes", () => {
     const invalid = buildInput();
     invalid.trajectories[1] = { id: "trajectory-content", content: [{}] } as never;

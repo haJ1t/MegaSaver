@@ -14,15 +14,14 @@ export const BENCHMARK_PROJECTION_NAMESPACE = "7d20f05d-6a18-52b8-98e0-8f6c933b3
 export const BENCHMARK_MAX_TEXT_CODE_UNITS = 50_000;
 
 const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/u);
+const SMALL_HAYSTACK_CHECKSUM = "9b5301defb23a088a5f06e45ff8d5f35e569d78305a66d492046a9fff9b46593";
+const MEDIUM_HAYSTACK_CHECKSUM = "4756d5126347f0d18f045bb6c47b08cb3b23e9db24386cc48a9b2879e7969b59";
 const checksumSchema = z
   .object({
     schema: z.literal("0672cf47cf16c30365648770628b433076bb3f5b73edded673af7dd6d5f3246f"),
     questions: z.literal("0a3ae5ebea938c24d7800e1e0b0828e08ae1646f939a53853b2b8cdc08e292b7"),
     trajectories: z.literal("363cec9a8e87aa8d9101ce4e600aadbf7031d674056ebe4f969e8424abc5f3c6"),
-    haystack: z.enum([
-      "9b5301defb23a088a5f06e45ff8d5f35e569d78305a66d492046a9fff9b46593",
-      "4756d5126347f0d18f045bb6c47b08cb3b23e9db24386cc48a9b2879e7969b59",
-    ]),
+    haystack: z.enum([SMALL_HAYSTACK_CHECKSUM, MEDIUM_HAYSTACK_CHECKSUM]),
   })
   .strict();
 const trajectoryRefSchema = z
@@ -166,6 +165,11 @@ function projectTrajectory(
 
 export function parseBenchmarkManifest(value: unknown): BenchmarkManifest {
   const manifest = benchmarkManifestSchema.parse(value);
+  const expectedHaystackChecksum =
+    manifest.tier === "small" ? SMALL_HAYSTACK_CHECKSUM : MEDIUM_HAYSTACK_CHECKSUM;
+  if (manifest.data.checksums.haystack !== expectedHaystackChecksum) {
+    throw new Error("Manifest tier checksum mismatch.");
+  }
   const trajectoryIds = new Set<string>();
   const trajectoryDigests = new Map<string, string>();
   for (const trajectory of manifest.trajectories) {
