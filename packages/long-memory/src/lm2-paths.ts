@@ -47,7 +47,7 @@ export function lm2CandidateCatalogDirectory(storeRoot: string, workspaceKey: st
 export function lm2CandidateCatalogPath(storeRoot: string, workspaceKey: string): string {
   const path = join(
     lm2CandidateCatalogDirectory(storeRoot, workspaceKey),
-    "candidate-catalog-v1.json",
+    "candidate-catalog-v2.json",
   );
   assertLm1PathIsNotSymlink(path);
   return path;
@@ -56,7 +56,7 @@ export function lm2CandidateCatalogPath(storeRoot: string, workspaceKey: string)
 export function lm2CandidateCatalogLockPath(storeRoot: string, workspaceKey: string): string {
   const path = join(
     lm2CandidateCatalogDirectory(storeRoot, workspaceKey),
-    "candidate-catalog-v1.lock",
+    "candidate-catalog-v2.lock",
   );
   assertLm1PathIsNotSymlink(path);
   return path;

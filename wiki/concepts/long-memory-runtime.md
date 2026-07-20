@@ -12,11 +12,13 @@ sources:
   - docs/superpowers/plans/2026-07-20-long-memory-lm2-hybrid-recall-plan.md
   - docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md
   - docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md
+  - docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md
+  - docs/superpowers/plans/2026-07-20-long-memory-lm2-runtime-security-completion-plan.md
   - commit 065df3e6 (LM2 ledger invariants)
   - commit 20853aac (LM2 fenced recovery receipts)
   - commit 65de9013 (LM2 bounded semantic deadlines)
   - commit 21af7f37 (LM2 bounded approval waits)
-status: LM0 and LM1 verified; LM2 quota-ledger architecture accepted and integration evidence implemented; final whole-branch review and official LongMemEval-V2 score pending
+status: LM0 and LM1 verified; LM2 quota-ledger and candidate-catalog hardening implemented; final whole-branch review and official LongMemEval-V2 score pending
 created: 2026-07-19
 updated: 2026-07-20
 ---
@@ -101,3 +103,16 @@ deadline, and evidence checks still fail closed; the external rollback case is
 an explicit threat-model limitation, not a recovery claim. (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
 commits `20853aac`, `21af7f37`)
+
+The LM2 candidate catalog now has separate V2 schema/cursor, anchored storage,
+and fixed-inode lock modules. Its immutable control record binds the permanent
+lock device, inode, and random token; each acquisition, mutation, and release
+rechecks that binding. The only automatic crash recovery states are an orphan
+lock before control/catalog publication and a valid control record before the
+canonical empty catalog. Either V1 pathname is explicitly unsupported and is
+left byte-identical. Process-level regressions cover idle and held lock-path
+replacement, catalog symlinks, descriptor-close failure, both named crash
+cuts, and concurrent appenders. Independent Task 3 review remains pending.
+(source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
+`.superpowers/sdd/task-3-report.md`)

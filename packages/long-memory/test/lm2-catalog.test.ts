@@ -1,11 +1,14 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -52,6 +55,12 @@ const workspaceKey = "0123456789abcdef";
 const evidenceIds = ["11111111-1111-4111-8111-111111111111"];
 const evidenceDigests = ["a".repeat(64)];
 const packageDirectory = fileURLToPath(new URL("..", import.meta.url));
+const repositoryDirectory = fileURLToPath(new URL("../../..", import.meta.url));
+const catalogChild = fileURLToPath(new URL("./fixtures/lm2-catalog-child.ts", import.meta.url));
+const tsxCli = join(
+  repositoryDirectory,
+  "node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs",
+);
 
 function createRoot(): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "megasaver-lm2-catalog-")));
@@ -121,15 +130,16 @@ function writeCatalog(
   entries: readonly ReturnType<typeof catalogEntry>[],
   generation = entries.length,
 ): void {
+  createLm2CandidateCatalog({ storeRoot: root }).page({ workspaceKey, cursor: null, limit: 1 });
   const path = lm2CandidateCatalogPath(root, workspaceKey);
-  writeFileSync(path, `${JSON.stringify({ schemaVersion: 1, generation, entries })}\n`);
+  writeFileSync(path, `${JSON.stringify({ schemaVersion: 2, generation, entries })}\n`);
 }
 
 function holdCatalogLock(path: string): Promise<() => Promise<void>> {
   const script = [
     'import { closeSync, openSync } from "node:fs";',
     'import { flockSync } from "fs-ext";',
-    'const descriptor = openSync(process.argv[1], "a+");',
+    'const descriptor = openSync(process.argv[1], "a+", 0o600);',
     'flockSync(descriptor, "exnb");',
     'process.stdout.write("locked\\n");',
     'process.stdin.once("data", () => { closeSync(descriptor); process.exit(0); });',
@@ -164,12 +174,258 @@ function holdCatalogLock(path: string): Promise<() => Promise<void>> {
   });
 }
 
+function v2Paths(root: string) {
+  const directory = join(root, "long-memory", "v1", workspaceKey, ".lm2");
+  return {
+    directory,
+    catalog: join(directory, "candidate-catalog-v2.json"),
+    control: join(directory, "candidate-catalog-v2.control.json"),
+    lock: join(directory, "candidate-catalog-v2.lock"),
+  };
+}
+
+function runCatalogChild(
+  root: string,
+  record: Lm1Record,
+  mode: "append" | "append-with-anchor-close-failure" = "append",
+): Promise<boolean> {
+  const encoded = Buffer.from(JSON.stringify({ mode, storeRoot: root, record })).toString(
+    "base64url",
+  );
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [tsxCli, catalogChild, encoded], {
+      cwd: packageDirectory,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code !== 0) reject(new Error(stderr));
+      else resolve((JSON.parse(stdout.trim()) as { result: boolean }).result);
+    });
+  });
+}
+
+function startBarrierAppender(root: string, record: Lm1Record): Promise<() => Promise<boolean>> {
+  const encoded = Buffer.from(
+    JSON.stringify({ mode: "append-after-barrier", storeRoot: root, record }),
+  ).toString("base64url");
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [tsxCli, catalogChild, encoded], {
+      cwd: packageDirectory,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.once("error", reject);
+    child.stdout.once("data", (chunk: Buffer) => {
+      if (chunk.toString() !== "ready\n") {
+        reject(new Error(`Catalog appender did not reach barrier: ${stderr}`));
+        return;
+      }
+      resolve(
+        () =>
+          new Promise<boolean>((finish, rejectFinish) => {
+            child.stdout.on("data", (result: Buffer) => {
+              stdout += result.toString();
+            });
+            child.once("error", rejectFinish);
+            child.once("close", (code) => {
+              if (code !== 0) rejectFinish(new Error(stderr));
+              else finish((JSON.parse(stdout.trim()) as { result: boolean }).result);
+            });
+            child.stdin.end("go\n");
+          }),
+      );
+    });
+  });
+}
+
+function writeV2Control(root: string): void {
+  const paths = v2Paths(root);
+  const stat = statSync(paths.lock);
+  const token = readFileSync(paths.lock, "utf8").trim();
+  const empty = `${JSON.stringify({ schemaVersion: 2, generation: 0, entries: [] })}\n`;
+  writeFileSync(
+    paths.control,
+    `${JSON.stringify({
+      schemaVersion: 2,
+      catalogLock: { device: stat.dev, inode: stat.ino, token },
+      emptyCatalogDigest: createHash("sha256").update(empty).digest("hex"),
+    })}\n`,
+    { mode: 0o600 },
+  );
+}
+
 afterEach(() => {
   observedDirectories.length = 0;
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
 describe("LM2 candidate catalog", () => {
+  it.each(["candidate-catalog-v1.json", "candidate-catalog-v1.lock"])(
+    "invalidates %s without reading, migrating, or overwriting it",
+    async (name) => {
+      const root = createRoot();
+      const paths = v2Paths(root);
+      mkdirSync(paths.directory, { recursive: true });
+      const v1Path = join(paths.directory, name);
+      const original = "legacy-catalog-must-remain-byte-identical\n";
+      writeFileSync(v1Path, original);
+
+      expect(await runCatalogChild(root, createRecord())).toBe(false);
+      expect(readFileSync(v1Path, "utf8")).toBe(original);
+      expect(existsSync(paths.catalog)).toBe(false);
+      expect(() =>
+        createLm2CandidateCatalog({ storeRoot: root }).page({
+          workspaceKey,
+          cursor: null,
+          limit: 1,
+        }),
+      ).toThrow(expect.objectContaining({ code: "catalog_schema_unsupported" }));
+    },
+  );
+
+  it("rejects an orphan catalog lock that is not mode 0600", async () => {
+    const root = createRoot();
+    const paths = v2Paths(root);
+    mkdirSync(paths.directory, { recursive: true });
+    writeFileSync(paths.lock, "orphaned-before-token\n", { mode: 0o644 });
+
+    expect(await runCatalogChild(root, createRecord())).toBe(false);
+    expect(existsSync(paths.control)).toBe(false);
+    expect(existsSync(paths.catalog)).toBe(false);
+  });
+
+  it("recovers only an orphan V2 lock on the same inode after a creator crash", async () => {
+    const root = createRoot();
+    const paths = v2Paths(root);
+    mkdirSync(paths.directory, { recursive: true });
+    writeFileSync(paths.lock, "orphaned-before-token\n", { mode: 0o600 });
+    const identity = statSync(paths.lock);
+
+    expect(await runCatalogChild(root, createRecord())).toBe(true);
+    expect(statSync(paths.lock)).toMatchObject({ dev: identity.dev, ino: identity.ino });
+    expect(JSON.parse(readFileSync(paths.catalog, "utf8"))).toMatchObject({
+      schemaVersion: 2,
+      generation: 1,
+    });
+    expect(JSON.parse(readFileSync(paths.control, "utf8"))).toMatchObject({
+      schemaVersion: 2,
+      catalogLock: { device: identity.dev, inode: identity.ino },
+    });
+  });
+
+  it("recovers the exact empty V2 catalog after a control-before-catalog crash", async () => {
+    const root = createRoot();
+    const paths = v2Paths(root);
+    mkdirSync(paths.directory, { recursive: true });
+    writeFileSync(paths.lock, `${"a".repeat(64)}\n`, { mode: 0o600 });
+    writeV2Control(root);
+
+    expect(await runCatalogChild(root, createRecord())).toBe(true);
+    expect(JSON.parse(readFileSync(paths.catalog, "utf8"))).toMatchObject({
+      schemaVersion: 2,
+      generation: 1,
+      entries: [catalogEntry(createRecord(), 1)],
+    });
+  });
+
+  it("rejects catalog symlinks for both reads and writes", async () => {
+    const root = createRoot();
+    const outside = createRoot();
+    expect(await runCatalogChild(root, createRecord())).toBe(true);
+    const paths = v2Paths(root);
+    const outsideCatalog = join(outside, "outside-catalog.json");
+    const original = "outside-must-not-change\n";
+    writeFileSync(outsideCatalog, original);
+    renameSync(paths.catalog, `${paths.catalog}.displaced`);
+    symlinkSync(outsideCatalog, paths.catalog);
+
+    expect(await runCatalogChild(root, createRecord(1))).toBe(false);
+    expect(readFileSync(outsideCatalog, "utf8")).toBe(original);
+    expect(() =>
+      createLm2CandidateCatalog({ storeRoot: root }).page({
+        workspaceKey,
+        cursor: null,
+        limit: 10,
+      }),
+    ).toThrow(expect.objectContaining({ code: "store_corrupt" }));
+  });
+
+  it("rejects an idle lock-path replacement without adopting the new inode", async () => {
+    const root = createRoot();
+    expect(await runCatalogChild(root, createRecord())).toBe(true);
+    const paths = v2Paths(root);
+    renameSync(paths.lock, `${paths.lock}.displaced`);
+    writeFileSync(paths.lock, `${"b".repeat(64)}\n`, { mode: 0o600 });
+
+    expect(await runCatalogChild(root, createRecord(1))).toBe(false);
+    expect(() =>
+      createLm2CandidateCatalog({ storeRoot: root }).page({
+        workspaceKey,
+        cursor: null,
+        limit: 10,
+      }),
+    ).toThrow(expect.objectContaining({ code: "store_corrupt" }));
+  });
+
+  it("rejects a new-inode writer while the old catalog-lock inode is held", async () => {
+    const root = createRoot();
+    expect(await runCatalogChild(root, createRecord())).toBe(true);
+    const paths = v2Paths(root);
+    const release = await holdCatalogLock(paths.lock);
+    try {
+      renameSync(paths.lock, `${paths.lock}.displaced`);
+      writeFileSync(paths.lock, `${"c".repeat(64)}\n`, { mode: 0o600 });
+      expect(await runCatalogChild(root, createRecord(1))).toBe(false);
+    } finally {
+      await release();
+    }
+    expect(JSON.parse(readFileSync(paths.catalog, "utf8"))).toMatchObject({ generation: 1 });
+  });
+
+  it("releases the catalog flock before reporting an anchor-close failure", async () => {
+    const root = createRoot();
+    expect(await runCatalogChild(root, createRecord(), "append-with-anchor-close-failure")).toBe(
+      false,
+    );
+    expect(await runCatalogChild(root, createRecord(1))).toBe(true);
+    expect(
+      createLm2CandidateCatalog({ storeRoot: root }).page({
+        workspaceKey,
+        cursor: null,
+        limit: 10,
+      }).entries,
+    ).toHaveLength(2);
+  });
+
+  it("serializes two real appenders without losing either catalog entry", async () => {
+    const root = createRoot();
+    expect(await runCatalogChild(root, createRecord())).toBe(true);
+    const first = await startBarrierAppender(root, createRecord(1));
+    const second = await startBarrierAppender(root, createRecord(2));
+    const results = await Promise.all([first(), second()]);
+
+    expect(results).toEqual([true, true]);
+    expect(
+      createLm2CandidateCatalog({ storeRoot: root }).page({
+        workspaceKey,
+        cursor: null,
+        limit: 10,
+      }).entries,
+    ).toHaveLength(3);
+  });
   it("serializes multi-batch indexing and reports recovery of a published pending prefix", async () => {
     const root = createRoot();
     const records = Array.from({ length: 9 }, (_, index) =>
@@ -351,7 +607,7 @@ describe("LM2 candidate catalog", () => {
     const root = createRoot();
     const catalog = createLm2CandidateCatalog({ storeRoot: root });
     const record = createRecord();
-    writeFileSync(lm2CandidateCatalogLockPath(root, workspaceKey), "held\n");
+    writeFileSync(lm2CandidateCatalogLockPath(root, workspaceKey), "held\n", { mode: 0o600 });
 
     expect(catalog.appendPublished(record)).toBe(true);
     expect(createFileLm1Store({ storeRoot: root }).publish(record)).toMatchObject({
@@ -381,7 +637,7 @@ describe("LM2 candidate catalog", () => {
 
     expect(catalog.appendPublished(record)).toBe(true);
     expect(JSON.parse(readFileSync(lm2CandidateCatalogPath(root, workspaceKey), "utf8"))).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       generation: 1,
       entries: [catalogEntry(record, 1)],
     });
