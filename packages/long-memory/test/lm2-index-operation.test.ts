@@ -49,8 +49,12 @@ vi.mock("node:fs", async (importOriginal) => {
   };
 });
 
+import type { Lm1Record } from "../src/lm1-model.js";
+import type { FileLm1Store } from "../src/lm1-store.js";
+import type { Lm2CandidateCatalog } from "../src/lm2-catalog.js";
 import { embeddingInputDigest, modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import { createLm2IndexPlanSequence } from "../src/lm2-index-plan.js";
+import { createLm2IndexService } from "../src/lm2-index.js";
 import { createPendingAllocations } from "../src/lm2-ledger-recovery.js";
 import type { Lm2Candidate } from "../src/lm2-model.js";
 import {
@@ -665,6 +669,114 @@ describe("LM2 index operation", () => {
       injectedFsyncFailures[0],
       injectedCloseFailures[0],
     ]);
+  });
+
+  it("carries aggregate cleanup roots through the real blocked receipt", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const candidate = createCandidate(1);
+    const evidenceId = "10000000-0000-4000-8000-000000000001";
+    const record = {
+      schemaVersion: 1,
+      ...candidate,
+      canonicalCaptureDigest: "a".repeat(64),
+      evidenceBindingDigest: "b".repeat(64),
+      recordedAt: "2026-07-20T00:00:03.000Z",
+      evidenceDigests: ["c".repeat(64)],
+      status: "recorded",
+      action: null,
+      evidenceIds: [evidenceId],
+      stateKey: "billing.status",
+      representation: "value",
+      supersedesSnapshotId: null,
+      redactionVersion: "redaction-v1",
+    } as Lm1Record;
+    const catalog: Lm2CandidateCatalog = {
+      appendPublished: vi.fn(),
+      page: vi.fn(() => ({
+        generation: 1,
+        entries: [
+          {
+            id: record.id,
+            sourceDigest: record.sourceDigest,
+            kind: record.kind,
+            observedAt: record.observedAt,
+            captureSequence: 1,
+          },
+        ],
+        nextCursor: null,
+      })),
+    };
+    const lm1Store: FileLm1Store = {
+      publish: vi.fn(),
+      getByDigest: vi.fn(),
+      getById: vi.fn(() => record),
+      list: vi.fn(),
+    };
+    let eligibilityChecks = 0;
+    const evidenceEligibility = {
+      resolve: vi.fn(async () => {
+        eligibilityChecks += 1;
+        if (eligibilityChecks === 2) {
+          failNextFsync = true;
+          failNextClose = true;
+        }
+        return [
+          {
+            evidenceId,
+            workspaceKey,
+            status: "available" as const,
+            unresolvedHighRisk: false,
+          },
+        ];
+      }),
+    };
+    const embedding = {
+      egress: "local" as const,
+      embed: vi.fn(async () => ({
+        modelFingerprint: modelDescriptorFingerprint(model),
+        vectors: [[1, 2, 3]],
+      })),
+    };
+    const vectors = createLm2VectorStore({ storeRoot: root });
+    const index = createLm2IndexService({
+      catalog,
+      store: lm1Store,
+      vectors,
+      evidenceEligibility,
+      embedding,
+      model,
+      defaultTimeoutMs: 1_000,
+    });
+    const request = {
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 1,
+    };
+
+    const receipt = await index.index(request);
+
+    expect(receipt).toEqual({
+      indexedCount: 0,
+      omitted: [],
+      outcome: "retry",
+      nextCursor: null,
+      retryCursor: null,
+      transientReason: "quota_state_invalid",
+      quotaRecovery: "blocked_pending",
+    });
+    const diagnostic = Reflect.getOwnPropertyDescriptor(receipt, "cause");
+    expect(diagnostic).toMatchObject({ enumerable: false });
+    expect(diagnostic?.value).toBeInstanceOf(AggregateError);
+    expect(exactCleanupRoots(diagnostic?.value)).toEqual([
+      injectedFsyncFailures[0],
+      injectedCloseFailures[0],
+    ]);
+    expect(JSON.parse(JSON.stringify(receipt))).toEqual(receipt);
+
+    const recovered = await index.index(request);
+    expect(recovered).toMatchObject({ outcome: "complete" });
+    expect(embedding.embed).toHaveBeenCalledTimes(1);
   });
 
   it("retains all independent finalization failures and releases the lock", async () => {
