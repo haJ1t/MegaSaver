@@ -32,7 +32,10 @@ const DIAGNOSTIC = /\b(error|fail(?:ed|ure)?|exception|warn(?:ing)?|panic|fatal)
 // A real source position is structural evidence, not volatile noise. It must be
 // a path/filename token (starts with a letter) followed by :line:col — NOT a
 // bare wall-clock HH:MM:SS, which starts with a digit and is masked by <ts>.
-const POSITION = /[A-Za-z][\w./-]*:\d+:\d+/;
+// Bounded run: unbounded, this is quadratic on a long delimiter-free line
+// (7.4 s on 50 KB) because the class accepts the whole run and `:` never
+// follows. No real source path is 256 chars. Do not restore `*`.
+const POSITION = /[A-Za-z][\w./-]{0,256}:\d+:\d+/;
 
 // Volatile tokens masked to a placeholder before similarity comparison. Only
 // pure identity noise — timestamps, uuids, hex ids, request-id ports — is

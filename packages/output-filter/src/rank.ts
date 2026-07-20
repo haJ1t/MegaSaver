@@ -55,11 +55,17 @@ const ERROR = /\berror\b|\bfailed\b|\bfailure\b|\bexception\b|\bpanic(ked)?\b/i;
 // Case-SENSITIVE on purpose: requiring a leading [A-Z] and the literal `Error`
 // suffix targets real exception identifiers without re-matching the substring
 // "error" inside benign lowercase prose (that stays the job of \berror\b above).
-const EXCEPTION_NAME = /[A-Z][A-Za-z]*Error\b/;
+// Bounded on purpose: unbounded, this is quadratic. 'X'.repeat(50_000) is all
+// [A-Za-z], so every position starts a scan to end-of-input that then fails
+// `Error` and backtracks — 6.6 s on 50 KB. Real exception names are short;
+// delimiter-free 50 KB runs (base64, minified bundles) are routine in tool
+// output. Do not restore `*`.
+const EXCEPTION_NAME = /[A-Z][A-Za-z]{0,64}Error\b/;
 const DIAGNOSTIC = /\(\d+,\d+\):\s+error\s+TS\d+:/;
 const STACKTRACE = /^\s+at\s+.+:\d+:\d+/m;
 const TEST_FAILURE = /^(?:FAIL|\s*[✗×])\s|\b\d+\s+failed\b/im;
-const FILE_PATH = /[\w./-]+\.\w{1,5}(?::\d+)?/;
+// Bounded for the same reason as EXCEPTION_NAME: 8.1 s on 50 KB unbounded.
+const FILE_PATH = /[\w./-]{1,256}\.\w{1,5}(?::\d+)?/;
 const NOISE = /^[\s.\-=*#]*$/;
 
 function keywordScore(intent: string | undefined, text: string): number {
