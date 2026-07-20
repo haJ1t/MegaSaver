@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type Stats, lstatSync } from "node:fs";
 import { dirname } from "node:path";
+import { combineLm2CleanupFailures } from "./lm2-cleanup-errors.js";
 import { createLm2OperationPublisher } from "./lm2-index-operation-publish.js";
 import {
   type Lm2OperationFence,
@@ -211,12 +212,12 @@ export async function beginIndexOperation(
       try {
         closeDirectoryAnchor(ledgerAnchor);
       } catch (error) {
-        failure ??= error;
+        failure = combineLm2CleanupFailures(failure, error);
       }
       try {
         lock.release();
       } catch (error) {
-        failure ??= error;
+        failure = combineLm2CleanupFailures(failure, error);
       }
       if (failure !== undefined)
         throw new Lm2CleanupError("LM2 operation cleanup failed.", failure);
