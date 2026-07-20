@@ -5,11 +5,33 @@ import json
 import os
 from pathlib import Path
 import stat
+import sys
 import textwrap
+import types
+import unittest
 from uuid import UUID, uuid5
 
 
 DATA_REVISION = "f152293e235517d504809563c833d7190b8c713b"
+
+
+def official_memory_api():
+    official_root = os.environ.get("LONGMEMEVAL_V2_ROOT")
+    if not official_root:
+        raise unittest.SkipTest("LONGMEMEVAL_V2_ROOT must name the pinned official checkout")
+    root = str(Path(official_root).resolve())
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    for module_name, class_name in {
+        "no_retrieval": "NoRetrievalMemory", "codex": "CodexMemory",
+        "agentrunbook_c": "AgentRunbookC", "agentrunbook_c_v2": "AgentRunbookCV2",
+        "agentrunbook_r": "AgentRunbookR", "rag": "RagMemory",
+    }.items():
+        module = types.ModuleType(f"memory_modules.{module_name}")
+        setattr(module, class_name, type(class_name, (), {}))
+        sys.modules[module.__name__] = module
+    from memory_modules.memory import build_memory, load_memory, save_memory
+    return build_memory, load_memory, save_memory
 
 
 def number(value: int | float) -> str:
