@@ -22,6 +22,10 @@
 - Remote document calls require the exact configured descriptor, `document` purpose, exact canonical batch projections, current approval immediately before call, evidence recheck immediately before each visibility transition, AbortSignal/deadline, and no late capability mutation.
 - `Lm2IndexReceipt` is discriminated: `complete`, `continue`, `retry`, or `expired`; retry never masquerades as completion. Hybrid receipts expose sorted/deduplicated missing, invalid, ledger-invalid, recovery-pending, read-limit, approval, port, input, and timeout reasons.
 
+### Staging type-safety constraint
+
+Task 1 deliberately makes `Lm2IndexReceipt` exact before Task 4 replaces the superseded indexer. Until Task 4, the old `lm2-index.ts` returns the obsolete three-field receipt and package typecheck must fail only at that boundary. Do not add a cast, union, or compatibility schema to conceal the mismatch: the Task 1–3 gates are their owned focused tests plus formatting, and Task 4 must restore a fully green package typecheck with the new exact receipt.
+
 ---
 
 ### Task 1: Add ledger, receipt, and v2 sidecar contracts
