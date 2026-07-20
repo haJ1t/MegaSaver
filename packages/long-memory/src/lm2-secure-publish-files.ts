@@ -23,6 +23,7 @@ import {
   verifyAnchoredFile,
   verifyDirectoryAnchor,
 } from "./lm2-secure-fs.js";
+import { readExactAnchoredFile } from "./lm2-secure-read.js";
 
 function directoryDescriptor(anchor: DirectoryAnchor): number {
   const descriptor = anchor.chain.at(-1)?.descriptor;
@@ -120,17 +121,27 @@ export function replaceAnchoredFile(
   anchor: DirectoryAnchor,
   name: string,
   serialized: string,
+  expectedContentDigest: string,
+  maximumBytes: number,
   assertMutationAllowed: () => void,
-): void {
+): ReturnType<typeof readExactAnchoredFile> {
   verifyDirectoryAnchor(anchor);
   const temp = materializeAnchoredFile(anchor, `.${randomUUID()}.replace`, serialized);
   let mutationFailure: unknown;
   let cleanupFailure: unknown;
+  let replacement: ReturnType<typeof readExactAnchoredFile> | undefined;
   try {
     assertMutationAllowed();
     renameSync(temp.path, anchoredChildPath(anchor, name));
     fsyncSync(directoryDescriptor(anchor));
     verifyDirectoryAnchor(anchor);
+    replacement = readExactAnchoredFile({
+      anchor,
+      name,
+      expectedSerialized: serialized,
+      expectedContentDigest,
+      maximumBytes,
+    });
   } catch (error) {
     mutationFailure = error;
     try {
@@ -164,4 +175,7 @@ export function replaceAnchoredFile(
   if (mutationFailure instanceof Lm2Error) throw mutationFailure;
   if (mutationFailure !== undefined)
     throw new Lm2Error("write_failed", "LM2 ledger replacement failed.");
+  if (replacement === undefined)
+    throw new Lm2Error("write_failed", "LM2 ledger replacement result is missing.");
+  return replacement;
 }
