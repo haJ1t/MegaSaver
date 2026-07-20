@@ -15,7 +15,11 @@ of any JSON payload produces a long dotless run, and 320 KiB of it measured
 **Percent-escaped carriers are recovered.** Branch 2, `(?<=%[0-9A-Fa-f][0-9A-Fa-f])`, restores
 redaction for a JWT preceded by a percent-escape — URL query strings and
 fragments, among the most common places a JWT appears in agent output. All 512
-`%XY` forms were verified. The branch costs 0.32 ms per 313 KiB and stays
+`%XY` forms were verified. That covers a single well-formed escape only, not
+percent-encoded input in general: double-encoded `%25XX` (`%253D`, `%2520`)
+and an escape truncated at a buffer boundary (`%X`) still fall in the loss
+class below, because the byte immediately before the JWT is then a raw
+base64url character. The branch costs 0.32 ms per 313 KiB and stays
 linear, because `%` sits outside the run class and terminates the dotless run.
 
 **Coverage reduction — read this.** A JWT preceded directly by a *raw*

@@ -70,6 +70,19 @@ across **all 512 `%XY` forms** (256 byte values x upper- and lower-case
 hex): 0/512 redact under the shipped pattern, 512/512 under the amended
 one.
 
+**Branch 2 matches one complete escape, not percent-encoding in general.**
+Read the 512-form result above as covering a single well-formed `%XY`
+immediately before the JWT — nothing wider. Two residual percent carriers
+stay in the loss class below because their predecessor byte is itself a
+raw base64url character: a **double-encoded** escape (`%253D`, `%2520` —
+the byte before `eyJ` is `D`/`0`, and the byte three back is `5`, not
+`%`), and an escape **truncated at a buffer boundary** (`q=%3` + JWT —
+the byte before `eyJ` is `3`). Both were re-confirmed through the full
+sequential-replacement pipeline: no detector fires at all and the
+complete signature stays in cleartext. Double-encoding is routine in
+redirect-chain logs, and boundary truncation is exactly what a streaming
+redaction sink sees.
+
 **Still lost — the true loss class.** Any JWT immediately preceded by a
 *raw base64url character*, i.e. exactly `[A-Za-z0-9_-]`. A 256-byte
 predecessor sweep confirms the boundary is exactly those 64 bytes and no
