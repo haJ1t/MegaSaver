@@ -82,6 +82,7 @@ describe("LM2 embedding output validation", () => {
   it.each([
     { name: "Float32 overflow", vector: [1e39, 0, 1] },
     { name: "nonfinite", vector: [Number.NaN, 0, 1] },
+    { name: "noncanonical negative zero", vector: [-0, 2, 3] },
     { name: "zero norm", vector: [0, 0, 0] },
     { name: "wrong dimension", vector: [1, 2] },
   ])("publishes nothing for $name", async ({ vector }) => {
