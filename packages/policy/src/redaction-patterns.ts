@@ -47,10 +47,12 @@ const baseline: RedactionPattern[] = [
     replacement: "Bearer [REDACTED]",
   },
   {
-    // The lookbehind is a performance guard, not a matcher. Without it, every
+    // The lookbehind is a performance guard that also narrows what matches, so
+    // it is not swappable for any equally fast guard. Without it, every
     // `eyJ` inside a dotless base64url run is a start position that greedily
     // scans to end-of-input before failing `\.` — O(n) starts x O(n) length,
-    // 8.4 s at 313 KiB. Rejecting glued starts collapses that to O(1).
+    // 8.4 s at 313 KiB. Rejecting glued starts collapses each start to O(1),
+    // the whole scan to O(n).
     // Accepted cost (spec 2026-07-20 §5): a JWT preceded directly by
     // [A-Za-z0-9_-] no longer redacts, so `session-<jwt>` and `id_token_<jwt>`
     // stay in cleartext. Narrowing the class to [A-Za-z0-9] recovers those two

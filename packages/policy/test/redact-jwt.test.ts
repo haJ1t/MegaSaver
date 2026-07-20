@@ -14,7 +14,9 @@ describe("jwt detector — ReDoS structural gate (fix spec §6.2)", () => {
 
 // Wall clock is kept ONLY at 313 KiB: 8,374 ms broken vs 0.45 ms fixed is four
 // orders of magnitude, wide enough to survive a Windows runner's GC or AV pause.
-// The 39 KiB rung was dropped — its ceiling would sit 2.3x under the broken value.
+// The 39 KiB rung was dropped: a 50 ms ceiling there sits only ~2.3x under the
+// broken 113 ms (though ~800x over the 0.06 ms pass value) — too thin, a GC
+// pause flips it.
 const CEILING_MS = 500;
 const SCALE_KIB = 313;
 
@@ -41,8 +43,8 @@ const SAMPLE_JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMe
 // preceded directly by [A-Za-z0-9_-] no longer redacts. Do not "fix" them by
 // narrowing the lookbehind to (?<![A-Za-z0-9]): that restores the first two and
 // restores the quadratic with them (7,494 ms and 7,561 ms at 313 KiB). The
-// hybrid alternation that recovers both was measured at 125x the simple fix and
-// rejected in the same section.
+// hybrid alternation that recovers those first two was measured at 125x the
+// simple fix and rejected in the same section.
 describe("jwt detector — accepted §5 trade-off, do not narrow the lookbehind", () => {
   const glued: ReadonlyArray<readonly [string, string]> = [
     ["a session- prefix", `session-${SAMPLE_JWT}`],
