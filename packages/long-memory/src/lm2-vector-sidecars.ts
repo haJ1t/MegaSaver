@@ -55,7 +55,7 @@ export function prepareLm2LedgerOperation(input: {
   fence: Lm2OperationFence;
   lockIdentity: { device: number; inode: number };
   lockToken: string;
-  adoptExistingLedger(stat: Stats): void;
+  adoptExistingLedger(ledger: Lm2QuotaLedger, raw: Buffer, stat: Stats): void;
   persist(ledger: Lm2QuotaLedger): void;
   recover(ledger: Lm2QuotaLedger): Lm2LedgerRecoveryResult;
 }):
@@ -93,7 +93,7 @@ export function prepareLm2LedgerOperation(input: {
     if (read.status !== "valid") return { status: "invalid" };
     const ledger = parseLm2QuotaLedger(read.raw, input.workspaceKey);
     if (ledger === null) return { status: "invalid" };
-    input.adoptExistingLedger(read.stat);
+    input.adoptExistingLedger(ledger, read.raw, read.stat);
     if (
       ledger.lockToken !== input.lockToken ||
       ledger.lockIdentity.device !== input.lockIdentity.device ||
