@@ -5852,3 +5852,18 @@ processes both call `appendPublished`, both fail, and catalog bytes remain
 unchanged. Fresh re-review remains pending. (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
 `.superpowers/sdd/task-3-report.md`)
+
+## [2026-07-20 17:30 +03] fix | LM2 catalog bootstrap V1 fence
+
+Task 3 closure review found one narrower bootstrap interval: V1 could appear
+after the new V2 lock acquired its OS flock but before the bootstrap token was
+written. A deterministic spawned-process RED observed the 65-byte token even
+though the append failed. Acquisition now revalidates V1 absence immediately
+after flock and before any token/control/catalog write; the regression requires
+an empty lock plus absent control/catalog files. Catalog coverage was split
+without loss into four focused suites and shared fixtures, leaving every Task 3
+source/test file below 300 lines. Evidence: focused 27/27, package 30/30 files
+and 290/290 tests with zero type errors, plus root `pnpm verify`. Fresh
+independent re-review remains pending. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
+`.superpowers/sdd/task-3-report.md`)
