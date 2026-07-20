@@ -190,6 +190,28 @@ cases. All six mutants (drop `/g`, narrow each of the three segment classes,
 length-bound the segments, narrow the lookbehind) were verified to turn the
 suite red, each behaviourally rather than via the source-prefix check.
 
+Round-2 verifier closeout (2026-07-20). Two gaps survived the rebuild above.
+First, every one of the 21 equivalence fixtures carries an `eyJ`-prefixed
+payload — real JWTs do — so dropping the payload's own `eyJ` anchor, or relaxing
+any segment's `+` to `*`, passed all 34 assertions while silently *widening*
+what redacts. That breaks the strict-subset-of-the-pre-fix-pattern invariant the
+corpus exists to protect, and over-redaction is a real cost: we never strip what
+the model needs to decide. Six no-over-redaction assertions now fence it, each
+verified red against exactly its mutant. `eyJ.eyJ.` alone is not sufficient —
+measured, it only redacts when all three quantifiers are relaxed at once, so the
+three single-position fixtures carry the guarantee. Second, the four timing
+tests flaked one `turbo test --force` run in five; CPU contention does not
+explain it (0.3–1.8 ms at 8x oversubscription, 15 consecutive green runs under
+that load), so they carry `{ retry: 3 }` with the 500 ms ceiling unchanged. A
+quadratic is slow on every attempt: the narrowed lookbehind fails 4 of 4 at
+38.0–41.8 s and the reverted pattern 4 of 4 at 34.2–40.3 s.
+
+Loss-class correction: branch 2 matches one complete `%XY` escape, not
+percent-encoding in general. Double-encoded `%25XX` (`%253D`, `%2520`) and an
+escape truncated at a buffer boundary (`q=%3`) stay in the loss class — their
+predecessor byte is a raw base64url character. Re-confirmed through the full
+pipeline: no detector fires at all.
+
 Released as **minor**, not patch: the public API is unchanged, but redaction
 coverage was reduced and that must be visible at release. policy@1.3.0.
 

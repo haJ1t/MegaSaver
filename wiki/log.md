@@ -3976,3 +3976,39 @@ naively and four of five mutants survive. The corpus held no `-` or `_` in any
 segment, making segment-class narrowing invisible. Six mutants now verified red,
 each behaviourally. Sources:
 [[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]] §0, [[entities/policy]].
+
+## [2026-07-20] fix | jwt detector: round-2 verifier findings closed (CRITICAL)
+
+Closes the `critic` round-2 and `verifier` round-2 findings on `fix/jwt-redos`.
+
+Two mutants survived the rebuilt suite. Removing the payload's `eyJ` anchor, and
+relaxing any segment `+` to `*`, both passed all 34 assertions — the corpus is
+blind to them because all 21 fixtures carry `eyJ`-prefixed payloads, as real
+JWTs do. Both mutants only ADD matches: `trace eyJhbGciOiJIUzI1NiJ9.session.abc123`
+and `see eyJlogger.v2.min bundle` start being redacted. Six no-over-redaction
+assertions added, each verified red against its own mutant. Note `eyJ.eyJ.`
+alone does NOT kill the single-position segment mutants — measured, it redacts
+only under the simultaneous triple relaxation; the three positional fixtures are
+what carry the guarantee.
+
+The 313 KiB timing tests flaked 1 run in 5 under `turbo test --force`. Not CPU
+contention: 0.3–1.8 ms at 8x oversubscription (load avg 77 on 10 cores) and 15
+consecutive green runs under that load. Two full forced runs each surfaced a
+*different*, pre-existing failure — `@megasaver/cli`'s `saver-run.test.ts`
+real-daemon HTTP test at 74 s, unrelated to this branch. Fixed with
+`{ retry: 3 }`, ceiling unchanged at 500 ms: a quadratic is slow on every
+attempt (narrowed lookbehind 4/4 at 38.0–41.8 s, reverted 4/4 at 34.2–40.3 s,
+both also tripping the structural gate).
+
+Scope correction: branch 2 recovers one complete `%XY` escape only. Double-
+encoded `%25XX` and boundary-truncated `%X` remain lost, re-confirmed through
+the full pipeline with no detector firing. Spec §0a and the changeset now say so.
+
+Paperwork: spec §6.2a (timing gate + mutation gap), §9a (the seven-pass CRITICAL
+review trail, the user's explicit approval of the round-2 amendment and the
+minor bump, and the Node 25.8.2 vs pinned Node 22 measurement caveat — the
+discrepancy runs in the safe direction). The plan, written for round 1 and never
+amended, gained a Round 2 section, inline superseded markers on its three stale
+pattern literals, and reconciled checkboxes. Sources:
+[[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]] §6.2a §9a,
+[[docs/superpowers/plans/2026-07-20-jwt-redos-fix-plan]], [[entities/policy]].
