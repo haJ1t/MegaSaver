@@ -28,7 +28,12 @@ const sidecarNameSchema = z
   .min(1)
   .max(512)
   .refine(
-    (value) => value === value.normalize("NFC") && !value.includes("/") && !value.includes("\\"),
+    (value) =>
+      value === value.normalize("NFC") &&
+      value !== "." &&
+      value !== ".." &&
+      !value.includes("/") &&
+      !value.includes("\\"),
     "must be a canonical basename",
   );
 
@@ -85,6 +90,9 @@ export const lm2PendingAllocationSchema = z
     }
     if (entry.finalName !== `${entry.recordId}.json`) {
       context.addIssue({ code: "custom", message: "final name must match the record id" });
+    }
+    if (entry.temporaryName === entry.finalName) {
+      context.addIssue({ code: "custom", message: "temporary name cannot reuse the final name" });
     }
   });
 export type Lm2PendingAllocation = z.infer<typeof lm2PendingAllocationSchema>;
@@ -152,6 +160,23 @@ export const lm2QuotaLedgerSchema = z
       context.addIssue({ code: "custom", message: "active fence must match ledger generation" });
     }
     const pending = ledger.pending;
+    const committedSidecarCount = ledger.namespaces.reduce(
+      (total, entry) => total + entry.sidecarCount,
+      0,
+    );
+    if (committedSidecarCount !== ledger.committedThroughAllocation) {
+      context.addIssue({
+        code: "custom",
+        message: "namespace counts must match the committed allocation watermark",
+      });
+    }
+    const allocatedBytes = ledger.namespaces.reduce(
+      (total, entry) => total + entry.serializedBytes,
+      (pending?.entries.length ?? 0) * LM2_PENDING_SIDECAR_RESERVATION_BYTES,
+    );
+    if (!Number.isSafeInteger(allocatedBytes) || allocatedBytes > MAX_LM2_WORKSPACE_VECTOR_BYTES) {
+      context.addIssue({ code: "custom", message: "ledger exceeds workspace byte quota" });
+    }
     if (pending === null) return;
     const active = ledger.activeOperation;
     if (
@@ -174,11 +199,15 @@ export const lm2QuotaLedgerSchema = z
     }
     const identities = pending.entries.map((entry) => entry.recordIdentityDigest);
     const targets = pending.entries.map((entry) => `${entry.modelFingerprint}\0${entry.recordId}`);
+    const temporaryNames = pending.entries.map((entry) => entry.temporaryName);
+    const finalNames = new Set(pending.entries.map((entry) => entry.finalName));
     if (
       new Set(identities).size !== identities.length ||
-      new Set(targets).size !== targets.length
+      new Set(targets).size !== targets.length ||
+      new Set(temporaryNames).size !== temporaryNames.length ||
+      temporaryNames.some((name) => finalNames.has(name))
     ) {
-      context.addIssue({ code: "custom", message: "pending record identities must be unique" });
+      context.addIssue({ code: "custom", message: "pending identities and names must be unique" });
     }
     const namespaceCounts = new Map(
       ledger.namespaces.map((entry) => [entry.modelFingerprint, entry.sidecarCount]),
@@ -194,13 +223,6 @@ export const lm2QuotaLedgerSchema = z
       [...namespaceCounts.values()].some((count) => count > MAX_LM2_SIDECARS_PER_NAMESPACE)
     ) {
       context.addIssue({ code: "custom", message: "pending allocation exceeds namespace quota" });
-    }
-    const allocatedBytes = ledger.namespaces.reduce(
-      (total, entry) => total + entry.serializedBytes,
-      pending.entries.length * LM2_PENDING_SIDECAR_RESERVATION_BYTES,
-    );
-    if (!Number.isSafeInteger(allocatedBytes) || allocatedBytes > MAX_LM2_WORKSPACE_VECTOR_BYTES) {
-      context.addIssue({ code: "custom", message: "pending allocation exceeds workspace quota" });
     }
   });
 export type Lm2QuotaLedger = z.infer<typeof lm2QuotaLedgerSchema>;

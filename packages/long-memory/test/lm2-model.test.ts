@@ -172,7 +172,7 @@ describe("LM2 model contracts", () => {
       ...complete,
       outcome: "retry" as const,
       retryCursor: null,
-      transientReason: "index_busy" as const,
+      transientReason: "quota_state_invalid" as const,
       quotaRecovery: "blocked_pending" as const,
     };
     const expired = { ...complete, outcome: "expired" as const };
@@ -188,6 +188,22 @@ describe("LM2 model contracts", () => {
       lm2IndexReceiptSchema.parse({ ...complete, outcome: "retry", transientReason: null }),
     ).toThrow();
     expect(() => lm2IndexReceiptSchema.parse({ ...expired, retryCursor: "cursor-1" })).toThrow();
+    for (const outcome of ["complete", "continue", "expired"] as const) {
+      expect(() =>
+        lm2IndexReceiptSchema.parse({
+          ...complete,
+          outcome,
+          nextCursor: outcome === "continue" ? "cursor-2" : null,
+          quotaRecovery: "blocked_pending",
+        }),
+      ).toThrow();
+    }
+    expect(() =>
+      lm2IndexReceiptSchema.parse({
+        ...retrying,
+        transientReason: "index_busy",
+      }),
+    ).toThrow();
   });
 
   it("keeps vector read diagnostics strict and ledger-specific", () => {

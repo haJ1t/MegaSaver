@@ -182,6 +182,83 @@ describe("LM2 quota ledger contract", () => {
     ).toThrow();
   });
 
+  it("ties the committed watermark to exact allocated namespace counts", () => {
+    const ledger = validLedger();
+    expect(() =>
+      lm2QuotaLedgerSchema.parse({
+        ...ledger,
+        committedThroughAllocation: 4,
+        nextAllocationSequence: 5,
+        activeOperation: { ...ledger.activeOperation, expectedGeneration: 7 },
+        pending: null,
+      }),
+    ).toThrow();
+  });
+
+  it("rejects aggregate workspace bytes over quota without a pending transaction", () => {
+    const ledger = validLedger();
+    expect(() =>
+      lm2QuotaLedgerSchema.parse({
+        ...ledger,
+        namespaces: [
+          {
+            modelFingerprint: "a".repeat(64),
+            sidecarCount: 1,
+            serializedBytes: 64 * 1024 * 1024 + 1,
+          },
+          {
+            modelFingerprint: "b".repeat(64),
+            sidecarCount: 1,
+            serializedBytes: 64 * 1024 * 1024 + 1,
+          },
+        ],
+        committedThroughAllocation: 2,
+        nextAllocationSequence: 3,
+        activeOperation: null,
+        pending: null,
+      }),
+    ).toThrow();
+  });
+
+  it("rejects unsafe and reused pending temporary names", () => {
+    const ledger = validLedger();
+    for (const temporaryName of [".", "..", pendingEntry(4).finalName]) {
+      expect(() =>
+        lm2QuotaLedgerSchema.parse({
+          ...ledger,
+          pending: {
+            ...ledger.pending,
+            entries: [{ ...pendingEntry(4), temporaryName }, pendingEntry(5)],
+          },
+        }),
+      ).toThrow();
+    }
+    expect(() =>
+      lm2QuotaLedgerSchema.parse({
+        ...ledger,
+        pending: {
+          ...ledger.pending,
+          entries: [
+            pendingEntry(4),
+            { ...pendingEntry(5), temporaryName: pendingEntry(4).temporaryName },
+          ],
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      lm2QuotaLedgerSchema.parse({
+        ...ledger,
+        pending: {
+          ...ledger.pending,
+          entries: [
+            pendingEntry(4),
+            { ...pendingEntry(5), temporaryName: pendingEntry(4).finalName },
+          ],
+        },
+      }),
+    ).toThrow();
+  });
+
   it("serializes fields in canonical order", () => {
     const serialized = serializeLm2QuotaLedger(validLedger());
     expect(Object.keys(JSON.parse(serialized))).toEqual([
