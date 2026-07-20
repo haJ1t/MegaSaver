@@ -3,20 +3,19 @@ import {
   type Lm2AdmittedIndexRecord,
   isOrderedCanonicalProjectionSubset,
 } from "./lm2-index-admission.js";
-import type { Lm2ReadyIndexOperation } from "./lm2-lock.js";
+import { Lm2ApprovalTimeoutError, type Lm2ReadyIndexOperation } from "./lm2-lock.js";
 import type {
   EmbeddingPort,
   Lm2IndexReceipt,
   ModelDescriptor,
   RemoteEmbeddingApprovalPort,
 } from "./lm2-model.js";
+import { approvalBeforeAbort } from "./lm2-secure-publish.js";
 import { canonicalEmbeddingInput } from "./lm2-vector-format.js";
-
 export type Lm2PendingIndexRecord = Lm2AdmittedIndexRecord & {
   cursorBefore: string | null;
   cursorAfter: string | null;
 };
-
 export type Lm2IndexBatchResult = {
   publishedIds: readonly string[];
   omissions: readonly { id: string; reason: string }[];
@@ -146,6 +145,8 @@ function transientReason(
       return "evidence_changed";
     case "lock_integrity_lost":
       return "lock_integrity_lost";
+    case "timeout":
+      return "timeout";
     case "storage_limit":
       throw new Error("storage limit is terminal");
   }
@@ -189,15 +190,17 @@ export async function publishLm2IndexBatch(input: {
       if (input.embedding.egress === "local") return true;
       if (input.remoteApproval === undefined || input.approvalRef === undefined) return false;
       try {
-        return (
-          (await input.remoteApproval.assertCurrent({
+        return await approvalBeforeAbort(
+          input.remoteApproval.assertCurrent({
             workspaceKey: input.workspaceKey,
             modelFingerprint: fingerprint,
             purpose: "document",
             approvalRef: input.approvalRef,
-          })) === "approved"
+          }),
+          input.signal,
         );
       } catch {
+        if (input.signal.aborted) throw new Lm2ApprovalTimeoutError();
         return false;
       }
     },

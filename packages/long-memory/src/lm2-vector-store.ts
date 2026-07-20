@@ -58,6 +58,7 @@ export type Lm2VectorStoreResult = {
     | "storage_limit"
     | "invalid_vectors"
     | "port_failure"
+    | "timeout"
     | "write_failed";
 };
 

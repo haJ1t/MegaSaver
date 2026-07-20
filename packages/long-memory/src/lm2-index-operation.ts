@@ -12,6 +12,7 @@ import {
 } from "./lm2-ledger-recovery.js";
 import {
   type BeginLm2IndexOperationInput,
+  Lm2ApprovalTimeoutError,
   type Lm2IndexOperationResult,
   type Lm2ReadyIndexOperation,
   acquireWorkspaceIndexLock,
@@ -41,7 +42,6 @@ import {
 } from "./lm2-vector-sidecars.js";
 
 const MAX_METADATA_READS = 1_024;
-
 export async function beginIndexOperation(
   input: BeginLm2IndexOperationInput,
 ): Promise<Lm2IndexOperationResult> {
@@ -76,7 +76,6 @@ export async function beginIndexOperation(
   let ledger: Lm2QuotaLedger;
   let metadataReads = 0;
   let finalized = false;
-
   const assertFence = () => {
     if (finalized) throw new Error("stale operation");
     lock.assertIntact();
@@ -274,13 +273,14 @@ export async function beginIndexOperation(
             : published,
         existing,
         reason:
-          error instanceof Lm2Error && error.code === "invalid_vectors"
-            ? "invalid_vectors"
-            : "write_failed",
+          error instanceof Lm2ApprovalTimeoutError
+            ? "timeout"
+            : error instanceof Lm2Error && error.code === "invalid_vectors"
+              ? "invalid_vectors"
+              : "write_failed",
       };
     }
   };
-
   return {
     status: "ready",
     quotaRecovery: prepared.quotaRecovery,
