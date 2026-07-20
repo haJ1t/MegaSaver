@@ -645,6 +645,81 @@ describe("LM2 explicit indexer", () => {
     expect(indexPublish).toHaveBeenCalledTimes(1);
   });
 
+  it("bounds a stalled approval and releases the operation after exact existing progress", async () => {
+    const existing = snapshot(0);
+    const missing = snapshot(1);
+    const test = harness([existing, missing], { remote: true });
+    const root = createRoot();
+    const vectors = createLm2VectorStore({ storeRoot: root });
+    const seed = await vectors.beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: {
+        signal: new AbortController().signal,
+        deadlineAtMs: 15_000,
+        now: () => 0,
+      },
+    });
+    if (seed.status !== "ready") throw new Error("operation unavailable");
+    await seed.publishBatch({
+      records: [candidate(existing)],
+      embed: test.embedding.embed,
+      assertEgressAllowed: async () => true,
+      recheckEvidence: async () => true,
+    });
+    await seed.finalize();
+    test.embedding.embed.mockClear();
+    let resolveApproval!: (value: "approved") => void;
+    test.remoteApproval.assertCurrent.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveApproval = resolve;
+        }),
+    );
+    const index = createLm2IndexService({
+      catalog: test.catalog,
+      store: test.store,
+      vectors,
+      evidenceEligibility: test.evidenceEligibility,
+      embedding: test.embedding,
+      model,
+      remoteApproval: test.remoteApproval,
+      approvalRef: "approval-1",
+      defaultTimeoutMs: 100,
+    });
+
+    const receipt = await index.index({
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 256,
+      timeoutMs: 500,
+    });
+
+    expect(receipt).toMatchObject({
+      outcome: "retry",
+      indexedCount: 0,
+      transientReason: "timeout",
+    });
+    expect(receipt.omitted).toEqual([{ id: existing.id, reason: "already_indexed" }]);
+    expect(cursorSequence(receipt.retryCursor)).toBe(2);
+    expect(test.embedding.embed).not.toHaveBeenCalled();
+    resolveApproval("approved");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(test.embedding.embed).not.toHaveBeenCalled();
+    expect(existsSync(sidecarPath(root, candidate(missing), model))).toBe(false);
+    const next = await vectors.beginIndexOperation({
+      workspaceKey,
+      model,
+      deadline: {
+        signal: new AbortController().signal,
+        deadlineAtMs: 15_000,
+        now: () => 0,
+      },
+    });
+    expect(next).toMatchObject({ status: "ready", quotaRecovery: "not_needed" });
+    if (next.status === "ready") await next.finalize();
+  }, 5_000);
+
   it("uses original-batch existing progress for a non-denial transient", async () => {
     const existing = snapshot(0);
     const missing = snapshot(1);
