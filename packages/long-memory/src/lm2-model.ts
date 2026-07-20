@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { workspaceKeySchema } from "@megasaver/shared";
 import { z } from "zod";
-
 export const MAX_LM2_MODEL_PROVIDER_CODE_UNITS = 128;
 export const MAX_LM2_MODEL_ID_CODE_UNITS = 256;
 export const MAX_LM2_MODEL_REVISION_CODE_UNITS = 256;
@@ -12,7 +11,6 @@ export const MAX_LM2_INDEX_BATCH_TIMEOUT_MS = 15_000;
 export const MAX_LM2_CANDIDATE_TEXT_CODE_UNITS = 50_000;
 export const MAX_LM2_RANK_CANDIDATES = 10_000;
 export const MAX_LM2_INDEX_RECORDS = 256;
-
 const lowercaseUuidSchema = z
   .string()
   .uuid()
@@ -24,7 +22,6 @@ const canonicalString = (maximum: number) =>
     .min(1)
     .max(maximum)
     .refine((value) => value === value.normalize("NFC").trim(), "must be canonical");
-
 export const modelDescriptorSchema = z
   .object({
     provider: canonicalString(MAX_LM2_MODEL_PROVIDER_CODE_UNITS),
@@ -35,14 +32,12 @@ export const modelDescriptorSchema = z
   })
   .strict();
 export type ModelDescriptor = z.infer<typeof modelDescriptorSchema>;
-
 export const lm2ProfileSchema = z.enum(["safe", "adaptive"]);
 export type Lm2Profile = z.infer<typeof lm2ProfileSchema>;
 export const embeddingEgressSchema = z.enum(["local", "remote"]);
 export type EmbeddingEgress = z.infer<typeof embeddingEgressSchema>;
 export const embeddingPurposeSchema = z.enum(["document", "query"]);
 export type EmbeddingPurpose = z.infer<typeof embeddingPurposeSchema>;
-
 export const lm2CandidateSchema = z
   .object({
     id: lowercaseUuidSchema,
@@ -54,7 +49,6 @@ export const lm2CandidateSchema = z
   })
   .strict();
 export type Lm2Candidate = z.infer<typeof lm2CandidateSchema>;
-
 export const lm2RankRequestSchema = z
   .object({
     workspaceKey: workspaceKeySchema,
@@ -65,7 +59,6 @@ export const lm2RankRequestSchema = z
   })
   .strict();
 export type Lm2RankRequest = z.infer<typeof lm2RankRequestSchema>;
-
 export const lm2IndexRequestSchema = z
   .object({
     workspaceKey: workspaceKeySchema,
@@ -76,7 +69,6 @@ export const lm2IndexRequestSchema = z
   })
   .strict();
 export type Lm2IndexRequest = z.infer<typeof lm2IndexRequestSchema>;
-
 const indexTransientReasonSchema = z.enum([
   "index_busy",
   "index_lock_unavailable",
@@ -102,45 +94,56 @@ const indexReceiptFields = {
 const cursorSchema = z.string().trim().min(1).max(4_096);
 export const lm2IndexOutcomeSchema = z.enum(["complete", "continue", "retry", "expired"]);
 export type Lm2IndexOutcome = z.infer<typeof lm2IndexOutcomeSchema>;
-
-export const lm2IndexReceiptSchema = z.discriminatedUnion("outcome", [
-  z
-    .object({
-      ...indexReceiptFields,
-      outcome: z.literal("complete"),
-      nextCursor: z.null(),
-      retryCursor: z.null(),
-      transientReason: z.null(),
-    })
-    .strict(),
-  z
-    .object({
-      ...indexReceiptFields,
-      outcome: z.literal("continue"),
-      nextCursor: cursorSchema,
-      retryCursor: z.null(),
-      transientReason: z.null(),
-    })
-    .strict(),
-  z
-    .object({
-      ...indexReceiptFields,
-      outcome: z.literal("retry"),
-      nextCursor: z.null(),
-      retryCursor: cursorSchema.nullable(),
-      transientReason: indexTransientReasonSchema,
-    })
-    .strict(),
-  z
-    .object({
-      ...indexReceiptFields,
-      outcome: z.literal("expired"),
-      nextCursor: z.null(),
-      retryCursor: z.null(),
-      transientReason: z.null(),
-    })
-    .strict(),
-]);
+export const lm2IndexReceiptSchema = z
+  .discriminatedUnion("outcome", [
+    z
+      .object({
+        ...indexReceiptFields,
+        outcome: z.literal("complete"),
+        nextCursor: z.null(),
+        retryCursor: z.null(),
+        transientReason: z.null(),
+      })
+      .strict(),
+    z
+      .object({
+        ...indexReceiptFields,
+        outcome: z.literal("continue"),
+        nextCursor: cursorSchema,
+        retryCursor: z.null(),
+        transientReason: z.null(),
+      })
+      .strict(),
+    z
+      .object({
+        ...indexReceiptFields,
+        outcome: z.literal("retry"),
+        nextCursor: z.null(),
+        retryCursor: cursorSchema.nullable(),
+        transientReason: indexTransientReasonSchema,
+      })
+      .strict(),
+    z
+      .object({
+        ...indexReceiptFields,
+        outcome: z.literal("expired"),
+        nextCursor: z.null(),
+        retryCursor: z.null(),
+        transientReason: z.null(),
+      })
+      .strict(),
+  ])
+  .superRefine((receipt, context) => {
+    if (
+      receipt.quotaRecovery === "blocked_pending" &&
+      (receipt.outcome !== "retry" || receipt.transientReason !== "quota_state_invalid")
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "blocked recovery requires a quota-state retry",
+      });
+    }
+  });
 export type Lm2IndexReceipt = z.infer<typeof lm2IndexReceiptSchema>;
 const vectorDiagnosticReasonSchema = z.enum([
   "missing_vectors",
@@ -176,7 +179,6 @@ export const lm2VectorReadResultSchema = z
   })
   .strict();
 export type Lm2VectorReadResult = z.infer<typeof lm2VectorReadResultSchema>;
-
 const remoteApprovalSchema = z
   .object({
     workspaceKey: workspaceKeySchema,
@@ -184,14 +186,12 @@ const remoteApprovalSchema = z
     approvalRef: z.string().trim().min(1).max(4_096),
   })
   .strict();
-
 function canonicalModelFingerprint(model: ModelDescriptor): string {
   const canonicalModel = Object.fromEntries(
     Object.entries(model).sort(([left], [right]) => left.localeCompare(right)),
   );
   return createHash("sha256").update(JSON.stringify(canonicalModel), "utf8").digest("hex");
 }
-
 export const lm2RuntimeConfigSchema = z
   .object({
     admittedModels: z.array(modelDescriptorSchema).min(1).max(MAX_LM2_ADMITTED_MODELS),
