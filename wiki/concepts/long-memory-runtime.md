@@ -133,6 +133,10 @@ and manifest entrypoints consumed by the non-contract builder, without adding
 package-root exports or bins. TypeScript and Python recompute every projection
 UUIDv5 from the exact `trajectoryId + NUL + sourceKind + NUL + sourceIndex`
 frame, with a shared fixed vector and zero-transport substitution regression.
+Projection text is NFC/trim canonicalized after its surrogate-safe 50,000-unit
+cut, closing the released `096432bf` `states[12]` whitespace boundary while
+preserving its UUID and final-text digest. The pinned enterprise/Small corpus
+builder passed unmodified screenshot validation and emitted later trajectories.
 Rejected queries launch no transport and write only
 redacted telemetry through a private random root whose cache-parent, directory,
 and file identities are descriptor-anchored; raw question/context fields are
