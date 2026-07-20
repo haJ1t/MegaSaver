@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Lm2CleanupError } from "./lm2-cleanup-errors.js";
+import { Lm2CleanupError, combineLm2CleanupFailures } from "./lm2-cleanup-errors.js";
 import { Lm2Error } from "./lm2-errors.js";
 import { Lm2ApprovalTimeoutError } from "./lm2-lock.js";
 import type { EmbeddingPort, Lm2Candidate, ModelDescriptor } from "./lm2-model.js";
@@ -169,11 +169,18 @@ export async function publishLm2ReservedBatch(input: {
         input.settlePending();
         return { published, reason: "evidence_changed" };
       }
+      let publishFailure: unknown;
       try {
         publishAnchoredTemporary(namespace, temp, entry.finalName, input.assertGuard);
-      } finally {
-        closeAndRemoveAnchoredTemporary(namespace, temp);
+      } catch (error) {
+        publishFailure = error;
       }
+      try {
+        closeAndRemoveAnchoredTemporary(namespace, temp);
+      } catch (error) {
+        publishFailure = combineLm2CleanupFailures(publishFailure, error);
+      }
+      if (publishFailure !== undefined) throw publishFailure;
       const verified = input.inspectPublished(entry);
       if (
         verified.status !== "valid" ||

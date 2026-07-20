@@ -551,6 +551,40 @@ describe("LM2 explicit indexer", () => {
     });
   });
 
+  it("prioritizes blocked cleanup while retaining a simultaneous processing failure", async () => {
+    const test = harness([snapshot(0)]);
+    const processingFailure = new Error("catalog processing failed");
+    const finalizeFailure = new Error("operation finalization failed");
+    vi.mocked(test.catalog.page).mockImplementationOnce(() => {
+      throw processingFailure;
+    });
+    test.finalize.mockRejectedValueOnce(finalizeFailure);
+
+    const receipt = await test.index.index({
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 256,
+    });
+
+    expect(receipt).toEqual({
+      indexedCount: 0,
+      omitted: [],
+      outcome: "retry",
+      nextCursor: null,
+      retryCursor: null,
+      transientReason: "quota_state_invalid",
+      quotaRecovery: "blocked_pending",
+    });
+    const cause = Reflect.getOwnPropertyDescriptor(receipt, "cause");
+    expect(cause).toMatchObject({ enumerable: false });
+    expect(cause?.value).toBeInstanceOf(AggregateError);
+    expect((cause?.value as AggregateError).errors).toEqual([processingFailure, finalizeFailure]);
+    expect(test.publishBatch).not.toHaveBeenCalled();
+    expect(test.embedding.embed).not.toHaveBeenCalled();
+    expect(test.vectors.beginIndexOperation).toHaveBeenCalledTimes(1);
+    expect(test.finalize).toHaveBeenCalledTimes(1);
+  });
+
   it("retries at the first uncommitted cursor after a blocked committed prefix", async () => {
     const records = [snapshot(0), snapshot(1)];
     const test = harness(records);

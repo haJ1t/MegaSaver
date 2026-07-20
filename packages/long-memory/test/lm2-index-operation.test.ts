@@ -9,6 +9,7 @@ let failNextPendingUnlink = false;
 let failEveryClose = false;
 let failCloseAfter: number | null = null;
 const injectedCloseFailures: Error[] = [];
+const injectedFsyncFailures: Error[] = [];
 const injectedPendingUnlinkFailures: Error[] = [];
 
 vi.mock("node:fs", async (importOriginal) => {
@@ -30,7 +31,9 @@ vi.mock("node:fs", async (importOriginal) => {
     fsyncSync(descriptor: number) {
       if (failNextFsync) {
         failNextFsync = false;
-        throw new Error("injected post-link fsync failure");
+        const error = new Error("injected post-link fsync failure");
+        injectedFsyncFailures.push(error);
+        throw error;
       }
       actual.fsyncSync(descriptor);
     },
@@ -48,6 +51,7 @@ vi.mock("node:fs", async (importOriginal) => {
 
 import { embeddingInputDigest, modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import { createLm2IndexPlanSequence } from "../src/lm2-index-plan.js";
+import { createPendingAllocations } from "../src/lm2-ledger-recovery.js";
 import type { Lm2Candidate } from "../src/lm2-model.js";
 import {
   lm2PendingTemporaryName,
@@ -55,10 +59,15 @@ import {
   recordIdentityDigest,
   serializeLm2QuotaLedger,
 } from "../src/lm2-quota-ledger.js";
-import { closeDirectoryAnchor } from "../src/lm2-secure-fs.js";
+import {
+  closeAnchoredFile,
+  closeDirectoryAnchor,
+  openAnchoredUpdateFile,
+} from "../src/lm2-secure-fs.js";
 import {
   closeAndRemoveAnchoredTemporary,
   materializeAnchoredFile,
+  publishLm2ReservedBatch,
 } from "../src/lm2-secure-publish.js";
 import { buildSerializedSidecar } from "../src/lm2-vector-format.js";
 import { ensureVectorNamespace, vectorQuotaLedgerPath } from "../src/lm2-vector-paths.js";
@@ -80,6 +89,7 @@ afterEach(() => {
   failEveryClose = false;
   failCloseAfter = null;
   injectedCloseFailures.length = 0;
+  injectedFsyncFailures.length = 0;
   injectedPendingUnlinkFailures.length = 0;
   cleanupRoots();
 });
@@ -87,6 +97,12 @@ afterEach(() => {
 function deadline() {
   const controller = new AbortController();
   return { signal: controller.signal, deadlineAtMs: 10_000, now: () => 0 };
+}
+
+function exactCleanupRoots(error: unknown): unknown[] {
+  if (error instanceof AggregateError) return error.errors.flatMap(exactCleanupRoots);
+  if (error instanceof Error && error.cause !== undefined) return exactCleanupRoots(error.cause);
+  return [error];
 }
 
 describe("LM2 index operation", () => {
@@ -584,6 +600,71 @@ describe("LM2 index operation", () => {
     });
     expect(failure.cause.errors[1]).toBe(injectedPendingUnlinkFailures[0]);
     expect(injectedCloseFailures).toHaveLength(1);
+  });
+
+  it("retains every file and parent descriptor cleanup root", () => {
+    const path = join(createRoot(), "owned-anchor.json");
+    writeFileSync(path, "lock");
+    const file = openAnchoredUpdateFile(path);
+    failEveryClose = true;
+    let failure: unknown;
+
+    try {
+      closeAnchoredFile(file);
+    } catch (error) {
+      failure = error;
+    }
+    failEveryClose = false;
+
+    expect(injectedCloseFailures.length).toBeGreaterThanOrEqual(2);
+    expect(exactCleanupRoots(failure)).toEqual(injectedCloseFailures);
+  });
+
+  it("retains publication and temporary cleanup roots together", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const record = createCandidate(1);
+    const fingerprint = modelDescriptorFingerprint(model);
+    const entries = createPendingAllocations({
+      records: [record],
+      modelFingerprint: fingerprint,
+      firstAllocationSequence: 1,
+      operationId: "11111111-1111-4111-8111-111111111111",
+    });
+    let currentEntries = entries;
+
+    const failure = await publishLm2ReservedBatch({
+      storeRoot: root,
+      workspaceKey,
+      model,
+      fingerprint,
+      records: [record],
+      entries,
+      ledgerEpoch: "a".repeat(64),
+      signal: new AbortController().signal,
+      deadlineAtMs: 100,
+      now: () => 0,
+      embed: async () => ({ modelFingerprint: fingerprint, vectors: [[1, 2, 3]] }),
+      assertEgressAllowed: async () => true,
+      recheckEvidence: async () => {
+        failNextFsync = true;
+        failNextClose = true;
+        return true;
+      },
+      assertGuard: () => {},
+      settlePending: () => {},
+      persistMaterialized: (materialized) => {
+        currentEntries = materialized;
+      },
+      currentEntry: () => currentEntries[0],
+      inspectPublished: () => ({ status: "missing" }),
+      commitFirst: () => {},
+    }).catch((error: unknown) => error);
+
+    expect(exactCleanupRoots(failure)).toEqual([
+      injectedFsyncFailures[0],
+      injectedCloseFailures[0],
+    ]);
   });
 
   it("retains all independent finalization failures and releases the lock", async () => {
