@@ -137,6 +137,16 @@ type PublishedProbe =
   | { status: "missing" | "invalid" }
   | { status: "valid"; digest: string; serializedBytes: number };
 
+export class Lm2PartialPublicationError extends Error {
+  readonly published: string[];
+
+  constructor(published: readonly string[], cause: unknown) {
+    super("LM2 batch publication failed after a committed prefix.", { cause });
+    this.name = "Lm2PartialPublicationError";
+    this.published = [...published];
+  }
+}
+
 function embeddingResult(
   value: unknown,
   fingerprint: string,
@@ -265,6 +275,8 @@ export async function publishLm2ReservedBatch(input: {
       input.commitFirst();
       published.push(record.id);
     }
+  } catch (error) {
+    throw new Lm2PartialPublicationError(published, error);
   } finally {
     closeDirectoryAnchor(namespace);
   }
