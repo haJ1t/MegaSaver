@@ -13,18 +13,22 @@ import {
   workspaceKey,
 } from "./lm2-runtime-fixtures.js";
 
-afterEach(cleanupRuntimeRoots);
+afterEach(() => {
+  vi.useRealTimers();
+  cleanupRuntimeRoots();
+});
 
 function create(input: {
   config?: ReturnType<typeof runtimeConfig>;
   embedding?: unknown;
   approval?: unknown;
+  monotonicClock?: { now(): number };
 }) {
   return createLm2Runtime({
     storeRoot: createRuntimeRoot(),
     ...lm1Ports(),
     clock: { now: () => "2026-07-20T00:00:01.000Z" },
-    monotonicClock: { now: () => 10 },
+    monotonicClock: input.monotonicClock ?? { now: () => 10 },
     config: input.config ?? runtimeConfig(),
     embedding: input.embedding as EmbeddingPort | undefined,
     ...(input.approval === undefined ? {} : { remoteApproval: input.approval as never }),
@@ -46,6 +50,91 @@ async function degradedReason(runtime: ReturnType<typeof createLm2Runtime>) {
 }
 
 describe("LM2 runtime capability matrix", () => {
+  it("bounds a nonresolving remote recall approval by the query deadline", async () => {
+    const approvalRef = "approval-1";
+    const config = {
+      ...runtimeConfig({
+        egress: "remote",
+        approvals: [
+          {
+            workspaceKey,
+            modelFingerprint: runtimeConfig().activeRecallModelFingerprint,
+            approvalRef,
+          },
+        ],
+      }),
+      queryTimeoutMs: 5,
+    };
+    const embedding: EmbeddingPort = {
+      egress: "remote",
+      embed: vi.fn(async ({ texts }) => ({
+        modelFingerprint: config.activeRecallModelFingerprint,
+        vectors: texts.map(() => [1, 0]),
+      })),
+    };
+    const approval = {
+      assertCurrent: vi
+        .fn()
+        .mockResolvedValueOnce("approved" as const)
+        .mockImplementation(() => new Promise<never>(() => undefined)),
+    };
+    const runtime = create({
+      config,
+      embedding,
+      approval,
+      monotonicClock: { now: () => Date.now() },
+    });
+    const prepared = runtime.capture.prepare(
+      snapshotInput(1, "Billing status paid", "2026-07-20T00:00:00.000Z"),
+    );
+    await runtime.capture.capturePrepared({ prepared, authorization: "signed" });
+    await expect(
+      runtime.index({
+        workspaceKey,
+        modelFingerprint: config.activeRecallModelFingerprint,
+        maxRecords: 1,
+      }),
+    ).resolves.toMatchObject({ outcome: "complete", indexedCount: 1 });
+
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    let settled = false;
+    const pending = runtime
+      .recall({
+        workspaceKey,
+        task: "billing",
+        tokenBudget: 100,
+        profile: "adaptive",
+      })
+      .then((result) => {
+        settled = true;
+        return result;
+      });
+    await vi.advanceTimersByTimeAsync(5);
+
+    expect(settled).toBe(true);
+    const result = await pending;
+    expect(result.items).toEqual([expect.objectContaining({ value: "Billing status paid" })]);
+    expect(result.receipt.hybrid).toEqual({
+      profile: "adaptive",
+      adaptiveCandidateScope: "lm2_capture_window",
+      adaptiveCatalogRecordCount: 1,
+      candidateInputOmittedCount: 0,
+      lexicalCandidateCount: 1,
+      semanticCandidateCount: 0,
+      fusedCandidateCount: 1,
+      semanticStatus: "degraded",
+      semanticReasons: ["timeout"],
+      indexedVectorCount: 1,
+      missingVectorCount: 0,
+      invalidVectorCount: 0,
+      semanticVectorBytesRead: 8,
+      queryLatencyMs: 5,
+    });
+    expect(approval.assertCurrent).toHaveBeenCalledTimes(2);
+    expect(embedding.embed).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects invalid local and remote approval composition before embedding inspection", () => {
     let reads = 0;
     const hostile = new Proxy(

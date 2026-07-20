@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { Lm2Error } from "../src/lm2-errors.js";
 import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
@@ -23,6 +25,15 @@ const model = {
 };
 
 describe("LM2 model contracts", () => {
+  it("keeps LM2 model modules within the source file limit", () => {
+    for (const sourceFile of ["lm2-model-contracts.ts", "lm2-model.ts", "lm2-runtime-model.ts"]) {
+      const sourcePath = fileURLToPath(new URL(`../src/${sourceFile}`, import.meta.url));
+      const lineCount = readFileSync(sourcePath, "utf8").split("\n").length - 1;
+
+      expect(lineCount, sourceFile).toBeLessThanOrEqual(300);
+    }
+  });
+
   it("accepts canonical model descriptors and rejects unknown or noncanonical fields", () => {
     expect(modelDescriptorSchema.parse(model)).toEqual(model);
     expect(() => modelDescriptorSchema.parse({ ...model, provider: " local" })).toThrow();
