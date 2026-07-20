@@ -218,23 +218,36 @@ export function createLm2VectorStore({ storeRoot }: { storeRoot: string }): Lm2V
       });
       if (operation.status === "busy") return { published: [], reason: "index_busy" };
       if (operation.status !== "ready") return { published: [], reason: "index_lock_unavailable" };
+      let result: Awaited<ReturnType<typeof operation.publishBatch>>;
       try {
-        const result = await operation.publishBatch({
+        result = await operation.publishBatch({
           records: input.records,
           embed: input.embed,
           assertEgressAllowed: async () => true,
           recheckEvidence: async () => true,
         });
-        const reason =
-          result.reason === "lock_integrity_lost" || result.reason === "evidence_changed"
-            ? "write_failed"
-            : result.reason === "remote_approval_denied"
-              ? "port_failure"
-              : result.reason;
-        return { published: result.published, reason };
-      } finally {
-        await operation.finalize();
+      } catch {
+        try {
+          await operation.finalize();
+        } catch {
+          return { published: [], reason: "write_failed" };
+        }
+        return { published: [], reason: "write_failed" };
       }
+      try {
+        await operation.finalize();
+      } catch {
+        return { published: result.published, reason: "write_failed" };
+      }
+      const reason =
+        result.reason === "lock_integrity_lost" ||
+        result.reason === "evidence_changed" ||
+        result.reason === "quota_state_invalid"
+          ? "write_failed"
+          : result.reason === "remote_approval_denied"
+            ? "port_failure"
+            : result.reason;
+      return { published: result.published, reason };
     },
   };
 }

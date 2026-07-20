@@ -8,7 +8,7 @@ import type { Lm2CandidateCatalog } from "../src/lm2-catalog.js";
 import { Lm2Error } from "../src/lm2-errors.js";
 import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import { createLm2IndexService } from "../src/lm2-index.js";
-import type { Lm2Candidate, ModelDescriptor } from "../src/lm2-model.js";
+import type { EmbeddingPort, Lm2Candidate, ModelDescriptor } from "../src/lm2-model.js";
 import { canonicalEmbeddingInput } from "../src/lm2-vector-format.js";
 import { type Lm2VectorStore, createLm2VectorStore } from "../src/lm2-vector-store.js";
 import { cleanupRoots, createRoot, sidecarPath } from "./lm2-vector-store-fixtures.js";
@@ -251,6 +251,7 @@ function harness(records: readonly Lm1Record[], input: { remote?: boolean } = {}
     evidenceEligibility,
     embedding,
     vectors,
+    operationSignal: () => operationSignal,
     publishBatch,
     finalize,
     remoteApproval,
@@ -421,6 +422,44 @@ describe("LM2 explicit indexer", () => {
     });
   });
 
+  it("allows two sequential batches while blocking a batch-zero replay", async () => {
+    const test = harness(Array.from({ length: 17 }, (_, index) => snapshot(index)));
+    let firstEmbed: EmbeddingPort["embed"] | undefined;
+    test.publishBatch.mockImplementation(async ({ records: batch, embed }) => {
+      if (firstEmbed === undefined) firstEmbed = embed;
+      else {
+        await expect(
+          firstEmbed({
+            model,
+            purpose: "document",
+            texts: test.embedding.embed.mock.calls[0]?.[0].texts ?? [],
+            signal: test.operationSignal(),
+          }),
+        ).rejects.toThrow();
+      }
+      const result = await embed({
+        model,
+        purpose: "document",
+        texts: batch.map(canonicalEmbeddingInput),
+        signal: test.operationSignal(),
+      });
+      return {
+        published: result.vectors.length === batch.length ? batch.map(({ id }) => id) : [],
+        existing: [],
+        reason: null,
+      };
+    });
+
+    const receipt = await test.index.index({
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 256,
+    });
+
+    expect(receipt).toMatchObject({ outcome: "complete", indexedCount: 17 });
+    expect(test.embedding.embed).toHaveBeenCalledTimes(2);
+  });
+
   it("performs zero egress and preserves the batch cursor when approval is denied", async () => {
     const test = harness([snapshot(0)], { remote: true });
     test.remoteApproval.assertCurrent.mockResolvedValue("revoked");
@@ -489,6 +528,75 @@ describe("LM2 explicit indexer", () => {
       quotaRecovery: "not_needed",
     });
     expect(test.finalize).toHaveBeenCalledTimes(1);
+  });
+
+  it("overrides a successful result with the normative blocked cleanup receipt", async () => {
+    const test = harness([snapshot(0)]);
+    test.finalize.mockRejectedValueOnce(new Error("lock close failed"));
+
+    const receipt = await test.index.index({
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 256,
+    });
+
+    expect(receipt).toEqual({
+      indexedCount: 1,
+      omitted: [],
+      outcome: "retry",
+      nextCursor: null,
+      retryCursor: null,
+      transientReason: "quota_state_invalid",
+      quotaRecovery: "blocked_pending",
+    });
+  });
+
+  it("retries at the first uncommitted cursor after a blocked committed prefix", async () => {
+    const records = [snapshot(0), snapshot(1)];
+    const test = harness(records);
+    test.publishBatch.mockResolvedValueOnce({
+      published: [records[0]?.id as string],
+      existing: [],
+      reason: "quota_state_invalid",
+      quotaRecovery: "blocked_pending",
+    });
+
+    const receipt = await test.index.index({
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 256,
+    });
+
+    expect(receipt).toMatchObject({
+      indexedCount: 1,
+      outcome: "retry",
+      transientReason: "quota_state_invalid",
+      quotaRecovery: "blocked_pending",
+    });
+    expect(cursorSequence(receipt.retryCursor)).toBe(2);
+  });
+
+  it("rejects a nested embedding getter without invoking it", async () => {
+    const test = harness([snapshot(0)]);
+    const getter = vi.fn(() => {
+      throw new Error("hostile nested getter");
+    });
+    const vector: unknown[] = [];
+    Object.defineProperty(vector, "0", { enumerable: true, get: getter });
+    vector.length = 2;
+    test.embedding.embed.mockResolvedValueOnce({
+      modelFingerprint: modelDescriptorFingerprint(model),
+      vectors: [vector as number[]],
+    });
+
+    const receipt = await test.index.index({
+      workspaceKey,
+      modelFingerprint: modelDescriptorFingerprint(model),
+      maxRecords: 256,
+    });
+
+    expect(receipt).toMatchObject({ outcome: "retry", transientReason: "embedding_failure" });
+    expect(getter).not.toHaveBeenCalled();
   });
 
   it("rechecks eligibility before publication and drops a revoked result", async () => {
