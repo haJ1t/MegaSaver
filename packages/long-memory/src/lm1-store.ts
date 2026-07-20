@@ -63,6 +63,8 @@ export type FileLm1Store = {
   list(workspaceKey: string, limit: number): readonly Lm1Record[];
 };
 
+const MAX_LM1_DIRECT_ID_READS = 10_000;
+
 export type Lm1StateIndexStore = FileLm1Store & {
   closureSuccessorIds(
     workspaceKey: string,
@@ -834,7 +836,12 @@ export function createFileLm1Store(input: { storeRoot: string }): FileLm1Store {
       return record;
     },
     getByIds(workspaceKey, entries, limit) {
-      if (!Number.isInteger(limit) || limit < 1) {
+      if (
+        !Number.isInteger(limit) ||
+        limit < 1 ||
+        limit > MAX_LM1_DIRECT_ID_READS ||
+        entries.length > MAX_LM1_DIRECT_ID_READS
+      ) {
         throw new Lm1Error("invalid_input", "Invalid LM1 direct record read limit.");
       }
       const records: Lm1Record[] = [];
@@ -848,10 +855,18 @@ export function createFileLm1Store(input: { storeRoot: string }): FileLm1Store {
         if (!expected.success) {
           throw new Lm1Error("invalid_input", "Invalid LM1 direct record locator.");
         }
-        const locator = parseRecordIdLocator(
-          lm1RecordIdLocatorPath(input.storeRoot, workspaceKey, expected.data.id),
-          { workspaceKey, id: expected.data.id },
-        );
+        let locator: RecordIdLocator;
+        try {
+          locator = parseRecordIdLocator(
+            lm1RecordIdLocatorPath(input.storeRoot, workspaceKey, expected.data.id),
+            { workspaceKey, id: expected.data.id },
+          );
+        } catch (error) {
+          if (error instanceof Lm1Error && error.code === "not_found") {
+            throw new Lm1Error("store_corrupt", "Long-memory direct record locator is missing.");
+          }
+          throw error;
+        }
         if (
           locator.kind !== expected.data.kind ||
           locator.sourceDigest !== expected.data.sourceDigest
