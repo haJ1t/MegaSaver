@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { Lm1Error } from "../src/lm1-errors.js";
 import {
   type RedactionPort,
   lm1RecordSchema,
@@ -62,6 +63,138 @@ describe("LM1 capture model", () => {
 
     expect(() => prepareCapture(input, redactor)).toThrow();
     expect(() => prepareCaptureInputSchema.parse({ ...input, unknown: true })).toThrow();
+  });
+
+  it("normalizes hostile public capture-input getters", () => {
+    const redactor: RedactionPort = {
+      version: "redaction-v1",
+      redact: ({ text, action }) => ({ text, action, unresolvedHighRisk: false }),
+    };
+
+    expect(() =>
+      prepareCapture(
+        new Proxy(
+          {},
+          {
+            get() {
+              throw new Error("hostile capture input");
+            },
+          },
+        ) as never,
+        redactor,
+      ),
+    ).toThrow(expect.objectContaining({ code: "invalid_input" }));
+  });
+
+  it("rejects a calendar-invalid public capture timestamp", () => {
+    expect(() =>
+      prepareCapture(
+        {
+          workspaceKey,
+          kind: "state_snapshot",
+          observedAt: "2026-02-99T00:00:00.000Z",
+          text: "billing paid",
+          action: null,
+          evidenceIds: [firstEvidenceId],
+          stateKey: "billing.status",
+          representation: "value",
+          supersedesSnapshotId: null,
+        },
+        {
+          version: "redaction-v1",
+          redact: ({ text, action }) => ({ text, action, unresolvedHighRisk: false }),
+        },
+      ),
+    ).toThrow(expect.objectContaining({ code: "invalid_input" }));
+  });
+
+  it("maps a redaction-adapter failure to a typed closed error", () => {
+    const input = {
+      workspaceKey,
+      kind: "state_snapshot" as const,
+      observedAt: "2026-07-20T00:00:00.000Z",
+      text: "billing paid",
+      action: null,
+      evidenceIds: [firstEvidenceId],
+      stateKey: "billing.status",
+      representation: "value" as const,
+      supersedesSnapshotId: null,
+    };
+
+    expect(() =>
+      prepareCapture(input, {
+        version: "redaction-v1",
+        redact: () => {
+          throw new Error("adapter boom");
+        },
+      }),
+    ).toThrow(expect.objectContaining({ code: "store_corrupt" }));
+  });
+
+  it("normalizes typed redactor and version failures to a closed error", () => {
+    const input = {
+      workspaceKey,
+      kind: "state_snapshot" as const,
+      observedAt: "2026-07-20T00:00:00.000Z",
+      text: "billing paid",
+      action: null,
+      evidenceIds: [firstEvidenceId],
+      stateKey: "billing.status",
+      representation: "value" as const,
+      supersedesSnapshotId: null,
+    };
+
+    expect(() =>
+      prepareCapture(input, {
+        version: "redaction-v1",
+        redact: () => {
+          throw new Lm1Error("invalid_input", "adapter-controlled error");
+        },
+      }),
+    ).toThrow(expect.objectContaining({ code: "store_corrupt" }));
+    expect(() =>
+      prepareCapture(input, {
+        get version() {
+          throw new Lm1Error("invalid_input", "adapter-controlled error");
+        },
+        redact: ({ text, action }) => ({ text, action, unresolvedHighRisk: false }),
+      }),
+    ).toThrow(expect.objectContaining({ code: "store_corrupt" }));
+  });
+
+  it("classifies malformed redacted capture fields and response getters as adapter corruption", () => {
+    const input = {
+      workspaceKey,
+      kind: "state_snapshot" as const,
+      observedAt: "2026-07-20T00:00:00.000Z",
+      text: "billing paid",
+      action: null,
+      evidenceIds: [firstEvidenceId],
+      stateKey: "billing.status",
+      representation: "value" as const,
+      supersedesSnapshotId: null,
+    };
+
+    expect(() =>
+      prepareCapture(input, {
+        version: "redaction-v1",
+        redact: () => ({ text: "", action: null, unresolvedHighRisk: false }),
+      }),
+    ).toThrow(expect.objectContaining({ code: "store_corrupt" }));
+    expect(() =>
+      prepareCapture(input, {
+        version: "redaction-v1",
+        redact: () =>
+          new Proxy(
+            {},
+            {
+              get() {
+                throw new Lm1Error("invalid_input", "adapter-controlled error");
+              },
+            },
+          ) as never,
+      }),
+    ).toThrow(expect.objectContaining({ code: "store_corrupt" }));
   });
 
   it("requires a lowercase workspace and lowercase evidence UUIDs", () => {

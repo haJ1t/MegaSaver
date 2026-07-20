@@ -5419,3 +5419,23 @@ then builds canonical evidence-bound contracts, immutable no-clobber storage,
 capture, correction-aware transitions, bounded recall, and independent release
 evidence. Source: [[concepts/long-memory-runtime]],
 `docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md`.
+
+## [2026-07-20] verification | Long Memory LM1 observations
+
+Implemented LM1's evidence-bound, append-only snapshot/transition runtime in
+`codex/feat/long-memory-observations`. It preserves LM0's public JSONL and
+TypeScript contract while adding private evidence-gated capture/recall,
+retry-stable snapshot reservations, correction-closure recall, bounded
+raw/pointer/coverage/closure scans, full directory-chain durability, and exact
+record-ID locators for bounded transition endpoint lookup. Two P1 findings from
+independent review were resolved with red-to-green regressions: closure-budget
+exhaustion now omits the affected correction group, and a valid endpoint no
+longer scans a large raw corpus or depends on unrelated raw-file health.
+
+Final evidence: `@megasaver/long-memory` 106/106 tests, package build,
+`pnpm verify`, `git diff --check`, and LongMemEval-V2 adapter tests 7/7 passed.
+Fresh independent code review and adversarial review both approved. This is not
+an official LongMemEval-V2 harness score; LM1 remains text-only and LM2/LM3
+capabilities are explicitly deferred. Source:
+[[concepts/long-memory-runtime]],
+`docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`.

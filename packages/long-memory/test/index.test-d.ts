@@ -1,4 +1,4 @@
-import { expectTypeOf, it } from "vitest";
+import { expect, expectTypeOf, it } from "vitest";
 import * as longMemory from "../src/index.js";
 
 it("exports the LM0 package marker", () => {
@@ -56,4 +56,8 @@ it("preserves LM0 exports while adding LM1 contracts", () => {
     version: string;
     redact(input: { text: string; action: string | null }): unknown;
   }>();
+  expect(longMemory).not.toHaveProperty("createFileLm1Store");
+  expect(longMemory).not.toHaveProperty("createLm1CaptureService");
+  expect(longMemory).not.toHaveProperty("createLm1RecallService");
+  expectTypeOf(longMemory.createLm1Runtime).toBeFunction();
 });
