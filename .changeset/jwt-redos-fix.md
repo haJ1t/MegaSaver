@@ -1,21 +1,39 @@
 ---
-"@megasaver/policy": patch
+"@megasaver/policy": minor
 ---
 
-Fix a quadratic ReDoS in the `jwt` redaction detector: a leading
-`(?<![A-Za-z0-9_-])` lookbehind rejects start positions glued to a base64url
-character, taking 313 KiB of adversarial input from 8,374 ms to 0.45 ms.
+Fix a quadratic ReDoS in the `jwt` redaction detector and recover the
+percent-escaped carriers the first attempt lost.
 
-**Behavior change:** a JWT preceded directly by a base64url character —
-including `-` and `_`, so `session-<jwt>` and `id_token_<jwt>` — no longer
-redacts and stays in cleartext. This is intended and accepted per
+**The quadratic is removed.** A two-branch leading lookbehind
+`(?:(?<![A-Za-z0-9_-])|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))` rejects start positions glued to a base64url
+character, taking 313 KiB of `'eyJaA0'.repeat(n)` from 8,374 ms to 0.45 ms.
+This is ordinarily reachable, not merely adversarial: `Buffer.toString("base64url")`
+of any JSON payload produces a long dotless run, and 320 KiB of it measured
+575.9 ms before the fix.
+
+**Percent-escaped carriers are recovered.** Branch 2, `(?<=%[0-9A-Fa-f][0-9A-Fa-f])`, restores
+redaction for a JWT preceded by a percent-escape — URL query strings and
+fragments, among the most common places a JWT appears in agent output. All 512
+`%XY` forms were verified. The branch costs 0.32 ms per 313 KiB and stays
+linear, because `%` sits outside the run class and terminates the dotless run.
+
+**Coverage reduction — read this.** A JWT preceded directly by a *raw*
+base64url character, including `-` and `_`, no longer redacts and stays in
+cleartext: `session-<jwt>`, `id_token_<jwt>`, `Bearer<jwt>` with no space,
+`ghs_<body>_<jwt>`, and base64-run glue. **No other detector provides fallback
+coverage for any of these** — verified through the full sequential-replacement
+pipeline, where every one leaves the complete signature in cleartext. The
+`ghs_` shape is the sharpest: `github_token` does fire, so findings are
+non-empty and the leak is easy to miss, but it redacts only the prefix.
+Escaped-equals forms `\x3d` and `\u003d` are lost the same way; `&#61;` is not
+affected. Accepted per
 `docs/superpowers/specs/2026-07-20-jwt-redos-fix-design.md` §5: the `-` and `_`
-characters must stay in the lookbehind class, because narrowing it to
-`(?<![A-Za-z0-9])` recovers those two shapes and reintroduces the full
-quadratic (7,494 ms at the same scale). Every standard JWT carrier — `=`, `:`,
-`"`, `;`, whitespace, start-of-string — is preserved, and 14 frozen cases
-assert byte-identical output against the pre-fix pattern.
+must stay in branch 1's class, because narrowing it to `(?<![A-Za-z0-9])` recovers
+`session-` and `id_token_` and reintroduces the full quadratic (7,728 ms and
+7,416 ms at 313 KiB).
 
-Patch rather than minor: no API surface changes. `redact`,
+Minor rather than patch: the public API is unchanged — `redact`,
 `redactWithFindings`, `redactForLedger`, `RedactResult`, and the `jwt` finding
-name are all unchanged.
+name are all identical — but a reduction in redaction coverage must be visible
+at release rather than auto-merged as a patch.
