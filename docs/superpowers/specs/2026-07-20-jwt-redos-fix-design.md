@@ -653,6 +653,57 @@ all 14 were re-verified byte-for-byte against the amended pattern, and
 against the pre-fix reference, on this branch. The amendment adds cases;
 it does not rewrite existing ones.
 
+### 6.2a Timing-gate flake and the mutation gap (added 2026-07-20b, round 2)
+
+Two round-2 `verifier` findings against §6 are closed here.
+
+**The timing tests flaked.** One `turbo test --force` run in five
+reported `@megasaver/policy: 2 failed | 205 passed`. Diagnosis on this
+branch could not reproduce it by CPU contention: at 8x oversubscription
+(load average 77 on 10 cores) the four measurements stayed at 0.3–1.8 ms
+against the 500 ms ceiling, and 15 consecutive runs of the file under
+that load were green. Two full `turbo test --force` runs each surfaced a
+*different* failure — `@megasaver/cli`'s `saver-run.test.ts` real-daemon
+HTTP test, at 74 s — which is a pre-existing flake unrelated to this
+branch. The residual mechanism is therefore a rare multi-hundred-
+millisecond whole-process stall (GC or scheduler) under a saturated box,
+not anything the regex does.
+
+**Fix: `{ retry: 3 }` on the four timing tests, ceiling unchanged at
+500 ms.** This costs nothing in discriminating power, because a
+reintroduced quadratic is slow on *every* attempt. Verified by mutation
+on this branch, with retries enabled:
+
+| mutant | seeds that fire | measured per attempt | attempts failed |
+|---|---|---|---|
+| narrowed lookbehind `(?<![A-Za-z0-9])` | `-eyJaA`, `_eyJaA` | 38.0–41.8 s | 4 of 4, both seeds |
+| fully reverted (pre-fix) pattern | `eyJaA0`, `-eyJaA`, `_eyJaA` | 34.2–40.3 s | 4 of 4, all three seeds |
+
+Both also trip the §6.1 structural gate independently, which is the
+point of §6.2 being defense-in-depth rather than the primary guard. Note
+these figures are ~5x the 7,416/7,728 ms recorded elsewhere in this spec:
+the runtime here is Node 25.8.2, not the pinned Node 22 — see §9a. The
+discrepancy runs in the safe direction and the ~70x minimum margin over
+the ceiling holds regardless.
+
+**The equivalence corpus could not see two mutant classes.** Every one of
+its 21 fixtures carries an `eyJ`-prefixed payload, because real JWTs do.
+So dropping the payload's own `eyJ` anchor, or relaxing any segment's `+`
+to `*`, passed all 34 assertions while silently *widening* what redacts —
+`trace eyJhbGciOiJIUzI1NiJ9.session.abc123` and `see eyJlogger.v2.min
+bundle` both start being redacted. That breaks the strict-subset-of-the-
+pre-fix-pattern invariant the corpus exists to protect, and
+over-redaction is a real cost here: Mega Saver's stated principle is that
+it never strips what the model needs to decide.
+
+Six non-match assertions now fence this, each killed by exactly the
+mutant it targets: two non-`eyJ` payloads (payload-anchor mutant), and
+one empty segment in each of the three positions plus the all-empty
+`eyJ.eyJ.` (segment `+`->`*` mutants). `eyJ.eyJ.` alone is **not**
+sufficient — measured, it is left unchanged by each single-position
+mutant and only redacts when all three quantifiers are relaxed at once,
+so the three positional fixtures are what carry the guarantee.
+
 <details>
 <summary>Original §6 text as approved 2026-07-20 (superseded)</summary>
 
@@ -806,3 +857,42 @@ Wiki: update `entities/policy` and append to `log.md`. **Amended
 the latter and is wrong — see corrected §1b for the base64url
 measurement (575.9 ms at 320 KiB, clean 4x-per-doubling scaling) and the
 absence of any effective size cap in front of the redaction sinks.
+
+## 9a. Review trail — round 2 record (2026-07-20)
+
+§12 CRITICAL requires `code-reviewer` **and** `critic` as separate
+passes, plus `security-reviewer`, plus a verifier with reproduction
+evidence. All of those ran; until now only the round-1 architect and
+security-reviewer passes were recorded above, so the audit trail was
+incomplete. The full list, in order:
+
+| # | pass | target | verdict | what it found |
+|---|---|---|---|---|
+| 1 | spec-compliance review | round-1 pattern | **SPEC COMPLIANT** | independently reproduced linearity at ~2.0x per doubling; confirmed 12/12 carriers still redact |
+| 2 | code-quality review | round 1 | **CHANGES_REQUESTED** | the 39 KiB comment had dropped the spec's 50 ms figure, leaving the claim false and self-contradictory; `O(1)` was wrong — the *per-start* cost is O(1), the scan is O(n). Both fixed |
+| 3 | `code-reviewer` | round-1 pattern | **APPROVED_WITH_NITS** | a length-bound regression that CI would have shown green; identified `ghs_<appid>_<jwt>` as the glued shape that matters |
+| 4 | `critic` | round 1 | **APPROVE_WITH_FIXES** | the percent-escape class (all 512 `%XY` forms blocked); deleting `/g` still passed the whole suite; no test JWT contained `-` or `_`. **Drove the round-2 amendment** |
+| 5 | `security-reviewer` | round 1 | **APPROVE** | 14 shapes x 4 scales + 600 fuzz seeds, nothing super-linear; refuted the wiki's "adversarially reachable" claim by measuring `base64(JSONL)` at 506 ms / 320 KiB; found the high-volume sinks uncapped |
+| 6 | `critic` | round 2, shipped pattern | **APPROVE_WITH_FIXES** | linearity of branch 2 held under `%`-saturated adversarial input; zero false positives; loss class exactly 64 bytes; found the surviving payload-`eyJ`-anchor mutant and the `+`->`*` segment mutants |
+| 7 | `verifier` | round 2 | **NOT DONE** | the timing tests flaked 1 run in 5 under `turbo test --force`; items 1, 2, 4, 5 and this section were open |
+
+Pass 7's findings are closed by the round-2 follow-up commits on this
+branch: the mutants from pass 6 are fenced by
+`test/redact-jwt.test.ts`'s no-over-redaction block, the timing flake is
+addressed in §6.2a, the residual percent carriers are named in §0a, and
+the plan carries its own round-2 section.
+
+**User approval on record.** The user explicitly approved, on
+**2026-07-20**, both the round-2 amendment (recovering the percent-escape
+class) and the **minor** — not patch — changeset bump, after being shown
+the corrected loss scope: the percent-escape class, `Bearer<jwt>` with no
+space, and `ghs_<appid>_<jwt>`. This satisfies the §12 CRITICAL
+"manual user confirmation in spec" requirement.
+
+**Runtime caveat on the measurements.** One reviewer's figures were taken
+on **Node 25.8.2** while `.nvmrc` pins **Node 22**, so the absolute
+catastrophic-backtracking numbers in this spec are runtime-bound rather
+than portable constants. The discrepancy ran in the *safe* direction —
+the vulnerability measured worse than documented, not better. The
+ratios, and the 500 ms ceiling's ~1000x margin over the fixed pattern,
+hold on either runtime.
