@@ -62,7 +62,14 @@ const ERROR = /\berror\b|\bfailed\b|\bfailure\b|\bexception\b|\bpanic(ked)?\b/i;
 // output. Do not restore `*`.
 const EXCEPTION_NAME = /[A-Z][A-Za-z]{0,64}Error\b/;
 const DIAGNOSTIC = /\(\d+,\d+\):\s+error\s+TS\d+:/;
-const STACKTRACE = /^\s+at\s+.+:\d+:\d+/m;
+// Bounded for the same reason as EXCEPTION_NAME, but the driver is different:
+// `\s+` and `.+` both accept whitespace, so on a long whitespace run after `at`
+// the split between them is ambiguous at every offset — 32.9 s through
+// scoreChunk on a 100 KB whitespace run. The gap bound is the tight one because
+// only the gap multiplies: the indent bound cannot, since just one indent split
+// can be followed by `at`. `.{1,512}` still absorbs a wide gap on its own, so
+// `\s{1,8}` costs no reach — behavior diverges only past 515 gap chars.
+const STACKTRACE = /^\s{1,64}at\s{1,8}.{1,512}:\d+:\d+/m;
 const TEST_FAILURE = /^(?:FAIL|\s*[✗×])\s|\b\d+\s+failed\b/im;
 // Bounded for the same reason as EXCEPTION_NAME: 8.1 s on 50 KB unbounded.
 const FILE_PATH = /[\w./-]{1,256}\.\w{1,5}(?::\d+)?/;
