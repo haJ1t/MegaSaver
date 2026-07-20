@@ -12,11 +12,20 @@ import {
   lm2CandidateSchema,
   modelDescriptorSchema,
 } from "./lm2-model.js";
+import {
+  LM2_PENDING_SIDECAR_RESERVATION_BYTES,
+  type Lm2QuotaLedger,
+  MAX_LM2_SIDECARS_PER_NAMESPACE,
+  MAX_LM2_VECTOR_NAMESPACES,
+  MAX_LM2_WORKSPACE_VECTOR_BYTES,
+} from "./lm2-quota-ledger.js";
 
-export const MAX_LM2_SIDECAR_BYTES = 24 * 1024;
-export const MAX_LM2_WORKSPACE_VECTOR_BYTES = 128 * 1024 * 1024;
-export const MAX_LM2_VECTOR_NAMESPACES = 2;
-export const MAX_LM2_SIDECARS_PER_NAMESPACE = 10_000;
+export const MAX_LM2_SIDECAR_BYTES = LM2_PENDING_SIDECAR_RESERVATION_BYTES;
+export {
+  MAX_LM2_SIDECARS_PER_NAMESPACE,
+  MAX_LM2_VECTOR_NAMESPACES,
+  MAX_LM2_WORKSPACE_VECTOR_BYTES,
+} from "./lm2-quota-ledger.js";
 export const MAX_LM2_DECODED_QUERY_VECTOR_BYTES = 64 * 1024 * 1024;
 
 const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
@@ -24,9 +33,23 @@ const lowercaseUuidSchema = z
   .string()
   .uuid()
   .refine((value) => value === value.toLowerCase(), "id must be lowercase");
-const sidecarSchema = z
+const positiveSafeIntegerSchema = z
+  .number()
+  .int()
+  .positive()
+  .max(Number.MAX_SAFE_INTEGER)
+  .refine((value) => !Object.is(value, -0), "must be a canonical positive integer");
+export const lm2SidecarProvenanceSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    ledgerEpoch: sha256Schema,
+    allocationSequence: positiveSafeIntegerSchema,
+  })
+  .strict();
+export type Lm2SidecarProvenance = z.infer<typeof lm2SidecarProvenanceSchema>;
+
+export const lm2V2SidecarSchema = z
+  .object({
+    schemaVersion: z.literal(2),
     workspaceKey: workspaceKeySchema,
     recordId: lowercaseUuidSchema,
     kind: z.enum(["state_snapshot", "state_transition"]),
@@ -34,10 +57,13 @@ const sidecarSchema = z
     embeddingInputDigest: sha256Schema,
     model: modelDescriptorSchema,
     dimension: z.number().int().min(1).max(4_096),
+    ledgerEpoch: sha256Schema,
+    allocationSequence: positiveSafeIntegerSchema,
     vectorBase64: z.string().min(1).max(32_768),
   })
   .strict();
-export type VectorSidecar = z.infer<typeof sidecarSchema>;
+export type Lm2V2Sidecar = z.infer<typeof lm2V2SidecarSchema>;
+export type VectorSidecar = Lm2V2Sidecar;
 
 export type SidecarMetadata = {
   sidecar: VectorSidecar;
@@ -116,7 +142,7 @@ export function parseSidecarMetadata(
   } catch {
     return null;
   }
-  const parsed = sidecarSchema.safeParse(value);
+  const parsed = lm2V2SidecarSchema.safeParse(value);
   if (!parsed.success || serializeSidecar(parsed.data) !== text) return null;
   if (
     parsed.data.dimension !== parsed.data.model.dimensions ||
@@ -146,6 +172,17 @@ export function matchesCandidate(
   );
 }
 
+export function isCommittedSidecar(input: {
+  ledger: Lm2QuotaLedger;
+  sidecar: Lm2V2Sidecar;
+}): boolean {
+  return (
+    input.sidecar.workspaceKey === input.ledger.workspaceKey &&
+    input.sidecar.ledgerEpoch === input.ledger.epoch &&
+    input.sidecar.allocationSequence <= input.ledger.committedThroughAllocation
+  );
+}
+
 export function decodeSidecarVector(metadata: SidecarMetadata): Float32Array | null {
   const { dimension, vectorBase64 } = metadata.sidecar;
   const bytes = Buffer.from(vectorBase64, "base64");
@@ -168,6 +205,7 @@ export function buildSerializedSidecar(
   model: ModelDescriptor,
   candidate: Lm2Candidate,
   values: readonly unknown[],
+  provenance?: Lm2SidecarProvenance,
 ): string {
   if (
     values.length !== model.dimensions ||
@@ -176,8 +214,12 @@ export function buildSerializedSidecar(
     throw new Lm2Error("invalid_vectors", "Invalid embedding vector tuple.");
   }
   const vector = canonicalFloat32(values as readonly number[]);
+  const parsedProvenance = lm2SidecarProvenanceSchema.safeParse(provenance);
+  if (!parsedProvenance.success) {
+    throw new Lm2Error("write_failed", "LM2 v2 sidecar provenance is required.");
+  }
   const serialized = serializeSidecar({
-    schemaVersion: 1,
+    schemaVersion: 2,
     workspaceKey: candidate.workspaceKey,
     recordId: candidate.id,
     kind: candidate.kind,
@@ -185,6 +227,8 @@ export function buildSerializedSidecar(
     embeddingInputDigest: embeddingInputDigest({ kind: candidate.kind, text: candidate.text }),
     model,
     dimension: model.dimensions,
+    ledgerEpoch: parsedProvenance.data.ledgerEpoch,
+    allocationSequence: parsedProvenance.data.allocationSequence,
     vectorBase64: encodeVector(vector),
   });
   if (Buffer.byteLength(serialized, "utf8") > MAX_LM2_SIDECAR_BYTES) {

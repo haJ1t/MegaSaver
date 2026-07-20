@@ -1,5 +1,18 @@
 import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
+import type { Lm2QuotaLedger } from "../src/lm2-quota-ledger.js";
+import {
+  buildSerializedSidecar,
+  isCommittedSidecar,
+  parseSidecarMetadata,
+} from "../src/lm2-vector-format.js";
+import {
+  embeddingsPath,
+  legacyEmbeddingsPath,
+  vectorQuotaLedgerPath,
+} from "../src/lm2-vector-paths.js";
 import { createLm2VectorStore } from "../src/lm2-vector-store.js";
 import {
   cleanupRoots,
@@ -14,6 +27,58 @@ import {
 afterEach(cleanupRoots);
 
 describe("LM2 embedding output validation", () => {
+  it("writes only canonical v2 provenance and admits only committed allocations", () => {
+    const model = createModel();
+    const record = createCandidate();
+    const ledgerEpoch = "a".repeat(64);
+    const serialized = buildSerializedSidecar(model, record, [1, 2, 3], {
+      ledgerEpoch,
+      allocationSequence: 4,
+    });
+    const metadata = parseSidecarMetadata(
+      Buffer.from(serialized),
+      modelDescriptorFingerprint(model),
+    );
+    const ledger = {
+      schemaVersion: 1,
+      workspaceKey,
+      epoch: ledgerEpoch,
+      generation: 1,
+      namespaces: [],
+      committedThroughAllocation: 4,
+      nextAllocationSequence: 5,
+      activeOperation: null,
+      pending: null,
+    } as const satisfies Lm2QuotaLedger;
+
+    expect(metadata?.sidecar).toMatchObject({
+      schemaVersion: 2,
+      ledgerEpoch,
+      allocationSequence: 4,
+    });
+    expect(isCommittedSidecar({ ledger, sidecar: metadata?.sidecar as never })).toBe(true);
+    expect(
+      isCommittedSidecar({
+        ledger: { ...ledger, committedThroughAllocation: 3, nextAllocationSequence: 4 },
+        sidecar: metadata?.sidecar as never,
+      }),
+    ).toBe(false);
+    expect(() => buildSerializedSidecar(model, record, [1, 2, 3])).toThrow();
+  });
+
+  it("fences the v2 authority from the historical embeddings root", () => {
+    const root = "/store";
+    expect(embeddingsPath(root, workspaceKey)).toBe(
+      join(root, "long-memory", "v1", workspaceKey, "embeddings-v2"),
+    );
+    expect(legacyEmbeddingsPath(root, workspaceKey)).toBe(
+      join(root, "long-memory", "v1", workspaceKey, "embeddings"),
+    );
+    expect(vectorQuotaLedgerPath(root, workspaceKey)).toBe(
+      join(root, "long-memory", "v1", workspaceKey, ".lm2", "vector-quota-ledger-v1.json"),
+    );
+  });
+
   it.each([
     { name: "Float32 overflow", vector: [1e39, 0, 1] },
     { name: "nonfinite", vector: [Number.NaN, 0, 1] },
