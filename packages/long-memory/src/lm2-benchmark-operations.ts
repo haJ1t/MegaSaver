@@ -3,6 +3,7 @@ import { performance } from "node:perf_hooks";
 import { canonicalSha256 } from "./lm2-benchmark-canonical.js";
 import {
   appendBenchmarkTelemetry,
+  assertBenchmarkRunIdentity,
   createBenchmarkRun,
   readBenchmarkManifest,
   replaceBenchmarkControl,
@@ -65,7 +66,7 @@ export async function runBenchmarkOperation(request: BenchmarkRequest): Promise<
   }
   return withBenchmarkRunLock({
     ...request,
-    async run(root, control) {
+    async run(handle, control) {
       if (control.chainDigest !== request.expectedChainDigest) {
         throw new BenchmarkTransportError("state_rejected");
       }
@@ -76,16 +77,18 @@ export async function runBenchmarkOperation(request: BenchmarkRequest): Promise<
         }
         const digest = canonicalSha256(request.trajectory);
         const trajectory = nextTrajectory({ manifest, chain: control.chain, id, digest });
+        assertBenchmarkRunIdentity(handle);
         const runtime = createBenchmarkRuntime({
           config: request.config,
-          storeRoot: join(root, "cache"),
+          storeRoot: join(handle.root.path, "cache"),
           instanceToken: request.instanceToken,
           sentinelToken: request.sentinelToken,
         });
         await runtime.insert(trajectory.projections);
+        assertBenchmarkRunIdentity(handle);
         const chain = [...control.chain, { id, fullObjectDigest: digest }];
         const next = { ...control, chain, chainDigest: canonicalSha256(chain) };
-        replaceBenchmarkControl(root, next);
+        replaceBenchmarkControl(handle, next);
         return {
           chainDigest: next.chainDigest,
           insertedCount: chain.length,
@@ -100,7 +103,7 @@ export async function runBenchmarkOperation(request: BenchmarkRequest): Promise<
       });
       const runtime = createBenchmarkRuntime({
         config: request.config,
-        storeRoot: join(root, "cache"),
+        storeRoot: join(handle.root.path, "cache"),
         instanceToken: request.instanceToken,
         sentinelToken: request.sentinelToken,
       });
@@ -122,7 +125,7 @@ export async function runBenchmarkOperation(request: BenchmarkRequest): Promise<
         imagePresent: request.queryImagePresent,
         imageUsed: false,
       };
-      appendBenchmarkTelemetry(root, telemetry);
+      appendBenchmarkTelemetry(handle, telemetry);
       return { items, telemetry };
     },
   });

@@ -5885,3 +5885,21 @@ No official LongMemEval-V2 score was run or claimed, and independent
 benchmark-contract review remains pending. (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
 `docs/superpowers/plans/2026-07-20-long-memory-lm2-runtime-security-completion-plan.md`)
+
+## [2026-07-20 19:50 +03] fix | LM2 benchmark contract review closure
+
+Fresh Task 5 review rejected pathname-based lock admission, incomplete Python
+manifest/state validation, divergent Python number serialization, and an
+unbound tier checksum. New REDs reproduced lock replacement before an operation
+and after flock, six self-consistent manifest substitutions, scientific-number
+digest divergence, and save-directory alias acceptance. The transport now
+binds the fixed lock descriptor to sentinel dev/inode, revalidates it before
+state writes, and fsyncs the run directory after control replacement. Python
+validates the exact canonical V1 manifest and complete saved/run identities
+before adoption; a real built cross-language run includes scientific numbers.
+Evidence: focused Node 25/25, long-memory 334/334 with zero type errors, Python
+18/18 against the pinned official base and built transport, and root `pnpm
+verify` 56/56. No official score was run or claimed; fresh independent
+benchmark-contract re-review remains pending. (source:
+`.superpowers/sdd/task-5-report.md`,
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`)
