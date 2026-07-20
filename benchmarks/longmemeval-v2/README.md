@@ -61,3 +61,62 @@ python evaluation/harness.py \
 Keep the harness output directory, its `aggregated_metrics.json`, the memory
 config, and the Mega Saver commit SHA for each run. Do not retain or submit
 non-public trajectory data.
+
+## LM2 hybrid backend
+
+`megasaver_lm2_hybrid.py` is a separate, public-data-only LM2 backend. It does
+not extend LM0 stdio and it never opens a production Mega Saver workspace. Each
+`open`, `insert`, and `query` operation launches the dedicated
+`megasaver-long-memory-lm2-benchmark` executable and waits for it to exit.
+Process startup is therefore included in query latency.
+
+The integration is pinned to official LongMemEval-V2 commit
+`6f020ac2fc3275e46c706d3406e02c3ed79b7be2` and dataset revision
+`f152293e235517d504809563c833d7190b8c713b`. Prepare a checkout and the exact
+released data, then build Mega Saver:
+
+```bash
+git -C "$LME_ROOT" checkout 6f020ac2fc3275e46c706d3406e02c3ed79b7be2
+pnpm --filter @megasaver/long-memory build
+mkdir -m 700 /absolute/path/to/private-megasaver-lm2-cache
+```
+
+Build one domain/tier manifest. The builder recomputes the released SHA-256
+checksums and runs the pinned official `data/validate_data.py` before creating
+a new mode-`0600` manifest:
+
+```bash
+node benchmarks/longmemeval-v2/build-lm2-manifest.mjs \
+  --official-root "$LME_ROOT" \
+  --data-root "$DATA_ROOT" \
+  --domain web \
+  --tier small \
+  --output /absolute/path/to/megasaver-lm2-manifest-v1.json
+```
+
+The command prints the independently configured `manifestDigest`. Copy
+`megasaver_lm2_hybrid.json`, replace its absolute paths and digest, and keep
+`embedding_egress` and the model provider set to `local`. Remote endpoints,
+remote acknowledgements, and destination fields are rejected.
+
+Install the backend without hand-editing the official checkout:
+
+```bash
+node benchmarks/longmemeval-v2/install-lm2-backend.mjs \
+  --checkout "$LME_ROOT" \
+  --backend "$(pwd)/benchmarks/longmemeval-v2/megasaver_lm2_hybrid.py"
+```
+
+The installer accepts only a pristine pinned checkout or its own exact prior
+installation. It verifies `memory.py`, the harness, and both leaderboard
+builders, then permits only the marked `memory.py` import and backend file.
+Re-running it is idempotent and emits pre/post hash evidence.
+
+Run the unmodified official harness with its documented web/enterprise inputs
+and the generated memory config. Query admission uses only `question_id`; the
+backend discards `question_item`, ignores query images, and returns no image
+context. Save/load succeeds only from the original save directory identity.
+
+No LongMemEval-V2 accuracy, latency, LAFS, or leaderboard score is claimed by
+these files. Such a claim requires completed web and enterprise runs plus the
+official artifact gate implemented separately from this Task 5 transport.
