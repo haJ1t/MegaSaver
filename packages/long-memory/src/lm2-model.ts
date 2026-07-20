@@ -77,16 +77,105 @@ export const lm2IndexRequestSchema = z
   .strict();
 export type Lm2IndexRequest = z.infer<typeof lm2IndexRequestSchema>;
 
-export const lm2IndexReceiptSchema = z
+const indexTransientReasonSchema = z.enum([
+  "index_busy",
+  "index_lock_unavailable",
+  "quota_state_invalid",
+  "evidence_cap_exhausted",
+  "remote_approval_denied",
+  "embedding_failure",
+  "timeout",
+  "sidecar_write_failed",
+  "evidence_changed",
+  "lock_integrity_lost",
+]);
+const quotaRecoverySchema = z.enum(["not_needed", "recovered_pending", "blocked_pending"]);
+const indexReceiptFields = {
+  indexedCount: z.number().int().nonnegative().max(MAX_LM2_INDEX_RECORDS),
+  omitted: z
+    .array(
+      z.object({ id: lowercaseUuidSchema, reason: z.string().trim().min(1).max(128) }).strict(),
+    )
+    .max(1_024),
+  quotaRecovery: quotaRecoverySchema,
+};
+const cursorSchema = z.string().trim().min(1).max(4_096);
+export const lm2IndexOutcomeSchema = z.enum(["complete", "continue", "retry", "expired"]);
+export type Lm2IndexOutcome = z.infer<typeof lm2IndexOutcomeSchema>;
+
+export const lm2IndexReceiptSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      ...indexReceiptFields,
+      outcome: z.literal("complete"),
+      nextCursor: z.null(),
+      retryCursor: z.null(),
+      transientReason: z.null(),
+    })
+    .strict(),
+  z
+    .object({
+      ...indexReceiptFields,
+      outcome: z.literal("continue"),
+      nextCursor: cursorSchema,
+      retryCursor: z.null(),
+      transientReason: z.null(),
+    })
+    .strict(),
+  z
+    .object({
+      ...indexReceiptFields,
+      outcome: z.literal("retry"),
+      nextCursor: z.null(),
+      retryCursor: cursorSchema.nullable(),
+      transientReason: indexTransientReasonSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...indexReceiptFields,
+      outcome: z.literal("expired"),
+      nextCursor: z.null(),
+      retryCursor: z.null(),
+      transientReason: z.null(),
+    })
+    .strict(),
+]);
+export type Lm2IndexReceipt = z.infer<typeof lm2IndexReceiptSchema>;
+const vectorDiagnosticReasonSchema = z.enum([
+  "missing_vectors",
+  "invalid_vectors",
+  "vector_read_limit",
+  "quota_ledger_invalid",
+  "quota_recovery_pending",
+]);
+const lm2VerifiedVectorSchema = z
   .object({
-    indexedCount: z.number().int().nonnegative().max(MAX_LM2_INDEX_RECORDS),
-    omitted: z.array(
-      z.object({ id: lowercaseUuidSchema, reason: z.string().trim().min(1) }).strict(),
-    ),
-    nextCursor: z.string().nullable(),
+    candidateId: lowercaseUuidSchema,
+    vector: z.array(z.number().finite()).min(1).max(MAX_LM2_DIMENSIONS),
+    decodedBytes: z
+      .number()
+      .int()
+      .positive()
+      .max(MAX_LM2_DIMENSIONS * 4),
+  })
+  .strict()
+  .refine((value) => value.decodedBytes === value.vector.length * 4, {
+    message: "decoded bytes must match the vector dimension",
+  });
+export const lm2VectorReadResultSchema = z
+  .object({
+    vectors: z.array(lm2VerifiedVectorSchema).max(MAX_LM2_RANK_CANDIDATES),
+    diagnostics: z
+      .array(
+        z
+          .object({ candidateId: lowercaseUuidSchema, reason: vectorDiagnosticReasonSchema })
+          .strict(),
+      )
+      .max(MAX_LM2_RANK_CANDIDATES),
   })
   .strict();
-export type Lm2IndexReceipt = z.infer<typeof lm2IndexReceiptSchema>;
+export type Lm2VectorReadResult = z.infer<typeof lm2VectorReadResultSchema>;
 
 const remoteApprovalSchema = z
   .object({
@@ -152,6 +241,8 @@ const semanticReasonSchema = z.enum([
   "storage_limit",
   "vector_read_limit",
   "remote_approval_denied",
+  "quota_ledger_invalid",
+  "quota_recovery_pending",
 ]);
 export type HybridSemanticReason = z.infer<typeof semanticReasonSchema>;
 
