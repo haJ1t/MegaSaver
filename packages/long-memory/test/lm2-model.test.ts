@@ -34,6 +34,7 @@ describe("LM2 model contracts", () => {
   it("bounds config timeouts and admits at most two canonical models", () => {
     const config = {
       admittedModels: [model],
+      activeRecallModelFingerprint: modelDescriptorFingerprint(model),
       embeddingEgress: "local" as const,
       remoteApprovals: [],
       queryTimeoutMs: MAX_LM2_QUERY_TIMEOUT_MS,
@@ -41,6 +42,8 @@ describe("LM2 model contracts", () => {
     };
 
     expect(lm2RuntimeConfigSchema.parse(config)).toEqual(config);
+    const { activeRecallModelFingerprint: _active, ...withoutActive } = config;
+    expect(() => lm2RuntimeConfigSchema.parse(withoutActive)).toThrow();
     expect(() => lm2RuntimeConfigSchema.parse({ ...config, queryTimeoutMs: 0 })).toThrow();
     expect(() =>
       lm2RuntimeConfigSchema.parse({ ...config, indexBatchTimeoutMs: 15_001 }),
@@ -59,6 +62,7 @@ describe("LM2 model contracts", () => {
     };
     const remoteConfig = {
       admittedModels: [model],
+      activeRecallModelFingerprint: modelDescriptorFingerprint(model),
       embeddingEgress: "remote" as const,
       remoteApprovals: [remoteApproval],
       queryTimeoutMs: MAX_LM2_QUERY_TIMEOUT_MS,
