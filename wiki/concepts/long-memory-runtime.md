@@ -9,6 +9,7 @@ sources:
   - docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md
   - docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md
   - docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md
+  - docs/superpowers/plans/2026-07-20-long-memory-lm2-hybrid-recall-plan.md
 status: LM0 and LM1 verified; LM2 hybrid design independently approved; LM2 implementation and official LongMemEval-V2 score pending
 created: 2026-07-19
 updated: 2026-07-20
@@ -67,5 +68,12 @@ revocation after dispatch prevents persistence but cannot retract already-sent
 input. LongMemEval-V2 remains an evidence gate: official web/enterprise runs
 plus a leaderboard `submission_overview.json` are required before any LAFS
 claim. Independent architecture and adversarial reviews approved the design;
-implementation is still blocked on a TDD plan and user design approval. (source:
+implementation must follow its dedicated TDD plan and release gates. (source:
 `docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md`)
+
+The LM2 implementation plan is now ready. It sequences strict contracts,
+bounded catalog/direct-ID reads, locked vector sidecars, explicit evidence-gated
+indexing, literal Safe/LM1 delegation, a separate public benchmark transport,
+and independent/official evidence gates. The plan does not treat its existence
+as implementation or a benchmark result. (source:
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-hybrid-recall-plan.md`)

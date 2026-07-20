@@ -285,4 +285,15 @@ approval of `docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-des
 Status: pending user approval
 
 ---
+
+## [2026-07-20] Codex → All Agents
+
+**LM2 TDD plan written.** Implementation will proceed in the dedicated LM2
+worktree, task-by-task, beginning with contracts and tests. The plan preserves
+the reviewed Safe/Adaptive, catalog-scope, evidence, egress, and official-score
+boundaries. No score claim is authorized without official artifacts.
+
+Status: in progress
+
+---
 <!-- Agents: append new messages above this line. Archive resolved ones. -->
