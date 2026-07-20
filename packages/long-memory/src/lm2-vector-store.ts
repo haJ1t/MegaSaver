@@ -30,7 +30,7 @@ import {
   parseModel,
 } from "./lm2-vector-format.js";
 import { embeddingsPath, vectorQuotaLedgerPath } from "./lm2-vector-paths.js";
-import { type Lm2VerifiedVector, readVerifiedVectors } from "./lm2-vector-sidecars.js";
+import { readBoundedVectors } from "./lm2-vector-sidecars.js";
 
 export {
   MAX_LM2_DECODED_QUERY_VECTOR_BYTES,
@@ -61,28 +61,48 @@ export type Lm2VectorStoreResult = {
     | "write_failed";
 };
 
+export type Lm2VectorReadRequest = {
+  workspaceKey: string;
+  model: ModelDescriptor;
+  candidates: readonly Lm2Candidate[];
+  maxDecodedBytes: number;
+  signal: AbortSignal;
+  deadlineAtMs: number;
+  now: () => number;
+};
+
 export type Lm2VectorStore = {
   beginIndexOperation(input: {
     workspaceKey: string;
     model: ModelDescriptor;
     deadline: Lm2IndexDeadline;
   }): Promise<Lm2IndexOperationResult>;
-  read(input: {
-    workspaceKey: string;
-    model: ModelDescriptor;
-    candidates: readonly Lm2Candidate[];
-    maxDecodedBytes: number;
-    signal: AbortSignal;
-  }): Promise<Lm2VectorReadResult>;
-  readVerified(input: {
-    workspaceKey: string;
-    model: ModelDescriptor;
-    candidates: readonly Lm2Candidate[];
-    maxDecodedBytes: number;
-    signal: AbortSignal;
-  }): Promise<readonly Lm2VerifiedVector[]>;
+  read(input: Lm2VectorReadRequest): Promise<Lm2VectorReadResult>;
   reserveAndPublish(input: ReserveAndPublishInput): Promise<Lm2VectorStoreResult>;
 };
+
+function readDeadlineReached(input: Lm2VectorReadRequest): boolean {
+  if (!Number.isFinite(input.deadlineAtMs) || typeof input.now !== "function") {
+    throw new Lm2Error("invalid_input", "Invalid LM2 vector read deadline.");
+  }
+  let current: number;
+  try {
+    current = input.now();
+  } catch {
+    throw new Lm2Error("invalid_input", "Invalid LM2 vector read clock.");
+  }
+  if (!Number.isFinite(current)) {
+    throw new Lm2Error("invalid_input", "Invalid LM2 vector read clock.");
+  }
+  return input.signal.aborted || current >= input.deadlineAtMs;
+}
+
+function limitedRead(candidates: readonly Lm2Candidate[]): Lm2VectorReadResult {
+  return {
+    vectors: [],
+    diagnostics: candidates.map(({ id }) => ({ candidateId: id, reason: "vector_read_limit" })),
+  };
+}
 
 function ledgerSnapshot(storeRoot: string, workspaceKey: string) {
   const path = vectorQuotaLedgerPath(storeRoot, workspaceKey);
@@ -122,13 +142,7 @@ function v2State(storeRoot: string, workspaceKey: string): "empty" | "nonempty" 
 }
 
 export function createLm2VectorStore({ storeRoot }: { storeRoot: string }): Lm2VectorStore {
-  const read = async (input: {
-    workspaceKey: string;
-    model: ModelDescriptor;
-    candidates: readonly Lm2Candidate[];
-    maxDecodedBytes: number;
-    signal: AbortSignal;
-  }): Promise<Lm2VectorReadResult> => {
+  const read = async (input: Lm2VectorReadRequest): Promise<Lm2VectorReadResult> => {
     const model = parseModel(input.model);
     const candidates = parseCandidates(
       input.workspaceKey,
@@ -142,11 +156,10 @@ export function createLm2VectorStore({ storeRoot }: { storeRoot: string }): Lm2V
     ) {
       throw new Lm2Error("invalid_input", "Invalid LM2 vector read budget.");
     }
+    if (readDeadlineReached(input)) return limitedRead(candidates);
     const ledger = ledgerSnapshot(storeRoot, input.workspaceKey);
-    if (
-      ledger === "invalid" ||
-      (ledger === null && v2State(storeRoot, input.workspaceKey) !== "empty")
-    ) {
+    if (readDeadlineReached(input)) return limitedRead(candidates);
+    if (ledger === "invalid") {
       return {
         vectors: [],
         diagnostics: candidates.map(({ id }) => ({
@@ -156,12 +169,24 @@ export function createLm2VectorStore({ storeRoot }: { storeRoot: string }): Lm2V
       };
     }
     if (ledger === null) {
+      if (readDeadlineReached(input)) return limitedRead(candidates);
+      const state = v2State(storeRoot, input.workspaceKey);
+      if (readDeadlineReached(input)) return limitedRead(candidates);
+      if (state !== "empty") {
+        return {
+          vectors: [],
+          diagnostics: candidates.map(({ id }) => ({
+            candidateId: id,
+            reason: "quota_ledger_invalid",
+          })),
+        };
+      }
       return {
         vectors: [],
         diagnostics: candidates.map(({ id }) => ({ candidateId: id, reason: "missing_vectors" })),
       };
     }
-    return readVerifiedVectors({
+    return readBoundedVectors({
       ...input,
       model,
       candidates,
@@ -182,9 +207,6 @@ export function createLm2VectorStore({ storeRoot }: { storeRoot: string }): Lm2V
       return beginIndexOperation({ ...input, model, storeRoot });
     },
     read,
-    async readVerified(input) {
-      return (await read(input)).vectors;
-    },
     async reserveAndPublish(input) {
       const deadline = { signal: input.signal, deadlineAtMs: 15_000, now: () => 0 };
       const operation = await beginIndexOperation({

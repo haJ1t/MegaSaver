@@ -296,6 +296,7 @@ describe("LM2 hybrid ranker", () => {
       .fn()
       .mockReturnValueOnce(10)
       .mockReturnValueOnce(10)
+      .mockReturnValueOnce(10)
       .mockReturnValue(1_510);
 
     const result = await rankLm2Candidates(input);
@@ -404,6 +405,39 @@ describe("LM2 hybrid ranker", () => {
     });
     expect(result.orderedCandidateIds).toEqual([record.id]);
     expect(input.embedding.embed).not.toHaveBeenCalled();
+  });
+
+  it("aborts stalled semantic work at the remaining absolute deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      let readSignal: AbortSignal | undefined;
+      const record = candidate(1, "billing");
+      const input = adaptiveInput([record], []);
+      input.request.timeoutMs = 100;
+      input.clock.now = vi.fn().mockReturnValueOnce(10).mockReturnValue(90);
+      input.vectors.read = vi.fn(
+        ({ signal }) =>
+          new Promise(() => {
+            readSignal = signal;
+          }),
+      );
+      let settled = false;
+      const pending = rankLm2Candidates(input).then((result) => {
+        settled = true;
+        return result;
+      });
+
+      await vi.advanceTimersByTimeAsync(20);
+
+      expect(settled).toBe(true);
+      expect(readSignal?.aborted).toBe(true);
+      await expect(pending).resolves.toMatchObject({
+        orderedCandidateIds: [record.id],
+        hybrid: { semanticStatus: "degraded", semanticReasons: ["timeout"] },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects private or unvalidated candidate fields at its boundary", async () => {

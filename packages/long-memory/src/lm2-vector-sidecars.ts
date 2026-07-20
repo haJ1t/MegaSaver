@@ -158,7 +158,7 @@ export function removePendingTemporary(input: {
   }
 }
 
-export function readVerifiedVectors(input: {
+export function readBoundedVectors(input: {
   storeRoot: string;
   workspaceKey: string;
   model: ModelDescriptor;
@@ -166,19 +166,37 @@ export function readVerifiedVectors(input: {
   candidates: readonly Lm2Candidate[];
   maxDecodedBytes: number;
   signal: AbortSignal;
+  deadlineAtMs: number;
+  now: () => number;
   ledger: Lm2QuotaLedger;
 }): Lm2VectorReadResult {
   const vectors: Lm2VerifiedVector[] = [];
   const diagnostics: Lm2VectorReadResult["diagnostics"][number][] = [];
   let decodedBytes = 0;
-  for (const candidate of input.candidates) {
-    if (input.signal.aborted) return { vectors: [], diagnostics };
+  const deadlineReached = () => {
+    if (input.signal.aborted) return true;
+    try {
+      const current = input.now();
+      return !Number.isFinite(current) || current >= input.deadlineAtMs;
+    } catch {
+      return true;
+    }
+  };
+  const limited = (start: number): Lm2VectorReadResult => {
+    const unread: Lm2VectorReadResult["diagnostics"] = input.candidates
+      .slice(start)
+      .map(({ id }) => ({ candidateId: id, reason: "vector_read_limit" }));
+    return { vectors, diagnostics: [...diagnostics, ...unread] };
+  };
+  for (const [index, candidate] of input.candidates.entries()) {
+    if (deadlineReached()) return limited(index);
     const state = inspectNamedSidecar({
       storeRoot: input.storeRoot,
       workspaceKey: input.workspaceKey,
       fingerprint: input.fingerprint,
       name: vectorSidecarName(candidate.id),
     });
+    if (deadlineReached()) return limited(index);
     if (state.status !== "valid") {
       diagnostics.push({
         candidateId: candidate.id,
@@ -198,7 +216,9 @@ export function readVerifiedVectors(input: {
       diagnostics.push({ candidateId: candidate.id, reason: "vector_read_limit" });
       continue;
     }
+    if (deadlineReached()) return limited(index);
     const vector = decodeSidecarVector(state.metadata);
+    if (deadlineReached()) return limited(index);
     if (vector === null) {
       diagnostics.push({ candidateId: candidate.id, reason: "invalid_vectors" });
       continue;
