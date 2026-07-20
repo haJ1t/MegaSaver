@@ -101,7 +101,10 @@ async function processPage(input: {
         omitted,
         retryCursor: result.retryCursor,
         reason: result.transientReason,
-        quotaRecovery: input.quotaRecovery,
+        quotaRecovery:
+          result.transientReason === "quota_state_invalid"
+            ? "blocked_pending"
+            : input.quotaRecovery,
       });
     }
     pending = [];
@@ -292,8 +295,8 @@ export function createLm2IndexService(input: IndexServiceInput): Lm2IndexService
         indexedCount: receipt.indexedCount,
         omitted: receipt.omitted,
         retryCursor,
-        reason: "lock_integrity_lost",
-        quotaRecovery: receipt.quotaRecovery,
+        reason: "quota_state_invalid",
+        quotaRecovery: "blocked_pending",
       });
     },
   };

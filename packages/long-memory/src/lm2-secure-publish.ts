@@ -14,6 +14,7 @@ import {
 import { Lm2Error } from "./lm2-errors.js";
 import { Lm2ApprovalTimeoutError } from "./lm2-lock.js";
 import type { EmbeddingPort, Lm2Candidate, ModelDescriptor } from "./lm2-model.js";
+import { snapshotLm2PortValue } from "./lm2-port-safety.js";
 import type { Lm2PendingAllocation } from "./lm2-quota-ledger.js";
 import {
   type AnchoredFile,
@@ -70,7 +71,14 @@ export function materializeAnchoredFile(
     verifyAnchoredFile(file);
     return file;
   } catch (error) {
-    closeAnchoredFile(file);
+    try {
+      closeAnchoredFile(file);
+    } catch (cleanupError) {
+      throw new Lm2CleanupError(
+        "LM2 materialization cleanup failed.",
+        new AggregateError([error, cleanupError], "LM2 materialization and cleanup failed."),
+      );
+    }
     throw error;
   }
 }
@@ -91,14 +99,20 @@ export function publishAnchoredTemporary(
   verifyDirectoryAnchor(anchor);
 }
 export function closeAndRemoveAnchoredTemporary(anchor: DirectoryAnchor, temp: AnchoredFile): void {
-  closeAnchoredFile(temp);
+  let failure: unknown;
+  try {
+    closeAnchoredFile(temp);
+  } catch (error) {
+    failure = error;
+  }
   try {
     verifyDirectoryAnchor(anchor);
     unlinkSync(temp.path);
     fsyncSync(directoryDescriptor(anchor));
-  } catch {
-    // Recovery owns the exact named temporary path if cleanup is interrupted.
+  } catch (error) {
+    failure ??= error;
   }
+  if (failure !== undefined) throw new Lm2CleanupError("LM2 temporary cleanup failed.", failure);
 }
 export function unlinkAnchoredFile(anchor: DirectoryAnchor, name: string): void {
   verifyDirectoryAnchor(anchor);
@@ -131,22 +145,46 @@ export function replaceAnchoredFile(
 ): void {
   verifyDirectoryAnchor(anchor);
   const temp = materializeAnchoredFile(anchor, `.${randomUUID()}.replace`, serialized);
+  let mutationFailure: unknown;
+  let cleanupFailure: unknown;
   try {
     assertMutationAllowed();
     renameSync(temp.path, anchoredChildPath(anchor, name));
     fsyncSync(directoryDescriptor(anchor));
     verifyDirectoryAnchor(anchor);
   } catch (error) {
+    mutationFailure = error;
     try {
       unlinkSync(temp.path);
-    } catch {
-      // Rename may already have made the replacement durable.
+    } catch (unlinkError) {
+      if (
+        !(unlinkError instanceof Error) ||
+        !("code" in unlinkError) ||
+        unlinkError.code !== "ENOENT"
+      ) {
+        cleanupFailure = unlinkError;
+      }
     }
-    if (error instanceof Lm2Error) throw error;
-    throw new Lm2Error("write_failed", "LM2 ledger replacement failed.");
-  } finally {
-    closeAnchoredFile(temp);
   }
+  try {
+    closeAnchoredFile(temp);
+  } catch (error) {
+    cleanupFailure ??= error;
+  }
+  if (cleanupFailure !== undefined) {
+    throw new Lm2CleanupError(
+      "LM2 ledger replacement cleanup failed.",
+      mutationFailure === undefined
+        ? cleanupFailure
+        : new AggregateError(
+            [mutationFailure, cleanupFailure],
+            "LM2 ledger replacement and cleanup failed.",
+          ),
+    );
+  }
+  if (mutationFailure instanceof Lm2Error) throw mutationFailure;
+  if (mutationFailure !== undefined)
+    throw new Lm2Error("write_failed", "LM2 ledger replacement failed.");
 }
 
 type PublishedProbe =
@@ -163,21 +201,41 @@ export class Lm2PartialPublicationError extends Error {
   }
 }
 
+export class Lm2CleanupError extends Error {
+  readonly entries: readonly Lm2PendingAllocation[];
+
+  constructor(message: string, cause: unknown, entries: readonly Lm2PendingAllocation[] = []) {
+    super(message, { cause });
+    this.name = "Lm2CleanupError";
+    this.entries = [...entries];
+  }
+}
+
+export function isLm2CleanupError(error: unknown): boolean {
+  let current = error;
+  const seen = new Set<object>();
+  while (current instanceof Error && !seen.has(current)) {
+    if (current instanceof Lm2CleanupError) return true;
+    seen.add(current);
+    current = current.cause;
+  }
+  return false;
+}
+
 function embeddingResult(
   value: unknown,
   fingerprint: string,
   count: number,
 ): readonly unknown[][] | null {
-  if (typeof value !== "object" || value === null) return null;
-  try {
-    const returnedFingerprint = Reflect.get(value, "modelFingerprint");
-    const vectors = Reflect.get(value, "vectors");
-    return returnedFingerprint === fingerprint && Array.isArray(vectors) && vectors.length === count
-      ? vectors
-      : null;
-  } catch {
-    return null;
-  }
+  const snapshot = snapshotLm2PortValue(value);
+  if (snapshot.status === "unreadable") return null;
+  const result = snapshot.value;
+  if (typeof result !== "object" || result === null) return null;
+  const returnedFingerprint = Reflect.get(result, "modelFingerprint");
+  const vectors = Reflect.get(result, "vectors");
+  return returnedFingerprint === fingerprint && Array.isArray(vectors) && vectors.length === count
+    ? vectors
+    : null;
 }
 
 export async function publishLm2ReservedBatch(input: {
@@ -254,6 +312,7 @@ export async function publishLm2ReservedBatch(input: {
   });
   input.persistMaterialized(materialized);
   const namespace = ensureVectorNamespace(input.storeRoot, input.workspaceKey, input.model);
+  let publicationFailure: Lm2PartialPublicationError | undefined;
   try {
     for (let index = 0; index < input.records.length; index += 1) {
       const record = input.records[index];
@@ -292,9 +351,19 @@ export async function publishLm2ReservedBatch(input: {
       published.push(record.id);
     }
   } catch (error) {
-    throw new Lm2PartialPublicationError(input.entries, error);
-  } finally {
-    closeDirectoryAnchor(namespace);
+    publicationFailure = new Lm2PartialPublicationError(input.entries, error);
   }
+  try {
+    closeDirectoryAnchor(namespace);
+  } catch (error) {
+    throw new Lm2CleanupError(
+      "LM2 namespace cleanup failed.",
+      publicationFailure === undefined
+        ? error
+        : new AggregateError([publicationFailure, error], "LM2 publication and cleanup failed."),
+      input.entries,
+    );
+  }
+  if (publicationFailure !== undefined) throw publicationFailure;
   return { published, reason: null };
 }

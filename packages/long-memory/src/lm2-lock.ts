@@ -47,7 +47,9 @@ export type Lm2PublishBatchResult = {
     | "write_failed"
     | "evidence_changed"
     | "timeout"
-    | "lock_integrity_lost";
+    | "lock_integrity_lost"
+    | "quota_state_invalid";
+  quotaRecovery?: "blocked_pending";
 };
 
 export type Lm2ReadyIndexOperation = {
