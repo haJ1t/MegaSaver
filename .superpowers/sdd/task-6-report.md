@@ -110,3 +110,15 @@ Status: P1 duplicate-key correction implemented; official score not run; fresh i
   monorepo typecheck/tests, and convention drift checks.
 - Full qualification is not attempted without authoritative released data and
   completed harness/judge artifacts.
+
+## Final independent review
+
+- A fresh final adversarial review at commit
+  `2e03773604f795e0d8397e59c57c22c8b1fac697` approved the raw JSON boundary.
+  It exercised 44 decoded-key duplicate families, including nested objects,
+  arrays, escaped Unicode names, surrogate pairs, malformed escapes, and
+  string false-positive controls; no P1 or P2 finding remained.
+- Task 6 is therefore complete as an evidence-gated implementation. It does
+  not assert an official LongMemEval-V2 score: a real, complete, authoritative
+  web-plus-enterprise harness/judge artifact bundle is still required before
+  the verifier can make `officialScoreEligible` true.
