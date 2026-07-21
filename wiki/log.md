@@ -5676,3 +5676,17 @@ contents. Evidence: 42/42 long-memory files and 361/361 tests, 26 Python tests
 plus one optional skip, and root `pnpm verify` 56/56. No authoritative completed
 two-domain run was available, so no official score is claimed. (source:
 `.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 11:53 +03] fix | LM2 official evidence provenance closure
+
+Final evidence review found five P1 authenticity gaps: local percentiles in the
+official combined timing shape, insufficient binding of executed inputs and
+evaluator answers, no clean-commit rebuild proof, name-only recorded tar
+validation, and incomplete telemetry correlation. The gate now executes the
+pinned real combiner contract, materializes and byte-compares complete released
+inputs, binds command/run arguments, rebuilds adapter and transport from a clean
+recorded commit, streams and compares tar member bytes, and validates telemetry
+against both official per-question metadata and config/manifest facts. Focused
+evidence/provenance coverage is 42/42 and repository verification is 56/56;
+no full two-domain bundle exists and no official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)

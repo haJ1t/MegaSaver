@@ -39,6 +39,37 @@ function exactTree(left, right, label) {
       fail(`${label} bytes differ: ${name}`);
   return leftFiles;
 }
+function sameBytes(left, right) {
+  return readFileSync(left).equals(readFileSync(right));
+}
+function git(root, args) {
+  return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+}
+
+export function verifyMegaSaverProvenance(input) {
+  if (git(input.repoRoot, ["rev-parse", "HEAD"]) !== input.commit) {
+    fail("Mega Saver commit binding differs.");
+  }
+  if (git(input.repoRoot, ["status", "--porcelain"]) !== "") {
+    fail("Mega Saver checkout must be clean at the recorded commit.");
+  }
+  const adapter = join(input.repoRoot, "benchmarks/longmemeval-v2/megasaver_lm2_hybrid.py");
+  const transport = join(input.repoRoot, "packages/long-memory/dist/lm2-benchmark.js");
+  if (!sameBytes(adapter, input.recordedAdapter)) fail("Recorded adapter differs from the commit.");
+  if (!sameBytes(transport, input.recordedTransport))
+    fail("Recorded transport differs from the commit.");
+  if (input.rebuild !== false) {
+    execFileSync("pnpm", ["--filter", "@megasaver/long-memory", "build"], {
+      cwd: input.repoRoot,
+      stdio: "pipe",
+    });
+    if (git(input.repoRoot, ["status", "--porcelain"]) !== "") {
+      fail("Mega Saver build changed the recorded clean checkout.");
+    }
+    if (!sameBytes(adapter, input.recordedAdapter)) fail("Fresh adapter bytes differ.");
+    if (!sameBytes(transport, input.recordedTransport)) fail("Fresh transport bytes differ.");
+  }
+}
 function runTimestampedBuilder(python, officialRoot, moduleName, timestamp, args) {
   const code = `import sys; import ${moduleName} as m; m.utc_now_iso=lambda:sys.argv[1]; sys.argv=[m.__file__,*sys.argv[2:]]; m.main()`;
   execFileSync(python, ["-c", code, timestamp, ...args], { cwd: officialRoot, stdio: "pipe" });
@@ -80,6 +111,35 @@ function verifyManifestBuilds(temp, options) {
       config.memory_params.manifest_digest !== built.manifestDigest
     )
       fail(`Rebuilt official manifest digest differs: ${run.domain}`);
+  }
+}
+function verifyReleasedRunInputs(temp, options) {
+  const trajectories = join(options.dataRoot, "trajectories.jsonl");
+  const code = [
+    "import json,sys",
+    "from pathlib import Path",
+    "from data.public_data import materialize_runtime_questions,materialize_runtime_haystack",
+    "root=Path(sys.argv[1]);domain=sys.argv[2];tier=sys.argv[3]",
+    "questions=materialize_runtime_questions(data_root=root,domain=domain,question_ids=None,limit=None,output_path=Path(sys.argv[4]))",
+    "materialize_runtime_haystack(data_root=root,tier=tier,selected_questions=questions,output_path=Path(sys.argv[5]))",
+  ].join(";");
+  for (const run of options.inspected.runs) {
+    const questionsPath = resolve(options.inspected.root, run.runtimeInputs.questions.path);
+    const haystackPath = resolve(options.inspected.root, run.runtimeInputs.haystack.path);
+    const trajectoryPath = resolve(options.inspected.root, run.runtimeInputs.trajectories.path);
+    const freshQuestions = join(temp, `${run.domain}-questions.json`);
+    const freshHaystack = join(temp, `${run.domain}-haystack.json`);
+    execFileSync(
+      options.python,
+      ["-c", code, options.dataRoot, run.domain, run.tier, freshQuestions, freshHaystack],
+      { cwd: options.officialRoot, stdio: "pipe" },
+    );
+    if (!sameBytes(freshQuestions, questionsPath) || !sameBytes(freshHaystack, haystackPath)) {
+      fail(`Recorded runtime inputs differ from released official data: ${run.domain}`);
+    }
+    if (!sameBytes(trajectories, trajectoryPath)) {
+      fail(`Recorded trajectories differ from released official bytes: ${run.domain}`);
+    }
   }
 }
 function verifyBuilders(temp, options) {
@@ -180,15 +240,21 @@ function verifyBuilders(temp, options) {
 }
 
 export function verifyFreshOfficialArtifacts(options) {
-  if (
-    execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: options.repoRoot,
-      encoding: "utf8",
-    }).trim() !== options.inspected.evidence.implementation.megaSaverCommit
-  )
-    fail("Mega Saver commit binding differs.");
+  verifyMegaSaverProvenance({
+    repoRoot: options.repoRoot,
+    commit: options.inspected.evidence.implementation.megaSaverCommit,
+    recordedAdapter: resolve(
+      options.inspected.root,
+      options.inspected.evidence.implementation.adapter.path,
+    ),
+    recordedTransport: resolve(
+      options.inspected.root,
+      options.inspected.evidence.implementation.transport.path,
+    ),
+  });
   const temp = realpathSync(mkdtempSync(join(tmpdir(), "megasaver-lm2-fresh-")));
   try {
+    verifyReleasedRunInputs(temp, options);
     verifyManifestBuilds(temp, options);
     return verifyBuilders(temp, options);
   } finally {

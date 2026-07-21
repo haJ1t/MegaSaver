@@ -58,6 +58,7 @@ function runArtifacts(
     answer: "paid",
     eval_function: "private",
   };
+  const { image: _image, ...runtimeQuestion } = question;
   const manifest = buildBenchmarkManifest({
     domain,
     tier: "small",
@@ -101,12 +102,21 @@ function runArtifacts(
     `${base}/runtime_inputs/memory_config.json`,
     memoryConfigValue,
   );
+  const questions = artifact(root, `${base}/runtime_inputs/questions.json`, [runtimeQuestion]);
+  const haystack = artifact(root, `${base}/runtime_inputs/haystack.json`, {
+    [questionId]: [trajectory.id],
+  });
+  const trajectories = artifact(root, `${base}/runtime_inputs/trajectories.jsonl`, trajectory);
   const runArgsValue = {
-    method: "megasaver_lm2_hybrid",
     domain,
-    tier: "small",
+    questions_path: join(root, questions.path),
+    haystack_path: join(root, haystack.path),
+    trajectories_path: join(root, trajectories.path),
+    memory_config_path: join(root, memoryConfig.path),
+    output_dir: join(root, base),
     model: "Qwen/Qwen3.5-9B",
     evaluator_model: "gpt-5.2",
+    started_at_utc: "2026-07-20T00:00:00+00:00",
   };
   const timing = {
     avg_seconds: 0.0125,
@@ -130,7 +140,7 @@ function runArtifacts(
   const telemetryValue = {
     profile: "adaptive",
     semanticStatus: "used",
-    modelFingerprint: "a".repeat(64),
+    modelFingerprint: canonicalSha256(memoryConfigValue.memory_params.model),
     candidateCount: 1,
     selectionCount: 1,
     latencyMs: 10,
@@ -139,10 +149,6 @@ function runArtifacts(
     imagePresent: false,
     imageUsed: false,
   };
-  const questions = artifact(root, `${base}/runtime_inputs/questions.json`, [question]);
-  const haystack = artifact(root, `${base}/runtime_inputs/haystack.json`, {
-    [questionId]: [trajectory.id],
-  });
   return {
     domain,
     tier: "small",
@@ -152,16 +158,20 @@ function runArtifacts(
       "evaluation.harness",
       "--domain",
       domain,
-      "--tier",
-      "small",
       "--questions-path",
       join(root, questions.path),
       "--haystack-path",
       join(root, haystack.path),
+      "--trajectories-path",
+      join(root, trajectories.path),
       "--memory-config-path",
       join(root, memoryConfig.path),
       "--output-dir",
       join(root, base),
+      "--model",
+      "Qwen/Qwen3.5-9B",
+      "--evaluator-model",
+      "gpt-5.2",
     ],
     outputDirectory: base,
     runArgs: artifact(root, `${base}/run_args.json`, runArgsValue),
@@ -170,12 +180,16 @@ function runArtifacts(
       ...artifact(root, `${base}/per_question.jsonl`, {
         question_id: questionId,
         question_type: "static",
+        question_image: null,
+        answer_gold: "paid",
+        memory_context: [{ type: "text", value: `${domain} billing status is paid` }],
         memory_query_duration_seconds: 0.0125,
+        memory_post_query_metadata: telemetryValue,
         score: 0.5,
       }),
       rowCount: 1,
     },
-    runtimeInputs: { questions, haystack, memoryConfig, manifest: manifestArtifact },
+    runtimeInputs: { questions, haystack, trajectories, memoryConfig, manifest: manifestArtifact },
     telemetry: {
       ...artifact(root, `${base}/telemetry/queries.jsonl`, telemetryValue),
       rowCount: 1,
@@ -197,6 +211,7 @@ function packageRunArtifacts(
       run.perQuestion,
       run.runtimeInputs.questions,
       run.runtimeInputs.haystack,
+      run.runtimeInputs.trajectories,
       run.runtimeInputs.memoryConfig,
       run.runtimeInputs.manifest,
     ]) {
@@ -222,8 +237,6 @@ export function createEvidenceFixture() {
   ];
   const timing = {
     avg_seconds: 0.0125,
-    p50_seconds: 0.0125,
-    p95_seconds: 0.0125,
     max_seconds: 0.0125,
     total_seconds: 0.025,
   };
