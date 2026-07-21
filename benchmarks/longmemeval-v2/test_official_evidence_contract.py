@@ -35,6 +35,14 @@ class OfficialEvidenceContractTest(unittest.TestCase):
             fixture["right"]["count"],
         )
         self.assertEqual(actual, fixture["expected"])
+        floating = fixture["floatingOrder"]
+        floating_actual = module.combine_timing(
+            floating["left"]["summary"],
+            floating["right"]["summary"],
+            floating["left"]["count"],
+            floating["right"]["count"],
+        )
+        self.assertEqual(floating_actual, floating["expected"])
 
 
 if __name__ == "__main__":
