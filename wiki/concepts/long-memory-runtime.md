@@ -186,7 +186,10 @@ JavaScript's safe range use exact `BigInt` comparison, preserving Python's
 unbounded signed-decimal semantics without rounded equality. The raw JSON
 reviver lexeme is mandatory for every official integer field: exponent and
 decimal-point spellings such as `2e4` and `20000.0` fail at the artifact
-boundary instead of collapsing to the same JavaScript `Number`. Per-question
+boundary instead of collapsing to the same JavaScript `Number`. A structural
+pre-parse scan rejects duplicate decoded keys in every JSON object, including
+escaped-equivalent names, before last-key-wins parsing can erase ambiguous
+evidence; strings remain opaque values during that scan. Per-question
 evaluator spec, category, and question text are bound to released input, and
 every official judge argument is bound to the recorded judge configuration.
 Recorded tar directories and files
@@ -197,6 +200,7 @@ and the fresh-versus-recorded tar digest are all compared.
 `benchmarks/longmemeval-v2/official-evidence-archive.mjs`,
 `benchmarks/longmemeval-v2/official-evidence-freshness.mjs`,
 `benchmarks/longmemeval-v2/official-evidence-harness-arguments.mjs`,
+`benchmarks/longmemeval-v2/official-evidence-json.mjs`,
 `benchmarks/longmemeval-v2/official-evidence-run-bindings.mjs`)
 
 Local closure evidence and final gate counts are recorded in the Task 6 report.
