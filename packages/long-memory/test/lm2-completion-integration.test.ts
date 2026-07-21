@@ -159,6 +159,24 @@ describe("LM2 official-score evidence gate", () => {
     expect(result.stderr).toContain("run_args.json differs");
   });
 
+  it.each([
+    ["max_completion_tokens", "2e4"],
+    ["max_completion_tokens", "20000.0"],
+    ["reader_max_concurrent_requests", "5e2"],
+  ])("rejects noncanonical raw JSON integer %s=%s", (key, rawValue) => {
+    const fixture = createEvidenceFixture();
+    replaceRunArgsInteger({ root: fixture.root, value: fixture.evidence }, key, rawValue);
+    writeEvidence(fixture);
+
+    const result = spawnSync(
+      process.execPath,
+      [verifier, "--inspect", "--evidence", fixture.evidencePath],
+      { encoding: "utf8" },
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Official run_args integer is not canonical");
+  });
+
   it("rejects local percentiles added to the official combined timing", () => {
     const fixture = createEvidenceFixture();
     const ref = fixture.evidence.combined.metrics;

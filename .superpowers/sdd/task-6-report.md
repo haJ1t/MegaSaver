@@ -1,6 +1,6 @@
 # Task 6 report — official evidence and architecture closure
 
-Status: P1 evidence corrections implemented; official score not run; fresh independent review pending.
+Status: P1 raw numeric-lexeme correction implemented; official score not run; fresh independent review pending.
 
 ## Architecture correction
 
@@ -39,6 +39,10 @@ Status: P1 evidence corrections implemented; official score not run; fresh indep
   signed decimal values beyond `Number.MAX_SAFE_INTEGER` remain exact: the raw
   `run_args.json` numeric token and executed argument are represented as
   `BigInt` for equality, while safe values remain numbers. Full mode freshly
+  rejects exponent and decimal-point spellings in every integer-valued
+  `run_args.json` field before JavaScript can normalize them to an equal
+  `Number`. Adversarial full-verifier cases cover `2e4`, `20000.0`, and an
+  equivalent spelling on a second official integer flag. Full mode freshly
   materializes the complete
   released questions and haystack for both domains, byte-compares them, and
   requires the recorded trajectories to equal the released file.
@@ -73,7 +77,9 @@ Status: P1 evidence corrections implemented; official score not run; fresh indep
   unrelated path was removed. Later generated verification caches were also
   moved recoverably to `/tmp/megasaver-task6-final-python-cache.TkJ4Np` and
   `/tmp/megasaver-task6-parity-cache.zVPqcS`; the final large-integer suite cache
-  was moved to `/tmp/megasaver-task6-bigint-python-cache.xAeqEn`. No benchmark
+  was moved to `/tmp/megasaver-task6-bigint-python-cache.xAeqEn`. The raw-lexeme
+  verification cache was moved recoverably to
+  `/private/tmp/megasaver-task6-canonical-int-pycache.XeYb2p`. No benchmark
   cache remains.
 - Inspect and preflight modes remain structurally ineligible. No real completed
   web plus enterprise artifact bundle is available, so this work records no
@@ -81,13 +87,16 @@ Status: P1 evidence corrections implemented; official score not run; fresh indep
 
 ## Verification evidence
 
-- Focused evidence, provenance, and source-size regressions: 61/61 passed.
+- Focused evidence, provenance, and source-size regressions: 64/64 passed.
 - Pinned official integer-argument and `combine_timing` fixtures against commit
   `6f020ac2fc3275e46c706d3406e02c3ed79b7be2`: 2/2 passed.
 - `@megasaver/long-memory`: build passed; typecheck reported zero errors; 43/43
-  files and 400/400 tests passed.
+  files and 403/403 tests passed.
 - Pinned official-base Python suite with the real built transport: 29/29 passed;
-  `compileall` also passed.
+  `compileall` also passed under Python 3.11. The first environment-default
+  invocation resolved to Apple Python 3.9 and stopped at the pinned source's
+  Python 3.10 union syntax before the suite; no product change was made for that
+  interpreter mismatch.
 - Pinned official checkout preflight passed and returned
   `officialScoreEligible: false`.
 - Repository `pnpm verify`: 56/56 Turbo tasks successful, including lint,
