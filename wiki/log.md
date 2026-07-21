@@ -4064,3 +4064,17 @@ against both official per-question metadata and config/manifest facts. Focused
 evidence/provenance coverage is 42/42 and repository verification is 56/56;
 no full two-domain bundle exists and no official score is claimed. (source:
 `.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 12:13 +03] fix | LM2 harness and timing authenticity closure
+
+Final evidence re-review found that selected-flag checks admitted a nonofficial
+runner or extra arguments, flattened raw latency samples changed the pinned
+combiner's floating-point order, and two copied telemetry rows could inflate
+their internal latency beyond the harness wall measurement. The gate now
+requires the exact Python module entrypoint and complete pinned argparse
+semantics, reconstructs combined timing from ordered domain summaries/counts,
+and bounds every telemetry millisecond duration by its official per-question
+seconds. Focused evidence/provenance/source coverage is 47/47. The isolated
+reviewer Python cache was moved recoverably to a unique `/tmp` directory; no
+unrelated file was removed. No official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)
