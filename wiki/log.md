@@ -6069,3 +6069,15 @@ an escaped-quote/key-like string regression prevents structural false
 positives. Focused coverage is 71/71, long-memory is 410/410, and pinned Python
 3.11 is 29/29. No official score is claimed. (source:
 `.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 13:47 +03] verify | LM2 Task 6 independent evidence approval
+
+A fresh independent adversarial review of commit
+`2e03773604f795e0d8397e59c57c22c8b1fac697` approved the final raw
+`run_args.json` boundary with no P1/P2 finding. Its probes covered direct,
+nested, array-contained, Unicode-escaped, and surrogate-pair duplicate decoded
+keys, malformed JSON/escapes, plus key-like text within strings; every
+ambiguous document failed closed. Task 6 is complete as an evidence-gated
+implementation. The verifier remains intentionally score-ineligible without a
+real authoritative completed web-plus-enterprise bundle, and this work makes
+no LongMemEval-V2 score claim. (source: `.superpowers/sdd/task-6-report.md`)
