@@ -6033,3 +6033,15 @@ members before tar inventory filtering, and compares fresh versus recorded tar
 digests. Focused evidence/provenance/source coverage is 60/60; long-memory is
 399/399 and pinned Python coverage is 29/29. No official score is claimed.
 (source: `.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 13:02 +03] fix | LM2 unbounded integer evidence parity
+
+Fresh review approved Task 6 without P1 findings and identified one P2 parser
+exactness gap: pinned Python `argparse(type=int)` accepts signed decimals beyond
+JavaScript's safe integer range. The verifier now reads the raw `run_args.json`
+numeric token and compares large values as `BigInt`, while retaining `Number`
+for safe integers. A pinned huge-negative fixture proves Python acceptance,
+authentic evidence acceptance, and exact rejection of an adjacent mismatched
+integer without precision loss. Focused coverage is 61/61; long-memory is
+400/400 and pinned Python remains 29/29. No official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)

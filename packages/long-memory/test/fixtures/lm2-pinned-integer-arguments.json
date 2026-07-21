@@ -5,6 +5,11 @@
     { "value": "1000", "pythonArgparseAccepts": true, "evidenceAccepts": true },
     { "value": "+1000", "pythonArgparseAccepts": true, "evidenceAccepts": true },
     { "value": "-1000", "pythonArgparseAccepts": true, "evidenceAccepts": true },
+    {
+      "value": "-900719925474099312345678901234567890",
+      "pythonArgparseAccepts": true,
+      "evidenceAccepts": true
+    },
     { "value": "-0", "pythonArgparseAccepts": true, "evidenceAccepts": true },
     { "value": "001000", "pythonArgparseAccepts": true, "evidenceAccepts": true },
     { "value": "1e3", "pythonArgparseAccepts": false, "evidenceAccepts": false },
