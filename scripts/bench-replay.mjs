@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 // Thin CLI over @megasaver/bench-replay. Every number reported here is decided by
 // that package (and covered by its tests); this file only moves bytes, spawns
 // processes, and formats. Nothing that could drift a measurement lives in here.
@@ -21,7 +21,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
 import {
@@ -43,6 +43,37 @@ import { normalizedCostUsd } from "../packages/stats/dist/index.js";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+
+// The capture proxy runs IN THIS PROCESS, so the recorded agent must be spawned
+// asynchronously: a synchronous spawnSync blocks the event loop, the proxy can
+// never read the request bodies claude sends it, and claude and the runner
+// deadlock waiting on each other. stdin is closed immediately — the prompt
+// arrives via -p and claude otherwise waits on an open stdin.
+export function runAgent(bin, args, opts) {
+  return new Promise((resolve) => {
+    const child = spawn(bin, args, { cwd: opts.cwd, env: opts.env });
+    const out = [];
+    const err = [];
+    let outLen = 0;
+    let overflow = false;
+    child.stdout.on("data", (c) => {
+      outLen += c.length;
+      if (outLen > MAX_BUFFER_BYTES) overflow = true;
+      else out.push(c);
+    });
+    child.stderr.on("data", (c) => err.push(c));
+    child.on("error", (error) => resolve({ error, status: null, stdout: "", stderr: "" }));
+    child.on("close", (status) =>
+      resolve({
+        error: overflow ? new Error("stdout exceeded MAX_BUFFER_BYTES") : null,
+        status,
+        stdout: Buffer.concat(out).toString("utf8"),
+        stderr: Buffer.concat(err).toString("utf8"),
+      }),
+    );
+    child.stdin.end();
+  });
+}
 
 function fail(message) {
   console.error(`bench-replay: ${message}`);
@@ -226,11 +257,9 @@ async function record(values) {
         baseEnv: process.env,
       });
       console.log(`=== recording ${task} via ${proxy.url} ===`);
-      result = spawnSync(command.bin, [...command.args], {
+      result = await runAgent(command.bin, [...command.args], {
         cwd: repoDir,
         env: command.env,
-        encoding: "utf8",
-        maxBuffer: MAX_BUFFER_BYTES,
       });
     } finally {
       await proxy.stop();
@@ -562,7 +591,11 @@ const { values, positionals } = parseArgs({
   },
 });
 
-const command = positionals[0];
-if (command === "record") await record(values);
-else if (command === "replay") await replay(values);
-else fail(`unknown command ${JSON.stringify(command ?? "")} — expected "record" or "replay"`);
+// Guard the CLI dispatch so a test can import runAgent without executing the
+// whole command line.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  const command = positionals[0];
+  if (command === "record") await record(values);
+  else if (command === "replay") await replay(values);
+  else fail(`unknown command ${JSON.stringify(command ?? "")} — expected "record" or "replay"`);
+}
