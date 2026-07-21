@@ -25,5 +25,30 @@
     "avg_seconds": 0.02,
     "max_seconds": 0.04,
     "total_seconds": 0.08
+  },
+  "floatingOrder": {
+    "left": {
+      "samples": [1, 1e-16],
+      "summary": {
+        "avg_seconds": 0.5,
+        "max_seconds": 1,
+        "total_seconds": 1
+      },
+      "count": 2
+    },
+    "right": {
+      "samples": [1e-16, 1e-16],
+      "summary": {
+        "avg_seconds": 1e-16,
+        "max_seconds": 1e-16,
+        "total_seconds": 2e-16
+      },
+      "count": 2
+    },
+    "expected": {
+      "avg_seconds": 0.25000000000000006,
+      "max_seconds": 1,
+      "total_seconds": 1.0000000000000002
+    }
   }
 }

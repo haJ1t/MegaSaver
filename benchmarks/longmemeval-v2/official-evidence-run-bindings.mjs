@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { verifyHarnessArguments } from "./official-evidence-harness-arguments.mjs";
 
 function fail(message) {
   throw new Error(message);
@@ -72,6 +73,10 @@ function validateTelemetry(input, questionById, manifestQuestionById, projection
       fail("Telemetry candidate counts differ from the manifest chain.");
     }
     finiteNonnegative(row.latencyMs, "telemetry latencyMs");
+    finiteNonnegative(output.memory_query_duration_seconds, "memory_query_duration_seconds");
+    if (row.latencyMs > output.memory_query_duration_seconds * 1000) {
+      fail("Telemetry latency exceeds the official harness wall duration.");
+    }
     const privateTexts = [
       typeof question.question === "string" ? question.question : question.question?.text,
       question.answer,
@@ -95,16 +100,20 @@ function validateTelemetry(input, questionById, manifestQuestionById, projection
   }
 }
 
-export function officialCombinedTiming(samples) {
-  const total = samples.reduce((sum, value) => sum + value, 0);
+export function officialCombinedTiming(domains) {
+  const totalCount = domains.reduce((sum, domain) => sum + domain.count, 0);
+  const total = domains
+    .map((domain) => domain.summary.total_seconds ?? domain.summary.avg_seconds * domain.count)
+    .reduce((sum, value) => sum + value, 0);
   return {
-    avg_seconds: total / samples.length,
-    max_seconds: Math.max(...samples),
+    avg_seconds: total / totalCount,
+    max_seconds: Math.max(...domains.map((domain) => domain.summary.max_seconds)),
     total_seconds: total,
   };
 }
 
 export function verifyRunBindings(input) {
+  verifyHarnessArguments(input.command, input.arguments, input.runArgs);
   const expectedPaths = {
     "--questions-path": input.paths.questions,
     "--haystack-path": input.paths.haystack,

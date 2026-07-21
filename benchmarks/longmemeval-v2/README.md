@@ -139,13 +139,20 @@ Schema, reruns the official data validator and aggregate/combined-metric code,
 and requires the pinned combiner's exact three-field combined timing contract.
 It freshly materializes every released question and haystack row for both
 domains, byte-compares the released trajectory file, and binds those paths plus
-reader/judge models in both the executed command and `run_args.json`. It also
-rebuilds both manifests, requires a clean Mega Saver checkout at the recorded
+reader/judge models in both the executed command and `run_args.json`. The run
+must invoke exactly `python -m evaluation.harness`; only pinned harness flags
+are accepted, and their official types, choices, defaults, and complete parsed
+`run_args.json` must agree. Combined timing is reconstructed from web then
+enterprise domain totals/counts/maxima, preserving the pinned floating-point
+operation order. It also rebuilds both manifests, requires a clean Mega Saver
+checkout at the recorded
 commit, rebuilds and byte-compares the adapter and transport, maps telemetry
 exactly to official per-question metadata, and validates its public fields
-against the config and manifest. Finally, it deterministically reruns both
-official leaderboard builders and byte-compares the recorded package, streamed
-tar members, fresh package, overview/LAFS, and fresh tar contents:
+against the config and manifest. Telemetry milliseconds cannot exceed the
+corresponding official harness query-wall seconds. Finally, it deterministically
+reruns both official leaderboard builders and byte-compares the recorded
+package, streamed tar members, fresh package, overview/LAFS, and fresh tar
+contents:
 
 ```bash
 pnpm --filter @megasaver/long-memory build
