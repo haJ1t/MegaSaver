@@ -276,10 +276,11 @@
         "runtimeInputs": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["questions", "haystack", "memoryConfig", "manifest"],
+          "required": ["questions", "haystack", "trajectories", "memoryConfig", "manifest"],
           "properties": {
             "questions": { "$ref": "#/$defs/artifact" },
             "haystack": { "$ref": "#/$defs/artifact" },
+            "trajectories": { "$ref": "#/$defs/artifact" },
             "memoryConfig": { "$ref": "#/$defs/artifact" },
             "manifest": { "$ref": "#/$defs/artifact" }
           }
@@ -365,7 +366,7 @@
         "packageDirectory": { "$ref": "#/$defs/safeRelativePath" },
         "packageFiles": {
           "type": "array",
-          "minItems": 19,
+          "minItems": 21,
           "items": { "$ref": "#/$defs/artifact" }
         },
         "submissionOverview": { "$ref": "#/$defs/artifact" },

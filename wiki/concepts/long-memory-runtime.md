@@ -166,22 +166,25 @@ LM2 completion now executes its strict evidence JSON Schema rather than using
 it as documentation only. Inspection and pinned-checkout preflight remain
 ineligible. Full verification alone can report `officialScoreEligible: true`,
 after binding each run to a rebuilt canonical domain manifest, exact transport
-command/executable digest, and Mega Saver commit; recomputing official domain
-and combined metrics plus all five latency aggregates; cross-binding telemetry
-IDs/latencies to harness rows; and deterministically rerunning both pinned
-leaderboard builders. The fresh package, overview/LAFS reference frontier, and
-extracted tar contents must be byte-identical to the recorded artifacts.
+command/executable digest, and a clean Mega Saver checkout at its recorded
+commit. It freshly rebuilds adapter/transport bytes, materializes the full
+released questions and haystack for each domain, matches the exact released
+trajectory bytes, and binds all input paths plus reader/judge models through
+the command and `run_args.json`. Official combined query timing has exactly
+`avg_seconds`, `max_seconds`, and `total_seconds`; local percentiles cannot enter
+that object. Telemetry is byte-equivalent to the official per-question metadata
+and its profile/status/fingerprint/type/image/count fields are independently
+checked against configuration and manifest identity. Recorded tar members and
+fresh builder outputs are compared by bytes, not only inventory.
 (source: `benchmarks/longmemeval-v2/evidence-schema.json`,
 `benchmarks/longmemeval-v2/verify-official-artifacts.mjs`,
-`benchmarks/longmemeval-v2/official-evidence-freshness.mjs`)
+`benchmarks/longmemeval-v2/official-evidence-freshness.mjs`,
+`benchmarks/longmemeval-v2/official-evidence-run-bindings.mjs`)
 
-Local closure evidence is green: evidence regressions passed 20/20, the long-
-memory package passed 42/42 files and 361/361 tests with zero type errors, the
-pinned official-base Python suite passed 26 tests with one optional transport
-test skipped, and repository `pnpm verify` completed 56/56 Turbo tasks. No
-authoritative completed web plus enterprise harness/judge bundle was available,
-so full qualification was not run and no official score, dashboard, latency,
-or LAFS claim exists. (source: `.superpowers/sdd/task-6-report.md`)
+Local closure evidence and final gate counts are recorded in the Task 6 report.
+No authoritative completed web plus enterprise harness/judge bundle was
+available, so full qualification was not run and no official score, dashboard,
+latency, or LAFS claim exists. (source: `.superpowers/sdd/task-6-report.md`)
 
 The verifier fails closed on every detected malformed, stale, symlinked, or
 identity-mismatched artifact. It does not supply a native anti-tamper anchor:
