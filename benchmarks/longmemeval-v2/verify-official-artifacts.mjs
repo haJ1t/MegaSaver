@@ -5,8 +5,10 @@ import { createReadStream, lstatSync, readFileSync, readdirSync, realpathSync } 
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { validateEvidenceSchema } from "./evidence-schema-validator.mjs";
+import { verifyRecordedArchive } from "./official-evidence-archive.mjs";
 import { verifyFreshOfficialArtifacts } from "./official-evidence-freshness.mjs";
 import { PIN } from "./official-evidence-pins.mjs";
+import { officialCombinedTiming, verifyRunBindings } from "./official-evidence-run-bindings.mjs";
 // biome-ignore format: The standalone gate is one responsibility and must stay below the repository's 300-line source limit.
 {
 const IMPORT_LINE =
@@ -108,11 +110,6 @@ function walkFiles(root, current = root) {
   }
   return files.sort();
 }
-function verifyTar(packageRoot, archive, files) {
-  const members = execFileSync("tar", ["-tzf", archive], { encoding: "utf8" }).split("\n").filter((name) => name && !name.endsWith("/")).sort();
-  const expected = files.map((path) => `${basename(packageRoot)}/${path}`).sort();
-  if (JSON.stringify(members) !== JSON.stringify(expected)) fail("Tarball contents differ from the package inventory.");
-}
 function verifyPackage(root, leaderboard, tier, dashboard) {
   const packageRoot = resolveInside(root, leaderboard.packageDirectory, true);
   if (!Array.isArray(leaderboard.packageFiles) || leaderboard.packageFiles.length < 19) fail("Package inventory is incomplete.");
@@ -130,7 +127,7 @@ function verifyPackage(root, leaderboard, tier, dashboard) {
     `${op}/metric_overview.json`,
     `${op}/operating_point_metadata.json`,
     ...["web", "enterprise"].flatMap((domain) =>
-      ["aggregated_metrics.json", "per_question.jsonl", "run_args.json", "runtime_inputs/questions.json", "runtime_inputs/haystack.json", "runtime_inputs/memory_config.json", "runtime_inputs/megasaver-lm2-manifest-v1.json"].map((name) => `${op}/${domain}/${name}`),
+      ["aggregated_metrics.json", "per_question.jsonl", "run_args.json", "runtime_inputs/questions.json", "runtime_inputs/haystack.json", "runtime_inputs/trajectories.jsonl", "runtime_inputs/memory_config.json", "runtime_inputs/megasaver-lm2-manifest-v1.json"].map((name) => `${op}/${domain}/${name}`),
     ),
   ];
   if (required.some((name) => !expected.includes(join(leaderboard.packageDirectory, name)))) fail("Package required files are incomplete.");
@@ -141,7 +138,7 @@ function verifyPackage(root, leaderboard, tier, dashboard) {
   const point = overview.operating_points?.find?.((entry) => entry?.name === leaderboard.operatingPointName);
   if (point?.overall_full_set !== dashboard.overallFullSet) fail("Submission overview score differs from dashboard evidence.");
   const tarball = verifyArtifact(root, leaderboard.tarball);
-  verifyTar(packageRoot, tarball, packageFiles);
+  verifyRecordedArchive(packageRoot, tarball, packageFiles);
 }
 function verifyEvidence(evidencePath) {
   const canonicalEvidence = realpathSync(evidencePath);
@@ -176,11 +173,11 @@ function verifyEvidence(evidencePath) {
     const run = exact(runValue, ["domain", "tier", "command", "arguments", "outputDirectory", "runArgs", "aggregatedMetrics", "perQuestion", "runtimeInputs", "telemetry", "rawLatencySamplesSeconds", "failures"], "run");
     if (!["web", "enterprise"].includes(run.domain) || domains.has(run.domain) || !["small", "medium"].includes(run.tier) || (tier && tier !== run.tier)) fail("Run domain/tier pairing differs.");
     domains.add(run.domain); tier = run.tier;
-    if (typeof run.command !== "string" || !run.command || !Array.isArray(run.arguments) || run.arguments.length < 1 || !run.arguments.includes(run.domain) || !run.arguments.includes(run.tier) || !Array.isArray(run.failures)) fail("Complete run arguments/failures are missing.");
-    resolveInside(root, run.outputDirectory, true);
+    if (typeof run.command !== "string" || !run.command || !Array.isArray(run.arguments) || run.arguments.length < 1 || !run.arguments.includes(run.domain) || !Array.isArray(run.failures)) fail("Complete run arguments/failures are missing.");
+    const outputDirectory = resolveInside(root, run.outputDirectory, true);
     const runArgs = record(json(verifyArtifact(root, run.runArgs)), "run_args");
-    if (runArgs.domain !== run.domain || runArgs.tier !== run.tier || typeof runArgs.method !== "string" || !String(runArgs.model).toLowerCase().includes("qwen3.5-9b") || !String(runArgs.evaluator_model).toLowerCase().includes("gpt-5.2") || configuration.reader.model !== runArgs.model || configuration.judge.model !== runArgs.evaluator_model) fail("Run arguments do not match official inputs.");
-    const runtimeInputs = exact(run.runtimeInputs, ["questions", "haystack", "memoryConfig", "manifest"], "runtimeInputs"); const memoryConfig = record(json(verifyArtifact(root, runtimeInputs.memoryConfig)), "memory config"); const memoryParams = record(memoryConfig.memory_params, "memory params");
+    if (!String(runArgs.model).toLowerCase().includes("qwen3.5-9b") || !String(runArgs.evaluator_model).toLowerCase().includes("gpt-5.2")) fail("Run arguments do not match official models.");
+    const runtimeInputs = exact(run.runtimeInputs, ["questions", "haystack", "trajectories", "memoryConfig", "manifest"], "runtimeInputs"); const memoryConfigPath = verifyArtifact(root, runtimeInputs.memoryConfig); const memoryConfig = record(json(memoryConfigPath), "memory config"); const memoryParams = record(memoryConfig.memory_params, "memory params");
     const manifestPath = verifyArtifact(root, runtimeInputs.manifest); const manifestBytes = readFileSync(manifestPath); const manifest = record(JSON.parse(manifestBytes), "manifest");
     const command = [implementation.transportExecutable.path, transportPath];
     if (memoryConfig.memory_type !== "megasaver_lm2_hybrid") fail("Runtime memory type differs.");
@@ -190,14 +187,14 @@ function verifyEvidence(evidencePath) {
     if (JSON.stringify(memoryParams.transport_command) !== JSON.stringify(command)) fail("Runtime transport binding differs.");
     if (memoryParams.profile !== "adaptive" || memoryParams.embedding_egress !== "local" || JSON.stringify(memoryParams.model) !== JSON.stringify({ provider: configuration.embedding.provider, modelId: configuration.embedding.model, ...configuration.embedding.parameters })) fail("Embedding configuration differs from runtime input.");
     if (manifest.schemaVersion !== "megasaver-lm2-manifest-v1" || manifest.officialCommit !== PIN.commit || manifest.domain !== run.domain || manifest.tier !== run.tier || manifest.data?.revision !== PIN.revision || !isDeepStrictEqual(manifest.data?.checksums, checksums)) fail("Manifest identity differs.");
-    const runMetrics = record(json(verifyArtifact(root, run.aggregatedMetrics)), "run metrics"); const questions = verifyArtifact(root, runtimeInputs.questions); verifyArtifact(root, runtimeInputs.haystack);
-    const perQuestion = jsonl(verifyArtifact(root, run.perQuestion, true)); const questionRows = json(questions);
+    const runMetrics = record(json(verifyArtifact(root, run.aggregatedMetrics)), "run metrics"); const questionsPath = verifyArtifact(root, runtimeInputs.questions); const haystackPath = verifyArtifact(root, runtimeInputs.haystack); const trajectoriesPath = verifyArtifact(root, runtimeInputs.trajectories);
+    const perQuestion = jsonl(verifyArtifact(root, run.perQuestion, true)); const questionRows = json(questionsPath);
     if (perQuestion.length !== run.perQuestion.rowCount || questionRows.length !== perQuestion.length) fail("Per-question output coverage differs.");
     const telemetry = jsonl(verifyArtifact(root, run.telemetry, true));
     if (telemetry.length !== run.telemetry.rowCount || telemetry.some((row) => Object.keys(record(row, "telemetry row")).some((key) => !TELEMETRY_KEYS.has(key)) || TELEMETRY_REQUIRED.some((key) => !Object.hasOwn(row, key)))) fail("Public telemetry is invalid.");
     const questionIds = questionRows.map((row) => row.id); const outputIds = perQuestion.map((row) => row.question_id); const telemetryIds = telemetry.map((row) => row.questionId);
     if (new Set(questionIds).size !== questionIds.length || JSON.stringify(outputIds) !== JSON.stringify(questionIds) || JSON.stringify(telemetryIds) !== JSON.stringify(questionIds) || JSON.stringify(manifest.questions?.map((row) => row.questionId)) !== JSON.stringify(questionIds)) fail("Question identity binding differs.");
-    for (let index = 0; index < telemetry.length; index += 1) { numeric(telemetry[index].latencyMs, "telemetry latencyMs"); if (telemetry[index].latencyMs > perQuestion[index].memory_query_duration_seconds * 1000) fail("Telemetry latency exceeds the harness timing."); }
+    verifyRunBindings({ domain: run.domain, arguments: run.arguments, outputDirectory, runArgs, paths: { questions: questionsPath, haystack: haystackPath, trajectories: trajectoriesPath, memoryConfig: memoryConfigPath }, questions: questionRows, haystack: json(haystackPath), trajectories: jsonl(trajectoriesPath), manifest, memoryParams, perQuestion, telemetry, configuration, canonicalSha256: (value) => sha256(Buffer.from(canonical(value))) });
     const samples = perQuestion.map((row) => row.memory_query_duration_seconds); if (!Array.isArray(run.rawLatencySamplesSeconds) || JSON.stringify(samples) !== JSON.stringify(run.rawLatencySamplesSeconds)) fail("Raw latency samples differ from official per-question output.");
     for (const sample of samples) numeric(sample, "memory_query_duration_seconds");
     const sorted = [...samples].sort((a, b) => a - b); const timing = { avg_seconds: samples.reduce((sum, value) => sum + value, 0) / samples.length, p50_seconds: sorted[Math.floor(sorted.length / 2)], p95_seconds: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))], max_seconds: sorted.at(-1), total_seconds: samples.reduce((sum, value) => sum + value, 0) };
@@ -205,7 +202,7 @@ function verifyEvidence(evidencePath) {
     for (const failure of run.failures) { const item = exact(failure, FAILURE_KEYS, "failure"); if (![item.questionId, item.stage, item.code].every((value) => typeof value === "string" && value) || !isDigest(item.messageSha256)) fail("Failure evidence is invalid."); }
   }
   if (domains.size !== 2 || (tier === "small" ? checksums.haystack !== PIN.checksums.small : checksums.haystack !== PIN.checksums.medium) || JSON.stringify(validator.arguments) !== JSON.stringify(["--tier", tier])) fail("Pinned tier evidence differs.");
-  const combined = exact(evidence.combined, ["metrics", "dashboard"], "combined"); const metrics = json(verifyArtifact(root, combined.metrics)); const allSamples = evidence.runs.flatMap((run) => run.rawLatencySamplesSeconds); const sortedSamples = [...allSamples].sort((a, b) => a - b); const combinedTiming = { avg_seconds: allSamples.reduce((sum, value) => sum + value, 0) / allSamples.length, p50_seconds: sortedSamples[Math.floor(sortedSamples.length / 2)], p95_seconds: sortedSamples[Math.min(sortedSamples.length - 1, Math.floor(sortedSamples.length * 0.95))], max_seconds: sortedSamples.at(-1), total_seconds: allSamples.reduce((sum, value) => sum + value, 0) }; if (!isDeepStrictEqual(metrics.memory_query, combinedTiming)) fail("Combined query latency differs from raw samples.");
+  const combined = exact(evidence.combined, ["metrics", "dashboard"], "combined"); const metrics = json(verifyArtifact(root, combined.metrics)); const allSamples = evidence.runs.flatMap((run) => run.rawLatencySamplesSeconds); if (!isDeepStrictEqual(metrics.memory_query, officialCombinedTiming(allSamples))) fail("Combined query latency differs from the official contract.");
   const dashboard = exact(combined.dashboard, ["overallFullSet", "gotchasAccuracy", "staticAccuracy", "dynamicAccuracy", "procedureAccuracy"], "dashboard");
   const expectedDashboard = [metric(metrics, ["overall", "overall_full_set"]), metric(metrics, ["non_abstention_by_category", "gotchas", "pct_correct"]), metric(metrics, ["combined_abstention_by_category", "static", "pct_correct"]), metric(metrics, ["combined_abstention_by_category", "dynamic", "pct_correct"]), metric(metrics, ["combined_abstention_by_category", "procedure", "pct_correct"])];
   if (JSON.stringify(Object.values(dashboard)) !== JSON.stringify(expectedDashboard)) fail("Five dashboard values differ from combined metrics.");
@@ -247,7 +244,12 @@ async function verifyData(officialRoot, dataRoot, inspected, python) {
 function verifyOfficialAggregates(officialRoot, inspected, python) {
   const code = "import json,sys; from evaluation.harness import aggregate_metrics; rows=[json.loads(x) for x in open(sys.argv[1],encoding='utf-8') if x.strip()]; print(json.dumps(aggregate_metrics(rows)))";
   for (const run of inspected.runs) { const computed = JSON.parse(execFileSync(python, ["-c", code, resolveInside(inspected.root, run.perQuestion.path)], { cwd: officialRoot, encoding: "utf8" })); const recorded = json(resolveInside(inspected.root, run.aggregatedMetrics.path)); for (const key of ["overall", "non_abstention_by_category", "abstention_by_category", "combined_abstention_by_category", "abstention_overall"]) if (!isDeepStrictEqual(computed[key], recorded[key])) fail(`Hand-authored aggregate differs: ${run.domain}.${key}`); }
-  const combineCode = "import json,sys; from leaderboard.combine_aggregated_metrics import combine_metrics; print(json.dumps(combine_metrics(json.load(open(sys.argv[1])),json.load(open(sys.argv[2])))))"; const paths = Object.fromEntries(inspected.runs.map((run) => [run.domain, resolveInside(inspected.root, run.aggregatedMetrics.path)])); const combined = JSON.parse(execFileSync(python, ["-c", combineCode, paths.web, paths.enterprise], { cwd: officialRoot, encoding: "utf8" })); const recordedCombined = json(resolveInside(inspected.root, inspected.evidence.combined.metrics.path)); if (!isDeepStrictEqual(combined, recordedCombined)) fail("Official combined metrics differ.");
+  const combineCode = "import json,sys; from pathlib import Path; from leaderboard.combine_aggregated_metrics import combine_metrics; value=combine_metrics(json.load(open(sys.argv[1])),json.load(open(sys.argv[2])),Path(sys.argv[1]),Path(sys.argv[2])); value['combined_at_utc']=sys.argv[3]; print(json.dumps(value))";
+  const paths = Object.fromEntries(inspected.runs.map((run) => [run.domain, resolveInside(inspected.root, run.aggregatedMetrics.path)]));
+  const recordedCombined = json(resolveInside(inspected.root, inspected.evidence.combined.metrics.path));
+  if (!isDeepStrictEqual(recordedCombined.combined_from, [paths.web, paths.enterprise]) || Number.isNaN(Date.parse(recordedCombined.combined_at_utc))) fail("Official combined provenance differs.");
+  const combined = JSON.parse(execFileSync(python, ["-c", combineCode, paths.web, paths.enterprise, recordedCombined.combined_at_utc], { cwd: officialRoot, encoding: "utf8" }));
+  if (!isDeepStrictEqual(combined, recordedCombined)) fail("Official combined metrics differ.");
 }
 function parseArgs(argv) {
   const args = { inspect: false, preflight: false };
@@ -265,6 +267,8 @@ async function main() {
   if (args.inspect) { if (args["official-root"] || args["data-root"]) fail("Inspect mode accepts only evidence."); process.stdout.write(`${JSON.stringify({ valid: true, officialScoreEligible: false })}\n`); return; }
   if (!args["official-root"] || !args["data-root"]) fail("Full verification requires --official-root and --data-root.");
   const officialRoot = verifyOfficialCheckout(args["official-root"], true, inspected); const python = args.python ?? "python3";
+  const pythonExecutable = realpathSync(execFileSync(python, ["-c", "import os,sys; print(os.path.realpath(sys.executable))"], { encoding: "utf8" }).trim());
+  for (const run of inspected.runs) if (realpathSync(run.command) !== pythonExecutable) fail("Recorded harness executable differs from verifier Python.");
   const dataRoot = realpathSync(args["data-root"]); await verifyData(officialRoot, dataRoot, inspected, python); verifyOfficialAggregates(officialRoot, inspected, python); const builderArtifacts = verifyFreshOfficialArtifacts({ officialRoot, dataRoot, repoRoot: resolve(import.meta.dirname, "../.."), inspected, python });
   process.stdout.write(`${JSON.stringify({ valid: true, officialScoreEligible: true, officialCommit: PIN.commit, dataRevision: PIN.revision, tier: inspected.tier, dashboard: inspected.dashboard, builderArtifacts })}\n`);
 }

@@ -1,6 +1,6 @@
 # Task 6 report — official evidence and architecture closure
 
-Status: implementation verified locally; official score not run; fresh independent review pending.
+Status: P1 evidence corrections implemented; official score not run; fresh independent review pending.
 
 ## Architecture correction
 
@@ -22,26 +22,42 @@ Status: implementation verified locally; official score not run; fresh independe
 - Each domain memory configuration binds canonical manifest bytes/digest/path,
   pinned data revision, exact transport command and executable digest, and the
   Mega Saver commit. The Python backend validates that commit field too.
-- Full verification rebuilds web and enterprise manifests from pinned official
-  trajectories, recomputes official per-domain and combined aggregates, derives
-  all five latency aggregates from raw harness rows, and cross-binds telemetry
-  question IDs and internal latency to the corresponding harness rows.
-- Full verification reruns both pinned leaderboard builders with the recorded
-  generation timestamps, then byte-compares the complete fresh package,
-  overview (including LAFS/reference frontier), and extracted tar contents.
+- A fixture loaded from the pinned official checkout proves that
+  `combine_timing` emits exactly `avg_seconds`, `max_seconds`, and
+  `total_seconds`; combined evidence rejects local p50/p95 additions. Full mode
+  calls the pinned four-argument `combine_metrics`, including source paths and
+  timestamp provenance, then compares the complete result.
+- Executed commands and `run_args.json` must resolve the recorded questions,
+  haystack, trajectories, memory config, and output directory, including exact
+  reader/judge models. Full mode freshly materializes the complete released
+  questions and haystack for both domains, byte-compares them, and requires the
+  recorded trajectories to equal the released file.
+- Full verification requires a clean Mega Saver checkout at the recorded commit,
+  checks adapter/transport bytes against that checkout, performs a fresh package
+  build, and compares the rebuilt bytes again.
+- Recorded tar members are regular, traversal-safe, streamed, and byte-equal to
+  the recorded package. Fresh builders and their tar remain byte-compared too.
+- Telemetry must exactly equal official `memory_post_query_metadata`; its
+  profile, status, model fingerprint, question type, image flags, candidate and
+  selection counts, and latency shape are independently checked against the
+  memory config, manifest, question, and returned official context. Raw question
+  and answer text are forbidden.
 - Inspect and preflight modes remain structurally ineligible. No real completed
   web plus enterprise artifact bundle is available, so this work records no
   official score or dashboard claim.
 
 ## Verification evidence
 
-- `pnpm verify`: 56/56 Turbo tasks successful.
-- `@megasaver/long-memory`: 42/42 files, 361/361 tests, zero type errors.
-- Pinned official-base Python suite: 26 tests passed; one optional built-
-  transport test skipped when its environment variable was not configured.
-- Evidence integration: 20/20 tests, including schema, unsafe-name, telemetry
-  identity/latency, transport substitution, missing-field, and unavailable-full-
-  verification failures.
-- Pinned official checkout preflight remains ineligible; full qualification was
-  not attempted because authoritative released data and completed harness/judge
-  artifacts were unavailable.
+- Focused evidence, provenance, and source-size regressions: 42/42 passed.
+- Pinned official `combine_timing` fixture against commit
+  `6f020ac2fc3275e46c706d3406e02c3ed79b7be2`: 1/1 passed.
+- `@megasaver/long-memory`: build passed; typecheck reported zero errors; 43/43
+  files and 381/381 tests passed.
+- Pinned official-base Python suite with the real built transport: 28/28 passed;
+  `compileall` also passed.
+- Pinned official checkout preflight passed and returned
+  `officialScoreEligible: false`.
+- Repository `pnpm verify`: 56/56 Turbo tasks successful, including lint,
+  monorepo typecheck/tests, and convention drift checks.
+- Full qualification is not attempted without authoritative released data and
+  completed harness/judge artifacts.

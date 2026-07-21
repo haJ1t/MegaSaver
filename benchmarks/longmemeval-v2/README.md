@@ -136,11 +136,16 @@ node benchmarks/longmemeval-v2/verify-official-artifacts.mjs \
 Only full verification can emit `officialScoreEligible: true`. It requires the
 pinned installed checkout and released public data, executes the evidence JSON
 Schema, reruns the official data validator and aggregate/combined-metric code,
-rebuilds both domain manifests from the trajectories, verifies the exact
-transport executable and Mega Saver commit, cross-binds telemetry IDs and
-latencies to harness rows, and deterministically reruns both official
-leaderboard builders. The rebuilt package, overview/LAFS, and tar contents must
-match the recorded bytes:
+and requires the pinned combiner's exact three-field combined timing contract.
+It freshly materializes every released question and haystack row for both
+domains, byte-compares the released trajectory file, and binds those paths plus
+reader/judge models in both the executed command and `run_args.json`. It also
+rebuilds both manifests, requires a clean Mega Saver checkout at the recorded
+commit, rebuilds and byte-compares the adapter and transport, maps telemetry
+exactly to official per-question metadata, and validates its public fields
+against the config and manifest. Finally, it deterministically reruns both
+official leaderboard builders and byte-compares the recorded package, streamed
+tar members, fresh package, overview/LAFS, and fresh tar contents:
 
 ```bash
 pnpm --filter @megasaver/long-memory build
