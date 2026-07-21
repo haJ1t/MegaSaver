@@ -15,6 +15,9 @@ import { basename, join, relative, resolve } from "node:path";
 function fail(message) {
   throw new Error(message);
 }
+export function verifyFreshTarballDigest(fresh, recorded) {
+  if (fresh !== recorded) fail("Fresh official tar digest differs from recorded evidence.");
+}
 function digest(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
@@ -256,7 +259,9 @@ export function verifyFreshOfficialArtifacts(options) {
   try {
     verifyReleasedRunInputs(temp, options);
     verifyManifestBuilds(temp, options);
-    return verifyBuilders(temp, options);
+    const artifacts = verifyBuilders(temp, options);
+    verifyFreshTarballDigest(artifacts.tarballSha256, options.inspected.leaderboard.tarball.sha256);
+    return artifacts;
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }

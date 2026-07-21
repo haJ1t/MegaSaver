@@ -4078,3 +4078,16 @@ seconds. Focused evidence/provenance/source coverage is 47/47. The isolated
 reviewer Python cache was moved recoverably to a unique `/tmp` directory; no
 unrelated file was removed. No official score is claimed. (source:
 `.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 12:42 +03] fix | LM2 evaluator and tar provenance closure
+
+Ultimate evidence review found three remaining authenticity gaps: JavaScript
+numeric coercion accepted noncanonical integer arguments, per-question judge
+inputs and full judge configuration were not cross-bound, and tar directories
+plus the fresh archive digest escaped validation. The gate now uses a pinned
+argparse parity fixture with canonical evidence lexemes, binds evaluator spec,
+category, question text, and every judge argument, validates directory and file
+members before tar inventory filtering, and compares fresh versus recorded tar
+digests. Focused evidence/provenance/source coverage is 60/60; long-memory is
+399/399 and pinned Python coverage is 29/29. No official score is claimed.
+(source: `.superpowers/sdd/task-6-report.md`)

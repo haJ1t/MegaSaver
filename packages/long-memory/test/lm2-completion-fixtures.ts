@@ -52,7 +52,7 @@ function runArtifacts(
     id: questionId,
     domain,
     environment: "shop",
-    question_type: "static",
+    question_type: "static-environment",
     question: "What is the billing status?",
     image: null,
     answer: "paid",
@@ -170,7 +170,7 @@ function runArtifacts(
     selectionCount: 1,
     latencyMs: 10,
     questionId,
-    questionType: "static",
+    questionType: "static-environment",
     imagePresent: false,
     imageUsed: false,
   };
@@ -204,7 +204,10 @@ function runArtifacts(
     perQuestion: {
       ...artifact(root, `${base}/per_question.jsonl`, {
         question_id: questionId,
-        question_type: "static",
+        question_type: "static-environment",
+        category: "static",
+        eval_function: "private",
+        question_text: "What is the billing status?",
         question_image: null,
         answer_gold: "paid",
         memory_context: [{ type: "text", value: `${domain} billing status is paid` }],
@@ -376,7 +379,18 @@ export function createEvidenceFixture() {
     },
     configuration: {
       reader: { provider: "local-openai-compatible", model: "Qwen/Qwen3.5-9B", parameters: {} },
-      judge: { provider: "openai", model: "gpt-5.2", parameters: { reasoning: "medium" } },
+      judge: {
+        provider: "openai",
+        model: "gpt-5.2",
+        parameters: {
+          baseUrl: null,
+          apiKeyEnv: "OPENAI_API_KEY",
+          apiKeyFile: null,
+          reasoningEffort: "medium",
+          maxCompletionTokens: 4096,
+          timeoutSeconds: 43_200,
+        },
+      },
       embedding: {
         provider: "local",
         model: "megasaver-hash-embedding",
