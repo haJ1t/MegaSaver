@@ -36,7 +36,10 @@ Status: P1 evidence corrections implemented; official score not run; fresh indep
   lexemes, excluding exponent, decimal-point, and whitespace spellings that
   JavaScript numeric coercion would otherwise admit. A fixture checks those
   cases against the pinned `type=int` declaration and Python `argparse`. Full
-  mode freshly materializes the complete
+  signed decimal values beyond `Number.MAX_SAFE_INTEGER` remain exact: the raw
+  `run_args.json` numeric token and executed argument are represented as
+  `BigInt` for equality, while safe values remain numbers. Full mode freshly
+  materializes the complete
   released questions and haystack for both domains, byte-compares them, and
   requires the recorded trajectories to equal the released file.
 - Full verification requires a clean Mega Saver checkout at the recorded commit,
@@ -69,18 +72,20 @@ Status: P1 evidence corrections implemented; official score not run; fresh indep
   `/tmp/megasaver-task6-reviewer-pycache.J8Sash` before implementation. No
   unrelated path was removed. Later generated verification caches were also
   moved recoverably to `/tmp/megasaver-task6-final-python-cache.TkJ4Np` and
-  `/tmp/megasaver-task6-parity-cache.zVPqcS`; no benchmark cache remains.
+  `/tmp/megasaver-task6-parity-cache.zVPqcS`; the final large-integer suite cache
+  was moved to `/tmp/megasaver-task6-bigint-python-cache.xAeqEn`. No benchmark
+  cache remains.
 - Inspect and preflight modes remain structurally ineligible. No real completed
   web plus enterprise artifact bundle is available, so this work records no
   official score or dashboard claim.
 
 ## Verification evidence
 
-- Focused evidence, provenance, and source-size regressions: 60/60 passed.
+- Focused evidence, provenance, and source-size regressions: 61/61 passed.
 - Pinned official integer-argument and `combine_timing` fixtures against commit
   `6f020ac2fc3275e46c706d3406e02c3ed79b7be2`: 2/2 passed.
 - `@megasaver/long-memory`: build passed; typecheck reported zero errors; 43/43
-  files and 399/399 tests passed.
+  files and 400/400 tests passed.
 - Pinned official-base Python suite with the real built transport: 29/29 passed;
   `compileall` also passed.
 - Pinned official checkout preflight passed and returned
