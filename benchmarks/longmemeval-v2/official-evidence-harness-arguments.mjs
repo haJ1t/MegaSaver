@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { assertNoDuplicateJsonKeys } from "./official-evidence-json.mjs";
 
 function fail(message) {
   throw new Error(message);
@@ -97,6 +98,7 @@ function parseNumber(value, integer) {
 }
 
 export function parseRunArgsJson(source) {
+  assertNoDuplicateJsonKeys(source);
   return JSON.parse(source, (key, value, context) => {
     if (!INTEGER_RUN_ARG_KEYS.has(key) || value === null) return value;
     if (typeof context.source !== "string" || !/^-?(?:0|[1-9][0-9]*)$/u.test(context.source)) {

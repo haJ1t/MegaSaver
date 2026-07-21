@@ -1,6 +1,6 @@
 # Task 6 report — official evidence and architecture closure
 
-Status: P1 raw numeric-lexeme correction implemented; official score not run; fresh independent review pending.
+Status: P1 duplicate-key correction implemented; official score not run; fresh independent review pending.
 
 ## Architecture correction
 
@@ -42,7 +42,11 @@ Status: P1 raw numeric-lexeme correction implemented; official score not run; fr
   rejects exponent and decimal-point spellings in every integer-valued
   `run_args.json` field before JavaScript can normalize them to an equal
   `Number`. Adversarial full-verifier cases cover `2e4`, `20000.0`, and an
-  equivalent spelling on a second official integer flag. Full mode freshly
+  equivalent spelling on a second official integer flag. Before ordinary JSON
+  parsing, a structural scanner rejects duplicate decoded keys in every object,
+  including inverse ordering, nested objects, and escaped-equivalent names.
+  String values containing escaped quotes or key-like text remain data rather
+  than scanner structure. Full mode freshly
   materializes the complete
   released questions and haystack for both domains, byte-compares them, and
   requires the recorded trajectories to equal the released file.
@@ -79,7 +83,9 @@ Status: P1 raw numeric-lexeme correction implemented; official score not run; fr
   `/tmp/megasaver-task6-parity-cache.zVPqcS`; the final large-integer suite cache
   was moved to `/tmp/megasaver-task6-bigint-python-cache.xAeqEn`. The raw-lexeme
   verification cache was moved recoverably to
-  `/private/tmp/megasaver-task6-canonical-int-pycache.XeYb2p`. No benchmark
+  `/private/tmp/megasaver-task6-canonical-int-pycache.XeYb2p`; the duplicate-key
+  verification cache was moved recoverably to
+  `/private/tmp/megasaver-task6-duplicate-json-pycache.Myq6Kp`. No benchmark
   cache remains.
 - Inspect and preflight modes remain structurally ineligible. No real completed
   web plus enterprise artifact bundle is available, so this work records no
@@ -87,11 +93,12 @@ Status: P1 raw numeric-lexeme correction implemented; official score not run; fr
 
 ## Verification evidence
 
-- Focused evidence, provenance, and source-size regressions: 64/64 passed.
+- Focused evidence, JSON-boundary, provenance, and source-size regressions:
+  71/71 passed.
 - Pinned official integer-argument and `combine_timing` fixtures against commit
   `6f020ac2fc3275e46c706d3406e02c3ed79b7be2`: 2/2 passed.
-- `@megasaver/long-memory`: build passed; typecheck reported zero errors; 43/43
-  files and 403/403 tests passed.
+- `@megasaver/long-memory`: build passed; typecheck reported zero errors; 44/44
+  files and 410/410 tests passed.
 - Pinned official-base Python suite with the real built transport: 29/29 passed;
   `compileall` also passed under Python 3.11. The first environment-default
   invocation resolved to Apple Python 3.9 and stopped at the pinned source's

@@ -5709,3 +5709,15 @@ spellings and a second integer flag while retaining canonical safe and
 unbounded signed acceptance. Focused coverage is 64/64, long-memory is 403/403,
 and pinned Python 3.11 is 29/29. No official score is claimed. (source:
 `.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 13:32 +03] fix | LM2 unambiguous run-argument JSON
+
+Adversarial review found that ordinary JSON parsing erased earlier duplicate
+keys before the raw integer reviver could inspect them. A recursive structural
+scanner now walks objects, arrays, strings, and values before parsing and
+rejects repeated decoded keys per object, including nested and Unicode-escaped
+equivalents. Full-verifier tests cover exact duplicates and both value orders;
+an escaped-quote/key-like string regression prevents structural false
+positives. Focused coverage is 71/71, long-memory is 410/410, and pinned Python
+3.11 is 29/29. No official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)
