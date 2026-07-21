@@ -23,6 +23,20 @@ function questionImagePresent(question) {
   return typeof question.question === "object" && question.question !== null;
 }
 
+function questionText(question) {
+  return typeof question.question === "string" ? question.question : question.question.text;
+}
+
+const CATEGORY_BY_QUESTION_TYPE = {
+  "static-environment": "static",
+  "static-environment-abs": "static-abs",
+  "dynamic-environment": "dynamic",
+  "dynamic-environment-abs": "dynamic-abs",
+  procedure: "procedure",
+  "procedure-abs": "procedure-abs",
+  "errors-gotchas": "gotchas",
+};
+
 function validateTelemetry(input, questionById, manifestQuestionById, projectionCountById) {
   const telemetryById = new Map(input.telemetry.map((row) => [row.questionId, row]));
   const fingerprint = input.canonicalSha256(input.memoryParams.model);
@@ -143,6 +157,17 @@ export function verifyRunBindings(input) {
   ) {
     fail("Executed reader or evaluator configuration differs.");
   }
+  const expectedJudgeParameters = {
+    baseUrl: input.runArgs.evaluator_base_url,
+    apiKeyEnv: input.runArgs.evaluator_api_key_env,
+    apiKeyFile: input.runArgs.evaluator_api_key_file,
+    reasoningEffort: input.runArgs.evaluator_reasoning_effort,
+    maxCompletionTokens: input.runArgs.evaluator_max_completion_tokens,
+    timeoutSeconds: input.runArgs.evaluator_timeout_seconds,
+  };
+  if (!isDeepStrictEqual(input.configuration.judge.parameters, expectedJudgeParameters)) {
+    fail("Official judge parameters differ from the executed harness.");
+  }
   const questionById = new Map(input.questions.map((row) => [row.id, row]));
   const manifestQuestionById = new Map(
     input.manifest.questions.map((row) => [row.questionId, row]),
@@ -181,7 +206,11 @@ export function verifyRunBindings(input) {
     const output = outputById.get(question.id);
     if (
       !output ||
+      !Object.hasOwn(CATEGORY_BY_QUESTION_TYPE, question.question_type) ||
       output.question_type !== question.question_type ||
+      output.category !== CATEGORY_BY_QUESTION_TYPE[question.question_type] ||
+      output.eval_function !== question.eval_function ||
+      output.question_text !== questionText(question) ||
       output.answer_gold !== question.answer ||
       output.question_image !== (questionImagePresent(question) ? question.question.image : null)
     ) {

@@ -179,11 +179,18 @@ surface; its types, choices, defaults, and `run_args.json` must agree. Telemetry
 is byte-equivalent to the official per-question metadata, cannot exceed its
 harness wall duration after seconds-to-milliseconds conversion, and has its
 profile/status/fingerprint/type/image/count fields independently checked against
-configuration and manifest identity. Recorded tar members and fresh builder
-outputs are compared by bytes, not only inventory.
+configuration and manifest identity. Canonical signed-decimal integer lexemes
+exclude JavaScript-only exponent/decimal/whitespace coercions and are covered by
+a pinned Python argparse fixture. Per-question evaluator spec, category, and
+question text are bound to released input, and every official judge argument is
+bound to the recorded judge configuration. Recorded tar directories and files
+are path/type validated before filtering; regular bytes, fresh builder outputs,
+and the fresh-versus-recorded tar digest are all compared.
 (source: `benchmarks/longmemeval-v2/evidence-schema.json`,
 `benchmarks/longmemeval-v2/verify-official-artifacts.mjs`,
+`benchmarks/longmemeval-v2/official-evidence-archive.mjs`,
 `benchmarks/longmemeval-v2/official-evidence-freshness.mjs`,
+`benchmarks/longmemeval-v2/official-evidence-harness-arguments.mjs`,
 `benchmarks/longmemeval-v2/official-evidence-run-bindings.mjs`)
 
 Local closure evidence and final gate counts are recorded in the Task 6 report.

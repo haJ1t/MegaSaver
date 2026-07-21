@@ -142,17 +142,23 @@ domains, byte-compares the released trajectory file, and binds those paths plus
 reader/judge models in both the executed command and `run_args.json`. The run
 must invoke exactly `python -m evaluation.harness`; only pinned harness flags
 are accepted, and their official types, choices, defaults, and complete parsed
-`run_args.json` must agree. Combined timing is reconstructed from web then
+`run_args.json` must agree. Integer flags use canonical signed decimal lexemes;
+exponent, decimal-point, and whitespace forms are rejected before conversion.
+Combined timing is reconstructed from web then
 enterprise domain totals/counts/maxima, preserving the pinned floating-point
 operation order. It also rebuilds both manifests, requires a clean Mega Saver
 checkout at the recorded
 commit, rebuilds and byte-compares the adapter and transport, maps telemetry
 exactly to official per-question metadata, and validates its public fields
 against the config and manifest. Telemetry milliseconds cannot exceed the
-corresponding official harness query-wall seconds. Finally, it deterministically
-reruns both official leaderboard builders and byte-compares the recorded
-package, streamed tar members, fresh package, overview/LAFS, and fresh tar
-contents:
+corresponding official harness query-wall seconds. Per-question evaluator spec,
+category, and question text must match the released runtime question, while the
+complete judge model/endpoint/reasoning/token/timeout configuration must match
+the executed harness. Finally, it deterministically reruns both official
+leaderboard builders, validates every tar directory and file path/type before
+inventory filtering, and byte-compares the recorded package, streamed tar
+members, fresh package, overview/LAFS, extracted fresh tar, and the fresh versus
+recorded tar digest:
 
 ```bash
 pnpm --filter @megasaver/long-memory build

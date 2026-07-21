@@ -33,6 +33,16 @@ function mutateTelemetryAndOfficialMetadata(
   Object.assign(run.perQuestion, artifact(evidence.root, run.perQuestion.path, perQuestion));
 }
 
+function mutatePerQuestion(
+  evidence: MutationContext,
+  mutate: (row: Record<string, unknown>) => void,
+) {
+  const run = evidence.value.runs[0];
+  const row = JSON.parse(readFileSync(join(evidence.root, run.perQuestion.path), "utf8"));
+  mutate(row);
+  Object.assign(run.perQuestion, artifact(evidence.root, run.perQuestion.path, row));
+}
+
 describe("LM2 official-score evidence gate", () => {
   it("inspects every required evidence class without authorizing a score", () => {
     const fixture = createEvidenceFixture();
@@ -92,6 +102,28 @@ describe("LM2 official-score evidence gate", () => {
         { count: floating.right.count, summary: floating.right.summary },
       ]),
     ).toEqual(floating.expected);
+  });
+
+  it("uses canonical Python integer lexemes for pinned type=int harness flags", () => {
+    const pinned = JSON.parse(
+      readFileSync(join(import.meta.dirname, "fixtures/lm2-pinned-integer-arguments.json"), "utf8"),
+    );
+    for (const valueCase of pinned.cases) {
+      const fixture = createEvidenceFixture();
+      const run = fixture.evidence.runs[0];
+      run.arguments.push(pinned.flag, valueCase.value);
+      const runArgs = JSON.parse(readFileSync(join(fixture.root, run.runArgs.path), "utf8"));
+      runArgs.max_completion_tokens = Number(valueCase.value);
+      Object.assign(run.runArgs, artifact(fixture.root, run.runArgs.path, runArgs));
+      writeEvidence(fixture);
+
+      const result = spawnSync(
+        process.execPath,
+        [verifier, "--inspect", "--evidence", fixture.evidencePath],
+        { encoding: "utf8" },
+      );
+      expect(result.status, valueCase.value).toBe(valueCase.evidenceAccepts ? 0 : 1);
+    }
   });
 
   it("rejects local percentiles added to the official combined timing", () => {
@@ -270,6 +302,30 @@ describe("LM2 official-score evidence gate", () => {
       },
     ],
     [
+      "binds the official evaluator specification per question",
+      (evidence: MutationContext) => {
+        mutatePerQuestion(evidence, (row) => {
+          row.eval_function = "substituted-evaluator";
+        });
+      },
+    ],
+    [
+      "binds the official aggregate category per question",
+      (evidence: MutationContext) => {
+        mutatePerQuestion(evidence, (row) => {
+          row.category = "gotchas";
+        });
+      },
+    ],
+    [
+      "binds the official question text per question",
+      (evidence: MutationContext) => {
+        mutatePerQuestion(evidence, (row) => {
+          row.question_text = "Substituted question";
+        });
+      },
+    ],
+    [
       "rejects an altered runtime haystack",
       (evidence: MutationContext) => {
         const ref = evidence.value.runs[0].runtimeInputs.haystack;
@@ -344,6 +400,27 @@ describe("LM2 official-score evidence gate", () => {
       },
     ],
     [
+      "binds the official judge model",
+      (evidence: MutationContext) => {
+        evidence.value.configuration.judge.model = "substituted-evaluator";
+      },
+    ],
+    ...[
+      ["baseUrl", "https://substituted.example"],
+      ["apiKeyEnv", "SUBSTITUTED_API_KEY"],
+      ["apiKeyFile", "/tmp/substituted-key"],
+      ["reasoningEffort", "high"],
+      ["maxCompletionTokens", 8192],
+      ["timeoutSeconds", 1],
+    ].map(([field, value]) => [
+      `binds the official judge ${field} parameter`,
+      (evidence: MutationContext) => {
+        (evidence.value.configuration.judge.parameters as Record<string, unknown>)[
+          field as string
+        ] = value;
+      },
+    ]),
+    [
       "rejects raw question content smuggled through telemetry",
       (evidence: MutationContext) => {
         mutateTelemetryAndOfficialMetadata(evidence, (row) => {
@@ -384,5 +461,47 @@ describe("LM2 official-score evidence gate", () => {
       { encoding: "utf8" },
     );
     expect(result.status).toBe(1);
+  });
+
+  it("rejects unsafe directory members before discarding tar directories", () => {
+    const fixture = createEvidenceFixture();
+    const tarPath = join(fixture.root, fixture.evidence.leaderboard.tarball.path);
+    const packageRoot = join(fixture.root, fixture.evidence.leaderboard.packageDirectory);
+    const code = [
+      "import io,sys,tarfile",
+      "archive,package=sys.argv[1:]",
+      "with tarfile.open(archive,'w:gz') as tf:",
+      " tf.add(package,arcname='megasaver_lm2')",
+      " unsafe=tarfile.TarInfo('megasaver_lm2/../escape/')",
+      " unsafe.type=tarfile.DIRTYPE",
+      " tf.addfile(unsafe)",
+    ].join("\n");
+    execFileSync("python3", ["-c", code, tarPath, packageRoot]);
+    fixture.evidence.leaderboard.tarball.sha256 = sha256(readFileSync(tarPath));
+    writeEvidence(fixture);
+
+    const result = spawnSync(
+      process.execPath,
+      [verifier, "--inspect", "--evidence", fixture.evidencePath],
+      { encoding: "utf8" },
+    );
+    expect(result.status).toBe(1);
+  });
+
+  it("rejects a fresh official tar digest mismatch even when package bytes match", async () => {
+    const module = (await import(
+      pathToFileURL(
+        join(
+          import.meta.dirname,
+          "../../../benchmarks/longmemeval-v2/official-evidence-freshness.mjs",
+        ),
+      ).href
+    )) as {
+      verifyFreshTarballDigest?: (fresh: string, recorded: string) => void;
+    };
+
+    expect(() => module.verifyFreshTarballDigest?.("a".repeat(64), "b".repeat(64))).toThrow(
+      "Fresh official tar digest differs",
+    );
   });
 });
