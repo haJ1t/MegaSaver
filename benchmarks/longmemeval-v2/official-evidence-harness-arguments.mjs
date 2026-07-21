@@ -77,11 +77,14 @@ const BOOLEAN_FLAGS = {
 };
 
 function parseNumber(value, integer) {
+  if (integer && !/^[+-]?[0-9]+$/u.test(value)) {
+    fail("Executed harness integer argument is not canonical.");
+  }
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || (integer && !Number.isSafeInteger(parsed))) {
     fail("Executed harness numeric argument is invalid.");
   }
-  return parsed;
+  return integer && Object.is(parsed, -0) ? 0 : parsed;
 }
 
 export function verifyHarnessArguments(command, arguments_, runArgs) {

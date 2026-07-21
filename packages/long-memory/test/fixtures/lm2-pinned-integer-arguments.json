@@ -1,0 +1,15 @@
+{
+  "harnessFileSha256": "4a508fde65e382c45669fe7243348944628054c9ce6416d78c0a395ce1c3abcd",
+  "flag": "--max-completion-tokens",
+  "cases": [
+    { "value": "1000", "pythonArgparseAccepts": true, "evidenceAccepts": true },
+    { "value": "+1000", "pythonArgparseAccepts": true, "evidenceAccepts": true },
+    { "value": "-1000", "pythonArgparseAccepts": true, "evidenceAccepts": true },
+    { "value": "-0", "pythonArgparseAccepts": true, "evidenceAccepts": true },
+    { "value": "001000", "pythonArgparseAccepts": true, "evidenceAccepts": true },
+    { "value": "1e3", "pythonArgparseAccepts": false, "evidenceAccepts": false },
+    { "value": "1000.0", "pythonArgparseAccepts": false, "evidenceAccepts": false },
+    { "value": " 1000", "pythonArgparseAccepts": true, "evidenceAccepts": false },
+    { "value": "1000 ", "pythonArgparseAccepts": true, "evidenceAccepts": false }
+  ]
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from hashlib import sha256
 import importlib.util
 import json
@@ -10,6 +11,27 @@ import unittest
 
 
 class OfficialEvidenceContractTest(unittest.TestCase):
+    def test_integer_argument_fixture_matches_pinned_argparse(self) -> None:
+        root_value = os.environ.get("LONGMEMEVAL_V2_ROOT")
+        if not root_value:
+            self.skipTest("LONGMEMEVAL_V2_ROOT must name the pinned official checkout")
+        source = Path(root_value).resolve() / "evaluation/harness.py"
+        fixture_path = Path(__file__).parents[2] / "packages/long-memory/test/fixtures/lm2-pinned-integer-arguments.json"
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        self.assertEqual(sha256(source.read_bytes()).hexdigest(), fixture["harnessFileSha256"])
+        source_text = source.read_text(encoding="utf-8")
+        self.assertIn(f'parser.add_argument("{fixture["flag"]}", type=int,', source_text)
+        parser = argparse.ArgumentParser(exit_on_error=False)
+        parser.add_argument(fixture["flag"], type=int)
+        for case in fixture["cases"]:
+            with self.subTest(value=case["value"]):
+                try:
+                    parser.parse_args([fixture["flag"], case["value"]])
+                    accepted = True
+                except argparse.ArgumentError:
+                    accepted = False
+                self.assertEqual(accepted, case["pythonArgparseAccepts"])
+
     def test_pinned_combine_timing_omits_local_percentiles(self) -> None:
         root_value = os.environ.get("LONGMEMEVAL_V2_ROOT")
         if not root_value:
