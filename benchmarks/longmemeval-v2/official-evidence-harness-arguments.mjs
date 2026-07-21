@@ -75,16 +75,34 @@ const BOOLEAN_FLAGS = {
   "--reader-enable-thinking": ["reader_enable_thinking", true],
   "--reader-disable-thinking": ["reader_enable_thinking", false],
 };
+const INTEGER_RUN_ARG_KEYS = new Set(Object.values(INTEGER_FLAGS));
+const MIN_SAFE_INTEGER = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
+
+function parseInteger(value) {
+  const parsed = BigInt(value);
+  return parsed >= MIN_SAFE_INTEGER && parsed <= MAX_SAFE_INTEGER ? Number(parsed) : parsed;
+}
 
 function parseNumber(value, integer) {
   if (integer && !/^[+-]?[0-9]+$/u.test(value)) {
     fail("Executed harness integer argument is not canonical.");
   }
+  if (integer) return parseInteger(value);
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || (integer && !Number.isSafeInteger(parsed))) {
+  if (!Number.isFinite(parsed)) {
     fail("Executed harness numeric argument is invalid.");
   }
-  return integer && Object.is(parsed, -0) ? 0 : parsed;
+  return parsed;
+}
+
+export function parseRunArgsJson(source) {
+  return JSON.parse(source, (key, value, context) => {
+    if (INTEGER_RUN_ARG_KEYS.has(key) && /^[+-]?[0-9]+$/u.test(context.source)) {
+      return parseInteger(context.source);
+    }
+    return value;
+  });
 }
 
 export function verifyHarnessArguments(command, arguments_, runArgs) {

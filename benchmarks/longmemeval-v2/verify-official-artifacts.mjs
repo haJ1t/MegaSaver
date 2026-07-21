@@ -7,6 +7,7 @@ import { isDeepStrictEqual } from "node:util";
 import { validateEvidenceSchema } from "./evidence-schema-validator.mjs";
 import { verifyRecordedArchive } from "./official-evidence-archive.mjs";
 import { verifyFreshOfficialArtifacts } from "./official-evidence-freshness.mjs";
+import { parseRunArgsJson } from "./official-evidence-harness-arguments.mjs";
 import { PIN } from "./official-evidence-pins.mjs";
 import { officialCombinedTiming, verifyRunBindings } from "./official-evidence-run-bindings.mjs";
 // biome-ignore format: The standalone gate is one responsibility and must stay below the repository's 300-line source limit.
@@ -175,7 +176,8 @@ function verifyEvidence(evidencePath) {
     domains.add(run.domain); tier = run.tier;
     if (typeof run.command !== "string" || !run.command || !Array.isArray(run.arguments) || run.arguments.length < 1 || !run.arguments.includes(run.domain) || !Array.isArray(run.failures)) fail("Complete run arguments/failures are missing.");
     const outputDirectory = resolveInside(root, run.outputDirectory, true);
-    const runArgs = record(json(verifyArtifact(root, run.runArgs)), "run_args");
+    const runArgsPath = verifyArtifact(root, run.runArgs);
+    const runArgs = record(parseRunArgsJson(readFileSync(runArgsPath, "utf8")), "run_args");
     if (!String(runArgs.model).toLowerCase().includes("qwen3.5-9b") || !String(runArgs.evaluator_model).toLowerCase().includes("gpt-5.2")) fail("Run arguments do not match official models.");
     const runtimeInputs = exact(run.runtimeInputs, ["questions", "haystack", "trajectories", "memoryConfig", "manifest"], "runtimeInputs"); const memoryConfigPath = verifyArtifact(root, runtimeInputs.memoryConfig); const memoryConfig = record(json(memoryConfigPath), "memory config"); const memoryParams = record(memoryConfig.memory_params, "memory params");
     const manifestPath = verifyArtifact(root, runtimeInputs.manifest); const manifestBytes = readFileSync(manifestPath); const manifest = record(JSON.parse(manifestBytes), "manifest");

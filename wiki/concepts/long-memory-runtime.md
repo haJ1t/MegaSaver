@@ -181,9 +181,12 @@ harness wall duration after seconds-to-milliseconds conversion, and has its
 profile/status/fingerprint/type/image/count fields independently checked against
 configuration and manifest identity. Canonical signed-decimal integer lexemes
 exclude JavaScript-only exponent/decimal/whitespace coercions and are covered by
-a pinned Python argparse fixture. Per-question evaluator spec, category, and
-question text are bound to released input, and every official judge argument is
-bound to the recorded judge configuration. Recorded tar directories and files
+a pinned Python argparse fixture. Raw `run_args.json` integer tokens outside
+JavaScript's safe range use exact `BigInt` comparison, preserving Python's
+unbounded signed-decimal semantics without rounded equality. Per-question
+evaluator spec, category, and question text are bound to released input, and
+every official judge argument is bound to the recorded judge configuration.
+Recorded tar directories and files
 are path/type validated before filtering; regular bytes, fresh builder outputs,
 and the fresh-versus-recorded tar digest are all compared.
 (source: `benchmarks/longmemeval-v2/evidence-schema.json`,
