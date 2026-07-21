@@ -43,6 +43,15 @@ function mutatePerQuestion(
   Object.assign(run.perQuestion, artifact(evidence.root, run.perQuestion.path, row));
 }
 
+function replaceRunArgsInteger(evidence: MutationContext, key: string, exactInteger: string) {
+  const ref = evidence.value.runs[0].runArgs;
+  const bytes = readFileSync(join(evidence.root, ref.path), "utf8");
+  const pattern = new RegExp(`("${key}":)-?[0-9]+(?:\\.[0-9]+)?(?:e[+-]?[0-9]+)?`, "iu");
+  const replaced = bytes.replace(pattern, `$1${exactInteger}`);
+  expect(replaced).not.toBe(bytes);
+  Object.assign(ref, artifact(evidence.root, ref.path, replaced));
+}
+
 describe("LM2 official-score evidence gate", () => {
   it("inspects every required evidence class without authorizing a score", () => {
     const fixture = createEvidenceFixture();
@@ -112,9 +121,13 @@ describe("LM2 official-score evidence gate", () => {
       const fixture = createEvidenceFixture();
       const run = fixture.evidence.runs[0];
       run.arguments.push(pinned.flag, valueCase.value);
-      const runArgs = JSON.parse(readFileSync(join(fixture.root, run.runArgs.path), "utf8"));
-      runArgs.max_completion_tokens = Number(valueCase.value);
-      Object.assign(run.runArgs, artifact(fixture.root, run.runArgs.path, runArgs));
+      replaceRunArgsInteger(
+        { root: fixture.root, value: fixture.evidence },
+        "max_completion_tokens",
+        /^[+-]?[0-9]+$/u.test(valueCase.value.trim())
+          ? BigInt(valueCase.value.trim()).toString()
+          : String(Number(valueCase.value)),
+      );
       writeEvidence(fixture);
 
       const result = spawnSync(
@@ -124,6 +137,26 @@ describe("LM2 official-score evidence gate", () => {
       );
       expect(result.status, valueCase.value).toBe(valueCase.evidenceAccepts ? 0 : 1);
     }
+  });
+
+  it("compares large official integers without numeric precision loss", () => {
+    const fixture = createEvidenceFixture();
+    const run = fixture.evidence.runs[0];
+    run.arguments.push("--max-completion-tokens", "900719925474099312345678901234567890");
+    replaceRunArgsInteger(
+      { root: fixture.root, value: fixture.evidence },
+      "max_completion_tokens",
+      "900719925474099312345678901234567891",
+    );
+    writeEvidence(fixture);
+
+    const result = spawnSync(
+      process.execPath,
+      [verifier, "--inspect", "--evidence", fixture.evidencePath],
+      { encoding: "utf8" },
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("run_args.json differs");
   });
 
   it("rejects local percentiles added to the official combined timing", () => {
