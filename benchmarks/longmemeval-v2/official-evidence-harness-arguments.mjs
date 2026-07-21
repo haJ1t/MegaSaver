@@ -98,10 +98,11 @@ function parseNumber(value, integer) {
 
 export function parseRunArgsJson(source) {
   return JSON.parse(source, (key, value, context) => {
-    if (INTEGER_RUN_ARG_KEYS.has(key) && /^[+-]?[0-9]+$/u.test(context.source)) {
-      return parseInteger(context.source);
+    if (!INTEGER_RUN_ARG_KEYS.has(key) || value === null) return value;
+    if (typeof context.source !== "string" || !/^-?(?:0|[1-9][0-9]*)$/u.test(context.source)) {
+      fail(`Official run_args integer is not canonical: ${key}`);
     }
-    return value;
+    return parseInteger(context.source);
   });
 }
 
