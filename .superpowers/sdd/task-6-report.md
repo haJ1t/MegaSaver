@@ -32,14 +32,26 @@ Status: P1 evidence corrections implemented; official score not run; fresh indep
   reader/judge models. The recorded command prefix is exactly Python plus
   `-m evaluation.harness`; every remaining argument is in the pinned harness
   allowlist, is parsed with its official type/choice/default, and must reproduce
-  the complete `run_args.json`. Full mode freshly materializes the complete
+  the complete `run_args.json`. Integer evidence uses canonical signed decimal
+  lexemes, excluding exponent, decimal-point, and whitespace spellings that
+  JavaScript numeric coercion would otherwise admit. A fixture checks those
+  cases against the pinned `type=int` declaration and Python `argparse`. Full
+  mode freshly materializes the complete
   released questions and haystack for both domains, byte-compares them, and
   requires the recorded trajectories to equal the released file.
 - Full verification requires a clean Mega Saver checkout at the recorded commit,
   checks adapter/transport bytes against that checkout, performs a fresh package
   build, and compares the rebuilt bytes again.
-- Recorded tar members are regular, traversal-safe, streamed, and byte-equal to
-  the recorded package. Fresh builders and their tar remain byte-compared too.
+- Every recorded tar member, including directories, is normalized and checked
+  for traversal and a safe regular-file/directory type before directories are
+  discarded from the file inventory. Regular members are streamed and
+  byte-equal to the recorded package. Full mode also requires the fresh official
+  tar digest to equal the recorded evidence tar digest, in addition to comparing
+  the fresh package and extracted tar contents.
+- Per-question evaluator evidence binds `eval_function`, official aggregate
+  category, and question text to the released runtime question. The judge model,
+  base URL, API-key source descriptors, reasoning effort, completion-token cap,
+  and timeout must exactly reproduce the executed official harness arguments.
 - Telemetry must exactly equal official `memory_post_query_metadata`; its
   profile, status, model fingerprint, question type, image flags, candidate and
   selection counts, and latency shape are independently checked against the
@@ -55,19 +67,21 @@ Status: P1 evidence corrections implemented; official score not run; fresh indep
   `test_official_evidence_contract.cpython-311.pyc`; its exact `__pycache__`
   directory was moved recoverably to
   `/tmp/megasaver-task6-reviewer-pycache.J8Sash` before implementation. No
-  unrelated path was removed.
+  unrelated path was removed. Later generated verification caches were also
+  moved recoverably to `/tmp/megasaver-task6-final-python-cache.TkJ4Np` and
+  `/tmp/megasaver-task6-parity-cache.zVPqcS`; no benchmark cache remains.
 - Inspect and preflight modes remain structurally ineligible. No real completed
   web plus enterprise artifact bundle is available, so this work records no
   official score or dashboard claim.
 
 ## Verification evidence
 
-- Focused evidence, provenance, and source-size regressions: 47/47 passed.
-- Pinned official `combine_timing` fixture against commit
-  `6f020ac2fc3275e46c706d3406e02c3ed79b7be2`: 1/1 passed.
+- Focused evidence, provenance, and source-size regressions: 60/60 passed.
+- Pinned official integer-argument and `combine_timing` fixtures against commit
+  `6f020ac2fc3275e46c706d3406e02c3ed79b7be2`: 2/2 passed.
 - `@megasaver/long-memory`: build passed; typecheck reported zero errors; 43/43
-  files and 386/386 tests passed.
-- Pinned official-base Python suite with the real built transport: 28/28 passed;
+  files and 399/399 tests passed.
+- Pinned official-base Python suite with the real built transport: 29/29 passed;
   `compileall` also passed.
 - Pinned official checkout preflight passed and returned
   `officialScoreEligible: false`.
