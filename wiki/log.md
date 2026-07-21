@@ -5729,3 +5729,15 @@ authentic evidence acceptance, and exact rejection of an adjacent mismatched
 integer without precision loss. Focused coverage is 61/61; long-memory is
 400/400 and pinned Python remains 29/29. No official score is claimed. (source:
 `.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 13:20 +03] fix | LM2 canonical run-argument JSON integers
+
+Fresh review found that noncanonical raw JSON numeric lexemes could bypass the
+integer evidence contract: `2e4` and `20000.0` became `Number(20000)` before
+binding. The parser now requires the raw reviver token for every official
+integer field to match JSON's integer-only grammar, then converts that exact
+token to a safe `Number` or `BigInt`. Full-verifier regressions cover both
+spellings and a second integer flag while retaining canonical safe and
+unbounded signed acceptance. Focused coverage is 64/64, long-memory is 403/403,
+and pinned Python 3.11 is 29/29. No official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)

@@ -183,7 +183,10 @@ configuration and manifest identity. Canonical signed-decimal integer lexemes
 exclude JavaScript-only exponent/decimal/whitespace coercions and are covered by
 a pinned Python argparse fixture. Raw `run_args.json` integer tokens outside
 JavaScript's safe range use exact `BigInt` comparison, preserving Python's
-unbounded signed-decimal semantics without rounded equality. Per-question
+unbounded signed-decimal semantics without rounded equality. The raw JSON
+reviver lexeme is mandatory for every official integer field: exponent and
+decimal-point spellings such as `2e4` and `20000.0` fail at the artifact
+boundary instead of collapsing to the same JavaScript `Number`. Per-question
 evaluator spec, category, and question text are bound to released input, and
 every official judge argument is bound to the recorded judge configuration.
 Recorded tar directories and files
