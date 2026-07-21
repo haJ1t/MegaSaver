@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   artifact,
@@ -65,6 +66,32 @@ describe("LM2 official-score evidence gate", () => {
     expect(() =>
       execFileSync(process.execPath, [verifier, "--inspect", "--evidence", fixture.evidencePath]),
     ).not.toThrow();
+  });
+
+  it("combines domain timing totals in pinned official floating-point order", async () => {
+    const pinned = JSON.parse(
+      readFileSync(join(import.meta.dirname, "fixtures/lm2-pinned-combine-timing.json"), "utf8"),
+    );
+    const module = (await import(
+      pathToFileURL(
+        join(
+          import.meta.dirname,
+          "../../../benchmarks/longmemeval-v2/official-evidence-run-bindings.mjs",
+        ),
+      ).href
+    )) as {
+      officialCombinedTiming: (
+        domains: Array<{ count: number; summary: Record<string, number> }>,
+      ) => Record<string, number>;
+    };
+    const floating = pinned.floatingOrder;
+
+    expect(
+      module.officialCombinedTiming([
+        { count: floating.left.count, summary: floating.left.summary },
+        { count: floating.right.count, summary: floating.right.summary },
+      ]),
+    ).toEqual(floating.expected);
   });
 
   it("rejects local percentiles added to the official combined timing", () => {
@@ -164,6 +191,28 @@ describe("LM2 official-score evidence gate", () => {
       },
     ],
     [
+      "rejects a nonofficial harness module",
+      (evidence: MutationContext) => {
+        evidence.value.runs[0].arguments[1] = "custom.runner";
+      },
+    ],
+    [
+      "rejects an extra nonofficial harness argument",
+      (evidence: MutationContext) => {
+        evidence.value.runs[0].arguments.push("--custom-runner-flag", "enabled");
+      },
+    ],
+    [
+      "rejects a value outside pinned harness choices",
+      (evidence: MutationContext) => {
+        const run = evidence.value.runs[0];
+        run.arguments.push("--reasoning-effort", "ultra");
+        const runArgs = JSON.parse(readFileSync(join(evidence.root, run.runArgs.path), "utf8"));
+        runArgs.reasoning_effort = "ultra";
+        Object.assign(run.runArgs, artifact(evidence.root, run.runArgs.path, runArgs));
+      },
+    ],
+    [
       "maps telemetry latency exactly through official per-question metadata",
       (evidence: MutationContext) => {
         const ref = evidence.value.runs[0].telemetry;
@@ -177,6 +226,14 @@ describe("LM2 official-score evidence gate", () => {
       (evidence: MutationContext) => {
         mutateTelemetryAndOfficialMetadata(evidence, (row) => {
           row.latencyMs = -1;
+        });
+      },
+    ],
+    [
+      "rejects inflated telemetry latency even when both telemetry copies agree",
+      (evidence: MutationContext) => {
+        mutateTelemetryAndOfficialMetadata(evidence, (row) => {
+          row.latencyMs = 13;
         });
       },
     ],

@@ -168,7 +168,7 @@ function verifyEvidence(evidencePath) {
   verifyArtifact(root, implementation.adapter); const transportPath = verifyArtifact(root, implementation.transport);
   if (!isAbsolute(implementation.transportExecutable.path) || fileSha256(implementation.transportExecutable.path) !== implementation.transportExecutable.sha256) fail("Transport executable binding differs.");
   if (!Array.isArray(evidence.runs) || evidence.runs.length !== 2) fail("Both domain runs are required.");
-  const domains = new Set(); let tier;
+  const domains = new Set(); const timingByDomain = new Map(); let tier;
   for (const runValue of evidence.runs) {
     const run = exact(runValue, ["domain", "tier", "command", "arguments", "outputDirectory", "runArgs", "aggregatedMetrics", "perQuestion", "runtimeInputs", "telemetry", "rawLatencySamplesSeconds", "failures"], "run");
     if (!["web", "enterprise"].includes(run.domain) || domains.has(run.domain) || !["small", "medium"].includes(run.tier) || (tier && tier !== run.tier)) fail("Run domain/tier pairing differs.");
@@ -190,11 +190,13 @@ function verifyEvidence(evidencePath) {
     const runMetrics = record(json(verifyArtifact(root, run.aggregatedMetrics)), "run metrics"); const questionsPath = verifyArtifact(root, runtimeInputs.questions); const haystackPath = verifyArtifact(root, runtimeInputs.haystack); const trajectoriesPath = verifyArtifact(root, runtimeInputs.trajectories);
     const perQuestion = jsonl(verifyArtifact(root, run.perQuestion, true)); const questionRows = json(questionsPath);
     if (perQuestion.length !== run.perQuestion.rowCount || questionRows.length !== perQuestion.length) fail("Per-question output coverage differs.");
+    if (!Number.isInteger(runMetrics.overall?.count_all_questions) || runMetrics.overall.count_all_questions !== perQuestion.length) fail("Official timing question count differs.");
+    timingByDomain.set(run.domain, { count: runMetrics.overall.count_all_questions, summary: runMetrics.memory_query });
     const telemetry = jsonl(verifyArtifact(root, run.telemetry, true));
     if (telemetry.length !== run.telemetry.rowCount || telemetry.some((row) => Object.keys(record(row, "telemetry row")).some((key) => !TELEMETRY_KEYS.has(key)) || TELEMETRY_REQUIRED.some((key) => !Object.hasOwn(row, key)))) fail("Public telemetry is invalid.");
     const questionIds = questionRows.map((row) => row.id); const outputIds = perQuestion.map((row) => row.question_id); const telemetryIds = telemetry.map((row) => row.questionId);
     if (new Set(questionIds).size !== questionIds.length || JSON.stringify(outputIds) !== JSON.stringify(questionIds) || JSON.stringify(telemetryIds) !== JSON.stringify(questionIds) || JSON.stringify(manifest.questions?.map((row) => row.questionId)) !== JSON.stringify(questionIds)) fail("Question identity binding differs.");
-    verifyRunBindings({ domain: run.domain, arguments: run.arguments, outputDirectory, runArgs, paths: { questions: questionsPath, haystack: haystackPath, trajectories: trajectoriesPath, memoryConfig: memoryConfigPath }, questions: questionRows, haystack: json(haystackPath), trajectories: jsonl(trajectoriesPath), manifest, memoryParams, perQuestion, telemetry, configuration, canonicalSha256: (value) => sha256(Buffer.from(canonical(value))) });
+    verifyRunBindings({ command: run.command, domain: run.domain, arguments: run.arguments, outputDirectory, runArgs, paths: { questions: questionsPath, haystack: haystackPath, trajectories: trajectoriesPath, memoryConfig: memoryConfigPath }, questions: questionRows, haystack: json(haystackPath), trajectories: jsonl(trajectoriesPath), manifest, memoryParams, perQuestion, telemetry, configuration, canonicalSha256: (value) => sha256(Buffer.from(canonical(value))) });
     const samples = perQuestion.map((row) => row.memory_query_duration_seconds); if (!Array.isArray(run.rawLatencySamplesSeconds) || JSON.stringify(samples) !== JSON.stringify(run.rawLatencySamplesSeconds)) fail("Raw latency samples differ from official per-question output.");
     for (const sample of samples) numeric(sample, "memory_query_duration_seconds");
     const sorted = [...samples].sort((a, b) => a - b); const timing = { avg_seconds: samples.reduce((sum, value) => sum + value, 0) / samples.length, p50_seconds: sorted[Math.floor(sorted.length / 2)], p95_seconds: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))], max_seconds: sorted.at(-1), total_seconds: samples.reduce((sum, value) => sum + value, 0) };
@@ -202,7 +204,7 @@ function verifyEvidence(evidencePath) {
     for (const failure of run.failures) { const item = exact(failure, FAILURE_KEYS, "failure"); if (![item.questionId, item.stage, item.code].every((value) => typeof value === "string" && value) || !isDigest(item.messageSha256)) fail("Failure evidence is invalid."); }
   }
   if (domains.size !== 2 || (tier === "small" ? checksums.haystack !== PIN.checksums.small : checksums.haystack !== PIN.checksums.medium) || JSON.stringify(validator.arguments) !== JSON.stringify(["--tier", tier])) fail("Pinned tier evidence differs.");
-  const combined = exact(evidence.combined, ["metrics", "dashboard"], "combined"); const metrics = json(verifyArtifact(root, combined.metrics)); const allSamples = evidence.runs.flatMap((run) => run.rawLatencySamplesSeconds); if (!isDeepStrictEqual(metrics.memory_query, officialCombinedTiming(allSamples))) fail("Combined query latency differs from the official contract.");
+  const combined = exact(evidence.combined, ["metrics", "dashboard"], "combined"); const metrics = json(verifyArtifact(root, combined.metrics)); const timingDomains = [timingByDomain.get("web"), timingByDomain.get("enterprise")]; if (!isDeepStrictEqual(metrics.memory_query, officialCombinedTiming(timingDomains))) fail("Combined query latency differs from the official contract.");
   const dashboard = exact(combined.dashboard, ["overallFullSet", "gotchasAccuracy", "staticAccuracy", "dynamicAccuracy", "procedureAccuracy"], "dashboard");
   const expectedDashboard = [metric(metrics, ["overall", "overall_full_set"]), metric(metrics, ["non_abstention_by_category", "gotchas", "pct_correct"]), metric(metrics, ["combined_abstention_by_category", "static", "pct_correct"]), metric(metrics, ["combined_abstention_by_category", "dynamic", "pct_correct"]), metric(metrics, ["combined_abstention_by_category", "procedure", "pct_correct"])];
   if (JSON.stringify(Object.values(dashboard)) !== JSON.stringify(expectedDashboard)) fail("Five dashboard values differ from combined metrics.");

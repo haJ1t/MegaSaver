@@ -172,10 +172,15 @@ released questions and haystack for each domain, matches the exact released
 trajectory bytes, and binds all input paths plus reader/judge models through
 the command and `run_args.json`. Official combined query timing has exactly
 `avg_seconds`, `max_seconds`, and `total_seconds`; local percentiles cannot enter
-that object. Telemetry is byte-equivalent to the official per-question metadata
-and its profile/status/fingerprint/type/image/count fields are independently
-checked against configuration and manifest identity. Recorded tar members and
-fresh builder outputs are compared by bytes, not only inventory.
+that object, and its floating-point operations use web/enterprise domain totals
+and official counts in the pinned combiner's order. The command is restricted
+to Python's `-m evaluation.harness` entrypoint plus the complete pinned argparse
+surface; its types, choices, defaults, and `run_args.json` must agree. Telemetry
+is byte-equivalent to the official per-question metadata, cannot exceed its
+harness wall duration after seconds-to-milliseconds conversion, and has its
+profile/status/fingerprint/type/image/count fields independently checked against
+configuration and manifest identity. Recorded tar members and fresh builder
+outputs are compared by bytes, not only inventory.
 (source: `benchmarks/longmemeval-v2/evidence-schema.json`,
 `benchmarks/longmemeval-v2/verify-official-artifacts.mjs`,
 `benchmarks/longmemeval-v2/official-evidence-freshness.mjs`,
