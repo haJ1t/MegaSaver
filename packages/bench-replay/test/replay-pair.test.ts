@@ -161,8 +161,12 @@ describe("replayBothOrders", () => {
     ).rejects.toThrow(/1\.25.*1(\.0+)?/s);
   });
 
+  // Refused BEFORE a request goes out: the refusal reads only the
+  // TransformSummary prepareArms already returned, so paying for four arm runs
+  // to reach a verdict that cannot exist is pure waste. Asserting no send
+  // happened pins the placement — the throw alone passes from either side.
   it("still refuses an arm that compressed nothing, order agreement notwithstanding", async () => {
-    const { send } = scriptedSend([1000, 1000, 1000, 1000]);
+    const { send, arms } = scriptedSend([1000, 1000, 1000, 1000]);
     await expect(
       replayBothOrders({
         task: "task_1",
@@ -173,6 +177,7 @@ describe("replayBothOrders", () => {
         now: () => 0,
       }),
     ).rejects.toThrow(/applied the saver 0 times/);
+    expect(arms).toEqual([]);
   });
 });
 

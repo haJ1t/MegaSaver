@@ -1,5 +1,5 @@
 import { normalizedCostUsd } from "@megasaver/stats";
-import { buildVerdict, costRatioOf } from "./report.js";
+import { assertResolvableTransform, buildVerdict, costRatioOf } from "./report.js";
 import { prepareArms } from "./transform.js";
 import type { ApplySaver, PreparedArms } from "./transform.js";
 import type {
@@ -158,6 +158,10 @@ export async function replayBothOrders(input: {
   // reach the measurement — and the hook is spawned once per tool call for the
   // whole gate rather than once per megasaver arm.
   const arms = prepareArms({ requests: input.requests, applySaver: input.applySaver });
+  // The same refusal `buildVerdict` ends on, hoisted to where it costs nothing:
+  // it reads only the summary above, and nothing between here and there touches
+  // that summary — `replayArm` never consults the saver.
+  assertResolvableTransform(input.task, arms);
 
   const baselineFirst = await replayPair({
     arms,

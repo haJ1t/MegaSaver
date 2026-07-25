@@ -160,6 +160,27 @@ function deriveOrderCheck(
   };
 }
 
+// Both refusals read ONLY the TransformSummary, which `prepareArms` has in hand
+// before a single request is sent — so `replayBothOrders` calls this up front and
+// the four arm runs a doomed verdict would otherwise pay for never happen. Kept
+// here, called from both sides, rather than duplicated into `prepareArms`:
+// two throw sites for one rule is the silent-drift failure this package exists
+// to avoid, and transform.ts already imports from this module.
+export function assertResolvableTransform(task: string, transform: TransformSummary): ArmIntegrity {
+  if (transform.saver.applied === 0) {
+    throw new Error(
+      `buildVerdict(${task}): the megasaver arm applied the saver 0 times (passthrough=${transform.saver.passthrough}, failed=${transform.saver.failed}) — it is identical to baseline, so there is no verdict to report`,
+    );
+  }
+  const integrity = checkTransformIntegrity(transform);
+  if (!integrity.ok) {
+    throw new Error(
+      `buildVerdict(${task}): the transform measured nothing this instrument can resolve — the saver was applied to ${integrity.applied} of ${transform.saver.applied + transform.saver.passthrough} tool calls (fraction ${integrity.appliedFraction}) and moved ${integrity.originalBytes}→${integrity.transformedBytes} B (byteRatio ${integrity.byteRatio}, ceiling ${MAX_BYTE_RATIO}). Removing ${((1 - integrity.byteRatio) * 100).toFixed(2)}% of the tool_result bytes bounds the input-side cost effect below the ≤5% band this harness exists to resolve, so any ratio derived from it would be noise. The fraction is reported, not enforced — a low one beside a large byte movement is a normal, resolvable run. Whether each applied call was a real compression is checked per call, in prepareArms.`,
+    );
+  }
+  return integrity;
+}
+
 // The ONLY constructor of a ReplayVerdict, so the refusals below cannot be
 // skipped by a caller. Checks the caller did not run are recorded as null —
 // never as passed. `transform` is the ONE saver pass both pairs replayed, so
@@ -188,17 +209,7 @@ export function buildVerdict(
       `buildVerdict(${task}): ${pairs.length} pairs were replayed but no order check combined them — there is no single ratio these arms justify`,
     );
   }
-  if (transform.saver.applied === 0) {
-    throw new Error(
-      `buildVerdict(${task}): the megasaver arm applied the saver 0 times (passthrough=${transform.saver.passthrough}, failed=${transform.saver.failed}) — it is identical to baseline, so there is no verdict to report`,
-    );
-  }
-  const integrity = checkTransformIntegrity(transform);
-  if (!integrity.ok) {
-    throw new Error(
-      `buildVerdict(${task}): the transform measured nothing this instrument can resolve — the saver was applied to ${integrity.applied} of ${transform.saver.applied + transform.saver.passthrough} tool calls (fraction ${integrity.appliedFraction}) and moved ${integrity.originalBytes}→${integrity.transformedBytes} B (byteRatio ${integrity.byteRatio}, ceiling ${MAX_BYTE_RATIO}). Removing ${((1 - integrity.byteRatio) * 100).toFixed(2)}% of the tool_result bytes bounds the input-side cost effect below the ≤5% band this harness exists to resolve, so any ratio derived from it would be noise. The fraction is reported, not enforced — a low one beside a large byte movement is a normal, resolvable run. Whether each applied call was a real compression is checked per call, in prepareArms.`,
-    );
-  }
+  const integrity = assertResolvableTransform(task, transform);
   return {
     task,
     pairs,
