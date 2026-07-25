@@ -1,12 +1,13 @@
 ---
 title: Unbounded-run ReDoS (recurring defect class)
-tags: [concept, redos, performance, regex, output-filter, policy, context-gate]
+tags: [concept, redos, performance, regex, output-filter, policy, context-gate, memory-graph]
 sources:
   - packages/output-filter/src/rank.ts
   - packages/output-filter/src/normalize.ts
   - packages/output-filter/src/parsers/stacktrace.ts
   - packages/policy/src/redaction-patterns.ts
   - packages/context-gate/src/session-hints.ts
+  - packages/memory-graph/src/parse-wiki.ts
 status: active
 created: 2026-07-20
 updated: 2026-07-25
@@ -52,6 +53,7 @@ hex dumps (delimiter-free runs); column-padded tables and tab-indented logs
 | 6 | `FILE_PATH`, `context-gate/src/session-hints.ts:17` | fixed — see below |
 | 7 | `VITEST_OUT`, `PROSE_ANTI_VI` (`classify.ts`) | fixed — see below |
 | 8 | `/\s+$/` trailing-whitespace strip, `normalize.ts:10` | fixed, `trimEnd()` — see below |
+| 9 | wikilink scanner, `memory-graph/src/parse-wiki.ts:64` | fixed — see below |
 
 ## Instance 6: the missed twin (`context-gate`)
 
@@ -179,6 +181,28 @@ bare anchor check, cheaper per step than the class/literal patterns, so at 100 K
 the unbounded form cost only 3.2-4.0 s and sat under the shared 5 s ceiling. Same
 lesson as below, one level sharper: the ceiling separates only if the size is
 tuned to the *per-step* cost of the specific pattern, not to the class.
+
+## Fixed: instance 9 (wikilink scanner, `memory-graph`)
+
+Fourth variant: the permissive class accepts the **opening delimiter of its own
+literal**. `/\[\[([^\]]+)\]\]/g` excludes only `]`, so on a `]`-free run of `[`
+every `[[` pair rescans to end-of-input — 1,158 / 5,847 / 32,755 ms at 25 / 50 /
+100 KB, through the exported `parseWikiPage` (source:
+`packages/memory-graph/src/parse-wiki.ts:64`). Fixed by excluding `[` as well,
+`[^\][]+`: each scan then stops at the next `[`, so the total is the input
+length — 0.2-0.3 ms at the same sizes. Behaviour-identical on all 75 scanned
+pages / 471 wikilinks of the real wiki.
+
+**This one is low, and the reason matters for triage.** The two call sites —
+`mega memory graph` (`apps/cli/src/commands/memory/read-wiki.ts:38`) and the
+token-gated localhost GUI bridge (`apps/gui/bridge/routes/memory-graph.ts:90`) —
+walk only the six `WIKI_FOLDERS` and skip `wiki/raw/`, so the
+sink is fed operator-authored repo files, never external content. And nothing
+naturally occurring fires it: any `]` truncates the backtrack tail, so markdown,
+code fences, JSON and base64 are all sub-millisecond, and the longest `[` run
+anywhere in `wiki/` is 2. Real defect, self-inflicted-only trigger. The size cap
+that would have prevented it does not exist here — both walkers `readFile` whole
+pages, and the largest one they scan today is 57,576 bytes.
 
 ## Lesson for the guard test
 
