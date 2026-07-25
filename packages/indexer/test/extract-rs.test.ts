@@ -78,6 +78,14 @@ describe("extractRs", () => {
     expect(extractRs("src/x.rs", "")).toEqual([]);
   });
 
+  it("ends a decl that opens and closes its braces on one line on that line", () => {
+    const b = extractRs("src/x.rs", "impl Auth {}\npub fn foo() {\n    bar();\n}\n");
+    expect(b.map((x) => [x.name, x.startLine, x.endLine])).toEqual([
+      ["Auth", 1, 1],
+      ["foo", 2, 4],
+    ]);
+  });
+
   it("never throws and clamps a never-closing brace to EOF", () => {
     const b = extractRs("src/x.rs", "fn open() {\n    1");
     expect(b[0]?.endLine).toBe(2);
