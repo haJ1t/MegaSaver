@@ -4667,3 +4667,41 @@ invariant (`apps/cli/test/hooks/saver.test.ts`) + end-to-end doctor masking
 
 Sources: `apps/cli/src/hooks/saver.ts`, `apps/cli/src/commands/doctor-saver.ts`,
 [[concepts/saver-activation-inheritance]].
+
+---
+
+## [2026-07-25] query | gui memory-graph flake: root cause was a wall-clock wait on a non-DOM signal
+
+`apps/gui/test/components/memory-graph-panel.test.tsx` failed once under
+full-monorepo `pnpm verify` (`capturedElements.length` > 0 timed out inside
+`waitFor`) yet passed in isolation. Not a logic bug and not "slow CI" — a
+structural race.
+
+Measured with an instrumented probe: the panel commits the
+`memory-graph-canvas` testid one event-loop turn BEFORE the effect that calls
+`cytoscape()` and fills the mock's `capturedElements` (mutation batch at
++0.97ms with `elements=0`; cytoscape at +3.02ms). `waitFor` cannot observe a
+plain module variable, so it converges only on a later mutation batch or its
+50ms poll — both bounded by RTL's own 1000ms `asyncUtilTimeout`, which the
+file's `testTimeout: 30_000` does **not** raise. A worker starved by turbo's
+parallel run (gui jsdom environment took 113.94s) overruns that budget.
+
+Fix is deterministic, not slower: `await act(async () => {})` drains the fetch
+continuation, the re-render and the passive effect with no timers and no
+deadline. Timeout was NOT raised.
+
+Red/green proof by denying the wall clock (`configure({ asyncUtilTimeout: 0 })`,
+a fully starved worker): HEAD helper 1 failed / 16 passed with the exact
+reported `expected 0 to be greater than 0`; patched file 17/17. The suite now
+has zero dependence on wall-clock scheduling.
+
+Sibling defect fixed at the same root: the seven raw `tapHandlers[0](…)`
+dispatches also set React state outside any flush, so their follow-up
+assertions rode the same wall clock — the zero-budget run reddened them once
+`waitForGraph` was fixed. Collapsed into a `tapNode(id)` helper that wraps the
+dispatch in `act` and throws instead of silently no-op'ing when no handler is
+registered (`if (handler)` could vacuously pass a broken test).
+
+Test-only change; no package behaviour changed, so no changeset. Branch
+`fix/gui-memory-graph-flake`. Evidence: single file 5/5 green, full gui suite
+83 files / 531 tests green, type errors none.
