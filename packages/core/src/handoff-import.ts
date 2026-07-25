@@ -1,6 +1,6 @@
-import { redactWithFindings } from "@megasaver/policy";
 import { memoryEntryIdSchema } from "@megasaver/shared";
 import type { ProjectId } from "@megasaver/shared";
+import { makeRedactor, redactMemory } from "./brain-export.js";
 import { CoreRegistryError } from "./errors.js";
 import type { HandoffPacket } from "./handoff-packet.js";
 import type { CoreRegistry } from "./registry.js";
@@ -49,26 +49,25 @@ export function applyHandoffMemories(input: ApplyHandoffMemoriesInput): HandoffM
 
   for (const entry of input.packet.payload.memories) {
     // The registry is user-controlled state like a written file: an exotic
-    // secret in packet content/title must be scrubbed before it persists,
-    // matching the open-side block guarantee. Dedupe on the REDACTED content so
-    // re-running a secret-bearing packet stays idempotent (stored rows already
-    // hold the redacted form).
-    const content = redactWithFindings(entry.content);
-    const title = redactWithFindings(entry.title);
-    if (contentKeys.has(content.redacted)) {
+    // secret anywhere in a packet memory must be scrubbed before it persists,
+    // matching the open-side block guarantee. Same redactor as the pack side, so
+    // import can never scrub fewer fields than export does. Dedupe on the
+    // REDACTED content so re-running a secret-bearing packet stays idempotent
+    // (stored rows already hold the redacted form).
+    const r = makeRedactor();
+    const scrubbed = redactMemory(entry, r);
+    if (contentKeys.has(scrubbed.content)) {
       skipped += 1;
       continue;
     }
-    redactionFindings += content.count + title.count;
+    redactionFindings += r.total;
     // lastVerified is a LOCAL audit stamp: it asserts a verification event
     // that never happened in this repo, and closedByCodeTruth is an ownership
     // flag the code-truth heal path trusts. The anchor stays (re-verifiable
     // here); the stamp does not.
-    const { supersedesId: _dropped, lastVerified: _stamp, ...rest } = entry;
+    const { supersedesId: _dropped, lastVerified: _stamp, ...rest } = scrubbed;
     const created = input.registry.createMemoryEntry({
       ...rest,
-      content: content.redacted,
-      title: title.redacted,
       id: memoryEntryIdSchema.parse(input.newId()),
       projectId: input.projectId,
       sessionId: null,
@@ -78,9 +77,9 @@ export function applyHandoffMemories(input: ApplyHandoffMemoriesInput): HandoffM
       // so it can't plant a forged from-session: keyword that suppresses a
       // legitimate autopilot/from-session capture in this project.
       keywords: stripReservedKeywords(rest.keywords),
-      evidence: [...(entry.evidence ?? []), provenance],
+      evidence: [...(scrubbed.evidence ?? []), provenance],
     });
-    contentKeys.add(content.redacted);
+    contentKeys.add(scrubbed.content);
     imported += 1;
     badges.push({ memoryId: created.id, badge: verificationBadgeFor(created) });
   }

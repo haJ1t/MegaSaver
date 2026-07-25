@@ -1,6 +1,7 @@
 import { failedAttemptIdSchema, memoryEntryIdSchema, projectRuleIdSchema } from "@megasaver/shared";
 import type { ProjectId } from "@megasaver/shared";
 import { type BrainBundle, parseBrainBundle } from "./brain-bundle.js";
+import { makeRedactor, redactMemory } from "./brain-export.js";
 import { CoreRegistryError } from "./errors.js";
 import type { CoreRegistry } from "./registry.js";
 import { stripReservedKeywords } from "./session-memory.js";
@@ -43,11 +44,16 @@ export function importBrain(input: ImportBrainInput): ImportBrainReport {
   // ponytail: writes are per-call and non-transactional; merge-only + content dedupe makes a re-run self-healing, so partial writes on a mid-loop throw are acceptable for v1.
 
   for (const entry of bundle.payload.memories) {
-    if (memoryKeys.has(entry.content)) {
+    // A bundle is untrusted input: an older or hostile writer may have scrubbed
+    // nothing, so re-run the pack-side redactor here rather than trusting the
+    // manifest's redactionFindings. Dedupe on the REDACTED content so re-running
+    // a secret-bearing bundle stays idempotent.
+    const scrubbed = redactMemory(entry, makeRedactor());
+    if (memoryKeys.has(scrubbed.content)) {
       skipped.memories += 1;
       continue;
     }
-    const { supersedesId: _dropped, ...rest } = entry;
+    const { supersedesId: _dropped, ...rest } = scrubbed;
     input.registry.createMemoryEntry({
       ...rest,
       id: memoryEntryIdSchema.parse(input.newId()),
@@ -59,9 +65,9 @@ export function importBrain(input: ImportBrainInput): ImportBrainReport {
       // namespace so a bundle can't plant a forged from-session: keyword that
       // suppresses a legitimate autopilot/from-session capture in this project.
       keywords: stripReservedKeywords(rest.keywords),
-      evidence: [...(entry.evidence ?? []), provenance],
+      evidence: [...(scrubbed.evidence ?? []), provenance],
     });
-    memoryKeys.add(entry.content);
+    memoryKeys.add(scrubbed.content);
     imported.memories += 1;
   }
 

@@ -206,6 +206,40 @@ describe("applyHandoffMemories", () => {
     expect(report.redactionFindings).toBe(2);
   });
 
+  it("redacts every secret-bearing memory field, not just content and title", () => {
+    const { registry, project } = target();
+    const token = `ghp_${"c".repeat(36)}`;
+    const secretMem = mem({
+      reason: `use ${token} for the dump`,
+      goal: `exfil via ${token}`,
+      evidence: [`https://ci.example/${token}`],
+      relatedFiles: [`/etc/${token}.env`],
+      relatedSymbols: [`sym_${token}`],
+      keywords: [`kw-${token}`],
+      anchor: {
+        repoHead: "a".repeat(40),
+        capturedAt: NOW,
+        files: [{ path: `src/${token}.ts`, blobSha: "b".repeat(40) }],
+        symbols: [],
+      },
+    });
+    const report = applyHandoffMemories({
+      registry,
+      projectId: project.id,
+      packet: packetWith([secretMem]),
+      now: NOW_MS,
+      newId,
+    });
+    const [m] = registry.listMemoryEntries(project.id);
+    expect(JSON.stringify(m)).not.toContain(token);
+    // The anchor's path is the `cat-file HEAD:<path>` key, so it cannot be
+    // rewritten in place — a secret-bearing anchor drops whole (export parity).
+    expect(m?.anchor).toBeUndefined();
+    // 6 scrubbed fields + the anchor path that forced the drop; title/content
+    // are clean here. The warning count must not under-report them.
+    expect(report.redactionFindings).toBe(7);
+  });
+
   it("throws on unknown target project", () => {
     const registry = createInMemoryCoreRegistry();
     expect(() =>
