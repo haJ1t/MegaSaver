@@ -1,4 +1,5 @@
-import { pruneOlderThan } from "@megasaver/content-store";
+import type { pruneOlderThan } from "@megasaver/content-store";
+import { pruneChunkSetsHonoringPins } from "@megasaver/context-gate";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../errors.js";
 import { readStoreEnv, resolveStorePath } from "../../store.js";
@@ -16,14 +17,14 @@ export type RunOutputGcInput = {
   now: () => number;
   days?: string;
   json: boolean;
-  /** Override for tests; defaults to content-store pruneOlderThan. */
+  /** Override for tests; defaults to the pin-honoring prune. */
   prune?: typeof pruneOlderThan;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
 };
 
 export async function runOutputGc(input: RunOutputGcInput): Promise<0 | 1> {
-  const prune = input.prune ?? pruneOlderThan;
+  const prune = input.prune ?? pruneChunkSetsHonoringPins;
   let days = DEFAULT_DAYS;
   if (input.days !== undefined) {
     const parsed = parseDays(input.days);

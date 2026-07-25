@@ -17,6 +17,7 @@ export {
   type Capture,
   type SpawnOutcome,
 } from "./run-command.js";
+export { pruneChunkSetsHonoringPins } from "./retention-prune.js";
 export { fetchChunk, type FetchChunkResult } from "./fetch-chunk.js";
 export { fetchOverlayChunk, type FetchOverlayChunkResult } from "./fetch-overlay-chunk.js";
 export { locateChunkSet, type LocatedChunkSet } from "./locate-chunk-set.js";

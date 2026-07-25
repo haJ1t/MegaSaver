@@ -1,6 +1,7 @@
 import { readdirSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { pruneOlderThan } from "@megasaver/content-store";
+import type { pruneOlderThan } from "@megasaver/content-store";
+import { pruneChunkSetsHonoringPins } from "@megasaver/context-gate";
 import { reconcileOverlaySummaries } from "@megasaver/core";
 
 export const OVERLAY_RETENTION_MS = 30 * 86_400_000;
@@ -78,7 +79,7 @@ function pruneSeenFiles(storeRoot: string, cutoffMs: number): void {
 // correctness (pruneTraceSessions precedent). True only when a prune completed.
 export async function maybeRunOverlayGc(storeRoot: string, deps: GcDeps = {}): Promise<boolean> {
   const now = deps.now ?? Date.now;
-  const prune = deps.prune ?? pruneOlderThan;
+  const prune = deps.prune ?? pruneChunkSetsHonoringPins;
   const marker = join(storeRoot, "content", ".last-gc");
   try {
     const mtime = statSync(marker).mtimeMs;
