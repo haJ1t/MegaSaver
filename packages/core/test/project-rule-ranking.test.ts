@@ -84,3 +84,28 @@ describe("rankApplicableRules", () => {
     expect(rankApplicableRules([r], { files: ["src/index.ts"] })).toEqual([]);
   });
 });
+
+// appliesTo globs are user/agent-authored and compiled per call inside the
+// ranking loop with no cache, so this is a third untrusted boundary onto the
+// same matcher as the policy path gates. Pre-fix, a five-`*` chain against a
+// 255-character filename cost ~58s here.
+describe("rankApplicableRules — hostile appliesTo glob cannot stall ranking", () => {
+  it("ranks within a bounded time against a wildcard-chain glob", { retry: 3 }, () => {
+    const hostile = rule({
+      id: "b0000000-0000-4000-8000-00000000000f",
+      appliesTo: [`${"*a".repeat(5)}x`],
+    });
+    const started = performance.now();
+    rankApplicableRules([hostile], { files: ["a".repeat(255)] });
+    expect(performance.now() - started).toBeLessThan(250);
+  });
+
+  it("matches an appliesTo glob whose filename holds regex metacharacters", () => {
+    const plus = rule({
+      id: "b0000000-0000-4000-8000-00000000001f",
+      appliesTo: ["**/a+b.txt"],
+    });
+    const out = rankApplicableRules([plus], { files: ["src/a+b.txt"] });
+    expect(out[0]?.reason).toContain("applies to src/a+b.txt");
+  });
+});
