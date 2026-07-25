@@ -4333,3 +4333,25 @@ Sources:
 [[docs/superpowers/specs/2026-07-25-deny-write-honest-rejection-design]],
 [[docs/superpowers/plans/2026-07-25-deny-write-honest-rejection-plan]],
 [[entities/policy]].
+
+## [2026-07-25 16:20 +03] fix | inert MCP tool inputs — max_results honored, around removed
+
+Second instance of the `deny.write` defect class, in `@megasaver/mcp-bridge`:
+`max_results` (`search-code.ts:25`) and `around` (`fetch-chunk.ts:19`) were
+validated by `.strict()` schemas and never read, making them the only keys a
+caller could pass without an error.
+
+Split the two rather than treating them alike. `max_results` is a genuine cap
+with BM25 ordering behind it and a spec that asked for it (P3-T8) — honored,
+capped after ranking, with a new optional `omitted: {files, matches}` so the
+truncation is visible. `around` is an unbuilt feature, not an ignored knob —
+removed from the schema.
+
+Corrected the incoming report: `max_results` was never published to agents with
+`{min:1,max:500,default:50}`; `server.ts:282` advertises
+`inputSchema: {type:"object"}` for all 26 tools, so NO input property is
+published for any tool. Filed that as a separate DX gap.
+
+Sources: [[docs/superpowers/specs/2026-07-25-inert-mcp-inputs-design]],
+[[docs/superpowers/plans/2026-07-25-inert-mcp-inputs-plan]],
+[[entities/mcp-bridge]].

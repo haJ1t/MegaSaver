@@ -16,7 +16,7 @@ export type SearchCodeToolEnv = {
   originPid: string;
 };
 
-const searchCodeInputSchema = z
+export const searchCodeInputSchema = z
   .object({
     query: z.string().min(1),
     task: z.string().optional(),
@@ -56,6 +56,15 @@ export type SearchCodeResult = {
   query: string;
   files: SearchCodeFile[];
   index_enrichment: IndexEnrichmentStatus;
+  // Present ONLY when max_results actually dropped files. A cap that hides its
+  // own effect is worse than an ignored parameter — the agent would act on a
+  // truncated list believing it complete (inert-mcp-inputs §3.1). Nothing is
+  // lost: the full raw grep output stays retrievable through chunkSetId.
+  //
+  // `metrics` below describes the FULL pre-cap capture, not `files`: it comes
+  // from the ExecResult, which the cap never touches. So returnedTokens covers
+  // omitted files too, and returnedBytes / files.length is not a per-file size.
+  omitted?: { files: number; matches: number };
   chunkSetId: string | undefined;
   metrics: {
     rawBytes: number;
@@ -133,6 +142,10 @@ export function groupGrepMatches(output: string): SearchCodeMatchGroup[] {
 // query over each file's matched-line text. Never adds or removes files — it
 // only reorders the live grep result set (spec §9.5). Any failure leaves the
 // live grep order untouched and reports "unavailable".
+//
+// Files CAN still leave the response after this point: shapeResult applies the
+// max_results cap to the order enrich produced, and reports the drop as
+// `omitted`. The §9.5 contract is about enrichment, not about the response.
 function enrich(
   groups: SearchCodeMatchGroup[],
   query: string,
@@ -164,7 +177,7 @@ export async function handleSearchCode(
   if (!parsed.success) {
     throw new McpBridgeError("validation_failed", parsed.error.message);
   }
-  const { query, task, sessionId, max_tokens } = parsed.data;
+  const { query, task, sessionId, max_tokens, max_results } = parsed.data;
   if (query.trim() === "") {
     throw new McpBridgeError("validation_failed", "proxy_search_code requires a non-empty query");
   }
@@ -246,25 +259,39 @@ export async function handleSearchCode(
         }
       }
 
-      return shapeResult(query, outcome.result);
+      return shapeResult(query, outcome.result, max_results);
     },
-    (json) => shapeResult(query, json as ExecResult),
+    (json) => shapeResult(query, json as ExecResult, max_results),
   );
 }
 
-function shapeResult(query: string, exec: ExecResult): SearchCodeResult {
+function shapeResult(query: string, exec: ExecResult, maxResults?: number): SearchCodeResult {
   const liveOutput = exec.excerpts.map((e) => e.text).join("\n");
   const groups = groupGrepMatches(liveOutput);
   const { files: ordered, status } = enrich(groups, query);
-  const files: SearchCodeFile[] = ordered.map((g) => ({
+  const all: SearchCodeFile[] = ordered.map((g) => ({
     ...g,
     matchCount: g.matches.length,
     reason: `${g.matches.length} match(es)`,
   }));
+  // The cap runs AFTER enrich, so it keeps the highest-ranked files rather than
+  // whichever ones grep happened to emit first. Absent ⇒ uncapped: adopting the
+  // roadmap's unimplemented `default: 50` would silently truncate every caller
+  // that never asked for a cap (inert-mcp-inputs §3.2).
+  const files = maxResults === undefined ? all : all.slice(0, maxResults);
+  const dropped = all.slice(files.length);
   return {
     query,
     files,
     index_enrichment: status,
+    ...(dropped.length > 0
+      ? {
+          omitted: {
+            files: dropped.length,
+            matches: dropped.reduce((n, f) => n + f.matchCount, 0),
+          },
+        }
+      : {}),
     chunkSetId: exec.chunkSetId,
     metrics: {
       rawBytes: exec.rawBytes,

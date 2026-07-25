@@ -105,3 +105,48 @@ See [[concepts/proxy-mode]] for the full 7-phase arc. Two bridge deltas:
   base tools; after the Phase 0–10 merge the bridge ships **26 tools** —
   the 25 ContextOps tools plus `proxy_search_code` — and `McpToolName` is a
   **26-member** enum.)
+
+## Inert tool inputs closed (2026-07-25)
+
+Two `.strict()` tool schemas declared a key nothing read: `max_results`
+(`src/tools/search-code.ts:25`) and `around` (`src/tools/fetch-chunk.ts:19`).
+Because the schemas are strict, these were among the very few keys a caller
+could pass WITHOUT an error — every other unknown key failed loud, these two
+were accepted and dropped. Same defect class as `deny.write` in
+[[entities/policy]], found by the same security review.
+
+One claim in the report did not survive checking: `max_results` is NOT published
+to agents as `{minimum:1, maximum:500, default:50}`. That line lives in the v1.2
+roadmap plan, never implemented — `src/server.ts:282` advertises
+`inputSchema: { type: "object" }` for **all 26 tools**, so no input property,
+bound, or default is published for anything. Lower exposure, same defect; and it
+means there was no published default to honor.
+
+- **`max_results` → honored.** It is a genuine cap: `enrich` already BM25-orders
+  files, so top-N is meaningful. The cap runs AFTER `enrich` (a slice-before-rank
+  implementation keeps whatever grep emitted first) and reports a new optional
+  `omitted: {files, matches}` when it drops anything — a silent cap is worse than
+  an ignored parameter, because the agent acts on a truncated list believing it
+  complete. Lossless: the raw output stays reachable via `chunkSetId`. No default
+  adopted; absent ⇒ uncapped, or every existing caller would start truncating.
+- **`around` → removed.** Not an ignored knob but an unbuilt feature
+  (neighbouring-chunk fetch needs chunk ordering, bounds, a changed result
+  shape). `.strict()` now rejects it, and zod's own message names the key, which
+  reaches the caller through `McpBridgeError("validation_failed", …)`. It did
+  NOT get the custom named-message machinery `deny.write` earned — that paid off
+  on a security key where silence means false protection; here zod naming the
+  key is already actionable.
+
+`shapeResult` is the single chokepoint for both the in-process and
+daemon-forward branches, so the cap needed no daemon-side change (the daemon's
+own `searchRequestSchema` never declared `max_results`, which is irrelevant —
+forwarding goes to `/exec-registry` and the `ExecResult` is shaped locally).
+
+Sources: [[docs/superpowers/specs/2026-07-25-inert-mcp-inputs-design]],
+[[docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design]] §P3-T8.
+
+Mutation testing (2026-07-25) killed 5 of 6 mutants on the first pass; the
+survivor was "treat absent `max_results` as a default of 50", which every test
+accepted because no fixture had more than 50 files — i.e. the §3.2 no-default
+decision shipped untested. Closed with a 60-file daemon-path fixture, verified
+red against exactly that mutant (60 → 50) before being kept.

@@ -220,6 +220,153 @@ describe("handleSearchCode", () => {
     ).rejects.toMatchObject({ code: "policy_load_failed" });
   });
 
+  // ─── max_results cap (inert-mcp-inputs §3.1) ──────────────────────────────────
+
+  // The fixture below has 3 matching files and 4 total matches. Expectations
+  // are derived from it rather than from a prior uncapped call: an identical
+  // repeat search returns the diff-on-reread unchanged-marker instead of the
+  // excerpts, so two searches in one test would not compare like with like.
+  async function seedThreeFilesFourMatches(): Promise<void> {
+    await writeFile(join(projectRoot, "a.ts"), "const needle = 1;\nconst needle2 = needle;\n");
+    await writeFile(join(projectRoot, "b.ts"), "import { needle } from './a';\n");
+    await writeFile(join(projectRoot, "c.ts"), "// needle again\n");
+  }
+
+  it("no max_results ⇒ every file, and no omitted field", async () => {
+    await seedThreeFilesFourMatches();
+    const result = await handleSearchCode(env(), { query: "needle", sessionId: SESSION_ID });
+    expect(result.files).toHaveLength(3);
+    expect(result.files.reduce((n, f) => n + f.matchCount, 0)).toBe(4);
+    expect(result.omitted).toBeUndefined();
+  });
+
+  it("max_results caps the file list and reports what it dropped", async () => {
+    await seedThreeFilesFourMatches();
+    const capped = await handleSearchCode(env(), {
+      query: "needle",
+      sessionId: SESSION_ID,
+      max_results: 1,
+    });
+    expect(capped.files).toHaveLength(1);
+    // A silent cap is the defect being fixed: the agent must be able to see
+    // that more exist (and the raw output stays reachable via chunkSetId).
+    expect(capped.omitted?.files).toBe(2);
+    // Which file survives depends on BM25 rank, so assert the accounting
+    // balances rather than pinning a path: nothing is invented or lost.
+    expect((capped.files[0]?.matchCount ?? 0) + (capped.omitted?.matches ?? 0)).toBe(4);
+  });
+
+  it("max_results >= the file count changes nothing (no omitted field)", async () => {
+    await writeFile(join(projectRoot, "a.ts"), "const needle = 1;\n");
+    await writeFile(join(projectRoot, "b.ts"), "const needle = 2;\n");
+    const result = await handleSearchCode(env(), {
+      query: "needle",
+      sessionId: SESSION_ID,
+      max_results: 5,
+    });
+    expect(result.files).toHaveLength(2);
+    expect(result.omitted).toBeUndefined();
+  });
+
+  it("no max_results ⇒ uncapped even past 50 files (the roadmap default is NOT adopted)", async () => {
+    // Kills the "undefined ⇒ default 50" mutant. Adopting the roadmap's
+    // unimplemented `default: 50` would silently truncate every caller that
+    // never asked for a cap — the exact "looks complete but isn't" failure this
+    // change exists to prevent (inert-mcp-inputs §3.2). Driven through the
+    // daemon path so 60 files cost no filesystem.
+    const lines = Array.from({ length: 60 }, (_, i) => `./f${i}.ts:1:needle`);
+    mockGetRunningDaemon.mockResolvedValue({
+      url: "http://127.0.0.1:1",
+      token: "t",
+      request: vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            chunkSetId: "cs-60",
+            rawBytes: 100,
+            returnedBytes: 80,
+            bytesSaved: 20,
+            savingRatio: 0.2,
+            rawTokens: 25,
+            returnedTokens: 20,
+            summary: "grep output",
+            excerpts: [{ id: "0", startLine: 1, endLine: 60, bytes: 900, text: lines.join("\n") }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    });
+
+    const result = await handleSearchCode(
+      {
+        registry: createInMemoryCoreRegistry(),
+        storeRoot: store,
+        now: () => TS,
+        newId: () => "x",
+        originPid: String(process.pid),
+      },
+      { query: "needle", sessionId: SESSION_ID },
+    );
+
+    expect(result.files).toHaveLength(60);
+    expect(result.omitted).toBeUndefined();
+  });
+
+  it("the cap keeps the TOP-RANKED files, not the ones grep emitted first", async () => {
+    // Deterministic ordering fixture: grep emits the weak match FIRST, BM25
+    // ranks the dense one higher. A slice-before-rank implementation would
+    // keep ./weak.ts and fail here.
+    const daemonExec = {
+      chunkSetId: "cs-rank",
+      rawBytes: 100,
+      returnedBytes: 80,
+      bytesSaved: 20,
+      savingRatio: 0.2,
+      rawTokens: 25,
+      returnedTokens: 20,
+      summary: "grep output",
+      excerpts: [
+        {
+          id: "0",
+          startLine: 1,
+          endLine: 3,
+          bytes: 90,
+          text: [
+            "./weak.ts:1:needle mentioned once among plenty of unrelated filler words here",
+            "./dense.ts:1:needle needle needle",
+            "./dense.ts:2:needle needle needle",
+          ].join("\n"),
+        },
+      ],
+    };
+    mockGetRunningDaemon.mockResolvedValue({
+      url: "http://127.0.0.1:1",
+      token: "t",
+      request: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(daemonExec), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    });
+
+    const result = await handleSearchCode(
+      {
+        registry: createInMemoryCoreRegistry(),
+        storeRoot: store,
+        now: () => TS,
+        newId: () => "x",
+        originPid: String(process.pid),
+      },
+      { query: "needle", sessionId: SESSION_ID, max_results: 1 },
+    );
+
+    // The cap applies on the daemon-forward path too (shapeResult is the
+    // single chokepoint for both branches).
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0]?.path).toBe("./dense.ts");
+    expect(result.omitted).toEqual({ files: 1, matches: 1 });
+  });
+
   // ─── daemon-forward cases ─────────────────────────────────────────────────────
 
   it("daemon 200 ExecResult → shapeResult applied → SearchCodeResult with files + index_enrichment", async () => {

@@ -951,6 +951,14 @@ Output:
 - expandable chunk IDs
 - token savings estimate
 
+> **Status 2026-07-25.** "omitted low-value matches" (and plan task P3-T8)
+> shipped only PARTLY. `max_results` now caps the ranked file list and
+> reports `omitted: {files, matches}`; per-match collapsing of noisy or
+> duplicate matches within a retained file is still not implemented, and
+> `omitted` carries counts rather than per-file entries. Until
+> 2026-07-25 `max_results` was parsed and ignored outright. See
+> `docs/superpowers/specs/2026-07-25-inert-mcp-inputs-design.md`.
+
 Acceptance criteria:
 
 - works without index
