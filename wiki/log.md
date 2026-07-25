@@ -6081,3 +6081,478 @@ ambiguous document failed closed. Task 6 is complete as an evidence-gated
 implementation. The verifier remains intentionally score-ineligible without a
 real authoritative completed web-plus-enterprise bundle, and this work makes
 no LongMemEval-V2 score claim. (source: `.superpowers/sdd/task-6-report.md`)
+## [2026-07-20] plan | Redaction baseline extension planned (CRITICAL)
+
+13-task TDD plan (3,458 lines) at
+`docs/superpowers/plans/2026-07-19-redaction-baseline-extension-plan.md`,
+implementing `docs/superpowers/specs/2026-07-19-redaction-baseline-extension-design.md`.
+31 new credential detectors plus a PKCS#8 fix to the existing
+`private_key_block`. Both CRITICAL design gates ran and returned REVISE:
+the architect measured the proposed prefix pre-filter as a 3x
+pessimization (V8 already fast-paths literal-anchored regexes) and the
+security reviewer found 6 BLOCKING defects — a quadratic ReDoS in the
+OpenAI detector, case-sensitive context gates that leaked 7 of 8
+canonical uppercase env-var shapes, a false "already covered" exclusion
+claim that turned out to be a real PKCS#8 gap in shipped code, 360
+corpus false positives from a Mailgun rule (dropped), 8 detectors
+missing trailing boundaries, and an unanchored GitHub App rule that ate
+file paths. All integrated; re-check APPROVE_WITH_FIXES, closed.
+Safety gates land before the detectors: frozen snapshot of the original
+19, a 5,010-line false-positive corpus, ordering tests (behavioral plus
+structural), and a ReDoS timing regression scoped to the new tier.
+Separately filed: a live ReDoS in the shipped `jwt` detector
+(1850 ms at 156 KiB, reachable from ordinary base64-heavy logs).
+
+## 2026-07-20 — `mega doctor` saver-liveness fixed (merged to main)
+
+`saver-liveness` failed permanently and never self-healed. Root cause: doctor
+reused the heartbeat ledger's **stats retention** window (`TTL_MS` = 30 days)
+as if it were a **liveness recency** window. `LIVENESS_GAP_GRACE_MS` (5 min)
+only bounds the invocation-vs-completion delta, never how recent the invocation
+is — so any workspace with `completion === null` failed the check from the
+moment it died until it aged out 30 days later. The code stated the false
+premise in a comment ("computeView already prunes stale invocations, so any
+survivor here is recent enough").
+
+Real ledger evidence: 67 workspace keys with an invocation, 30 with a
+completion, **37 with none**. The reported key `5fe7a040a2e5a5b8` was a dead
+temp dir from `2026-07-14`. Neither suggested remedy worked — re-running doctor
+left the key, and `mega hooks install` does not clear history.
+
+Fix (`829ddb3e`): dedicated `LIVENESS_WINDOW_MS` (24h) in `doctor-saver.ts`,
+applied to **both** the gap scan and the sibling `failures` scan (the failures
+branch had the identical defect). `TTL_MS` and `packages/context-gate` left
+untouched — retention and liveness are different questions, and conflating them
+was the bug. The user's ledger is not mutated; stale entries remain and are
+simply ignored.
+
+Verified: `10 PASS / 0 FAIL` on the real store; 19/19 doctor tests; `pnpm verify`
+exit 0; `bundle-smoke` green against a real bundle. Review APPROVED with no
+findings, having independently reproduced the before/after test split and
+mutation-tested the boundary operator.
+
+Correction to an earlier claim in this session: `bundle-smoke` **skips** when no
+bundle exists, so `main` was not red for everyone — only for anyone with a built
+bundle on disk.
+## 2026-07-20 — Variance-controlled benchmark harness (L0 + L1) built; fast-mode premise retracted
+
+Built `feat/bench-replay` (15 commits, 101 package tests green) implementing the
+L0 cost-normalization + L1 record/replay harness from
+[[syntheses/variance-controlled-benchmark]].
+
+**Retraction.** The spec's premise that a fast-mode 2x billing artifact drove
+benchmark variance was checked against all 24 saved Stage A result files and is
+FALSE: every one is `service_tier: standard`, `fast_mode_state: off`, with raw
+`total_cost_usd` equal to normalized cost (0% deviation). L0 changes no number
+on current data and is kept only as insurance. Corrected in
+[[syntheses/saver-cache-churn]].
+
+**Real variance sources:** (1) agent turn count driving cache_read near-linearly;
+(2) previously unidentified — the saver's per-workspace store carrying over
+between runs. task_1 ran 5/5 turns in both Stage A runs yet megasaver
+cache_creation fell 48,681 → 29,613 (baseline 30,129): the saver had switched
+itself off. Its run-2 "1.03x pass" was decay, not success.
+
+**Review caught four defects that would each have produced a confident wrong
+number:** saver applied per-request instead of per-tool-call (would have imposed
+a ~20x cache penalty on the arm under test); an isolated store silently
+disabling the saver (inert arm reporting 1.00x); arm run order contaminating via
+the shared prompt-cache prefix; and array-form `tool_result` blocks (14.4% of
+17,584 real blocks) passing through untransformed. All fixed.
+
+**Not done:** the real gate has not run — replay needs an `ANTHROPIC_API_KEY`
+(Claude Code's OAuth is not usable by a separate HTTP client). No Stage A
+verdict exists; `feat/net-positive-stage-a` remains parked and ungated.
+Sources: code-reviewer + critic passes 2026-07-20, direct inspection of
+`/tmp/stagea-run{1,2}-results`.
+
+## 2026-07-20 — bench-replay merged to main after four adversarial review rounds
+
+`feat/bench-replay` merged (`3c1e23ca`), `pnpm verify` exit 0, 56/56 turbo tasks,
+139 package tests. **Merged as tested infrastructure, NOT as a source of
+quotable numbers** — see [[syntheses/variance-controlled-benchmark]] and
+`packages/bench-replay/README.md`.
+
+### Four rounds, four real defects — each a fix of the instance, not the class
+
+1. **FATAL** — saver applied per request. A Messages API conversation resends
+   its whole history each turn, so a stateless transform re-invoked the saver on
+   the same `tool_result` once per containing request. Would have made the
+   megasaver arm's prefix mutate every turn, paying `cache_creation` ($10/Mtok)
+   where baseline paid `cache_read` ($0.50/Mtok) — a ~20x manufactured penalty
+   that would have condemned Stage A for causing the very prefix churn it exists
+   to prevent.
+2. **Same defect, relocated** — the memo was scoped inside `replayArm` (one arm),
+   but the verdict path runs four arm runs. Measured 6 saver invocations for 3
+   tool calls; pair 1's megasaver bytes differed from pair 2's. `orderSensitive`
+   structurally could not detect it (both orders penalised equally → ratios agree
+   → spread 0 → guard passes).
+3. **BLOCKER** — output-token sampling noise. The model resampled freely on all
+   four arms; output is ~26% of arm cost at $25/Mtok. Simulation against a TRUE
+   5% saving: sd 3.78%, and **15.5% of runs reported the wrong SIGN**. Fixed by
+   capping generation to 1 token on both arms (`max_tokens` is not in the
+   prompt-cache key; the replay never uses generated output). Output share falls
+   to f≈0.00071 with c≈0.
+4. **Aggregate-vs-per-call** — the two-sided integrity band constrained
+   conversation-wide aggregates while a saver breaks per call, and the two axes
+   traded off freely. `() => ""` on half the calls scored frac 0.500 /
+   byteRatio 0.500, `ok=true`, reporting a fake **2.0x win**; emptying the 11
+   largest of 100 reported **3.3x**.
+
+### Final fix — structural, not another threshold
+
+Per-call contract validation inside `memoize`, using the saver's own invariant
+(confirmed in `record-output.ts:188,218-228`): every applied output carries
+`[Mega Saver: compressed ` AND is strictly smaller than the raw. Throws before
+any request is sent, naming each offending `tool_use_id`. Catches one bad call
+among ninety-nine, which no aggregate can. Both aggregate floors were then
+removed as redundant-or-harmful (`MIN_BYTE_RATIO` refused honest aggressive-mode
+runs at byteRatio 0.039; `MIN_APPLIED_FRACTION` refused honest runs where the
+saver legitimately fires on few large outputs). One aggregate threshold remains,
+`MAX_BYTE_RATIO = 0.95`, derived: above it a transform provably cannot reach the
+≤5% band even if tool_results were the entire prompt.
+
+### What it measures, and what it does not
+
+- **Measures:** the saver's direct input-side token/cache effect on one frozen
+  conversation. Turn count is identical across arms by construction. Compounding
+  IS captured (history resend means a turn-3 compression shrinks every later
+  request).
+- **Does NOT measure:** any effect on agent behaviour (fewer/more turns because
+  compressed output read differently) — the larger prize, needing high-N
+  end-to-end.
+- **As a proxy for live savings the ratio is an UPPER BOUND**, not an estimate:
+  the harness omits the saver's main cost channel (compression removes bytes the
+  agent may need, and the footer invites it to fetch them — each recovery is a
+  full extra request at full history price) while counting all its savings.
+
+### Known-unvalidated at merge
+
+Never run against the real API. Prompt-cache nondeterminism (best-effort caching
+can return `cache_creation` for bytes that returned `cache_read` moments earlier
+— 20x on that segment) is untested and unmeasured by anything in the harness, so
+residual input-side variance is unknown and **no ≤5% claim is supportable yet**.
+The record path (`capture-proxy.ts`, `record-command.ts`) and the cost function
+have never been adversarially reviewed. `normalizedCostUsd` is model-blind —
+sidecar Haiku calls are priced as Opus (~6x) and dilute the ratio toward 1.00;
+mitigated by a printed per-model histogram, not by repricing.
+
+Stage A (`feat/net-positive-stage-a`) remains parked and UNGATED. Running the
+gate needs an `ANTHROPIC_API_KEY` (Claude Code's OAuth is not usable by a
+separate HTTP client).
+
+## 2026-07-20 — LLM Code Problems Research analysis
+
+Analyzed `~/Desktop/LLM-Code-Problems-Research.docx` (593+ articles, ~19.4k lines) via 10 parallel range agents. Mapped dominant problem clusters (package/API hallucination, generated-code security, context quality, silent agent failures, memory poisoning) to 10 prioritized Mega Saver feature proposals + validated existing bets. Caveats: heavy duplication, boilerplate fields, single-source numbers. Synthesis: [[syntheses/llm-code-problems-research-2026-07]].
+
+## [2026-07-20] fix | output-filter — close review on the quadratic signal regexes
+
+Five code-review items closed on `fix/rank-quadratic` (commits `a1bf5983`,
+`47dab116`). New page: [[concepts/unbounded-run-redos]].
+
+**Two more instances of the same class were still live.** `STACKTRACE`
+(`rank.ts`) and `SIGNATURE` (`parsers/stacktrace.ts`) had the identical shape
+plus a second driver — `\s+` and `.+` both accept whitespace, so the split is
+ambiguous at every offset of a whitespace run. Bounded to
+`\s{1,64}at\s{1,8}.{1,512}` (+ `\(.{1,512}` for SIGNATURE). Derived, not taken
+from the review: the gap bound is the tight one because only the gap
+multiplies, and `.{1,512}` absorbs a wide gap anyway, so `\s{1,8}` costs no
+reach (divergence only past 515 gap chars). Equivalence verified on 20 real
+frames — node with/without parens, tab-indented, deep monorepo, nested v8 eval,
+java, python, go, rust — before and after, all identical.
+
+**Correction to the review's attribution.** The reviewer measured 42 s for
+`  at ` + spaces through `filterOutput` and attributed it to
+STACKTRACE/SIGNATURE. Stage-level profiling says otherwise: on that shape the
+cost is `redactWithFindings` (16-24 s), from three variable-length lookbehinds
+in `@megasaver/policy` — `aws_secret_key` 6,132 ms, `basic_auth_header`
+4,598 ms, `api_key_header` 4,156 ms. Same defect class, third variant, now
+recorded and **still open**. The output-filter patterns were genuinely
+quadratic (32.9 s and 16.5 s through their own call sites), but they were not
+what the 42 s measured.
+
+**The guard test was not guarding.** It ran at 50 KB with a 5 s ceiling, where
+four of the five reverted patterns cost 2.9-4.7 s and stayed green — so only
+STACKTRACE's reversion would ever have failed it. And it drove only
+`scoreChunk`, which never reaches `normalize.ts`, so its claim to cover
+`POSITION` was false (the reviewer proved this; confirmed). Fix: SIZE 50 KB →
+100 KB (quadratic vs linear, so size is the cheap separator), and one timing
+block per pattern through its real call site. Each of the five now goes red
+alone when its bound is reverted: 16.1 / 19.3 / 32.9 / 16.5 / 12.2 s.
+
+**Changeset corrected.** "No behavior change" softened to "no realistic input"
+with the exact thresholds. Two of the five turn out to have no length
+divergence at all — `FILE_PATH`'s start class equals its continuation class, so
+a longer run restarts the match later rather than failing. The 236 s `saver-run`
+baseline is noted as load-dependent (160 s idle) rather than silently swapped.
+
+**Deferred, unchanged:** the `email` observer (`redaction-patterns.ts:171`),
+LOCKED §9d baseline, needs its own spec → security-reviewer chain. It is
+count-only and never modifies text, so a size gate on the observer loop may be
+cheaper than touching the locked pattern. Recorded as an option in
+[[concepts/unbounded-run-redos]]; not acted on.
+
+## [2026-07-20] fix | jwt detector ReDoS fixed (CRITICAL)
+
+One-line fix on `packages/policy/src/redaction-patterns.ts`: a leading
+`(?<![A-Za-z0-9_-])` on the LOCKED `jwt` detector. 313 KiB of
+`'eyJaA0'.repeat(n)` goes from 8,374 ms to 0.45 ms — quadratic to linear,
+~17,400x. Root cause is start-position count, not run length: 39 KiB with 6,800
+`eyJ` starts costs 204 ms, the same 39 KiB with one start costs 0.0 ms.
+
+**Supersedes the severity claim in the entry above.** That entry filed this as
+"reachable from ordinary base64-heavy logs". Re-measured, that is wrong: a
+24.6 KiB unbroken base64 run costs 0.00 ms, because random base64url holds `eyJ`
+about once per 262,144 positions. Text full of real JWTs is fast too — the dots
+satisfy the mandatory separator immediately. The correct classification is
+**adversarially reachable, not ordinarily reachable**: it needs a crafted
+payload with many `eyJ` occurrences and no dots. It stays CRITICAL-tier because
+the redactor sits on untrusted agent output, tool results, and Hot Handoff
+packets, where a crafted payload stalls every sink.
+
+The earlier note's stated root cause ("the separator is not excluded from the
+character class") was also wrong — `[A-Za-z0-9_-]` does not match `.`.
+
+Accepted trade-off (spec §5): a JWT glued to a base64url character, including
+`-` and `_`, no longer redacts; `session-<jwt>` and `id_token_<jwt>` stay in
+cleartext, asserted explicitly so nobody narrows the class back into the
+quadratic. BB3 §5a lock table amended with a footnote in the same commit. The
+unexecuted redaction-baseline extension plan was retargeted: snapshot literal,
+single-exception framing, and the ReDoS gate's jwt exclusion (comment and
+committed commit-message body) all updated, and `jwt` brought into that gate's
+scope. Sources:
+[[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]], [[entities/policy]].
+
+## [2026-07-20] fix | jwt detector: percent carriers recovered, severity corrected (CRITICAL)
+
+**Supersedes the severity claim in the entry above.** That entry classified the
+jwt ReDoS as "adversarially reachable, not ordinarily reachable". Measurement
+refutes it: the correct classification is **ordinarily reachable**. The earlier
+reasoning used the wrong population — base64 of *JSON* is not random. JSON
+objects begin `{"`, which encodes to `eyJ`, so every encoded JSON value
+contributes an `eyJ` at a predictable alignment, and encoded-JSON payloads are
+routine in agent output.
+
+The vector is **base64url with no separator**: 320 KiB of it costs **575.9 ms**
+under the pre-fix pattern (327,680-char dotless run), scaling cleanly
+quadratically — 85 / 171 / 341 / 683 KiB at 40.6 / 165.6 / 637.6 / 2,555.5 ms.
+`Buffer.toString("base64url")` of any JSON payload produces this shape, and no
+effective size cap sits in front of redaction. Standard base64 and newline
+wrapping are both benign, which is the honest boundary. **Kubernetes Secrets and
+Docker `config.json` auth blobs are NOT the vector** — both use standard base64,
+whose `+` and `/` break the run, and measure 1.0 ms and 2.1 ms at ~320 KiB.
+
+**Second correction: the first fix silently lost the percent-escaped carriers.**
+Every hex digit is a base64url character, so a `%XY` predecessor blocked
+redaction — taking URL query strings and fragments, among the most common places
+a JWT appears in agent output, with it. The scope sentence in the original spec
+§5 did not say so. Recovered by a second lookbehind branch,
+`(?<=%[0-9A-Fa-f][0-9A-Fa-f])`: 0/512 `%XY` forms redacted before, 512/512 now.
+Nearly free, because `%` sits outside the run class and terminates the dotless
+run — 0.32 ms per 313 KiB, linear. The earlier 49.7 ms rejection of a hybrid
+alternation did not transfer: it measured a branch after `-`/`_`, which are
+inside the class and still scan.
+
+Remaining disclosed loss, unchanged in kind but stated correctly: a JWT preceded
+by a **raw** base64url character. `session-<jwt>`, `id_token_<jwt>`,
+`Bearer<jwt>`, `ghs_<body>_<jwt>`, base64-run glue, and `\x3d` / `\u003d`
+escaped equals. **No other detector covers those bytes** — verified through the
+full pipeline. `&#61;` was never affected (predecessor `;`). Released as
+**minor**, not patch, so the coverage reduction is visible at release.
+
+The test suite was rebuilt: mutation testing showed the shipped 21 assertions
+killed all five structural mutants through a single `pattern.source` prefix
+check, which tests no behaviour and breaks on the amended pattern — update it
+naively and four of five mutants survive. The corpus held no `-` or `_` in any
+segment, making segment-class narrowing invisible. Six mutants now verified red,
+each behaviourally. Sources:
+[[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]] §0, [[entities/policy]].
+
+## [2026-07-20] fix | jwt detector: round-2 verifier findings closed (CRITICAL)
+
+Closes the `critic` round-2 and `verifier` round-2 findings on `fix/jwt-redos`.
+
+Two mutants survived the rebuilt suite. Removing the payload's `eyJ` anchor, and
+relaxing any segment `+` to `*`, both passed all 34 assertions — the corpus is
+blind to them because all 21 fixtures carry `eyJ`-prefixed payloads, as real
+JWTs do. Both mutants only ADD matches: `trace eyJhbGciOiJIUzI1NiJ9.session.abc123`
+and `see eyJlogger.v2.min bundle` start being redacted. Six no-over-redaction
+assertions added, each verified red against its own mutant. Note `eyJ.eyJ.`
+alone does NOT kill the single-position segment mutants — measured, it redacts
+only under the simultaneous triple relaxation; the three positional fixtures are
+what carry the guarantee.
+
+The 313 KiB timing tests flaked 1 run in 5 under `turbo test --force`. Not CPU
+contention: 0.3–1.8 ms at 8x oversubscription (load avg 77 on 10 cores) and 15
+consecutive green runs under that load. Two full forced runs each surfaced a
+*different*, pre-existing failure — `@megasaver/cli`'s `saver-run.test.ts`
+real-daemon HTTP test at 74 s, unrelated to this branch. Fixed with
+`{ retry: 3 }`, ceiling unchanged at 500 ms: a quadratic is slow on every
+attempt (narrowed lookbehind 4/4 at 38.0–41.8 s, reverted 4/4 at 34.2–40.3 s,
+both also tripping the structural gate).
+
+Scope correction: branch 2 recovers one complete `%XY` escape only. Double-
+encoded `%25XX` and boundary-truncated `%X` remain lost, re-confirmed through
+the full pipeline with no detector firing. Spec §0a and the changeset now say so.
+
+Paperwork: spec §6.2a (timing gate + mutation gap), §9a (the seven-pass CRITICAL
+review trail, the user's explicit approval of the round-2 amendment and the
+minor bump, and the Node 25.8.2 vs pinned Node 22 measurement caveat — the
+discrepancy runs in the safe direction). The plan, written for round 1 and never
+amended, gained a Round 2 section, inline superseded markers on its three stale
+pattern literals, and reconciled checkboxes. Sources:
+[[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]] §6.2a §9a,
+[[docs/superpowers/plans/2026-07-20-jwt-redos-fix-plan]], [[entities/policy]].
+## [2026-07-14 21:15 +03] fix | Claude proxy cache parity finalized
+
+Root cause confirmed as Claude Code's custom-base-URL mode, not proxy payload
+mutation: it changes tool-schema and hook-attachment cache placement. The
+first-party route flag restores parity for the verified Claude Code 2.1.207
+client. Final hardening clears stale flags for custom upstreams, tests the real
+CLI adapter, snapshots benchmark hooks after setup, and exposes an explicit
+managed-service-only upgrade restart. URL equality is never used as ownership
+authorization.
+
+Evidence: 70 focused tests and full `pnpm verify` passed; changeset status,
+benchmark shell syntax, and diff checks passed. Independent code reviewer and
+adversarial critic both returned Ready. Four-task real-billing smoke benchmark
+improved from 0/4 losses to 4/4 wins (1.30x cost geomean; approximately $1.87
+vs $2.49 total), while the 4x claim remains unproven. Implementation branch:
+`fix/proxy-cache-parity-finalize`; code head before this wiki record:
+`b09a3983`. Integration PR: GitHub #288.
+## [2026-07-25 14:20 +03] fix | context-gate FILE_PATH ReDoS (defect class instance 6)
+
+`FILE_PATH` in `packages/context-gate/src/session-hints.ts` was the unfixed twin
+of the `FILE_PATH` bounded in `packages/output-filter/src/rank.ts` (`4ddac04e`),
+and the worse form: `[\w./\\-]*\w+\.` is two unbounded quantified runs over
+overlapping classes (`\w` is a subset of `[\w./\\-]`), so the split between them
+was ambiguous at every offset *and* every start position rescanned to fail the
+`\.`. Superquadratic, ~7x per doubling through `extractFailureSignatures`: 1.2 s
+at 2 KB, 9.1 s at 4 KB, 80.5 s at 8 KB.
+
+Critical rather than theoretical on two counts. 4 KB is the shipped cap, not a
+probe size — both capture sites store `redact(...).redacted.slice(0, 4000)`
+(`run-command.ts:305`, `:574`) — and the cost is persisted and amplified: up to
+`MAX_OVERLAY_FAILURES` (50) records are re-extracted by `buildSessionHints` /
+`buildOverlayHints` on every read and exec, including inside the `guard-run`
+hook, so one session that captured a hex dump or identifier run added minutes of
+CPU to every later tool call, permanently. The firing shapes are accidental
+(`'x'.repeat` 9.1 s, hex dump 11.4 s, identifier run 10.1 s); path-ish runs,
+base64 and npm `sha512-` hashes do NOT fire it, because `/`, `-`, `+` and `=`
+break the `\w` run.
+
+Fix: collapse the second run to the single `\w` it actually required —
+`/[\w./\\-]{0,255}\w\.[a-zA-Z]{1,5}(?::\d+)?/g`, 2.3 ms at 4 KB. Semantics
+preserved exactly; verified behaviour-identical on 22 real diagnostic lines and
+200k randomised strings over the triggering alphabet. The one-run collapse
+`[\w./\\-]{1,256}\.` is equally fast but was rejected — it drops the
+`\w`-before-dot requirement and starts matching `-.ts`, `..ts`, `a/.js`. Only
+divergence kept is the 256-char leading-run cap, matching the merged twin.
+
+Why it survived: a wiki indexing gap, not a code gap. This page's `sources:`
+frontmatter listed only `output-filter` and `policy`, so a wiki-first sweep for
+the class never pointed at `context-gate`. Added, with a rule that every package
+holding a member of the class — including packages that merely copied a fixed
+pattern — goes in `sources:` in the same edit.
+
+Evidence: TDD red first — the guard failed at 6.47x / 6.60x / 6.10x with the
+bound reverted (clean ratio assertions, not timeouts) while all 12 behaviour
+tests passed unfixed, proving they lock behaviour rather than describe the fix.
+Green after: `pnpm verify` EXIT 0, 56/56 turbo tasks, context-gate 331/331.
+Guard is `packages/context-gate/test/session-hints-redos.test.ts` — drives the
+exported function at the shipped cap, asserts a growth ratio (min-of-5-trials,
+calibrated repeat count) rather than a wall-clock ceiling. Sources:
+[[concepts/unbounded-run-redos]] instance 6, [[entities/context-gate]].
+
+## [2026-07-25 14:30 +03] fix | Handoff redaction guard + three leaking fields
+
+Follow-up to the PR #293 pre-merge review. Two findings were filed as
+non-blocking hardening: no structural guard around per-field handoff
+redaction, and `git.branch` bypassing the redactor. Adversarial review of the
+first fix found the guard was itself fail-open and had *certified as safe*
+five fields that leak a secret today.
+
+Shipped: `git.branch`, `git.changedFiles[].path`, `git.diff.excludedPaths[]`
+now redacted; code anchors (`files[].path`, `symbols[].path`,
+`symbols[].name`) dropped wholesale with `lastVerified` when a key is dirty,
+because they are code-truth lookup keys and a redacted value produces a false
+`contradicted` that closes `validTo` on the receiver. Anchor handling sits in
+`redactMemory`, so `mega brain export` inherits it.
+
+Guard is test-based, not a runtime walk: zod string-leaf enumeration over
+`handoffPayloadSchema`, throwing on unrecognized wrappers and on non-strict
+objects, with four classification lists and per-path behavioral proof.
+
+Evidence: each of the four new redactions reverted individually and shown to
+fail the guard; `notes: z.record(z.string())` added to the schema and shown to
+throw `unclassifiable zod type ZodRecord`; `packages/core` 37/37;
+`pnpm verify` 56/56 tasks, exit 0. Reviewed by `code-reviewer` and two
+adversarial `critic` passes; every round-one and round-two finding addressed.
+Sources: [[docs/superpowers/specs/2026-07-25-handoff-redaction-guard-design]],
+[[docs/superpowers/plans/2026-07-25-handoff-redaction-guard-plan]],
+[[entities/hot-handoff]].
+
+## [2026-07-25 14:52 +03] merge | Stage A shipped with its gate still failing
+
+PR #295 ("net-positive Stage A — PARKED, ungated") merged to `main` as
+`8e261d19` on 2026-07-25, carrying the per-workspace net-effect estimator that
+auto-pauses the saver plus the per-session first-sight seen-hash ledger. Its
+own acceptance gate was still FAILED at merge time: geomean 0.948x against a
+required >=1.0x, min task 0.68x against >=0.9x. The variance-controlled
+bench-replay harness that could resolve the effect has never been run against
+the real API, so no post-merge verdict exists — the shipped guardrail and
+first-sight saver have no demonstrated cost benefit. PR #293 (Hot Handoff)
+also merged in the same window. Sources:
+[[syntheses/variance-controlled-benchmark]], [[syntheses/saver-cache-churn]],
+[[docs/superpowers/specs/2026-07-19-net-positive-megasaver-design]] §gate.
+
+## [2026-07-25 15:40 +03] correction | Stage A merge shape and commit count
+
+Both syntheses overstated the Stage A merge. Corrections, each verified against
+the repo: the branch carries **10** commits, not 11 (`git log --oneline
+main..feat/net-positive-stage-a | wc -l`); it was **rebase-merged**, not
+merged — `8e261d19` has a single parent, so there is no merge commit, and the
+range on `main` is `0157fe44..8e261d19`; the `feat/net-positive-stage-a` ref
+survives the rebase, so `git merge-base --is-ancestor` still reports it
+unmerged while `git cherry` marks all 10 commits as patch-equivalent on `main`.
+Added the live-code pointer (`apps/cli/src/hooks/saver-run.ts` wires
+`saverPausedByNetEffect` plus the seen-hash ledger) so a reader does not
+re-derive whether the guardrail actually ships. The prior entry
+`[2026-07-25 14:52]` stands as written history; it is superseded on the "merged
+as `8e261d19`" phrasing only. Sources:
+[[syntheses/saver-cache-churn]], [[syntheses/variance-controlled-benchmark]].
+## [2026-07-25 14:30 +03] fix | GC sweep clobbered registry-session stats
+
+`reconcileOverlaySummaries` (packages/stats/src/store.ts) treated every
+`stats/<dir>` as an overlay workspace, so `maybeRunOverlayGc`'s once-a-day
+sweep rewrote `stats/<projectId>/<sessionId>.json` as a zeroed overlay
+summary. Measured on a store with one registry session: `rebuilt` 2,
+`bytesSavedTotal` 9000 → 0, and a phantom `handoff.json` fabricated from the
+handoff ledger; `readSummary` and `appendEvent` then threw `store_corrupt`
+permanently, so `mega output exec/file/filter` returned `store_write_failed`.
+
+Fix: the sweep only enters dirs matching `workspaceKeySchema` (16 lowercase
+hex), the layout discriminator `locateChunkSet` already uses. After: `rebuilt`
+0, registry summary byte-identical, no `handoff.json`, real overlay workspaces
+still repaired. 4 red → green guard tests in
+`packages/stats/test/reconcile-legacy-layout.test.ts`; 241/241 stats tests
+pass. Branch `fix/gc-reconcile-clobbers-legacy-summaries`.
+See [[entities/stats]].
+## [2026-07-25 14:35 +03] fix | classify.ts `^\s*` quadratic (redos instance 6)
+
+`VITEST_OUT` and `PROSE_ANTI_VI` in `packages/output-filter/src/classify.ts`
+opened alternatives with `^\s*` under the `m` flag. `\s` matches `\n`, so inside
+a blank-line block every line start rescanned the whole remaining whitespace
+region before failing the required literal. Measured through the real call site
+`classifyOutput`: 31.8 s on 100 KB of newlines, 89 ms after bounding to
+`\s{0,64}`. Exposed by `mega bench`, which passes raw command output to the
+public export (`filterOutput` was shielded only incidentally, by feeding it
+post-`collapseRepeatedLines` text).
+
+Evidence: new `packages/output-filter/test/classify-redos.test.ts` at 100 KB
+with a 5 s ceiling — red 31.8 s before the fix; each bound verified
+load-bearing alone (32.6 s / 20.9 s when reverted individually). Package suite
+40 files / 416 tests green; biome clean on both touched files. Branch
+`fix/classify-vitest-text-multiline-ws-quadratic`; not merged. Updated
+[[concepts/unbounded-run-redos]] with instance 6 and the `^\s*`-under-`m`
+variant.
