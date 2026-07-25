@@ -1,7 +1,18 @@
 import type { Chunk } from "../rank.js";
 
-const SUMMARY = /^\s*✖ \d+ problems?/m;
-const PROBLEM_ROW = /^\s+\d+:\d+\s+(?:error|warning)\s/m;
+// Both leading runs are bounded for the same reason as classify.ts's vitest
+// patterns: `^` under `m` anchors after every U+2028/U+2029 and `\s` matches
+// them, so an unbounded run rescans the whole remaining separator run from each
+// anchor. normalize splits on `\n` only, so such a run reaches here intact.
+// Reverted one at a time, each costs ~30 s on 200 KB (29.9 s SUMMARY, 30.0 s
+// PROBLEM_ROW) — SUMMARY runs first and short-circuits the `&&` below, so
+// PROBLEM_ROW is only reachable behind a real summary line.
+// Bounding the leading run is also what defuses PROBLEM_ROW's second `\s+`: a
+// start position must now be within 64 chars of the `\d+:\d+`, so only O(64)
+// starts can reach any one gap. eslint indents problem rows by two spaces. Do
+// not restore `*`/`+`.
+const SUMMARY = /^\s{0,64}✖ \d+ problems?/m;
+const PROBLEM_ROW = /^\s{1,64}\d+:\d+\s+(?:error|warning)\s/m;
 const FILE_HEADER = /^\S/;
 
 export function detectEslint(text: string): boolean {
