@@ -4816,3 +4816,36 @@ would mask a real regression.
 
 Sources: [[docs/superpowers/specs/2026-07-25-dedupe-guard-flake-design]],
 [[docs/superpowers/plans/2026-07-25-dedupe-guard-flake-plan]].
+
+## [2026-07-25 21:15 +03] fix | successful stale-lock steal was abandoned at the deadline
+
+`main` had been red since 07a4e3dc on two lock tests (`saver-heartbeat` E25,
+`saver-seen-concurrency`). Chasing them found ONE root cause, and it is a
+production defect rather than two flaky tests.
+
+`withFileLock` removed a stale lock and then re-checked the deadline BEFORE
+retrying the acquire, so a steal whose syscalls outran `deadlineMs` returned
+false having just cleared the only obstacle to the write — the caller then
+skipped its write. The old comment justified the bail with "staleMs >>
+deadlineMs, so a stale lock means the deadline has effectively passed", which
+is true only when the steal FAILED.
+
+Quantified rather than argued: the steal path costs four syscalls, p50 ~0.18 ms,
+but p99 29.8 ms idle / 39.6 ms under 3x load over 200 samples — against shipped
+deadlines of 10 ms (`saver-heartbeat` LOCK_WAIT_MS) and 50 ms (`saver-seen`). So
+~1 in 100 steals succeeds and is abandoned on an IDLE machine. E25 ("a crashed
+writer can never freeze its callers forever") therefore failed precisely on the
+slow machines where a crashed writer is most likely.
+
+Honest boundary: NOT claimed as the fix for the two red tests. Neither
+reproduced locally — `saver-heartbeat` passed 3/3 under 2x oversubscription with
+the fix reverted. What is established is a real, deterministic defect whose
+failure signature (a skipped write ⇒ `expected {} to have property "aaaa"`) and
+measured rate match both symptoms.
+
+Also noted: the existing `file-lock` test "steals a STALE lock and runs fn" uses
+`deadlineMs: 10` and is exposed to the same p99 tail — it has been passing on
+luck, not margin.
+
+Sources: [[docs/superpowers/specs/2026-07-25-stale-lock-steal-abandoned-design]],
+[[docs/superpowers/plans/2026-07-25-stale-lock-steal-abandoned-plan]].

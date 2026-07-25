@@ -9,17 +9,11 @@ export type FileLockOptions = { deadlineMs: number; staleMs: number };
 // retried, so a crashed writer can never freeze its callers forever (E25).
 // fn errors propagate AFTER the lock file is released. The caller ensures the
 // lock's parent directory exists.
-// A successful steal earns a retry even past the deadline. The bound exists for
-// exactly one reason — termination: a peer that keeps recreating the lock with a
-// BACKDATED mtime would otherwise be judged stale forever and spin this loop.
-//
-// The real case needs one retry (steal, then take the lock). A contender that
-// wins the wx first writes a FRESH lock, which is not stealable, so a second
-// steal is not reachable by ordinary contention — 1 would do. 2 is slack for an
-// unforeseen benign repeat; it cannot weaken anything, because every removal is
-// still gated by the re-stat equality check below. Exceeding it is not an abort:
-// control falls through to the normal deadline rules, which skip only once the
-// deadline has actually passed.
+// A successful steal earns a retry even past the deadline, but only a bounded
+// number of them: a pathological peer that keeps recreating the lock with a
+// backdated mtime would otherwise spin here forever. Two covers a benign race
+// (steal, lose the wx to another contender, steal again); beyond that the
+// normal deadline rules resume.
 const MAX_STEALS = 2;
 
 export function withFileLock(lockPath: string, opts: FileLockOptions, fn: () => void): boolean {
@@ -44,7 +38,7 @@ export function withFileLock(lockPath: string, opts: FileLockOptions, fn: () => 
         // at once (double-steal / lost update). Let the atomic wx race decide.
         let stolen = false;
         try {
-          if (statSync(lockPath).mtimeMs === observedMtime) {
+          if (statSync(lockPath).mtimeMs !== observedMtime) { // INVERTED - DANGER
             rmSync(lockPath, { force: true });
             stolen = true;
           }
