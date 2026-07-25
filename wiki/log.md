@@ -4479,3 +4479,49 @@ only after verifying zod applies it.
 Sources: [[docs/superpowers/specs/2026-07-25-publish-tool-input-schemas-design]],
 [[docs/superpowers/plans/2026-07-25-publish-tool-input-schemas-plan]],
 [[entities/mcp-bridge]].
+
+## [2026-07-25] fix | redaction ReDoS instances 4 and 5 (@megasaver/policy)
+
+Closed the last two open members of [[concepts/unbounded-run-redos]], both in
+`packages/policy/src/redaction-patterns.ts`. Four bounds, no other change.
+
+Instance 5 is the lookbehind variant, and the reason it read as safe is that
+**V8 evaluates a lookbehind right to left**: the `\s` run that rescans at every
+start position is the one written *last*, nearest the value, not the one nearest
+the key. Bounded the trailing run only — `aws_secret_key` and `api_key_header`
+to `\s{0,64}`, `basic_auth_header`'s `basic\s+` to `basic\s{1,64}`. Measured
+50 KB -> 100 KB before: 2.2 -> 9.4 s, 1.3 -> 7.6 s, 1.9 -> 8.4 s.
+
+The **leading** `\s*` in each was left unbounded on purpose: reaching it needs
+the delimiter within 64 characters behind, and one delimiter per 64 characters
+is exactly what caps the leading run, so it is already O(n). Bounding it too
+measures identical. A bound no red test can justify is a change that should not
+be made.
+
+Instance 4 is `email`. This page had recorded a size gate on the observer loop
+as the cheaper fix, on the grounds that the observer is count-only. **That was
+wrong, and reading the sink is what showed it:** `redactForLedger` runs the same
+`OBSERVED_PATTERNS` array and actually replaces (F-FW-1 — an email must never
+persist into a ledger `sourcePath` label). A gate in `redactWithFindings` leaves
+that loop quadratic; a gate in both converts a DoS into an email leak. Bounded
+the local part to `{1,64}` (RFC 5321) instead, which fixes both loops at the
+root — 6.0 -> 23.1 s becomes linear — and does not change the reported count,
+because the bound is still greedy with backtracking.
+
+Guard: `packages/policy/test/redact-redos.test.ts`, growth ratio through the
+exported `redactWithFindings` at 50 -> 100 KB, min of 5 trials, calibrated
+repeats. Red 3.5x-4.1x on all three shapes before the fix, ~2.0x after; wall
+clock 304 s -> 3 s. Each of the four bounds was reverted alone and confirmed red
+alone.
+
+New lesson recorded on the concept page: the ratio guard is **per-shape**.
+`aws_secret_key` reverted is red on a space run and green on tabs;
+`api_key_header` reverted is the exact mirror — and on the shape that does not
+separate it, the reverted pattern still burns 65-100 s while the assertion
+passes. One shape per member of the whitespace class.
+
+`aws_secret_key` is row 5 of the LOCKED §5a table; amended with a dated footnote
+per the `jwt` precedent, never rewritten. The other three are outside that table.
+
+`pnpm verify` EXIT 0, 56/56 tasks. policy 284, context-gate 330, output-filter
+410, core 900 tests.

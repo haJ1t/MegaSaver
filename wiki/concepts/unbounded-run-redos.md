@@ -47,8 +47,8 @@ hex dumps (delimiter-free runs); column-padded tables and tab-indented logs
 | 1 | `jwt` redaction detector, `packages/policy` | fixed (own spec + security-reviewer chain) |
 | 2 | `EXCEPTION_NAME`, `FILE_PATH`, `POSITION` — output-filter | fixed, `8a872ef2` |
 | 3 | `STACKTRACE` (`rank.ts`), `SIGNATURE` (`parsers/stacktrace.ts`) | fixed, `a1bf5983` |
-| 4 | `email` observer, `redaction-patterns.ts:171` | **deferred** — see below |
-| 5 | 3 lookbehind patterns, `redaction-patterns.ts` | **open, unfiled** — see below |
+| 4 | `email` observer, `redaction-patterns.ts` | fixed — see below |
+| 5 | 3 lookbehind patterns, `redaction-patterns.ts` | fixed — see below |
 | 6 | `FILE_PATH`, `context-gate/src/session-hints.ts:17` | fixed — see below |
 | 7 | `VITEST_OUT`, `PROSE_ANTI_VI` (`classify.ts`) | fixed — see below |
 | 8 | `/\s+$/` trailing-whitespace strip, `normalize.ts:10` | fixed, `trimEnd()` — see below |
@@ -139,26 +139,63 @@ guard-size one: check what the *public* entry point does, not what the internal
 caller happens to do first.
 
 ## Deferred: instance 4 (`email`)
+## Instances 4 and 5 (`packages/policy`) — fixed 2026-07-25
 
-LOCKED §9d baseline entry (138 / 1,299 / 4,551 ms at 12.5 / 25 / 50 KB). Changing
-it needs its own spec → security-reviewer chain. **It is a count-only observer —
-it never modifies text** (`OBSERVED_PATTERNS`, redaction-patterns.ts:167), so a
-size gate on the observer loop may be a cheaper correct fix than touching the
-locked pattern. Recorded as an option; not acted on.
+Both closed by one spec,
+[[docs/superpowers/specs/2026-07-25-policy-redaction-redos-design]], with one
+bound each. Guard: `packages/policy/test/redact-redos.test.ts`.
 
-## Open: instance 5 (three lookbehinds)
+### Instance 5: the lookbehind variant
 
-Found while measuring instance 3. On a 50 KB whitespace run, `redactWithFindings`
-costs 16-24 s, and it is **not** the email pattern:
+**V8 evaluates a lookbehind right to left.** That is the whole mechanism, and it
+is why these three read as safe: the `\s*` that rescans is the one written
+*last*, nearest the value, not the one nearest the key literal. At every start
+position it consumes the whole preceding whitespace run, requires the delimiter,
+fails, and gives back one character at a time.
 
-| pattern | ms |
-|---------|-----|
-| `aws_secret_key` `/(?<=aws_secret_access_key\s*=\s*)[A-Za-z0-9/+]{40}/g` | 6,132 |
-| `basic_auth_header` `/(?<=authorization\s*[:=]\s*basic\s+)…/gi` | 4,598 |
-| `api_key_header` `/(?<=(?:x-api-key\|…)\s*[:=]\s*)…/g` | 4,156 |
+| pattern | bound added | 50 KB | 100 KB |
+|---------|-------------|-------|--------|
+| `aws_secret_key` | trailing `\s*` → `\s{0,64}` | 2,206 ms | 9,412 ms |
+| `basic_auth_header` | `basic\s+` → `basic\s{1,64}` | 1,894 ms | 8,350 ms |
+| `api_key_header` | trailing `\s*` → `\s{0,64}` | 1,280 ms | 7,606 ms |
 
-Variable-length lookbehind containing `\s*`, re-evaluated at every position.
-Same class, third variant. Not filed as a spec yet.
+The **leading** `\s*` in each was deliberately left alone. Reaching it needs the
+delimiter within 64 characters behind, and one delimiter per ≤64 characters is
+exactly what caps the leading run — the two conditions are mutually exclusive, so
+it is O(n) already. Bounding it too measures identical (10–140 ms at 200 KB
+across `ws=ws`, `ws:ws`, `(ws×500)basic(ws×500)` and `(ws×64)=`). **A bound that
+is not load-bearing is a change no red test can justify.**
+
+### Instance 4: `email`, and why the size gate was the wrong fix
+
+This page previously recorded "a size gate on the observer loop may be a cheaper
+correct fix than touching the locked pattern." Reading the sink says otherwise —
+**`OBSERVED_PATTERNS` is not count-only everywhere.** `redactForLedger`
+(`redact.ts:53-59`) runs the same array and actually *replaces*, because an email
+must never persist into a ledger `sourcePath` label (F-FW-1). A gate in
+`redactWithFindings` leaves that second loop quadratic; a gate in both turns a
+DoS into an email leak above the cap. The gate also zeroes the `observed` count
+on exactly the large diffs the observer exists for.
+
+Bounding the local part to `{1,64}` (RFC 5321 §4.5.3.1.1) fixes both loops at the
+root: 6,049 → 23,098 ms at 50 → 100 KB of letters, now linear. The bound is still
+greedy **with backtracking**, so an over-long local part does not stop matching —
+the match starts later, at the same `@` — and the reported count is unchanged.
+The domain run needs no bound: its start positions are the `@`s and each run it
+opens is terminated by the next `@`, so the total is already O(n).
+
+**Rule this adds:** before gating a loop to dodge a locked literal, grep for the
+other callers of the array. "Count-only" was a property of one call site, not of
+the data.
+
+### On the LOCKED table
+
+`aws_secret_key` is row 5 of the §5a baseline
+(`docs/superpowers/specs/2026-05-10-bb3-policy-design.md`). `api_key_header`,
+`basic_auth_header` and `email` are **not** in it. The lock is documentary — no
+snapshot test pins pattern bytes — and its amendment procedure was set by the two
+`jwt` amendments of 2026-07-20, both for this same defect class: add a dated
+footnote, never rewrite the row. Followed here.
 
 ## Fixed: instance 8 (`normalize`'s trailing-whitespace strip)
 
@@ -207,6 +244,16 @@ failed (there the unbounded form measured only 1.81x, so it never separated):
   count multiplies the pathological cost and hangs for 17+ minutes instead of
   going red. Deriving the count from one real call spends ~60 ms per sample when
   bounded and drops to a single repeat when not.
+
+### One shape does not separate every bound (instances 4-5)
+
+Reverting each of the four bounds alone showed the ratio guard is **per-shape**,
+not per-function: `aws_secret_key` reverted goes red only on a space run (3.77x)
+while the tab run stays green — and `api_key_header` reverted is the exact
+mirror, red on tabs (3.89x), green on spaces. On the shape it does not separate,
+the reverted pattern still burns 65–100 s at these sizes and the assertion passes
+anyway. Carry one shape per member of the whitespace class, and revert each bound
+individually to find out which shape is the one that catches it.
 
 Also: size the guard at the **shipped cap**, not an arbitrary probe size, and drive
 the exported function — never the bare regex. A sibling fix was previously weakened
