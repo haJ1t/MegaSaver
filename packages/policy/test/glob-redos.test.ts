@@ -149,8 +149,8 @@ describe("evaluatePathRead — line terminators in a path segment cannot bypass 
   const terminators: ReadonlyArray<readonly [string, string]> = [
     ["\\n", "home\nx/id_rsa"],
     ["\\r", "home\rx/.ssh/key"],
-    ["U+2028", "home x/credentials.json"],
-    ["U+2029", "home x/server.pem"],
+    ["U+2028", "home\u2028x/credentials.json"],
+    ["U+2029", "home\u2029x/server.pem"],
   ];
 
   for (const [label, path] of terminators) {
