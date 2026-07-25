@@ -98,17 +98,21 @@ export function checkTransformIntegrity(transform: TransformSummary): ArmIntegri
   };
 }
 
-// Below this the check would claim a precision it structurally cannot have: the
-// reference is a DIFFERENT agent conversation with a different turn count, so
-// two runs agreeing inside a few percent is coincidence, not agreement. A caller
-// who asks for a tight band is misunderstanding the instrument, so we refuse
-// rather than hand back a `true` that will be quoted as calibration.
+// Below this the check would claim a precision it structurally cannot have. The
+// reference is the SAME conversation's own end-to-end run, but it is not the
+// same cost object: it paid its own cold-cache pattern (cache_creation prices at
+// 20x cache_read), and it carries that session's FULL generation at the priciest
+// token class, while every replayed request is capped by GENERATION_CAP_TOKENS.
+// So two runs agreeing inside a few percent is coincidence, not agreement. A
+// caller who asks for a tight band is misunderstanding the instrument, so we
+// refuse rather than hand back a `true` that will be quoted as calibration.
 export const MIN_DRIFT_SMOKE_TOLERANCE = 0.1;
 
 // NOT a calibration. This is a gross-drift smoke check on the BASELINE arm —
-// order-of-magnitude only. It compares a replayed baseline against a real
-// end-to-end baseline captured from a different conversation, so it can catch a
-// stale recording or a broken cost model and nothing finer. It CANNOT vouch for
+// order-of-magnitude only. It compares a replayed baseline against the real
+// end-to-end baseline of the same conversation, whose cache split and full
+// generation the capped replay does not reproduce, so it can catch a stale
+// recording or a broken cost model and nothing finer. It CANNOT vouch for
 // the ≤5% effect this harness exists to resolve and must never be read as
 // doing so; `checkArmIntegrity` is the guard that protects the measurement.
 export function baselineDriftSmokeOk(input: {
@@ -118,7 +122,7 @@ export function baselineDriftSmokeOk(input: {
 }): boolean {
   if (input.tolerance < MIN_DRIFT_SMOKE_TOLERANCE) {
     throw new Error(
-      `baselineDriftSmokeOk: tolerance ${input.tolerance} is below the ${MIN_DRIFT_SMOKE_TOLERANCE} floor — this is a gross-drift smoke check against a different conversation, not a calibration, and cannot resolve a band that tight`,
+      `baselineDriftSmokeOk: tolerance ${input.tolerance} is below the ${MIN_DRIFT_SMOKE_TOLERANCE} floor — this is a gross-drift smoke check against a structurally different cost object (the reference's own cache split, plus a full generation the capped replay never pays), not a calibration, and cannot resolve a band that tight`,
     );
   }
   if (!(input.realBaselineUsd > 0)) return false;

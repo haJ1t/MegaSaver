@@ -582,7 +582,13 @@ function printVerdict(verdict, realBaselineUsd) {
       "    run paid its own cold-cache pattern, and cache_creation vs cache_read is a 20x price difference,",
     );
     console.log(
-      `    so agreement within ${(baselineDriftSmoke.tolerance * 100).toFixed(0)}% is a sanity floor, not evidence for any effect smaller than it.`,
+      "    and it carries that session's FULL generation at the priciest token class while every replayed",
+    );
+    console.log(
+      "    request is capped at max_tokens=1 — the two sides are not the same cost object. Agreement within",
+    );
+    console.log(
+      `    ${(baselineDriftSmoke.tolerance * 100).toFixed(0)}% is a sanity floor, not evidence for any effect smaller than it.`,
     );
   }
 }

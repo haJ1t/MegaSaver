@@ -132,9 +132,11 @@ describe("baselineDriftSmokeOk", () => {
     ).toBe(false);
   });
 
-  // Fix B: the reference is a DIFFERENT agent conversation, so agreement inside
-  // a few percent is coincidence, not calibration. Accepting a tight tolerance
-  // would let a caller present this smoke check as a precision instrument.
+  // Fix B: the reference is the same conversation but not the same cost object —
+  // its own cache split, plus a full generation the capped replay never pays — so
+  // agreement inside a few percent is coincidence, not calibration. Accepting a
+  // tight tolerance would let a caller present this smoke check as a precision
+  // instrument.
   it("rejects a tolerance tight enough to imply precision it cannot deliver", () => {
     expect(() =>
       baselineDriftSmokeOk({ replayedBaselineUsd: 0.5, realBaselineUsd: 0.5, tolerance: 0.02 }),
