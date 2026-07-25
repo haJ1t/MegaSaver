@@ -204,20 +204,40 @@ describe("compileGlob — non-ASCII case-folding divergence is bounded", () => {
     });
   }
 
-  // The ONLY weakening direction found: Greek final vs medial sigma both
-  // uppercase to Σ, so Canonicalize unified them and toLowerCase does not. It
-  // needs an operator to write ς in a deny glob against a path carrying σ; the
-  // old unification was an artifact of regex canonicalization, not an intended
-  // rule. Asserted here so the boundary is known rather than discovered.
-  it("no longer unifies Greek final sigma with medial sigma", () => {
-    expect(legacyCompileGlob("ς").test("σ")).toBe(true);
-    expect(compileGlob("ς").test("σ")).toBe(false);
+  // Weakening direction. A security review scanning every code point in
+  // U+0000–U+2FFFF found 23 such families, not one — the pairs below are a
+  // sample. All share a shape: two non-ASCII code points that share an
+  // uppercase form (so Canonicalize unified them) but not a lowercase form.
+  // Reaching any of them needs a NON-ASCII glob, which is why the LOCKED
+  // denylist is untouched.
+  const weakens: ReadonlyArray<readonly [string, string, string]> = [
+    ["ς", "σ", "Greek final vs medial sigma"],
+    ["µ", "μ", "MICRO SIGN vs Greek mu"],
+    ["ϐ", "β", "Greek beta symbol"],
+    ["ϑ", "θ", "Greek theta symbol"],
+    ["ẛ", "ṡ", "long s with dot above"],
+  ];
+
+  for (const [glob, path, label] of weakens) {
+    it(`no longer unifies ${label}`, () => {
+      expect(legacyCompileGlob(glob).test(path)).toBe(true);
+      expect(compileGlob(glob).test(path)).toBe(false);
+    });
+  }
+
+  // U+0130 is the one code point in that range whose toLowerCase() expands to
+  // TWO code units, so a folded path is longer than the original and `?` — a
+  // one-character token — no longer spans it. Needs no non-ASCII glob at all,
+  // but also no denylist glob contains `?`.
+  it("? no longer spans a code point that case-folds to two units", () => {
+    expect(legacyCompileGlob("?.pem").test("İ.pem")).toBe(true);
+    expect(compileGlob("?.pem").test("İ.pem")).toBe(false);
+    expect(DENYLIST_GLOBS.some((glob) => glob.includes("?"))).toBe(false);
   });
 
   it("every LOCKED denylist glob is pure ASCII, so none of this reaches them", () => {
     for (const glob of DENYLIST_GLOBS) {
-      // biome-ignore lint/suspicious/noControlCharactersInRegex: ASCII range check
-      expect(/^[\x20-\x7E]*$/.test(glob)).toBe(true);
+      expect([...glob].every((ch) => ch >= " " && ch <= "~")).toBe(true);
     }
   });
 });

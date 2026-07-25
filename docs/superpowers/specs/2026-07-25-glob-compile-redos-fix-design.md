@@ -106,11 +106,12 @@ drives `evaluatePathRead` to burn multiple seconds and then return
   hold, the cap must be ≤2 — k=3 already costs 17 ms, and 256 globs × 17 ms
   is 4.4 s per path evaluation — which rejects the shipped `**/*.pem` and
   `**/.ssh/**` shapes. And D2 bypasses it completely with zero wildcards.
-- **`.max(256)` on the glob array.** Not adopted. It bounds the wrong
-  axis: per-glob cost, not glob count, is what is unbounded today, and
-  after this fix per-glob cost is linear. Adding it would only create a new
-  way for a valid config to be rejected. Revisit if a real large-config
-  case appears.
+- **`.max(256)` on the glob array.** Initially not adopted, on the
+  argument that per-glob cost rather than glob count was the unbounded
+  axis. **Overturned by the security review (§8):** linear is not the same
+  as bounded, and a single unbounded 64 KB glob against a 64 KB path still
+  measured 16 s. Caps are now in place on glob length, glob count, and
+  command count.
 
 ## §4 The fix
 
@@ -216,3 +217,67 @@ verifier pass with reproduction evidence; changeset; wiki updated
 (`concepts/unbounded-run-redos` gains this as a distinct defect shape —
 ambiguous-quantifier chaining and metachar injection, not the unbounded-run
 shape that page currently describes — and `entities/policy`).
+
+---
+
+## §8 Review findings applied (2026-07-25)
+
+Three reviewer passes ran per §12 CRITICAL. The security pass could not
+weaken the LOCKED §9a denylist — 0 weakening witnesses in 812,861
+differential cases plus 22.7 M exhaustive pairs, and the two reference
+ReDoS shapes fell from 44,997 ms and 28,358 ms to 0.020 ms and 0.003 ms.
+Four findings changed the code.
+
+**F1 (HIGH) — linear is not bounded.** `matches()` is O(tokens × path
+length) and *neither axis had a cap*: a 64 KB glob against a 64 KB path
+measured 16,322 ms, and `"a"×20000` against `"a"×20000` measured 288 ms
+where the old regex took 3.2 ms. §3's rejection of `.max()` was wrong and
+is reversed. `parse-project-permissions.ts` now caps glob length at 256,
+glob count at 256, and command count at 256. Over-cap is a
+`PolicyLoadError`, never a silent trim.
+
+**F2 (MEDIUM-HIGH) — bracket expressions were silently downgraded.**
+`[...]` is genuine glob syntax and the regex-backed implementation
+honoured it, so treating it as literal characters *narrowed the deny set
+with no operator signal*: `**/[sS]ecrets/**` stopped denying
+`app/secrets/db.txt`, `**/*.[pk]em` stopped denying `certs/server.pem`.
+That is the same fail-open this whole spec exists to remove. Brackets are
+now **rejected** at the parse boundary rather than reinterpreted —
+supporting them means a character-class parser inside the security gate,
+and nothing in the shipped denylist needs one. Rejection is visible; a
+wrong match is not. The `**/[draft].md` literal-match case in §6 was
+therefore wrong and has been replaced with `$` and `^` cases.
+
+**F3 (MEDIUM) — §5b undercounted the case-folding divergence.** A full
+scan of U+0000–U+2FFFF found **23** weakening families, not one; sigma is
+merely the most familiar. All share one shape — two non-ASCII code points
+sharing an uppercase form but not a lowercase one — so all 23 need a
+non-ASCII glob and none reaches the ASCII-only denylist. Brute-forcing
+every code point in that range into denylist-adjacent path templates gave
+a path-side weakening count of **0**. Separately, U+0130 is the only code
+point whose `toLowerCase()` expands to two code units, which desynchronises
+the `?` token; no denylist glob contains `?`. The §5b table and the test
+comment are corrected; a sample of five families plus the U+0130 case are
+pinned.
+
+**F4 — the fix silently closed a live denylist bypass on `main`.** Every
+`**/`-prefixed glob compiled to `(?:.*/)?`, and `.` in a non-`s`-flag JS
+regex does not match a line terminator. So on `main` any path carrying
+`\n`, `\r`, U+2028 or U+2029 in a directory segment slipped **13 of the 15
+LOCKED entries** — all legal POSIX filename bytes. Verified against the
+frozen oracle: `**/id_rsa` did not deny `home\nx/id_rsa`. The NFA matcher
+has no such carve-out. This was unclaimed and untested; it now has four
+regression tests so a future rewrite cannot reopen it.
+
+**Rejected findings.** The code review claimed the old regex left `.`
+unescaped, so `**/.env.*` also denied `x/myenvXlocal`. It did not — the
+old body emitted `\\.` and neither cited example matches. No action.
+
+**Deferred, filed rather than fixed.** `deny.write` is parsed and compiled
+but has no consumer — there is no `evaluatePathWrite`, which the
+permissions spec lists as out of scope. `normalizePath` does no `..`
+resolution, percent-decoding, NUL truncation, or trailing-dot/space
+stripping; both implementations share that gap equally, so it is
+pre-existing rather than a regression. Literal-heavy globs and the
+per-pattern re-lowercasing in `evaluatePathRead` are slower than the old
+regex but bounded by F1's caps.

@@ -1,7 +1,7 @@
 import { projectIdSchema } from "@megasaver/shared";
 import { describe, expect, it } from "vitest";
 import { type EvaluatePathReadResult, evaluatePathRead } from "../src/evaluate-path-read.js";
-import { parseProjectPermissions } from "../src/parse-project-permissions.js";
+import { PolicyLoadError, parseProjectPermissions } from "../src/parse-project-permissions.js";
 
 const PROJECT = projectIdSchema.parse("11111111-1111-4111-8111-111111111111");
 
@@ -52,9 +52,14 @@ describe("evaluatePathRead — hostile project glob cannot stall the gate", () =
       deny: { read: [`${"*a".repeat(5)}x`] },
     });
     const path = "a".repeat(255);
+    let result: EvaluatePathReadResult | undefined;
     const ms = elapsed(() => {
-      evaluatePathRead({ path, project: PROJECT, permissions: starChain });
+      result = evaluatePathRead({ path, project: PROJECT, permissions: starChain });
     });
+    // Asserting the verdict too: a timing-only test passes against a matcher
+    // whose test() is `() => false`, which is the same silent fail-open the
+    // stall produces. `*a`x5 + "x" needs a trailing x; this path is all 'a'.
+    expect(result).toEqual({ allowed: true });
     expect(ms).toBeLessThan(CEILING_MS);
   });
 });
@@ -63,9 +68,13 @@ describe("compileGlob treats regex metacharacters as literals", () => {
   // Zero wildcards, so no wildcard-count cap could ever catch this one.
   it("a zero-wildcard regex-shaped glob is inert", { retry: 3 }, () => {
     const permissions = parseProjectPermissions({ deny: { read: ["(a+)+b"] } });
+    let result: EvaluatePathReadResult | undefined;
     const ms = elapsed(() => {
-      evaluatePathRead({ path: "a".repeat(28), project: PROJECT, permissions });
+      result = evaluatePathRead({ path: "a".repeat(28), project: PROJECT, permissions });
     });
+    // "inert" is the actual claim, so assert it: as a literal filename the glob
+    // matches nothing here. Without this the test passes on a dead matcher.
+    expect(result).toEqual({ allowed: true });
     expect(ms).toBeLessThan(CEILING_MS);
   });
 
@@ -82,15 +91,73 @@ describe("compileGlob treats regex metacharacters as literals", () => {
   const literalCases: ReadonlyArray<readonly [string, string]> = [
     ["**/a+b.txt", "x/a+b.txt"],
     ["**/file(1).txt", "x/file(1).txt"],
-    ["**/[draft].md", "x/[draft].md"],
     ["**/report{2}.csv", "x/report{2}.csv"],
     ["**/a|b.log", "x/a|b.log"],
+    ["**/dollar$.txt", "x/dollar$.txt"],
+    ["**/caret^.txt", "x/caret^.txt"],
   ];
 
   for (const [glob, path] of literalCases) {
     it(`denies ${path} via ${glob}`, () => {
       const permissions = parseProjectPermissions({ deny: { read: [glob] } });
       expect(evaluatePathRead({ path, project: PROJECT, permissions })).toEqual({
+        allowed: false,
+        reason: "secret_path_read",
+      });
+    });
+  }
+});
+
+describe("parseProjectPermissions — fail closed on globs the matcher cannot bound", () => {
+  it("rejects a glob longer than the cap rather than matching it slowly", () => {
+    expect(() =>
+      parseProjectPermissions({ deny: { read: ["*".repeat(257)] } }),
+    ).toThrow(PolicyLoadError);
+  });
+
+  it("accepts a glob exactly at the cap", () => {
+    const permissions = parseProjectPermissions({
+      deny: { read: [`${"a".repeat(255)}*`] },
+    });
+    expect(permissions.denyReadPatterns).toHaveLength(1);
+  });
+
+  it("rejects more globs than the cap", () => {
+    expect(() =>
+      parseProjectPermissions({ deny: { read: new Array(257).fill("*.pem") } }),
+    ).toThrow(PolicyLoadError);
+  });
+
+  // Bracket expressions ARE glob syntax and the previous regex-backed matcher
+  // honoured them. Reading them as literals would narrow the deny set with no
+  // signal, so they are refused outright — fail closed, not fail quiet.
+  const brackets = ["**/[sS]ecrets/**", "**/*.[pk]em", "**/id_rsa[0-9]", "**/a]b"];
+  for (const glob of brackets) {
+    it(`rejects the bracket glob ${glob}`, () => {
+      expect(() => parseProjectPermissions({ deny: { read: [glob] } })).toThrow(
+        PolicyLoadError,
+      );
+    });
+  }
+});
+
+// Found by the security review, not by the original report: on the previous
+// implementation every `**/`-prefixed glob compiled to `(?:.*/)?`, and `.` in a
+// non-`s`-flag JS regex does not match a line terminator. A path carrying one in
+// a directory segment therefore slipped 13 of the 15 LOCKED entries. These are
+// legal POSIX filename bytes. The NFA matcher has no such carve-out; pinned here
+// so a future rewrite cannot quietly reopen it.
+describe("evaluatePathRead — line terminators in a path segment cannot bypass the denylist", () => {
+  const terminators: ReadonlyArray<readonly [string, string]> = [
+    ["\\n", "home\nx/id_rsa"],
+    ["\\r", "home\rx/.ssh/key"],
+    ["U+2028", "home x/credentials.json"],
+    ["U+2029", "home x/server.pem"],
+  ];
+
+  for (const [label, path] of terminators) {
+    it(`denies a path containing ${label}`, () => {
+      expect(evaluatePathRead({ path, project: PROJECT })).toEqual({
         allowed: false,
         reason: "secret_path_read",
       });

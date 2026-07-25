@@ -22,7 +22,7 @@ type Token =
 function tokenize(glob: string): readonly Token[] {
   const tokens: Token[] = [];
   for (let i = 0; i < glob.length; i += 1) {
-    const char = glob[i] as string;
+    const char = glob.charAt(i);
     if (char === "*") {
       if (glob[i + 1] === "*") {
         if (glob[i + 2] === "/") {
@@ -57,7 +57,7 @@ function matches(tokens: readonly Token[], path: string): boolean {
     if (token.kind === "literal" || token.kind === "any") {
       for (let i = 0; i < n; i += 1) {
         if (cur[i] === 0) continue;
-        const ch = path[i] as string;
+        const ch = path.charAt(i);
         if (token.kind === "literal" ? ch === token.ch : ch !== "/") {
           next[i + 1] = 1;
           live = true;
