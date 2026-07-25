@@ -232,9 +232,19 @@ Contract now:
   including `(`, `+`, `[`, `|`, `{`, `\`, `^`, `$` — is a **literal**. Previously
   they reached the regex engine raw, so `**/a+b.txt` did not match `x/a+b.txt`.
 - Case-insensitive via `toLowerCase()` rather than the regex `i` flag. Identical
-  on ASCII, so all 15 LOCKED §9a globs are unaffected. Off ASCII three measured
-  divergences tighten the gate and exactly one weakens it (Greek final sigma no
-  longer unifies with medial sigma) — accepted and test-pinned, see spec §5b.
+  on ASCII, so all 15 LOCKED §9a globs are unaffected. Off ASCII a full
+  U+0000–U+2FFFF scan found 23 weakening families (all needing a non-ASCII glob;
+  path-side weakening count against the denylist is 0) plus the U+0130 two-unit
+  fold that desynchronises `?` — accepted and test-pinned, see spec §5b/§8 F3.
+- `.megasaver/permissions.yaml` caps glob length, glob count and command count
+  at 256 each, as `PolicyLoadError`. Linear is not bounded: an uncapped 64 KB
+  glob against a 64 KB path measured 16,322 ms even with backtracking gone.
+- Bracket expressions (`[abc]`) are **rejected**, not reinterpreted. They are
+  real glob syntax the regex honoured, so reading them as literals would narrow
+  the deny set silently.
+- **Closed a live bypass on `main`:** `**/` compiled to `(?:.*/)?` and regex `.`
+  excludes line terminators, so a path with `\n`, `\r`, U+2028 or U+2029 in a
+  directory segment slipped 13 of the 15 LOCKED entries.
 - `SECRET_PATH_PATTERNS` and `ProjectPermissions.denyReadPatterns` /
   `denyWritePatterns` are `readonly PathMatcher[]`.
 

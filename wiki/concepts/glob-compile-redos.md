@@ -72,12 +72,43 @@ mis-match together.
 
 `compileGlob` returns `PathMatcher` (`{ test(path): boolean }`), not `RegExp`.
 
+## But linear is not bounded
+
+The security review's sharpest finding. Removing backtracking kills the
+*exponential*; it does not bound anything, because `O(tokens × path length)`
+still has two uncapped axes. A 64 KB glob against a 64 KB path measured
+**16,322 ms** on the fixed matcher, and a 20 KB all-literal glob measured
+288 ms where the old regex took 3.2 ms.
+
+So the cap came back — just on the right axis. Glob length, glob count and
+command count each cap at 256, enforced at the parse boundary as a
+`PolicyLoadError`. Worst *accepted* config (256 globs × 256 wildcard tokens) vs
+a 4096-character path: **3.0 ms**. The 16 s case is rejected in 0.0 ms.
+
+## Rejecting beats reinterpreting
+
+`[...]` is real glob syntax, and the regex honoured it by accident. Making it a
+literal would have *narrowed* the deny set silently — `**/[sS]ecrets/**` would
+stop denying `app/secrets/db.txt`. Brackets are rejected at the boundary rather
+than reimplemented: a character-class parser inside a security gate is more
+surface than the feature is worth, and nothing shipped needs one. A refusal is
+visible; a wrong match is not.
+
+## The bug the fix closed without noticing
+
+`**/` compiled to `(?:.*/)?`, and `.` in a non-`s`-flag JS regex does not match
+a line terminator. Any path with `\n`, `\r`, U+2028 or U+2029 in a directory
+segment therefore slipped **13 of the 15 LOCKED entries** — all legal POSIX
+filename bytes. `**/id_rsa` did not deny `home\nx/id_rsa`. The NFA matcher has
+no such carve-out, so this was fixed silently and is now regression-tested.
+
 ## Lesson
 
 A cap is only sound if it bounds the axis the exploit actually uses. Here the
 reported axis (`**/` count) was neither the only wildcard that blew up nor
-necessary at all. Prefer removing the backtracking engine over bounding its
-input.
+necessary at all — but the *opposite* error is just as easy, and this fix made
+it first: declaring "no bound to tune" because the algorithm is linear, while
+leaving both of its inputs unbounded.
 
 The equivalence obligation is the real cost of this fix: the LOCKED §9a denylist
 must keep its exact verdicts, so the pre-fix implementation is frozen verbatim

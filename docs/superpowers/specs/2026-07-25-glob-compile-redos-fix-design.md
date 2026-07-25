@@ -68,11 +68,16 @@ ordinary filename containing a regex metacharacter does not deny:
 |---|---|---|---|
 | `**/a+b.txt` | `x/a+b.txt` | `false` | `true` |
 | `**/file(1).txt` | `x/file(1).txt` | `false` | `true` |
-| `**/[draft].md` | `x/[draft].md` | `false` | `true` |
+| `**/dollar$.txt` | `x/dollar$.txt` | `false` | `true` |
 
 D3 needs no crafted input — it is reachable with a legitimate filename,
 and it is the same end state as D1: the gate does not deny, with no
 operator signal.
+
+`[` and `]` are the one exception in this list, and an earlier revision of
+this spec got them wrong: they are genuine glob syntax that the regex
+honoured by accident, so making them literal would *narrow* the deny set.
+They are rejected at the parse boundary instead — see §8 F2.
 
 ## §2b Reachability
 
@@ -143,9 +148,12 @@ once per token with a single left-to-right sweep:
 
 `test` returns `cur[path.length]` after the last token. Each token is one
 O(pathLen) sweep, so the whole match is O(tokens × pathLen) with no
-backtracking **by construction** — there is no bound to tune and no cap to
-bypass. At 50 tokens × a 4096-character path that is ~200k boolean
-operations.
+backtracking **by construction**. At 50 tokens × a 4096-character path
+that is ~200k boolean operations.
+
+Linear is not the same as bounded, though — see §8 F1. Both axes are
+capped at the parse boundary, because an uncapped 64 KB glob against a
+64 KB path still costs seconds even without backtracking.
 
 Case-insensitivity (today the `i` flag) becomes `toLowerCase()` on the glob
 at compile time and on the path at match time.
@@ -181,14 +189,21 @@ denylist only the *direction* matters:
 | `å` | `Å` (U+212B ANGSTROM) | no match | match | tightens |
 | `ς` (U+03C2) | `σ` (U+03C3) | **match** | **no match** | **weakens** |
 
-Every divergence found tightens the gate except one: Greek final sigma
-and medial sigma both uppercase to `Σ`, so Canonicalize unified them and
-`toLowerCase` does not. Reaching it requires an operator to write `ς` in a
-deny glob against a path carrying `σ`. The old unification was an artifact
-of regex canonicalization rather than an intended rule, so this is
-accepted, not fixed — emulating Canonicalize would mean carrying Unicode
-tables for a case with no consumer. All four rows are pinned by tests so
-the boundary is asserted rather than discovered later.
+**Corrected by review — see §8 F3.** An earlier revision of this section
+claimed sigma was the *only* weakening pair. A full scan of U+0000–U+2FFFF
+found **23 weakening families**; sigma is simply the most recognisable.
+Every one shares the same shape — two non-ASCII code points sharing an
+uppercase form but not a lowercase one — so every one needs a non-ASCII
+glob, and brute-forcing every code point in that range into
+denylist-adjacent path templates gives a path-side weakening count of
+**0**. U+0130 is a separate, related case: it is the only code point there
+whose `toLowerCase()` expands to two code units, desynchronising the `?`
+token; no denylist glob contains `?`.
+
+All of this is accepted rather than fixed — emulating Canonicalize would
+mean carrying Unicode tables for a case with no consumer. A sample of five
+families, the three tightening rows, and the U+0130 case are pinned by
+tests so the boundary is asserted rather than rediscovered.
 
 ## §6 Test plan (TDD — RED first)
 

@@ -4264,3 +4264,42 @@ the gate, one weakens it (Greek final sigma), accepted and test-pinned. Full
 Pages updated: [[concepts/glob-compile-redos]] (new),
 [[concepts/unbounded-run-redos]], [[entities/policy]], [[index]].
 Branch: `claude/laughing-matsumoto-be0481`.
+
+## [2026-07-25] review | glob-compile ReDoS — three reviewer passes applied
+
+Security, code-review and evidence passes ran per §12 CRITICAL. The security
+pass could not weaken the LOCKED §9a denylist: 0 weakening witnesses across
+812,861 differential cases and 22.7 M exhaustive pairs, with the two reference
+ReDoS shapes falling from 44,997 ms and 28,358 ms to 0.020 ms and 0.003 ms.
+Four findings changed the code.
+
+The sharpest correction: **linear is not bounded.** The first cut declared "no
+bound to tune and no cap to bypass" because the matcher is O(tokens × path
+length) — while leaving both axes uncapped. A 64 KB glob against a 64 KB path
+still measured 16,322 ms. The `.max()` rejected in the original spec is back,
+on glob length, glob count and command count. Worst accepted config against a
+4096-character path is now 3.0 ms; the 16 s input is refused in 0.0 ms.
+
+Second: treating `[...]` as literal characters was itself a fail-open, because
+bracket expressions are genuine glob syntax the regex honoured —
+`**/[sS]ecrets/**` stopped denying `app/secrets/db.txt`. Rejected at the parse
+boundary rather than reimplemented.
+
+Third: the case-folding note claimed one weakening family; a full
+U+0000–U+2FFFF scan found 23. None reaches the ASCII-only denylist
+(path-side weakening count 0), so the blast-radius claim held while the count
+did not.
+
+Fourth, unclaimed by the original work: the fix **closed a live denylist bypass
+on `main`**. `**/` compiled to `(?:.*/)?` and regex `.` excludes line
+terminators, so any path with `\n`, `\r`, U+2028 or U+2029 in a directory
+segment slipped 13 of the 15 LOCKED entries. Now regression-tested.
+
+One code-review finding was rejected on evidence: the claim that the old regex
+left `.` unescaped is false — it emitted `\.`, and neither cited example ever
+matched.
+
+Filed, not fixed: `ProjectRule.appliesTo` has no length bound of its own, and
+`deny.write` is parsed and compiled but has no consumer.
+
+`pnpm verify` EXIT 0; policy suite 264 tests.

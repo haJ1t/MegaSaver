@@ -110,9 +110,9 @@ describe("compileGlob treats regex metacharacters as literals", () => {
 
 describe("parseProjectPermissions — fail closed on globs the matcher cannot bound", () => {
   it("rejects a glob longer than the cap rather than matching it slowly", () => {
-    expect(() =>
-      parseProjectPermissions({ deny: { read: ["*".repeat(257)] } }),
-    ).toThrow(PolicyLoadError);
+    expect(() => parseProjectPermissions({ deny: { read: ["*".repeat(257)] } })).toThrow(
+      PolicyLoadError,
+    );
   });
 
   it("accepts a glob exactly at the cap", () => {
@@ -123,9 +123,9 @@ describe("parseProjectPermissions — fail closed on globs the matcher cannot bo
   });
 
   it("rejects more globs than the cap", () => {
-    expect(() =>
-      parseProjectPermissions({ deny: { read: new Array(257).fill("*.pem") } }),
-    ).toThrow(PolicyLoadError);
+    expect(() => parseProjectPermissions({ deny: { read: new Array(257).fill("*.pem") } })).toThrow(
+      PolicyLoadError,
+    );
   });
 
   // Bracket expressions ARE glob syntax and the previous regex-backed matcher
@@ -134,9 +134,7 @@ describe("parseProjectPermissions — fail closed on globs the matcher cannot bo
   const brackets = ["**/[sS]ecrets/**", "**/*.[pk]em", "**/id_rsa[0-9]", "**/a]b"];
   for (const glob of brackets) {
     it(`rejects the bracket glob ${glob}`, () => {
-      expect(() => parseProjectPermissions({ deny: { read: [glob] } })).toThrow(
-        PolicyLoadError,
-      );
+      expect(() => parseProjectPermissions({ deny: { read: [glob] } })).toThrow(PolicyLoadError);
     });
   }
 });
