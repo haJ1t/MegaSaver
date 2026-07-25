@@ -90,3 +90,8 @@ scripts/license/.private-key.pem
 packages/agent-office/test/supervisor-permission-edge.test.ts
 packages/context-pruner/test/score-edge.test.ts
 .superpowers/
+
+# Personal Superpowers benchmark experiment (third-party plugin research, not part of the published repo)
+docs/superpowers/specs/2026-07-14-claude-code-superpowers-token-savings-design.md
+docs/superpowers/plans/2026-07-14-claude-code-superpowers-token-savings-plan.md
+__pycache__/
