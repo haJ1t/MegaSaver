@@ -265,9 +265,17 @@ describe("the disclosed divergences", () => {
   // More than 64 whitespace characters between a key and its value. A key name
   // plus 65 columns of padding already overflows an 80-column terminal, so no
   // real config or header dump reaches this.
-  it("stops redacting past 64 characters of padding", () => {
+  // This pinned the disclosed loss of the BOUND fix (`\s{0,64}`): an assignment
+  // whose `=` was followed by more than 64 whitespace characters stopped
+  // redacting. That fix was superseded by a leading lookahead guard, which
+  // removes the quadratic without giving up any input — measured 0.1 ms against
+  // 8.1 ms bounded on a whitespace run — so the loss no longer exists and the
+  // assertion is inverted rather than deleted. See §5a's `§` footnote (kept, and
+  // marked superseded) and the `◆` amendment.
+  it("still redacts past 64 characters of padding — the bound's loss is gone", () => {
     const line = `aws_secret_access_key =${" ".repeat(65)}wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`;
 
-    expect(redactWithFindings(line).redacted).toBe(line);
+    expect(redactWithFindings(line).redacted).not.toBe(line);
+    expect(redactWithFindings(line).redacted).not.toContain("wJalrXUtnFEMI");
   });
 });

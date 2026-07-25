@@ -307,16 +307,16 @@ tuple-pinned enum in BB3 (the epic §17 table lists no
 
 | Name              | Pattern (epic §9d)                                     | Replacement                |
 |-------------------|--------------------------------------------------------|----------------------------|
-| github_token      | `gh[pousr]_[A-Za-z0-9]{36,}`                           | `gh*_[REDACTED]`           |
+| github_token ◆    | `(?:gh[pousr]_[A-Za-z0-9]{36,}\|github_pat_[A-Za-z0-9_]{40,})` | `gh*_[REDACTED]`   |
 | openai_key        | `sk-[A-Za-z0-9]{20,}`                                  | `sk-[REDACTED]`            |
 | anthropic_key     | `sk-ant-[A-Za-z0-9-_]{20,}`                            | `sk-ant-[REDACTED]`        |
-| aws_access_key    | `AKIA[0-9A-Z]{16}`                                     | `AKIA[REDACTED]`           |
-| aws_secret_key §  | `(?<=aws_secret_access_key\s*=\s{0,64})[A-Za-z0-9/+]{40}` | `[REDACTED]`            |
+| aws_access_key ◆  | `A(?:KIA\|SIA)[0-9A-Z]{16}`                             | `AKIA[REDACTED]`           |
+| aws_secret_key ◆  | `(?=[A-Za-z0-9/+])(?<=aws_secret_access_key\s*=\s*)[A-Za-z0-9/+]{40}` | `[REDACTED]`  |
 | bearer_token      | `(?i:bearer\s+)[A-Za-z0-9\-._~+/=]{20,}`               | `Bearer [REDACTED]`        |
 | jwt †‡            | `(?:(?<![A-Za-z0-9_-])\|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+` (see ‡ for exact bytes) | `eyJ[REDACTED]` |
-| private_key_block | `-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]+?-----END`   | `[REDACTED PRIVATE KEY]`   |
+| private_key_block ◆ | grouped label + `(?:PRIVATE\|SECRET) KEY(?: BLOCK)?` (see ◆ for exact bytes — the cell cannot render them) | `[REDACTED PRIVATE KEY]` |
 | env_value         | `(?<=^[A-Z_]+=)["'].+?["']`                            | `"[REDACTED]"`             |
-| db_url            | `(?:postgres|postgresql|mysql|mongodb)://[^\s/]+:[^\s@]+@\S+` | `[scheme]://[REDACTED]@[host]` |
+| db_url ◆          | `(?:postgres\|postgresql\|mysql\|mongodb):\/\/[^\s/]{1,256}:[^\s@]{1,8192}@\S+` (see ◆ for exact bytes) | `[scheme]://[REDACTED]@[host]` |
 
 † `jwt` amended 2026-07-20 by
 [[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]] — a leading
@@ -348,29 +348,227 @@ narrowing it to `(?<![A-Za-z0-9])` restores the 7.4-7.7 s quadratic.
 Released as a **minor**, not a patch, because coverage was reduced.
 Both footnotes stand; amend this row, never rewrite it silently.
 
-§ `aws_secret_key` amended 2026-07-25 by
-[[docs/superpowers/specs/2026-07-25-policy-redaction-redos-design]] — the
-**trailing** `\s*` was bounded to `\s{0,64}` to remove a quadratic ReDoS
-(2.2 s at 50 KB of spaces, 9.4 s at 100 KB). Same defect class as the two
-`jwt` amendments above; here the shape is a variable-length lookbehind,
-which V8 evaluates right to left, so the trailing run rescans the whole
-preceding whitespace at every start position. The leading `\s*` is
-deliberately left unbounded — reaching it requires an `=` within 64
-characters behind, and one `=` per 64 characters is exactly what caps the
-leading run, so it is O(n) already and bounding it measures identical.
-Disclosed behaviour change: an assignment whose `=` is followed by **more
-than 64 whitespace characters** no longer redacts. A key name plus 65
-columns of padding already overflows an 80-column terminal, so no real
-config or credentials file reaches it; pinned in
-`packages/policy/test/redact-redos.test.ts`. Released as a **patch**,
-not a minor: no shape any real input produces lost coverage.
+◆ **Amended 2026-07-25** by
+[[docs/superpowers/specs/2026-07-25-redaction-superlinear-patterns-design]] —
+all three were super-linear on long runs, reachable from arbitrary tool output
+under the 4 MB capture cap. Amend these rows, never rewrite them silently.
 
-The same spec bounded the count-only `email` observer's local part to
-`{1,64}` (RFC 5321 §4.5.3.1.1) and the two non-§5a contextual detectors
-`api_key_header` and `basic_auth_header`. Those three are outside this
-table — `email` lives in `OBSERVED_PATTERNS`, the other two are appended
-after the ten baseline rows — and need no row here; they are named only
-so this footnote is not read as the whole change.
+- `aws_secret_key` gained a leading **lookahead guard**, and later the **`i`
+  flag** (2026-07-25, fourth amendment). The flag is a coverage fix, not a
+  style choice: `AWS_SECRET_ACCESS_KEY=<40 chars>` unquoted — the form a `.env`,
+  `printenv` or CI log actually contains, and the most common one an agent sees
+  — matched **nothing**, because this lookbehind literal is lowercase (the ini
+  form) and `env_value` requires quotes. The body class already spans both
+  cases, so the flag widens only the indicator. Pattern bytes are unchanged;
+  `pattern.flags` is now `gi` and is pinned by the flags test. It is semantically
+  inert: its class is exactly the set of first characters the body can match,
+  so it is strictly implied and cannot drop a match. It exists to reject a
+  non-matching start position in O(1) before the variable-length `\s*`
+  lookbehind is walked — 10,287 ms per 100 KB of whitespace down to 0.36 ms.
+  **The guard must stay in FRONT of the lookbehind**; moving it after produces
+  identical output and restores the full quadratic, so the position is pinned
+  by `packages/policy/test/redact-superlinear.test.ts` rather than by any
+  behavioural assertion. No coverage change.
+- `db_url` bounded both userinfo runs. Both bounds are load-bearing; either
+  alone leaves a super-linear seed. The password bound went through two
+  rejected values: **256** leaves `postgres://user:<JWT>@host` in cleartext,
+  and **2048** leaves a ~2.5 KB JWE-shaped token and a ~2.2 KB AWS RDS IAM auth
+  token in cleartext. It ships at **8192**, which costs nothing (3.6 ms per
+  200 KB at either 2048 or 8192, growth x1.00). Disclosed loss: userinfo user
+  over 256, or password over 8192. The user bound is partly mitigated —
+  `url_basic_auth` catches an over-long username as a fallback.
+- `private_key_block` bounded its lazy body. 32768 clears a Classic McEliece
+  private key (~18.6 KB base64, ~19.1 KB wrapped) with ~1.7x margin. `[A-Z ]+`
+  is left unbounded — measured a non-driver.
+
+  On bound **size**, the effect reverses with input size and both halves must be
+  stated together. Below ~1–2 MB a larger bound is *slower* than none, because
+  V8's counted lazy loop costs ~2x per step while the bound prunes nothing
+  ({1,100000}: 708 ms per 200 KB against 114 unbounded). At the 4 MB capture cap
+  the ordering flips and the bound is what saves you: unbounded 42,394 ms,
+  {1,100000} 19,896 ms, {1,32768} 6,304 ms. Raising this bound is therefore
+  **not** categorically unsafe; it trades small-input constant for large-input
+  asymptote. An earlier revision of this footnote stated only the first half.
+
+  Disclosed loss: a PEM body over 32768 **characters between the markers —
+  newlines count**. Real 64-column wrapping costs ~1 character in 65, so the
+  effective ceiling is ~32,262 base64 characters with LF (~23.6 KiB of raw key)
+  and ~31,772 with CRLF (~23.3 KiB), not 32 KB.
+
+  **Second amendment, same date — header coverage.** The label run became `*`
+  rather than `+` and ` BLOCK` became optional, because `+` required at least one
+  character between `BEGIN ` and `PRIVATE KEY`. Two real formats therefore never
+  matched at all, in this baseline as originally locked:
+
+  - **unlabelled PKCS#8**, `-----BEGIN PRIVATE KEY-----` — what `openssl genpkey`
+    emits, and what GCP service-account JSON keys and Kubernetes TLS secrets
+    carry. Arguably the most common modern form. A 2,400-character key passed
+    `redactWithFindings` with `findings: []` and landed verbatim in the firewall
+    ledger.
+  - **PGP**, `-----BEGIN PGP PRIVATE KEY BLOCK-----` — the trailing ` BLOCK`
+    broke the `-----` anchor.
+  - **PGP SECRET**, `-----BEGIN PGP SECRET KEY BLOCK-----` — GnuPG's armour
+    table carries three key-block headers, not two (PRIVATE, PUBLIC, SECRET);
+    `strings $(which gpg) | grep 'KEY BLOCK'`. Found by the `security-reviewer`
+    pass on the first attempt at this amendment, which had only widened the
+    label and the ` BLOCK` suffix. Hence `(?:PRIVATE|SECRET)`.
+
+  Found by the security review of the 2026-07-25 super-linear fix; **pre-existing
+  in this baseline, not introduced by it**.
+
+  Accepted cost. Both shapes were previously non-matching and therefore free;
+  each marker is now a real start position scanning to the bound. Measured on an
+  idle box at the 4 MB cap, isolated pattern, min-of-3:
+
+  | seed | before | after |
+  |---|---|---|
+  | labelled (pre-existing worst) | 5,760 ms | 6,227 ms |
+  | PKCS#8 (new) | 3.3 ms | 6,976 ms |
+  | PGP (new) | 3.6 ms | 4,818 ms |
+
+  The availability-relevant number is the **ceiling**, not the seed count — an
+  attacker picks the best seed, and the labelled one already sat at it. The
+  ceiling moves **5,760 → ~7,000 ms, roughly +21%**, and the delta is explained
+  by start-position density (the PKCS#8 marker is 27 bytes against 29).
+
+  **Revised after the 2026-07-25 detector additions.** There are now *four*
+  anchors in the same ~7–9 s band at the 4 MB cap, not one: the labelled PEM
+  marker, `-----BEGIN PRIVATE KEY-----` (27 B), `-----BEGIN SECRET KEY-----`
+  (26 B — denser than any seed originally measured), and
+  `PuTTY-User-Key-File-1:` (22 B). No new asymptote; all linear. `age_secret_key`
+  and `jwk_private_key` are immaterial (single-digit to low-hundreds ms).
+  Absolute figures in this band vary 25–35% with machine load — two reviewers
+  measured the same seed at 6.2 s and 9.4 s — so treat the band, not the digits,
+  as the disclosure. All growth
+  x1.97–2.10, i.e. linear. An earlier revision of this footnote said "three seeds
+  reach the residual instead of one", which invites reading exposure as tripled;
+  it is not. What genuinely rises is the chance of *accidentally* hitting the
+  residual on benign input carrying PKCS#8 or PGP markers.
+
+  ` BLOCK` is tied to `PRIVATE`/`SECRET KEY`, not floating: `PGP PUBLIC KEY
+  BLOCK` differs by one word and must not redact.
+
+  Which negative fixtures are load-bearing was measured against the mutant family
+  rather than assumed. `PUBLIC KEY` and `PGP PUBLIC KEY BLOCK` do the work, and
+  the latter uniquely catches a mutant that floats ` BLOCK` off the noun.
+  `CERTIFICATE` and `PGP MESSAGE` kill nothing here and are kept as documentation
+  of intent. The all-lowercase row constrains the label class not at all — the
+  literal `BEGIN`/`END` are uppercase, so even widening the label to `[\s\S]*?`
+  leaves it unmatched; it pins the absence of the `i` flag, already covered. An
+  earlier revision claimed a `[A-Z ]*KEY` mutant "fails three of those
+  assertions"; measured, it fails two, the third failure being the §5a byte pin.
+
+  Six further mutants initially survived the whole suite, each failing only that
+  byte pin: dropping the body's lazy `?`; loosening only the **END** label (every
+  fixture paired matching labels, so the END marker was never consulted); label
+  → `[A-Za-z ]*`; ` BLOCK` → `(?: [A-Z]+)?` or `\s?BLOCK`; and folding the space
+  after `BEGIN` into the class. All are now killed behaviourally.
+
+  **BEGIN and END labels may differ, and ` BLOCK` is independently optional on
+  each.** Deliberate: a backreference tying them would stop redacting
+  concatenated, hand-edited and mislabelled exports — turning a robustness case
+  into the leak class this amendment exists to close — and every PEM fixture is
+  symmetric by construction, so such an edit would otherwise pass the whole
+  behavioural suite. Now pinned both ways.
+
+  **Accepted over-redaction:** text quoting BOTH markers is consumed — a PEM
+  parse error, or prose describing the format. Requiring a newline after the
+  BEGIN marker would avoid it and was rejected: GCP service-account JSON carries
+  the key with literal `\n` escapes, not real newlines.
+
+  **Third amendment, same date — the label is now a GROUPED expression, not a
+  character class.** The uppercase-and-space class covered **7 of the 32**
+  labels ending in `PRIVATE KEY` in OpenSSL 3.6.2's own PEM table
+  (`strings libcrypto | grep 'PRIVATE KEY$'`), which is the authoritative list of
+  what OpenSSL decodes as a private key. The 25 it missed were the entire NIST
+  post-quantum set (`ML-DSA-44/65/87`, `ML-KEM-512/768/1024`, twelve
+  `SLH-DSA-*`), every modern curve (`ED25519`, `ED448`, `X25519`, `X448`), `SM2`,
+  `RSA-PSS`, and `X9.42 DH` — a **dot**. The `SLH-DSA` labels end in a lowercase
+  `f`/`s`, so the group class is `[A-Za-z0-9]`; an all-uppercase label assumption
+  is simply wrong.
+
+  Reachability is weaker than for the PKCS#8/PGP amendment and is stated as such:
+  no OpenSSL CLI path emits these labels (`genpkey` writes unlabelled PKCS#8 and
+  `-traditional` is unsupported for them). They are in the **decoder** table plus
+  a `%s PRIVATE KEY` template, so a library caller using the traditional writer
+  produces files OpenSSL reads back as private keys. The change was taken on
+  error-cost asymmetry, given it is close to free.
+
+  **The grouped form is load-bearing, not stylistic**, and the obvious
+  simplification is the dangerous one. Measured on the labelled-BEGIN-run seed:
+
+  | label form | 400 KB | growth | covers |
+  |---|---|---|---|
+  | `[A-Z ]*` (previous) | 552 ms | x1.93 | 7/32 |
+  | `[A-Za-z0-9. -]*` | **1,148 ms at 16 KB** | **x7.13** | 32/32 |
+  | `[A-Za-z0-9. -]{0,64}` | 2,187 ms | x1.77 | 32/32 |
+  | **grouped (shipped)** | **~600 ms** | x2.16 | **32/32** |
+
+  The unbounded class is catastrophic because it covers **every character** of
+  `-----BEGIN A PRIVATE KEY-----`, so the label run swallows the whole input and
+  backtracks for `PRIVATE KEY`. Requiring each `.`/`-` to sit BETWEEN
+  alphanumerics stops the label crossing a `-----` at all — which is how the
+  grouped form costs what the old narrow class did while covering three times as
+  many labels.
+
+  It is a nested quantifier, so it was attacked rather than assumed: seven shapes
+  built to trigger `(X+)*` backtracking (dash runs, `A `/`A-1 `/`A.9 ` chains, a
+  near-miss `PRIVATE KEZ`, dense BEGIN+group runs) all measure x1.81–2.04 and
+  sub-1.1 ms at 400 KB. Each group parses deterministically, because `-` and `.`
+  are outside `[A-Za-z0-9]`, so there is no ambiguous split to explore.
+
+  Four fixtures pin the structure behaviourally — `A- `, `-A `, `A. ` and `A--B `
+  labels must NOT match, and all four DO match either character-class form. They
+  kill both class mutants without the timing test, which matters: the unbounded
+  mutant makes that test take over ten minutes.
+
+  **Not PEM-armoured, so no label width reaches them:** RFC 4716, PuTTY `.ppk`,
+  age and JWK. Each now has its own detector in `REDACTION_PATTERNS`; those are
+  post-lock additions and are not §5a rows, but their bytes are pinned by
+  `packages/policy/test/redact-superlinear.test.ts` for the same reason these
+  are — without a byte pin, eleven bound-edge and character-class mutations
+  survived the whole suite.
+
+**Exact pattern bytes** — the `db_url` cell above escapes the alternation `|` as
+`\|` so the markdown row renders as one cell, and the table renders `/` plainly;
+neither matches the compiled `RegExp.source`. Transcribe from here, not from the
+table (the `jwt` row carries the same trap, see ‡):
+
+```
+/(?:postgres|postgresql|mysql|mongodb):\/\/[^\s/]{1,256}:[^\s@]{1,8192}@\S+/g
+/-----BEGIN (?:[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)* )*(?:PRIVATE|SECRET) KEY(?: BLOCK)?-----[\s\S]{1,32768}?-----END (?:[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)* )*(?:PRIVATE|SECRET) KEY(?: BLOCK)?-----/g
+```
+
+All three amended rows are pinned byte-for-byte against `RegExp.source` in
+`packages/policy/test/redact-superlinear.test.ts`, so a silent drift between
+this record and shipped code fails CI.
+
+**Ledger note.** This change also added a ledger-only userinfo scrub in
+`packages/policy/src/redact.ts` (`redactForLedger`). It is not part of this
+baseline — the agent-visible path is unchanged by it — but it exists because
+bounding `email`'s local part removed an accidental backstop: the previously
+unbounded local part had been swallowing whole URL passwords before they could
+reach a ledger `sourcePath` label (F-FW-1).
+
+**Fourth amendment, 2026-07-25 — two coverage holes in previously-untouched
+rows**, both found by the security-reviewer pass on the carrier detectors:
+
+- `aws_access_key` spelled only `AKIA`. **`ASIA` is the TEMPORARY (STS) prefix**,
+  so a complete `aws sts assume-role` credential set — access key, secret key and
+  session token — produced `findings: []` and reached the ledger verbatim, the
+  same signature this spec cites as the worst case for PKCS#8. Two of the three
+  values were also missed by `json_secret_field`, which now carries
+  `SecretAccessKey`/`SessionToken`; all three causes had to be fixed together.
+- `github_token` could not match **`github_pat_`**, the fine-grained form and
+  GitHub's own recommended default, because the character after `gh` is `i`. A
+  bare `GH_TOKEN=github_pat_…` leaked; it was caught only incidentally inside
+  `.git-credentials` and quoted `.env`.
+
+Both are one-token fixes with no measured false positives (0 across 2,758 files
+/ 21 MB of third-party JSON plus every tracked repo file) and no timing change.
+
+Released as a **minor**, not a patch, because `db_url` and
+`private_key_block` coverage was reduced.
 
 Order is application order (longest/most-specific guards run such
 that `anthropic_key` is attempted before `openai_key` since

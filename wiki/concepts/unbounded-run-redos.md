@@ -63,6 +63,7 @@ hex dumps (delimiter-free runs); column-padded tables and tab-indented logs
 | 9 | `TEST_FAILURE` (`rank.ts`), `FAIL_LINE` (`go-test.ts`), `SUMMARY` + `PROBLEM_ROW` (`eslint.ts`), `SIGNATURE` (`test-output.ts`) | fixed — see below |
 | 9 | citation anchor strip, `memory-graph/src/parse-wiki.ts:79` | fixed — see below |
 | 9 | wikilink scanner, `memory-graph/src/parse-wiki.ts:64` | fixed — see below |
+| 10 | `email`, `aws_secret_key`, `api_key_header`, `basic_auth_header`, `db_url`, `url_basic_auth`, `private_key_block` | fixed 2026-07-25 — see below |
 
 ## Instance 6: the missed twin (`context-gate`)
 
@@ -496,10 +497,33 @@ it with hostile strings finds nothing; the trigger is an ordinary flat
 dictionary. Sweep for "regex inside a per-item loop over all lines", not only
 for ambiguous quantifiers. See [[entities/indexer]].
 
+## Fixing it: three tools, chosen by measurement
+
+- Bound the run — for an unbounded forward run before a required literal.
+- Left-boundary lookbehind — see the `jwt` fix.
+- [[concepts/lookahead-start-guard]] — for a variable-length lookbehind re-walked
+  at every offset. Provably lossless and 60-80x faster than bounding the same
+  run (measured: `aws_secret_key` 0.1 ms against 8.1 ms bounded), but
+  position-sensitive and engine-dependent. It superseded an earlier bound-based
+  fix for the same three patterns; both worked, the guard costs less and gives
+  up no coverage.
+
+How to test any of them: [[concepts/redos-guard-testing]]. Every rule there was
+paid for by a suite that passed while broken.
+
+## Correction to an earlier record here
+
+This page once said `email` "never modifies text" and floated a size gate on the
+observer loop. `redactForLedger()` loops `OBSERVED_PATTERNS` and calls
+`out.replace(...)`, so the gate was never safe; the local part is bounded to
+RFC 5321 instead.
+
 ## Related
 
 - [[entities/output-filter]] — instances 2, 3, 7, 8 and 9.
-- [[entities/policy]] — instances 1, 4, 5.
+- [[entities/policy]] — instances 1, 4, 5 and 10.
+- [[concepts/lookahead-start-guard]] — the third fix tool.
+- [[concepts/redos-guard-testing]] — how to fence a fix so it stays fixed.
 - [[entities/context-gate]] — instance 6.
 - [[concepts/glob-compile-redos]] — the sibling defect class.
 - `@megasaver/memory-graph` — instance 9 (no entity page yet).
