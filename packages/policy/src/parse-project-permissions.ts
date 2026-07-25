@@ -37,11 +37,20 @@ export const projectPermissionsSchema = z
     deny: z
       .object({
         read: globs.default([]),
-        write: globs.default([]),
+        // No write gate exists — there is no `evaluatePathWrite` to pair with
+        // `evaluatePathRead`, and permissions-yaml §5.4 scoped live write
+        // enforcement out. These globs used to compile into an unread
+        // `denyWritePatterns`, so a correctly-spelled `write:` bought an
+        // operator confidence it never earned. Rejected by name instead
+        // (deny-write-honest-rejection §3.1). `.optional()` is load-bearing:
+        // bare `z.never()` rejects the `undefined` of an absent key and would
+        // fail every valid file. Restore this to a glob list only together
+        // with a real call site.
+        write: z.never().optional(),
         commands: z.array(z.string().min(1)).max(MAX_GLOBS).readonly().default([]),
       })
       .strict()
-      .default({ read: [], write: [], commands: [] }),
+      .default({ read: [], commands: [] }),
   })
   // .strict() is load-bearing: a typo or an `allow:` attempt is a parse
   // failure, never a silent ignore — fail-closed (I3, §3.1).
@@ -53,7 +62,6 @@ export const projectPermissionsSchema = z
 // ALLOWED_COMMANDS-style check (permissions-yaml §2).
 export type ProjectPermissions = {
   denyReadPatterns: readonly PathMatcher[];
-  denyWritePatterns: readonly PathMatcher[];
   denyCommands: readonly string[];
 };
 
@@ -68,17 +76,29 @@ export class PolicyLoadError extends Error {
   }
 }
 
+// This message is what the operator READS: resolveEffectiveSettings copies
+// err.message into the policy_load_failed `detail`, which the file-read and
+// MCP surfaces print. "Unrecognized key" would be the wrong story — the key is
+// real and correctly spelled, it just denies nothing.
+const DENY_WRITE_MESSAGE =
+  "deny.write is not enforced: Mega Saver has no write gate, so these globs would never deny anything. " +
+  "Remove the deny.write key; use deny.read / deny.commands, which are enforced.";
+
 // PURE: takes an ALREADY-PARSED plain object (no fs, no yaml). Validates with
 // the .strict() schema, then compiles globs to the resolved ProjectPermissions.
 export function parseProjectPermissions(raw: unknown): ProjectPermissions {
   const result = projectPermissionsSchema.safeParse(raw);
   if (!result.success) {
-    throw new PolicyLoadError("invalid project permissions", { cause: result.error });
+    const denyWrite = result.error.issues.some(
+      (issue) => issue.path[0] === "deny" && issue.path[1] === "write",
+    );
+    throw new PolicyLoadError(denyWrite ? DENY_WRITE_MESSAGE : "invalid project permissions", {
+      cause: result.error,
+    });
   }
   const { deny } = result.data;
   return {
     denyReadPatterns: deny.read.map(compileGlob),
-    denyWritePatterns: deny.write.map(compileGlob),
     denyCommands: deny.commands,
   };
 }

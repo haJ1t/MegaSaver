@@ -4303,3 +4303,33 @@ Filed, not fixed: `ProjectRule.appliesTo` has no length bound of its own, and
 `deny.write` is parsed and compiled but has no consumer.
 
 `pnpm verify` EXIT 0; policy suite 264 tests.
+## [2026-07-25 15:45 +03] fix | deny.write rejected instead of silently ignored
+
+`.megasaver/permissions.yaml` accepted a `deny.write` key that compiled into
+`ProjectPermissions.denyWritePatterns` — a field with **zero consumers** in the
+repo (no `evaluatePathWrite` exists; permissions-yaml §5.4 scoped live write
+enforcement out). The YAML presented `write:` as a peer of `read:` and
+`commands:`, which are enforced. Reported from a 2026-07-25 glob-matcher review.
+
+Chose rejection over implementing a write gate (contradicts §5.4, and there is
+no single write chokepoint — `memory create`, `connector sync`, `handoff pack`,
+`brain export`, `hooks install` all write independently; gating some reads as
+gating all) and over documenting the gap (the parser is where the operator
+actually gets told). `write` is now `z.never().optional()` in the shape with a
+message selected by zod issue path, so the `PolicyLoadError` names the key.
+`denyWritePatterns` removed from `ProjectPermissions`; changeset major.
+
+`security-reviewer` found no vulnerability (I1–I4 hold, I1/I3 strengthened; all
+six `loadProjectPermissions` call sites verified fail-closed) but argued one
+pre-existing defect BLOCKED rather than deferred: `mega output exec` dropped the
+`policy_load_failed` detail, so the named message never reached the operator on
+the surface most likely to hit it — negating the reason for choosing a named
+message at all. Fixed in the same change (`exec.ts:124`), detail now rides after
+the code to keep CLI/MCP parity. `critic` killed 4/4 mutants. Filed separately:
+`max_results` (`mcp-bridge/src/tools/search-code.ts:25`) and `ownerDead`
+(`proxy-control/src/reconcile.ts:25`) are the same unread-but-parsed class.
+
+Sources:
+[[docs/superpowers/specs/2026-07-25-deny-write-honest-rejection-design]],
+[[docs/superpowers/plans/2026-07-25-deny-write-honest-rejection-plan]],
+[[entities/policy]].

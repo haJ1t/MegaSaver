@@ -229,6 +229,17 @@ now so the schema is stable when a write path lands; loader + tests
 cover it. Flagged as a known no-op to avoid a false sense of write
 protection.
 
+> **SUPERSEDED 2026-07-25** — the flag above was not enough. Parsing a
+> correctly-spelled security key that denies nothing IS the false sense
+> of write protection, and this doc is not what an operator reads before
+> editing YAML. `deny.write` is now REJECTED at parse time with a
+> `PolicyLoadError` naming it, and `denyWritePatterns` is gone from
+> `ProjectPermissions`. The §2 schema block above is stale in the same
+> way. See
+> `docs/superpowers/specs/2026-07-25-deny-write-honest-rejection-design.md`.
+> Live write enforcement remains out of scope; when it lands, `write:`
+> returns to the schema together with its call site.
+
 ## §6 Alternatives considered
 
 - **`allow:` support** — REJECTED (§3.1): escalation risk; the file

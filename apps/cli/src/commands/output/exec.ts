@@ -120,8 +120,11 @@ export async function runOutputExec(input: RunOutputExecInput): Promise<number> 
           case "policy_load_failed":
             // policy_load_failed IS a PolicyDenyCode; surface it on the same
             // command_denied line so the CLI and MCP observe the same code. The
-            // command was never spawned (fail-closed, I3).
-            return commandDeniedMessage("policy_load_failed");
+            // command was never spawned (fail-closed, I3). `detail` rides after
+            // the code rather than replacing it: the code keeps CLI/MCP parity,
+            // and without the detail the operator cannot tell an unenforceable
+            // key (deny.write) from a YAML syntax error.
+            return commandDeniedMessage(`policy_load_failed: ${outcome.detail}`);
           case "command_denied":
             return commandDeniedMessage(outcome.code);
           case "command_failed":

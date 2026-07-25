@@ -615,6 +615,19 @@ file is left untouched.
 An optional `permissions.yaml` in a project tightens the command/path allow-list.
 It is **tighten-only** — it can never loosen the built-in safety gates.
 
+```yaml
+# .megasaver/permissions.yaml — every key ADDS a denial
+deny:
+  read:     ["creds/**"]   # extra secret-path globs
+  commands: ["make"]       # extra denied commands
+```
+
+`deny.read` and `deny.commands` are the only enforced keys. There is no
+`deny.write`: Mega Saver has no write gate, so a write rule would deny nothing —
+declaring one is rejected outright rather than accepted and ignored. A
+malformed or unenforceable file is **fail-closed**: the gated operation is
+denied, never run with the file skipped.
+
 ---
 
 ## Troubleshooting

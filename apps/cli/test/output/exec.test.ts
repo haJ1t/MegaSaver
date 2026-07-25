@@ -267,6 +267,27 @@ describe("runOutputExec", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("a deny.write permissions.yaml → the reason rides after the code, not just the code", async () => {
+    await seed(store, projectRoot);
+    await mkdir(join(projectRoot, ".megasaver"), { recursive: true });
+    await writeFile(
+      join(projectRoot, ".megasaver", "permissions.yaml"),
+      ["deny:", '  write: ["dist/**"]'].join("\n"),
+      "utf8",
+    );
+    const { input, calls, out, err } = baseInput({ command: "ls", args: ["-la"] });
+
+    const code = await runOutputExec(input);
+
+    expect(code).toBe(1);
+    expect(out).toHaveLength(0);
+    // The PolicyDenyCode stays first for CLI/MCP parity...
+    expect(err.some((e) => e.includes("command_denied: policy_load_failed"))).toBe(true);
+    // ...and the reason the operator needs is no longer dropped.
+    expect(err.some((e) => e.includes("deny.write is not enforced"))).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+
   // ---- session_not_found -----------------------------------------------
 
   it("unknown session → exit 1, no spawn", async () => {
