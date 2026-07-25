@@ -5,12 +5,16 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { makeSpawnedSaver, prepareSaverStore } from "../src/saver-subprocess.js";
 
-// Built by `pnpm turbo build --filter=@megasaver/cli...` then
-// `pnpm --filter @megasaver/cli run bundle` (see apps/cli/package.json's
-// `prepack` script). Not part of `pnpm verify` — skip cleanly if absent instead
-// of faking the result.
-const MEGA_BIN = resolve(import.meta.dirname, "../../../apps/cli/dist-bundle/mega.mjs");
-const bundleExists = existsSync(MEGA_BIN);
+// The build-graph output, NOT the hand-built publish bundle (dist-bundle/mega.mjs
+// is gitignored and only ever built by hand or by `prepack`, so it can be
+// arbitrarily older than the source under test — a measurement harness proving
+// itself against a stale binary is the drift this package exists to prevent).
+// turbo/tsup rebuild dist/cli.js whenever the CLI or a dep changes, and CI builds
+// before it verifies, so freshness needs no bespoke staleness check.
+const MEGA_BIN = resolve(import.meta.dirname, "../../../apps/cli/dist/cli.js");
+// defaultRun (src/saver-subprocess.ts) spawns the binary directly, which on win32
+// cannot execute a shebang script. Skip cleanly instead of faking the result.
+const canSpawnMega = existsSync(MEGA_BIN) && process.platform !== "win32";
 
 // Mirrors apps/cli/src/store.ts resolveStorePath's macOS/Linux branch: XDG_DATA_HOME
 // wins if set, else `<HOME>/.local/share/megasaver`. This is the real store a
@@ -31,7 +35,7 @@ function readWorkspaceKeys(path: string): string[] {
 }
 
 describe("makeSpawnedSaver store isolation (real binary)", () => {
-  it.skipIf(!bundleExists)(
+  it.skipIf(!canSpawnMega)(
     "writes the hook's store under the caller-supplied storeRoot, not the real store",
     () => {
       const base = mkdtempSync(join(tmpdir(), "bench-store-isolation-"));
@@ -85,38 +89,55 @@ describe("makeSpawnedSaver store isolation (real binary)", () => {
   // "disabled (safe) — source missing" and passes everything through. The whole
   // measured effect silently depended on a seeding step that lived nowhere in
   // this package. This is the test that would have caught it.
-  it.skipIf(!bundleExists)("a seeded isolated store actually compresses", () => {
-    const base = mkdtempSync(join(tmpdir(), "bench-store-seeded-"));
-    const cwd = join(base, "cwd");
-    const storeRoot = join(base, "store");
-    mkdirSync(cwd, { recursive: true });
+  it.skipIf(!canSpawnMega)(
+    "a seeded isolated store actually compresses",
+    () => {
+      const base = mkdtempSync(join(tmpdir(), "bench-store-seeded-"));
+      const cwd = join(base, "cwd");
+      const storeRoot = join(base, "store");
+      mkdirSync(cwd, { recursive: true });
 
-    try {
-      prepareSaverStore({ megaBin: MEGA_BIN, cwd, storeRoot, mode: "safe" });
-      const apply = makeSpawnedSaver({
-        megaBin: MEGA_BIN,
-        cwd,
-        sessionId: randomUUID(),
-        storeRoot,
-      });
-      // Clears safe mode's 32000-byte Read floor with the smallest margin that
-      // still compresses: the real hook's cost grows super-linearly in payload
-      // size (~5s at 40 KB, ~27s at 100 KB on the reviewing machine), and this
-      // test must not sit against vitest's 30s ceiling.
-      const raw = "x".repeat(40_000);
-      const out = apply(raw, {
-        toolUseId: "t1",
-        toolName: "Read",
-        toolInput: { file_path: join(cwd, "big.ts") },
-      });
-      expect(out).not.toBeNull();
-      expect((out as string).length).toBeLessThan(raw.length);
-    } finally {
-      rmSync(base, { recursive: true, force: true });
-    }
-  });
+      try {
+        prepareSaverStore({ megaBin: MEGA_BIN, cwd, storeRoot, mode: "safe" });
+        const apply = makeSpawnedSaver({
+          megaBin: MEGA_BIN,
+          cwd,
+          sessionId: randomUUID(),
+          storeRoot,
+        });
+        // Clears safe mode's 32000-byte Read floor with the smallest margin that
+        // still compresses: the real hook's cost grows super-linearly in payload
+        // size (~5s at 40 KB, ~27s at 100 KB on the reviewing machine), and this
+        // test must not sit against vitest's 30s ceiling.
+        const raw = "x".repeat(40_000);
+        const out = apply(raw, {
+          toolUseId: "t1",
+          toolName: "Read",
+          toolInput: { file_path: join(cwd, "big.ts") },
+        });
+        expect(out).not.toBeNull();
+        expect((out as string).length).toBeLessThan(raw.length);
 
-  it.skipIf(!bundleExists)("refuses to run against a store it could not enable", () => {
+        // Stage A: the saver compresses a given output only on FIRST SIGHT, and the
+        // seen-ledger it consults lives in the store — so replaying the identical
+        // payload in the same session must pass through. Pins the binary under test
+        // to a build that actually has the subsystem the harness claims to isolate.
+        const second = apply(raw, {
+          toolUseId: "t2",
+          toolName: "Read",
+          toolInput: { file_path: join(cwd, "big.ts") },
+        });
+        expect(second).toBeNull();
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+      }
+    },
+    // Two real hook spawns over a 40 KB payload — ~15s locally with the rest of
+    // the suite running in parallel, so vitest's 30s default is too tight for CI.
+    60_000,
+  );
+
+  it.skipIf(!canSpawnMega)("refuses to run against a store it could not enable", () => {
     const base = mkdtempSync(join(tmpdir(), "bench-store-unseeded-"));
     const cwd = join(base, "cwd");
     mkdirSync(cwd, { recursive: true });
@@ -134,9 +155,9 @@ describe("makeSpawnedSaver store isolation (real binary)", () => {
     }
   });
 
-  if (!bundleExists) {
-    it("SKIPPED: apps/cli/dist-bundle/mega.mjs not built — run `pnpm turbo build --filter=@megasaver/cli...` then `pnpm --filter @megasaver/cli run bundle` to enable this test", () => {
-      expect(bundleExists).toBe(false);
+  if (!canSpawnMega) {
+    it("SKIPPED: cannot spawn apps/cli/dist/cli.js — run `pnpm turbo build --filter=@megasaver/cli...` to enable this test (never runs on win32)", () => {
+      expect(canSpawnMega).toBe(false);
     });
   }
 });
