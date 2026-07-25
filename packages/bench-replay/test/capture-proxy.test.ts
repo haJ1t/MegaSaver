@@ -103,6 +103,28 @@ describe("startCaptureProxy", () => {
     }
   });
 
+  // A count_tokens body carries `model` and `messages`, so nothing downstream can
+  // tell it apart from an inference body once it is on disk: replay would cap it
+  // to max_tokens=1 and POST it to /v1/messages, fabricating a billed request the
+  // agent never made.
+  it("does not record sibling paths under /v1/messages (count_tokens)", async () => {
+    const upstream = await startFakeUpstream('{"input_tokens":7}');
+    const proxy = await startCaptureProxy({ port: 0, upstream: upstream.url, outDir: dir });
+    try {
+      const res = await fetch(`${proxy.url}/v1/messages/count_tokens?beta=true`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "m", messages: [{ role: "user", content: "hi" }] }),
+      });
+      expect(await res.text()).toBe('{"input_tokens":7}');
+      expect(readdirSync(dir).filter((f) => f.endsWith(".json"))).toEqual([]);
+      expect(proxy.count()).toBe(0);
+    } finally {
+      await proxy.stop();
+      await upstream.stop();
+    }
+  });
+
   it("ignores non-/v1/messages paths (no recording, still forwards)", async () => {
     const upstream = await startFakeUpstream('{"pong":1}');
     const proxy = await startCaptureProxy({ port: 0, upstream: upstream.url, outDir: dir });

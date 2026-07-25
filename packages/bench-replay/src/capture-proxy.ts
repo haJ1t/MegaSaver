@@ -3,12 +3,18 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { type IncomingMessage, type Server, createServer } from "node:http";
 import { join } from "node:path";
 
-// Records every /v1/messages request VERBATIM — body in `req-NNN.json`, request
+// Records every request to the /v1/messages INFERENCE path — bare or
+// query-suffixed, since Claude Code sends /v1/messages?beta=true — VERBATIM: body
+// in `req-NNN.json`, request
 // line and headers in `req-NNN.meta.json` — so a task's conversation can later
 // be replayed identically through both arms. Deliberately dumb: it does not
 // parse, validate, or rewrite anything on the way through — a recording that
 // differs from what the client actually sent would poison every downstream
-// measurement.
+// measurement. Sibling paths under the same prefix — notably
+// /v1/messages/count_tokens — are NOT inference requests, and their bodies carry
+// `model` and `messages` too, so once recorded nothing downstream could tell them
+// apart: replay would POST one to /v1/messages, fabricating traffic the agent
+// never sent instead of preserving what it did.
 //
 // The headers are not decoration. Claude Code sends a per-request anthropic-beta
 // set (prompt-caching-scope, context-1m, context-management, effort) that DIFFERS
@@ -58,7 +64,7 @@ export async function startCaptureProxy(input: {
         if (v === undefined || HOP_BY_HOP.has(k.toLowerCase())) continue;
         headers[k] = Array.isArray(v) ? v.join(", ") : v;
       }
-      if (url.startsWith("/v1/messages") && body.length > 0) {
+      if ((url === "/v1/messages" || url.startsWith("/v1/messages?")) && body.length > 0) {
         seq += 1;
         const stem = join(input.outDir, `req-${String(seq).padStart(3, "0")}`);
         writeFileSync(`${stem}.json`, body);
