@@ -68,6 +68,14 @@ describe("extractGo", () => {
     expect(extractGo("src/x.go", "")).toEqual([]);
   });
 
+  it("ends a decl whose line has net-zero delimiter delta on that line", () => {
+    const b = extractGo("src/pb.go", "type ID string\nfunc Foo() {\n\tx()\n}\n");
+    expect(b.map((x) => [x.name, x.startLine, x.endLine])).toEqual([
+      ["ID", 1, 1],
+      ["Foo", 2, 4],
+    ]);
+  });
+
   it("never throws and clamps a never-closing brace to EOF", () => {
     const b = extractGo("src/x.go", "func Open() {\n\treturn");
     expect(b[0]?.endLine).toBe(2);
