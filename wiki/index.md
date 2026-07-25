@@ -98,6 +98,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 - [[syntheses/solo-developer-roadmap]] — active 2026-07-17 reset after v2.1.1 / CLI 2.2.0: the Experience Layer is shipped; Agent Passport → Brain Doctor → Context Contracts → Déjà Vu, with release gates and honest-metrics constraints.
 - [[syntheses/global-agent-continuity-strategy]] — approved 2026-07-19 long-horizon direction: developer-first Agent Continuity Layer, four horizons, platform gates, and privacy/evidence guardrails.
 - [[concepts/proxy-mode]] / Proxy Mode v1.2 — public naming mode, output classifier, vitest/tsc compressors, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics; full spec+plan written and shipped on `docs/contextops-roadmap-phases`.
+- [[syntheses/llm-code-problems-research-2026-07]] — external research scan (593+ articles) mapped to 10 prioritized feature proposals (package-hallucination firewall, memory write-verify, silent-failure monitor, MCP security layer…) + validation of existing bets.
 
 ## Sources (pointers to raw + project artifacts)
 

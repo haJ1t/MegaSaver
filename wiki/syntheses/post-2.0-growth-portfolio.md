@@ -1,18 +1,21 @@
 ---
 title: Post-2.0 Growth Portfolio — next-gen differentiation ideas
 tags: [synthesis, business, product, pro, ideas]
-sources: [syntheses/pro-differentiation-portfolio.md, syntheses/gtm-plan-2026-07.md, entities/brain-portability (origin), user session 2026-07-11]
-status: active — ideation; each picked item gets its own spec cycle
+sources: [syntheses/pro-differentiation-portfolio.md, syntheses/gtm-plan-2026-07.md, entities/brain-portability (origin), entities/brain-sync.md, syntheses/solo-developer-roadmap.md, wiki/log.md, npm registry @megasaver/cli checked 2026-07-17, user sessions 2026-07-11 and 2026-07-17]
+status: active — recalibrated for the individual daily-developer buyer after v2.1.1 / CLI 2.2.0
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-17
 ---
 
 # Post-2.0 Growth Portfolio
 
-Baseline (2026-07-11): 2.0.0 live on npm — m1–m11 all shipped + `mega brain
-export/import`. Old portfolio ([[syntheses/pro-differentiation-portfolio]])
-fully executed except carry-overs below. User goal restated: world-class,
-paid, clearly differentiated.
+Baseline (2026-07-17): product tag `v2.1.1` and `@megasaver/cli@2.2.0` are
+released. The latter is npm `latest` as of 2026-07-17. The release completes
+the first coherent **Agent Experience Layer**: encrypted multi-machine Brain
+Sync, Warm Start, Mistake Firewall, Living Brain, Code-Truth Verify, and Brain
+Autopilot. The buyer priority is now the individual developer who uses an
+agent every day, not an immediate Team/enterprise buyer. (source: `git`
+`653f7599`; `apps/cli/CHANGELOG.md` 2.2.0; npm registry check 2026-07-17)
 
 ## Carry-overs (never shipped, still valid)
 
@@ -23,11 +26,11 @@ E6 budgeted multi-agent (CRITICAL) · i18n `tr` + PPP pricing.
 
 | # | Today | Evolution | Why it sells |
 |---|-------|-----------|--------------|
-| E7 | brain export/import = manual file | **`mega brain sync`** — E2E-encrypted cloud sync, multi-machine | First cloud service; recurring infra justifies recurring price; Team foundation |
-| E8 | brain is snapshot | **`brain diff/merge` + time-travel** ("brain as of Friday") — bi-temporal M1 already in core | Nobody has versioned agent memory; demo gold |
+| E7 | brain export/import = manual file | **SHIPPED:** `mega brain sync` — E2E-encrypted cloud sync, multi-machine | Anti-lock-in foundation; makes a later cross-machine handoff credible |
+| E8 | brain is snapshot | **PARTIAL:** `history` / `--as-of` time-travel shipped with Living Brain; brain-level diff/merge remains | A visible, reversible brain history remains demo gold |
 | E9 | brain starts empty | **Starter-pack brains** (framework best-practice bundles, community-shareable) | Seeds marketplace; day-1 value |
 | E10 | roi speaks to dev | **`mega roi report --pdf`** — manager-grade monthly artifact | "Boss pays" wedge; B2B without backend |
-| E11 | fix = manual one-click | **Autopilot** — auto-apply safe fixes, weekly digest "saved extra $9 while you slept" | Stickiness; subscription earns keep passively |
+| E11 | fix = manual one-click | **SHIPPED:** Autopilot — safe cross-session capture plus `mega brain digest` | Daily stickiness; now needs activation and proof rather than another core subsystem |
 | E12 | bench = private runs | **MegaSaver Index** — published anonymized benchmark per agent/model version | Press/SEO magnet; content moat; cites us |
 | E13 | firewall blocks leaks | **Compliance pack** — audit log export, HIPAA/PCI/SOC2 policy templates | Enterprise tier unlock, price > $7.99 |
 | E14 | alerts warn only | **Session circuit breaker** — hard budget kill-switch per session (E6-lite, de-risked) | Bill-shock killer without CRITICAL fleet scope |
@@ -51,30 +54,21 @@ E6 budgeted multi-agent (CRITICAL) · i18n `tr` + PPP pricing.
 - **PPP/regional pricing** + i18n `tr` — global conversion.
 - **Enterprise** = E13 compliance + SSO, custom price.
 
-## Three strategic paths
+## Strategic reset — solo depth first
 
-- **A Depth** (solo perfection): E11, N11, N13, N4 → churn↓, ceiling $7.99.
-- **B Up-market** (B2B arc): E7 → E10 → N6 Team → E13 → ARPU↑; needs first backend.
-- **C Distribution** (viral): N9, E12, N5, N8, i18n → TAM/top-funnel growth.
+- **A Depth** (solo perfection): the shipped Experience Layer, N10, Brain
+  Doctor, N11, N13 → daily value and churn reduction.
+- **B Up-market** (B2B arc): E10 → N6 Team → E13 → ARPU↑; deliberately later.
+- **C Distribution** (viral): N10 shareable handoffs, N8 connectors, N12
+  starter brains, i18n → activation and word of mouth.
 
-**Recommendation: B backbone, C tactical.** Solo $7.99 has a hard revenue
-ceiling; seat expansion is the biggest lever; brain sync is both the
-subscription justification and the Team-tier foundation. C items feed the
-funnel while B builds. Proposed sequence: 2.1 E7 sync · 2.2 E10 report+N4 ·
-2.3 N8 connectors · 2.4 E11 autopilot · 2.5 N9 CI guard · **3.0 N6 Team
-tier**. Moonshot track in parallel: N11 replay, N13 semantic cache.
+**Recommendation: A backbone, C tactical until individual retention is proven.**
+The first buyer pays for a noticeably better agent every working day; the next
+two releases should make the already-shipped layer easy to experience, then
+make switching agents feel lossless. Team expansion remains an option after a
+retained solo cohort, not the near-term forcing function.
 
-Anthropic-absorption defense strengthens: native compaction will never do
-cloud brain sync, fleet connectors, CI metering, or org dashboards.
-
-## Status
-
-Direction LOCKED (user, 2026-07-11): **path B+C mix** (up-market backbone,
-distribution tactical). **2.1 = E7 `mega brain sync`** — now **IMPLEMENTED**
-(branch `worktree-brain-sync`; `@megasaver/brain-sync` package + 5 CLI commands,
-16-task TDD plan executed subagent-driven; see [[entities/brain-sync]]). Still
-pending the CRITICAL review gauntlet (architect + critic + security-reviewer +
-tracer evidence loop) + smoke + manual user release approval before merge.
-E7 involves E2E encryption → cryptographic ops → **CRITICAL** risk per
-[[concepts/risk-aware-development]]. Each subsequent pick → full superpowers
-chain per [[concepts/superpowers-discipline]].
+The executable solo sequence, acceptance gates, evidence rule, and risk
+classification now live in [[syntheses/solo-developer-roadmap]]. The next build
+decision is **2.2 Agent Passport**, unless activation data shows the shipped
+Experience Layer itself is not reaching users. (source: user target 2026-07-17)

@@ -3899,3 +3899,7 @@ mitigated by a printed per-model histogram, not by repricing.
 Stage A (`feat/net-positive-stage-a`) remains parked and UNGATED. Running the
 gate needs an `ANTHROPIC_API_KEY` (Claude Code's OAuth is not usable by a
 separate HTTP client).
+
+## 2026-07-20 — LLM Code Problems Research analysis
+
+Analyzed `~/Desktop/LLM-Code-Problems-Research.docx` (593+ articles, ~19.4k lines) via 10 parallel range agents. Mapped dominant problem clusters (package/API hallucination, generated-code security, context quality, silent agent failures, memory poisoning) to 10 prioritized Mega Saver feature proposals + validated existing bets. Caveats: heavy duplication, boilerplate fields, single-source numbers. Synthesis: [[syntheses/llm-code-problems-research-2026-07]].
