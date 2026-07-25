@@ -4221,3 +4221,46 @@ re-derive whether the guardrail actually ships. The prior entry
 `[2026-07-25 14:52]` stands as written history; it is superseded on the "merged
 as `8e261d19`" phrasing only. Sources:
 [[syntheses/saver-cache-churn]], [[syntheses/variance-controlled-benchmark]].
+
+
+## [2026-07-25] fix | compileGlob ReDoS + metachar injection (@megasaver/policy)
+
+Reported as an exponential blowup in `**/`-chained project deny globs.
+Measurement confirmed the report and found the root cause to be broader than
+the report's framing: `compileGlob` compiled untrusted glob text into a
+`RegExp`, so (1) all three wildcard forms chained exponentially — not only
+`**/` — with `*a`x5 costing 58,530 ms against a 255-character path, and (2)
+every character outside the glob language reached the engine unescaped, making
+the zero-wildcard `(a+)+b` a 1,130 ms ReDoS on 28 characters. The same
+passthrough silently broke ordinary deny rules: `**/a+b.txt` did not match
+`x/a+b.txt`.
+
+Both mitigations proposed in the report were refuted by measurement rather than
+argument. Collapsing consecutive `(?:.*/)?` groups does not apply (a literal
+sits between them). Rewriting `**/` as `(?:[^/]*/)*` is language-equivalent but
+*slower* (344 vs 126 ms at k=4). A wildcard-count cap would have to be ≤2 to
+hold — rejecting the shipped `**/*.pem` — and is bypassed entirely by the
+zero-wildcard vector, because it counts a token the exploit does not need.
+
+Fix: drop the regex. `compileGlob` returns `PathMatcher` and matches by NFA
+simulation over a boolean reachability frontier, O(tokens × path length) with no
+backtracking by construction. Every non-glob character is a literal.
+
+A third untrusted call site not named in the report was found and covered:
+`rankApplicableRules` in `@megasaver/core` compiles `ProjectRule.appliesTo` per
+call inside a ranking loop with no cache, measured at 70,377 ms for one hostile
+rule.
+
+Evidence: red gate 129,970 ms → 3 ms; the end-to-end `evaluatePathRead` case
+failed all four retries pre-fix at 6,298/2,171/2,094/2,008 ms against a 250 ms
+ceiling. LOCKED §9a denylist equivalence pinned by a frozen fixture table plus
+60,000 randomized comparisons against the pre-fix implementation held verbatim
+as an oracle; property generators were corrected after measuring the first
+version at 0/20,000 matches (vacuous). Five semantic mutants each turn the suite
+red. Non-ASCII case-folding divergence measured and bounded: three cases tighten
+the gate, one weakens it (Greek final sigma), accepted and test-pinned. Full
+`pnpm verify` EXIT 0.
+
+Pages updated: [[concepts/glob-compile-redos]] (new),
+[[concepts/unbounded-run-redos]], [[entities/policy]], [[index]].
+Branch: `claude/laughing-matsumoto-be0481`.
