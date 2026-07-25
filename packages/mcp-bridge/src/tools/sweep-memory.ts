@@ -10,7 +10,7 @@ export type SweepMemoryEnv = { registry: CoreRegistry; now?: string };
 
 export type SweepMemoryResult = { archived: number; scanned: number };
 
-const sweepMemoryInputSchema = z.object({ projectId: z.string().min(1) }).strict();
+export const sweepMemoryInputSchema = z.object({ projectId: z.string().min(1) }).strict();
 
 // On-demand tier sweep (the MCP analog of `mega memory sweep`): demote aged-out /
 // closed / low-value memories to the `archival` tier so they drop out of default

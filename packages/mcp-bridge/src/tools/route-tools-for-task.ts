@@ -5,7 +5,7 @@ import { McpBridgeError } from "../errors.js";
 
 export type RouteToolsForTaskEnv = { registry: CoreRegistry };
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     projectId: z.string().min(1),
     task: z.string().optional(),

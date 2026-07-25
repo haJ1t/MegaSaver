@@ -10,7 +10,7 @@ export type CheckApproachEnv = {
   isPro: boolean;
 };
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     projectId: z.string().min(1),
     description: z.string().min(1),

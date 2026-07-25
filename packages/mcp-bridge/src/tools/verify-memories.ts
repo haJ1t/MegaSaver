@@ -16,7 +16,7 @@ export type VerifyMemoriesEnv = {
 export const VERIFY_MEMORIES_UPSELL =
   "Agent-triggered memory verification is Mega Saver Pro — mega license activate <key>. Free tier: run `mega memory verify <projectId>` manually.";
 
-const inputSchema = z.object({ projectId: z.string().min(1) }).strict();
+export const inputSchema = z.object({ projectId: z.string().min(1) }).strict();
 
 export type VerifyMemoriesResult = VerifyPlan | { upsell: string };
 

@@ -13,7 +13,7 @@ export type ReadFileToolEnv = {
   newId: () => string;
 };
 
-const readFileInputSchema = z
+export const readFileInputSchema = z
   .object({
     path: z.string().min(1),
     intent: z.string(),

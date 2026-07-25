@@ -15,7 +15,7 @@ export type RecordTaskStepEnv = {
   newId: () => string;
 };
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     planId: z.string().min(1),
     stepId: z.string().min(1),

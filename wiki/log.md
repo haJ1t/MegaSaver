@@ -4378,3 +4378,25 @@ caught by following up rather than reporting the first read.
 Sources: [[docs/superpowers/specs/2026-07-25-reconcile-obs-dead-fields-design]],
 [[docs/superpowers/plans/2026-07-25-reconcile-obs-dead-fields-plan]],
 [[concepts/persistent-proxy-routing]].
+
+## [2026-07-25 18:10 +03] fix | real inputSchema published for all 35 MCP tools
+
+Root cause of the whole 2026-07-25 inert-input batch: `server.ts:282` published a
+bare `{type:"object"}` for every tool, so agents guessed parameter names from
+prose. Fixed by generating JSON Schema from the same Zod object each handler
+parses with, mapped in a new `src/tool-schemas.ts` typed
+`Record<McpToolName, z.ZodTypeAny>` — completeness is now a compile error
+(verified: deleting one entry yields TS2741).
+
+Two report corrections: the bridge has **35** tools, not 26 (the 26 figure is
+stale in the wiki and was inherited by the report); and `zod-to-json-schema` was
+already in the lockfile via `@modelcontextprotocol/sdk`, so no hand-rolled
+converter and no new dependency download.
+
+Honesty rule held: `max_results` is published with no `default`/`maximum` because
+neither is enforced; the single `.default()` in the tool surface is published
+only after verifying zod applies it.
+
+Sources: [[docs/superpowers/specs/2026-07-25-publish-tool-input-schemas-design]],
+[[docs/superpowers/plans/2026-07-25-publish-tool-input-schemas-plan]],
+[[entities/mcp-bridge]].

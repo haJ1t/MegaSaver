@@ -5,7 +5,9 @@ import { McpBridgeError } from "../errors.js";
 
 export type RetryFailedStepEnv = { registry: CoreRegistry };
 
-const inputSchema = z.object({ planId: z.string().min(1), stepId: z.string().min(1) }).strict();
+export const inputSchema = z
+  .object({ planId: z.string().min(1), stepId: z.string().min(1) })
+  .strict();
 
 export type RetryFailedStepResult = { plan: TaskPlan };
 

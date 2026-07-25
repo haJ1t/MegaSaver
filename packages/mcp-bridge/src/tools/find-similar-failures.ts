@@ -11,7 +11,7 @@ export type FindSimilarFailuresEnv = {
 
 const FREE_WINDOW_MS = 7 * 86_400_000;
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     projectId: z.string().min(1),
     task: z.string().min(1),

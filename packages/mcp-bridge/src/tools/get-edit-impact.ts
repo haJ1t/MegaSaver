@@ -31,7 +31,7 @@ export type EditImpactResult = {
   reason?: EmptyImpactReason;
 };
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     projectId: z.string().min(1),
     changedFiles: z.array(z.string()).optional(),

@@ -13,7 +13,7 @@ import { McpBridgeError } from "../errors.js";
 
 export type GetProjectContextEnv = { registry: CoreRegistry; storeRoot: string };
 
-const inputSchema = z.object({ projectId: z.string().min(1) }).strict();
+export const inputSchema = z.object({ projectId: z.string().min(1) }).strict();
 
 export type IndexSummary = {
   totalBlocks: number;

@@ -14,7 +14,7 @@ export type BuildTaskPlanEnv = {
   newId: () => string;
 };
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     projectId: z.string().min(1),
     task: z.string().min(1),

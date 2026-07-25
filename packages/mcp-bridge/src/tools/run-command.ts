@@ -17,7 +17,7 @@ export type RunCommandToolEnv = {
   originPid: string;
 };
 
-const runCommandInputSchema = z
+export const runCommandInputSchema = z
   .object({
     command: z.string().min(1),
     args: z.array(z.string()).readonly(),
