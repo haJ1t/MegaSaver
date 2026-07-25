@@ -23,27 +23,33 @@ def dup(b):
     return b + 2
 `;
 
-function fakeGit(map: Record<string, string>) {
-  return (args: string[], _cwd: string): string => {
-    const key = args.join(" ");
-    const out = map[key];
-    if (out === undefined) throw new Error(`fake git rejects: ${key}`);
-    return out;
-  };
-}
-
-// records every argv so a test can assert an unsafe path NEVER reaches a git
-// call (not merely that the result was undefined by coincidence).
+// Records every argv so a test can assert an unsafe path NEVER reaches a git
+// call (not merely that the result was undefined by coincidence). Answers BOTH
+// blob-lookup shapes off the same `rev-parse HEAD:<path>` map keys: the
+// per-path spawn and the batched `cat-file --batch-check` (queries on stdin,
+// one output line each, positional).
 function spyGit(map: Record<string, string>) {
   const calls: string[][] = [];
-  const exec = (args: string[], _cwd: string): string => {
+  const exec = (args: string[], _cwd: string, input?: string): string => {
     calls.push(args);
+    if (args.join(" ") === "cat-file --batch-check") {
+      return `${(input ?? "")
+        .split("\n")
+        .filter((query) => query !== "")
+        .map((query) => {
+          const sha = map[`rev-parse ${query}`]?.trim();
+          return sha === undefined ? `${query} missing` : `${sha} blob 12`;
+        })
+        .join("\n")}\n`;
+    }
     const out = map[args.join(" ")];
     if (out === undefined) throw new Error(`spy git rejects: ${args.join(" ")}`);
     return out;
   };
   return { exec, calls };
 }
+
+const fakeGit = (map: Record<string, string>) => spyGit(map).exec;
 
 describe("captureCodeAnchor (fake git)", () => {
   let root: string;
@@ -200,6 +206,34 @@ describe("captureCodeAnchor (fake git)", () => {
     expect(calls).toEqual([["rev-parse", "HEAD"]]);
   });
 
+  // relatedFiles is agent-supplied and uncapped (save_memory MCP arg): the git
+  // spawn count must not track its length. Counted, not timed — one spawn per
+  // path is exactly what freezes the stdio server for the whole capture.
+  it("keeps the git spawn count flat as relatedFiles grows (no per-path spawn)", async () => {
+    const spawnsFor = async (n: number): Promise<{ spawns: number; anchored: number }> => {
+      const paths = Array.from({ length: n }, (_, i) => `src/gen/f${i}.ts`);
+      const { exec, calls } = spyGit({
+        "rev-parse HEAD": "headsha1\n",
+        ...Object.fromEntries(paths.map((rel, i) => [`rev-parse HEAD:${rel}`, `blob${i}\n`])),
+      });
+      const anchor = await captureCodeAnchor({
+        rootPath: root,
+        relatedFiles: paths,
+        now: NOW,
+        execGit: exec,
+      });
+      return { spawns: calls.length, anchored: anchor?.files.length ?? 0 };
+    };
+
+    const small = await spawnsFor(20);
+    const large = await spawnsFor(400);
+
+    expect(small.anchored).toBe(20);
+    expect(large.anchored).toBe(400); // no silent truncation
+    expect(large.spawns).toBe(small.spawns); // 20x the input, same spawn count
+    expect(large.spawns).toBeLessThanOrEqual(2);
+  });
+
   it("skips a bare name colliding across relatedFiles (N2)", async () => {
     const shared = "export function shared(): void {}\n";
     writeFileSync(join(root, "src", "c1.ts"), shared);
@@ -258,6 +292,28 @@ describe("captureCodeAnchor (real git repo)", () => {
     ]);
     expect(anchor?.symbols[0]?.name).toBe("alpha");
     expect((anchor?.symbols[0]?.contentHash.length ?? 0) > 0).toBe(true);
+  });
+
+  // Batched stdin pairs replies to queries positionally: a skipped file must
+  // shift nothing. Real git, real `cat-file --batch-check` output.
+  it("pairs batched blob replies to the right paths across an untracked gap", async () => {
+    writeFileSync(join(repo, "b.ts"), "export const b = 1;\n");
+    writeFileSync(join(repo, "c.ts"), "export const c = 2;\n");
+    git(["add", "b.ts", "c.ts"], repo);
+    git(["commit", "-m", "add b c"], repo);
+    writeFileSync(join(repo, "untracked.ts"), "export const u = 3;\n");
+
+    const anchor = await captureCodeAnchor({
+      rootPath: repo,
+      relatedFiles: ["a.ts", "untracked.ts", "b.ts", "c.ts"],
+      now: NOW,
+    });
+    expect(anchor?.files).toEqual(
+      ["a.ts", "b.ts", "c.ts"].map((path) => ({
+        path,
+        blobSha: git(["rev-parse", `HEAD:${path}`], repo).trim(),
+      })),
+    );
   });
 
   it("returns undefined in a non-git directory (default execGit)", async () => {
