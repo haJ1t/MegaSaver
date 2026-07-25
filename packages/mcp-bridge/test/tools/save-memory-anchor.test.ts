@@ -35,14 +35,18 @@ function registryAt(rootPath: string): CoreRegistry {
 }
 
 // Mirrors the git calls the contract pins for captureCodeAnchor:
-// `rev-parse HEAD` (repo head) and `rev-parse HEAD:<path>` (per-file blob).
-// Any other invocation throws, which capture treats as a per-file skip.
-// If the core capture implementation added further git probes, extend this
-// fake to answer them — do not weaken the assertions.
-function fakeExecGit(args: string[], _cwd: string): string {
+// `rev-parse HEAD` (repo head) and `cat-file --batch-check` (all cited blobs
+// in one spawn, `HEAD:<path>` queries on stdin). Any other invocation throws,
+// which capture treats as a skip. If the core capture implementation added
+// further git probes, extend this fake to answer them — do not weaken the
+// assertions.
+function fakeExecGit(args: string[], _cwd: string, input?: string): string {
   const joined = args.join(" ");
   if (joined === "rev-parse HEAD") return HEAD_SHA;
-  if (joined.startsWith("rev-parse HEAD:")) return BLOB_SHA;
+  if (joined === "cat-file --batch-check") {
+    const queries = (input ?? "").split("\n").filter((line) => line !== "");
+    return `${queries.map(() => `${BLOB_SHA} blob 12`).join("\n")}\n`;
+  }
   throw new Error(`unexpected git call: ${joined}`);
 }
 
@@ -76,6 +80,42 @@ describe("save_memory — code anchor capture (i6 §5/§5.1)", () => {
     expect(symbol?.path).toBe("src/auth.ts");
     expect(symbol?.name).toBe("verifyToken");
     expect(symbol?.contentHash).toBeTruthy();
+  });
+
+  // `relatedFiles` is an uncapped agent-supplied argument, and capture runs
+  // synchronously inside the stdio request: one git spawn per path freezes the
+  // whole server. Counted at two sizes — flat, not proportional.
+  it("does not spawn one git per relatedFiles entry", async () => {
+    const spawnsFor = async (n: number, id: string): Promise<number> => {
+      const calls: string[][] = [];
+      const execGit = (args: string[], _cwd: string, input?: string): string => {
+        calls.push(args);
+        if (args.join(" ") === "rev-parse HEAD") return HEAD_SHA;
+        if (args[0] === "rev-parse") return BLOB_SHA;
+        if (args.join(" ") === "cat-file --batch-check") {
+          const queries = (input ?? "").split("\n").filter((line) => line !== "");
+          return `${queries.map(() => `${BLOB_SHA} blob 12`).join("\n")}\n`;
+        }
+        throw new Error(`unexpected git call: ${args.join(" ")}`);
+      };
+      const registry = registryAt(repoDir);
+      const result = await handleSaveMemory(
+        { registry, now: () => TS, newId: () => id, execGit },
+        {
+          projectId: PROJECT_ID,
+          scope: "project",
+          content: "big related file list",
+          relatedFiles: Array.from({ length: n }, (_, i) => `src/gen/f${i}.ts`),
+        },
+      );
+      expect(registry.getMemoryEntry(result.id as MemoryEntryId)?.anchor?.files).toHaveLength(n);
+      return calls.length;
+    };
+
+    const small = await spawnsFor(20, "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+    const large = await spawnsFor(400, "ffffffff-ffff-4fff-8fff-ffffffffffff");
+    expect(large).toBe(small);
+    expect(large).toBeLessThanOrEqual(2);
   });
 
   it("saves unanchored when the project root is not a git repo", async () => {

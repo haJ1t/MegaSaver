@@ -29,8 +29,9 @@ export type SaveMemoryEnv = {
   storeRoot?: string;
   embedFn?: (texts: readonly string[]) => Promise<Float32Array[]>;
   // Injectable git runner threaded into captureCodeAnchor so anchor tests
-  // never need a real repo. Absent ⇒ capture's execFileSync default.
-  execGit?: (args: string[], cwd: string) => string;
+  // never need a real repo. Absent ⇒ capture's execFileSync default. The third
+  // argument is git's stdin (batched cat-file) and MUST be forwarded.
+  execGit?: (args: string[], cwd: string, input?: string) => string;
 };
 
 export type SaveMemoryResult = {
