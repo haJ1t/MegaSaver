@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { deleteOverlayChunkSet } from "@megasaver/content-store";
 import { gcEvidence } from "@megasaver/evidence-ledger";
 import { locateChunkSet } from "./locate-chunk-set.js";
+import { EVIDENCE_RETENTION_MS } from "./record-output.js";
 
 // Store-wide ordinary-retention pass over the evidence ledger: gcEvidence is
 // per-workspace, so nothing swept dead workspaces (and nothing called it at
@@ -35,6 +36,9 @@ export async function sweepEvidenceStore(input: {
         workspaceKey,
         now: input.now,
         deleteChunk,
+        // Records the saver wrote before it stamped expiresAt carry null; they
+        // age out on the same 30-day clock as everything else it wrote.
+        fallbackExpiryMs: EVIDENCE_RETENTION_MS,
       });
       degraded += res.degraded;
     } catch {
