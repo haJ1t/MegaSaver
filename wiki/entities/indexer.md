@@ -7,7 +7,7 @@ sources:
   - docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md
 status: active
 created: 2026-06-11
-updated: 2026-06-26
+updated: 2026-07-25
 ---
 
 # @megasaver/indexer
@@ -30,7 +30,11 @@ incremental index. Leaf package — depends only on `@megasaver/shared`,
 - `extractMd` — ATX-heading sections → `docs` blocks (+ pre-heading
   `(intro)` block when present).
 - `extractJson` — top-level keys → `config` blocks; `package.json`
-  scripts → `script:<name>`. `lineOf` anchors to the key position.
+  scripts → `script:<name>`. `lineOf` anchors to the key position; key
+  lines are resolved in ONE pass (map of key token → first line), never
+  a regex + full scan per key — that form cost O(keys x lines) and made
+  a 1 MB flat locale file 2755 ms instead of 24 ms (fixed 2026-07-25,
+  guard `test/extract-json-quadratic.test.ts`).
 - `scanRepo({rootDir, maxFileSize?})` — read-only, traversal-safe walk;
   never follows symlinks; honors always-ignore + .gitignore +
   .megaignore (via `ignore`); skips secret/binary/oversized with reasons.

@@ -275,6 +275,11 @@ export async function gcEvidence(args: {
   workspaceKey: string;
   now: Date;
   deleteChunk: ChunkDeletePort;
+  // A null expiresAt means "no expiry" and is skipped below, so records written
+  // before the writer stamped one are uncollectable forever. Callers that own a
+  // retention policy pass its window here to age those out from createdAt; the
+  // ledger keeps no policy of its own (same reason redaction is a port).
+  fallbackExpiryMs?: number;
 }): Promise<{ degraded: number }> {
   const all = await listEvidenceByWorkspace({
     storeRoot: args.storeRoot,
@@ -286,8 +291,13 @@ export async function gcEvidence(args: {
     if (rec.status !== "available") continue;
     // GC exemptions (spec §5): pinned and manual_hold survive ordinary GC.
     if (rec.retentionClass === "pinned" || rec.retentionClass === "manual_hold") continue;
-    if (rec.expiresAt === null) continue;
-    if (new Date(rec.expiresAt).getTime() > args.now.getTime()) continue;
+    const expiresAtMs =
+      rec.expiresAt !== null
+        ? new Date(rec.expiresAt).getTime()
+        : args.fallbackExpiryMs !== undefined
+          ? Date.parse(rec.createdAt) + args.fallbackExpiryMs
+          : Number.POSITIVE_INFINITY;
+    if (expiresAtMs > args.now.getTime()) continue;
     if (rec.redactedRawChunkSetId !== null) {
       try {
         await args.deleteChunk(rec.redactedRawChunkSetId);
@@ -299,6 +309,9 @@ export async function gcEvidence(args: {
       ...rec,
       status: "retained_metadata_only",
       redactedRawChunkSetId: null,
+      // Every ref points into the chunk set just deleted, so they are dangling
+      // weight — and on a large output they are ~99% of the record's bytes.
+      returnedChunkRefs: [],
       transitions: [...rec.transitions, { at, kind: "raw_gc", actor: "system" }],
     });
     writeRecord(args.storeRoot, next);

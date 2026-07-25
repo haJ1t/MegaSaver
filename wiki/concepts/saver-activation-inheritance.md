@@ -40,6 +40,12 @@ Every valid saver-hook invocation updates minimal global and per-workspace
 heartbeats, including passthrough. Status can therefore distinguish configured
 hooks, observed invocation, and actual compression.
 
+Invocation and completion are one pair: a run records a completion only if it
+recorded an invocation. Tools the saver never processes (Write/Edit/TodoWrite)
+stop at the source-kind gate and stamp neither — otherwise their completion
+would clear a genuinely failing hook from `mega doctor`'s `saver-liveness` FAIL
+(fix 2026-07-25, `apps/cli/src/hooks/saver.ts`).
+
 Source: `docs/superpowers/specs/2026-07-02-saver-activation-inheritance-design.md`.
 
 ## Related

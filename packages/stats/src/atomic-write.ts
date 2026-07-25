@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  chmodSync,
   closeSync,
   existsSync,
   fsyncSync,
@@ -24,8 +25,11 @@ export function atomicWriteFile(filePath: string, content: string): void {
       throw new StatsError("write_failed");
     }
 
-    mkdirSync(parentDir, { recursive: true });
-    writeFileSync(tempPath, content);
+    // Owner-only: the store holds captured prompts and tool output. The chmod
+    // is the backstop — mkdir's mode is a no-op on an existing dir.
+    mkdirSync(parentDir, { recursive: true, mode: 0o700 });
+    chmodSync(parentDir, 0o700);
+    writeFileSync(tempPath, content, { mode: 0o600 });
     // Durability: fsync the temp file before rename so its bytes are on disk,
     // then fsync the parent dir after rename so the link is durable.
     // Open read-WRITE for the fsync: on Windows FlushFileBuffers requires a

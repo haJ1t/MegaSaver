@@ -159,8 +159,8 @@ describe("runHooksStatus — honest metrics wording", () => {
 });
 
 const OVERLAY_ID = "33333333-3333-4333-8333-333333333333";
-const WK1 = "wk-alpha";
-const WK2 = "wk-beta";
+const WK1 = "000000000000a1fa";
+const WK2 = "000000000000be7a";
 
 async function seedOverlaySummary(
   wk: string,

@@ -35,6 +35,16 @@ function bump(outer: Map<string, Map<string, number>>, key: string, other: strin
   inner.set(other, (inner.get(other) ?? 0) + 1);
 }
 
+// Pairing is all-pairs within a commit — O(files²) time AND memory — so one
+// mass-touch commit in the window (initial import, vendored deps, repo-wide
+// formatter run, generated client drop) dominates everything: 4000 files in one
+// commit cost 2.3 s and 960 MB, ~8-10k head to OOM. Such a commit carries no
+// co-change signal anyway — "everything changed with everything" is noise that
+// also inflates `peak` — so skip its pairs entirely; churn still accrues.
+// ponytail: 50 caps a commit at 2450 ordered pairs; per-pair emission (only
+// pairs touching the edit site) if the cap ever proves too coarse.
+const MAX_FILES_PER_COMMIT = 50;
+
 // `git log --numstat` prints a header block per commit followed by numstat rows;
 // commits are blank-line separated. We don't need commit boundaries to be exact
 // — only "which files share a commit" — so we split on blank lines and treat
@@ -51,6 +61,7 @@ export function parseNumstat(raw: string): CoChangeMap {
       files.push(row.path);
       churn.set(row.path, (churn.get(row.path) ?? 0) + row.churn);
     }
+    if (files.length > MAX_FILES_PER_COMMIT) continue;
     const unique = [...new Set(files)];
     for (let i = 0; i < unique.length; i += 1) {
       for (let j = i + 1; j < unique.length; j += 1) {

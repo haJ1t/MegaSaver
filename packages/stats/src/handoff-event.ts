@@ -1,8 +1,9 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ProjectId } from "@megasaver/shared";
 import { projectIdSchema } from "@megasaver/shared";
 import { z } from "zod";
+import { appendPrivateLine } from "./append-line.js";
 import { StatsError } from "./errors.js";
 
 // Advisory ledger for `mega handoff` pack/open runs. Deliberately NOT a
@@ -35,8 +36,7 @@ export function appendHandoffEvent(store: StoreRoot, event: HandoffEvent): void 
     throw new StatsError("schema_invalid");
   }
   const path = handoffEventsPath(store, parsed.data.projectId);
-  mkdirSync(dirname(path), { recursive: true });
-  appendFileSync(path, `${JSON.stringify(parsed.data)}\n`);
+  appendPrivateLine(path, `${JSON.stringify(parsed.data)}\n`);
 }
 
 export function readHandoffEvents(store: StoreRoot, projectId: ProjectId): HandoffEvent[] {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { serializeBrainBundle } from "../src/brain-bundle.js";
 import { exportBrain } from "../src/brain-export.js";
 import { importBrain } from "../src/brain-import.js";
 import type { MemoryEntry } from "../src/memory-entry.js";
@@ -138,6 +139,45 @@ describe("importBrain", () => {
     expect(report.imported.memories).toBe(1);
     expect(report.skipped.memories).toBe(1);
     expect(registry.listMemoryEntries(project.id)).toHaveLength(1);
+  });
+
+  it("redacts secret-bearing memory fields from a hostile bundle", () => {
+    const token = `ghp_${"c".repeat(36)}`;
+    const hostile = serializeBrainBundle({
+      sourceProject: { id: "0f0e0d0c-0b0a-4900-8807-060504030201", name: "alpha" },
+      createdAt: NOW,
+      redactionFindings: 0,
+      payload: {
+        memories: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            projectId: "0f0e0d0c-0b0a-4900-8807-060504030201",
+            sessionId: null,
+            scope: "project",
+            type: "decision",
+            title: `key ${token}`,
+            content: `use ${token}`,
+            keywords: [`kw-${token}`],
+            confidence: "high",
+            source: "agent",
+            approval: "approved",
+            reason: `use ${token} for the dump`,
+            goal: `exfil via ${token}`,
+            evidence: [`https://ci.example/${token}`],
+            relatedFiles: [`/etc/${token}.env`],
+            relatedSymbols: [`sym_${token}`],
+            stale: false,
+            createdAt: NOW,
+            updatedAt: NOW,
+          } as unknown as MemoryEntry,
+        ],
+        rules: [],
+        failures: [],
+      },
+    });
+    const { registry, project } = targetRegistry();
+    importBrain({ registry, projectId: project.id, bundleText: hostile, newId });
+    expect(JSON.stringify(registry.listMemoryEntries(project.id))).not.toContain(token);
   });
 
   it("throws on unknown target project", () => {

@@ -1,7 +1,8 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import type { ProjectId, SessionId } from "@megasaver/shared";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { type ProjectId, type SessionId, workspaceKeySchema } from "@megasaver/shared";
 import { withFileLock } from "@megasaver/shared/node";
+import { appendPrivateLine } from "./append-line.js";
 import { atomicWriteFile } from "./atomic-write.js";
 import { StatsError } from "./errors.js";
 import {
@@ -35,7 +36,20 @@ function eventsPath(store: StatsStore, projectId: ProjectId, sessionId: SessionI
   return join(store.root, "stats", projectId, `${sessionId}.events.jsonl`);
 }
 
-function loadSummary(path: string): SessionTokenSaverStats | null {
+// The pre-fix overlay GC sweep walked registry project dirs as workspaces and
+// overwrote <sessionId>.json with an overlay-shaped summary. The layout
+// discriminator stops new damage but leaves already-clobbered stores unreadable
+// forever, so a summary that IS json yet fails the registry schema is rebuilt
+// from the authoritative JSONL. A file that is not json at all is a torn write,
+// not a layout mismatch — it keeps the loud store_corrupt posture, because the
+// registry event carries no secretsRedacted/chunksStored and a rebuild zeroes
+// those two counters.
+function loadSummary(
+  store: StatsStore,
+  projectId: ProjectId,
+  sessionId: SessionId,
+): SessionTokenSaverStats | null {
+  const path = summaryPath(store, projectId, sessionId);
   if (!existsSync(path)) {
     return null;
   }
@@ -47,9 +61,27 @@ function loadSummary(path: string): SessionTokenSaverStats | null {
   }
   const parsed = sessionTokenSaverStatsSchema.safeParse(raw);
   if (!parsed.success) {
-    throw new StatsError("store_corrupt");
+    return rebuildSummaryFromEvents(store, projectId, sessionId);
   }
   return parsed.data;
+}
+
+function rebuildSummaryFromEvents(
+  store: StatsStore,
+  projectId: ProjectId,
+  sessionId: SessionId,
+): SessionTokenSaverStats {
+  const rebuilt = emptySummary(sessionId);
+  for (const event of readEvents(store, projectId, sessionId)) {
+    rebuilt.eventsTotal += 1;
+    rebuilt.rawBytesTotal += event.rawBytes;
+    rebuilt.returnedBytesTotal += event.returnedBytes;
+    rebuilt.bytesSavedTotal += event.bytesSaved;
+  }
+  rebuilt.savingRatio =
+    rebuilt.rawBytesTotal === 0 ? 0 : rebuilt.bytesSavedTotal / rebuilt.rawBytesTotal;
+  atomicWriteFile(summaryPath(store, projectId, sessionId), JSON.stringify(rebuilt));
+  return rebuilt;
 }
 
 function emptySummary(sessionId: SessionId): SessionTokenSaverStats {
@@ -77,10 +109,13 @@ export function appendEvent(input: AppendEventInput): SessionTokenSaverStats {
   const events = eventsPath(store, event.projectId, event.sessionId);
   const summary = summaryPath(store, event.projectId, event.sessionId);
 
-  mkdirSync(dirname(events), { recursive: true });
-  appendFileSync(events, `${JSON.stringify(event)}\n`);
+  // Read BEFORE the append: a clobbered summary is repaired by folding the
+  // JSONL, so this event must not already be in it when we accumulate on top.
+  const prior =
+    loadSummary(store, event.projectId, event.sessionId) ?? emptySummary(event.sessionId);
 
-  const prior = loadSummary(summary) ?? emptySummary(event.sessionId);
+  appendPrivateLine(events, `${JSON.stringify(event)}\n`);
+
   const rawBytesTotal = prior.rawBytesTotal + event.rawBytes;
   const bytesSavedTotal = prior.bytesSavedTotal + event.bytesSaved;
   const next: SessionTokenSaverStats = {
@@ -104,7 +139,7 @@ export function readSummary(
   projectId: ProjectId,
   sessionId: SessionId,
 ): SessionTokenSaverStats | null {
-  return loadSummary(summaryPath(store, projectId, sessionId));
+  return loadSummary(store, projectId, sessionId);
 }
 
 // Read the per-call audit trail (one TokenSaverEvent per line). Missing file
@@ -235,6 +270,24 @@ export function rebuildOverlaySummaryFromEvents(
   return rebuilt;
 }
 
+// stats/ holds two layouts side by side: overlay dirs are 16-hex workspaceKeys
+// (encodeWorkspaceKey), registry dirs are UUID project ids. Every walker that
+// treats a dir as an overlay workspace goes through here — reading a registry
+// dir as one destroys its legacy <sessionId>.json summaries (self-healing reads
+// rewrite them as zeroed overlay summaries) and fabricates one per non-session
+// *.events.jsonl ledger. Sorted for a deterministic first match.
+function overlayWorkspaceKeys(store: StatsStore): string[] {
+  try {
+    return readdirSync(join(store.root, "stats"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((name) => workspaceKeySchema.safeParse(name).success)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
 // E26 repair: summaries that lag their JSONL (lock-skipped updates) or fail
 // schema are rebuilt. Bounded: invoked from the once-a-day GC sweep. Returns
 // the number of files rebuilt. Best-effort — every per-file failure is
@@ -244,16 +297,7 @@ export function rebuildOverlaySummaryFromEvents(
 // once-a-day cadence.
 export function reconcileOverlaySummaries(store: StatsStore): number {
   let rebuilt = 0;
-  let workspaces: string[];
-  try {
-    workspaces = readdirSync(join(store.root, "stats"), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
-  } catch {
-    return 0;
-  }
-  for (const workspaceKey of workspaces) {
-    if (!isSafeSegment(workspaceKey)) continue;
+  for (const workspaceKey of overlayWorkspaceKeys(store)) {
     let files: string[];
     try {
       files = readdirSync(join(store.root, "stats", workspaceKey));
@@ -355,8 +399,7 @@ export function appendOverlayEvent(input: AppendOverlayEventInput): OverlaySessi
   const events = overlayEventsPath(store, event.workspaceKey, event.liveSessionId);
   const summary = overlaySummaryPath(store, event.workspaceKey, event.liveSessionId);
 
-  mkdirSync(dirname(events), { recursive: true });
-  appendFileSync(events, `${JSON.stringify(event)}\n`);
+  appendPrivateLine(events, `${JSON.stringify(event)}\n`);
 
   // E26: parallel tool calls in one turn race this read-modify-write.
   // Serialize under a short stale-aware lock: deadlineMs 50 (a hook must not
@@ -417,20 +460,7 @@ export function readOverlaySummaryAnyWorkspace(
   store: StatsStore,
   liveSessionId: string,
 ): { workspaceKey: string; summary: OverlaySessionTokenSaverStats } | null {
-  let entries: string[];
-  try {
-    entries = readdirSync(join(store.root, "stats"), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort();
-  } catch {
-    return null;
-  }
-
-  for (const workspaceKey of entries) {
-    if (!isSafeSegment(workspaceKey)) {
-      continue;
-    }
+  for (const workspaceKey of overlayWorkspaceKeys(store)) {
     let summary: OverlaySessionTokenSaverStats | null;
     try {
       summary = readOverlaySummary(store, workspaceKey, liveSessionId);
@@ -542,24 +572,12 @@ export type AllWorkspaceTokenSaverTotals = {
 // retained per workspace) rather than averaging per-workspace ratios. Best-
 // effort: a missing stats/ dir yields zeros; an unreadable workspace is skipped.
 export function readAllWorkspaceTokenSaverTotals(store: StatsStore): AllWorkspaceTokenSaverTotals {
-  let entries: string[];
-  try {
-    entries = readdirSync(join(store.root, "stats"), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
-  } catch {
-    return { bytesSavedTotal: 0, sessionsCount: 0, savingRatio: 0, workspaceCount: 0 };
-  }
-
   let bytesSavedTotal = 0;
   let rawBytesTotal = 0;
   let sessionsCount = 0;
   let workspaceCount = 0;
 
-  for (const workspaceKey of entries) {
-    if (!isSafeSegment(workspaceKey)) {
-      continue;
-    }
+  for (const workspaceKey of overlayWorkspaceKeys(store)) {
     let totals: WorkspaceTokenSaverTotals | null;
     try {
       totals = readWorkspaceTokenSaverTotals(store, workspaceKey);

@@ -31,6 +31,9 @@ const excerptRequestSchema = z
     intent: z.string().min(1).optional(),
     compressFloorBytes: z.number().int().positive().optional(),
     includeFooter: z.boolean().optional(),
+    // The hook derives a content-addressed chunk-set id but cannot ship its
+    // `newId` closure over HTTP, so it sends the derived value instead.
+    chunkSetId: safeSegmentSchema.optional(),
   })
   .strict();
 
@@ -40,7 +43,7 @@ export async function excerptHandler(storeRoot: string, body: unknown): Promise<
   // Parity with the in-process hook path, which writes evidence rows. The daemon
   // owns its evidence location (= storeRoot) — the hook never sends a filesystem
   // path over HTTP (that would be a traversal surface).
-  const { intent, compressFloorBytes, includeFooter, ...rest } = parsed.data;
+  const { intent, compressFloorBytes, includeFooter, chunkSetId, ...rest } = parsed.data;
   const result = await recordAndFilterOverlayOutput({
     storeRoot,
     evidenceStoreRoot: storeRoot,
@@ -49,6 +52,7 @@ export async function excerptHandler(storeRoot: string, body: unknown): Promise<
     ...(intent !== undefined ? { intent } : {}),
     ...(compressFloorBytes !== undefined ? { compressFloorBytes } : {}),
     ...(includeFooter !== undefined ? { includeFooter } : {}),
+    ...(chunkSetId !== undefined ? { newId: () => chunkSetId } : {}),
   });
   return { status: 200, json: { ...result } };
 }

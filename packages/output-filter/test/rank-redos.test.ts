@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
+import { classifyOutput } from "../src/classify.js";
 import { collapseSimilar } from "../src/normalize.js";
+import { chunkByFormatWithMeta } from "../src/parsers/index.js";
 import { detectStacktrace } from "../src/parsers/stacktrace.js";
 import { type Chunk, scoreChunk } from "../src/rank.js";
 
 const chunk = (text: string): Chunk => ({ text, startLine: 1, endLine: 1 });
 
-// Five signal patterns across this package pair a greedy run with a required
-// trailing literal. Unbounded, every position in a run the class accepts starts
-// a scan to end-of-input that then fails the literal and backtracks —
+// Seven signal patterns across this package pair a greedy run with a required
+// trailing literal (or, for normalize's trailing-whitespace strip, a required
+// zero-width anchor). Unbounded, every position in a run the class accepts
+// starts a scan to end-of-input that then fails the literal and backtracks —
 // O(starts x length). Each timing block below drives exactly ONE of them
 // through its real call site, and each was verified to go red on its own when
-// that single bound is reverted (16.1 / 19.3 / 32.9 / 16.5 / 12.2 s).
+// that single bound is reverted (16.1 / 19.3 / 32.9 / 16.5 / 12.2 s, 13.8 s for
+// normalize and 18.8 s for pytest, at the 2x size those two blocks explain).
 //
 // The bounds are what make these linear. Do not "simplify" the {0,N}/{1,N}
 // quantifiers back to * or +: real exception names, file paths, source
@@ -89,6 +93,63 @@ describe("collapseSimilar — ReDoS regression via POSITION", () => {
   // POSITION alone to `[\w./-]*` — and nothing else — takes this to 12.2 s.
   it(`folds a ${SIZE / 1000} KB delimiter-free line under ${CEILING_MS} ms`, () => {
     expect(elapsed(() => collapseSimilar("a/b-c".repeat(SIZE / 5)))).toBeLessThan(CEILING_MS);
+  });
+});
+
+describe("normalize — ReDoS regression on a mid-line whitespace run", () => {
+  // normalize's per-line trailing-whitespace strip is the FIRST structural pass
+  // over every raw tool output and file read, ahead of any size cap. `\s+$` is
+  // the same shape with a zero-width literal: on a whitespace run that is not
+  // at end-of-line, every offset inside the run consumes to the run's end, fails
+  // `$`, and backtracks the whole run. Driven through the public classifyOutput,
+  // which calls normalize first; 13.8 s reverted at this size.
+  //
+  // The trailing 'b' is load-bearing: with the run AT end-of-line the second
+  // start position matches immediately and the pattern is linear.
+  //
+  // On WS_SIZE: this driver needs 2x the shared SIZE. Each backtrack step here
+  // is a bare `$` check, cheaper per step than the class/literal patterns above,
+  // so at 100 KB the unbounded form costs only 3.2-4.0 s and stays green under
+  // the shared 5 s ceiling. Quadratic vs linear again makes length the cheap
+  // separator: at 200 KB the unbounded form costs 13.8-17.0 s. Do not lower it.
+  const WS_SIZE = SIZE * 2;
+  const midLineRun = (fill: string): string => `a${fill.repeat(WS_SIZE - 2)}b`;
+
+  it(`classifies a ${WS_SIZE / 1000} KB mid-line space run under ${CEILING_MS} ms`, () => {
+    expect(elapsed(() => classifyOutput({ text: midLineRun(" ") }))).toBeLessThan(CEILING_MS);
+  });
+
+  // Tabs are the realistic form (indented blobs, padded tables) and are a
+  // separate character class member, so they are asserted independently.
+  it(`classifies a ${WS_SIZE / 1000} KB mid-line tab run under ${CEILING_MS} ms`, () => {
+    expect(elapsed(() => classifyOutput({ text: midLineRun("\t") }))).toBeLessThan(CEILING_MS);
+  });
+});
+
+describe("chunkByFormatWithMeta — ReDoS regression on a padded pytest header", () => {
+  // pytest's FAILURE_HEADER is the overlapping-runs variant with no bound to
+  // revert: `.*` and the `\s+` behind it both accept whitespace, and the `_+$`
+  // they hand off to can never succeed on a line that ends in anything else, so
+  // every split point of `.*` inside a whitespace run rescans that whole run.
+  // detectPytest is the FIRST dispatch here and gates on nothing but a
+  // `=== FAILURES ===` line anywhere in the text, so one padded line in any tool
+  // output or file reaches it.
+  //
+  // The trailing 'y' is load-bearing: with the run at end-of-line the header
+  // cannot match at all and the pattern gives up in microseconds.
+  //
+  // On HEADER_SIZE: 2x the shared SIZE. Each backtrack step is a whitespace
+  // rescan with no class test, so at 100 KB the ambiguous form measured 5.0 s
+  // once JIT-warm — level with the shared ceiling. Quadratic vs linear makes
+  // length the separator: at 200 KB it costs 18.8 s here against 0.3 ms once the
+  // ambiguity is gone. Do not lower it.
+  const HEADER_SIZE = SIZE * 2;
+  const paddedHeader = `=================== FAILURES ===================\n_ x${" ".repeat(HEADER_SIZE)}y`;
+
+  it(`chunks a ${HEADER_SIZE / 1000} KB padded header line under ${CEILING_MS} ms`, async () => {
+    const started = performance.now();
+    await chunkByFormatWithMeta(paddedHeader);
+    expect(performance.now() - started).toBeLessThan(CEILING_MS);
   });
 });
 

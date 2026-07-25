@@ -311,7 +311,7 @@ tuple-pinned enum in BB3 (the epic §17 table lists no
 | openai_key        | `sk-[A-Za-z0-9]{20,}`                                  | `sk-[REDACTED]`            |
 | anthropic_key     | `sk-ant-[A-Za-z0-9-_]{20,}`                            | `sk-ant-[REDACTED]`        |
 | aws_access_key    | `AKIA[0-9A-Z]{16}`                                     | `AKIA[REDACTED]`           |
-| aws_secret_key    | `(?<=aws_secret_access_key\s*=\s*)[A-Za-z0-9/+]{40}`   | `[REDACTED]`               |
+| aws_secret_key §  | `(?<=aws_secret_access_key\s*=\s{0,64})[A-Za-z0-9/+]{40}` | `[REDACTED]`            |
 | bearer_token      | `(?i:bearer\s+)[A-Za-z0-9\-._~+/=]{20,}`               | `Bearer [REDACTED]`        |
 | jwt †‡            | `(?:(?<![A-Za-z0-9_-])\|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+` (see ‡ for exact bytes) | `eyJ[REDACTED]` |
 | private_key_block | `-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]+?-----END`   | `[REDACTED PRIVATE KEY]`   |
@@ -347,6 +347,30 @@ the added branch: 0.32 ms per 313 KiB, linear (~2.0x per doubling to
 narrowing it to `(?<![A-Za-z0-9])` restores the 7.4-7.7 s quadratic.
 Released as a **minor**, not a patch, because coverage was reduced.
 Both footnotes stand; amend this row, never rewrite it silently.
+
+§ `aws_secret_key` amended 2026-07-25 by
+[[docs/superpowers/specs/2026-07-25-policy-redaction-redos-design]] — the
+**trailing** `\s*` was bounded to `\s{0,64}` to remove a quadratic ReDoS
+(2.2 s at 50 KB of spaces, 9.4 s at 100 KB). Same defect class as the two
+`jwt` amendments above; here the shape is a variable-length lookbehind,
+which V8 evaluates right to left, so the trailing run rescans the whole
+preceding whitespace at every start position. The leading `\s*` is
+deliberately left unbounded — reaching it requires an `=` within 64
+characters behind, and one `=` per 64 characters is exactly what caps the
+leading run, so it is O(n) already and bounding it measures identical.
+Disclosed behaviour change: an assignment whose `=` is followed by **more
+than 64 whitespace characters** no longer redacts. A key name plus 65
+columns of padding already overflows an 80-column terminal, so no real
+config or credentials file reaches it; pinned in
+`packages/policy/test/redact-redos.test.ts`. Released as a **patch**,
+not a minor: no shape any real input produces lost coverage.
+
+The same spec bounded the count-only `email` observer's local part to
+`{1,64}` (RFC 5321 §4.5.3.1.1) and the two non-§5a contextual detectors
+`api_key_header` and `basic_auth_header`. Those three are outside this
+table — `email` lives in `OBSERVED_PATTERNS`, the other two are appended
+after the ten baseline rows — and need no row here; they are named only
+so this footnote is not read as the whole change.
 
 Order is application order (longest/most-specific guards run such
 that `anthropic_key` is attempted before `openai_key` since

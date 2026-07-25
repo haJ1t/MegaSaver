@@ -61,7 +61,11 @@ export function parseWikiPage(relPath: string, content: string): WikiInput {
   }
 
   const body = fm ? content.slice((fm[0] as string).length) : content;
-  const links = [...body.matchAll(/\[\[([^\]]+)\]\]/g)].map((mm) => {
+  // `[` is excluded from the target class, not just `]`: an Obsidian target
+  // cannot contain either, and letting the run swallow `[` made every `[[` in a
+  // `]`-free run of brackets rescan to end-of-input — quadratic on an uncapped
+  // page read.
+  const links = [...body.matchAll(/\[\[([^\][]+)\]\]/g)].map((mm) => {
     const ref = mm[1] as string;
     const withoutAlias = ref.split("|")[0] ?? ref;
     return (withoutAlias.split("#")[0] ?? withoutAlias).trim();
@@ -76,7 +80,11 @@ export function parseWikiPage(relPath: string, content: string): WikiInput {
           // Strip a trailing space-separated Obsidian/markdown anchor before path
           // canonicalization so `path.md:12 #8` collapses to `path.md`; the file
           // node must unify with the same path cited without an anchor.
-          s = s.replace(/\s+#\S.*$/, "").trim();
+          // Single `\s`, not `\s+`, and `[\s\S]*`, not `.*$`: `[^)]+` above accepts
+          // unbounded whitespace and newlines and no caller caps page size, so both
+          // unbounded-run/required-literal forms were quadratic here. The trailing
+          // `.trim()` absorbs the rest of the whitespace run either way.
+          s = s.replace(/\s#\S[\s\S]*/, "").trim();
           return canonicalizeFilePath(s);
         })
         .filter((s): s is string => s !== null && looksLikePath(s)),

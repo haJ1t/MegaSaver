@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MemoryGraphData } from "../../src/lib/claude-sessions-client.js";
 
@@ -128,15 +128,28 @@ afterEach(() => {
 });
 
 // The cytoscape mock fills capturedElements/tapHandlers from inside the panel's
-// effect, which runs AFTER the canvas testid first paints. Tests that then read
-// capturedElements/tapHandlers must wait for that effect — not just the testid —
-// or they race (flaky on slow / Windows CI). Wait for both. (Used only with
-// non-empty fixtures, where capturedElements is always populated.)
+// effect, which React runs a turn AFTER the canvas testid commits — the DOM
+// reads "ready" while the mock is still empty. waitFor cannot watch a plain
+// module variable, so it only re-checks on a later mutation batch or its 50ms
+// poll, both bounded by waitFor's own 1000ms wall clock (asyncUtilTimeout — the
+// config's testTimeout does not raise it), which a worker starved by the
+// parallel monorepo run can overrun. Flush React rather than race it: act
+// drains the fetch continuation, the re-render and the passive effect with no
+// timers and no deadline. (Used only with non-empty fixtures, where
+// capturedElements is always populated.)
 async function waitForGraph(): Promise<void> {
-  await waitFor(() => {
-    expect(screen.getByTestId("memory-graph-canvas")).toBeDefined();
-    expect(capturedElements.length).toBeGreaterThan(0);
-  });
+  await act(async () => {});
+  expect(screen.getByTestId("memory-graph-canvas")).toBeDefined();
+  expect(capturedElements.length).toBeGreaterThan(0);
+}
+
+// Tapping a node sets React state, so the dispatch needs the same flush that
+// fireEvent gives a real DOM event — otherwise the assertion after it is once
+// more waiting on the wall clock for the re-render to land.
+function tapNode(id: string): void {
+  const handler = tapHandlers[0];
+  if (handler === undefined) throw new Error("cytoscape tap handler was never registered");
+  act(() => handler({ target: { id: () => id } }));
 }
 
 describe("MemoryGraphPanel", () => {
@@ -164,10 +177,9 @@ describe("MemoryGraphPanel", () => {
     await waitForGraph();
 
     expect(tapHandlers.length).toBeGreaterThan(0);
-    const handler = tapHandlers[0];
-    if (handler) handler({ target: { id: () => "m1" } });
+    tapNode("m1");
 
-    await waitFor(() => expect(screen.getByText("decided to use cose")).toBeDefined());
+    expect(screen.getByText("decided to use cose")).toBeDefined();
     expect(screen.getByText(/decision/)).toBeDefined();
   });
 
@@ -285,13 +297,10 @@ describe("MemoryGraphPanel", () => {
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
     await waitForGraph();
 
-    const handler = tapHandlers[0];
-    if (handler) handler({ target: { id: () => "w1" } });
+    tapNode("w1");
 
     // "Memory Graph design" appears in both the label <p> and the meta title <dd>
-    await waitFor(() =>
-      expect(screen.getAllByText("Memory Graph design").length).toBeGreaterThan(0),
-    );
+    expect(screen.getAllByText("Memory Graph design").length).toBeGreaterThan(0);
     expect(screen.getByText(/design, graph/)).toBeDefined();
     expect(screen.getByText(/active/)).toBeDefined();
   });
@@ -301,10 +310,9 @@ describe("MemoryGraphPanel", () => {
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
     await waitForGraph();
 
-    const handler = tapHandlers[0];
-    if (handler) handler({ target: { id: () => "w1" } });
+    tapNode("w1");
 
-    await waitFor(() => expect(screen.getByText(/active/)).toBeDefined());
+    expect(screen.getByText(/active/)).toBeDefined();
     expect(screen.queryByText("tags")).toBeNull();
   });
 
@@ -313,11 +321,10 @@ describe("MemoryGraphPanel", () => {
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
     await waitForGraph();
 
-    const handler = tapHandlers[0];
-    if (handler) handler({ target: { id: () => "f1" } });
+    tapNode("f1");
 
     // "src/lib/core.ts" appears in both the label <p> and the meta path <dd>
-    await waitFor(() => expect(screen.getAllByText("src/lib/core.ts").length).toBeGreaterThan(0));
+    expect(screen.getAllByText("src/lib/core.ts").length).toBeGreaterThan(0);
     expect(screen.getByText(/path/)).toBeDefined();
   });
 
@@ -326,10 +333,9 @@ describe("MemoryGraphPanel", () => {
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
     await waitForGraph();
 
-    const handler = tapHandlers[0];
-    if (handler) handler({ target: { id: () => "w1" } });
+    tapNode("w1");
 
-    await waitFor(() => expect(screen.getByText(/design, graph/)).toBeDefined());
+    expect(screen.getByText(/design, graph/)).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: /Wiki/i }));
 
@@ -342,10 +348,9 @@ describe("MemoryGraphPanel", () => {
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
     await waitForGraph();
 
-    const handler = tapHandlers[0];
-    if (handler) handler({ target: { id: () => "f1" } });
+    tapNode("f1");
 
-    await waitFor(() => expect(screen.getAllByText("src/lib/core.ts").length).toBeGreaterThan(0));
+    expect(screen.getAllByText("src/lib/core.ts").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /Code/i }));
 
@@ -358,10 +363,9 @@ describe("MemoryGraphPanel", () => {
     render(<MemoryGraphPanel dir="d" id="i" cwd="/tmp/w" />);
     await waitForGraph();
 
-    const handler = tapHandlers[0];
-    if (handler) handler({ target: { id: () => "m1" } });
+    tapNode("m1");
 
-    await waitFor(() => expect(screen.getByText("decided to use cose")).toBeDefined());
+    expect(screen.getByText("decided to use cose")).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: /Wiki/i }));
 

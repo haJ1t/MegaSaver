@@ -71,17 +71,21 @@ export const lastVerifiedSchema = z
   .strict();
 export type LastVerified = z.infer<typeof lastVerifiedSchema>;
 
-type ExecGit = (args: string[], cwd: string) => string;
+// The optional third `input` feeds git's stdin (batched cat-file). A custom
+// execGit MUST forward it or the blob lookup below sees an empty stdin and
+// every cited file reads as untracked. The default forwards it.
+type ExecGit = (args: string[], cwd: string, input?: string) => string;
 
 // timeout so a stuck git (index.lock, slow FS) can't stall a save; the
 // best-effort catch below absorbs the throw (same shape as cli git-delta.ts).
-const defaultExecGit: ExecGit = (args, cwd) =>
+const defaultExecGit: ExecGit = (args, cwd, input) =>
   execFileSync("git", args, {
     cwd,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
+    stdio: ["pipe", "pipe", "ignore"],
     timeout: 3000,
     maxBuffer: 10 * 1024 * 1024,
+    ...(input === undefined ? {} : { input }),
   });
 
 // Repo-relative POSIX form, or undefined when the input escapes rootPath or
@@ -122,13 +126,30 @@ export async function captureCodeAnchor(opts: {
       if (rel !== undefined && !relFiles.includes(rel)) relFiles.push(rel);
     }
 
+    // ONE spawn for every cited file (same batch as code-truth's
+    // batchCheckBlobs): `HEAD:<path>` queries on stdin, one output line each,
+    // paired positionally — safe because stored paths carry no control chars.
+    // relatedFiles is agent-supplied and uncapped (save_memory MCP arg), so a
+    // per-path spawn stalls the whole caller for the length of the list.
     const files: FileAnchor[] = [];
-    for (const rel of relFiles) {
+    if (relFiles.length > 0) {
       try {
-        const blobSha = exec(["rev-parse", `HEAD:${rel}`], opts.rootPath).trim();
-        if (blobSha !== "") files.push({ path: rel, blobSha });
+        const out = exec(
+          ["cat-file", "--batch-check"],
+          opts.rootPath,
+          `${relFiles.map((rel) => `HEAD:${rel}`).join("\n")}\n`,
+        );
+        const lines = out.split("\n");
+        for (const [index, rel] of relFiles.entries()) {
+          const line = lines[index] ?? "";
+          // `<sha> <type> <size>` anchors; `HEAD:<path> missing`
+          // (untracked/new) is skipped, not an error (§5)
+          if (line.endsWith(" missing")) continue;
+          const blobSha = line.split(" ")[0] ?? "";
+          if (blobSha !== "") files.push({ path: rel, blobSha });
+        }
       } catch {
-        // no blob at HEAD (untracked/new) — skipped, not an error (§5)
+        // git died mid-capture — files skipped, symbols still attempted (§5)
       }
     }
 

@@ -1,4 +1,7 @@
+import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -9,14 +12,45 @@ import { type RunningDaemon, startDaemonServer } from "../src/server.js";
 
 let store: string;
 let servers: RunningDaemon[];
+let impostors: Impostor[];
 beforeEach(() => {
   store = mkdtempSync(join(tmpdir(), "daemon-cli-"));
   servers = [];
+  impostors = [];
 });
 afterEach(async () => {
   for (const s of servers) await s.close();
+  for (const i of impostors) await i.close();
   rmSync(store, { recursive: true, force: true });
 });
+
+// A real process that has really exited: its pid can never be our daemon.
+async function exitedPid(): Promise<number> {
+  const child = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+  await new Promise((resolve) => child.once("exit", resolve));
+  return child.pid as number;
+}
+
+type Impostor = { port: number; auth: string[]; close: () => Promise<void> };
+
+// Stands in for whatever local process grabs the freed ephemeral port after a
+// SIGKILLed daemon: answers 200 to everything and records the tokens it is sent.
+async function startImpostor(): Promise<Impostor> {
+  const auth: string[] = [];
+  const server = createServer((req, res) => {
+    auth.push(String(req.headers.authorization));
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ text: "impostor payload" }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+  const impostor: Impostor = {
+    port: (server.address() as AddressInfo).port,
+    auth,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
+  impostors.push(impostor);
+  return impostor;
+}
 
 // Injected "spawn" starts an in-process daemon instead of a subprocess.
 const inProcessSpawn = (root: string) => {
@@ -90,5 +124,34 @@ describe("getRunningDaemon", () => {
     writeDiscovery(store, { port: 1, token: "dead", pid: 1, startedAt: "x" });
     const handle = await getRunningDaemon({ storeRoot: store });
     expect(handle).toBeNull();
+  });
+
+  it("returns null when the recorded pid is gone, even if the port answers", async () => {
+    const impostor = await startImpostor();
+    writeDiscovery(store, {
+      port: impostor.port,
+      token: "stale-token",
+      pid: await exitedPid(),
+      startedAt: new Date().toISOString(),
+    });
+    const handle = await getRunningDaemon({ storeRoot: store });
+    expect(handle).toBeNull();
+    expect(impostor.auth).toEqual([]);
+  });
+});
+
+describe("stale discovery with a live squatter on the port", () => {
+  it("getDaemon ignores it and spawns a real daemon", async () => {
+    const impostor = await startImpostor();
+    writeDiscovery(store, {
+      port: impostor.port,
+      token: "stale-token",
+      pid: await exitedPid(),
+      startedAt: new Date().toISOString(),
+    });
+    const handle = await getDaemon({ storeRoot: store, spawn: inProcessSpawn, waitMs: 3000 });
+    expect(handle.url).not.toContain(`:${impostor.port}`);
+    expect((await handle.request("GET", "/status")).status).toBe(200);
+    expect(impostor.auth).toEqual([]);
   });
 });

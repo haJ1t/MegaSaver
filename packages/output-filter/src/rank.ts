@@ -70,7 +70,13 @@ const DIAGNOSTIC = /\(\d+,\d+\):\s+error\s+TS\d+:/;
 // can be followed by `at`. `.{1,512}` still absorbs a wide gap on its own, so
 // `\s{1,8}` costs no reach — behavior diverges only past 515 gap chars.
 const STACKTRACE = /^\s{1,64}at\s{1,8}.{1,512}:\d+:\d+/m;
-const TEST_FAILURE = /^(?:FAIL|\s*[✗×])\s|\b\d+\s+failed\b/im;
+// The `\s*[✗×]` alternative is bounded for the same reason as classify.ts's
+// vitest patterns: `^` under `m` anchors after every U+2028/U+2029 and `\s`
+// matches them, so an unbounded run rescans the whole remaining separator run
+// from each anchor — 33.5 s on 200 KB. normalize splits on `\n` only, so such a
+// run reaches here intact. Reporter indents are a handful of spaces. Do not
+// restore `*`.
+const TEST_FAILURE = /^(?:FAIL|\s{0,64}[✗×])\s|\b\d+\s+failed\b/im;
 // Bounded for the same reason as EXCEPTION_NAME: 8.1 s on 50 KB unbounded.
 const FILE_PATH = /[\w./-]{1,256}\.\w{1,5}(?::\d+)?/;
 const NOISE = /^[\s.\-=*#]*$/;

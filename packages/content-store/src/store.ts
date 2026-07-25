@@ -248,6 +248,10 @@ function readChunkSetCreatedAt(path: string): string | null {
 export async function pruneOlderThan(input: {
   storeRoot: string;
   olderThan: Date;
+  // Chunk sets an evidence hold still points at (pinned / manual_hold). The
+  // store cannot read the ledger (no dep edge), so the composer joins them and
+  // hands the ids down — see @megasaver/context-gate pruneChunkSetsHonoringPins.
+  keepChunkSetIds?: ReadonlySet<string>;
 }): Promise<{ removed: number }> {
   const contentRoot = join(input.storeRoot, "content");
 
@@ -270,7 +274,22 @@ export async function pruneOlderThan(input: {
         if (!name.endsWith(".json")) continue;
         if (name === READ_INDEX_FILENAME) continue; // sibling index, not a chunk-set
         if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
+        if (input.keepChunkSetIds?.has(name.slice(0, -".json".length))) continue;
         const path = join(sessionPath, name);
+        // Chunk sets are write-once (atomicWriteFile), so mtime tracks createdAt
+        // and answers "is this young?" without reading the body — which holds a
+        // whole stored tool output. The sweep runs inside the PostToolUse hook
+        // and retains ~30x what it deletes, so the retained files are the
+        // workload. Same stat-gate shape as pruneIntentFiles / pruneSeenFiles
+        // (apps/cli/src/hooks/gc.ts). A file touched after it was written is
+        // kept, not deleted: mtime can only over-state age-since-write.
+        let mtimeMs: number;
+        try {
+          mtimeMs = statSync(path).mtimeMs;
+        } catch {
+          continue;
+        }
+        if (mtimeMs >= input.olderThan.getTime()) continue;
         const createdAt = readChunkSetCreatedAt(path);
         if (createdAt === null) continue;
         if (new Date(createdAt) < input.olderThan) {

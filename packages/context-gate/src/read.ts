@@ -13,7 +13,12 @@ import {
   filterOutput,
   resolveSafeReadPath,
 } from "@megasaver/output-filter";
-import { type ProjectPermissions, evaluatePathRead, redact } from "@megasaver/policy";
+import {
+  type PolicyDenyCode,
+  type ProjectPermissions,
+  evaluatePathRead,
+  redact,
+} from "@megasaver/policy";
 import type { ProjectId, SessionId, TokenSaverMode } from "@megasaver/shared";
 import { loadProjectPermissions } from "./load-project-permissions.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
@@ -92,6 +97,47 @@ export function resolveOverlayEffectiveSettings(input: {
   };
 }
 
+function denyReason(
+  path: string,
+  project: ProjectId,
+  permissions: ProjectPermissions | null,
+): PolicyDenyCode | null {
+  const policy = evaluatePathRead({
+    path,
+    project,
+    ...(permissions !== null ? { permissions } : {}),
+  });
+  return policy.allowed ? null : policy.reason;
+}
+
+// Gate 1 twice, around gate 2. `evaluatePathRead` is a pure string match
+// (`normalizePath` does no fs access), so on the caller's literal path it
+// cannot see through a symlink: `ln -s ~/.aws cfg` turns `cfg/credentials`
+// into a path that matches no deny glob, while gate 2 only ever checked
+// sandbox CONTAINMENT of the realpath — and $HOME is a sandbox root. Re-running
+// the denylist on the resolved real path closes that; the first pass stays so a
+// denied path is never stat'd and still reports path_denied, not path_unsafe.
+function gateAround(
+  path: string,
+  root: string,
+  project: ProjectId,
+  permissions: ProjectPermissions | null,
+): GateResult {
+  const lexical = denyReason(path, project, permissions);
+  if (lexical !== null) return { ok: false, code: "path_denied", reason: lexical };
+
+  let resolved: { absolute: string; real: string };
+  try {
+    resolved = resolveSafeReadPath({ path, projectRoot: root });
+  } catch (err) {
+    return { ok: false, code: "path_unsafe", message: err instanceof Error ? err.message : "" };
+  }
+
+  const structural = denyReason(resolved.real, project, permissions);
+  if (structural !== null) return { ok: false, code: "path_denied", reason: structural };
+  return { ok: true, absolute: resolved.absolute };
+}
+
 // Two-gate read safety (§8): policy denylist, then sandbox resolver. Both
 // run before any fs.readFile so a denied path is never read. The project
 // permissions (deny.read globs) widen gate 1 only — gate 2 (the symlink/..
@@ -102,20 +148,7 @@ export function runTwoGates(input: {
   projectRoot: string;
   permissions: ProjectPermissions | null;
 }): GateResult {
-  const policy = evaluatePathRead({
-    path: input.path,
-    project: input.projectId,
-    ...(input.permissions !== null ? { permissions: input.permissions } : {}),
-  });
-  if (!policy.allowed) return { ok: false, code: "path_denied", reason: policy.reason };
-
-  let absolute: string;
-  try {
-    absolute = resolveSafeReadPath({ path: input.path, projectRoot: input.projectRoot }).absolute;
-  } catch (err) {
-    return { ok: false, code: "path_unsafe", message: err instanceof Error ? err.message : "" };
-  }
-  return { ok: true, absolute };
+  return gateAround(input.path, input.projectRoot, input.projectId, input.permissions);
 }
 
 // Overlay variant of runTwoGates: same two gates, keyed by cwd instead of a
@@ -129,20 +162,7 @@ export function runOverlayTwoGates(input: {
   cwd: string;
   permissions: ProjectPermissions | null;
 }): GateResult {
-  const policy = evaluatePathRead({
-    path: input.path,
-    project: OVERLAY_GATE_PROJECT,
-    ...(input.permissions !== null ? { permissions: input.permissions } : {}),
-  });
-  if (!policy.allowed) return { ok: false, code: "path_denied", reason: policy.reason };
-
-  let absolute: string;
-  try {
-    absolute = resolveSafeReadPath({ path: input.path, projectRoot: input.cwd }).absolute;
-  } catch (err) {
-    return { ok: false, code: "path_unsafe", message: err instanceof Error ? err.message : "" };
-  }
-  return { ok: true, absolute };
+  return gateAround(input.path, input.cwd, OVERLAY_GATE_PROJECT, input.permissions);
 }
 
 export async function readRaw(

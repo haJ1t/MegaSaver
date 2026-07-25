@@ -68,49 +68,54 @@ const FAKE_DAEMON_RESPONSE = {
   excerpts: [],
 };
 
-/** Start a stub HTTP server that responds to /status with 200 and /excerpt with the given response. */
+/** Start a stub HTTP server that responds to /status with 200 and /excerpt with the given response.
+ *  `received` captures the parsed /excerpt bodies so tests can assert what went over the wire. */
 async function startStub(opts: {
   storeRoot: string;
   excerptResponse?: { status: number; body: unknown };
-}): Promise<{ port: number; close: () => Promise<void> }> {
+}): Promise<{ port: number; received: unknown[]; close: () => Promise<void> }> {
   const excerptStatus = opts.excerptResponse?.status ?? 200;
   const excerptBody = opts.excerptResponse?.body ?? FAKE_DAEMON_RESPONSE;
+  const received: unknown[] = [];
 
-  return new Promise<{ port: number; close: () => Promise<void> }>((resolve, reject) => {
-    const s = createServer((req, res) => {
-      const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
-      if (req.method === "GET" && path === "/status") {
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
-      } else if (req.method === "POST" && path === "/excerpt") {
-        // Drain body so the connection closes cleanly, then reply.
-        let _buf = "";
-        req.on("data", (chunk: Buffer) => {
-          _buf += chunk.toString();
-        });
-        req.on("end", () => {
-          res.writeHead(excerptStatus, { "content-type": "application/json" });
-          res.end(JSON.stringify(excerptBody));
-        });
-      } else {
-        res.writeHead(404);
-        res.end();
-      }
-    });
-    s.once("error", reject);
-    s.listen(0, "127.0.0.1", () => {
-      const addr = s.address();
-      const port = typeof addr === "object" && addr !== null ? addr.port : 0;
-      // Stub does not check auth — write a known token into discovery.
-      writeDiscovery(opts.storeRoot, {
-        port,
-        token: "stub-token",
-        pid: process.pid,
-        startedAt: new Date().toISOString(),
+  return new Promise<{ port: number; received: unknown[]; close: () => Promise<void> }>(
+    (resolve, reject) => {
+      const s = createServer((req, res) => {
+        const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
+        if (req.method === "GET" && path === "/status") {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ ok: true }));
+        } else if (req.method === "POST" && path === "/excerpt") {
+          // Drain body so the connection closes cleanly, then reply.
+          let buf = "";
+          req.on("data", (chunk: Buffer) => {
+            buf += chunk.toString();
+          });
+          req.on("end", () => {
+            received.push(JSON.parse(buf));
+            res.writeHead(excerptStatus, { "content-type": "application/json" });
+            res.end(JSON.stringify(excerptBody));
+          });
+        } else {
+          res.writeHead(404);
+          res.end();
+        }
       });
-      resolve({ port, close: () => new Promise<void>((res) => s.close(() => res())) });
-    });
-  });
+      s.once("error", reject);
+      s.listen(0, "127.0.0.1", () => {
+        const addr = s.address();
+        const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+        // Stub does not check auth — write a known token into discovery.
+        writeDiscovery(opts.storeRoot, {
+          port,
+          token: "stub-token",
+          pid: process.pid,
+          startedAt: new Date().toISOString(),
+        });
+        resolve({ port, received, close: () => new Promise<void>((res) => s.close(() => res())) });
+      });
+    },
+  );
 }
 
 describe("makeRecord", () => {
@@ -150,6 +155,34 @@ describe("makeRecord", () => {
 
     // In-process was NOT called: it would have written chunks to clientStore/content.
     expect(existsSync(chunkDir(clientStore))).toBe(false);
+  });
+
+  // P1: saver.ts derives `cs-<sha256(raw).slice(0,32)>` and hands it to record()
+  // as a `newId` closure. A closure cannot be JSON-serialized, so makeRecord must
+  // send the DERIVED VALUE over the wire — otherwise the daemon falls back to
+  // randomUUID() and byte-identical content gets a fresh chunk-set id per run.
+  it("forwards the content-derived chunk-set id to the daemon (P1 parity)", async () => {
+    const clientStore = tempStore();
+    const stub = await startStub({ storeRoot: clientStore });
+    servers.push(stub);
+
+    const derived = "cs-6c72797b6030b4ccdb3cbffd47e5d85a";
+    const record = makeRecord(clientStore);
+    await record({ ...baseInput(clientStore), newId: () => derived });
+
+    expect(stub.received).toHaveLength(1);
+    expect(stub.received[0]).toMatchObject({ chunkSetId: derived });
+  });
+
+  it("omits chunkSetId when the caller supplied no newId", async () => {
+    const clientStore = tempStore();
+    const stub = await startStub({ storeRoot: clientStore });
+    servers.push(stub);
+
+    const record = makeRecord(clientStore);
+    await record(baseInput(clientStore));
+
+    expect(stub.received[0]).not.toHaveProperty("chunkSetId");
   });
 
   it("falls back to in-process recordAndFilterOverlayOutput when no daemon is running", async () => {

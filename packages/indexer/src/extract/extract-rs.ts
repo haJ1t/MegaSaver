@@ -4,29 +4,27 @@ import { hashText, tokenize } from "./helpers.js";
 const FN_RE = /^(?:pub\s+)?(?:async\s+)?fn\s+([A-Za-z_]\w*)/;
 const TYPE_RE = /^(?:pub\s+)?(struct|enum|trait|mod|impl)\b\s*([A-Za-z_]\w*)?/;
 
+// `opened` flips on an opening brace, not on end-of-line depth: a decl that
+// opens and closes within its own line (`impl T for X {}`) or opens no brace at
+// all (`struct Unit;`) nets zero, and an end-of-line test would keep scanning
+// into the next decl's braces — swallowing it, and costing O(n^2) on a file of
+// such decls.
 // ponytail: naive brace count ignores strings/comments/char literals; accepted ceiling per spec.
-function braceDelta(line: string): number {
-  let delta = 0;
-  for (const ch of line) {
-    if (ch === "{") delta += 1;
-    else if (ch === "}") delta -= 1;
-  }
-  return delta;
-}
-
 function balancedEnd(lines: readonly string[], start: number): number {
-  // ;-terminated decls (e.g. `struct Unit;`) open no brace on their start line
-  // and span exactly 1 line — without this guard the scan would run on into the
-  // next decl's braces.
-  if (!(lines[start] ?? "").includes("{")) return start + 1;
   let depth = 0;
   let opened = false;
   for (let i = start; i < lines.length; i += 1) {
-    depth += braceDelta(lines[i] ?? "");
-    if (depth > 0) opened = true;
-    if (opened && depth <= 0) return i + 1;
+    for (const ch of lines[i] ?? "") {
+      if (ch === "{") {
+        depth += 1;
+        opened = true;
+      } else if (ch === "}") {
+        depth -= 1;
+      }
+    }
+    if (!opened || depth <= 0) return i + 1;
   }
-  return opened ? lines.length : start + 1;
+  return lines.length;
 }
 
 // Heuristic Rust extractor: top-level fn / struct / enum / trait / mod / impl

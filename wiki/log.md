@@ -4221,6 +4221,85 @@ re-derive whether the guardrail actually ships. The prior entry
 `[2026-07-25 14:52]` stands as written history; it is superseded on the "merged
 as `8e261d19`" phrasing only. Sources:
 [[syntheses/saver-cache-churn]], [[syntheses/variance-controlled-benchmark]].
+## [2026-07-25 14:30 +03] fix | GC sweep clobbered registry-session stats
+
+`reconcileOverlaySummaries` (packages/stats/src/store.ts) treated every
+`stats/<dir>` as an overlay workspace, so `maybeRunOverlayGc`'s once-a-day
+sweep rewrote `stats/<projectId>/<sessionId>.json` as a zeroed overlay
+summary. Measured on a store with one registry session: `rebuilt` 2,
+`bytesSavedTotal` 9000 → 0, and a phantom `handoff.json` fabricated from the
+handoff ledger; `readSummary` and `appendEvent` then threw `store_corrupt`
+permanently, so `mega output exec/file/filter` returned `store_write_failed`.
+
+Fix: the sweep only enters dirs matching `workspaceKeySchema` (16 lowercase
+hex), the layout discriminator `locateChunkSet` already uses. After: `rebuilt`
+0, registry summary byte-identical, no `handoff.json`, real overlay workspaces
+still repaired. 4 red → green guard tests in
+`packages/stats/test/reconcile-legacy-layout.test.ts`; 241/241 stats tests
+pass. Branch `fix/gc-reconcile-clobbers-legacy-summaries`.
+See [[entities/stats]].
+## [2026-07-25 14:35 +03] fix | classify.ts `^\s*` quadratic (redos instance 6)
+
+`VITEST_OUT` and `PROSE_ANTI_VI` in `packages/output-filter/src/classify.ts`
+opened alternatives with `^\s*` under the `m` flag. `\s` matches `\n`, so inside
+a blank-line block every line start rescanned the whole remaining whitespace
+region before failing the required literal. Measured through the real call site
+`classifyOutput`: 31.8 s on 100 KB of newlines, 89 ms after bounding to
+`\s{0,64}`. Exposed by `mega bench`, which passes raw command output to the
+public export (`filterOutput` was shielded only incidentally, by feeding it
+post-`collapseRepeatedLines` text).
+
+Evidence: new `packages/output-filter/test/classify-redos.test.ts` at 100 KB
+with a 5 s ceiling — red 31.8 s before the fix; each bound verified
+load-bearing alone (32.6 s / 20.9 s when reverted individually). Package suite
+40 files / 416 tests green; biome clean on both touched files. Branch
+`fix/classify-vitest-text-multiline-ws-quadratic`; not merged. Updated
+[[concepts/unbounded-run-redos]] with instance 6 and the `^\s*`-under-`m`
+variant.
+
+## [2026-07-25 14:30 +03] fix | normalize trailing-whitespace strip was quadratic
+
+Sixth instance of [[concepts/unbounded-run-redos]], and the earliest one in the
+pipeline: `normalize()`'s per-line `/\s+$/` in
+`packages/output-filter/src/normalize.ts`. Unbounded greedy run before a
+zero-width anchor, retried at every start position, so a whitespace run that is
+not at end-of-line backtracks the whole run at every offset. Reachable from
+ordinary input (padded tables, ASCII banners, tab-indented blobs) through
+`filterOutput` and the public `classifyOutput`, with no size cap ahead of it.
+
+Fixed with `String.prototype.trimEnd()` — exactly equivalent (ES `\s` is
+WhiteSpace + LineTerminator, the set `trimEnd` removes; `$` without `m` anchors
+only at end of string), linear, one line.
+
+Evidence: RED at 200 KB through `classifyOutput` — space run 13,846 ms, tab run
+17,046 ms against a 5,000 ms ceiling; GREEN <1 ms each. Reverting the single line
+takes both back to 33.6 s / 29.6 s, so the guard is load-bearing. Guard needed 2x
+the suite's shared 100 KB: this variant's per-backtrack step is a bare anchor
+check, so at 100 KB the unbounded form cost only 3.2-4.0 s and stayed green.
+Same-byte-count 80-column control measured linear (3.2 / 9.5 / 12.3 / 17.1 ms at
+25 / 50 / 100 / 200 KB), so the cost was the regex shape, not the byte count.
+Full `@megasaver/output-filter` suite 413/413 passing; biome clean on the three
+touched files. Branch `fix/normalize-trailing-whitespace-quadratic`; not merged,
+pending external review per §4.
+
+## [2026-07-25 19:05 +03] fix | restore log.md, wiped by merge 5a13a8c2
+
+Merge `5a13a8c2` (`fix/normalize-trailing-whitespace-quadratic`) resolved this
+file to zero bytes: parent1 `d213947e` had 4258 lines, parent2 4147, the merge
+commit 0 — a 4258-line deletion of the project's only cross-session, cross-agent
+memory channel. `main` carried the empty file through two more commits. Nothing
+in `pnpm verify` noticed, because nothing checked the wiki.
+
+Restored by re-running the merge with `git merge-file --union` over base
+`89eea64f` — 4283 lines, no conflict markers, zero lines dropped from either
+parent (`diff parent2 union` shows 136 additions, 0 deletions). The other four
+branches in that batch (`gc-reconcile`, `dedupe`, `classify`, `evidence-ledger`)
+are accounted for: their entries were already on `d213947e`, or they wrote none.
+
+Guard: `apps/cli/test/wiki-integrity.test.ts` fails on any empty tracked wiki
+page and on a `log.md` that drops below 50 timestamped entries. RED on `main`
+(`expected [ 'wiki/log.md' ] to deeply equal []`, `expected 0 to be greater than
+50`), green after restore, red again when the restore is reverted.
 
 
 ## [2026-07-25] fix | compileGlob ReDoS + metachar injection (@megasaver/policy)
@@ -4400,3 +4479,286 @@ only after verifying zod applies it.
 Sources: [[docs/superpowers/specs/2026-07-25-publish-tool-input-schemas-design]],
 [[docs/superpowers/plans/2026-07-25-publish-tool-input-schemas-plan]],
 [[entities/mcp-bridge]].
+
+## [2026-07-25] fix | redaction ReDoS instances 4 and 5 (@megasaver/policy)
+
+Closed the last two open members of [[concepts/unbounded-run-redos]], both in
+`packages/policy/src/redaction-patterns.ts`. Four bounds, no other change.
+
+Instance 5 is the lookbehind variant, and the reason it read as safe is that
+**V8 evaluates a lookbehind right to left**: the `\s` run that rescans at every
+start position is the one written *last*, nearest the value, not the one nearest
+the key. Bounded the trailing run only — `aws_secret_key` and `api_key_header`
+to `\s{0,64}`, `basic_auth_header`'s `basic\s+` to `basic\s{1,64}`. Measured
+50 KB -> 100 KB before: 2.2 -> 9.4 s, 1.3 -> 7.6 s, 1.9 -> 8.4 s.
+
+The **leading** `\s*` in each was left unbounded on purpose: reaching it needs
+the delimiter within 64 characters behind, and one delimiter per 64 characters
+is exactly what caps the leading run, so it is already O(n). Bounding it too
+measures identical. A bound no red test can justify is a change that should not
+be made.
+
+Instance 4 is `email`. This page had recorded a size gate on the observer loop
+as the cheaper fix, on the grounds that the observer is count-only. **That was
+wrong, and reading the sink is what showed it:** `redactForLedger` runs the same
+`OBSERVED_PATTERNS` array and actually replaces (F-FW-1 — an email must never
+persist into a ledger `sourcePath` label). A gate in `redactWithFindings` leaves
+that loop quadratic; a gate in both converts a DoS into an email leak. Bounded
+the local part to `{1,64}` (RFC 5321) instead, which fixes both loops at the
+root — 6.0 -> 23.1 s becomes linear — and does not change the reported count,
+because the bound is still greedy with backtracking.
+
+Guard: `packages/policy/test/redact-redos.test.ts`, growth ratio through the
+exported `redactWithFindings` at 50 -> 100 KB, min of 5 trials, calibrated
+repeats. Red 3.5x-4.1x on all three shapes before the fix, ~2.0x after; wall
+clock 304 s -> 3 s. Each of the four bounds was reverted alone and confirmed red
+alone.
+
+New lesson recorded on the concept page: the ratio guard is **per-shape**.
+`aws_secret_key` reverted is red on a space run and green on tabs;
+`api_key_header` reverted is the exact mirror — and on the shape that does not
+separate it, the reverted pattern still burns 65-100 s while the assertion
+passes. One shape per member of the whitespace class.
+
+`aws_secret_key` is row 5 of the LOCKED §5a table; amended with a dated footnote
+per the `jwt` precedent, never rewritten. The other three are outside that table.
+
+`pnpm verify` EXIT 0, 56/56 tasks. policy 284, context-gate 330, output-filter
+410, core 900 tests.
+
+## [2026-07-25] fix | exec args bypassed the secret-path denylist (@megasaver/policy)
+
+Reported as "grep path skips secret denylist", anchored at
+`mcp-bridge/src/tools/search-code.ts:95` (`buildGrepArgs`). The anchor was
+wrong: `buildGrepArgs` is a pure string builder with no gate to add, and it is
+one of seven callers of a single ungated sink. `mega_run_command({command:
+"cat", args: [".env"]})` leaks identically and never touches search-code at all.
+
+Root cause: `policy.evaluateCommand` inspected the command name and the rendered
+command line, never the individual args, while `ALLOWED_COMMANDS` holds five
+file-reading commands (`cat`, `find`, `grep`, `ls`, `tail`). The LOCKED §9a
+denylist was therefore one tool call wide — `runOutputPipeline({path: ".env"})`
+denied with `secret_path_read` and appended a `blocked-read` firewall event,
+while `runOutputExecCommand({command: "grep", args: ["-r","-n","--include=.env",
+"-e","=","."]})` — byte-identical to what `buildGrepArgs` emits — returned the
+file body as excerpts, `warnings: []`, and left the firewall ledger empty. The
+context-firewall pitch ("your `.env` never reached the model — and you can prove
+it") was false for every exec surface.
+
+Redaction is not a backstop: real `redactWithFindings` over that grep output
+returns `count: 0`. The `./.env:1:` prefix defeats the `^`-anchored `env_value`
+detector and `aws_secret_key`'s lookbehind is lowercase-only. `--include=*.pem`
+and `--include=id_rsa` are the exception, not the rule — `private_key_block`
+catches those, so the `.env`-shaped case is the live one.
+
+Fix: `evaluateCommand` runs `evaluatePathRead` over every arg plus the tail
+after a `=` (where `--include=<glob>` hides), before the project deny.commands
+gate. One guard in the shared sink covers `mega output exec`, `mega bench`,
+`proxy_search_code`, `mega_run_command`, both daemon exec handlers, and the
+overlay exec twin. Project `deny.read` globs now bind exec as well as read.
+
+Evidence: real orchestrator, real `spawn`, real `.env` on disk. Before —
+`ok: true`, excerpt `./.env:1:AWS_SECRET_ACCESS_KEY=… ./.env:2:DB_PASSWORD=…`;
+after — `command_denied` / `secret_path_read`, child never spawned. Control
+`grep -r -n --include=*.ts -e const .` unchanged. Guard tests drive the two real
+call sites (`packages/context-gate/test/exec-secret-path-gate.test.ts`) and go
+red alone on revert. Repo-wide `pnpm test`: 56/56 tasks green, no over-block.
+
+Left open deliberately: this is an INPUT gate. A recursive `grep -r pattern .`
+still sweeps a denied file it was never handed — output-side path analysis is an
+explicit non-goal of the 2026-07-08 context-firewall spec.
+## [2026-07-25] fix | unbounded-run-redos instance 9 (output-filter)
+
+Bounded the five remaining `^\s*`/`^\s+`-under-`m` leading runs in
+`@megasaver/output-filter` — `TEST_FAILURE` (`rank.ts`), `FAIL_LINE`
+(`parsers/go-test.ts`), `SUMMARY` + `PROBLEM_ROW` (`parsers/eslint.ts`),
+`SIGNATURE` (`parsers/test-output.ts`). Siblings the instance-7 fix left behind
+when it bounded `classify.ts` and stopped there.
+
+Driver is a U+2028/U+2029 run, which survives `normalize` +
+`collapseRepeatedLines` (they only fold `\n`) while still anchoring `^` under
+`m`. Reaches `filterOutput` through the uncapped `readRaw`. 200 KB, one bound
+reverted at a time: 29.9-33.5 s each; all bounded, 200 ms.
+
+Guard: `packages/output-filter/test/multiline-ws-anchor-redos.test.ts` (28
+tests). Updated `concepts/unbounded-run-redos` — new instance 9 section, the
+grep-every-hit rule, `sources:` frontmatter extended to the three parser files
+plus `classify.ts`, and the `Related` line corrected (output-filter holds
+2, 3, 7, 8, 9 — it read "2, 3 and 6", but 6 is the context-gate instance).
+`pnpm verify` green, 56/56.
+## [2026-07-25] fix | dedupe guard margin overstated
+
+Post-merge review of the banded-`dedupe()` fix: the regression guard cleared
+its 5 s ceiling by only 1.4x when the fix was reverted (6.8-7.7 s reproduced),
+not the 2.7x its comment claimed — and the comment (13.5 s) and the changeset
+(17.4 s) disagreed with each other. Neither number had been re-run. Guard now
+gates on an n-vs-2n growth ratio (64k/128k lines, 2.75x): 1.95-2.09x idle,
+2.06-2.17x under four busy cores, 4.48x reverted. Lesson filed under
+[[concepts/unbounded-run-redos]] — minimise per SIDE, not the per-trial ratio.
+The sibling classify guard was checked and does NOT share the defect: reverting
+`PROSE_ANTI_VI` measures 21.5 s against its 5 s ceiling, matching its changeset.
+## [2026-07-25 20:55 +03] fix | extractJson resolved key lines in O(keys x lines)
+
+`lineOf` (`packages/indexer/src/extract/extract-json.ts`) compiled a fresh
+RegExp per top-level key and ran a full `lines.findIndex` for each, so a flat
+JSON dictionary — i18n locale file, config map, data dump — cost O(keys x lines).
+Both read paths reach it: `filterOutput` -> `chunkBySemantic` -> `extractJson`
+on any `.json` read (uncapped, `readRaw`), and `mega scan` / `mega index` up to
+the 1 MB `DEFAULT_MAX_FILE_SIZE`. Measured: 33 ms at 97 KB, 479 ms at 395 KB,
+2755-3409 ms at ~1 MB; one-pass 24 ms.
+
+Fixed with one anchored regex per LINE recording each key token's first line,
+then a map lookup. Parity (including first-occurrence-wins, where a nested key
+on an earlier line beats the top-level key of the same name) verified by
+differential run of both resolvers over 40,240 documents / 42,068 key lookups —
+zero divergences.
+
+Guard lesson, same family as [[concepts/unbounded-run-redos]] instance 6 but the
+opposite conclusion: a wall-clock CEILING was tried first and rejected here. The
+fixed call is 24 ms idle but measured 1137 ms inside a full parallel
+`pnpm verify` (~47x), which leaves no gap below the 2755 ms defect. The guard
+that holds compares two adjacent measurements in the same process — the same
+object pretty-printed vs minified, so every non-defect per-key cost (sha256,
+tokenize, allocation) cancels and only line count differs: 1.10-1.43x one-pass,
+20.5-79.0x quadratic. Ceilings are not universally safer than ratios; the choice
+depends on whether the fast path's own cost is small next to load variance.
+
+Sources: [[entities/indexer]], [[concepts/unbounded-run-redos]].
+## [2026-07-25 19:05 +03] fix | any-workspace READ clobbered registry-session stats
+
+Post-merge review finding C1 on `259fed05`. That fix added the layout
+discriminator to `reconcileOverlaySummaries` only. `readOverlaySummaryAnyWorkspace`
+(packages/stats/src/store.ts) still walked every `stats/<dir>` as an overlay
+workspace behind `isSafeSegment` — and overlay summary reads SELF-HEAL, so a
+schema miss writes. Reproduced: one registry `appendEvent`, one scan call →
+`stats/<projectId>/<sessionId>.json` rewritten to all zeros with `rebuiltAt`,
+`readSummary` threw `store_corrupt`. Reachable from `mega audit session`,
+`mega audit honest` (never consults the registry) and
+`mega hooks status --session`.
+
+Fix: all three `stats/*` walkers in `store.ts` share one `overlayWorkspaceKeys`
+helper applying `workspaceKeySchema`. After: scan `null`, summary byte-identical,
+`readSummary` intact. 1 red → green guard test in
+`packages/stats/test/read-overlay-any-workspace.test.ts`; `pnpm verify` 56/56.
+Fake fixture keys (`workspace-aaa`, `wk-alpha`) in three CLI overlay tests
+replaced with real 16-hex keys. Branch `fix/review-C1-stats-sibling-clobber`.
+
+Lesson recorded in [[entities/stats]]: guarding ONE walker does not close the
+defect class; grep every sibling `readdirSync(join(root, "stats"))` first.
+
+NOTE: this file arrived at 0 bytes on `main` (emptied by a merge conflict
+resolution in the five-branch merge, `5a13a8c2`/`d213947e`). The header and
+prior entries are recoverable from `git show 259fed05:wiki/log.md`; not restored
+here to avoid guessing at a parallel agent's rotation.
+## [2026-07-25 21:00 +03] fix | saver completion heartbeat no longer masks a broken hook
+
+Audit sweep (fail-open inversion): `buildSaverDecision` stamped a completion for
+EVERY well-formed PostToolUse payload — including tools the saver never
+processes (Write/Edit/TodoWrite), which return at the `resolveSourceKind` gate
+before `recordInvocation`. That orphan completion was newer than the last
+failure, so doctor’s `failing` filter dropped the entry and `saver-liveness`
+downgraded from FAIL to “past hook failure(s), since recovered” while
+compression was still dead. Fix: record a completion only when the run stamped
+an invocation (`ctx.workspaceKey !== undefined`); the `process.cwd()` fallback
+key is gone from the completion path (it stays on the failure path, where a
+spurious attribution is fail-loud, not fail-open). Two RED tests: hook-level
+invariant (`apps/cli/test/hooks/saver.test.ts`) + end-to-end doctor masking
+(`apps/cli/test/doctor-saver.test.ts`); both fail on revert.
+
+Sources: `apps/cli/src/hooks/saver.ts`, `apps/cli/src/commands/doctor-saver.ts`,
+[[concepts/saver-activation-inheritance]].
+
+---
+
+## [2026-07-25] query | gui memory-graph flake: root cause was a wall-clock wait on a non-DOM signal
+
+`apps/gui/test/components/memory-graph-panel.test.tsx` failed once under
+full-monorepo `pnpm verify` (`capturedElements.length` > 0 timed out inside
+`waitFor`) yet passed in isolation. Not a logic bug and not "slow CI" — a
+structural race.
+
+Measured with an instrumented probe: the panel commits the
+`memory-graph-canvas` testid one event-loop turn BEFORE the effect that calls
+`cytoscape()` and fills the mock's `capturedElements` (mutation batch at
++0.97ms with `elements=0`; cytoscape at +3.02ms). `waitFor` cannot observe a
+plain module variable, so it converges only on a later mutation batch or its
+50ms poll — both bounded by RTL's own 1000ms `asyncUtilTimeout`, which the
+file's `testTimeout: 30_000` does **not** raise. A worker starved by turbo's
+parallel run (gui jsdom environment took 113.94s) overruns that budget.
+
+Fix is deterministic, not slower: `await act(async () => {})` drains the fetch
+continuation, the re-render and the passive effect with no timers and no
+deadline. Timeout was NOT raised.
+
+Red/green proof by denying the wall clock (`configure({ asyncUtilTimeout: 0 })`,
+a fully starved worker): HEAD helper 1 failed / 16 passed with the exact
+reported `expected 0 to be greater than 0`; patched file 17/17. The suite now
+has zero dependence on wall-clock scheduling.
+
+Sibling defect fixed at the same root: the seven raw `tapHandlers[0](…)`
+dispatches also set React state outside any flush, so their follow-up
+assertions rode the same wall clock — the zero-budget run reddened them once
+`waitForGraph` was fixed. Collapsed into a `tapNode(id)` helper that wraps the
+dispatch in `act` and throws instead of silently no-op'ing when no handler is
+registered (`if (handler)` could vacuously pass a broken test).
+
+Test-only change; no package behaviour changed, so no changeset. Branch
+`fix/gui-memory-graph-flake`. Evidence: single file 5/5 green, full gui suite
+83 files / 531 tests green, type errors none.
+## [2026-07-25 19:40 +03] rebase | long-memory hybrid recall onto main
+
+Rebased `codex/feat/long-memory-hybrid-recall` (71 commits) onto `main`
+(`e639a7ee`) as `rebase/long-memory-hybrid-recall`. The branch is purely
+additive outside four files — it adds `packages/long-memory`,
+`benchmarks/longmemeval-v2/`, its specs/plans, and wiki pages — so it does not
+overlap the perf/correctness work that landed on main. One conflict, in
+`wiki/log.md`; `wiki/index.md` and `wiki/agent-channel.md` auto-merged with no
+entry lost.
+
+`wiki/log.md` needed care: main's merge `5a13a8c2` left the file at zero bytes,
+so a plain rebase would have carried only the branch copy and silently dropped
+the 17 entries main gained after the fork. Resolved by three-way union against
+main's last non-empty version `d213947e` — 221 entries, no duplicates, nothing
+dropped from either side. The zero-byte file on main is a separate open defect
+with its own branch (`fix/review-C2-wiki-log-wiped`).
+
+`pnpm-lock.yaml` was reset to main's and regenerated with
+`pnpm install --lockfile-only`; the result is byte-identical to the branch's
+own lockfile (the `packages/long-memory` importer plus `fs-ext@2.1.1`,
+`nan@2.28.0`, `@types/fs-ext@2.0.3`).
+
+One test failed under a forced full run and not in isolation:
+`packages/long-memory/test/lm2-index.test.ts` "stops catalog/direct work at
+1,024 and raw text at 16 MiB". The harness sets `defaultTimeoutMs: 100` and
+`createLm2IndexService` deadlines on real `performance.now()`, so on a loaded
+machine the wall clock ended the run before the budget under test and the
+receipt came back without a `nextCursor`. Pinned that one case to
+`MAX_LM2_INDEX_BATCH_TIMEOUT_MS`. Pre-existing on the branch, not caused by the
+rebase.
+
+Evidence: `pnpm verify` exit 0; `Tasks: 58 successful, 58 total`. Forced
+uncached runs also green — `turbo typecheck --force` 58/58 in 33.1 s,
+`turbo test --force --concurrency=4` 58/58 in 2m2.9 s. Not merged, not pushed.
+Also observed and left alone: `packages/context-gate/test/saver-heartbeat.test.ts`
+"steals a stale lock file" flaked once under a forced full run and passes in
+isolation; that file is untouched by this branch and the flake is main's.
+
+## [2026-07-25 20:15 +03] fix | memory-graph ReDoS guards moved off the growth ratio
+
+Both `parse-wiki` guards (instances 9 and 10) failed `pnpm verify` while passing
+79/79 in isolation: under a 55-task parallel `turbo` run the anchor-strip ratio
+read 15.9x and 12.6x against an 8x gate, and the same code measured 2-4x idle.
+min-of-trials cancels spikes, not sustained load — every trial is slow and the
+larger sample accumulates more preemption, so the ratio inflates on linear code.
+
+Replaced with an absolute ceiling at a size that buys the separation: one call at
+200 KB, 250 ms gate. Bounded costs 0.1-0.2 ms on all four shapes; reverted costs
+34,000 / 4,740 ms (anchor strip) and 15,600 / 15,500 ms (wikilink). Red proof is
+per-bound: reverting the anchor bound alone fails its two timing tests at 67.2 s
+and 9.5 s while the wikilink suite stays green, and reverting the wikilink bound
+alone fails its two at 30.6 s each while the anchor suite stays green. Each
+revert also fails its own behaviour pins, so the guards are not timing-only.
+
+Same instrument the context-gate guard moved to in `0e8f3362` (PR #301), for the
+same reason. Sources: [[concepts/unbounded-run-redos]] "…but the ratio breaks
+under a parallel turbo run".

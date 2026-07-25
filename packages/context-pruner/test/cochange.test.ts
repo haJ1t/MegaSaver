@@ -69,6 +69,47 @@ describe("parseNumstat", () => {
   });
 });
 
+// Co-change is all-pairs per commit: O(files²) time AND memory. One mass-touch
+// commit inside the 1000-commit window (initial import, vendored deps drop,
+// repo-wide formatter run, generated client) blows both up — measured on the
+// unbounded parse: 1000 files 75 ms/142 MB, 2000 files 344 ms/370 MB, 4000 files
+// (103 KB of numstat text) 2256 ms/960 MB. ~4-6.5x per doubling while the input
+// bytes only double; ~8-10k files in one commit is OOM, not just slow.
+//
+// The cap in cochange.ts is what keeps this linear. Do not remove it: a commit
+// touching hundreds of files carries no co-change signal anyway (in a log made
+// of one such commit every pair ties at frequency 1, so `peak` normalizes them
+// all to 1.0 — pure noise crowding out the real pairs).
+const WIDE_COMMIT_FILES = 4000;
+const WIDE_COMMIT_CEILING_MS = 1_000;
+
+function wideCommit(files: number): string {
+  const rows: string[] = [];
+  for (let i = 0; i < files; i += 1) rows.push(`1\t1\tsrc/pkg${i % 40}/file-${i}.ts`);
+  return `commit deadbeef\n\n${rows.join("\n")}`;
+}
+
+describe("parseNumstat — mass-touch commit", () => {
+  it("records churn but no co-change pairs for a repo-wide commit", () => {
+    const map = parseNumstat(
+      `${wideCommit(WIDE_COMMIT_FILES)}\n\ncommit cafe\n1\t1\tx.ts\n2\t2\ty.ts`,
+    );
+
+    expect(map.churn.size).toBe(WIDE_COMMIT_FILES + 2);
+    expect(map.churn.get("src/pkg0/file-0.ts")).toBe(2);
+    expect(map.coChange.has("src/pkg0/file-0.ts")).toBe(false);
+    // The normal-sized commit alongside it still pairs up.
+    expect(map.coChange.get("x.ts")?.get("y.ts")).toBe(1);
+  });
+
+  it(`parses a ${WIDE_COMMIT_FILES}-file commit under ${WIDE_COMMIT_CEILING_MS} ms`, () => {
+    const raw = wideCommit(WIDE_COMMIT_FILES);
+    const started = performance.now();
+    parseNumstat(raw);
+    expect(performance.now() - started).toBeLessThan(WIDE_COMMIT_CEILING_MS);
+  });
+});
+
 describe("coChangeStrength", () => {
   it("is 0 when changedFiles is empty", () => {
     const map = parseNumstat(FIXTURE);

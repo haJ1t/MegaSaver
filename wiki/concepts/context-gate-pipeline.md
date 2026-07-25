@@ -5,9 +5,10 @@ sources:
   - docs/superpowers/specs/2026-05-10-aa1-context-gate-epic.md
   - docs/superpowers/specs/2026-06-25-diff-on-reread-design.md
   - docs/superpowers/specs/2026-06-26-semantic-ast-read-design.md
+  - packages/policy/src/evaluate-command.ts
 status: active
 created: 2026-05-11
-updated: 2026-06-26
+updated: 2026-07-25
 ---
 
 # Context Gate pipeline & redaction flow
@@ -28,6 +29,15 @@ For a read / command / grep / fetch, the flow is:
 1. **Read gates** (file/exec only) — `policy.evaluatePathRead`
    (secret-path denylist) THEN `outputFilter.resolveSafeReadPath`
    (structural sandbox). Both must pass before any `fs.readFile`.
+1a. **on the exec path** the denylist is reached through
+   `policy.evaluateCommand`, which runs `evaluatePathRead` over every
+   arg (and the tail after a `=`, where `--include=<glob>` hides)
+   before spawn. Until 2026-07-25 it checked only the command name, so
+   the five file-reading members of `ALLOWED_COMMANDS` (`cat`, `find`,
+   `grep`, `ls`, `tail`) read any denied path the read gate refused —
+   `grep -r -n --include=.env -e = .` returned `.env` in full with
+   zero redactions. "file/exec only" describes the gate's reach now;
+   it did not before that fix.
 1b. **unchanged short-circuit** (read path only) — read raw → sha256 →
    look up the per-session read-index (key = sha256(absPath)); on a
    content-hash hit, return a tiny `unchanged-marker` result

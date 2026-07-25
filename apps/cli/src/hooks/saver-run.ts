@@ -114,14 +114,11 @@ export function makeRecord(storeRoot: string): SaverDeps["record"] {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), DAEMON_TIMEOUT_MS);
         try {
-          const {
-            storeRoot: _sr,
-            evidenceStoreRoot: _esr,
-            now: _now,
-            newId: _nid,
-            ...daemonBody
-          } = input;
-          // ponytail: daemon excerptHandler supplies storeRoot itself; do NOT add evidenceStoreRoot
+          const { storeRoot: _sr, evidenceStoreRoot: _esr, now: _now, newId, ...rest } = input;
+          // ponytail: daemon excerptHandler supplies storeRoot itself; do NOT add evidenceStoreRoot.
+          // newId is a closure and cannot be serialized — send its DERIVED VALUE so the
+          // daemon keeps the P1 content-addressed chunk-set id instead of a random UUID.
+          const daemonBody = newId === undefined ? rest : { ...rest, chunkSetId: newId() };
           const res = await handle.request("POST", "/excerpt", daemonBody, controller.signal);
           clearTimeout(timer);
           if (res.ok) {

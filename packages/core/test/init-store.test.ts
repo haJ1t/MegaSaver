@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -45,6 +45,22 @@ describe("initStore", () => {
 
     expect(await readFile(join(target, "projects.json"), "utf8")).toBe('[{"id":"x","name":"y"}]');
     expect(await readFile(join(target, "sessions.json"), "utf8")).toBe("[]");
+  });
+
+  // The root gates traversal into every session's captured output. NTFS
+  // ignores POSIX mode bits, so this is POSIX-only.
+  it.skipIf(process.platform === "win32")("creates the root owner-only (0700)", async () => {
+    const target = join(root, "store");
+    await initStore(target);
+    expect((await stat(target)).mode & 0o777).toBe(0o700);
+  });
+
+  it.skipIf(process.platform === "win32")("repairs a world-readable root", async () => {
+    const target = join(root, "store");
+    await mkdir(target, { recursive: true });
+    await chmod(target, 0o755);
+    await initStore(target);
+    expect((await stat(target)).mode & 0o777).toBe(0o700);
   });
 
   it("is idempotent across two consecutive calls", async () => {

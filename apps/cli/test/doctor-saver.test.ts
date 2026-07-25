@@ -11,9 +11,11 @@ import {
   writeControlState,
   writeRuntimeState,
 } from "@megasaver/proxy-control";
+import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runSaverChecks } from "../src/commands/doctor-saver.js";
 import type { Check } from "../src/commands/doctor.js";
+import { type SaverDeps, buildSaverDecision } from "../src/hooks/saver.js";
 
 const NOW = Date.UTC(2026, 6, 10, 12, 0, 0);
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -214,6 +216,46 @@ describe("runSaverChecks", () => {
       now: () => NOW,
     });
     expect(find(checks, "saver-liveness")?.pass).toBe(true);
+  });
+
+  it("a tool the saver never processes cannot clear a failing hook from the liveness FAIL", async () => {
+    // No registered hook → the self-test is skipped and liveness is the signal.
+    const settingsPath = join(dir, "absent-settings.json");
+    // Claude Code runs the hook inside the workspace it reports, so the payload
+    // cwd and the hook process cwd are the same key.
+    const cwd = process.cwd();
+    const wk = encodeWorkspaceKey(cwd);
+    const T = Date.now();
+    recordInvocationHeartbeat(storeRoot, wk, new Date(T - 2000).toISOString(), T);
+    recordFailureHeartbeat(storeRoot, wk, "record", new Date(T - 1000).toISOString(), T);
+    expect(find(runSaverChecks({ settingsPath, storeRoot }), "saver-liveness")?.pass).toBe(false);
+
+    const saverDeps: SaverDeps = {
+      storeRoot,
+      resolveSettings: () => ({ enabled: true, mode: "balanced" }),
+      readSessionIntent: () => undefined,
+      record: () => Promise.reject(new Error("not reached for an unhandled tool")),
+      recordInvocation: (s, w) => recordInvocationHeartbeat(s, w, new Date().toISOString()),
+      recordCompression: () => {},
+      recordFailure: (s, w, k, ts) => recordFailureHeartbeat(s, w, k, ts),
+      recordCompletion: (s, w, ts) => recordCompletionHeartbeat(s, w, ts),
+      hasSeenOutput: () => false,
+      recordSeenOutput: () => {},
+    };
+    await buildSaverDecision(
+      {
+        tool_name: "Write",
+        tool_input: { file_path: join(cwd, "a.ts") },
+        tool_response: { filePath: join(cwd, "a.ts"), success: true },
+        session_id: "live-1",
+        cwd,
+      },
+      saverDeps,
+    );
+
+    const after = find(runSaverChecks({ settingsPath, storeRoot }), "saver-liveness");
+    expect(after?.pass).toBe(false);
+    expect(after?.value).toContain("failing");
   });
 
   it("FAILs the self-test when the hook bumps invocation but not completion", () => {

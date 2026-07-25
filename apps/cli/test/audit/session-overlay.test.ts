@@ -10,8 +10,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runAuditSession } from "../../src/commands/audit/session.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
-const WORKSPACE_A = "workspace-aaa";
-const WORKSPACE_B = "workspace-bbb";
+// Overlay dirs under stats/ are 16-hex workspaceKeys (encodeWorkspaceKey); the
+// stats readers skip every other dir so they cannot touch registry data.
+const WORKSPACE_A = "00000000000000aa";
+const WORKSPACE_B = "00000000000000bb";
 const OVERLAY_ID = "1af7f8f0-2b3c-4d5e-8f60-718293a4b5c6";
 const REGISTERED_ID = "22222222-2222-4222-8222-222222222222";
 const TS = "2026-07-03T12:00:00.000Z";

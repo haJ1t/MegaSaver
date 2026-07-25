@@ -5,25 +5,26 @@ const FUNC_RE = /^func\s+(?:\([^)]*\)\s*)?([A-Za-z_]\w*)/;
 const TYPE_RE = /^type\s+([A-Za-z_]\w*)/;
 const GROUP_RE = /^(?:var|const)\s*\(/;
 
+// `opened` flips on an opening delimiter, not on end-of-line depth: a decl that
+// opens and closes within its own line (or opens nothing at all, e.g.
+// `type ID string`) nets zero, and an end-of-line test would keep scanning to
+// EOF — swallowing the next decl, and costing O(n^2) on a file of such decls.
 // ponytail: naive delimiter count ignores strings/comments; accepted ceiling per spec.
-function delimDelta(line: string): number {
-  let delta = 0;
-  for (const ch of line) {
-    if (ch === "{" || ch === "(") delta += 1;
-    else if (ch === "}" || ch === ")") delta -= 1;
-  }
-  return delta;
-}
-
 function balancedEnd(lines: readonly string[], start: number): number {
   let depth = 0;
   let opened = false;
   for (let i = start; i < lines.length; i += 1) {
-    depth += delimDelta(lines[i] ?? "");
-    if (depth > 0) opened = true;
-    if (opened && depth <= 0) return i + 1;
+    for (const ch of lines[i] ?? "") {
+      if (ch === "{" || ch === "(") {
+        depth += 1;
+        opened = true;
+      } else if (ch === "}" || ch === ")") {
+        depth -= 1;
+      }
+    }
+    if (!opened || depth <= 0) return i + 1;
   }
-  return opened ? lines.length : start + 1;
+  return lines.length;
 }
 
 // Heuristic Go extractor: top-level func/type/grouped var|const only (nested
