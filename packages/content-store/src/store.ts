@@ -276,6 +276,20 @@ export async function pruneOlderThan(input: {
         if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
         if (input.keepChunkSetIds?.has(name.slice(0, -".json".length))) continue;
         const path = join(sessionPath, name);
+        // Chunk sets are write-once (atomicWriteFile), so mtime tracks createdAt
+        // and answers "is this young?" without reading the body — which holds a
+        // whole stored tool output. The sweep runs inside the PostToolUse hook
+        // and retains ~30x what it deletes, so the retained files are the
+        // workload. Same stat-gate shape as pruneIntentFiles / pruneSeenFiles
+        // (apps/cli/src/hooks/gc.ts). A file touched after it was written is
+        // kept, not deleted: mtime can only over-state age-since-write.
+        let mtimeMs: number;
+        try {
+          mtimeMs = statSync(path).mtimeMs;
+        } catch {
+          continue;
+        }
+        if (mtimeMs >= input.olderThan.getTime()) continue;
         const createdAt = readChunkSetCreatedAt(path);
         if (createdAt === null) continue;
         if (new Date(createdAt) < input.olderThan) {

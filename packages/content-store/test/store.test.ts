@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projectIdSchema, sessionIdSchema } from "@megasaver/shared";
@@ -34,6 +34,14 @@ function makeChunkSet(overrides: Partial<ChunkSet> = {}): ChunkSet {
 
 function sessionDir(): string {
   return join(storeRoot, "content", projectId, sessionId);
+}
+
+// The store is write-once, so on disk a file's mtime IS its createdAt. Fixtures
+// that backdate only the body describe a store that cannot occur, and prune
+// reads mtime first to avoid parsing every retained body.
+function backdate(name: string, createdAt: string): void {
+  const stamp = new Date(createdAt);
+  utimesSync(join(sessionDir(), name), stamp, stamp);
 }
 
 beforeEach(() => {
@@ -179,6 +187,8 @@ describe("pruneOlderThan", () => {
     const fresh = makeChunkSet({ chunkSetId: "fresh", createdAt: "2026-12-01T00:00:00.000Z" });
     await saveChunkSet({ storeRoot, chunkSet: old });
     await saveChunkSet({ storeRoot, chunkSet: fresh });
+    backdate("old.json", old.createdAt);
+    backdate("fresh.json", fresh.createdAt);
     const result = await pruneOlderThan({
       storeRoot,
       olderThan: new Date("2026-06-01T00:00:00.000Z"),
@@ -196,6 +206,8 @@ describe("pruneOlderThan", () => {
     const old = makeChunkSet({ chunkSetId: "old", createdAt: "2026-01-01T00:00:00.000Z" });
     await saveChunkSet({ storeRoot, chunkSet: old });
     writeFileSync(join(sessionDir(), "corrupt.json"), "{ broken");
+    backdate("old.json", old.createdAt);
+    backdate("corrupt.json", old.createdAt); // old enough to be a delete candidate
     const result = await pruneOlderThan({
       storeRoot,
       olderThan: new Date("2026-06-01T00:00:00.000Z"),

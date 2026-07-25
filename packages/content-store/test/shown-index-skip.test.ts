@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projectIdSchema, sessionIdSchema } from "@megasaver/shared";
@@ -55,10 +55,15 @@ describe("listChunkSets tolerates shown-index.json", () => {
 
 describe("pruneOlderThan tolerates shown-index.json", () => {
   it("does not delete shown-index.json and does not throw", async () => {
-    await saveChunkSet({ storeRoot, chunkSet: makeChunkSet() });
+    const chunkSet = makeChunkSet();
+    await saveChunkSet({ storeRoot, chunkSet });
+    // Write-once store: mtime IS createdAt on disk, and prune reads mtime first.
+    const stamp = new Date(chunkSet.createdAt);
+    utimesSync(join(sessionDir(), `${chunkSet.chunkSetId}.json`), stamp, stamp);
     mkdirSync(sessionDir(), { recursive: true });
     const shownPath = join(sessionDir(), SHOWN_INDEX_FILENAME);
     writeFileSync(shownPath, '{"abc123":{"chunkSetId":"cs-1"}}\n');
+    utimesSync(shownPath, stamp, stamp); // old too: the name skip is what spares it
     const res = await pruneOlderThan({
       storeRoot,
       olderThan: new Date("2026-06-01T00:00:00.000Z"),
