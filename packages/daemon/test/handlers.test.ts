@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RunCommandSpawn } from "@megasaver/context-gate";
@@ -78,6 +78,49 @@ describe("excerptHandler", () => {
     });
     const rows = await listEvidenceByWorkspace({ storeRoot: store, workspaceKey: ws });
     expect(rows.length).toBeGreaterThan(0);
+  });
+
+  // P1 parity: the hook derives a content-addressed chunk-set id
+  // (`cs-<sha256(raw).slice(0,32)>`). It cannot send the closure over HTTP, so
+  // the daemon must accept the derived id and use it verbatim — otherwise the
+  // daemon path mints a random UUID and the "byte-identical compressions
+  // produce identical footers" property silently never holds.
+  it("uses a caller-supplied chunkSetId verbatim (P1 content-derived id parity)", async () => {
+    const ws = encodeWorkspaceKey("/test/proj");
+    const derived = "cs-6c72797b6030b4ccdb3cbffd47e5d85a";
+    const body = {
+      workspaceKey: ws,
+      liveSessionId: "live1",
+      raw: bigRaw,
+      sourceKind: "command" as const,
+      label: "run tests",
+      mode: "aggressive" as const,
+      storeRawOutput: true,
+      chunkSetId: derived,
+    };
+
+    const first = await excerptHandler(store, body);
+    expect(first.status).toBe(200);
+    expect(first.json.chunkSetId).toBe(derived);
+
+    // Byte-identical re-emit in the same session reuses the one stored set.
+    const second = await excerptHandler(store, body);
+    expect(second.json.chunkSetId).toBe(derived);
+    expect(readdirSync(join(store, "content", ws, "live1"))).toEqual([`${derived}.json`]);
+  });
+
+  it("rejects a containment-breaking chunkSetId", async () => {
+    const res = await excerptHandler(store, {
+      workspaceKey: "ws",
+      liveSessionId: "live1",
+      raw: bigRaw,
+      sourceKind: "command",
+      label: "l",
+      mode: "aggressive",
+      storeRawOutput: true,
+      chunkSetId: "../escape",
+    });
+    expect(res.status).toBe(400);
   });
 
   it("accepts an optional intent field (strict schema passthrough)", async () => {
