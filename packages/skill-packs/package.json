@@ -3,7 +3,7 @@
   "version": "1.1.0",
   "license": "MIT",
   "private": true,
-  "description": "Placeholder for Mega-Saver-native skill pack bundles (v0.3 scaffold).",
+  "description": "Skill pack discovery, install, and conflict resolution behind `mega pack`.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
