@@ -1,6 +1,6 @@
 ---
 title: Unbounded-run ReDoS (recurring defect class)
-tags: [concept, redos, performance, regex, output-filter, policy, context-gate]
+tags: [concept, redos, performance, regex, output-filter, policy, context-gate, memory-graph]
 sources:
   - packages/output-filter/src/rank.ts
   - packages/output-filter/src/normalize.ts
@@ -12,6 +12,7 @@ sources:
   - packages/output-filter/src/parsers/test-output.ts
   - packages/policy/src/redaction-patterns.ts
   - packages/context-gate/src/session-hints.ts
+  - packages/memory-graph/src/parse-wiki.ts
 status: active
 created: 2026-07-20
 updated: 2026-07-25
@@ -59,6 +60,7 @@ hex dumps (delimiter-free runs); column-padded tables and tab-indented logs
 | 8 | `/\s+$/` trailing-whitespace strip, `normalize.ts:10` | fixed, `trimEnd()` — see below |
 | 9 | `FAILURE_HEADER`, `parsers/pytest.ts:4` | fixed — see below |
 | 9 | `TEST_FAILURE` (`rank.ts`), `FAIL_LINE` (`go-test.ts`), `SUMMARY` + `PROBLEM_ROW` (`eslint.ts`), `SIGNATURE` (`test-output.ts`) | fixed — see below |
+| 9 | citation anchor strip, `memory-graph/src/parse-wiki.ts:79` | fixed — see below |
 
 ## Instance 6: the missed twin (`context-gate`)
 
@@ -325,6 +327,34 @@ The underscore run in the reporter's shape is not the driver — `'_ x' +
 ' '.repeat(n) + 'y'` with zero interior underscores is the worst case. Long
 underscore runs *without* whitespace (0.27 ms at 100 KB) and real headers
 (0.07 ms) never fire it.
+## Fixed: instance 9 (wiki citation anchor strip, `memory-graph`)
+
+First instance **outside the tool-output pipeline** — it runs on wiki markdown,
+not on captured command output, which is why every earlier sweep of this class
+missed it. `/\s+#\S.*$/` carried two variants at once: `\s+#` (class/literal on
+whitespace) and `.*$` (zero-width literal, instance 8's variant). Its input is
+the `[^)]+` capture of `/\(source:\s*([^)]+)\)/g`, which accepts whitespace and
+newlines unbounded, and no read path caps page size — `mega memory graph`
+(`apps/cli/src/commands/memory/read-wiki.ts:38`) and the GUI bridge route
+(`apps/gui/bridge/routes/memory-graph.ts:90`) both hand whole files to
+`parseWikiPage`. Through that export: whitespace run 148 / 2,514 / 10,919 ms at
+12.5 / 50 / 100 KB; end to end `mega memory graph` on one 100 KB poisoned page
+12,619 ms → 592 ms (source: `packages/memory-graph/src/parse-wiki.ts`).
+
+Fixed by **dropping** both runs rather than bounding them: `/\s#\S[\s\S]*/`. The
+single `\s` is exactly equivalent because the surrounding `.trim()` already
+absorbs the rest of the run, and `[\s\S]*` cannot fail, so the tail consumes to
+end of string with nothing to backtrack. When a trailing `.trim()` or an
+end-anchored tail already makes the run irrelevant, deleting the quantifier beats
+capping it — same move as instance 8's `trimEnd()`, and it leaves no magic
+number to justify.
+
+One deliberate divergence: `.` cannot cross a line terminator, so the old form
+refused to strip an anchor followed by a newline and kept the whole multi-line
+blob as the file node id. Characterised, not assumed — over 1,000,000 randomised
+strings on the triggering alphabet, 64,775 diverged and **0** diverged for any
+reason other than a line terminator inside the stripped tail; on the repo's own
+wiki (75 pages, 54 captures, 4 anchor-stripped) the two forms agree on every one.
 
 ## Lesson for the guard test
 
@@ -394,6 +424,25 @@ bias; a ~2x separation does not.
 **When documenting a guard's margin, quote a reproduction, not an estimate.**
 Both wrong numbers here were plausible and neither had been re-run. A margin
 claim is only load-bearing if the revert was actually performed.
+### Correction: minimise per SIZE, not the ratio (instance 9)
+
+The min-of-trials rule above is right about *why* (noise only inflates) but wrong
+about *what* to minimise. `min(large_i / small_i)` pairs a noise-inflated `small`
+with a clean `large` and reports a **fraction** of the true growth. Instance 9's
+guard reproduced this: on a loaded machine the min-of-ratios sampler read 2.94x
+where min-per-size read 7.63x on the same defect, and the first cut of the test
+passed against the unfixed code. Minimise each size independently and divide —
+both minima converge on their true cost from above, so the quotient converges on
+the true ratio.
+
+Two more things instance 9 needed, where no shipped cap exists to size against:
+
+- **A 4x size step, not 2x.** Linear then predicts 4.0 and the defect measured
+  12.7-18.5x, so a threshold of 8 leaves ~2x margin on both sides. At 2x the
+  bands are 2.0 vs 4.1 — too close to survive a busy runner.
+- **An explicit per-test timeout.** The quadratic form needs ~70 s to produce its
+  own red; with the file's 30 s default the revert check fails on a timeout
+  instead of on the assertion, which proves nothing about the ratio.
 
 ## Related
 
@@ -401,3 +450,4 @@ claim is only load-bearing if the revert was actually performed.
 - [[entities/policy]] — instances 1, 4, 5.
 - [[entities/context-gate]] — instance 6.
 - [[concepts/glob-compile-redos]] — the sibling defect class.
+- `@megasaver/memory-graph` — instance 9 (no entity page yet).

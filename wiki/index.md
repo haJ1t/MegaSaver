@@ -26,6 +26,7 @@ updated: 2026-07-20
 - [[concepts/glob-compile-redos]] — sibling defect class: the regex is *built from* untrusted input (ambiguous quantifier chaining + metachar injection). `compileGlob` fixed 2026-07-25 by dropping regexes for an NFA matcher.
 - [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; 9 instances, 2 still open.
 - [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; 9 instances, 2 still open (4 deferred, 5 unfiled — both in `packages/policy`).
+- [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; 9 instances, 2 still open.
 - [[concepts/superpowers-discipline]] — mandatory chain on every feature.
 - [[concepts/wiki-first-token-discipline]] — wiki is the only sanctioned project memory; question → entry mapping; hard rules to avoid raw spec/code reads.
 - [[concepts/context-gate-pipeline]] — Mega Saver Mode: redact → chunk → rank → fit → summarize; redaction flow; AA1 package roles + cycle direction.
