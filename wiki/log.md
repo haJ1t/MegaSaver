@@ -4355,3 +4355,26 @@ published for any tool. Filed that as a separate DX gap.
 Sources: [[docs/superpowers/specs/2026-07-25-inert-mcp-inputs-design]],
 [[docs/superpowers/plans/2026-07-25-inert-mcp-inputs-plan]],
 [[entities/mcp-bridge]].
+
+## [2026-07-25 17:05 +03] fix | unread ownerDead/leasePhase removed from ReconcileObs
+
+Third finding from the same 2026-07-25 security review. Unlike the other two this
+one required a trace before a decision: the report offered "wire it in" vs "delete
+it", and the answer was neither obvious nor symmetric.
+
+Traced it: owner liveness IS enforced, at the lock layer (`isOwnerStale`: boot id
++ lease expiry + live-same-boot pid/start-token), and both reconcile drivers run
+inside `withTransitionLock`. The matrix runs after ownership is settled, so it has
+no takeover to guard — `ownerDead` was not a missing guard but a redundant, weaker
+one derived from a documented sentinel that both writers hardcode to null.
+Deleted both fields; added a key-set test pinning `observeReality` to the five
+consumed fields.
+
+Process note: a mid-investigation claim that `superviseDrive` had NO production
+callers was wrong — `head -20` truncated the grep before `supervise.ts`. Same
+class as the earlier `| tail` that masked a `pnpm verify` exit code. Both were
+caught by following up rather than reporting the first read.
+
+Sources: [[docs/superpowers/specs/2026-07-25-reconcile-obs-dead-fields-design]],
+[[docs/superpowers/plans/2026-07-25-reconcile-obs-dead-fields-plan]],
+[[concepts/persistent-proxy-routing]].

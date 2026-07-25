@@ -42,10 +42,6 @@ export function observeReality(deps: SupervisorDeps, control: ProxyControlState)
     route,
     health,
     hasLease,
-    leasePhase: control.routeLease?.phase ?? null,
-    ownerDead: control.transition?.handoffDeadline
-      ? Date.parse(control.transition.handoffDeadline) <= deps.now()
-      : true,
     generationLive: deps.listener.isAlive() && health === "matching",
     confirmed: control.transition?.kind === "drain_complete",
   };

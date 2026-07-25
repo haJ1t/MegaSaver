@@ -33,16 +33,17 @@ const base: ReconcileObs = {
   route: "absent",
   health: "none",
   hasLease: false,
-  leasePhase: null,
-  ownerDead: false,
   generationLive: false,
   confirmed: false,
 };
 const obs = (over: Partial<ReconcileObs>): ReconcileObs => ({ ...base, ...over });
 
 describe("enable recovery", () => {
-  it("intent_persisted with desired-false dead owner clears the transition", () => {
-    const d = reconcileTransition(enable("intent_persisted"), obs({ ownerDead: true }), false);
+  // Named for what actually drives it: desiredEnabled === false. The previous
+  // name credited a "dead owner", but the matrix never observed owner liveness —
+  // that is settled upstream by the transition lock.
+  it("intent_persisted with the durable opt-in absent clears the transition", () => {
+    const d = reconcileTransition(enable("intent_persisted"), obs({}), false);
     expect(d.actions).toContain("clear_transition");
     expect(d.ready).toBe(false);
   });
@@ -69,7 +70,7 @@ describe("enable recovery", () => {
   it("lease_installing + exact + matching promotes to active and reports ready", () => {
     const d = reconcileTransition(
       enable("lease_installing"),
-      obs({ route: "exact", health: "matching", hasLease: true, leasePhase: "installing" }),
+      obs({ route: "exact", health: "matching", hasLease: true }),
       true,
     );
     expect(d.actions).toEqual(
@@ -81,7 +82,7 @@ describe("enable recovery", () => {
   it("lease_installing + exact + failed health removes the leased route and blocks", () => {
     const d = reconcileTransition(
       enable("lease_installing"),
-      obs({ route: "exact", health: "failed", hasLease: true, leasePhase: "installing" }),
+      obs({ route: "exact", health: "failed", hasLease: true }),
       true,
     );
     expect(d.actions).toContain("remove_route");
@@ -92,7 +93,7 @@ describe("enable recovery", () => {
   it("lease_installing + absent + matching applies then promotes", () => {
     const d = reconcileTransition(
       enable("lease_installing"),
-      obs({ route: "absent", health: "matching", hasLease: true, leasePhase: "installing" }),
+      obs({ route: "absent", health: "matching", hasLease: true }),
       true,
     );
     expect(d.actions).toEqual(
@@ -104,7 +105,7 @@ describe("enable recovery", () => {
   it("lease_installing + foreign preserves the foreign value and blocks (never overwrites)", () => {
     const d = reconcileTransition(
       enable("lease_installing"),
-      obs({ route: "foreign", hasLease: true, leasePhase: "installing" }),
+      obs({ route: "foreign", hasLease: true }),
       true,
     );
     expect(d.actions).not.toContain("apply_route");
@@ -115,7 +116,7 @@ describe("enable recovery", () => {
   it("route_verified + exact + matching clears the transition and is ready", () => {
     const d = reconcileTransition(
       enable("route_verified"),
-      obs({ route: "exact", health: "matching", hasLease: true, leasePhase: "active" }),
+      obs({ route: "exact", health: "matching", hasLease: true }),
       true,
     );
     expect(d.actions).toContain("clear_transition");
@@ -131,7 +132,6 @@ describe("enable rollback", () => {
         route: "exact",
         health: "matching",
         hasLease: true,
-        leasePhase: "active",
         generationLive: true,
       }),
       true,
@@ -156,7 +156,7 @@ describe("disable", () => {
   it("unroute_expected + lease + exact → value-guarded remove, never apply", () => {
     const d = reconcileTransition(
       disable("unroute_expected"),
-      obs({ route: "exact", hasLease: true, leasePhase: "active" }),
+      obs({ route: "exact", hasLease: true }),
       false,
     );
     expect(d.actions).toContain("remove_route");
@@ -246,7 +246,6 @@ describe("drain_complete", () => {
       obs({
         route: "exact",
         hasLease: true,
-        leasePhase: "active",
         generationLive: true,
         confirmed: true,
       }),
@@ -297,7 +296,6 @@ describe("global invariants across every enumerated row", () => {
                   route,
                   health,
                   hasLease,
-                  leasePhase: hasLease ? "active" : null,
                   generationLive,
                   confirmed: true,
                 }),

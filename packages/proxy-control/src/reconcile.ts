@@ -15,14 +15,21 @@ export type ReconcileAction =
   | "stop_listener"
   | "clear_transition";
 
+// EXACTLY the observations the matrix below branches on. Owner liveness is
+// deliberately absent: "may I displace the previous owner?" is decided upstream
+// at the lock layer by isOwnerStale (boot id + lease expiry + live-same-boot
+// pid/start-token), and every reconcile driver runs inside withTransitionLock —
+// so by the time we get here single-writer ownership is already settled and
+// there is no takeover left to guard. A `ownerDead` field used to be computed
+// from the transition record's handoffDeadline, which the record's own writers
+// document as a sentinel; it was never read. Do not add an observation the
+// matrix does not consume (guarded by a key-set test in supervisor.test.ts).
 export type ReconcileObs = {
   // Inspection of the Claude route relative to OUR owned url.
   route: "absent" | "exact" | "foreign" | "invalid";
   // Ownership health of the current listener generation.
   health: "matching" | "failed" | "none";
   hasLease: boolean;
-  leasePhase: "installing" | "active" | null;
-  ownerDead: boolean;
   // A verifiably live, authenticated, same-instance generation exists.
   generationLive: boolean;
   // drain_complete: the operator confirmed clients were closed/restarted.
