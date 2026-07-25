@@ -4400,3 +4400,21 @@ only after verifying zod applies it.
 Sources: [[docs/superpowers/specs/2026-07-25-publish-tool-input-schemas-design]],
 [[docs/superpowers/plans/2026-07-25-publish-tool-input-schemas-plan]],
 [[entities/mcp-bridge]].
+
+## [2026-07-25 21:00 +03] fix | saver completion heartbeat no longer masks a broken hook
+
+Audit sweep (fail-open inversion): `buildSaverDecision` stamped a completion for
+EVERY well-formed PostToolUse payload — including tools the saver never
+processes (Write/Edit/TodoWrite), which return at the `resolveSourceKind` gate
+before `recordInvocation`. That orphan completion was newer than the last
+failure, so doctor’s `failing` filter dropped the entry and `saver-liveness`
+downgraded from FAIL to “past hook failure(s), since recovered” while
+compression was still dead. Fix: record a completion only when the run stamped
+an invocation (`ctx.workspaceKey !== undefined`); the `process.cwd()` fallback
+key is gone from the completion path (it stays on the failure path, where a
+spurious attribution is fail-loud, not fail-open). Two RED tests: hook-level
+invariant (`apps/cli/test/hooks/saver.test.ts`) + end-to-end doctor masking
+(`apps/cli/test/doctor-saver.test.ts`); both fail on revert.
+
+Sources: `apps/cli/src/hooks/saver.ts`, `apps/cli/src/commands/doctor-saver.ts`,
+[[concepts/saver-activation-inheritance]].
