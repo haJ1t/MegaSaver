@@ -1,4 +1,4 @@
-import { clearDiscovery, readDiscovery } from "./discovery.js";
+import { type Discovery, clearDiscovery, readDiscovery } from "./discovery.js";
 import { clearLock } from "./lock.js";
 import { spawnDaemon } from "./spawn.js";
 
@@ -25,10 +25,25 @@ function urlFor(port: number): string {
   return `http://127.0.0.1:${port}`;
 }
 
-async function ping(url: string, token: string): Promise<boolean> {
+function pidAlive(pid: number): boolean {
   try {
-    const res = await fetch(`${url}/status`, {
-      headers: { authorization: `Bearer ${token}` },
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // ESRCH = the process is gone. EPERM = it exists but isn't ours to signal;
+    // treat that as alive so a permission quirk can't wedge a live daemon.
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+// A SIGKILLed daemon leaves discovery behind (only close() clears it) and frees
+// its ephemeral port. Without the pid check we hand the stale bearer token to
+// whatever local process grabbed that port, then trust its JSON as tool output.
+async function ping(disc: Discovery): Promise<boolean> {
+  if (!pidAlive(disc.pid)) return false;
+  try {
+    const res = await fetch(`${urlFor(disc.port)}/status`, {
+      headers: { authorization: `Bearer ${disc.token}` },
       signal: AbortSignal.timeout(1500),
     });
     return res.ok;
@@ -63,9 +78,8 @@ function sleep(ms: number): Promise<void> {
 export async function getRunningDaemon(opts: { storeRoot: string }): Promise<DaemonHandle | null> {
   const disc = readDiscovery(opts.storeRoot);
   if (disc === null) return null;
-  const url = urlFor(disc.port);
-  if (!(await ping(url, disc.token))) return null;
-  return makeHandle(url, disc.token);
+  if (!(await ping(disc))) return null;
+  return makeHandle(urlFor(disc.port), disc.token);
 }
 
 export async function getDaemon(opts: GetDaemonOptions): Promise<DaemonHandle> {
@@ -73,7 +87,7 @@ export async function getDaemon(opts: GetDaemonOptions): Promise<DaemonHandle> {
   const spawn = opts.spawn ?? spawnDaemon;
 
   const existing = readDiscovery(storeRoot);
-  if (existing && (await ping(urlFor(existing.port), existing.token))) {
+  if (existing && (await ping(existing))) {
     return makeHandle(urlFor(existing.port), existing.token);
   }
   // A leftover lock with no live discovery is exactly the post-/shutdown state,
@@ -87,7 +101,7 @@ export async function getDaemon(opts: GetDaemonOptions): Promise<DaemonHandle> {
   const deadline = Date.now() + (opts.waitMs ?? 5000);
   while (Date.now() < deadline) {
     const disc = readDiscovery(storeRoot);
-    if (disc && (await ping(urlFor(disc.port), disc.token))) {
+    if (disc && (await ping(disc))) {
       return makeHandle(urlFor(disc.port), disc.token);
     }
     await sleep(100);
