@@ -18,14 +18,17 @@ import type {
 // carry no tool_result, so they are byte-identical in both arms and drag the
 // ratio toward 1.00 carrying inflated weight.
 //
-// The direction is conservative (it UNDER-reports the saver) and nothing here can
-// be fixed by a better ratio, so the fix is to stop the error being invisible:
-// printed beside the verdict, this histogram lets a reader bound the dilution
-// themselves. Pricing per model would mean per-model rate cards inside
-// @megasaver/stats, which three other benchmarks share — a wide change for a
-// sub-1% correction in the safe direction. Excluding the sidecar calls outright
-// would mean silently dropping recorded traffic from a replay, which is the exact
-// drift class this harness must not have.
+// The inflated term is common to BOTH arms, so it biases the ratio toward 1.00
+// from whichever side it sits on: the true effect is larger in magnitude than
+// reported in whichever direction the ratio already points — above 1.00 the
+// saving is under-reported, below 1.00 the harm is. Nothing here can be fixed by
+// a better ratio, so the fix is to stop the error being invisible: printed beside
+// the verdict, this histogram lets a reader bound the dilution themselves.
+// Pricing per model would mean per-model rate cards inside @megasaver/stats,
+// which three other benchmarks share — a wide change for a sub-1% correction.
+// Excluding the sidecar calls outright would mean silently dropping recorded
+// traffic from a replay, which is the exact drift class this harness must not
+// have.
 export function modelHistogram(requests: readonly RecordedRequest[]): ModelRequestCount[] {
   const counts = new Map<string, number>();
   for (const request of requests) counts.set(request.model, (counts.get(request.model) ?? 0) + 1);

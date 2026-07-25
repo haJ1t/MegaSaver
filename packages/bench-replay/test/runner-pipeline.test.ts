@@ -311,7 +311,10 @@ describe("bench-replay.mjs replay against a fake upstream", () => {
   // Fix 2: a real recording holds Claude Code's sidecar Haiku calls too. They
   // carry no tool_result, so they are identical in both arms and drag the ratio
   // toward 1.00 while priced as the primary model — the runner has to say so.
-  it("flags a mixed-model recording as understating the effect", async () => {
+  // The note has to stay direction-neutral: a term common to both arms pulls the
+  // ratio toward 1.00 from whichever side it sits on, so below 1.00 the omission
+  // is understated HARM, not understated saving.
+  it("flags a mixed-model recording as understating the effect magnitude", async () => {
     const recordings = join(root, "mixed-model");
     const dir = writeRecording(recordings);
     writeFileSync(
@@ -330,7 +333,7 @@ describe("bench-replay.mjs replay against a fake upstream", () => {
     expect(run.status, run.stderr).toBe(0);
     expect(run.stdout).toContain("models: claude-test=2 (66.7%) claude-haiku-sidecar=1 (33.3%)");
     expect(run.stdout).toContain("this recording spans 2 models");
-    expect(run.stdout).toContain("UNDERSTATED");
+    expect(run.stdout).toContain("UNDERSTATED IN MAGNITUDE in whichever direction");
   });
 
   it("refuses a recording that does not parse as a /v1/messages body", async () => {

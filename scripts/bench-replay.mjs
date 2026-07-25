@@ -458,8 +458,11 @@ function printArm(arm) {
 // Every /v1/messages call the agent made is in the recording, including Claude
 // Code's sidecar Haiku calls, and normalizedCostUsd prices them all at ONE rate
 // card. Those calls carry no tool_result, so they are byte-identical in both arms
-// and drag the ratio toward 1.00 while priced at ~6x their true cost. Printed
-// rather than corrected: the direction is conservative and a reader who can see
+// and drag the ratio toward 1.00 while priced at ~6x their true cost. The
+// inflated term is common to BOTH arms, so it biases the ratio toward 1.00 from
+// whichever side it sits on — the true effect is larger in magnitude than
+// reported in whichever direction the ratio points, which is why the note below
+// cannot name a direction. Printed rather than corrected: a reader who can see
 // the split can bound the dilution, whereas repricing means per-model rate cards
 // inside a cost function three other benchmarks share.
 function printModelHistogram(requests) {
@@ -479,7 +482,10 @@ function printModelHistogram(requests) {
     console.log(
       "    arms and pull the ratio toward 1.00 at inflated weight — the reported effect is therefore",
     );
-    console.log("    UNDERSTATED, by at most the share above.");
+    console.log(
+      "    UNDERSTATED IN MAGNITUDE in whichever direction it points (above 1.00 it understates the",
+    );
+    console.log("    saving, below 1.00 it understates the harm), by at most the share above.");
   }
 }
 

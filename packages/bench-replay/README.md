@@ -97,9 +97,12 @@ at a single model's card** ($5 / $10 / $0.50 / $25 per Mtok). A recording contai
 calls (conversation titling and similar), which are replayed at their recorded
 model but priced as the primary one — roughly 6x their true cost. Those calls
 carry no `tool_result`, so they are byte-identical in both arms and **drag the
-ratio toward 1.00 carrying inflated weight**. The direction is conservative (the
-saver is *under*-reported) and the magnitude is bounded by their share, which the
-runner now prints as a per-model histogram on every recording it loads. It is
+ratio toward 1.00 carrying inflated weight**. The inflated term is common to both
+arms, so it biases the ratio toward 1.00 from whichever side it sits on: the true
+effect is *understated in magnitude* in whichever direction the ratio already
+points — above 1.00 the saving is under-reported, below 1.00 the harm is. The
+magnitude is bounded by their share, which the runner now prints as a per-model
+histogram on every recording it loads. It is
 disclosed, not corrected: repricing would mean per-model rate cards inside a cost
 function other benchmarks share, and excluding the sidecar calls would mean
 silently dropping recorded traffic from a replay.
