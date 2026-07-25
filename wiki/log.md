@@ -4163,3 +4163,31 @@ Guard is `packages/context-gate/test/session-hints-redos.test.ts` — drives the
 exported function at the shipped cap, asserts a growth ratio (min-of-5-trials,
 calibrated repeat count) rather than a wall-clock ceiling. Sources:
 [[concepts/unbounded-run-redos]] instance 6, [[entities/context-gate]].
+
+## [2026-07-25 14:30 +03] fix | Handoff redaction guard + three leaking fields
+
+Follow-up to the PR #293 pre-merge review. Two findings were filed as
+non-blocking hardening: no structural guard around per-field handoff
+redaction, and `git.branch` bypassing the redactor. Adversarial review of the
+first fix found the guard was itself fail-open and had *certified as safe*
+five fields that leak a secret today.
+
+Shipped: `git.branch`, `git.changedFiles[].path`, `git.diff.excludedPaths[]`
+now redacted; code anchors (`files[].path`, `symbols[].path`,
+`symbols[].name`) dropped wholesale with `lastVerified` when a key is dirty,
+because they are code-truth lookup keys and a redacted value produces a false
+`contradicted` that closes `validTo` on the receiver. Anchor handling sits in
+`redactMemory`, so `mega brain export` inherits it.
+
+Guard is test-based, not a runtime walk: zod string-leaf enumeration over
+`handoffPayloadSchema`, throwing on unrecognized wrappers and on non-strict
+objects, with four classification lists and per-path behavioral proof.
+
+Evidence: each of the four new redactions reverted individually and shown to
+fail the guard; `notes: z.record(z.string())` added to the schema and shown to
+throw `unclassifiable zod type ZodRecord`; `packages/core` 37/37;
+`pnpm verify` 56/56 tasks, exit 0. Reviewed by `code-reviewer` and two
+adversarial `critic` passes; every round-one and round-two finding addressed.
+Sources: [[docs/superpowers/specs/2026-07-25-handoff-redaction-guard-design]],
+[[docs/superpowers/plans/2026-07-25-handoff-redaction-guard-plan]],
+[[entities/hot-handoff]].

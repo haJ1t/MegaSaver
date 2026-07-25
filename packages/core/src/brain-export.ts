@@ -27,8 +27,11 @@ export function makeRedactor(): Redactor {
 }
 
 export function redactMemory(entry: MemoryEntry, r: Redactor): MemoryEntry {
+  // anchor/lastVerified are pulled OUT of the spread, not overridden after it:
+  // anchorFields drops them by returning {}, which a later spread cannot do.
+  const { anchor: _anchor, lastVerified: _lastVerified, ...rest } = entry;
   return {
-    ...entry,
+    ...rest,
     title: r.text(entry.title),
     content: r.text(entry.content),
     keywords: entry.keywords.map((k) => r.text(k)),
@@ -41,6 +44,33 @@ export function redactMemory(entry: MemoryEntry, r: Redactor): MemoryEntry {
     ...(entry.relatedSymbols === undefined
       ? {}
       : { relatedSymbols: entry.relatedSymbols.map((s) => r.text(s)) }),
+    // Anchor paths and symbol names are derived from the SAME user input as
+    // relatedFiles/relatedSymbols above, so shipping them verbatim leaks the
+    // string the fields above just scrubbed. They cannot be redacted in place:
+    // code-truth uses path as the `cat-file HEAD:<path>` key and name as the
+    // symbol-match key, so a rewritten one resolves to nothing and verify
+    // reports a false `contradicted` — which closes validTo on the receiver.
+    // Drop the whole anchor instead: the memory imports unanchored, which is
+    // exactly what it is once its keys cannot travel.
+    ...anchorFields(entry, r),
+  };
+}
+
+function anchorFields(
+  entry: MemoryEntry,
+  r: Redactor,
+): Pick<MemoryEntry, "anchor" | "lastVerified"> | Record<string, never> {
+  if (entry.anchor === undefined) return {};
+  const scrubbed = entry.anchor.files.every((f) => r.text(f.path) === f.path);
+  const scrubbedSymbols = entry.anchor.symbols.every(
+    (s) => r.text(s.path) === s.path && r.text(s.name) === s.name,
+  );
+  // lastVerified goes with it: a verification stamp for an anchor that no
+  // longer travels would render a badge nothing can re-check.
+  if (!scrubbed || !scrubbedSymbols) return {};
+  return {
+    anchor: entry.anchor,
+    ...(entry.lastVerified === undefined ? {} : { lastVerified: entry.lastVerified }),
   };
 }
 

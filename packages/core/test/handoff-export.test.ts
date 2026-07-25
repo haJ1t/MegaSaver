@@ -8,7 +8,11 @@ import {
   type HandoffDirtyState,
   buildHandoffPacket,
 } from "../src/handoff-export.js";
-import { parseHandoffPacket, serializeHandoffPacket } from "../src/handoff-packet.js";
+import {
+  handoffPayloadSchema,
+  parseHandoffPacket,
+  serializeHandoffPacket,
+} from "../src/handoff-packet.js";
 import * as core from "../src/index.js";
 import { type MemoryEntry, memoryEntrySchema } from "../src/memory-entry.js";
 
@@ -530,5 +534,268 @@ describe("buildHandoffPacket — assembly", () => {
   it("is exported from the core public surface", () => {
     expect(typeof core.buildHandoffPacket).toBe("function");
     expect(core.HANDOFF_DIFF_TOKEN_CAP).toBe(2000);
+  });
+});
+
+// Structural guard for review finding 1: redaction in buildHandoffPacket is
+// per-field discipline with no choke point, so a string field added to
+// handoffPayloadSchema later would ship UNREDACTED by default and silently.
+// Three tests make that failure mode loud: every string leaf in the schema
+// must be classified, every path classified as free text must actually reach
+// the redactor, and anything classified as unreachable must really be
+// unreachable.
+type ZodDef = {
+  typeName?: string;
+  shape?: () => Record<string, unknown>;
+  catchall?: { _def?: ZodDef };
+  type?: unknown;
+  innerType?: unknown;
+  schema?: unknown;
+};
+
+// Fails CLOSED on an unrecognized wrapper. Returning [] instead would make
+// the whole guard decorative: a `z.record(z.string())` or `z.union` field
+// would contribute no path, the classification set would still match, and the
+// new field would ship unredacted — the exact failure this guard exists to
+// catch. The value leaves reachable in this tree are string, number, boolean
+// and enum; a closed enum set cannot carry a secret.
+function stringPaths(schema: unknown, prefix = ""): string[] {
+  const def = (schema as { _def?: ZodDef })._def;
+  if (def === undefined) return [];
+  switch (def.typeName) {
+    case "ZodString":
+      return [prefix];
+    case "ZodNumber":
+    case "ZodBoolean":
+    case "ZodEnum":
+      return [];
+    case "ZodObject": {
+      // `.catchall(z.string())` / `.passthrough()` add a string leaf that is
+      // absent from shape() — the same silent pass the default arm throws on.
+      if (def.catchall?._def?.typeName !== undefined && def.catchall._def.typeName !== "ZodNever") {
+        throw new Error(`non-strict object at ${prefix || "<root>"} hides unclassifiable keys`);
+      }
+      return Object.entries(def.shape?.() ?? {}).flatMap(([key, value]) =>
+        stringPaths(value, prefix === "" ? key : `${prefix}.${key}`),
+      );
+    }
+    case "ZodArray":
+      return stringPaths(def.type, `${prefix}[]`);
+    case "ZodOptional":
+    case "ZodNullable":
+    case "ZodDefault":
+    case "ZodBranded":
+      return stringPaths(def.innerType ?? def.type, prefix);
+    case "ZodEffects":
+      return stringPaths(def.schema, prefix);
+    default:
+      throw new Error(`unclassifiable zod type ${String(def.typeName)} at ${prefix || "<root>"}`);
+  }
+}
+
+// Resolve a stringPaths path against a built payload, collecting every leaf
+// value it names. A trailing run of `[]` means "iterate that many array
+// levels" — `f[][]` must not silently resolve to nothing, or a path could be
+// certified absent by a bug in this resolver rather than by the code.
+function valuesAt(node: unknown, path: string): string[] {
+  if (node === null || node === undefined) return [];
+  if (path === "") return typeof node === "string" ? [node] : [];
+  const dot = path.indexOf(".");
+  const head = dot === -1 ? path : path.slice(0, dot);
+  const rest = dot === -1 ? "" : path.slice(dot + 1);
+  const key = head.replace(/(\[\])+$/, "");
+  let value = (node as Record<string, unknown>)[key];
+  for (let depth = (head.length - key.length) / 2; depth > 0; depth -= 1) {
+    if (!Array.isArray(value)) return [];
+    if (depth === 1) return value.flatMap((item) => valuesAt(item, rest));
+    value = value.flat();
+  }
+  return valuesAt(value, rest);
+}
+
+// Free text an author controls — every one of these MUST pass through r.text(),
+// and the planted-secret test below proves it rather than asserting it.
+const REDACTED_PATHS = [
+  "taskSummary.text",
+  "resumeInstructions",
+  "git.branch",
+  "git.commits[].subject",
+  "git.changedFiles[].path",
+  "git.diff.text",
+  "git.diff.excludedPaths[]",
+  "failures[].task",
+  "failures[].failedStep",
+  "failures[].errorOutput",
+  "failures[].relatedFiles[]",
+  "failures[].suspectedCause",
+  "memories[].title",
+  "memories[].content",
+  "memories[].keywords[]",
+  "memories[].reason",
+  "memories[].goal",
+  "memories[].evidence[]",
+  "memories[].relatedFiles[]",
+  "memories[].relatedSymbols[]",
+];
+
+// Anchor keys. Redacting these in place is NOT an option: code-truth resolves
+// `cat-file HEAD:<path>` and matches symbols by name, so a rewritten value
+// resolves to nothing and the receiver records a false `contradicted`, closing
+// validTo. redactMemory drops the whole anchor when any of them is dirty.
+const DROPPED_PATHS = [
+  "memories[].anchor.files[].path",
+  "memories[].anchor.symbols[].path",
+  "memories[].anchor.symbols[].name",
+];
+
+// Machine-shaped: uuids, ISO timestamps, git shas and content hashes. None is
+// author-prose. Asserted by shape below, not just by classification — appending
+// a leaky field here is exactly the mistake this guard's first draft made.
+const STRUCTURAL_PATHS = [
+  "git.headSha",
+  "git.commits[].sha",
+  "git.commits[].date",
+  "failures[].id",
+  "failures[].projectId",
+  "failures[].sessionId",
+  "failures[].createdAt",
+  "memories[].id",
+  "memories[].projectId",
+  "memories[].sessionId",
+  "memories[].createdAt",
+  "memories[].updatedAt",
+  "memories[].expiresAt",
+  "memories[].validFrom",
+  "memories[].validTo",
+  "memories[].supersedesId",
+  "memories[].lastActiveAt",
+  "memories[].anchor.repoHead",
+  "memories[].anchor.capturedAt",
+  "memories[].anchor.files[].blobSha",
+  "memories[].anchor.symbols[].contentHash",
+  "memories[].lastVerified.headSha",
+  "memories[].lastVerified.at",
+];
+
+// Free text that redactMemory/redactFailure do redact but no packet can carry:
+// selectFailures admits only failures with resolution === undefined.
+const UNREACHABLE_PATHS = ["failures[].resolution"];
+
+// Every redacted path populated with the same secret, so the planted-secret
+// test can assert per-path presence-then-absence instead of one blanket
+// "the JSON has no secret" — which passes vacuously for a field the fixture
+// forgot to fill.
+function secretLoadedInput(): BuildHandoffPacketInput {
+  return baseInput({
+    resumeInstructions: `resume ${SECRET}`,
+    memories: [
+      memory({
+        title: `title ${SECRET}`,
+        content: `content ${SECRET}`,
+        keywords: [`kw-${SECRET}`],
+        reason: `reason ${SECRET}`,
+        goal: `goal ${SECRET}`,
+        evidence: [`evidence ${SECRET}`],
+        relatedFiles: [`src/${SECRET}.ts`],
+        relatedSymbols: [`fn${SECRET}`],
+        anchor: {
+          repoHead: "abc1234",
+          capturedAt: NOW_ISO,
+          files: [{ path: `src/${SECRET}.ts`, blobSha: "deadbee" }],
+          symbols: [
+            {
+              path: `src/${SECRET}.ts`,
+              name: `fn${SECRET}`,
+              startLine: 1,
+              endLine: 2,
+              contentHash: "cafe123",
+            },
+          ],
+        },
+      }),
+    ],
+    failedAttempts: [
+      failure({
+        task: `task ${SECRET}`,
+        failedStep: `step ${SECRET}`,
+        errorOutput: `error ${SECRET}`,
+        relatedFiles: [`src/${SECRET}.ts`],
+        suspectedCause: `cause ${SECRET}`,
+      }),
+    ],
+    gitDelta: {
+      branch: `feat/${SECRET}`,
+      commits: [{ sha: "abc1234", subject: `subject ${SECRET}`, date: NOW_ISO }],
+      changedFiles: [{ path: `src/${SECRET}.ts`, churn: 1 }],
+    },
+    // .env is deny-globbed, so its path lands in excludedPaths carrying the secret.
+    dirtyState: dirty(
+      [fileDiff("src/app.ts", `const k = "${SECRET}";`), fileDiff(`.env.${SECRET}`, "X=1")].join(
+        "\n",
+      ),
+    ),
+  });
+}
+
+describe("buildHandoffPacket — redaction coverage guard", () => {
+  it("every string field in handoffPayloadSchema is classified", () => {
+    expect(stringPaths(handoffPayloadSchema).sort()).toEqual(
+      [...REDACTED_PATHS, ...STRUCTURAL_PATHS, ...DROPPED_PATHS, ...UNREACHABLE_PATHS].sort(),
+    );
+  });
+
+  it("redacts a secret planted in every free-text field at once", () => {
+    const { packet } = buildHandoffPacket(secretLoadedInput());
+    for (const path of REDACTED_PATHS) {
+      const values = valuesAt(packet.payload, path);
+      // Presence check first: a path the fixture failed to populate would pass
+      // the absence assertion for free, and the guard would be a no-op there.
+      expect(values.length, `${path} not populated by the fixture`).toBeGreaterThan(0);
+      for (const value of values) expect(value, `${path} leaked the secret`).not.toContain(SECRET);
+    }
+    expect(JSON.stringify(packet.payload)).not.toContain(SECRET);
+  });
+
+  it("every structural value is machine-shaped, never prose", () => {
+    const { packet } = buildHandoffPacket(secretLoadedInput());
+    // uuid | hex sha | ISO-8601. Not every structural path is populated by the
+    // fixture, so this checks shape on what IS present rather than presence.
+    const machine = /^([0-9a-f-]{7,64}|\d{4}-\d{2}-\d{2}T[\d:.]+Z)$/;
+    for (const path of STRUCTURAL_PATHS) {
+      for (const value of valuesAt(packet.payload, path)) {
+        expect(value, `${path} is not machine-shaped — reclassify it`).toMatch(machine);
+      }
+    }
+  });
+
+  it("drops the whole anchor when an anchor key carries a secret", () => {
+    const { packet } = buildHandoffPacket(secretLoadedInput());
+    for (const path of DROPPED_PATHS) {
+      expect(valuesAt(packet.payload, path), `${path} survived redaction`).toEqual([]);
+    }
+    expect(packet.payload.memories[0]?.anchor).toBeUndefined();
+    expect(packet.payload.memories[0]?.lastVerified).toBeUndefined();
+  });
+
+  it("keeps a clean anchor intact, keys and hashes untouched", () => {
+    const anchor = {
+      repoHead: "abc1234",
+      capturedAt: NOW_ISO,
+      files: [{ path: "src/app.ts", blobSha: "deadbee" }],
+      symbols: [
+        { path: "src/app.ts", name: "run", startLine: 1, endLine: 2, contentHash: "cafe123" },
+      ],
+    };
+    const { packet } = buildHandoffPacket(baseInput({ memories: [memory({ anchor })] }));
+    expect(packet.payload.memories[0]?.anchor).toEqual(anchor);
+  });
+
+  it("keeps unreachable paths unreachable", () => {
+    const { packet } = buildHandoffPacket(secretLoadedInput());
+    for (const path of UNREACHABLE_PATHS) {
+      expect(valuesAt(packet.payload, path), `${path} is now reachable — reclassify it`).toEqual(
+        [],
+      );
+    }
   });
 });
