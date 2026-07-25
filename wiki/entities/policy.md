@@ -217,3 +217,46 @@ coverage was reduced and that must be visible at release. policy@1.3.0.
 
 Sources: [[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]],
 [[docs/superpowers/specs/2026-05-10-bb3-policy-design]].
+
+## `compileGlob` no longer returns a RegExp (2026-07-25)
+
+`compileGlob(glob: string): PathMatcher` where `PathMatcher = { test(path):
+boolean }`. It used to compile untrusted glob text into a `RegExp`, which was
+exponential on chained wildcards and injectable via unescaped metacharacters —
+full analysis in [[concepts/glob-compile-redos]].
+
+Contract now:
+
+- Matching is an NFA simulation, O(tokens × path length), no backtracking.
+- `*`, `**`, `**/`, `?` are the ONLY special forms. Every other character —
+  including `(`, `+`, `[`, `|`, `{`, `\`, `^`, `$` — is a **literal**. Previously
+  they reached the regex engine raw, so `**/a+b.txt` did not match `x/a+b.txt`.
+- Case-insensitive via `toLowerCase()` rather than the regex `i` flag. Identical
+  on ASCII, so all 15 LOCKED §9a globs are unaffected. Off ASCII a full
+  U+0000–U+2FFFF scan found 23 weakening families (all needing a non-ASCII glob;
+  path-side weakening count against the denylist is 0) plus the U+0130 two-unit
+  fold that desynchronises `?` — accepted and test-pinned, see spec §5b/§8 F3.
+- `.megasaver/permissions.yaml` caps glob length, glob count and command count
+  at 256 each, as `PolicyLoadError`. Linear is not bounded: an uncapped 64 KB
+  glob against a 64 KB path measured 16,322 ms even with backtracking gone.
+- Bracket expressions (`[abc]`) are **rejected**, not reinterpreted. They are
+  real glob syntax the regex honoured, so reading them as literals would narrow
+  the deny set silently.
+- **Closed a live bypass on `main`:** `**/` compiled to `(?:.*/)?` and regex `.`
+  excludes line terminators, so a path with `\n`, `\r`, U+2028 or U+2029 in a
+  directory segment slipped 13 of the 15 LOCKED entries.
+- `SECRET_PATH_PATTERNS` and `ProjectPermissions.denyReadPatterns` /
+  `denyWritePatterns` are `readonly PathMatcher[]`.
+
+Denylist verdicts are unchanged, pinned by a frozen fixture table over all 15
+globs plus 60,000 randomized comparisons against the pre-fix implementation kept
+verbatim as a test oracle. Five semantic mutants of the matcher were each
+verified to turn the suite red.
+
+Three untrusted call sites route through this one function:
+`parseProjectPermissions`, `SECRET_PATH_PATTERNS`, and — not covered by the
+original report — `rankApplicableRules` in `@megasaver/core`, which compiles
+`ProjectRule.appliesTo` per call inside a ranking loop with no cache and
+measured 70 s for a single hostile rule.
+
+Source: [[docs/superpowers/specs/2026-07-25-glob-compile-redos-fix-design]].

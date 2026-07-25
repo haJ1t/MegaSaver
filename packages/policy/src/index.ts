@@ -23,4 +23,4 @@ export {
   type RedactFindings,
   type DetectorCount,
 } from "./redact.js";
-export { compileGlob } from "./secret-paths.js";
+export { compileGlob, type PathMatcher } from "./secret-paths.js";

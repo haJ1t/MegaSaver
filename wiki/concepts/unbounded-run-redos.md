@@ -171,8 +171,16 @@ Also: size the guard at the **shipped cap**, not an arbitrary probe size, and dr
 the exported function — never the bare regex. A sibling fix was previously weakened
 by asserting on the pattern instead of its call site.
 
+## Not this class
+
+`compileGlob` (`packages/policy`) blew up exponentially in 2026-07, but it is a
+**different shape** and a bound-the-run patch does not touch it: the regex there
+is *built from* untrusted input rather than applied to it. See
+[[concepts/glob-compile-redos]].
+
 ## Related
 
 - [[entities/output-filter]] — instances 2 and 3.
 - [[entities/policy]] — instances 1, 4, 5.
 - [[entities/context-gate]] — instance 6.
+- [[concepts/glob-compile-redos]] — the sibling defect class.

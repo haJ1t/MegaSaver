@@ -1,12 +1,36 @@
 import { z } from "zod";
-import { compileGlob } from "./secret-paths.js";
+import { type PathMatcher, compileGlob } from "./secret-paths.js";
 
 // Tighten-only project permissions (permissions-yaml §2). EVERY key adds
 // denials; there is no `allow:` key and no field that subtracts from a
 // baseline list, so by construction no input can re-allow a
 // DANGEROUS_PATTERNS hit, add to ALLOWED_COMMANDS, or un-deny a
 // SECRET_PATH_PATTERNS entry (I1 — enforced by the type, not a runtime check).
-const globs = z.array(z.string().min(1)).readonly();
+
+// Matching is linear in (glob length x path length), but linear is not the same
+// as bounded: an unbounded 64 KB glob against a 64 KB path still measured 16 s.
+// These cap the two axes that feed that product. A real path glob is far below
+// either limit, and exceeding one is a PolicyLoadError, never a silent trim —
+// the gate shuts rather than degrading (I3).
+const MAX_GLOB_LENGTH = 256;
+const MAX_GLOBS = 256;
+
+// Bracket expressions are real glob syntax and the previous regex-backed
+// implementation honoured them, so silently reading `[sS]ecrets` as five
+// literal characters would NARROW the deny set with no operator signal —
+// fail-open. They are rejected rather than reinterpreted: a matcher that
+// supports them means a character-class parser inside the security gate, and
+// nothing in the shipped denylist needs one. Rejection is fail-closed and
+// visible; a wrong match is neither.
+const glob = z
+  .string()
+  .min(1)
+  .max(MAX_GLOB_LENGTH)
+  .refine((value) => !value.includes("[") && !value.includes("]"), {
+    message: "bracket expressions are not supported in permission globs",
+  });
+
+const globs = z.array(glob).max(MAX_GLOBS).readonly();
 
 export const projectPermissionsSchema = z
   .object({
@@ -14,7 +38,7 @@ export const projectPermissionsSchema = z
       .object({
         read: globs.default([]),
         write: globs.default([]),
-        commands: z.array(z.string().min(1)).readonly().default([]),
+        commands: z.array(z.string().min(1)).max(MAX_GLOBS).readonly().default([]),
       })
       .strict()
       .default({ read: [], write: [], commands: [] }),
@@ -28,8 +52,8 @@ export const projectPermissionsSchema = z
 // SECRET_PATH_PATTERNS; deny.commands stay verbatim for the exact-string
 // ALLOWED_COMMANDS-style check (permissions-yaml §2).
 export type ProjectPermissions = {
-  denyReadPatterns: readonly RegExp[];
-  denyWritePatterns: readonly RegExp[];
+  denyReadPatterns: readonly PathMatcher[];
+  denyWritePatterns: readonly PathMatcher[];
   denyCommands: readonly string[];
 };
 

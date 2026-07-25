@@ -4221,3 +4221,85 @@ re-derive whether the guardrail actually ships. The prior entry
 `[2026-07-25 14:52]` stands as written history; it is superseded on the "merged
 as `8e261d19`" phrasing only. Sources:
 [[syntheses/saver-cache-churn]], [[syntheses/variance-controlled-benchmark]].
+
+
+## [2026-07-25] fix | compileGlob ReDoS + metachar injection (@megasaver/policy)
+
+Reported as an exponential blowup in `**/`-chained project deny globs.
+Measurement confirmed the report and found the root cause to be broader than
+the report's framing: `compileGlob` compiled untrusted glob text into a
+`RegExp`, so (1) all three wildcard forms chained exponentially — not only
+`**/` — with `*a`x5 costing 58,530 ms against a 255-character path, and (2)
+every character outside the glob language reached the engine unescaped, making
+the zero-wildcard `(a+)+b` a 1,130 ms ReDoS on 28 characters. The same
+passthrough silently broke ordinary deny rules: `**/a+b.txt` did not match
+`x/a+b.txt`.
+
+Both mitigations proposed in the report were refuted by measurement rather than
+argument. Collapsing consecutive `(?:.*/)?` groups does not apply (a literal
+sits between them). Rewriting `**/` as `(?:[^/]*/)*` is language-equivalent but
+*slower* (344 vs 126 ms at k=4). A wildcard-count cap would have to be ≤2 to
+hold — rejecting the shipped `**/*.pem` — and is bypassed entirely by the
+zero-wildcard vector, because it counts a token the exploit does not need.
+
+Fix: drop the regex. `compileGlob` returns `PathMatcher` and matches by NFA
+simulation over a boolean reachability frontier, O(tokens × path length) with no
+backtracking by construction. Every non-glob character is a literal.
+
+A third untrusted call site not named in the report was found and covered:
+`rankApplicableRules` in `@megasaver/core` compiles `ProjectRule.appliesTo` per
+call inside a ranking loop with no cache, measured at 70,377 ms for one hostile
+rule.
+
+Evidence: red gate 129,970 ms → 3 ms; the end-to-end `evaluatePathRead` case
+failed all four retries pre-fix at 6,298/2,171/2,094/2,008 ms against a 250 ms
+ceiling. LOCKED §9a denylist equivalence pinned by a frozen fixture table plus
+60,000 randomized comparisons against the pre-fix implementation held verbatim
+as an oracle; property generators were corrected after measuring the first
+version at 0/20,000 matches (vacuous). Five semantic mutants each turn the suite
+red. Non-ASCII case-folding divergence measured and bounded: three cases tighten
+the gate, one weakens it (Greek final sigma), accepted and test-pinned. Full
+`pnpm verify` EXIT 0.
+
+Pages updated: [[concepts/glob-compile-redos]] (new),
+[[concepts/unbounded-run-redos]], [[entities/policy]], [[index]].
+Branch: `claude/laughing-matsumoto-be0481`.
+
+## [2026-07-25] review | glob-compile ReDoS — three reviewer passes applied
+
+Security, code-review and evidence passes ran per §12 CRITICAL. The security
+pass could not weaken the LOCKED §9a denylist: 0 weakening witnesses across
+812,861 differential cases and 22.7 M exhaustive pairs, with the two reference
+ReDoS shapes falling from 44,997 ms and 28,358 ms to 0.020 ms and 0.003 ms.
+Four findings changed the code.
+
+The sharpest correction: **linear is not bounded.** The first cut declared "no
+bound to tune and no cap to bypass" because the matcher is O(tokens × path
+length) — while leaving both axes uncapped. A 64 KB glob against a 64 KB path
+still measured 16,322 ms. The `.max()` rejected in the original spec is back,
+on glob length, glob count and command count. Worst accepted config against a
+4096-character path is now 3.0 ms; the 16 s input is refused in 0.0 ms.
+
+Second: treating `[...]` as literal characters was itself a fail-open, because
+bracket expressions are genuine glob syntax the regex honoured —
+`**/[sS]ecrets/**` stopped denying `app/secrets/db.txt`. Rejected at the parse
+boundary rather than reimplemented.
+
+Third: the case-folding note claimed one weakening family; a full
+U+0000–U+2FFFF scan found 23. None reaches the ASCII-only denylist
+(path-side weakening count 0), so the blast-radius claim held while the count
+did not.
+
+Fourth, unclaimed by the original work: the fix **closed a live denylist bypass
+on `main`**. `**/` compiled to `(?:.*/)?` and regex `.` excludes line
+terminators, so any path with `\n`, `\r`, U+2028 or U+2029 in a directory
+segment slipped 13 of the 15 LOCKED entries. Now regression-tested.
+
+One code-review finding was rejected on evidence: the claim that the old regex
+left `.` unescaped is false — it emitted `\.`, and neither cited example ever
+matched.
+
+Filed, not fixed: `ProjectRule.appliesTo` has no length bound of its own, and
+`deny.write` is parsed and compiled but has no consumer.
+
+`pnpm verify` EXIT 0; policy suite 264 tests.

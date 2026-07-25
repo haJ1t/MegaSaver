@@ -9,7 +9,7 @@ describe("parseProjectPermissions — valid shapes (§7 1a)", () => {
     expect(perms.denyReadPatterns).toHaveLength(1);
     expect(perms.denyWritePatterns).toHaveLength(1);
     expect(perms.denyCommands).toEqual(["make"]);
-    expect(perms.denyReadPatterns[0]).toBeInstanceOf(RegExp);
+    expect(typeof perms.denyReadPatterns[0]?.test).toBe("function");
     // Compiled the same way as SECRET_PATH_PATTERNS: normalizePath-lowered,
     // `/`-unified, anchored, case-insensitive (I4).
     expect(perms.denyReadPatterns[0]?.test("creds/x.txt")).toBe(true);
