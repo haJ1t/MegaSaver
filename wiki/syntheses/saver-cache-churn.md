@@ -139,8 +139,8 @@ rates (kills the fast-mode artifact outright, pure arithmetic, zero extra runs);
 and control agent-path nondeterminism (replay a fixed tool-call transcript through
 both arms, or raise N with normalized cost).
 
-Stage A branch `feat/net-positive-stage-a` (11 commits) is parked unmerged
-pending a harness that can resolve the effect.
+Stage A (11 commits) merged to `main` on 2026-07-25 (PR #295) with this gate
+still FAILED; the harness that could resolve the effect has still not been run.
 
 ## Direction
 

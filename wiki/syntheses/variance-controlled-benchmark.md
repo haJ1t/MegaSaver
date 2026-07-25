@@ -85,8 +85,11 @@ switching the saver off.
 Built and green offline: 101 package tests, runner proven end to end against a
 fake upstream. **The real gate has not been run** — it needs an
 `ANTHROPIC_API_KEY` for the replay sender (Claude Code's own OAuth is not
-usable by a separate HTTP client). No Stage A verdict exists yet; the parked
-`feat/net-positive-stage-a` branch remains unmerged and ungated.
+usable by a separate HTTP client). Stage A merged to `main` anyway on
+2026-07-25 (PR #295, merge commit `8e261d19`) with its gate still FAILED —
+geomean 0.948x against a required >=1.0x, min task 0.68x against >=0.9x — so
+the shipped guardrail and first-sight saver have no demonstrated cost benefit.
+No post-merge verdict exists either.
 
 Known-unproven until a real run: `anthropic-beta` headers are not recorded or
 replayed (bodies only — headers carry credentials and must not hit disk), so

@@ -4191,3 +4191,17 @@ adversarial `critic` passes; every round-one and round-two finding addressed.
 Sources: [[docs/superpowers/specs/2026-07-25-handoff-redaction-guard-design]],
 [[docs/superpowers/plans/2026-07-25-handoff-redaction-guard-plan]],
 [[entities/hot-handoff]].
+
+## [2026-07-25 14:52 +03] merge | Stage A shipped with its gate still failing
+
+PR #295 ("net-positive Stage A — PARKED, ungated") merged to `main` as
+`8e261d19` on 2026-07-25, carrying the per-workspace net-effect estimator that
+auto-pauses the saver plus the per-session first-sight seen-hash ledger. Its
+own acceptance gate was still FAILED at merge time: geomean 0.948x against a
+required >=1.0x, min task 0.68x against >=0.9x. The variance-controlled
+bench-replay harness that could resolve the effect has never been run against
+the real API, so no post-merge verdict exists — the shipped guardrail and
+first-sight saver have no demonstrated cost benefit. PR #293 (Hot Handoff)
+also merged in the same window. Sources:
+[[syntheses/variance-controlled-benchmark]], [[syntheses/saver-cache-churn]],
+[[docs/superpowers/specs/2026-07-19-net-positive-megasaver-design]] §gate.
