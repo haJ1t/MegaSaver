@@ -374,6 +374,26 @@ by asserting on the pattern instead of its call site.
 **different shape** and a bound-the-run patch does not touch it: the regex there
 is *built from* untrusted input rather than applied to it. See
 [[concepts/glob-compile-redos]].
+### Minimise per SIDE, not the per-trial ratio
+
+Carried over from the same lesson applied to the quadratic `dedupe()` scan
+(`packages/output-filter/test/dedupe-quadratic.test.ts`, 2026-07-25): that guard
+shipped a 5 s ceiling documenting the reverted cost as 13.5 s in the test and
+17.4 s in its changeset, and reproduction on the machine that wrote both gave
+6.8-7.7 s — a 1.4x margin. Rewritten as an n-vs-2n ratio at 64k/128k lines with
+a 2.75x threshold it reads 1.95-2.09x idle, 2.06-2.17x under four busy cores,
+and 4.48x reverted.
+
+Refinement over instance 6's form: take the **minimum of each side across trials
+and then divide**, rather than the minimum of the per-trial ratios. Minimising
+the ratio pairs an inflated n sample with a clean 2n sample, so it is biased
+*downward* — toward false green. On the same reverted `dedupe()` it read 2.55
+where the per-side form read 4.48. Instance 6's ~5.5x separation absorbs that
+bias; a ~2x separation does not.
+
+**When documenting a guard's margin, quote a reproduction, not an estimate.**
+Both wrong numbers here were plausible and neither had been re-run. A margin
+claim is only load-bearing if the revert was actually performed.
 
 ## Related
 
