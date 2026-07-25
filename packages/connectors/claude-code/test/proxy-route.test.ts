@@ -159,6 +159,15 @@ describe("assumeFirstParty option", () => {
     expect(readFullEnv()).toEqual({ ANTHROPIC_BASE_URL: URL_OURS });
   });
 
+  it("apply without the option removes a stale first-party flag", () => {
+    writeFileSync(
+      settings,
+      JSON.stringify({ env: { ANTHROPIC_BASE_URL: URL_OURS, [FLAG]: "1", OTHER: "keep" } }),
+    );
+    expect(adapter().apply(URL_OURS)).toBe(true);
+    expect(readFullEnv()).toEqual({ ANTHROPIC_BASE_URL: URL_OURS, OTHER: "keep" });
+  });
+
   it("removeExpected drops both keys and preserves foreign env keys", () => {
     writeFileSync(
       settings,

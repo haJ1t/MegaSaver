@@ -69,7 +69,7 @@ function fakeLaunchctl(loaded: Record<string, string[] | undefined> = {}): Launc
       calls.push("bootstrap");
       state["com.megasaver.proxy"] = MANAGED_ARGV;
     },
-    kickstart: () => calls.push("kickstart"),
+    kickstart: (label, force) => calls.push(`kickstart ${label} ${force}`),
   };
 }
 
@@ -99,6 +99,20 @@ describe("runProxyStart", () => {
     const r = runProxyStart(deps(fakeRoute(null), lc));
     expect(r.status).toBe("legacy_service_present");
     expect(lc.calls).not.toContain("bootout com.megasaver.proxy");
+  });
+
+  it("restarts an older managed supervisor only when explicitly requested", () => {
+    const lc = fakeLaunchctl({ "com.megasaver.proxy": MANAGED_ARGV });
+    expect(runProxyStart(deps(fakeRoute(OWNED), lc), { restartSupervisor: true }).status).toBe(
+      "already_managed",
+    );
+    expect(lc.calls).toContain("kickstart com.megasaver.proxy true");
+  });
+
+  it("does not restart an already managed supervisor by default", () => {
+    const lc = fakeLaunchctl({ "com.megasaver.proxy": MANAGED_ARGV });
+    expect(runProxyStart(deps(fakeRoute(OWNED), lc)).status).toBe("already_managed");
+    expect(lc.calls).not.toContain("kickstart com.megasaver.proxy true");
   });
 });
 

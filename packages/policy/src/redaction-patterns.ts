@@ -47,8 +47,27 @@ const baseline: RedactionPattern[] = [
     replacement: "Bearer [REDACTED]",
   },
   {
+    // Branch 1 is a performance guard that also narrows what matches, so it is
+    // not swappable for any equally fast guard. Without it, every `eyJ` inside
+    // a dotless base64url run is a start position that greedily scans to
+    // end-of-input before failing `\.` — O(n) starts x O(n) length, 8.4 s at
+    // 313 KiB. Rejecting glued starts collapses each start to O(1), the whole
+    // scan to O(n).
+    // Branch 2 costs almost nothing (0.32 ms per 313 KiB) precisely because `%`
+    // sits OUTSIDE the run class: it terminates the dotless run, so an admitted
+    // start scans only its own token. That is what makes percent-escaped
+    // carriers — URL query strings and fragments — cheap to recover while the
+    // shapes below are not.
+    // Accepted cost (spec 2026-07-20 §5, corrected 20b): a JWT preceded directly
+    // by a RAW [A-Za-z0-9_-] no longer redacts, so `session-<jwt>` and
+    // `id_token_<jwt>` stay in cleartext. Narrowing the class to [A-Za-z0-9]
+    // recovers those two and reintroduces the full quadratic — see
+    // test/redact-jwt.test.ts, which pins the percent recoveries too.
+    // `Bearer<jwt>`, `ghs_<body>_<jwt>` and raw base64-run glue are lost the
+    // same way, and no other detector covers those bytes.
     name: "jwt",
-    pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+    pattern:
+      /(?:(?<![A-Za-z0-9_-])|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
     replacement: "eyJ[REDACTED]",
   },
   {

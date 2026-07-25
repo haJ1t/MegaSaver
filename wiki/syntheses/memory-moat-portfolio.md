@@ -1,10 +1,10 @@
 ---
 title: Memory Moat Portfolio — long-term memory differentiation ideas
 tags: [synthesis, product, memory, pro, ideas]
-sources: [ultracode workflow wf_4d826f4a-e32 2026-07-12 (19 agents: 1 map, 6 lenses, dedup+gap critic, 3-judge panel, 6 sketches), syntheses/pro-differentiation-portfolio.md, syntheses/post-2.0-growth-portfolio.md]
-status: active — i8 Warm Start + i7 Mistake Firewall + i1 Living Brain + i6 Code-Truth Verify + i10 Hot Handoff SHIPPED; rest awaiting pick
+sources: [ultracode workflow wf_4d826f4a-e32 2026-07-12 (19 agents: 1 map, 6 lenses, dedup+gap critic, 3-judge panel, 6 sketches), syntheses/pro-differentiation-portfolio.md, syntheses/post-2.0-growth-portfolio.md, syntheses/solo-developer-roadmap.md, wiki/log.md, user session 2026-07-17, https://arxiv.org/abs/2507.05257]
+status: active — v2.1.1 / CLI 2.2.0 completed the Experience Layer; i10 Hot Handoff shipped 2026-07-19; next is cross-agent continuity and proof
 created: 2026-07-12
-updated: 2026-07-12
+updated: 2026-07-17
 ---
 
 # Memory Moat Portfolio
@@ -15,14 +15,14 @@ ideas → 32 judged (buyer / strategist / builder personas, 4 dims × 1-10,
 max 40). Complements [[syntheses/post-2.0-growth-portfolio]] (some overlap:
 i10≈N10 handoff, i14≈autopilot).
 
-## Baseline weaknesses found (map agent)
+## Baseline weaknesses — release recalibration
 
-1. Bi-temporal fields (validFrom/validTo/supersedesId) write-orphaned — no
-   auto-supersession; M1 degrades to approval+tier filtering.
+1. **Closed:** bi-temporal fields are now written through Living Brain
+   supersession and exposed through history / `--as-of`.
 2. Embedding sidecar drifts silently (manual index-build only).
-3. Approval backlog rot — agent writes default `suggested`, invisible; GUI
-   cannot approve.
-4. No dedupe in main write path; decay keyed to updatedAt (approve resets age).
+3. **Mostly closed:** Autopilot + `mega brain digest` makes the suggested queue
+   triageable in the CLI; a GUI approval inbox remains a later convenience gap.
+4. **Closed:** main-path dedupe, lineage, and `lastActiveAt` handling now ship.
 5. Per-project JSON + in-memory BM25 scaling ceiling; constants not tunable.
 
 ## Top 9 (score /40, judges' avg)
@@ -49,16 +49,35 @@ firewall + redaction ledger (25.3) · i5 approval inbox GUI (25.0) · i9
 Brain Check diff review (25.0) · i19 self-tuning recall (25.0). Full list
 + scores: 32 ideas ranked in workflow output (see log 2026-07-12).
 
-## Strategy read
+## Strategy read — from components to a product loop
 
-Top cluster = one coherent story: **"the brain that proves itself"** —
-i7+i8 make memory *active* (agent saved unprompted), i6+i1 make it
-*truthful* (git-anchored, versioned), i14 makes it *self-growing*, i4
-prices it. All reuse shipped infra (hooks, BM25, recall predicate, savings
-pipeline, entitlement). Recommended sequence: **i8 Warm Start (2 wk, S
-effort, daily-visible) → i7 Mistake Firewall (killer demo) → i1 Living
-Brain (fills M1 debt) → i6 Code-Truth Verify → i14 Autopilot → i4
-Receipts.** Each = own spec cycle, risk HIGH (memory schema / connector
-core path) per [[concepts/risk-aware-development]].
+The previous recommended chain is now **shipped** in `@megasaver/cli@2.2.0`:
+i8+i7 make memory active, i1+i6 make it truthful, and i14 makes it
+self-growing. Market it as the **Agent Experience Layer**, not as five separate
+technical features. (source: `apps/cli/CHANGELOG.md` 2.2.0; `git` `653f7599`)
+
+The next priority order for the daily individual developer is:
+
+1. **i10 Hot Handoff / Agent Passport** — a compelling public demo and a real
+   daily continuity benefit across Claude Code, Codex, machines, and branches.
+   It must reuse validation badges, redaction, and explicit Brain Sync rather
+   than invent another memory store.
+2. **i3 Brain Doctor** — turn the new autonomous brain into a trusted one:
+   explain stale, contradictory, unreviewed, and inactive knowledge with a
+   repair action. This directly addresses the remaining retrieval-health gap.
+3. **Context Contracts** — an opt-in test harness for whether context still
+   retrieves the needed evidence after an instruction/memory change. Research
+   now evaluates memory as retrieval, learning, long-range understanding, and
+   selective forgetting rather than mere storage; the product should make that
+   quality visible. (source: [MemoryAgentBench](https://arxiv.org/abs/2507.05257))
+4. **i21 Déjà Vu** — only after Doctor/Contracts establish a conservative trust
+   bar; cross-project recall is powerful but a leak or noisy hit would damage
+   the core promise.
+
+**Deferred:** i4 Recall Receipts may report observed events but must not assign
+per-memory dollar causality until an intervention/contract methodology exists.
+This preserves Mega Saver's honest-metrics position. Team, Marketplace, and
+enterprise work are secondary until this solo loop shows activation and
+retention.
 
 Design sketches (arch, CLI, gating, first slice): [[syntheses/memory-moat-sketches]].

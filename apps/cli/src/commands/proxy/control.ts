@@ -1,6 +1,7 @@
 import {
   type EnsureServiceResult,
   type LaunchctlRunner,
+  MANAGED_LABEL,
   type ProcessIdentityAdapter,
   type ProxyControlState,
   type UninstallResult,
@@ -54,7 +55,10 @@ export type StopResult = { status: "ok" } | { status: "transition_in_progress" }
 // refused (never stopped). The control write is serialized under the transition
 // lock so it can neither race a concurrent writer nor clobber an in-flight
 // transition the supervisor is actively reconciling.
-export function runProxyStart(deps: ProxyControlPlaneDeps): StartResult {
+export function runProxyStart(
+  deps: ProxyControlPlaneDeps,
+  opts: { restartSupervisor?: boolean } = {},
+): StartResult {
   const service = ensureManagedService(launchAgentDeps(deps));
   if (service.status === "legacy_service_present" || service.status === "blocked") return service;
   const locked = withTransitionLock(
@@ -81,7 +85,17 @@ export function runProxyStart(deps: ProxyControlPlaneDeps): StartResult {
     },
     deps.identity ?? nodeProcessIdentity,
   );
-  return locked.status === "locked" ? { status: "transition_in_progress" } : service;
+  if (locked.status === "locked") return { status: "transition_in_progress" };
+  if (opts.restartSupervisor && service.status === "already_managed") {
+    // Explicit upgrade action only. ensureManagedService proved the loaded label
+    // is our managed argv; legacy/foreign jobs returned before this point.
+    try {
+      deps.launchctl.kickstart(MANAGED_LABEL, true);
+    } catch {
+      return { status: "blocked", reason: "managed supervisor restart failed" };
+    }
+  }
+  return service;
 }
 
 // `mega proxy stop`: disable future routing and enter drain. Persists the disable

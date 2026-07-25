@@ -15,6 +15,9 @@ BASELINE_SETTINGS=/tmp/claude-baseline-no-megasaver.json
 MEGASAVER_SETTINGS=/tmp/claude-megasaver.json
 PROXY_URL="${MEGA_PROXY_URL:-http://127.0.0.1:8787}"
 CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude || true)}"
+# Absolute — the script cd's into $REPO before running tasks, so a relative
+# path to benchmark-rates.json would not resolve from there.
+RATES_JSON="$(cd "$(dirname "$0")" && pwd)/benchmark-rates.json"
 
 if [ -z "$CLAUDE_BIN" ] || [ ! -x "$CLAUDE_BIN" ]; then
   echo "ERROR: claude CLI not found in PATH."
@@ -40,70 +43,6 @@ if ! curl -s -o /dev/null --max-time 3 "$PROXY_URL" 2>/dev/null; then
   exit 1
 fi
 echo "Proxy reachable at $PROXY_URL (mega $(mega --version 2>/dev/null || echo '?'))"
-
-echo "Creating baseline settings without MegaSaver proxy/hooks..."
-python3 - "$DEFAULT_SETTINGS" "$BASELINE_SETTINGS" <<'PY'
-import json, sys, copy
-src, dst = sys.argv[1], sys.argv[2]
-with open(src) as f:
-    settings = json.load(f)
-
-baseline = copy.deepcopy(settings)
-
-# Remove MegaSaver proxy routing (and its first-party assertion flag).
-if 'env' in baseline:
-    baseline['env'].pop('ANTHROPIC_BASE_URL', None)
-    baseline['env'].pop('_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL', None)
-    if not baseline['env']:
-        del baseline['env']
-
-# Remove hooks whose command contains 'mega hooks' (MegaSaver telemetry/saver/intent).
-if 'hooks' in baseline:
-    cleaned_hooks = {}
-    for event, configs in baseline['hooks'].items():
-        kept_configs = []
-        for cfg in configs:
-            kept_inner = []
-            for h in cfg.get('hooks', []):
-                cmd = h.get('command', '')
-                if 'mega hooks' in cmd:
-                    continue
-                kept_inner.append(h)
-            if kept_inner:
-                new_cfg = dict(cfg)
-                new_cfg['hooks'] = kept_inner
-                kept_configs.append(new_cfg)
-        if kept_configs:
-            cleaned_hooks[event] = kept_configs
-    if cleaned_hooks:
-        baseline['hooks'] = cleaned_hooks
-    else:
-        del baseline['hooks']
-
-with open(dst, 'w') as f:
-    json.dump(baseline, f, indent=2)
-PY
-
-echo "Baseline settings written to $BASELINE_SETTINGS"
-
-# Both arms run with an explicit --settings file and a scrubbed ANTHROPIC_BASE_URL,
-# so an inherited env var can never decide which endpoint an arm talks to.
-python3 - "$DEFAULT_SETTINGS" "$MEGASAVER_SETTINGS" "$PROXY_URL" <<'PY'
-import json, sys
-src, dst, proxy_url = sys.argv[1], sys.argv[2], sys.argv[3]
-with open(src) as f:
-    settings = json.load(f)
-env = settings.setdefault('env', {})
-env['ANTHROPIC_BASE_URL'] = proxy_url
-# Mirrors what the fixed route installer writes: without it Claude Code enters
-# non-first-party mode (tools inlined, hook tail uncached, cold-cache rewrites).
-env['_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL'] = '1'
-with open(dst, 'w') as f:
-    json.dump(settings, f, indent=2)
-PY
-
-echo "MegaSaver settings written to $MEGASAVER_SETTINGS (proxy $PROXY_URL)"
-echo ""
 
 # Task prompts (mixed workload).
 TASKS=(
@@ -222,9 +161,90 @@ BASELINE_COMMIT=$(git rev-parse HEAD)
 
 # Enable the workspace token saver for the bench repo, otherwise the megasaver
 # arm pays the proxy overhead without the product's compression benefit.
-(cd "$REPO" && mega init --yes --no-gui --mode balanced >/dev/null 2>&1) \
+SAVER_MODE="${MEGA_SAVER_MODE:-balanced}"
+(cd "$REPO" && mega init --yes --no-gui --mode "$SAVER_MODE" >/dev/null 2>&1) \
   || { echo "ERROR: mega init failed — saver not enabled for bench repo"; exit 1; }
-echo "Workspace saver enabled for $REPO"
+echo "Workspace saver enabled for $REPO (mode: $SAVER_MODE)"
+
+# Snapshot both arms only after init has installed the hooks. Claude runs with
+# --setting-sources "", so the treatment file must carry those hooks itself.
+echo "Creating baseline settings without MegaSaver proxy/hooks..."
+python3 - "$DEFAULT_SETTINGS" "$BASELINE_SETTINGS" <<'PY'
+import json, sys, copy
+src, dst = sys.argv[1], sys.argv[2]
+with open(src) as f:
+    settings = json.load(f)
+
+baseline = copy.deepcopy(settings)
+
+# Remove MegaSaver proxy routing (and its first-party assertion flag).
+if 'env' in baseline:
+    baseline['env'].pop('ANTHROPIC_BASE_URL', None)
+    baseline['env'].pop('_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL', None)
+    if not baseline['env']:
+        del baseline['env']
+
+# Remove hooks whose command contains 'mega hooks' (MegaSaver telemetry/saver/intent).
+if 'hooks' in baseline:
+    cleaned_hooks = {}
+    for event, configs in baseline['hooks'].items():
+        kept_configs = []
+        for cfg in configs:
+            kept_inner = []
+            for h in cfg.get('hooks', []):
+                cmd = h.get('command', '')
+                if 'mega hooks' in cmd:
+                    continue
+                kept_inner.append(h)
+            if kept_inner:
+                new_cfg = dict(cfg)
+                new_cfg['hooks'] = kept_inner
+                kept_configs.append(new_cfg)
+        if kept_configs:
+            cleaned_hooks[event] = kept_configs
+    if cleaned_hooks:
+        baseline['hooks'] = cleaned_hooks
+    else:
+        del baseline['hooks']
+
+with open(dst, 'w') as f:
+    json.dump(baseline, f, indent=2)
+PY
+
+echo "Baseline settings written to $BASELINE_SETTINGS"
+
+# Both arms run with an explicit --settings file and a scrubbed ANTHROPIC_BASE_URL,
+# so an inherited env var can never decide which endpoint an arm talks to.
+python3 - "$DEFAULT_SETTINGS" "$MEGASAVER_SETTINGS" "$PROXY_URL" <<'PY'
+import json, sys
+src, dst, proxy_url = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(src) as f:
+    settings = json.load(f)
+env = settings.setdefault('env', {})
+env['ANTHROPIC_BASE_URL'] = proxy_url
+# Mirrors what the fixed route installer writes: without it Claude Code enters
+# non-first-party mode (tools inlined, hook tail uncached, cold-cache rewrites).
+env['_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL'] = '1'
+with open(dst, 'w') as f:
+    json.dump(settings, f, indent=2)
+PY
+
+python3 - "$MEGASAVER_SETTINGS" <<'PY'
+import json, sys
+with open(sys.argv[1]) as f:
+    settings = json.load(f)
+commands = [
+    hook.get('command', '')
+    for configs in settings.get('hooks', {}).values()
+    for config in configs
+    for hook in config.get('hooks', [])
+]
+if not any('mega hooks saver' in command for command in commands):
+    raise SystemExit('ERROR: MegaSaver settings snapshot has no saver hook')
+PY
+
+echo "MegaSaver settings written to $MEGASAVER_SETTINGS (proxy $PROXY_URL)"
+echo ""
 
 # Results dir.
 rm -rf "$RESULTS"
@@ -271,9 +291,9 @@ run_task() {
   git diff --stat > "$outdir/diffstat.txt" || true
   git diff > "$outdir/diff.patch" || true
 
-  python3 - "$outdir" "$name" "$mode" "$elapsed" <<'PY'
+  python3 - "$outdir" "$name" "$mode" "$elapsed" "$RATES_JSON" <<'PY'
 import json, os, sys
-outdir, task, mode, elapsed = sys.argv[1:5]
+outdir, task, mode, elapsed, rates_json = sys.argv[1:6]
 
 summary = {"task": task, "mode": mode, "wall_seconds": int(elapsed), "ok": False}
 try:
@@ -298,6 +318,15 @@ else:
         "num_turns": r.get("num_turns", 0),
         "duration_ms": r.get("duration_ms", 0),
     })
+    # `total_cost_usd` mixes 1x/2x (fast-mode) billed requests -- price the
+    # same token breakdown at fixed rates so identical tokens cost the same.
+    rates = json.load(open(rates_json))
+    summary["normalized_cost_usd"] = (
+        u.get("input_tokens", 0) * rates["input"]
+        + u.get("cache_creation_input_tokens", 0) * rates["cacheCreation"]
+        + u.get("cache_read_input_tokens", 0) * rates["cacheRead"]
+        + u.get("output_tokens", 0) * rates["output"]
+    ) / 1_000_000
     if r.get("is_error"):
         summary["error"] = r.get("result", "")[:200]
 
@@ -337,6 +366,7 @@ METRICS = [
     'cache_read_input_tokens',
     'cache_creation_input_tokens',
     'output_tokens',
+    'normalized_cost_usd',
     'total_cost_usd',
     'wall_seconds',
 ]
@@ -395,8 +425,10 @@ else:
         print(f'  {m:<28} {g:>9.2f}x')
 
 print()
-print('Tokens and cost come from `claude --output-format json` -> .usage / .total_cost_usd,')
-print('i.e. what Anthropic actually billed -- not a stdout-size proxy.')
+print('Gate metric: normalized_cost_usd (token breakdown priced at fixed standard')
+print('rates from scripts/benchmark-rates.json). Raw total_cost_usd is shown for')
+print('transparency only — it mixes 1x and 2x (fast-mode) billed requests, so it')
+print('is NOT comparable across runs.')
 print()
 print('Raw logs and diffs: /tmp/megasaver-claude-limit-test-results')
 print('=' * 92)

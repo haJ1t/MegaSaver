@@ -313,10 +313,40 @@ tuple-pinned enum in BB3 (the epic §17 table lists no
 | aws_access_key    | `AKIA[0-9A-Z]{16}`                                     | `AKIA[REDACTED]`           |
 | aws_secret_key    | `(?<=aws_secret_access_key\s*=\s*)[A-Za-z0-9/+]{40}`   | `[REDACTED]`               |
 | bearer_token      | `(?i:bearer\s+)[A-Za-z0-9\-._~+/=]{20,}`               | `Bearer [REDACTED]`        |
-| jwt               | `eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+` | `eyJ[REDACTED]`            |
+| jwt †‡            | `(?:(?<![A-Za-z0-9_-])\|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+` (see ‡ for exact bytes) | `eyJ[REDACTED]` |
 | private_key_block | `-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]+?-----END`   | `[REDACTED PRIVATE KEY]`   |
 | env_value         | `(?<=^[A-Z_]+=)["'].+?["']`                            | `"[REDACTED]"`             |
 | db_url            | `(?:postgres|postgresql|mysql|mongodb)://[^\s/]+:[^\s@]+@\S+` | `[scheme]://[REDACTED]@[host]` |
+
+† `jwt` amended 2026-07-20 by
+[[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]] — a leading
+lookbehind was added to remove a quadratic ReDoS (8.4 s at 313 KiB). The
+behavior difference is intended and scoped by that spec §5: a JWT preceded
+directly by a base64url character, including `-` and `_`, no longer redacts.
+The lock otherwise stands; amend this row, never rewrite it silently.
+
+‡ **Exact pattern bytes** — the table cell above escapes the alternation
+`|` as `\|` so the markdown row renders as a single cell; that backslash
+is NOT part of the regex. Transcribe from here, not from the table:
+
+```
+/(?:(?<![A-Za-z0-9_-])|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g
+```
+
+`jwt` was amended again 2026-07-20b by the same spec (see its §0), after
+three review passes found the first amendment's scope statement
+understated. The pattern gained a second lookbehind branch,
+`(?<=%[0-9A-Fa-f][0-9A-Fa-f])`, so a JWT preceded by a percent-escape
+redacts again — all 512 `%XY` forms were verified. The remaining,
+disclosed loss is narrower and is stated in that spec's corrected §5:
+a JWT preceded by a **raw** base64url character still does not redact
+(`session-<jwt>`, `id_token_<jwt>`, `Bearer<jwt>`, `ghs_<appid>_<jwt>`,
+base64-run glue), and **no other detector covers those bytes**. Cost of
+the added branch: 0.32 ms per 313 KiB, linear (~2.0x per doubling to
+1 MiB+). The `-` and `_` must stay in the first branch's class —
+narrowing it to `(?<![A-Za-z0-9])` restores the 7.4-7.7 s quadratic.
+Released as a **minor**, not a patch, because coverage was reduced.
+Both footnotes stand; amend this row, never rewrite it silently.
 
 Order is application order (longest/most-specific guards run such
 that `anthropic_key` is attempted before `openai_key` since

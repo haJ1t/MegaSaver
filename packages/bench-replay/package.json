@@ -1,0 +1,33 @@
+{
+  "name": "@megasaver/bench-replay",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "description": "Record/replay benchmark harness: freezes one conversation's request bodies and replays baseline vs megasaver arms for deterministic cost comparison.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@megasaver/stats": "workspace:*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17"
+  }
+}

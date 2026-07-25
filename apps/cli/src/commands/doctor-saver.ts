@@ -27,6 +27,12 @@ const SELF_TEST_TIMEOUT_MS = 10_000;
 // decide() call, so any latest-invocation newer than the latest-completion by
 // more than this grace means the most recent activity never finished.
 const LIVENESS_GAP_GRACE_MS = 5 * 60_000;
+// Liveness asks a "right now" question, so it needs its own recency bound.
+// The ledger's retention TTL (30d) is NOT that bound: a workspace that died
+// mid-invocation stays in the view for a month, and an unbounded scan then
+// reports it as a live crash signal forever. Anything invoked longer ago than
+// this is historical wreckage, not a signal to act on.
+const LIVENESS_WINDOW_MS = 24 * 60 * 60 * 1000;
 const REPAIR_HINT = "run: mega hooks install";
 
 function newestTs(map: Record<string, string> | undefined): string | null {
@@ -224,24 +230,28 @@ export function runSaverChecks(deps: DoctorSaverDeps = {}): Check[] {
       reason: `warn: no invocation recorded — ${REPAIR_HINT}, then run any tool`,
     });
   } else {
+    const livenessFloor = now() - LIVENESS_WINDOW_MS;
     const failures = view.failures ?? {};
     const failing = Object.entries(failures).filter(([wk, f]) => {
       const completion = view.completions?.[wk];
       return (
-        f.count > 0 && (completion === undefined || Date.parse(completion) <= Date.parse(f.lastAt))
+        f.count > 0 &&
+        Date.parse(f.lastAt) >= livenessFloor &&
+        (completion === undefined || Date.parse(completion) <= Date.parse(f.lastAt))
       );
     });
     const totalFailures = Object.values(failures).reduce((n, f) => n + f.count, 0);
     const first = failing[0];
-    // Per-workspace invocation-vs-completion gap: a recent invocation with no
+    // Per-workspace invocation-vs-completion gap: a RECENT invocation with no
     // (or a far-older) completion is a crash/timeout signal — the hook fired
-    // but never finished. computeView already prunes stale invocations, so any
-    // survivor here is recent enough that a missing completion is real.
+    // but never finished. Scoped to LIVENESS_WINDOW_MS because the view's
+    // retention window is 30 days, which says nothing about recency.
     const gap = Object.entries(view.workspaces)
       .map(([wk, invIso]) => {
         const comp = view.completions?.[wk];
         return { wk, inv: Date.parse(invIso), comp: comp !== undefined ? Date.parse(comp) : null };
       })
+      .filter(({ inv }) => inv >= livenessFloor)
       .find(({ inv, comp }) => comp === null || inv - comp > LIVENESS_GAP_GRACE_MS);
     if (first !== undefined) {
       const [wk, f] = first;
