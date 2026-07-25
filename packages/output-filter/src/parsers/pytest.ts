@@ -1,7 +1,11 @@
 import type { Chunk } from "../rank.js";
 
 const FAILURES_BANNER = /^=+\s*FAILURES\s*=+$/m;
-const FAILURE_HEADER = /^_+\s+\S.*\s+_+$/;
+// The trailing separator is a single `\s`, not `\s+`: `.*` already absorbs any
+// extra whitespace, so the two forms accept exactly the same lines, but `\s+`
+// makes the split between it and `.*` ambiguous at every offset of a whitespace
+// run — quadratic on a padded line that ends in anything but `_`.
+const FAILURE_HEADER = /^_+\s+\S.*\s_+$/;
 const SUMMARY_BANNER = /^=+\s*short test summary info\s*=+$/;
 
 export function detectPytest(text: string): boolean {
