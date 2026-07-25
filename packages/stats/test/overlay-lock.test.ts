@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { OverlayTokenSaverEvent } from "../src/event.js";
 import { appendOverlayEvent, readOverlayEvents, reconcileOverlaySummaries } from "../src/store.js";
 
-const WK = "wk-lock";
+// reconcileOverlaySummaries only sweeps 16-hex workspaceKey dirs (encodeWorkspaceKey).
+const WK = "a1b2c3d4e5f60718";
 const ID = "live-lock-1";
 
 let root: string;

@@ -107,6 +107,29 @@ See [[concepts/proxy-mode]].
 hook-log evidence on disk; absent it, stats shows adoption only. Mirrors
 the no-fake-savings stance in [[entities/output-filter]].
 
+## Two layouts share `stats/` — never conflate them (2026-07-25)
+
+`stats/` holds BOTH layouts: registry sessions at
+`stats/<projectId>/<sessionId>.json` (`sessionTokenSaverStatsSchema`) and the F4
+overlay at `stats/<workspaceKey>/<liveSessionId>.json`
+(`overlaySessionTokenSaverStatsSchema`). Both schemas are `.strict()`, so each
+rejects the other's file as `store_corrupt`.
+
+`reconcileOverlaySummaries` (daily GC sweep) walked every dir as an overlay
+workspace and rewrote registry summaries as zeroed overlay ones — after which
+`readSummary`/`appendEvent` threw `store_corrupt` forever and `mega output
+exec/file/filter` returned `store_write_failed`. It also fabricated one phantom
+summary per non-session ledger (`handoff` / `guard` / `warm-start` /
+`code-truth` `.events.jsonl`).
+
+**Rule:** any walk of `stats/*` that WRITES must first discriminate the layout —
+overlay dirs are 16 lowercase hex (`workspaceKeySchema`, from
+`encodeWorkspaceKey`), registry dirs are UUIDs. Same discriminator
+`locateChunkSet` uses (`packages/context-gate/src/locate-chunk-set.ts:11`).
+Read-only walks are safe because they schema-filter. Fix: branch
+`fix/gc-reconcile-clobbers-legacy-summaries`, guard test
+`packages/stats/test/reconcile-legacy-layout.test.ts`.
+
 ## Related
 
 - [[entities/output-filter]] — emits the byte metrics; owns

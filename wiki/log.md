@@ -4120,3 +4120,20 @@ improved from 0/4 losses to 4/4 wins (1.30x cost geomean; approximately $1.87
 vs $2.49 total), while the 4x claim remains unproven. Implementation branch:
 `fix/proxy-cache-parity-finalize`; code head before this wiki record:
 `b09a3983`. Integration PR: GitHub #288.
+## [2026-07-25 14:30 +03] fix | GC sweep clobbered registry-session stats
+
+`reconcileOverlaySummaries` (packages/stats/src/store.ts) treated every
+`stats/<dir>` as an overlay workspace, so `maybeRunOverlayGc`'s once-a-day
+sweep rewrote `stats/<projectId>/<sessionId>.json` as a zeroed overlay
+summary. Measured on a store with one registry session: `rebuilt` 2,
+`bytesSavedTotal` 9000 → 0, and a phantom `handoff.json` fabricated from the
+handoff ledger; `readSummary` and `appendEvent` then threw `store_corrupt`
+permanently, so `mega output exec/file/filter` returned `store_write_failed`.
+
+Fix: the sweep only enters dirs matching `workspaceKeySchema` (16 lowercase
+hex), the layout discriminator `locateChunkSet` already uses. After: `rebuilt`
+0, registry summary byte-identical, no `handoff.json`, real overlay workspaces
+still repaired. 4 red → green guard tests in
+`packages/stats/test/reconcile-legacy-layout.test.ts`; 241/241 stats tests
+pass. Branch `fix/gc-reconcile-clobbers-legacy-summaries` (not merged).
+See [[entities/stats]].
