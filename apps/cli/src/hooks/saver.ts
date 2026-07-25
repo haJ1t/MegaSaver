@@ -241,14 +241,16 @@ export async function buildSaverDecision(
   const ctx: DecisionContext = { stage: "payload" };
   try {
     const decision = await decide(payload, deps, ctx);
-    try {
-      deps.recordCompletion(
-        deps.storeRoot,
-        ctx.workspaceKey ?? encodeWorkspaceKey(process.cwd()),
-        new Date().toISOString(),
-      );
-    } catch {
-      /* ledger is best-effort */
+    // Only a run that stamped an invocation may stamp a completion: tools the
+    // saver never processes return before the invocation heartbeat, and their
+    // completion would clear a genuinely failing hook from doctor's liveness
+    // FAIL — a fail-open inversion that hides dead compression.
+    if (ctx.workspaceKey !== undefined) {
+      try {
+        deps.recordCompletion(deps.storeRoot, ctx.workspaceKey, new Date().toISOString());
+      } catch {
+        /* ledger is best-effort */
+      }
     }
     return decision;
   } catch {

@@ -931,6 +931,25 @@ describe("E21 failure + completion ledger", () => {
     expect(wk).toBe(encodeWorkspaceKey(process.cwd()));
   });
 
+  it("a tool the saver never processes records neither an invocation nor a completion", async () => {
+    const d = deps();
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Write",
+        tool_input: { file_path: "/Users/x/proj/a.ts" },
+        tool_response: { filePath: "/Users/x/proj/a.ts", success: true },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect(out).toEqual({ passthrough: true });
+    expect(d.recordInvocation).not.toHaveBeenCalled();
+    // A completion without a matching invocation clears a genuinely failing
+    // hook from doctor's liveness FAIL (fail-open inversion).
+    expect(d.recordCompletion).not.toHaveBeenCalled();
+  });
+
   it("a throwing ledger write never breaks the decision", async () => {
     const d = deps({
       recordCompletion: vi.fn(() => {
