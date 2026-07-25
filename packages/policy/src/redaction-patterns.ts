@@ -37,8 +37,17 @@ const baseline: RedactionPattern[] = [
     replacement: "AKIA[REDACTED]",
   },
   {
+    // The TRAILING `\s` run is bounded, and only that one. V8 evaluates a
+    // lookbehind right to left, so it is the first element tried at every start
+    // position: unbounded it consumes the whole preceding whitespace run,
+    // requires `=`, fails, and gives back one character at a time — 2.2 s at
+    // 50 KB of spaces, 9.4 s at 100 KB. The LEADING run cannot do the same:
+    // reaching it needs an `=` within 64 characters behind, and one `=` per
+    // 64 characters is exactly what caps the leading run. Bounding it too
+    // measures identical, so it is left alone (spec 2026-07-25 §2).
+    // Amends the LOCKED §5a row — see that table's footnote.
     name: "aws_secret_key",
-    pattern: /(?<=aws_secret_access_key\s*=\s*)[A-Za-z0-9/+]{40}/g,
+    pattern: /(?<=aws_secret_access_key\s*=\s{0,64})[A-Za-z0-9/+]{40}/g,
     replacement: "[REDACTED]",
   },
   {
@@ -141,15 +150,19 @@ const baseline: RedactionPattern[] = [
   },
   {
     // Dedicated api-key / auth-token request headers (Bearer is handled above).
+    // Trailing `\s` run bounded — same reason as aws_secret_key: 1.3 s at 50 KB
+    // of spaces, 7.6 s at 100 KB, and 18.2 s at 100 KB of a ` \t` alternation.
     name: "api_key_header",
     pattern:
-      /(?<=(?:x-api-key|x-auth-token|x-access-token)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s"']{8,})/gi,
+      /(?<=(?:x-api-key|x-auth-token|x-access-token)\s*[:=]\s{0,64})(?:"[^"]*"|'[^']*'|[^\s"']{8,})/gi,
     replacement: "[REDACTED]",
   },
   {
     // HTTP Basic credentials in an Authorization header (Bearer covered above).
+    // The `\s+` after `basic` is the trailing run here, so it is the bounded
+    // one: 1.9 s at 50 KB of spaces, 8.4 s at 100 KB.
     name: "basic_auth_header",
-    pattern: /(?<=authorization\s*[:=]\s*basic\s+)[A-Za-z0-9+/=]{8,}/gi,
+    pattern: /(?<=authorization\s*[:=]\s*basic\s{1,64})[A-Za-z0-9+/=]{8,}/gi,
     replacement: "[REDACTED]",
   },
   {
@@ -186,8 +199,19 @@ export const REDACTION_PATTERNS: readonly RedactionPattern[] = z
 // the agent legitimately needs).
 const observedBaseline: RedactionPattern[] = [
   {
+    // Local part bounded at RFC 5321 §4.5.3.1.1's 64 octets. Unbounded it is the
+    // plain class/literal form of the ReDoS class — a greedy run followed by a
+    // required `@` that never arrives, retried at every start position: 6.0 s at
+    // 50 KB of letters, 23.1 s at 100 KB. The bound is greedy WITH backtracking,
+    // so an over-long run still matches, starting later at the same `@` — the
+    // count this observer reports is unchanged. The DOMAIN run needs no bound:
+    // its start positions are the `@`s, and the runs they open are terminated by
+    // the next `@`, so the total is O(n) already.
+    // NOT swappable for a size gate on the loop: redactForLedger runs this same
+    // array and actually replaces (F-FW-1), so a gate would leave that loop
+    // quadratic and, once gated too, leaking emails into ledger labels.
     name: "email",
-    pattern: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
+    pattern: /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
     replacement: "",
   },
 ];
