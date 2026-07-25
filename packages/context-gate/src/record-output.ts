@@ -35,6 +35,12 @@ const policyRedactSourceRef: SourceRefRedactor = (ref: SourceRef): SourceRef => 
   };
 };
 
+// Session evidence points at an overlay chunk set the store GC deletes after
+// 30 days, so it must expire on the same clock: a null expiresAt means "never"
+// to gcEvidence, which left every record — and its one ref per raw chunk —
+// on disk forever.
+export const EVIDENCE_RETENTION_MS = 30 * 86_400_000;
+
 export type RecordOverlayOutputInput = {
   storeRoot: string;
   // When set, one evidence row is written per compressed+stored chunk set.
@@ -316,7 +322,7 @@ export async function recordAndFilterOverlayOutput(
       redactedRawChunkSetId: chunkSetId,
       returnedChunkRefs: chunkRefs,
       createdAt,
-      expiresAt: null,
+      expiresAt: new Date(Date.parse(createdAt) + EVIDENCE_RETENTION_MS).toISOString(),
       retentionClass: "session",
       policyVersion: "1",
       pipelineVersion: "1",

@@ -299,6 +299,9 @@ export async function gcEvidence(args: {
       ...rec,
       status: "retained_metadata_only",
       redactedRawChunkSetId: null,
+      // Every ref points into the chunk set just deleted, so they are dangling
+      // weight — and on a large output they are ~99% of the record's bytes.
+      returnedChunkRefs: [],
       transitions: [...rec.transitions, { at, kind: "raw_gc", actor: "system" }],
     });
     writeRecord(args.storeRoot, next);

@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   utimesSync,
@@ -10,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { recordAndFilterOverlayOutput } from "@megasaver/context-gate";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GC_INTERVAL_MS, OVERLAY_RETENTION_MS, maybeRunOverlayGc } from "../../src/hooks/gc.js";
@@ -107,6 +109,41 @@ describe("maybeRunOverlayGc", () => {
     expect(ran).toBe(true);
     expect(existsSync(old)).toBe(false);
     expect(existsSync(fresh)).toBe(true);
+  });
+
+  it("sweeps the evidence ledger past its retention window", async () => {
+    const wk = encodeWorkspaceKey("/some/project");
+    const sid = "live-gc-evidence";
+    const res = await recordAndFilterOverlayOutput({
+      storeRoot: store,
+      evidenceStoreRoot: store,
+      workspaceKey: wk,
+      liveSessionId: sid,
+      raw: Array.from({ length: 4_000 }, (_, i) => `ln ${i}`).join("\n"),
+      sourceKind: "command",
+      label: "cat huge.log",
+      mode: "aggressive",
+      storeRawOutput: true,
+      now: () => new Date(NOW - 40 * 86_400_000).toISOString(),
+    });
+    expect(res.decision).toBe("compressed");
+    const chunkPath = join(store, "content", wk, sid, `${res.chunkSetId}.json`);
+    const evidenceDir = join(store, "evidence", wk);
+    const evidencePath = join(evidenceDir, readdirSync(evidenceDir)[0] ?? "");
+    const before = statSync(evidencePath).size;
+
+    // No-op prune: the chunk must be deleted by the evidence sweep itself.
+    const ran = await maybeRunOverlayGc(store, {
+      now: () => NOW,
+      prune: async () => ({ removed: 0 }),
+    });
+
+    expect(ran).toBe(true);
+    expect(existsSync(chunkPath)).toBe(false);
+    const after = JSON.parse(readFileSync(evidencePath, "utf8"));
+    expect(after.status).toBe("retained_metadata_only");
+    expect(after.returnedChunkRefs).toEqual([]);
+    expect(statSync(evidencePath).size).toBeLessThan(before / 2);
   });
 
   it("reconciles overlay summaries whose count lags the JSONL (E26 drift)", async () => {
