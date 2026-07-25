@@ -5,7 +5,7 @@ import { McpBridgeError } from "../errors.js";
 
 export type GetTaskStatusEnv = { registry: CoreRegistry };
 
-const inputSchema = z.object({ planId: z.string().min(1) }).strict();
+export const inputSchema = z.object({ planId: z.string().min(1) }).strict();
 
 export type GetTaskStatusResult = { plan: TaskPlan; ready: readonly string[] };
 

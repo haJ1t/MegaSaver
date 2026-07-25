@@ -14,7 +14,7 @@ export type ConvertFailureToRuleEnv = {
   newId: () => string;
 };
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     failureId: z.string().min(1),
     title: z.string().min(1),

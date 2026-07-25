@@ -33,7 +33,7 @@ export type GetRelevantMemoriesEnv = {
   execGit?: (args: string[], cwd: string) => string;
 };
 
-const getRelevantMemoriesInputSchema = z
+export const getRelevantMemoriesInputSchema = z
   .object({
     projectId: z.string().min(1),
     task: z.string().min(1),

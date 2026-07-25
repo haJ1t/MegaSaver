@@ -10,7 +10,7 @@ import { McpBridgeError } from "../errors.js";
 
 export type GetApplicableRulesEnv = { registry: CoreRegistry };
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     projectId: z.string().min(1),
     task: z.string().min(1).optional(),

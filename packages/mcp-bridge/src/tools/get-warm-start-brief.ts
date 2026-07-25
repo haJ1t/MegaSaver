@@ -14,7 +14,7 @@ export type GetWarmStartBriefEnv = {
   now: () => string;
 };
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     projectId: z.string().min(1),
     budgetTokens: z.number().int().min(300).max(8000).optional(),

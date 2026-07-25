@@ -25,7 +25,7 @@ export type RecallToolEnv = {
   execGit?: (args: string[], cwd: string) => string;
 };
 
-const recallInputSchema = z
+export const recallInputSchema = z
   .object({
     sessionId: z.string().min(1),
     intent: z.string(),

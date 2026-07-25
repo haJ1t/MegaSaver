@@ -150,3 +150,58 @@ survivor was "treat absent `max_results` as a default of 50", which every test
 accepted because no fixture had more than 50 files — i.e. the §3.2 no-default
 decision shipped untested. Closed with a 60-file daemon-path fixture, verified
 red against exactly that mutant (60 → 50) before being kept.
+
+## Real inputSchema published per tool (2026-07-25)
+
+`server.ts:282` advertised `inputSchema: { type: "object" }` for EVERY tool — no
+properties, types, required list, or bounds for anything. Agents inferred
+parameter names from the prose description, which is the root cause of the
+`max_results` passed-and-ignored defect fixed the same day.
+
+**Tool count correction: 35, not 26.** `TOOL_DEFS` holds 35 entries and
+`server.e2e.test.ts` already asserted `lists 35 tools`. The "26 tools" figure in
+the v1.2 section above (25 ContextOps + `proxy_search_code`) is stale and was
+repeated into the incoming bug report. Treat 35 as current.
+
+The id→schema mapping was derived mechanically (dispatch switch → handler → the
+const that handler `safeParse`s) rather than hand-written, because 35 hand-wired
+entries is where mis-wiring hides. 31 tools name a schema directly; the 4
+context-pruning tools legitimately share that module's single `inputSchema`
+through a common helper.
+
+Design points worth keeping:
+
+- **One value, not two.** `src/tool-schemas.ts` maps each tool to the SAME Zod
+  object its handler parses with, so advertised and enforced contracts cannot
+  drift.
+- **Completeness is a compile error.** The map is typed
+  `Record<McpToolName, z.ZodTypeAny>`; deleting one entry was verified to produce
+  `error TS2741`, so a new tool cannot ship advertising nothing.
+- **Converted once at module load**, not per `tools/list` request.
+  `$refStrategy: "none"` guarantees no `$ref`/`definitions` (MCP clients need not
+  resolve refs); `$schema` is stripped as draft metadata.
+- **Nothing unenforced is advertised.** `max_results` publishes without the
+  roadmap's `default: 50` / `maximum: 500`, neither of which the schema enforces.
+  `approve_memory.approval` is the only `.default()` in the tool surface and is
+  published because zod really applies it — pinned by a test.
+- `zod-to-json-schema` was already in the lockfile via `@modelcontextprotocol/sdk`
+  at our zod version; declaring it direct added zero packages.
+
+Sources: [[docs/superpowers/specs/2026-07-25-publish-tool-input-schemas-design]].
+
+Two gaps the `critic` found in the first cut of this change, both fixed:
+
+1. **The compile-time `Record` guard catches a MISSING mapping, not a WRONG one.**
+   Swapping two tools' schemas passed every test but one (and only by accident,
+   via the single `.default()`). Added a cross-check that calls each tool with
+   `{}` and asserts the handler's own zod error names every property the listing
+   advertised as required — a swapped schema advertises a required set its
+   handler never asks for. Verified non-vacuous by swapping
+   `get_project_rules`/`save_project_rule`: RED, naming the tool and the key.
+2. **`get_task_context` was the only non-strict schema of the 35.** It stripped
+   unknown keys, but `zod-to-json-schema` emits `additionalProperties: false`
+   for a stripping object as well — so the published contract was stricter than
+   the enforced one. Fixed by making it `.strict()` (aligning with the other 34
+   and with the advertisement), plus a source-level test asserting every mapped
+   schema has `_def.unknownKeys === "strict"`, since the published JSON cannot
+   distinguish strip from strict.

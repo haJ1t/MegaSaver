@@ -7,7 +7,7 @@ import { McpBridgeError } from "../errors.js";
 
 export type ImpactToolEnv = { registry: CoreRegistry; storeRoot: string };
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     projectId: z.string().min(1),
     symbol: z.string().min(1),

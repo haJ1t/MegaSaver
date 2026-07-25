@@ -3,6 +3,7 @@ import type { CoreRegistry } from "@megasaver/core";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { McpBridgeError } from "./errors.js";
 import type { McpToolName } from "./tool-name.js";
 import {
@@ -11,6 +12,7 @@ import {
   internalIdFromExposed,
   namingModeFromEnv,
 } from "./tool-naming.js";
+import { TOOL_INPUT_SCHEMAS } from "./tool-schemas.js";
 import { handleApproveMemory } from "./tools/approve-memory.js";
 import { handleAuditTokenUsage } from "./tools/audit-token-usage.js";
 import { handleBuildTaskPlan } from "./tools/build-task-plan.js";
@@ -110,6 +112,24 @@ export type ServerDeps = {
   // expansion guard is always engaged on the production path.
   allowedChunkSetIds?: ReadonlySet<string>;
 };
+
+// JSON Schema published in tools/list, derived from the SAME Zod object each
+// handler parses with, so the advertised contract and the enforced one are one
+// value (publish-tool-input-schemas §2.2). Built once at module load — 35
+// conversions per tools/list request would be pure waste.
+//
+// `$refStrategy: "none"` guarantees no $ref/definitions can appear: MCP clients
+// are not required to resolve refs. `$schema` is dropped — draft metadata, not
+// contract, and it would repeat a URL across all 35 listings.
+const PUBLISHED_INPUT_SCHEMAS: Record<McpToolName, object> = Object.fromEntries(
+  Object.entries(TOOL_INPUT_SCHEMAS).map(([id, schema]) => {
+    const { $schema, ...jsonSchema } = zodToJsonSchema(schema, {
+      $refStrategy: "none",
+      target: "jsonSchema7",
+    }) as Record<string, unknown>;
+    return [id, jsonSchema];
+  }),
+) as Record<McpToolName, object>;
 
 // Internal dispatch id (== legacy wire name) + description. The
 // exposed name is derived per naming mode at list/dispatch time.
@@ -279,7 +299,7 @@ export function buildServer(deps: ServerDeps): {
       tools: TOOL_DEFS.map((t) => ({
         name: exposedToolName(t.id, naming),
         description: t.description,
-        inputSchema: { type: "object" as const },
+        inputSchema: PUBLISHED_INPUT_SCHEMAS[t.id],
       })),
     }),
   );
