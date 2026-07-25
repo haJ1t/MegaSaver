@@ -147,3 +147,22 @@ export {
   type FirewallScope,
   type FilterFirewallCounts,
 } from "./firewall-ledger.js";
+export {
+  readNetEffectRecord,
+  saverPausedByNetEffect,
+  writeNetEffectRecord,
+  writeResumeOverride,
+  type NetEffectRecord,
+} from "./net-effect-store.js";
+export { hashToolOutput, hasSeenOutput, recordSeenOutput } from "./saver-seen.js";
+// Re-export the stats symbols the CLI's doctor needs: @megasaver/cli is
+// forbidden from depending on @megasaver/stats directly (it reads stats only
+// through this package + @megasaver/core), so route them through here.
+export {
+  estimateNetEffect,
+  overlayTokenSaverEventSchema,
+  sumBytesSavedSince,
+  type NetEffectVerdict,
+  type ProxyUsageRow,
+  type WorkspaceWindowStats,
+} from "@megasaver/stats";

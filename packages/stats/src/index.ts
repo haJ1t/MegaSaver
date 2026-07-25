@@ -177,3 +177,10 @@ export {
   normalizedCostUsd,
   type BenchmarkUsage,
 } from "./benchmark-cost.js";
+
+export {
+  estimateNetEffect,
+  type NetEffectVerdict,
+  type ProxyUsageRow,
+  type WorkspaceWindowStats,
+} from "./net-effect.js";

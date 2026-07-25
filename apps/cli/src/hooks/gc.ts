@@ -40,6 +40,35 @@ function pruneIntentFiles(storeRoot: string, cutoffMs: number): void {
   }
 }
 
+// P1 first-sight ledger: one seen-hash file per session, unbounded file count;
+// sweep with the same retention as intent files. Best-effort, every failure swallowed.
+function pruneSeenFiles(storeRoot: string, cutoffMs: number): void {
+  let workspaces: string[];
+  try {
+    workspaces = readdirSync(join(storeRoot, "stats"));
+  } catch {
+    return;
+  }
+  for (const ws of workspaces) {
+    const dir = join(storeRoot, "stats", ws, "saver-seen");
+    let files: string[];
+    try {
+      files = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      if (!f.endsWith(".json")) continue;
+      const p = join(dir, f);
+      try {
+        if (statSync(p).mtimeMs < cutoffMs) unlinkSync(p);
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+}
+
 // Throttled, best-effort content-store GC (C14). The marker is touched BEFORE
 // pruning so a hook arriving AFTER the touch skips the walk. A simultaneous
 // check-then-claim race (two hooks in the statSync→write window) can still both
@@ -68,6 +97,7 @@ export async function maybeRunOverlayGc(storeRoot: string, deps: GcDeps = {}): P
   try {
     await prune({ storeRoot, olderThan: new Date(now() - OVERLAY_RETENTION_MS) });
     pruneIntentFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
+    pruneSeenFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
     // E26 drift repair: summaries lagging their JSONL (lock-skipped updates)
     // or failing schema are rebuilt in the same daily sweep. Best-effort.
     try {
