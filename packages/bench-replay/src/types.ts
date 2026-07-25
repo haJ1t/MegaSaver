@@ -12,6 +12,17 @@ export const recordedRequestSchema = z
 
 export type RecordedRequest = z.infer<typeof recordedRequestSchema>;
 
+// The request line and header set a body was recorded under, from its
+// `req-NNN.meta.json` sibling. Replayed as captured because Claude Code's
+// anthropic-beta set varies per request and gates body fields the recording
+// already contains — see capture-proxy.ts.
+export const recordedRequestMetaSchema = z.object({
+  url: z.string(),
+  headers: z.record(z.string()),
+});
+
+export type RecordedRequestMeta = z.infer<typeof recordedRequestMetaSchema>;
+
 export type Arm = "baseline" | "megasaver";
 
 // A fail-open `null` from the saver is indistinguishable from a legitimate

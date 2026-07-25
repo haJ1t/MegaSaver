@@ -60,6 +60,28 @@ describe("replayArm", () => {
     expect(usage.normalizedCostUsd).toBeCloseTo(0.00315, 8);
   });
 
+  // The recorded request line and header set are per-request (Claude Code's
+  // sidecar turns carry a different anthropic-beta set than the main turn), so
+  // the sender needs the meta that belongs to the body it is sending, not a
+  // global constant.
+  it("hands the sender the meta recorded for that same request", async () => {
+    const metas = [
+      { url: "/v1/messages?beta=true", headers: { "anthropic-beta": "one" } },
+      { url: "/v1/messages", headers: { "anthropic-beta": "two" } },
+    ];
+    const seen: unknown[] = [];
+    await replayArm({
+      arm: "baseline",
+      bodies: recorded,
+      metas,
+      send: async (_body, meta) => {
+        seen.push(meta);
+        return zeroUsage;
+      },
+    });
+    expect(seen).toEqual(metas);
+  });
+
   it("sends the bodies it was handed verbatim, applying no transform of its own", async () => {
     const sent: string[] = [];
     const arms = prepareArms({ requests: recorded, applySaver: () => SAVED });

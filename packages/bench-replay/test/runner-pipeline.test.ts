@@ -80,6 +80,15 @@ function toolResultMessages(content: string) {
   ];
 }
 
+// Each body's recorded request line and header set, written as the capture
+// proxy writes them. The two requests carry DIFFERENT anthropic-beta sets, as a
+// real recording does (main turn vs sidecar turn), so a sender that substituted
+// one global header set would be caught here.
+const META = [
+  { url: "/v1/messages?beta=true", headers: { "anthropic-beta": "beta-main" } },
+  { url: "/v1/messages", headers: { "anthropic-beta": "beta-sidecar" } },
+];
+
 function writeRecording(root: string, content = RAW_TOOL_OUTPUT): string {
   const dir = join(root, "task_1");
   mkdirSync(dir, { recursive: true });
@@ -88,6 +97,7 @@ function writeRecording(root: string, content = RAW_TOOL_OUTPUT): string {
     join(dir, "req-001.json"),
     JSON.stringify({ model: "claude-test", stream: true, messages }),
   );
+  writeFileSync(join(dir, "req-001.meta.json"), JSON.stringify(META[0]));
   writeFileSync(
     join(dir, "req-002.json"),
     JSON.stringify({
@@ -100,6 +110,7 @@ function writeRecording(root: string, content = RAW_TOOL_OUTPUT): string {
       ],
     }),
   );
+  writeFileSync(join(dir, "req-002.meta.json"), JSON.stringify(META[1]));
   // Same-conversation cost reference: 2000*5 + 4000*10 + 8000*0.5 + 1100*25 per
   // 1e6 = $0.0815, i.e. 3.07% off the replayed baseline — a real, non-zero drift
   // that still passes the 25% smoke tolerance.
@@ -141,7 +152,13 @@ else if (argv.startsWith("hooks saver")) {
 let root: string;
 let server: Server;
 let baseUrl: string;
-const seen: { authed: boolean; stream: unknown; maxTokens: unknown }[] = [];
+const seen: {
+  authed: boolean;
+  stream: unknown;
+  maxTokens: unknown;
+  url: string | undefined;
+  beta: unknown;
+}[] = [];
 
 beforeAll(async () => {
   root = mkdtempSync(join(tmpdir(), "bench-replay-pipeline-"));
@@ -157,6 +174,8 @@ beforeAll(async () => {
         authed: typeof req.headers["x-api-key"] === "string",
         stream: parsed.stream,
         maxTokens: parsed.max_tokens,
+        url: req.url,
+        beta: req.headers["anthropic-beta"],
       });
       res.writeHead(200, { "content-type": "text/event-stream" });
       res.end(sse(body.includes(COMPRESSED_MARKER) ? "megasaver" : "baseline"));
@@ -263,6 +282,18 @@ describe("bench-replay.mjs replay against a fake upstream", () => {
     // reintroduce the bias class this harness exists to eliminate — and the
     // printed verdict has to say so rather than reading as end-to-end.
     expect(seen.every((r) => r.maxTokens === 1)).toBe(true);
+    // Each request is replayed on the request line and under the beta header set
+    // it was RECORDED with. Both arms alternate req-001, req-002, so the two
+    // distinct sets have to alternate too — a fixed global header set would put
+    // one value on all eight.
+    expect(seen.map((r) => r.url)).toEqual(
+      Array.from({ length: 8 }, (_, i) =>
+        i % 2 === 0 ? "/v1/messages?beta=true" : "/v1/messages",
+      ),
+    );
+    expect(seen.map((r) => r.beta)).toEqual(
+      Array.from({ length: 8 }, (_, i) => (i % 2 === 0 ? "beta-main" : "beta-sidecar")),
+    );
     expect(out).toContain("generation was capped to max_tokens=1 on BOTH arms");
     expect(out).toContain("INPUT-SIDE comparison");
 
@@ -291,6 +322,10 @@ describe("bench-replay.mjs replay against a fake upstream", () => {
         messages: [{ role: "user", content: "title this conversation" }],
       }),
     );
+    writeFileSync(
+      join(dir, "req-003.meta.json"),
+      JSON.stringify({ url: "/v1/messages", headers: { "anthropic-beta": "beta-sidecar" } }),
+    );
     const run = await runReplay(recordings);
     expect(run.status, run.stderr).toBe(0);
     expect(run.stdout).toContain("models: claude-test=2 (66.7%) claude-haiku-sidecar=1 (33.3%)");
@@ -308,6 +343,19 @@ describe("bench-replay.mjs replay against a fake upstream", () => {
     const run = await runReplay(recordings);
     expect(run.status).not.toBe(0);
     expect(run.stderr).toMatch(/not a valid recorded \/v1\/messages body/);
+  });
+
+  // A body without its meta sibling was captured before the recorder persisted
+  // request lines and headers. It can only be replayed under invented headers,
+  // and the ones it was actually recorded with are unrecoverable — so it is
+  // refused rather than replayed as something else.
+  it("refuses a recording whose body has no meta sibling", async () => {
+    const recordings = join(root, "no-meta");
+    const dir = writeRecording(recordings);
+    rmSync(join(dir, "req-002.meta.json"));
+    const run = await runReplay(recordings);
+    expect(run.status).not.toBe(0);
+    expect(run.stderr).toMatch(/req-002\.meta\.json/);
   });
 
   it("refuses a recording captured with the saver already on", async () => {

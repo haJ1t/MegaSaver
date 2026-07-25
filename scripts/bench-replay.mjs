@@ -35,6 +35,7 @@ import {
   modelHistogram,
   pooledCostRatio,
   prepareSaverStore,
+  recordedRequestMetaSchema,
   recordedRequestSchema,
   replayBothOrders,
   startCaptureProxy,
@@ -82,10 +83,26 @@ function fail(message) {
 
 // ---------------------------------------------------------------- recordings
 
-// The loaded file is the system boundary the schema exists for: a recording is
+function parseJsonFile(path, describe) {
+  if (!existsSync(path)) fail(describe("does not exist"));
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch (cause) {
+    fail(describe(`is not valid JSON: ${cause.message}`));
+  }
+}
+
+// The loaded files are the system boundary the schemas exist for: a recording is
 // written by one process and read by another, possibly after an edit, a partial
 // write, or a tool that reformatted it. Parsing here is what turns a corrupt
 // recording into a loud failure instead of a plausible-looking cost number.
+//
+// The `.meta.json` sibling is REQUIRED, not optional. A body without one was
+// captured before the recorder persisted request lines and headers, and the
+// anthropic-beta set it was recorded under cannot be reconstructed from the body
+// — replaying it means inventing headers that decide prompt-cache scoping and
+// the pricing tier. Such a recording is refused rather than silently replayed as
+// a different request.
 function loadRecording(taskDir) {
   const files = readdirSync(taskDir)
     .filter((name) => /^req-\d+\.json$/.test(name))
@@ -94,20 +111,31 @@ function loadRecording(taskDir) {
     .sort((a, b) => Number(a.match(/\d+/)[0]) - Number(b.match(/\d+/)[0]));
   if (files.length === 0) fail(`no req-*.json files in ${taskDir}`);
 
-  return files.map((name) => {
-    const path = join(taskDir, name);
-    let raw;
-    try {
-      raw = JSON.parse(readFileSync(path, "utf8"));
-    } catch (cause) {
-      fail(`${path} is not valid JSON: ${cause.message}`);
+  const requests = [];
+  const metas = [];
+  for (const name of files) {
+    const bodyPath = join(taskDir, name);
+    const body = recordedRequestSchema.safeParse(
+      parseJsonFile(bodyPath, (why) => `${bodyPath} ${why}`),
+    );
+    if (!body.success) {
+      fail(`${bodyPath} is not a valid recorded /v1/messages body: ${body.error.message}`);
     }
-    const parsed = recordedRequestSchema.safeParse(raw);
-    if (!parsed.success) {
-      fail(`${path} is not a valid recorded /v1/messages body: ${parsed.error.message}`);
+    const metaPath = join(taskDir, name.replace(/\.json$/, ".meta.json"));
+    const meta = recordedRequestMetaSchema.safeParse(
+      parseJsonFile(
+        metaPath,
+        (why) =>
+          `${metaPath} ${why} — the request line and headers ${name} was recorded under are unrecoverable, so it cannot be replayed faithfully. Re-record this task.`,
+      ),
+    );
+    if (!meta.success) {
+      fail(`${metaPath} is not a valid recorded request meta: ${meta.error.message}`);
     }
-    return parsed.data;
-  });
+    requests.push(body.data);
+    metas.push(meta.data);
+  }
+  return { requests, metas };
 }
 
 function taskDirs(recordingsRoot) {
@@ -286,7 +314,7 @@ async function record(values) {
 
     // Fail here, not at replay time: a contaminated recording is cheap to redo
     // now and expensive to discover after four tasks of API spend.
-    assertUncompressedRecording(loadRecording(outDir));
+    assertUncompressedRecording(loadRecording(outDir).requests);
 
     console.log(
       `  ${task}: ${proxy.count()} requests recorded, ${endToEnd.num_turns ?? "?"} turns, reference cost $${normalizedCostUsd(endToEnd.usage).toFixed(6)}`,
@@ -298,15 +326,16 @@ async function record(values) {
 
 // ------------------------------------------------------------------- replay
 
+// Replays each request on the path and under the header set it was RECORDED
+// with — Claude Code's anthropic-beta set varies per request and gates body
+// fields the recording already carries, so a fixed header trio would send a
+// different request than the one measured. Only the credential is ours: the
+// recorder strips it, and this process authenticates from ANTHROPIC_API_KEY.
 function makeSender(baseUrl, apiKey) {
-  return async (body) => {
-    const response = await fetch(`${baseUrl}/v1/messages`, {
+  return async (body, meta) => {
+    const response = await fetch(`${baseUrl}${meta.url}`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: { ...meta.headers, "x-api-key": apiKey },
       // Sent exactly as prepared: `"stream": true` stays as recorded (flipping it
       // would change what the API bills and make the replay a different request),
       // and `max_tokens` was already capped identically on both arms upstream in
@@ -344,7 +373,7 @@ async function replay(values) {
 
   for (const task of taskDirs(values.recordings)) {
     const taskDir = join(values.recordings, task);
-    const requests = loadRecording(taskDir);
+    const { requests, metas } = loadRecording(taskDir);
     assertUncompressedRecording(requests);
 
     // A FRESH store per task and per invocation. The saver's seen-hash ledger and
@@ -370,6 +399,7 @@ async function replay(values) {
     const base = await replayBothOrders({
       task,
       requests,
+      metas,
       applySaver,
       send,
       orderTolerance,

@@ -30,11 +30,73 @@ describe("startCaptureProxy", () => {
         expect(await res.text()).toBe('{"ok":true}');
       }
       const files = readdirSync(dir)
-        .filter((f) => f.endsWith(".json"))
+        .filter((f) => /^req-\d+\.json$/.test(f))
         .sort();
       expect(files).toEqual(["req-001.json", "req-002.json"]);
       expect(JSON.parse(readFileSync(join(dir, "req-001.json"), "utf8"))).toEqual(bodies[0]);
       expect(JSON.parse(readFileSync(join(dir, "req-002.json"), "utf8"))).toEqual(bodies[1]);
+    } finally {
+      await proxy.stop();
+      await upstream.stop();
+    }
+  });
+
+  // Real Claude Code sends /v1/messages?beta=true with a per-request
+  // anthropic-beta set — prompt-caching-scope, context-1m, context-management,
+  // effort — and the recorded bodies carry top-level fields that only exist
+  // under those betas. A recording without them cannot be replayed as the
+  // request the client actually made, and the header set is unrecoverable after
+  // the fact.
+  it("records the request line and forwarded headers beside the body", async () => {
+    const upstream = await startFakeUpstream('{"ok":true}');
+    const proxy = await startCaptureProxy({ port: 0, upstream: upstream.url, outDir: dir });
+    try {
+      await fetch(`${proxy.url}/v1/messages?beta=true`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "anthropic-beta": "prompt-caching-scope-2026-01-05,context-1m-2025-08-07",
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({ model: "m", messages: [] }),
+      });
+      const meta = JSON.parse(readFileSync(join(dir, "req-001.meta.json"), "utf8"));
+      expect(meta.url).toBe("/v1/messages?beta=true");
+      expect(meta.headers["anthropic-beta"]).toBe(
+        "prompt-caching-scope-2026-01-05,context-1m-2025-08-07",
+      );
+      expect(meta.headers["anthropic-version"]).toBe("2023-06-01");
+      expect(meta.headers["content-type"]).toBe("application/json");
+      // Hop-by-hop headers are not part of the request being replayed.
+      expect(meta.headers.host).toBeUndefined();
+    } finally {
+      await proxy.stop();
+      await upstream.stop();
+    }
+  });
+
+  // The forwarded header map carries the operator's live API key. Recordings sit
+  // in /tmp and are handed around; replay injects its own key from the
+  // environment, so the credential has no reason to be on disk at all.
+  it("never writes credentials into the recorded headers", async () => {
+    const upstream = await startFakeUpstream('{"ok":true}');
+    const proxy = await startCaptureProxy({ port: 0, upstream: upstream.url, outDir: dir });
+    try {
+      await fetch(`${proxy.url}/v1/messages`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": "sk-ant-live-secret",
+          authorization: "Bearer oauth-secret",
+        },
+        body: JSON.stringify({ model: "m", messages: [] }),
+      });
+      const raw = readFileSync(join(dir, "req-001.meta.json"), "utf8");
+      expect(raw).not.toContain("sk-ant-live-secret");
+      expect(raw).not.toContain("oauth-secret");
+      const meta = JSON.parse(raw);
+      expect(meta.headers["x-api-key"]).toBeUndefined();
+      expect(meta.headers.authorization).toBeUndefined();
     } finally {
       await proxy.stop();
       await upstream.stop();

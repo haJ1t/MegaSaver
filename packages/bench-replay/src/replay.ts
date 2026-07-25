@@ -8,6 +8,7 @@ import type {
   DriftSmokeResult,
   PairResult,
   RecordedRequest,
+  RecordedRequestMeta,
   ReplayOrder,
   ReplayVerdict,
   RequestUsage,
@@ -21,7 +22,7 @@ export type SendResult = {
   cache_read_input_tokens?: number;
   output_tokens?: number;
 };
-export type Send = (body: RecordedRequest) => Promise<SendResult>;
+export type Send = (body: RecordedRequest, meta?: RecordedRequestMeta) => Promise<SendResult>;
 
 // A PURE byte-replay of one precomputed sequence. It never consults the saver:
 // the transform ran once, up front, in `prepareArms`. That is what lets the two
@@ -30,6 +31,10 @@ export type Send = (body: RecordedRequest) => Promise<SendResult>;
 export async function replayArm(input: {
   arm: Arm;
   bodies: readonly RecordedRequest[];
+  // Index-aligned with `bodies`: one recorded request line + header set each,
+  // because Claude Code's anthropic-beta set differs between the main turn and
+  // its sidecar turns, so no single header set replays the whole sequence.
+  metas?: readonly RecordedRequestMeta[] | undefined;
   send: Send;
   now?: () => number;
 }): Promise<ArmUsage> {
@@ -48,7 +53,7 @@ export async function replayArm(input: {
   for (const [index, body] of input.bodies.entries()) {
     let usage: SendResult;
     try {
-      usage = await input.send(body);
+      usage = await input.send(body, input.metas?.[index]);
     } catch (cause) {
       // A partial replay must never be reported as a result — a half-sent arm
       // would look artificially cheap and skew the ratio. Abort loudly with
@@ -96,6 +101,7 @@ export async function replayArm(input: {
 // `replayBothOrders`, which is the only path to a verdict.
 export async function replayPair(input: {
   arms: PreparedArms;
+  metas?: readonly RecordedRequestMeta[] | undefined;
   send: Send;
   order: ReplayOrder;
   now?: () => number;
@@ -104,6 +110,7 @@ export async function replayPair(input: {
     replayArm({
       arm,
       bodies: input.arms[arm],
+      metas: input.metas,
       send: input.send,
       ...(input.now === undefined ? {} : { now: input.now }),
     });
@@ -138,6 +145,7 @@ export async function replayPair(input: {
 export async function replayBothOrders(input: {
   task: string;
   requests: readonly RecordedRequest[];
+  metas?: readonly RecordedRequestMeta[] | undefined;
   applySaver: ApplySaver;
   send: Send;
   orderTolerance: number;
@@ -153,12 +161,14 @@ export async function replayBothOrders(input: {
 
   const baselineFirst = await replayPair({
     arms,
+    metas: input.metas,
     send: input.send,
     order: "baseline-first",
     ...clock,
   });
   const megasaverFirst = await replayPair({
     arms,
+    metas: input.metas,
     send: input.send,
     order: "megasaver-first",
     ...clock,

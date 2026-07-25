@@ -1,4 +1,5 @@
 export {
+  recordedRequestMetaSchema,
   recordedRequestSchema,
   type Arm,
   type ArmIntegrity,
@@ -8,6 +9,7 @@ export {
   type OrderCheck,
   type PairResult,
   type RecordedRequest,
+  type RecordedRequestMeta,
   type ReplayOrder,
   type ReplayVerdict,
   type RequestUsage,

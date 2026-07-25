@@ -104,6 +104,18 @@ disclosed, not corrected: repricing would mean per-model rate cards inside a cos
 function other benchmarks share, and excluding the sidecar calls would mean
 silently dropping recorded traffic from a replay.
 
+**Each request is replayed on the request line and under the header set it was
+recorded with.** The recorder writes them to a `req-NNN.meta.json` sibling of
+every body (minus credentials, which replay supplies from `ANTHROPIC_API_KEY`),
+because Claude Code sends a per-request `anthropic-beta` set — it differs between
+the main turn and the sidecar turns — and the recorded bodies carry top-level
+fields that exist only under those betas. Two of them, `prompt-caching-scope` and
+`context-1m`, decide prompt-cache scoping and the pricing tier: replaying under a
+substituted header set measures a different cache regime in *both* arms, which no
+arm-vs-arm ratio can cancel. The header set cannot be reconstructed from a body,
+so **a recording whose body has no `.meta.json` sibling is refused, not
+replayed.**
+
 ---
 
 ## KNOWN-UNVALIDATED — read before quoting any number
