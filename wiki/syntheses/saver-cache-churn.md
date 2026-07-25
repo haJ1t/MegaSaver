@@ -139,8 +139,15 @@ rates (kills the fast-mode artifact outright, pure arithmetic, zero extra runs);
 and control agent-path nondeterminism (replay a fixed tool-call transcript through
 both arms, or raise N with normalized cost).
 
-Stage A (11 commits) merged to `main` on 2026-07-25 (PR #295) with this gate
-still FAILED; the harness that could resolve the effect has still not been run.
+Stage A (10 commits) was rebase-merged to `main` on 2026-07-25 (PR #295, range
+`0157fe44..8e261d19`) with this gate still FAILED. The `feat/net-positive-stage-a`
+ref still exists, so `git merge-base --is-ancestor` reports it unmerged, but
+`git cherry main feat/net-positive-stage-a` marks all 10 commits as having
+patch-equivalents on `main`. The guardrail is live, not dormant:
+`apps/cli/src/hooks/saver-run.ts` wires `saverPausedByNetEffect` and the
+seen-hash ledger into the real hook. The harness that could resolve the effect
+(`@megasaver/bench-replay`) now exists but has never been run against the real
+API, so the conclusion above applies to shipped behaviour.
 
 ## Direction
 

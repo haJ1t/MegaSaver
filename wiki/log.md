@@ -4205,3 +4205,19 @@ first-sight saver have no demonstrated cost benefit. PR #293 (Hot Handoff)
 also merged in the same window. Sources:
 [[syntheses/variance-controlled-benchmark]], [[syntheses/saver-cache-churn]],
 [[docs/superpowers/specs/2026-07-19-net-positive-megasaver-design]] §gate.
+
+## [2026-07-25 15:40 +03] correction | Stage A merge shape and commit count
+
+Both syntheses overstated the Stage A merge. Corrections, each verified against
+the repo: the branch carries **10** commits, not 11 (`git log --oneline
+main..feat/net-positive-stage-a | wc -l`); it was **rebase-merged**, not
+merged — `8e261d19` has a single parent, so there is no merge commit, and the
+range on `main` is `0157fe44..8e261d19`; the `feat/net-positive-stage-a` ref
+survives the rebase, so `git merge-base --is-ancestor` still reports it
+unmerged while `git cherry` marks all 10 commits as patch-equivalent on `main`.
+Added the live-code pointer (`apps/cli/src/hooks/saver-run.ts` wires
+`saverPausedByNetEffect` plus the seen-hash ledger) so a reader does not
+re-derive whether the guardrail actually ships. The prior entry
+`[2026-07-25 14:52]` stands as written history; it is superseded on the "merged
+as `8e261d19`" phrasing only. Sources:
+[[syntheses/saver-cache-churn]], [[syntheses/variance-controlled-benchmark]].

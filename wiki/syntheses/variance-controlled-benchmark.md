@@ -85,8 +85,9 @@ switching the saver off.
 Built and green offline: 101 package tests, runner proven end to end against a
 fake upstream. **The real gate has not been run** — it needs an
 `ANTHROPIC_API_KEY` for the replay sender (Claude Code's own OAuth is not
-usable by a separate HTTP client). Stage A merged to `main` anyway on
-2026-07-25 (PR #295, merge commit `8e261d19`) with its gate still FAILED —
+usable by a separate HTTP client). Stage A was rebase-merged to `main` anyway
+on 2026-07-25 (PR #295, range `0157fe44..8e261d19`, no merge commit) with its
+gate still FAILED —
 geomean 0.948x against a required >=1.0x, min task 0.68x against >=0.9x — so
 the shipped guardrail and first-sight saver have no demonstrated cost benefit.
 No post-merge verdict exists either.
