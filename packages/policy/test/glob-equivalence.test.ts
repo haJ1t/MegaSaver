@@ -135,6 +135,43 @@ const SEGMENTS = [
   "",
 ] as const;
 
+// Case folding changed carrier: the regex `i` flag used Canonicalize (which
+// refuses any non-ASCII -> ASCII mapping), the matcher uses toLowerCase(). They
+// are identical on ASCII, so every LOCKED §9a glob — all ASCII — is unaffected.
+// Off ASCII they differ, and the DIRECTION is what matters for a denylist.
+describe("compileGlob — non-ASCII case-folding divergence is bounded", () => {
+  // Tightening: the matcher denies paths the regex let through. Safe direction.
+  const tightens: ReadonlyArray<readonly [string, string, string]> = [
+    ["k", "K", "KELVIN SIGN"],
+    ["ß", "ẞ", "capital sharp s"],
+    ["å", "Å", "ANGSTROM SIGN"],
+  ];
+
+  for (const [glob, path, label] of tightens) {
+    it(`matches more than the regex did — ${label}`, () => {
+      expect(legacyCompileGlob(glob).test(path)).toBe(false);
+      expect(compileGlob(glob).test(path)).toBe(true);
+    });
+  }
+
+  // The ONLY weakening direction found: Greek final vs medial sigma both
+  // uppercase to Σ, so Canonicalize unified them and toLowerCase does not. It
+  // needs an operator to write ς in a deny glob against a path carrying σ; the
+  // old unification was an artifact of regex canonicalization, not an intended
+  // rule. Asserted here so the boundary is known rather than discovered.
+  it("no longer unifies Greek final sigma with medial sigma", () => {
+    expect(legacyCompileGlob("ς").test("σ")).toBe(true);
+    expect(compileGlob("ς").test("σ")).toBe(false);
+  });
+
+  it("every LOCKED denylist glob is pure ASCII, so none of this reaches them", () => {
+    for (const glob of DENYLIST_GLOBS) {
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: ASCII range check
+      expect(/^[\x20-\x7E]*$/.test(glob)).toBe(true);
+    }
+  });
+});
+
 describe("compileGlob — property equivalence on metachar-free input", () => {
   // Restricted to the alphabet where the two implementations are SUPPOSED to
   // agree. Outside it they diverge on purpose: that divergence is the fix, and

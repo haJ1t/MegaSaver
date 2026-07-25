@@ -163,10 +163,31 @@ The LOCKED §9a denylist must keep its exact verdicts. Three gates:
 
 The property is restricted to metachar-free ASCII deliberately. Outside
 that alphabet the two implementations are *supposed* to disagree (that is
-D2/D3), and non-ASCII case folding differs between `toLowerCase()` and the
-regex `i` flag's Canonicalize — a documented micro-divergence, not a
-regression, and unreachable on the policy path because `normalizePath`
-already lowercases.
+D2/D3), and case folding changes carrier — see §5b.
+
+## §5b Case-folding divergence, measured
+
+The regex `i` flag used Canonicalize, which explicitly refuses any
+non-ASCII → ASCII mapping; the matcher uses `toLowerCase()`. On ASCII the
+two are identical, so **all 15 LOCKED §9a globs are unaffected** — every
+one is pure ASCII, asserted by a test. Off ASCII they differ, and for a
+denylist only the *direction* matters:
+
+| glob | path | regex `i` | `toLowerCase` | direction |
+|---|---|---|---|---|
+| `k` | `K` (U+212A KELVIN SIGN) | no match | match | tightens |
+| `ß` | `ẞ` (U+1E9E) | no match | match | tightens |
+| `å` | `Å` (U+212B ANGSTROM) | no match | match | tightens |
+| `ς` (U+03C2) | `σ` (U+03C3) | **match** | **no match** | **weakens** |
+
+Every divergence found tightens the gate except one: Greek final sigma
+and medial sigma both uppercase to `Σ`, so Canonicalize unified them and
+`toLowerCase` does not. Reaching it requires an operator to write `ς` in a
+deny glob against a path carrying `σ`. The old unification was an artifact
+of regex canonicalization rather than an intended rule, so this is
+accepted, not fixed — emulating Canonicalize would mean carrying Unicode
+tables for a case with no consumer. All four rows are pinned by tests so
+the boundary is asserted rather than discovered later.
 
 ## §6 Test plan (TDD — RED first)
 
