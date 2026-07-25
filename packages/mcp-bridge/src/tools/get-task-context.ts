@@ -6,7 +6,13 @@ import { type ContextToolEnv, packFor } from "./context-pruning.js";
 
 export type GetTaskContextEnv = ContextToolEnv;
 
-const argsSchema = z.object({ projectId: z.string().min(1), task: z.string().trim().min(1) });
+// .strict() like every other tool input: without it this schema STRIPS unknown
+// keys while the published JSON Schema says additionalProperties:false, so the
+// advertised contract would be stricter than the enforced one. It was the lone
+// non-strict schema of the 35 (publish-tool-input-schemas §3.3).
+export const argsSchema = z
+  .object({ projectId: z.string().min(1), task: z.string().trim().min(1) })
+  .strict();
 
 // Proactive seam: turn a free-text task into a task-scoped context pack. The
 // task is normalized through deriveIntent (explicit source), then packFor does

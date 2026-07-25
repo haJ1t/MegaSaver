@@ -1,284 +1,298 @@
-# `compileGlob` Catastrophic Backtracking Fix — Design
+# `compileGlob` Exponential-Backtracking + Metachar-Injection Fix — Design
 
 - **Date:** 2026-07-25
-- **Status:** user-approved design (2026-07-25). Approach chosen after the
-  originally-proposed fix — "collapse runs of adjacent unbounded
-  quantifiers" — was **disproven by measurement** (§3). Not yet reviewed;
-  `code-reviewer`, `critic`, and `security-reviewer` passes are required
-  before merge.
-- **Risk:** HIGH (§12 — policy denylist core path). `compileGlob` backs
-  `SECRET_PATH_PATTERNS`, the read-gate denylist. A change that altered
-  what an accepted pattern matches would be a denylist **bypass**, not a
-  slowdown. The chosen approach is selected specifically because it
-  changes zero matching semantics (§5). Worktree required; no `main`
-  edits. Mandatory: full chain + `architect` + `critic` +
-  `security-reviewer`.
-- **Origin:** found while evaluating whether `ProjectRule.appliesTo`
-  should carry a length bound (`packages/core/src/project-rule.ts:24`).
-  The bound was rejected; the investigation surfaced this instead.
-  Pre-existing in shipped code since the BB3 policy package (`61efb28b`);
-  no in-flight branch introduced it.
+- **Status:** user-approved design. Approach chosen after both originally
+  proposed candidate fixes were **refuted by measurement** (§3); the user
+  confirmed the linear-matcher approach and the inclusion of the
+  `@megasaver/core` call site.
+- **Risk:** CRITICAL (§12 — security gate). `compileGlob` is the single
+  matcher behind the LOCKED §9a `DENYLIST_GLOBS` (`SECRET_PATH_PATTERNS`),
+  the `.megasaver/permissions.yaml` `deny.read` / `deny.write` rules, and
+  `ProjectRule.appliesTo` ranking. Mandatory chain: HIGH chain +
+  `security-reviewer` + verifier with reproduction evidence + this manual
+  user-confirmation record. Worktree required; `autopilot` / `ralph` /
+  any unsupervised loop forbidden.
+- **Origin:** reported as an exponential blowup in `**/`-chained globs.
+  Measurement confirmed the report and found two further defects of the
+  same root cause (§2).
 
 ---
 
-## 1. Problem
+## §1 Summary
 
-`compileGlob` (`packages/policy/src/secret-paths.ts:26`) compiles a glob
-to an anchored, case-insensitive `RegExp`. Consecutive wildcard tokens
-compile to **multiple unbounded quantifiers in one pattern**. On a
-subject that does **not** match, the engine explores every way to
-partition the subject among those quantifiers — exponential time.
+`packages/policy/src/secret-paths.ts:26` compiles an untrusted glob string
+into a `RegExp`. That is the root cause of three distinct defects. The fix
+removes the regex entirely and matches the glob directly with a
+non-backtracking NFA simulation.
 
-Three consumers:
+## §2 The three defects, one root cause
 
-| consumer | file | exposure |
+`compileGlob` translates `**/` → `(?:.*/)?`, `**` → `.*`, `*` → `[^/]*`,
+`?` → `[^/]`, `.` → `\.`, and emits **every other character raw** into the
+regex body.
+
+**D1 — chained wildcards backtrack exponentially.** The translations are
+ambiguous: adjacent unbounded quantifiers admit many splits of the same
+subject, and a non-matching subject forces the engine through all of them.
+This is *not* specific to `**/` — all three wildcard forms blow up
+identically. Measured against a 255-character subject (`k` = wildcard
+count):
+
+| k | `*a`×k, `/`-free subject | `**a`×k | `**/a`×k, segmented subject |
+|---|---|---|---|
+| 3 | 17.16 ms | 14.16 ms | 3.62 ms |
+| 4 | 1,041.06 ms | 1,027.45 ms | 126.20 ms |
+| 5 | 58,529.58 ms | 47,486.46 ms | 3,233.72 ms |
+| 6 | — | — | 158,483.06 ms |
+
+Compilation stays at 0.007–0.038 ms throughout; the cost is entirely in
+`.test()`.
+
+**D2 — regex metacharacters are injected verbatim.** `(`, `)`, `+`, `{`,
+`}`, `|`, `[`, `]`, `^`, `$`, `\` all reach the regex body unescaped, so a
+"glob" is a partially-interpreted regex. A **zero-wildcard** glob is
+therefore a classic ReDoS:
+
+| glob | `*` count | subject | time |
+|---|---|---|---|
+| `(a+)+b` | 0 | 28 × `a` | 1,130.3 ms |
+| `(a\|a)+b` | 0 | 24 × `a` | 1,210.6 ms |
+
+This is what makes any wildcard-counting cap unsound: the cap counts a
+token that the exploit does not need.
+
+**D3 — the same passthrough silently breaks matching.** A deny rule for an
+ordinary filename containing a regex metacharacter does not deny:
+
+| glob | path | today | correct |
+|---|---|---|---|
+| `**/a+b.txt` | `x/a+b.txt` | `false` | `true` |
+| `**/file(1).txt` | `x/file(1).txt` | `false` | `true` |
+| `**/dollar$.txt` | `x/dollar$.txt` | `false` | `true` |
+
+D3 needs no crafted input — it is reachable with a legitimate filename,
+and it is the same end state as D1: the gate does not deny, with no
+operator signal.
+
+`[` and `]` are the one exception in this list, and an earlier revision of
+this spec got them wrong: they are genuine glob syntax that the regex
+honoured by accident, so making them literal would *narrow* the deny set.
+They are rejected at the parse boundary instead — see §8 F2.
+
+## §2b Reachability
+
+Three call sites compile untrusted globs through this one function:
+
+1. `parseProjectPermissions` (`packages/policy/src/parse-project-permissions.ts:56-57`)
+   — `deny.read` / `deny.write` from a checked-in `.megasaver/permissions.yaml`.
+   Consumed by `packages/context-gate/src/read.ts` and
+   `packages/daemon/src/handlers.ts:117` and `:258`.
+2. `rankApplicableRules` (`packages/core/src/project-rule-ranking.ts:18`)
+   — `ProjectRule.appliesTo`, user/agent-authored, compiled **per call
+   inside a ranking loop** with no cache. Not covered by the original
+   report.
+3. `SECRET_PATH_PATTERNS` (`packages/policy/src/secret-paths.ts:57`) — the
+   LOCKED §9a constants. Trusted; each shipped glob has at most one `**/`,
+   so the shipped set is not itself vulnerable.
+
+End-to-end, a `permissions.yaml` carrying `deny: read: ['**/a'×9 + '/x']`
+drives `evaluatePathRead` to burn multiple seconds and then return
+`{ allowed: true }`.
+
+## §3 Rejected alternatives (refuted by measurement, not by argument)
+
+- **Collapse consecutive `(?:.*/)?` groups.** Does not apply: the vector
+  carries a literal between the groups, so no two are adjacent.
+- **Rewrite `**/` as the unambiguous-looking `(?:[^/]*/)*`.** Measured
+  **worse**, not better — 344.46 ms vs 126.20 ms at k=4, 9,060.93 ms vs
+  3,233.72 ms at k=5. Verified language-equivalent over 18 cases first, so
+  the rejection is on cost alone.
+- **Cap the wildcard count at the zod boundary.** Unsound twice over. To
+  hold, the cap must be ≤2 — k=3 already costs 17 ms, and 256 globs × 17 ms
+  is 4.4 s per path evaluation — which rejects the shipped `**/*.pem` and
+  `**/.ssh/**` shapes. And D2 bypasses it completely with zero wildcards.
+- **`.max(256)` on the glob array.** Initially not adopted, on the
+  argument that per-glob cost rather than glob count was the unbounded
+  axis. **Overturned by the security review (§8):** linear is not the same
+  as bounded, and a single unbounded 64 KB glob against a 64 KB path still
+  measured 16 s. Caps are now in place on glob length, glob count, and
+  command count.
+
+## §4 The fix
+
+`compileGlob(glob: string): PathMatcher`, where
+`PathMatcher = { test(path: string): boolean }`.
+
+**Tokenize** the glob once, at compile time, into:
+
+| token | meaning | replaces |
 |---|---|---|
-| `SECRET_PATH_PATTERNS` | `secret-paths.ts:57` | fixed compile-time list, max 2 quantifiers — **not** exploitable |
-| `parseProjectPermissions` | `parse-project-permissions.ts:56` | user-supplied `.megasaver/permissions.yaml` `deny.read` / `deny.write` globs |
-| `rankApplicableRules` | `packages/core/src/project-rule-ranking.ts:18` | agent-supplied `ProjectRule.appliesTo`, per (rule, glob, file) triple, no cache |
+| `GlobStarSlash` | zero or more complete leading segments | `(?:.*/)?` |
+| `GlobStar` | any run, `/` included | `.*` |
+| `Star` | any run within one segment | `[^/]*` |
+| `Any` | one character, not `/` | `[^/]` |
+| `Literal(ch)` | exactly `ch` | everything else |
 
-Non-matching input is the **common** case in ranking — most rules do not
-apply to most files — so the pathological path is the hot path.
+`Literal` is the default arm, so **every** non-glob character — including
+every regex metacharacter — is matched literally. That closes D2 and D3.
 
-### 1a. Measurements
+**Match** by NFA simulation. Carry a boolean frontier `cur[i]` = "the first
+_t_ tokens can consume `path[0..i)`", seeded `cur[0] = true`, and advance it
+once per token with a single left-to-right sweep:
 
-All on Node (macOS), subject
-`packages/core/src/project-rule-ranking.ts` (41 chars, non-matching):
+- `Literal(c)` / `Any` — `next[i+1] |= cur[i]` where the character agrees.
+- `Star` — sweep with an `active` flag that sets on any `cur[i]` and clears
+  at each `/`.
+- `GlobStar` — same sweep, without the clear.
+- `GlobStarSlash` — `next[i] |= cur[i]`, plus `next[i] |= active && path[i-1] === '/'`.
 
-| glob | length | time |
-|---|---:|---:|
-| `'*'*12 + 'x'` | 13 | 58 ms |
-| `'*'*14 + 'x'` | 15 | 426 ms |
-| `'*'*16 + 'x'` | 17 | **3,135 ms** |
-| `'*'*18 + 'x'` | 19 | >15,000 ms (killed) |
-| `'**/'*85` | 256 | 228 ms |
-| `'**/'*200` | 601 | 20,181 ms |
+`test` returns `cur[path.length]` after the last token. Each token is one
+O(pathLen) sweep, so the whole match is O(tokens × pathLen) with no
+backtracking **by construction**. At 50 tokens × a 4096-character path
+that is ~200k boolean operations.
 
-A **17-character** glob costs over three seconds. Length is not the
-governing variable (§3), so a length cap does not fix this.
+Linear is not the same as bounded, though — see §8 F1. Both axes are
+capped at the parse boundary, because an uncapped 64 KB glob against a
+64 KB path still costs seconds even without backtracking.
 
-### 1b. Why the shipped denylist is not itself exploitable
+Case-insensitivity (today the `i` flag) becomes `toLowerCase()` on the glob
+at compile time and on the path at match time.
 
-Every entry in `DENYLIST_GLOBS` compiles to at most **2** crossing
-quantifiers (counted in §4). The list is a compile-time constant. The
-reachable attack surface is the two *user-supplied* paths in the table
-above.
+## §5 Equivalence obligation
 
----
+The LOCKED §9a denylist must keep its exact verdicts. Three gates:
 
-## 2. Root cause
+1. A frozen table over all 15 `DENYLIST_GLOBS` × a fixture path corpus,
+   asserting matcher verdict == today's regex verdict.
+2. A `fast-check` property (`fast-check` is already a `devDependency`)
+   over random glob/path pairs drawn from a **metachar-free ASCII**
+   alphabet, asserting identical verdicts.
+3. Explicit divergence tests pinning the *intended* behaviour change: the
+   D2 and D3 cases above.
 
-The scanner emits three unbounded forms:
+The property is restricted to metachar-free ASCII deliberately. Outside
+that alphabet the two implementations are *supposed* to disagree (that is
+D2/D3), and case folding changes carrier — see §5b.
 
-| glob token | emitted | crosses `/`? |
-|---|---|---|
-| `**/` | `(?:.*/)?` | yes |
-| `**` (not followed by `/`) | `.*` | yes |
-| `*` (lone) | `[^/]*` | **no** |
-| `?` | `[^/]` | bounded, single char |
+## §5b Case-folding divergence, measured
 
-`**` pairs greedily left-to-right, so `"*".repeat(2n)` emits `n`
-adjacent `.*`. Against a subject of length `m`, a failing match explores
-~`C(m+n-1, n-1)` partitions.
+The regex `i` flag used Canonicalize, which explicitly refuses any
+non-ASCII → ASCII mapping; the matcher uses `toLowerCase()`. On ASCII the
+two are identical, so **all 15 LOCKED §9a globs are unaffected** — every
+one is pure ASCII, asserted by a test. Off ASCII they differ, and for a
+denylist only the *direction* matters:
 
----
+| glob | path | regex `i` | `toLowerCase` | direction |
+|---|---|---|---|---|
+| `k` | `K` (U+212A KELVIN SIGN) | no match | match | tightens |
+| `ß` | `ẞ` (U+1E9E) | no match | match | tightens |
+| `å` | `Å` (U+212B ANGSTROM) | no match | match | tightens |
+| `ς` (U+03C2) | `σ` (U+03C3) | **match** | **no match** | **weakens** |
 
-## 3. Why the originally-proposed fix was rejected
+**Corrected by review — see §8 F3.** An earlier revision of this section
+claimed sigma was the *only* weakening pair. A full scan of U+0000–U+2FFFF
+found **23 weakening families**; sigma is simply the most recognisable.
+Every one shares the same shape — two non-ASCII code points sharing an
+uppercase form but not a lowercase one — so every one needs a non-ASCII
+glob, and brute-forcing every code point in that range into
+denylist-adjacent path templates gives a path-side weakening count of
+**0**. U+0130 is a separate, related case: it is the only code point there
+whose `toLowerCase()` expands to two code units, desynchronising the `?`
+token; no denylist glob contains `?`.
 
-The proposal was to collapse runs of adjacent unbounded quantifiers
-(`.*.*` → `.*`, `(?:.*/)?(?:.*/)?` → `(?:.*/)?`). Two measured shapes
-defeat it:
+All of this is accepted rather than fixed — emulating Canonicalize would
+mean carrying Unicode tables for a case with no consumer. A sample of five
+families, the three tightening rows, and the U+0130 case are pinned by
+tests so the boundary is asserted rather than rediscovered.
 
-| shape | glob | emits | length | time |
-|---|---|---|---:|---:|
-| alternating | `'**/**'*8 + 'x'` | `(?:.*/)?.*(?:.*/)?.*…` | 41 | >12,000 ms |
-| separated | `'**?'*12 + 'x'` | `.*[^/].*[^/]…` | 37 | >12,000 ms |
+## §6 Test plan (TDD — RED first)
 
-- **Alternating**: no two *identical* tokens are ever adjacent, so an
-  identical-token collapse is a no-op.
-- **Separated**: the quantifiers are not adjacent at all — a mandatory
-  `[^/]` sits between them. **No collapse rule can merge them by
-  construction.**
+The first test drives **`evaluatePathRead`**, not `compileGlob`, through a
+crafted `permissions.yaml` parsed by `parseProjectPermissions`, and asserts
+both halves:
 
-A collapse across *different* token types was also considered and
-rejected as unsafe: the equivalences are order-dependent and subtle.
-`(?:.*/)?[^/]*` ≡ `.*`, but `[^/]*(?:.*/)?` ≢ `.*` (it cannot match
-`a/b`). Getting that algebra wrong in the denylist matcher is exactly the
-bypass this spec must avoid.
+- a path the crafted glob **matches** returns `{ allowed: false, reason: 'secret_path_read' }`;
+- a path it does not match returns `{ allowed: true }`;
+- both inside a wall-clock ceiling.
 
-**Conclusion:** the governing variable is the *count* of crossing
-quantifiers in a pattern, not their adjacency and not the glob's length.
+Ceiling 250 ms with `{ retry: 3 }`, matching the convention established by
+the `redact-jwt` timing gates. The separator is large: the pre-fix cost of
+the crafted case is measured in tens of seconds, so the gate is not
+sensitive to CI load — a quadratic is slow on every attempt.
 
----
+Further RED tests: the D2 zero-wildcard `(a+)+b` case, the D3 literal-filename
+cases, and a `rankApplicableRules` regression driving a hostile `appliesTo`
+glob (call site 2).
 
-## 4. Chosen approach — reject pathological globs at compile time
+## §7 Definition of done
 
-Count crossing quantifiers as they are emitted. If the count exceeds a
-cap, throw before constructing the `RegExp`.
-
-### 4a. What counts
-
-Only quantifiers that can cross `/`:
-
-- `(?:.*/)?` (from `**/`) — **counted**
-- `.*` (from `**`) — **counted**
-- `[^/]*` (from a lone `*`) — **not counted**
-- `[^/]` (from `?`) — **not counted**, bounded
-
-`[^/]*` is excluded on evidence, not intuition. It cannot cross a
-separator, so each instance is bounded by one path segment, and the
-scanner never emits two of them adjacently (two consecutive `*` pair
-into `**`). Measured: a glob with 32 `[^/]*` runs in **0.10 ms**.
-Counting them would reject legitimate patterns like `src/*/*/*/*.ts`
-for no benefit.
-
-### 4b. Cap = 3
-
-Worst observed single-match time by crossing-quantifier count, across
-adversarial shapes and subjects of 41 / 128 / 256 chars:
-
-| count | 1 | 2 | 3 | 4 | 5 |
-|---|---:|---:|---:|---:|---:|
-| worst ms | 0.37 | 1.34 | **57** | **252** | **>10,000** |
-
-The cliff is between 3 and 5. Cap of 3 was verified against adversarial
-shapes that hold the crossing count at 3 while maximising uncounted
-tokens — worst case 57 ms, and `manysegstar` (32 uncounted quantifiers)
-at 0.10 ms.
-
-Every shipped `DENYLIST_GLOBS` entry is ≤2:
-
-```
-1  **/.env                      2  **/.gcp/**            1  **/id_ed25519
-2  **/.env.*                    2  **/.azure/**          2  **/*.pem
-2  **/.ssh/**                   2  **/private_keys/**    2  **/*.key
-1  **/.aws/credentials          2  **/secrets/**         1  **/credentials.json
-1  **/.aws/config               1  **/id_rsa             2  **/service-account*.json
-```
-
-Cap 3 therefore leaves one slot of headroom over every shipped pattern
-and keeps legitimate user globs such as `**/a/**/b/**` working. Cap 2
-would leave zero headroom and reject that pattern; cap 4 admits a 252 ms
-single match.
-
-### 4c. Why this approach and not a linear matcher
-
-A DP/NFA matcher would eliminate the bug class outright and reject
-nothing. It was considered and set aside for this change because it
-rewrites the matcher backing the secret denylist, which makes "did
-matching semantics shift?" the central review question.
-
-The chosen approach makes that question trivially answerable: the
-counter does not touch the `body` string. An accepted glob compiles to a
-**byte-identical** `RegExp` to today's. A pattern either behaves exactly
-as it does now, or refuses to compile. **A denylist bypass is impossible
-by construction** — the property that matters most at this risk level.
-
-The cost is honest and stated: pathological-but-harmless globs (e.g.
-`'**/'*4`, semantically equivalent to `**/`) are refused rather than
-normalised. No such glob exists in the repo or in any realistic use.
+`pnpm verify` EXIT 0; every new test verified red before green; `code-reviewer`
+**and** `critic` **and** `security-reviewer` passes (CRITICAL tier, §12);
+verifier pass with reproduction evidence; changeset; wiki updated
+(`concepts/unbounded-run-redos` gains this as a distinct defect shape —
+ambiguous-quantifier chaining and metachar injection, not the unbounded-run
+shape that page currently describes — and `entities/policy`).
 
 ---
 
-## 5. Changes
+## §8 Review findings applied (2026-07-25)
 
-### 5a. `packages/policy/src/secret-paths.ts`
+Three reviewer passes ran per §12 CRITICAL. The security pass could not
+weaken the LOCKED §9a denylist — 0 weakening witnesses in 812,861
+differential cases plus 22.7 M exhaustive pairs, and the two reference
+ReDoS shapes fell from 44,997 ms and 28,358 ms to 0.020 ms and 0.003 ms.
+Four findings changed the code.
 
-- Add `MAX_CROSSING_QUANTIFIERS = 3` with the §4b measurements as the
-  WHY comment.
-- Add `GlobCompileError extends Error`, carrying the offending glob and
-  the observed count. Exported from `packages/policy/src/index.ts`.
-- `compileGlob` increments a local counter at the `(?:.*/)?` and `.*`
-  emit sites only, and throws `GlobCompileError` before `new RegExp` if
-  the count exceeds the cap.
-- The `body` construction is otherwise untouched.
+**F1 (HIGH) — linear is not bounded.** `matches()` is O(tokens × path
+length) and *neither axis had a cap*: a 64 KB glob against a 64 KB path
+measured 16,322 ms, and `"a"×20000` against `"a"×20000` measured 288 ms
+where the old regex took 3.2 ms. §3's rejection of `.max()` was wrong and
+is reversed. `parse-project-permissions.ts` now caps glob length at 256,
+glob count at 256, and command count at 256. Over-cap is a
+`PolicyLoadError`, never a silent trim.
 
-### 5b. `packages/policy/src/parse-project-permissions.ts`
+**F2 (MEDIUM-HIGH) — bracket expressions were silently downgraded.**
+`[...]` is genuine glob syntax and the regex-backed implementation
+honoured it, so treating it as literal characters *narrowed the deny set
+with no operator signal*: `**/[sS]ecrets/**` stopped denying
+`app/secrets/db.txt`, `**/*.[pk]em` stopped denying `certs/server.pem`.
+That is the same fail-open this whole spec exists to remove. Brackets are
+now **rejected** at the parse boundary rather than reinterpreted —
+supporting them means a character-class parser inside the security gate,
+and nothing in the shipped denylist needs one. Rejection is visible; a
+wrong match is not. The `**/[draft].md` literal-match case in §6 was
+therefore wrong and has been replaced with `$` and `^` cases.
 
-Wrap the two `.map(compileGlob)` calls; catch `GlobCompileError` and
-rethrow as `PolicyLoadError`, mirroring how the zod failure is already
-wrapped. The orchestrator continues to map that to `policy_load_failed`.
-**The gate stays fail-closed** — a permissions file containing a
-pathological glob is a load failure, never a silently-opened gate.
+**F3 (MEDIUM) — §5b undercounted the case-folding divergence.** A full
+scan of U+0000–U+2FFFF found **23** weakening families, not one; sigma is
+merely the most familiar. All share one shape — two non-ASCII code points
+sharing an uppercase form but not a lowercase one — so all 23 need a
+non-ASCII glob and none reaches the ASCII-only denylist. Brute-forcing
+every code point in that range into denylist-adjacent path templates gave
+a path-side weakening count of **0**. Separately, U+0130 is the only code
+point whose `toLowerCase()` expands to two code units, which desynchronises
+the `?` token; no denylist glob contains `?`. The §5b table and the test
+comment are corrected; a sample of five families plus the U+0130 case are
+pinned.
 
-### 5c. `packages/core/src/project-rule-ranking.ts`
+**F4 — the fix silently closed a live denylist bypass on `main`.** Every
+`**/`-prefixed glob compiled to `(?:.*/)?`, and `.` in a non-`s`-flag JS
+regex does not match a line terminator. So on `main` any path carrying
+`\n`, `\r`, U+2028 or U+2029 in a directory segment slipped **13 of the 15
+LOCKED entries** — all legal POSIX filename bytes. Verified against the
+frozen oracle: `**/id_rsa` did not deny `home\nx/id_rsa`. The NFA matcher
+has no such carve-out. This was unclaimed and untested; it now has four
+regression tests so a future rewrite cannot reopen it.
 
-`appliesToMatches` catches `GlobCompileError` and returns `false`
-(no match).
+**Rejected findings.** The code review claimed the old regex left `.`
+unescaped, so `**/.env.*` also denied `x/myenvXlocal`. It did not — the
+old body emitted `\\.` and neither cited example matches. No action.
 
-**This is the one deliberate asymmetry in the design and reviewers
-should scrutinise it.** The two consumers take opposite failure
-semantics on purpose:
-
-- **policy** is a security gate → fail **closed** (throw).
-- **ranking** is a scoring heuristic → **degrade** (skip the glob).
-
-Justification for degrading in ranking: store reads are already
-fail-closed at a coarser grain — `parseEntity`
-(`packages/core/src/json-directory-store.ts:496`) throws
-`CorePersistenceError` for the whole file, with no per-line recovery, so
-letting a `GlobCompileError` propagate would take down `mega context`,
-`rules list`, and brain export for the entire project because one stored
-rule has a silly glob. Ranking has no security duty; skipping the glob
-costs at most one missed suggestion.
-
----
-
-## 6. Testing
-
-TDD: every test below is written and observed failing before the fix.
-
-1. **Red proof** — `'**/**'*8 + 'x'`, `'**?'*12 + 'x'`, `'*'*18 + 'x'`.
-   Each currently exceeds 12 s. After the fix each must throw
-   `GlobCompileError` within a small wall-clock budget. The assertion is
-   on both the throw **and** the elapsed time; a throw alone would not
-   prove the blowup is gone.
-2. **Shipped denylist compiles** — every `DENYLIST_GLOBS` entry compiles
-   without throwing. `SECRET_PATH_PATTERNS` is built at module load, so
-   without this test a future 4-quantifier denylist addition would fail
-   at **import** time in production rather than in CI.
-3. **Boundary** — a 3-crossing-quantifier glob compiles; a
-   4-crossing-quantifier glob throws. Uncounted tokens do not trip the
-   cap: `src/*/*/*/*.ts` and a 32×`[^/]*` glob both compile.
-4. **`parseProjectPermissions`** surfaces `PolicyLoadError` (not a raw
-   `GlobCompileError`) for a pathological `deny.read` glob.
-5. **`rankApplicableRules`** returns normally, and still ranks the
-   remaining rules, when one rule carries a pathological glob.
-6. **Differential property (fast-check, already a `packages/policy`
-   devDependency; `redact.property.test.ts` sets the precedent).** For
-   randomly generated globs that fall under the cap, assert the new
-   `compileGlob(g).source` and `.flags` equal the **pre-fix**
-   implementation's output. This mechanically proves the "zero semantic
-   drift on accepted input" claim in §4c rather than resting it on
-   argument. The reference implementation is inlined in the test file as
-   a frozen copy of the current function.
-7. Existing `evaluate-path-read.test.ts` and
-   `parse-project-permissions.test.ts` stay green, unmodified.
-
----
-
-## 7. Out of scope (stated, not silently narrowed)
-
-- **Ranking fan-out.** `rankApplicableRules` remains
-  O(rules × globs × files) with no cache. With the cap, a worst-case
-  crafted rule set is bounded-but-slow (57 ms × fan-out) instead of
-  unbounded. A `compileGlob` memo cache would **not** help — the cost is
-  in `.test()`, not compilation. A per-call budget is the follow-up if
-  this ever bites; there is no evidence it does today.
-- **`ProjectRule.appliesTo` length bound.** Evaluated and rejected: a
-  17-char glob already costs 3 s, so a length cap fixes nothing, and
-  adding `.max()` to `projectRuleSchema` — a **read-back** schema —
-  would make a previously-stored rule fail `parseEntity` and take down
-  the whole rules file.
-- **Replacing the regex matcher with a linear DP matcher** (§4c).
-  Remains the option if rejection ever proves too blunt.
-
----
-
-## 8. Definition of done
-
-Per §9: spec (this file), plan, TDD red→green, `pnpm verify` green,
-changeset (`@megasaver/policy` and `@megasaver/core` — `GlobCompileError`
-is new public API and `compileGlob` gains a throw condition),
-`code-reviewer` **and** `critic` **and** `security-reviewer` passes,
-verifier pass with reproduction evidence.
+**Deferred, filed rather than fixed.** `deny.write` is parsed and compiled
+but has no consumer — there is no `evaluatePathWrite`, which the
+permissions spec lists as out of scope. `normalizePath` does no `..`
+resolution, percent-decoding, NUL truncation, or trailing-dot/space
+stripping; both implementations share that gap equally, so it is
+pre-existing rather than a regression. Literal-heavy globs and the
+per-pattern re-lowercasing in `evaluatePathRead` are slower than the old
+regex but bounded by F1's caps.

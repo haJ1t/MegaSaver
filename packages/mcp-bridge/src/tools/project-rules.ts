@@ -18,7 +18,7 @@ export type SaveProjectRuleEnv = {
 };
 export type GetProjectRulesEnv = { registry: CoreRegistry };
 
-const saveInputSchema = z
+export const saveInputSchema = z
   .object({
     projectId: z.string().min(1),
     title: z.string().min(1),
@@ -31,7 +31,7 @@ const saveInputSchema = z
   })
   .strict();
 
-const getInputSchema = z
+export const getInputSchema = z
   .object({
     projectId: z.string().min(1),
     task: z.string().min(1).optional(),

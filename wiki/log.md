@@ -4300,3 +4300,182 @@ Guard: `apps/cli/test/wiki-integrity.test.ts` fails on any empty tracked wiki
 page and on a `log.md` that drops below 50 timestamped entries. RED on `main`
 (`expected [ 'wiki/log.md' ] to deeply equal []`, `expected 0 to be greater than
 50`), green after restore, red again when the restore is reverted.
+
+
+## [2026-07-25] fix | compileGlob ReDoS + metachar injection (@megasaver/policy)
+
+Reported as an exponential blowup in `**/`-chained project deny globs.
+Measurement confirmed the report and found the root cause to be broader than
+the report's framing: `compileGlob` compiled untrusted glob text into a
+`RegExp`, so (1) all three wildcard forms chained exponentially — not only
+`**/` — with `*a`x5 costing 58,530 ms against a 255-character path, and (2)
+every character outside the glob language reached the engine unescaped, making
+the zero-wildcard `(a+)+b` a 1,130 ms ReDoS on 28 characters. The same
+passthrough silently broke ordinary deny rules: `**/a+b.txt` did not match
+`x/a+b.txt`.
+
+Both mitigations proposed in the report were refuted by measurement rather than
+argument. Collapsing consecutive `(?:.*/)?` groups does not apply (a literal
+sits between them). Rewriting `**/` as `(?:[^/]*/)*` is language-equivalent but
+*slower* (344 vs 126 ms at k=4). A wildcard-count cap would have to be ≤2 to
+hold — rejecting the shipped `**/*.pem` — and is bypassed entirely by the
+zero-wildcard vector, because it counts a token the exploit does not need.
+
+Fix: drop the regex. `compileGlob` returns `PathMatcher` and matches by NFA
+simulation over a boolean reachability frontier, O(tokens × path length) with no
+backtracking by construction. Every non-glob character is a literal.
+
+A third untrusted call site not named in the report was found and covered:
+`rankApplicableRules` in `@megasaver/core` compiles `ProjectRule.appliesTo` per
+call inside a ranking loop with no cache, measured at 70,377 ms for one hostile
+rule.
+
+Evidence: red gate 129,970 ms → 3 ms; the end-to-end `evaluatePathRead` case
+failed all four retries pre-fix at 6,298/2,171/2,094/2,008 ms against a 250 ms
+ceiling. LOCKED §9a denylist equivalence pinned by a frozen fixture table plus
+60,000 randomized comparisons against the pre-fix implementation held verbatim
+as an oracle; property generators were corrected after measuring the first
+version at 0/20,000 matches (vacuous). Five semantic mutants each turn the suite
+red. Non-ASCII case-folding divergence measured and bounded: three cases tighten
+the gate, one weakens it (Greek final sigma), accepted and test-pinned. Full
+`pnpm verify` EXIT 0.
+
+Pages updated: [[concepts/glob-compile-redos]] (new),
+[[concepts/unbounded-run-redos]], [[entities/policy]], [[index]].
+Branch: `claude/laughing-matsumoto-be0481`.
+
+## [2026-07-25] review | glob-compile ReDoS — three reviewer passes applied
+
+Security, code-review and evidence passes ran per §12 CRITICAL. The security
+pass could not weaken the LOCKED §9a denylist: 0 weakening witnesses across
+812,861 differential cases and 22.7 M exhaustive pairs, with the two reference
+ReDoS shapes falling from 44,997 ms and 28,358 ms to 0.020 ms and 0.003 ms.
+Four findings changed the code.
+
+The sharpest correction: **linear is not bounded.** The first cut declared "no
+bound to tune and no cap to bypass" because the matcher is O(tokens × path
+length) — while leaving both axes uncapped. A 64 KB glob against a 64 KB path
+still measured 16,322 ms. The `.max()` rejected in the original spec is back,
+on glob length, glob count and command count. Worst accepted config against a
+4096-character path is now 3.0 ms; the 16 s input is refused in 0.0 ms.
+
+Second: treating `[...]` as literal characters was itself a fail-open, because
+bracket expressions are genuine glob syntax the regex honoured —
+`**/[sS]ecrets/**` stopped denying `app/secrets/db.txt`. Rejected at the parse
+boundary rather than reimplemented.
+
+Third: the case-folding note claimed one weakening family; a full
+U+0000–U+2FFFF scan found 23. None reaches the ASCII-only denylist
+(path-side weakening count 0), so the blast-radius claim held while the count
+did not.
+
+Fourth, unclaimed by the original work: the fix **closed a live denylist bypass
+on `main`**. `**/` compiled to `(?:.*/)?` and regex `.` excludes line
+terminators, so any path with `\n`, `\r`, U+2028 or U+2029 in a directory
+segment slipped 13 of the 15 LOCKED entries. Now regression-tested.
+
+One code-review finding was rejected on evidence: the claim that the old regex
+left `.` unescaped is false — it emitted `\.`, and neither cited example ever
+matched.
+
+Filed, not fixed: `ProjectRule.appliesTo` has no length bound of its own, and
+`deny.write` is parsed and compiled but has no consumer.
+
+`pnpm verify` EXIT 0; policy suite 264 tests.
+## [2026-07-25 15:45 +03] fix | deny.write rejected instead of silently ignored
+
+`.megasaver/permissions.yaml` accepted a `deny.write` key that compiled into
+`ProjectPermissions.denyWritePatterns` — a field with **zero consumers** in the
+repo (no `evaluatePathWrite` exists; permissions-yaml §5.4 scoped live write
+enforcement out). The YAML presented `write:` as a peer of `read:` and
+`commands:`, which are enforced. Reported from a 2026-07-25 glob-matcher review.
+
+Chose rejection over implementing a write gate (contradicts §5.4, and there is
+no single write chokepoint — `memory create`, `connector sync`, `handoff pack`,
+`brain export`, `hooks install` all write independently; gating some reads as
+gating all) and over documenting the gap (the parser is where the operator
+actually gets told). `write` is now `z.never().optional()` in the shape with a
+message selected by zod issue path, so the `PolicyLoadError` names the key.
+`denyWritePatterns` removed from `ProjectPermissions`; changeset major.
+
+`security-reviewer` found no vulnerability (I1–I4 hold, I1/I3 strengthened; all
+six `loadProjectPermissions` call sites verified fail-closed) but argued one
+pre-existing defect BLOCKED rather than deferred: `mega output exec` dropped the
+`policy_load_failed` detail, so the named message never reached the operator on
+the surface most likely to hit it — negating the reason for choosing a named
+message at all. Fixed in the same change (`exec.ts:124`), detail now rides after
+the code to keep CLI/MCP parity. `critic` killed 4/4 mutants. Filed separately:
+`max_results` (`mcp-bridge/src/tools/search-code.ts:25`) and `ownerDead`
+(`proxy-control/src/reconcile.ts:25`) are the same unread-but-parsed class.
+
+Sources:
+[[docs/superpowers/specs/2026-07-25-deny-write-honest-rejection-design]],
+[[docs/superpowers/plans/2026-07-25-deny-write-honest-rejection-plan]],
+[[entities/policy]].
+
+## [2026-07-25 16:20 +03] fix | inert MCP tool inputs — max_results honored, around removed
+
+Second instance of the `deny.write` defect class, in `@megasaver/mcp-bridge`:
+`max_results` (`search-code.ts:25`) and `around` (`fetch-chunk.ts:19`) were
+validated by `.strict()` schemas and never read, making them the only keys a
+caller could pass without an error.
+
+Split the two rather than treating them alike. `max_results` is a genuine cap
+with BM25 ordering behind it and a spec that asked for it (P3-T8) — honored,
+capped after ranking, with a new optional `omitted: {files, matches}` so the
+truncation is visible. `around` is an unbuilt feature, not an ignored knob —
+removed from the schema.
+
+Corrected the incoming report: `max_results` was never published to agents with
+`{min:1,max:500,default:50}`; `server.ts:282` advertises
+`inputSchema: {type:"object"}` for all 26 tools, so NO input property is
+published for any tool. Filed that as a separate DX gap.
+
+Sources: [[docs/superpowers/specs/2026-07-25-inert-mcp-inputs-design]],
+[[docs/superpowers/plans/2026-07-25-inert-mcp-inputs-plan]],
+[[entities/mcp-bridge]].
+
+## [2026-07-25 17:05 +03] fix | unread ownerDead/leasePhase removed from ReconcileObs
+
+Third finding from the same 2026-07-25 security review. Unlike the other two this
+one required a trace before a decision: the report offered "wire it in" vs "delete
+it", and the answer was neither obvious nor symmetric.
+
+Traced it: owner liveness IS enforced, at the lock layer (`isOwnerStale`: boot id
++ lease expiry + live-same-boot pid/start-token), and both reconcile drivers run
+inside `withTransitionLock`. The matrix runs after ownership is settled, so it has
+no takeover to guard — `ownerDead` was not a missing guard but a redundant, weaker
+one derived from a documented sentinel that both writers hardcode to null.
+Deleted both fields; added a key-set test pinning `observeReality` to the five
+consumed fields.
+
+Process note: a mid-investigation claim that `superviseDrive` had NO production
+callers was wrong — `head -20` truncated the grep before `supervise.ts`. Same
+class as the earlier `| tail` that masked a `pnpm verify` exit code. Both were
+caught by following up rather than reporting the first read.
+
+Sources: [[docs/superpowers/specs/2026-07-25-reconcile-obs-dead-fields-design]],
+[[docs/superpowers/plans/2026-07-25-reconcile-obs-dead-fields-plan]],
+[[concepts/persistent-proxy-routing]].
+
+## [2026-07-25 18:10 +03] fix | real inputSchema published for all 35 MCP tools
+
+Root cause of the whole 2026-07-25 inert-input batch: `server.ts:282` published a
+bare `{type:"object"}` for every tool, so agents guessed parameter names from
+prose. Fixed by generating JSON Schema from the same Zod object each handler
+parses with, mapped in a new `src/tool-schemas.ts` typed
+`Record<McpToolName, z.ZodTypeAny>` — completeness is now a compile error
+(verified: deleting one entry yields TS2741).
+
+Two report corrections: the bridge has **35** tools, not 26 (the 26 figure is
+stale in the wiki and was inherited by the report); and `zod-to-json-schema` was
+already in the lockfile via `@modelcontextprotocol/sdk`, so no hand-rolled
+converter and no new dependency download.
+
+Honesty rule held: `max_results` is published with no `default`/`maximum` because
+neither is enforced; the single `.default()` in the tool surface is published
+only after verifying zod applies it.
+
+Sources: [[docs/superpowers/specs/2026-07-25-publish-tool-input-schemas-design]],
+[[docs/superpowers/plans/2026-07-25-publish-tool-input-schemas-plan]],
+[[entities/mcp-bridge]].

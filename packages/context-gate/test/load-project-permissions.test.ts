@@ -44,7 +44,15 @@ describe("loadProjectPermissions (permissions-yaml §4.1, §7 1b)", () => {
     expect(perms).not.toBeNull();
     expect(perms?.denyCommands).toEqual([]);
     expect(perms?.denyReadPatterns).toEqual([]);
-    expect(perms?.denyWritePatterns).toEqual([]);
+  });
+
+  it("a deny.write key ⇒ PolicyLoadError whose message names it (not enforced)", async () => {
+    await writePerms(projectRoot, ["deny:", '  write: ["dist/**"]'].join("\n"));
+    // End-to-end through fs + yaml.parse: the named message must survive to the
+    // caller, because resolveEffectiveSettings copies it into the
+    // policy_load_failed `detail` the operator sees.
+    expect(() => loadProjectPermissions(projectRoot)).toThrow(/deny\.write/);
+    expect(() => loadProjectPermissions(projectRoot)).toThrow(PolicyLoadError);
   });
 
   it("malformed YAML ⇒ PolicyLoadError (fail-closed, I3)", async () => {

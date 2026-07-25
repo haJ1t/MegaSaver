@@ -13,7 +13,7 @@ import { McpBridgeError } from "../errors.js";
 
 export type SearchMemoryEnv = { registry: CoreRegistry };
 
-const searchMemoryInputSchema = z
+export const searchMemoryInputSchema = z
   .object({
     projectId: z.string().min(1),
     text: z.string().optional(),

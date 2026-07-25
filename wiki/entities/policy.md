@@ -217,3 +217,102 @@ coverage was reduced and that must be visible at release. policy@1.3.0.
 
 Sources: [[docs/superpowers/specs/2026-07-20-jwt-redos-fix-design]],
 [[docs/superpowers/specs/2026-05-10-bb3-policy-design]].
+
+## `compileGlob` no longer returns a RegExp (2026-07-25)
+
+`compileGlob(glob: string): PathMatcher` where `PathMatcher = { test(path):
+boolean }`. It used to compile untrusted glob text into a `RegExp`, which was
+exponential on chained wildcards and injectable via unescaped metacharacters —
+full analysis in [[concepts/glob-compile-redos]].
+
+Contract now:
+
+- Matching is an NFA simulation, O(tokens × path length), no backtracking.
+- `*`, `**`, `**/`, `?` are the ONLY special forms. Every other character —
+  including `(`, `+`, `[`, `|`, `{`, `\`, `^`, `$` — is a **literal**. Previously
+  they reached the regex engine raw, so `**/a+b.txt` did not match `x/a+b.txt`.
+- Case-insensitive via `toLowerCase()` rather than the regex `i` flag. Identical
+  on ASCII, so all 15 LOCKED §9a globs are unaffected. Off ASCII a full
+  U+0000–U+2FFFF scan found 23 weakening families (all needing a non-ASCII glob;
+  path-side weakening count against the denylist is 0) plus the U+0130 two-unit
+  fold that desynchronises `?` — accepted and test-pinned, see spec §5b/§8 F3.
+- `.megasaver/permissions.yaml` caps glob length, glob count and command count
+  at 256 each, as `PolicyLoadError`. Linear is not bounded: an uncapped 64 KB
+  glob against a 64 KB path measured 16,322 ms even with backtracking gone.
+- Bracket expressions (`[abc]`) are **rejected**, not reinterpreted. They are
+  real glob syntax the regex honoured, so reading them as literals would narrow
+  the deny set silently.
+- **Closed a live bypass on `main`:** `**/` compiled to `(?:.*/)?` and regex `.`
+  excludes line terminators, so a path with `\n`, `\r`, U+2028 or U+2029 in a
+  directory segment slipped 13 of the 15 LOCKED entries.
+- `SECRET_PATH_PATTERNS` and `ProjectPermissions.denyReadPatterns` /
+  `denyWritePatterns` are `readonly PathMatcher[]`.
+
+Denylist verdicts are unchanged, pinned by a frozen fixture table over all 15
+globs plus 60,000 randomized comparisons against the pre-fix implementation kept
+verbatim as a test oracle. Five semantic mutants of the matcher were each
+verified to turn the suite red.
+
+Three untrusted call sites route through this one function:
+`parseProjectPermissions`, `SECRET_PATH_PATTERNS`, and — not covered by the
+original report — `rankApplicableRules` in `@megasaver/core`, which compiles
+`ProjectRule.appliesTo` per call inside a ranking loop with no cache and
+measured 70 s for a single hostile rule.
+
+Source: [[docs/superpowers/specs/2026-07-25-glob-compile-redos-fix-design]].
+## `deny.write` rejected, not ignored (2026-07-25)
+
+`deny.write` compiled into `ProjectPermissions.denyWritePatterns` and **nothing
+read that field** — no `evaluatePathWrite` exists, and permissions-yaml §5.4
+scoped live write enforcement out. Confirmed by grep: the type declaration, the
+assignment, and four test assertions were the only occurrences in the repo.
+
+The defect was not the missing enforcement — that was a deliberate scope
+decision. It was that the same `deny:` object **failed closed on a misspelled
+key and failed silent on a real-but-dead one**: `deny.execute` threw
+`PolicyLoadError`, `deny.write` was accepted, compiled, and ignored. An operator
+got a stronger signal for a typo than for a rule that would never fire. §5.4's
+mitigation ("flagged as a known no-op") lived in a design doc nobody reads
+before editing YAML, and `README.md` never mentioned the key at all.
+
+Fix: `write` stays a NAMED key in the zod shape, typed `z.never().optional()`,
+and `parseProjectPermissions` selects a message by zod issue path
+`["deny","write"]` so the thrown `PolicyLoadError` says *"deny.write is not
+enforced… Remove the deny.write key"* rather than "invalid project
+permissions". Two details are load-bearing and were caught by tests, not
+reasoning: `.optional()` (bare `z.never()` rejects the `undefined` of an absent
+key and fails every valid file) and dropping `write` from the `deny` object's
+`.default({...})` (zod parses defaults, so `write: []` in the default failed its
+own schema). Deleting the key instead and letting `.strict()` reject it was
+rejected — right outcome, wrong story: it reports a correctly-spelled,
+semantically-real key as a typo.
+
+`denyWritePatterns` removed from `ProjectPermissions`. No protection is lost —
+it denied nothing before. Breaking for any project declaring `deny.write`: that
+file now fail-closes every gated operation until the key is deleted. Released
+**major** (1.2.2 → 2.0.0): a previously-valid config is rejected and a public
+type field is gone.
+
+Pre-existing gap closed in the same change, on the `security-reviewer`'s
+argument that it blocked rather than deferred: `mega output exec`
+(`apps/cli/src/commands/output/exec.ts:124`) dropped `detail` and printed only
+`command_denied: policy_load_failed`, so on the surface most likely to hit a bad
+permissions file the operator could not tell an unenforceable key from a YAML
+syntax error — negating the reason for choosing a named message over plain
+`.strict()` rejection. `detail` now rides after the code, preserving the
+CLI/MCP code parity that motivated the omission. Applies to every
+`policy_load_failed` cause.
+
+Also confirmed by that review and left alone: `parseProjectPermissions({deny:
+{write: undefined}})` parses (`.optional()` cannot separate absent from
+present-but-undefined), but `yaml.parse` yields `null`/`""`/`[]` for every
+empty-value form and never `undefined`, and `load-project-permissions.ts:53` is
+the only production caller — so it is unreachable. Pinned by a test so a zod
+upgrade cannot widen it silently. Sibling defects of the same class found
+elsewhere and filed separately: `max_results` (`mcp-bridge/src/tools/search-code.ts:25`)
+and `ownerDead` (`proxy-control/src/reconcile.ts:25`, also pinned permanently
+true).
+
+Sources:
+[[docs/superpowers/specs/2026-07-25-deny-write-honest-rejection-design]],
+[[docs/superpowers/specs/2026-06-03-permissions-yaml-design]] §5.4.

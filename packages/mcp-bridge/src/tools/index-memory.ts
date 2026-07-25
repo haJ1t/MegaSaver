@@ -17,7 +17,7 @@ export type IndexMemoryEnv = {
   embedFn?: EmbedFn;
 };
 
-const indexMemoryInputSchema = z.object({ projectId: z.string().min(1) }).strict();
+export const indexMemoryInputSchema = z.object({ projectId: z.string().min(1) }).strict();
 
 // On-demand refresh of a project's memory-vector sidecar (the MCP analog of
 // `mega memory index`). Heavy: loads the embedding model on the real path, so

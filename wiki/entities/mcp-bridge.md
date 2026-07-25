@@ -105,3 +105,103 @@ See [[concepts/proxy-mode]] for the full 7-phase arc. Two bridge deltas:
   base tools; after the Phase 0–10 merge the bridge ships **26 tools** —
   the 25 ContextOps tools plus `proxy_search_code` — and `McpToolName` is a
   **26-member** enum.)
+
+## Inert tool inputs closed (2026-07-25)
+
+Two `.strict()` tool schemas declared a key nothing read: `max_results`
+(`src/tools/search-code.ts:25`) and `around` (`src/tools/fetch-chunk.ts:19`).
+Because the schemas are strict, these were among the very few keys a caller
+could pass WITHOUT an error — every other unknown key failed loud, these two
+were accepted and dropped. Same defect class as `deny.write` in
+[[entities/policy]], found by the same security review.
+
+One claim in the report did not survive checking: `max_results` is NOT published
+to agents as `{minimum:1, maximum:500, default:50}`. That line lives in the v1.2
+roadmap plan, never implemented — `src/server.ts:282` advertises
+`inputSchema: { type: "object" }` for **all 26 tools**, so no input property,
+bound, or default is published for anything. Lower exposure, same defect; and it
+means there was no published default to honor.
+
+- **`max_results` → honored.** It is a genuine cap: `enrich` already BM25-orders
+  files, so top-N is meaningful. The cap runs AFTER `enrich` (a slice-before-rank
+  implementation keeps whatever grep emitted first) and reports a new optional
+  `omitted: {files, matches}` when it drops anything — a silent cap is worse than
+  an ignored parameter, because the agent acts on a truncated list believing it
+  complete. Lossless: the raw output stays reachable via `chunkSetId`. No default
+  adopted; absent ⇒ uncapped, or every existing caller would start truncating.
+- **`around` → removed.** Not an ignored knob but an unbuilt feature
+  (neighbouring-chunk fetch needs chunk ordering, bounds, a changed result
+  shape). `.strict()` now rejects it, and zod's own message names the key, which
+  reaches the caller through `McpBridgeError("validation_failed", …)`. It did
+  NOT get the custom named-message machinery `deny.write` earned — that paid off
+  on a security key where silence means false protection; here zod naming the
+  key is already actionable.
+
+`shapeResult` is the single chokepoint for both the in-process and
+daemon-forward branches, so the cap needed no daemon-side change (the daemon's
+own `searchRequestSchema` never declared `max_results`, which is irrelevant —
+forwarding goes to `/exec-registry` and the `ExecResult` is shaped locally).
+
+Sources: [[docs/superpowers/specs/2026-07-25-inert-mcp-inputs-design]],
+[[docs/superpowers/specs/2026-06-12-proxy-mode-v1.2-design]] §P3-T8.
+
+Mutation testing (2026-07-25) killed 5 of 6 mutants on the first pass; the
+survivor was "treat absent `max_results` as a default of 50", which every test
+accepted because no fixture had more than 50 files — i.e. the §3.2 no-default
+decision shipped untested. Closed with a 60-file daemon-path fixture, verified
+red against exactly that mutant (60 → 50) before being kept.
+
+## Real inputSchema published per tool (2026-07-25)
+
+`server.ts:282` advertised `inputSchema: { type: "object" }` for EVERY tool — no
+properties, types, required list, or bounds for anything. Agents inferred
+parameter names from the prose description, which is the root cause of the
+`max_results` passed-and-ignored defect fixed the same day.
+
+**Tool count correction: 35, not 26.** `TOOL_DEFS` holds 35 entries and
+`server.e2e.test.ts` already asserted `lists 35 tools`. The "26 tools" figure in
+the v1.2 section above (25 ContextOps + `proxy_search_code`) is stale and was
+repeated into the incoming bug report. Treat 35 as current.
+
+The id→schema mapping was derived mechanically (dispatch switch → handler → the
+const that handler `safeParse`s) rather than hand-written, because 35 hand-wired
+entries is where mis-wiring hides. 31 tools name a schema directly; the 4
+context-pruning tools legitimately share that module's single `inputSchema`
+through a common helper.
+
+Design points worth keeping:
+
+- **One value, not two.** `src/tool-schemas.ts` maps each tool to the SAME Zod
+  object its handler parses with, so advertised and enforced contracts cannot
+  drift.
+- **Completeness is a compile error.** The map is typed
+  `Record<McpToolName, z.ZodTypeAny>`; deleting one entry was verified to produce
+  `error TS2741`, so a new tool cannot ship advertising nothing.
+- **Converted once at module load**, not per `tools/list` request.
+  `$refStrategy: "none"` guarantees no `$ref`/`definitions` (MCP clients need not
+  resolve refs); `$schema` is stripped as draft metadata.
+- **Nothing unenforced is advertised.** `max_results` publishes without the
+  roadmap's `default: 50` / `maximum: 500`, neither of which the schema enforces.
+  `approve_memory.approval` is the only `.default()` in the tool surface and is
+  published because zod really applies it — pinned by a test.
+- `zod-to-json-schema` was already in the lockfile via `@modelcontextprotocol/sdk`
+  at our zod version; declaring it direct added zero packages.
+
+Sources: [[docs/superpowers/specs/2026-07-25-publish-tool-input-schemas-design]].
+
+Two gaps the `critic` found in the first cut of this change, both fixed:
+
+1. **The compile-time `Record` guard catches a MISSING mapping, not a WRONG one.**
+   Swapping two tools' schemas passed every test but one (and only by accident,
+   via the single `.default()`). Added a cross-check that calls each tool with
+   `{}` and asserts the handler's own zod error names every property the listing
+   advertised as required — a swapped schema advertises a required set its
+   handler never asks for. Verified non-vacuous by swapping
+   `get_project_rules`/`save_project_rule`: RED, naming the tool and the key.
+2. **`get_task_context` was the only non-strict schema of the 35.** It stripped
+   unknown keys, but `zod-to-json-schema` emits `additionalProperties: false`
+   for a stripping object as well — so the published contract was stricter than
+   the enforced one. Fixed by making it `.strict()` (aligning with the other 34
+   and with the advertisement), plus a source-level test asserting every mapped
+   schema has `_def.unknownKeys === "strict"`, since the published JSON cannot
+   distinguish strip from strict.

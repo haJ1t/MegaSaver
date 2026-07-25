@@ -41,7 +41,7 @@ export type ApproveMemoryEnv = {
 // through the agent; an autonomous agent self-approving its own
 // save_memory(suggested) defeats the gate — by convention this is a
 // human-in-the-loop action.
-const approveMemoryInputSchema = z
+export const approveMemoryInputSchema = z
   .object({
     memoryEntryId: z.string().min(1),
     approval: z.enum(["approved", "rejected"]).default("approved"),

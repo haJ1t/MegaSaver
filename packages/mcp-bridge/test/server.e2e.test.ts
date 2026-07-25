@@ -12,6 +12,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildServer } from "../src/server.js";
 import type { NamingMode } from "../src/tool-naming.js";
+import { TOOL_INPUT_SCHEMAS } from "../src/tool-schemas.js";
+import { approveMemoryInputSchema } from "../src/tools/approve-memory.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
 const SESSION_ID = "22222222-2222-4222-8222-222222222222" as SessionId;
@@ -370,6 +372,159 @@ describe("tool naming mode (Proxy Mode v1.2 §5)", () => {
     const legacyNames = (await legacy.client.listTools()).tools.map((t) => t.name);
     expect(legacyNames.filter((n) => n === "proxy_search_code")).toHaveLength(1);
     await legacy.server.close();
+  });
+});
+
+// Every tool used to advertise a bare `{type:"object"}` — no properties, no
+// required list, no bounds — so an agent had to infer parameter names from the
+// prose description. That is how `max_results` came to be passed-and-ignored
+// (publish-tool-input-schemas §1).
+describe("published inputSchema (publish-tool-input-schemas)", () => {
+  let store: string;
+  let projectRoot: string;
+  beforeEach(async () => {
+    store = await mkdtemp(join(tmpdir(), "mcp-schema-store-"));
+    projectRoot = await mkdtemp(join(tmpdir(), "mcp-schema-root-"));
+  });
+  afterEach(async () => {
+    await rm(store, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  type Published = {
+    name: string;
+    inputSchema: {
+      type: string;
+      properties?: Record<string, unknown>;
+      required?: string[];
+      additionalProperties?: boolean;
+    };
+  };
+
+  it("EVERY tool publishes a real object schema with properties — none left bare", async () => {
+    const { client, server } = await connect(projectRoot, store, "proxy");
+    const tools = (await client.listTools()).tools as unknown as Published[];
+    expect(tools.length).toBeGreaterThan(0);
+    const bare = tools
+      .filter((t) => Object.keys(t.inputSchema.properties ?? {}).length === 0)
+      .map((t) => t.name);
+    expect(bare).toEqual([]);
+    for (const t of tools) expect(t.inputSchema.type).toBe("object");
+    await server.close();
+  });
+
+  it("every published schema is closed, matching the .strict() the handlers parse with", async () => {
+    const { client, server } = await connect(projectRoot, store, "proxy");
+    const tools = (await client.listTools()).tools as unknown as Published[];
+    const open = tools
+      .filter((t) => t.inputSchema.additionalProperties !== false)
+      .map((t) => t.name);
+    expect(open).toEqual([]);
+    await server.close();
+  });
+
+  it("advertises proxy_search_code's real contract, with no unenforced bounds", async () => {
+    const { client, server } = await connect(projectRoot, store, "proxy");
+    const tools = (await client.listTools()).tools as unknown as Published[];
+    const search = tools.find((t) => t.name === "proxy_search_code");
+    expect(search?.inputSchema.required?.sort()).toEqual(["query", "sessionId"]);
+    expect(search?.inputSchema.properties?.max_results).toMatchObject({ type: "integer" });
+    // The roadmap's `maximum: 500` / `default: 50` are NOT enforced by the Zod
+    // schema, so they must not be advertised (spec §2.3).
+    expect(search?.inputSchema.properties?.max_results).not.toHaveProperty("default");
+    expect(search?.inputSchema.properties?.max_results).not.toHaveProperty("maximum");
+    await server.close();
+  });
+
+  it("every mapped schema is genuinely .strict(), so additionalProperties:false is true", () => {
+    // zod-to-json-schema emits additionalProperties:false for a plain z.object()
+    // too, because "strip" means extra keys do not survive. That would advertise
+    // a contract STRICTER than the handler enforces (it strips rather than
+    // rejects). Checked at the source, since the published output cannot tell
+    // the two apart. get_task_context was the lone non-strict schema.
+    const loose = Object.entries(TOOL_INPUT_SCHEMAS)
+      .filter(([, s]) => (s as { _def?: { unknownKeys?: string } })._def?.unknownKeys !== "strict")
+      .map(([id]) => id);
+    expect(loose).toEqual([]);
+  });
+
+  it("each tool enforces the exact required set it advertises (mis-wiring guard)", async () => {
+    // The compile-time Record<McpToolName, ...> catches a MISSING mapping, not a
+    // WRONG one. Without this, giving get_project_rules the save schema would
+    // pass every other test silently.
+    //
+    // Cross-check: call each tool with {} and confirm the handler's own zod
+    // error names every property the listing advertised as required. A swapped
+    // schema advertises a different required set than the handler reports.
+    const { client, server } = await connect(projectRoot, store, "proxy");
+    const tools = (await client.listTools()).tools as unknown as Published[];
+    const checked: string[] = [];
+    for (const t of tools) {
+      const required = t.inputSchema.required ?? [];
+      if (required.length === 0) continue; // nothing to cross-check; would really run
+      const err = await client
+        .callTool({ name: t.name, arguments: {} })
+        .then(() => null)
+        .catch((e: unknown) => String(e));
+      expect(err, `${t.name} accepted {} despite advertising required keys`).not.toBeNull();
+      for (const key of required) {
+        expect(
+          err,
+          `${t.name} advertises required "${key}" but its handler never asks for it`,
+        ).toContain(key);
+      }
+      checked.push(t.name);
+    }
+    // Guard the guard: if a refactor made every schema requirement-free this
+    // test would silently check nothing.
+    expect(checked.length).toBeGreaterThanOrEqual(30);
+    await server.close();
+  });
+
+  it("the one advertised default is a default the code really applies", async () => {
+    const { client, server } = await connect(projectRoot, store, "proxy");
+    const tools = (await client.listTools()).tools as unknown as Published[];
+    const approve = tools.find((t) => t.name === "approve_memory");
+    // approve_memory is the ONLY tool whose schema carries a .default(). It is
+    // honest to publish because zod applies it during safeParse and the handler
+    // reads `approval` off parsed.data — verified below, not assumed. A default
+    // the code did not apply would be exactly the lie this change must avoid
+    // (publish-tool-input-schemas §2.3).
+    expect(approve?.inputSchema.properties?.approval).toMatchObject({ default: "approved" });
+    expect(approveMemoryInputSchema.parse({ memoryEntryId: "m1" })).toMatchObject({
+      approval: "approved",
+    });
+    await server.close();
+  });
+
+  it("what is advertised as required is what the handler actually enforces", async () => {
+    const { client, server } = await connect(projectRoot, store, "proxy");
+    // `query` is advertised required above; calling without it must be rejected.
+    await expect(
+      client.callTool({ name: "proxy_search_code", arguments: { sessionId: SESSION_ID } }),
+    ).rejects.toThrow();
+    await server.close();
+  });
+
+  it("the published schema is identical in both naming modes (no internal id leak)", async () => {
+    const proxy = await connect(projectRoot, store, "proxy");
+    const proxyTools = (await proxy.client.listTools()).tools as unknown as Published[];
+    await proxy.server.close();
+
+    const legacy = await connect(projectRoot, store, "legacy");
+    const legacyTools = (await legacy.client.listTools()).tools as unknown as Published[];
+    await legacy.server.close();
+
+    // Keyed by the tool that is named the same in both modes; the schema
+    // describes ARGUMENTS, so renaming the tool must not change one byte of it.
+    const pick = (ts: Published[], n: string) =>
+      JSON.stringify(ts.find((t) => t.name === n)?.inputSchema);
+    expect(pick(proxyTools, "proxy_search_code")).toBe(pick(legacyTools, "proxy_search_code"));
+    expect(pick(proxyTools, "approve_memory")).toBe(pick(legacyTools, "approve_memory"));
+
+    const allSchemas = (ts: Published[]) =>
+      JSON.stringify([...ts].map((t) => t.inputSchema).sort((a, b) => (a > b ? 1 : -1)));
+    expect(allSchemas(proxyTools)).toBe(allSchemas(legacyTools));
   });
 });
 

@@ -22,7 +22,7 @@ import { McpBridgeError } from "../errors.js";
 export type EmbedFn = (texts: readonly string[]) => Promise<Float32Array[]>;
 export type ContextToolEnv = { registry: CoreRegistry; storeRoot: string; embedFn?: EmbedFn };
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     projectId: z.string().min(1),
     task: z.string().min(1),

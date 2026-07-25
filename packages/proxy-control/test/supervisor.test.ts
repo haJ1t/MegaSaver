@@ -172,6 +172,28 @@ describe("observeReality", () => {
     expect(o.generationLive).toBe(true);
     expect(o.hasLease).toBe(true);
   });
+
+  it("observes EXACTLY the fields the matrix consumes — no write-only signals", () => {
+    // `ownerDead` and `leasePhase` were computed here every tick and never read
+    // by reconcileTransition. `ownerDead` was worse than unused: it derived from
+    // the transition record's handoffDeadline, which both production writers
+    // hardcode to null, so it was pinned true — a safety-shaped constant that
+    // read like a guard. Owner liveness is decided upstream at the lock layer by
+    // isOwnerStale (boot id + lease expiry + live-same-boot pid/start-token),
+    // which every reconcile driver runs inside via withTransitionLock.
+    //
+    // Runtime key-set assertion rather than expectTypeOf: this package's
+    // vitest.config.ts has no `typecheck` block and only includes
+    // `test/**/*.test.ts`, so a .test-d.ts guard would silently never run.
+    const o = observeReality(deps(fakeRoute(OWNED), fakeListener(true, "matching")), control({}));
+    expect(Object.keys(o).sort()).toEqual([
+      "confirmed",
+      "generationLive",
+      "hasLease",
+      "health",
+      "route",
+    ]);
+  });
 });
 
 describe("runStartupRecovery — applies the matrix to real state", () => {

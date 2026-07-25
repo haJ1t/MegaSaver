@@ -39,7 +39,7 @@ export type SaveMemoryResult = {
   deduped?: SaveMemoryLineageResult["deduped"];
 };
 
-const saveMemoryInputSchema = z
+export const saveMemoryInputSchema = z
   .object({
     projectId: z.string().min(1),
     scope: memoryScopeSchema,

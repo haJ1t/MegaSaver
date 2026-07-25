@@ -22,7 +22,7 @@ export type FromSessionMemoryEnv = {
 
 export type FromSessionMemoryResult = { suggested: number; skipped: number };
 
-const fromSessionMemoryInputSchema = z.object({ sessionId: z.string().min(1) }).strict();
+export const fromSessionMemoryInputSchema = z.object({ sessionId: z.string().min(1) }).strict();
 
 // M4 transcript→memory (MCP analog of `mega memory from-session`): deterministically
 // distill a session's RECORDED failures into `suggested` memories for the human

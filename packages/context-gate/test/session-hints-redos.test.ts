@@ -18,65 +18,62 @@ import { extractFailureSignatures } from "../src/session-hints.js";
 // guard-run hook at apps/cli/src/hooks/guard-run.ts:196). One poisoned session
 // adds minutes of CPU to every later tool call, permanently.
 const SHIPPED_CAP = 4_000;
-// The ratio is taken from half the cap up to the cap, so the largest input the
-// assertion drives is exactly the 4000 chars the capture sites store. Going up
-// to 8 KB instead would guard nothing extra — nothing stores 8 KB — and would
-// cost 80 s per sample once a bound is reverted.
-const HALF_CAP = SHIPPED_CAP / 2;
 
-// Why a growth RATIO and not a wall-clock ceiling: a ceiling only guards what it
-// separates, and on a fast idle runner a reverted bound can slip under it — the
-// prior-art suite documents four of five reverted bounds passing silently under
-// a 5 s ceiling at 50 KB. The ratio is runtime- and load-independent: bounded is
-// linear (~2.0x per doubling), while the unbounded form measured 5.4-5.7x here
-// under this exact sampler. That same prior-art suite tried a ratio and rejected
-// it, but there the unbounded form measured only 1.81x at the sizes used, so it
-// never separated. Here it clears the 2.5x threshold by >2x in the red direction
-// and sits ~20% under it in the green direction, which is what makes the ratio
-// the better guard.
+// Why an absolute ceiling and not a growth ratio: re-measured at the cap here,
+// bounded costs 1.9-2.1 ms per call and the reverted pattern costs 15-22 s
+// across runs — a ~6000x separation. (The 9.1 s above is the original
+// reporter's machine; the defect is the same, the hardware is not. That spread
+// is itself the argument: an absolute number this far from both outcomes does
+// not care which machine it lands on, and a 2.5x ratio does.) A ceiling placed
+// anywhere in that gap is decided by the defect, not by the runner.
 //
-// min-of-TRIALS, not mean: scheduler noise can only ever INFLATE a measured
-// duration, so a spike in the cap sample inflates that trial's ratio and a spike
-// in the half-cap sample deflates it. Taking the minimum discards the inflated
-// trials and can only make the assertion harder to pass, never easier. A single
-// un-minimised trial reached 2.91x under four busy cores; the min over 5 trials
-// stayed at 1.09-1.94x both idle and loaded.
-const MAX_GROWTH = 2.5;
-const TRIALS = 5;
+// The growth-ratio guard this replaces asserted `< 2.5x` from 2 KB to 4 KB off
+// ~60 ms samples. Bounded measures ~2.0x there, so the whole gate lived inside
+// a 25% band, and on windows-latest it measured 4.12x and went red on a commit
+// that had passed an hour earlier. A security regression test that cries wolf
+// is worse than none: it trains everyone to re-run without reading, which is
+// exactly how the real regression would get waved through.
+//
+// The prior-art objection to ceilings — "a ceiling only guards what it
+// separates" — does not apply at this separation. There the reverted forms were
+// genuinely fast at the size probed; here every shape is 5000x+ over the
+// ceiling with the bound reverted, and the numbers above are per-shape
+// measurements, not an extrapolation. Prior art cuts the other way too: the
+// sibling suite in packages/output-filter/test/rank-redos.test.ts tried a
+// scaling ratio FIRST and rejected it, measuring the bounded ratio at 1.48-3.78
+// over 12 runs. A 2.5x threshold sits inside that band. Both siblings
+// (rank-redos, policy/glob-redos) settled on a ceiling; this file was the
+// outlier, and windows-latest found the seam.
+//
+// 1 s is placed against the TAIL, not the median: bounded runs 1.9-2.1 ms
+// typically, but a cold first call was observed at 73.8 ms and warm calls spike
+// to 12-21 ms under load, so the honest green margin is ~13x here and ~4x on a
+// windows-latest runner (~3x slower at this workload). `retry: 3` covers what
+// is left — with a 6000x separation a retry cannot mask a real regression,
+// since a reverted bound is 12-22 s on every attempt.
+//
+// The narrowest case is NOT the full revert. Restoring just the `+`
+// (`{0,255}\w+\.`, keeping the outer bound) costs 1.9-3.0 s — only ~2-3x over
+// the ceiling, which a much faster future machine could close. That case does
+// not rest on the ceiling: it also fails the 256-char clip assertion at the
+// bottom of this file, in 2 ms, deterministically and independent of hardware.
+// The two halves of this file are a pair — the clip assertion pins the bound so
+// the only bound-preserving regression left is the `+` restore, and that one is
+// caught without a stopwatch. Neither half is sufficient alone.
+const CEILING_MS = 1_000;
 
-// Sample count is calibrated per shape rather than fixed, and that is what makes
-// this test fail FAST when a bound is reverted. Vitest cannot interrupt a
-// synchronous loop — its `timeout` only fires at async boundaries — so a fixed
-// repeat count would multiply the unbounded 9.1 s cap-size call by that count
-// and hang for 17+ minutes instead of going red. Calibrating against one real
-// call spends ~60 ms per sample when the pattern is bounded (≈55 repeats) and
-// drops to a single repeat when it is not, so a reverted bound reds out in ~50 s
-// on the ratio itself, not on a timeout.
-const TARGET_SAMPLE_MS = 60;
-
-const repeatsFor = (input: string): number => {
-  extractFailureSignatures(input); // warm up: keep JIT cost out of the estimate
+// Same shape as the sibling suites' helper, deliberately. One call, no
+// calibration loop and no repeat count: the old sampler needed both because it
+// compared two sizes and had to keep samples long enough to out-measure noise,
+// and a ceiling this far from either outcome needs neither. One call also keeps
+// the RED path honest — a reverted bound fails on the ceiling in ~20 s per shape
+// and reports the real measurement, instead of running a repeat loop vitest
+// cannot interrupt (its `timeout` only fires at async boundaries) and surfacing
+// as a timeout with no number in it.
+const elapsed = (run: () => void): number => {
   const started = performance.now();
-  extractFailureSignatures(input);
-  const one = performance.now() - started;
-  return Math.max(1, Math.round(TARGET_SAMPLE_MS / Math.max(one, 0.05)));
-};
-
-const sample = (input: string, repeats: number): number => {
-  const started = performance.now();
-  for (let i = 0; i < repeats; i += 1) extractFailureSignatures(input);
+  run();
   return performance.now() - started;
-};
-
-const growthRatio = (shape: (size: number) => string): number => {
-  const small = shape(HALF_CAP);
-  const large = shape(SHIPPED_CAP);
-  const repeats = repeatsFor(small);
-  let best = Number.POSITIVE_INFINITY;
-  for (let trial = 0; trial < TRIALS; trial += 1) {
-    best = Math.min(best, sample(large, repeats) / sample(small, repeats));
-  }
-  return best;
 };
 
 // All three shapes are runs of characters that `\w` and `[\w./\\-]` BOTH accept —
@@ -85,29 +82,30 @@ const growthRatio = (shape: (size: number) => string): number => {
 // ambiguity collapses (19.5 ms unfixed). Neither does a real base64 blob or an
 // npm `sha512-` integrity hash — `+` and `=` break the run.
 const SHAPES: ReadonlyArray<readonly [string, (size: number) => string]> = [
-  // The report's repro, and the pure form of the defect: 9.1 s unfixed at the cap.
+  // The report's repro, and the pure form of the defect: 17-20 s unfixed at the cap.
   ["a single repeated character", (size) => "x".repeat(size)],
-  // Accidental, not crafted: a 4 KB hex dump costs 11.4 s unfixed. Interleaving
+  // Accidental, not crafted: a 4 KB hex dump costs 15-19 s unfixed. Interleaving
   // letters and digits changes nothing — both are `\w`.
   ["a hex-dump run", (size) => "a1b2c3d4".repeat(size / 8)],
   // Underscores and digits are `\w` too, so identifier-ish dumps trigger it
-  // just as well (10.1 s unfixed at the cap).
+  // just as well (17-22 s unfixed at the cap).
   ["an underscore/digit run", (size) => "a_1__b2_".repeat(size / 8)],
 ];
 
 describe("extractFailureSignatures — ReDoS regression at the shipped 4000-char cap", () => {
   for (const [label, shape] of SHAPES) {
-    it(`grows no worse than ${MAX_GROWTH}x from ${HALF_CAP / 1000} KB to ${
-      SHIPPED_CAP / 1000
-    } KB of ${label}`, () => {
-      expect(growthRatio(shape)).toBeLessThan(MAX_GROWTH);
-    });
+    it(
+      `scans ${SHIPPED_CAP / 1000} KB of ${label} in under ${CEILING_MS / 1000}s`,
+      { retry: 3 },
+      () => {
+        const input = shape(SHIPPED_CAP);
+
+        expect(elapsed(() => extractFailureSignatures(input))).toBeLessThan(CEILING_MS);
+      },
+    );
   }
 });
 
-// The bound must not change which signatures come out. Every expectation below
-// was captured from the UNBOUNDED pattern before the fix, so these lock
-// behaviour rather than describe it: they pass identically before and after.
 describe("signatures unchanged after bounding", () => {
   const cases: ReadonlyArray<readonly [string, string, readonly string[]]> = [
     [

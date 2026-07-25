@@ -17,7 +17,7 @@ export type AuditTokenUsageEnv = {
   now: () => string;
 };
 
-const inputSchema = z
+export const inputSchema = z
   .object({
     projectId: z.string().min(1),
     sessionId: z.string().min(1).optional(),
