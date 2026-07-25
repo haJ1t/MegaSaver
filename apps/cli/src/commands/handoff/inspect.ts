@@ -8,6 +8,14 @@ import { HANDOFF_BADGE_NOTE, MAX_PACKET_BYTES } from "./shared.js";
 const INSPECT_PROJECT_ID = "00000000-0000-4000-8000-000000000000" as ProjectId;
 const VERIFIED_QUALIFIER = "sender anchor — not yet checked against this repo";
 
+// Every string this report echoes is attacker-controlled (handoff-packet.ts:
+// diagnose surfaces parsed fields even when hash/expiry fail), and ANSI or CR
+// repositions the cursor over the verdict lines already printed above.
+const scrubLine = (value: string): string =>
+  Array.from(value, (ch) => (ch < " " || ch === "\u007f" ? " " : ch)).join("");
+// Payload bodies are multi-line by design; a \n cannot repaint what is above it.
+const scrubBlock = (value: string): string => value.split("\n").map(scrubLine).join("\n");
+
 export type RunHandoffInspectInput = {
   filePath: string;
   now: () => number;
@@ -127,9 +135,7 @@ export async function runHandoffInspect(input: RunHandoffInspectInput): Promise<
     // sourceProject.name is free-form (z.string) and NOT hash-protected, so a
     // hostile packet embeds newlines/ANSI to forge verdict lines onto this
     // trust surface; scrub control chars before printing (schema stays open).
-    const projectName = Array.from(m.sourceProject.name, (ch) =>
-      ch < " " || ch === "\u007f" ? " " : ch,
-    ).join("");
+    const projectName = scrubLine(m.sourceProject.name);
     input.stdout(
       `from ${m.sourceAgent} to ${m.targetAgent} | project ${projectName} | expires ${m.expiresAt}`,
     );
@@ -149,9 +155,9 @@ export async function runHandoffInspect(input: RunHandoffInspectInput): Promise<
       input.stderr("warning: payload scan disagrees with manifest claims");
     }
     input.stdout("--- resume ---");
-    input.stdout(recomputed.resume);
+    input.stdout(scrubBlock(recomputed.resume));
     input.stdout("--- summary ---");
-    input.stdout(recomputed.summary);
+    input.stdout(scrubBlock(recomputed.summary));
   }
   return 0;
 }
