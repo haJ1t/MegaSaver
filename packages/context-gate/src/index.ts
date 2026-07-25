@@ -44,10 +44,12 @@ export type {
 } from "./types.js";
 export type { OrchestratorRegistry, SessionView, ProjectView } from "./registry-port.js";
 export {
+  EVIDENCE_RETENTION_MS,
   recordAndFilterOverlayOutput,
   type RecordOverlayOutputInput,
   type RecordOverlayOutputResult,
 } from "./record-output.js";
+export { sweepEvidenceStore } from "./evidence-gc.js";
 export {
   OVERLAY_CHUNK_LINES,
   buildRecoveryFooter,

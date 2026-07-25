@@ -1,6 +1,7 @@
 import { readdirSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pruneOlderThan } from "@megasaver/content-store";
+import { sweepEvidenceStore } from "@megasaver/context-gate";
 import { reconcileOverlaySummaries } from "@megasaver/core";
 
 export const OVERLAY_RETENTION_MS = 30 * 86_400_000;
@@ -98,6 +99,13 @@ export async function maybeRunOverlayGc(storeRoot: string, deps: GcDeps = {}): P
     await prune({ storeRoot, olderThan: new Date(now() - OVERLAY_RETENTION_MS) });
     pruneIntentFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
     pruneSeenFiles(storeRoot, now() - OVERLAY_RETENTION_MS);
+    // Evidence rows outlive the chunk sets they point at unless the ledger is
+    // swept on the same daily clock; nothing else calls gcEvidence.
+    try {
+      await sweepEvidenceStore({ storeRoot, now: new Date(now()) });
+    } catch {
+      /* best-effort */
+    }
     // E26 drift repair: summaries lagging their JSONL (lock-skipped updates)
     // or failing schema are rebuilt in the same daily sweep. Best-effort.
     try {
