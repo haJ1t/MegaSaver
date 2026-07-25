@@ -3,21 +3,18 @@ import {
   type CoreRegistry,
   CoreRegistryError,
   type MemoryEntry,
+  type VerificationBadge,
   changedFromFor,
   isRecallable,
   memoryEmbeddingsSidecarPath,
   searchMemoryEntriesSemantic,
+  verificationBadgeFor,
 } from "@megasaver/core";
 import { embed, readVectors } from "@megasaver/embeddings";
 import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
-import {
-  type ContradictedDisclosure,
-  type VerificationBadge,
-  spotCheckHits,
-  verificationBadgeFor,
-} from "./code-truth-check.js";
+import { type ContradictedDisclosure, spotCheckHits } from "./code-truth-check.js";
 
 // embedFn is injectable so the boundary can be unit-tested with a fake — no model
 // in CI. storeRoot locates the per-project memory-vector sidecar; absent ⇒ the

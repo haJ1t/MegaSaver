@@ -18,7 +18,9 @@
   m4 (§10 write-suppression test table), m5 (two-state upsert wording) —
   ALL integrated same day. Architect's own note: fixes fully enumerated,
   no second architect pass warranted beyond integration. Next gate:
-  writing-plans.
+  writing-plans. T13 restructured to subcommands-only (citty 0.1.6
+  cannot mix root `run` + args + `subCommands`); surface is
+  `mega handoff pack --to …`.
 - **Risk:** HIGH (§12 — connector core path, public CLI flags, writes into
   target agent config files, secret-exfiltration surface). Architect design
   pass + code-reviewer AND critic (separate passes) required before merge.
@@ -50,7 +52,7 @@ in-place. Nothing carries *this task, right now* across agents or machines.
 
 ## 2. Goal and acceptance gate
 
-`mega handoff --to codex` packs a redacted, bounded, expiring task packet;
+`mega handoff pack --to codex` packs a redacted, bounded, expiring task packet;
 `mega handoff open` applies it on the receiving side.
 
 Acceptance (roadmap 2.2, verbatim gate):
@@ -142,7 +144,7 @@ The packet file is an external boundary per the parse-on-handoff policy
 (`docs/conventions/code-conventions.md`): full Zod + hash validation on
 open; registry-validated data is NOT re-parsed at pack time.
 
-## 5. Pack pipeline — `mega handoff --to <target>`
+## 5. Pack pipeline — `mega handoff pack --to <target>`
 
 Command shape clones `runBrainExport` (`apps/cli/src/commands/brain/export.ts`):
 pure `runHandoff(input): Promise<0|1>` with injected
@@ -346,8 +348,8 @@ holds by construction, not by filtering.
 ## 7. CLI surface
 
 ```
-mega handoff --to <target> [--from <id>] [--out <file>] [--expires <n>h|<n>d]
-             [--budget <n>] [--dry-run] [--copy] [--json]
+mega handoff pack --to <target> [--from <id>] [--out <file>] [--expires <n>h|<n>d]
+                  [--budget <n>] [--dry-run] [--copy] [--json]
                                                # pack (Pro; --dry-run free)
 mega handoff open <file> [--merge] [--json]    # apply block (+ merge) (Pro)
 mega handoff inspect <file> [--json]           # manifest + redaction report (free)

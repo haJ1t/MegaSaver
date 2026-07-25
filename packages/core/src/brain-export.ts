@@ -13,9 +13,9 @@ export type ExportBrainInput = {
   createdAt: string;
 };
 
-type Redactor = { total: number; text(value: string): string };
+export type Redactor = { total: number; text(value: string): string };
 
-function makeRedactor(): Redactor {
+export function makeRedactor(): Redactor {
   return {
     total: 0,
     text(value: string): string {
@@ -26,7 +26,7 @@ function makeRedactor(): Redactor {
   };
 }
 
-function redactMemory(entry: MemoryEntry, r: Redactor): MemoryEntry {
+export function redactMemory(entry: MemoryEntry, r: Redactor): MemoryEntry {
   return {
     ...entry,
     title: r.text(entry.title),
@@ -54,7 +54,7 @@ function redactRule(rule: ProjectRule, r: Redactor): ProjectRule {
   };
 }
 
-function redactFailure(failure: FailedAttempt, r: Redactor): FailedAttempt {
+export function redactFailure(failure: FailedAttempt, r: Redactor): FailedAttempt {
   return {
     ...failure,
     task: r.text(failure.task),

@@ -133,6 +133,35 @@ export {
   importBrain,
 } from "./brain-import.js";
 export {
+  type ApplyHandoffMemoriesInput,
+  type HandoffMergeReport,
+  applyHandoffMemories,
+} from "./handoff-import.js";
+export {
+  HANDOFF_DIFF_TOKEN_CAP,
+  type BuildHandoffPacketInput,
+  type BuildHandoffPacketResult,
+  type HandoffPackReport,
+  buildHandoffPacket,
+} from "./handoff-export.js";
+export {
+  HANDOFF_SCHEMA_VERSION,
+  HandoffPacketError,
+  type HandoffDiagnostics,
+  type HandoffGit,
+  type HandoffManifest,
+  type HandoffPacket,
+  type HandoffPacketErrorCode,
+  type HandoffPayload,
+  agentSlugSchema,
+  diagnoseHandoffPacket,
+  handoffGitSchema,
+  handoffManifestSchema,
+  handoffPayloadSchema,
+  parseHandoffPacket,
+  serializeHandoffPacket,
+} from "./handoff-packet.js";
+export {
   DEFAULT_GUARD_STATE,
   GUARD_STATE_MAX_SESSIONS,
   type GuardState,
@@ -184,3 +213,5 @@ export {
   type RunAutopilotResult,
   runAutopilot,
 } from "./autopilot.js";
+export { type VerificationBadge, verificationBadgeFor } from "./verification-badge.js";
+export type { HandoffDirtyState } from "./handoff-export.js";

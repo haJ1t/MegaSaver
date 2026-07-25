@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type ExecGit, gatherGitDelta } from "../src/git-delta.js";
+import { type ExecGit, gatherDirtyState, gatherGitDelta } from "../src/git-delta.js";
 
 const SINCE = "2026-07-01T00:00:00.000Z";
 
@@ -72,6 +72,100 @@ describe("gatherGitDelta", () => {
   it("returns null when git is unavailable", () => {
     expect(
       gatherGitDelta("/repo", SINCE, () => {
+        throw new Error("ENOENT");
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("gatherDirtyState", () => {
+  it("reports a dirty tree with status paths and combined diff", () => {
+    const state = gatherDirtyState(
+      "/repo",
+      fakeGit({
+        "status --porcelain": " M src/a.ts\0?? notes.md\0",
+        "rev-parse HEAD": "abc1234def\n",
+        "diff --cached": "diff --git b staged\n",
+        diff: "diff --git a unstaged\n",
+      }),
+    );
+    expect(state).toEqual({
+      headSha: "abc1234def",
+      dirty: true,
+      statusPaths: [
+        { path: "src/a.ts", status: " M" },
+        { path: "notes.md", status: "??" },
+      ],
+      diffText: "diff --git a unstaged\n\ndiff --git b staged\n",
+    });
+  });
+
+  it("clean tree: no diff calls, diffText null", () => {
+    const state = gatherDirtyState(
+      "/repo",
+      fakeGit({
+        "status --porcelain": "",
+        "rev-parse HEAD": "abc1234def\n",
+      }),
+    );
+    expect(state).toEqual({
+      headSha: "abc1234def",
+      dirty: false,
+      statusPaths: [],
+      diffText: null,
+    });
+  });
+
+  it("skips the rename old-path field and keeps spaced paths unquoted", () => {
+    const state = gatherDirtyState(
+      "/repo",
+      fakeGit({
+        "status --porcelain": "R  new.ts\0old.ts\0?? has space.md\0",
+        "rev-parse HEAD": "abc1234def\n",
+        "diff --cached": "diff --git b staged\n",
+        diff: "",
+      }),
+    );
+    expect(state?.statusPaths).toEqual([
+      { path: "new.ts", status: "R " },
+      { path: "has space.md", status: "??" },
+    ]);
+  });
+
+  it("skips the old-path field for worktree-side renames too", () => {
+    const state = gatherDirtyState(
+      "/repo",
+      fakeGit({
+        "status --porcelain": " R new.ts\0old.ts\0",
+        "rev-parse HEAD": "abc1234def\n",
+        "diff --cached": "",
+        diff: "diff --git a unstaged\n",
+      }),
+    );
+    expect(state?.statusPaths).toEqual([{ path: "new.ts", status: " R" }]);
+  });
+
+  it("unborn HEAD yields null headSha; whitespace-only diff normalizes to null", () => {
+    const state = gatherDirtyState(
+      "/repo",
+      fakeGit({
+        "status --porcelain": "?? notes.md\0",
+        "rev-parse HEAD": new Error("unborn"),
+        "diff --cached": "",
+        diff: "",
+      }),
+    );
+    expect(state).toEqual({
+      headSha: null,
+      dirty: true,
+      statusPaths: [{ path: "notes.md", status: "??" }],
+      diffText: null,
+    });
+  });
+
+  it("returns null when not a git repo", () => {
+    expect(
+      gatherDirtyState("/repo", () => {
         throw new Error("ENOENT");
       }),
     ).toBeNull();

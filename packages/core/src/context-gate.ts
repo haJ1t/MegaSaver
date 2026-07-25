@@ -57,12 +57,15 @@ export {
 export {
   appendCodeTruthEvent,
   appendGuardEvent,
+  appendHandoffEvent,
   appendWarmStartEvent,
   readCodeTruthEvents,
   readGuardEvents,
+  readHandoffEvents,
   readWarmStartEvents,
   type CodeTruthEvent,
   type GuardEvent,
+  type HandoffEvent,
   type WarmStartEvent,
 } from "@megasaver/stats";
 
