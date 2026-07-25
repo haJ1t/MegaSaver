@@ -35,7 +35,20 @@ function eventsPath(store: StatsStore, projectId: ProjectId, sessionId: SessionI
   return join(store.root, "stats", projectId, `${sessionId}.events.jsonl`);
 }
 
-function loadSummary(path: string): SessionTokenSaverStats | null {
+// The pre-fix overlay GC sweep walked registry project dirs as workspaces and
+// overwrote <sessionId>.json with an overlay-shaped summary. The layout
+// discriminator stops new damage but leaves already-clobbered stores unreadable
+// forever, so a summary that IS json yet fails the registry schema is rebuilt
+// from the authoritative JSONL. A file that is not json at all is a torn write,
+// not a layout mismatch — it keeps the loud store_corrupt posture, because the
+// registry event carries no secretsRedacted/chunksStored and a rebuild zeroes
+// those two counters.
+function loadSummary(
+  store: StatsStore,
+  projectId: ProjectId,
+  sessionId: SessionId,
+): SessionTokenSaverStats | null {
+  const path = summaryPath(store, projectId, sessionId);
   if (!existsSync(path)) {
     return null;
   }
@@ -47,9 +60,27 @@ function loadSummary(path: string): SessionTokenSaverStats | null {
   }
   const parsed = sessionTokenSaverStatsSchema.safeParse(raw);
   if (!parsed.success) {
-    throw new StatsError("store_corrupt");
+    return rebuildSummaryFromEvents(store, projectId, sessionId);
   }
   return parsed.data;
+}
+
+function rebuildSummaryFromEvents(
+  store: StatsStore,
+  projectId: ProjectId,
+  sessionId: SessionId,
+): SessionTokenSaverStats {
+  const rebuilt = emptySummary(sessionId);
+  for (const event of readEvents(store, projectId, sessionId)) {
+    rebuilt.eventsTotal += 1;
+    rebuilt.rawBytesTotal += event.rawBytes;
+    rebuilt.returnedBytesTotal += event.returnedBytes;
+    rebuilt.bytesSavedTotal += event.bytesSaved;
+  }
+  rebuilt.savingRatio =
+    rebuilt.rawBytesTotal === 0 ? 0 : rebuilt.bytesSavedTotal / rebuilt.rawBytesTotal;
+  atomicWriteFile(summaryPath(store, projectId, sessionId), JSON.stringify(rebuilt));
+  return rebuilt;
 }
 
 function emptySummary(sessionId: SessionId): SessionTokenSaverStats {
@@ -77,10 +108,14 @@ export function appendEvent(input: AppendEventInput): SessionTokenSaverStats {
   const events = eventsPath(store, event.projectId, event.sessionId);
   const summary = summaryPath(store, event.projectId, event.sessionId);
 
+  // Read BEFORE the append: a clobbered summary is repaired by folding the
+  // JSONL, so this event must not already be in it when we accumulate on top.
+  const prior =
+    loadSummary(store, event.projectId, event.sessionId) ?? emptySummary(event.sessionId);
+
   mkdirSync(dirname(events), { recursive: true });
   appendFileSync(events, `${JSON.stringify(event)}\n`);
 
-  const prior = loadSummary(summary) ?? emptySummary(event.sessionId);
   const rawBytesTotal = prior.rawBytesTotal + event.rawBytes;
   const bytesSavedTotal = prior.bytesSavedTotal + event.bytesSaved;
   const next: SessionTokenSaverStats = {
@@ -104,7 +139,7 @@ export function readSummary(
   projectId: ProjectId,
   sessionId: SessionId,
 ): SessionTokenSaverStats | null {
-  return loadSummary(summaryPath(store, projectId, sessionId));
+  return loadSummary(store, projectId, sessionId);
 }
 
 // Read the per-call audit trail (one TokenSaverEvent per line). Missing file
