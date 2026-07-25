@@ -61,7 +61,11 @@ export function parseWikiPage(relPath: string, content: string): WikiInput {
   }
 
   const body = fm ? content.slice((fm[0] as string).length) : content;
-  const links = [...body.matchAll(/\[\[([^\]]+)\]\]/g)].map((mm) => {
+  // `[` is excluded from the target class, not just `]`: an Obsidian target
+  // cannot contain either, and letting the run swallow `[` made every `[[` in a
+  // `]`-free run of brackets rescan to end-of-input — quadratic on an uncapped
+  // page read.
+  const links = [...body.matchAll(/\[\[([^\][]+)\]\]/g)].map((mm) => {
     const ref = mm[1] as string;
     const withoutAlias = ref.split("|")[0] ?? ref;
     return (withoutAlias.split("#")[0] ?? withoutAlias).trim();

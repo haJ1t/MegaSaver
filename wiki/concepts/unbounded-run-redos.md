@@ -61,6 +61,7 @@ hex dumps (delimiter-free runs); column-padded tables and tab-indented logs
 | 9 | `FAILURE_HEADER`, `parsers/pytest.ts:4` | fixed — see below |
 | 9 | `TEST_FAILURE` (`rank.ts`), `FAIL_LINE` (`go-test.ts`), `SUMMARY` + `PROBLEM_ROW` (`eslint.ts`), `SIGNATURE` (`test-output.ts`) | fixed — see below |
 | 9 | citation anchor strip, `memory-graph/src/parse-wiki.ts:79` | fixed — see below |
+| 9 | wikilink scanner, `memory-graph/src/parse-wiki.ts:64` | fixed — see below |
 
 ## Instance 6: the missed twin (`context-gate`)
 
@@ -355,6 +356,27 @@ blob as the file node id. Characterised, not assumed — over 1,000,000 randomis
 strings on the triggering alphabet, 64,775 diverged and **0** diverged for any
 reason other than a line terminator inside the stripped tail; on the repo's own
 wiki (75 pages, 54 captures, 4 anchor-stripped) the two forms agree on every one.
+## Fixed: instance 9 (wikilink scanner, `memory-graph`)
+
+Fourth variant: the permissive class accepts the **opening delimiter of its own
+literal**. `/\[\[([^\]]+)\]\]/g` excludes only `]`, so on a `]`-free run of `[`
+every `[[` pair rescans to end-of-input — 1,158 / 5,847 / 32,755 ms at 25 / 50 /
+100 KB, through the exported `parseWikiPage` (source:
+`packages/memory-graph/src/parse-wiki.ts:64`). Fixed by excluding `[` as well,
+`[^\][]+`: each scan then stops at the next `[`, so the total is the input
+length — 0.2-0.3 ms at the same sizes. Behaviour-identical on all 75 scanned
+pages / 471 wikilinks of the real wiki.
+
+**This one is low, and the reason matters for triage.** The two call sites —
+`mega memory graph` (`apps/cli/src/commands/memory/read-wiki.ts:38`) and the
+token-gated localhost GUI bridge (`apps/gui/bridge/routes/memory-graph.ts:90`) —
+walk only the six `WIKI_FOLDERS` and skip `wiki/raw/`, so the
+sink is fed operator-authored repo files, never external content. And nothing
+naturally occurring fires it: any `]` truncates the backtrack tail, so markdown,
+code fences, JSON and base64 are all sub-millisecond, and the longest `[` run
+anywhere in `wiki/` is 2. Real defect, self-inflicted-only trigger. The size cap
+that would have prevented it does not exist here — both walkers `readFile` whole
+pages, and the largest one they scan today is 57,576 bytes.
 
 ## Lesson for the guard test
 
