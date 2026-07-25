@@ -295,7 +295,20 @@ async function record(values) {
 
     if (result.error) fail(`${task}: could not run ${claudeBin}: ${result.error.message}`);
     if (result.status !== 0) {
-      fail(`${task}: ${claudeBin} exited ${result.status}: ${String(result.stderr).slice(0, 500)}`);
+      // claude reports its own failures on STDOUT as `{is_error, result}` and
+      // leaves stderr empty, so a stderr-only message drops the one line that
+      // says what went wrong (an expired OAuth session reads as a bare
+      // "exited 1:"). Prefer the structured reason, fall back to raw streams.
+      let reason = String(result.stderr).trim();
+      try {
+        const parsed = JSON.parse(result.stdout);
+        if (typeof parsed?.result === "string" && parsed.result.trim() !== "") {
+          reason = parsed.result;
+        }
+      } catch {
+        if (reason === "") reason = String(result.stdout).trim();
+      }
+      fail(`${task}: ${claudeBin} exited ${result.status}: ${reason.slice(0, 500)}`);
     }
 
     // The end-to-end result is this conversation's OWN cost reference, so a
