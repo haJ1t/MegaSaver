@@ -88,6 +88,28 @@ describe("evaluateCommand — allow-list (spec §3 step 3)", () => {
   });
 });
 
+describe("evaluateCommand — secret-path denylist on args (epic §9a)", () => {
+  it("denies a denied path handed to an allow-listed reader", () => {
+    expect(evaluateCommand(input("cat", [".env"]))).toEqual({
+      allowed: false,
+      reason: "secret_path_read",
+    });
+  });
+
+  it("denies a denied glob attached to a flag with `=`", () => {
+    expect(evaluateCommand(input("grep", ["-r", "-n", "--include=.env", "-e", "=", "."]))).toEqual({
+      allowed: false,
+      reason: "secret_path_read",
+    });
+  });
+
+  it("allows args that touch no denied path", () => {
+    expect(evaluateCommand(input("grep", ["-r", "--include=*.ts", "-e", "x=1", "src"]))).toEqual({
+      allowed: true,
+    });
+  });
+});
+
 describe("evaluateCommand — project deny.commands (permissions-yaml §4.2)", () => {
   it("denies an otherwise-allowed command listed in deny.commands (I2 deny-precedence)", () => {
     // `cat` IS allow-listed; a project deny adds an additional gate on top of

@@ -4303,3 +4303,45 @@ Filed, not fixed: `ProjectRule.appliesTo` has no length bound of its own, and
 `deny.write` is parsed and compiled but has no consumer.
 
 `pnpm verify` EXIT 0; policy suite 264 tests.
+
+## [2026-07-25] fix | exec args bypassed the secret-path denylist (@megasaver/policy)
+
+Reported as "grep path skips secret denylist", anchored at
+`mcp-bridge/src/tools/search-code.ts:95` (`buildGrepArgs`). The anchor was
+wrong: `buildGrepArgs` is a pure string builder with no gate to add, and it is
+one of seven callers of a single ungated sink. `mega_run_command({command:
+"cat", args: [".env"]})` leaks identically and never touches search-code at all.
+
+Root cause: `policy.evaluateCommand` inspected the command name and the rendered
+command line, never the individual args, while `ALLOWED_COMMANDS` holds five
+file-reading commands (`cat`, `find`, `grep`, `ls`, `tail`). The LOCKED §9a
+denylist was therefore one tool call wide — `runOutputPipeline({path: ".env"})`
+denied with `secret_path_read` and appended a `blocked-read` firewall event,
+while `runOutputExecCommand({command: "grep", args: ["-r","-n","--include=.env",
+"-e","=","."]})` — byte-identical to what `buildGrepArgs` emits — returned the
+file body as excerpts, `warnings: []`, and left the firewall ledger empty. The
+context-firewall pitch ("your `.env` never reached the model — and you can prove
+it") was false for every exec surface.
+
+Redaction is not a backstop: real `redactWithFindings` over that grep output
+returns `count: 0`. The `./.env:1:` prefix defeats the `^`-anchored `env_value`
+detector and `aws_secret_key`'s lookbehind is lowercase-only. `--include=*.pem`
+and `--include=id_rsa` are the exception, not the rule — `private_key_block`
+catches those, so the `.env`-shaped case is the live one.
+
+Fix: `evaluateCommand` runs `evaluatePathRead` over every arg plus the tail
+after a `=` (where `--include=<glob>` hides), before the project deny.commands
+gate. One guard in the shared sink covers `mega output exec`, `mega bench`,
+`proxy_search_code`, `mega_run_command`, both daemon exec handlers, and the
+overlay exec twin. Project `deny.read` globs now bind exec as well as read.
+
+Evidence: real orchestrator, real `spawn`, real `.env` on disk. Before —
+`ok: true`, excerpt `./.env:1:AWS_SECRET_ACCESS_KEY=… ./.env:2:DB_PASSWORD=…`;
+after — `command_denied` / `secret_path_read`, child never spawned. Control
+`grep -r -n --include=*.ts -e const .` unchanged. Guard tests drive the two real
+call sites (`packages/context-gate/test/exec-secret-path-gate.test.ts`) and go
+red alone on revert. Repo-wide `pnpm test`: 56/56 tasks green, no over-block.
+
+Left open deliberately: this is an INPUT gate. A recursive `grep -r pattern .`
+still sweeps a denied file it was never handed — output-side path analysis is an
+explicit non-goal of the 2026-07-08 context-firewall spec.
