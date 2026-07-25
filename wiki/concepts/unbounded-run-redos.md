@@ -14,8 +14,8 @@ updated: 2026-07-25
 
 # Unbounded-run ReDoS
 
-Three separate incidents in this repo share one defect shape. Treat it as a
-class, not three bugs.
+Several separate incidents in this repo share one defect shape. Treat it as a
+class, not a handful of unrelated bugs.
 
 ## The shape
 
@@ -23,12 +23,15 @@ class, not three bugs.
 > literal, evaluated at every start position.
 
 On input the class accepts but the literal never follows, every start position
-scans to end-of-input and backtracks: O(starts x length). Two variants seen:
+scans to end-of-input and backtracks: O(starts x length). Three variants seen:
 
 - **Class/literal** — `[A-Za-z]*Error`, `[\w./-]+\.\w{1,5}`, `eyJ[A-Za-z0-9_-]+\.`.
 - **Overlapping runs** — `\s+at\s+.+`, where two adjacent quantifiers both
   accept whitespace, so the split between them is ambiguous at every offset.
   Same cost, but it fires on whitespace, which the delimiter-free probes miss.
+- **Zero-width literal** — `\s+$`, where the required follower is an anchor
+  rather than a character. Cheapest per backtrack step, so it needs a longer
+  input than the others to clear the same timing ceiling (instance 6).
 
 ## Why this repo keeps hitting it
 
@@ -48,6 +51,7 @@ hex dumps (delimiter-free runs); column-padded tables and tab-indented logs
 | 5 | 3 lookbehind patterns, `redaction-patterns.ts` | **open, unfiled** — see below |
 | 6 | `FILE_PATH`, `context-gate/src/session-hints.ts:17` | fixed — see below |
 | 7 | `VITEST_OUT`, `PROSE_ANTI_VI` (`classify.ts`) | fixed — see below |
+| 8 | `/\s+$/` trailing-whitespace strip, `normalize.ts:10` | fixed, `trimEnd()` — see below |
 
 ## Instance 6: the missed twin (`context-gate`)
 
@@ -156,6 +160,26 @@ costs 16-24 s, and it is **not** the email pattern:
 Variable-length lookbehind containing `\s*`, re-evaluated at every position.
 Same class, third variant. Not filed as a spec yet.
 
+## Fixed: instance 6 (`normalize`'s trailing-whitespace strip)
+
+Third variant of the shape: the required literal is a **zero-width anchor**, not
+a character. `/\s+$/` on a whitespace run that is not at end-of-line backtracks
+the whole run at every offset. It is the earliest instance in the pipeline —
+`normalize` is the first structural pass over every raw tool output and file
+read, ahead of any size cap (redaction runs first, then normalize).
+
+Fixed by `String.prototype.trimEnd()`, which is exactly equivalent (ES `\s` is
+WhiteSpace + LineTerminator, the identical set `trimEnd` removes; `$` without
+`m` anchors only at end of string) and linear. Measured through the public
+`classifyOutput`: 200 KB space run 13,846 ms → <1 ms; 200 KB tab run 17,046 ms →
+<1 ms (source: `packages/output-filter/src/normalize.ts`).
+
+The guard needed **2x** the suite's shared 100 KB. Each backtrack step here is a
+bare anchor check, cheaper per step than the class/literal patterns, so at 100 KB
+the unbounded form cost only 3.2-4.0 s and sat under the shared 5 s ceiling. Same
+lesson as below, one level sharper: the ceiling separates only if the size is
+tuned to the *per-step* cost of the specific pattern, not to the class.
+
 ## Lesson for the guard test
 
 A timing ceiling only guards what it separates. The first fix's suite ran at
@@ -190,6 +214,6 @@ by asserting on the pattern instead of its call site.
 
 ## Related
 
-- [[entities/output-filter]] — instances 2 and 3.
+- [[entities/output-filter]] — instances 2, 3 and 6.
 - [[entities/policy]] — instances 1, 4, 5.
 - [[entities/context-gate]] — instance 6.

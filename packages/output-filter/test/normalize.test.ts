@@ -18,6 +18,12 @@ describe("normalize (spec §6 stage 2)", () => {
     expect(normalize("a   \nb\t")).toBe("a\nb");
   });
 
+  // The strip is trimEnd, not /\s+$/ (ReDoS). Pins the character set: these are
+  // in `\s` but not in a naive [ \t] trim, so a drift in the swap fails here.
+  it("trims exotic trailing whitespace (vertical tab, form feed, NBSP, BOM)", () => {
+    expect(normalize("a\v\nb\f\nc\u00a0\nd\ufeff")).toBe("a\nb\nc\nd");
+  });
+
   it("leaves clean text unchanged", () => {
     expect(normalize("hello\nworld")).toBe("hello\nworld");
   });

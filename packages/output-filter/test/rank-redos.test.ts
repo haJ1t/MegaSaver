@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { classifyOutput } from "../src/classify.js";
 import { collapseSimilar } from "../src/normalize.js";
 import { detectStacktrace } from "../src/parsers/stacktrace.js";
 import { type Chunk, scoreChunk } from "../src/rank.js";
 
 const chunk = (text: string): Chunk => ({ text, startLine: 1, endLine: 1 });
 
-// Five signal patterns across this package pair a greedy run with a required
-// trailing literal. Unbounded, every position in a run the class accepts starts
-// a scan to end-of-input that then fails the literal and backtracks —
+// Six signal patterns across this package pair a greedy run with a required
+// trailing literal (or, for normalize's trailing-whitespace strip, a required
+// zero-width anchor). Unbounded, every position in a run the class accepts
+// starts a scan to end-of-input that then fails the literal and backtracks —
 // O(starts x length). Each timing block below drives exactly ONE of them
 // through its real call site, and each was verified to go red on its own when
-// that single bound is reverted (16.1 / 19.3 / 32.9 / 16.5 / 12.2 s).
+// that single bound is reverted (16.1 / 19.3 / 32.9 / 16.5 / 12.2 s, and 13.8 s
+// for normalize at the 2x size its own block explains).
 //
 // The bounds are what make these linear. Do not "simplify" the {0,N}/{1,N}
 // quantifiers back to * or +: real exception names, file paths, source
@@ -89,6 +92,36 @@ describe("collapseSimilar — ReDoS regression via POSITION", () => {
   // POSITION alone to `[\w./-]*` — and nothing else — takes this to 12.2 s.
   it(`folds a ${SIZE / 1000} KB delimiter-free line under ${CEILING_MS} ms`, () => {
     expect(elapsed(() => collapseSimilar("a/b-c".repeat(SIZE / 5)))).toBeLessThan(CEILING_MS);
+  });
+});
+
+describe("normalize — ReDoS regression on a mid-line whitespace run", () => {
+  // normalize's per-line trailing-whitespace strip is the FIRST structural pass
+  // over every raw tool output and file read, ahead of any size cap. `\s+$` is
+  // the same shape with a zero-width literal: on a whitespace run that is not
+  // at end-of-line, every offset inside the run consumes to the run's end, fails
+  // `$`, and backtracks the whole run. Driven through the public classifyOutput,
+  // which calls normalize first; 13.8 s reverted at this size.
+  //
+  // The trailing 'b' is load-bearing: with the run AT end-of-line the second
+  // start position matches immediately and the pattern is linear.
+  //
+  // On WS_SIZE: this driver needs 2x the shared SIZE. Each backtrack step here
+  // is a bare `$` check, cheaper per step than the class/literal patterns above,
+  // so at 100 KB the unbounded form costs only 3.2-4.0 s and stays green under
+  // the shared 5 s ceiling. Quadratic vs linear again makes length the cheap
+  // separator: at 200 KB the unbounded form costs 13.8-17.0 s. Do not lower it.
+  const WS_SIZE = SIZE * 2;
+  const midLineRun = (fill: string): string => `a${fill.repeat(WS_SIZE - 2)}b`;
+
+  it(`classifies a ${WS_SIZE / 1000} KB mid-line space run under ${CEILING_MS} ms`, () => {
+    expect(elapsed(() => classifyOutput({ text: midLineRun(" ") }))).toBeLessThan(CEILING_MS);
+  });
+
+  // Tabs are the realistic form (indented blobs, padded tables) and are a
+  // separate character class member, so they are asserted independently.
+  it(`classifies a ${WS_SIZE / 1000} KB mid-line tab run under ${CEILING_MS} ms`, () => {
+    expect(elapsed(() => classifyOutput({ text: midLineRun("\t") }))).toBeLessThan(CEILING_MS);
   });
 });
 

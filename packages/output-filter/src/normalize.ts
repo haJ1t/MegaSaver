@@ -1,13 +1,21 @@
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes are control chars by definition.
 const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
 
+// The per-line strip is trimEnd, NOT /\s+$/. That regex is an unbounded greedy
+// run before a required anchor, so on a whitespace run that is not at
+// end-of-line every offset scans to the run's end, fails `$` and backtracks —
+// quadratic in line length (13.8 s on a 200 KB run). This is the first
+// structural pass over every raw tool output and file read, ahead of any size
+// cap. trimEnd strips the identical character set (ES `\s` is WhiteSpace plus
+// LineTerminator, exactly what trimEnd removes) in linear time. Do not restore
+// the regex.
 export function normalize(raw: string): string {
   return raw
     .replace(ANSI, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .split("\n")
-    .map((line) => line.replace(/\s+$/, ""))
+    .map((line) => line.trimEnd())
     .join("\n");
 }
 
