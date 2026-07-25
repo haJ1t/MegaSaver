@@ -7,6 +7,7 @@ sources:
   - packages/output-filter/src/parsers/stacktrace.ts
   - packages/policy/src/redaction-patterns.ts
   - packages/context-gate/src/session-hints.ts
+  - packages/indexer/src/extract/extract-json.ts
 status: active
 created: 2026-07-20
 updated: 2026-07-25
@@ -177,6 +178,14 @@ by asserting on the pattern instead of its call site.
 **different shape** and a bound-the-run patch does not touch it: the regex there
 is *built from* untrusted input rather than applied to it. See
 [[concepts/glob-compile-redos]].
+
+`extractJson`'s `lineOf` (`packages/indexer`, fixed 2026-07-25) is the third
+neighbour: every individual regex there was linear and the input was not
+adversarial — the cost came from compiling one regex per key and re-scanning all
+lines for each, O(keys x lines). Same *cost curve*, no backtracking, so probing
+it with hostile strings finds nothing; the trigger is an ordinary flat
+dictionary. Sweep for "regex inside a per-item loop over all lines", not only
+for ambiguous quantifiers. See [[entities/indexer]].
 
 ## Related
 

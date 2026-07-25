@@ -4400,3 +4400,31 @@ only after verifying zod applies it.
 Sources: [[docs/superpowers/specs/2026-07-25-publish-tool-input-schemas-design]],
 [[docs/superpowers/plans/2026-07-25-publish-tool-input-schemas-plan]],
 [[entities/mcp-bridge]].
+
+## [2026-07-25 20:55 +03] fix | extractJson resolved key lines in O(keys x lines)
+
+`lineOf` (`packages/indexer/src/extract/extract-json.ts`) compiled a fresh
+RegExp per top-level key and ran a full `lines.findIndex` for each, so a flat
+JSON dictionary — i18n locale file, config map, data dump — cost O(keys x lines).
+Both read paths reach it: `filterOutput` -> `chunkBySemantic` -> `extractJson`
+on any `.json` read (uncapped, `readRaw`), and `mega scan` / `mega index` up to
+the 1 MB `DEFAULT_MAX_FILE_SIZE`. Measured: 33 ms at 97 KB, 479 ms at 395 KB,
+2755-3409 ms at ~1 MB; one-pass 24 ms.
+
+Fixed with one anchored regex per LINE recording each key token's first line,
+then a map lookup. Parity (including first-occurrence-wins, where a nested key
+on an earlier line beats the top-level key of the same name) verified by
+differential run of both resolvers over 40,240 documents / 42,068 key lookups —
+zero divergences.
+
+Guard lesson, same family as [[concepts/unbounded-run-redos]] instance 6 but the
+opposite conclusion: a wall-clock CEILING was tried first and rejected here. The
+fixed call is 24 ms idle but measured 1137 ms inside a full parallel
+`pnpm verify` (~47x), which leaves no gap below the 2755 ms defect. The guard
+that holds compares two adjacent measurements in the same process — the same
+object pretty-printed vs minified, so every non-defect per-key cost (sha256,
+tokenize, allocation) cancels and only line count differs: 1.10-1.43x one-pass,
+20.5-79.0x quadratic. Ceilings are not universally safer than ratios; the choice
+depends on whether the fast path's own cost is small next to load variance.
+
+Sources: [[entities/indexer]], [[concepts/unbounded-run-redos]].
