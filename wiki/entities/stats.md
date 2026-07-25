@@ -122,13 +122,29 @@ exec/file/filter` returned `store_write_failed`. It also fabricated one phantom
 summary per non-session ledger (`handoff` / `guard` / `warm-start` /
 `code-truth` `.events.jsonl`).
 
-**Rule:** any walk of `stats/*` that WRITES must first discriminate the layout —
-overlay dirs are 16 lowercase hex (`workspaceKeySchema`, from
-`encodeWorkspaceKey`), registry dirs are UUIDs. Same discriminator
-`locateChunkSet` uses (`packages/context-gate/src/locate-chunk-set.ts:11`).
-Read-only walks are safe because they schema-filter. Fix: branch
+**Rule:** EVERY walk of `stats/*` must first discriminate the layout — overlay
+dirs are 16 lowercase hex (`workspaceKeySchema`, from `encodeWorkspaceKey`),
+registry dirs are UUIDs. Same discriminator `locateChunkSet` uses
+(`packages/context-gate/src/locate-chunk-set.ts:11`). Fix: branch
 `fix/gc-reconcile-clobbers-legacy-summaries`, guard test
 `packages/stats/test/reconcile-legacy-layout.test.ts`.
+
+That fix guarded `reconcileOverlaySummaries` only, and the rule it left behind
+("read-only walks are safe because they schema-filter") was wrong: overlay
+summary reads are SELF-HEALING, so a schema miss WRITES
+(`loadOverlaySummarySelfHealing` → `rebuildGuarded` → `atomicWriteFile`).
+`readOverlaySummaryAnyWorkspace` therefore destroyed the same registry
+summaries on a plain read, reachable from `mega audit session`, `mega audit
+honest` (which never consults the registry) and `mega hooks status --session`.
+All three `stats/*` walkers in `store.ts` now share one `overlayWorkspaceKeys`
+helper that applies the discriminator. Post-merge review finding C1; branch
+`fix/review-C1-stats-sibling-clobber`, guard test
+`packages/stats/test/read-overlay-any-workspace.test.ts` ("leaves a legacy
+registry summary intact"). Fixture keys in the CLI overlay tests were fake
+(`workspace-aaa`, `wk-alpha`) and are now real 16-hex keys.
+
+**Class note:** a merged fix that guards ONE walker is not a fixed defect class.
+Grep every sibling walker (`readdirSync(join(root, "stats"))`) before closing.
 
 ## Related
 
