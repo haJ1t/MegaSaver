@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mega Saver Pro — Token spend, itemized</title>
+<style>
+  /* ============ Mega Saver Pro — token ledger ============ */
+  #ms{
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+    /* day ledger (light) */
+    --bg:      #F4F6F3;
+    --surface: #FFFFFF;
+    --ink:     #14201A;
+    --muted:   #55685E;
+    --rule:    #D6DED7;
+    --rule-strong: #9FB0A5;
+    --credit:  #0E7A55;
+    --credit-soft: #E2F0E9;
+    --debit:   #B23F24;
+    --debit-soft: #F6E7E1;
+    --btn-bg:  #0E7A55;
+    --btn-ink: #FFFFFF;
+    --shadow:  0 1px 2px rgba(20,32,26,.06), 0 8px 28px rgba(20,32,26,.08);
+
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.6;
+    margin: 0;
+    -webkit-text-size-adjust: 100%;
+  }
+  @media (prefers-color-scheme: dark){
+    #ms:not([data-theme="light"]){
+      --bg:      #0C1310;
+      --surface: #111B16;
+      --ink:     #E9F2EC;
+      --muted:   #9DB4A8;
+      --rule:    #24312B;
+      --rule-strong: #3B4C43;
+      --credit:  #3DDC97;
+      --credit-soft: #143126;
+      --debit:   #FF8A70;
+      --debit-soft: #33201A;
+      --btn-bg:  #3DDC97;
+      --btn-ink: #0C1310;
+      --shadow:  0 1px 2px rgba(0,0,0,.4), 0 10px 32px rgba(0,0,0,.45);
+    }
+  }
+  #ms[data-theme="dark"]{
+    --bg:      #0C1310;
+    --surface: #111B16;
+    --ink:     #E9F2EC;
+    --muted:   #9DB4A8;
+    --rule:    #24312B;
+    --rule-strong: #3B4C43;
+    --credit:  #3DDC97;
+    --credit-soft: #143126;
+    --debit:   #FF8A70;
+    --debit-soft: #33201A;
+    --btn-bg:  #3DDC97;
+    --btn-ink: #0C1310;
+    --shadow:  0 1px 2px rgba(0,0,0,.4), 0 10px 32px rgba(0,0,0,.45);
+  }
+
+  #ms *, #ms *::before, #ms *::after{ box-sizing: border-box; }
+  #ms :focus-visible{ outline: 2px solid var(--credit); outline-offset: 3px; border-radius: 2px; }
+
+  #ms .ms-skip{
+    position: absolute; left: -9999px; top: 0;
+    background: var(--btn-bg); color: var(--btn-ink);
+    padding: 10px 16px; font-family: var(--mono); font-size: 14px; z-index: 99;
+  }
+  #ms .ms-skip:focus{ left: 12px; top: 12px; }
+
+  #ms .ms-wrap{ max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- top bar ---------- */
+  #ms .ms-bar{
+    position: sticky; top: 0; z-index: 50;
+    background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+  }
+  #ms .ms-bar-in{
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 24px; max-width: 1060px; margin: 0 auto;
+  }
+  #ms .ms-word{
+    font-family: var(--mono); font-size: 15px; font-weight: 700;
+    letter-spacing: .08em; white-space: nowrap;
+  }
+  #ms .ms-word em{ font-style: normal; color: var(--credit); }
+  #ms .ms-bar-price{
+    margin-left: auto; font-family: var(--mono); font-size: 13px;
+    color: var(--muted); white-space: nowrap;
+  }
+  @media (max-width: 620px){ #ms .ms-bar-price{ display: none; } }
+
+  /* ---------- buttons ---------- */
+  #ms .ms-buy, #ms .ms-ghost{
+    font-family: var(--mono); font-size: 15px; font-weight: 700;
+    letter-spacing: .02em; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 15px 22px; min-height: 48px;
+    border-radius: 6px; border: 1px solid transparent;
+    cursor: pointer; text-decoration: none;
+    transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+  }
+  #ms .ms-buy{ background: var(--btn-bg); color: var(--btn-ink); box-shadow: var(--shadow); }
+  #ms .ms-buy:hover{ transform: translateY(-1px); }
+  #ms .ms-buy:active{ transform: translateY(0); }
+  #ms .ms-buy.ms-buy-sm{ padding: 10px 16px; min-height: 40px; font-size: 13px; box-shadow: none; }
+  #ms .ms-ghost{ background: transparent; color: var(--ink); border-color: var(--rule-strong); }
+  #ms .ms-ghost:hover{ border-color: var(--ink); }
+
+  #ms .ms-toggle{
+    background: transparent; border: 1px solid var(--rule-strong); color: var(--ink);
+    border-radius: 6px; width: 40px; height: 40px; min-height: 40px;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    padding: 0;
+  }
+  #ms .ms-toggle svg{ width: 18px; height: 18px; }
+  #ms .ms-toggle .ms-ic-moon{ display: none; }
+  #ms[data-theme="dark"] .ms-toggle .ms-ic-moon{ display: block; }
+  #ms[data-theme="dark"] .ms-toggle .ms-ic-sun{ display: none; }
+  @media (prefers-color-scheme: dark){
+    #ms:not([data-theme="light"]) .ms-toggle .ms-ic-moon{ display: block; }
+    #ms:not([data-theme="light"]) .ms-toggle .ms-ic-sun{ display: none; }
+  }
+
+  /* ---------- hero ---------- */
+  #ms .ms-hero{ padding: 72px 0 64px; border-bottom: 1px solid var(--rule); }
+  #ms .ms-eyebrow{
+    font-family: var(--mono); font-size: 12.5px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 22px;
+  }
+  #ms h1{
+    font-family: var(--mono); font-weight: 700;
+    font-size: clamp(2.1rem, 6.4vw, 4.6rem);
+    line-height: 1.04; letter-spacing: -0.015em;
+    margin: 0 0 26px; text-wrap: balance;
+  }
+  #ms h1 .ms-h1-credit{ color: var(--credit); }
+  #ms .ms-sub{
+    font-size: clamp(1.02rem, 1.6vw, 1.2rem); color: var(--muted);
+    max-width: 40em; margin: 0 0 32px;
+  }
+  #ms .ms-sub strong{ color: var(--ink); font-weight: 600; }
+  #ms .ms-cta-row{ display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 18px; }
+  #ms .ms-cta-note{ font-family: var(--mono); font-size: 12.5px; color: var(--muted); margin: 0 0 56px; }
+
+  /* ---------- statement (signature) ---------- */
+  #ms .ms-statement{
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 26px 26px 22px;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    max-width: 780px;
+  }
+  #ms .ms-st-head{
+    display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between;
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); padding-bottom: 14px; border-bottom: 1px solid var(--rule-strong);
+  }
+  #ms .ms-st-body{ list-style: none; margin: 0; padding: 0; }
+  #ms .ms-row{
+    display: grid;
+    grid-template-columns: 3ch minmax(9ch,1.6fr) 7ch 8ch minmax(56px,1fr);
+    gap: 0 14px; align-items: center;
+    padding: 11px 0; border-bottom: 1px dashed var(--rule);
+    font-size: 14.5px;
+  }
+  #ms .ms-row .ms-no{ color: var(--muted); font-size: 12px; }
+  #ms .ms-row .ms-src{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #ms .ms-row .ms-read{ text-align: right; color: var(--muted); }
+  #ms .ms-row .ms-cut{ text-align: right; color: var(--credit); font-weight: 700; }
+  #ms .ms-meter{ height: 8px; border-radius: 99px; background: var(--credit-soft); overflow: hidden; }
+  #ms .ms-meter i{
+    display: block; height: 100%; border-radius: 99px;
+    background: var(--credit); width: var(--w, 60%);
+    transform-origin: left center;
+  }
+  #ms .ms-total{
+    display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline;
+    padding: 16px 0 4px; justify-content: space-between;
+  }
+  #ms .ms-total .ms-total-label{ font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  #ms .ms-total .ms-total-num{ font-size: clamp(1.5rem, 3vw, 2.1rem); font-weight: 700; color: var(--credit); }
+  #ms .ms-total .ms-total-sess{ font-size: 13.5px; color: var(--ink); }
+  #ms .ms-st-foot{ margin: 10px 0 0; font-size: 11.5px; color: var(--muted); }
+  @media (max-width: 560px){
+    #ms .ms-row{ grid-template-columns: 3ch minmax(8ch,1.5fr) 8ch minmax(44px,1fr); }
+    #ms .ms-row .ms-read{ display: none; }
+    #ms .ms-statement{ padding: 20px 16px 16px; }
+  }
+
+  /* print-in animation (JS adds .ms-anim when motion is allowed) */
+  #ms .ms-statement.ms-anim .ms-row,
+  #ms .ms-statement.ms-anim .ms-total,
+  #ms .ms-statement.ms-anim .ms-st-foot{ opacity: 0; transform: translateY(6px); }
+  #ms .ms-statement.ms-anim .ms-printed{
+    opacity: 1; transform: none;
+    transition: opacity .28s ease, transform .28s ease;
+  }
+  #ms .ms-statement.ms-anim .ms-meter i{ transform: scaleX(0); }
+  #ms .ms-statement.ms-anim .ms-printed .ms-meter i{
+    transform: scaleX(1); transition: transform .5s ease .1s;
+  }
+
+  /* ---------- fact strip ---------- */
+  #ms .ms-facts{ border-bottom: 1px solid var(--rule); }
+  #ms .ms-facts-in{
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+  }
+  #ms .ms-fact{ padding: 30px 22px; border-left: 1px solid var(--rule); }
+  #ms .ms-fact:first-child{ border-left: 0; padding-left: 0; }
+  #ms .ms-fact h3{
+    font-family: var(--mono); font-size: 13px; letter-spacing: .14em;
+    text-transform: uppercase; margin: 0 0 8px; color: var(--credit);
+  }
+  #ms .ms-fact p{ margin: 0; font-size: 14.5px; color: var(--muted); }
+  @media (max-width: 720px){
+    #ms .ms-facts-in{ grid-template-columns: 1fr; }
+    #ms .ms-fact{ border-left: 0; border-top: 1px solid var(--rule); padding: 22px 0; }
+    #ms .ms-fact:first-child{ border-top: 0; }
+  }
+
+  /* ---------- feature ledger pages ---------- */
+  #ms .ms-feats{ border-bottom: 1px solid var(--rule); padding: 20px 0 0; }
+  #ms .ms-feat{
+    display: grid; grid-template-columns: minmax(0,1.05fr) minmax(0,1fr);
+    gap: 40px; padding: 56px 0; border-bottom: 1px solid var(--rule);
+    align-items: center;
+  }
+  #ms .ms-feat:last-child{ border-bottom: 0; }
+  #ms .ms-feat:nth-child(even) .ms-feat-viz{ order: -1; }
+  @media (max-width: 820px){
+    #ms .ms-feat{ grid-template-columns: 1fr; gap: 26px; padding: 44px 0; }
+    #ms .ms-feat:nth-child(even) .ms-feat-viz{ order: 0; }
+  }
+  #ms .ms-acct{
+    font-family: var(--mono); font-size: 12px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 14px;
+  }
+  #ms .ms-acct b{ color: var(--credit); font-weight: 700; }
+  #ms .ms-feat h2{
+    font-family: var(--mono); font-weight: 700; letter-spacing: -0.01em;
+    font-size: clamp(1.5rem, 3vw, 2.1rem); line-height: 1.15; margin: 0 0 14px;
+  }
+  #ms .ms-feat p{ color: var(--muted); margin: 0 0 12px; max-width: 34em; }
+  #ms .ms-cmd{
+    font-family: var(--mono); font-size: 13.5px;
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 6px; padding: 8px 12px; display: inline-block; margin-top: 6px;
+  }
+  #ms .ms-cmd .ms-dollar{ color: var(--credit); }
+  #ms code{
+    font-family: var(--mono); font-size: .92em;
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 4px; padding: 1px 5px;
+  }
+
+  #ms .ms-panel{
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    box-shadow: var(--shadow); padding: 22px;
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+  }
+  #ms .ms-panel-cap{
+    font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 14px;
+  }
+  #ms .ms-panel svg{ display: block; width: 100%; height: auto; }
+  #ms .ms-panel .ms-svg-credit{ stroke: var(--credit); }
+  #ms .ms-panel .ms-svg-fill{ fill: var(--credit); opacity: .16; stroke: none; }
+  #ms .ms-panel .ms-svg-muted{ stroke: var(--rule-strong); }
+  #ms .ms-panel .ms-svg-bar{ fill: var(--credit); }
+  #ms .ms-panel .ms-svg-dash{ stroke-dasharray: 2 7; }
+  #ms .ms-axis{
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--muted); margin: 6px 2px 0;
+  }
+
+  #ms .ms-waste{ list-style: none; margin: 0; padding: 0; }
+  #ms .ms-waste li{
+    display: grid; grid-template-columns: minmax(0,1fr) 6ch; gap: 4px 12px;
+    padding: 10px 0; border-bottom: 1px dashed var(--rule); font-size: 13.5px;
+  }
+  #ms .ms-waste li:last-child{ border-bottom: 0; }
+  #ms .ms-waste .ms-waste-label{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #ms .ms-waste .ms-waste-num{ text-align: right; color: var(--debit); font-weight: 700; }
+  #ms .ms-waste .ms-waste-bar{ grid-column: 1 / -1; height: 7px; border-radius: 99px; background: var(--debit-soft); }
+  #ms .ms-waste .ms-waste-bar i{ display: block; height: 100%; border-radius: 99px; background: var(--debit); width: var(--w, 50%); }
+  #ms .ms-waste .ms-waste-fix{ grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+  #ms .ms-waste .ms-waste-fix b{ color: var(--credit); font-weight: 700; }
+
+  /* ---------- steps ---------- */
+  #ms .ms-steps{ padding: 64px 0; border-bottom: 1px solid var(--rule); }
+  #ms .ms-steps h2, #ms .ms-price h2, #ms .ms-faq h2{
+    font-family: var(--mono); font-weight: 700;
+    font-size: clamp(1.5rem, 3vw, 2.1rem); margin: 0 0 34px; letter-spacing: -0.01em;
+  }
+  #ms .ms-steps-grid{ display: grid; grid-template-columns: repeat(3,1fr); gap: 26px; }
+  @media (max-width: 820px){ #ms .ms-steps-grid{ grid-template-columns: 1fr; } }
+  #ms .ms-step{
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 22px;
+  }
+  #ms .ms-step .ms-step-no{
+    font-family: var(--mono); font-size: 12px; letter-spacing: .16em;
+    color: var(--credit); font-weight: 700; display: block; margin-bottom: 10px;
+  }
+  #ms .ms-step h3{ font-family: var(--mono); font-size: 16.5px; margin: 0 0 8px; }
+  #ms .ms-step p{ font-size: 14.5px; color: var(--muted); margin: 0 0 10px; }
+  #ms .ms-step .ms-cmd{ font-size: 12.5px; width: 100%; overflow-x: auto; white-space: nowrap; }
+
+  /* ---------- pricing ---------- */
+  #ms .ms-price{ padding: 64px 0; border-bottom: 1px solid var(--rule); }
+  #ms .ms-price-card{
+    background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 12px;
+    box-shadow: var(--shadow); max-width: 620px; margin: 0 auto; padding: 34px;
+  }
+  #ms .ms-price-name{
+    font-family: var(--mono); font-size: 13px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 6px;
+  }
+  #ms .ms-price-amount{
+    font-family: var(--mono); font-weight: 700; color: var(--credit);
+    font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; margin: 0 0 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  #ms .ms-price-recur{ font-family: var(--mono); font-size: 13px; color: var(--muted); margin: 0 0 22px; }
+  #ms .ms-includes{ list-style: none; margin: 0 0 26px; padding: 0; border-top: 1px solid var(--rule); }
+  #ms .ms-includes li{
+    display: flex; gap: 10px; align-items: baseline;
+    padding: 11px 0; border-bottom: 1px dashed var(--rule); font-size: 15px;
+  }
+  #ms .ms-includes .ms-tick{ color: var(--credit); font-family: var(--mono); font-weight: 700; flex: none; }
+  #ms .ms-includes li span:last-child{ color: var(--ink); }
+  #ms .ms-includes code{ background: var(--bg); }
+  #ms .ms-price-cta{ display: flex; flex-direction: column; gap: 12px; }
+  #ms .ms-price-cta .ms-buy{ width: 100%; font-size: 16px; padding: 18px 22px; }
+  #ms .ms-price-fine{ font-size: 12.5px; font-family: var(--mono); color: var(--muted); text-align: center; margin: 0; }
+
+  /* ---------- FAQ ---------- */
+  #ms .ms-faq{ padding: 64px 0; border-bottom: 1px solid var(--rule); max-width: 760px; }
+  #ms .ms-faq details{ border-bottom: 1px solid var(--rule); }
+  #ms .ms-faq summary{
+    font-family: var(--mono); font-size: 15.5px; font-weight: 700;
+    padding: 18px 34px 18px 0; cursor: pointer; list-style: none; position: relative;
+  }
+  #ms .ms-faq summary::-webkit-details-marker{ display: none; }
+  #ms .ms-faq summary::after{
+    content: "+"; position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    color: var(--credit); font-size: 20px; font-weight: 400;
+  }
+  #ms .ms-faq details[open] summary::after{ content: "−"; }
+  #ms .ms-faq .ms-a{ padding: 0 0 20px; color: var(--muted); font-size: 15px; max-width: 40em; }
+  #ms .ms-a p{ margin: 0 0 10px; }
+
+  /* ---------- final CTA + footer ---------- */
+  #ms .ms-final{ padding: 84px 0; text-align: center; }
+  #ms .ms-final h2{
+    font-family: var(--mono); font-weight: 700;
+    font-size: clamp(1.7rem, 4.4vw, 3rem); letter-spacing: -0.01em;
+    margin: 0 0 14px; text-wrap: balance;
+  }
+  #ms .ms-final h2 em{ font-style: normal; color: var(--credit); }
+  #ms .ms-final p{ color: var(--muted); margin: 0 0 30px; }
+  #ms .ms-footer{
+    border-top: 1px solid var(--rule);
+    padding: 26px 0 40px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--muted);
+  }
+  #ms .ms-footer .ms-wrap{ display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+
+  /* ---------- reveal on scroll ---------- */
+  #ms .ms-reveal{ opacity: 1; transform: none; }
+  #ms.ms-io .ms-reveal{ opacity: 0; transform: translateY(14px); transition: opacity .5s ease, transform .5s ease; }
+  #ms.ms-io .ms-reveal.ms-in{ opacity: 1; transform: none; }
+
+  @media (prefers-reduced-motion: reduce){
+    #ms *, #ms *::before, #ms *::after{
+      animation: none !important; transition: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="ms">
+  <a class="ms-skip" href="#ms-main">Skip to content</a>
+
+  <header class="ms-bar">
+    <div class="ms-bar-in">
+      <span class="ms-word">MEGA&nbsp;SAVER&nbsp;<em>/&nbsp;PRO</em></span>
+      <span class="ms-bar-price"><span data-gumroad-field="price">$7.99 a month</span></span>
+      <button type="button" class="ms-buy ms-buy-sm" data-gumroad-action="buy" data-gumroad-option="Pro" data-gumroad-recurrence="monthly">Get Pro</button>
+      <button type="button" class="ms-toggle" id="ms-toggle" aria-label="Switch between light and dark theme">
+        <svg class="ms-ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg>
+        <svg class="ms-ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 14.2A8.5 8.5 0 0 1 9.8 3.6a8.5 8.5 0 1 0 10.6 10.6Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="ms-main">
+
+    <!-- ================= HERO ================= -->
+    <section class="ms-hero" aria-labelledby="ms-h1">
+      <div class="ms-wrap">
+        <p class="ms-eyebrow">For Claude Code · Codex · Cursor · Aider · any CLI agent</p>
+        <h1 id="ms-h1">Your tokens, itemized.<br>Your savings, <span class="ms-h1-credit">proven.</span></h1>
+        <p class="ms-sub"><strong data-gumroad-field="name">Mega Saver Pro</strong> adds savings history, waste insights, and spend forecasts on top of the free, MIT-licensed Mega Saver CLI — the context layer that keeps your coding agent from reading what it doesn't need.</p>
+        <div class="ms-cta-row">
+          <button type="button" class="ms-buy" data-gumroad-action="buy" data-gumroad-option="Pro" data-gumroad-recurrence="monthly">Get Mega Saver Pro</button>
+          <a class="ms-ghost" href="#ms-features">See what it shows you</a>
+        </div>
+        <p class="ms-cta-note"><span data-gumroad-field="price">$7.99 a month</span> · cancel anytime · license key by email</p>
+
+        <div class="ms-statement" id="ms-statement" role="img" aria-label="Example token statement: four waste sources itemized, totalling 3.5 million tokens saved in a week — roughly three extra sessions on the same plan.">
+          <div class="ms-st-head" aria-hidden="true">
+            <span>Token statement</span>
+            <span>7 days · illustrative</span>
+          </div>
+          <ol class="ms-st-body" aria-hidden="true">
+            <li class="ms-row">
+              <span class="ms-no">001</span>
+              <span class="ms-src">file reads</span>
+              <span class="ms-read">2.41M</span>
+              <span class="ms-cut">−1.82M</span>
+              <span class="ms-meter"><i style="--w:76%"></i></span>
+            </li>
+            <li class="ms-row">
+              <span class="ms-no">002</span>
+              <span class="ms-src">build &amp; test logs</span>
+              <span class="ms-read">0.91M</span>
+              <span class="ms-cut">−0.79M</span>
+              <span class="ms-meter"><i style="--w:87%"></i></span>
+            </li>
+            <li class="ms-row">
+              <span class="ms-no">003</span>
+              <span class="ms-src">diffs &amp; reviews</span>
+              <span class="ms-read">0.44M</span>
+              <span class="ms-cut">−0.28M</span>
+              <span class="ms-meter"><i style="--w:64%"></i></span>
+            </li>
+            <li class="ms-row">
+              <span class="ms-no">004</span>
+              <span class="ms-src">repeat re-reads</span>
+              <span class="ms-read">0.63M</span>
+              <span class="ms-cut">−0.61M</span>
+              <span class="ms-meter"><i style="--w:97%"></i></span>
+            </li>
+          </ol>
+          <div class="ms-total" aria-hidden="true">
+            <span class="ms-total-label">Net saved</span>
+            <span class="ms-total-num"><span id="ms-count" data-target="3.50">3.50</span>M tokens</span>
+            <span class="ms-total-sess">≈ 3 extra sessions on the same plan</span>
+          </div>
+          <p class="ms-st-foot" aria-hidden="true">Example output. Pro reports your own recorded usage — nothing simulated, nothing sent anywhere.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= FACTS ================= -->
+    <section class="ms-facts" aria-label="Key facts">
+      <div class="ms-wrap ms-facts-in">
+        <div class="ms-fact ms-reveal">
+          <h3>100% offline</h3>
+          <p>Analytics run on your machine, from usage the CLI already records locally. The license is verified offline with an Ed25519 signature — no phone-home, no account.</p>
+        </div>
+        <div class="ms-fact ms-reveal">
+          <h3>Open core</h3>
+          <p>The Mega Saver CLI stays free and MIT-licensed. Pro is the analytics layer on top — buy it for the numbers, not to unlock basics.</p>
+        </div>
+        <div class="ms-fact ms-reveal">
+          <h3>Export everything</h3>
+          <p>Every table and series exports to CSV or JSON. Pipe it into your own dashboards, expense reports, or spreadsheets.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= FEATURES ================= -->
+    <section class="ms-feats" id="ms-features" aria-label="What Pro shows you">
+      <div class="ms-wrap">
+
+        <article class="ms-feat ms-reveal">
+          <div class="ms-feat-copy">
+            <p class="ms-acct">Savings <b>/ history</b></p>
+            <h2>Every session, on the record.</h2>
+            <p>What your agent read, what got filtered, what you actually saved — kept locally, session by session. Scan a week or a quarter. Spot the day a chatty tool started eating your budget.</p>
+            <span class="ms-cmd"><span class="ms-dollar">$</span> mega savings history --weeks 8</span>
+          </div>
+          <div class="ms-feat-viz">
+            <div class="ms-panel">
+              <p class="ms-panel-cap">Tokens saved per week</p>
+              <svg viewBox="0 0 320 130" role="img" aria-label="Example bar chart of tokens saved across eight weeks, trending upward.">
+                <line x1="0" y1="118" x2="320" y2="118" class="ms-svg-muted" stroke-width="1"/>
+                <rect class="ms-svg-bar" x="10"  y="86" width="26" height="32" rx="2"/>
+                <rect class="ms-svg-bar" x="49"  y="78" width="26" height="40" rx="2"/>
+                <rect class="ms-svg-bar" x="88"  y="90" width="26" height="28" rx="2"/>
+                <rect class="ms-svg-bar" x="127" y="62" width="26" height="56" rx="2"/>
+                <rect class="ms-svg-bar" x="166" y="50" width="26" height="68" rx="2"/>
+                <rect class="ms-svg-bar" x="205" y="58" width="26" height="60" rx="2"/>
+                <rect class="ms-svg-bar" x="244" y="34" width="26" height="84" rx="2"/>
+                <rect class="ms-svg-bar" x="283" y="22" width="26" height="96" rx="2"/>
+              </svg>
+              <div class="ms-axis" aria-hidden="true"><span>w1</span><span>w8</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="ms-feat ms-reveal">
+          <div class="ms-feat-copy">
+            <p class="ms-acct">Savings <b>/ insights</b></p>
+            <h2>Waste, named and ranked.</h2>
+            <p>Insights itemizes where tokens leak — whole-file reads for one function, verbose test logs, the same file read five times unchanged — and ranks each source by what it costs you.</p>
+            <span class="ms-cmd"><span class="ms-dollar">$</span> mega savings insights</span>
+          </div>
+          <div class="ms-feat-viz">
+            <div class="ms-panel">
+              <p class="ms-panel-cap">Top waste sources · illustrative</p>
+              <ul class="ms-waste">
+                <li>
+                  <span class="ms-waste-label">re-reads of unchanged files</span>
+                  <span class="ms-waste-num">612K</span>
+                  <span class="ms-waste-bar"><i style="--w:88%"></i></span>
+                  <span class="ms-waste-fix">already filtered · <b>−97%</b> on re-read</span>
+                </li>
+                <li>
+                  <span class="ms-waste-label">verbose build &amp; test logs</span>
+                  <span class="ms-waste-num">418K</span>
+                  <span class="ms-waste-bar"><i style="--w:60%"></i></span>
+                  <span class="ms-waste-fix">compressed to root cause + first failure</span>
+                </li>
+                <li>
+                  <span class="ms-waste-label">whole files read for one symbol</span>
+                  <span class="ms-waste-num">305K</span>
+                  <span class="ms-waste-bar"><i style="--w:44%"></i></span>
+                  <span class="ms-waste-fix">served as AST chunks instead</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="ms-feat ms-reveal">
+          <div class="ms-feat-copy">
+            <p class="ms-acct">Savings <b>/ forecast</b></p>
+            <h2>See the bill before it lands.</h2>
+            <p>Forecast projects the month from your current burn rate: tokens in, tokens filtered, where you'll stand at month-end. Adjust habits while it's still cheap to.</p>
+            <span class="ms-cmd"><span class="ms-dollar">$</span> mega savings forecast</span>
+          </div>
+          <div class="ms-feat-viz">
+            <div class="ms-panel">
+              <p class="ms-panel-cap">Month-end projection</p>
+              <svg viewBox="0 0 320 130" role="img" aria-label="Example line chart: recorded savings so far this month, with a dashed projection to month-end.">
+                <line x1="0" y1="118" x2="320" y2="118" class="ms-svg-muted" stroke-width="1"/>
+                <path class="ms-svg-fill" d="M10 108 L70 96 L130 88 L190 66 L190 118 L10 118 Z"/>
+                <path d="M10 108 L70 96 L130 88 L190 66" class="ms-svg-credit" fill="none" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M190 66 L250 48 L310 30" class="ms-svg-credit ms-svg-dash" fill="none" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="190" cy="66" r="4" class="ms-svg-bar"/>
+              </svg>
+              <div class="ms-axis" aria-hidden="true"><span>day 1</span><span>today</span><span>day 30</span></div>
+            </div>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- ================= STEPS ================= -->
+    <section class="ms-steps" aria-labelledby="ms-steps-h">
+      <div class="ms-wrap">
+        <h2 id="ms-steps-h">Running in three steps</h2>
+        <div class="ms-steps-grid">
+          <div class="ms-step ms-reveal">
+            <span class="ms-step-no">STEP 1</span>
+            <h3>Run the free CLI</h3>
+            <p>Mega Saver's core is free and open source (MIT). It filters context, records usage locally, and works with your agent today.</p>
+            <span class="ms-cmd"><span class="ms-dollar">$</span> mega --version</span>
+          </div>
+          <div class="ms-step ms-reveal">
+            <span class="ms-step-no">STEP 2</span>
+            <h3>Activate your key</h3>
+            <p>Buy Pro and your license key arrives by email. One command activates it — verified offline, tied to no account.</p>
+            <span class="ms-cmd"><span class="ms-dollar">$</span> mega license activate &lt;key&gt;</span>
+          </div>
+          <div class="ms-step ms-reveal">
+            <span class="ms-step-no">STEP 3</span>
+            <h3>Read your numbers</h3>
+            <p>History, insights, and forecast unlock in place. Export any of it to CSV or JSON whenever you need it elsewhere.</p>
+            <span class="ms-cmd"><span class="ms-dollar">$</span> mega savings insights</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= PRICING ================= -->
+    <section class="ms-price" aria-labelledby="ms-price-h">
+      <div class="ms-wrap">
+        <h2 id="ms-price-h" style="text-align:center">One tier. The whole ledger.</h2>
+        <div class="ms-price-card ms-reveal">
+          <p class="ms-price-name" data-gumroad-field="name">Mega Saver Pro</p>
+          <p class="ms-price-amount"><span data-gumroad-field="price">$7.99 a month</span></p>
+          <p class="ms-price-recur">billed monthly · cancel anytime</p>
+          <ul class="ms-includes">
+            <li><span class="ms-tick">+</span><span><code>mega savings history</code> — session-by-session savings record</span></li>
+            <li><span class="ms-tick">+</span><span><code>mega savings insights</code> — waste sources, named and ranked</span></li>
+            <li><span class="ms-tick">+</span><span><code>mega savings forecast</code> — month-end spend projection</span></li>
+            <li><span class="ms-tick">+</span><span>CSV / JSON export for every table and series</span></li>
+            <li><span class="ms-tick">+</span><span>Offline, unforgeable Ed25519 license — no phone-home</span></li>
+            <li><span class="ms-tick">+</span><span>The core CLI stays free &amp; MIT — Pro is pure analytics</span></li>
+          </ul>
+          <div class="ms-price-cta">
+            <button type="button" class="ms-buy" data-gumroad-action="buy" data-gumroad-option="Pro" data-gumroad-recurrence="monthly">Get Mega Saver Pro</button>
+            <p class="ms-price-fine">Secure checkout by Gumroad · key delivered by email</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= FAQ ================= -->
+    <section class="ms-faq-wrap" aria-labelledby="ms-faq-h">
+      <div class="ms-wrap">
+        <div class="ms-faq">
+          <h2 id="ms-faq-h">Questions, answered</h2>
+
+          <details>
+            <summary>What exactly am I buying?</summary>
+            <div class="ms-a" data-gumroad-field="description">
+              <p>Historical savings analytics + waste/efficiency insights on top of the free open-source Mega Saver CLI. <code>mega savings history/insights/forecast</code>, CSV/JSON export. The core CLI stays free (MIT); Pro is the analytics layer. Offline, unforgeable Ed25519 license.</p>
+            </div>
+          </details>
+
+          <details>
+            <summary>What's free and what's Pro?</summary>
+            <div class="ms-a">
+              <p>The Mega Saver CLI — context filtering, session tools, local usage records — is free and MIT-licensed, and stays that way. Pro adds the analytics layer: <code>mega savings history</code>, <code>insights</code>, <code>forecast</code>, and CSV/JSON export.</p>
+            </div>
+          </details>
+
+          <details>
+            <summary>Which coding agents does it work with?</summary>
+            <div class="ms-a">
+              <p>Mega Saver is agent-agnostic: Claude Code, Codex, Cursor, Aider, and any CLI agent you can point at it. Pro analyzes the usage the CLI records — it doesn't care which agent produced it.</p>
+            </div>
+          </details>
+
+          <details>
+            <summary>Does any of my data leave my machine?</summary>
+            <div class="ms-a">
+              <p>No. Usage is recorded locally by the free CLI, and Pro's analytics run locally on those records. The license itself is verified offline via an Ed25519 signature, so activation doesn't need a server either.</p>
+            </div>
+          </details>
+
+          <details>
+            <summary>How does the license arrive, and can I cancel?</summary>
+            <div class="ms-a">
+              <p>Your key arrives by email right after checkout; activate it with <code>mega license activate &lt;key&gt;</code>. The subscription is billed monthly through Gumroad and you can cancel anytime from your Gumroad account — billing simply stops.</p>
+            </div>
+          </details>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= FINAL CTA ================= -->
+    <section class="ms-final" aria-labelledby="ms-final-h">
+      <div class="ms-wrap">
+        <h2 id="ms-final-h">Stop guessing.<br>Start <em>keeping receipts.</em></h2>
+        <p>Join for <span data-gumroad-field="price">$7.99 a month</span> — cancel anytime.</p>
+        <button type="button" class="ms-buy" data-gumroad-action="buy" data-gumroad-option="Pro" data-gumroad-recurrence="monthly">Get Mega Saver Pro</button>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="ms-footer">
+    <div class="ms-wrap">
+      <span>© 2026 megasaver</span>
+      <span>Secure checkout &amp; billing by Gumroad</span>
+      <span>Core CLI: free · MIT</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("ms");
+  if (!root) return;
+
+  var reduced = false;
+  try {
+    reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch (e) {}
+
+  /* ---- theme toggle ---- */
+  try {
+    var saved = null;
+    try { saved = window.localStorage.getItem("ms-theme"); } catch (e) {}
+    if (saved === "light" || saved === "dark") root.setAttribute("data-theme", saved);
+
+    var toggle = document.getElementById("ms-toggle");
+    if (toggle) {
+      toggle.addEventListener("click", function () {
+        var systemDark = false;
+        try { systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches; } catch (e) {}
+        var current = root.getAttribute("data-theme") || (systemDark ? "dark" : "light");
+        var next = current === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { window.localStorage.setItem("ms-theme", next); } catch (e) {}
+      });
+    }
+  } catch (e) {}
+
+  /* ---- statement print-in ---- */
+  try {
+    var st = document.getElementById("ms-statement");
+    if (st && !reduced) {
+      st.classList.add("ms-anim");
+      var pieces = st.querySelectorAll(".ms-row, .ms-total, .ms-st-foot");
+      var i = 0;
+      var printNext = function () {
+        if (i >= pieces.length) return;
+        pieces[i].classList.add("ms-printed");
+        i += 1;
+        window.setTimeout(printNext, i === pieces.length - 1 ? 420 : 300);
+      };
+      window.setTimeout(printNext, 350);
+
+      /* count-up on the total */
+      var counter = document.getElementById("ms-count");
+      if (counter) {
+        var target = parseFloat(counter.getAttribute("data-target") || "3.5");
+        var t0 = null;
+        var dur = 900;
+        var delay = 350 + pieces.length * 300;
+        window.setTimeout(function () {
+          var tick = function (ts) {
+            if (t0 === null) t0 = ts;
+            var p = Math.min(1, (ts - t0) / dur);
+            var eased = 1 - Math.pow(1 - p, 3);
+            counter.textContent = (target * eased).toFixed(2);
+            if (p < 1) window.requestAnimationFrame(tick);
+          };
+          window.requestAnimationFrame(tick);
+        }, delay);
+      }
+    }
+  } catch (e) {}
+
+  /* ---- scroll reveals ---- */
+  try {
+    if (!reduced && "IntersectionObserver" in window) {
+      root.classList.add("ms-io");
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) {
+            en.target.classList.add("ms-in");
+            io.unobserve(en.target);
+          }
+        });
+      }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+      var nodes = root.querySelectorAll(".ms-reveal");
+      for (var n = 0; n < nodes.length; n++) io.observe(nodes[n]);
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
