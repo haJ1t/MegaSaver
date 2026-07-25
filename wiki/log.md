@@ -4120,3 +4120,46 @@ improved from 0/4 losses to 4/4 wins (1.30x cost geomean; approximately $1.87
 vs $2.49 total), while the 4x claim remains unproven. Implementation branch:
 `fix/proxy-cache-parity-finalize`; code head before this wiki record:
 `b09a3983`. Integration PR: GitHub #288.
+## [2026-07-25 14:20 +03] fix | context-gate FILE_PATH ReDoS (defect class instance 6)
+
+`FILE_PATH` in `packages/context-gate/src/session-hints.ts` was the unfixed twin
+of the `FILE_PATH` bounded in `packages/output-filter/src/rank.ts` (`4ddac04e`),
+and the worse form: `[\w./\\-]*\w+\.` is two unbounded quantified runs over
+overlapping classes (`\w` is a subset of `[\w./\\-]`), so the split between them
+was ambiguous at every offset *and* every start position rescanned to fail the
+`\.`. Superquadratic, ~7x per doubling through `extractFailureSignatures`: 1.2 s
+at 2 KB, 9.1 s at 4 KB, 80.5 s at 8 KB.
+
+Critical rather than theoretical on two counts. 4 KB is the shipped cap, not a
+probe size — both capture sites store `redact(...).redacted.slice(0, 4000)`
+(`run-command.ts:305`, `:574`) — and the cost is persisted and amplified: up to
+`MAX_OVERLAY_FAILURES` (50) records are re-extracted by `buildSessionHints` /
+`buildOverlayHints` on every read and exec, including inside the `guard-run`
+hook, so one session that captured a hex dump or identifier run added minutes of
+CPU to every later tool call, permanently. The firing shapes are accidental
+(`'x'.repeat` 9.1 s, hex dump 11.4 s, identifier run 10.1 s); path-ish runs,
+base64 and npm `sha512-` hashes do NOT fire it, because `/`, `-`, `+` and `=`
+break the `\w` run.
+
+Fix: collapse the second run to the single `\w` it actually required —
+`/[\w./\\-]{0,255}\w\.[a-zA-Z]{1,5}(?::\d+)?/g`, 2.3 ms at 4 KB. Semantics
+preserved exactly; verified behaviour-identical on 22 real diagnostic lines and
+200k randomised strings over the triggering alphabet. The one-run collapse
+`[\w./\\-]{1,256}\.` is equally fast but was rejected — it drops the
+`\w`-before-dot requirement and starts matching `-.ts`, `..ts`, `a/.js`. Only
+divergence kept is the 256-char leading-run cap, matching the merged twin.
+
+Why it survived: a wiki indexing gap, not a code gap. This page's `sources:`
+frontmatter listed only `output-filter` and `policy`, so a wiki-first sweep for
+the class never pointed at `context-gate`. Added, with a rule that every package
+holding a member of the class — including packages that merely copied a fixed
+pattern — goes in `sources:` in the same edit.
+
+Evidence: TDD red first — the guard failed at 6.47x / 6.60x / 6.10x with the
+bound reverted (clean ratio assertions, not timeouts) while all 12 behaviour
+tests passed unfixed, proving they lock behaviour rather than describe the fix.
+Green after: `pnpm verify` EXIT 0, 56/56 turbo tasks, context-gate 331/331.
+Guard is `packages/context-gate/test/session-hints-redos.test.ts` — drives the
+exported function at the shipped cap, asserts a growth ratio (min-of-5-trials,
+calibrated repeat count) rather than a wall-clock ceiling. Sources:
+[[concepts/unbounded-run-redos]] instance 6, [[entities/context-gate]].

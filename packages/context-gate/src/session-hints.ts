@@ -14,7 +14,21 @@ interface HintSource {
 // distill each blob into SHORT signatures likely to recur in related output:
 // diagnostic/error codes (TS2322, E0308) and source paths (src/auth.ts[:42]).
 const ERROR_CODE = /\b[A-Z]{1,5}\d{2,5}\b/g;
-const FILE_PATH = /[\w./\\-]*\w+\.[a-zA-Z]{1,5}(?::\d+)?/g;
+// Bounded, and the trailing `\w` is a single char rather than a run, on purpose.
+// `[\w./\\-]*\w+\.` was two unbounded quantified runs over overlapping classes
+// (`\w` is a subset of `[\w./\\-]`), so on any run of `\w` chars the split
+// between them was ambiguous at every offset AND every start position rescanned
+// to end-of-input to fail the `\.` — superquadratic, ~7x per doubling: 1.2 s at
+// 2 KB, 9.1 s at 4 KB, 80.5 s at 8 KB. 4 KB is the shipped worst case, not a
+// crafted one (run-command.ts slices every stored record to 4000 chars), the
+// shapes that fire it are accidental (hex dumps, identifier runs), and the cost
+// is persisted: up to 50 stored records are re-extracted on every read and exec.
+// Collapsing the second run to one `\w` keeps the semantics exactly — the char
+// before the dot must still be a word char, everything before it still comes
+// from the wider class — while removing the ambiguity: 9.1 s -> 2.3 ms at 4 KB.
+// The twin in packages/output-filter/src/rank.ts is bounded for the same reason.
+// Do not restore `*`/`+`.
+const FILE_PATH = /[\w./\\-]{0,255}\w\.[a-zA-Z]{1,5}(?::\d+)?/g;
 const MIN_SIGNATURE_LENGTH = 4;
 export const MAX_SIGNATURES_PER_SESSION = 12;
 // Dot-tokens like README.md, example.com, or a.b are prose/hostnames, not
