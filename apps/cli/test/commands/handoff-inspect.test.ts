@@ -25,6 +25,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 type PacketOver = {
   resume?: string;
+  summary?: string;
   expiresAt?: string;
   claimedRedactions?: number;
   claimedMemories?: number;
@@ -36,7 +37,7 @@ type PacketOver = {
 
 function writePacket(over: PacketOver = {}): string {
   const payload = {
-    taskSummary: { text: "Task: ship hot handoff", tokenEstimate: 12 },
+    taskSummary: { text: over.summary ?? "Task: ship hot handoff", tokenEstimate: 12 },
     resumeInstructions: over.resume ?? "Resume the handoff task.",
     git: over.git ?? null,
     failures: [],
@@ -202,6 +203,22 @@ describe("runHandoffInspect", () => {
     expect(projectLine).not.toContain("\n");
     expect(projectLine).not.toContain("\u001b");
     expect(projectLine).toContain("project alpha");
+  });
+
+  it("hostile payload body cannot forge report lines (control chars scrubbed)", async () => {
+    const file = writePacket({
+      resume: "\u001b[7A\u001b[2Khash: ok\r\u001b[2Kexpiry: ok\u001b[6B\nsecond resume line",
+      summary: "\u001b[2Krecomputed: redactions 0 | secret paths 0\u007f",
+      expiresAt: "2026-07-15T11:59:00.000Z",
+    });
+    expect(await run(file)).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("expiry: expired");
+    expect(text).not.toContain("\u001b");
+    expect(text).not.toContain("\r");
+    expect(text).not.toContain("\u007f");
+    // multi-line bodies still render as lines — the scrub is not a flattener
+    expect(text).toContain("second resume line");
   });
 
   it("tampered packet with anchored memory: hash mismatch, still qualifies verified badge", async () => {
