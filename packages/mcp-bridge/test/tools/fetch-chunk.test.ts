@@ -74,6 +74,19 @@ describe("handleFetchChunk", () => {
     ).rejects.toMatchObject({ code: "validation_failed" });
   });
 
+  it("rejects `around` by name — accepted-but-ignored is worse than rejected", async () => {
+    // `around` (neighbouring-chunk fetch) was declared and never read. It is an
+    // unbuilt feature, not an ignored knob, so .strict() rejects it and zod's
+    // own message names the key (inert-mcp-inputs §3.3).
+    await seedChunkSet(store, "cs-around");
+    await expect(
+      handleFetchChunk({ storeRoot: store }, { chunkSetId: "cs-around", chunkId: "0", around: 2 }),
+    ).rejects.toMatchObject({ code: "validation_failed" });
+    await expect(
+      handleFetchChunk({ storeRoot: store }, { chunkSetId: "cs-around", chunkId: "0", around: 2 }),
+    ).rejects.toThrow(/around/);
+  });
+
   it("returns the chunk when chunkSetId is in the allowed set", async () => {
     await seedChunkSet(store, "cs-allowed");
     const result = await handleFetchChunk(

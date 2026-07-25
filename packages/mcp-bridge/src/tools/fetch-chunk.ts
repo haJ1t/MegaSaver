@@ -12,11 +12,14 @@ export type FetchChunkToolEnv = {
   allowedChunkSetIds?: ReadonlySet<string>;
 };
 
-const fetchChunkInputSchema = z
+// No `around` key: neighbouring-chunk fetch was declared here and never read,
+// so a caller asking for context silently got a single chunk. It is an unbuilt
+// feature rather than an ignored knob, so .strict() now rejects it by name and
+// it returns together with an implementation (inert-mcp-inputs §3.3).
+export const fetchChunkInputSchema = z
   .object({
     chunkSetId: z.string().min(1),
     chunkId: z.string().min(1),
-    around: z.number().int().nonnegative().optional(),
   })
   .strict();
 
