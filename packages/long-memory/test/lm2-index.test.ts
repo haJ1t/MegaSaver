@@ -8,7 +8,12 @@ import type { Lm2CandidateCatalog } from "../src/lm2-catalog.js";
 import { Lm2Error } from "../src/lm2-errors.js";
 import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import { createLm2IndexService } from "../src/lm2-index.js";
-import type { EmbeddingPort, Lm2Candidate, ModelDescriptor } from "../src/lm2-model.js";
+import {
+  type EmbeddingPort,
+  type Lm2Candidate,
+  MAX_LM2_INDEX_BATCH_TIMEOUT_MS,
+  type ModelDescriptor,
+} from "../src/lm2-model.js";
 import { canonicalEmbeddingInput } from "../src/lm2-vector-format.js";
 import { type Lm2VectorStore, createLm2VectorStore } from "../src/lm2-vector-store.js";
 import { cleanupRoots, createRoot, sidecarPath } from "./lm2-vector-store-fixtures.js";
@@ -934,6 +939,9 @@ describe("LM2 explicit indexer", () => {
       workspaceKey,
       modelFingerprint: modelDescriptorFingerprint(model),
       maxRecords: 256,
+      // the harness default is 100ms; 22MB of records outruns it on a loaded
+      // machine and the wall clock, not the budget under test, ends the run
+      timeoutMs: MAX_LM2_INDEX_BATCH_TIMEOUT_MS,
     });
 
     expect(vi.mocked(test.catalog.page).mock.calls.length).toBeLessThanOrEqual(1_024);
