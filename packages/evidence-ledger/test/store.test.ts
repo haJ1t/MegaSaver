@@ -389,6 +389,33 @@ describe("gcEvidence", () => {
     );
   });
 
+  it("ages null-expiry evidence out from createdAt when the caller passes its retention window", async () => {
+    await appendEvidence({
+      storeRoot,
+      redactSourceRef: (r) => r,
+      record: input({ expiresAt: null }),
+    });
+    const fallbackExpiryMs = 3_600_000;
+    expect(
+      await gcEvidence({
+        storeRoot,
+        workspaceKey,
+        now: new Date("2026-06-16T12:30:00.000Z"),
+        deleteChunk: async () => {},
+        fallbackExpiryMs,
+      }),
+    ).toEqual({ degraded: 0 });
+    expect(
+      await gcEvidence({
+        storeRoot,
+        workspaceKey,
+        now: new Date("2026-06-16T13:30:00.000Z"),
+        deleteChunk: async () => {},
+        fallbackExpiryMs,
+      }),
+    ).toEqual({ degraded: 1 });
+  });
+
   it("not-yet-expired and null-expiry evidence is left intact", async () => {
     await appendEvidence({
       storeRoot,

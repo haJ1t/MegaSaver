@@ -1,4 +1,11 @@
-import { existsSync, mkdtempSync, readdirSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gcEvidence, listEvidenceByWorkspace } from "@megasaver/evidence-ledger";
@@ -95,6 +102,52 @@ describe("sweepEvidenceStore", () => {
     expect(degraded).toBe(1);
     expect(readdirSync(join(storeRoot, "evidence", WK))).toHaveLength(1);
     expect(existsSync(chunkPath)).toBe(false);
+  });
+
+  // Every record written before the writer stamped expiresAt is on disk with
+  // expiresAt: null, which gcEvidence reads as "never" — the sweep has to age
+  // those out from createdAt or the bloat it exists to collect never is.
+  it("sweeps a pre-fix record whose expiresAt was written null", async () => {
+    const storeRoot = store();
+    const chunkPath = await writeEvidence(storeRoot);
+    const evidenceDir = join(storeRoot, "evidence", WK);
+    const recordPath = join(evidenceDir, readdirSync(evidenceDir)[0] ?? "");
+    writeFileSync(
+      recordPath,
+      JSON.stringify({ ...JSON.parse(readFileSync(recordPath, "utf8")), expiresAt: null }, null, 2),
+    );
+    const before = evidenceBytes(storeRoot);
+
+    const { degraded } = await sweepEvidenceStore({
+      storeRoot,
+      now: new Date(Date.parse(T0) + 31 * DAY_MS),
+    });
+
+    expect(degraded).toBe(1);
+    const [rec] = await listEvidenceByWorkspace({ storeRoot, workspaceKey: WK });
+    expect(rec?.status).toBe("retained_metadata_only");
+    expect(rec?.returnedChunkRefs).toEqual([]);
+    expect(evidenceBytes(storeRoot)).toBeLessThan(before / 10);
+    expect(existsSync(chunkPath)).toBe(false);
+  });
+
+  it("leaves a pre-fix record inside the retention window intact", async () => {
+    const storeRoot = store();
+    const chunkPath = await writeEvidence(storeRoot);
+    const evidenceDir = join(storeRoot, "evidence", WK);
+    const recordPath = join(evidenceDir, readdirSync(evidenceDir)[0] ?? "");
+    writeFileSync(
+      recordPath,
+      JSON.stringify({ ...JSON.parse(readFileSync(recordPath, "utf8")), expiresAt: null }, null, 2),
+    );
+
+    const { degraded } = await sweepEvidenceStore({
+      storeRoot,
+      now: new Date(Date.parse(T0) + 29 * DAY_MS),
+    });
+
+    expect(degraded).toBe(0);
+    expect(existsSync(chunkPath)).toBe(true);
   });
 
   it("returns zero without throwing when the store has no evidence dir", async () => {
