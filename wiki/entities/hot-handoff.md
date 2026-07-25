@@ -41,6 +41,29 @@ Redaction-first at pack (`@megasaver/policy` firewall, findings counted);
 re-redaction; agent-slug + sentinel guards block `\n`/ANSI/Trojan-Source
 forgery into terminal reports and the target file; expiry fails closed.
 
+Post-#293 hardening (2026-07-25): `git.branch`, `git.changedFiles[].path` and
+`git.diff.excludedPaths[]` were shipping verbatim and are now redacted —
+`evaluatePathRead` decides *whether* a path travels, it never rewrites what
+the path spells out. Code anchors are **dropped**, not redacted, when a key
+is dirty: `files[].path` and `symbols[].name` are code-truth lookup keys, so a
+rewritten value resolves to nothing and makes the receiver record a false
+`contradicted` that closes the memory's `validTo`. Anchor drop lives in
+`redactMemory`, shared with [[entities/brain-portability]].
+
+Redaction is per-field discipline with no runtime choke point (a schema-wide
+walk would corrupt uuids/shas/timestamps and double-count findings). The
+choke point is a **test**: a zod walker enumerates every string leaf in
+`handoffPayloadSchema`, fails closed on any wrapper it does not recognize
+(incl. `.catchall()`/`.passthrough()`), and requires each leaf to be
+classified redacted / structural / dropped / unreachable. Redacted paths are
+proven by planting one secret in all of them at once with a per-path
+presence-then-absence assertion; structural paths must match a machine shape.
+A new unclassified string field fails CI. Sources:
+[[docs/superpowers/specs/2026-07-25-handoff-redaction-guard-design]].
+
+Known gap, flagged not fixed: `manifest.sourceProject.name` is unredacted and
+outside the payload guard's reach.
+
 ## Reuse (no new store)
 
 Block writes via [[entities/connectors-shared]] `handoff-block.ts`

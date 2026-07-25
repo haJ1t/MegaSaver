@@ -207,9 +207,15 @@ function buildGit(
     diff = {
       text,
       truncated,
-      excludedPaths: [...excluded].sort(),
+      // Redacted like every other payload string: evaluatePathRead decides
+      // WHETHER a path travels, it never rewrites what the path itself spells
+      // out — and a path is as author-controlled as the file it names. The
+      // report keeps the raw set: it stays on the sender's own machine.
+      excludedPaths: [...excluded].sort().map((p) => r.text(p)),
     };
   }
+
+  const branch = input.gitDelta?.branch ?? null;
 
   return {
     git: {
@@ -218,12 +224,14 @@ function buildGit(
       // a partially-filled git object with degradedGit=false. The reader-facing
       // gap — a dirty tree whose diff probe failed — is surfaced via the
       // report's gitDiffUnavailable flag, not left silent.
-      branch: input.gitDelta?.branch ?? null,
+      // Branch names are free text (a token pasted into a branch name is rare
+      // but possible) — same treatment as every sibling payload string.
+      branch: branch === null ? null : r.text(branch),
       headSha: input.dirtyState?.headSha ?? null,
       dirty: input.dirtyState?.dirty ?? false,
       // review 5a: subjects are free text — must stay redacted after 5b replaces buildGit
       commits: (input.gitDelta?.commits ?? []).map((c) => ({ ...c, subject: r.text(c.subject) })),
-      changedFiles,
+      changedFiles: changedFiles.map((f) => ({ ...f, path: r.text(f.path) })),
       diff,
     },
     diffFiles,
