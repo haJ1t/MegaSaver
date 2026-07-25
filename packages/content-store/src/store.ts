@@ -248,6 +248,10 @@ function readChunkSetCreatedAt(path: string): string | null {
 export async function pruneOlderThan(input: {
   storeRoot: string;
   olderThan: Date;
+  // Chunk sets an evidence hold still points at (pinned / manual_hold). The
+  // store cannot read the ledger (no dep edge), so the composer joins them and
+  // hands the ids down — see @megasaver/context-gate pruneChunkSetsHonoringPins.
+  keepChunkSetIds?: ReadonlySet<string>;
 }): Promise<{ removed: number }> {
   const contentRoot = join(input.storeRoot, "content");
 
@@ -270,6 +274,7 @@ export async function pruneOlderThan(input: {
         if (!name.endsWith(".json")) continue;
         if (name === READ_INDEX_FILENAME) continue; // sibling index, not a chunk-set
         if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
+        if (input.keepChunkSetIds?.has(name.slice(0, -".json".length))) continue;
         const path = join(sessionPath, name);
         const createdAt = readChunkSetCreatedAt(path);
         if (createdAt === null) continue;
