@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  chmodSync,
   closeSync,
   existsSync,
   fsyncSync,
@@ -27,8 +28,14 @@ export function atomicWriteFile(filePath: string, content: string): void {
       throw new ContentStoreError("write_failed", "Store write failed.");
     }
 
-    mkdirSync(parentDir, { recursive: true });
-    writeFileSync(tempPath, content);
+    // A chunk set holds captured file bodies and command transcripts, so it is
+    // owner-only like every other store writer (daemon/discovery, llm-proxy,
+    // context-gate/saver-store). The chmod is the backstop: mkdir's mode is a
+    // no-op on a dir that already exists, so a sibling writer that got there
+    // first would otherwise leave the dir world-traversable.
+    mkdirSync(parentDir, { recursive: true, mode: 0o700 });
+    chmodSync(parentDir, 0o700);
+    writeFileSync(tempPath, content, { mode: 0o600 });
     // Durability: fsync the temp file before rename so its bytes are on disk,
     // then fsync the parent dir after rename so the link is durable. POSIX
     // best-practice for atomic-update semantics.

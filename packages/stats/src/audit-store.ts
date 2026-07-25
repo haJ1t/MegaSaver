@@ -1,6 +1,7 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import type { ProjectId, SessionId } from "@megasaver/shared";
+import { appendPrivateLine } from "./append-line.js";
 import { type AuditEvent, auditEventSchema } from "./audit-event.js";
 import { StatsError } from "./errors.js";
 import type { StatsStore } from "./store.js";
@@ -46,8 +47,7 @@ export function appendAuditEvent(input: AppendAuditEventInput): void {
   }
   const event = parsed.data;
   const path = auditPath(input.store, event.projectId, event.sessionId);
-  mkdirSync(dirname(path), { recursive: true });
-  appendFileSync(path, `${JSON.stringify(event)}\n`);
+  appendPrivateLine(path, `${JSON.stringify(event)}\n`);
 }
 
 export function readAuditEvents(

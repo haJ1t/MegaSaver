@@ -1,7 +1,8 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { type ProjectId, type SessionId, workspaceKeySchema } from "@megasaver/shared";
 import { withFileLock } from "@megasaver/shared/node";
+import { appendPrivateLine } from "./append-line.js";
 import { atomicWriteFile } from "./atomic-write.js";
 import { StatsError } from "./errors.js";
 import {
@@ -77,8 +78,7 @@ export function appendEvent(input: AppendEventInput): SessionTokenSaverStats {
   const events = eventsPath(store, event.projectId, event.sessionId);
   const summary = summaryPath(store, event.projectId, event.sessionId);
 
-  mkdirSync(dirname(events), { recursive: true });
-  appendFileSync(events, `${JSON.stringify(event)}\n`);
+  appendPrivateLine(events, `${JSON.stringify(event)}\n`);
 
   const prior = loadSummary(summary) ?? emptySummary(event.sessionId);
   const rawBytesTotal = prior.rawBytesTotal + event.rawBytes;
@@ -359,8 +359,7 @@ export function appendOverlayEvent(input: AppendOverlayEventInput): OverlaySessi
   const events = overlayEventsPath(store, event.workspaceKey, event.liveSessionId);
   const summary = overlaySummaryPath(store, event.workspaceKey, event.liveSessionId);
 
-  mkdirSync(dirname(events), { recursive: true });
-  appendFileSync(events, `${JSON.stringify(event)}\n`);
+  appendPrivateLine(events, `${JSON.stringify(event)}\n`);
 
   // E26: parallel tool calls in one turn race this read-modify-write.
   // Serialize under a short stale-aware lock: deadlineMs 50 (a hook must not

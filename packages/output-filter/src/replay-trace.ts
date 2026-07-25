@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, chmod, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { type Classification, outputCategorySchema } from "./classify.js";
@@ -180,8 +180,14 @@ export function readReplayTraces(path: string): ReplayTrace[] {
 // never block or fail the response it describes.
 export async function writeReplayTrace(dir: string, trace: ReplayTrace): Promise<void> {
   try {
-    await mkdir(dir, { recursive: true });
-    await appendFile(join(dir, "replay-traces.jsonl"), `${JSON.stringify(trace)}\n`, "utf8");
+    // Owner-only: a trace names the files and commands the agent ran. The
+    // chmods are the backstop — mkdir's mode is a no-op on an existing dir and
+    // appendFile's is ignored once the file exists.
+    await mkdir(dir, { recursive: true, mode: 0o700 });
+    await chmod(dir, 0o700);
+    const path = join(dir, "replay-traces.jsonl");
+    await appendFile(path, `${JSON.stringify(trace)}\n`, { encoding: "utf8", mode: 0o600 });
+    await chmod(path, 0o600);
   } catch {
     // swallow — tracing is observability, not correctness
   }

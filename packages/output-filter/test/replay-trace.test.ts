@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
+import { appendFile, chmod, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -220,6 +220,22 @@ describe("writeReplayTrace (best-effort persistence)", () => {
     const parsed = JSON.parse(contents.trim());
     expect(parsed.chunkSetId).toBe("cs-123");
     expect(contents).not.toContain("hello world");
+  });
+
+  // The trace names the files read and commands run; it lives in the shared
+  // store next to the captured output. NTFS ignores mode bits → POSIX-only.
+  it.skipIf(process.platform === "win32")("writes owner-only, repairing 0644", async () => {
+    const ranking = (await filterOutput(base("hello\n"))).trace;
+    if (ranking === undefined) throw new Error("expected trace");
+    const trace = finalizeReplayTrace(ranking, META);
+    const target = join(dir, "sess-traces");
+    await writeReplayTrace(target, trace);
+    const file = join(target, "replay-traces.jsonl");
+    await chmod(target, 0o755);
+    await chmod(file, 0o644);
+    await writeReplayTrace(target, trace);
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
+    expect((await stat(target)).mode & 0o777).toBe(0o700);
   });
 
   it("never throws when the directory is unwritable", async () => {

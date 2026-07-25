@@ -1,8 +1,9 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ProjectId } from "@megasaver/shared";
 import { projectIdSchema } from "@megasaver/shared";
 import { z } from "zod";
+import { appendPrivateLine } from "./append-line.js";
 import { StatsError } from "./errors.js";
 
 // Code-Truth analytics ledger (i6 spec §10). Deliberately NOT a
@@ -36,8 +37,7 @@ export function appendCodeTruthEvent(store: StoreRoot, event: CodeTruthEvent): v
     throw new StatsError("schema_invalid");
   }
   const path = codeTruthEventsPath(store, parsed.data.projectId);
-  mkdirSync(dirname(path), { recursive: true });
-  appendFileSync(path, `${JSON.stringify(parsed.data)}\n`);
+  appendPrivateLine(path, `${JSON.stringify(parsed.data)}\n`);
 }
 
 export function readCodeTruthEvents(store: StoreRoot, projectId: ProjectId): CodeTruthEvent[] {
