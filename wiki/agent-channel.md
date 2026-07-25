@@ -3,7 +3,7 @@ title: Agent Communication Channel
 tags: [runtime, communication]
 status: active
 created: 2026-05-31
-updated: 2026-05-31
+updated: 2026-07-20
 ---
 
 # Agent Communication Channel
@@ -245,6 +245,352 @@ travel in the payload (recomputed on open, qualified as sender-anchor),
 new `hot-handoff` ProFeature key, `agentSlugSchema` exported from core.
 
 Status: pending merge
+
+---
+## [2026-07-20 01:12] Codex → All Agents
+
+**Long Memory LM1 design gate passed.** The approved design isolates durable
+evidence-bound observations from LM0's public adapter and uses deterministic
+evidence adoption across crashes. Its six-task TDD plan is ready; fresh
+implementation review remains mandatory before merge. Spec/plan:
+`docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md`.
+
+Status: done
+
+---
+## [2026-07-20 05:40] Codex → All Agents
+
+**LM1 observations release evidence complete.** The private runtime now has
+evidence-bound capture, append-only snapshots/transitions, bounded fail-closed
+recall, and exact record-ID locators for bounded endpoint validation. The final
+fresh code review and adversarial review both approved after two P1 regressions
+were fixed. Evidence: long-memory 106/106, package build, `pnpm verify`, and
+LongMemEval-V2 adapter 7/7. No official LongMemEval-V2 score is claimed.
+Branch: `codex/feat/long-memory-observations`; no merge or push requested.
+
+Status: done
+
+---
+
+## [2026-07-20] Codex → All Agents
+
+**LM2 hybrid recall design gate passed.** Safe delegates exactly to LM1;
+Adaptive is explicitly opt-in, approval-gated, and catalog-window scoped rather
+than making untrue whole-history or benchmark-score claims. Independent
+architecture and adversarial reviews approved the final HIGH-risk design.
+Production implementation remains blocked on the required TDD plan and user
+approval of `docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md`.
+
+Status: pending user approval
+
+---
+
+## [2026-07-20] Codex → All Agents
+
+**LM2 TDD plan written.** Implementation will proceed in the dedicated LM2
+worktree, task-by-task, beginning with contracts and tests. The plan preserves
+the reviewed Safe/Adaptive, catalog-scope, evidence, egress, and official-score
+boundaries. No score claim is authorized without official artifacts.
+
+Status: in progress
+
+---
+## [2026-07-20] Codex → All Agents
+
+**LM2 quota-ledger rework design approved.** Task 4 review exposed an actual
+conflict: directory-wide quota recomputation could exceed the same call's 1,024
+sidecar-metadata-read budget. The authoritative amendment now requires a
+bounded `embeddings-v2` allocation ledger, one fenced operation-scoped lock,
+epoch/allocation sidecar provenance, no-scan recovery, and discriminated retry
+or expired index receipts. Commits through `0ae93e7d` are not accepted runtime
+behavior; execute the dedicated rework plan with fresh TDD and reviews.
+
+Status: in progress
+
+---
+## [2026-07-20 13:10 +03] Codex → All Agents
+
+**LM2 quota-ledger Task 5 integration evidence is complete; final whole-branch
+reviews remain.** The real catalog/index/vector-store regression proves two
+serialized batches, a named published-pending recovery with
+`quotaRecovery: "recovered_pending"`, exact committed count/byte/watermark
+restoration, no `embeddings-v2` enumeration, and pending-sidecar read
+exclusion. The four stale V1 vector-store assertions now enforce V2
+provenance/fencing. Evidence: long-memory 249/249 with zero type errors,
+package typecheck, root lint, and `pnpm verify` 56/56 Turbo tasks plus
+conventions checks. The threat-model boundary remains explicit: compliant
+ledger-aware writers are covered; a wholly out-of-operation, well-formed
+trusted-root ledger rollback is undetectable in Node's static-symlink model.
+Sources: quota-ledger amendment/rework plan; commits `065df3e6`, `20853aac`,
+`21af7f37`.
+
+Status: done
+
+---
+## [2026-07-20 14:00 +03] Codex → All Agents
+
+**LM2 completion amendment remains in design review; no production code has
+started.** Whole-branch review found the original completion proposal could not
+rely on a `workspace_dir` for an unknown official backend. The revised contract
+uses vanilla LongMemEval-V2 lifecycle only: static config, random instance and
+sentinel tokens, manifest-validated ordered haystack chains, source-save
+realpath/device/inode adoption, local-only benchmark embeddings, pinned
+official/data checksums, strict question-field exclusion, and allowlisted
+installer state. Fresh architecture and adversarial review are the gate before
+TDD starts. No LongMemEval-V2 score is claimed.
+
+Status: in progress
+
+---
+## [2026-07-20 16:55 +03] Codex → All Agents
+
+**LM2 completion Task 3 V2 candidate-catalog implementation is ready for fresh
+review.** The catalog is split into schema/cursor, anchored storage, fixed
+inode/token lock, and orchestration modules; V1 is explicitly unsupported,
+only the two named bootstrap crash cuts recover, and real-process regressions
+cover symlinks, idle/held path replacement, anchor-close cleanup, and concurrent
+appenders. Focused and full package gates are recorded in
+`.superpowers/sdd/task-3-report.md`. No official LongMemEval-V2 score is
+claimed.
+
+Status: pending independent review
+
+---
+## [2026-07-20 17:10 +03] Codex → All Agents
+
+**LM2 completion Task 3 P1 correction is ready for re-review.** A spawned V2
+writer now fails before publication when V1 appears after lock acquisition.
+V1 absence is rechecked through acquisition, mutation/publication, and release.
+The old-inode regression now uses genuine old- and replacement-inode processes
+that both call `appendPublished`; neither reports success or changes catalog
+bytes. Final evidence is recorded in `.superpowers/sdd/task-3-report.md`. No
+official LongMemEval-V2 score is claimed.
+
+Status: pending independent re-review
+
+---
+
+## [2026-07-20 17:30 +03] Codex → All Agents
+
+**LM2 completion Task 3 bootstrap closure is ready for fresh re-review.** A
+real V2 bootstrap writer paused after flock now fails before writing its lock
+token, control, or catalog when V1 appears. Catalog coverage remains 27/27
+after splitting into focused files; every Task 3 source/test file is below 300
+lines. Package evidence is 30/30 files and 290/290 tests with zero type errors,
+and root `pnpm verify` passed. No official LongMemEval-V2 score is claimed.
+
+Status: pending independent re-review
+
+---
+
+## [2026-07-20 19:07 +03] Codex → All Agents
+
+**LM2 completion Task 5 benchmark backend and transport are ready for fresh
+independent contract review.** The separate executable is not exported from
+the production package root. The pinned manifest/builder, official-base Python
+backend, allowlisted installer, stateless open/insert/query transport, durable
+chain admission, local-only configuration, and rejection/telemetry boundaries
+are covered by cross-language tests. Evidence: root `pnpm verify` 56/56,
+long-memory 330/330, Python 15/15 against the pinned official `Memory` base,
+including the built transport. No official score was run or claimed.
+
+Status: pending independent benchmark-contract review
+
+---
+
+## [2026-07-20 19:50 +03] Codex → All Agents
+
+**LM2 completion Task 5 review corrections are ready for fresh independent
+re-review.** Fixed-inode lock replacement, tier-checksum substitution, exact
+Python manifest admission, cross-language numeric canonicalization, and saved
+state/run identity now have regression coverage. Evidence is recorded in
+`.superpowers/sdd/task-5-report.md`: focused Node 25/25, long-memory 334/334,
+Python official-base + real built transport 18/18, and root `pnpm verify`
+56/56. Task 6 was not started and no official score is claimed.
+
+Status: pending independent benchmark-contract re-review
+
+---
+## [2026-07-20 20:14 +03] Codex → All Agents
+
+**LM2 completion Task 5 final closure corrections are ready for fresh
+re-review.** Python now rejects invalid timestamps, empty question IDs, and
+noncanonical or out-of-range local-model descriptors before transport.
+Pre-open rejected queries durably record only redacted telemetry through
+descriptor-anchored private storage; FIFO and cache-parent replacement fail
+closed without blocking, redirecting, or launching transport. Python coverage
+is 23/23 against the pinned official base and real built Node transport. No
+official LongMemEval-V2 score is claimed.
+
+Status: pending independent benchmark-contract re-review
+
+---
+## [2026-07-20 20:32 +03] Codex → All Agents
+
+**LM2 completion Task 5 telemetry/load closure is ready for fresh re-review.**
+Rejected telemetry omits raw question/context data and retains a durable reason,
+timestamp, audit ID, and aggregates. Python load now takes the real run flock,
+validates identity-bound state under it, rechecks lock/run pathname identity
+before adoption, and releases correctly after a deterministic replacement
+failure. Python official-base + built-transport coverage is 25/25. Task 6 was
+not started and no official LongMemEval-V2 score is claimed.
+
+Status: pending independent benchmark-contract re-review
+
+---
+## [2026-07-20 20:58 +03] Codex → All Agents
+
+**LM2 completion Task 5 builder/identity closure is ready for fresh re-review.**
+Normal builds emit the private canonical and manifest artifacts required by the
+actual non-contract builder while preserving the package-root export and bins.
+Both runtimes bind projection UUIDv5 values to the exact
+trajectory/source/index frame; cross-language vector and zero-transport
+substitution tests cover the boundary. Evidence: benchmark Node 27/27,
+long-memory 336/336, Python official-base plus built transport 26/26, and root
+`pnpm verify` 56/56. Task 6 was not started and no official score is claimed.
+
+Status: pending independent benchmark-contract re-review
+
+---
+## [2026-07-20 21:26 +03] Codex → All Agents
+
+**LM2 completion Task 5 released-corpus truncation closure is ready for fresh
+re-review.** Projection text is canonicalized after its bounded UTF-16 cut,
+closing the exact `096432bf` `states[12]` trailing-space failure while retaining
+deterministic UUID and final-text digest identity. The pinned snapshot matched
+all checksums; official screenshot preparation and unmodified Small validation
+passed, and the README enterprise/Small builder emitted the blocker plus later
+rows. Evidence: long-memory 337/337 and Python official-base plus built transport
+26/26. Task 6 and scoring remain untouched.
+
+Status: pending independent benchmark-contract re-review
+
+---
+## [2026-07-20 22:05 +03] Codex → All Agents
+
+**LM2 completion Task 6 implementation is ready for fresh independent
+review.** The evidence schema and verifier separate inspect, pinned-checkout
+preflight, and full official qualification; only the full path can emit
+`officialScoreEligible: true`, after authenticating both domains, raw official
+latencies and aggregates, pinned data, installed diffs, and fresh leaderboard
+builders. Evidence: focused gate 13/13, long-memory 350/350 with no type errors,
+official-base Python 26/26 with built transport, and root `pnpm verify` 56/56.
+The real pinned-checkout preflight passed and remained explicitly ineligible.
+No official score is claimed; trusted-root compromise remains a documented
+limitation.
+
+Status: pending fresh independent code and adversarial review
+
+---
+## [2026-07-20 23:02 +03] Codex → All Agents
+
+**LM2 Task 6 release-blocker corrections are ready for fresh review.** The
+benchmark runtime now ranks public candidates directly and formats raw context
+only through `Lm2BenchmarkContextBuilder`; it no longer calls product LM1/LM2
+capture or recall. LM1 oversized modules are split and a production source gate
+enforces the 300-line boundary. Full evidence qualification executes the JSON
+Schema, rebuilds both official manifests, binds transport executable plus Mega
+Saver commit, recomputes official aggregates/latencies, cross-binds telemetry,
+and byte-compares fresh package/overview/LAFS/tar contents. Local evidence:
+long-memory 361/361, Python 26 passed plus one optional skip, root verify 56/56.
+No real two-domain artifacts were available; no official score is claimed.
+
+Status: pending fresh independent architecture and adversarial review
+
+---
+## [2026-07-21 11:53 +03] Codex → All Agents
+
+**LM2 Task 6 final evidence-provenance corrections are ready for fresh review.**
+The official combined timing contract now comes from the pinned real combiner;
+full verification binds and byte-compares complete released run inputs, rebuilds
+adapter/transport from a clean recorded Mega Saver commit, streams recorded tar
+members for byte comparison, and correlates every public telemetry field with
+official per-question metadata plus config/manifest facts. Focused adversarial
+evidence/provenance coverage is 42/42. No real two-domain artifacts were
+available, so no official score is claimed. Repository verification is 56/56.
+
+Status: pending fresh independent evidence review
+
+---
+## [2026-07-21 12:13 +03] Codex → All Agents
+
+**LM2 Task 6 harness/timing authenticity corrections are ready for fresh
+review.** Full evidence now requires the exact Python `-m evaluation.harness`
+prefix and complete pinned argparse/default/choice agreement, preserves the
+official web-then-enterprise floating-point timing order, and bounds copied
+telemetry latency by each official harness wall duration. Focused regressions
+are 47/47. The reviewer-created Python cache contained one generated `.pyc` and
+was moved recoverably to a unique `/tmp` path. No score is claimed.
+
+Status: pending fresh independent evidence review
+
+---
+## [2026-07-21 12:42 +03] Codex → All Agents
+
+**LM2 Task 6 evaluator/tar authenticity corrections are ready for fresh
+review.** Integer harness flags now use canonical signed-decimal evidence
+lexemes backed by a pinned Python argparse fixture. Every per-question evaluator
+spec/category/question text and the complete official judge configuration are
+cross-bound. Tar directories and files are validated before filtering, and full
+mode compares the fresh archive digest with recorded evidence. Focused coverage
+is 60/60; long-memory is 399/399 and pinned Python is 29/29. No official score
+is claimed.
+
+Status: pending fresh independent evidence review
+
+---
+## [2026-07-21 13:02 +03] Codex → All Agents
+
+**LM2 Task 6 large-integer P2 closure is ready for review.** After independent
+approval with no P1 findings, the remaining parser gap was closed by preserving
+raw `run_args.json` signed integers beyond JavaScript's safe range as `BigInt`.
+The pinned Python fixture accepts the huge negative value; the JS gate accepts
+the authentic pair and rejects an adjacent exact mismatch. Focused coverage is
+61/61; long-memory is 400/400 and pinned Python is 29/29. No official score is
+claimed.
+
+Status: pending targeted P2 review
+
+---
+## [2026-07-21 13:20 +03] Codex → All Agents
+
+**LM2 Task 6 raw-integer-lexeme P1 closure is ready for fresh review.** The
+official evidence parser now rejects exponent and decimal-point JSON spellings
+for every integer-valued harness field before JavaScript numeric normalization.
+Full verifier regressions cover `2e4`, `20000.0`, and a second integer flag;
+canonical safe and unbounded signed integers remain exact. Focused coverage is
+64/64, long-memory is 403/403, and pinned Python 3.11 is 29/29. No official
+score is claimed.
+
+Status: pending targeted P1 review
+
+---
+## [2026-07-21 13:32 +03] Codex → All Agents
+
+**LM2 Task 6 duplicate-JSON-key P1 closure is ready for fresh review.** A
+structural scanner now rejects duplicate decoded keys at every raw
+`run_args.json` object depth before ordinary last-key-wins parsing. Full
+verifier coverage includes exact duplicates, both value orders, and
+escaped-equivalent names; nested duplicates also fail, while escaped quotes and
+key-like text inside strings remain valid data. Focused coverage is 71/71,
+long-memory is 410/410, and pinned Python 3.11 is 29/29. No official score is
+claimed.
+
+Status: pending targeted P1 review
+
+---
+## [2026-07-21 13:47 +03] Codex → All Agents
+
+**LM2 Task 6 is independently approved and complete.** A fresh adversarial
+review at `2e037736` found no P1/P2 after exercising duplicate decoded keys in
+nested objects and arrays, Unicode/escape equivalents, malformed JSON, and
+string false-positive controls. The evidence gate remains fail-closed: no
+complete authoritative web-plus-enterprise artifact bundle exists, so no
+official score is claimed or eligible.
+
+Status: LM2 completion plan closed; ready for a future authenticated official
+score run only when the real two-domain evidence bundle is supplied
 
 ---
 <!-- Agents: append new messages above this line. Archive resolved ones. -->

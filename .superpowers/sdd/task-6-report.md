@@ -1,0 +1,124 @@
+# Task 6 report — official evidence and architecture closure
+
+Status: P1 duplicate-key correction implemented; official score not run; fresh independent review pending.
+
+## Architecture correction
+
+- `Lm2BenchmarkContextBuilder` now constructs harness context only from ordered
+  public benchmark candidates and the harness token budget.
+- The benchmark runtime ranks public projections directly and does not call or
+  imitate LM1 capture, correction closure, evidence selection, or product recall.
+- A cross-path fixture proves shared candidate semantics while retaining the
+  intended policy difference: the benchmark path can return a raw superseded
+  projection, while the LM1 selector returns its evidence-valid correction.
+- LM1 model, path, and store responsibilities were split behind their existing
+  public facades. A source gate covers every production long-memory TypeScript
+  file and benchmark script at 300 lines or fewer.
+
+## Official evidence correction
+
+- The standalone verifier executes `evidence-schema.json` and validates safe
+  builder names, exact fields, paths, digests, counts, and numeric constraints.
+- Each domain memory configuration binds canonical manifest bytes/digest/path,
+  pinned data revision, exact transport command and executable digest, and the
+  Mega Saver commit. The Python backend validates that commit field too.
+- A fixture loaded from the pinned official checkout proves that
+  `combine_timing` emits exactly `avg_seconds`, `max_seconds`, and
+  `total_seconds`; combined evidence rejects local p50/p95 additions. Full mode
+  calls the pinned four-argument `combine_metrics`, including source paths and
+  timestamp provenance, then compares the complete result.
+- Executed commands and `run_args.json` must resolve the recorded questions,
+  haystack, trajectories, memory config, and output directory, including exact
+  reader/judge models. The recorded command prefix is exactly Python plus
+  `-m evaluation.harness`; every remaining argument is in the pinned harness
+  allowlist, is parsed with its official type/choice/default, and must reproduce
+  the complete `run_args.json`. Integer evidence uses canonical signed decimal
+  lexemes, excluding exponent, decimal-point, and whitespace spellings that
+  JavaScript numeric coercion would otherwise admit. A fixture checks those
+  cases against the pinned `type=int` declaration and Python `argparse`. Full
+  signed decimal values beyond `Number.MAX_SAFE_INTEGER` remain exact: the raw
+  `run_args.json` numeric token and executed argument are represented as
+  `BigInt` for equality, while safe values remain numbers. Full mode freshly
+  rejects exponent and decimal-point spellings in every integer-valued
+  `run_args.json` field before JavaScript can normalize them to an equal
+  `Number`. Adversarial full-verifier cases cover `2e4`, `20000.0`, and an
+  equivalent spelling on a second official integer flag. Before ordinary JSON
+  parsing, a structural scanner rejects duplicate decoded keys in every object,
+  including inverse ordering, nested objects, and escaped-equivalent names.
+  String values containing escaped quotes or key-like text remain data rather
+  than scanner structure. Full mode freshly
+  materializes the complete
+  released questions and haystack for both domains, byte-compares them, and
+  requires the recorded trajectories to equal the released file.
+- Full verification requires a clean Mega Saver checkout at the recorded commit,
+  checks adapter/transport bytes against that checkout, performs a fresh package
+  build, and compares the rebuilt bytes again.
+- Every recorded tar member, including directories, is normalized and checked
+  for traversal and a safe regular-file/directory type before directories are
+  discarded from the file inventory. Regular members are streamed and
+  byte-equal to the recorded package. Full mode also requires the fresh official
+  tar digest to equal the recorded evidence tar digest, in addition to comparing
+  the fresh package and extracted tar contents.
+- Per-question evaluator evidence binds `eval_function`, official aggregate
+  category, and question text to the released runtime question. The judge model,
+  base URL, API-key source descriptors, reasoning effort, completion-token cap,
+  and timeout must exactly reproduce the executed official harness arguments.
+- Telemetry must exactly equal official `memory_post_query_metadata`; its
+  profile, status, model fingerprint, question type, image flags, candidate and
+  selection counts, and latency shape are independently checked against the
+  memory config, manifest, question, and returned official context. Each
+  telemetry millisecond duration must also fit inside its official harness
+  `memory_query_duration_seconds` wall measurement. Raw question and answer text
+  are forbidden.
+- Combined timing follows the pinned combiner's floating-point operation order:
+  web total plus enterprise total, divided by their official question counts,
+  with the maximum selected from the two domain summaries. A floating-order
+  fixture proves that flattening raw samples would reject authentic bytes.
+- Reviewer-generated cache inspection found only
+  `test_official_evidence_contract.cpython-311.pyc`; its exact `__pycache__`
+  directory was moved recoverably to
+  `/tmp/megasaver-task6-reviewer-pycache.J8Sash` before implementation. No
+  unrelated path was removed. Later generated verification caches were also
+  moved recoverably to `/tmp/megasaver-task6-final-python-cache.TkJ4Np` and
+  `/tmp/megasaver-task6-parity-cache.zVPqcS`; the final large-integer suite cache
+  was moved to `/tmp/megasaver-task6-bigint-python-cache.xAeqEn`. The raw-lexeme
+  verification cache was moved recoverably to
+  `/private/tmp/megasaver-task6-canonical-int-pycache.XeYb2p`; the duplicate-key
+  verification cache was moved recoverably to
+  `/private/tmp/megasaver-task6-duplicate-json-pycache.Myq6Kp`. No benchmark
+  cache remains.
+- Inspect and preflight modes remain structurally ineligible. No real completed
+  web plus enterprise artifact bundle is available, so this work records no
+  official score or dashboard claim.
+
+## Verification evidence
+
+- Focused evidence, JSON-boundary, provenance, and source-size regressions:
+  71/71 passed.
+- Pinned official integer-argument and `combine_timing` fixtures against commit
+  `6f020ac2fc3275e46c706d3406e02c3ed79b7be2`: 2/2 passed.
+- `@megasaver/long-memory`: build passed; typecheck reported zero errors; 44/44
+  files and 410/410 tests passed.
+- Pinned official-base Python suite with the real built transport: 29/29 passed;
+  `compileall` also passed under Python 3.11. The first environment-default
+  invocation resolved to Apple Python 3.9 and stopped at the pinned source's
+  Python 3.10 union syntax before the suite; no product change was made for that
+  interpreter mismatch.
+- Pinned official checkout preflight passed and returned
+  `officialScoreEligible: false`.
+- Repository `pnpm verify`: 56/56 Turbo tasks successful, including lint,
+  monorepo typecheck/tests, and convention drift checks.
+- Full qualification is not attempted without authoritative released data and
+  completed harness/judge artifacts.
+
+## Final independent review
+
+- A fresh final adversarial review at commit
+  `2e03773604f795e0d8397e59c57c22c8b1fac697` approved the raw JSON boundary.
+  It exercised 44 decoded-key duplicate families, including nested objects,
+  arrays, escaped Unicode names, surrogate pairs, malformed escapes, and
+  string false-positive controls; no P1 or P2 finding remained.
+- Task 6 is therefore complete as an evidence-gated implementation. It does
+  not assert an official LongMemEval-V2 score: a real, complete, authoritative
+  web-plus-enterprise harness/judge artifact bundle is still required before
+  the verifier can make `officialScoreEligible` true.

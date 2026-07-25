@@ -3781,6 +3781,405 @@ Passport / Hot Handoff → Brain Doctor → Context Contracts → Déjà Vu; Hot
 Handoff remains separately owned. Sources: [[syntheses/global-agent-continuity-strategy]],
 [[syntheses/solo-developer-roadmap]], user approval 2026-07-19.
 
+## [2026-07-19] ingest | LongMemEval-V2
+
+Ingested the official benchmark into [[sources/longmemeval-v2]]. It evaluates
+static state, dynamic state, workflow, gotchas, and premise awareness on an
+accuracy-latency frontier.
+
+## [2026-07-19] query | Evidence-Backed Long Memory Runtime
+
+User approved one agent-neutral, evidence-cited runtime for product recall and
+LongMemEval-V2. The architecture and LM0–LM3 delivery boundaries are in
+`docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md`; see
+[[concepts/long-memory-runtime]].
+
+## [2026-07-20] implementation | Long Memory LM0 benchmark boundary
+
+Implemented the isolated `@megasaver/long-memory` LM0 package in worktree
+`codex/feat/long-memory-runtime`: strict observations and receipts,
+workspace-scoped idempotent ingestion, deterministic BM25 recall, and a JSONL
+`insert|query` host. Added a public-data-only LongMemEval-V2 Python adapter
+that keeps one local Node process per memory instance and rejects image paths
+outside the configured benchmark root. LM1–LM3 product memory, semantic
+retrieval, transitions, runbooks, gotchas, premises, and media remain out of
+scope. Source: [[concepts/long-memory-runtime]].
+
+## [2026-07-20] verification | Long Memory LM0 benchmark boundary
+
+Independent critical review initially found incompatible official trajectory
+input, non-canonical digest construction, uncorrelated RPC failures, missing
+boundary limits, child-process lifecycle gaps, and retrieval UUID ambiguity.
+The implementation now accepts both official public trajectory forms, uses
+canonical digests, preserves typed internal RPC correlation, aligns Python and
+Node UTF-16/token limits, bounds process lifetime, and rejects workspace-local
+UUID collisions. Independent re-review approved the final fix set; `pnpm
+verify` and the Python adapter suite were then rerun as release evidence.
+Source: [[concepts/long-memory-runtime]].
+
+## [2026-07-20] design | Long Memory LM1 observations approved
+
+LM1's HIGH-risk design gate passed independent architecture and adversarial
+review. The next slice adds immutable evidence-bound snapshots/transitions with
+deterministic cross-store retry adoption, correction-chain fail-closed recall,
+and preserved LM0 public boundaries. Implementation has not started; it remains
+gated on a TDD plan, fresh review, and `pnpm verify`. Source:
+[[concepts/long-memory-runtime]],
+`docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`.
+
+## [2026-07-20] plan | Long Memory LM1 observations
+
+The approved six-task TDD plan preserves LM0's public TypeScript/JSONL surface,
+then builds canonical evidence-bound contracts, immutable no-clobber storage,
+capture, correction-aware transitions, bounded recall, and independent release
+evidence. Source: [[concepts/long-memory-runtime]],
+`docs/superpowers/plans/2026-07-20-long-memory-lm1-observations-plan.md`.
+
+## [2026-07-20] verification | Long Memory LM1 observations
+
+Implemented LM1's evidence-bound, append-only snapshot/transition runtime in
+`codex/feat/long-memory-observations`. It preserves LM0's public JSONL and
+TypeScript contract while adding private evidence-gated capture/recall,
+retry-stable snapshot reservations, correction-closure recall, bounded
+raw/pointer/coverage/closure scans, full directory-chain durability, and exact
+record-ID locators for bounded transition endpoint lookup. Two P1 findings from
+independent review were resolved with red-to-green regressions: closure-budget
+exhaustion now omits the affected correction group, and a valid endpoint no
+longer scans a large raw corpus or depends on unrelated raw-file health.
+
+Final evidence: `@megasaver/long-memory` 106/106 tests, package build,
+`pnpm verify`, `git diff --check`, and LongMemEval-V2 adapter tests 7/7 passed.
+Fresh independent code review and adversarial review both approved. This is not
+an official LongMemEval-V2 harness score; LM1 remains text-only and LM2/LM3
+capabilities are explicitly deferred. Source:
+[[concepts/long-memory-runtime]],
+`docs/superpowers/specs/2026-07-20-long-memory-lm1-observations-design.md`.
+
+## [2026-07-20] design | Long Memory LM2 hybrid recall approved
+
+LM2's HIGH-risk design passed independent architecture and adversarial review.
+Safe preserves exact LM1 behavior. Adaptive adds only opt-in semantic RRF over
+an LM2-owned bounded capture catalog, with explicit current remote-embedding
+approval, pre-embedding evidence admission, direct-ID verification, sidecar
+quotas/locking, cancellation, and correction/evidence-safe final selection.
+The catalog deliberately does not backfill legacy LM1 directories, so receipts
+state its limited coverage. The LongMemEval-V2 gate requires official web and
+enterprise artifacts plus leaderboard `submission_overview.json` before a LAFS
+claim. This design has no production implementation yet; TDD planning and user
+design approval remain required. Source: [[concepts/long-memory-runtime]],
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-hybrid-recall-design.md`.
+
+## [2026-07-20] plan | Long Memory LM2 hybrid recall
+
+The LM2 TDD plan breaks implementation into strict contracts, bounded catalog
+and direct-ID reads, locked quota-safe vector sidecars, deterministic hybrid
+ranking, explicit evidence-admitted indexing, LM1-preserving runtime
+composition, public LongMemEval transport/backend, and independent plus
+official evidence gates. No production implementation or official score is
+claimed by this planning entry. Source: [[concepts/long-memory-runtime]],
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-hybrid-recall-plan.md`.
+
+## [2026-07-20] design | LM2 quota-ledger amendment approved
+
+Implementation review found a real contradiction between the one-index-call
+1,024 sidecar-metadata-read cap and directory-wide exact quota recomputation.
+The HIGH-risk amendment replaces scans with a bounded v2 allocation ledger,
+fenced operation-scoped advisory locking, epoch/allocation sidecar provenance,
+bounded pending recovery, and discriminated index retry/expired receipts.
+Independent architecture and adversarial design reviews approved the corrected
+amendment. The prior Task 3/4 code is implementation evidence only; the new
+TDD rework plan is authoritative. No LongMemEval-V2 score is claimed. Source:
+[[concepts/long-memory-runtime]],
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md`.
+
+## [2026-07-20 13:10 +03] verification | LM2 quota-ledger integration evidence
+
+Task 5 closed the quota-ledger rework's integration gap without changing LM0,
+LM1, or production code. A real file-backed catalog/index/vector-store fixture
+crosses the 16-document/65,536-code-unit batch boundary, then represents the
+durable published-prefix crash cut with the exact V2 sidecar bytes produced by
+that run. The next real operation returns
+`quotaRecovery: "recovered_pending"`, restores the exact committed allocation
+watermark/count/serialized-byte totals, performs no new embedding call, and a
+pass-through filesystem observer records no `embeddings-v2` namespace
+enumeration. A read of the pending snapshot excludes the uncommitted sidecar.
+The four remaining V1 publication assertions now verify `embeddings-v2`,
+epoch/allocation provenance, and fenced V2 failure semantics. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md`,
+commits `065df3e6`, `20853aac`, `21af7f37`)
+
+Verification evidence: the long-memory package passed 27/27 files and 249/249
+tests with zero type errors, package `tsc -b --noEmit` passed, root `pnpm lint`
+checked 1,582 files, and `pnpm verify` completed all 56 Turbo tasks plus every
+managed conventions check. The accepted guarantee is deliberately bounded:
+exact quotas and recovery apply to compliant ledger-aware writers; a
+well-formed trusted-root ledger rollback performed wholly outside an operation
+cannot be detected in Node's static-symlink model. Final independent
+whole-branch architecture/adversarial review remains required, and no official
+LongMemEval-V2 score is claimed. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-quota-ledger-amendment-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-quota-ledger-rework-plan.md`)
+
+## [2026-07-20 16:55 +03] implementation | LM2 V2 candidate catalog hardening
+
+Completion Task 3 split the candidate catalog into schema/cursor, anchored
+storage, fixed-inode/token lock, and orchestration modules. V2 uses only its
+catalog/control/lock names, leaves either V1 pathname untouched with
+`catalog_schema_unsupported`, binds the immutable control record to the lock's
+device/inode/token, and recovers only orphan-lock and control-before-empty
+crash cuts. Process-level TDD covers symlinked catalog paths, idle/held lock
+replacement, an injected anchor-close failure, and two concurrent appenders.
+The package passed 27/27 files and 288/288 tests with zero type errors; package
+typecheck and root lint also passed. Fresh independent implementation review
+remains pending; no official LongMemEval-V2 score is claimed. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-runtime-security-completion-plan.md`,
+`.superpowers/sdd/task-3-report.md`)
+
+## [2026-07-20 17:10 +03] fix | LM2 catalog V1-admission race
+
+Fresh Task 3 review found that V1 absence was checked only when anchored
+storage opened, allowing a legacy writer to create V1 after V2 acquired its
+separate lock and before V2 publication. A deterministic spawned-writer RED
+reproduced the false-success V2 mutation. V1 absence is now fenced again on
+established acquisition, bootstrap/control/catalog publication callbacks,
+normal mutation, post-publication validation, and release. The previous
+descriptor-only old-inode test was also replaced: real old- and new-inode
+processes both call `appendPublished`, both fail, and catalog bytes remain
+unchanged. Fresh re-review remains pending. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
+`.superpowers/sdd/task-3-report.md`)
+
+## [2026-07-20 17:30 +03] fix | LM2 catalog bootstrap V1 fence
+
+Task 3 closure review found one narrower bootstrap interval: V1 could appear
+after the new V2 lock acquired its OS flock but before the bootstrap token was
+written. A deterministic spawned-process RED observed the 65-byte token even
+though the append failed. Acquisition now revalidates V1 absence immediately
+after flock and before any token/control/catalog write; the regression requires
+an empty lock plus absent control/catalog files. Catalog coverage was split
+without loss into four focused suites and shared fixtures, leaving every Task 3
+source/test file below 300 lines. Evidence: focused 27/27, package 30/30 files
+and 290/290 tests with zero type errors, plus root `pnpm verify`. Fresh
+independent re-review remains pending. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
+`.superpowers/sdd/task-3-report.md`)
+
+## [2026-07-20 19:07 +03] implementation | LM2 benchmark backend and transport
+
+Completion Task 5 added a separately built, non-root-exported LongMemEval-V2
+transport plus the pinned Python `Memory` backend, manifest builder, and
+allowlisted official-checkout installer. Admission is bound to canonical
+source/input digests, exact projected trajectories, an ordered durable insert
+chain, and a question allowlist; rejected or poisoned queries launch no
+transport. The backend accepts only local benchmark embeddings, persists one
+random instance identity across the official save/load lifecycle, and returns
+only non-empty text items. Evidence: repository `pnpm verify` completed all
+56 Turbo tasks; long-memory passed 38/38 files and 330/330 tests; the combined
+Python suites passed 15/15 against the real pinned official `Memory` base,
+including a Python-to-built-Node round trip and installer import smoke test.
+No official LongMemEval-V2 score was run or claimed, and independent
+benchmark-contract review remains pending. (source:
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`,
+`docs/superpowers/plans/2026-07-20-long-memory-lm2-runtime-security-completion-plan.md`)
+
+## [2026-07-20 19:50 +03] fix | LM2 benchmark contract review closure
+
+Fresh Task 5 review rejected pathname-based lock admission, incomplete Python
+manifest/state validation, divergent Python number serialization, and an
+unbound tier checksum. New REDs reproduced lock replacement before an operation
+and after flock, six self-consistent manifest substitutions, scientific-number
+digest divergence, and save-directory alias acceptance. The transport now
+binds the fixed lock descriptor to sentinel dev/inode, revalidates it before
+state writes, and fsyncs the run directory after control replacement. Python
+validates the exact canonical V1 manifest and complete saved/run identities
+before adoption; a real built cross-language run includes scientific numbers.
+Evidence: focused Node 25/25, long-memory 334/334 with zero type errors, Python
+18/18 against the pinned official base and built transport, and root `pnpm
+verify` 56/56. No official score was run or claimed; fresh independent
+benchmark-contract re-review remains pending. (source:
+`.superpowers/sdd/task-5-report.md`,
+`docs/superpowers/specs/2026-07-20-long-memory-lm2-runtime-security-completion-design.md`)
+
+## [2026-07-20 20:14 +03] fix | LM2 benchmark final closure hardening
+
+The next Task 5 closure review found two remaining Python admission gaps and an
+unsafe rejected-query telemetry path. Regression REDs showed invalid canonical
+timestamps, empty question IDs, and malformed local-model values crossing the
+Python boundary; pre-open rejections were not durable, and FIFO/cache-parent
+substitution did not fail closed. Admission now validates those pinned fields
+and UTF-16 model limits before transport. Rejected queries create a redacted,
+durable stream below a random private root using component-anchored descriptors,
+nonblocking no-follow opens, link/mode/owner checks, and descriptor/path identity
+checks. Python official-base/installer/LM0 coverage is 23/23 with the real built
+transport; no official score is claimed. (source: `.superpowers/sdd/task-5-report.md`)
+
+## [2026-07-20 20:32 +03] fix | LM2 telemetry and load-state closure
+
+Final Task 5 closure review found that rejected telemetry still persisted raw
+untrusted question IDs and that Python load inspected `run.lock` without taking
+its flock. REDs reproduced the raw field, successful load under a concurrently
+held lock, and successful state adoption after the lock pathname was replaced
+during the state read. Telemetry now omits raw question/context data while
+retaining a durable reason, canonical timestamp, random audit ID, and aggregate
+metadata. Load takes the real flock nonblocking, reads identity-bound state
+under it, revalidates run/lock descriptor-path identity before adoption, and
+releases the original inode on every path. Python coverage is 25/25 against the
+pinned official base and built transport; no official score is claimed.
+(source: `.superpowers/sdd/task-5-report.md`)
+
+## [2026-07-20 20:58 +03] fix | LM2 builder and projection identity closure
+
+Fresh Task 5 re-review found that the normal package build omitted two private
+artifacts imported by the non-contract manifest builder, and that both language
+boundaries checked only the shape of projection UUIDs. The build now emits the
+private canonical and manifest entrypoints without changing package-root
+exports or bins. TypeScript and Python recompute UUIDv5 from the exact
+trajectory/source/index frame, share a fixed vector, and reject a valid but
+foreign-frame UUID before transport. Evidence: focused benchmark Node 27/27,
+long-memory 336/336 with zero type errors, Python official-base plus real built
+transport 26/26, and root `pnpm verify` 56/56. Task 6 was not started and no
+official score is claimed. (source: `.superpowers/sdd/task-5-report.md`)
+
+## [2026-07-20 21:26 +03] fix | LM2 released-corpus truncation closure
+
+Ultimate Task 5 review found that pre-truncation canonicalization could expose
+trailing whitespace at the 50,000-UTF-16-unit boundary. Released enterprise
+trajectory `096432bf`, `states[12]`, reproduced the failure exactly. Projection
+text is now NFC/trim canonicalized after the bounded surrogate-safe cut, with
+UUID and final-text digest regressions. The pinned snapshot matched all released
+checksums; official screenshot preparation and unmodified Small validation
+passed. The README enterprise/Small builder produced an 89-MiB manifest with
+211 questions and 100 trajectories, including a canonical 49,999-unit blocker
+projection and later rows. Long-memory passed 337/337 and Python passed 26/26;
+no harness, judge, Task 6, or score was run. (source:
+`.superpowers/sdd/task-5-report.md`)
+
+## [2026-07-20 22:05 +03] test | LM2 official evidence gate
+
+Added a strict official-evidence schema and standalone verifier with separate
+inspection, pristine-checkout preflight, and full-verification modes. Inspection
+and preflight are structurally unable to mark a score eligible; full mode also
+requires pinned data validation, allowlisted installation diffs, recomputed
+official aggregates, raw latency samples, both domains, and freshly rebuilt
+leaderboard artifacts. Evidence: gate regressions 13/13; long-memory 350/350
+with no type errors; official-base Python 26/26 with the built transport; root
+`pnpm verify` 56/56. Real pinned-checkout preflight passed and returned
+`officialScoreEligible: false`. No official web plus enterprise score was run
+or claimed. Trusted-root compromise remains an explicit limitation. (source:
+`benchmarks/longmemeval-v2/verify-official-artifacts.mjs`,
+`benchmarks/longmemeval-v2/evidence-schema.json`,
+`packages/long-memory/test/lm2-completion-integration.test.ts`)
+
+## [2026-07-20 23:02 +03] fix | LM2 architecture and evidence closure
+
+Release-blocker review found that the benchmark runtime still traversed the
+product LM2/LM1 selector, three LM1 source files exceeded the repository limit,
+and full evidence qualification could accept self-described manifests,
+transport, aggregate, and builder artifacts. The benchmark path now ranks raw
+public projections and formats them only through `Lm2BenchmarkContextBuilder`;
+a cross-path regression preserves the explicit difference from LM1 correction
+selection. LM1 internals are split behind compatible facades and a source gate
+covers all production long-memory TypeScript and benchmark scripts. Full
+qualification now executes the JSON Schema, rebuilds both manifests from pinned
+trajectories, binds the exact transport executable and Mega Saver commit,
+recomputes official domain/combined metrics and latency summaries, cross-binds
+telemetry, and byte-compares freshly built package, overview/LAFS, and tar
+contents. Evidence: 42/42 long-memory files and 361/361 tests, 26 Python tests
+plus one optional skip, and root `pnpm verify` 56/56. No authoritative completed
+two-domain run was available, so no official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 11:53 +03] fix | LM2 official evidence provenance closure
+
+Final evidence review found five P1 authenticity gaps: local percentiles in the
+official combined timing shape, insufficient binding of executed inputs and
+evaluator answers, no clean-commit rebuild proof, name-only recorded tar
+validation, and incomplete telemetry correlation. The gate now executes the
+pinned real combiner contract, materializes and byte-compares complete released
+inputs, binds command/run arguments, rebuilds adapter and transport from a clean
+recorded commit, streams and compares tar member bytes, and validates telemetry
+against both official per-question metadata and config/manifest facts. Focused
+evidence/provenance coverage is 42/42 and repository verification is 56/56;
+no full two-domain bundle exists and no official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 12:13 +03] fix | LM2 harness and timing authenticity closure
+
+Final evidence re-review found that selected-flag checks admitted a nonofficial
+runner or extra arguments, flattened raw latency samples changed the pinned
+combiner's floating-point order, and two copied telemetry rows could inflate
+their internal latency beyond the harness wall measurement. The gate now
+requires the exact Python module entrypoint and complete pinned argparse
+semantics, reconstructs combined timing from ordered domain summaries/counts,
+and bounds every telemetry millisecond duration by its official per-question
+seconds. Focused evidence/provenance/source coverage is 47/47. The isolated
+reviewer Python cache was moved recoverably to a unique `/tmp` directory; no
+unrelated file was removed. No official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 12:42 +03] fix | LM2 evaluator and tar provenance closure
+
+Ultimate evidence review found three remaining authenticity gaps: JavaScript
+numeric coercion accepted noncanonical integer arguments, per-question judge
+inputs and full judge configuration were not cross-bound, and tar directories
+plus the fresh archive digest escaped validation. The gate now uses a pinned
+argparse parity fixture with canonical evidence lexemes, binds evaluator spec,
+category, question text, and every judge argument, validates directory and file
+members before tar inventory filtering, and compares fresh versus recorded tar
+digests. Focused evidence/provenance/source coverage is 60/60; long-memory is
+399/399 and pinned Python coverage is 29/29. No official score is claimed.
+(source: `.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 13:02 +03] fix | LM2 unbounded integer evidence parity
+
+Fresh review approved Task 6 without P1 findings and identified one P2 parser
+exactness gap: pinned Python `argparse(type=int)` accepts signed decimals beyond
+JavaScript's safe integer range. The verifier now reads the raw `run_args.json`
+numeric token and compares large values as `BigInt`, while retaining `Number`
+for safe integers. A pinned huge-negative fixture proves Python acceptance,
+authentic evidence acceptance, and exact rejection of an adjacent mismatched
+integer without precision loss. Focused coverage is 61/61; long-memory is
+400/400 and pinned Python remains 29/29. No official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 13:20 +03] fix | LM2 canonical run-argument JSON integers
+
+Fresh review found that noncanonical raw JSON numeric lexemes could bypass the
+integer evidence contract: `2e4` and `20000.0` became `Number(20000)` before
+binding. The parser now requires the raw reviver token for every official
+integer field to match JSON's integer-only grammar, then converts that exact
+token to a safe `Number` or `BigInt`. Full-verifier regressions cover both
+spellings and a second integer flag while retaining canonical safe and
+unbounded signed acceptance. Focused coverage is 64/64, long-memory is 403/403,
+and pinned Python 3.11 is 29/29. No official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 13:32 +03] fix | LM2 unambiguous run-argument JSON
+
+Adversarial review found that ordinary JSON parsing erased earlier duplicate
+keys before the raw integer reviver could inspect them. A recursive structural
+scanner now walks objects, arrays, strings, and values before parsing and
+rejects repeated decoded keys per object, including nested and Unicode-escaped
+equivalents. Full-verifier tests cover exact duplicates and both value orders;
+an escaped-quote/key-like string regression prevents structural false
+positives. Focused coverage is 71/71, long-memory is 410/410, and pinned Python
+3.11 is 29/29. No official score is claimed. (source:
+`.superpowers/sdd/task-6-report.md`)
+
+## [2026-07-21 13:47 +03] verify | LM2 Task 6 independent evidence approval
+
+A fresh independent adversarial review of commit
+`2e03773604f795e0d8397e59c57c22c8b1fac697` approved the final raw
+`run_args.json` boundary with no P1/P2 finding. Its probes covered direct,
+nested, array-contained, Unicode-escaped, and surrogate-pair duplicate decoded
+keys, malformed JSON/escapes, plus key-like text within strings; every
+ambiguous document failed closed. Task 6 is complete as an evidence-gated
+implementation. The verifier remains intentionally score-ineligible without a
+real authoritative completed web-plus-enterprise bundle, and this work makes
+no LongMemEval-V2 score claim. (source: `.superpowers/sdd/task-6-report.md`)
 ## [2026-07-20] plan | Redaction baseline extension planned (CRITICAL)
 
 13-task TDD plan (3,458 lines) at
@@ -4705,3 +5104,40 @@ registered (`if (handler)` could vacuously pass a broken test).
 Test-only change; no package behaviour changed, so no changeset. Branch
 `fix/gui-memory-graph-flake`. Evidence: single file 5/5 green, full gui suite
 83 files / 531 tests green, type errors none.
+## [2026-07-25 19:40 +03] rebase | long-memory hybrid recall onto main
+
+Rebased `codex/feat/long-memory-hybrid-recall` (71 commits) onto `main`
+(`e639a7ee`) as `rebase/long-memory-hybrid-recall`. The branch is purely
+additive outside four files — it adds `packages/long-memory`,
+`benchmarks/longmemeval-v2/`, its specs/plans, and wiki pages — so it does not
+overlap the perf/correctness work that landed on main. One conflict, in
+`wiki/log.md`; `wiki/index.md` and `wiki/agent-channel.md` auto-merged with no
+entry lost.
+
+`wiki/log.md` needed care: main's merge `5a13a8c2` left the file at zero bytes,
+so a plain rebase would have carried only the branch copy and silently dropped
+the 17 entries main gained after the fork. Resolved by three-way union against
+main's last non-empty version `d213947e` — 221 entries, no duplicates, nothing
+dropped from either side. The zero-byte file on main is a separate open defect
+with its own branch (`fix/review-C2-wiki-log-wiped`).
+
+`pnpm-lock.yaml` was reset to main's and regenerated with
+`pnpm install --lockfile-only`; the result is byte-identical to the branch's
+own lockfile (the `packages/long-memory` importer plus `fs-ext@2.1.1`,
+`nan@2.28.0`, `@types/fs-ext@2.0.3`).
+
+One test failed under a forced full run and not in isolation:
+`packages/long-memory/test/lm2-index.test.ts` "stops catalog/direct work at
+1,024 and raw text at 16 MiB". The harness sets `defaultTimeoutMs: 100` and
+`createLm2IndexService` deadlines on real `performance.now()`, so on a loaded
+machine the wall clock ended the run before the budget under test and the
+receipt came back without a `nextCursor`. Pinned that one case to
+`MAX_LM2_INDEX_BATCH_TIMEOUT_MS`. Pre-existing on the branch, not caused by the
+rebase.
+
+Evidence: `pnpm verify` exit 0; `Tasks: 58 successful, 58 total`. Forced
+uncached runs also green — `turbo typecheck --force` 58/58 in 33.1 s,
+`turbo test --force --concurrency=4` 58/58 in 2m2.9 s. Not merged, not pushed.
+Also observed and left alone: `packages/context-gate/test/saver-heartbeat.test.ts`
+"steals a stale lock file" flaked once under a forced full run and passes in
+isolation; that file is untouched by this branch and the flake is main's.
