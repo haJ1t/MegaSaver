@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { compileGlob } from "./secret-paths.js";
+import { type PathMatcher, compileGlob } from "./secret-paths.js";
 
 // Tighten-only project permissions (permissions-yaml §2). EVERY key adds
 // denials; there is no `allow:` key and no field that subtracts from a
@@ -28,8 +28,8 @@ export const projectPermissionsSchema = z
 // SECRET_PATH_PATTERNS; deny.commands stay verbatim for the exact-string
 // ALLOWED_COMMANDS-style check (permissions-yaml §2).
 export type ProjectPermissions = {
-  denyReadPatterns: readonly RegExp[];
-  denyWritePatterns: readonly RegExp[];
+  denyReadPatterns: readonly PathMatcher[];
+  denyWritePatterns: readonly PathMatcher[];
   denyCommands: readonly string[];
 };
 
