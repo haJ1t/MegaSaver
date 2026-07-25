@@ -4780,3 +4780,39 @@ Also fixed a contradiction introduced by [2026-07-25 16:20]: that entry's
 mcp-bridge section said "all 26 tools" while the later section corrected it to
 35 — two figures in one page. `log.md` history is left as written (schema hard
 rule #3: contradictions are flagged, not rewritten).
+
+## [2026-07-25 19:40 +03] fix | dedupe growth-ratio guard gets the retry it lacked
+
+The guard failed CI at 3.178 vs a 2.75 threshold on a DOCS-ONLY PR (#305), so the
+change could not be causal.
+
+The chip that opened this work proposed converting it to a wall-clock ceiling,
+"as #301 did". That premise was WRONG and acting on it would have regressed us:
+this guard shipped with a 5 s ceiling and was deliberately moved OFF it in
+07a4e3dc, with measurements showing the reverted scan cost only 1.4x the ceiling
+— a faster machine greens it with the quadratic restored. The repo runs both
+patterns on purpose, chosen per test by measurement; `session-hints-redos` opens
+with "Why an absolute ceiling and not a growth ratio" and this file opens with
+the mirror image.
+
+Measured before changing anything (node v25.8.2, 10 cores, guard's own harness):
+linear 1.999-2.024 idle, 1.838-2.104 at 2x oversubscription, all-pairs
+3.916-3.992. **Uniform CPU load does not move the ratio** — both samples inflate
+together — so the chip's stated root cause ("scheduler noise affects the two
+measurements unequally") does not reproduce and is not established. The 3.178
+remains undiagnosed.
+
+Fix: `retry: 3`, the idiom every other timing guard already carries and this one
+alone lacked. Proven load-bearing twice, independently: restoring the all-pairs
+scan WITH the retry active went red on all four attempts (3.929 / 3.897 / 3.831
+/ 3.885), and a reviewer reproducing the mutant from scratch read 3.973 / 3.898
+/ 3.929 / 3.865. Lowest of twelve quadratic measurements is 3.831, 1.39x the
+threshold. The guard runs 3.6 s banded vs 395 s all-pairs.
+
+Same-class gap left open deliberately: `content-store/prune-scan-cost` and
+`policy/redact-redos` are also growth-ratio guards without a retry. Each needs
+its own margin measured before getting one — a retry on a thin-margin guard
+would mask a real regression.
+
+Sources: [[docs/superpowers/specs/2026-07-25-dedupe-guard-flake-design]],
+[[docs/superpowers/plans/2026-07-25-dedupe-guard-flake-plan]].

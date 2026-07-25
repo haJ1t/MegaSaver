@@ -78,28 +78,55 @@ const sample = async (raw: string): Promise<number> => {
 };
 
 describe("filterOutput — quadratic dedupe scan on high-entropy output", () => {
-  it(`grows under ${MAX_GROWTH}x from ${HALF_LINES / 1000}k to ${LINES / 1000}k lines`, async () => {
-    const half = hexLog(HALF_LINES, 1);
-    const full = hexLog(LINES, 1);
+  // `retry: 3` matches every other timing guard in the repo (policy/glob-redos,
+  // context-gate/session-hints-redos, core/project-rule-ranking,
+  // policy/redact-jwt); this file was the only one without it. It went red once
+  // on ubuntu-latest at 3.178 on a DOCS-ONLY PR (#305, run 30171707912) while
+  // windows-latest passed the same commit.
+  //
+  // Re-measured here through this harness, node v25.8.2, 10 cores, 5 repeats:
+  //   linear, idle                    1.999-2.024   (half ~102 ms, full ~206 ms)
+  //   linear, 2x core oversubscription 1.838-2.104  (half ~284 ms, full ~530 ms)
+  //   all-pairs restored               3.916-3.992  (half ~4.5 s,  full ~18 s)
+  // Uniform load does NOT move the ratio — both samples inflate together, as
+  // the note above predicts — so CPU contention is ruled out as the cause and
+  // the 3.178 remains unreproduced. The retry is a bounded mitigation for that
+  // unreproduced transient, NOT a diagnosis of it.
+  //
+  // Why it cannot mask the defect: verified twice, independently, not argued.
+  // With the all-pairs scan restored AND this retry active, the four attempts
+  // read 3.929 / 3.897 / 3.831 / 3.885; a second reviewer reproducing the mutant
+  // from scratch read 3.973 / 3.898 / 3.929 / 3.865. Every one red. Across all
+  // twelve quadratic measurements the lowest is 3.831 — 1.39x the threshold —
+  // so passing would need a reading ~30% below anything the defect has ever
+  // produced. The absolute gap is the corroborating signal: the guard runs in
+  // 3.6 s on the banded scan and 395 s on the all-pairs one.
+  it(
+    `grows under ${MAX_GROWTH}x from ${HALF_LINES / 1000}k to ${LINES / 1000}k lines`,
+    { retry: 3, timeout: 300_000 },
+    async () => {
+      const half = hexLog(HALF_LINES, 1);
+      const full = hexLog(LINES, 1);
 
-    // Guard the driver: a compressed generic_shell run is the path that reaches
-    // dedupe. If either changes, the timings below stop measuring the scan.
-    // Doubles as warm-up, so trial 0 does not carry the JIT cost.
-    for (const raw of [half, full]) {
-      const result = await filterHexLog(raw);
-      expect(result.decision).toBe("compressed");
-      expect(result.classification.category).toBe("generic_shell");
-    }
+      // Guard the driver: a compressed generic_shell run is the path that reaches
+      // dedupe. If either changes, the timings below stop measuring the scan.
+      // Doubles as warm-up, so trial 0 does not carry the JIT cost.
+      for (const raw of [half, full]) {
+        const result = await filterHexLog(raw);
+        expect(result.decision).toBe("compressed");
+        expect(result.classification.category).toBe("generic_shell");
+      }
 
-    let bestHalf = Number.POSITIVE_INFINITY;
-    let bestFull = Number.POSITIVE_INFINITY;
-    for (let trial = 0; trial < TRIALS; trial += 1) {
-      bestHalf = Math.min(bestHalf, await sample(half));
-      bestFull = Math.min(bestFull, await sample(full));
-    }
+      let bestHalf = Number.POSITIVE_INFINITY;
+      let bestFull = Number.POSITIVE_INFINITY;
+      for (let trial = 0; trial < TRIALS; trial += 1) {
+        bestHalf = Math.min(bestHalf, await sample(half));
+        bestFull = Math.min(bestFull, await sample(full));
+      }
 
-    expect(bestFull / bestHalf).toBeLessThan(MAX_GROWTH);
-  }, 300_000);
+      expect(bestFull / bestHalf).toBeLessThan(MAX_GROWTH);
+    },
+  );
 });
 
 describe("dedupe — banded candidate lookup keeps all-pairs semantics", () => {
