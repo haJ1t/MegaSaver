@@ -76,7 +76,11 @@ export function parseWikiPage(relPath: string, content: string): WikiInput {
           // Strip a trailing space-separated Obsidian/markdown anchor before path
           // canonicalization so `path.md:12 #8` collapses to `path.md`; the file
           // node must unify with the same path cited without an anchor.
-          s = s.replace(/\s+#\S.*$/, "").trim();
+          // Single `\s`, not `\s+`, and `[\s\S]*`, not `.*$`: `[^)]+` above accepts
+          // unbounded whitespace and newlines and no caller caps page size, so both
+          // unbounded-run/required-literal forms were quadratic here. The trailing
+          // `.trim()` absorbs the rest of the whitespace run either way.
+          s = s.replace(/\s#\S[\s\S]*/, "").trim();
           return canonicalizeFilePath(s);
         })
         .filter((s): s is string => s !== null && looksLikePath(s)),
