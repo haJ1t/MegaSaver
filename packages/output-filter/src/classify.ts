@@ -41,8 +41,14 @@ const TS_CMD = /\btsc\b|\b(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:typecheck|type-check
 const DIFF_CMD = /\bgit\s+(?:diff|status|log|show)\b/i;
 
 // Sniffers run on ANSI-stripped text (§10.2).
+// The leading indents are bounded for the same reason as rank.ts's STACKTRACE,
+// with a driver of their own: `\s` matches `\n`, so inside a blank-line block
+// every line start scans the whole remaining whitespace region before failing
+// the literal — 31.8 s through classifyOutput on 100 KB of newlines. The bound
+// costs no reach because `^` re-anchors at every line under `m`, so an indent
+// match that spanned a newline was already redundant. Do not restore `*`.
 const VITEST_OUT =
-  /^\s*Test Files\s|^\s*Tests\s+\d|Serialized Error|AssertionError|^\s*(?:FAIL|PASS)\b|Duration\s+\d/m;
+  /^\s{0,64}Test Files\s|^\s{0,64}Tests\s+\d|Serialized Error|AssertionError|^\s{0,64}(?:FAIL|PASS)\b|Duration\s+\d/m;
 const TS_OUT = /\(\d+,\d+\):\s+error\s+TS\d+:|error\s+TS\d+:|Found\s+\d+\s+errors?/m;
 // Out-only sniff requires a real diff anchor: a `diff --git` header or a
 // `@@ ... @@` hunk. A lone leading +/- line is NOT a confident diff signal
@@ -69,7 +75,10 @@ const PROSE_STRUCT = /^```|^[-*+] |\b\d+\. /m;
 // These shadow the earlier category checks but are kept here for locality.
 const PROSE_ANTI_DIFF = /^diff --git |^@@ .* @@/m;
 const PROSE_ANTI_TS = /\(\d+,\d+\):\s+error\s+TS\d+:|error\s+TS\d+:|Found\s+\d+\s+errors?/m;
-const PROSE_ANTI_VI = /^\s*Test Files\s|^\s*Tests\s+\d|AssertionError/m;
+// Bounded for the same reason as VITEST_OUT, and it needs its own bound: the
+// prose check runs on text that already got past the vitest check, so a fix to
+// VITEST_OUT alone leaves this one quadratic on the same input.
+const PROSE_ANTI_VI = /^\s{0,64}Test Files\s|^\s{0,64}Tests\s+\d|AssertionError/m;
 
 // The structured sniff fires ONLY when the body actually parses to a large
 // homogeneous array of objects — the only shape compressJson collapses.

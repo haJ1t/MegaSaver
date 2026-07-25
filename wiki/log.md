@@ -4120,3 +4120,21 @@ improved from 0/4 losses to 4/4 wins (1.30x cost geomean; approximately $1.87
 vs $2.49 total), while the 4x claim remains unproven. Implementation branch:
 `fix/proxy-cache-parity-finalize`; code head before this wiki record:
 `b09a3983`. Integration PR: GitHub #288.
+## [2026-07-25 14:35 +03] fix | classify.ts `^\s*` quadratic (redos instance 6)
+
+`VITEST_OUT` and `PROSE_ANTI_VI` in `packages/output-filter/src/classify.ts`
+opened alternatives with `^\s*` under the `m` flag. `\s` matches `\n`, so inside
+a blank-line block every line start rescanned the whole remaining whitespace
+region before failing the required literal. Measured through the real call site
+`classifyOutput`: 31.8 s on 100 KB of newlines, 89 ms after bounding to
+`\s{0,64}`. Exposed by `mega bench`, which passes raw command output to the
+public export (`filterOutput` was shielded only incidentally, by feeding it
+post-`collapseRepeatedLines` text).
+
+Evidence: new `packages/output-filter/test/classify-redos.test.ts` at 100 KB
+with a 5 s ceiling — red 31.8 s before the fix; each bound verified
+load-bearing alone (32.6 s / 20.9 s when reverted individually). Package suite
+40 files / 416 tests green; biome clean on both touched files. Branch
+`fix/classify-vitest-text-multiline-ws-quadratic`; not merged. Updated
+[[concepts/unbounded-run-redos]] with instance 6 and the `^\s*`-under-`m`
+variant.

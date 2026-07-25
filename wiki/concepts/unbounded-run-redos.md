@@ -45,6 +45,23 @@ hex dumps (delimiter-free runs); column-padded tables and tab-indented logs
 | 3 | `STACKTRACE` (`rank.ts`), `SIGNATURE` (`parsers/stacktrace.ts`) | fixed, `a1bf5983` |
 | 4 | `email` observer, `redaction-patterns.ts:171` | **deferred** — see below |
 | 5 | 3 lookbehind patterns, `redaction-patterns.ts` | **open, unfiled** — see below |
+| 6 | `VITEST_OUT`, `PROSE_ANTI_VI` (`classify.ts`) | fixed, branch `fix/classify-vitest-text-multiline-ws-quadratic` |
+
+## Third variant: `^\s*` under the `m` flag
+
+Instance 6 is a variant worth naming separately. `\s` matches `\n`, so an
+`^\s*`-led alternative under `m` re-scans the whole remaining whitespace region
+from every line start of a blank-line block: 31.8 s through `classifyOutput` on
+100 KB of newlines. The bound (`\s{0,64}`) costs no reach — `^` re-anchors at
+every line, so an indent match that spanned a newline was already reachable from
+the later line start.
+
+Its exposure differs from 1-5: `classifyOutput` is a **public export that only
+normalizes, never collapses**. `filterOutput` feeds it post-`collapseRepeatedLines`
+text, which defuses the driver; `mega bench` (`apps/cli/src/commands/bench.ts`)
+passes raw command output and had no such shield. Second lesson, alongside the
+guard-size one: check what the *public* entry point does, not what the internal
+caller happens to do first.
 
 ## Deferred: instance 4 (`email`)
 
