@@ -29,9 +29,19 @@ function megaEnv(storeRoot: string): NodeJS.ProcessEnv {
   return { ...process.env, XDG_DATA_HOME: storeRoot };
 }
 
+// --mega-bin is routinely a JS entrypoint (apps/cli/dist/cli.js, the fixtures'
+// mega.cjs). Handing one to execFileSync makes the OS loader start it, which
+// needs a shebang plus an exec bit — win32 has neither and fails EFTYPE. Run
+// scripts under the current node instead: same on every platform, and no shell,
+// so the path is never re-parsed by a command interpreter.
+function spawnParts(megaBin: string, args: readonly string[]): [string, string[]] {
+  return /\.[cm]?js$/.test(megaBin) ? [process.execPath, [megaBin, ...args]] : [megaBin, [...args]];
+}
+
 function defaultRun(megaBin: string, cwd: string, storeRoot: string): RunHook {
+  const [bin, base] = spawnParts(megaBin, ["hooks", "saver"]);
   return (payloadJson) =>
-    execFileSync(megaBin, ["hooks", "saver"], {
+    execFileSync(bin, base, {
       input: payloadJson,
       cwd,
       env: megaEnv(storeRoot),
@@ -53,13 +63,15 @@ export function prepareSaverStore(input: {
   storeRoot: string;
   mode: SaverMode;
 }): void {
-  const run = (args: readonly string[]): string =>
-    execFileSync(input.megaBin, [...args], {
+  const run = (args: readonly string[]): string => {
+    const [bin, spawnArgs] = spawnParts(input.megaBin, args);
+    return execFileSync(bin, spawnArgs, {
       cwd: input.cwd,
       env: megaEnv(input.storeRoot),
       encoding: "utf8",
       maxBuffer: MAX_BUFFER_BYTES,
     });
+  };
 
   try {
     run(["session", "saver", "default", "enable", "--mode", input.mode, "--json"]);
