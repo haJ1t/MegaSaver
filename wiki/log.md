@@ -6556,3 +6556,40 @@ load-bearing alone (32.6 s / 20.9 s when reverted individually). Package suite
 `fix/classify-vitest-text-multiline-ws-quadratic`; not merged. Updated
 [[concepts/unbounded-run-redos]] with instance 6 and the `^\s*`-under-`m`
 variant.
+## [2026-07-25 19:40 +03] rebase | long-memory hybrid recall onto main
+
+Rebased `codex/feat/long-memory-hybrid-recall` (71 commits) onto `main`
+(`e639a7ee`) as `rebase/long-memory-hybrid-recall`. The branch is purely
+additive outside four files — it adds `packages/long-memory`,
+`benchmarks/longmemeval-v2/`, its specs/plans, and wiki pages — so it does not
+overlap the perf/correctness work that landed on main. One conflict, in
+`wiki/log.md`; `wiki/index.md` and `wiki/agent-channel.md` auto-merged with no
+entry lost.
+
+`wiki/log.md` needed care: main's merge `5a13a8c2` left the file at zero bytes,
+so a plain rebase would have carried only the branch copy and silently dropped
+the 17 entries main gained after the fork. Resolved by three-way union against
+main's last non-empty version `d213947e` — 221 entries, no duplicates, nothing
+dropped from either side. The zero-byte file on main is a separate open defect
+with its own branch (`fix/review-C2-wiki-log-wiped`).
+
+`pnpm-lock.yaml` was reset to main's and regenerated with
+`pnpm install --lockfile-only`; the result is byte-identical to the branch's
+own lockfile (the `packages/long-memory` importer plus `fs-ext@2.1.1`,
+`nan@2.28.0`, `@types/fs-ext@2.0.3`).
+
+One test failed under a forced full run and not in isolation:
+`packages/long-memory/test/lm2-index.test.ts` "stops catalog/direct work at
+1,024 and raw text at 16 MiB". The harness sets `defaultTimeoutMs: 100` and
+`createLm2IndexService` deadlines on real `performance.now()`, so on a loaded
+machine the wall clock ended the run before the budget under test and the
+receipt came back without a `nextCursor`. Pinned that one case to
+`MAX_LM2_INDEX_BATCH_TIMEOUT_MS`. Pre-existing on the branch, not caused by the
+rebase.
+
+Evidence: `pnpm verify` exit 0; `Tasks: 58 successful, 58 total`. Forced
+uncached runs also green — `turbo typecheck --force` 58/58 in 33.1 s,
+`turbo test --force --concurrency=4` 58/58 in 2m2.9 s. Not merged, not pushed.
+Also observed and left alone: `packages/context-gate/test/saver-heartbeat.test.ts`
+"steals a stale lock file" flaked once under a forced full run and passes in
+isolation; that file is untouched by this branch and the flake is main's.
