@@ -59,3 +59,43 @@ critic approved the design; security review remains mandatory before merge.
   classifier) that persistent routing keeps pointed at a live listener.
 - [[syntheses/post-v1.1-roadmap]] — where this proposed next-arc item is tracked.
 
+
+## Where owner liveness is actually decided (2026-07-25)
+
+Traced while resolving an unread `ReconcileObs.ownerDead` field. Recorded so the
+question is not re-derived.
+
+**The reconcile matrix does not observe owner liveness, and should not.**
+"May I displace the previous route owner?" is answered upstream at the lock
+layer: `withTransitionLock` → `tryAcquireLock` → `isOwnerStale`
+(`packages/proxy-control/src/locks.ts:44-54`), which uses real process identity —
+a different `bootId`, an expired `leaseExpiresAt`, or `isLiveSameBoot(pid,
+processStartToken, bootId)` returning false. Alternative predicates, never an
+AND, so PID reuse cannot create a permanent veto.
+
+Both production drivers run inside that lock — `runStartupRecovery`
+(`apps/cli/src/commands/proxy/supervise.ts:211`) and the 5-second `superviseDrive`
+tick (`:184`). By the time `reconcileTransition` runs, single-writer ownership is
+settled and there is no takeover left to guard.
+
+**The transition record's owner fields are sentinels**, stated verbatim at
+`apps/cli/src/commands/proxy/control.ts:147-149`: the single-writer guarantee
+comes from the fenced, process-identity-based `transition.lock`, not from the
+record.
+
+**`handoffDeadline` is null because the bootstrap handoff is unimplemented.**
+The design (`2026-07-02-persistent-proxy-routing-design.md:356-360`) has the CLI
+persist a deadline, RELEASE `transition.lock`, and the supervisor re-acquire and
+rewrite the owner; the deadline exists to bound a *released* transition so a
+suspended CLI cannot become an immortal owner. `withTransitionLock` instead holds
+the lock across the whole operation (`try { fn() } finally { releaseLock }`) and
+never persists a deadline. That is stricter, not laxer — no released-but-live
+window exists to bound. The permanent `null` is consistent with the shipped
+protocol.
+
+Consequence: `ownerDead` (derived from that null, hence pinned `true`) and
+`leasePhase` were deleted from `ReconcileObs` rather than wired in. Wiring them
+would have fed a route-safety decision from a documented sentinel that is
+currently a constant — a guard in appearance only.
+
+Sources: [[docs/superpowers/specs/2026-07-25-reconcile-obs-dead-fields-design]].
