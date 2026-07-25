@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { ProjectId, SessionId } from "@megasaver/shared";
+import { type ProjectId, type SessionId, workspaceKeySchema } from "@megasaver/shared";
 import { withFileLock } from "@megasaver/shared/node";
 import { atomicWriteFile } from "./atomic-write.js";
 import { StatsError } from "./errors.js";
@@ -253,7 +253,11 @@ export function reconcileOverlaySummaries(store: StatsStore): number {
     return 0;
   }
   for (const workspaceKey of workspaces) {
-    if (!isSafeSegment(workspaceKey)) continue;
+    // Overlay dirs are 16-hex workspaceKeys (encodeWorkspaceKey); registry dirs
+    // are UUID project ids. Reading a registry dir as a workspace overwrites its
+    // legacy <sessionId>.json summaries — and fabricates one per non-session
+    // *.events.jsonl ledger — with a zeroed overlay summary.
+    if (!workspaceKeySchema.safeParse(workspaceKey).success) continue;
     let files: string[];
     try {
       files = readdirSync(join(store.root, "stats", workspaceKey));

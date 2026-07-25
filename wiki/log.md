@@ -4221,3 +4221,20 @@ re-derive whether the guardrail actually ships. The prior entry
 `[2026-07-25 14:52]` stands as written history; it is superseded on the "merged
 as `8e261d19`" phrasing only. Sources:
 [[syntheses/saver-cache-churn]], [[syntheses/variance-controlled-benchmark]].
+## [2026-07-25 14:30 +03] fix | GC sweep clobbered registry-session stats
+
+`reconcileOverlaySummaries` (packages/stats/src/store.ts) treated every
+`stats/<dir>` as an overlay workspace, so `maybeRunOverlayGc`'s once-a-day
+sweep rewrote `stats/<projectId>/<sessionId>.json` as a zeroed overlay
+summary. Measured on a store with one registry session: `rebuilt` 2,
+`bytesSavedTotal` 9000 → 0, and a phantom `handoff.json` fabricated from the
+handoff ledger; `readSummary` and `appendEvent` then threw `store_corrupt`
+permanently, so `mega output exec/file/filter` returned `store_write_failed`.
+
+Fix: the sweep only enters dirs matching `workspaceKeySchema` (16 lowercase
+hex), the layout discriminator `locateChunkSet` already uses. After: `rebuilt`
+0, registry summary byte-identical, no `handoff.json`, real overlay workspaces
+still repaired. 4 red → green guard tests in
+`packages/stats/test/reconcile-legacy-layout.test.ts`; 241/241 stats tests
+pass. Branch `fix/gc-reconcile-clobbers-legacy-summaries`.
+See [[entities/stats]].
