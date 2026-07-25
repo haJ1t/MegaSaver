@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { redact } from "@megasaver/policy";
 import { encodeWorkspaceKey } from "@megasaver/shared";
@@ -65,10 +73,13 @@ export function readSessionIntent(
 // hook / daemon); a reader must never see a half-written file.
 function writeIntentAt(path: string, prompt: string, ts: number): void {
   const dir = dirname(path);
-  mkdirSync(dir, { recursive: true });
+  // Owner-only: this file holds the user's verbatim prompt. The chmod is the
+  // backstop — mkdir's mode is a no-op on a dir that already exists.
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  chmodSync(dir, 0o700);
   const tmp = join(dir, `.${randomUUID()}.tmp`);
   try {
-    writeFileSync(tmp, `${JSON.stringify({ prompt, ts })}\n`);
+    writeFileSync(tmp, `${JSON.stringify({ prompt, ts })}\n`, { mode: 0o600 });
     renameSync(tmp, path);
   } catch (err) {
     rmSync(tmp, { force: true });

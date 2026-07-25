@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { encodeWorkspaceKey } from "@megasaver/shared";
@@ -39,6 +48,22 @@ describe("captureIntent", () => {
     const raw = readFileSync(intentFilePath(storeRoot, wk), "utf8");
     expect(raw).not.toContain(secret);
     expect(JSON.parse(raw).prompt).toBe("use key AKIA[REDACTED] please");
+  });
+
+  // The file holds the user's verbatim prompt. NTFS ignores POSIX mode bits.
+  it.skipIf(process.platform === "win32")("writes the prompt owner-only", () => {
+    captureIntent(storeRoot, { prompt: "fix the parser", cwd }, () => 1);
+    const path = intentFilePath(storeRoot, wk);
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    expect(statSync(dirname(path)).mode & 0o777).toBe(0o700);
+  });
+
+  it.skipIf(process.platform === "win32")("repairs a world-readable intent dir", () => {
+    const dir = dirname(intentFilePath(storeRoot, wk));
+    mkdirSync(dir, { recursive: true });
+    chmodSync(dir, 0o755);
+    captureIntent(storeRoot, { prompt: "fix the parser", cwd }, () => 1);
+    expect(statSync(dir).mode & 0o777).toBe(0o700);
   });
 });
 
