@@ -4120,3 +4120,28 @@ improved from 0/4 losses to 4/4 wins (1.30x cost geomean; approximately $1.87
 vs $2.49 total), while the 4x claim remains unproven. Implementation branch:
 `fix/proxy-cache-parity-finalize`; code head before this wiki record:
 `b09a3983`. Integration PR: GitHub #288.
+
+## [2026-07-25 14:30 +03] fix | normalize trailing-whitespace strip was quadratic
+
+Sixth instance of [[concepts/unbounded-run-redos]], and the earliest one in the
+pipeline: `normalize()`'s per-line `/\s+$/` in
+`packages/output-filter/src/normalize.ts`. Unbounded greedy run before a
+zero-width anchor, retried at every start position, so a whitespace run that is
+not at end-of-line backtracks the whole run at every offset. Reachable from
+ordinary input (padded tables, ASCII banners, tab-indented blobs) through
+`filterOutput` and the public `classifyOutput`, with no size cap ahead of it.
+
+Fixed with `String.prototype.trimEnd()` — exactly equivalent (ES `\s` is
+WhiteSpace + LineTerminator, the set `trimEnd` removes; `$` without `m` anchors
+only at end of string), linear, one line.
+
+Evidence: RED at 200 KB through `classifyOutput` — space run 13,846 ms, tab run
+17,046 ms against a 5,000 ms ceiling; GREEN <1 ms each. Reverting the single line
+takes both back to 33.6 s / 29.6 s, so the guard is load-bearing. Guard needed 2x
+the suite's shared 100 KB: this variant's per-backtrack step is a bare anchor
+check, so at 100 KB the unbounded form cost only 3.2-4.0 s and stayed green.
+Same-byte-count 80-column control measured linear (3.2 / 9.5 / 12.3 / 17.1 ms at
+25 / 50 / 100 / 200 KB), so the cost was the regex shape, not the byte count.
+Full `@megasaver/output-filter` suite 413/413 passing; biome clean on the three
+touched files. Branch `fix/normalize-trailing-whitespace-quadratic`; not merged,
+pending external review per §4.
