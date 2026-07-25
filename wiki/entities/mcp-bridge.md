@@ -102,9 +102,12 @@ See [[concepts/proxy-mode]] for the full 7-phase arc. Two bridge deltas:
   status), `path_scope` traversal guard (rejects absolute / `..`). Adds a
   `@megasaver/retrieval` dependency to mcp-bridge. Exposed in BOTH naming
   modes. (Introduced on the v1.2 branch as the 5th tool over the four AA1
-  base tools; after the Phase 0–10 merge the bridge ships **26 tools** —
-  the 25 ContextOps tools plus `proxy_search_code` — and `McpToolName` is a
-  **26-member** enum.)
+  base tools; at the Phase 0–10 merge the bridge shipped **26 tools** —
+  the 25 ContextOps tools plus `proxy_search_code` — with a 26-member
+  `McpToolName`. **That count is historical: the bridge ships 35 tools as
+  of 2026-07-25.** Tools were added after Phase 10 without this line being
+  updated, and the stale 26 propagated into a bug report. `TOOL_DEFS` in
+  `src/server.ts` is the authority; `server.e2e.test.ts` asserts the count.)
 
 ## Inert tool inputs closed (2026-07-25)
 
@@ -118,9 +121,11 @@ were accepted and dropped. Same defect class as `deny.write` in
 One claim in the report did not survive checking: `max_results` is NOT published
 to agents as `{minimum:1, maximum:500, default:50}`. That line lives in the v1.2
 roadmap plan, never implemented — `src/server.ts:282` advertises
-`inputSchema: { type: "object" }` for **all 26 tools**, so no input property,
+`inputSchema: { type: "object" }` for **all 35 tools**, so no input property,
 bound, or default is published for anything. Lower exposure, same defect; and it
-means there was no published default to honor.
+means there was no published default to honor. (Written as "26 tools" when this
+entry was first filed, from the stale figure above; the real count is 35, as the
+next section records.)
 
 - **`max_results` → honored.** It is a genuine cap: `enrich` already BM25-orders
   files, so top-N is meaningful. The cap runs AFTER `enrich` (a slice-before-rank

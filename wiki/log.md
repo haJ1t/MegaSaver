@@ -4762,3 +4762,21 @@ revert also fails its own behaviour pins, so the guards are not timing-only.
 Same instrument the context-gate guard moved to in `0e8f3362` (PR #301), for the
 same reason. Sources: [[concepts/unbounded-run-redos]] "…but the ratio breaks
 under a parallel turbo run".
+
+## [2026-07-25 18:45 +03] docs | correct the stale 26-tool count to 35
+
+`wiki/index.md` and the v1.2 section of `wiki/entities/mcp-bridge.md` still
+claimed the bridge ships 26 tools. That was true at the Phase 0–10 merge; tools
+were added afterwards without the line being updated, and the stale figure
+propagated OUT of the wiki into a bug report ("every one of the 26 tools"),
+which is the concrete cost of leaving it.
+
+The 26 is kept where it is genuinely historical, marked as such and pointed at
+the current count. `TOOL_DEFS` in `src/server.ts` is named as the authority, and
+`server.e2e.test.ts` already asserts the count, so the wiki now defers to a
+checked source instead of restating a number that drifts.
+
+Also fixed a contradiction introduced by [2026-07-25 16:20]: that entry's
+mcp-bridge section said "all 26 tools" while the later section corrected it to
+35 — two figures in one page. `log.md` history is left as written (schema hard
+rule #3: contradictions are flagged, not rewritten).
