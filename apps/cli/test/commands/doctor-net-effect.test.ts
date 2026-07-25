@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readNetEffectRecord } from "@megasaver/context-gate";
+import { readNetEffectRecord, writeNetEffectRecord } from "@megasaver/context-gate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { refreshNetEffectVerdicts } from "../../src/commands/doctor-saver.js";
 
@@ -15,12 +15,12 @@ const NOW = "2026-07-19T12:00:00.000Z";
 
 // A valid overlay event line. sourceKind/mode must be members of the
 // overlayTokenSaverEventSchema enums (output-source + token-saver-mode).
-function overlayEvent(wk: string, sid: string, bytesSaved: number): object {
+function overlayEvent(wk: string, sid: string, bytesSaved: number, createdAt = NOW): object {
   return {
     id: "e1",
     liveSessionId: sid,
     workspaceKey: wk,
-    createdAt: NOW,
+    createdAt,
     sourceKind: "command",
     label: "x",
     rawBytes: bytesSaved,
@@ -82,6 +82,31 @@ describe("refreshNetEffectVerdicts", () => {
     const checks = refreshNetEffectVerdicts(store, NOW);
     expect(checks.some((c) => c.key === "saver-net-effect" && !c.pass)).toBe(true);
     expect(readNetEffectRecord(store, "wk1")?.verdict).toBe("negative");
+  });
+
+  it("still reports a persisted negative verdict once its events age out of the window", () => {
+    // A paused workspace stops compressing, so once the 7d window rolls past the
+    // pause it produces no in-window events — the latch must stay visible anyway.
+    seedOverlay("wk1", "s1", [overlayEvent("wk1", "s1", 4000, "2026-07-01T12:00:00.000Z")]);
+    writeNetEffectRecord(store, "wk1", {
+      savedTokens: 1000,
+      churnTokens: 90_000,
+      verdict: "negative",
+      updatedAt: "2026-07-01T12:00:00.000Z",
+    });
+    const checks = refreshNetEffectVerdicts(store, NOW);
+    const c = checks.find((c) => c.key === "saver-net-effect");
+    expect(c?.pass).toBe(false);
+    expect(c?.value).toContain("paused");
+    expect(c?.reason).toContain("mega session saver resume");
+    // The stale verdict must not be silently overwritten or auto-expired.
+    expect(readNetEffectRecord(store, "wk1")?.verdict).toBe("negative");
+  });
+
+  it("stays quiet for an idle workspace with no prior verdict", () => {
+    seedOverlay("wk1", "s1", [overlayEvent("wk1", "s1", 4000, "2026-07-01T12:00:00.000Z")]);
+    const checks = refreshNetEffectVerdicts(store, NOW);
+    expect(checks.map((c) => c.value)).toEqual(["no compression activity in window"]);
   });
 
   it("does not throw when the verdict cannot be persisted (write fail-open)", () => {

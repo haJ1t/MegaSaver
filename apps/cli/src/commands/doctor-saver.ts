@@ -8,6 +8,7 @@ import {
   estimateNetEffect,
   overlayTokenSaverEventSchema,
   readHeartbeatView,
+  readNetEffectRecord,
   sumBytesSavedSince,
   writeNetEffectRecord,
 } from "@megasaver/context-gate";
@@ -204,7 +205,19 @@ export function refreshNetEffectVerdicts(storeRoot: string, nowIso: string): Che
   const verdicts = estimateNetEffect({ nowIso, workspaces, usageRows });
   const checks: Check[] = [];
   for (const v of verdicts) {
-    if (v.savedTokens === 0 && v.churnTokens === 0 && v.verdict === "unknown") continue; // idle workspace, no signal
+    if (v.savedTokens === 0 && v.churnTokens === 0 && v.verdict === "unknown") {
+      // A paused workspace stops compressing, so it stops producing the events
+      // the estimator needs — without this the latch would go unreported forever.
+      const prev = readNetEffectRecord(storeRoot, v.workspaceKey);
+      if (prev?.verdict !== "negative") continue; // genuinely idle, no signal
+      checks.push({
+        key: "saver-net-effect",
+        value: `paused (negative since ${prev.updatedAt}, no activity to re-judge, workspace ${v.workspaceKey})`,
+        pass: false,
+        reason: "saver auto-paused for this workspace — run: mega session saver resume",
+      });
+      continue;
+    }
     try {
       writeNetEffectRecord(storeRoot, v.workspaceKey, {
         savedTokens: v.savedTokens,
