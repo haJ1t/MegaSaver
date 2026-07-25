@@ -10,17 +10,29 @@ import { filterOutput } from "../src/types.js";
 // logs, CSV, hex dumps) has no duplicates, so every chunk survives and the scan
 // is maximal: the MCP tool call / PostToolUse hook blocks for the whole time.
 //
-// On SIZE: 128k lines (1.1 MB) → 3,200 chunks at 40 lines/chunk. NOT smaller —
-// the defect is quadratic and the fix linear, so size is what separates them.
-// Measured on this repo (node v25.8.2): 64k lines cost 3.7 s, UNDER the ceiling
-// and silently green; 128k lines cost 13.5 s. With the fix, 128k lines cost
-// 0.5 s (the rest of the pipeline alone is 0.13 s). Do not lower SIZE.
-//
-// On the ceiling: 5 s matches rank-redos.test.ts — loose enough for a loaded
-// runner (this suite runs under `turbo test` with ~12 packages in parallel),
-// while the defect still overshoots it by 2.7x.
-const CEILING_MS = 5_000;
-const LINES = 128_000;
+// Why a growth RATIO and not a wall-clock ceiling: this guard shipped with a
+// 5 s ceiling at 128k lines and documented the reverted cost as 13.5 s (the
+// changeset said 17.4 s — the two never agreed). Reproduced on the machine that
+// wrote them, node v25.8.2, the reverted scan costs 6.8 / 6.9 / 7.7 s: a 1.4x
+// margin, not the 2.7x claimed. A machine ~1.5x faster — or a cheaper BigInt
+// path in a future Node — greens this guard with the quadratic scan restored,
+// which is the silent-green failure the ceiling existed to prevent. A ratio has
+// no machine-tuned constant in it: the all-pairs scan is quadratic in chunk
+// count, so doubling the input costs it ~4x, while the banded lookup is linear
+// and costs ~2x. Load and CPU speed move both samples together.
+const LINES = 128_000; // 3,200 chunks at 40 lines/chunk
+const HALF_LINES = LINES / 2;
+// Measured through filterOutput, node v25.8.2: banded 1.95-2.09x idle and
+// 2.06-2.17x under four busy cores; all-pairs 4.48x. 2.75 leaves ~27% headroom
+// on the linear side at the worst load sampled, and the quadratic side clears
+// it by 1.6x.
+const MAX_GROWTH = 2.75;
+// Minimum per SIDE, not minimum of per-trial ratios. Scheduler noise can only
+// inflate a duration, so each side's minimum converges on its noise-free cost.
+// Minimising the per-trial ratio instead pairs an inflated half sample with a
+// clean full one and biases the result DOWN — that form read 2.55 with the
+// defect restored where this one reads 4.48.
+const TRIALS = 3;
 
 function mulberry32(seed: number): () => number {
   let a = seed;
@@ -52,22 +64,42 @@ const ranked = (text: string): RankedChunk => ({
   features: zeroFeatures(),
 });
 
+const filterHexLog = async (raw: string) =>
+  filterOutput({
+    raw,
+    mode: "balanced",
+    source: { kind: "command", command: "cat", args: ["build.log"] },
+  });
+
+const sample = async (raw: string): Promise<number> => {
+  const started = performance.now();
+  await filterHexLog(raw);
+  return performance.now() - started;
+};
+
 describe("filterOutput — quadratic dedupe scan on high-entropy output", () => {
-  it(`filters ${LINES / 1000}k lines of high-entropy output under ${CEILING_MS} ms`, async () => {
-    const raw = hexLog(LINES, 1);
-    const started = performance.now();
-    const result = await filterOutput({
-      raw,
-      mode: "balanced",
-      source: { kind: "command", command: "cat", args: ["build.log"] },
-    });
-    const ms = performance.now() - started;
+  it(`grows under ${MAX_GROWTH}x from ${HALF_LINES / 1000}k to ${LINES / 1000}k lines`, async () => {
+    const half = hexLog(HALF_LINES, 1);
+    const full = hexLog(LINES, 1);
+
     // Guard the driver: a compressed generic_shell run is the path that reaches
-    // dedupe. If either changes, the timing above stops measuring the scan.
-    expect(result.decision).toBe("compressed");
-    expect(result.classification.category).toBe("generic_shell");
-    expect(ms).toBeLessThan(CEILING_MS);
-  }, 120_000);
+    // dedupe. If either changes, the timings below stop measuring the scan.
+    // Doubles as warm-up, so trial 0 does not carry the JIT cost.
+    for (const raw of [half, full]) {
+      const result = await filterHexLog(raw);
+      expect(result.decision).toBe("compressed");
+      expect(result.classification.category).toBe("generic_shell");
+    }
+
+    let bestHalf = Number.POSITIVE_INFINITY;
+    let bestFull = Number.POSITIVE_INFINITY;
+    for (let trial = 0; trial < TRIALS; trial += 1) {
+      bestHalf = Math.min(bestHalf, await sample(half));
+      bestFull = Math.min(bestFull, await sample(full));
+    }
+
+    expect(bestFull / bestHalf).toBeLessThan(MAX_GROWTH);
+  }, 300_000);
 });
 
 describe("dedupe — banded candidate lookup keeps all-pairs semantics", () => {

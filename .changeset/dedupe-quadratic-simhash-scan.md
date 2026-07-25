@@ -17,8 +17,5 @@ band-mates need a Hamming compare. The kept set is unchanged — a test pins it
 against a brute-force all-pairs reference on a corpus with real folds.
 
 Measured through `filterOutput` on 128k lines (1.1 MB) of high-entropy output,
-3,200 chunks, node v25.8.2: **17.4 s before, 0.35 s after** (the rest of the
-pipeline alone is 0.13 s). The regression guard sits at 128 k lines with a 5 s
-ceiling — at 64 k lines the quadratic scan costs 3.7 s and stays under it, so
-input size, not the ceiling, is what separates quadratic from linear. Do not
-lower it.
+3,200 chunks, node v25.8.2: **6.8-7.7 s before, 0.32 s after** (the rest of the
+pipeline alone is 0.13 s).
