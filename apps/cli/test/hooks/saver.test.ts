@@ -30,7 +30,6 @@ function deps(overrides: Partial<Parameters<typeof buildSaverDecision>[1]> = {})
     recordCompression: vi.fn(),
     recordFailure: vi.fn(),
     recordCompletion: vi.fn(),
-    saverPaused: () => false,
     hasSeenOutput: () => false,
     recordSeenOutput: () => {},
     ...overrides,
@@ -291,7 +290,6 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
     recordCompression: () => {},
     recordFailure: () => {},
     recordCompletion: () => {},
-    saverPaused: () => false,
     hasSeenOutput: () => false,
     recordSeenOutput: () => {},
   });
@@ -354,7 +352,6 @@ describe("buildSaverDecision evidence-ledger wiring (real record)", () => {
       recordCompression: () => {},
       recordFailure: () => {},
       recordCompletion: () => {},
-      saverPaused: () => false,
       hasSeenOutput: () => false,
       recordSeenOutput: () => {},
     });
@@ -429,7 +426,6 @@ describe("buildSaverDecision intent fill-gap", () => {
       readSessionIntent: () => "refactor the auth module",
       recordInvocation: () => {},
       recordCompression: () => {},
-      saverPaused: () => false,
       hasSeenOutput: () => false,
       recordSeenOutput: () => {},
       record: async (input: { intent?: string }) => {
@@ -458,7 +454,6 @@ describe("buildSaverDecision intent fill-gap", () => {
       readSessionIntent: () => undefined,
       recordInvocation: () => {},
       recordCompression: () => {},
-      saverPaused: () => false,
       hasSeenOutput: () => false,
       recordSeenOutput: () => {},
       record: async (input: Record<string, unknown>) => {
@@ -947,18 +942,12 @@ describe("E21 failure + completion ledger", () => {
   });
 });
 
-describe("net-effect auto-pause gate", () => {
-  it("net-effect pause forces passthrough even when settings enable the saver", async () => {
-    const d = deps({
-      resolveSettings: () => ({ enabled: true, mode: "balanced" as const }),
-      saverPaused: () => true,
-    });
-    const decision = await buildSaverDecision(compressiblePayload(), d);
-    expect(decision).toEqual({ passthrough: true });
-  });
-
-  it("saverPaused defaults to not-paused when dep reports false", async () => {
-    const d = deps({ saverPaused: () => false });
+describe("net-effect verdict", () => {
+  // The verdict is an unattributed dispersion advisory (@megasaver/stats
+  // net-effect.ts) — the hook must have no knob for it to switch off.
+  it("cannot gate compression: the hook takes no pause dependency", async () => {
+    const d = deps();
+    expect(Object.keys(d).filter((k) => /paus/i.test(k))).toEqual([]);
     const decision = await buildSaverDecision(compressiblePayload(), d);
     expect("updatedToolOutput" in decision).toBe(true);
   });

@@ -80,9 +80,6 @@ export type SaverDeps = {
     tsIso: string,
   ) => void;
   recordCompletion: (storeRoot: string, workspaceKey: string, tsIso: string) => void;
-  // P0 guardrail: measured net-negative saver auto-pauses per workspace.
-  // Read-only, fail-open (store layer returns false on any anomaly).
-  saverPaused: (storeRoot: string, workspaceKey: string, nowIso: string) => boolean;
   // P1 first-sight ledger (fail-open at the store layer).
   hasSeenOutput: (
     storeRoot: string,
@@ -311,7 +308,6 @@ async function decide(
 
   const settings = deps.resolveSettings(deps.storeRoot, cwd);
   if (settings === null || !settings.enabled) return PASSTHROUGH;
-  if (deps.saverPaused(deps.storeRoot, workspaceKey, new Date().toISOString())) return PASSTHROUGH;
   const sessionIntent = deps.readSessionIntent(deps.storeRoot, workspaceKey, sessionId);
 
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature

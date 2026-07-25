@@ -3,7 +3,6 @@ import {
   readHeartbeatView,
   readNetEffectRecord,
   resolveWorkspaceTokenSaverSettings,
-  saverPausedByNetEffect,
 } from "@megasaver/context-gate";
 import { defineCommand } from "citty";
 import { mapErrorToCliMessage } from "../../../errors.js";
@@ -34,14 +33,7 @@ export async function runSessionSaverResolve(input: RunSessionSaverResolveInput)
   const lastInvocation = hb.latest;
   const lastCompression = hb.latestCompression;
   const invokedHere = hb.workspaces[requested] ?? null;
-  // The hook applies this gate AFTER the resolver, so `enabled` alone would
-  // claim the saver is on while every tool output passes through untouched.
   const netEffect = readNetEffectRecord(store, requested);
-  const netEffectPaused = saverPausedByNetEffect(
-    store,
-    requested,
-    new Date(input.now ?? Date.now()).toISOString(),
-  );
 
   if (input.json) {
     input.stdout(
@@ -54,7 +46,6 @@ export async function runSessionSaverResolve(input: RunSessionSaverResolveInput)
         familyUnavailableReason: resolved.familyUnavailableReason,
         familyIdentityDiagnostic: resolved.familyIdentityDiagnostic,
         policyClamp: resolved.policyClamp,
-        netEffectPaused,
         netEffectVerdict: netEffect?.verdict ?? null,
         lastInvocationAt: lastInvocation?.ts ?? null,
         lastInvocationHereAt: invokedHere,
@@ -70,11 +61,6 @@ export async function runSessionSaverResolve(input: RunSessionSaverResolveInput)
   input.stdout(
     `Saver Mode: ${resolved.enabled ? "enabled" : "disabled"} (${resolved.mode}) — source ${resolved.source}`,
   );
-  if (netEffectPaused && netEffect !== null) {
-    input.stdout(
-      `  net-effect: AUTO-PAUSED (verdict ${netEffect.verdict}, churn≈${netEffect.churnTokens} vs saved≈${netEffect.savedTokens}, updated ${netEffect.updatedAt}) — run: mega session saver resume`,
-    );
-  }
   input.stdout(`  workspace: ${requested}`);
   if (resolved.repositoryFamilyKey !== null) {
     input.stdout(`  repository family: ${resolved.repositoryFamilyKey}`);

@@ -149,9 +149,7 @@ export {
 } from "./firewall-ledger.js";
 export {
   readNetEffectRecord,
-  saverPausedByNetEffect,
   writeNetEffectRecord,
-  writeResumeOverride,
   type NetEffectRecord,
 } from "./net-effect-store.js";
 export { hashToolOutput, hasSeenOutput, recordSeenOutput } from "./saver-seen.js";

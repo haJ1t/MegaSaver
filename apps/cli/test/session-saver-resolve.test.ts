@@ -132,32 +132,29 @@ describe("session saver resolve", () => {
     expect(p.daemonFallbacks).toBeNull();
   });
 
-  it("contradicts an enabled saver that the net-effect gate has paused", async () => {
+  it("reports a negative net-effect verdict without claiming the saver is off", async () => {
     const now = Date.UTC(2026, 0, 1);
     writeGlobalDefault(store, { enabled: true, mode: "safe" });
     writeNetEffectRecord(store, encodeWorkspaceKey(CWD), {
       savedTokens: 1000,
-      churnTokens: 90_000,
+      excessTokens: 90_000,
       verdict: "negative",
       updatedAt: new Date(now).toISOString(),
     });
     const { out } = await run(true, now);
     const p = JSON.parse(out[0] as string);
     expect(p.enabled).toBe(true);
-    expect(p.netEffectPaused).toBe(true);
     expect(p.netEffectVerdict).toBe("negative");
+    expect(p.netEffectPaused).toBeUndefined();
 
     const human = (await run(false, now)).out.join("\n");
-    expect(human).toContain("net-effect: AUTO-PAUSED");
-    expect(human).toContain("mega session saver resume");
+    expect(human).not.toContain("PAUSED");
+    expect(human).not.toContain("resume");
   });
 
-  it("omits the net-effect pause line when nothing is paused", async () => {
+  it("reports a null verdict when doctor has never judged this workspace", async () => {
     const { out } = await run(true);
-    const p = JSON.parse(out[0] as string);
-    expect(p.netEffectPaused).toBe(false);
-    expect(p.netEffectVerdict).toBeNull();
-    expect((await run(false)).out.join("\n")).not.toContain("net-effect:");
+    expect(JSON.parse(out[0] as string).netEffectVerdict).toBeNull();
   });
 
   it("shows none observed when the ledger is empty", async () => {

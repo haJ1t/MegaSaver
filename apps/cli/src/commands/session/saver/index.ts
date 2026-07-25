@@ -3,7 +3,6 @@ import { sessionSaverDefaultCommand } from "./default.js";
 import { sessionSaverDisableCommand } from "./disable.js";
 import { sessionSaverEnableCommand } from "./enable.js";
 import { sessionSaverResolveCommand } from "./resolve.js";
-import { sessionSaverResumeCommand } from "./resume.js";
 import { sessionSaverStatsCommand } from "./stats.js";
 import { sessionSaverStatusCommand } from "./status.js";
 import { sessionSaverWorkspaceCommand } from "./workspace.js";
@@ -30,7 +29,6 @@ export {
   runSessionSaverResolve,
   sessionSaverResolveCommand,
 } from "./resolve.js";
-export { runSaverResume, sessionSaverResumeCommand } from "./resume.js";
 export {
   type RunSessionSaverStatsInput,
   runSessionSaverStats,
@@ -59,6 +57,5 @@ export const sessionSaverCommand = defineCommand({
     workspace: sessionSaverWorkspaceCommand,
     default: sessionSaverDefaultCommand,
     resolve: sessionSaverResolveCommand,
-    resume: sessionSaverResumeCommand,
   },
 });

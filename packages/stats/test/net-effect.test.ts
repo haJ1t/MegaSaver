@@ -13,17 +13,41 @@ const flatRows = (n: number, cc: number) =>
   }));
 
 describe("estimateNetEffect", () => {
-  it("verdict ok when saved tokens exceed churn excess", () => {
+  it("verdict ok when saved tokens exceed the excess", () => {
     const [v] = estimateNetEffect({
       nowIso: NOW,
       workspaces: [{ workspaceKey: "wk1", savedBytesInWindow: 4000, compressionsInWindow: 5 }],
       usageRows: flatRows(20, 1000),
     });
-    expect(v).toMatchObject({ workspaceKey: "wk1", verdict: "ok", churnTokens: 0 });
+    expect(v).toMatchObject({ workspaceKey: "wk1", verdict: "ok", excessTokens: 0 });
     expect(v?.savedTokens).toBe(1000);
   });
 
-  it("verdict negative when churn excess dwarfs savings", () => {
+  // Pins what this estimator actually measures, so nobody re-promotes it to a
+  // gate: identical total cache_creation — identical real cost — with only the
+  // dispersion changed moves the number from 0 to the whole right tail. It is a
+  // dispersion statistic, not a cost or causation statistic.
+  it("is dispersion-only: same total cache_creation, different spread, different excess", () => {
+    const workspaces = [
+      { workspaceKey: "wk1", savedBytesInWindow: 40_000, compressionsInWindow: 20 },
+    ];
+    const flat = estimateNetEffect({ nowIso: NOW, workspaces, usageRows: flatRows(40, 3000) });
+    const spread = estimateNetEffect({
+      nowIso: NOW,
+      workspaces,
+      usageRows: Array.from({ length: 40 }, (_, i) => ({
+        ts: IN_WINDOW,
+        cacheCreationTokens: i % 2 === 0 ? 1000 : 5000,
+        messageCount: 3 + i,
+      })),
+    });
+    expect(flat[0]?.excessTokens).toBe(0);
+    expect(spread[0]?.excessTokens).toBe(40_000);
+    expect(flat[0]?.verdict).toBe("ok");
+    expect(spread[0]?.verdict).toBe("negative");
+  });
+
+  it("verdict negative when the excess dwarfs savings", () => {
     const rows = [
       ...flatRows(19, 1000),
       { ts: IN_WINDOW, cacheCreationTokens: 101_000, messageCount: 5 },
@@ -34,10 +58,10 @@ describe("estimateNetEffect", () => {
       usageRows: rows,
     });
     expect(v?.verdict).toBe("negative");
-    expect(v?.churnTokens).toBe(100_000);
+    expect(v?.excessTokens).toBe(100_000);
   });
 
-  it("churn excess splits by compression share across workspaces", () => {
+  it("excess splits by compression share across workspaces", () => {
     const rows = [
       ...flatRows(19, 1000),
       { ts: IN_WINDOW, cacheCreationTokens: 41_000, messageCount: 5 },
@@ -54,9 +78,9 @@ describe("estimateNetEffect", () => {
     expect(out.find((v) => v.workspaceKey === "b")?.verdict).toBe("negative");
   });
 
-  it("churn within the 1.5x margin does NOT pause (hysteresis against misattributed churn)", () => {
-    // saved 1000 tok (4000 B); churn 1200 → exceeds savings but stays inside the
-    // margin, so a cache-safe saver is not paused on attribution noise.
+  it("excess within the 1.5x margin stays advisory-ok", () => {
+    // saved 1000 tok (4000 B); excess 1200 → exceeds savings but stays inside the
+    // margin, so ordinary dispersion does not raise the warning.
     const rows = [
       ...flatRows(19, 1000),
       { ts: IN_WINDOW, cacheCreationTokens: 2200, messageCount: 5 },
@@ -66,13 +90,13 @@ describe("estimateNetEffect", () => {
       workspaces: [{ workspaceKey: "wk1", savedBytesInWindow: 4000, compressionsInWindow: 5 }],
       usageRows: rows,
     });
-    expect(v?.churnTokens).toBe(1200);
+    expect(v?.excessTokens).toBe(1200);
     expect(v?.savedTokens).toBe(1000);
     expect(v?.verdict).toBe("ok");
   });
 
-  it("churn beyond the 1.5x margin pauses", () => {
-    // saved 1000 tok; churn 1600 > 1500 → negative.
+  it("excess beyond the 1.5x margin warns", () => {
+    // saved 1000 tok; excess 1600 > 1500 → negative (advisory only, never a gate).
     const rows = [
       ...flatRows(19, 1000),
       { ts: IN_WINDOW, cacheCreationTokens: 2600, messageCount: 5 },
@@ -82,7 +106,7 @@ describe("estimateNetEffect", () => {
       workspaces: [{ workspaceKey: "wk1", savedBytesInWindow: 4000, compressionsInWindow: 5 }],
       usageRows: rows,
     });
-    expect(v?.churnTokens).toBe(1600);
+    expect(v?.excessTokens).toBe(1600);
     expect(v?.verdict).toBe("negative");
   });
 
@@ -116,6 +140,6 @@ describe("estimateNetEffect", () => {
       usageRows: rows,
     });
     expect(v?.verdict).toBe("ok");
-    expect(v?.churnTokens).toBe(0);
+    expect(v?.excessTokens).toBe(0);
   });
 });

@@ -8,7 +8,6 @@ import {
   estimateNetEffect,
   overlayTokenSaverEventSchema,
   readHeartbeatView,
-  readNetEffectRecord,
   sumBytesSavedSince,
   writeNetEffectRecord,
 } from "@megasaver/context-gate";
@@ -205,23 +204,11 @@ export function refreshNetEffectVerdicts(storeRoot: string, nowIso: string): Che
   const verdicts = estimateNetEffect({ nowIso, workspaces, usageRows });
   const checks: Check[] = [];
   for (const v of verdicts) {
-    if (v.savedTokens === 0 && v.churnTokens === 0 && v.verdict === "unknown") {
-      // A paused workspace stops compressing, so it stops producing the events
-      // the estimator needs — without this the latch would go unreported forever.
-      const prev = readNetEffectRecord(storeRoot, v.workspaceKey);
-      if (prev?.verdict !== "negative") continue; // genuinely idle, no signal
-      checks.push({
-        key: "saver-net-effect",
-        value: `paused (negative since ${prev.updatedAt}, no activity to re-judge, workspace ${v.workspaceKey})`,
-        pass: false,
-        reason: "saver auto-paused for this workspace — run: mega session saver resume",
-      });
-      continue;
-    }
+    if (v.savedTokens === 0 && v.excessTokens === 0 && v.verdict === "unknown") continue;
     try {
       writeNetEffectRecord(storeRoot, v.workspaceKey, {
         savedTokens: v.savedTokens,
-        churnTokens: v.churnTokens,
+        excessTokens: v.excessTokens,
         verdict: v.verdict,
         updatedAt: nowIso,
       });
@@ -230,11 +217,11 @@ export function refreshNetEffectVerdicts(storeRoot: string, nowIso: string): Che
     }
     checks.push({
       key: "saver-net-effect",
-      value: `${v.verdict} (saved≈${v.savedTokens} vs churn≈${v.churnTokens} tok, 7d, workspace ${v.workspaceKey})`,
-      pass: v.verdict !== "negative",
+      value: `${v.verdict} (saved≈${v.savedTokens} vs excess≈${v.excessTokens} tok, 7d, workspace ${v.workspaceKey})`,
+      pass: true,
       reason:
         v.verdict === "negative"
-          ? "saver auto-paused for this workspace — run: mega session saver resume"
+          ? "warn: cache_creation dispersion is high relative to measured savings — NOT attributed to the saver (the usage ledger carries no workspace key); saver left ON"
           : v.verdict === "unknown"
             ? "warn: not enough proxied traffic to judge — verdict pending"
             : "net savings positive",

@@ -99,7 +99,6 @@ describe("saver hook — repository-family inheritance across worktrees", () => 
       recordCompression: () => {},
       recordFailure: () => {},
       recordCompletion: () => {},
-      saverPaused: () => false,
       hasSeenOutput: () => false,
       recordSeenOutput: () => {},
     });
@@ -135,7 +134,6 @@ describe("saver hook — repository-family inheritance across worktrees", () => 
         recordCompression: () => {},
         recordFailure: () => {},
         recordCompletion: () => {},
-        saverPaused: () => false,
         hasSeenOutput: () => false,
         recordSeenOutput: () => {},
       },

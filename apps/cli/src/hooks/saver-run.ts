@@ -10,7 +10,6 @@ import {
   recordInvocationHeartbeat,
   recordSeenOutput as recordSeenOutputImpl,
   resolveWorkspaceTokenSaverSettings,
-  saverPausedByNetEffect,
 } from "@megasaver/context-gate";
 import {
   type RecordOverlayOutputInput,
@@ -176,7 +175,6 @@ export async function runSaverHookFromProcess(): Promise<void> {
       recordCompression,
       recordFailure,
       recordCompletion,
-      saverPaused: saverPausedByNetEffect,
       hasSeenOutput,
       recordSeenOutput,
     };

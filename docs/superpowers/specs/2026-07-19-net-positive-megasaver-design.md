@@ -85,6 +85,20 @@ Surfaces: `packages/stats` (estimator + view), `packages/context-gate`
 (decision short-circuit), `apps/cli/src/commands/doctor-saver.ts` (check),
 new `mega saver resume` subcommand.
 
+> **Superseded 2026-07-25 — auto-pause removed, advisory only.** The signed-off
+> risk above was mis-assessed. `Σ max(0, cache_creation − median)` is a
+> dispersion statistic with no baseline and no counterfactual: it is positive
+> for any spread distribution whether or not the saver touched a byte, and the
+> confounders named above (5m TTL expiry, compaction) contribute 20–60x the
+> median per row — orders of magnitude past a 1.5x margin, which only absorbs
+> single-outlier noise. Holding total cache_creation constant and changing only
+> its spread flips the verdict, so the number cannot bound cost. The pause
+> gate, `saverPausedByNetEffect`, the resume override and
+> `mega session saver resume` are deleted; `churnTokens` is renamed
+> `excessTokens` and doctor reports it as explicitly unattributed. A sound gate
+> requires stamping `workspaceKey` on proxy usage rows and comparing turns the
+> saver rewrote against turns it did not in the same workspace/session.
+
 ### P1 — cache-safe saver (first-sight-only compression)
 
 - **Session content-hash ledger** in the saver store: hash of each tool_result

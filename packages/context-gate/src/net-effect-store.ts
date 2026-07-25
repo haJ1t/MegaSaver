@@ -3,19 +3,17 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
-// P0 verdict persistence. Doctor computes and WRITES; the PostToolUse hook only
-// READS (one small JSON per invocation — same cost class as settings reads).
-// Fail-open everywhere: a missing or corrupt record never pauses the saver.
-
-const RESUME_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+// P0 verdict persistence. Doctor computes and WRITES; `mega session saver
+// resolve` READS it to show the last advisory. Nothing acts on it — the verdict
+// is an unattributed dispersion advisory, never a gate (see @megasaver/stats
+// net-effect.ts). Fail-open: a missing or corrupt record is simply absent.
 
 const netEffectRecordSchema = z.object({
   version: z.literal(1),
   savedTokens: z.number().int().nonnegative(),
-  churnTokens: z.number().int().nonnegative(),
+  excessTokens: z.number().int().nonnegative(),
   verdict: z.enum(["ok", "negative", "unknown"]),
   updatedAt: z.string(),
-  resumeOverrideAt: z.string().optional(),
 });
 
 export type NetEffectRecord = Omit<z.infer<typeof netEffectRecordSchema>, "version">;
@@ -35,25 +33,9 @@ function writeAtomic(path: string, data: unknown): void {
 export function writeNetEffectRecord(
   storeRoot: string,
   workspaceKey: string,
-  record: Omit<NetEffectRecord, "resumeOverrideAt">,
+  record: NetEffectRecord,
 ): void {
-  // Preserve an existing resume override across verdict refreshes.
-  const prev = readNetEffectRecord(storeRoot, workspaceKey);
-  writeAtomic(recordPath(storeRoot, workspaceKey), {
-    version: 1,
-    ...record,
-    ...(prev?.resumeOverrideAt !== undefined ? { resumeOverrideAt: prev.resumeOverrideAt } : {}),
-  });
-}
-
-export function writeResumeOverride(storeRoot: string, workspaceKey: string, atIso: string): void {
-  const prev = readNetEffectRecord(storeRoot, workspaceKey);
-  if (prev === null) return; // nothing to override
-  writeAtomic(recordPath(storeRoot, workspaceKey), {
-    version: 1,
-    ...prev,
-    resumeOverrideAt: atIso,
-  });
+  writeAtomic(recordPath(storeRoot, workspaceKey), { version: 1, ...record });
 }
 
 export function readNetEffectRecord(
@@ -70,20 +52,4 @@ export function readNetEffectRecord(
   } catch {
     return null;
   }
-}
-
-export function saverPausedByNetEffect(
-  storeRoot: string,
-  workspaceKey: string,
-  nowIso: string,
-): boolean {
-  const now = Date.parse(nowIso);
-  if (!Number.isFinite(now)) return false;
-  const record = readNetEffectRecord(storeRoot, workspaceKey);
-  if (record === null || record.verdict !== "negative") return false;
-  if (record.resumeOverrideAt !== undefined) {
-    const at = Date.parse(record.resumeOverrideAt);
-    if (Number.isFinite(at) && now - at < RESUME_WINDOW_MS) return false;
-  }
-  return true;
 }

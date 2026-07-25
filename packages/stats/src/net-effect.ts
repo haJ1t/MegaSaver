@@ -1,13 +1,20 @@
 import { tokensFromBytes } from "./honest-metrics.js";
 
-// Stage A / P0 (spec 2026-07-19-net-positive-megasaver-design.md): estimate
-// whether the saver is net-positive per workspace. Pure — callers do all I/O.
+// Stage A / P0 (spec 2026-07-19-net-positive-megasaver-design.md): a per-workspace
+// ADVISORY signal. Pure — callers do all I/O.
 //
-// churn model: proxied requests with messageCount >= 3 are continuation turns;
-// their cache_creation should sit near the append median. Anything above the
-// median is "excess" — the churn signature the saver can cause. Excess is
-// attributed to workspaces by their share of compressions in the window,
-// because the ledger rows themselves carry no workspace key.
+// `excess` sums how far each continuation turn (messageCount >= 3) sits above the
+// window median cache_creation. That is a DISPERSION statistic, not a cost or a
+// causation statistic: it is positive for any spread distribution, and the same
+// total cache_creation redistributed produces a wildly different number. Prompt
+// cache TTL expiry, context compaction and user edits all land in the same right
+// tail, and the usage ledger carries no workspace key — the tail is split across
+// workspaces by compression share. Nothing here shows the saver caused any of it,
+// so this must never gate the saver; doctor reports it as unattributed.
+//
+// A sound gate needs a counterfactual: stamp workspaceKey on proxy usage rows,
+// then compare turns the saver rewrote against turns it did not in the same
+// workspace and session.
 
 export type ProxyUsageRow = {
   ts: string;
@@ -24,20 +31,15 @@ export type WorkspaceWindowStats = {
 export type NetEffectVerdict = {
   workspaceKey: string;
   savedTokens: number;
-  churnTokens: number;
+  excessTokens: number;
   verdict: "ok" | "negative" | "unknown";
 };
 
 const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_CONTINUATION_ROWS = 20;
-// Hysteresis before auto-pausing. Churn attribution is a heuristic: the usage
-// ledger carries no workspace key, so excess is split by compression share and
-// a workspace can inherit churn it did not cause (5m-TTL expiry between turns,
-// user edits, context compaction). Requiring churn to clearly EXCEED savings —
-// not merely edge past them — keeps a cache-safe saver from being paused on
-// noise, while a genuinely net-negative saver (churn is multiples of savings)
-// still trips it.
-const PAUSE_MARGIN = 1.5;
+// Only raise the advisory when the excess clearly outweighs measured savings,
+// so ordinary one-outlier noise stays quiet.
+const ADVISORY_MARGIN = 1.5;
 
 function median(sorted: number[]): number {
   const mid = Math.floor(sorted.length / 2);
@@ -71,14 +73,14 @@ export function estimateNetEffect(input: {
       w.compressionsInWindow === 0 ||
       totalCompressions === 0
     ) {
-      return { workspaceKey: w.workspaceKey, savedTokens, churnTokens: 0, verdict: "unknown" };
+      return { workspaceKey: w.workspaceKey, savedTokens, excessTokens: 0, verdict: "unknown" };
     }
-    const churnTokens = Math.round(excess * (w.compressionsInWindow / totalCompressions));
+    const excessTokens = Math.round(excess * (w.compressionsInWindow / totalCompressions));
     return {
       workspaceKey: w.workspaceKey,
       savedTokens,
-      churnTokens,
-      verdict: churnTokens > savedTokens * PAUSE_MARGIN ? "negative" : "ok",
+      excessTokens,
+      verdict: excessTokens > savedTokens * ADVISORY_MARGIN ? "negative" : "ok",
     };
   });
 }
