@@ -8,7 +8,10 @@ export type ResolveSafeReadPathInput = {
   projectRoot: string;
 };
 
-export type ResolvedPath = { absolute: string };
+// `real` is `absolute` with every symlink component resolved. Callers need it
+// because `absolute` is lexical: gate 1's secret-path denylist is a pure string
+// match, so it must be re-run against the file that will actually be read.
+export type ResolvedPath = { absolute: string; real: string };
 
 function isContained(root: string, target: string): boolean {
   const rel = relative(root, target);
@@ -38,11 +41,12 @@ export function resolveSafeReadPath(input: ResolveSafeReadPathInput): ResolvedPa
   }
 
   const realRoots = roots.map((root) => (existsSync(root) ? realpathSync(root) : root));
-  const real = realpathSync(nearestExistingAncestor(absolute));
+  const ancestor = nearestExistingAncestor(absolute);
+  const real = resolve(realpathSync(ancestor), relative(ancestor, absolute));
   const realContained = realRoots.some((root) => isContained(root, real));
   if (!realContained) {
     throw new OutputFilterError("path_unsafe", `symlink escapes sandbox: ${input.path}`);
   }
 
-  return { absolute };
+  return { absolute, real };
 }
