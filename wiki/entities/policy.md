@@ -260,3 +260,59 @@ original report — `rankApplicableRules` in `@megasaver/core`, which compiles
 measured 70 s for a single hostile rule.
 
 Source: [[docs/superpowers/specs/2026-07-25-glob-compile-redos-fix-design]].
+## `deny.write` rejected, not ignored (2026-07-25)
+
+`deny.write` compiled into `ProjectPermissions.denyWritePatterns` and **nothing
+read that field** — no `evaluatePathWrite` exists, and permissions-yaml §5.4
+scoped live write enforcement out. Confirmed by grep: the type declaration, the
+assignment, and four test assertions were the only occurrences in the repo.
+
+The defect was not the missing enforcement — that was a deliberate scope
+decision. It was that the same `deny:` object **failed closed on a misspelled
+key and failed silent on a real-but-dead one**: `deny.execute` threw
+`PolicyLoadError`, `deny.write` was accepted, compiled, and ignored. An operator
+got a stronger signal for a typo than for a rule that would never fire. §5.4's
+mitigation ("flagged as a known no-op") lived in a design doc nobody reads
+before editing YAML, and `README.md` never mentioned the key at all.
+
+Fix: `write` stays a NAMED key in the zod shape, typed `z.never().optional()`,
+and `parseProjectPermissions` selects a message by zod issue path
+`["deny","write"]` so the thrown `PolicyLoadError` says *"deny.write is not
+enforced… Remove the deny.write key"* rather than "invalid project
+permissions". Two details are load-bearing and were caught by tests, not
+reasoning: `.optional()` (bare `z.never()` rejects the `undefined` of an absent
+key and fails every valid file) and dropping `write` from the `deny` object's
+`.default({...})` (zod parses defaults, so `write: []` in the default failed its
+own schema). Deleting the key instead and letting `.strict()` reject it was
+rejected — right outcome, wrong story: it reports a correctly-spelled,
+semantically-real key as a typo.
+
+`denyWritePatterns` removed from `ProjectPermissions`. No protection is lost —
+it denied nothing before. Breaking for any project declaring `deny.write`: that
+file now fail-closes every gated operation until the key is deleted. Released
+**major** (1.2.2 → 2.0.0): a previously-valid config is rejected and a public
+type field is gone.
+
+Pre-existing gap closed in the same change, on the `security-reviewer`'s
+argument that it blocked rather than deferred: `mega output exec`
+(`apps/cli/src/commands/output/exec.ts:124`) dropped `detail` and printed only
+`command_denied: policy_load_failed`, so on the surface most likely to hit a bad
+permissions file the operator could not tell an unenforceable key from a YAML
+syntax error — negating the reason for choosing a named message over plain
+`.strict()` rejection. `detail` now rides after the code, preserving the
+CLI/MCP code parity that motivated the omission. Applies to every
+`policy_load_failed` cause.
+
+Also confirmed by that review and left alone: `parseProjectPermissions({deny:
+{write: undefined}})` parses (`.optional()` cannot separate absent from
+present-but-undefined), but `yaml.parse` yields `null`/`""`/`[]` for every
+empty-value form and never `undefined`, and `load-project-permissions.ts:53` is
+the only production caller — so it is unreachable. Pinned by a test so a zod
+upgrade cannot widen it silently. Sibling defects of the same class found
+elsewhere and filed separately: `max_results` (`mcp-bridge/src/tools/search-code.ts:25`)
+and `ownerDead` (`proxy-control/src/reconcile.ts:25`, also pinned permanently
+true).
+
+Sources:
+[[docs/superpowers/specs/2026-07-25-deny-write-honest-rejection-design]],
+[[docs/superpowers/specs/2026-06-03-permissions-yaml-design]] §5.4.
