@@ -9,7 +9,6 @@ packages:
 allowBuilds:
   '@biomejs/biome': true
   esbuild: true
-  fs-ext: true
   onnxruntime-node: true
   protobufjs: true
   sharp: true
