@@ -235,6 +235,24 @@ export function rebuildOverlaySummaryFromEvents(
   return rebuilt;
 }
 
+// stats/ holds two layouts side by side: overlay dirs are 16-hex workspaceKeys
+// (encodeWorkspaceKey), registry dirs are UUID project ids. Every walker that
+// treats a dir as an overlay workspace goes through here — reading a registry
+// dir as one destroys its legacy <sessionId>.json summaries (self-healing reads
+// rewrite them as zeroed overlay summaries) and fabricates one per non-session
+// *.events.jsonl ledger. Sorted for a deterministic first match.
+function overlayWorkspaceKeys(store: StatsStore): string[] {
+  try {
+    return readdirSync(join(store.root, "stats"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((name) => workspaceKeySchema.safeParse(name).success)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
 // E26 repair: summaries that lag their JSONL (lock-skipped updates) or fail
 // schema are rebuilt. Bounded: invoked from the once-a-day GC sweep. Returns
 // the number of files rebuilt. Best-effort — every per-file failure is
@@ -244,20 +262,7 @@ export function rebuildOverlaySummaryFromEvents(
 // once-a-day cadence.
 export function reconcileOverlaySummaries(store: StatsStore): number {
   let rebuilt = 0;
-  let workspaces: string[];
-  try {
-    workspaces = readdirSync(join(store.root, "stats"), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
-  } catch {
-    return 0;
-  }
-  for (const workspaceKey of workspaces) {
-    // Overlay dirs are 16-hex workspaceKeys (encodeWorkspaceKey); registry dirs
-    // are UUID project ids. Reading a registry dir as a workspace overwrites its
-    // legacy <sessionId>.json summaries — and fabricates one per non-session
-    // *.events.jsonl ledger — with a zeroed overlay summary.
-    if (!workspaceKeySchema.safeParse(workspaceKey).success) continue;
+  for (const workspaceKey of overlayWorkspaceKeys(store)) {
     let files: string[];
     try {
       files = readdirSync(join(store.root, "stats", workspaceKey));
@@ -420,20 +425,7 @@ export function readOverlaySummaryAnyWorkspace(
   store: StatsStore,
   liveSessionId: string,
 ): { workspaceKey: string; summary: OverlaySessionTokenSaverStats } | null {
-  let entries: string[];
-  try {
-    entries = readdirSync(join(store.root, "stats"), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort();
-  } catch {
-    return null;
-  }
-
-  for (const workspaceKey of entries) {
-    if (!isSafeSegment(workspaceKey)) {
-      continue;
-    }
+  for (const workspaceKey of overlayWorkspaceKeys(store)) {
     let summary: OverlaySessionTokenSaverStats | null;
     try {
       summary = readOverlaySummary(store, workspaceKey, liveSessionId);
@@ -545,24 +537,12 @@ export type AllWorkspaceTokenSaverTotals = {
 // retained per workspace) rather than averaging per-workspace ratios. Best-
 // effort: a missing stats/ dir yields zeros; an unreadable workspace is skipped.
 export function readAllWorkspaceTokenSaverTotals(store: StatsStore): AllWorkspaceTokenSaverTotals {
-  let entries: string[];
-  try {
-    entries = readdirSync(join(store.root, "stats"), { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
-  } catch {
-    return { bytesSavedTotal: 0, sessionsCount: 0, savingRatio: 0, workspaceCount: 0 };
-  }
-
   let bytesSavedTotal = 0;
   let rawBytesTotal = 0;
   let sessionsCount = 0;
   let workspaceCount = 0;
 
-  for (const workspaceKey of entries) {
-    if (!isSafeSegment(workspaceKey)) {
-      continue;
-    }
+  for (const workspaceKey of overlayWorkspaceKeys(store)) {
     let totals: WorkspaceTokenSaverTotals | null;
     try {
       totals = readWorkspaceTokenSaverTotals(store, workspaceKey);

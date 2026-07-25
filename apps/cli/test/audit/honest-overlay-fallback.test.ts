@@ -6,8 +6,10 @@ import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runHonestAudit } from "../../src/commands/audit/honest.js";
 
-const WORKSPACE_A = "workspace-aaa";
-const WORKSPACE_B = "workspace-bbb";
+// Overlay dirs under stats/ are 16-hex workspaceKeys (encodeWorkspaceKey); the
+// stats readers skip every other dir so they cannot touch registry data.
+const WORKSPACE_A = "00000000000000aa";
+const WORKSPACE_B = "00000000000000bb";
 const OVERLAY_ID = "1af7f8f0-2b3c-4d5e-8f60-718293a4b5c6";
 const TS = "2026-07-03T12:00:00.000Z";
 const CWD = "/synthetic/honest/project";
