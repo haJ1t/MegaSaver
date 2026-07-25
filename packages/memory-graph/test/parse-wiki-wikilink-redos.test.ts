@@ -13,53 +13,31 @@ import { parseWikiPage } from "../src/parse-wiki.js";
 // and hand the entire body to parseWikiPage. 32 KB is therefore a real page
 // size, not a synthetic probe — the largest page the walkers actually scan today
 // is wiki/syntheses/memory-moat-sketches.md at 57,576 bytes.
-const PAGE_SIZE = 32_000;
-const HALF_PAGE_SIZE = PAGE_SIZE / 2;
+// 200 KB, not the 32 KB real-page size the shapes were first measured at: the
+// gate is an absolute ceiling now, and a ceiling is only as good as the
+// separation it sits in. The growth-ratio gate this file used to carry was
+// abandoned across this suite after the sibling anchor-strip test read 15.9x
+// under a 55-task parallel `turbo` run while measuring 2-4x idle — sustained
+// load inflates the large sample more than the small one, and min-of-trials
+// cannot cancel that when every trial is slow. Matches the instrument the
+// context-gate suite moved to in 0e8f3362 (#301).
+const PAGE_SIZE = 200_000;
 
-// A growth RATIO rather than a wall-clock ceiling, for the reason recorded in
-// wiki/concepts/unbounded-run-redos.md: a ceiling is load- and runtime-dependent
-// and a reverted bound can slip under it on a fast idle runner, while the ratio
-// separates quadratic from linear by construction. Reverting the fix measured
-// 3.7-4.2x (`[` run) and 3.5-3.6x (`[[` run) through this exact sampler; the
-// bounded form measures 0.7-1.0x. The threshold sits between the two with >1.4x
-// of headroom on each side.
-const MAX_GROWTH = 2.5;
-const TRIALS = 5;
+// Measured at PAGE_SIZE, one call, this machine: bounded 0.1-0.2 ms on both
+// shapes; the reverted `[^\]]+` costs 15,600 ms (`[` run) and 15,500 ms (`[[`
+// run). The ceiling sits 62x below the cheapest red and ~1,250x above the most
+// expensive green.
+const CEILING_MS = 250;
 
-// min-of-trials, not mean: scheduler noise can only inflate a duration, so a
-// spike in the large sample inflates that trial's ratio and a spike in the small
-// sample deflates it. The minimum discards inflated trials and can only make the
-// assertion harder to pass.
-//
-// The repeat count is calibrated from one real call instead of fixed, because
-// vitest cannot interrupt a synchronous loop — a fixed count would multiply the
-// pathological 587 ms call and hang instead of going red. Calibrating drops to a
-// single repeat as soon as one call is slow.
-const TARGET_SAMPLE_MS = 60;
+// The reverted form needs ~16 s per shape, so the per-test budget must clear it:
+// the assertion, not a timeout, is what fails on a revert.
+const TIMEOUT_MS = 240_000;
 
-const repeatsFor = (body: string): number => {
-  parseWikiPage("x.md", body); // warm up: keep JIT cost out of the estimate
+const elapsed = (body: string): number => {
+  parseWikiPage("x.md", body); // warm up: keep JIT cost out of the sample
   const started = performance.now();
   parseWikiPage("x.md", body);
-  const one = performance.now() - started;
-  return Math.max(1, Math.round(TARGET_SAMPLE_MS / Math.max(one, 0.05)));
-};
-
-const sample = (body: string, repeats: number): number => {
-  const started = performance.now();
-  for (let i = 0; i < repeats; i += 1) parseWikiPage("x.md", body);
   return performance.now() - started;
-};
-
-const growthRatio = (shape: (size: number) => string): number => {
-  const small = shape(HALF_PAGE_SIZE);
-  const large = shape(PAGE_SIZE);
-  const repeats = repeatsFor(small);
-  let best = Number.POSITIVE_INFINITY;
-  for (let trial = 0; trial < TRIALS; trial += 1) {
-    best = Math.min(best, sample(large, repeats) / sample(small, repeats));
-  }
-  return best;
 };
 
 // Only a `]`-free run of `[` fires this. Any `]` truncates the backtrack tail,
@@ -75,11 +53,13 @@ const SHAPES: ReadonlyArray<readonly [string, (size: number) => string]> = [
 
 describe("parseWikiPage — wikilink ReDoS regression", () => {
   for (const [label, shape] of SHAPES) {
-    it(`grows no worse than ${MAX_GROWTH}x from ${HALF_PAGE_SIZE / 1000} KB to ${
-      PAGE_SIZE / 1000
-    } KB of ${label}`, () => {
-      expect(growthRatio(shape)).toBeLessThan(MAX_GROWTH);
-    });
+    it(
+      `scans ${PAGE_SIZE / 1000} KB of ${label} in under ${CEILING_MS} ms`,
+      () => {
+        expect(elapsed(shape(PAGE_SIZE))).toBeLessThan(CEILING_MS);
+      },
+      TIMEOUT_MS,
+    );
   }
 });
 

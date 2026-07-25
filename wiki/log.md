@@ -5141,3 +5141,23 @@ uncached runs also green — `turbo typecheck --force` 58/58 in 33.1 s,
 Also observed and left alone: `packages/context-gate/test/saver-heartbeat.test.ts`
 "steals a stale lock file" flaked once under a forced full run and passes in
 isolation; that file is untouched by this branch and the flake is main's.
+
+## [2026-07-25 20:15 +03] fix | memory-graph ReDoS guards moved off the growth ratio
+
+Both `parse-wiki` guards (instances 9 and 10) failed `pnpm verify` while passing
+79/79 in isolation: under a 55-task parallel `turbo` run the anchor-strip ratio
+read 15.9x and 12.6x against an 8x gate, and the same code measured 2-4x idle.
+min-of-trials cancels spikes, not sustained load — every trial is slow and the
+larger sample accumulates more preemption, so the ratio inflates on linear code.
+
+Replaced with an absolute ceiling at a size that buys the separation: one call at
+200 KB, 250 ms gate. Bounded costs 0.1-0.2 ms on all four shapes; reverted costs
+34,000 / 4,740 ms (anchor strip) and 15,600 / 15,500 ms (wikilink). Red proof is
+per-bound: reverting the anchor bound alone fails its two timing tests at 67.2 s
+and 9.5 s while the wikilink suite stays green, and reverting the wikilink bound
+alone fails its two at 30.6 s each while the anchor suite stays green. Each
+revert also fails its own behaviour pins, so the guards are not timing-only.
+
+Same instrument the context-gate guard moved to in `0e8f3362` (PR #301), for the
+same reason. Sources: [[concepts/unbounded-run-redos]] "…but the ratio breaks
+under a parallel turbo run".

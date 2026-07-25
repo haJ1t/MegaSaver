@@ -18,69 +18,31 @@ import { parseWikiPage } from "../src/parse-wiki.js";
 // readFile every wiki/{entities,concepts,decisions,syntheses,workflows,sources}/**/*.md
 // and hand the whole file to parseWikiPage. One page with an unclosed `(source:` region
 // stalls the command.
-const SMALL = 12_500;
-const LARGE = 50_000;
+// One size, large enough that the ceiling is decided by the defect and not by the
+// machine. The ratio gate this file used to carry read 15.9x and 12.6x under a
+// 55-task parallel `turbo` run while measuring 2-4x idle: sustained load inflates
+// the large sample more than the small one, and min-per-size cannot cancel that
+// because every trial is slow. An absolute ceiling has no such coupling — it is a
+// question about one duration, and at this size the two implementations are five
+// orders of magnitude apart. Same instrument as the sibling context-gate suite
+// after 0e8f3362 (#301), for the same reason.
+const PAGE_SIZE = 200_000;
 
-// Why a growth RATIO and not a wall-clock ceiling: a ceiling only guards what it
-// separates, and the prior-art suite for this class documents four of five reverted
-// bounds slipping under a 5 s ceiling on a fast idle runner. A 4x step in input size
-// costs a linear implementation 4x; the quadratic form measured 12.7x (whitespace run)
-// and 18.5x (`#` run) through this exported function. The threshold sits halfway
-// between in log space, so both sides carry ~2x margin.
-const MAX_GROWTH = 8;
-const TRIALS = 5;
+// Measured at PAGE_SIZE, one call, this machine: bounded 0.1-0.2 ms on both shapes;
+// the reverted `/\s+#\S.*$/` costs 34,000 ms (whitespace run) and 4,740 ms (`#` run).
+// The ceiling sits against the *tail* of that pair — 19x above the cheapest red and
+// ~2,000x above the most expensive green.
+const CEILING_MS = 250;
 
-// Take the minimum PER SIZE and divide, never the minimum of per-trial ratios.
-// Scheduler noise can only ever inflate a duration, so min-per-size converges on the
-// true cost of each size from above. Minimising the ratio instead pairs an inflated
-// SMALL sample with a clean LARGE one and reports a fraction of the true growth: on
-// this machine, under load, that sampler read 2.94x where min-per-size read 7.63x —
-// i.e. it hides the defect it exists to catch.
-const ratioOf = (durations: ReadonlyArray<readonly [number, number]>): number => {
-  const small = Math.min(...durations.map(([s]) => s));
-  const large = Math.min(...durations.map(([, l]) => l));
-  return large / small;
-};
-
-// Calibrated repeat count, not a fixed one: vitest cannot interrupt a synchronous loop
-// (its `timeout` only fires at async boundaries), so a fixed count would multiply the
-// quadratic 2.5 s call and hang for many minutes instead of going red on the ratio.
-// Deriving the count from one real call spends ~60 ms per sample when linear and drops
-// to a single repeat when it is not.
-const TARGET_SAMPLE_MS = 60;
-
-// The quadratic form needs ~70 s to produce its own red here, so the per-test budget
-// has to clear that: the assertion, not a timeout, must be what fails when the fix is
-// reverted. Fixed, both tests run in ~2 s.
+// The reverted form needs ~34 s on the whitespace shape, so the per-test budget has
+// to clear that: the assertion, not a timeout, must be what fails on a revert.
 const TIMEOUT_MS = 240_000;
 
-const parse = (page: string): void => {
+const elapsed = (page: string): number => {
+  parseWikiPage("concepts/probe.md", page); // warm up: keep JIT cost out of the sample
+  const started = performance.now();
   parseWikiPage("concepts/probe.md", page);
-};
-
-const repeatsFor = (page: string): number => {
-  parse(page); // warm up: keep JIT cost out of the estimate
-  const started = performance.now();
-  parse(page);
-  const one = performance.now() - started;
-  return Math.max(1, Math.round(TARGET_SAMPLE_MS / Math.max(one, 0.05)));
-};
-
-const sample = (page: string, repeats: number): number => {
-  const started = performance.now();
-  for (let i = 0; i < repeats; i += 1) parse(page);
   return performance.now() - started;
-};
-
-const growthRatio = (shape: (size: number) => string): number => {
-  const small = shape(SMALL);
-  const large = shape(LARGE);
-  const repeats = repeatsFor(small);
-  const durations: Array<readonly [number, number]> = [];
-  for (let trial = 0; trial < TRIALS; trial += 1) {
-    durations.push([sample(small, repeats), sample(large, repeats)]);
-  }
-  return ratioOf(durations);
 };
 
 const SHAPES: ReadonlyArray<readonly [string, (size: number) => string]> = [
@@ -103,11 +65,9 @@ const SHAPES: ReadonlyArray<readonly [string, (size: number) => string]> = [
 describe("parseWikiPage — anchor-strip ReDoS on an uncapped wiki page", () => {
   for (const [label, shape] of SHAPES) {
     it(
-      `grows no worse than ${MAX_GROWTH}x from ${SMALL / 1000} KB to ${
-        LARGE / 1000
-      } KB of ${label}`,
+      `scans ${PAGE_SIZE / 1000} KB of ${label} in under ${CEILING_MS} ms`,
       () => {
-        expect(growthRatio(shape)).toBeLessThan(MAX_GROWTH);
+        expect(elapsed(shape(PAGE_SIZE))).toBeLessThan(CEILING_MS);
       },
       TIMEOUT_MS,
     );

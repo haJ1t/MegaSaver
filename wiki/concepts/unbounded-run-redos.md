@@ -407,6 +407,27 @@ failed (there the unbounded form measured only 1.81x, so it never separated):
   going red. Deriving the count from one real call spends ~60 ms per sample when
   bounded and drops to a single repeat when not.
 
+### …but the ratio breaks under a parallel `turbo` run (superseded)
+
+The subsection above is superseded for the guards that run inside `pnpm verify`.
+Under a 55-task parallel `turbo` run the instance-9 anchor-strip guard read 15.9x
+and 12.6x — squarely in quadratic territory — while the same code measured 2-4x
+idle and passed 79/79 in isolation. min-of-trials does not save it: it cancels
+*spikes*, and sustained load is not a spike. Every trial is slow, and the larger
+sample accumulates more preemption than the smaller one, so the ratio inflates
+even though both sides are linear.
+
+The fix is the one the "Lesson" above already names — **raise the input size
+until a ceiling is decided by the defect** — and both memory-graph guards plus
+the context-gate guard (`0e8f3362`, PR #301) now use it. At 200 KB the bounded
+form costs 0.1-0.2 ms and the reverted forms cost 4.7-34 s: a ceiling of 250 ms
+sits ~1,250x above the slowest green and 19x below the fastest red. A ceiling
+with five orders of magnitude of separation is not load-dependent in any way
+that matters; a ratio with 2x of headroom is.
+
+Use a growth ratio only where the size cannot be raised enough to buy that
+separation — and never in a suite that runs under `turbo`'s full fan-out.
+
 ### One shape does not separate every bound (instances 4-5)
 
 Reverting each of the four bounds alone showed the ratio guard is **per-shape**,
