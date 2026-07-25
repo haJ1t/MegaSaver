@@ -12,18 +12,24 @@ import { makeSpawnedSaver, prepareSaverStore } from "../src/saver-subprocess.js"
 // turbo/tsup rebuild dist/cli.js whenever the CLI or a dep changes, and CI builds
 // before it verifies, so freshness needs no bespoke staleness check.
 const MEGA_BIN = resolve(import.meta.dirname, "../../../apps/cli/dist/cli.js");
-// defaultRun (src/saver-subprocess.ts) spawns the binary directly, which on win32
-// cannot execute a shebang script. Skip cleanly instead of faking the result.
-const canSpawnMega = existsSync(MEGA_BIN) && process.platform !== "win32";
+const canSpawnMega = existsSync(MEGA_BIN);
 
-// Mirrors apps/cli/src/store.ts resolveStorePath's macOS/Linux branch: XDG_DATA_HOME
-// wins if set, else `<HOME>/.local/share/megasaver`. This is the real store a
-// non-isolated hook invocation would write into — used here only to prove it did
-// NOT happen, never written to by this test.
+// Mirrors apps/cli/src/store.ts resolveStorePath's no-flag path on EVERY platform:
+// XDG_DATA_HOME first, then the win32 LOCALAPPDATA branch, else
+// `<HOME>/.local/share/megasaver`. This is the real store a non-isolated hook
+// invocation would write into — used here only to prove it did NOT happen, never
+// written to by this test. The win32 branch is not cosmetic: computing the POSIX
+// path on Windows would name a directory that never exists, and the "real store
+// untouched" assertion below would hold for free.
 function realStoreRoot(): string {
   const xdg = process.env.XDG_DATA_HOME;
   if (xdg && xdg.length > 0) return resolve(xdg, "megasaver");
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData && localAppData.length > 0) return resolve(localAppData, "megasaver");
+    return resolve(home, "AppData", "Local", "megasaver");
+  }
   return resolve(home, ".local", "share", "megasaver");
 }
 
@@ -105,10 +111,9 @@ describe("makeSpawnedSaver store isolation (real binary)", () => {
           sessionId: randomUUID(),
           storeRoot,
         });
-        // Clears safe mode's 32000-byte Read floor with the smallest margin that
-        // still compresses: the real hook's cost grows super-linearly in payload
-        // size (~5s at 40 KB, ~27s at 100 KB on the reviewing machine), and this
-        // test must not sit against vitest's 30s ceiling.
+        // Clears safe mode's 32000-byte Read floor. The real hook's cost grows
+        // super-linearly in payload size, so the margin is kept small — but not
+        // minimal, and the timeout below is what actually has to absorb it.
         const raw = "x".repeat(40_000);
         const out = apply(raw, {
           toolUseId: "t1",
@@ -132,9 +137,13 @@ describe("makeSpawnedSaver store isolation (real binary)", () => {
         rmSync(base, { recursive: true, force: true });
       }
     },
-    // Two real hook spawns over a 40 KB payload — ~15s locally with the rest of
-    // the suite running in parallel, so vitest's 30s default is too tight for CI.
-    60_000,
+    // Two real hook spawns over a 40 KB payload: measured 27s standalone on a
+    // fast dev machine, and windows-latest runners are routinely 2-3x slower at
+    // process spawn plus filesystem work. vitest's 30s default is far too tight,
+    // and 60s was under a 2.2x margin — this test is newly un-skipped on the one
+    // platform this change exists to turn green, so a timeout here would
+    // reproduce the red job with a different cause.
+    120_000,
   );
 
   it.skipIf(!canSpawnMega)("refuses to run against a store it could not enable", () => {
@@ -156,7 +165,7 @@ describe("makeSpawnedSaver store isolation (real binary)", () => {
   });
 
   if (!canSpawnMega) {
-    it("SKIPPED: cannot spawn apps/cli/dist/cli.js — run `pnpm turbo build --filter=@megasaver/cli...` to enable this test (never runs on win32)", () => {
+    it("SKIPPED: cannot spawn apps/cli/dist/cli.js — run `pnpm turbo build --filter=@megasaver/cli...` to enable this test", () => {
       expect(canSpawnMega).toBe(false);
     });
   }
