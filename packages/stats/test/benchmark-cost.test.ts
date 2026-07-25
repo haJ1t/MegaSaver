@@ -34,18 +34,18 @@ describe("normalizedCostUsd", () => {
     expect(cost).toBeCloseTo(0.672, 6);
   });
 
-  // THE artifact that broke the old gate: two runs of the same work, one served
-  // at fast-mode (2x billed) and one standard, must normalize to the same cost.
-  it("is identical for identical tokens regardless of how the request was billed", () => {
+  // Normalized cost must ignore how the request was billed: the CLI's own
+  // total_cost_usd reflects the serving tier, this must not.
+  it("ignores non-token fields such as raw total_cost_usd", () => {
     const tokens = usage({
       input_tokens: 8,
       cache_creation_input_tokens: 48_681,
       cache_read_input_tokens: 134_075,
       output_tokens: 993,
     });
-    const fastModeBilled = { ...tokens, speed: "fast" as const, total_cost_usd: 0.5787 };
-    const standardBilled = { ...tokens, speed: "standard" as const, total_cost_usd: 0.3972 };
-    expect(normalizedCostUsd(fastModeBilled)).toBe(normalizedCostUsd(standardBilled));
+    expect(normalizedCostUsd({ ...tokens, total_cost_usd: 0.5787 })).toBe(
+      normalizedCostUsd({ ...tokens, total_cost_usd: 0.3972 }),
+    );
   });
 
   it("treats missing token fields as zero", () => {
