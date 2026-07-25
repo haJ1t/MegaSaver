@@ -22,7 +22,9 @@ updated: 2026-07-20
 - [[concepts/contextops]] — what "ContextOps" means; product category.
 - [[concepts/agent-agnostic-core]] — non-negotiable: agents connect to core, never reverse.
 - [[concepts/risk-aware-development]] — LOW / MEDIUM / HIGH / CRITICAL gating skills.
-- [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; 6 instances, 2 still open.
+- [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; all instances fixed.
+- [[concepts/lookahead-start-guard]] — provably-lossless ReDoS fix for variable-length lookbehinds; must stay in front of the lookbehind, relies on V8 assertion ordering.
+- [[concepts/redos-guard-testing]] — how to fence a ReDoS fix: instrument choice, seeded corpora, commit the harness, test the pipeline not just the regex.
 - [[concepts/glob-compile-redos]] — sibling defect class: the regex is *built from* untrusted input (ambiguous quantifier chaining + metachar injection). `compileGlob` fixed 2026-07-25 by dropping regexes for an NFA matcher.
 - [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; 9 instances, 2 still open.
 - [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; 9 instances, 2 still open (4 deferred, 5 unfiled — both in `packages/policy`).
