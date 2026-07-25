@@ -160,7 +160,7 @@ costs 16-24 s, and it is **not** the email pattern:
 Variable-length lookbehind containing `\s*`, re-evaluated at every position.
 Same class, third variant. Not filed as a spec yet.
 
-## Fixed: instance 6 (`normalize`'s trailing-whitespace strip)
+## Fixed: instance 8 (`normalize`'s trailing-whitespace strip)
 
 Third variant of the shape: the required literal is a **zero-width anchor**, not
 a character. `/\s+$/` on a whitespace run that is not at end-of-line backtracks
