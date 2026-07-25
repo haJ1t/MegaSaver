@@ -135,6 +135,56 @@ const SEGMENTS = [
   "",
 ] as const;
 
+// Exhaustive beats random for the arm-adjacency bugs that matter here: an
+// off-by-one in the `**/` `seen` ordering or the `*` `active` clear only shows
+// up in specific short arrangements of wildcards and separators, which a
+// generator may or may not draw. This enumerates ALL of them up to these
+// lengths — every `**/`, `**`, `*`, `?`, literal and separator adjacency.
+function enumerate(alphabet: readonly string[], maxLength: number): string[] {
+  const out = [""];
+  let level = [""];
+  for (let length = 1; length <= maxLength; length += 1) {
+    const nextLevel: string[] = [];
+    for (const prefix of level) {
+      for (const ch of alphabet) {
+        nextLevel.push(prefix + ch);
+        out.push(prefix + ch);
+      }
+    }
+    level = nextLevel;
+  }
+  return out;
+}
+
+describe("compileGlob — exhaustive equivalence over short glob/path space", () => {
+  it("agrees with the frozen regex on every glob<=6 x path<=7", () => {
+    const globs = enumerate(["a", "/", "*", "?"], 6);
+    const paths = enumerate(["a", "/"], 7);
+    let compared = 0;
+    let legacyHits = 0;
+
+    for (const glob of globs) {
+      const legacy = legacyCompileGlob(glob);
+      const matcher = compileGlob(glob);
+      for (const path of paths) {
+        const want = legacy.test(path);
+        if (want) legacyHits += 1;
+        compared += 1;
+        if (matcher.test(path) !== want) {
+          throw new Error(
+            `divergence: glob=${JSON.stringify(glob)} path=${JSON.stringify(path)} legacy=${want}`,
+          );
+        }
+      }
+    }
+
+    expect(compared).toBeGreaterThan(1_000_000);
+    // Non-vacuity: if this floor ever fails the space stopped producing
+    // matches and the whole sweep degenerated to comparing false===false.
+    expect(legacyHits).toBeGreaterThan(compared * 0.02);
+  });
+});
+
 // Case folding changed carrier: the regex `i` flag used Canonicalize (which
 // refuses any non-ASCII -> ASCII mapping), the matcher uses toLowerCase(). They
 // are identical on ASCII, so every LOCKED §9a glob — all ASCII — is unaffected.
