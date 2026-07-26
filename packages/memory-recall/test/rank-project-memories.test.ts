@@ -257,7 +257,7 @@ describe("LM2 product-memory recall", () => {
     expect(result.hybrid).toMatchObject({ profile: "adaptive", semanticStatus: "used" });
   });
 
-  it("returns a Safe receipt when local embedding fails after current vectors are read", async () => {
+  it("retains the degraded receipt when local embedding fails after current vectors are read", async () => {
     const entry = memory({
       id: "00000000-0000-4000-8000-000000000021",
       title: "Deploy policy",
@@ -284,7 +284,14 @@ describe("LM2 product-memory recall", () => {
       now: () => 0,
     });
 
-    expect(result).toMatchObject({ memory: [entry], hybrid: { profile: "safe" } });
+    expect(result).toMatchObject({
+      memory: [entry],
+      hybrid: {
+        profile: "adaptive",
+        semanticStatus: "degraded",
+        semanticReasons: ["port_failure"],
+      },
+    });
   });
 
   it("preselects the LM2 window by task relevance rather than newest entries", async () => {
