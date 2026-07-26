@@ -25,6 +25,19 @@ const vectorRecordSchema = z.object({
   vector: z.array(z.number()),
 });
 
+function sameFileState(
+  before: { size: number; dev: number; ino: number; mtimeMs: number; ctimeMs: number },
+  after: { size: number; dev: number; ino: number; mtimeMs: number; ctimeMs: number },
+): boolean {
+  return (
+    before.size === after.size &&
+    before.dev === after.dev &&
+    before.ino === after.ino &&
+    before.mtimeMs === after.mtimeMs &&
+    before.ctimeMs === after.ctimeMs
+  );
+}
+
 function atomicWrite(filePath: string, content: string): void {
   const dir = dirname(filePath);
   mkdirSync(dir, { recursive: true });
@@ -53,12 +66,15 @@ export function readVectors(
     if (options.maxBytes !== undefined) {
       const fd = openSync(path, "r");
       try {
-        const before = fstatSync(fd).size;
-        if (before > options.maxBytes) {
+        const before = fstatSync(fd);
+        if (before.size > options.maxBytes) {
           throw new RangeError("Vector sidecar exceeds the configured byte limit.");
         }
-        const bytes = Buffer.alloc(before);
-        if (readSync(fd, bytes, 0, before, 0) !== before || fstatSync(fd).size !== before) {
+        const bytes = Buffer.alloc(before.size);
+        if (
+          readSync(fd, bytes, 0, before.size, 0) !== before.size ||
+          !sameFileState(before, fstatSync(fd))
+        ) {
           throw new Error("Vector sidecar changed during bounded read.");
         }
         raw = bytes.toString("utf8");
@@ -81,16 +97,8 @@ export function readVectors(
   let selectedRecords = 0;
   for (const line of raw.split("\n")) {
     if (line.trim().length === 0) continue;
-    const rawRecord = JSON.parse(line);
-    if (
-      options.ids !== undefined &&
-      (typeof rawRecord !== "object" ||
-        rawRecord === null ||
-        !options.ids.has(rawRecord.id as string))
-    ) {
-      continue;
-    }
-    const rec = vectorRecordSchema.parse(rawRecord);
+    const rec = vectorRecordSchema.parse(JSON.parse(line));
+    if (options.ids !== undefined && !options.ids.has(rec.id)) continue;
     selectedRecords += 1;
     if (options.maxRecords !== undefined && selectedRecords > options.maxRecords) {
       throw new RangeError("Vector sidecar exceeds the configured selected-record limit.");
@@ -105,10 +113,13 @@ export function readVectorIds(path: string, maxBytes: number): Set<string> {
   try {
     const fd = openSync(path, "r");
     try {
-      const before = fstatSync(fd).size;
-      if (before > maxBytes) return new Set();
-      const bytes = Buffer.alloc(before);
-      if (readSync(fd, bytes, 0, before, 0) !== before || fstatSync(fd).size !== before) {
+      const before = fstatSync(fd);
+      if (before.size > maxBytes) return new Set();
+      const bytes = Buffer.alloc(before.size);
+      if (
+        readSync(fd, bytes, 0, before.size, 0) !== before.size ||
+        !sameFileState(before, fstatSync(fd))
+      ) {
         return new Set();
       }
       raw = bytes.toString("utf8");

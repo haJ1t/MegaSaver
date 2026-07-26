@@ -22,7 +22,14 @@ verify those P1 closures. A
 concrete cross-surface fixture in the CLI suite proves identical Safe ordering
 through the shared adapter, both applicable MCP calls, daemon registry recall,
 and CLI search without
-introducing a reverse dependency into `@megasaver/memory-recall`.
+introducing a reverse dependency into `@megasaver/memory-recall`. Subsequent
+adversarial passes closed cache-only embedding global state, bounded vector and
+hash sidecar receipt provenance, and saturated lexical/indexed candidate-window
+coverage. Follow-up review also added exact hash validation, complete vector-row
+validation, and same-size sidecar race detection. Focused adapter coverage is
+21/21 and `pnpm verify` passed at the working release candidate after commit
+`4a6cf71b`; Task 6 is now pending only the final fresh release-gate review and
+PR/merge handoff.
 
 ## Global Constraints
 

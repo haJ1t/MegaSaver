@@ -1,7 +1,16 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const fsMock = vi.hoisted(() => ({ fstatSync: vi.fn() }));
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  fsMock.fstatSync.mockImplementation(actual.fstatSync);
+  return { ...actual, fstatSync: fsMock.fstatSync };
+});
+
 import { readVectors, writeVectors } from "../src/store.js";
 
 let dir: string;
@@ -57,5 +66,26 @@ describe("vector sidecar store", () => {
     writeVectors(path, []);
     expect(readFileSync(path, "utf8")).toBe("");
     expect(readVectors(path).size).toBe(0);
+  });
+
+  it("rejects a same-size sidecar race during a bounded read", () => {
+    const path = join(dir, "vectors.jsonl");
+    writeVectors(path, [{ id: "a", vector: [1] }]);
+    const originalFstat = fsMock.fstatSync.getMockImplementation();
+    if (originalFstat === undefined) throw new Error("Expected the real fstatSync implementation.");
+    let calls = 0;
+    fsMock.fstatSync.mockImplementation((fd: number) => {
+      const stat = originalFstat(fd);
+      calls += 1;
+      return calls === 2 ? { ...stat, ctimeMs: stat.ctimeMs + 1 } : stat;
+    });
+
+    try {
+      expect(() => readVectors(path, { maxBytes: 1_024 })).toThrow(
+        "Vector sidecar changed during bounded read.",
+      );
+    } finally {
+      fsMock.fstatSync.mockImplementation(originalFstat);
+    }
   });
 });
