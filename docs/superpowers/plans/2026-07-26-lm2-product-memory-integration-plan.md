@@ -28,8 +28,9 @@ hash sidecar receipt provenance, and saturated lexical/indexed candidate-window
 coverage. Follow-up review also added exact hash validation, complete vector-row
 validation, and same-size sidecar race detection. Focused adapter coverage is
 21/21 and `pnpm verify` passed at the working release candidate after commit
-`4a6cf71b`; Task 6 is now pending only the final fresh release-gate review and
-PR/merge handoff.
+`d528189a`. The final fresh release-gate review approved `d528189a` with no
+P0/P1/P2. Task 6 is complete through the pre-merge gates; only a
+user-authorized GitHub push/PR and merge handoff remains.
 
 ## Global Constraints
 
