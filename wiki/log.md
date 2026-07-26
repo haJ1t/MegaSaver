@@ -6664,3 +6664,17 @@ still required before merge. (source:
 `packages/memory-recall/src/rank-project-memories.ts`,
 `packages/memory-recall/test/rank-project-memories.test.ts`, 2026-07-26
 verifier run)
+
+## [2026-07-26 17:19 +03] fix | bound LM2 product-memory corpus input
+
+The re-review confirmed task-aware candidate preselection but found that 1,000
+individually valid candidates could exceed LM2's 64 MiB aggregate UTF-8 corpus
+limit and leak a validation error. The corpus limit is now a shared public LM2
+contract used by both the runtime and product adapter. The adapter preflights
+the aggregate and converts any remaining `Lm2Error` to Core lexical recall with
+a Safe receipt. The new astral-Unicode regression passes alongside the focused
+adapter suite (13/13), both package typechecks/tests, build, and `pnpm verify`.
+A fresh independent review remains required before merge. (source:
+`packages/long-memory/src/lm2-model-contracts.ts`,
+`packages/memory-recall/src/rank-project-memories.ts`,
+`packages/memory-recall/test/rank-project-memories.test.ts`)
