@@ -6649,3 +6649,18 @@ provider for model: gpt-5.6-terra`. This is the fifth repeated provider failure,
 not a code-review result. The integration branch remains clean after its frozen
 install and full verifier pass; do not merge until an independent reviewer can
 run. (source: 2026-07-26 `lm2_integration_review` launcher result)
+
+## [2026-07-26 17:14 +03] fix | preserve bounded product-memory recall
+
+After the local review provider was restored, a fresh independent review found
+two P1 defects in the product-memory adapter. Its preselection dropped the
+task text and could discard a relevant older memory after 1,000 newer entries;
+it now takes Core's task-aware lexical order before applying the LM2 window.
+LM2 projections and tasks larger than the 50,000-code-unit contract now return
+Core lexical recall and a Safe receipt instead of propagating an LM2 validation
+error through CLI, MCP, or daemon callers. Focused adapter tests (12/12), the
+adapter build/typecheck, and `pnpm verify` pass. An independent re-review is
+still required before merge. (source:
+`packages/memory-recall/src/rank-project-memories.ts`,
+`packages/memory-recall/test/rank-project-memories.test.ts`, 2026-07-26
+verifier run)
