@@ -23,7 +23,7 @@ export function memoryEmbeddingsSidecarPath(storeRoot: string, projectId: Projec
 // id→contentHash record, the manifest the vector sidecar lacks. Captured after
 // each build, read back as priorHashById next build so an unchanged memory
 // (vector present AND hash matches) carries forward instead of re-embedding.
-function memoryHashSidecarPath(storeRoot: string, projectId: ProjectId): string {
+export function memoryEmbeddingHashesSidecarPath(storeRoot: string, projectId: ProjectId): string {
   return join(storeRoot, "memory", `${projectId}.embeddings.hashes.json`);
 }
 
@@ -62,8 +62,15 @@ export function memoryEmbedText(entry: MemoryEntry): string {
 
 // Content hash deciding carry-forward. MemoryEntry has no contentHash field, so
 // derive one from title+content — the only inputs to memoryEmbedText.
-function memoryContentHash(entry: MemoryEntry): string {
+export function memoryEmbeddingContentHash(entry: MemoryEntry): string {
   return createHash("sha256").update(memoryEmbedText(entry)).digest("hex");
+}
+
+export function readMemoryEmbeddingHashes(
+  storeRoot: string,
+  projectId: ProjectId,
+): Map<string, string> {
+  return readHashSidecar(memoryEmbeddingHashesSidecarPath(storeRoot, projectId));
 }
 
 // Embed function shape; defaults to the real lazy embed(). Injectable so the
@@ -95,7 +102,7 @@ export async function embedMemoryEntries(
   const toEmbed: MemoryEntry[] = [];
   for (const entry of entries) {
     const prior = priorVectors.get(entry.id);
-    if (prior !== undefined && priorHashById.get(entry.id) === memoryContentHash(entry)) {
+    if (prior !== undefined && priorHashById.get(entry.id) === memoryEmbeddingContentHash(entry)) {
       carried.set(entry.id, Array.from(prior));
     } else {
       toEmbed.push(entry);
@@ -128,7 +135,7 @@ export async function buildMemoryIndex(
   entries: readonly MemoryEntry[],
   embedFn: EmbedFn = embed,
 ): Promise<MemoryIndexBuildResult> {
-  const hashPath = memoryHashSidecarPath(storeRoot, projectId);
+  const hashPath = memoryEmbeddingHashesSidecarPath(storeRoot, projectId);
   const priorHashById = readHashSidecar(hashPath);
 
   // Counts come straight from the embedder's own carry-forward decision, which
@@ -142,7 +149,7 @@ export async function buildMemoryIndex(
   );
 
   const nextHashes: Record<string, string> = {};
-  for (const e of entries) nextHashes[e.id] = memoryContentHash(e);
+  for (const e of entries) nextHashes[e.id] = memoryEmbeddingContentHash(e);
   atomicWriteFile(hashPath, JSON.stringify(nextHashes));
 
   return { embedded, carried, total: entries.length };

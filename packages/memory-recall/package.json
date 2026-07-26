@@ -1,0 +1,35 @@
+{
+  "name": "@megasaver/memory-recall",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "description": "LM2 hybrid ranking for Mega Saver's authoritative memory entries.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@megasaver/core": "workspace:*",
+    "@megasaver/embeddings": "workspace:*",
+    "@megasaver/long-memory": "workspace:*",
+    "@megasaver/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.17"
+  }
+}
