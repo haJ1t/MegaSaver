@@ -286,4 +286,67 @@ describe("LM2 product-memory recall", () => {
 
     expect(result).toMatchObject({ memory: [entry], hybrid: { profile: "safe" } });
   });
+
+  it("preselects the LM2 window by task relevance rather than newest entries", async () => {
+    const irrelevant = Array.from({ length: 1_000 }, (_, index) =>
+      memory({
+        id: `00000000-0000-4000-8000-${String(index + 100).padStart(12, "0")}`,
+        title: `Unrelated entry ${index}`,
+        content: "unrelated memory",
+      }),
+    );
+    const relevant = memory({
+      id: "00000000-0000-4000-8000-000000009999",
+      title: "Deploy rollback needle",
+      content: "Needle memory must remain recallable beyond the newest 1,000 entries.",
+    });
+
+    const result = await rankProjectMemories({
+      projectId: PROJECT_ID,
+      entries: [...irrelevant, relevant],
+      task: "needle",
+      storeRoot: root(),
+      query: { text: "needle" },
+      now: () => 0,
+    });
+
+    expect(result.memory).toEqual([relevant]);
+  });
+
+  it("falls back to Core lexical recall when a memory projection exceeds the LM2 limit", async () => {
+    const entry = memory({
+      id: "00000000-0000-4000-8000-000000000022",
+      title: "Oversized deploy policy",
+      content: `needle ${"x".repeat(50_000)}`,
+    });
+
+    await expect(
+      rankProjectMemories({
+        projectId: PROJECT_ID,
+        entries: [entry],
+        task: "needle",
+        storeRoot: root(),
+        query: { text: "needle" },
+      }),
+    ).resolves.toMatchObject({ memory: [entry], hybrid: { profile: "safe" } });
+  });
+
+  it("falls back to Core lexical recall when the task exceeds the LM2 limit", async () => {
+    const entry = memory({
+      id: "00000000-0000-4000-8000-000000000023",
+      title: "Needle policy",
+      content: "needle",
+    });
+    const task = `needle ${"x".repeat(50_000)}`;
+
+    await expect(
+      rankProjectMemories({
+        projectId: PROJECT_ID,
+        entries: [entry],
+        task,
+        storeRoot: root(),
+        query: { text: task },
+      }),
+    ).resolves.toMatchObject({ memory: [entry], hybrid: { profile: "safe" } });
+  });
 });
