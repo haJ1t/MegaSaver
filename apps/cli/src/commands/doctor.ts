@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_HOOK_COMMAND, hasPreToolUseHook } from "@megasaver/connector-claude-code";
 import { defineCommand } from "citty";
@@ -64,6 +64,36 @@ export function checkHookTelemetry(paths: HookTelemetryPaths): Check {
   };
 }
 
+// settings.json holds env.ANTHROPIC_API_KEY, and the writer preserves whatever
+// mode it finds (connectors/claude-code/src/settings-write.ts) — deliberately,
+// so it never narrows an operator's choice. That leaves every file a pre-fix
+// `mega hooks install` widened to 0644 widened forever, with nothing to notice
+// it. This is the noticer: read-only, never chmods someone else's agent config.
+export function checkSettingsPermissions(settingsPath: string): Check {
+  const key = "claude-code-settings-perms";
+  // NTFS ignores POSIX mode bits, so every Windows file would report a false
+  // 0666. Nothing to check there.
+  if (process.platform === "win32") return { key, value: "n/a (win32)", pass: true };
+  let mode: number;
+  try {
+    // stat, not lstat: through a symlink it is the target's bits that expose
+    // the key. A broken link stats as absent, which is the honest answer.
+    mode = statSync(settingsPath).mode & 0o777;
+  } catch {
+    return { key, value: "absent", pass: true };
+  }
+  const value = mode.toString(8);
+  if ((mode & 0o077) === 0) return { key, value, pass: true };
+  // WARN, not FAIL: the operator may have widened it on purpose, and doctor's
+  // exit code gates the environment, not their permission policy.
+  return {
+    key,
+    value,
+    pass: true,
+    reason: `warn: group/world-accessible — run: chmod 600 ${settingsPath}`,
+  };
+}
+
 function defaultHookTelemetryPaths(): HookTelemetryPaths {
   return {
     settingsPath: resolveClaudeCodeSettingsPath(),
@@ -100,7 +130,11 @@ export const doctorCommand = defineCommand({
     // E22: environment checks + the saver verifier (registration, binary,
     // store bake, liveness, self-test, daemon). Saver FAILs affect the exit
     // code through the same exitCodeFor; warnings are pass:true with a reason.
-    const checks = [...runChecks(), ...runSaverChecks()];
+    const checks = [
+      ...runChecks(),
+      ...runSaverChecks(),
+      checkSettingsPermissions(resolveClaudeCodeSettingsPath()),
+    ];
     // Hook telemetry is informational: a "missing" result reports the install
     // hint but never fails the doctor (it is opt-in, not an environment fault),
     // so it is rendered below the env summary and excluded from exitCodeFor.

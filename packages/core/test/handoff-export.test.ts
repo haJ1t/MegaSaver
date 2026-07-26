@@ -320,21 +320,42 @@ function dirty(
 }
 
 describe("buildHandoffPacket — diff + path filter pipeline", () => {
-  it.each([".env", "config/secrets/prod.yaml", ".ssh/id_rsa"])(
-    "drops the %s hunk and lists it as excluded",
-    (secretPath) => {
-      const diffText = [fileDiff("src/app.ts", "safe change"), fileDiff(secretPath, "TOP=1")].join(
-        "\n",
-      );
+  it.each([
+    ".env",
+    "config/secrets/prod.yaml",
+    ".ssh/id_rsa",
+    // Home credential stores (spec 2026-07-25). This is the THIRD consumer of
+    // the same LOCKED table — an exported handoff carries whatever the denylist
+    // does not drop, so the amendment has to be fenced here too.
+    ".pgpass",
+    ".kube/config",
+    ".docker/config.json",
+    ".config/gh/hosts.yml",
+  ])("drops the %s hunk and lists it as excluded", (secretPath) => {
+    const diffText = [fileDiff("src/app.ts", "safe change"), fileDiff(secretPath, "TOP=1")].join(
+      "\n",
+    );
+    const { packet, report } = buildHandoffPacket(baseInput({ dirtyState: dirty(diffText) }));
+    const diff = packet.payload.git?.diff;
+    expect(diff).not.toBeNull();
+    expect(diff?.text).toContain("src/app.ts");
+    expect(diff?.text).not.toContain(secretPath);
+    expect(diff?.excludedPaths).toEqual([secretPath]);
+    expect(packet.manifest.secretPathsExcluded).toBe(1);
+    expect(report.excludedPaths).toEqual([secretPath]);
+    expect(packet.manifest.counts.diffFiles).toBe(1);
+  });
+
+  // Over-correction fence: a directory-level glob would have taken these with
+  // the credential files, and a dropped hunk is invisible to the receiving
+  // agent — it does not know the file changed at all.
+  it.each([".kube/cache/http/abc", ".docker/daemon.json", ".config/gh/config.yml"])(
+    "keeps the %s hunk, which is ordinary config",
+    (path) => {
+      const diffText = fileDiff(path, "note");
       const { packet, report } = buildHandoffPacket(baseInput({ dirtyState: dirty(diffText) }));
-      const diff = packet.payload.git?.diff;
-      expect(diff).not.toBeNull();
-      expect(diff?.text).toContain("src/app.ts");
-      expect(diff?.text).not.toContain(secretPath);
-      expect(diff?.excludedPaths).toEqual([secretPath]);
-      expect(packet.manifest.secretPathsExcluded).toBe(1);
-      expect(report.excludedPaths).toEqual([secretPath]);
-      expect(packet.manifest.counts.diffFiles).toBe(1);
+      expect(packet.payload.git?.diff?.text).toContain(path);
+      expect(report.excludedPaths).toEqual([]);
     },
   );
 

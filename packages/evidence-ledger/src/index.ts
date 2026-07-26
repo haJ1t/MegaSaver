@@ -34,7 +34,7 @@ export {
   evidenceLedgerErrorCodeSchema,
   type EvidenceLedgerErrorCode,
 } from "./errors.js";
-export type { ChunkDeletePort } from "./ports.js";
+export type { ChunkDeletePort, ChunkRef } from "./ports.js";
 
 export {
   appendEvidence,

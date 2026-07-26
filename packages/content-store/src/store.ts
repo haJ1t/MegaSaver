@@ -245,13 +245,28 @@ function readChunkSetCreatedAt(path: string): string | null {
   return null;
 }
 
+// A chunk file's address. Chunk-set ids are content-derived on the saver path,
+// so the same id names a different file in every session dir that produced the
+// same output — only the whole triple identifies one file. Ids never contain
+// "/", so a scoped key can never be mistaken for a bare id.
+export function chunkSetKey(input: {
+  topDir: string;
+  sessionDir: string;
+  chunkSetId: string;
+}): string {
+  return `${input.topDir}/${input.sessionDir}/${input.chunkSetId}`;
+}
+
 export async function pruneOlderThan(input: {
   storeRoot: string;
   olderThan: Date;
-  // Chunk sets an evidence hold still points at (pinned / manual_hold). The
-  // store cannot read the ledger (no dep edge), so the composer joins them and
-  // hands the ids down — see @megasaver/context-gate pruneChunkSetsHonoringPins.
-  keepChunkSetIds?: ReadonlySet<string>;
+  // Chunk sets an evidence hold still points at (pinned / manual_hold), as
+  // chunkSetKey values. The store cannot read the ledger (no dep edge), so the
+  // composer joins them and hands the keys down — see @megasaver/context-gate
+  // pruneChunkSetsHonoringPins. A hold whose scope the composer could not
+  // resolve arrives as a bare id and matches every copy: over-retaining is the
+  // safe failure for a hold, deleting is not.
+  keepChunkSetKeys?: ReadonlySet<string>;
 }): Promise<{ removed: number }> {
   const contentRoot = join(input.storeRoot, "content");
 
@@ -274,7 +289,15 @@ export async function pruneOlderThan(input: {
         if (!name.endsWith(".json")) continue;
         if (name === READ_INDEX_FILENAME) continue; // sibling index, not a chunk-set
         if (name === SHOWN_INDEX_FILENAME) continue; // sibling index, not a chunk-set
-        if (input.keepChunkSetIds?.has(name.slice(0, -".json".length))) continue;
+        const chunkSetId = name.slice(0, -".json".length);
+        if (
+          input.keepChunkSetKeys?.has(
+            chunkSetKey({ topDir, sessionDir: sessionDirName, chunkSetId }),
+          ) ||
+          input.keepChunkSetKeys?.has(chunkSetId)
+        ) {
+          continue;
+        }
         const path = join(sessionPath, name);
         // Chunk sets are write-once (atomicWriteFile), so mtime tracks createdAt
         // and answers "is this young?" without reading the body — which holds a

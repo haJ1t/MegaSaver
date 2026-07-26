@@ -236,7 +236,11 @@ export async function revokeEvidence(args: {
   // 2) Best-effort raw delete AFTER the tombstone is durable.
   if (rec.redactedRawChunkSetId !== null) {
     try {
-      await args.deleteChunk(rec.redactedRawChunkSetId);
+      await args.deleteChunk({
+        workspaceKey: rec.workspaceKey,
+        sessionRef: rec.sessionRef,
+        chunkSetId: rec.redactedRawChunkSetId,
+      });
     } catch {
       // Best-effort; the tombstone already records the revocation.
     }
@@ -270,6 +274,20 @@ export async function explainEvidence(args: {
   };
 }
 
+// The (workspaceKey, session, chunkSetId) triple addresses the FILE, not its
+// owner: ids are content-derived, so several records in one session can point
+// at one chunk file (the saver's first-sight index fails open). Deleting on
+// behalf of whichever record expires first would strip the raw a pinned or
+// unexpired twin still advertises as `rawExpandable`.
+function chunkAddress(rec: EvidenceRecord): string {
+  return [
+    rec.workspaceKey,
+    rec.sessionRef?.kind ?? "",
+    rec.sessionRef?.id ?? "",
+    rec.redactedRawChunkSetId,
+  ].join("\u0000");
+}
+
 export async function gcEvidence(args: {
   storeRoot: string;
   workspaceKey: string;
@@ -286,21 +304,33 @@ export async function gcEvidence(args: {
     workspaceKey: args.workspaceKey,
   });
   const at = args.now.toISOString();
-  let degraded = 0;
-  for (const rec of all) {
-    if (rec.status !== "available") continue;
+  const collectable = (rec: EvidenceRecord): boolean => {
+    if (rec.status !== "available") return false;
     // GC exemptions (spec §5): pinned and manual_hold survive ordinary GC.
-    if (rec.retentionClass === "pinned" || rec.retentionClass === "manual_hold") continue;
+    if (rec.retentionClass === "pinned" || rec.retentionClass === "manual_hold") return false;
     const expiresAtMs =
       rec.expiresAt !== null
         ? new Date(rec.expiresAt).getTime()
         : args.fallbackExpiryMs !== undefined
           ? Date.parse(rec.createdAt) + args.fallbackExpiryMs
           : Number.POSITIVE_INFINITY;
-    if (expiresAtMs > args.now.getTime()) continue;
-    if (rec.redactedRawChunkSetId !== null) {
+    return expiresAtMs <= args.now.getTime();
+  };
+  const stillReferenced = new Set(
+    all
+      .filter((rec) => rec.status === "available" && !collectable(rec))
+      .map((rec) => chunkAddress(rec)),
+  );
+  let degraded = 0;
+  for (const rec of all) {
+    if (!collectable(rec)) continue;
+    if (rec.redactedRawChunkSetId !== null && !stillReferenced.has(chunkAddress(rec))) {
       try {
-        await args.deleteChunk(rec.redactedRawChunkSetId);
+        await args.deleteChunk({
+          workspaceKey: rec.workspaceKey,
+          sessionRef: rec.sessionRef,
+          chunkSetId: rec.redactedRawChunkSetId,
+        });
       } catch {
         // Best-effort; still degrade the metadata below.
       }
@@ -309,8 +339,8 @@ export async function gcEvidence(args: {
       ...rec,
       status: "retained_metadata_only",
       redactedRawChunkSetId: null,
-      // Every ref points into the chunk set just deleted, so they are dangling
-      // weight — and on a large output they are ~99% of the record's bytes.
+      // Every ref points into the chunk set this record just dropped, so they
+      // are dangling weight — on a large output, ~99% of the record's bytes.
       returnedChunkRefs: [],
       transitions: [...rec.transitions, { at, kind: "raw_gc", actor: "system" }],
     });

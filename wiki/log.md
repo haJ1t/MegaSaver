@@ -5393,3 +5393,272 @@ exempt nothing.
 
 Sources: [[docs/superpowers/specs/2026-07-26-probe-parity-design]],
 [[docs/superpowers/plans/2026-07-26-probe-parity-plan]].
+
+## [2026-07-25] fix | home credential stores reach the model (denylist + redaction)
+
+Two independent gaps, one table each. `resolveSafeReadPath` deliberately admits
+`homedir()` as a sandbox root (`packages/output-filter/src/resolve-safe-read-path.ts:32`),
+so the LOCKED §4a denylist is the only thing between an agent and every
+credential file under `$HOME` — and it listed neither `.pgpass` nor the
+`docker`/`kube`/`gh` stores.
+
+**(a) Path.** Five globs appended to `DENYLIST_GLOBS`, 19 → 24: `**/.pgpass`,
+`**/pgpass.conf` (the Windows spelling; `normalizePath` already folds `\`),
+`**/.docker/config.json`, `**/.kube/config`, `**/.config/gh/hosts.yml`. The
+discriminator, now written into the spec: deny when the exact filename is
+credentials-only regardless of location; leave it to the redactor when the same
+filename also carries ordinary config. That is what excludes `.npmrc` (#309's
+recorded reasoning stands) and the directory forms `**/.docker/**`,
+`**/.kube/**`, `**/.config/**` — a baseline denial has no un-deny field (I1), so
+a wide glob blinds the agent permanently.
+
+One amendment, three consumers: the read gates, `evaluateCommand`'s arg scan
+(`packages/policy/src/evaluate-command.ts:51` — `cat ~/.pgpass` was ALLOWED, a
+second entry point the original report never named) and
+`core/handoff-export.ts:70`. No per-caller guard was written.
+
+**(b) Content.** Three detectors APPENDED to `REDACTION_PATTERNS` (40 → 43),
+nothing reordered, no existing row's bytes touched — the HIGH-tier append shape:
+`npmrc_auth` (covers legacy-UUID and Artifactory-base64 `_authToken` plus
+`_auth`, which `npm_token` misses), `pgpass_line`, `kubeconfig_token`.
+
+Design constraint found by reading the code: `redact()` applies each pattern
+through a replacer FUNCTION (`redact.ts:22`), so `$1` in a replacement string is
+returned literally. Capture-group replacements are unavailable, and all three
+therefore use the house shape — `(?=\S)` start guard in front of a bounded
+lookbehind. Both line-anchored patterns use `[ \t]{0,32}`, not `^\s*`, because
+`\s` matches `\n` — [[concepts/unbounded-run-redos]] instance 7.
+
+**Measured, and NOT what the shape suggests.** All three are linear BY
+CONSTRUCTION: every lookbehind run is bounded and nothing follows the value run,
+so a start position matches or fails in one pass. Shipped vs an unguarded,
+unbounded mutant, min-of-3 at 100 KB / 400 KB: `_auth=`+A-run 0.33/1.32 ms vs
+0.10/0.34; `h:1:d:u:`+A-run 0.23/0.94 vs 0.04/0.17; indented `token:`+space-run
+0.14/0.57 vs 1.66/5.16. Two consequences worth recording: the BOUNDS buy no
+speed here and cost a little — exactly the reasoning that removed
+`netrc_password`'s ceiling — so they are kept as OVER-redaction controls with
+their coverage cost disclosed, not as ReDoS controls; and the `(?=\S)` guard is
+the one measured win (~9x on the whitespace seed), which is the shape it exists
+for. No eleventh instance of the ReDoS class was added, and none was removed
+either — there was no quadratic here to fix.
+
+**(c) Third defect, found while reproducing, not in the report.**
+`glob-equivalence.test.ts:36` hand-copied `DENYLIST_GLOBS` and still held the
+pre-#309 fifteen entries, and spec §4a still printed those fifteen under the
+line "15 patterns" while the code shipped nineteen. #309 therefore shipped four
+globs with zero equivalence coverage and did not fail. Closed by DELETING the
+copy — `DENYLIST_GLOBS` is now exported from the module (not from `index.ts`, so
+the LOCKED §2 public surface is untouched) and imported — plus a non-vacuity
+assertion that every glob is matched by at least one corpus path, plus a new
+`spec-denylist-parity.test.ts` that parses §4a's fenced block and pins it to the
+array. A test that detects drift is strictly worse than an import that makes
+drift impossible; #313 could not delete its probe copy (it legitimately holds
+superseded patterns), this one had no such reason.
+
+Reproduction re-run under a throwaway `$HOME`: the four new path carriers plus
+`.netrc`/`.git-credentials`/`.aws/credentials` all `path_denied/secret_path_read`;
+`.npmrc` still ALLOWED by design but now `findings=[npmrc_auth x1]`;
+`.kube/cache/http/abc`, `.docker/daemon.json` and `.config/gh/config.yml` still
+allowed. 0 files reach the model in cleartext, against 3 before.
+
+Each guard reverted alone: dropping the five globs reddens 16 policy tests, 4
+context-gate and 4 core; dropping the three detectors reddens 25 policy tests
+and neither touches the other's fences.
+
+Sources: [[docs/superpowers/specs/2026-07-25-secret-path-home-credentials-design]],
+[[docs/superpowers/plans/2026-07-25-secret-path-home-credentials-plan]],
+[[entities/policy]], [[concepts/unbounded-run-redos]].
+
+## [2026-07-26] fix | home credential detectors: quoted npmrc leak + two PWD-class over-redactions
+
+Review of `fix/secret-path-home-credentials-impl` raised four findings against
+the three detectors appended the day before. All four reproduced against the
+branch; three are the same two root causes and are fixed here, and the fourth's
+suggested remedy (deny `**/.npmrc`) is re-rejected in favour of the other
+reviewer's remedy for the identical defect.
+
+**1. `npmrc_auth` could not match a quoted value.** npm's ini serializer
+`JSON.stringify()`s any value containing `=` — base64 padding, so most real
+`_auth` and Artifactory `_authToken` values — which makes
+`_auth="dXNlcjpwYXNzd29yZA=="` the form `npm config set` writes, not an edge
+case. `[^\s"']` cannot consume the opening `"`, and one position later the
+lookbehind no longer holds, so the line was skipped ENTIRELY rather than
+truncated at the quote as the source comment claimed. The branch's own
+disclosed-loss test only covered an EMBEDDED quote. Since §3b keeps `.npmrc`
+off the denylist precisely because this detector covers it, the log entry above
+claiming "0 files reach the model in cleartext, against 3 before" was FALSE for
+the canonical spelling of `~/.npmrc`. Fixed by taking an optional quote inside
+the lookbehind, which `json_secret_field` already does.
+
+**2 & 3. `pgpass_line` and `kubeconfig_token` were the `PWD=` class.** A numeric
+second field is not rare: `12:34:56:789:request completed ok`, an expanded IPv6
+address and `CACHE:8080:web:nginx:restarting` all cleared the port gate, and
+`[^\r\n]{1,512}` then ate the rest of the line. A 16-character floor is not a
+discriminator either: every identifier expression clears it, and
+`token: z.string().min(1),` — this repo's own `packages/daemon/src/discovery.ts:8`
+— was destroyed, as were `token: process.env.GITHUB_TOKEN,` and
+`token: matchStack.token,`. `filterOutput` redacts before chunking and persists
+only the redacted raw, so `mega output chunk` could not recover the bytes.
+
+Both fences the branch added were VACUOUS: the two five-field negatives have a
+non-numeric second field, so `\d{1,5}` rejected them at position 0 and they
+never exercised the shape that over-matched; the evidence-preservation
+negatives for `kubeconfig_token` were all short values that the floor rejected
+anyway. Fixed by gating on value SHAPE and anchoring to end of line — a
+`.pgpass` password is the last field and cannot contain an unescaped `:`
+(escapes are now honoured), a kubeconfig token is a YAML scalar. Thirteen
+non-vacuous negatives added, taken verbatim from the reviewers' corpora.
+
+**Re-rejected: deny `**/.npmrc`.** Correct that §3b's rationale was falsified as
+shipped, wrong about which side to fix. The falsified thing was the detector,
+not the placement; `**/.npmrc` has no un-deny (I1) and would deny this repo's
+own four-line settings file. A broken detector is a bug in the detector.
+
+Cost, disclosed and pinned: the end-of-line anchor means a value past its bound
+is now missed ENTIRELY instead of truncated (>512 for pgpass, >4096 for
+kubeconfig), a kubeconfig token followed by an inline `# comment` is missed, and
+a bare identifier alone on the line still over-redacts because it is
+byte-identical to a real scalar. The superlinear seed for `pgpass_line` had to
+change with it — the old A-run no longer matches at any length, and a seed that
+never fires measures a pattern that does not exist (the `age_secret_key` trap).
+Re-measured: all three still linear, ~4.1x on a 4x step.
+
+Each guard reverted alone: dropping the optional quote reddens 3 tests;
+dropping the shape class reddens 5; dropping the end-of-line anchor with the
+shape class kept reddens 5 more, so neither half of the `kubeconfig_token` fix
+is redundant.
+
+`pnpm verify` exit 0 — 56/56 turbo tasks, policy 791/791, conventions ok.
+
+Sources: [[docs/superpowers/specs/2026-07-25-secret-path-home-credentials-design]],
+[[entities/policy]], [[concepts/unbounded-run-redos]].
+## 2026-07-26 — evidence GC deleted a live session's chunk set
+
+Root cause was the KEY, not the helper. A chunk file is addressed by
+`(workspaceKey, session dir, chunkSetId)`, but the delete and hold paths
+identified it by bare `chunkSetId` — safe only while ids were `randomUUID`,
+broken once the saver made them `cs-${sha256(raw)[:32]}`, weaponized when
+`sweepEvidenceStore` wired `ChunkDeletePort` to the store-wide first-match
+`locateChunkSet` scan. The daily, unattended PostToolUse GC could delete a LIVE
+session's (or another repo's) raw output while the expired record's own copy
+survived, leaving the ledger claiming `available` over a deleted file.
+
+Fixed at the two places all consumers route through: `ChunkDeletePort` now takes
+`ChunkRef { workspaceKey, sessionRef, chunkSetId }` (the record already carried
+all three) and `sweepEvidenceStore` deletes only at that path; `pruneOlderThan`
+takes `keepChunkSetKeys` built from the new exported `chunkSetKey`. Fail
+directions are deliberately opposite: an unscopable delete is a no-op, an
+unscopable hold over-retains.
+
+The pin walker never called `locateChunkSet`, so its RED was captured AFTER the
+delete-path fix was green — the evidence that fixing the scan alone was not
+enough. Each guard reverted alone goes red alone. `locateChunkSet` keeps the
+read path (colliding sets are byte-identical) with its false "globally unique"
+comment corrected and a guard test fencing it out of the delete/hold sources.
+
+`pnpm verify` exit 0 (56/56 typecheck, 56/56 test).
+
+See [[concepts/chunk-set-identity]].
+Sources: [[docs/superpowers/specs/2026-07-25-evgc-content-id-collision-design]],
+[[docs/superpowers/plans/2026-07-25-evgc-content-id-collision-plan]].
+
+
+## 2026-07-26 — the triple is the address, not the owner
+
+Review of the collision fix found the residual case: two evidence records in the
+SAME workspace and session share one chunk file (saver-seen fails open — FIFO
+cap 500, lock skip, parse fail), so `gcEvidence` deleting on behalf of whichever
+expired first still stripped the raw a PINNED or unexpired twin advertised as
+`rawExpandable`. Pre-existing, but the same defect class the fix claimed closed.
+
+`gcEvidence` now precomputes the addresses of the records that survive the pass
+and skips the unlink when the expiring record shares one; it still degrades the
+metadata. `revokeEvidence` keeps deleting unconditionally — a revoke is a
+requested destruction, not housekeeping.
+
+RED first: pinned twin and live twin both lost their file; the guard reverted
+alone goes red alone (3 tests).
+
+See [[concepts/chunk-set-identity]].
+---
+
+## 2026-07-26 — hook settings write dropped the operator's file mode (HIGH)
+
+`packages/connectors/claude-code/src/hook-settings.ts` `writeSettings()` created
+its temp file with no `mode` and never chmod'd, so `rename()` swapped in a fresh
+`0644` inode (umask 022) over `~/.claude/settings.json` — the file that holds
+`env.ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN`. Verified starting-mode matrix:
+`600→644`, `640→644`, `400→644`, fresh create `644`. Five reaching call sites,
+all through the one function: `mega hooks install`, `mega hooks uninstall`,
+`mega init` (first-run onboarding), the GUI "Connect Saver hook" toggle both
+directions, and the currently-dormant `ClaudeRouteAdapter.ensureHooks()`.
+
+The contract was already pinned inside the same package: `proxy-route.ts` had a
+second, hardened writer for the same file (`existingMode ?? 0o600` + `chmodSync`
++ fsync + symlink refusal). One adapter object could be observed writing `0600`
+via `apply()` and then reverting it to `0644` via `ensureHooks()`.
+
+Fix: extracted the hardened writer to `src/settings-write.ts`
+(`writeSettingsFile`) and pointed both call paths at it; both private copies
+deleted. Direction was forced — `proxy-route.ts` already imports from
+`hook-settings.ts`, so the reverse import would be circular (§8).
+
+Two things the extraction surfaced that the spec did not predict:
+
+- **The verbatim writer could not preserve `0400`.** It chmod'd the temp file
+  then reopened it `r+` to fsync → `EACCES`. Fixed by writing through the one
+  fd from `openSync(tmp, "wx", mode)` and chmod'ing after close, still before
+  the rename. `mega proxy` had this latent failure too.
+- **`chmodSync` is only load-bearing for umask-sensitive modes.** Dropping it
+  leaves `0600`/`0640`/`0400` correct under umask 022, so the mutation test
+  needed a `0660` row to go red. That row is in the suite for that reason.
+
+Behaviour break, named in the changeset: a **symlinked** settings path is now
+refused. Observed at HEAD — the rename destroyed the symlink and the
+dotfiles-repo target never received the hooks, so the operator's tracked file
+silently diverged. Failing loudly beats that.
+
+Tests: `packages/connectors/claude-code/test/hook-settings-permissions.test.ts`,
+platform-guarded (`describe.skip` on win32, proven to report *skipped* rather
+than vacuously passing by flipping the condition once). Mode preservation is
+asserted in both directions — `0644` stays `0644`, so the fix does not
+over-correct by silently narrowing an operator's choice.
+
+Sources: [[docs/superpowers/specs/2026-07-25-hook-settings-file-mode-design]],
+[[docs/superpowers/plans/2026-07-25-hook-settings-file-mode-plan]].
+
+## 2026-07-26 — the widened files the mode fix cannot heal (review R7)
+
+Review of the mode-preservation fix: it stops new widening but heals nothing.
+Preservation is deliberate (spec §3 alt 2 — silently narrowing someone else's
+agent config is the mirror of the bug), so every `~/.claude/settings.json` that
+a pre-fix `mega hooks install` / `mega init` left at `0644` stays `0644`
+forever, on a file holding `ANTHROPIC_API_KEY`. Confirmed the population is
+undetectable at HEAD: no `statSync` on the settings path anywhere in
+`apps/cli/src` or `apps/gui/bridge`, and no mode/chmod/perm reference in
+`doctor.ts` or `doctor-saver.ts`.
+
+Fix is a noticer, not a healer: `checkSettingsPermissions()` in
+`apps/cli/src/commands/doctor.ts` stats the resolved settings path and, when
+`mode & 0o077` is non-zero, emits the repo's WARN shape (`pass: true` +
+`warn:`-prefixed reason, never touches the exit code — `doctor-saver.ts:242`)
+naming `chmod 600 <path>`. Read-only; `mega doctor` does not chmod the
+operator's file. `win32` short-circuits to `n/a` — NTFS ignores POSIX bits, so
+every Windows file would otherwise report a permanent false `0666`.
+
+`stat`, not `lstat`: the writer refuses symlinks, but for *exposure* it is the
+target's bits that matter, and a broken link stats as `absent` — the honest
+answer.
+
+Load-bearing proof (two mutations, backup restored after each): `if (true)
+return {...pass:true}` → 4 red; `mode & 0o077` → `mode & 0o007` → 1 red (the
+`0o640` row). Smoke: `claude-code-settings-perms 644 PASS (warn:
+group/world-accessible — run: chmod 600 …)`, quiet at `600`.
+
+Spec risk table gained R7; the changeset names the already-widened population
+and adds `@megasaver/cli` to the bump list.
+
+Tests: `apps/cli/test/doctor.test.ts` (`checkSettingsPermissions`, posix-only).
+
+Sources: [[docs/superpowers/specs/2026-07-25-hook-settings-file-mode-design]],
+[[entities/connectors-claude-code]].

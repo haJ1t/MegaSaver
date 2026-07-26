@@ -108,6 +108,44 @@ describe("evaluateCommand — secret-path denylist on args (epic §9a)", () => {
       allowed: true,
     });
   });
+
+  // REGRESSION FENCES, not red-first tests, and the distinction is worth
+  // stating: these went green the moment the 2026-07-25 globs landed in
+  // SECRET_PATH_PATTERNS, because this gate reads the SAME table as the read
+  // gate — that is the whole argument for fixing the table instead of guarding
+  // each caller. The original leak report never named this second consumer, and
+  // nothing else asserts it, so the cases must exist.
+  const deniedHomeCredentials: ReadonlyArray<readonly [string, readonly string[]]> = [
+    ["cat", ["/Users/u/.pgpass"]],
+    ["grep", ["-r", "x", "/Users/u/.kube/config"]],
+    ["tail", ["/Users/u/.config/gh/hosts.yml"]],
+    ["cat", ["/Users/u/.docker/config.json"]],
+    ["grep", ["--include=.pgpass", "-e", "=", "."]],
+  ];
+
+  for (const [command, args] of deniedHomeCredentials) {
+    it(`denies secret_path_read for: ${command} ${args.join(" ")}`, () => {
+      expect(evaluateCommand(input(command, args))).toEqual({
+        allowed: false,
+        reason: "secret_path_read",
+      });
+    });
+  }
+
+  // The other half. A file-level glob that swallowed its directory would break
+  // ordinary inspection, and there is no field to un-deny a baseline path.
+  const allowedNeighbours: ReadonlyArray<readonly [string, readonly string[]]> = [
+    ["ls", ["/Users/u/.kube"]],
+    ["cat", ["/Users/u/.docker/daemon.json"]],
+    ["ls", ["/Users/u/.kube/cache/http"]],
+    ["cat", ["/Users/u/.config/gh/config.yml"]],
+  ];
+
+  for (const [command, args] of allowedNeighbours) {
+    it(`still allows: ${command} ${args.join(" ")}`, () => {
+      expect(evaluateCommand(input(command, args))).toEqual({ allowed: true });
+    });
+  }
 });
 
 describe("evaluateCommand — project deny.commands (permissions-yaml §4.2)", () => {

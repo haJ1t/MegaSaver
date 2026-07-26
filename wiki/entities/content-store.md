@@ -6,7 +6,7 @@ sources:
   - docs/superpowers/specs/2026-06-25-diff-on-reread-design.md
 status: active
 created: 2026-05-11
-updated: 2026-06-26
+updated: 2026-07-26
 ---
 
 # `@megasaver/content-store`
@@ -33,8 +33,13 @@ itself — that would require importing core (forbidden, see below).
   `ContentStoreError("not_found")` on miss.
 - `listChunkSets(...): Promise<readonly ChunkSetSummary[]>`.
 - `deleteChunkSet(...): Promise<void>`.
-- `pruneOlderThan({ storeRoot, olderThan }): Promise<{ removed }>` —
+- `pruneOlderThan({ storeRoot, olderThan, keepChunkSetKeys? }): Promise<{ removed }>` —
   caller passes an explicit clock (no module-level `Date.now()`).
+  `keepChunkSetKeys` holds `chunkSetKey` values, not bare ids — see
+  [[concepts/chunk-set-identity]].
+- `chunkSetKey({ topDir, sessionDir, chunkSetId }): string` — the `/`-joined
+  address of one chunk file; the shared key between the store's own walk and
+  the composer's retention holds.
 - `chunkSchema` / `Chunk`, `chunkSetSchema` / `ChunkSet`,
   `ChunkSetSummary` (`src/chunk-set.ts`). `ChunkSet.source` is a
   discriminated union keyed on `OutputSourceKind` imported from

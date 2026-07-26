@@ -11,7 +11,11 @@ export type LocatedChunkSet =
 const WORKSPACE_KEY_DIR = /^[0-9a-f]{16}$/;
 
 // Walks <store>/content/<topDir>/<sessionDir>/ for <chunkSetId>.json.
-// Chunk-set ids are globally unique (§3d), so the first match owns it.
+// READ PATH ONLY. Saver ids are sha256 of the pre-redaction raw output, so two
+// sessions with identical output share an id and this returns an arbitrary one
+// of them. Redaction is deterministic, so colliding sets are byte-identical and
+// any match serves a read. Never resolve a delete or a retention hold with it —
+// those address the (workspaceKey, sessionDir, chunkSetId) triple.
 // Schema/ownership validation is delegated to the loaders, not done here.
 export function locateChunkSet(input: {
   storeRoot: string;

@@ -151,6 +151,24 @@ GUI bridge can consume it (`apps/gui` cannot import `apps/cli` — §8). Module
 `src/hook-settings.ts`; pure + boundary-validated; writes are **atomic**
 (temp file + `rename`, so a crash can't truncate the user's global config).
 
+> **Since 2026-07-26 there is exactly ONE writer of `settings.json`:**
+> `src/settings-write.ts` `writeSettingsFile(path, settings)`. Both
+> `hook-settings.ts` (install/uninstall) and `proxy-route.ts` (route
+> apply/remove) call it; neither hand-rolls its own any more. Contract:
+> preserve the existing file mode exactly, `0600` when creating fresh, refuse
+> a symlinked path, fsync the temp file and the directory around the rename.
+> Before this, `hook-settings.ts` had its own copy with no mode handling, so
+> every `mega hooks install` / `uninstall` / `mega init` / GUI toggle reset an
+> operator's `0600` (or `0400`) hardening of an API-key-bearing file to `0644`
+> — while the sibling writer one call away implemented the invariant. Source:
+> [[docs/superpowers/specs/2026-07-25-hook-settings-file-mode-design]].
+>
+> Preservation cuts both ways: a file an *older* build already widened to
+> `0644` is preserved at `0644` forever. `mega doctor` is the only detector —
+> `checkSettingsPermissions()` (`apps/cli/src/commands/doctor.ts`) warns with
+> `chmod 600 <path>` when `mode & 0o077` is non-zero. Read-only by design; the
+> product never chmods the operator's agent config (spec §4 R7).
+
 Public surface (added):
 
 - `installClaudeCodeHook({ settingsPath, command? })` — idempotent add of

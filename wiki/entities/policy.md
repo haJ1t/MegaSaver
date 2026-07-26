@@ -33,6 +33,18 @@ See [[decisions/policy-is-bb3]] for the rationale. Shipped BB3
   — default-deny secret-path denylist (`src/secret-paths.ts`): `.env`,
   `.env.*`, `.ssh/**`, `.aws/credentials`, `*.pem`, `*.key`, `id_rsa`,
   `id_ed25519`, `service-account*.json`, … Added Revision 2 (F-CRIT-2).
+  **24 globs** as of 2026-07-25 — 15 original, +4 in #309 (`.netrc`,
+  `_netrc`, `.pypirc`, `.git-credentials`), +5 for the home credential
+  stores (`.pgpass`, `pgpass.conf`, `.docker/config.json`, `.kube/config`,
+  `.config/gh/hosts.yml`). All FILE-level: deny only when the exact
+  filename is credentials-only regardless of location, because a baseline
+  denial has no un-deny field (I1) and a directory glob would blind the
+  agent to `.kube/cache`, `.docker/daemon.json` and `.config/gh/config.yml`.
+  `.npmrc` stays a RECORDED EXCLUSION, covered on the output side instead.
+  One table, three consumers — the read gates (`runTwoGates` /
+  `runOverlayTwoGates`), `evaluateCommand`'s arg scan, and
+  `core/handoff-export`'s hunk filter — so an amendment lands in all three
+  and no per-caller guard exists.
 - `redact(text: string): RedactResult` — `{ redacted, count }`
   (`src/redact.ts` + `src/redaction-patterns.ts`).
 - `policyDenyCodeSchema` / `PolicyDenyCode` (`src/deny-code.ts`) —
@@ -319,9 +331,9 @@ Sources:
 
 ## Carrier residual gaps closed (2026-07-26)
 
-`REDACTION_PATTERNS` is 40 rows and `OBSERVED_PATTERNS` is 1 (`email`). §5a's
-locked ten plus §5b's 31 post-lock rows account for all 41, since §5b's count
-spans both tables.
+`REDACTION_PATTERNS` is 43 rows and `OBSERVED_PATTERNS` is 1 (`email`) as of
+2026-07-25. §5a's locked ten plus §5b's 34 post-lock rows account for all 44,
+since §5b's count spans both tables.
 
 Three gaps that §5b had **disclosed and left open** are now closed. Twelve
 shapes that measured `fired: (none)` against `769d7efd` redact:

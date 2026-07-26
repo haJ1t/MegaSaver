@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { writeSettingsFile } from "./settings-write.js";
 
 // Wave 1 (spec 2026-07-09): PreToolUse telemetry and the PostToolUse saver
 // now cover the same tool surface — agent/search tools plus any MCP tool —
@@ -343,23 +343,6 @@ function readSettings(settingsPath: string): unknown {
   return JSON.parse(readFileSync(settingsPath, "utf8"));
 }
 
-// Atomic write: a global user file (~/.claude/settings.json) must never be left
-// truncated by a crash mid-write. Write a sibling temp file, then rename() over
-// the target — rename is atomic within a filesystem, so a reader sees either the
-// old file or the complete new one, never a partial.
-function writeSettings(settingsPath: string, settings: SettingsObject): void {
-  const dir = dirname(settingsPath);
-  mkdirSync(dir, { recursive: true });
-  const tempPath = join(dir, `.${randomUUID()}.tmp`);
-  try {
-    writeFileSync(tempPath, `${JSON.stringify(settings, null, 2)}\n`);
-    renameSync(tempPath, settingsPath);
-  } catch (error) {
-    rmSync(tempPath, { force: true });
-    throw error;
-  }
-}
-
 export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): ClaudeCodeHookResult {
   const cfg = input.config ?? {};
   const command = input.command ?? buildHookCommand("log", cfg);
@@ -379,7 +362,7 @@ export function installClaudeCodeHook(input: InstallClaudeCodeHookInput): Claude
   if (JSON.stringify(next) === JSON.stringify(existing)) {
     return { settingsPath: input.settingsPath, changed: false };
   }
-  writeSettings(input.settingsPath, next);
+  writeSettingsFile(input.settingsPath, next);
   return { settingsPath: input.settingsPath, changed: true };
 }
 
@@ -403,7 +386,7 @@ export function uninstallClaudeCodeHook(input: InstallClaudeCodeHookInput): Clau
   next = removeUserPromptSubmitHook(next, INTENT_HOOK_COMMAND);
   next = removeSessionStartHook(next, WARMUP_HOOK_COMMAND);
   next = removeGuardHook(next, GUARD_HOOK_COMMAND);
-  writeSettings(input.settingsPath, next);
+  writeSettingsFile(input.settingsPath, next);
   return { settingsPath: input.settingsPath, changed: true };
 }
 

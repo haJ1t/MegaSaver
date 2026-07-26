@@ -236,8 +236,8 @@ describe("revoke / explain (secret purge)", () => {
       workspaceKey,
       evidenceId: rec.evidenceId,
       reason: "secret_false_negative",
-      deleteChunk: async (id) => {
-        deleted.push(id);
+      deleteChunk: async (ref) => {
+        deleted.push(ref.chunkSetId);
       },
       now: new Date("2026-06-16T13:00:00.000Z"),
     });
@@ -345,8 +345,8 @@ describe("gcEvidence", () => {
       storeRoot,
       workspaceKey,
       now: new Date("2026-06-16T13:00:00.000Z"),
-      deleteChunk: async (id) => {
-        deleted.push(id);
+      deleteChunk: async (ref) => {
+        deleted.push(ref.chunkSetId);
       },
     });
     expect(res.degraded).toBe(1);
@@ -356,6 +356,29 @@ describe("gcEvidence", () => {
     expect(loaded.revocationReason).toBeNull(); // GC is NOT a revocation
     expect(loaded.transitions.at(-1)).toMatchObject({ kind: "raw_gc" });
     expect(deleted).toEqual(["cs-7"]);
+  });
+
+  // Chunk-set ids are content-derived, so the triple addresses the file, not
+  // its owner: another record in the same session can still point at it.
+  it("does not delete a chunk another available record still points at", async () => {
+    const expired = input({ expiresAt: "2026-06-16T12:30:00.000Z", redactedRawChunkSetId: "cs-9" });
+    const live = input({ expiresAt: "2026-07-16T12:30:00.000Z", redactedRawChunkSetId: "cs-9" });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: expired });
+    await appendEvidence({ storeRoot, redactSourceRef: (r) => r, record: live });
+    const deleted: string[] = [];
+    const res = await gcEvidence({
+      storeRoot,
+      workspaceKey,
+      now: new Date("2026-06-16T13:00:00.000Z"),
+      deleteChunk: async (ref) => {
+        deleted.push(ref.chunkSetId);
+      },
+    });
+    expect(res.degraded).toBe(1);
+    expect(deleted).toEqual([]);
+    expect(
+      await getEvidenceStatus({ storeRoot, workspaceKey, evidenceId: expired.evidenceId }),
+    ).toBe("retained_metadata_only");
   });
 
   it("pinned evidence survives ordinary GC", async () => {
