@@ -84,6 +84,9 @@ importers:
       '@megasaver/memory-graph':
         specifier: workspace:*
         version: link:../../packages/memory-graph
+      '@megasaver/memory-recall':
+        specifier: workspace:*
+        version: link:../../packages/memory-recall
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../../packages/output-filter
@@ -471,6 +474,9 @@ importers:
       '@megasaver/core':
         specifier: workspace:*
         version: link:../core
+      '@megasaver/memory-recall':
+        specifier: workspace:*
+        version: link:../memory-recall
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter
@@ -613,6 +619,9 @@ importers:
       '@megasaver/indexer':
         specifier: workspace:*
         version: link:../indexer
+      '@megasaver/memory-recall':
+        specifier: workspace:*
+        version: link:../memory-recall
       '@megasaver/output-filter':
         specifier: workspace:*
         version: link:../output-filter

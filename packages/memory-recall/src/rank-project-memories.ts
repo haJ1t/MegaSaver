@@ -53,11 +53,8 @@ function candidatesFor(input: RankProjectMemoriesInput): {
   if (input.entries.length === 0) {
     return { entries: [], candidates: [], omitted: 0 };
   }
-  const entries = searchMemoryEntries(input.entries, {
-    ...input.query,
-    text: input.task,
-    limit: input.entries.length,
-  });
+  const { text: _text, ...filters } = input.query;
+  const entries = searchMemoryEntries(input.entries, { ...filters, limit: input.entries.length });
   const selected = entries.slice(0, MAX_CANDIDATES);
   const workspaceKey = projectWorkspaceKey(input.projectId);
   return {
