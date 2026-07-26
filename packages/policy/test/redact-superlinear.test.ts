@@ -78,6 +78,7 @@ describe("structural gates (spec §6.1)", () => {
     ["digitalocean_token", "g"],
     ["twilio_api_key_sid", "g"],
     ["connection_string_secret", "gi"],
+    ["slack_webhook_url", "g"],
   ])("%s keeps flags %s", (name, flags) => {
     expect(entry(name).pattern.flags).toBe(flags);
   });
@@ -121,13 +122,25 @@ describe("post-lock detector bytes", () => {
     ],
     ["stripe_key", "(?:(?:sk|rk)_(?:live|test)|whsec)_[A-Za-z0-9]{16,}"],
     ["slack_token", "(?:xox[baprse]|xapp)-[A-Za-z0-9-]{10,}"],
-    ["gitlab_token", "gl(?:pat|rt|ptt|dt|cbt|oas)-[A-Za-z0-9_-]{20,}"],
+    [
+      "gitlab_token",
+      "gl(?:pat|oas|rtr|rt|dt|cbt|ptt|ft|ffct|imt|soat|agent|wt)-[A-Za-z0-9_-]{20,}",
+    ],
     ["sendgrid_key", "SG\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{16,}"],
     ["digitalocean_token", "do[opr]_v1_[a-f0-9]{64}"],
     ["twilio_api_key_sid", "\\bSK[0-9a-f]{32}\\b"],
     [
+      "slack_webhook_url",
+      "(?=[A-Za-z0-9/_-])(?<=https?:\\/\\/hooks\\.slack\\.com\\/(?:services|workflows|triggers)\\/)[A-Za-z0-9/_-]{16,}",
+    ],
+    [
       "connection_string_secret",
-      "(?=[^;\\s])(?<=(?:^|;)(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)=)[^;\\s]{8,}",
+      "(?=[^;\\s])(?<=(?:^|;)\\s{0,8}(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)\\s{0,8}=\\s{0,8})(?:\"[^\"]{8,8192}\"|'[^']{8,8192}'|[^;\\s]{8,})",
+      // 2026-07-26: bounded `\s{0,8}` gaps and quoted alternatives. The gaps
+      // are BOUNDED on purpose — `\s*` would make this an unbounded-variable-
+      // length lookbehind, the shape the superlinear change removed. The quoted
+      // runs are bounded for OVER-redaction, not time: on a value whose closing
+      // quote is missing, an unbounded run reaches the next quote in the file.
     ],
   ])("%s matches its pinned bytes", (name, source) => {
     expect(entry(name).pattern.source).toBe(source);
@@ -180,18 +193,29 @@ describe("post-lock detector bytes", () => {
     "pypi_token",
     "vault_token",
     "bip32_xprv",
+    // The 2026-07-26 vendor rows are prefix detectors too. They were missing
+    // here while the comment above claimed the list was complete.
+    "stripe_key",
+    "slack_token",
+    "gitlab_token",
+    "sendgrid_key",
+    "digitalocean_token",
+    "twilio_api_key_sid",
   ] as const;
 
-  it.each(["jwk_private_key", "jwt"] as const)("%s runs before every prefix detector", (early) => {
-    const names = REDACTION_PATTERNS.map((x) => x.name);
-    expect(names).toContain(early);
-    for (const later of PREFIX_DETECTORS) {
-      // Without this, a renamed detector makes indexOf return -1 and the
-      // comparison below passes vacuously.
-      expect(names).toContain(later);
-      expect(names.indexOf(early)).toBeLessThan(names.indexOf(later));
-    }
-  });
+  it.each(["jwk_private_key", "jwt", "slack_webhook_url"] as const)(
+    "%s runs before every prefix detector",
+    (early) => {
+      const names = REDACTION_PATTERNS.map((x) => x.name);
+      expect(names).toContain(early);
+      for (const later of PREFIX_DETECTORS) {
+        // Without this, a renamed detector makes indexOf return -1 and the
+        // comparison below passes vacuously.
+        expect(names).toContain(later);
+        expect(names.indexOf(early)).toBeLessThan(names.indexOf(later));
+      }
+    },
+  );
 });
 
 // ─── §6.2 equivalence corpus ─────────────────────────────────────────────────
@@ -939,11 +963,12 @@ describe("non-vacuity gate — every detector in the table", () => {
       "digitalocean_token",
       "twilio_api_key_sid",
       "connection_string_secret",
+      "slack_webhook_url",
     ]);
     const shipped = REDACTION_PATTERNS.map((p) => p.name);
     expect(shipped.filter((n) => !covered.has(n))).toEqual([]);
     // Pins the table size: the wiki claimed 33 by summing two exported tables.
-    expect(shipped).toHaveLength(39);
+    expect(shipped).toHaveLength(40);
     expect(OBSERVED_PATTERNS).toHaveLength(1);
   });
 });
@@ -1086,6 +1111,124 @@ describe("vendor and connection-string carriers", () => {
     expect(redactWithFindings(`sk-${"A".repeat(24)}`).findings.map((f) => f.name)).toEqual([
       "openai_key",
     ]);
+  });
+});
+
+// ── the three gaps spec §5b disclosed and left open ──────────────────────────
+// Every fixture here measured `fired: (none)` against 769d7efd. The controls
+// below redact on that commit, so they cannot be what turns this block green —
+// they are here to catch a regression that kills a detector outright.
+describe("residual carriers disclosed in spec §5b", () => {
+  const HOOK = "aBcDeFgHiJkLmNoPqRsTuVwX";
+
+  it.each([
+    ["services", `POST https://hooks.slack.com/services/T00000000/B00000000/${HOOK}`],
+    ["workflows", `https://hooks.slack.com/workflows/T0000/A0000/1234567890/${HOOK}`],
+    ["triggers", `https://hooks.slack.com/triggers/T0000/1234567890/${HOOK}`],
+    ["plaintext http", `http://hooks.slack.com/services/T0/B0/${HOOK}`],
+  ])("redacts a Slack %s webhook URL", (_l, input) => {
+    const { redacted, findings } = redactWithFindings(input);
+    expect(findings.map((f) => f.name)).toContain("slack_webhook_url");
+    expect(redacted).not.toContain(HOOK);
+  });
+
+  // Host and endpoint kind stay readable: report grouping needs a host, and a
+  // reader needs to know which Slack surface leaked. Same reason
+  // `url_basic_auth` keeps its host and `sendgrid_key` keeps `SG.`.
+  it("keeps the Slack host and endpoint kind out of the redaction", () => {
+    expect(
+      redactWithFindings(`https://hooks.slack.com/services/T00000000/B00000000/${HOOK}`).redacted,
+    ).toBe("https://hooks.slack.com/services/[REDACTED]");
+  });
+
+  it.each([
+    ["glrtr", "glrtr-"],
+    ["glft", "glft-"],
+    ["glffct", "glffct-"],
+    ["glimt", "glimt-"],
+    ["glsoat", "glsoat-"],
+    ["glagent", "glagent-"],
+    ["glwt", "glwt-"],
+  ])("redacts a GitLab %s- token", (_l, prefix) => {
+    const body = "A".repeat(20);
+    const { redacted, findings } = redactWithFindings(`token=${prefix}${body}`);
+    expect(findings.map((f) => f.name)).toContain("gitlab_token");
+    expect(redacted).not.toContain(body);
+  });
+
+  const PW = "Pl4inTextOdbcPassw0rdZZ";
+
+  it.each([
+    ["a space after the ; separator", `Server=tcp:h,1433; Password=${PW};Encrypt=True`],
+    ["spaces around the = sign", `Server=tcp:h,1433;Password = ${PW};Encrypt=True`],
+    ["a newline after the ; separator", `Server=tcp:h,1433;\nPassword=${PW};\nEncrypt=True`],
+    ["a newline plus indent", `Server=tcp:h,1433;\n    Password=${PW};`],
+  ])("redacts a connection-string password with %s", (_l, input) => {
+    const { redacted, findings } = redactWithFindings(input);
+    expect(findings.map((f) => f.name)).toContain("connection_string_secret");
+    expect(redacted).not.toContain(PW);
+  });
+
+  // ADO.NET quotes a value that legally contains the `;` delimiter. Before this
+  // change the body saw `"pw` — three characters, under the 8-char floor — so
+  // NOTHING matched: not a shortened redaction, no finding at all, and the whole
+  // password leaked including the segment before the first delimiter.
+  it.each([
+    ["double", `Server=a;Password="pw;with;semis;ZZZZ";Encrypt=True`],
+    ["single", `Server=a;Password='pw;with;semis;ZZZZ';Encrypt=True`],
+  ])("redacts a %s-quoted value containing the ; delimiter", (_l, input) => {
+    const { redacted, findings } = redactWithFindings(input);
+    expect(findings.map((f) => f.name)).toContain("connection_string_secret");
+    expect(redacted).not.toContain("semis");
+    expect(redacted).toContain("Server=a");
+    expect(redacted).toContain("Encrypt=True");
+  });
+
+  it.each([
+    ["glpat", `token=glpat-${"A".repeat(20)}`, "gitlab_token"],
+    ["bare ;Password=", `Server=h;Password=${PW};X=1`, "connection_string_secret"],
+  ])("control: %s still redacts", (_l, input, detector) => {
+    expect(redactWithFindings(input).findings.map((f) => f.name)).toContain(detector);
+  });
+
+  // Over-redaction, not under: a value whose closing quote is missing lets the
+  // run reach the NEXT quote in the input, taking the following field name with
+  // it. Malformed input, and erring toward redacting more is the safe direction
+  // — but it is a behaviour, so it is pinned rather than left to surprise.
+  it("an unterminated quote swallows the following field, capped by the bound", () => {
+    const out = redactWithFindings(`a=1;Password="unterminated;Other=${"z".repeat(12)}";b=2`);
+    expect(out.findings.map((f) => f.name)).toContain("connection_string_secret");
+    expect(out.redacted).toBe("a=1;Password=[REDACTED];b=2");
+  });
+
+  // A quoted value OVER the bound falls through to the unquoted alternative,
+  // which is unbounded — so length alone never leaks. Only length AND a `;`
+  // inside do, because the unquoted run stops at the delimiter.
+  it("a quoted value over the bound is still redacted when it holds no ;", () => {
+    expect(redactWithFindings(`a=1;Password="${"q".repeat(9000)}";b=2`).redacted).toBe(
+      "a=1;Password=[REDACTED];b=2",
+    );
+  });
+
+  it.each([
+    ["at the bound", 8000, true],
+    ["over the bound", 9000, false],
+  ])("a ;-bearing quoted value %s is redacted: %s", (_l, len, want) => {
+    const input = `a=1;Password="qqqqqqqqqq;${"r".repeat(len)}";b=2`;
+    expect(!redactWithFindings(input).redacted.includes("r".repeat(20))).toBe(want);
+  });
+
+  // Disclosed losses this change CREATES — spec §5. Pinning them keeps a later
+  // widening honest: if one of these starts redacting, a bound moved.
+  it.each([
+    [
+      "nine spaces before the =, over the 8-char gap bound",
+      `Server=h;Password${" ".repeat(9)}=${PW};X=1`,
+    ],
+    ["a quoted value under the 8-char floor", `Server=h;Password="ab";X=1`],
+    ["a Slack webhook path under the 16-char floor", "https://hooks.slack.com/services/T0/B0/x"],
+  ])("disclosed loss: does not redact %s", (_l, input) => {
+    expect(redactWithFindings(input).redacted).toBe(input);
   });
 });
 

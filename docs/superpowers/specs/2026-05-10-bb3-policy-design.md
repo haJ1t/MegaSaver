@@ -326,7 +326,7 @@ CRITICAL amendment must update **in the same commit** and a reviewer is expected
 to check the new bytes against.
 
 Do not read the ten as "the pinned ones". Measured 2026-07-26, exact
-`RegExp.source` pins exist for 5 of these 10 and for 20 of the 30 in §5b;
+`RegExp.source` pins exist for 5 of these 10 and for 21 of the 31 in §5b;
 `anthropic_key`, `openai_key`, `bearer_token` and `env_value` have neither a
 byte nor a flags pin, and `jwt` has a `startsWith` prefix pin only. That gap is
 ADR follow-up F2, not a property of the lock.
@@ -684,9 +684,9 @@ so `count` reflects every occurrence.
 
 ### §5b Post-lock detectors (NOT §5a lock-table rows)
 
-The 30 rows below ship in the same two tables but are **not** covered by the §5a
-lock. They are recorded here so the lock is enumerable: §5a's ten plus these 30
-is the whole of `REDACTION_PATTERNS` (39) and `OBSERVED_PATTERNS` (1). Amendment
+The 31 rows below ship in the same two tables but are **not** covered by the §5a
+lock. They are recorded here so the lock is enumerable: §5a's ten plus these 31
+is the whole of `REDACTION_PATTERNS` (40) and `OBSERVED_PATTERNS` (1). Amendment
 tier is by change shape, not by table — see §5a's scope paragraph and
 [[docs/superpowers/specs/2026-07-26-redaction-lock-scope-adr]].
 
@@ -713,13 +713,14 @@ structural gate only; `flags` = a `.flags` equality pin.
 | `aws_session_token` | `~/.aws/credentials`, env dumps | 2026-07-25-redaction-superlinear-patterns §3f | bytes + flags |
 | `json_secret_field` | gcloud ADC, Azure, docker `auth`, STS fields | 2026-07-25-redaction-superlinear-patterns §3f | bytes + flags |
 | `netrc_password` | `.netrc`, gated on a `machine`/`default` record | 2026-07-25-redaction-superlinear-patterns §3f | bytes + flags |
-| `connection_string_secret` | ADO.NET / ODBC / Azure semicolon strings (`Password=`, `AccountKey=`) | 2026-07-26-policy-followups §T2 | bytes + flags |
+| `connection_string_secret` | ADO.NET / ODBC / Azure semicolon strings (`Password=`, `AccountKey=`), including whitespace around the separator and quoted values holding a `;` | 2026-07-26-policy-followups §T2, 2026-07-26-carrier-residual-gaps §3c | bytes + flags |
 | `stripe_key` | Stripe secret and restricted keys (`sk_`/`rk_`; `pk_` excluded) | 2026-07-26-policy-followups §T2 | bytes + flags |
 | `slack_token` | Slack bot/user/app tokens (`xox[baprs]-`) | 2026-07-26-policy-followups §T2 | bytes + flags |
-| `gitlab_token` | GitLab personal access token (`glpat-`) | 2026-07-26-policy-followups §T2 | bytes + flags |
+| `gitlab_token` | GitLab prefixed tokens — the full documented set (`glpat/gloas/glrtr/glrt/gldt/glcbt/glptt/glft/glffct/glimt/glsoat/glagent/glwt`) | 2026-07-26-policy-followups §T2, 2026-07-26-carrier-residual-gaps §3b | bytes + flags |
 | `sendgrid_key` | SendGrid API key (`SG.`) | 2026-07-26-policy-followups §T2 | bytes + flags |
 | `digitalocean_token` | DigitalOcean PAT (`dop_v1_`) | 2026-07-26-policy-followups §T2 | bytes + flags |
 | `twilio_api_key_sid` | Twilio API Key SID (`SK` + 32 hex) | 2026-07-26-policy-followups §T2 | bytes + flags |
+| `slack_webhook_url` | Slack incoming-webhook / workflow / trigger URLs — the URL is the credential; runs ahead of every prefix detector | 2026-07-26-carrier-residual-gaps §3a | bytes + flags |
 | `npm_token` | `.npmrc` | designed 2026-07-19-redaction-baseline-extension, shipped 2026-07-25 §3f with different bounds | bytes + flags |
 | `pypi_token` | `.pypirc` | designed 2026-07-19-redaction-baseline-extension, shipped 2026-07-25 §3f | bytes + flags |
 | `vault_token` | HashiCorp Vault | 2026-07-25-redaction-superlinear-patterns §3f | bytes + flags |
@@ -748,11 +749,11 @@ than left to be rediscovered; each was verified as a no-redaction:
 | detector | still missed |
 |---|---|
 | `stripe_key` | covers `sk_`/`rk_`/`whsec_`; `pk_` is the PUBLISHABLE key and is excluded on purpose |
-| `slack_token` | covers `xox[baprse]-` and `xapp-`; `https://hooks.slack.com/services/…` webhook URLs are not covered |
-| `gitlab_token` | covers `glpat/glrt/glptt/gldt/glcbt/gloas`; GitLab mints others |
+| `slack_token` | covers `xox[baprse]-` and `xapp-`. Webhook URLs were **closed** on 2026-07-26 by the separate `slack_webhook_url` row — a separate detector rather than a widening of this one, because the URL form shares no prefix with `xox`/`xapp` |
+| `gitlab_token` | **closed** 2026-07-26: the alternation now carries the full documented set. Seven prefixes were missing and each measured `fired: (none)` — `glrtr glft glffct glimt glsoat glagent glwt`. Enumerated, not `gl[a-z]{2,6}-`, which would false-positive on `global-<20 chars>` |
 | `digitalocean_token` | `do[opr]_v1_` covers PAT, OAuth and refresh |
 | `twilio_api_key_sid` | matches the API Key **SID**, which is the HTTP Basic *username* — an identifier, not the secret. Kept for the same reason `aws_access_key` is kept. The actual secrets — Auth Token (32 hex) and API Key Secret (32 alphanumeric) — have **no distinguishing prefix** and are therefore unreachable by a regex at acceptable false-positive cost |
-| `connection_string_secret` | `Pwd=` is deliberately absent: it collides with the universal `PWD` shell variable, which appears in every `env`/`printenv`/CI log, and narrowing the separator was not enough because `PWD=` can sit at position 0. `Password = value` with spaces around `=`, and the legal ADO.NET quoted form `Password="p;w;d"`, are also not covered |
+| `connection_string_secret` | `Pwd=` is deliberately absent: it collides with the universal `PWD` shell variable, which appears in every `env`/`printenv`/CI log, and narrowing the separator was not enough because `PWD=` can sit at position 0. The spaced form `Password = value` and the legal ADO.NET quoted form `Password="p;w;d"` were **closed** 2026-07-26 with three bounded `\s{0,8}` gaps and quoted alternatives; the quoted form previously fired *nothing at all*, because the body saw `"pw` — under the 8-char floor — so there was no match to shorten. Still open: a quoted value over 8192 chars **with an interior `;`**, and `Password` followed by nine or more spaces |
 
 **Do not read §5b as the design list.**
 [[docs/superpowers/specs/2026-07-19-redaction-baseline-extension-design]]
