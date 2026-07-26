@@ -6615,3 +6615,16 @@ Follow-up retry at 16:49 failed with the identical provider error, making four
 failed fresh-context review launches in total. The code and verifier evidence
 remain ready, but the mandatory external-review and pre-merge rebase gates are
 unmet. (source: `wiki/agent-channel.md`)
+
+## [2026-07-26 16:55 +03] test | LM2 product recall surface parity
+
+Added a concrete temporary-store fixture that compares Safe lexical ordering
+from the shared adapter, MCP relevant-memory and search handlers, daemon
+registry recall, and JSON CLI search. It also proves that an unapproved
+suggested memory is excluded on every surface. The fixture found only a
+TypeScript package-boundary issue: the existing MCP handlers were made public
+exports rather than importing MCP internals from the CLI test. `pnpm verify`
+passed after the change. The independent-review and pre-merge integration
+gates remain pending. (source:
+`apps/cli/test/memory/hybrid-recall-surfaces.test.ts`,
+`packages/mcp-bridge/src/index.ts`)

@@ -16,9 +16,10 @@ failure, and MCP/daemon responses now carry the additive `hybrid` receipt.
 `pnpm verify` passed after the implementation. Task 6 remains open only for
 the final independent review and PR/merge handoff: three reviewer launches on
 2026-07-26 failed before execution because the local agent provider returned
-HTTP 404 for both enabled model routes. The optional all-surface fixture is
-covered by adapter, MCP, daemon, and CLI package suites rather than introducing
-a reverse-dependency test into `@megasaver/memory-recall`.
+HTTP 404 for both enabled model routes. A concrete cross-surface fixture in
+the CLI suite now proves identical Safe ordering through the shared adapter,
+both applicable MCP calls, daemon registry recall, and CLI search without
+introducing a reverse dependency into `@megasaver/memory-recall`.
 
 ## Global Constraints
 
@@ -353,7 +354,7 @@ git commit -m "feat(cli): use LM2 for memory text search"
 ### Task 6: End-to-end regression proof, documentation, and review gate
 
 **Files:**
-- Create: `packages/memory-recall/test/product-recall.e2e.test.ts`
+- Create: `apps/cli/test/memory/hybrid-recall-surfaces.test.ts`
 - Modify: `wiki/syntheses/longmemeval-v2-status.md`
 - Modify: `wiki/log.md`
 - Modify: `docs/superpowers/specs/2026-07-26-lm2-product-memory-integration-design.md`
@@ -362,7 +363,7 @@ git commit -m "feat(cli): use LM2 for memory text search"
 shared adapter, MCP relevant-memory, MCP recall, daemon proxy recall, and CLI
 search for their applicable input shape.
 
-- [ ] **Step 1: Write a failing cross-surface parity test.**
+- [x] **Step 1: Write a cross-surface parity test.**
 
 ```ts
 it("preserves the same Safe fallback order across all task recall boundaries", async () => {
@@ -372,18 +373,21 @@ it("preserves the same Safe fallback order across all task recall boundaries", a
 });
 ```
 
-- [ ] **Step 2: Run it and observe any boundary drift.**
+- [x] **Step 2: Run it and observe any boundary drift.**
 
 Run: `pnpm --filter @megasaver/memory-recall test -- product-recall.e2e.test.ts`
 
-Expected: FAIL until all applicable boundaries use the shared adapter.
+Observed: PASS; all applicable boundaries used the shared adapter with the
+same Safe ordering and excluded an unapproved proposed memory.
 
-- [ ] **Step 3: Fix only the discovered parity differences.**
+- [x] **Step 3: Fix only the discovered parity differences.**
 
 Keep the adapter as the authority; do not duplicate ranking or add per-surface
-fallback policies.
+fallback policies. No ranking-policy difference was observed; the test instead
+exposed a package-boundary issue, resolved by exporting the existing MCP
+handlers from the package’s public entry point.
 
-- [ ] **Step 4: Run the complete verification matrix.**
+- [x] **Step 4: Run the complete verification matrix.**
 
 Run: `pnpm --filter @megasaver/long-memory test && pnpm --filter @megasaver/memory-recall test && pnpm --filter @megasaver/mcp-bridge test && pnpm --filter @megasaver/daemon test && pnpm --filter @megasaver/cli test && pnpm verify`
 
@@ -398,7 +402,7 @@ Give each reviewer the final base/head SHAs, this spec, this plan, and the
 verification evidence. Resolve every P0/P1 before merge; record the reviewer
 outputs and any P2 decision in the wiki.
 
-- [ ] **Step 6: Commit docs and evidence.**
+- [x] **Step 6: Commit docs and evidence.**
 
 ```bash
 git add docs/superpowers wiki packages/memory-recall/test

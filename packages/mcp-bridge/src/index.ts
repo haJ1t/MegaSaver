@@ -9,3 +9,13 @@ export * from "./setup/setup-ops.js";
 export * from "./setup/status.js";
 export * from "./tool-name.js";
 export * from "./transport.js";
+export {
+  type GetRelevantMemoriesEnv,
+  type GetRelevantMemoriesResult,
+  handleGetRelevantMemories,
+} from "./tools/get-relevant-memories.js";
+export {
+  type SearchMemoryEnv,
+  type SearchMemoryResult,
+  handleSearchMemory,
+} from "./tools/search-memory.js";
