@@ -135,8 +135,9 @@ describe("post-lock detector bytes", () => {
     ],
     [
       "connection_string_secret",
-      "(?=[^;\\s])(?<=(?:^|;)\\s{0,8}(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)\\s{0,8}=\\s{0,8})(?:\"[^\"]{8,8192}\"|'[^']{8,8192}'|[^;\\s]{8,})",
-      // 2026-07-26: bounded `\s{0,8}` gaps and quoted alternatives. The gaps
+      "(?=[^;\\s])(?<=(?:^|;)\\s{0,8}(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)\\s{0,8}=\\s{0,8})(?:\"(?:[^\"]|\"\"){8,8192}\"|'(?:[^']|''){8,8192}'|[^;\\s]{8,})",
+      // 2026-07-26: bounded `\s{0,8}` gaps and ADO.NET quoted alternatives.
+      // Doubled delimiters are escaped content, not terminators. The gaps
       // are BOUNDED on purpose — `\s*` would make this an unbounded-variable-
       // length lookbehind, the shape the superlinear change removed. The quoted
       // runs are bounded for OVER-redaction, not time: on a value whose closing
@@ -1182,6 +1183,15 @@ describe("residual carriers disclosed in spec §5b", () => {
     expect(redacted).not.toContain("semis");
     expect(redacted).toContain("Server=a");
     expect(redacted).toContain("Encrypt=True");
+  });
+
+  it.each([
+    ["double", `Server=h;Password="abcdefgh""secret-after-quote;ZZZZ";Encrypt=True`],
+    ["single", `Server=h;Password='abcdefgh''secret-after-quote;ZZZZ';Encrypt=True`],
+  ])("redacts an ADO.NET %s-quoted escaped delimiter without a tail", (_l, input) => {
+    const { redacted, findings } = redactWithFindings(input);
+    expect(findings.map((f) => f.name)).toContain("connection_string_secret");
+    expect(redacted).toBe("Server=h;Password=[REDACTED];Encrypt=True");
   });
 
   it.each([

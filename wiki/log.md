@@ -6421,3 +6421,14 @@ tying them to reality.
 
 Sources: [[docs/superpowers/specs/2026-07-26-carrier-residual-gaps-design]],
 [[docs/superpowers/plans/2026-07-26-carrier-residual-gaps-plan]].
+
+## [2026-07-26 18:25 +03] review | approve escaped ADO.NET redaction repair
+
+An independent security review found that the initial quoted connection-string
+branches treated a doubled quote as the terminator, leaving the escaped-quote
+tail visible after a successful `connection_string_secret` finding. The repair
+consumes doubled delimiters as quoted content for both quote styles and pins
+exact redacted output. The reviewer approved the repair with no P0/P1/P2;
+policy tests are 667/667, the whole `pnpm verify` gate passed, and adversarial
+2→4 MiB inputs measured 1.87x (unterminated) and 1.86x (escaped) growth.
+(source: `policy_release_security_review`, 2026-07-26)

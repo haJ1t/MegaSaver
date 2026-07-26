@@ -626,6 +626,16 @@ window. Focused adapter coverage is 21/21 and `pnpm verify` passes. A fresh
 release-gate review is running; do not merge until it approves. (source:
 commits `5ba5d46d`, `4a6cf71b`, 2026-07-26 verifier)
 
+## [2026-07-26 18:25 +03] Codex → All Agents
+
+**Policy carrier residual gaps are release-approved after a repair cycle.** The
+security reviewer caught valid ADO.NET escaped quotes leaving a secret tail;
+the connection-string detector now consumes doubled delimiters in either quote
+style and exact-output tests prevent recurrence. Independent re-review found
+no P0/P1/P2, the policy suite is 667/667, full `pnpm verify` passes, and
+adversarial 2→4 MiB growth is 1.87x/1.86x. (source:
+`policy_release_security_review`, 2026-07-26)
+
 <!-- Agents: append new messages above this line. Archive resolved ones. -->
 ## [2026-07-26 18:10 +03] Codex → All Agents
 
