@@ -20,16 +20,12 @@ import {
   closeAnchoredFile,
   openAnchoredCreateFile,
   sameFileIdentity,
+  secureOpenFlags,
+  syncDirectoryAnchor,
   verifyAnchoredFile,
   verifyDirectoryAnchor,
 } from "./lm2-secure-fs.js";
 import { readExactAnchoredFile } from "./lm2-secure-read.js";
-
-function directoryDescriptor(anchor: DirectoryAnchor): number {
-  const descriptor = anchor.chain.at(-1)?.descriptor;
-  if (descriptor === undefined) throw new Lm2Error("write_failed", "LM2 anchor is incomplete.");
-  return descriptor;
-}
 
 export function materializeAnchoredFile(
   anchor: DirectoryAnchor,
@@ -72,7 +68,7 @@ export function publishAnchoredTemporary(
   if (!sameFileIdentity(target, temp.stat)) {
     throw new Lm2Error("write_failed", "LM2 sidecar publication identity changed.");
   }
-  fsyncSync(directoryDescriptor(anchor));
+  syncDirectoryAnchor(anchor);
   verifyDirectoryAnchor(anchor);
 }
 
@@ -86,7 +82,7 @@ export function closeAndRemoveAnchoredTemporary(anchor: DirectoryAnchor, temp: A
   try {
     verifyDirectoryAnchor(anchor);
     unlinkSync(temp.path);
-    fsyncSync(directoryDescriptor(anchor));
+    syncDirectoryAnchor(anchor);
   } catch (error) {
     failure = combineLm2CleanupFailures(failure, error);
   }
@@ -99,7 +95,7 @@ export function unlinkAnchoredFile(anchor: DirectoryAnchor, name: string): void 
   try {
     const stat = lstatSync(path);
     if (!stat.isFile()) throw new Lm2Error("store_corrupt", "LM2 child is not a regular file.");
-    const descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const descriptor = openSync(path, secureOpenFlags(constants.O_RDONLY));
     try {
       if (!sameFileIdentity(stat, fstatSync(descriptor))) {
         throw new Lm2Error("store_corrupt", "LM2 child identity changed.");
@@ -108,7 +104,7 @@ export function unlinkAnchoredFile(anchor: DirectoryAnchor, name: string): void 
       closeSync(descriptor);
     }
     unlinkSync(path);
-    fsyncSync(directoryDescriptor(anchor));
+    syncDirectoryAnchor(anchor);
     verifyDirectoryAnchor(anchor);
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
@@ -133,7 +129,7 @@ export function replaceAnchoredFile(
   try {
     assertMutationAllowed();
     renameSync(temp.path, anchoredChildPath(anchor, name));
-    fsyncSync(directoryDescriptor(anchor));
+    syncDirectoryAnchor(anchor);
     verifyDirectoryAnchor(anchor);
     replacement = readExactAnchoredFile({
       anchor,

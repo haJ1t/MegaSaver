@@ -29,7 +29,12 @@ import {
 } from "./lm2-catalog-storage.js";
 import { combineLm2CleanupFailures } from "./lm2-cleanup-errors.js";
 import { Lm2Error } from "./lm2-errors.js";
-import { anchoredChildPath, sameFileIdentity, verifyDirectoryAnchor } from "./lm2-secure-fs.js";
+import {
+  anchoredChildPath,
+  sameFileIdentity,
+  secureOpenFlags,
+  verifyDirectoryAnchor,
+} from "./lm2-secure-fs.js";
 
 const TOKEN_BYTES = 65;
 const BUSY_CODES = new Set(["EAGAIN", "EWOULDBLOCK"]);
@@ -80,13 +85,13 @@ function openLock(storage: CatalogStorage): { file: LockFile; created: boolean }
   try {
     descriptor = openSync(
       path,
-      constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+      secureOpenFlags(constants.O_RDWR | constants.O_CREAT | constants.O_EXCL),
       0o600,
     );
     created = true;
   } catch (error) {
     if (errorCode(error) !== "EEXIST") throw error;
-    descriptor = openSync(path, constants.O_RDWR | constants.O_NOFOLLOW);
+    descriptor = openSync(path, secureOpenFlags(constants.O_RDWR));
   }
   try {
     const stat = fstatSync(descriptor);

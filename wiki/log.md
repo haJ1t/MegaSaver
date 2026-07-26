@@ -6866,3 +6866,17 @@ Missing ledgers now return fail-open `false` before lock acquisition; existing
 ledgers retain the reader/writer lock that prevents Windows `EPERM`. Focused
 seen tests and the four-process race remain 6/6. (source:
 `pr312_release_review`, 2026-07-26)
+
+## [2026-07-26 20:06 +03] fix | make LM2 filesystem guards Windows-portable
+
+Windows CI run `30211016909` proved that LM2 passed POSIX-only `O_NOFOLLOW`
+and `O_DIRECTORY` flags unconditionally, so durable index and catalog work
+failed closed before acquiring their Windows `LockFileEx` locks. Shared
+platform helpers now omit only those unsupported flags on Windows, retain the
+existing immediate and repeated `fstat`/`lstat`/symlink checks, and skip only
+directory metadata `fsync` there; file sync and atomic publication remain.
+The stalled-approval fixture's test-only deadline is now 5 s (10 s ceiling),
+because its former 500 ms could expire before reading an existing vector under
+full-Turbo contention. `pnpm verify` passes: 60 tasks; long-memory 46 files /
+416 tests. (source: GitHub Actions run `30211016909`,
+`docs/superpowers/specs/2026-07-26-lm2-windows-filesystem-design.md`)

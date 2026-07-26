@@ -32,7 +32,10 @@ express their intended conditions explicitly:
 
 - Set the harness default deadline to the existing maximum test-safe LM2 batch
   deadline (15 seconds). Tests whose subject is a short timeout already pass an
-  explicit `timeoutMs`; retain those explicit values.
+  explicit `timeoutMs`; retain those explicit values except the stalled-approval
+  fixture, whose 500 ms setup budget can expire before it observes existing
+  progress under a full Turborepo run. That fixture uses 5 seconds solely to
+  reach its intentionally stalled approval, while its test ceiling is 10 seconds.
 - Remove the per-test `pnpm build` helper. The root `verify` workflow builds
   workspace dependencies before tests, and package test children consume that
   stable artifact. This eliminates the concurrent mutation of `dist/`.

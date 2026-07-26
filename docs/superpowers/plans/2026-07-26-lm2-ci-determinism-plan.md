@@ -39,9 +39,11 @@ fixture can observe a missing shared `dist/index.js`.
 - [ ] **Step 2: Make normal multi-batch fixtures deadline-independent**
 
 Change the `createLm2IndexService` test-harness option from `defaultTimeoutMs:
-100` to `defaultTimeoutMs: MAX_LM2_INDEX_BATCH_TIMEOUT_MS`. Do not alter test
-requests that explicitly set `timeoutMs: 5`, `100`, or `500` to exercise the
-timeout contract.
+100` to `defaultTimeoutMs: MAX_LM2_INDEX_BATCH_TIMEOUT_MS`. Keep explicit
+short timeout requests intact, except the stalled-approval fixture: change its
+`timeoutMs` from `500` to `5_000` and its Vitest ceiling from `5_000` to
+`10_000`, so the test reaches the intended pending approval before timing out
+under a full Turborepo run.
 
 - [ ] **Step 3: Remove concurrent workspace rebuilding**
 

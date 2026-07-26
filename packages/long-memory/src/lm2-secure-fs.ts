@@ -12,6 +12,13 @@ import {
 import { basename, dirname, join, parse, relative, resolve, sep } from "node:path";
 import { combineLm2CleanupFailures } from "./lm2-cleanup-errors.js";
 import { Lm2Error } from "./lm2-errors.js";
+import { secureDirectoryOpenFlags, secureOpenFlags } from "./lm2-fs-platform.js";
+
+export {
+  secureDirectoryOpenFlags,
+  secureOpenFlags,
+  syncDirectoryAnchor,
+} from "./lm2-fs-platform.js";
 
 type AnchoredIdentity = { path: string; descriptor: number; stat: Stats };
 
@@ -86,10 +93,7 @@ export function openDirectoryAnchor(path: string, allowMissing: boolean): Direct
     for (const current of paths) {
       let descriptor: number;
       try {
-        descriptor = openSync(
-          current,
-          constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
-        );
+        descriptor = openSync(current, secureDirectoryOpenFlags());
       } catch (error) {
         if (allowMissing && errorCode(error) === "ENOENT") {
           closeDescriptors(chain);
@@ -175,7 +179,7 @@ function openRegularChild(
 ): AnchoredFile {
   verifyDirectoryAnchor(anchor);
   const path = anchoredChildPath(anchor, name);
-  const descriptor = openSync(path, flags | constants.O_NOFOLLOW, mode);
+  const descriptor = openSync(path, secureOpenFlags(flags), mode);
   try {
     const stat = fstatSync(descriptor);
     if (!stat.isFile()) throw new Lm2Error("store_corrupt", "LM2 child is not a regular file.");

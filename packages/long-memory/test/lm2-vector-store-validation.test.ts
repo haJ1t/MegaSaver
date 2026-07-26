@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { modelDescriptorFingerprint } from "../src/lm2-identity.js";
 import type { Lm2QuotaLedger } from "../src/lm2-quota-ledger.js";
@@ -69,13 +69,13 @@ describe("LM2 embedding output validation", () => {
   it("fences the v2 authority from the historical embeddings root", () => {
     const root = "/store";
     expect(embeddingsPath(root, workspaceKey)).toBe(
-      join(root, "long-memory", "v1", workspaceKey, "embeddings-v2"),
+      join(resolve(root), "long-memory", "v1", workspaceKey, "embeddings-v2"),
     );
     expect(legacyEmbeddingsPath(root, workspaceKey)).toBe(
-      join(root, "long-memory", "v1", workspaceKey, "embeddings"),
+      join(resolve(root), "long-memory", "v1", workspaceKey, "embeddings"),
     );
     expect(vectorQuotaLedgerPath(root, workspaceKey)).toBe(
-      join(root, "long-memory", "v1", workspaceKey, ".lm2", "vector-quota-ledger-v1.json"),
+      join(resolve(root), "long-memory", "v1", workspaceKey, ".lm2", "vector-quota-ledger-v1.json"),
     );
   });
 

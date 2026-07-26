@@ -839,7 +839,7 @@ describe("LM2 explicit indexer", () => {
       workspaceKey,
       modelFingerprint: modelDescriptorFingerprint(model),
       maxRecords: 256,
-      timeoutMs: 500,
+      timeoutMs: 5_000,
     });
 
     expect(receipt).toMatchObject({
@@ -865,7 +865,7 @@ describe("LM2 explicit indexer", () => {
     });
     expect(next).toMatchObject({ status: "ready", quotaRecovery: "not_needed" });
     if (next.status === "ready") await next.finalize();
-  }, 5_000);
+  }, 10_000);
 
   it("uses original-batch existing progress for a non-denial transient", async () => {
     const existing = snapshot(0);
