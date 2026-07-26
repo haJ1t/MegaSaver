@@ -6706,3 +6706,34 @@ saturated 1,000-record window, and shared CLI/MCP/daemon adapter behavior.
 `pnpm verify` is green. The branch is clean, rebased on current `origin/main`,
 and ready for a user-authorized push and pull request. (source:
 `lm2_final_release_approval`, 2026-07-26)
+## 2026-07-26 — policy: three disclosed carrier gaps closed
+
+Closed the three gaps §5b's "Disclosed coverage gaps" table recorded as known
+and unclosed. Twelve shapes measured `fired: (none)` against `769d7efd`; all
+twelve redact. New row `slack_webhook_url` (public surface: `findings[].name` is
+a grouping key in `pro-analytics/src/firewall-report.ts`), placed immediately
+after `jwt` and ahead of every prefix detector. `gitlab_token` alternation
+completed to GitLab's full documented set. `connection_string_secret` gained
+three bounded `\s{0,8}` gaps and quoted alternatives.
+
+Linear: growth x2.03–2.07 across five seeds, 512 KB → 4 MB. The `\s{0,8}` gaps
+cost 1.6x constant on a benign 200 KB log (0.52 → 0.82 ms).
+
+**Measurement hazard, second occurrence.** Every timing figure taken before the
+box was checked was worthless: 60 orphaned vitest workers and 30 orphaned
+busy-wait shells (`while :; do :; done`, from a deleted `lock-steal` worktree
+whose lock-contention benchmark spawned `CORES*3` hogs and whose `kill $HOGS`
+never ran) had held the 10-core box at **load 124 for 16 h 52 m**. Provably
+linear patterns measured growth ratios from x0.97 to x13.70, non-monotonically.
+min-of-N does not help — at that load there is no quiet slice. `redos-probe.mjs
+carriers` now refuses to print a ratio above 0.75 × cores. See
+[[wiki/concepts/redos-growth-ratio-measurement]].
+
+Also found: `scripts/redos-probe.mjs` had drifted from the shipped table — its
+`connection_string_secret` row still carried the `pwd` field dropped from
+production, so the row measured a regex that does not ship. The probe
+transcribes patterns by hand; the byte pins in the suite are the only thing
+tying them to reality.
+
+Sources: [[docs/superpowers/specs/2026-07-26-carrier-residual-gaps-design]],
+[[docs/superpowers/plans/2026-07-26-carrier-residual-gaps-plan]].
