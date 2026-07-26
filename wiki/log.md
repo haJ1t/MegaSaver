@@ -5133,3 +5133,203 @@ wordlist, not a regex. §5a still calls itself "the 10 baseline entries" while t
 array holds 33 — that ADR is still owed. All three reviewers' recommendation to
 split the post-lock detectors into their own change still stands and is the
 user's call at merge.
+
+## [2026-07-26] decision | ADR — what the §5a redaction lock covers
+
+Closes the ADR the 2026-07-25 entry recorded as owed. Two reviewers had flagged
+§5a: it says "the 10 baseline entries" while the shipped table holds 32 plus the
+`email` observer, so nobody could enumerate which rows are locked.
+
+Decision: **the lock covers the original ten and now says so** (option 2), with
+one correction — the amendment tier is keyed to what a change *does*, not to
+which table a row lives in. Editing any row's bytes/flags/replacement/validate,
+moving a row, or inserting before `jwk_private_key`/`jwt` is CRITICAL for all 33
+rows; appending a detector that preserves the ordering constraint is HIGH.
+
+Rejected option 1 (lock everything, all CRITICAL): every leak this table has had
+was *missing* coverage — PKCS#8, `ASIA`, `github_pat_`, unquoted
+`AWS_SECRET_ACCESS_KEY=` — never a bad addition. Taxing additions with the
+CRITICAL chain points the process at the wrong failure. Rejected option 3
+(generate from source), agreeing with the architect pass and adding the decisive
+reason: a generated record makes `expect(source).toBe(record)` tautological, so
+it deletes the drift detector it was meant to serve. Adopted one slice of it as
+follow-up F1 — a name-set *completeness check*, not a generator.
+
+Measured while writing it, and the reason option 2's naive framing would have
+been false: exact `.source` pins exist for **5 of the 10** lock rows and **13 of
+23** post-lock rows. `anthropic_key`, `openai_key`, `bearer_token`, `env_value`
+have neither byte nor flags pin; `jwt` has a prefix pin only. Table membership
+has not predicted rigor — "amended by a dated spec since 2026-07-19" has.
+
+New §5b enumerates all 23 post-lock rows with owning spec. Six have **none**:
+`url_basic_auth`, `url_query_secret`, `cli_secret_flag_eq`,
+`cli_secret_flag_spaced`, `api_key_header`, `basic_auth_header` shipped
+2026-06-17 in `b2e39cdf` (PR #150) before per-detector spec discipline; recorded
+as-is rather than back-attributed. Conversely the 2026-07-19 extension design
+specifies ~28 vendor detectors (`stripe_*`, `slack_*`, `gitlab_*`, …) that are
+**not** in the table — record drift runs both ways.
+
+Follow-ups filed in the ADR, none implemented: F1 completeness check, F2 pin the
+four unpinned lock rows, F3 `PREFIX_DETECTORS` is a hardcoded list whose comment
+claims it is exhaustive and nothing checks that (a new prefix detector inserted
+before `jwt` passes the ordering test vacuously), F4 reconcile the 07-19 design.
+
+Evidence: docs-only, no regex touched. `pnpm --filter @megasaver/policy test`
+566/566, `pnpm lint` clean. Record/shipped name sets verified equal by hand
+(33/33, no missing, no extra, no duplicates) — that check is F1.
+
+## [2026-07-26] lint | split the 529-line ReDoS concept page
+
+`wiki/concepts/unbounded-run-redos.md` had reached 529 lines — five times the
+`wiki/CLAUDE.md` hard-rule-8 ceiling of 100. Two branches grew it in parallel and
+the merge left it mixing three kinds of content plus visible merge scars: an
+orphan `## Deferred: instance 4 (email)` heading immediately above the section
+recording instance 4 as fixed, a `## Correction to an earlier record here`
+section restating the same `email` correction a second time, and a
+`## Lesson for the guard test` block that duplicated the opening of
+[[concepts/redos-guard-testing]] (the extracted method page) verbatim.
+
+Split as follows. Nothing was deleted, so nothing went to `archive/` — every
+line of the old page landed on one of these:
+
+- [[concepts/unbounded-run-redos]] (529 → 99) keeps only the registry: the
+  defect shape, its variants, why the repo recurs on it, the instance table with
+  a write-up link per row, the fix moves, and "not this class".
+- [[concepts/redos-case-context-gate]] (86) — instance 6.
+- [[concepts/redos-case-output-filter]] (83) — instances 7, 8, 9-pytest.
+- [[concepts/redos-case-output-filter-siblings]] (93) — instance 9's five
+  `^\s*`-under-`m` siblings.
+- [[concepts/redos-case-policy]] (79) — instances 4 and 5, plus the LOCKED-table
+  note and the absorbed `email` correction.
+- [[concepts/redos-case-memory-graph]] (71) — instance 9's two `parse-wiki.ts`
+  patterns.
+- [[concepts/redos-growth-ratio-measurement]] (99) — new method page holding all
+  the n-vs-kn instrument material that had accreted on the registry.
+  [[concepts/redos-guard-testing]] (88) absorbed the three non-duplicated
+  sentences from the duplicated "Lesson" block and now links to it.
+
+Case-study pages went to `concepts/` rather than into the owning entity pages:
+`entities/policy` (318), `entities/output-filter` (207) and
+`entities/context-gate` (112) are each already over the 100-line rule, so
+folding would have compounded an existing violation. `@megasaver/memory-graph`
+still has no entity page.
+
+Two content corrections made while splitting, both flagged on the pages:
+
+- The variant list said "Three variants" while two later headings called
+  themselves the "Third variant" and the "Fourth variant" of a differently
+  ordered set. Now five **named** variants, no ordinals.
+- Instance-table row 10 said "see below" but no instance-10 section had ever
+  been written — its write-up is [[concepts/lookahead-start-guard]]. Row now
+  points there.
+
+`wiki/index.md`: three stale duplicate `unbounded-run-redos` bullets claiming
+"9 instances, 2 still open" (a merge artefact contradicting the correct bullet
+four lines above) removed; six new pages catalogued; one Q&A row added for
+guard construction.
+
+Evidence: no page renamed, so no inbound link changed —
+`concepts/glob-compile-redos`, `concepts/lookahead-start-guard`,
+`concepts/redos-guard-testing`, `entities/output-filter` and `index.md` all still
+resolve. Wiki-wide `[[link]]` scan: 0 new dangling links (the one pre-existing
+dangler, `[[entities/evidence-ledger]]` in `entities/agent-office.md`, is
+untouched and predates this work). All 137 measurement tokens from the old page
+(ms/s/x/KB figures and every table cell) verified still present in the wiki by
+mechanical diff, and 204 source sentences checked for content loss — the 44 that
+moved are the reworded headings, the merged duplicate method sections, and the
+rebuilt `Related` lists. Every page touched is now under 100 lines.
+
+## [2026-07-26] fix | credential path denials + seven vendor/connection-string detectors
+
+Task 2 of the four queued policy follow-ups (T1 jwt reorder, T3 lock-scope ADR and
+T4 wiki split landed alongside; see their own entries).
+
+**Part A — the asymmetry that mattered more.** `DENYLIST_GLOBS` had no `.netrc`,
+`.npmrc`, `.pypirc` or `.git-credentials`, so the previous round's output-side
+detectors (netrc_password, npm_token, pypi_token) were the ONLY line of defence:
+an agent could read those files directly and the detectors only caught whatever
+leaked into tool output afterwards. Added five globs (`_netrc` too — the Windows
+name). Verified through the real `evaluatePathRead` gate, not the glob in
+isolation, and pinned four allow-neighbours (`npmrc`, `.npmrc.bak`,
+`netrc-format.md`, `.pypirc.example`) so the globs cannot grow into over-denial.
+
+**Part B — seven detectors.** `connection_string_secret` (ADO.NET/ODBC/Azure
+semicolon strings — `url_query_secret` needs `[?&#]`, `cli_secret_flag_eq` needs
+`--`, `env_value` needs quotes, so none reached them; `AccountKey` is full
+control of an Azure Storage account), plus `stripe_key`, `slack_token`,
+`gitlab_token`, `sendgrid_key`, `digitalocean_token`, `twilio_api_key`.
+
+Two judgement calls, both measured rather than asserted:
+- Stripe's `pk_` PUBLISHABLE key is deliberately excluded and pinned as
+  must-not-match. `openai_key` is `sk-`, Stripe is `sk_`; checked both
+  directions so neither claims the other.
+- `twilio_api_key` (`SK` + 32 hex) is the loosest shape in the table and there is
+  no further structure to gate on. An invented "commit SK<32hex>" string DOES
+  match it. Included anyway on corpus evidence: **0 false positives across 22,083
+  files / 189 MB** of this repo plus node_modules. The invented fixture was the
+  artifact, which is the same trap a previous reviewer fell into. The shape risk
+  is the disclosed cost.
+
+Evidence: 610 passing (was 566 after T1/T3/T4), typecheck clean. All seven linear
+(x0.99-2.01 per doubling on their own no-terminator seeds) with probe seeds
+committed; six declared MATCH_FREE_BY_DESIGN because they are anchor-scan seeds.
+Field name survives redaction (`Password=[REDACTED];Encrypt=True`) so the
+connection string stays readable. §5b extended to 30 post-lock rows; the
+REDACTION_PATTERNS table-size pin moved 32 -> 39.
+
+Outstanding: this batch has NOT been independently reviewed — the workflow's three
+review agents all died on API 529. That review is the remaining gate.
+
+## [2026-07-26] review | policy follow-ups, single reviewer (three died on 529)
+
+APPROVE_WITH_FIXES. T4 clean and needed nothing; T1's forward claim reproduced
+independently (250k JWTs, 0 losses); 65 mutants, 0 survivors. Two blocking, and
+both were real:
+
+**F1 — T1's "strict superset" claim was false.** `jwt`'s third segment
+`[A-Za-z0-9_-]+` is greedy and unbounded, so it swallows a following base64url
+run including a later detector's INDICATOR. Measured: `<jwt>aws_secret_access_key
+= <40>` now reports only `jwt` and leaves the AWS secret in cleartext; same for
+`bearer`, `SG.`, `hvs.`. The loss occurs iff the two are joined by zero or more
+`[A-Za-z0-9_-]` characters — every other separator is safe, which is why no
+realistic tool-output shape triggers it. The claim is now replaced by the measured
+condition and pinned: four loss rows plus eleven safe separators.
+
+**F2 — `connection_string_secret` destroyed `PWD=`**, the universal shell
+variable, in every `env`/`printenv`/`set -x`/CI log. Mine, written an hour
+earlier. The reviewer's suggested fix (narrow the separator to `(?:^|;)`, drop the
+dead `/m`) was necessary but NOT sufficient — `PWD=` at position 0 still matched
+`^`. Dropped the `pwd` field entirely; `Pwd=` is only an ADO.NET alias for
+`Password=`, so the canonical spelling covers the carrier.
+
+Also fixed: `/m` was dead and its comment claimed otherwise (a mutant dropping it
+survived all 262 behavioural tests, killed only by the flags pin); the ADR and
+§5a's scope paragraph carried pre-T2 counts in paragraphs ADJACENT to a correct
+§5b (39/30/40, not 32/23/33); the `jwt` attribution figure was stale AND
+understated — re-measured at 367 losses per 250,000 (146.8 per 100k) with
+`sendgrid_key` at 63, a detector the record omitted entirely while the committed
+test printed it on every run.
+
+`**/.npmrc` was REMOVED from the denylist. A project `.npmrc` is pnpm settings —
+this repo's own is four lines — and there is no field to un-deny a baseline path
+(evaluate-path-read I1), so denying it blinds the agent permanently with no
+appeal. The credential case is `~/.npmrc`'s `_authToken`, which `npm_token`
+covers in output. `.netrc`, `_netrc`, `.pypirc`, `.git-credentials` stay: they are
+credential stores by definition.
+
+Three probe seeds were vacuous — `SG.`, `SK` and `;password=` each died before
+scanning anything, the last because the `(?=[^;\s])` guard rejects every position
+in it, making the row a guard test that could not fail. All three now match.
+
+Coverage added while in there: `whsec_`, `xapp-`, five more GitLab prefixes,
+`do[opr]_v1_`, and Azure `SharedAccessSignature=` — which nothing reached, because
+`sharedaccesskey != sharedaccesssignature` and `url_query_secret` carries
+`signature` but not the `sig=` a SAS actually uses. `twilio_api_key` renamed to
+`twilio_api_key_sid`: it matches the Basic-auth username, not the secret, and the
+old comment's justification was wrong about its own shape.
+
+Evidence: 635 passing (610 before this pass, 557 on origin/main), typecheck and
+lint clean. Behavioural fixtures added for the three mutant classes the reviewer
+identified as pin-only-and-dangerous: the ceiling mutant (still matches, so it
+redacts a prefix and reports green over a live key), the value-class widening, and
+three connection-string field names with no coverage.

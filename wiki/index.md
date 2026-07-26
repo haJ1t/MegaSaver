@@ -22,13 +22,16 @@ updated: 2026-07-20
 - [[concepts/contextops]] — what "ContextOps" means; product category.
 - [[concepts/agent-agnostic-core]] — non-negotiable: agents connect to core, never reverse.
 - [[concepts/risk-aware-development]] — LOW / MEDIUM / HIGH / CRITICAL gating skills.
-- [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; all instances fixed.
-- [[concepts/lookahead-start-guard]] — provably-lossless ReDoS fix for variable-length lookbehinds; must stay in front of the lookbehind, relies on V8 assertion ordering.
+- [[concepts/unbounded-run-redos]] — **registry** for the recurring quadratic-regex defect class: the shape, its five variants, the instance index (all fixed), and the four fix moves. Start here; per-instance detail is on the case pages below. (Three stale duplicate index entries claiming "2 still open" removed 2026-07-26.)
+- [[concepts/redos-case-context-gate]] — instance 6, `FILE_PATH` in `session-hints.ts`: the twin of a fixed pattern that a too-narrow `sources:` list hid.
+- [[concepts/redos-case-output-filter]] — instances 7, 8 and 9-pytest: `^\s*` under `m`, the `\s+$` strip fixed by `trimEnd()`, the pytest failure banner.
+- [[concepts/redos-case-output-filter-siblings]] — instance 9: the five `^\s*`-under-`m` siblings instance 7's sweep left behind; U+2028 driver.
+- [[concepts/redos-case-policy]] — instances 4 and 5: the `email` local-part bound (why a size gate was the wrong fix) and the three right-to-left lookbehinds.
+- [[concepts/redos-case-memory-graph]] — instance 9 in the wiki parser: citation anchor strip and the wikilink scanner whose class ate its own delimiter.
+- [[concepts/lookahead-start-guard]] — provably-lossless ReDoS fix for variable-length lookbehinds (instance 10); must stay in front of the lookbehind, relies on V8 assertion ordering.
 - [[concepts/redos-guard-testing]] — how to fence a ReDoS fix: instrument choice, seeded corpora, commit the harness, test the pipeline not just the regex.
+- [[concepts/redos-growth-ratio-measurement]] — building the n-vs-kn instrument: minimise per size not per ratio, 4x step, why ratios break under a parallel `turbo` run.
 - [[concepts/glob-compile-redos]] — sibling defect class: the regex is *built from* untrusted input (ambiguous quantifier chaining + metachar injection). `compileGlob` fixed 2026-07-25 by dropping regexes for an NFA matcher.
-- [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; 9 instances, 2 still open.
-- [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; 9 instances, 2 still open (4 deferred, 5 unfiled — both in `packages/policy`).
-- [[concepts/unbounded-run-redos]] — recurring quadratic-regex defect class; 9 instances, 2 still open.
 - [[concepts/superpowers-discipline]] — mandatory chain on every feature.
 - [[concepts/wiki-first-token-discipline]] — wiki is the only sanctioned project memory; question → entry mapping; hard rules to avoid raw spec/code reads.
 - [[concepts/context-gate-pipeline]] — Mega Saver Mode: redact → chunk → rank → fit → summarize; redaction flow; AA1 package roles + cycle direction.
@@ -175,6 +178,7 @@ Stale/rotated/merged pages, kept for grep + history (never deleted; schema hard-
 | What are the 25 MCP tools?                          | [[entities/mcp-bridge]]                          |
 | Is Windows supported / how?                         | [[concepts/windows-support]]                    |
 | Why did a regex make the suite time out?            | [[concepts/unbounded-run-redos]]                |
+| How do I write a guard that proves a ReDoS fix?     | [[concepts/redos-guard-testing]] / [[concepts/redos-growth-ratio-measurement]] |
 | How does path-glob matching work / why no regex?    | [[concepts/glob-compile-redos]] / [[entities/policy]] |
 
 ## Status

@@ -21,9 +21,15 @@ const entry = (name: string) => {
 
 describe("structural gates (spec §6.1)", () => {
   it.each([
-    ["aws_secret_key", "(?=[A-Za-z0-9/+])"],
-    ["api_key_header", "(?=\\S)"],
-    ["basic_auth_header", "(?=[A-Za-z0-9+/=])"],
+    ["aws_secret_key", "(?=[A-Za-z0-9/+])(?<=aws_secret_access_key\\s*=\\s*)[A-Za-z0-9/+]{40}"],
+    [
+      "api_key_header",
+      "(?=\\S)(?<=(?:x-api-key|x-auth-token|x-access-token)\\s*[:=]\\s*)(?:\"[^\"]*\"|'[^']*'|[^\\s\"']{8,})",
+    ],
+    [
+      "basic_auth_header",
+      "(?=[A-Za-z0-9+/=])(?<=authorization\\s*[:=]\\s*basic\\s+)[A-Za-z0-9+/=]{8,}",
+    ],
   ])("%s is start-position guarded before its lookbehind", (name, guard) => {
     expect(entry(name).pattern.source.startsWith(guard)).toBe(true);
   });
@@ -32,7 +38,10 @@ describe("structural gates (spec §6.1)", () => {
   // which strictly subsume a substring check. Only the two non-lock-table
   // bounded patterns need their own gate.
   it.each([
-    ["url_basic_auth", "[^\\s?#]{1,8192}?"],
+    [
+      "url_basic_auth",
+      "(?<=[a-z][a-z0-9+.-]*:\\/\\/)[^\\s/?#:]*:[^\\s?#]{1,8192}?(?=@(?:[^\\s/?#@:]+(?:[/?#:]|$)|\\s|$))",
+    ],
     ["email", "[A-Za-z0-9._%+-]{1,64}"],
   ])("%s bounds the run that drives its quadratic", (name, bound) => {
     expect(entry(name).pattern.source).toContain(bound);
@@ -49,7 +58,6 @@ describe("structural gates (spec §6.1)", () => {
     ["db_url", "g"],
     ["url_basic_auth", "gi"],
     ["private_key_block", "g"],
-    ["email", "g"],
     ["ssh2_private_key_block", "g"],
     ["putty_private_key", "g"],
     ["age_secret_key", "g"],
@@ -63,6 +71,13 @@ describe("structural gates (spec §6.1)", () => {
     ["ansible_vault", "g"],
     ["bip32_xprv", "g"],
     ["base64_pem_block", "g"],
+    ["stripe_key", "g"],
+    ["slack_token", "g"],
+    ["gitlab_token", "g"],
+    ["sendgrid_key", "g"],
+    ["digitalocean_token", "g"],
+    ["twilio_api_key_sid", "g"],
+    ["connection_string_secret", "gi"],
   ])("%s keeps flags %s", (name, flags) => {
     expect(entry(name).pattern.flags).toBe(flags);
   });
@@ -104,6 +119,16 @@ describe("post-lock detector bytes", () => {
       "jwk_private_key",
       '\\{(?=[^{}]{0,4096}"kty"\\s*:\\s*"(?:RSA|EC|OKP|oct)")(?=[^{}]{0,4096}"(?:d|k)"\\s*:\\s*"[A-Za-z0-9_-]{20,}")[^{}]{1,4096}\\}',
     ],
+    ["stripe_key", "(?:(?:sk|rk)_(?:live|test)|whsec)_[A-Za-z0-9]{16,}"],
+    ["slack_token", "(?:xox[baprse]|xapp)-[A-Za-z0-9-]{10,}"],
+    ["gitlab_token", "gl(?:pat|rt|ptt|dt|cbt|oas)-[A-Za-z0-9_-]{20,}"],
+    ["sendgrid_key", "SG\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{16,}"],
+    ["digitalocean_token", "do[opr]_v1_[a-f0-9]{64}"],
+    ["twilio_api_key_sid", "\\bSK[0-9a-f]{32}\\b"],
+    [
+      "connection_string_secret",
+      "(?=[^;\\s])(?<=(?:^|;)(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)=)[^;\\s]{8,}",
+    ],
   ])("%s matches its pinned bytes", (name, source) => {
     expect(entry(name).pattern.source).toBe(source);
   });
@@ -137,14 +162,34 @@ describe("post-lock detector bytes", () => {
     expect(entry(name).pattern.source).toBe(source);
   });
 
-  // Ordering is load-bearing for jwk_private_key: base64url contains `-`/`_`,
-  // so a prefix detector firing inside the `d` value breaks the closing-quote
-  // lookahead and the whole object leaks with only that prefix redacted.
-  // Measured 63 per 100,000 RSA JWKs before the reorder.
-  it("jwk_private_key runs before every prefix detector", () => {
+  // Ordering is load-bearing for jwk_private_key and for jwt, and for the same
+  // reason: both carry base64url bodies, which contain `-` and `_` as well as
+  // every alphanumeric, so a prefix detector can fire INSIDE one. Its
+  // replacement inserts `[`, the enclosing detector's required span (jwk's
+  // closing quote, jwt's segment-terminating `.`) can no longer complete, and
+  // the whole secret survives with only the prefix span redacted. Measured 63
+  // per 100,000 RSA JWKs and 120 per 100,000 JWTs before the two reorders.
+  // The list is every prefix detector in the table, not the three that existed
+  // when this test was written — a new one appended below either of these two
+  // reopens the leak, and it must fail here rather than in a Monte Carlo.
+  const PREFIX_DETECTORS = [
+    "github_token",
+    "anthropic_key",
+    "openai_key",
+    "npm_token",
+    "pypi_token",
+    "vault_token",
+    "bip32_xprv",
+  ] as const;
+
+  it.each(["jwk_private_key", "jwt"] as const)("%s runs before every prefix detector", (early) => {
     const names = REDACTION_PATTERNS.map((x) => x.name);
-    for (const later of ["github_token", "anthropic_key", "openai_key"]) {
-      expect(names.indexOf("jwk_private_key")).toBeLessThan(names.indexOf(later));
+    expect(names).toContain(early);
+    for (const later of PREFIX_DETECTORS) {
+      // Without this, a renamed detector makes indexOf return -1 and the
+      // comparison below passes vacuously.
+      expect(names).toContain(later);
+      expect(names.indexOf(early)).toBeLessThan(names.indexOf(later));
     }
   });
 });
@@ -153,9 +198,9 @@ describe("post-lock detector bytes", () => {
 //
 // Pattern-level, one detector in isolation. That isolation is deliberate and
 // follows the jwt spec §6 precedent: through the real pipeline an earlier
-// detector often consumes the token first (bearer_token eats a JWT before jwt
-// sees it), which would make these assertions test ordering rather than the
-// pattern. The public surface is exercised separately below — both are needed.
+// detector often consumes the bytes first (jwt now claims `Bearer <jwt>` ahead
+// of bearer_token, and anthropic_key claims `sk-ant-` ahead of openai_key),
+// which would make these assertions test ordering rather than the pattern. The public surface is exercised separately below — both are needed.
 const apply = (name: string, input: string): string => {
   const { pattern, replacement, validate } = entry(name);
   return input.replace(pattern, (match) =>
@@ -887,11 +932,18 @@ describe("non-vacuity gate — every detector in the table", () => {
       "credit_card",
       "iban",
       "tr_national_id",
+      "stripe_key",
+      "slack_token",
+      "gitlab_token",
+      "sendgrid_key",
+      "digitalocean_token",
+      "twilio_api_key_sid",
+      "connection_string_secret",
     ]);
     const shipped = REDACTION_PATTERNS.map((p) => p.name);
     expect(shipped.filter((n) => !covered.has(n))).toEqual([]);
     // Pins the table size: the wiki claimed 33 by summing two exported tables.
-    expect(shipped).toHaveLength(32);
+    expect(shipped).toHaveLength(39);
     expect(OBSERVED_PATTERNS).toHaveLength(1);
   });
 });
@@ -958,6 +1010,123 @@ describe("round-4 review regressions", () => {
   ])("ansible_vault accepts %s", (header, shouldRedact) => {
     const body = "3938306162636465666768696a6b6c6d6e6f70717273747576777879";
     expect(redactWithFindings(`${header}\n${body}`).count > 0).toBe(shouldRedact);
+  });
+});
+
+describe("vendor and connection-string carriers", () => {
+  it.each([
+    ["Stripe secret", `sk_live_${"A".repeat(24)}`, "stripe_key"],
+    ["Stripe restricted", `rk_live_${"A".repeat(24)}`, "stripe_key"],
+    ["Slack bot", `xoxb-123456789012-${"A".repeat(24)}`, "slack_token"],
+    ["GitLab PAT", `glpat-${"A".repeat(20)}`, "gitlab_token"],
+    ["SendGrid", `SG.${"A".repeat(22)}.${"B".repeat(43)}`, "sendgrid_key"],
+    ["DigitalOcean", `dop_v1_${"a".repeat(64)}`, "digitalocean_token"],
+    ["Twilio API key", `SK${"0123456789abcdef".repeat(2)}`, "twilio_api_key_sid"],
+    [
+      "ODBC Password field",
+      "Server=tcp:h,1433;Database=prod;Password=Pl4inTextOdbcPassw0rdZZ;Encrypt=True",
+      "connection_string_secret",
+    ],
+    [
+      "Azure AccountKey",
+      `DefaultEndpointsProtocol=https;AccountName=p;AccountKey=${"A".repeat(86)}==;EndpointSuffix=core`,
+      "connection_string_secret",
+    ],
+  ])("redacts a %s", (_l, input, detector) => {
+    expect(redactWithFindings(input).findings.map((f) => f.name)).toContain(detector);
+  });
+
+  // `pk_` is Stripe's PUBLISHABLE key — not a secret, and redacting it would be
+  // evidence loss. This is the row that keeps `sk|rk` from becoming `[a-z]{2}`.
+  it.each([[`pk_live_${"A".repeat(24)}`], [`pk_test_${"A".repeat(24)}`]])(
+    "leaves the Stripe publishable key %s alone",
+    (input) => {
+      expect(redactWithFindings(input).redacted).toBe(input);
+    },
+  );
+
+  it.each([
+    ["a documented field name with no value", "the Password= field is documented below"],
+    ["a short connection-string value", "Server=h;Password=short;X=1"],
+    ["a truncated Slack prefix", "xoxb-123"],
+    ["prose mentioning SK", "the SK identifier appears in the docs"],
+  ])("does not redact %s", (_l, input) => {
+    expect(redactWithFindings(input).redacted).toBe(input);
+  });
+
+  // Field-name gate, not a bare long value: the value must stop at the next `;`
+  // so the rest of the connection string survives as evidence.
+  it("keeps the connection string readable around the redacted value", () => {
+    // The field NAME survives — only the value is replaced — so a reader can
+    // still see which field was scrubbed and the rest of the string is intact.
+    expect(redactWithFindings("Server=h;Password=Sup3rSecretPw;Encrypt=True").redacted).toBe(
+      "Server=h;Password=[REDACTED];Encrypt=True",
+    );
+  });
+
+  it.each([
+    ["floor-1", 15, false],
+    ["floor", 16, true],
+  ])("stripe_key at %s", (_l, n, want) => {
+    expect(redactWithFindings(`sk_live_${"A".repeat(n)}`).count > 0).toBe(want);
+  });
+
+  it.each([
+    ["floor-1", 7, false],
+    ["floor", 8, true],
+  ])("connection_string_secret value at %s", (_l, n, want) => {
+    expect(redactWithFindings(`Server=h;Password=${"P".repeat(n)};X=1`).count > 0).toBe(want);
+  });
+
+  // `openai_key` is `sk-`, Stripe is `sk_`. Neither may claim the other.
+  it("stripe_key and openai_key do not claim each other", () => {
+    expect(redactWithFindings(`sk_live_${"A".repeat(24)}`).findings.map((f) => f.name)).toEqual([
+      "stripe_key",
+    ]);
+    expect(redactWithFindings(`sk-${"A".repeat(24)}`).findings.map((f) => f.name)).toEqual([
+      "openai_key",
+    ]);
+  });
+});
+
+describe("carrier detectors — the mutants only a pin was catching", () => {
+  // A CEILING mutant is the one with real teeth: it still MATCHES, so it redacts
+  // the first N characters, leaves the rest, and reports a finding. Green signal
+  // over a live key — the same failure `base64_pem_block` already records. Every
+  // other fixture sits at or below any plausible ceiling, so none can see it.
+  it.each([
+    ["stripe_key", `sk_live_${"K".repeat(99)}`],
+    ["slack_token", `xoxb-${"K".repeat(99)}`],
+    ["gitlab_token", `glpat-${"K".repeat(99)}`],
+  ])("%s redacts a long value WHOLE, leaving no tail", (_name, input) => {
+    const out = redactWithFindings(input).redacted;
+    expect(out).not.toMatch(/K{8}|b{8}/);
+  });
+
+  // `[^;\s]` not `[^;]`: without the whitespace exclusion a value swallows
+  // spaces and newlines up to the next `;`, eating whatever follows on the line.
+  it("connection_string_secret stops at whitespace, not just at the next ;", () => {
+    expect(redactWithFindings("Server=h;Password=Sup3rSecret and then prose;X=1").redacted).toBe(
+      "Server=h;Password=[REDACTED] and then prose;X=1",
+    );
+  });
+
+  // Three of the six field names had no behavioural coverage at all.
+  it.each([["sharedaccesskey"], ["sharedaccesssignature"], ["userpassword"]])(
+    "connection_string_secret gates on the %s field",
+    (field) => {
+      expect(redactWithFindings(`Server=h;${field}=Sup3rSecretValue;X=1`).count).toBe(1);
+    },
+  );
+
+  // `PWD` is the universal shell variable — every env dump and CI log has one.
+  // This is why the separator gate is `(?:^|;)` and not `[;\s]`.
+  it.each([
+    ["PWD=/Users/x/Desktop/project"],
+    ["SHELL=/bin/zsh\nPWD=/Users/x/proj\nTERM=xterm"],
+    ["OLDPWD=/tmp"],
+  ])("connection_string_secret leaves the shell variable in %s alone", (input) => {
+    expect(redactWithFindings(input).redacted).toBe(input);
   });
 });
 

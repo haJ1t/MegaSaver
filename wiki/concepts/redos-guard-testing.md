@@ -18,12 +18,15 @@ quietly undo it. Every rule here was paid for by a suite that passed while broke
 
 **A timing ceiling only guards what it separates.** The first fix's suite ran at
 50 KB with a 5 s ceiling — four of five reverted patterns cost 2.9–4.7 s and
-stayed green. Raising the input size is the cheap separator.
+stayed green. Raising the input size is the cheap separator: at 100 KB the
+cheapest of those reversions costs 12.2 s. Size the guard at the **shipped cap**
+where one exists, not at an arbitrary probe size.
 
-Where that still fails, use a **growth ratio** — run at n and 2n, fail above
-~2.5–3.0x. Runtime-independent, nothing to calibrate. `private_key_block` needs
-it: bounded, it costs *more* than unbounded below ~256 KB, so a ceiling would
-flag the fix rather than the defect.
+Where that still fails, use a **growth ratio** — run at n and kn, fail above a
+threshold set by the measured separation. Runtime-independent, nothing to
+calibrate. `private_key_block` needs it: bounded, it costs *more* than unbounded
+below ~256 KB, so a ceiling would flag the fix rather than the defect. Building
+one correctly is its own subject: [[concepts/redos-growth-ratio-measurement]].
 
 **Neither instrument alone is safe.** A ratio-only suite passes a broken
 `aws_secret_key`, which flattens toward x1.4 once it is slow enough to hit
@@ -64,6 +67,10 @@ A suite of 259 tests that all asserted on regexes in isolation left
 cleartext. Pattern-level isolation is right for equivalence (through the real
 pipeline an earlier detector often eats the token first), but at least one
 assertion must go through the public entry point.
+
+Timing assertions in particular must drive each pattern through **its own real
+call site**, never the bare regex — a sibling fix was weakened exactly that way.
+And verify each bound goes red **alone**, with the others left in place.
 
 ## A fixture can mask the bound it tests
 

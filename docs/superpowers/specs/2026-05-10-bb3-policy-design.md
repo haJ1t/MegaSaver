@@ -296,14 +296,42 @@ are LOW-risk follow-ups). BB3's own test obligation:
 - `count` equals the number of substitutions performed;
   `{ redacted: "", count: 0 }` for input with no secrets.
 
-### §5a `REDACTION_PATTERNS` baseline (epic §9d — LOCKED for BB3)
+### §5a `REDACTION_PATTERNS` — the BB3 baseline ten (epic §9d — LOCKED for BB3)
 
 `readonly` array of `{ name: string; pattern: RegExp; replacement: string }`,
 validated at module load by a Zod schema (input-at-boundary;
 `CLAUDE.md` §8). Names form a closed set but are NOT a
 tuple-pinned enum in BB3 (the epic §17 table lists no
-`RedactionPatternName` pin — only `PolicyDenyCode` for BB3). The
-10 baseline entries:
+`RedactionPatternName` pin — only `PolicyDenyCode` for BB3).
+
+**Scope of this section — read before amending anything.** The lock covers the
+**ten rows below and only those ten**. The shipped table is much larger: as of
+2026-07-26, `REDACTION_PATTERNS` holds **39** entries plus **one**
+`OBSERVED_PATTERNS` observer (`email`). The other 30 are **post-lock
+additions**, enumerated in **§5b** with the spec that owns each one. Neither
+list is a subset of the other by accident — §5b exists so that "which rows are
+locked" has an answer a reader can check.
+
+What the boundary does and does not mean is decided in
+[[docs/superpowers/specs/2026-07-26-redaction-lock-scope-adr]]. In short:
+the amendment tier is keyed to **what a change does**, not to which of the two
+tables a row lives in. Editing any existing row's `pattern`/`flags`/
+`replacement`/`validate`, moving any row, or inserting a row before
+`jwk_private_key` or `jwt` is **CRITICAL** whether or not the row is one of the
+ten; appending a detector that preserves the ordering constraint is **HIGH**.
+Every change, either way, needs a `.source` pin, a `.flags` pin and behavioural
+floor/ceiling fixtures. What the ten additionally carry is the footnote record
+below — measured timings, rejected bound values, disclosed losses — which a
+CRITICAL amendment must update **in the same commit** and a reviewer is expected
+to check the new bytes against.
+
+Do not read the ten as "the pinned ones". Measured 2026-07-26, exact
+`RegExp.source` pins exist for 5 of these 10 and for 20 of the 30 in §5b;
+`anthropic_key`, `openai_key`, `bearer_token` and `env_value` have neither a
+byte nor a flags pin, and `jwt` has a `startsWith` prefix pin only. That gap is
+ADR follow-up F2, not a property of the lock.
+
+The 10 baseline entries:
 
 | Name              | Pattern (epic §9d)                                     | Replacement                |
 |-------------------|--------------------------------------------------------|----------------------------|
@@ -313,7 +341,7 @@ tuple-pinned enum in BB3 (the epic §17 table lists no
 | aws_access_key ◆  | `A(?:KIA\|SIA)[0-9A-Z]{16}`                             | `AKIA[REDACTED]`           |
 | aws_secret_key ◆  | `(?=[A-Za-z0-9/+])(?<=aws_secret_access_key\s*=\s*)[A-Za-z0-9/+]{40}` | `[REDACTED]`  |
 | bearer_token      | `(?i:bearer\s+)[A-Za-z0-9\-._~+/=]{20,}`               | `Bearer [REDACTED]`        |
-| jwt †‡            | `(?:(?<![A-Za-z0-9_-])\|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+` (see ‡ for exact bytes) | `eyJ[REDACTED]` |
+| jwt †‡◇           | `(?:(?<![A-Za-z0-9_-])\|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+` (see ‡ for exact bytes) | `eyJ[REDACTED]` |
 | private_key_block ◆ | grouped label + `(?:PRIVATE\|SECRET) KEY(?: BLOCK)?` (see ◆ for exact bytes — the cell cannot render them) | `[REDACTED PRIVATE KEY]` |
 | env_value         | `(?<=^[A-Z_]+=)["'].+?["']`                            | `"[REDACTED]"`             |
 | db_url ◆          | `(?:postgres\|postgresql\|mysql\|mongodb):\/\/[^\s/]{1,256}:[^\s@]{1,8192}@\S+` (see ◆ for exact bytes) | `[scheme]://[REDACTED]@[host]` |
@@ -347,6 +375,54 @@ the added branch: 0.32 ms per 313 KiB, linear (~2.0x per doubling to
 narrowing it to `(?<![A-Za-z0-9])` restores the 7.4-7.7 s quadratic.
 Released as a **minor**, not a patch, because coverage was reduced.
 Both footnotes stand; amend this row, never rewrite it silently.
+
+◇ **Third amendment, 2026-07-26 — pure reorder, the pattern bytes are
+unchanged.** `jwt` was moved from just after `bearer_token` to just before
+`github_token`, i.e. ahead of every prefix detector, for the reason
+`jwk_private_key` was moved to the front of the table: JWT segments are
+base64url, so `sk-`, `ghp_`, `npm_`, `pypi-` and `hvs.` occur inside real
+token bytes. A prefix detector firing inside a segment replaces those bytes
+with a span containing `[`, the segment run can no longer reach its
+terminating `.`, `jwt` fails to match at all, and the token passes through
+with only the prefix detector's span redacted — under a finding named
+`openai_key`, which reads as benign.
+
+Measured over 400,000 crypto-random JWTs
+(`JWT_ORDER_N=400000 pnpm --filter @megasaver/policy test redact-jwt-order`):
+
+| order | losses per 250,000 | per 100,000 | attribution |
+|---|---|---|---|
+| `jwt` after `bearer_token` (before) | 367 | 146.8 | `openai_key` 282, `jwt` 165, `sendgrid_key` 63, `github_token` 13, `npm_token` 7, `slack_token` 1, `gitlab_token` 1 |
+| `jwt` before `github_token` (shipped) | **0** | 0 | — |
+
+Most of the 367 also fired `jwt` on a surviving fragment, so a finding named
+`jwt` was not by itself proof that a token had been redacted whole.
+This figure is a function of the CURRENT table and moves whenever a prefix
+detector is added — an earlier revision omitted `sendgrid_key` and understated
+the rate as 120 per 100,000.
+
+`vault_token` and `sendgrid_key` reach a JWT by spanning a segment separator: a payload ending
+`hvs` plus the `.` before a 20-character signature.
+
+**Behaviour change to `findings[].name`, deliberate and singular.**
+`bearer_token` used to run first and claim `Bearer <jwt>`; that input now
+reports `jwt` and redacts to `Bearer eyJ[REDACTED]` instead of
+`Bearer [REDACTED]`. Both forms redact the whole token — the change is the
+name, which is public surface (`packages/pro-analytics/src/firewall-report.ts`
+groups on it). `bearer_token` was deliberately NOT moved along with `jwt`:
+moving it would relabel `Bearer sk-…`, `Bearer ghp_…` and every other
+`Bearer <prefixed-secret>` as `bearer_token` too, a strictly wider rename for
+no coverage gain. No other input changes name, and no input loses coverage —
+the reorder is a strict superset of what the old order redacted.
+
+Ordering is pinned in `packages/policy/test/redact-superlinear.test.ts`
+(`jwk_private_key` and `jwt` before all seven prefix detectors), the mechanism
+and the `Bearer` rename in `packages/policy/test/redact-jwt.test.ts`, and the
+rate in `packages/policy/test/redact-jwt-order.test.ts` — which also asserts
+the pre-reorder order still loses tokens, so a generator that stopped emitting
+realistic JWTs fails the suite instead of reporting a vacuous zero. Released
+as a **patch**: no pattern bytes changed and coverage only grows.
+All three footnotes stand; amend this row, never rewrite it silently.
 
 ◆ **Amended 2026-07-25** by
 [[docs/superpowers/specs/2026-07-25-redaction-superlinear-patterns-design]] —
@@ -573,9 +649,95 @@ Released as a **minor**, not a patch, because `db_url` and
 Order is application order (longest/most-specific guards run such
 that `anthropic_key` is attempted before `openai_key` since
 `sk-ant-` is a prefix of the `sk-` shape — anthropic MUST run
-first). This ordering is locked here; BB5's corpus test pins
-exact outputs. Patterns needing the `g` flag are compiled with it
+first). Two later additions extend the same rule: `jwk_private_key`
+and `jwt` both carry base64url bodies in which a prefix detector can
+fire, disabling them entirely, so both MUST precede every prefix
+detector (see ◇ above and the 2026-07-25 non-PEM key detector note).
+`bearer_token` consequently no longer precedes `jwt`. This ordering is
+locked here; BB5's corpus test pins exact outputs. Patterns needing the `g` flag are compiled with it
 so `count` reflects every occurrence.
+
+### §5b Post-lock detectors (NOT §5a lock-table rows)
+
+The 30 rows below ship in the same two tables but are **not** covered by the §5a
+lock. They are recorded here so the lock is enumerable: §5a's ten plus these 30
+is the whole of `REDACTION_PATTERNS` (39) and `OBSERVED_PATTERNS` (1). Amendment
+tier is by change shape, not by table — see §5a's scope paragraph and
+[[docs/superpowers/specs/2026-07-26-redaction-lock-scope-adr]].
+
+**No pattern bytes here, deliberately.** Footnotes ‡ and ◆ above exist because a
+markdown cell escapes `|` as `\|` and renders `/` plainly, so a table cell never
+matches a compiled `RegExp.source`. Twenty-three more escaped-regex cells would
+be twenty-three more copies of that trap. The bytes live in the pin tests named
+below and in each owning spec.
+
+The **Pin** column is a snapshot read on 2026-07-26 from
+`packages/policy/test/redact-superlinear.test.ts` (and `redact-jwt.test.ts` for
+`jwt`). Nothing enforces that it stays accurate — that is ADR follow-up F1.
+`bytes` = exact `.source` equality; `struct` = a `startsWith`/`toContain`
+structural gate only; `flags` = a `.flags` equality pin.
+
+| Detector | Carrier / kind | Owning spec | Pin (2026-07-26) |
+|---|---|---|---|
+| `jwk_private_key` | JWK with a private component | 2026-07-25-redaction-superlinear-patterns §3e | bytes + flags |
+| `ssh2_private_key_block` | RFC 4716 four-dash armour | 2026-07-25-redaction-superlinear-patterns §3e | bytes + flags |
+| `putty_private_key` | PuTTY `.ppk` | 2026-07-25-redaction-superlinear-patterns §3e | bytes + flags |
+| `age_secret_key` | age identity | 2026-07-25-redaction-superlinear-patterns §3e | bytes + flags |
+| `base64_pem_block` | base64-wrapped PEM (`kubectl get secret -o yaml`) | 2026-07-25-redaction-superlinear-patterns §3f | bytes + flags |
+| `ansible_vault` | `$ANSIBLE_VAULT` blob, formats 1.1 and 1.2 | 2026-07-25-redaction-superlinear-patterns §3f | bytes + flags |
+| `aws_session_token` | `~/.aws/credentials`, env dumps | 2026-07-25-redaction-superlinear-patterns §3f | bytes + flags |
+| `json_secret_field` | gcloud ADC, Azure, docker `auth`, STS fields | 2026-07-25-redaction-superlinear-patterns §3f | bytes + flags |
+| `netrc_password` | `.netrc`, gated on a `machine`/`default` record | 2026-07-25-redaction-superlinear-patterns §3f | bytes + flags |
+| `connection_string_secret` | ADO.NET / ODBC / Azure semicolon strings (`Password=`, `AccountKey=`) | 2026-07-26-policy-followups §T2 | bytes + flags |
+| `stripe_key` | Stripe secret and restricted keys (`sk_`/`rk_`; `pk_` excluded) | 2026-07-26-policy-followups §T2 | bytes + flags |
+| `slack_token` | Slack bot/user/app tokens (`xox[baprs]-`) | 2026-07-26-policy-followups §T2 | bytes + flags |
+| `gitlab_token` | GitLab personal access token (`glpat-`) | 2026-07-26-policy-followups §T2 | bytes + flags |
+| `sendgrid_key` | SendGrid API key (`SG.`) | 2026-07-26-policy-followups §T2 | bytes + flags |
+| `digitalocean_token` | DigitalOcean PAT (`dop_v1_`) | 2026-07-26-policy-followups §T2 | bytes + flags |
+| `twilio_api_key_sid` | Twilio API Key SID (`SK` + 32 hex) | 2026-07-26-policy-followups §T2 | bytes + flags |
+| `npm_token` | `.npmrc` | designed 2026-07-19-redaction-baseline-extension, shipped 2026-07-25 §3f with different bounds | bytes + flags |
+| `pypi_token` | `.pypirc` | designed 2026-07-19-redaction-baseline-extension, shipped 2026-07-25 §3f | bytes + flags |
+| `vault_token` | HashiCorp Vault | 2026-07-25-redaction-superlinear-patterns §3f | bytes + flags |
+| `bip32_xprv` | BIP32 extended private key | 2026-07-25-redaction-superlinear-patterns §3f | bytes + flags |
+| `url_basic_auth` | userinfo on any scheme (`db_url` fallback) | **none** — commit `b2e39cdf`, 2026-06-17 | struct + flags |
+| `url_query_secret` | secret-named query / fragment param | **none** — commit `b2e39cdf`, 2026-06-17 | — |
+| `cli_secret_flag_eq` | `--flag=value` | **none** — commit `b2e39cdf`, 2026-06-17 | — |
+| `cli_secret_flag_spaced` | `--flag "value"`, quoted only | **none** — commit `b2e39cdf`, 2026-06-17 | — |
+| `api_key_header` | `X-Api-Key`-style header value | **none** — commit `b2e39cdf`, 2026-06-17 | struct + flags |
+| `basic_auth_header` | `Authorization: Basic` | **none** — commit `b2e39cdf`, 2026-06-17 | struct + flags |
+| `credit_card` | 13–19 digit run, Luhn-gated | 2026-07-08-context-firewall | — |
+| `iban` | ISO 13616 mod-97-gated | 2026-07-08-context-firewall | — |
+| `tr_national_id` | TCKN checksum-gated | 2026-07-08-context-firewall | — |
+| `email` (`OBSERVED_PATTERNS`) | count-only observer; never rewrites text | 2026-07-08-context-firewall | struct + flags |
+
+Six rows have **no owning spec** — they shipped 2026-06-17 in `b2e39cdf`
+("feat(policy): redact contextual no-prefix secrets", PR #150), before the
+per-detector spec discipline existed. Recorded as-is rather than back-attributed
+to a spec that does not describe them; the later specs only amend them. Under
+§5a's scope paragraph the first CRITICAL change to any of the six must give it a
+record.
+
+**Disclosed coverage gaps in the 2026-07-26 vendor rows.** Recorded here rather
+than left to be rediscovered; each was verified as a no-redaction:
+
+| detector | still missed |
+|---|---|
+| `stripe_key` | covers `sk_`/`rk_`/`whsec_`; `pk_` is the PUBLISHABLE key and is excluded on purpose |
+| `slack_token` | covers `xox[baprse]-` and `xapp-`; `https://hooks.slack.com/services/…` webhook URLs are not covered |
+| `gitlab_token` | covers `glpat/glrt/glptt/gldt/glcbt/gloas`; GitLab mints others |
+| `digitalocean_token` | `do[opr]_v1_` covers PAT, OAuth and refresh |
+| `twilio_api_key_sid` | matches the API Key **SID**, which is the HTTP Basic *username* — an identifier, not the secret. Kept for the same reason `aws_access_key` is kept. The actual secrets — Auth Token (32 hex) and API Key Secret (32 alphanumeric) — have **no distinguishing prefix** and are therefore unreachable by a regex at acceptable false-positive cost |
+| `connection_string_secret` | `Pwd=` is deliberately absent: it collides with the universal `PWD` shell variable, which appears in every `env`/`printenv`/CI log, and narrowing the separator was not enough because `PWD=` can sit at position 0. `Password = value` with spaces around `=`, and the legal ADO.NET quoted form `Password="p;w;d"`, are also not covered |
+
+**Do not read §5b as the design list.**
+[[docs/superpowers/specs/2026-07-19-redaction-baseline-extension-design]]
+specifies roughly twenty-eight vendor detectors (`stripe_*`, `google_api_key`,
+`slack_*` including `slack_webhook_url`, `gitlab_*`, `huggingface_*`,
+`digitalocean_*`, `azure_client_secret`, `sendgrid_api_key`, `datadog_app_key`,
+`github_app_token`) that are **designed and not shipped** — they are absent from
+`redaction-patterns.ts`. Its status line says so ("user-approved design",
+security re-check pending); ADR follow-up F4 tracks reconciling it. §5b lists
+what is in the table.
 
 ---
 

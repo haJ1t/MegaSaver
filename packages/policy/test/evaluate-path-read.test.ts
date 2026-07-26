@@ -33,7 +33,29 @@ describe("evaluatePathRead — secret-path denylist (spec §4a)", () => {
     ["**/*.key", "certs/server.key"],
     ["**/credentials.json", "config/credentials.json"],
     ["**/service-account*.json", "config/service-account-prod.json"],
+    ["**/.netrc", "home/.netrc"],
+    ["**/_netrc", "home/_netrc"],
+    ["**/.pypirc", "home/.pypirc"],
+    ["**/.git-credentials", "home/.git-credentials"],
   ];
+
+  // The credential-file globs must not swallow neighbours. `.npmrc` is denied
+  // but a project's `npmrc` doc or an `.npmrc.bak` note is ordinary text, and
+  // over-denying makes the agent blind to files it legitimately needs.
+  const allowedNeighbours: readonly string[] = [
+    "project/npmrc",
+    "project/.npmrc",
+    "home/.npmrc",
+    "project/.npmrc.bak",
+    "docs/netrc-format.md",
+    "project/.pypirc.example",
+  ];
+
+  for (const path of allowedNeighbours) {
+    it(`allows ${path}, which only resembles a credential file`, () => {
+      expect(evalPath(path)).toEqual({ allowed: true });
+    });
+  }
 
   for (const [pattern, path] of denied) {
     it(`denies secret_path_read for ${pattern} via ${path}`, () => {
