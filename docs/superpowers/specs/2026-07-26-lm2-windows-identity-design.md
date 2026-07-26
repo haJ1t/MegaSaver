@@ -110,10 +110,11 @@ descriptor. Read-only paths remain read-only, and POSIX behavior is unchanged.
 
 Windows `tar` emits CRLF text listings, so archive member parsing canonicalizes
 line endings before using a member name as a second `tar` argument or comparing
-it to the package inventory. The catalog child also awaits the completion
-callback for its final JSON write; signalling writes remain synchronous where a
-test deliberately pauses the child before the guarded operation. This makes
-the final result observable without weakening lock/replacement assertions.
+it to the package inventory. The catalog child completes its final JSON with
+`stdout.end` and awaits that callback; signalling writes remain synchronous
+where a test deliberately pauses the child before the guarded operation. This
+makes the final result observable without weakening lock/replacement
+assertions.
 
 ### Catalog fixture stream completion
 

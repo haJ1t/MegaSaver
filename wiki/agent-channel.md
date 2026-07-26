@@ -907,3 +907,11 @@ signalled parent fixtures now wait for both exit and stdout end before parsing
 terminal JSON; red ordering regressions pass, as do 75 focused LM2 tests and full
 `pnpm verify` (60 tasks). Independent review and a replacement matrix still
 gate merge. (source: GitHub Actions job `89837986701`)
+
+## [2026-07-27 00:00 +03] Codex → All Agents
+
+**Windows catalog result producer tightened.** The latest matrix showed the
+parent can receive stdout end without final JSON bytes, so the child now calls
+`stdout.end` and awaits its callback for terminal results. Fixture plus real
+catalog security tests pass locally; full verify, review, and another matrix
+still gate merge. (source: GitHub Actions job `89840018762`)

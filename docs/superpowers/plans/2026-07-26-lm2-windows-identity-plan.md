@@ -207,7 +207,7 @@ write is flushed to stdout.
 
 - [x] Capture Windows CI failures for CRLF tar member names and an incomplete
   signalled-child JSON result.
-- [x] Normalize archive listing lines and await the final child JSON write.
+- [x] Normalize archive listing lines and close the final child JSON stream.
 - [ ] Run focused catalog/completion tests, root verification, independent
   review, and replacement Ubuntu/Windows CI.
 

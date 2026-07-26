@@ -7075,3 +7075,14 @@ package typecheck/lint, and root `pnpm verify` (60 tasks) pass locally. Fresh
 review and replacement two-platform CI remain release gates. (source: GitHub
 Actions job `89837986701`,
 `packages/long-memory/test/lm2-catalog-process-fixtures.ts`, 2026-07-26)
+
+## [2026-07-27 00:00 +03] fix | close the child result stream on Windows
+
+The replacement Windows run proved that parent-side close-plus-stream-end
+ordering alone cannot recover bytes that the child never flushes: its final
+catalog JSON was absent even when the parent observed stdout end. The child
+now uses `process.stdout.end` and awaits its completion callback for the
+terminal result. Local catalog fixture/security tests (18) and package
+typecheck pass; full verification, review, and a new Windows matrix remain
+release gates. (source: GitHub Actions job `89840018762`,
+`packages/long-memory/test/fixtures/lm2-catalog-child.ts`, 2026-07-27)

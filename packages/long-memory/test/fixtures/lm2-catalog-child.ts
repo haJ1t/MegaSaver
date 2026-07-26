@@ -21,8 +21,8 @@ const input = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as 
 
 function writeResult(result: boolean): Promise<void> {
   return new Promise((resolve, reject) => {
-    process.stdout.write(`${JSON.stringify({ result })}\n`, (error) => {
-      if (error === null) resolve();
+    process.stdout.end(`${JSON.stringify({ result })}\n`, (error) => {
+      if (error == null) resolve();
       else reject(error);
     });
   });
