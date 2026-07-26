@@ -13,7 +13,9 @@ import {
   type HybridReceipt,
   type Lm2Candidate,
   type Lm2RankVectorReader,
+  MAX_LM2_CANDIDATE_TEXT_CODE_UNITS,
   type ModelDescriptor,
+  hybridReceiptSchema,
   modelDescriptorFingerprint,
   rankLm2Candidates,
 } from "@megasaver/long-memory";
@@ -53,14 +55,44 @@ function candidatesFor(input: RankProjectMemoriesInput): {
   if (input.entries.length === 0) {
     return { entries: [], candidates: [], omitted: 0 };
   }
-  const { text: _text, ...filters } = input.query;
-  const entries = searchMemoryEntries(input.entries, { ...filters, limit: input.entries.length });
+  const entries = searchMemoryEntries(input.entries, {
+    ...input.query,
+    text: input.task,
+    limit: input.entries.length,
+  });
   const selected = entries.slice(0, MAX_CANDIDATES);
   const workspaceKey = projectWorkspaceKey(input.projectId);
   return {
     entries: selected,
     candidates: selected.map((entry) => memoryCandidate(entry, workspaceKey)),
     omitted: entries.length - selected.length,
+  };
+}
+
+function coreFallback(input: RankProjectMemoriesInput): RankProjectMemoriesResult {
+  const memory = searchMemoryEntries(input.entries, {
+    ...input.query,
+    text: input.task,
+    limit: Math.min(input.query.limit ?? 20, MAX_CANDIDATES),
+  });
+  return {
+    memory,
+    hybrid: hybridReceiptSchema.parse({
+      profile: "safe",
+      adaptiveCandidateScope: "not_applicable",
+      adaptiveCatalogRecordCount: 0,
+      candidateInputOmittedCount: 0,
+      lexicalCandidateCount: memory.length,
+      semanticCandidateCount: 0,
+      fusedCandidateCount: memory.length,
+      semanticStatus: "not_requested",
+      semanticReasons: [],
+      indexedVectorCount: 0,
+      missingVectorCount: 0,
+      invalidVectorCount: 0,
+      semanticVectorBytesRead: 0,
+      queryLatencyMs: 0,
+    }),
   };
 }
 
@@ -119,6 +151,14 @@ export async function rankProjectMemories(
   input: RankProjectMemoriesInput,
 ): Promise<RankProjectMemoriesResult> {
   const prepared = candidatesFor(input);
+  if (
+    input.task.trim().length > MAX_LM2_CANDIDATE_TEXT_CODE_UNITS ||
+    prepared.candidates.some(
+      (candidate) => candidate.text.length > MAX_LM2_CANDIDATE_TEXT_CODE_UNITS,
+    )
+  ) {
+    return coreFallback(input);
+  }
   const workspaceKey = projectWorkspaceKey(input.projectId);
   const byId = new Map<string, MemoryEntry>(prepared.entries.map((entry) => [entry.id, entry]));
   const memoryFor = (ids: readonly string[]) =>
