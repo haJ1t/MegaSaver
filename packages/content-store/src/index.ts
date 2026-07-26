@@ -16,6 +16,7 @@ export {
   listChunkSets,
   deleteChunkSet,
   pruneOlderThan,
+  chunkSetKey,
   saveOverlayChunkSet,
   loadOverlayChunkSet,
   deleteOverlayChunkSet,

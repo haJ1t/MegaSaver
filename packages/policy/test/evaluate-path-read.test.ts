@@ -37,6 +37,11 @@ describe("evaluatePathRead — secret-path denylist (spec §4a)", () => {
     ["**/_netrc", "home/_netrc"],
     ["**/.pypirc", "home/.pypirc"],
     ["**/.git-credentials", "home/.git-credentials"],
+    ["**/.pgpass", "/Users/u/.pgpass"],
+    ["**/pgpass.conf", "C:\\Users\\u\\AppData\\Roaming\\postgresql\\pgpass.conf"],
+    ["**/.docker/config.json", "/Users/u/.docker/config.json"],
+    ["**/.kube/config", "/Users/u/.kube/config"],
+    ["**/.config/gh/hosts.yml", "/Users/u/.config/gh/hosts.yml"],
   ];
 
   // The credential-file globs must not swallow neighbours. `.npmrc` is denied
@@ -49,6 +54,16 @@ describe("evaluatePathRead — secret-path denylist (spec §4a)", () => {
     "project/.npmrc.bak",
     "docs/netrc-format.md",
     "project/.pypirc.example",
+    // The 2026-07-25 home-credential globs are FILE-level, never
+    // directory-level: a baseline denial has no un-deny field (I1), so a
+    // `**/.kube/**`-shaped glob would permanently blind the agent to ordinary
+    // config. These are the neighbours that must survive.
+    "/Users/u/.kube/cache/http/abc",
+    "/Users/u/.docker/daemon.json",
+    "/Users/u/.docker/contexts/meta/x/meta.json",
+    "/Users/u/.config/gh/config.yml",
+    "/repo/pgpassword.txt",
+    "/repo/docs/kube/config.md",
   ];
 
   for (const path of allowedNeighbours) {
@@ -98,6 +113,22 @@ describe("evaluatePathRead — secret-path denylist (spec §4a)", () => {
       reason: "secret_path_read",
     });
   });
+
+  // The home-credential globs must survive both normalizePath foldings, since
+  // the Windows carrier (`%APPDATA%\postgresql\pgpass.conf`) arrives with
+  // backslashes and a capitalised drive path.
+  const deniedSpellings: readonly string[] = [
+    "C:\\Users\\U\\.pgpass",
+    "/Users/U/.Kube/Config",
+    "Users\\u\\.docker\\config.json",
+    "/USERS/U/.CONFIG/GH/HOSTS.YML",
+  ];
+
+  for (const path of deniedSpellings) {
+    it(`denies ${path} across separator and case foldings`, () => {
+      expect(evalPath(path)).toEqual({ allowed: false, reason: "secret_path_read" });
+    });
+  }
 });
 
 describe("evaluatePathRead — allow + reason policy (spec §4, §4b)", () => {

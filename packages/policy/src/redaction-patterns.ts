@@ -699,6 +699,96 @@ const baseline: RedactionPattern[] = [
     replacement: "[REDACTED:tr_national_id]",
     validate: (match: string) => tcknValid(match),
   },
+  // --- Home credential stores (spec 2026-07-25 §3c). APPENDED, in this order,
+  // at the very END of the table: nothing above is reordered and no existing
+  // row's bytes change, so the §5a ordering constraint (jwk_private_key and jwt
+  // ahead of every prefix detector) is preserved by construction.
+  // All three use the house shape — a first-character `(?=\S)` lookahead in
+  // front of a bounded lookbehind (concepts/lookahead-start-guard), value run
+  // bounded (concepts/unbounded-run-redos). Capture-group replacements are NOT
+  // available: redact() applies each pattern through a replacer FUNCTION, so a
+  // `$1` in the replacement string is returned literally.
+  // Measured, and NOT what the shape suggests: all three are linear by
+  // construction — every lookbehind run is bounded and nothing follows the
+  // value run, so a start position matches or fails in one pass. The BOUNDS
+  // therefore buy no speed (they cost a little, exactly as netrc_password's
+  // removed ceiling did) and are kept as OVER-REDACTION controls; the `(?=\S)`
+  // guard is the one measured win, ~9x on a whitespace run. Figures in
+  // test/redact-superlinear.test.ts alongside the growth rows.
+  {
+    // `~/.npmrc` is deliberately NOT on the secret-path denylist (§4a records
+    // why), so this detector is the ONLY defence for its credential line.
+    // The gate is the leading `_`, which is what makes it npm-shaped rather
+    // than the English word "auth" — `--auth=`, `x-auth-token` and
+    // `"auth":` all lack it and are covered by their own rows.
+    // Covers the three formats `npm_token` misses: legacy UUID `_authToken`,
+    // Artifactory base64 `_authToken`, and `_auth` (base64 `user:password`).
+    // The 8-char floor keeps `_auth=` placeholders and short flags out.
+    // The optional quote in the LOOKBEHIND is load-bearing, not cosmetic:
+    // npm's ini serializer JSON.stringify()s any value containing `=`, which
+    // is base64 padding, so `npm config set _auth …` writes the DOUBLE-QUOTED
+    // form. Without it the value class cannot consume the opening `"`, the
+    // lookbehind no longer holds one position later, and the canonical
+    // tool-written line is skipped entirely rather than truncated —
+    // json_secret_field already eats its opening quote for the same reason.
+    // Disclosed loss: a value containing a space or an embedded quote is
+    // truncated there; a value over 4096 characters keeps its tail.
+    name: "npmrc_auth",
+    pattern: /(?=\S)(?<=_(?:authtoken|auth|password)[ \t]{0,8}=[ \t]{0,8}["']?)[^\s"']{8,4096}/gi,
+    replacement: "[REDACTED]",
+  },
+  {
+    // `host:port:database:user:password`, credentials only by definition. The
+    // lookbehind requires all four preceding fields INCLUDING a numeric port,
+    // which is what stops it firing on an ordinary `a:b:c:d:e` line — a
+    // `[^\s:]{1,5}` port would fire on any five-colon line and was rejected.
+    // Line-anchored via `^` under `m`, and deliberately NOT `^\s*`: `\s`
+    // matches `\n`, which is ReDoS instance 7 in concepts/unbounded-run-redos.
+    // The numeric port alone does NOT make the shape rare: `12:34:56:789:req
+    // completed`, an expanded IPv6 address and `CACHE:8080:web:nginx:…` all
+    // clear it, and a `[^\r\n]` value run then eats the rest of the line —
+    // the `PWD=` class of evidence destruction, in the stream this redactor
+    // filters. Postgres escapes both `:` and `\` inside a field and the
+    // password is the LAST one, so the value is pinned to end-of-line and an
+    // unescaped colon or space ends it. That is what separates a record from
+    // a log line; the port is only the first gate.
+    // Disclosed loss: a password over 512 characters is missed ENTIRELY (the
+    // end-of-line anchor cannot be reached, so there is no truncation to fall
+    // back on); a password beginning with a space is missed (the `(?=\S)`
+    // guard); and a record whose port field is the legal `*` wildcard is
+    // missed entirely — a real, accepted hole, taken over widening the port
+    // class.
+    name: "pgpass_line",
+    pattern:
+      /(?=\S)(?<=^[^\s:]{1,253}:\d{1,5}:[^\s:]{1,64}:[^\s:]{1,64}:)(?:\\[^\r\n]|[^\s:\\]){1,512}(?=[ \t]{0,8}$)/gm,
+    replacement: "[REDACTED]",
+  },
+  {
+    // kubeconfig `users[].user.token`, and the OIDC pair beside it. Gated on
+    // line-start indentation (`[ \t]{0,32}`, again not `\s`) plus a 16-char
+    // floor, so `token: yes` and `token: 42` in prose or a count column do not
+    // fire. The JSON form `"token": "…"` cannot reach it — the `"` breaks the
+    // line-start gate — and is deliberately not added to json_secret_field,
+    // whose field list is an existing row and so a CRITICAL-tier edit.
+    // `client-key-data` in the same file is already covered by
+    // base64_pem_block.
+    // A 16-character floor is NOT a discriminator — every identifier
+    // expression clears it, and `token: z.string().min(1),` (this repo's own
+    // packages/daemon/src/discovery.ts:8), `token: process.env.GITHUB_TOKEN,`
+    // and `token: matchStack.token,` were all being destroyed. The value is
+    // therefore gated on SHAPE as well: a YAML scalar, i.e. only characters a
+    // base64/base64url/JWT/opaque token uses, running to end of line. Code
+    // dies on the punctuation (`(`, `)`, `,`, `<`) or on the trailing comma.
+    // Disclosed loss: a token under 16 characters, flow style (`{token: x}`),
+    // a token over 4096 characters (missed ENTIRELY — the end-of-line anchor
+    // cannot be reached), and a token followed by an inline `# comment`.
+    // Residual over-redaction, accepted: a bare identifier alone on the line
+    // (`token: authorizationHeaderValue`) is byte-identical to a real scalar.
+    name: "kubeconfig_token",
+    pattern:
+      /(?=\S)(?<=^[ \t]{0,32}(?:token|id-token|refresh-token):[ \t]{1,8})[A-Za-z0-9._~+/=-]{16,4096}(?=[ \t]{0,8}$)/gim,
+    replacement: "[REDACTED]",
+  },
 ];
 
 export const REDACTION_PATTERNS: readonly RedactionPattern[] = z

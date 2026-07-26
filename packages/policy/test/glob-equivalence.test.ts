@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { compileGlob } from "../src/secret-paths.js";
+import { DENYLIST_GLOBS, compileGlob } from "../src/secret-paths.js";
 
 // The pre-fix implementation, frozen verbatim as the equivalence oracle. It is
 // NOT imported from src — it no longer exists there. Keeping the old body here
@@ -33,24 +33,12 @@ function legacyCompileGlob(glob: string): RegExp {
   return new RegExp(`^${body}$`, "i");
 }
 
-const DENYLIST_GLOBS = [
-  "**/.env",
-  "**/.env.*",
-  "**/.ssh/**",
-  "**/.aws/credentials",
-  "**/.aws/config",
-  "**/.gcp/**",
-  "**/.azure/**",
-  "**/private_keys/**",
-  "**/secrets/**",
-  "**/id_rsa",
-  "**/id_ed25519",
-  "**/*.pem",
-  "**/*.key",
-  "**/credentials.json",
-  "**/service-account*.json",
-] as const;
-
+// Imported, NOT hand-copied. The copy that used to live here still held the
+// pre-#309 fifteen globs months after the table shipped nineteen, and it could
+// not fail: it only cross-checked two glob compilers against its own private
+// snapshot. A test that detects drift is strictly worse than an import that
+// makes drift impossible — so the oracle stays (legacyCompileGlob below) and
+// the LIST comes from production.
 const PATHS = [
   ".env",
   "a/.env",
@@ -89,7 +77,39 @@ const PATHS = [
   "",
   "/",
   "a//b",
+  // #309's credential files, unexercised here until the hand-copy was deleted.
+  "home/.netrc",
+  "home/_netrc",
+  "home/.pypirc",
+  "home/.git-credentials",
+  // Home credential stores (2026-07-25), each paired with the near-miss
+  // sibling that must NOT match, so the oracle sees both sides of the glob.
+  "home/.pgpass",
+  ".pgpass",
+  "home/pgpass.conf",
+  "home/pgpassword.txt",
+  "home/.docker/config.json",
+  "home/.docker/daemon.json",
+  "home/.docker/contexts/meta/x/meta.json",
+  "home/.kube/config",
+  "home/.kube/cache/http/abc",
+  "home/.config/gh/hosts.yml",
+  "home/.config/gh/config.yml",
+  "docs/kube/config.md",
 ] as const;
+
+// Non-vacuity. Equivalence is `matcher.test(p) === legacy.test(p)` over PATHS,
+// which is satisfied by false===false: a glob no fixture path exercises is
+// compared only on non-matches and its check proves nothing. This is what let
+// #309's four globs ship with no equivalence coverage at all.
+describe("compileGlob — every denylist glob is exercised by the corpus", () => {
+  it("no glob is checked only on non-matches", () => {
+    const unexercised = DENYLIST_GLOBS.filter(
+      (glob) => !PATHS.some((path) => legacyCompileGlob(glob).test(path)),
+    );
+    expect(unexercised).toEqual([]);
+  });
+});
 
 describe("compileGlob — LOCKED §9a denylist verdicts are unchanged", () => {
   for (const glob of DENYLIST_GLOBS) {

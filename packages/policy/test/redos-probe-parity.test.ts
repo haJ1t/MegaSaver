@@ -61,8 +61,8 @@ describe("redos-probe.mjs measures what actually ships", () => {
   // probe already guards against that one.
   it("imported both probe tables with rows in each", () => {
     expect(Object.keys((AFTER ?? {}) as object).length).toBeGreaterThanOrEqual(7);
-    expect(Object.keys((NEW_DETECTORS ?? {}) as object).length).toBeGreaterThanOrEqual(21);
-    expect(probeRows.length).toBeGreaterThanOrEqual(28);
+    expect(Object.keys((NEW_DETECTORS ?? {}) as object).length).toBeGreaterThanOrEqual(24);
+    expect(probeRows.length).toBeGreaterThanOrEqual(31);
   });
 
   it.each(probeRows)("%s.%s matches the shipped pattern byte for byte", (_table, name, re) => {

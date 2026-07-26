@@ -242,12 +242,42 @@ Decision:
 **/*.key
 **/credentials.json
 **/service-account*.json
+**/.netrc
+**/_netrc
+**/.pypirc
+**/.git-credentials
+**/.pgpass
+**/pgpass.conf
+**/.docker/config.json
+**/.kube/config
+**/.config/gh/hosts.yml
 ```
 
-15 patterns. Compiled once at module load into anchored regexes.
+24 patterns. Compiled once at module load into anchored regexes.
 The glob → regex compilation is an internal helper (NOT
 exported): `*` → `[^/]*`, `**` → `.*`, `?` → `[^/]`, `.` literal,
 case-insensitive flag, full-string anchored.
+
+**Amendment record.** The table is LOCKED; every row above the
+fifteenth arrived through a spec with its own owner confirmation.
+
+| Amendment | Globs added | Owning spec |
+|---|---|---|
+| `5e221055` (#309) | `**/.netrc`, `**/_netrc`, `**/.pypirc`, `**/.git-credentials` | 2026-07-24 secret-path credential files |
+| 2026-07-25 | `**/.pgpass`, `**/pgpass.conf`, `**/.docker/config.json`, `**/.kube/config`, `**/.config/gh/hosts.yml` | `2026-07-25-secret-path-home-credentials-design.md` |
+
+`**/.npmrc` is a RECORDED EXCLUSION, not an omission: a project
+`.npmrc` is ordinary package-manager settings, a baseline denial has
+no un-deny field (§4 I1), so denying it blinds the agent with no
+appeal. Its credential line is covered on the output side by
+`npm_token` and `npmrc_auth` (§5a). Same discriminator for the
+directory forms `**/.docker/**`, `**/.kube/**` and `**/.config/**`,
+all rejected: deny only when the exact filename is credentials-only
+regardless of location.
+
+This block is pinned to `DENYLIST_GLOBS` by
+`packages/policy/test/spec-denylist-parity.test.ts` — the spec table
+and the shipped array cannot drift apart again.
 
 ### §4b `secret_path_read` vs `path_denied` reason policy (LOCKED)
 
@@ -306,8 +336,8 @@ tuple-pinned enum in BB3 (the epic §17 table lists no
 
 **Scope of this section — read before amending anything.** The lock covers the
 **ten rows below and only those ten**. The shipped table is much larger: as of
-2026-07-26, `REDACTION_PATTERNS` holds **39** entries plus **one**
-`OBSERVED_PATTERNS` observer (`email`). The other 30 are **post-lock
+2026-07-26, `REDACTION_PATTERNS` holds **43** entries plus **one**
+`OBSERVED_PATTERNS` observer (`email`). The other 34 are **post-lock
 additions**, enumerated in **§5b** with the spec that owns each one. Neither
 list is a subset of the other by accident — §5b exists so that "which rows are
 locked" has an answer a reader can check.
@@ -326,7 +356,7 @@ CRITICAL amendment must update **in the same commit** and a reviewer is expected
 to check the new bytes against.
 
 Do not read the ten as "the pinned ones". Measured 2026-07-26, exact
-`RegExp.source` pins exist for 5 of these 10 and for 21 of the 31 in §5b;
+`RegExp.source` pins exist for 5 of these 10 and for 24 of the 34 in §5b;
 `anthropic_key`, `openai_key`, `bearer_token` and `env_value` have neither a
 byte nor a flags pin, and `jwt` has a `startsWith` prefix pin only. That gap is
 ADR follow-up F2, not a property of the lock.
@@ -684,9 +714,9 @@ so `count` reflects every occurrence.
 
 ### §5b Post-lock detectors (NOT §5a lock-table rows)
 
-The 31 rows below ship in the same two tables but are **not** covered by the §5a
-lock. They are recorded here so the lock is enumerable: §5a's ten plus these 31
-is the whole of `REDACTION_PATTERNS` (40) and `OBSERVED_PATTERNS` (1). Amendment
+The 34 rows below ship in the same two tables but are **not** covered by the §5a
+lock. They are recorded here so the lock is enumerable: §5a's ten plus these 34
+is the whole of `REDACTION_PATTERNS` (43) and `OBSERVED_PATTERNS` (1). Amendment
 tier is by change shape, not by table — see §5a's scope paragraph and
 [[docs/superpowers/specs/2026-07-26-redaction-lock-scope-adr]].
 
@@ -735,6 +765,9 @@ structural gate only; `flags` = a `.flags` equality pin.
 | `iban` | ISO 13616 mod-97-gated | 2026-07-08-context-firewall | — |
 | `tr_national_id` | TCKN checksum-gated | 2026-07-08-context-firewall | — |
 | `email` (`OBSERVED_PATTERNS`) | count-only observer; never rewrites text | 2026-07-08-context-firewall | struct + flags |
+| `npmrc_auth` | `~/.npmrc` `_authToken` / `_auth` / `_password` — the three formats `npm_token` misses (legacy UUID, Artifactory base64, basic). `.npmrc` is a recorded §4a EXCLUSION, so this is its only defence | 2026-07-25-secret-path-home-credentials §3c | bytes + flags |
+| `pgpass_line` | `~/.pgpass` / `pgpass.conf` fifth field, gated on four preceding fields including a numeric port | 2026-07-25-secret-path-home-credentials §3c | bytes + flags |
+| `kubeconfig_token` | kubeconfig `token:` / `id-token:` / `refresh-token:`, gated on line-start indentation plus a 16-char floor | 2026-07-25-secret-path-home-credentials §3c | bytes + flags |
 
 Six rows have **no owning spec** — they shipped 2026-06-17 in `b2e39cdf`
 ("feat(policy): redact contextual no-prefix secrets", PR #150), before the
@@ -753,6 +786,9 @@ than left to be rediscovered; each was verified as a no-redaction:
 | `gitlab_token` | **closed** 2026-07-26: the alternation now carries the full documented set. Seven prefixes were missing and each measured `fired: (none)` — `glrtr glft glffct glimt glsoat glagent glwt`. Enumerated, not `gl[a-z]{2,6}-`, which would false-positive on `global-<20 chars>` |
 | `digitalocean_token` | `do[opr]_v1_` covers PAT, OAuth and refresh |
 | `twilio_api_key_sid` | matches the API Key **SID**, which is the HTTP Basic *username* — an identifier, not the secret. Kept for the same reason `aws_access_key` is kept. The actual secrets — Auth Token (32 hex) and API Key Secret (32 alphanumeric) — have **no distinguishing prefix** and are therefore unreachable by a regex at acceptable false-positive cost |
+| `npmrc_auth` | a value containing a space or a quote is truncated there; a value over 4096 characters keeps its tail |
+| `pgpass_line` | a password over 512 characters keeps its tail; a password beginning with a space is missed (the `(?=\S)` guard); a record whose port field is the legal `*` wildcard is missed entirely — accepted over widening the port class to `[^\s:]{1,5}`, which would fire on any five-colon line |
+| `kubeconfig_token` | a token under 16 characters, and YAML flow style (`{token: x}`). The JSON form `"token": "…"` is out of reach by construction and was NOT added to `json_secret_field`, whose field list is an existing row and so a CRITICAL-tier edit |
 | `connection_string_secret` | `Pwd=` is deliberately absent: it collides with the universal `PWD` shell variable, which appears in every `env`/`printenv`/CI log, and narrowing the separator was not enough because `PWD=` can sit at position 0. The spaced form `Password = value` and the legal ADO.NET quoted form `Password="p;w;d"` were **closed** 2026-07-26 with three bounded `\s{0,8}` gaps and quoted alternatives; the quoted form previously fired *nothing at all*, because the body saw `"pw` — under the 8-char floor — so there was no match to shorten. Still open: a quoted value over 8192 chars **with an interior `;`**, and `Password` followed by nine or more spaces |
 
 **Do not read §5b as the design list.**

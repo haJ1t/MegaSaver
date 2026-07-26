@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,6 +8,7 @@ import {
   checkHookTelemetry,
   checkNode,
   checkPlatform,
+  checkSettingsPermissions,
   doctorCommand,
   exitCodeFor,
   renderReport,
@@ -190,7 +191,8 @@ describe("doctorCommand", () => {
     const output = logSpy.mock.calls[0]?.[0] as string;
     expect(output).toMatch(/^node v\d+\.\d+\.\d+/);
     expect(output).toContain("saver-hooks-registered");
-    expect(output).toMatch(/8 PASS \/ 0 FAIL/);
+    expect(output).toContain("claude-code-settings-perms");
+    expect(output).toMatch(/9 PASS \/ 0 FAIL/);
   });
 
   it("sets exitCode 0 when the saver hook is not installed (absent = WARN, not FAIL)", async () => {
@@ -223,5 +225,57 @@ describe("doctorCommand", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+// WHY: NTFS ignores POSIX mode bits, so the check is a no-op on Windows.
+const describeUnlessWindows = process.platform === "win32" ? describe.skip : describe;
+
+describeUnlessWindows("checkSettingsPermissions", () => {
+  const dirs: string[] = [];
+  const seed = (mode: number): string => {
+    const dir = mkdtempSync(join(tmpdir(), "megasaver-doctor-perms-"));
+    dirs.push(dir);
+    const p = join(dir, "settings.json");
+    writeFileSync(p, "{}\n");
+    chmodSync(p, mode);
+    return p;
+  };
+
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  // The writer preserves whatever mode it finds, so a file widened to 0644 by a
+  // pre-fix `mega hooks install` stays widened forever unless doctor says so.
+  it.each([0o644, 0o640, 0o604, 0o666])("warns about an existing mode of %s", (mode) => {
+    const check = checkSettingsPermissions(seed(mode));
+    expect(check.value).toBe(mode.toString(8));
+    expect(check.pass).toBe(true);
+    expect(check.reason).toContain("warn:");
+    expect(check.reason).toContain("chmod 600");
+  });
+
+  it.each([0o600, 0o400, 0o700])("stays quiet for an owner-only mode of %s", (mode) => {
+    const check = checkSettingsPermissions(seed(mode));
+    expect(check.value).toBe(mode.toString(8));
+    expect(check.pass).toBe(true);
+    expect(check.reason).toBeUndefined();
+  });
+
+  it("reports absent when there is no settings file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "megasaver-doctor-perms-"));
+    dirs.push(dir);
+    expect(checkSettingsPermissions(join(dir, "settings.json"))).toEqual({
+      key: "claude-code-settings-perms",
+      value: "absent",
+      pass: true,
+    });
+  });
+
+  it("never mutates the file it inspects", () => {
+    const p = seed(0o644);
+    checkSettingsPermissions(p);
+    expect(checkSettingsPermissions(p).value).toBe("644");
   });
 });

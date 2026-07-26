@@ -1,6 +1,6 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
-import { pruneOlderThan } from "@megasaver/content-store";
+import { chunkSetKey, pruneOlderThan } from "@megasaver/content-store";
 import { listEvidenceByWorkspace } from "@megasaver/evidence-ledger";
 import { workspaceKeySchema } from "@megasaver/shared";
 
@@ -12,7 +12,7 @@ import { workspaceKeySchema } from "@megasaver/shared";
 // record class the user explicitly protected loses its raw.
 // ponytail: full ledger scan per prune run (daily, or on an explicit
 // `mega output gc`); index held ids on pin/unpin if the ledger ever outgrows it.
-async function heldChunkSetIds(storeRoot: string): Promise<ReadonlySet<string>> {
+async function heldChunkSetKeys(storeRoot: string): Promise<ReadonlySet<string>> {
   const held = new Set<string>();
   let entries: string[];
   try {
@@ -27,7 +27,21 @@ async function heldChunkSetIds(storeRoot: string): Promise<ReadonlySet<string>> 
     for (const rec of await listEvidenceByWorkspace({ storeRoot, workspaceKey: entry })) {
       if (rec.status !== "available") continue;
       if (rec.retentionClass !== "pinned" && rec.retentionClass !== "manual_hold") continue;
-      if (rec.redactedRawChunkSetId !== null) held.add(rec.redactedRawChunkSetId);
+      if (rec.redactedRawChunkSetId === null) continue;
+      // Scoped so one workspace's pin cannot retain another's expired copy of
+      // the same content-derived id. A ref we cannot scope (null / durable,
+      // only reachable via a hand-edited ledger) falls back to the bare id,
+      // which the store matches everywhere — over-retain rather than delete a
+      // held chunk.
+      held.add(
+        rec.sessionRef?.kind === "live"
+          ? chunkSetKey({
+              topDir: rec.workspaceKey,
+              sessionDir: rec.sessionRef.id,
+              chunkSetId: rec.redactedRawChunkSetId,
+            })
+          : rec.redactedRawChunkSetId,
+      );
     }
   }
   return held;
@@ -40,6 +54,6 @@ export async function pruneChunkSetsHonoringPins(input: {
   return pruneOlderThan({
     storeRoot: input.storeRoot,
     olderThan: input.olderThan,
-    keepChunkSetIds: await heldChunkSetIds(input.storeRoot),
+    keepChunkSetKeys: await heldChunkSetKeys(input.storeRoot),
   });
 }

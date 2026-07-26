@@ -182,6 +182,21 @@ export const NEW_DETECTORS = {
     // kty present, private field absent: forces both lookaheads to scan and fail
     seed: (n) => `{"kty":"RSA","n":"${"x".repeat(200)}"}`.repeat(Math.ceil(n / 220)),
   },
+  // Home credential stores, added 2026-07-25. Each seed MATCHES — a corpus with
+  // no anchor reports zero divergences and proves nothing, which has shipped
+  // here three times.
+  npmrc_auth: {
+    re: /(?=\S)(?<=_(?:authtoken|auth|password)[ \t]{0,8}=[ \t]{0,8}["']?)[^\s"']{8,4096}/gi,
+    seed: (n) => `_authToken=${"A".repeat(24)} `.repeat(Math.ceil(n / 36)),
+  },
+  pgpass_line: {
+    re: /(?=\S)(?<=^[^\s:]{1,253}:\d{1,5}:[^\s:]{1,64}:[^\s:]{1,64}:)(?:\\[^\r\n]|[^\s:\\]){1,512}(?=[ \t]{0,8}$)/gm,
+    seed: (n) => `h.internal:5432:db:user:${"A".repeat(24)}\n`.repeat(Math.ceil(n / 49)),
+  },
+  kubeconfig_token: {
+    re: /(?=\S)(?<=^[ \t]{0,32}(?:token|id-token|refresh-token):[ \t]{1,8})[A-Za-z0-9._~+/=-]{16,4096}(?=[ \t]{0,8}$)/gim,
+    seed: (n) => `    token: ${"A".repeat(24)}\n`.repeat(Math.ceil(n / 36)),
+  },
 };
 
 // The adversarial seed per pattern. NOTE url_basic_auth: an earlier published

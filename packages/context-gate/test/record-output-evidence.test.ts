@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deleteOverlayChunkSet } from "@megasaver/content-store";
-import { listEvidenceByWorkspace, revokeEvidence } from "@megasaver/evidence-ledger";
+import { type ChunkRef, listEvidenceByWorkspace, revokeEvidence } from "@megasaver/evidence-ledger";
 import { describe, expect, it } from "vitest";
 import { recordAndFilterOverlayOutput } from "../src/record-output.js";
 
@@ -103,9 +103,14 @@ describe("recordAndFilterOverlayOutput — evidence write", () => {
     const chunkPath = join(storeRoot, "content", WK, SID, `${chunkSetId}.json`);
     expect(existsSync(chunkPath)).toBe(true);
 
-    // The deleteChunk port closed over the same path components used at write time.
-    const deleteChunk = (id: string): Promise<void> =>
-      deleteOverlayChunkSet({ storeRoot, workspaceKey: WK, liveSessionId: SID, chunkSetId: id });
+    // The deleteChunk port deletes at the ref's own scope, not by bare id.
+    const deleteChunk = (ref: ChunkRef): Promise<void> =>
+      deleteOverlayChunkSet({
+        storeRoot,
+        workspaceKey: ref.workspaceKey,
+        liveSessionId: ref.sessionRef?.kind === "live" ? ref.sessionRef.id : "",
+        chunkSetId: ref.chunkSetId,
+      });
 
     await revokeEvidence({
       storeRoot,

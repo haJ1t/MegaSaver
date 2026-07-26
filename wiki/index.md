@@ -1,6 +1,6 @@
 ---
 title: Wiki Index
-updated: 2026-07-20
+updated: 2026-07-26
 ---
 
 # Wiki Index — Mega Saver
@@ -54,6 +54,7 @@ updated: 2026-07-20
 - [[concepts/diff-on-reread]] — PR #181: unchanged re-reads return a lossless `unchanged-marker` (prior chunkSetId) via a per-session sha256 read-index; skips re-filter/re-persist.
 - [[concepts/semantic-ast-read]] — PR #182: source-file reads chunk on AST boundaries (reuses [[entities/indexer]] extractors, lazy-loaded); line-chunk fallback for everything else.
 - [[concepts/outline-first-read]] — opt-in skeleton reads: signatures + line ranges + chunk ids; bodies fetch-on-demand (lossless, additive).
+- [[concepts/chunk-set-identity]] — a chunk file is addressed by `(workspaceKey, session, chunkSetId)`; saver ids are content-derived and collide across sessions. Read may key on the bare id; **delete and retention holds may not**. Fixed the evidence GC that deleted a live session's raw output (2026-07-26).
 
 > **Drafts / proposals** (not yet locked; kept as draft):
 > [[concepts/context-ledger-architecture]] — proposed next architecture splitting

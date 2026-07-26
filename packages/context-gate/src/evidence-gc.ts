@@ -1,8 +1,7 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { deleteOverlayChunkSet } from "@megasaver/content-store";
-import { gcEvidence } from "@megasaver/evidence-ledger";
-import { locateChunkSet } from "./locate-chunk-set.js";
+import { type ChunkRef, gcEvidence } from "@megasaver/evidence-ledger";
 import { EVIDENCE_RETENTION_MS } from "./record-output.js";
 
 // Store-wide ordinary-retention pass over the evidence ledger: gcEvidence is
@@ -18,14 +17,16 @@ export async function sweepEvidenceStore(input: {
   } catch {
     return { degraded: 0 };
   }
-  const deleteChunk = async (chunkSetId: string): Promise<void> => {
-    const at = locateChunkSet({ storeRoot: input.storeRoot, chunkSetId });
-    if (at?.layout !== "overlay") return;
+  // Delete only at the record's own (workspaceKey, session, id) path. A ref
+  // whose session scope is unresolvable is skipped rather than searched for:
+  // the id alone matches colliding copies owned by other, live sessions.
+  const deleteChunk = async (ref: ChunkRef): Promise<void> => {
+    if (ref.sessionRef?.kind !== "live") return;
     await deleteOverlayChunkSet({
       storeRoot: input.storeRoot,
-      workspaceKey: at.workspaceKey,
-      liveSessionId: at.liveSessionId,
-      chunkSetId,
+      workspaceKey: ref.workspaceKey,
+      liveSessionId: ref.sessionRef.id,
+      chunkSetId: ref.chunkSetId,
     });
   };
   let degraded = 0;

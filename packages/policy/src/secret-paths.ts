@@ -6,7 +6,7 @@ export type { PathMatcher } from "./glob-matcher.js";
 // once at module load into anchored PathMatchers. Order of `**` before
 // `*` in the tokenizer matters: the `**` token must be consumed before
 // the single-`*` rule runs.
-const DENYLIST_GLOBS: readonly string[] = [
+export const DENYLIST_GLOBS: readonly string[] = [
   "**/.env",
   "**/.env.*",
   "**/.ssh/**",
@@ -37,6 +37,24 @@ const DENYLIST_GLOBS: readonly string[] = [
   "**/_netrc",
   "**/.pypirc",
   "**/.git-credentials",
+  // Home credential stores (spec 2026-07-25 §3a). resolveSafeReadPath admits
+  // the whole home directory as a sandbox root, so this table is the only
+  // thing between an agent and these files.
+  // All FILE-level, never directory-level, and the discriminator is: does this
+  // exact filename ever carry ordinary, non-credential config? If it does, it
+  // belongs to the redactor, not here — a baseline denial has no un-deny field
+  // (evaluate-path-read I1), so `**/.kube/**` would permanently blind the agent
+  // to `.kube/cache`, `**/.docker/**` to `daemon.json` and contexts, and
+  // `**/.config/**` to essentially everything.
+  // `pgpass.conf` is the Windows spelling (`%APPDATA%\postgresql\pgpass.conf`);
+  // normalizePath already folds `\` to `/`. It is the one glob without a
+  // leading dot, so it can match a project file of that name — that file is a
+  // pgpass file wherever it lives, and the denial is correct there too.
+  "**/.pgpass",
+  "**/pgpass.conf",
+  "**/.docker/config.json",
+  "**/.kube/config",
+  "**/.config/gh/hosts.yml",
 ];
 
 // Exported for parse-project-permissions.ts so project deny.read/write

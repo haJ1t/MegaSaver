@@ -79,6 +79,13 @@ describe("structural gates (spec §6.1)", () => {
     ["twilio_api_key_sid", "g"],
     ["connection_string_secret", "gi"],
     ["slack_webhook_url", "g"],
+    // 2026-07-25 home credential carriers. `m` is load-bearing on two of them
+    // — without it `^` means start-of-INPUT and a kubeconfig or pgpass file
+    // yields at most one finding — and `count` derives from a global replace,
+    // so a dropped `g` silently under-reports every one of them.
+    ["npmrc_auth", "gi"],
+    ["pgpass_line", "gm"],
+    ["kubeconfig_token", "gim"],
   ])("%s keeps flags %s", (name, flags) => {
     expect(entry(name).pattern.flags).toBe(flags);
   });
@@ -167,6 +174,21 @@ describe("post-lock detector bytes", () => {
       "\\$ANSIBLE_VAULT;[\\d.]{1,8};[A-Z0-9]{3,32}(?:;[\\w.-]{1,64})?[\\s0-9a-f]{32,65536}",
     ],
     ["bip32_xprv", "[xyz]prv[A-HJ-NP-Za-km-z1-9]{95,120}"],
+    // 2026-07-25 home credential carriers. Every bound here is measured in the
+    // growth rows below and its loss is disclosed in redaction-patterns.ts;
+    // without a byte pin, a bound-edge or class mutation survives the suite.
+    [
+      "npmrc_auth",
+      "(?=\\S)(?<=_(?:authtoken|auth|password)[ \\t]{0,8}=[ \\t]{0,8}[\"']?)[^\\s\"']{8,4096}",
+    ],
+    [
+      "pgpass_line",
+      "(?=\\S)(?<=^[^\\s:]{1,253}:\\d{1,5}:[^\\s:]{1,64}:[^\\s:]{1,64}:)(?:\\\\[^\\r\\n]|[^\\s:\\\\]){1,512}(?=[ \\t]{0,8}$)",
+    ],
+    [
+      "kubeconfig_token",
+      "(?=\\S)(?<=^[ \\t]{0,32}(?:token|id-token|refresh-token):[ \\t]{1,8})[A-Za-z0-9._~+/=-]{16,4096}(?=[ \\t]{0,8}$)",
+    ],
     [
       "base64_pem_block",
       "LS0tLS1CRUdJTiB[A-Za-z0-9+/=]{0,64}(?:UklWQVRFIEtF|VkFURSBL|SVZBVEUgS0VZ|RUNSRVQgS0VZ|UkVUIEtF|Q1JFVCBL)[A-Za-z0-9+/=]{16,65536}(?:[\\r\\n]{1,2}[ \\t]{0,8}[A-Za-z0-9+/=]{16,65536}){0,4096}",
@@ -859,6 +881,36 @@ describe("carrier detectors — behavioural bound edges and negatives", () => {
     expect(redactWithFindings(input).redacted).toBe(input);
   });
 
+  // 2026-07-25 home credential carriers: canonical positive plus the floor
+  // edge, which is the whole of what separates the detector from the `PWD=`
+  // class of evidence destruction.
+  it.each([
+    ["floor-1", 7, false],
+    ["floor", 8, true],
+  ])("npmrc_auth %s", (_l, n, want) => {
+    const s = `//registry.internal/:_authToken=${"A".repeat(n)}`;
+    expect(apply("npmrc_auth", s) !== s).toBe(want);
+  });
+
+  it.each([
+    ["floor-1", 15, false],
+    ["floor", 16, true],
+  ])("kubeconfig_token %s", (_l, n, want) => {
+    const s = `    token: ${"A".repeat(n)}`;
+    expect(apply("kubeconfig_token", s) !== s).toBe(want);
+  });
+
+  // The numeric port is the entire discriminator between a pgpass record and
+  // any other five-field colon line. Widening it to `[^\s:]{1,5}` — the obvious
+  // "fix" for the disclosed `*` wildcard hole — makes the second row match.
+  it.each([
+    ["a numeric port", "db.internal:5432:app:svc:S3cret-Value", true],
+    ["a wildcard port (disclosed loss)", "db.internal:*:app:svc:S3cret-Value", false],
+    ["a non-numeric fourth colon field", "alpha:beta:gamma:delta:epsilon", false],
+  ])("pgpass_line with %s", (_l, input, want) => {
+    expect(apply("pgpass_line", input) !== input).toBe(want);
+  });
+
   // Regression fixtures for the defects this round found.
   it("aws_access_key covers the temporary ASIA prefix", () => {
     for (const p of ["AKIA", "ASIA"]) {
@@ -964,11 +1016,14 @@ describe("non-vacuity gate — every detector in the table", () => {
       "twilio_api_key_sid",
       "connection_string_secret",
       "slack_webhook_url",
+      "npmrc_auth",
+      "pgpass_line",
+      "kubeconfig_token",
     ]);
     const shipped = REDACTION_PATTERNS.map((p) => p.name);
     expect(shipped.filter((n) => !covered.has(n))).toEqual([]);
     // Pins the table size: the wiki claimed 33 by summing two exported tables.
-    expect(shipped).toHaveLength(40);
+    expect(shipped).toHaveLength(43);
     expect(OBSERVED_PATTERNS).toHaveLength(1);
   });
 });
@@ -1417,6 +1472,41 @@ const SEEDS: Record<string, (bytes: number) => string> = {
   age_secret_key: (n) => `AGE-SECRET-KEY-1${"Q".repeat(60)}`.repeat(Math.ceil(n / 76)),
   // kty present, private field absent: forces BOTH lookaheads to scan and fail.
   jwk_private_key: (n) => `{"kty":"RSA","n":"${"x".repeat(200)}"}`.repeat(Math.ceil(n / 220)),
+  // Home credential detectors, added 2026-07-25. These three are linear BY
+  // CONSTRUCTION and the rows below are a class fence, not a repaired
+  // quadratic — say so plainly rather than implying a blowup that does not
+  // exist. Every run inside each lookbehind is bounded; the end-of-line
+  // lookahead the 2026-07-26 review added to two of them does make a failing
+  // start position backtrack, but only within the value bound and only at the
+  // one position per line where the anchored lookbehind holds, so the work per
+  // line is a constant. Re-measured after that review (min-of-3, isolated),
+  // shipped vs an unguarded and unbounded mutant:
+  //   seed                         100 KB              400 KB
+  //   `_auth= ` repeated           0.50 / 0.58 ms      1.96 / 1.93 ms
+  //   `_auth=` + A-run             0.33 / 0.08 ms      1.38 / 0.44 ms
+  //   `h:1:d:u:` + A-run           0.23 / 0.10 ms      0.91 / 0.40 ms
+  //   `h:1:d:u:` + 512 A + NL      0.14 / 0.12 ms      0.60 / 0.49 ms
+  //   `    token: ` + space-run    0.15 / 1.86 ms      0.61 / 6.44 ms
+  // Two things follow, and neither is what a reader assumes. (1) The BOUNDS
+  // buy no speed here and cost a little, exactly as netrc_password's removed
+  // ceiling did — they are kept as OVER-REDACTION controls (a 100 KB line
+  // opening with a pgpass-shaped prefix would otherwise be consumed whole) and
+  // their coverage cost is disclosed. (2) The `(?=\S)` guard is the one
+  // measured win: ~12x on the whitespace seed. It is NOT made redundant by the
+  // no-whitespace value class, which is the obvious reading — the win is that
+  // `[ \t]{1,8}` inside the lookbehind lets eight positions in a whitespace
+  // run satisfy it, and the guard rejects all eight before the lookbehind is
+  // ever evaluated.
+  npmrc_auth: (n) => `_auth=${"A".repeat(n)}`,
+  // Must actually MATCH, same trap as age_secret_key: the end-of-line anchor
+  // means an unterminated A-run no longer matches at ANY length, and a seed
+  // that never fires measures a pattern that does not exist. A run of exactly
+  // the 512-char bound per line is both — 197 matches at 100 KB, and the
+  // greedy run still walks the whole bound before the lookahead decides.
+  pgpass_line: (n) => `h:1:d:u:${"A".repeat(512)}\n`.repeat(Math.ceil(n / 521)),
+  // Deliberately does NOT match: this row exists to measure the `(?=\S)` guard,
+  // and a whitespace run is the shape the guard is for.
+  kubeconfig_token: (n) => `    token: ${" ".repeat(n)}`,
 };
 
 const seed = (name: string, bytes: number): string => {
@@ -1435,6 +1525,9 @@ describe("linear time on the adversarial seed (spec §6.3)", () => {
     "email",
     "age_secret_key",
     "jwk_private_key",
+    "npmrc_auth",
+    "pgpass_line",
+    "kubeconfig_token",
   ])(
     "%s stays under the ceiling at 100 KB",
     (name) => {
@@ -1486,6 +1579,27 @@ describe("linear time on the adversarial seed (spec §6.3)", () => {
       const large = at(256 * KB);
       if (large < FLOOR_MS) expect(large).toBeLessThan(FLOOR_MS);
       else expect(large / small).toBeLessThan(MAX_GROWTH);
+    },
+    { retry: 3, timeout: 300_000 },
+  );
+
+  // 4x step, not the 2x above, per concepts/redos-growth-ratio-measurement:
+  // these three are cheap enough that a doubling lands under FLOOR_MS and the
+  // ratio would measure the scheduler. Minimise per SIZE (measure() already
+  // takes min-of-3), never per ratio, and not under a parallel turbo run.
+  it.each([
+    ["npmrc_auth", 32 * KB],
+    ["pgpass_line", 32 * KB],
+    ["kubeconfig_token", 32 * KB],
+  ])(
+    "%s grows linearly on a 4x step",
+    (name, base) => {
+      const small = measure(name, seed(name, base));
+      const large = measure(name, seed(name, base * 4));
+      if (large < FLOOR_MS) expect(large).toBeLessThan(FLOOR_MS);
+      // Linear on a 4x step is ~4x; quadratic is ~16x. 8 is the midpoint in
+      // log space, so it discriminates from either side.
+      else expect(large / small).toBeLessThan(8);
     },
     { retry: 3, timeout: 300_000 },
   );
