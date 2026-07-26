@@ -412,8 +412,33 @@ name, which is public surface (`packages/pro-analytics/src/firewall-report.ts`
 groups on it). `bearer_token` was deliberately NOT moved along with `jwt`:
 moving it would relabel `Bearer sk-…`, `Bearer ghp_…` and every other
 `Bearer <prefixed-secret>` as `bearer_token` too, a strictly wider rename for
-no coverage gain. No other input changes name, and no input loses coverage —
-the reorder is a strict superset of what the old order redacted.
+no coverage gain. No other input changes name.
+
+**The reorder is NOT a strict superset, and an earlier revision of this footnote
+said it was.** `jwt`'s third segment `[A-Za-z0-9_-]+` is greedy and unbounded, so
+it swallows any following base64url run — including a later detector's INDICATOR
+when the two are joined by zero or more `[A-Za-z0-9_-]` characters. Measured
+through `redactWithFindings`:
+
+| glued input | before | after |
+|---|---|---|
+| `<jwt>aws_secret_access_key = <40>` | `[aws_secret_key, jwt]` | `[jwt]`, the 40-char secret in cleartext |
+| `<jwt>bearer <24>` | `[bearer_token, jwt]` | `[jwt]`, the value in cleartext |
+| `<jwt>SG.<22>.<43>` | `[sendgrid_key, jwt]` | `[jwt]`, the key in cleartext |
+| `<jwt>hvs.<24>` | `[vault_token, jwt]` | `[jwt]`, the token in cleartext |
+
+The loss occurs **iff** the separator is zero or more `[A-Za-z0-9_-]` characters.
+Space, newline, tab, comma, semicolon, quote, `/`, `.`, `=`, `&` and `|` are all
+safe, which is why no realistic tool-output shape triggers it — every JSON, URL,
+env-file and log line supplies one. This is the mirror image of the left-side cost
+`‡` already discloses (`session-<jwt>` staying in cleartext).
+
+Both directions are pinned in `packages/policy/test/redact-jwt-order.test.ts`:
+the four losses above, and eleven separators that must stay safe so nobody
+"fixes" the loss by widening the segment class. Per the
+[[docs/superpowers/specs/2026-07-26-redaction-lock-scope-adr]] tier table a
+coverage reduction is CRITICAL, which this reorder therefore is — recorded here
+rather than left implied by a superset claim that was never checked.
 
 Ordering is pinned in `packages/policy/test/redact-superlinear.test.ts`
 (`jwk_private_key` and `jwt` before all seven prefix detectors), the mechanism
