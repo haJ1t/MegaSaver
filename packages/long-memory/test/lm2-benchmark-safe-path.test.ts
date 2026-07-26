@@ -1,4 +1,15 @@
-import { constants, lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync } from "node:fs";
+import {
+  constants,
+  closeSync,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -18,9 +29,39 @@ afterEach(() => {
 });
 
 describe("LM2 benchmark safe paths", () => {
-  it("omits the unsupported nonblocking flag on Windows file opens", () => {
-    expect(benchmarkFileOpenFlags("read", "win32") & constants.O_NONBLOCK).toBe(0);
-    expect(benchmarkFileOpenFlags("read", "linux") & constants.O_NONBLOCK).not.toBe(0);
+  it("retains POSIX nonblocking protection only where the host exposes it", () => {
+    expect(benchmarkFileOpenFlags("read", "win32")).toBe(constants.O_RDONLY);
+    expect(benchmarkFileOpenFlags("read", "linux")).toBe(
+      constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW,
+    );
+  });
+
+  it("opens a regular benchmark file on native Windows", () => {
+    if (process.platform !== "win32") return;
+    const root = mkdtempSync(join(tmpdir(), "megasaver-lm2-safe-path-"));
+    roots.push(root);
+    const path = join(root, "manifest.json");
+    writeFileSync(path, "{}\n", { mode: 0o600 });
+    const named = lstatSync(path);
+    const descriptor = openSync(path, "r");
+    const opened = fstatSync(descriptor);
+    closeSync(descriptor);
+    try {
+      const safe = openSafeBenchmarkPath(path, "read");
+      closeSafeBenchmarkPath(safe);
+    } catch (error) {
+      throw new Error(
+        `Windows regular-file safe path rejected ${JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          named: { dev: named.dev, ino: named.ino, mode: named.mode, nlink: named.nlink },
+          opened: { dev: opened.dev, ino: opened.ino, mode: opened.mode, nlink: opened.nlink },
+          bigint: {
+            dev: lstatSync(path, { bigint: true }).dev.toString(),
+            ino: lstatSync(path, { bigint: true }).ino.toString(),
+          },
+        })}`,
+      );
+    }
   });
 
   it("uses a directory handle when Windows cannot open a directory descriptor", () => {

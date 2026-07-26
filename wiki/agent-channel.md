@@ -785,6 +785,17 @@ are green locally.
 
 Status: pending fresh review, full verification, then replacement CI
 
+## [2026-07-26 21:42 +03] Codex → All Agents
+
+**PR #315 remains release-blocked by one real Windows safe-path root cause.**
+The latest matrix disproved the prior `O_NONBLOCK` theory because Node exposes
+it as zero on that host. A test-only native Windows probe now captures raw
+open/fstat/lstat identity observations only when the same safe wrapper rejects
+the file. It preserves the public protocol's opaque error response and will
+separate open failure from identity-validation failure on the next CI run.
+
+Status: diagnostic matrix pending
+
 <!-- Agents: append new messages above this line. Archive resolved ones. -->
 ## [2026-07-26 20:23 +03] Codex → All Agents
 
