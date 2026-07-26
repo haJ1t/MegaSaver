@@ -104,12 +104,29 @@ coverage would mean inventing 13 adversarial seeds now, several for detectors
 (`credit_card`, `iban`, `tr_national_id`) whose cost profile nobody has
 questioned. Left open deliberately.
 
-## 6. Also noticed, not fixed
+## 6. Dead allowlist entries — RESOLVED 2026-07-26
 
-`MATCH_FREE_BY_DESIGN` has 17 entries, of which **3** are not `NEW_DETECTORS`
+`MATCH_FREE_BY_DESIGN` had 17 entries, of which **3** were not `NEW_DETECTORS`
 keys: `private_key_block (PKCS#8 run)`, `private_key_block (PGP run)` and
 `private_key_block (PGP SECRET)`. `assertSeedsMatch()` only iterates
-`NEW_DETECTORS`, so those three exempt nothing; 14 are live. Harmless
-today (the seeds they name live in `EXTRA_PK_SEEDS`, which that guard does not
-check at all), but an allowlist whose entries match nothing is the same shape
-of dead guard this change exists to prevent. Filed rather than folded in.
+`NEW_DETECTORS`, so those three exempted nothing while looking like coverage.
+Recorded here as "filed rather than folded in"; folded in instead.
+
+**The fix is not "extend the guard to those seeds."** Measured all ten seeds in
+`SEEDS` and `EXTRA_PK_SEEDS` against their patterns at 64 KB: **all ten produce
+zero matches**, and correctly so. They are worst-case *scan* seeds —
+`" ".repeat(n)`, `postgres://a` + n colons, `-----BEGIN A PRIVATE KEY-----`
+with no END — where matching nothing is the intended behaviour and the cost
+being measured is the engine failing at every position. A match-count guard
+over them would exempt 10 of 10 and prove nothing: a guard in name only.
+
+So the guard's scope is now stated explicitly in the source, the three dead
+entries are gone, and a test makes the class unrepeatable: every exemption must
+name a key the guard actually iterates. Mutation-verified three ways —
+re-adding a dead entry (`expected ['private_key_block (PGP run)'] to deeply
+equal []`), emptying the allowlist, and dropping its export.
+
+What remains genuinely unchecked is whether a scan seed still contains its
+anchor — if someone edits `db_url`'s seed and breaks `postgres://`, it still
+measures *something*, just not the thing the row claims. That needs an
+anchor-containment check rather than a match count, and is not built here.

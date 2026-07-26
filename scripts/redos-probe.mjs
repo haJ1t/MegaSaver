@@ -230,7 +230,17 @@ const fmt = (ms) => (ms < 10 ? ms.toFixed(2) : ms.toFixed(0)).padStart(9);
 // Guard against the class of bug that shipped twice here: a seed that never
 // matches makes its whole row meaningless. Anchor-scan seeds (deliberately
 // match-free, to force a bounded scan that fails) are listed explicitly.
-const MATCH_FREE_BY_DESIGN = new Set([
+//
+// SCOPE: NEW_DETECTORS only. SEEDS and EXTRA_PK_SEEDS are deliberately outside
+// it. All ten of those are worst-case SCAN seeds — ` `.repeat(n),
+// `postgres://a` + n colons, BEGIN markers with no END — where matching nothing
+// is the intended behaviour and the cost being measured is the engine failing
+// at every position. A match-count guard over them would exempt 10 of 10 and
+// prove nothing, so it would be a guard in name only. Three entries naming
+// EXTRA_PK_SEEDS labels used to sit in the set below and exempted nothing,
+// because this function never iterated that table; the parity test now fails
+// if such an entry reappears.
+export const MATCH_FREE_BY_DESIGN = new Set([
   "slack_token",
   "gitlab_token",
   "sendgrid_key",
@@ -245,9 +255,6 @@ const MATCH_FREE_BY_DESIGN = new Set([
   "aws_session_token",
   "netrc_password",
   "jwk_private_key",
-  "private_key_block (PKCS#8 run)",
-  "private_key_block (PGP run)",
-  "private_key_block (PGP SECRET)",
 ]);
 
 function assertSeedsMatch() {

@@ -33,8 +33,9 @@ import { OBSERVED_PATTERNS, REDACTION_PATTERNS } from "../src/redaction-patterns
 const probeModule = probe as {
   AFTER?: Record<string, RegExp>;
   NEW_DETECTORS?: Record<string, { re: RegExp }>;
+  MATCH_FREE_BY_DESIGN?: Set<string>;
 };
-const { AFTER, NEW_DETECTORS } = probeModule;
+const { AFTER, NEW_DETECTORS, MATCH_FREE_BY_DESIGN } = probeModule;
 
 const shipped = new Map(
   [...REDACTION_PATTERNS, ...OBSERVED_PATTERNS].map((p) => [p.name, p.pattern] as const),
@@ -79,6 +80,26 @@ describe("redos-probe.mjs measures what actually ships", () => {
   // what ships. They are also unexported, so this cannot drift into asserting
   // over them by accident.
   it("does not accidentally reach the historical tables", () => {
-    expect(Object.keys(probe as object).sort()).toEqual(["AFTER", "NEW_DETECTORS"]);
+    expect(Object.keys(probe as object).sort()).toEqual([
+      "AFTER",
+      "MATCH_FREE_BY_DESIGN",
+      "NEW_DETECTORS",
+    ]);
+  });
+
+  // `assertSeedsMatch()` iterates NEW_DETECTORS and skips anything named in
+  // MATCH_FREE_BY_DESIGN. An entry naming something that is NOT a
+  // NEW_DETECTORS key therefore exempts nothing while looking like coverage —
+  // three such entries sat in the set for months, naming EXTRA_PK_SEEDS labels
+  // that the guard never iterates. A dead entry in a guard's allowlist is the
+  // same failure as a seed that matches nothing: the guard reports clean and
+  // checks less than it appears to.
+  it("every seed-guard exemption names a detector the guard actually iterates", () => {
+    const exemptions = [...(MATCH_FREE_BY_DESIGN ?? [])];
+    // Non-vacuity: an emptied or renamed export would make the loop below pass
+    // over nothing.
+    expect(exemptions.length).toBeGreaterThanOrEqual(14);
+    const iterated = Object.keys((NEW_DETECTORS ?? {}) as object);
+    expect(exemptions.filter((n) => !iterated.includes(n))).toEqual([]);
   });
 });
