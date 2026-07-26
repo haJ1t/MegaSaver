@@ -3,6 +3,12 @@ export { createInMemoryLongMemoryStore, type LongMemoryStore } from "./store.js"
 export { dispatchRpcLine } from "./rpc.js";
 export { Lm2Error, lm2ErrorCodeSchema, type Lm2ErrorCode } from "./lm2-errors.js";
 export {
+  rankLm2Candidates,
+  type Lm2RankClock,
+  type Lm2RankResult,
+  type RankLm2CandidatesInput,
+} from "./lm2-ranker.js";
+export {
   MAX_LM2_ADMITTED_MODELS,
   MAX_LM2_CANDIDATE_TEXT_CODE_UNITS,
   MAX_LM2_DIMENSIONS,
