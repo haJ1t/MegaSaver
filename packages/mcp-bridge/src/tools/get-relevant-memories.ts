@@ -44,6 +44,7 @@ export type GetRelevantMemoriesResult = {
     changedFrom?: ChangedFrom;
     verification: VerificationBadge;
   })[];
+  hybrid?: Awaited<ReturnType<typeof rankProjectMemories>>["hybrid"];
   contradictedByCode?: ContradictedDisclosure[];
 };
 
@@ -53,7 +54,7 @@ async function hybridMemoryRanking(
   task: string,
   limit: number | undefined,
   asOf: string,
-): Promise<MemoryEntry[] | null> {
+): Promise<Awaited<ReturnType<typeof rankProjectMemories>> | null> {
   if (env.storeRoot === undefined) return null;
   const result = await rankProjectMemories({
     projectId,
@@ -63,7 +64,7 @@ async function hybridMemoryRanking(
     query: { text: task, asOf, ...(limit === undefined ? {} : { limit }) },
     ...(env.embedFn === undefined ? {} : { embed: env.embedFn }),
   });
-  return [...result.memory];
+  return result;
 }
 
 // changedFrom enrichment (response-only, never persisted): a hit that
@@ -100,9 +101,9 @@ export async function handleGetRelevantMemories(
   const at = asOf ?? new Date().toISOString();
 
   try {
-    const semantic = await hybridMemoryRanking(env, projectId as ProjectId, task, limit, at);
+    const hybrid = await hybridMemoryRanking(env, projectId as ProjectId, task, limit, at);
     const ranked =
-      semantic ??
+      hybrid?.memory ??
       env.registry.searchMemoryEntries(projectId as ProjectId, {
         text: task,
         asOf: at,
@@ -134,6 +135,7 @@ export async function handleGetRelevantMemories(
     }));
     return {
       memory,
+      ...(hybrid === null ? {} : { hybrid: hybrid.hybrid }),
       ...(check.contradictedByCode.length > 0
         ? { contradictedByCode: check.contradictedByCode }
         : {}),

@@ -43,6 +43,7 @@ export type RecallToolResult = {
     verification: VerificationBadge;
   })[];
   chunkSets: readonly ChunkSetSummary[];
+  hybrid?: Awaited<ReturnType<typeof rankProjectMemories>>["hybrid"];
   contradictedByCode?: ContradictedDisclosure[];
 };
 
@@ -73,7 +74,8 @@ export async function handleRecall(
 
       const allMemory = env.registry.listMemoryEntries(session.projectId);
       const scopedMemory = allMemory.filter(
-        (m) => isRecallable(m, at) && (m.sessionId === session.id || m.scope === "project"),
+        (m) =>
+          isRecallable(m, at) && !m.stale && (m.sessionId === session.id || m.scope === "project"),
       );
       const ranked = await rankProjectMemories({
         projectId: session.projectId,
@@ -126,6 +128,7 @@ export async function handleRecall(
       return {
         memory,
         chunkSets,
+        hybrid: ranked.hybrid,
         ...(check.contradictedByCode.length > 0
           ? { contradictedByCode: check.contradictedByCode }
           : {}),

@@ -100,19 +100,30 @@ describe("LM2 product-memory recall", () => {
       title: "Release guard",
       content: "Deployment credential rotation requires approval.",
     });
+    const storeRoot = root();
+    const vector = Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0));
+    writeVectors(memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID), [{ id: semantic.id, vector }]);
+    writeFileSync(
+      memoryEmbeddingHashesSidecarPath(storeRoot, PROJECT_ID),
+      JSON.stringify({ [semantic.id]: memoryEmbeddingContentHash(semantic) }),
+      "utf8",
+    );
 
     const result = await rankProjectMemories({
       projectId: PROJECT_ID,
       entries: [semantic, lexicalOnly],
       task: "deployment credential rotation",
-      storeRoot: root(),
+      storeRoot,
       query: { text: "deployment credential rotation" },
-      embed: async () => [new Float32Array([1, 0])],
+      embed: async () => [new Float32Array(vector)],
       now: () => 0,
     });
 
     expect(result.memory.map((entry) => entry.id)).toContain(lexicalOnly.id);
-    expect(result.hybrid).toMatchObject({ profile: "safe", semanticStatus: "not_requested" });
+    expect(result.hybrid).toMatchObject({
+      profile: "adaptive",
+      semanticStatus: "used_partial_index",
+    });
   });
 
   it("excludes unapproved stale expired and archival entries before ranking", async () => {
@@ -244,5 +255,35 @@ describe("LM2 product-memory recall", () => {
 
     expect(result.memory).toEqual([entry]);
     expect(result.hybrid).toMatchObject({ profile: "adaptive", semanticStatus: "used" });
+  });
+
+  it("returns a Safe receipt when local embedding fails after current vectors are read", async () => {
+    const entry = memory({
+      id: "00000000-0000-4000-8000-000000000021",
+      title: "Deploy policy",
+      content: "deployment policy requires explicit approval",
+    });
+    const storeRoot = root();
+    const vector = Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0));
+    writeVectors(memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID), [{ id: entry.id, vector }]);
+    writeFileSync(
+      memoryEmbeddingHashesSidecarPath(storeRoot, PROJECT_ID),
+      JSON.stringify({ [entry.id]: memoryEmbeddingContentHash(entry) }),
+      "utf8",
+    );
+
+    const result = await rankProjectMemories({
+      projectId: PROJECT_ID,
+      entries: [entry],
+      task: "deployment approval policy",
+      storeRoot,
+      query: { text: "deployment approval policy" },
+      embed: async () => {
+        throw new Error("local model unavailable");
+      },
+      now: () => 0,
+    });
+
+    expect(result).toMatchObject({ memory: [entry], hybrid: { profile: "safe" } });
   });
 });

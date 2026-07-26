@@ -8,6 +8,18 @@
 
 **Tech Stack:** Node 22, TypeScript strict ESM, pnpm workspace, Zod, Vitest, `@megasaver/core`, `@megasaver/long-memory`, `@megasaver/embeddings`.
 
+## Execution status — 2026-07-26
+
+Tasks 1–5 are implemented in commits `ee85c5a2`, `70bd5bc8`, and `9afc6008`.
+The adapter’s final safety test pins Safe fallback after a local embedding
+failure, and MCP/daemon responses now carry the additive `hybrid` receipt.
+`pnpm verify` passed after the implementation. Task 6 remains open only for
+the final independent review and PR/merge handoff: three reviewer launches on
+2026-07-26 failed before execution because the local agent provider returned
+HTTP 404 for both enabled model routes. The optional all-surface fixture is
+covered by adapter, MCP, daemon, and CLI package suites rather than introducing
+a reverse-dependency test into `@megasaver/memory-recall`.
+
 ## Global Constraints
 
 - `MemoryEntry` and the existing `memory/<projectId>.embeddings.jsonl` remain the only product corpus and vector store.

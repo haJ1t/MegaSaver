@@ -45,6 +45,16 @@ LM0 benchmark contracts → LM1 observations → LM2 hybrid recall → LM3 appro
 knowledge/media. Hot Handoff remains separately owned. (source:
 `docs/superpowers/specs/2026-07-19-long-memory-runtime-design.md`)
 
+The product now reuses LM2 ranking through the read-only
+`@megasaver/memory-recall` adapter. It maps only Core-filtered `MemoryEntry`
+records into `memory_entry` candidates and accepts a vector only when the
+existing Core hash manifest matches that entry's current title/content. A
+missing, corrupt, or stale vector set stays Safe/lexical; a partial current
+set uses Adaptive with every eligible lexical candidate retained. The adapter
+does not create a competing memory lifecycle. (source:
+`docs/superpowers/specs/2026-07-26-lm2-product-memory-integration-design.md`,
+`packages/memory-recall/test/rank-project-memories.test.ts`)
+
 LM0 now has an isolated `@megasaver/long-memory` package, deterministic
 workspace-scoped observation deduplication, receipt-bearing BM25 recall, a
 JSONL host, and a public-data-only LongMemEval-V2 adapter. It does not change

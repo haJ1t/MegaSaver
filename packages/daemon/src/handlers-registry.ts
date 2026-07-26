@@ -76,7 +76,8 @@ export async function recallRegistryHandler(
   const asOf = parsed.data.asOf ?? new Date().toISOString();
   const allMemory = registry.listMemoryEntries(session.projectId);
   const scopedMemory = allMemory.filter(
-    (m) => isRecallable(m, asOf) && (m.sessionId === session.id || m.scope === "project"),
+    (m) =>
+      isRecallable(m, asOf) && !m.stale && (m.sessionId === session.id || m.scope === "project"),
   );
   const ranked = await rankProjectMemories({
     projectId: session.projectId,
@@ -94,7 +95,11 @@ export async function recallRegistryHandler(
 
   return {
     status: 200,
-    json: { memory: ranked.memory.length > 0 ? ranked.memory : scopedMemory, chunkSets },
+    json: {
+      memory: ranked.memory.length > 0 ? ranked.memory : scopedMemory,
+      chunkSets,
+      hybrid: ranked.hybrid,
+    },
   };
 }
 

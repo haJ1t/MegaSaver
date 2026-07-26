@@ -26,7 +26,10 @@ export const searchMemoryInputSchema = z
   })
   .strict();
 
-export type SearchMemoryResult = { memory: readonly MemoryEntry[] };
+export type SearchMemoryResult = {
+  memory: readonly MemoryEntry[];
+  hybrid?: Awaited<ReturnType<typeof rankProjectMemories>>["hybrid"];
+};
 
 export async function handleSearchMemory(
   env: SearchMemoryEnv,
@@ -51,19 +54,20 @@ export async function handleSearchMemory(
   try {
     const projectId = d.projectId;
     const task = query.text?.trim();
-    const memory =
+    const ranked =
       env.storeRoot === undefined || task === undefined || task === ""
-        ? env.registry.searchMemoryEntries(projectId as ProjectId, query)
-        : (
-            await rankProjectMemories({
-              projectId: projectId as ProjectId,
-              entries: env.registry.listMemoryEntries(projectId as ProjectId),
-              task,
-              storeRoot: env.storeRoot,
-              query,
-            })
-          ).memory;
-    return { memory };
+        ? null
+        : await rankProjectMemories({
+            projectId: projectId as ProjectId,
+            entries: env.registry.listMemoryEntries(projectId as ProjectId),
+            task,
+            storeRoot: env.storeRoot,
+            query,
+          });
+    return {
+      memory: ranked?.memory ?? env.registry.searchMemoryEntries(projectId as ProjectId, query),
+      ...(ranked === null ? {} : { hybrid: ranked.hybrid }),
+    };
   } catch (err) {
     if (err instanceof CoreRegistryError && err.code === "project_not_found") {
       throw new McpBridgeError("resource_not_found", err.message);

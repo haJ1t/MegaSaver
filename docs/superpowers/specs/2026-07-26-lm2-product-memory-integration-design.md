@@ -96,8 +96,8 @@ creates the sidecar consumed by Adaptive recall.
 - Existing responses retain their existing fields. `hybrid` is optional and
   additive. Existing callers without a text/task keep their former output.
 - Candidate conversion, vector reads, and local embedding inputs are bounded.
-  Over 1,000 eligible candidates are deterministically preselected using Core
-  lexical search; the omission count is reported in the LM2 receipt.
+  Over 1,000 eligible candidates are deterministically capped after Core's
+  eligibility filters; the omission count is reported in the LM2 receipt.
 - No agent-specific code enters Core. CLI, MCP, and daemon only adapt their
   existing boundary input/output to the shared package.
 
