@@ -32,9 +32,10 @@ review provider.** `pnpm verify` passes on
 `@megasaver/memory-recall` adapter. Four independent reviewer launches (both
 available model routes attempted) failed before execution with local-provider
 HTTP 404: `No enabled canonical OpenAI provider`. Do not merge until a fresh
-external reviewer can inspect commits `b8f54665..56237b12`. The branch is also
-five commits behind `main`; its predicted integration conflict is limited to
-`wiki/log.md` and must preserve both logs.
+external reviewer can inspect the final branch range. The latest verifier run
+also includes a cross-surface Safe-order fixture for adapter, MCP, daemon, and
+CLI. The branch is also five commits behind `main`; its predicted integration
+conflict is limited to `wiki/log.md` and must preserve both logs.
 
 Status: pending external-state recovery
 
