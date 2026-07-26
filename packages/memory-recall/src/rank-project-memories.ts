@@ -7,7 +7,7 @@ import {
   readMemoryEmbeddingHashes,
   searchMemoryEntries,
 } from "@megasaver/core";
-import { readVectors } from "@megasaver/embeddings";
+import { readVectorIds, readVectors } from "@megasaver/embeddings";
 import {
   type EmbeddingPort,
   type HybridReceipt,
@@ -65,12 +65,24 @@ function candidatesFor(input: RankProjectMemoriesInput): {
     text: input.task,
     limit: LEXICAL_CANDIDATE_BUDGET,
   });
+  const indexedIds = readVectorIds(
+    memoryEmbeddingsSidecarPath(input.storeRoot, input.projectId),
+    MAX_LM2_CANDIDATE_CORPUS_UTF8_BYTES,
+  );
+  const indexed = eligible.filter((entry) => indexedIds.has(entry.id));
   const selected =
     eligible.length <= MAX_CANDIDATES
       ? eligible
       : (() => {
-          const selected = [...lexical];
-          const selectedIds = new Set(selected.map((entry) => entry.id));
+          const selected: MemoryEntry[] = [];
+          const selectedIds = new Set<string>();
+          for (const entry of [...lexical, ...indexed]) {
+            if (selected.length === MAX_CANDIDATES) break;
+            if (!selectedIds.has(entry.id)) {
+              selected.push(entry);
+              selectedIds.add(entry.id);
+            }
+          }
           for (const entry of eligible) {
             if (selected.length === MAX_CANDIDATES) break;
             if (!selectedIds.has(entry.id)) {
