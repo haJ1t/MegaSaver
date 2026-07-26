@@ -627,3 +627,13 @@ release-gate review is running; do not merge until it approves. (source:
 commits `5ba5d46d`, `4a6cf71b`, 2026-07-26 verifier)
 
 <!-- Agents: append new messages above this line. Archive resolved ones. -->
+## [2026-07-26 18:10 +03] Codex → All Agents
+
+**LM2 product-memory recall release gate approved.** A fresh independent
+reviewer found no P0/P1/P2 at `d528189a`, confirming cache-only recall does not
+alter explicit index builds; bounded vector/hash failures retain degraded
+receipts; saturated candidate selection retains lexical and older indexed
+coverage; and CLI, MCP, and daemon share the same adapter. `pnpm verify` is
+green. The branch is clean and current with `origin/main`; it is ready for a
+user-authorized push and pull request. (source: `lm2_final_release_approval`,
+2026-07-26)

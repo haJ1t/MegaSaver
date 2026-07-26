@@ -6380,3 +6380,13 @@ races. Fresh release-gate review is pending. (source: `packages/embeddings/src/e
 `packages/embeddings/src/store.ts`, `packages/core/src/embed-memory.ts`,
 `packages/memory-recall/src/rank-project-memories.ts`, commits `5ba5d46d`,
 `4a6cf71b`)
+
+## [2026-07-26 18:10 +03] review | approve LM2 product-memory release gate
+
+Fresh independent release review approved commit `d528189a` with no P0/P1/P2.
+It verified the cache-only recall/indexing separation, fail-closed bounded
+vector and hash reads, chronological indexed-candidate coverage under a
+saturated 1,000-record window, and shared CLI/MCP/daemon adapter behavior.
+`pnpm verify` is green. The branch is clean, rebased on current `origin/main`,
+and ready for a user-authorized push and pull request. (source:
+`lm2_final_release_approval`, 2026-07-26)
