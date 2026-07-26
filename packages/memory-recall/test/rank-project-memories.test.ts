@@ -171,7 +171,7 @@ describe("LM2 product-memory recall", () => {
     expect(result.memory.map((entry) => entry.id)).toEqual([included.id]);
   });
 
-  it("falls back to Safe ranking when the existing vector sidecar is malformed", async () => {
+  it("retains vector-read degradation when the existing vector sidecar is malformed", async () => {
     const entry = memory({
       id: "00000000-0000-4000-8000-000000000018",
       title: "Current deploy policy",
@@ -190,7 +190,14 @@ describe("LM2 product-memory recall", () => {
         storeRoot,
         query: { text: "deployment policy" },
       }),
-    ).resolves.toMatchObject({ memory: [entry], hybrid: { profile: "safe" } });
+    ).resolves.toMatchObject({
+      memory: [entry],
+      hybrid: {
+        profile: "adaptive",
+        semanticStatus: "degraded",
+        semanticReasons: ["vector_read_limit"],
+      },
+    });
   });
 
   it("does not use a vector whose saved projection hash predates changed memory text", async () => {
