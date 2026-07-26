@@ -91,7 +91,7 @@ describe("LM2 pinned benchmark preparation tools", () => {
     expect(canonicalModule.canonicalSha256).toBeTypeOf("function");
 
     const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
-    expect(Object.keys(packageJson.exports)).toEqual(["."]);
+    expect(Object.keys(packageJson.exports)).toEqual([".", "./ranker"]);
     expect(Object.keys(packageJson.bin)).toEqual([
       "megasaver-long-memory",
       "megasaver-long-memory-lm2-benchmark",

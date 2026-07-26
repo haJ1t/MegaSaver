@@ -29,8 +29,12 @@ coverage. Follow-up review also added exact hash validation, complete vector-row
 validation, and same-size sidecar race detection. Focused adapter coverage is
 21/21 and `pnpm verify` passed at the working release candidate after commit
 `d528189a`. The final fresh release-gate review approved `d528189a` with no
-P0/P1/P2. Task 6 is complete through the pre-merge gates; only a
-user-authorized GitHub push/PR and merge handoff remains.
+P0/P1/P2. PR #312's subsequent independent release review found the CLI bundle
+could still carry a native `fs-ext` dependency and exceed its 12 MiB artifact
+ceiling. The adapter now imports the native-free Long Memory `./ranker` public
+entrypoint and the standalone bundle uses whitespace minification; its native,
+size, GUI, and doctor smoke checks pass. A re-review of those PR findings and
+the refreshed full verifier remain required before merge.
 
 ## Global Constraints
 

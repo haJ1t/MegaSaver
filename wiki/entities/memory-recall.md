@@ -17,6 +17,13 @@ it does not create another memory store or bypass Core approval, validity, stale
 and scope gates. It is read-only. (source:
 `packages/memory-recall/src/rank-project-memories.ts`)
 
+The adapter imports Long Memory's deliberately narrow `@megasaver/long-memory/ranker`
+entrypoint rather than its full barrel. This keeps the standalone CLI recall
+path free of the LM runtime's native `fs-ext` dependency while retaining the
+same typed LM2 ranking contract. (source:
+`packages/long-memory/src/lm2-ranker-entry.ts`,
+`packages/memory-recall/src/rank-project-memories.ts`)
+
 ## Safety
 
 Adaptive ranking uses only existing project vector sidecars whose hash manifest
