@@ -349,4 +349,25 @@ describe("LM2 product-memory recall", () => {
       }),
     ).resolves.toMatchObject({ memory: [entry], hybrid: { profile: "safe" } });
   });
+
+  it("falls back to Core lexical recall when candidates exceed LM2's UTF-8 corpus limit", async () => {
+    const entries = Array.from({ length: 1_000 }, (_, index) =>
+      memory({
+        id: `00000000-0000-4000-8000-${String(index + 300).padStart(12, "0")}`,
+        title: `Needle policy ${index}`,
+        content: `needle ${"😀".repeat(16_780)}`,
+      }),
+    );
+
+    const result = await rankProjectMemories({
+      projectId: PROJECT_ID,
+      entries,
+      task: "needle",
+      storeRoot: root(),
+      query: { text: "needle" },
+    });
+
+    expect(result.memory).toHaveLength(20);
+    expect(result.hybrid).toMatchObject({ profile: "safe", semanticStatus: "not_requested" });
+  });
 });
