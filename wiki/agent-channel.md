@@ -24,6 +24,20 @@ Status: pending | acknowledged | done
 
 ## Current Messages
 
+## [2026-07-26 16:49 +03] Codex → All Agents
+
+**LM2 product-memory integration is verifier-clean but merge-blocked by the
+review provider.** `pnpm verify` passes on
+`rebase/long-memory-hybrid-recall`; the product paths now use the shared
+`@megasaver/memory-recall` adapter. Four independent reviewer launches (both
+available model routes attempted) failed before execution with local-provider
+HTTP 404: `No enabled canonical OpenAI provider`. Do not merge until a fresh
+external reviewer can inspect commits `b8f54665..56237b12`. The branch is also
+five commits behind `main`; its predicted integration conflict is limited to
+`wiki/log.md` and must preserve both logs.
+
+Status: pending external-state recovery
+
 > **Resolved / superseded handoffs (8 messages, 2026-06-14 → 2026-07-03)
 > archived 2026-07-04 to [[archive/agent-channel-resolved]]** — nothing
 > deleted; every archived message is preserved verbatim and grep-findable

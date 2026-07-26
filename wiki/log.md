@@ -6262,3 +6262,8 @@ final verifier pass, including both available model routes. All failed before
 reviewing with the local provider error `404 No enabled canonical OpenAI
 provider`; do not merge until an independent reviewer can run. (source:
 2026-07-26 Codex review launcher results)
+
+Follow-up retry at 16:49 failed with the identical provider error, making four
+failed fresh-context review launches in total. The code and verifier evidence
+remain ready, but the mandatory external-review and pre-merge rebase gates are
+unmet. (source: `wiki/agent-channel.md`)
