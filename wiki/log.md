@@ -6929,6 +6929,22 @@ shape. The end-to-end migration case, focused suites, and the full `pnpm
 verify` gate pass; PR #315 is ready for a replacement two-platform CI run.
 (source: `pr312_release_review`, 2026-07-26)
 
+## [2026-07-26 21:25 +03] fix | close final Windows benchmark admission boundary
+
+Replacement CI `30214155415` was green on Ubuntu but revealed that Windows
+rejects `O_NONBLOCK` on ordinary benchmark-file opens, causing the safe-path
+boundary to fail before the retained identity verification. The boundary now
+omits only that unsupported flag on Windows; POSIX retains it for FIFO-stall
+protection. The same matrix exposed an immediate `process.exit()` in the
+replacement-writer fixture, which could truncate its JSON pipe output on
+Windows; the fixture now exits naturally after stdout drains. The orphan-lock
+expectation also follows the already-specified Windows mode capability rather
+than asserting a POSIX-only permission result. A red flag test then 30 focused
+benchmark/catalog tests, typecheck, and lint pass locally. Full verification,
+fresh review, and replacement two-platform CI remain release gates.
+(source: GitHub Actions job `89825272677`,
+`packages/long-memory/src/lm2-benchmark-safe-path.ts`, 2026-07-26)
+
 ## [2026-07-26 20:47 +03] fix | preserve LM2 source boundary after identity transition
 
 Ubuntu CI found the extended ledger-recovery module at 302 lines, violating the

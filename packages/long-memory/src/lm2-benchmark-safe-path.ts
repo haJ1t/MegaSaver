@@ -29,6 +29,19 @@ export type SafeBenchmarkFilePath = SafeBenchmarkPathBase & {
 };
 export type SafeBenchmarkPath = SafeBenchmarkDirectoryPath | SafeBenchmarkFilePath;
 
+export function benchmarkFileOpenFlags(
+  mode: Exclude<SafeBenchmarkOpenMode, "directory">,
+  platform: NodeJS.Platform = process.platform,
+): number {
+  const access =
+    mode === "update"
+      ? constants.O_RDWR
+      : mode === "append"
+        ? constants.O_WRONLY | constants.O_APPEND
+        : constants.O_RDONLY;
+  return secureOpenFlags((platform === "win32" ? 0 : constants.O_NONBLOCK) | access, platform);
+}
+
 function sameIdentity(left: Stats, right: Stats): boolean {
   return left.dev === right.dev && left.ino === right.ino && left.mode === right.mode;
 }
@@ -127,15 +140,7 @@ export function openSafeBenchmarkPath(
     const flags =
       mode === "directory"
         ? secureDirectoryOpenFlags(platform)
-        : secureOpenFlags(
-            constants.O_NONBLOCK |
-              (mode === "update"
-                ? constants.O_RDWR
-                : mode === "append"
-                  ? constants.O_WRONLY | constants.O_APPEND
-                  : constants.O_RDONLY),
-            platform,
-          );
+        : benchmarkFileOpenFlags(mode, platform);
     descriptor = openSync(path, flags);
   } catch {
     throw new BenchmarkTransportError("state_rejected");

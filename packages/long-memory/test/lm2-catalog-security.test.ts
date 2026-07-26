@@ -113,13 +113,20 @@ describe("LM2 candidate catalog process safety", () => {
     },
   );
 
-  it("rejects an orphan catalog lock that is not mode 0600", async () => {
+  it("applies platform mode semantics to an orphan catalog lock", async () => {
     const root = createRoot();
     const paths = v2Paths(root);
     mkdirSync(paths.directory, { recursive: true });
     writeFileSync(paths.lock, "orphaned-before-token\n", { mode: 0o644 });
 
-    expect(await runCatalogChild(root, createRecord())).toBe(false);
+    const result = await runCatalogChild(root, createRecord());
+    if (process.platform === "win32") {
+      expect(result).toBe(true);
+      expect(existsSync(paths.control)).toBe(true);
+      expect(existsSync(paths.catalog)).toBe(true);
+      return;
+    }
+    expect(result).toBe(false);
     expect(existsSync(paths.control)).toBe(false);
     expect(existsSync(paths.catalog)).toBe(false);
   });

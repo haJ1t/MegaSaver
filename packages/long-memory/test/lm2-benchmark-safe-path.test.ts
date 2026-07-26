@@ -1,8 +1,9 @@
-import { lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync } from "node:fs";
+import { constants, lstatSync, mkdirSync, mkdtempSync, renameSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  benchmarkFileOpenFlags,
   closeSafeBenchmarkPath,
   openSafeBenchmarkPath,
   verifySafeBenchmarkPath,
@@ -17,6 +18,11 @@ afterEach(() => {
 });
 
 describe("LM2 benchmark safe paths", () => {
+  it("omits the unsupported nonblocking flag on Windows file opens", () => {
+    expect(benchmarkFileOpenFlags("read", "win32") & constants.O_NONBLOCK).toBe(0);
+    expect(benchmarkFileOpenFlags("read", "linux") & constants.O_NONBLOCK).not.toBe(0);
+  });
+
   it("uses a directory handle when Windows cannot open a directory descriptor", () => {
     const root = mkdtempSync(join(tmpdir(), "megasaver-lm2-safe-path-"));
     roots.push(root);

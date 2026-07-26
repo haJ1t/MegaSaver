@@ -104,9 +104,9 @@ if (input.mode === "replace-lock-and-append") {
   flockSync(descriptor, "un");
   fs.closeSync(descriptor);
   process.stdout.write(`${JSON.stringify({ result })}\n`);
-  process.exit(0);
+} else {
+  const result = createLm2CandidateCatalog({ storeRoot: input.storeRoot }).appendPublished(
+    input.record as never,
+  );
+  process.stdout.write(`${JSON.stringify({ result })}\n`);
 }
-const result = createLm2CandidateCatalog({ storeRoot: input.storeRoot }).appendPublished(
-  input.record as never,
-);
-process.stdout.write(`${JSON.stringify({ result })}\n`);

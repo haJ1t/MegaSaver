@@ -130,12 +130,17 @@ retain descriptors and the run lock retains its advisory lock. Fixture
 protocols parse the first platform-neutral line, and Windows command scripts
 run through its command shell.
 
+Windows regular-file opens omit only the unsupported `O_NONBLOCK` flag; POSIX
+retains it to prevent FIFO stalls. The replacement-writer child returns by
+natural stdout drain rather than forcing process exit before its JSON result
+is flushed.
+
 - [ ] Write red simulated-Windows directory-handle/replacement tests,
   including a replacement during `opendirSync` that mimics a lossy-number
   collision.
 - [ ] Use the `Dir` handle with exact BigInt identity rechecks, while retaining
   descriptor checks, regular-file `fsync`, and flock for regular files.
-- [ ] Correct Windows-only fixture expectations without masking file
-  durability, CRLF framing, or symlink checks.
+- [x] Correct Windows-only fixture expectations without masking file
+  durability, CRLF framing, symlink checks, or regular-file identity checks.
 - [ ] Run targeted suites, package typecheck, root verify, fresh review, and
   replacement Ubuntu/Windows CI before merge.

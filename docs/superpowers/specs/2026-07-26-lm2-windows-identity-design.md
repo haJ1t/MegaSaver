@@ -85,6 +85,17 @@ regular descriptor-backed, advisory-locked file. Directory metadata `fsync`
 is omitted only where the platform does not support it. A pathname replacement
 is still rejected before further publication.
 
+### Windows regular-file flags and child completion
+
+The safe-path boundary retains `O_NONBLOCK` for POSIX regular-file opens so a
+named pipe cannot stall benchmark admission. Windows does not support that
+flag for this operation, so its regular-file path omits only `O_NONBLOCK` and
+continues to require the existing file type, link, owner, mode-capability,
+and exact identity checks after open. Catalog process fixtures finish by
+natural event-loop drain instead of calling `process.exit()` immediately after
+writing their JSON result; this preserves the result across Windows pipe
+buffering without changing catalog behavior.
+
 ### Test and fixture portability
 
 Tests that observe directory `fsync` assert it only where directory sync is a
@@ -109,3 +120,6 @@ evidence tests pass on both operating systems.
    rejection of an adversarial replacement between pre-open and post-open
    BigInt identity captures; the real Windows CI exercises the same production
    branch.
+6. A red flag-selection test proves Windows omits only unsupported
+   `O_NONBLOCK`, while POSIX retains it; catalog replacement-writer fixtures
+   return their complete result on both platforms.
