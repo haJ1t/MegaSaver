@@ -27,7 +27,9 @@ eligible lexical candidate in Adaptive ranking. (source:
 
 Candidate selection first uses Core's task-aware lexical ordering, so the LM2
 window cannot silently exclude a relevant older memory merely because 1,000
-newer records exist. A task or candidate projection beyond LM2's 50,000
+newer records exist. Above that window, it preserves up to 500 lexical hits
+and fills the remaining capacity with newest eligible memories, so a recent
+semantic-only memory remains a candidate. A task or candidate projection beyond LM2's 50,000
 code-unit input limit, or a candidate set whose UTF-8 corpus exceeds LM2's
 64 MiB bound, returns Core lexical recall with a Safe receipt rather than
 surfacing an LM2 validation error to a product caller. (source:
