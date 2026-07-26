@@ -1,10 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   closeSync,
+  fstatSync,
   fsyncSync,
   mkdirSync,
   openSync,
   readFileSync,
+  readSync,
   renameSync,
   writeFileSync,
 } from "node:fs";
@@ -27,8 +29,24 @@ export function memoryEmbeddingHashesSidecarPath(storeRoot: string, projectId: P
   return join(storeRoot, "memory", `${projectId}.embeddings.hashes.json`);
 }
 
-function readHashSidecar(path: string): Map<string, string> {
+function readHashSidecar(path: string, maxBytes?: number): Map<string, string> {
   try {
+    if (maxBytes !== undefined) {
+      const fd = openSync(path, "r");
+      try {
+        const before = fstatSync(fd).size;
+        if (before > maxBytes) return new Map();
+        const bytes = Buffer.alloc(before);
+        if (readSync(fd, bytes, 0, before, 0) !== before || fstatSync(fd).size !== before) {
+          return new Map();
+        }
+        return new Map(
+          Object.entries(JSON.parse(bytes.toString("utf8")) as Record<string, string>),
+        );
+      } finally {
+        closeSync(fd);
+      }
+    }
     return new Map(
       Object.entries(JSON.parse(readFileSync(path, "utf8")) as Record<string, string>),
     );
@@ -69,8 +87,9 @@ export function memoryEmbeddingContentHash(entry: MemoryEntry): string {
 export function readMemoryEmbeddingHashes(
   storeRoot: string,
   projectId: ProjectId,
+  maxBytes?: number,
 ): Map<string, string> {
-  return readHashSidecar(memoryEmbeddingHashesSidecarPath(storeRoot, projectId));
+  return readHashSidecar(memoryEmbeddingHashesSidecarPath(storeRoot, projectId), maxBytes);
 }
 
 // Embed function shape; defaults to the real lazy embed(). Injectable so the

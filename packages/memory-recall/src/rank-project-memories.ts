@@ -68,11 +68,18 @@ function candidatesFor(input: RankProjectMemoriesInput): {
   const selected =
     eligible.length <= MAX_CANDIDATES
       ? eligible
-      : [...lexical, ...eligible]
-          .filter(
-            (entry, index, entries) => entries.findIndex(({ id }) => id === entry.id) === index,
-          )
-          .slice(0, MAX_CANDIDATES);
+      : (() => {
+          const selected = [...lexical];
+          const selectedIds = new Set(selected.map((entry) => entry.id));
+          for (const entry of eligible) {
+            if (selected.length === MAX_CANDIDATES) break;
+            if (!selectedIds.has(entry.id)) {
+              selected.push(entry);
+              selectedIds.add(entry.id);
+            }
+          }
+          return selected;
+        })();
   const workspaceKey = projectWorkspaceKey(input.projectId);
   return {
     entries: selected,
@@ -144,7 +151,11 @@ function vectorReader(input: {
     maxRecords: MAX_CANDIDATES,
     ids: candidateIds,
   });
-  const hashes = readMemoryEmbeddingHashes(input.storeRoot, input.projectId);
+  const hashes = readMemoryEmbeddingHashes(
+    input.storeRoot,
+    input.projectId,
+    MAX_LM2_CANDIDATE_CORPUS_UTF8_BYTES,
+  );
   const entriesById = new Map<string, MemoryEntry>(input.entries.map((entry) => [entry.id, entry]));
   const values = new Map(
     [...rawValues].filter(([id]) => {
