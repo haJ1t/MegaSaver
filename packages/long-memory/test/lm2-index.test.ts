@@ -269,7 +269,7 @@ function harness(records: readonly Lm1Record[], input: { remote?: boolean } = {}
       model,
       remoteApproval: input.remote ? remoteApproval : undefined,
       approvalRef: input.remote ? "approval-1" : undefined,
-      defaultTimeoutMs: 100,
+      defaultTimeoutMs: MAX_LM2_INDEX_BATCH_TIMEOUT_MS,
     }),
   };
 }

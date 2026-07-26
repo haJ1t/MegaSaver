@@ -6473,3 +6473,19 @@ at 512 KiB through 4 MiB — **x2.03** from 2 to 4 MiB. Its benign 200 KiB build
 log constant was 0.42 ms. These replace the pre-scope timing evidence in the
 carrier design; no performance claim rests on the obsolete lowercase-only
 regex. (source: `scripts/redos-probe.mjs carriers`, 2026-07-26)
+
+## [2026-07-26 18:58 +03] fix | make LM2 CI verification deterministic
+
+GitHub Actions run `30208733506` failed on both Ubuntu and Windows at
+long-memory fixtures while the same package passed locally. Root cause was
+three fixture assumptions, not a runtime memory failure: normal indexing tests
+used a 100 ms deadline under matrix contention; two tests rebuilt workspace
+`dist/` during concurrent child-process tests; and one current-state fixture
+tied multiple snapshots on `observedAt`. The test harness now uses the existing
+15-second batch deadline, child tests consume the workflow's prebuilt artifacts,
+and the bounded-recall candidates have strictly increasing timestamps. A
+two-fork focused run passed 45/45 files and 413/413 tests; full `pnpm verify`
+passed with the same long-memory count. Fresh PR review and a new CI matrix are
+still required before merge. (source:
+`docs/superpowers/specs/2026-07-26-lm2-ci-determinism-design.md`,
+GitHub Actions run `30208733506`)

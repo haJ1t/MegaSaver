@@ -30,7 +30,7 @@
 
 - [ ] **Step 1: Preserve the CI failure as a focused red run**
 
-Run: `pnpm --filter @megasaver/long-memory test -- --maxWorkers=2`
+Run: `pnpm --filter @megasaver/long-memory exec vitest run --poolOptions.forks.minForks=2 --poolOptions.forks.maxForks=2`
 
 Expected before the correction on a constrained runner: the 100 ms default can
 finish a multi-batch fixture after only one 16-record batch and the child
@@ -52,7 +52,7 @@ compiled workspace packages.
 
 - [ ] **Step 4: Verify the focused suite**
 
-Run: `pnpm --filter @megasaver/long-memory test -- --maxWorkers=2`
+Run: `pnpm --filter @megasaver/long-memory exec vitest run --poolOptions.forks.minForks=2 --poolOptions.forks.maxForks=2`
 
 Expected: 45 files / 413 tests pass, with no `ERR_MODULE_NOT_FOUND`.
 
