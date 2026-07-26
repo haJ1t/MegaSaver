@@ -91,3 +91,37 @@ export function readVectors(
   }
   return out;
 }
+
+export function readVectorIds(path: string, maxBytes: number): Set<string> {
+  let raw: string;
+  try {
+    const fd = openSync(path, "r");
+    try {
+      const before = fstatSync(fd).size;
+      if (before > maxBytes) return new Set();
+      const bytes = Buffer.alloc(before);
+      if (readSync(fd, bytes, 0, before, 0) !== before || fstatSync(fd).size !== before) {
+        return new Set();
+      }
+      raw = bytes.toString("utf8");
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return new Set();
+  }
+  const ids = new Set<string>();
+  try {
+    for (const line of raw.split("\n")) {
+      if (line.trim().length === 0) continue;
+      const record = JSON.parse(line);
+      if (typeof record !== "object" || record === null || typeof record.id !== "string") {
+        return new Set();
+      }
+      ids.add(record.id);
+    }
+  } catch {
+    return new Set();
+  }
+  return ids;
+}
