@@ -7,7 +7,7 @@ import {
   readMemoryEmbeddingHashes,
   searchMemoryEntries,
 } from "@megasaver/core";
-import { embed, readVectors } from "@megasaver/embeddings";
+import { readVectors } from "@megasaver/embeddings";
 import {
   type EmbeddingPort,
   type HybridReceipt,
@@ -229,7 +229,7 @@ export async function rankProjectMemories(
             return { vectors: [], diagnostics: [] };
           },
         },
-        embedding: localEmbedding(input.embed ?? embed),
+        embedding: localEmbedding(input.embed ?? (async () => [])),
         clock: { now: input.now ?? (() => performance.now()) },
         adaptiveCandidateScope: "lm2_capture_window",
         candidateInputOmittedCount: prepared.omitted,
@@ -245,7 +245,7 @@ export async function rankProjectMemories(
       const ranked = await rankSafe();
       return { memory: memoryFor(ranked.orderedCandidateIds), hybrid: ranked.hybrid };
     }
-    const profile = vectors.values.size === 0 ? "safe" : "adaptive";
+    const profile = vectors.values.size === 0 || input.embed === undefined ? "safe" : "adaptive";
     const ranked = await rankLm2Candidates({
       candidates: prepared.candidates,
       request: {
@@ -255,7 +255,7 @@ export async function rankProjectMemories(
         ...(profile === "adaptive" ? { model: LOCAL_MODEL } : {}),
       },
       vectors: vectors.reader,
-      embedding: localEmbedding(input.embed ?? embed),
+      embedding: localEmbedding(input.embed ?? (async () => [])),
       clock: { now: input.now ?? (() => performance.now()) },
       adaptiveCandidateScope: "lm2_capture_window",
       candidateInputOmittedCount: prepared.omitted,
