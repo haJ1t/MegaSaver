@@ -57,7 +57,9 @@ The remaining §5b gaps stay open, deliberately:
 (?=[A-Za-z0-9/_-])(?<=https?:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/)[A-Za-z0-9\/_-]{16,}
 ```
 
-Replacement `[REDACTED]`, flags `g`.
+Replacement `[REDACTED]`, flags `gi`. URL schemes and DNS hosts are
+case-insensitive, so this detector must not leave a credential visible merely
+because a logger rendered `HTTPS://HOOKS.SLACK.COM` in uppercase.
 
 - **Anchored, not prefix-shaped.** The lookbehind is a fixed literal plus a
   three-way bounded alternation, so it is not the unbounded-variable-length

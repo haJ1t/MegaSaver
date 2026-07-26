@@ -7,6 +7,7 @@ export default defineConfig({
     "src/lm2-benchmark.ts",
     "src/lm2-benchmark-manifest.ts",
     "src/lm2-benchmark-canonical.ts",
+    "src/lm2-ranker-entry.ts",
   ],
   format: ["esm"],
   dts: true,

@@ -176,7 +176,7 @@ const baseline: RedactionPattern[] = [
     // segment.
     name: "slack_webhook_url",
     pattern:
-      /(?=[A-Za-z0-9/_-])(?<=https?:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/)[A-Za-z0-9/_-]{16,}/g,
+      /(?=[A-Za-z0-9/_-])(?<=https?:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/)[A-Za-z0-9/_-]{16,}/gi,
     replacement: "[REDACTED]",
   },
   {

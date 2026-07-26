@@ -20,7 +20,7 @@ import {
   hybridReceiptSchema,
   modelDescriptorFingerprint,
   rankLm2Candidates,
-} from "@megasaver/long-memory";
+} from "@megasaver/long-memory/ranker";
 import type { ProjectId } from "@megasaver/shared";
 import { memoryCandidate } from "./memory-candidate.js";
 import { projectWorkspaceKey } from "./project-workspace-key.js";

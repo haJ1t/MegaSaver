@@ -343,6 +343,12 @@ detector.** Third instance of this now: `jwk_private_key`, `jwt`, and
 the body inserts `[`, which is outside the body class, so the run stops there.
 For jwk/jwt the enclosing span could no longer complete and the whole secret
 survived; for a webhook URL the loss is partial (the characters before the hit).
+
+The webhook detector uses `gi`: both URI schemes and DNS hosts are
+case-insensitive, so uppercase `HTTPS://HOOKS.SLACK.COM` must receive the same
+redaction as its canonical lowercase form. (source:
+`packages/policy/src/redaction-patterns.ts`,
+`packages/policy/test/redact-superlinear.test.ts`)
 The ordering pin in `redact-superlinear.test.ts` now covers all three, and its
 `PREFIX_DETECTORS` list was completed — the comment claimed the list was every
 prefix detector in the table while carrying 7 of 13, so the six 2026-07-26
