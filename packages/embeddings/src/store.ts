@@ -54,10 +54,12 @@ export function readVectors(
       const fd = openSync(path, "r");
       try {
         const before = fstatSync(fd).size;
-        if (before > options.maxBytes) return new Map();
+        if (before > options.maxBytes) {
+          throw new RangeError("Vector sidecar exceeds the configured byte limit.");
+        }
         const bytes = Buffer.alloc(before);
         if (readSync(fd, bytes, 0, before, 0) !== before || fstatSync(fd).size !== before) {
-          return new Map();
+          throw new Error("Vector sidecar changed during bounded read.");
         }
         raw = bytes.toString("utf8");
       } finally {
@@ -66,7 +68,13 @@ export function readVectors(
     } else {
       raw = readFileSync(path, "utf8");
     }
-  } catch {
+  } catch (error) {
+    if (
+      options.maxBytes !== undefined &&
+      !(error instanceof Error && "code" in error && error.code === "ENOENT")
+    ) {
+      throw error;
+    }
     return new Map();
   }
   const out = new Map<string, Float32Array>();

@@ -9,9 +9,13 @@ type FeatureExtractor = (
   texts: readonly string[],
   opts: { pooling: "mean"; normalize: boolean },
 ) => Promise<Tensor>;
+type PipelineOptions = { local_files_only?: boolean };
 type TransformersModule = {
-  pipeline: (task: "feature-extraction", model: string) => Promise<FeatureExtractor>;
-  env: { allowRemoteModels: boolean };
+  pipeline: (
+    task: "feature-extraction",
+    model: string,
+    options?: PipelineOptions,
+  ) => Promise<FeatureExtractor>;
 };
 
 // @huggingface/transformers (and its native onnxruntime-node) is heavy and
@@ -31,11 +35,11 @@ async function getExtractor(): Promise<FeatureExtractor> {
 
 async function getOfflineExtractor(): Promise<FeatureExtractor> {
   if (offlineExtractorPromise === undefined) {
-    offlineExtractorPromise = import("@huggingface/transformers").then((mod) => {
-      const transformers = mod as unknown as TransformersModule;
-      transformers.env.allowRemoteModels = false;
-      return transformers.pipeline("feature-extraction", MODEL_ID);
-    });
+    offlineExtractorPromise = import("@huggingface/transformers").then((mod) =>
+      (mod as unknown as TransformersModule).pipeline("feature-extraction", MODEL_ID, {
+        local_files_only: true,
+      }),
+    );
   }
   return offlineExtractorPromise;
 }
