@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, expectTypeOf, it } from "vitest";
 import {
   canonicalCaptureDigest,
@@ -26,6 +27,14 @@ import {
   type Lm1StateIndexStore,
   createFileLm1Store,
 } from "../src/lm1-store.js";
+
+const packageDirectory = fileURLToPath(new URL("..", import.meta.url));
+const repositoryDirectory = fileURLToPath(new URL("../../..", import.meta.url));
+const publishChild = fileURLToPath(new URL("./fixtures/lm1-publish-child.ts", import.meta.url));
+const tsxCli = join(
+  repositoryDirectory,
+  "node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs",
+);
 
 const roots: string[] = [];
 const workspaceKey = "0123456789abcdef";
@@ -90,19 +99,9 @@ function writeLargeRecordSet(root: string, count = 10_001): readonly Lm1Record[]
 }
 
 function publishInChild(root: string, record: Lm1Record): Promise<{ inserted: boolean }> {
-  const distUrl = new URL("../dist/index.js", import.meta.url).href;
-  const script = [
-    `import { createLm1Runtime } from ${JSON.stringify(distUrl)};`,
-    "const record = JSON.parse(process.env.MEGASAVER_LM1_RECORD ?? '{}');",
-    "const { id: _id, sourceDigest: _sourceDigest, evidenceBindingDigest: _bindingDigest, recordedAt: _recordedAt, evidenceDigests: _evidenceDigests, status: _status, ...prepared } = record;",
-    "const runtime = createLm1Runtime({ storeRoot: process.env.MEGASAVER_LM1_ROOT ?? '', redaction: { version: 'redaction-v1', redact: ({ text, action }) => ({ text, action, unresolvedHighRisk: false }) }, evidenceBinding: { verify: async ({ evidenceIds }) => ({ evidence: evidenceIds.map((evidenceId) => ({ evidenceId, evidenceDigest: 'a'.repeat(64) })) }) }, evidenceEligibility: { resolve: async ({ workspaceKey, evidenceIds }) => evidenceIds.map((evidenceId) => ({ evidenceId, workspaceKey, status: 'available', unresolvedHighRisk: false })) }, clock: { now: () => record.recordedAt } });",
-    "const result = await runtime.capture.capturePrepared({ prepared, authorization: 'signed' });",
-    "process.stdout.write(JSON.stringify(result));",
-  ].join("\n");
-
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["--input-type=module", "--eval", script], {
-      cwd: process.cwd(),
+    const child = spawn(process.execPath, [tsxCli, publishChild], {
+      cwd: packageDirectory,
       env: {
         ...process.env,
         MEGASAVER_LM1_RECORD: JSON.stringify(record),
