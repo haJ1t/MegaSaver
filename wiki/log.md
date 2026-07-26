@@ -6678,3 +6678,21 @@ A fresh independent review remains required before merge. (source:
 `packages/long-memory/src/lm2-model-contracts.ts`,
 `packages/memory-recall/src/rank-project-memories.ts`,
 `packages/memory-recall/test/rank-project-memories.test.ts`)
+
+## [2026-07-26 18:05 +03] fix | close adaptive product-memory release findings
+
+Cached recall now uses the Transformers per-call local-files-only option rather
+than mutating the process-global remote-model policy, so a later explicit memory
+index build retains its documented download path. Bounded vector and hash
+sidecar reads now distinguish absence (Safe) from malformed, oversized, or
+concurrently changed input (Adaptive degraded `vector_read_limit`). Candidate
+selection keeps up to 500 task-relevant lexical entries and evenly samples the
+remaining vector-indexed capacity across the eligible timeline, preventing
+newer indexed records from crowding out an older semantic candidate. Focused
+adapter tests are 21/21 and `pnpm verify` passed. Hash values now require the
+exact SHA-256 shape, every vector row is validated before filtering, and bounded
+reads compare file identity plus modification metadata to reject same-size
+races. Fresh release-gate review is pending. (source: `packages/embeddings/src/embed.ts`,
+`packages/embeddings/src/store.ts`, `packages/core/src/embed-memory.ts`,
+`packages/memory-recall/src/rank-project-memories.ts`, commits `5ba5d46d`,
+`4a6cf71b`)

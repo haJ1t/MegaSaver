@@ -189,6 +189,7 @@ describe("LM2 product-memory recall", () => {
         task: "deployment policy",
         storeRoot,
         query: { text: "deployment policy" },
+        embed: async () => [new Float32Array(vector)],
       }),
     ).resolves.toMatchObject({
       memory: [entry],
@@ -218,6 +219,7 @@ describe("LM2 product-memory recall", () => {
         task: "deployment policy",
         storeRoot,
         query: { text: "deployment policy" },
+        embed: async () => [new Float32Array(vector)],
       }),
     ).resolves.toMatchObject({
       memory: [entry],
@@ -239,6 +241,78 @@ describe("LM2 product-memory recall", () => {
     const vector = Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0));
     writeVectors(memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID), [{ id: entry.id, vector }]);
     writeFileSync(memoryEmbeddingHashesSidecarPath(storeRoot, PROJECT_ID), "not-json", "utf8");
+
+    await expect(
+      rankProjectMemories({
+        projectId: PROJECT_ID,
+        entries: [entry],
+        task: "deployment policy",
+        storeRoot,
+        query: { text: "deployment policy" },
+      }),
+    ).resolves.toMatchObject({
+      memory: [entry],
+      hybrid: {
+        profile: "adaptive",
+        semanticStatus: "degraded",
+        semanticReasons: ["vector_read_limit"],
+      },
+    });
+  });
+
+  it("retains vector-read degradation when the hash sidecar contains an invalid hash", async () => {
+    const entry = memory({
+      id: "00000000-0000-4000-8000-000000000030",
+      title: "Current deploy policy",
+      content: "deployment policy",
+    });
+    const storeRoot = root();
+    const vector = Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0));
+    writeVectors(memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID), [{ id: entry.id, vector }]);
+    writeFileSync(
+      memoryEmbeddingHashesSidecarPath(storeRoot, PROJECT_ID),
+      JSON.stringify({ [entry.id]: "not-a-sha256" }),
+      "utf8",
+    );
+
+    await expect(
+      rankProjectMemories({
+        projectId: PROJECT_ID,
+        entries: [entry],
+        task: "deployment policy",
+        storeRoot,
+        query: { text: "deployment policy" },
+      }),
+    ).resolves.toMatchObject({
+      memory: [entry],
+      hybrid: {
+        profile: "adaptive",
+        semanticStatus: "degraded",
+        semanticReasons: ["vector_read_limit"],
+      },
+    });
+  });
+
+  it("retains vector-read degradation when an unrequested vector row is malformed", async () => {
+    const entry = memory({
+      id: "00000000-0000-4000-8000-000000000031",
+      title: "Current deploy policy",
+      content: "deployment policy",
+    });
+    const storeRoot = root();
+    const sidecarPath = memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID);
+    const vector = Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0));
+    mkdirSync(dirname(sidecarPath), { recursive: true });
+    writeFileSync(
+      sidecarPath,
+      `${JSON.stringify({ id: entry.id, vector })}\n${JSON.stringify({ id: "other", vector: "bad" })}\n`,
+      "utf8",
+    );
+    writeFileSync(
+      memoryEmbeddingHashesSidecarPath(storeRoot, PROJECT_ID),
+      JSON.stringify({ [entry.id]: memoryEmbeddingContentHash(entry) }),
+      "utf8",
+    );
 
     await expect(
       rankProjectMemories({
