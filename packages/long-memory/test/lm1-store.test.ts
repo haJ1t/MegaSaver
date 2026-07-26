@@ -30,7 +30,7 @@ import {
 
 const packageDirectory = fileURLToPath(new URL("..", import.meta.url));
 const publishChild = fileURLToPath(new URL("./fixtures/lm1-publish-child.ts", import.meta.url));
-const tsxCli = join(packageDirectory, "node_modules", ".bin", process.platform === "win32" ? "tsx.cmd" : "tsx");
+const tsxCli = join(packageDirectory, "node_modules", "tsx", "dist", "cli.mjs");
 
 const roots: string[] = [];
 const workspaceKey = "0123456789abcdef";
@@ -96,7 +96,7 @@ function writeLargeRecordSet(root: string, count = 10_001): readonly Lm1Record[]
 
 function publishInChild(root: string, record: Lm1Record): Promise<{ inserted: boolean }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(tsxCli, [publishChild], {
+    const child = spawn(process.execPath, [tsxCli, publishChild], {
       cwd: packageDirectory,
       env: {
         ...process.env,
