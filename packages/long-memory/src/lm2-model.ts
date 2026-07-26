@@ -49,7 +49,7 @@ export const lm2CandidateSchema = z
     id: lowercaseUuidSchema,
     workspaceKey: workspaceKeySchema,
     observedAt: z.string().datetime({ offset: true }),
-    kind: z.enum(["state_snapshot", "state_transition"]),
+    kind: z.enum(["state_snapshot", "state_transition", "memory_entry"]),
     text: z.string().min(1).max(MAX_LM2_CANDIDATE_TEXT_CODE_UNITS),
     sourceDigest: sha256Schema,
   })
