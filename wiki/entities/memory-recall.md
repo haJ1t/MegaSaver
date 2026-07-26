@@ -20,19 +20,24 @@ and scope gates. It is read-only. (source:
 ## Safety
 
 Adaptive ranking uses only existing project vector sidecars whose hash manifest
-matches the current title/content projection. Missing, malformed, or stale
-vectors select Safe lexical ranking; partial current vectors retain every
-eligible lexical candidate in Adaptive ranking. (source:
+matches the current title/content projection. A genuinely absent sidecar selects
+Safe lexical ranking. A present but malformed, oversized, or concurrently
+changed vector or hash sidecar preserves lexical recall while returning an
+Adaptive degraded receipt with `vector_read_limit`; partial current vectors
+retain every eligible lexical candidate. (source:
+`packages/memory-recall/src/rank-project-memories.ts`,
 `packages/memory-recall/test/rank-project-memories.test.ts`)
 
 Candidate selection first uses Core's task-aware lexical ordering, so the LM2
 window cannot silently exclude a relevant older memory merely because 1,000
-newer records exist. Above that window, it preserves up to 500 lexical hits
-and fills the remaining capacity with newest eligible memories, so a recent
-semantic-only memory remains a candidate. A task or candidate projection beyond LM2's 50,000
-code-unit input limit, or a candidate set whose UTF-8 corpus exceeds LM2's
-64 MiB bound, returns Core lexical recall with a Safe receipt rather than
-surfacing an LM2 validation error to a product caller. (source:
+newer records exist. Above that window, it preserves up to 500 lexical hits,
+then distributes the remaining indexed slots across the whole eligible indexed
+set before filling with newest eligible memories; this retains an older indexed
+semantic candidate even when both budgets are saturated. A task or candidate
+projection beyond LM2's 50,000-code-unit input limit, or a candidate set whose
+UTF-8 corpus exceeds LM2's 64 MiB bound, returns Core lexical recall with a
+Safe receipt rather than surfacing an LM2 validation error to a product caller.
+(source:
 `packages/memory-recall/src/rank-project-memories.ts`,
 `packages/memory-recall/test/rank-project-memories.test.ts`)
 
