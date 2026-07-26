@@ -1,10 +1,9 @@
 import type { FileLm1Store } from "./lm1-store.js";
 import type { Lm2CandidateCatalog } from "./lm2-catalog.js";
 import { Lm2Error } from "./lm2-errors.js";
-import type { Lm2Candidate } from "./lm2-model.js";
+import { type Lm2Candidate, MAX_LM2_CANDIDATE_CORPUS_UTF8_BYTES } from "./lm2-model.js";
 
 const MAX_CANDIDATES = 10_000;
-const MAX_CORPUS_UTF8_BYTES = 64 * 1024 * 1024;
 
 export type Lm2RuntimeCandidates = {
   candidates: readonly Lm2Candidate[];
@@ -49,7 +48,7 @@ export function loadLm2RuntimeCandidates(input: {
   let bytes = 0;
   for (const candidate of ordered) {
     const next = bytes + Buffer.byteLength(candidate.text, "utf8");
-    if (!Number.isSafeInteger(next) || next > MAX_CORPUS_UTF8_BYTES) break;
+    if (!Number.isSafeInteger(next) || next > MAX_LM2_CANDIDATE_CORPUS_UTF8_BYTES) break;
     bytes = next;
     candidates.push(candidate);
   }

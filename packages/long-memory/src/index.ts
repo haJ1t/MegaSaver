@@ -11,6 +11,7 @@ export {
 export type { Lm2RankVectorReader } from "./lm2-semantic-lane.js";
 export {
   MAX_LM2_ADMITTED_MODELS,
+  MAX_LM2_CANDIDATE_CORPUS_UTF8_BYTES,
   MAX_LM2_CANDIDATE_TEXT_CODE_UNITS,
   MAX_LM2_DIMENSIONS,
   MAX_LM2_INDEX_BATCH_TIMEOUT_MS,

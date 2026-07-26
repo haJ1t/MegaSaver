@@ -12,7 +12,9 @@ import {
   type EmbeddingPort,
   type HybridReceipt,
   type Lm2Candidate,
+  Lm2Error,
   type Lm2RankVectorReader,
+  MAX_LM2_CANDIDATE_CORPUS_UTF8_BYTES,
   MAX_LM2_CANDIDATE_TEXT_CODE_UNITS,
   type ModelDescriptor,
   hybridReceiptSchema,
@@ -96,6 +98,22 @@ function coreFallback(input: RankProjectMemoriesInput): RankProjectMemoriesResul
   };
 }
 
+function exceedsLm2InputLimit(input: {
+  task: string;
+  candidates: readonly Lm2Candidate[];
+}): boolean {
+  if (input.task.trim().length > MAX_LM2_CANDIDATE_TEXT_CODE_UNITS) return true;
+  let corpusBytes = 0;
+  for (const candidate of input.candidates) {
+    if (candidate.text.length > MAX_LM2_CANDIDATE_TEXT_CODE_UNITS) return true;
+    corpusBytes += Buffer.byteLength(candidate.text, "utf8");
+    if (!Number.isSafeInteger(corpusBytes) || corpusBytes > MAX_LM2_CANDIDATE_CORPUS_UTF8_BYTES) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function vectorReader(input: {
   storeRoot: string;
   projectId: ProjectId;
@@ -151,70 +169,70 @@ export async function rankProjectMemories(
   input: RankProjectMemoriesInput,
 ): Promise<RankProjectMemoriesResult> {
   const prepared = candidatesFor(input);
-  if (
-    input.task.trim().length > MAX_LM2_CANDIDATE_TEXT_CODE_UNITS ||
-    prepared.candidates.some(
-      (candidate) => candidate.text.length > MAX_LM2_CANDIDATE_TEXT_CODE_UNITS,
-    )
-  ) {
+  if (exceedsLm2InputLimit({ task: input.task, candidates: prepared.candidates })) {
     return coreFallback(input);
   }
-  const workspaceKey = projectWorkspaceKey(input.projectId);
-  const byId = new Map<string, MemoryEntry>(prepared.entries.map((entry) => [entry.id, entry]));
-  const memoryFor = (ids: readonly string[]) =>
-    ids
-      .flatMap((id) => {
-        const entry = byId.get(id);
-        return entry === undefined ? [] : [entry];
-      })
-      .slice(0, input.query.limit ?? 20);
-  const rankSafe = () =>
-    rankLm2Candidates({
-      candidates: prepared.candidates,
-      request: { workspaceKey, task: input.task, profile: "safe" },
-      vectors: {
-        async read() {
-          return { vectors: [], diagnostics: [] };
+  try {
+    const workspaceKey = projectWorkspaceKey(input.projectId);
+    const byId = new Map<string, MemoryEntry>(prepared.entries.map((entry) => [entry.id, entry]));
+    const memoryFor = (ids: readonly string[]) =>
+      ids
+        .flatMap((id) => {
+          const entry = byId.get(id);
+          return entry === undefined ? [] : [entry];
+        })
+        .slice(0, input.query.limit ?? 20);
+    const rankSafe = () =>
+      rankLm2Candidates({
+        candidates: prepared.candidates,
+        request: { workspaceKey, task: input.task, profile: "safe" },
+        vectors: {
+          async read() {
+            return { vectors: [], diagnostics: [] };
+          },
         },
+        embedding: localEmbedding(input.embed ?? embed),
+        clock: { now: input.now ?? (() => performance.now()) },
+        adaptiveCandidateScope: "lm2_capture_window",
+        candidateInputOmittedCount: prepared.omitted,
+      });
+    let vectors: ReturnType<typeof vectorReader>;
+    try {
+      vectors = vectorReader({
+        storeRoot: input.storeRoot,
+        projectId: input.projectId,
+        entries: prepared.entries,
+      });
+    } catch {
+      const ranked = await rankSafe();
+      return { memory: memoryFor(ranked.orderedCandidateIds), hybrid: ranked.hybrid };
+    }
+    const profile = vectors.values.size === 0 ? "safe" : "adaptive";
+    const ranked = await rankLm2Candidates({
+      candidates: prepared.candidates,
+      request: {
+        workspaceKey,
+        task: input.task,
+        profile,
+        ...(profile === "adaptive" ? { model: LOCAL_MODEL } : {}),
       },
+      vectors: vectors.reader,
       embedding: localEmbedding(input.embed ?? embed),
       clock: { now: input.now ?? (() => performance.now()) },
       adaptiveCandidateScope: "lm2_capture_window",
       candidateInputOmittedCount: prepared.omitted,
     });
-  let vectors: ReturnType<typeof vectorReader>;
-  try {
-    vectors = vectorReader({
-      storeRoot: input.storeRoot,
-      projectId: input.projectId,
-      entries: prepared.entries,
-    });
-  } catch {
-    const ranked = await rankSafe();
-    return { memory: memoryFor(ranked.orderedCandidateIds), hybrid: ranked.hybrid };
+    if (ranked.hybrid.semanticStatus === "degraded") {
+      const safe = await rankSafe();
+      return { memory: memoryFor(safe.orderedCandidateIds), hybrid: safe.hybrid };
+    }
+    return {
+      memory: memoryFor(ranked.orderedCandidateIds),
+      hybrid: ranked.hybrid,
+    };
+  } catch (error) {
+    if (error instanceof Lm2Error) return coreFallback(input);
+    throw error;
   }
-  const profile = vectors.values.size === 0 ? "safe" : "adaptive";
-  const ranked = await rankLm2Candidates({
-    candidates: prepared.candidates,
-    request: {
-      workspaceKey,
-      task: input.task,
-      profile,
-      ...(profile === "adaptive" ? { model: LOCAL_MODEL } : {}),
-    },
-    vectors: vectors.reader,
-    embedding: localEmbedding(input.embed ?? embed),
-    clock: { now: input.now ?? (() => performance.now()) },
-    adaptiveCandidateScope: "lm2_capture_window",
-    candidateInputOmittedCount: prepared.omitted,
-  });
-  if (ranked.hybrid.semanticStatus === "degraded") {
-    const safe = await rankSafe();
-    return { memory: memoryFor(safe.orderedCandidateIds), hybrid: safe.hybrid };
-  }
-  return {
-    memory: memoryFor(ranked.orderedCandidateIds),
-    hybrid: ranked.hybrid,
-  };
 }
 import { performance } from "node:perf_hooks";
