@@ -6628,3 +6628,14 @@ passed after the change. The independent-review and pre-merge integration
 gates remain pending. (source:
 `apps/cli/test/memory/hybrid-recall-surfaces.test.ts`,
 `packages/mcp-bridge/src/index.ts`)
+
+## [2026-07-26 16:58 +03] chore | LM0–LM2 rebased onto current main
+
+The previous Long Memory integration branch had drifted 17 commits from remote
+`main`, so its merge preview contained unrelated application conflicts. A new
+`feat/lm2-product-memory-integration` branch was created directly from current
+`origin/main`, then the complete LM0–LM2 plus product-memory commit chain was
+replayed without rewriting the original branch. Only additive `wiki/log.md`
+history required manual union. `pnpm install --frozen-lockfile` and `pnpm verify`
+passed on the new branch. Independent review remains the only release gate.
+(source: branch `feat/lm2-product-memory-integration`, 2026-07-26 verifier)
