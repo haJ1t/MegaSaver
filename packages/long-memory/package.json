@@ -39,6 +39,7 @@
   },
   "devDependencies": {
     "@types/fs-ext": "^2.0.3",
-    "@types/node": "^22.19.17"
+    "@types/node": "^22.19.17",
+    "tsx": "^4.21.0"
   }
 }
