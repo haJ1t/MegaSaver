@@ -6856,3 +6856,13 @@ contention contract and the real four-process race suite pass 6/6 locally.
 Fresh review and a replacement two-platform matrix are required before merge.
 (source: GitHub Actions job `89815835263`,
 `docs/superpowers/specs/2026-07-26-windows-seen-ledger-lock-design.md`)
+
+## [2026-07-26 19:41 +03] fix | avoid first-use seen-ledger lock spin
+
+Fresh review found that the shared lock helper requires its parent directory to
+exist. A first-time `hasSeenOutput` call had neither a ledger nor that parent,
+so its attempted lock acquisition busy-waited for the full 50 ms deadline.
+Missing ledgers now return fail-open `false` before lock acquisition; existing
+ledgers retain the reader/writer lock that prevents Windows `EPERM`. Focused
+seen tests and the four-process race remain 6/6. (source:
+`pr312_release_review`, 2026-07-26)

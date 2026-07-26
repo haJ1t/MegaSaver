@@ -41,7 +41,9 @@ returns `true`.
 
 Add `SEEN_LOCK_OPTIONS = { deadlineMs: 50, staleMs: 5000 }`. Read into a local
 `seen = false` only inside `withFileLock`; return that default if acquisition
-fails. Reuse the same constant in `recordSeenOutput`.
+fails. Return `false` before lock acquisition when the ledger file does not
+exist, because the lock helper requires its parent directory to exist. Reuse
+the same constant in `recordSeenOutput`.
 
 - [ ] **Step 3: Verify the unit and process race contracts**
 

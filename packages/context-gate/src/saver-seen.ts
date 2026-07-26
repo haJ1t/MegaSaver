@@ -41,6 +41,7 @@ export function hasSeenOutput(
   hash: string,
 ): boolean {
   const path = seenPath(storeRoot, workspaceKey, sessionId);
+  if (!existsSync(path)) return false;
   let seen = false;
   withFileLock(`${path}.lock`, SEEN_LOCK_OPTIONS, () => {
     seen = readHashes(path).includes(hash);

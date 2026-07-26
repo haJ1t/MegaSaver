@@ -22,8 +22,11 @@ compression, but never blocks a tool call or reads through an active writer.
 
 1. A fresh seen-ledger lock makes `hasSeenOutput` return `false`, even for a
    recorded hash.
-2. The existing real multi-process race test stays green.
-3. The full context-gate package, `pnpm verify`, and both CI runners pass.
+2. A missing ledger returns `false` before lock acquisition; the lock helper's
+   parent-directory precondition therefore cannot impose its 50 ms deadline on
+   first use.
+3. The existing real multi-process race test stays green.
+4. The full context-gate package, `pnpm verify`, and both CI runners pass.
 
 ## Out of scope
 
