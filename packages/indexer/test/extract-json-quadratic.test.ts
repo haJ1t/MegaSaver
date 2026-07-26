@@ -57,7 +57,15 @@ const fastest = (run: () => void): number => {
 };
 
 describe("extractJson — quadratic key-line scan at the 1 MB file cap", () => {
-  it(`costs under ${MAX_PRETTY_TO_MINIFIED}x the same object on one line`, () => {
+  // `retry: 3`, matching every other timing guard in this repo
+  // (output-filter/dedupe-quadratic, core/project-rule-ranking, policy/glob-redos).
+  // min-of-trials cancels a spike inside one run, but it cannot cancel sustained
+  // load: under a full parallel `pnpm verify` the pretty sample runs long enough
+  // to accumulate far more preemption than the one-line control, so the ratio
+  // inflates on one-pass code — measured 22.9x against this 5x gate while passing
+  // 3/3 in isolation. Retrying does not weaken the gate: the quadratic form is
+  // slow on every attempt, so it still fails all three.
+  it(`costs under ${MAX_PRETTY_TO_MINIFIED}x the same object on one line`, { retry: 3 }, () => {
     const entries = localeEntries(SCAN_CAP_BYTES);
     const pretty = JSON.stringify(entries, null, 2);
     const minified = JSON.stringify(entries);
