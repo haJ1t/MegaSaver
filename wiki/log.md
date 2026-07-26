@@ -5365,3 +5365,31 @@ tying them to reality.
 
 Sources: [[docs/superpowers/specs/2026-07-26-carrier-residual-gaps-design]],
 [[docs/superpowers/plans/2026-07-26-carrier-residual-gaps-plan]].
+
+## 2026-07-26 — probe/table drift now fails CI
+
+`scripts/redos-probe.mjs` transcribes 28 shipped regexes (`AFTER` 7,
+`NEW_DETECTORS` 21). Two had drifted. New
+`packages/policy/test/redos-probe-parity.test.ts` imports the probe's real
+`RegExp` objects and compares `.source` and `.flags` against the union of
+`REDACTION_PATTERNS` and `OBSERVED_PATTERNS`. Green on arrival, so it was
+mutation-verified four ways — source drift, flags drift, a renamed detector,
+and a dropped export — each turning it red.
+
+Enabled by an entry-point guard on the probe's CLI dispatch and its
+`assertSeedsMatch()` call. Both set exit codes and neither belongs in an
+importer's process; without the guard a bare `import` runs `timing` (observed:
+it ran until the 2-minute timeout).
+
+Chose "loud" over "impossible" deliberately. Importing the built `dist` would
+need `REDACTION_PATTERNS` added to the package's public exports, and would
+trade transcription drift for staleness drift — a probe run against a stale
+build measures the previous pattern and looks identical. See the spec's §2.
+
+Scope is truthfulness, not coverage: 28 of 41 detectors are probed and the
+other 13 stay unmeasured by choice. Also found and left alone: 3 of
+`MATCH_FREE_BY_DESIGN`'s 17 entries are not `NEW_DETECTORS` keys, so they
+exempt nothing.
+
+Sources: [[docs/superpowers/specs/2026-07-26-probe-parity-design]],
+[[docs/superpowers/plans/2026-07-26-probe-parity-plan]].

@@ -365,3 +365,35 @@ bound, whose ~2.5 KB real-credential evidence already justified that size.
 Sources:
 [[docs/superpowers/specs/2026-07-26-carrier-residual-gaps-design]],
 [[docs/superpowers/specs/2026-05-10-bb3-policy-design]] §5b.
+
+## The measurement harness now has to tell the truth (2026-07-26)
+
+`scripts/redos-probe.mjs` hand-writes the 28 regexes it measures. A drifted
+copy does not fail — it benchmarks a pattern that does not ship and the number
+lands in a spec looking exactly like a real one. Two rows had drifted; the fix
+makes drift fail CI.
+
+The general shape worth remembering: **a measurement harness that copies its
+subject needs the copy checked, or it silently measures fiction.** Same family
+as a fuzz corpus that matches nothing and a seed that never forms its anchor —
+in all three the harness reports a clean number while testing nothing.
+
+Two design points that were not obvious:
+
+**Comparing objects beats parsing text.** The reason "add a test that reads the
+probe file" sounded fragile is that it implies regex-parsing another file's
+source. Exporting the tables and importing them removes the parsing entirely —
+the test compares real `RegExp` objects. What made this possible was an
+entry-point guard on the CLI dispatch; without one, a bare `import` of the probe
+runs `timing`, the mode its own header warns takes tens of minutes.
+
+**Importing the built `dist` would have been worse, not better.** It looks like
+the stronger fix — the copy disappears — but `REDACTION_PATTERNS` is not part of
+the package's public exports (CLAUDE.md §8), so it would mean widening a public
+API for a dev script. Worse, a `dist` import is only as truthful as the last
+build: edit the source, skip the rebuild, and the probe measures the previous
+pattern with nothing in its output looking different. That trades transcription
+drift for staleness drift — the same bug, harder to see. Vitest compiles the TS
+source directly, so the test approach has no such hole.
+
+Source: [[docs/superpowers/specs/2026-07-26-probe-parity-design]].

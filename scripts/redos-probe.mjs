@@ -21,11 +21,22 @@
 // row prints its match count; a row whose count is 0 proves nothing.
 
 import os from "node:os";
+import { pathToFileURL } from "node:url";
 
 const KB = 1024;
 const mode = process.argv[2] ?? "timing";
 
 // ─── patterns: HEAD (before) vs shipped (after) ───────────────────────────────
+//
+// The `after` side of both tables is TRANSCRIBED from
+// packages/policy/src/redaction-patterns.ts. A drifted copy does not fail — it
+// benchmarks a pattern that does not ship and the number lands in a spec
+// looking real. `packages/policy/test/redos-probe-parity.test.ts` imports AFTER
+// and NEW_DETECTORS and compares them byte for byte against the shipped table,
+// so editing a regex there without editing it here fails CI.
+//
+// BEFORE and CARRIER_BEFORE are exempt and stay unexported: they hold the
+// superseded patterns, whose purpose is to differ from what ships.
 
 const BEFORE = {
   aws_secret_key: /(?<=aws_secret_access_key\s*=\s*)[A-Za-z0-9/+]{40}/g,
@@ -39,7 +50,7 @@ const BEFORE = {
   email: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
 };
 
-const AFTER = {
+export const AFTER = {
   aws_secret_key: /(?=[A-Za-z0-9/+])(?<=aws_secret_access_key\s*=\s*)[A-Za-z0-9/+]{40}/gi,
   api_key_header:
     /(?=\S)(?<=(?:x-api-key|x-auth-token|x-access-token)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s"']{8,})/gi,
@@ -65,7 +76,7 @@ const EXTRA_PK_SEEDS = {
 
 // Detectors with no "before" — added 2026-07-25 for private-key carriers that
 // are not PEM-armoured. Reported separately since there is nothing to compare to.
-const NEW_DETECTORS = {
+export const NEW_DETECTORS = {
   ssh2_private_key_block: {
     re: /---- BEGIN (?:[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)* )*PRIVATE KEY ----[\s\S]{1,32768}?---- END (?:[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)* )*PRIVATE KEY ----/g,
     seed: (n) => "---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----".repeat(Math.ceil(n / 42)),
@@ -590,9 +601,11 @@ function labels() {
   }
 }
 
+const isCli = import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
+
 // Runs for EVERY mode. The guard was previously reachable only from `timing`,
 // which is also the mode this file tells reviewers to avoid.
-assertSeedsMatch();
+if (isCli) assertSeedsMatch();
 
 // Spec 2026-07-26-carrier-residual-gaps-design §4: the `\s{0,8}` gaps multiply
 // the lookbehind's internal alternatives, and the guard `(?=[^;\s])` prunes
@@ -685,12 +698,16 @@ function carriers() {
   }
 }
 
-if (mode === "labels") labels();
-else if (mode === "timing") timing();
-else if (mode === "fuzz") fuzz();
-else if (mode === "bounds") bounds();
-else if (mode === "carriers") carriers();
-else {
-  console.error(`unknown mode ${mode}; expected timing | fuzz | bounds | labels`);
-  process.exit(1);
+// Entry-point guard. Without it, `import` of this module runs `timing` — the
+// mode the header tells reviewers to avoid because it takes tens of minutes.
+if (isCli) {
+  if (mode === "labels") labels();
+  else if (mode === "timing") timing();
+  else if (mode === "fuzz") fuzz();
+  else if (mode === "bounds") bounds();
+  else if (mode === "carriers") carriers();
+  else {
+    console.error(`unknown mode ${mode}; expected timing | fuzz | bounds | labels | carriers`);
+    process.exit(1);
+  }
 }
