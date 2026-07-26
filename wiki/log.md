@@ -6441,12 +6441,12 @@ standalone CLI, the artifact exceeded its 12 MiB ceiling, and uppercase Slack
 webhook URL scheme/host variants escaped redaction. Long Memory now exposes a
 benchmark-free, `fs-ext`-free `./ranker` public entrypoint used only by the
 recall adapter; the single-file CLI bundle applies whitespace minification and
-is 8.33 MiB with no `.node` payload. Slack webhook matching is `gi` and pins
-the uppercase case. The benchmark package-boundary tests now explicitly allow
+is 8.33 MiB with no `.node` payload. Slack webhook matching pins uppercase
+scheme/host while retaining its lowercase endpoint path. The benchmark package-boundary tests now explicitly allow
 only this narrow additional export while proving it contains neither benchmark
 transport nor `fs-ext`. The standalone smoke suite is 7/7, focused Long Memory
 boundary/index tests are 48/48, policy is 668/668, and `pnpm verify` passes.
-A new independent review is still required before merge. (source:
+A security re-review is still required before merge. (source:
 `apps/cli/tsup.bundle.config.ts`,
 `packages/long-memory/src/lm2-ranker-entry.ts`,
 `packages/policy/src/redaction-patterns.ts`, PR #312)
