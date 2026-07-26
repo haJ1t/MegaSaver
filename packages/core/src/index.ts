@@ -62,8 +62,11 @@ export {
   type MemoryIndexBuildResult,
   buildMemoryIndex,
   embedMemoryEntries,
+  memoryEmbeddingContentHash,
+  memoryEmbeddingHashesSidecarPath,
   memoryEmbeddingsSidecarPath,
   memoryEmbedText,
+  readMemoryEmbeddingHashes,
 } from "./embed-memory.js";
 export {
   type LiveSessionId,

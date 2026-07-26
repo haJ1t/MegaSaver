@@ -41,7 +41,7 @@ function parseModelDescriptor(input: unknown): ModelDescriptor {
 
 const embeddingIdentityInputSchema = z
   .object({
-    kind: z.enum(["state_snapshot", "state_transition"]),
+    kind: z.enum(["state_snapshot", "state_transition", "memory_entry"]),
     text: z.string().min(1).max(MAX_LM2_CANDIDATE_TEXT_CODE_UNITS),
   })
   .strict()
@@ -62,7 +62,7 @@ export function modelDescriptorFingerprint(model: ModelDescriptor): Lm2Sha256 {
 }
 
 export function embeddingInputDigest(input: {
-  kind: "state_snapshot" | "state_transition";
+  kind: "state_snapshot" | "state_transition" | "memory_entry";
   text: string;
 }): Lm2Sha256 {
   return sha256(
