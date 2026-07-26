@@ -25,13 +25,19 @@ describe("runAgent", () => {
       cwd: process.cwd(),
       env: process.env,
     });
+    const totalMs = Date.now() - started;
     clearTimeout(timer);
 
     expect(result.status).toBe(0);
-    // The 100ms timer fired long before the ~600ms child exited — proof the loop
-    // was never blocked. Under a synchronous spawn timerFiredAt would be ~600.
+    // Two assertions, neither of them a wall-clock constant. Under a blocking
+    // spawn the callback never runs before clearTimeout, so timerFiredAt stays 0
+    // — that is the discriminator. The second says the timer fired WHILE the
+    // child was alive, by comparing against the run's own duration instead of a
+    // fixed budget: a 400 ms ceiling on a 100 ms timer measured 429 ms under a
+    // full parallel `pnpm verify`, which is scheduler latency, not a blocked
+    // loop. Both numbers come from the same run, so load inflates them together.
     expect(timerFiredAt).toBeGreaterThan(0);
-    expect(timerFiredAt).toBeLessThan(400);
+    expect(timerFiredAt).toBeLessThan(totalMs);
   });
 
   it("serves an in-process HTTP request during the child's lifetime", async () => {
