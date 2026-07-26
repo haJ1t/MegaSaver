@@ -242,7 +242,19 @@ export async function rankProjectMemories(
         entries: prepared.entries,
       });
     } catch {
-      const ranked = await rankSafe();
+      const ranked = await rankLm2Candidates({
+        candidates: prepared.candidates,
+        request: { workspaceKey, task: input.task, profile: "adaptive", model: LOCAL_MODEL },
+        vectors: {
+          async read() {
+            throw new Error("bounded vector sidecar read failed");
+          },
+        },
+        embedding: localEmbedding(input.embed ?? (async () => [])),
+        clock: { now: input.now ?? (() => performance.now()) },
+        adaptiveCandidateScope: "lm2_capture_window",
+        candidateInputOmittedCount: prepared.omitted,
+      });
       return { memory: memoryFor(ranked.orderedCandidateIds), hybrid: ranked.hybrid };
     }
     const profile = vectors.values.size === 0 || input.embed === undefined ? "safe" : "adaptive";
