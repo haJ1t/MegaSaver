@@ -109,5 +109,6 @@ describe("handleIndexMemory", () => {
       { projectId: PROJECT_ID, task: "unrelated" },
     );
     expect(after.memory.map((m) => m.id)).toEqual([SEM]);
+    expect(after.hybrid).toMatchObject({ profile: "adaptive", semanticStatus: "used" });
   });
 });

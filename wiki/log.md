@@ -6245,3 +6245,20 @@ uncached runs also green — `turbo typecheck --force` 58/58 in 33.1 s,
 Also observed and left alone: `packages/context-gate/test/saver-heartbeat.test.ts`
 "steals a stale lock file" flaked once under a forced full run and passes in
 isolation; that file is untouched by this branch and the flake is main's.
+
+## [2026-07-26 16:41 +03] feat | product memory now uses LM2 hybrid ranking
+
+Added `@megasaver/memory-recall`, a read-only adapter from Core MemoryEntry
+records to LM2 candidates. It relies on the existing vector sidecar and hash
+manifest, so malformed or stale vectors fall back to Safe lexical recall rather
+than changing memory lifecycle or silently dropping eligible entries. Wired it
+into task-based CLI search, MCP `get_relevant_memories`, `search_memory`, and
+`mega_recall`, plus daemon registry recall. Sources:
+[[entities/memory-recall]],
+`docs/superpowers/specs/2026-07-26-lm2-product-memory-integration-design.md`.
+
+Review gate: three fresh-context review launches were attempted after the
+final verifier pass, including both available model routes. All failed before
+reviewing with the local provider error `404 No enabled canonical OpenAI
+provider`; do not merge until an independent reviewer can run. (source:
+2026-07-26 Codex review launcher results)

@@ -136,6 +136,35 @@ describe("handleRecall", () => {
     expect(contents).not.toContain("agent suggestion not yet approved");
   });
 
+  it("does not restore stale memory when a no-match intent uses the recall fallback", async () => {
+    const registry = seededRegistry();
+    registry.createMemoryEntry({
+      id: "66666666-6666-4666-8666-666666666666" as MemoryEntryId,
+      projectId: PROJECT_ID,
+      sessionId: SESSION_ID,
+      scope: "session",
+      content: "obsolete deployment process",
+      type: "decision",
+      title: "obsolete deployment process",
+      keywords: [],
+      confidence: "medium",
+      source: "manual",
+      approval: "approved",
+      stale: true,
+      createdAt: TS,
+      updatedAt: TS,
+    });
+
+    const result = await handleRecall(
+      { registry, storeRoot: store },
+      { sessionId: SESSION_ID, intent: "unmatched terms" },
+    );
+
+    expect(result.memory.map((memory) => memory.id)).not.toContain(
+      "66666666-6666-4666-8666-666666666666",
+    );
+  });
+
   it("returns daemon {memory,chunkSets} when daemon is present, registry NOT read", async () => {
     const daemonResult = {
       memory: [{ id: "daemon-mem", content: "from daemon" }],

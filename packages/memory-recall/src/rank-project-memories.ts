@@ -168,6 +168,10 @@ export async function rankProjectMemories(
     adaptiveCandidateScope: "lm2_capture_window",
     candidateInputOmittedCount: prepared.omitted,
   });
+  if (ranked.hybrid.semanticStatus === "degraded") {
+    const safe = await rankSafe();
+    return { memory: memoryFor(safe.orderedCandidateIds), hybrid: safe.hybrid };
+  }
   return {
     memory: memoryFor(ranked.orderedCandidateIds),
     hybrid: ranked.hybrid,
