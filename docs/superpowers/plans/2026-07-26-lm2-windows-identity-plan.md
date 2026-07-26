@@ -160,3 +160,37 @@ schema changes.
 - [x] Reopen exclusive benchmark state with `update` before `fsync`.
 - [ ] Run the focused benchmark/file suites, package typecheck, root verify,
   independent review, and replacement Ubuntu/Windows CI.
+
+### Task 8: Canonicalize evidence package inventory names
+
+**Files:**
+- Modify: `benchmarks/longmemeval-v2/verify-official-artifacts.mjs`
+- Modify: `packages/long-memory/test/lm2-completion-integration.test.ts`
+
+**Interfaces:** Artifact names in the evidence package inventory always use
+`/`, independently of the filesystem platform. Native paths remain only at
+the file access boundary.
+
+- [x] Capture the real Windows completion-gate failure: `relative`/`join`
+  create `\\` names that do not equal the portable evidence references.
+- [x] Canonicalize walked package names, package prefixes, and required-file
+  comparisons before inventory validation.
+- [ ] Run the completion integration suite, root verification, independent
+  review, and replacement Ubuntu/Windows CI.
+
+### Task 9: Keep directory-sync fault assertions capability-aware
+
+**Files:**
+- Modify: `packages/long-memory/test/lm2-index-operation.test.ts`
+
+**Interfaces:** Windows skips unsupported directory metadata `fsync`; a cleanup
+test must therefore require its injected directory-sync root only where that
+operation exists, while requiring the regular-file close cleanup root on every
+platform.
+
+- [x] Capture the Windows CI failure where the POSIX-only injected `fsync`
+  never runs and produced an undefined expected error.
+- [x] Make the cleanup-root expectation match the documented platform
+  capability boundary.
+- [ ] Run the index-operation suite, root verification, independent review,
+  and replacement Ubuntu/Windows CI.

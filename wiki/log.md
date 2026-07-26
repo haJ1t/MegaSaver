@@ -7034,3 +7034,18 @@ tests, package typecheck/lint, and full `pnpm verify` pass locally. Fresh
 review and replacement matrix are still release gates. (source: GitHub
 Actions jobs `89830416544`, `89831530754`,
 `packages/long-memory/src/lm2-benchmark-files.ts`, 2026-07-26)
+
+## [2026-07-26 22:53 +03] fix | close the remaining Windows LM2 test boundaries
+
+Replacement Windows CI `30217042527` proved the durable benchmark writer no
+longer caused the original run-open fan-out, then exposed three independent
+portability boundaries. The official evidence verifier now compares logical
+package artifact names in canonical `/` form rather than native `path.join`
+output; catalog process fixtures accumulate and frame CRLF/chunked pipe output
+before parsing the barrier/result protocol; and the index-operation cleanup
+assertion now distinguishes the documented absence of Windows directory fsync
+from mandatory file-close cleanup. A red fake-child regression covered the
+combined CRLF/barrier-result chunk. Focused LM2 tests (109) plus a fresh full
+`pnpm verify` pass locally. Independent review and new two-platform CI remain
+release gates. (source: GitHub Actions job `89832957274`,
+`docs/superpowers/specs/2026-07-26-lm2-windows-identity-design.md`)

@@ -30,11 +30,17 @@ export function holdCatalogLock(path: string): Promise<() => Promise<void>> {
       stderr += chunk.toString();
     });
     child.once("error", reject);
-    child.stdout.once("data", (chunk: Buffer) => {
-      if (chunk.toString() !== "locked\n") {
+    let stdout = "";
+    let locked = false;
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+      const separator = stdout.indexOf("\n");
+      if (locked || separator === -1) return;
+      if (stdout.slice(0, separator).replace(/\r$/u, "") !== "locked") {
         reject(new Error(`Catalog lock child did not acquire lock: ${stderr}`));
         return;
       }
+      locked = true;
       resolve(
         () =>
           new Promise<void>((release, rejectRelease) => {
@@ -92,26 +98,32 @@ export function startBarrierAppender(
       stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "";
+    let ready = false;
     let stderr = "";
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
     child.once("error", reject);
-    child.stdout.once("data", (chunk: Buffer) => {
-      if (chunk.toString() !== "ready\n") {
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+      const separator = stdout.indexOf("\n");
+      if (ready || separator === -1) return;
+      if (stdout.slice(0, separator).replace(/\r$/u, "") !== "ready") {
         reject(new Error(`Catalog appender did not reach barrier: ${stderr}`));
         return;
       }
+      ready = true;
       resolve(
         () =>
           new Promise<boolean>((finish, rejectFinish) => {
-            child.stdout.on("data", (result: Buffer) => {
-              stdout += result.toString();
-            });
             child.once("error", rejectFinish);
             child.once("close", (code) => {
               if (code !== 0) rejectFinish(new Error(stderr));
-              else finish((JSON.parse(stdout.trim()) as { result: boolean }).result);
+              else {
+                finish(
+                  (JSON.parse(stdout.slice(separator + 1).trim()) as { result: boolean }).result,
+                );
+              }
             });
             child.stdin.end("go\n");
           }),

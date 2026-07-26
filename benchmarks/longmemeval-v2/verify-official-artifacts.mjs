@@ -99,6 +99,7 @@ function metric(metrics, path) {
   numeric(value, path.join("."), 1);
   return value;
 }
+function evidencePath(path) { return path.replaceAll("\\", "/"); }
 function walkFiles(root, current = root) {
   const files = [];
   for (const name of readdirSync(current)) {
@@ -106,7 +107,7 @@ function walkFiles(root, current = root) {
     const stat = lstatSync(path);
     if (stat.isSymbolicLink()) fail(`Package contains a symlink: ${path}`);
     if (stat.isDirectory()) files.push(...walkFiles(root, path));
-    else if (stat.isFile()) files.push(relative(root, path));
+    else if (stat.isFile()) files.push(evidencePath(relative(root, path)));
     else fail(`Package contains an unsupported entry: ${path}`);
   }
   return files.sort();
@@ -118,7 +119,7 @@ function verifyPackage(root, leaderboard, tier, dashboard) {
     verifyArtifact(root, entry);
     return entry.path;
   });
-  const packageFiles = walkFiles(packageRoot); const expected = packageFiles.map((path) => join(leaderboard.packageDirectory, path)).sort();
+  const packageFiles = walkFiles(packageRoot); const packageDirectory = evidencePath(leaderboard.packageDirectory).replace(/\/+$/u, ""); const expected = packageFiles.map((path) => `${packageDirectory}/${path}`).sort();
   if (JSON.stringify([...refs].sort()) !== JSON.stringify(expected)) fail("Package inventory differs from disk.");
   const op = `operating_points/${leaderboard.operatingPointName}`;
   const required = [
@@ -131,7 +132,7 @@ function verifyPackage(root, leaderboard, tier, dashboard) {
       ["aggregated_metrics.json", "per_question.jsonl", "run_args.json", "runtime_inputs/questions.json", "runtime_inputs/haystack.json", "runtime_inputs/trajectories.jsonl", "runtime_inputs/memory_config.json", "runtime_inputs/megasaver-lm2-manifest-v1.json"].map((name) => `${op}/${domain}/${name}`),
     ),
   ];
-  if (required.some((name) => !expected.includes(join(leaderboard.packageDirectory, name)))) fail("Package required files are incomplete.");
+  if (required.some((name) => !expected.includes(`${packageDirectory}/${name}`))) fail("Package required files are incomplete.");
   const overviewPath = verifyArtifact(root, leaderboard.submissionOverview);
   if (overviewPath !== join(packageRoot, "submission_overview.json")) fail("Submission overview reference differs.");
   const overview = record(json(overviewPath), "submission overview");

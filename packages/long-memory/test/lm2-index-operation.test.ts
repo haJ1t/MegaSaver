@@ -867,10 +867,11 @@ describe("LM2 index operation", () => {
       commitFirst: () => {},
     }).catch((error: unknown) => error);
 
-    expect(exactCleanupRoots(failure)).toEqual([
-      injectedFsyncFailures[0],
-      injectedCloseFailures[0],
-    ]);
+    expect(exactCleanupRoots(failure)).toEqual(
+      process.platform === "win32"
+        ? [injectedCloseFailures[0]]
+        : [injectedFsyncFailures[0], injectedCloseFailures[0]],
+    );
   });
 
   it("carries aggregate cleanup roots through the real blocked receipt", async () => {

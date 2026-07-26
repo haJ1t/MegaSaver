@@ -106,6 +106,16 @@ before `fsync`. This changes no pathname, object, link, mode, or identity
 validation: it only gives the durable-write flush a writable regular-file
 descriptor. Read-only paths remain read-only, and POSIX behavior is unchanged.
 
+### Evidence package inventory names
+
+The official evidence package is a logical artifact tree, not a host-native
+path API. The verifier therefore canonicalizes every walked relative package
+name and every package-directory prefix to `/` before comparing them with the
+manifest references. Native `join` and `relative` remain limited to filesystem
+access. This preserves the evidence schema's portable artifact spelling and
+stops a valid Windows package from being rejected solely because Node returned
+`\\` while the signed evidence correctly contains `/`.
+
 ### Test and fixture portability
 
 Tests that observe directory `fsync` assert it only where directory sync is a
@@ -135,3 +145,5 @@ evidence tests pass on both operating systems.
    return their complete result on both platforms.
 7. A red durable-write test observes the former read-only open and requires
    the exclusive writer to use its update descriptor before durability flush.
+8. A Windows CI completion-gate run accepts the portable package inventory;
+   POSIX runs continue to compare the same canonical `/` artifact names.
