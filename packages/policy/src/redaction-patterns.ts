@@ -153,6 +153,33 @@ const baseline: RedactionPattern[] = [
     replacement: "eyJ[REDACTED]",
   },
   {
+    // Slack incoming webhooks and workflow/trigger URLs: the URL IS the
+    // credential — anyone holding it can post as the app. `slack_token` cannot
+    // reach these; they carry no `xox`/`xapp` prefix.
+    //
+    // MUST run ahead of every prefix detector, for the reason jwk_private_key
+    // and jwt do. The body class holds `-` and `_`, so `sk-`/`xoxb-`/`npm_`
+    // can occur inside a real token; a prefix hit there inserts `[`, which is
+    // outside the class, the run stops at it, and the characters before the hit
+    // leak. Partial rather than total, but a 24-char token that leaks a prefix
+    // is a weakened token.
+    //
+    // The lookbehind is a fixed literal plus a bounded three-way alternation,
+    // so it is not the unbounded-variable-length shape §3 of the superlinear
+    // design removed. The lookahead's class is exactly the set of first
+    // characters the body can match, so the guard is lossless. Nothing is
+    // required after the run, so it cannot backtrack.
+    //
+    // Matching only the path AFTER `…/services/` keeps host and endpoint kind
+    // in the output: report grouping needs a host. `/` is inside the class
+    // because the credential is the whole `T…/B…/token` triple, not the last
+    // segment.
+    name: "slack_webhook_url",
+    pattern:
+      /(?=[A-Za-z0-9/_-])(?<=https?:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/)[A-Za-z0-9/_-]{16,}/g,
+    replacement: "[REDACTED]",
+  },
+  {
     // `github_pat_` is the FINE-GRAINED form and GitHub's recommended default;
     // `gh[pousr]_` cannot match it, because the character after `gh` is `i`.
     name: "github_token",
@@ -201,7 +228,7 @@ const baseline: RedactionPattern[] = [
   },
   {
     name: "gitlab_token",
-    pattern: /gl(?:pat|rt|ptt|dt|cbt|oas)-[A-Za-z0-9_-]{20,}/g,
+    pattern: /gl(?:pat|oas|rtr|rt|dt|cbt|ptt|ft|ffct|imt|soat|agent|wt)-[A-Za-z0-9_-]{20,}/g,
     replacement: "[REDACTED]",
   },
   {
@@ -603,7 +630,7 @@ const baseline: RedactionPattern[] = [
     // carries `signature` but not the `sig=` that a SAS actually uses.
     name: "connection_string_secret",
     pattern:
-      /(?=[^;\s])(?<=(?:^|;)(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)=)[^;\s]{8,}/gi,
+      /(?=[^;\s])(?<=(?:^|;)\s{0,8}(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)\s{0,8}=\s{0,8})(?:"[^"]{8,8192}"|'[^']{8,8192}'|[^;\s]{8,})/gi,
     replacement: "[REDACTED]",
   },
   {

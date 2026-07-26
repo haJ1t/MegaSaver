@@ -6,6 +6,7 @@
 //   node scripts/redos-probe.mjs fuzz       seeded differential corpus, divergence counts
 //   node scripts/redos-probe.mjs bounds     bound sweeps behind the chosen values
 //   node scripts/redos-probe.mjs labels     label-form cost vs OpenSSL label coverage
+//   node scripts/redos-probe.mjs carriers   growth for the 2026-07-26 carrier residuals     label-form cost vs OpenSSL label coverage
 //
 // Absolute milliseconds vary by 1.5x or more run to run on the same box
 // (thermal, other load) and several times across Node versions. GROWTH PER
@@ -18,6 +19,8 @@
 // divergences because it never manufactures `aws_secret_access_key=` or
 // `-----BEGIN … PRIVATE KEY-----` and therefore never matches anything. Each
 // row prints its match count; a row whose count is 0 proves nothing.
+
+import os from "node:os";
 
 const KB = 1024;
 const mode = process.argv[2] ?? "timing";
@@ -130,7 +133,7 @@ const NEW_DETECTORS = {
     seed: (n) => "xoxb-".repeat(Math.ceil(n / 5)),
   },
   gitlab_token: {
-    re: /gl(?:pat|rt|ptt|dt|cbt|oas)-[A-Za-z0-9_-]{20,}/g,
+    re: /gl(?:pat|oas|rtr|rt|dt|cbt|ptt|ft|ffct|imt|soat|agent|wt)-[A-Za-z0-9_-]{20,}/g,
     seed: (n) => "glpat-".repeat(Math.ceil(n / 6)),
   },
   sendgrid_key: {
@@ -150,11 +153,18 @@ const NEW_DETECTORS = {
     seed: (n) => `SK${"0123456789abcdef".repeat(2).slice(0, 31)} `.repeat(Math.ceil(n / 34)),
   },
   connection_string_secret: {
-    re: /(?=[^;\s])(?<=(?:^|;)(?:password|pwd|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)=)[^;\s]{8,}/gi,
+    re: /(?=[^;\s])(?<=(?:^|;)\s{0,8}(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)\s{0,8}=\s{0,8})(?:"[^"]{8,8192}"|'[^']{8,8192}'|[^;\s]{8,})/gi,
     // ";password=" is rejected by the `(?=[^;\\s])` guard at EVERY position,
     // because the char after each `=` is `;` — the row was a guard test that
     // could not fail, and never walked the lookbehind the guard protects.
     seed: (n) => "password=1234567;".repeat(Math.ceil(n / 17)),
+  },
+  // Anchor-scan seed: after `services/` comes `https`, and `:` is outside the
+  // body class, so the 5-char run is under the 16 floor. Every anchor is paid
+  // for and none matches — the maximal cost for this shape.
+  slack_webhook_url: {
+    re: /(?=[A-Za-z0-9/_-])(?<=https?:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/)[A-Za-z0-9/_-]{16,}/g,
+    seed: (n) => "https://hooks.slack.com/services/".repeat(Math.ceil(n / 33)),
   },
   jwk_private_key: {
     re: /\{(?=[^{}]{0,4096}"kty"\s*:\s*"(?:RSA|EC|OKP|oct)")(?=[^{}]{0,4096}"(?:d|k)"\s*:\s*"[A-Za-z0-9_-]{20,}")[^{}]{1,4096}\}/g,
@@ -201,6 +211,7 @@ const MATCH_FREE_BY_DESIGN = new Set([
   "digitalocean_token",
   "twilio_api_key_sid",
   "connection_string_secret",
+  "slack_webhook_url",
   "ssh2_private_key_block",
   "putty_private_key",
   "base64_pem_block",
@@ -225,6 +236,15 @@ function assertSeedsMatch() {
     process.exitCode = 1;
   }
 }
+
+const benignLog = (n) =>
+  (
+    "  at Module._compile (node:internal/modules/cjs/loader:1234:14)\n" +
+    "INFO 2026-07-25T10:00:00Z request id=abc-123 status=200 dur=14ms\n" +
+    "ERROR TypeError: Cannot read properties of undefined (reading 'x')\n" +
+    "user alice@example.com fetched https://api.example.com/v1/items?page=2\n" +
+    "postgres://app:s3cret@db.internal:5432/prod\n"
+  ).repeat(Math.ceil(n / 300));
 
 function timing() {
   console.error("note: `timing` measures the QUADRATIC before-patterns and takes tens of");
@@ -266,13 +286,7 @@ function timing() {
   }
 
   console.log("\nBenign 200 KB build log (no adversarial run) — all 7 patterns:");
-  const benign = (
-    "  at Module._compile (node:internal/modules/cjs/loader:1234:14)\n" +
-    "INFO 2026-07-25T10:00:00Z request id=abc-123 status=200 dur=14ms\n" +
-    "ERROR TypeError: Cannot read properties of undefined (reading 'x')\n" +
-    "user alice@example.com fetched https://api.example.com/v1/items?page=2\n" +
-    "postgres://app:s3cret@db.internal:5432/prod\n"
-  ).repeat(Math.ceil((200 * KB) / 300));
+  const benign = benignLog(200 * KB);
   for (const name of Object.keys(AFTER)) {
     console.log(
       `  ${name.padEnd(20)} before${fmt(median3(BEFORE[name], benign))}   after${fmt(median3(AFTER[name], benign))}`,
@@ -580,10 +594,102 @@ function labels() {
 // which is also the mode this file tells reviewers to avoid.
 assertSeedsMatch();
 
+// Spec 2026-07-26-carrier-residual-gaps-design §4: the `\s{0,8}` gaps multiply
+// the lookbehind's internal alternatives, and the guard `(?=[^;\s])` prunes
+// almost nothing because nearly every character is in `[^;\s]`. So the
+// lookbehind runs at nearly every position with a larger constant. Growth per
+// doubling is the load-bearing figure; the constants move with the box.
+const CARRIER_BEFORE = {
+  gitlab_token: /gl(?:pat|rt|ptt|dt|cbt|oas)-[A-Za-z0-9_-]{20,}/g,
+  connection_string_secret:
+    /(?=[^;\s])(?<=(?:^|;)(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)=)[^;\s]{8,}/gi,
+};
+
+const CARRIER_SEEDS = {
+  // Guard passes at every position and the lookbehind must fail: the shape the
+  // `\s{0,8}` gaps make more expensive.
+  "conn: bare anchor run": (n) => "password=1234567;".repeat(Math.ceil(n / 17)),
+  // Maximal gap work — 8 spaces on both sides of `=`, value under the floor,
+  // so every anchor is paid for and none matches.
+  "conn: maximal ws gaps": (n) =>
+    `;password${" ".repeat(8)}=${" ".repeat(8)}1234567`.repeat(Math.ceil(n / 34)),
+  // An unterminated quote: the bounded run stops at 8192 instead of scanning to
+  // the next quote in the file.
+  "conn: unterminated quote": (n) => `;password="${"a".repeat(200)}`.repeat(Math.ceil(n / 212)),
+  "gitlab: anchor run": (n) => "glagent-".repeat(Math.ceil(n / 8)),
+  "slack: anchor run": (n) => "https://hooks.slack.com/services/".repeat(Math.ceil(n / 33)),
+};
+
+// Load guard. Twice now a measurement on this repo was taken on a box carrying
+// orphaned test workers — once at 5x inflation, once at load 124 on 10 cores,
+// where every growth ratio came out between x0.97 and x13.70 on patterns that
+// are provably linear. min-of-N does not save you: at that load there is no
+// quiet slice to find. Refuse rather than print a number nobody can trust.
+function assertQuietBox() {
+  const load = os.loadavg()[0];
+  const cores = os.cpus().length;
+  if (load > cores * 0.75) {
+    console.error(
+      `LOADED BOX: 1-min load ${load.toFixed(1)} on ${cores} cores. Growth ratios here are noise.
+Check for orphaned workers (ps -Ao pid,ppid,%cpu,etime,command | awk '$2==1') and
+re-run once load settles below ${(cores * 0.75).toFixed(0)}.`,
+    );
+    process.exitCode = 1;
+    return false;
+  }
+  return true;
+}
+
+function carriers() {
+  if (!assertQuietBox()) return;
+  // 512 KB and up, not the 100/200/400 the other modes use: these three rows
+  // land at 0.2-3 ms there, where the timer floor dominates and the ratios are
+  // meaningless. At 512 KB-4 MB the signal clears the floor.
+  const rungs = [512, 1024, 2048, 4096].map((k) => k * KB);
+  console.log(`node ${process.version}\n`);
+  console.log(
+    "seed                       detector                 512KB      1MB        2MB        4MB   growth(4M/2M)  matches@4MB",
+  );
+  const rows = [
+    ["conn: bare anchor run", "connection_string_secret"],
+    ["conn: maximal ws gaps", "connection_string_secret"],
+    ["conn: unterminated quote", "connection_string_secret"],
+    ["gitlab: anchor run", "gitlab_token"],
+    ["slack: anchor run", "slack_webhook_url"],
+  ];
+  for (const [seedName, det] of rows) {
+    const mk = CARRIER_SEEDS[seedName];
+    const re = NEW_DETECTORS[det].re;
+    const r = rungs.map((n) => median3(re, mk(n)));
+    const hits = (mk(rungs[3]).match(new RegExp(re.source, re.flags)) ?? []).length;
+    console.log(
+      `${seedName.padEnd(26)} ${det.padEnd(24)}${r.map(fmt).join("")}   x${(r[3] / r[2]).toFixed(2)}` +
+        `        ${hits}`,
+    );
+    const before = CARRIER_BEFORE[det];
+    if (before) {
+      const b = rungs.map((n) => median3(before, mk(n)));
+      console.log(
+        `${"  (before this change)".padEnd(26)} ${"".padEnd(24)}${b.map(fmt).join("")}   x${(b[3] / b[2]).toFixed(2)}`,
+      );
+    }
+  }
+  console.log("\nBenign 200 KB build log — constant, not growth:");
+  const benign = benignLog(200 * KB);
+  for (const det of ["connection_string_secret", "gitlab_token", "slack_webhook_url"]) {
+    const after = median3(NEW_DETECTORS[det].re, benign);
+    const before = CARRIER_BEFORE[det] ? median3(CARRIER_BEFORE[det], benign) : null;
+    console.log(
+      `  ${det.padEnd(26)} after${fmt(after)}${before === null ? "" : `   before${fmt(before)}`}`,
+    );
+  }
+}
+
 if (mode === "labels") labels();
 else if (mode === "timing") timing();
 else if (mode === "fuzz") fuzz();
 else if (mode === "bounds") bounds();
+else if (mode === "carriers") carriers();
 else {
   console.error(`unknown mode ${mode}; expected timing | fuzz | bounds | labels`);
   process.exit(1);

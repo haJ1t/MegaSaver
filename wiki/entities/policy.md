@@ -316,3 +316,52 @@ true).
 Sources:
 [[docs/superpowers/specs/2026-07-25-deny-write-honest-rejection-design]],
 [[docs/superpowers/specs/2026-06-03-permissions-yaml-design]] §5.4.
+
+## Carrier residual gaps closed (2026-07-26)
+
+`REDACTION_PATTERNS` is 40 rows and `OBSERVED_PATTERNS` is 1 (`email`). §5a's
+locked ten plus §5b's 31 post-lock rows account for all 41, since §5b's count
+spans both tables.
+
+Three gaps that §5b had **disclosed and left open** are now closed. Twelve
+shapes that measured `fired: (none)` against `769d7efd` redact:
+
+- `slack_webhook_url` — new row, and the reason it is new rather than a widening
+  of `slack_token`: `https://hooks.slack.com/{services,workflows,triggers}/…`
+  shares no prefix with `xox`/`xapp`. The URL *is* the credential.
+- `gitlab_token` — seven of GitLab's thirteen documented prefixes were absent
+  (`glrtr glft glffct glimt glsoat glagent glwt`).
+- `connection_string_secret` — whitespace around the separator, and quoted
+  values holding the `;` delimiter.
+
+Three things worth carrying forward:
+
+**A detector whose body class holds `-`/`_` must run ahead of every prefix
+detector.** Third instance of this now: `jwk_private_key`, `jwt`, and
+`slack_webhook_url`. The mechanism is identical each time — a prefix hit inside
+the body inserts `[`, which is outside the body class, so the run stops there.
+For jwk/jwt the enclosing span could no longer complete and the whole secret
+survived; for a webhook URL the loss is partial (the characters before the hit).
+The ordering pin in `redact-superlinear.test.ts` now covers all three, and its
+`PREFIX_DETECTORS` list was completed — the comment claimed the list was every
+prefix detector in the table while carrying 7 of 13, so the six 2026-07-26
+vendor rows were unprotected by it.
+
+**A floor can turn a partial redaction into no redaction at all.** The quoted
+connection-string case is the clean example: the body `[^;\s]{8,}` saw `"pw`
+before the first `;` — three characters, under the floor — so nothing matched.
+Not a shortened redaction with a reported finding, but `findings: []` and the
+full password in cleartext. When reasoning about a bound, ask whether the
+truncated match still clears the floor.
+
+**A bound that is cost-free is chosen on failure mode, not on time.** Sweeping
+the quoted run at 4096 / 8192 / 16384 / 65536 gave 4.7–4.9 ms at 2 MB and growth
+x1.98–2.03 for all four — indistinguishable. So the sweep answers nothing about
+speed and everything about which direction you want to fail: too small leaks a
+long `;`-bearing value, too large lets a malformed unterminated quote
+over-redact up to the bound. Picked 8192 to match `url_basic_auth`'s password
+bound, whose ~2.5 KB real-credential evidence already justified that size.
+
+Sources:
+[[docs/superpowers/specs/2026-07-26-carrier-residual-gaps-design]],
+[[docs/superpowers/specs/2026-05-10-bb3-policy-design]] §5b.
