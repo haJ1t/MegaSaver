@@ -34,6 +34,8 @@ is pinned as benchmark-free and `fs-ext`-free. Slack webhook redaction now
 matches case-insensitive scheme/host variants while retaining case-sensitive
 endpoint paths. The standalone smoke suite is 7/7, focused Long Memory
 boundary/index tests are 48/48, policy is 671/671, and `pnpm verify` passes.
+The updated mixed-case Slack ReDoS probe ran on a quiet 10-core host at load
+5.27 and measured x2.03 growth from 2 to 4 MiB.
 
 Status: pending independent re-review
 

@@ -6464,3 +6464,12 @@ the reviewer independently measured 2→4 MiB growth at 1.94x, 1.97x, and
 required before merge. (source: `packages/policy/src/redaction-patterns.ts`,
 `packages/policy/test/redact-superlinear.test.ts`,
 `scripts/redos-probe.mjs`, `policy_release_security_review`)
+
+## [2026-07-26 18:40 +03] test | remeasure scoped Slack carrier detector
+
+After the load guard admitted the host (5.27 on 10 cores), the updated
+mixed-case Slack anchor probe measured 1.29 ms, 2.61 ms, 4.89 ms, and 9.93 ms
+at 512 KiB through 4 MiB — **x2.03** from 2 to 4 MiB. Its benign 200 KiB build
+log constant was 0.42 ms. These replace the pre-scope timing evidence in the
+carrier design; no performance claim rests on the obsolete lowercase-only
+regex. (source: `scripts/redos-probe.mjs carriers`, 2026-07-26)
