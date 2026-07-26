@@ -11,6 +11,7 @@ type FeatureExtractor = (
 ) => Promise<Tensor>;
 type TransformersModule = {
   pipeline: (task: "feature-extraction", model: string) => Promise<FeatureExtractor>;
+  env: { allowRemoteModels: boolean };
 };
 
 // @huggingface/transformers (and its native onnxruntime-node) is heavy and
@@ -18,6 +19,7 @@ type TransformersModule = {
 // `import("@megasaver/embeddings")` never pays for it — only an actual embed()
 // call does. Mirrors the lazy TS-compiler load in output-filter/semantic.ts.
 let extractorPromise: Promise<FeatureExtractor> | undefined;
+let offlineExtractorPromise: Promise<FeatureExtractor> | undefined;
 async function getExtractor(): Promise<FeatureExtractor> {
   if (extractorPromise === undefined) {
     extractorPromise = import("@huggingface/transformers").then((mod) =>
@@ -27,14 +29,35 @@ async function getExtractor(): Promise<FeatureExtractor> {
   return extractorPromise;
 }
 
-export async function embed(texts: readonly string[]): Promise<Float32Array[]> {
-  if (texts.length === 0) return [];
-  const extractor = await getExtractor();
+async function getOfflineExtractor(): Promise<FeatureExtractor> {
+  if (offlineExtractorPromise === undefined) {
+    offlineExtractorPromise = import("@huggingface/transformers").then((mod) => {
+      const transformers = mod as unknown as TransformersModule;
+      transformers.env.allowRemoteModels = false;
+      return transformers.pipeline("feature-extraction", MODEL_ID);
+    });
+  }
+  return offlineExtractorPromise;
+}
+
+async function runEmbedding(
+  extractor: FeatureExtractor,
+  texts: readonly string[],
+): Promise<Float32Array[]> {
   const tensor = await extractor(texts, { pooling: "mean", normalize: true });
   const [rows, dim] = tensor.dims as [number, number];
   const out: Float32Array[] = [];
-  for (let i = 0; i < rows; i++) {
-    out.push(tensor.data.slice(i * dim, (i + 1) * dim));
-  }
+  for (let i = 0; i < rows; i++) out.push(tensor.data.slice(i * dim, (i + 1) * dim));
   return out;
+}
+
+export async function embed(texts: readonly string[]): Promise<Float32Array[]> {
+  if (texts.length === 0) return [];
+  const extractor = await getExtractor();
+  return runEmbedding(extractor, texts);
+}
+
+export async function embedOffline(texts: readonly string[]): Promise<Float32Array[]> {
+  if (texts.length === 0) return [];
+  return runEmbedding(await getOfflineExtractor(), texts);
 }
