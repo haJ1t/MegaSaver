@@ -6957,6 +6957,20 @@ The next matrix run will identify the exact boundary (open versus identity
 verification) without exposing filesystem details through the benchmark
 protocol. (source: GitHub Actions job `89826841693`, 2026-07-26)
 
+## [2026-07-26 21:52 +03] diagnosis | Windows host handle still blocks seen-ledger replacement
+
+The native safe-path diagnostic no longer reproduces in run `30215294810`;
+Long Memory proceeds on Windows. The same run instead isolated the remaining
+release failure to `context-gate`: even after saver-seen readers and writers
+share a lock, Windows returns `EPERM` when a writer renames its temporary JSON
+file over the ledger. Therefore the contending handle is not an owned reader
+and retrying the lock would be a symptom treatment. The planned repair retains
+the shared lock but writes this explicitly fail-open auxiliary ledger directly
+under it; its existing corrupt-file behavior already converts an interrupted
+write to “not seen,” which is safe redundant compression. (source: GitHub
+Actions job `89828358449`, `packages/context-gate/src/saver-seen.ts`,
+2026-07-26)
+
 ## [2026-07-26 20:47 +03] fix | preserve LM2 source boundary after identity transition
 
 Ubuntu CI found the extended ledger-recovery module at 302 lines, violating the
