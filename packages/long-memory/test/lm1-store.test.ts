@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -125,18 +125,6 @@ function publishInChild(root: string, record: Lm1Record): Promise<{ inserted: bo
       }
       reject(new Error(error));
     });
-  });
-}
-
-function buildChildRuntime(): void {
-  const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  execFileSync(command, ["--filter", "@megasaver/shared", "build"], {
-    cwd: process.cwd(),
-    stdio: "ignore",
-  });
-  execFileSync(command, ["--filter", "@megasaver/long-memory", "build"], {
-    cwd: process.cwd(),
-    stdio: "ignore",
   });
 }
 
@@ -316,7 +304,6 @@ describe("LM1 file store", () => {
   it("allows two processes to publish one immutable record without a shared lock", async () => {
     const root = createRoot();
     const record = createRecord();
-    buildChildRuntime();
     const results = await Promise.all([publishInChild(root, record), publishInChild(root, record)]);
 
     expect(results.map((result) => result.inserted).sort()).toEqual([false, true]);
@@ -327,7 +314,6 @@ describe("LM1 file store", () => {
     const root = createRoot();
     const firstAttempt = createRecord();
     const retry = { ...firstAttempt, recordedAt: "2026-07-20T00:01:00.000Z" };
-    buildChildRuntime();
 
     const results = await Promise.all([
       publishInChild(root, firstAttempt),
@@ -668,7 +654,7 @@ describe("LM1 file store", () => {
       const candidate = createRecord({
         stateKey: predecessor.stateKey,
         text: `Independent current billing status ${index}.`,
-        observedAt: "2026-07-20T00:00:01.000Z",
+        observedAt: new Date(Date.UTC(2026, 6, 20, 0, 0, index + 1)).toISOString(),
       });
       store.publish(candidate);
       if (!store.list(workspaceKey, 10_000).some((record) => record.id === candidate.id)) {
