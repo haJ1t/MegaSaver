@@ -96,6 +96,16 @@ natural event-loop drain instead of calling `process.exit()` immediately after
 writing their JSON result; this preserves the result across Windows pipe
 buffering without changing catalog behavior.
 
+### Durable benchmark writes
+
+Windows CI showed that opening a newly written benchmark state file as
+read-only and then calling `fsync` can reject an otherwise valid run. The
+exclusive state writer therefore reopens `sentinel.json`, `control.json`, and
+the control replacement temporary using the existing `update` safe-path mode
+before `fsync`. This changes no pathname, object, link, mode, or identity
+validation: it only gives the durable-write flush a writable regular-file
+descriptor. Read-only paths remain read-only, and POSIX behavior is unchanged.
+
 ### Test and fixture portability
 
 Tests that observe directory `fsync` assert it only where directory sync is a
@@ -123,3 +133,5 @@ evidence tests pass on both operating systems.
 6. A red flag-selection test proves Windows omits only unsupported
    `O_NONBLOCK`, while POSIX retains it; catalog replacement-writer fixtures
    return their complete result on both platforms.
+7. A red durable-write test observes the former read-only open and requires
+   the exclusive writer to use its update descriptor before durability flush.

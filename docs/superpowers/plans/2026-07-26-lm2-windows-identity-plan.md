@@ -144,3 +144,19 @@ is flushed.
   durability, CRLF framing, symlink checks, or regular-file identity checks.
 - [ ] Run targeted suites, package typecheck, root verify, fresh review, and
   replacement Ubuntu/Windows CI before merge.
+
+### Task 7: Flush exclusive benchmark state through a writable descriptor
+
+**Files:**
+- Modify: `packages/long-memory/src/lm2-benchmark-files.ts`
+- Modify: `packages/long-memory/test/lm2-benchmark-files-security.test.ts`
+
+**Interfaces:** The exclusive state writer uses the existing safe `update`
+open mode before its required file `fsync`; no public transport or persistence
+schema changes.
+
+- [x] Add a red test that observes exclusive state being opened read-only and
+  requires the update descriptor before durability flush.
+- [x] Reopen exclusive benchmark state with `update` before `fsync`.
+- [ ] Run the focused benchmark/file suites, package typecheck, root verify,
+  independent review, and replacement Ubuntu/Windows CI.

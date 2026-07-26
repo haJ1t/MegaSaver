@@ -1,11 +1,29 @@
 import { closeSync, openSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { replaceBenchmarkControl, withBenchmarkRunLock } from "../src/lm2-benchmark-files.js";
 import { dispatchLm2BenchmarkLine } from "../src/lm2-benchmark.js";
 import { benchmarkFixture, cleanupBenchmarkRoots } from "./lm2-benchmark-fixtures.js";
 
-afterEach(cleanupBenchmarkRoots);
+const safePathOpens = vi.hoisted((): { path: string; mode: string }[] => []);
+
+vi.mock("../src/lm2-benchmark-safe-path.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/lm2-benchmark-safe-path.js")>();
+  return {
+    ...actual,
+    openSafeBenchmarkPath(
+      ...args: Parameters<typeof actual.openSafeBenchmarkPath>
+    ): ReturnType<typeof actual.openSafeBenchmarkPath> {
+      safePathOpens.push({ path: args[0], mode: args[1] });
+      return actual.openSafeBenchmarkPath(...args);
+    },
+  };
+});
+
+afterEach(() => {
+  safePathOpens.length = 0;
+  cleanupBenchmarkRoots();
+});
 
 async function send(payload: object) {
   return JSON.parse(await dispatchLm2BenchmarkLine(JSON.stringify(payload))) as {
@@ -30,6 +48,25 @@ async function openedFixture() {
 }
 
 describe("LM2 benchmark fixed run lock", () => {
+  it("flushes exclusive benchmark state through an update descriptor", async () => {
+    const fixture = benchmarkFixture();
+    const response = JSON.parse(
+      await dispatchLm2BenchmarkLine(
+        JSON.stringify({
+          id: "open",
+          op: "open",
+          config: fixture.config,
+          instanceToken: fixture.instanceToken,
+        }),
+      ),
+    ) as { ok: boolean };
+
+    expect(response.ok).toBe(true);
+    const root = join(fixture.cacheParent, `instance-${fixture.instanceToken}`);
+    expect(safePathOpens).toContainEqual({ path: join(root, "sentinel.json"), mode: "update" });
+    expect(safePathOpens).toContainEqual({ path: join(root, "control.json"), mode: "update" });
+  });
+
   it("rejects a lock pathname replaced before a later operation", async () => {
     const { fixture, identity, root } = await openedFixture();
     renameSync(join(root, "run.lock"), join(root, "run.lock.original"));

@@ -7019,3 +7019,18 @@ the pre-open identity. A dynamic filesystem regression reproduces the swap
 while returning the old numeric stat, failed red before the repair, and passes
 after it. Independent review approved the closure; full `pnpm verify` remains
 green. (source: `pr312_release_review`, 2026-07-26)
+
+## [2026-07-26 22:31 +03] fix | flush exclusive LM2 benchmark state through update handles
+
+Fresh Windows CI run `30216086762` reproduced benchmark admission failure on
+two independent Windows workers while Ubuntu passed. The fan-out begins at
+run opening: `writeExclusive` created each canonical state file, reopened it
+read-only, then requested the required durability flush. The exclusive writer
+now reopens `sentinel.json`, `control.json`, and the replacement temporary in
+safe `update` mode before `fsync`, retaining every pathname, file-kind, link,
+mode-capability, and exact-identity check. A mocked safe-path contract failed
+red by observing the old read mode and now observes update mode; 88 focused
+tests, package typecheck/lint, and full `pnpm verify` pass locally. Fresh
+review and replacement matrix are still release gates. (source: GitHub
+Actions jobs `89830416544`, `89831530754`,
+`packages/long-memory/src/lm2-benchmark-files.ts`, 2026-07-26)

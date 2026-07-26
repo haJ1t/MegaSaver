@@ -84,10 +84,10 @@ export function benchmarkRunRoot(config: BenchmarkConfig, instanceToken: string)
 
 function writeExclusive(path: string, value: unknown): void {
   writeFileSync(path, `${canonicalJson(value)}\n`, { flag: "wx", mode: 0o600 });
-  const file = openSafeBenchmarkPath(path, "read");
+  const file = openSafeBenchmarkPath(path, "update");
   try {
     fsyncSync(file.descriptor);
-    verifySafeBenchmarkPath(file, "read");
+    verifySafeBenchmarkPath(file, "update");
   } finally {
     closeSafeBenchmarkPath(file);
   }
