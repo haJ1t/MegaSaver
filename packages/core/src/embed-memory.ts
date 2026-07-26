@@ -35,24 +35,39 @@ function readHashSidecar(path: string, maxBytes?: number): Map<string, string> {
       const fd = openSync(path, "r");
       try {
         const before = fstatSync(fd).size;
-        if (before > maxBytes) return new Map();
+        if (before > maxBytes) {
+          throw new RangeError("Memory embedding hash sidecar exceeds the configured byte limit.");
+        }
         const bytes = Buffer.alloc(before);
         if (readSync(fd, bytes, 0, before, 0) !== before || fstatSync(fd).size !== before) {
-          return new Map();
+          throw new Error("Memory embedding hash sidecar changed during bounded read.");
         }
-        return new Map(
-          Object.entries(JSON.parse(bytes.toString("utf8")) as Record<string, string>),
-        );
+        return hashMap(JSON.parse(bytes.toString("utf8")));
       } finally {
         closeSync(fd);
       }
     }
-    return new Map(
-      Object.entries(JSON.parse(readFileSync(path, "utf8")) as Record<string, string>),
-    );
-  } catch {
+    return hashMap(JSON.parse(readFileSync(path, "utf8")));
+  } catch (error) {
+    if (
+      maxBytes !== undefined &&
+      !(error instanceof Error && "code" in error && error.code === "ENOENT")
+    ) {
+      throw error;
+    }
     return new Map();
   }
+}
+
+function hashMap(value: unknown): Map<string, string> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("Memory embedding hash sidecar is not an object.");
+  }
+  const entries = Object.entries(value);
+  if (entries.some(([id, hash]) => typeof id !== "string" || typeof hash !== "string")) {
+    throw new Error("Memory embedding hash sidecar contains an invalid entry.");
+  }
+  return new Map(entries);
 }
 
 // tmp + fsync + rename, the same crash-safe write writeVectors uses for the

@@ -229,6 +229,35 @@ describe("LM2 product-memory recall", () => {
     });
   });
 
+  it("retains vector-read degradation when the hash sidecar is malformed", async () => {
+    const entry = memory({
+      id: "00000000-0000-4000-8000-000000000028",
+      title: "Current deploy policy",
+      content: "deployment policy",
+    });
+    const storeRoot = root();
+    const vector = Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0));
+    writeVectors(memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID), [{ id: entry.id, vector }]);
+    writeFileSync(memoryEmbeddingHashesSidecarPath(storeRoot, PROJECT_ID), "not-json", "utf8");
+
+    await expect(
+      rankProjectMemories({
+        projectId: PROJECT_ID,
+        entries: [entry],
+        task: "deployment policy",
+        storeRoot,
+        query: { text: "deployment policy" },
+      }),
+    ).resolves.toMatchObject({
+      memory: [entry],
+      hybrid: {
+        profile: "adaptive",
+        semanticStatus: "degraded",
+        semanticReasons: ["vector_read_limit"],
+      },
+    });
+  });
+
   it("does not use a vector whose saved projection hash predates changed memory text", async () => {
     const entry = memory({
       id: "00000000-0000-4000-8000-000000000019",
@@ -519,6 +548,58 @@ describe("LM2 product-memory recall", () => {
       task: "no lexical overlap",
       storeRoot,
       query: { text: "no lexical overlap" },
+      embed: async () => [new Float32Array(vector)],
+      now: () => 0,
+    });
+
+    expect(result.memory.map((entry) => entry.id)).toContain(semantic.id);
+    expect(result.hybrid).toMatchObject({
+      profile: "adaptive",
+      semanticStatus: "used_partial_index",
+    });
+  });
+
+  it("keeps an older indexed semantic candidate when lexical and indexed budgets are saturated", async () => {
+    const semantic = memory({
+      id: "00000000-0000-4000-8000-000000000029",
+      title: "Semantic candidate",
+      content: "vector-only memory",
+      createdAt: "2024-01-01T00:00:00.000Z",
+    });
+    const lexicalEntries = Array.from({ length: 500 }, (_, index) =>
+      memory({
+        id: `00000000-0000-4000-8000-${String(index + 4_000).padStart(12, "0")}`,
+        title: `Lexical entry ${index}`,
+        content: "needle",
+        createdAt: "2026-07-25T00:00:00.000Z",
+      }),
+    );
+    const newerIndexedEntries = Array.from({ length: 500 }, (_, index) =>
+      memory({
+        id: `00000000-0000-4000-8000-${String(index + 5_000).padStart(12, "0")}`,
+        title: `Indexed entry ${index}`,
+        content: "unrelated memory",
+        createdAt: "2026-07-25T00:00:00.000Z",
+      }),
+    );
+    const storeRoot = root();
+    const vector = Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0));
+    writeVectors(memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID), [
+      ...newerIndexedEntries.map((entry) => ({ id: entry.id, vector })),
+      { id: semantic.id, vector },
+    ]);
+    writeFileSync(
+      memoryEmbeddingHashesSidecarPath(storeRoot, PROJECT_ID),
+      JSON.stringify({ [semantic.id]: memoryEmbeddingContentHash(semantic) }),
+      "utf8",
+    );
+
+    const result = await rankProjectMemories({
+      projectId: PROJECT_ID,
+      entries: [semantic, ...lexicalEntries, ...newerIndexedEntries],
+      task: "needle",
+      storeRoot,
+      query: { text: "needle" },
       embed: async () => [new Float32Array(vector)],
       now: () => 0,
     });
