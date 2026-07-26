@@ -200,6 +200,35 @@ describe("LM2 product-memory recall", () => {
     });
   });
 
+  it("retains vector-read degradation when the vector sidecar exceeds the byte limit", async () => {
+    const entry = memory({
+      id: "00000000-0000-4000-8000-000000000026",
+      title: "Current deploy policy",
+      content: "deployment policy",
+    });
+    const storeRoot = root();
+    const sidecarPath = memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID);
+    mkdirSync(dirname(sidecarPath), { recursive: true });
+    writeFileSync(sidecarPath, "x".repeat(64 * 1024 * 1024 + 1), "utf8");
+
+    await expect(
+      rankProjectMemories({
+        projectId: PROJECT_ID,
+        entries: [entry],
+        task: "deployment policy",
+        storeRoot,
+        query: { text: "deployment policy" },
+      }),
+    ).resolves.toMatchObject({
+      memory: [entry],
+      hybrid: {
+        profile: "adaptive",
+        semanticStatus: "degraded",
+        semanticReasons: ["vector_read_limit"],
+      },
+    });
+  });
+
   it("does not use a vector whose saved projection hash predates changed memory text", async () => {
     const entry = memory({
       id: "00000000-0000-4000-8000-000000000019",
@@ -458,5 +487,46 @@ describe("LM2 product-memory recall", () => {
 
     expect(result.memory.map((entry) => entry.id)).toContain(semantic.id);
     expect(result.hybrid.profile).toBe("adaptive");
+  });
+
+  it("keeps an older indexed semantic candidate above the 1,000-entry cap", async () => {
+    const semantic = memory({
+      id: "00000000-0000-4000-8000-000000000027",
+      title: "Semantic candidate",
+      content: "vector-only memory",
+      createdAt: "2024-01-01T00:00:00.000Z",
+    });
+    const newerEntries = Array.from({ length: 1_000 }, (_, index) =>
+      memory({
+        id: `00000000-0000-4000-8000-${String(index + 3_000).padStart(12, "0")}`,
+        title: `Newer entry ${index}`,
+        content: "unrelated memory",
+        createdAt: "2026-07-25T00:00:00.000Z",
+      }),
+    );
+    const storeRoot = root();
+    const vector = Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0));
+    writeVectors(memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID), [{ id: semantic.id, vector }]);
+    writeFileSync(
+      memoryEmbeddingHashesSidecarPath(storeRoot, PROJECT_ID),
+      JSON.stringify({ [semantic.id]: memoryEmbeddingContentHash(semantic) }),
+      "utf8",
+    );
+
+    const result = await rankProjectMemories({
+      projectId: PROJECT_ID,
+      entries: [semantic, ...newerEntries],
+      task: "no lexical overlap",
+      storeRoot,
+      query: { text: "no lexical overlap" },
+      embed: async () => [new Float32Array(vector)],
+      now: () => 0,
+    });
+
+    expect(result.memory.map((entry) => entry.id)).toContain(semantic.id);
+    expect(result.hybrid).toMatchObject({
+      profile: "adaptive",
+      semanticStatus: "used_partial_index",
+    });
   });
 });
