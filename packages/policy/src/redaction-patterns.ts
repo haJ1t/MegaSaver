@@ -630,7 +630,7 @@ const baseline: RedactionPattern[] = [
     // carries `signature` but not the `sig=` that a SAS actually uses.
     name: "connection_string_secret",
     pattern:
-      /(?=[^;\s])(?<=(?:^|;)\s{0,8}(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)\s{0,8}=\s{0,8})(?:"[^"]{8,8192}"|'[^']{8,8192}'|[^;\s]{8,})/gi,
+      /(?=[^;\s])(?<=(?:^|;)\s{0,8}(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)\s{0,8}=\s{0,8})(?:"(?:[^"]|""){8,8192}"|'(?:[^']|''){8,8192}'|[^;\s]{8,})/gi,
     replacement: "[REDACTED]",
   },
   {
