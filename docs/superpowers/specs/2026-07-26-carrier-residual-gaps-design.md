@@ -114,7 +114,7 @@ detector here would be scope creep into an unmeasured carrier.
 ### 3c. `connection_string_secret` — separators and quoted values
 
 ```
-(?=[^;\s])(?<=(?:^|;)\s{0,8}(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)\s{0,8}=\s{0,8})(?:"[^"]{8,8192}"|'[^']{8,8192}'|[^;\s]{8,})
+(?=[^;\s])(?<=(?:^|;)\s{0,8}(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)\s{0,8}=\s{0,8})(?:"(?:[^"]|""){8,8192}"|'(?:[^']|''){8,8192}'|[^;\s]{8,})
 ```
 
 Three `\s{0,8}` gaps and two quoted alternatives.
@@ -129,6 +129,10 @@ Three `\s{0,8}` gaps and two quoted alternatives.
   `{"} ∪ {'} ∪ [^;\s]`, and both quotes are in `[^;\s]`, so the union is
   `[^;\s]` — unchanged. The guard remains a precise equality, not an
   approximation.
+- **ADO.NET doubled delimiters are content.** Inside a quoted value, `""` and
+  `''` escape a literal delimiter. Each quoted branch consumes those pairs
+  before accepting a single closing delimiter, so a successful finding never
+  leaves an escaped-quote tail visible.
 - **Quoted runs are bounded at 8192, and the bound is cost-free.** `"[^"]{8,}"`
   is an unbounded run before a required literal, but it sits behind an anchor, so
   few start positions reach it — the same shape `api_key_header` ships. Swept

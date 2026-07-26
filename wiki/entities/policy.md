@@ -331,8 +331,9 @@ shapes that measured `fired: (none)` against `769d7efd` redact:
   shares no prefix with `xox`/`xapp`. The URL *is* the credential.
 - `gitlab_token` — seven of GitLab's thirteen documented prefixes were absent
   (`glrtr glft glffct glimt glsoat glagent glwt`).
-- `connection_string_secret` — whitespace around the separator, and quoted
-  values holding the `;` delimiter.
+- `connection_string_secret` — whitespace around the separator, quoted values
+  holding the `;` delimiter, and ADO.NET doubled-quote escapes inside either
+  quote style.
 
 Three things worth carrying forward:
 
