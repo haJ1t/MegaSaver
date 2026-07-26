@@ -107,3 +107,38 @@ result, and full-verification result in the wiki log and agent channel.
 
 Have a reviewer inspect the final diff and rerun/check the focused suite before
 the repaired PR is merged.
+
+### Task 4: Remove the Unix-only LM2 fixture dependency
+
+**Files:**
+- Modify: `packages/long-memory/test/lm2-completion-fixtures.ts`
+- Modify: `packages/long-memory/test/lm2-completion-integration.test.ts`
+
+**Interfaces:**
+- Produces: `listPackageFiles(root, directory)`, a test-fixture helper returning
+  `{ path, sha256 }` rows for every regular file below the package directory.
+- Preserves: evidence paths relative to `root`, normalized with `/`, and each
+  file's SHA-256.
+
+- [ ] **Step 1: Add the failing portability contract**
+
+Add an integration test that imports the fixture module dynamically, asserts
+that `listPackageFiles` is exported, and compares its result with
+`fixture.evidence.leaderboard.packageFiles`.
+
+Run: `pnpm --filter @megasaver/long-memory test -- lm2-completion-integration.test.ts`
+
+Expected before the correction: FAIL because `listPackageFiles` is absent.
+
+- [ ] **Step 2: Replace the Unix `find` invocation**
+
+Implement `listPackageFiles` using `readdirSync(path, { withFileTypes: true })`.
+Visit directory entries in deterministic name order, recurse into directories,
+include only `entry.isFile()` values, and normalize each root-relative path with
+`sep` to `/` before hashing its bytes. Use this helper in `createEvidenceFixture`.
+
+- [ ] **Step 3: Verify cross-platform-ready evidence construction**
+
+Run: `pnpm --filter @megasaver/long-memory test -- lm2-completion-integration.test.ts`
+
+Expected: the fixture's evidence gate tests pass without invoking Unix `find`.

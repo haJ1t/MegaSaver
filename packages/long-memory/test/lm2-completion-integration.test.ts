@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import * as completionFixtures from "./lm2-completion-fixtures.js";
 import {
   artifact,
   cleanupEvidenceRoots,
@@ -53,6 +54,21 @@ function replaceRunArgsInteger(evidence: MutationContext, key: string, exactInte
 }
 
 describe("LM2 official-score evidence gate", () => {
+  it("lists packaged evidence files through Node filesystem APIs", () => {
+    const fixture = createEvidenceFixture();
+    const fixtures = completionFixtures as typeof completionFixtures & {
+      listPackageFiles?: (
+        root: string,
+        directory: string,
+      ) => Array<{ path: string; sha256: string }>;
+    };
+
+    expect(fixtures.listPackageFiles).toBeTypeOf("function");
+    expect(
+      fixtures.listPackageFiles?.(fixture.root, fixture.evidence.leaderboard.packageDirectory),
+    ).toEqual(fixture.evidence.leaderboard.packageFiles);
+  });
+
   it("inspects every required evidence class without authorizing a score", () => {
     const fixture = createEvidenceFixture();
     const result = execFileSync(

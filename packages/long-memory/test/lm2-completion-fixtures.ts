@@ -5,12 +5,13 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { canonicalJson, canonicalSha256 } from "../src/lm2-benchmark-canonical.js";
 import { buildBenchmarkManifest } from "../src/lm2-benchmark-manifest.js";
 
@@ -28,6 +29,26 @@ const checksums = {
 };
 
 export const sha256 = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
+
+export function listPackageFiles(root: string, directory: string) {
+  const paths: string[] = [];
+  const visit = (current: string) => {
+    const entries = readdirSync(current, { withFileTypes: true }).sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+    for (const entry of entries) {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.isFile()) paths.push(path);
+    }
+  };
+
+  visit(join(root, directory));
+  return paths.map((path) => ({
+    path: relative(root, path).split(sep).join("/"),
+    sha256: sha256(readFileSync(path)),
+  }));
+}
 
 export function artifact(root: string, path: string, value: unknown) {
   const bytes = typeof value === "string" ? value : `${JSON.stringify(value)}\n`;
@@ -329,12 +350,7 @@ export function createEvidenceFixture() {
     tier: "small",
     generated_at_utc: "2026-07-20T00:00:00+00:00",
   });
-  const packageFiles = execFileSync("find", [join(root, packageDirectory), "-type", "f"], {
-    encoding: "utf8",
-  })
-    .trim()
-    .split("\n")
-    .map((path) => ({ path: path.slice(root.length + 1), sha256: sha256(readFileSync(path)) }));
+  const packageFiles = listPackageFiles(root, packageDirectory);
   execFileSync("tar", ["-czf", join(root, "leaderboard/megasaver_lm2.tar.gz"), "megasaver_lm2"], {
     cwd: join(root, "leaderboard"),
   });

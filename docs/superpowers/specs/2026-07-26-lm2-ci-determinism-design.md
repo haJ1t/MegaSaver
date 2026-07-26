@@ -55,3 +55,12 @@ express their intended conditions explicitly:
 No long-memory runtime logic, public API, timeout policy, persistence schema,
 or generated release artifact changes. This is a deterministic-test correction
 only.
+
+## Amendment: Windows evidence-fixture portability
+
+Independent release review found that `createEvidenceFixture` shells out to
+Unix `find` when recording package-file hashes. GitHub's Windows runner treats
+that command as Windows `FIND`, rejects `-type`, and prevents the LM2 evidence
+tests from starting. Replace only this file enumeration with a Node `readdir`
+walk. Preserve regular-file-only semantics, root-relative slash-separated paths,
+and SHA-256 values; leave the archive and verifier behavior unchanged.

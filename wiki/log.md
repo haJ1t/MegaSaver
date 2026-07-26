@@ -6831,3 +6831,16 @@ and the full `pnpm verify` gate passed locally. A replacement two-platform CI
 matrix and fresh independent review remain required before merging. (source:
 `docs/superpowers/specs/2026-07-26-policy-probe-parity-design.md`, GitHub
 Actions run `30209915950`)
+
+## [2026-07-26 19:28 +03] fix | make LM2 evidence fixture Windows-portable
+
+Independent review identified the Windows-only P1 hidden behind the preceding
+Ubuntu failure: `createEvidenceFixture` invoked Unix `find -type f`, which the
+Windows runner routes to its incompatible `FIND` command. The fixture now walks
+only ordinary files using Node `readdirSync`, emits deterministic root-relative
+`/` paths, and retains the existing SHA-256 evidence rows. A red contract test
+first proved the helper was absent; after implementation the LM2 completion
+integration suite passes 60/60 and the full `pnpm verify` gate passes locally.
+A fresh reviewer pass and a replacement matrix remain required before merge.
+(source: `packages/long-memory/test/lm2-completion-fixtures.ts`,
+`pr312_release_review`, 2026-07-26)
