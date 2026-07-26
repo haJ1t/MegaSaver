@@ -14,11 +14,13 @@ Tasks 1–5 are implemented in commits `ee85c5a2`, `70bd5bc8`, and `9afc6008`.
 The adapter’s final safety test pins Safe fallback after a local embedding
 failure, and MCP/daemon responses now carry the additive `hybrid` receipt.
 `pnpm verify` passed after the implementation. Task 6 remains open only for
-the final independent review and PR/merge handoff: three reviewer launches on
-2026-07-26 failed before execution because the local agent provider returned
-HTTP 404 for both enabled model routes. A concrete cross-surface fixture in
-the CLI suite now proves identical Safe ordering through the shared adapter,
-both applicable MCP calls, daemon registry recall, and CLI search without
+final independent and adversarial review plus PR/merge handoff. The reviewer
+provider was restored on 2026-07-26; its first fresh pass found and the branch
+now fixes task-aware candidate preselection plus bounded Safe fallback for
+oversized LM2 inputs. A fresh re-review must verify those P1 closures. A
+concrete cross-surface fixture in the CLI suite proves identical Safe ordering
+through the shared adapter, both applicable MCP calls, daemon registry recall,
+and CLI search without
 introducing a reverse dependency into `@megasaver/memory-recall`.
 
 ## Global Constraints
