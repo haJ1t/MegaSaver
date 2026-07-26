@@ -6,12 +6,18 @@ import {
   openSync,
   readFileSync,
   renameSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
 export type VectorEntry = { id: string; vector: number[] };
+export type ReadVectorsOptions = {
+  maxBytes?: number;
+  maxRecords?: number;
+  ids?: ReadonlySet<string>;
+};
 
 const vectorRecordSchema = z.object({
   id: z.string(),
@@ -37,17 +43,37 @@ export function writeVectors(path: string, entries: readonly VectorEntry[]): voi
   atomicWrite(path, body.length === 0 ? "" : `${body}\n`);
 }
 
-export function readVectors(path: string): Map<string, Float32Array> {
+export function readVectors(
+  path: string,
+  options: ReadVectorsOptions = {},
+): Map<string, Float32Array> {
   let raw: string;
   try {
+    if (options.maxBytes !== undefined && statSync(path).size > options.maxBytes) {
+      throw new RangeError("Vector sidecar exceeds the configured read limit.");
+    }
     raw = readFileSync(path, "utf8");
   } catch {
     return new Map();
   }
   const out = new Map<string, Float32Array>();
+  let records = 0;
   for (const line of raw.split("\n")) {
     if (line.trim().length === 0) continue;
-    const rec = vectorRecordSchema.parse(JSON.parse(line));
+    records += 1;
+    if (options.maxRecords !== undefined && records > options.maxRecords) {
+      throw new RangeError("Vector sidecar exceeds the configured record limit.");
+    }
+    const rawRecord = JSON.parse(line);
+    if (
+      options.ids !== undefined &&
+      (typeof rawRecord !== "object" ||
+        rawRecord === null ||
+        !options.ids.has(rawRecord.id as string))
+    ) {
+      continue;
+    }
+    const rec = vectorRecordSchema.parse(rawRecord);
     out.set(rec.id, Float32Array.from(rec.vector));
   }
   return out;
