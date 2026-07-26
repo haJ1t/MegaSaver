@@ -123,7 +123,17 @@ function openLock(storage: CatalogStorage): { file: LockFile; created: boolean }
   }
 }
 
-function assertBinding(storage: CatalogStorage, file: LockFile, control: Lm2CatalogControl): void {
+// `verifyToken` reads the lock file's bytes, which is only legal while THIS
+// process holds the lock. POSIX flock is advisory, so a non-owning reader
+// succeeds; Windows LockFileEx — what fs-ext maps flock to — is MANDATORY over
+// the whole range, and the same read fails with ERROR_LOCK_VIOLATION. Every
+// caller holds the lock except the pre-acquisition check, which passes false.
+function assertBinding(
+  storage: CatalogStorage,
+  file: LockFile,
+  control: Lm2CatalogControl,
+  verifyToken = true,
+): void {
   assertNoV1CatalogState(storage);
   const descriptorStat = fstatSync(file.descriptor, { bigint: true });
   const namedStat = lstatSync(anchoredChildPath(storage.anchor, LM2_CATALOG_LOCK_NAME), {
@@ -136,7 +146,7 @@ function assertBinding(storage: CatalogStorage, file: LockFile, control: Lm2Cata
     !sameLockIdentity(namedStat, file.stat) ||
     control.catalogLock.device !== identity.device ||
     control.catalogLock.inode !== identity.inode ||
-    readToken(file.descriptor) !== control.catalogLock.token
+    (verifyToken && readToken(file.descriptor) !== control.catalogLock.token)
   ) {
     throw new Lm2Error("store_corrupt", "LM2 catalog lock binding changed.");
   }
@@ -211,7 +221,12 @@ export function acquireCatalogLock(storage: CatalogStorage): CatalogLockGuard {
     if (beforeControl === null && beforeCatalog !== null) {
       throw new Lm2Error("store_corrupt", "LM2 catalog control is missing.");
     }
-    if (beforeControl !== null) assertBinding(storage, file, beforeControl);
+    // Pre-acquisition, so it must not read the lock file: another process may
+    // hold the lock, and on Windows that read fails rather than returning stale
+    // bytes. Never authoritative anyway — the token can change between this
+    // check and the acquisition below. The post-acquisition assertBinding calls
+    // still verify it, and those are the ones that decide.
+    if (beforeControl !== null) assertBinding(storage, file, beforeControl, false);
     flockSync(file.descriptor, beforeCatalog === null ? "exnb" : "ex");
     acquired = true;
     assertNoV1CatalogState(storage);
