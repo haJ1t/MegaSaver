@@ -6937,3 +6937,29 @@ normalizer and serializer now live in a dedicated 76-line module, leaving the
 recovery module at 234 lines without changing its public parser. Source-size,
 ledger, index, read, full verification, and a fresh independent review pass.
 (source: GitHub Actions run `30213074787`, `pr312_release_review`, 2026-07-26)
+## [2026-07-26 21:06 +03] fix | make benchmark safe paths truly Windows-capable
+
+CI run `30213350385` passed Ubuntu but its Windows job exposed a second
+benchmark boundary: Node cannot open directories as POSIX file descriptors on
+Windows, so benchmark run admission failed before its regular-file lock. The
+safe-path layer now holds a Windows `Dir` handle for directories, preserves
+exact BigInt device/file identities, and revalidates pathname replacement at
+every guarded boundary; regular files retain descriptor, flock, and fsync
+behavior. The same repair makes the `.cmd` benchmark build invocation shell
+safe, makes catalog child framing CRLF-safe, and scopes LM1 durability
+observation to directory syncs rather than file syncs. A red simulated Windows
+handle/replacement test, 38 focused tests, package typecheck, lint, and full
+`pnpm verify` pass locally. A fresh independent review and replacement matrix
+remain required. (source: GitHub Actions job `89823208710`,
+`docs/superpowers/specs/2026-07-26-lm2-windows-identity-design.md`)
+
+## [2026-07-26 21:09 +03] review | close benchmark directory identity race
+
+Fresh review found that the new Windows directory branch initially captured
+its exact identity only after `opendirSync`, leaving an identity-swap window
+that a rounded numeric stat could miss. The implementation now compares
+lossless BigInt identities immediately before and after opening and retains
+the pre-open identity. A dynamic filesystem regression reproduces the swap
+while returning the old numeric stat, failed red before the repair, and passes
+after it. Independent review approved the closure; full `pnpm verify` remains
+green. (source: `pr312_release_review`, 2026-07-26)

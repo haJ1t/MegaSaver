@@ -112,3 +112,30 @@ fail closed.
 - [ ] Implement the narrow canonical legacy parser and verify the next ledger
   write serializes text identities.
 - [ ] Re-run lock, ledger, index-operation, catalog, and full package tests.
+
+### Task 6: Close remaining real-Windows benchmark and fixture boundaries
+
+**Files:**
+- Modify: `packages/long-memory/src/lm2-benchmark-safe-path.ts`
+- Modify: `packages/long-memory/src/lm2-benchmark-files.ts`
+- Modify: `packages/long-memory/test/lm2-benchmark-safe-path.test.ts`
+- Modify: `packages/long-memory/test/lm2-benchmark-builder.test.ts`
+- Modify: `packages/long-memory/test/lm1-paths.test.ts`
+- Modify: `packages/long-memory/test/lm2-catalog-process-fixtures.ts`
+
+**Interfaces:** Benchmark directories use an `opendirSync` handle on Windows,
+with pre-open/post-open lossless identity equality and later revalidation
+rather than an unavailable directory file descriptor. Regular benchmark files
+retain descriptors and the run lock retains its advisory lock. Fixture
+protocols parse the first platform-neutral line, and Windows command scripts
+run through its command shell.
+
+- [ ] Write red simulated-Windows directory-handle/replacement tests,
+  including a replacement during `opendirSync` that mimics a lossy-number
+  collision.
+- [ ] Use the `Dir` handle with exact BigInt identity rechecks, while retaining
+  descriptor checks, regular-file `fsync`, and flock for regular files.
+- [ ] Correct Windows-only fixture expectations without masking file
+  durability, CRLF framing, or symlink checks.
+- [ ] Run targeted suites, package typecheck, root verify, fresh review, and
+  replacement Ubuntu/Windows CI before merge.

@@ -21,7 +21,9 @@ vi.mock("node:fs", async (importOriginal) => {
     },
     fsyncSync(descriptor: number) {
       const path = openedPaths.get(descriptor);
-      if (path !== undefined) fsyncedPaths.push(path);
+      if (path !== undefined && actual.fstatSync(descriptor).isDirectory()) {
+        fsyncedPaths.push(path);
+      }
       actual.fsyncSync(descriptor);
     },
   };

@@ -72,6 +72,19 @@ Windows absolute path. The runtime verifier still calls the host `isAbsolute`
 and hashes the referenced executable, so permitting the schema spelling does
 not authorize a relative or unbound executable.
 
+### Windows directory handles
+
+Node cannot acquire a POSIX-style file descriptor for a directory on Windows.
+For benchmark directories only, the safe-path boundary therefore captures a
+lossless BigInt device/file identity both before and immediately after
+acquiring a `Dir` handle, rejecting any difference, then retains the pre-open
+identity. It rechecks
+the current pathname's type, symlink status, mode capability, and exact
+identity before and after each guarded operation; the run lock remains a
+regular descriptor-backed, advisory-locked file. Directory metadata `fsync`
+is omitted only where the platform does not support it. A pathname replacement
+is still rejected before further publication.
+
 ### Test and fixture portability
 
 Tests that observe directory `fsync` assert it only where directory sync is a
@@ -91,3 +104,8 @@ there is no broad suite exclusion.
 evidence tests pass on both operating systems.
 4. `pnpm verify` passes locally, a fresh independent reviewer approves, and
    replacement Ubuntu and Windows CI plus bundle smoke pass before merge.
+5. Windows-simulated directory-handle tests prove successful opening without
+   a directory descriptor, rejection of a later pathname replacement, and
+   rejection of an adversarial replacement between pre-open and post-open
+   BigInt identity captures; the real Windows CI exercises the same production
+   branch.

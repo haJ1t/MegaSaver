@@ -11,6 +11,7 @@ const packageRoot = join(import.meta.dirname, "..");
 beforeAll(() => {
   execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["build"], {
     cwd: packageRoot,
+    shell: process.platform === "win32",
     stdio: "pipe",
   });
 });

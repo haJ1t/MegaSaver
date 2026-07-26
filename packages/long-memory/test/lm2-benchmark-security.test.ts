@@ -124,19 +124,33 @@ describe("LM2 benchmark admission and filesystem boundary", () => {
     }
   });
 
-  it.each(["symlink", "unsafe-mode", "fifo"])("rejects a %s manifest", async (kind) => {
+  it.each(["symlink", "unsafe-mode"])("handles a %s manifest safely", async (kind) => {
     const fixture = benchmarkFixture();
     if (kind === "symlink") {
       const original = `${fixture.manifestPath}.original`;
       renameSync(fixture.manifestPath, original);
       symlinkSync(original, fixture.manifestPath);
-    } else if (kind === "unsafe-mode") {
-      chmodSync(fixture.manifestPath, 0o644);
     } else {
-      renameSync(fixture.manifestPath, `${fixture.manifestPath}.original`);
-      execFileSync("mkfifo", [fixture.manifestPath]);
+      chmodSync(fixture.manifestPath, 0o644);
     }
 
+    const response = await send({
+      id: "open",
+      op: "open",
+      config: fixture.config,
+      instanceToken: fixture.instanceToken,
+    });
+    if (kind === "unsafe-mode" && process.platform === "win32") {
+      expect(response.ok).toBe(true);
+      return;
+    }
+    expect(response).toMatchObject({ ok: false });
+  });
+
+  it.skipIf(process.platform === "win32")("rejects a fifo manifest", async () => {
+    const fixture = benchmarkFixture();
+    renameSync(fixture.manifestPath, `${fixture.manifestPath}.original`);
+    execFileSync("mkfifo", [fixture.manifestPath]);
     await expect(
       send({
         id: "open",

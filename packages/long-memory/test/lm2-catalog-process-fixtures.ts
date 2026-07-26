@@ -153,13 +153,25 @@ export function startSignaledAppender(
           rejectFinish(new Error(stderr));
           return;
         }
-        const result = stdout.slice(`${signal}\n`.length).trim();
+        const separator = stdout.indexOf("\n");
+        if (separator === -1) {
+          rejectFinish(new Error(`Catalog appender omitted result: ${stderr}`));
+          return;
+        }
+        const result = stdout.slice(separator + 1).trim();
         finish((JSON.parse(result) as { result: boolean }).result);
       });
     });
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
-      if (signaled || !stdout.startsWith(`${signal}\n`)) return;
+      const separator = stdout.indexOf("\n");
+      if (
+        signaled ||
+        separator === -1 ||
+        stdout.slice(0, separator).replace(/\r$/u, "") !== signal
+      ) {
+        return;
+      }
       signaled = true;
       resolve(() => completed);
     });

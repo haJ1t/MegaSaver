@@ -22,6 +22,7 @@ export {
   syncDirectoryAnchor,
   syncDirectoryDescriptor,
 } from "./lm2-fs-platform.js";
+export type { LosslessFileIdentity } from "./lm2-fs-platform.js";
 
 type AnchoredIdentity = { path: string; descriptor: number; stat: Stats };
 

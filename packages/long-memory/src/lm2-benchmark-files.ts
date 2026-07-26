@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { closeSync, fsyncSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { fsyncSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { flockSync } from "fs-ext";
 import { z } from "zod";
@@ -7,7 +7,9 @@ import { canonicalJson, canonicalSha256 } from "./lm2-benchmark-canonical.js";
 import { type BenchmarkManifest, parseBenchmarkManifest } from "./lm2-benchmark-manifest.js";
 import { type BenchmarkConfig, BenchmarkTransportError } from "./lm2-benchmark-protocol.js";
 import {
-  type SafeBenchmarkPath,
+  type SafeBenchmarkDirectoryPath,
+  type SafeBenchmarkFilePath,
+  closeSafeBenchmarkPath,
   openSafeBenchmarkPath,
   verifySafeBenchmarkPath,
 } from "./lm2-benchmark-safe-path.js";
@@ -36,8 +38,8 @@ const controlSchema = z
 export type BenchmarkRunControl = z.infer<typeof controlSchema>;
 
 export type BenchmarkRunHandle = {
-  root: SafeBenchmarkPath;
-  lock: SafeBenchmarkPath;
+  root: SafeBenchmarkDirectoryPath;
+  lock: SafeBenchmarkFilePath;
 };
 
 function readCanonical(path: string): unknown {
@@ -47,7 +49,7 @@ function readCanonical(path: string): unknown {
     raw = readFileSync(file.descriptor, "utf8");
     verifySafeBenchmarkPath(file, "read");
   } finally {
-    closeSync(file.descriptor);
+    closeSafeBenchmarkPath(file);
   }
   let value: unknown;
   try {
@@ -87,7 +89,7 @@ function writeExclusive(path: string, value: unknown): void {
     fsyncSync(file.descriptor);
     verifySafeBenchmarkPath(file, "read");
   } finally {
-    closeSync(file.descriptor);
+    closeSafeBenchmarkPath(file);
   }
 }
 
@@ -104,12 +106,11 @@ export function createBenchmarkRun(input: {
     writeFileSync(join(root, "run.lock"), "", { flag: "wx", mode: 0o600 });
     writeFileSync(join(root, "telemetry", "queries.jsonl"), "", { flag: "wx", mode: 0o600 });
   } catch {
-    closeSync(cacheParent.descriptor);
+    closeSafeBenchmarkPath(cacheParent);
     throw new BenchmarkTransportError("state_rejected");
   }
   const safeRoot = openSafeBenchmarkPath(root, "directory");
   const lock = openSafeBenchmarkPath(join(root, "run.lock"), "read");
-  const stats = safeRoot.stats;
   const sentinelToken = randomBytes(16).toString("hex");
   const chain: BenchmarkRunControl["chain"] = [];
   const control: BenchmarkRunControl = {
@@ -118,20 +119,20 @@ export function createBenchmarkRun(input: {
     dataRevision: input.config.dataRevision,
     instanceToken: input.instanceToken,
     sentinelToken,
-    device: String(stats.dev),
-    inode: String(stats.ino),
-    lockDevice: String(lock.stats.dev),
-    lockInode: String(lock.stats.ino),
+    device: safeRoot.identity.device,
+    inode: safeRoot.identity.inode,
+    lockDevice: lock.identity.device,
+    lockInode: lock.identity.inode,
     chain,
     chainDigest: canonicalSha256(chain),
   };
   writeExclusive(join(root, "sentinel.json"), control);
   writeExclusive(join(root, "control.json"), control);
-  syncDirectoryDescriptor(safeRoot.descriptor);
-  syncDirectoryDescriptor(cacheParent.descriptor);
-  closeSync(lock.descriptor);
-  closeSync(safeRoot.descriptor);
-  closeSync(cacheParent.descriptor);
+  if (safeRoot.descriptor !== null) syncDirectoryDescriptor(safeRoot.descriptor);
+  if (cacheParent.descriptor !== null) syncDirectoryDescriptor(cacheParent.descriptor);
+  closeSafeBenchmarkPath(lock);
+  closeSafeBenchmarkPath(safeRoot);
+  closeSafeBenchmarkPath(cacheParent);
   return control;
 }
 
@@ -146,10 +147,10 @@ function validateRun(input: {
   const root = input.handle.root.path;
   for (const directory of [join(root, "cache"), join(root, "telemetry")]) {
     const safe = openSafeBenchmarkPath(directory, "directory");
-    closeSync(safe.descriptor);
+    closeSafeBenchmarkPath(safe);
   }
   const telemetry = openSafeBenchmarkPath(join(root, "telemetry", "queries.jsonl"), "read");
-  closeSync(telemetry.descriptor);
+  closeSafeBenchmarkPath(telemetry);
   const sentinel = controlSchema.parse(readCanonical(join(root, "sentinel.json")));
   const control = controlSchema.parse(readCanonical(join(root, "control.json")));
   const identityMatches = (value: BenchmarkRunControl) =>
@@ -157,10 +158,10 @@ function validateRun(input: {
     value.dataRevision === input.config.dataRevision &&
     value.instanceToken === input.instanceToken &&
     value.sentinelToken === input.sentinelToken &&
-    value.device === String(input.handle.root.stats.dev) &&
-    value.inode === String(input.handle.root.stats.ino) &&
-    value.lockDevice === String(input.handle.lock.stats.dev) &&
-    value.lockInode === String(input.handle.lock.stats.ino) &&
+    value.device === input.handle.root.identity.device &&
+    value.inode === input.handle.root.identity.inode &&
+    value.lockDevice === input.handle.lock.identity.device &&
+    value.lockInode === input.handle.lock.identity.inode &&
     value.chainDigest === canonicalSha256(value.chain);
   if (
     !identityMatches(sentinel) ||
@@ -181,11 +182,11 @@ export async function withBenchmarkRunLock<T>(input: {
 }): Promise<T> {
   const root = benchmarkRunRoot(input.config, input.instanceToken);
   const safeRoot = openSafeBenchmarkPath(root, "directory");
-  let lock: SafeBenchmarkPath;
+  let lock: SafeBenchmarkFilePath;
   try {
     lock = openSafeBenchmarkPath(join(root, "run.lock"), "update");
   } catch (error) {
-    closeSync(safeRoot.descriptor);
+    closeSafeBenchmarkPath(safeRoot);
     throw error;
   }
   const handle = { root: safeRoot, lock };
@@ -203,8 +204,8 @@ export async function withBenchmarkRunLock<T>(input: {
     try {
       flockSync(lock.descriptor, "un");
     } finally {
-      closeSync(lock.descriptor);
-      closeSync(safeRoot.descriptor);
+      closeSafeBenchmarkPath(lock);
+      closeSafeBenchmarkPath(safeRoot);
     }
   }
 }
@@ -224,8 +225,8 @@ export function replaceBenchmarkControl(
   assertBenchmarkRunIdentity(handle);
   renameSync(temporary, join(handle.root.path, "control.json"));
   const replacement = openSafeBenchmarkPath(join(handle.root.path, "control.json"), "read");
-  closeSync(replacement.descriptor);
-  syncDirectoryDescriptor(handle.root.descriptor);
+  closeSafeBenchmarkPath(replacement);
+  if (handle.root.descriptor !== null) syncDirectoryDescriptor(handle.root.descriptor);
   assertBenchmarkRunIdentity(handle);
 }
 
@@ -238,7 +239,7 @@ export function appendBenchmarkTelemetry(handle: BenchmarkRunHandle, value: unkn
     fsyncSync(file.descriptor);
     verifySafeBenchmarkPath(file, "append");
   } finally {
-    closeSync(file.descriptor);
+    closeSafeBenchmarkPath(file);
   }
   assertBenchmarkRunIdentity(handle);
 }
