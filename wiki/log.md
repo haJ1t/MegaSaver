@@ -7126,3 +7126,12 @@ matrix is therefore replaced from the same verified source head; a repeated
 failure must be diagnosed from the new job's first emitted failure rather than
 treated as a retry-success signal.
 (source: GitHub Actions run `30249330274`, workflow `CI`, 2026-07-27)
+
+## [2026-07-27 00:32 +03] release | merge LM2 durable product recall
+
+PR #315 is merged into `main` at `b8554f7a`. Its final CI run `30220323813`
+passed build, `pnpm verify`, and bundle smoke on both Ubuntu and Windows. The
+merged product exposes LM2-backed recall through the existing Core memory
+entries and the CLI, MCP, and daemon adapters; it does not establish an
+official LongMemEval-V2 score. (source: GitHub PR #315; GitHub Actions run
+`30220323813`)
