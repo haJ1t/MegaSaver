@@ -6489,3 +6489,15 @@ passed with the same long-memory count. Fresh PR review and a new CI matrix are
 still required before merge. (source:
 `docs/superpowers/specs/2026-07-26-lm2-ci-determinism-design.md`,
 GitHub Actions run `30208733506`)
+
+## [2026-07-26 19:05 +03] fix | remove LM1 child artifact dependency
+
+Independent review found the first CI repair had removed the in-test build but
+left two LM1 child-process tests importing the untracked long-memory
+`dist/index.js`. Those children now run a source fixture with the repository
+tsx runtime and import `lm1-runtime` directly, so no test mutates `dist/` and
+the child behavior no longer depends on a previously emitted long-memory
+artifact. With `packages/long-memory/dist` temporarily absent, the LM1 store
+suite is 28/28; the complete long-memory suite is 45/45 files and 413/413
+tests. (source: `packages/long-memory/test/fixtures/lm1-publish-child.ts`,
+`pr312_release_review`, 2026-07-26)
