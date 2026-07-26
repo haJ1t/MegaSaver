@@ -121,6 +121,41 @@ const NEW_DETECTORS = {
     // prefix present, phase slice absent: forces the bounded window to scan and fail
     seed: (n) => "LS0tLS1CRUdJTiB".repeat(Math.ceil(n / 15)),
   },
+  stripe_key: {
+    re: /(?:(?:sk|rk)_(?:live|test)|whsec)_[A-Za-z0-9]{16,}/g,
+    seed: (n) => `sk_live_${"A".repeat(24)}`.repeat(Math.ceil(n / 32)),
+  },
+  slack_token: {
+    re: /(?:xox[baprse]|xapp)-[A-Za-z0-9-]{10,}/g,
+    seed: (n) => "xoxb-".repeat(Math.ceil(n / 5)),
+  },
+  gitlab_token: {
+    re: /gl(?:pat|rt|ptt|dt|cbt|oas)-[A-Za-z0-9_-]{20,}/g,
+    seed: (n) => "glpat-".repeat(Math.ceil(n / 6)),
+  },
+  sendgrid_key: {
+    re: /SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/g,
+    // "SG." alone dies at 2 chars — below the 16 floor — so it never scans.
+    // This gives seg1 a full run and seg2 a near-miss, which is the shape whose
+    // backtracking we care about.
+    seed: (n) => `SG.${"A".repeat(20)}.${"B".repeat(8)} `.repeat(Math.ceil(n / 32)),
+  },
+  digitalocean_token: {
+    re: /do[opr]_v1_[a-f0-9]{64}/g,
+    seed: (n) => "dop_v1_".repeat(Math.ceil(n / 7)),
+  },
+  twilio_api_key_sid: {
+    re: /\bSK[0-9a-f]{32}\b/g,
+    // "SK" alone has no hex to scan. 31 hex is one short of the required 32.
+    seed: (n) => `SK${"0123456789abcdef".repeat(2).slice(0, 31)} `.repeat(Math.ceil(n / 34)),
+  },
+  connection_string_secret: {
+    re: /(?=[^;\s])(?<=(?:^|;)(?:password|pwd|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)=)[^;\s]{8,}/gi,
+    // ";password=" is rejected by the `(?=[^;\\s])` guard at EVERY position,
+    // because the char after each `=` is `;` — the row was a guard test that
+    // could not fail, and never walked the lookbehind the guard protects.
+    seed: (n) => "password=1234567;".repeat(Math.ceil(n / 17)),
+  },
   jwk_private_key: {
     re: /\{(?=[^{}]{0,4096}"kty"\s*:\s*"(?:RSA|EC|OKP|oct)")(?=[^{}]{0,4096}"(?:d|k)"\s*:\s*"[A-Za-z0-9_-]{20,}")[^{}]{1,4096}\}/g,
     // kty present, private field absent: forces both lookaheads to scan and fail
@@ -160,6 +195,12 @@ const fmt = (ms) => (ms < 10 ? ms.toFixed(2) : ms.toFixed(0)).padStart(9);
 // matches makes its whole row meaningless. Anchor-scan seeds (deliberately
 // match-free, to force a bounded scan that fails) are listed explicitly.
 const MATCH_FREE_BY_DESIGN = new Set([
+  "slack_token",
+  "gitlab_token",
+  "sendgrid_key",
+  "digitalocean_token",
+  "twilio_api_key_sid",
+  "connection_string_secret",
   "ssh2_private_key_block",
   "putty_private_key",
   "base64_pem_block",

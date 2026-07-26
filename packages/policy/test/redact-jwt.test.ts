@@ -135,8 +135,10 @@ const jwtOf = (headerPad: number, payloadPad: number, sigLen: number): string =>
 // Expected values were captured by running the PRE-FIX quadratic pattern over
 // these same inputs outside the repo (fix spec §6.1) and frozen as literals, so
 // the old pattern never enters CI. Assertions are pattern-level, not through
-// redact(): bearer_token sits at index 5 and jwt at index 6, so in the real
-// pipeline bearer_token consumes the Authorization case before jwt sees it.
+// redact(): the pipeline's other detectors would make these rows test ordering
+// rather than the pattern. `bearer_header` was bearer_token's row in the
+// pipeline until jwt moved ahead of the prefix detectors; the whole-pipeline
+// attribution is asserted at the end of this file, not here.
 const EQUIVALENCE: ReadonlyArray<readonly [string, string, string]> = [
   ["hs256_minimal", SAMPLE_JWT, "eyJ[REDACTED]"],
   ["rs256_typical", jwtOf(40, 120, 342), "eyJ[REDACTED]"],
@@ -191,4 +193,51 @@ describe("jwt detector — strict subset of the pre-fix pattern, no over-redacti
       expect(apply(input)).toBe(input);
     });
   }
+});
+
+// The Monte Carlo in redact-jwt-order.test.ts measures the RATE at which a
+// prefix detector fires inside a random token; these two pin the MECHANISM
+// deterministically, through the real pipeline, in the millisecond a fixture
+// costs. Both shapes are plain base64url — `sk-` plus 20 alphanumerics is a
+// legal payload substring, and `hvs.` needs only a payload ending in `hvs`,
+// because the `.` it wants is the segment separator itself. Under the old
+// order each left the rest of the token in cleartext under a prefix-detector
+// finding.
+describe("jwt detector — ordered ahead of the prefix detectors (whole pipeline)", () => {
+  const collisions: ReadonlyArray<readonly [string, string]> = [
+    [
+      "an openai_key shape in the payload",
+      `eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOsk-${"A".repeat(24)}.SflKxwRJSMeKKF2QT4`,
+    ],
+    [
+      "a vault_token shape across the payload/signature separator",
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0hvs.SflKxwRJSMeKKF2QT4abcdef",
+    ],
+  ];
+
+  for (const [label, input] of collisions) {
+    it(`redacts a JWT carrying ${label}, and names it jwt`, () => {
+      const { redacted, findings } = redactWithFindings(input);
+      expect(redacted).toBe("eyJ[REDACTED]");
+      expect(findings.map((finding) => finding.name)).toEqual(["jwt"]);
+    });
+  }
+
+  // The one behaviour change the reorder makes to an input that was already
+  // fully redacted: findings[].name is public surface (pro-analytics groups on
+  // it), so the flip is pinned rather than left to be discovered downstream.
+  it("claims `Bearer <jwt>` as jwt, where bearer_token used to claim it", () => {
+    const { redacted, findings } = redactWithFindings(`Authorization: Bearer ${SAMPLE_JWT}`);
+    expect(redacted).toBe("Authorization: Bearer eyJ[REDACTED]");
+    expect(findings.map((finding) => finding.name)).toEqual(["jwt"]);
+  });
+
+  // bearer_token still owns every opaque bearer value, and is still BEHIND the
+  // prefix detectors so `Bearer sk-…` keeps its specific name.
+  it.each([
+    ["an opaque token", `Authorization: Bearer ${"c".repeat(24)}`, ["bearer_token"]],
+    ["an openai key", `Authorization: Bearer sk-${"A".repeat(24)}`, ["openai_key"]],
+  ])("leaves %s to its own detector", (_label, input, expected) => {
+    expect(redactWithFindings(input).findings.map((finding) => finding.name)).toEqual(expected);
+  });
 });

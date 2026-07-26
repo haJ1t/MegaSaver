@@ -22,6 +22,21 @@ const DENYLIST_GLOBS: readonly string[] = [
   "**/*.key",
   "**/credentials.json",
   "**/service-account*.json",
+  // Credential files whose CONTENTS already have output-side detectors
+  // (netrc_password, npm_token, pypi_token, url_basic_auth). Without the
+  // path denial the redactor was the only line of defence: an agent could
+  // read the file directly and the detectors only caught what leaked into
+  // tool output afterwards. Detectors are the second line, not the first.
+  // `.npmrc` is deliberately ABSENT. The credential case is the `_authToken`
+  // line in the USER-level `~/.npmrc`; a project `.npmrc` is pnpm settings —
+  // this repo's own is four lines of `auto-install-peers` and friends. Denying
+  // it blinds the agent to ordinary config with no appeal, because there is no
+  // field to un-deny a baseline path (evaluate-path-read I1). The `npm_token`
+  // detector covers the credential if it ever reaches tool output.
+  "**/.netrc",
+  "**/_netrc",
+  "**/.pypirc",
+  "**/.git-credentials",
 ];
 
 // Exported for parse-project-permissions.ts so project deny.read/write

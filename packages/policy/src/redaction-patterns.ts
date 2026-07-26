@@ -2,9 +2,11 @@ import { z } from "zod";
 import { ibanValid, luhnValid, tcknValid } from "./pii-validators.js";
 
 // epic §9d — LOCKED baseline. Validated at module load (boundary, §8).
-// Application order matters: anthropic_key MUST run before openai_key
-// because `sk-ant-` is a prefix of the `sk-` shape; db_url before
-// generic schemes; private_key_block spans newlines. All compiled with
+// Application order matters: jwk_private_key and jwt MUST run before every
+// prefix detector (their base64url bodies contain `sk-`/`ghp_`/`hvs.`, and a
+// prefix hit inside one disables the whole detector); anthropic_key MUST run
+// before openai_key because `sk-ant-` is a prefix of the `sk-` shape; db_url
+// before generic schemes; private_key_block spans newlines. All compiled with
 // the `g` flag so `count` reflects every occurrence.
 const redactionPatternSchema = z.object({
   name: z.string(),
@@ -94,6 +96,53 @@ const baseline: RedactionPattern[] = [
     replacement: "[REDACTED ANSIBLE VAULT]",
   },
   {
+    // MUST RUN AHEAD OF EVERY PREFIX DETECTOR, for the reason jwk_private_key
+    // is first. JWT segments are base64url, so `sk-`, `ghp_`, `npm_`, `hvs.`
+    // and `pypi-` occur inside real token bytes; when a prefix detector fires
+    // there first its replacement inserts `[`, the segment run can no longer
+    // reach its `.`, and the token survives with only the prefix span redacted.
+    // Measured over 250,000 crypto-random JWTs: 367 losses in the old
+    // order — 146.8 per 100,000, attribution `openai_key` 282, `jwt` 165, `sendgrid_key` 63, `github_token` 13, `npm_token` 7, `slack_token` 1, `gitlab_token` 1
+    // — against 0 in this one. `vault_token` and `sendgrid_key` get there by
+    // spanning a segment separator (`…hvs` + `.` + signature; `SG` + `.` +
+    // payload + `.` + signature). This figure is a function of the CURRENT table,
+    // so it moves whenever a prefix detector is added — an earlier revision of
+    // this comment omitted `sendgrid_key` entirely and understated the rate as
+    // 120 per 100,000. The committed test prints its own attribution line on
+    // every run; trust that over this comment. Most of the losses
+    // ALSO fired `jwt` on a surviving fragment, so a finding named `jwt` was
+    // not proof the token had been redacted whole; the rest reported only a
+    // benign-looking prefix hit over a token whose header, most of the payload
+    // and whole signature were still in cleartext.
+    // Consequence, deliberate: bearer_token ran first and claimed `Bearer
+    // <jwt>` as `bearer_token`; that input now reports `jwt` and redacts to
+    // `Bearer eyJ[REDACTED]`. bearer_token was NOT moved along with jwt —
+    // that would relabel `Bearer sk-…`/`Bearer ghp_…` as well, a strictly
+    // wider findings change for no coverage gain.
+    // Branch 1 is a performance guard that also narrows what matches, so it is
+    // not swappable for any equally fast guard. Without it, every `eyJ` inside
+    // a dotless base64url run is a start position that greedily scans to
+    // end-of-input before failing `\.` — O(n) starts x O(n) length, 8.4 s at
+    // 313 KiB. Rejecting glued starts collapses each start to O(1), the whole
+    // scan to O(n).
+    // Branch 2 costs almost nothing (0.32 ms per 313 KiB) precisely because `%`
+    // sits OUTSIDE the run class: it terminates the dotless run, so an admitted
+    // start scans only its own token. That is what makes percent-escaped
+    // carriers — URL query strings and fragments — cheap to recover while the
+    // shapes below are not.
+    // Accepted cost (spec 2026-07-20 §5, corrected 20b): a JWT preceded directly
+    // by a RAW [A-Za-z0-9_-] no longer redacts, so `session-<jwt>` and
+    // `id_token_<jwt>` stay in cleartext. Narrowing the class to [A-Za-z0-9]
+    // recovers those two and reintroduces the full quadratic — see
+    // test/redact-jwt.test.ts, which pins the percent recoveries too.
+    // `Bearer<jwt>`, `ghs_<body>_<jwt>` and raw base64-run glue are lost the
+    // same way, and no other detector covers those bytes.
+    name: "jwt",
+    pattern:
+      /(?:(?<![A-Za-z0-9_-])|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+    replacement: "eyJ[REDACTED]",
+  },
+  {
     // `github_pat_` is the FINE-GRAINED form and GitHub's recommended default;
     // `gh[pousr]_` cannot match it, because the character after `gh` is `i`.
     name: "github_token",
@@ -125,6 +174,56 @@ const baseline: RedactionPattern[] = [
     name: "vault_token",
     pattern: /hv[sb]\.[A-Za-z0-9_-]{20,}/g,
     replacement: "hv[REDACTED]",
+  },
+  {
+    // Stripe SECRET and RESTRICTED keys. `pk_` is the PUBLISHABLE key and is
+    // deliberately absent — it is not a secret and redacting it would be
+    // evidence loss. `openai_key` cannot reach these: its prefix is `sk-`, and
+    // Stripe uses `sk_`. Verified in both directions.
+    name: "stripe_key",
+    pattern: /(?:(?:sk|rk)_(?:live|test)|whsec)_[A-Za-z0-9]{16,}/g,
+    replacement: "[REDACTED]",
+  },
+  {
+    name: "slack_token",
+    pattern: /(?:xox[baprse]|xapp)-[A-Za-z0-9-]{10,}/g,
+    replacement: "[REDACTED]",
+  },
+  {
+    name: "gitlab_token",
+    pattern: /gl(?:pat|rt|ptt|dt|cbt|oas)-[A-Za-z0-9_-]{20,}/g,
+    replacement: "[REDACTED]",
+  },
+  {
+    name: "sendgrid_key",
+    pattern: /SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/g,
+    replacement: "SG.[REDACTED]",
+  },
+  {
+    name: "digitalocean_token",
+    pattern: /do[opr]_v1_[a-f0-9]{64}/g,
+    replacement: "[REDACTED]",
+  },
+  {
+    // Twilio API Key SID: `SK` + exactly 32 lowercase hex, word-bounded. This is
+    // the loosest shape in the table — there is no further structure to gate on,
+    // so a bare 32-hex run prefixed by `SK` would also match. Measured over
+    // 22,083 files / 189 MB of this repo plus node_modules: ZERO false
+    // positives — and zero even at a relaxed {28,40} bound, while bare 32-hex
+    // words occur 2,738 times, so the `SK` prefix plus `\b` is doing the work.
+    // NAMED `_sid` deliberately: this matches the API Key SID, which is the HTTP
+    // Basic USERNAME — an identifier, not the secret. It is kept for the same
+    // reason `aws_access_key` is kept (an identifier that names the credential is
+    // worth scrubbing), NOT because it is itself a credential. An earlier comment
+    // claimed "the alternative is a live Twilio credential in cleartext"; that
+    // was wrong about this shape.
+    // Still uncovered, and these ARE the secrets: the Auth Token (32 hex, no
+    // prefix) and the API Key Secret (32 alphanumeric, no prefix). Neither has a
+    // distinguishing prefix, so neither is reachable by a regex at acceptable
+    // false-positive cost. Disclosed rather than silently missing.
+    name: "twilio_api_key_sid",
+    pattern: /\bSK[0-9a-f]{32}\b/g,
+    replacement: "[REDACTED]",
   },
   {
     // BIP32 extended PRIVATE keys only. The public `xpub`/`ypub`/`zpub` forms
@@ -165,33 +264,13 @@ const baseline: RedactionPattern[] = [
     replacement: "[REDACTED]",
   },
   {
+    // Runs AFTER jwt (see there): `Bearer <jwt>` is claimed by jwt now, so this
+    // detector no longer sees that input. It still covers every opaque bearer
+    // value, and it is deliberately left behind the prefix detectors so
+    // `Bearer sk-…` keeps reporting openai_key rather than bearer_token.
     name: "bearer_token",
     pattern: /bearer\s+[A-Za-z0-9\-._~+/=]{20,}/gi,
     replacement: "Bearer [REDACTED]",
-  },
-  {
-    // Branch 1 is a performance guard that also narrows what matches, so it is
-    // not swappable for any equally fast guard. Without it, every `eyJ` inside
-    // a dotless base64url run is a start position that greedily scans to
-    // end-of-input before failing `\.` — O(n) starts x O(n) length, 8.4 s at
-    // 313 KiB. Rejecting glued starts collapses each start to O(1), the whole
-    // scan to O(n).
-    // Branch 2 costs almost nothing (0.32 ms per 313 KiB) precisely because `%`
-    // sits OUTSIDE the run class: it terminates the dotless run, so an admitted
-    // start scans only its own token. That is what makes percent-escaped
-    // carriers — URL query strings and fragments — cheap to recover while the
-    // shapes below are not.
-    // Accepted cost (spec 2026-07-20 §5, corrected 20b): a JWT preceded directly
-    // by a RAW [A-Za-z0-9_-] no longer redacts, so `session-<jwt>` and
-    // `id_token_<jwt>` stay in cleartext. Narrowing the class to [A-Za-z0-9]
-    // recovers those two and reintroduces the full quadratic — see
-    // test/redact-jwt.test.ts, which pins the percent recoveries too.
-    // `Bearer<jwt>`, `ghs_<body>_<jwt>` and raw base64-run glue are lost the
-    // same way, and no other detector covers those bytes.
-    name: "jwt",
-    pattern:
-      /(?:(?<![A-Za-z0-9_-])|(?<=%[0-9A-Fa-f][0-9A-Fa-f]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
-    replacement: "eyJ[REDACTED]",
   },
   {
     // The body bound caps the forward scan each `-----BEGIN` start makes looking
@@ -477,6 +556,44 @@ const baseline: RedactionPattern[] = [
     name: "json_secret_field",
     pattern:
       /(?=[^"\\\s])(?<="(?:refresh_?token|client_?secret|identity_?token|private_key_?id|secret_?access_?key|session_?token|auth)"\s*:\s*")(?:(?:Basic|Bearer|Digest|Token) )?[^"\\\s]{16,}/gi,
+    replacement: "[REDACTED]",
+  },
+  {
+    // Semicolon-delimited connection strings: ADO.NET, ODBC, `web.config`,
+    // `appsettings.json`, the Azure portal. None of the existing detectors
+    // reach them — `url_query_secret` needs `[?&#]`, `cli_secret_flag_eq` needs
+    // `--`, and `env_value` needs line-start plus quotes. `AccountKey` is the
+    // Azure Storage account secret, which is full control of the account.
+    // The field name is the gate, and the value stops at the next `;` or
+    // whitespace, so a following `Encrypt=True` survives. JDBC's query-param
+    // and userinfo forms are already covered by url_query_secret and
+    // url_basic_auth; only the semicolon form was missing.
+    // The separator gate is `(?:^|;)`, NOT `[;\s]`, and there is no `m` flag.
+    // Both were wrong together: with whitespace in the gate, `pwd` matched the
+    // universal `PWD` environment variable — every `env`, `printenv`, `set -x`
+    // trace and CI log carries one, so `PWD=/Users/x/proj` became
+    // `PWD=[REDACTED]`. That is evidence destruction in exactly the stream this
+    // redactor filters, against the stated non-goal of never stripping what the
+    // model needs. And the `m` flag was DEAD: every position its `^` reached,
+    // `[;\s]` had already reached, because `[;\s]` consumes the newline itself.
+    // A mutant dropping `/m` survived all 262 behavioural tests and died only on
+    // the flags pin — a comment asserting a property no test checked.
+    // `^` without `m` still catches `Password=…` as the first field of a string,
+    // which is the only case the whitespace alternative was there for.
+    // `pwd` is DROPPED from the field list, not merely re-gated. Narrowing the
+    // separator to `(?:^|;)` was not sufficient: `PWD=` at position 0 — the first
+    // line of a `printenv` dump — still matched `^`. `Pwd=` is only an ADO.NET
+    // alias for `Password=`, so the canonical spelling covers the real carrier,
+    // and the collision with the universal shell variable is total.
+    // Disclosed loss: a connection string that spells the field `Pwd=` and
+    // nothing else on the line.
+    // `SharedAccessSignature` is included because Azure SAS connection strings
+    // are the other half of the same carrier and NOTHING else reached them:
+    // `sharedaccesskey != sharedaccesssignature`, and `url_query_secret`'s list
+    // carries `signature` but not the `sig=` that a SAS actually uses.
+    name: "connection_string_secret",
+    pattern:
+      /(?=[^;\s])(?<=(?:^|;)(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)=)[^;\s]{8,}/gi,
     replacement: "[REDACTED]",
   },
   {
