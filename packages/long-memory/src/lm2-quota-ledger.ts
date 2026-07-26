@@ -23,6 +23,7 @@ const safeIntegerSchema = (minimum: number, maximum = Number.MAX_SAFE_INTEGER) =
     .refine((value) => !Object.is(value, -0), "must be a canonical nonnegative integer");
 const nonnegativeSafeIntegerSchema = safeIntegerSchema(0);
 const positiveSafeIntegerSchema = safeIntegerSchema(1);
+const identityTextSchema = z.string().regex(/^(?:0|[1-9][0-9]*)$/);
 const sidecarNameSchema = z
   .string()
   .min(1)
@@ -103,8 +104,8 @@ export type Lm2PendingAllocation = z.infer<typeof lm2PendingAllocationSchema>;
 
 const lockIdentitySchema = z
   .object({
-    device: nonnegativeSafeIntegerSchema,
-    inode: nonnegativeSafeIntegerSchema,
+    device: identityTextSchema,
+    inode: identityTextSchema,
   })
   .strict();
 

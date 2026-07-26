@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { parseLm2QuotaLedger } from "../src/lm2-ledger-recovery.js";
 import {
   LM2_PENDING_SIDECAR_RESERVATION_BYTES,
   lm2QuotaLedgerSchema,
@@ -44,7 +45,7 @@ function validLedger() {
     schemaVersion: 1 as const,
     workspaceKey,
     epoch,
-    lockIdentity: { device: 10, inode: 20 },
+    lockIdentity: { device: "10", inode: "20" },
     lockToken: "e".repeat(64),
     generation: 7,
     namespaces: [{ modelFingerprint, sidecarCount: 3, serializedBytes: 4_096 }],
@@ -53,7 +54,7 @@ function validLedger() {
     activeOperation: {
       operationId,
       expectedGeneration: 7,
-      lockIdentity: { device: 10, inode: 20 },
+      lockIdentity: { device: "10", inode: "20" },
       lockToken: "e".repeat(64),
     },
     pending: {
@@ -67,6 +68,40 @@ function validLedger() {
 }
 
 describe("LM2 quota ledger contract", () => {
+  it("normalizes only safe canonical numeric ledger identities", () => {
+    const ledger = validLedger();
+    const legacy = {
+      ...ledger,
+      lockIdentity: { device: 10, inode: 20 },
+      activeOperation: {
+        ...ledger.activeOperation,
+        lockIdentity: { device: 10, inode: 20 },
+      },
+    };
+    expect(
+      parseLm2QuotaLedger(Buffer.from(`${JSON.stringify(legacy)}\n`), workspaceKey),
+    ).toMatchObject({
+      lockIdentity: { device: "10", inode: "20" },
+    });
+    expect(
+      parseLm2QuotaLedger(
+        Buffer.from(
+          `${JSON.stringify({
+            ...legacy,
+            lockIdentity: { device: 9_007_199_254_740_992, inode: 20 },
+          })}\n`,
+        ),
+        workspaceKey,
+      ),
+    ).toBeNull();
+    expect(
+      parseLm2QuotaLedger(
+        Buffer.from(`${JSON.stringify({ workspaceKey: legacy.workspaceKey, ...legacy })}\n`),
+        workspaceKey,
+      ),
+    ).toBeNull();
+  });
+
   it("accepts one canonical pending allocation range", () => {
     expect(lm2QuotaLedgerSchema.parse(validLedger())).toEqual(validLedger());
   });
@@ -139,7 +174,7 @@ describe("LM2 quota ledger contract", () => {
         ...validLedger(),
         activeOperation: {
           ...validLedger().activeOperation,
-          lockIdentity: { device: 10, inode: 21 },
+          lockIdentity: { device: "10", inode: "21" },
         },
       }),
     ).toThrow();

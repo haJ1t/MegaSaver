@@ -15,6 +15,8 @@ import { Lm2Error } from "./lm2-errors.js";
 import { secureDirectoryOpenFlags, secureOpenFlags } from "./lm2-fs-platform.js";
 
 export {
+  hasRequiredMode,
+  losslessFileIdentity,
   secureDirectoryOpenFlags,
   secureOpenFlags,
   syncDirectoryAnchor,

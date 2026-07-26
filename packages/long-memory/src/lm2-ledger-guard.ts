@@ -33,14 +33,14 @@ export function createLm2LedgerGuard(input: {
   expected?: Lm2QuotaLedger;
 }): Lm2LedgerGuard {
   const ledger = parseLm2QuotaLedger(input.read.raw, input.workspaceKey);
-  const serialized = ledger === null ? "" : serializeLm2QuotaLedger(ledger);
+  const canonicalSerialized = ledger === null ? "" : serializeLm2QuotaLedger(ledger);
+  const serialized = input.read.raw.toString("utf8");
   const contentDigest = createHash("sha256").update(input.read.raw).digest("hex");
   if (
     ledger === null ||
-    serialized !== input.read.raw.toString("utf8") ||
     contentDigest !== input.read.contentDigest ||
     (input.expected !== undefined &&
-      (serialized !== serializeLm2QuotaLedger(input.expected) ||
+      (canonicalSerialized !== serializeLm2QuotaLedger(input.expected) ||
         !samePermanentFence(ledger, input.expected)))
   ) {
     throw new Lm2Error("index_lock_unavailable", "LM2 ledger guard changed.");

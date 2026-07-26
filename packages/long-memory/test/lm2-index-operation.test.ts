@@ -456,6 +456,47 @@ describe("LM2 index operation", () => {
     if (result.status === "ready") await result.finalize();
   });
 
+  it("migrates a canonical numeric legacy ledger under the index lock", async () => {
+    const root = createRoot();
+    const model = createModel();
+    const store = createLm2VectorStore({ storeRoot: root });
+    const initial = await store.beginIndexOperation({ workspaceKey, model, deadline: deadline() });
+    expect(initial.status).toBe("ready");
+    if (initial.status !== "ready") return;
+    await initial.finalize();
+
+    const path = vectorQuotaLedgerPath(root, workspaceKey);
+    const current = JSON.parse(readFileSync(path, "utf8"));
+    const device = Number(current.lockIdentity.device);
+    const inode = Number(current.lockIdentity.inode);
+    if (!Number.isSafeInteger(device) || !Number.isSafeInteger(inode)) return;
+    const legacy = {
+      ...current,
+      lockIdentity: { device, inode },
+    };
+    writeFileSync(path, `${JSON.stringify(legacy)}\n`);
+
+    const candidate = createCandidate();
+    const read = await store.read({
+      workspaceKey,
+      model,
+      candidates: [candidate],
+      maxDecodedBytes: 64,
+      signal: new AbortController().signal,
+      deadlineAtMs: 1,
+      now: () => 0,
+    });
+    expect(read.diagnostics).toEqual([{ candidateId: candidate.id, reason: "missing_vectors" }]);
+
+    const migrated = await store.beginIndexOperation({ workspaceKey, model, deadline: deadline() });
+    expect(migrated.status).toBe("ready");
+    expect(JSON.parse(readFileSync(path, "utf8")).lockIdentity).toEqual({
+      device: String(device),
+      inode: String(inode),
+    });
+    if (migrated.status === "ready") await migrated.finalize();
+  });
+
   it("returns busy while another process holds the fixed inode", async () => {
     const root = createRoot();
     const release = await holdIndexLock(indexLockPath(root));
@@ -1242,7 +1283,7 @@ describe("LM2 index operation", () => {
       schemaVersion: 1,
       workspaceKey,
       epoch,
-      lockIdentity: { device: lockStat.dev, inode: lockStat.ino },
+      lockIdentity: { device: String(lockStat.dev), inode: String(lockStat.ino) },
       lockToken: token,
       generation: 1,
       namespaces: [],
@@ -1251,7 +1292,7 @@ describe("LM2 index operation", () => {
       activeOperation: {
         operationId,
         expectedGeneration: 1,
-        lockIdentity: { device: lockStat.dev, inode: lockStat.ino },
+        lockIdentity: { device: String(lockStat.dev), inode: String(lockStat.ino) },
         lockToken: token,
       },
       pending: {
@@ -1316,7 +1357,7 @@ describe("LM2 index operation", () => {
       schemaVersion: 1,
       workspaceKey,
       epoch,
-      lockIdentity: { device: lockStat.dev, inode: lockStat.ino },
+      lockIdentity: { device: String(lockStat.dev), inode: String(lockStat.ino) },
       lockToken: token,
       generation: 1,
       namespaces: [
@@ -1331,7 +1372,7 @@ describe("LM2 index operation", () => {
       activeOperation: {
         operationId,
         expectedGeneration: 1,
-        lockIdentity: { device: lockStat.dev, inode: lockStat.ino },
+        lockIdentity: { device: String(lockStat.dev), inode: String(lockStat.ino) },
         lockToken: token,
       },
       pending: {

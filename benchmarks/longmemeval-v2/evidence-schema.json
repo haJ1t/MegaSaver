@@ -48,7 +48,7 @@
       "additionalProperties": false,
       "required": ["path", "sha256"],
       "properties": {
-        "path": { "type": "string", "pattern": "^/" },
+        "path": { "type": "string", "pattern": "^(?:/|[A-Za-z]:[\\\\/])" },
         "sha256": { "$ref": "#/$defs/sha256" }
       }
     },

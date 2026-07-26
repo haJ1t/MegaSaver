@@ -102,7 +102,7 @@ export function writeV2Control(root: string): void {
     paths.control,
     `${JSON.stringify({
       schemaVersion: 2,
-      catalogLock: { device: stat.dev, inode: stat.ino, token },
+      catalogLock: { device: String(stat.dev), inode: String(stat.ino), token },
       emptyCatalogDigest: createHash("sha256").update(empty).digest("hex"),
     })}\n`,
     { mode: 0o600 },

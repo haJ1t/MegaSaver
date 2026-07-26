@@ -1,6 +1,6 @@
 import { constants, type Stats, closeSync, fstatSync, lstatSync, openSync } from "node:fs";
 import { BenchmarkTransportError } from "./lm2-benchmark-protocol.js";
-import { secureDirectoryOpenFlags, secureOpenFlags } from "./lm2-secure-fs.js";
+import { hasRequiredMode, secureDirectoryOpenFlags, secureOpenFlags } from "./lm2-secure-fs.js";
 
 export type SafeBenchmarkPath = { path: string; descriptor: number; stats: Stats };
 export type SafeBenchmarkOpenMode = "directory" | "read" | "update" | "append";
@@ -26,7 +26,7 @@ export function verifySafeBenchmarkPath(
       !sameIdentity(descriptorStats, value.stats) ||
       !sameIdentity(pathStats, value.stats) ||
       pathStats.isSymbolicLink() ||
-      (descriptorStats.mode & 0o777) !== (directory ? 0o700 : 0o600) ||
+      !hasRequiredMode(descriptorStats.mode, directory ? 0o700 : 0o600) ||
       !ownerMatches
     ) {
       throw new BenchmarkTransportError("state_rejected");

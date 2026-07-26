@@ -6890,3 +6890,41 @@ remains unchanged. The new descriptor-level red contract went green with
 benchmark security and transport coverage (6 tests) plus package typecheck.
 (source: `pr312_release_review`,
 `packages/long-memory/src/lm2-benchmark-files.ts`)
+
+## [2026-07-26 20:23 +03] release-blocked | final Windows matrix exposes remaining LM2 portability gaps
+
+Replacement CI run `30211975610` is green on Ubuntu but fails in the Windows
+`@megasaver/long-memory` test task. The failures group behind three root
+causes: Windows does not implement POSIX owner/group permission bits used by
+the benchmark safe-path verifier; benchmark evidence/test tooling assumes
+Unix absolute paths and a `pnpm` executable without the Windows `.cmd`
+suffix; and catalog-lock control persists `dev`/`ino` as safe JavaScript
+numbers even though Windows file identifiers can exceed that precision. The
+last case is a security-boundary concern and must use a lossless identity
+representation, not a test waiver. PR #315 must not merge until a scoped
+Windows-identity design, red tests, independent review, and a fresh two-OS
+matrix succeed. (source: GitHub Actions run `30211975610`, Node/Libuv stat
+documentation, 2026-07-26)
+
+## [2026-07-26 20:36 +03] fix | preserve Windows lock identities losslessly
+
+The final PR #315 review found the catalog-only repair incomplete: the
+workspace index lock, operation fence, and quota ledger still serialized file
+identities as JavaScript numbers. Those paths now use `BigIntStats` and
+canonical decimal strings end-to-end, including descriptor/path rechecks.
+Existing canonical catalog controls and quota ledgers with safe numeric IDs
+are narrowly normalized; noncanonical or precision-losing legacy IDs fail
+closed. Focused security, ledger, catalog, index-operation, and full
+long-memory checks pass locally; fresh independent review and two-platform CI
+remain release gates. (source: `pr312_release_review`,
+`docs/superpowers/specs/2026-07-26-lm2-windows-identity-design.md`, 2026-07-26)
+
+## [2026-07-26 20:40 +03] review | approve lossless Windows identity transition
+
+Fresh independent review found and then verified the last persisted-state
+transition condition: a legacy numeric quota ledger is guarded by its original
+canonical bytes until the held index lock atomically rewrites the normalized
+string form. Snapshot reads likewise accept only the safe canonical legacy
+shape. The end-to-end migration case, focused suites, and the full `pnpm
+verify` gate pass; PR #315 is ready for a replacement two-platform CI run.
+(source: `pr312_release_review`, 2026-07-26)

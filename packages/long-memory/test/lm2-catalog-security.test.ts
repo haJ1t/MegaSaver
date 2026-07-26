@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { lm2CatalogControlSchema, parseLm2CatalogControl } from "../src/lm2-catalog-schema.js";
 import { createLm2CandidateCatalog } from "../src/lm2-catalog.js";
 import {
   catalogEntry,
@@ -29,6 +30,43 @@ import {
 afterEach(cleanupRoots);
 
 describe("LM2 candidate catalog process safety", () => {
+  it("preserves lossless decimal lock identities", () => {
+    const control = {
+      schemaVersion: 2,
+      catalogLock: {
+        device: "18446744073709551615",
+        inode: "9007199254740993",
+        token: "a".repeat(64),
+      },
+      emptyCatalogDigest: "b".repeat(64),
+    };
+
+    expect(lm2CatalogControlSchema.parse(control)).toEqual(control);
+    expect(
+      lm2CatalogControlSchema.safeParse({
+        ...control,
+        catalogLock: { ...control.catalogLock, inode: "01" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("normalizes only safe canonical numeric catalog controls", () => {
+    const legacy = {
+      schemaVersion: 2,
+      catalogLock: { device: 12, inode: 34, token: "a".repeat(64) },
+      emptyCatalogDigest: "b".repeat(64),
+    };
+    expect(parseLm2CatalogControl(`${JSON.stringify(legacy)}\n`).catalogLock).toMatchObject({
+      device: "12",
+      inode: "34",
+    });
+    expect(() =>
+      parseLm2CatalogControl(
+        `${JSON.stringify({ ...legacy, catalogLock: { ...legacy.catalogLock, inode: 9_007_199_254_740_992 } })}\n`,
+      ),
+    ).toThrow();
+  });
+
   it("checks V1 after flock before writing the bootstrap token", async () => {
     const root = createRoot();
     const paths = v2Paths(root);
@@ -101,7 +139,7 @@ describe("LM2 candidate catalog process safety", () => {
     });
     expect(JSON.parse(readFileSync(paths.control, "utf8"))).toMatchObject({
       schemaVersion: 2,
-      catalogLock: { device: identity.dev, inode: identity.ino },
+      catalogLock: { device: String(identity.dev), inode: String(identity.ino) },
     });
   });
 

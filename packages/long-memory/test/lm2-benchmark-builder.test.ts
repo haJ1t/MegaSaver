@@ -9,7 +9,10 @@ const benchmarkRoot = join(import.meta.dirname, "../../../benchmarks/longmemeval
 const packageRoot = join(import.meta.dirname, "..");
 
 beforeAll(() => {
-  execFileSync("pnpm", ["build"], { cwd: packageRoot, stdio: "pipe" });
+  execFileSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["build"], {
+    cwd: packageRoot,
+    stdio: "pipe",
+  });
 });
 
 describe("LM2 pinned benchmark preparation tools", () => {

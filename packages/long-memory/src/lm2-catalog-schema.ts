@@ -8,7 +8,8 @@ export const MAX_LM2_CATALOG_ENTRIES = 10_000;
 export const MAX_LM2_CATALOG_BYTES = 4 * 1024 * 1024;
 export const MAX_LM2_CATALOG_CONTROL_BYTES = 1_024;
 
-const safeIdentityNumber = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const identityTextSchema = z.string().regex(/^(?:0|[1-9][0-9]*)$/);
+const legacyIdentityNumberSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const lowercaseUuidSchema = z
   .string()
   .uuid()
@@ -40,12 +41,26 @@ export const lm2CatalogControlSchema = z
   .object({
     schemaVersion: z.literal(2),
     catalogLock: z
-      .object({ device: safeIdentityNumber, inode: safeIdentityNumber, token: tokenSchema })
+      .object({ device: identityTextSchema, inode: identityTextSchema, token: tokenSchema })
       .strict(),
     emptyCatalogDigest: digestSchema,
   })
   .strict();
 export type Lm2CatalogControl = z.infer<typeof lm2CatalogControlSchema>;
+
+const legacyLm2CatalogControlSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    catalogLock: z
+      .object({
+        device: legacyIdentityNumberSchema,
+        inode: legacyIdentityNumberSchema,
+        token: tokenSchema,
+      })
+      .strict(),
+    emptyCatalogDigest: digestSchema,
+  })
+  .strict();
 
 const cursorSchema = z
   .object({
@@ -122,7 +137,32 @@ export function serializeLm2CatalogControl(control: Lm2CatalogControl): string {
 }
 
 export function parseLm2CatalogControl(raw: string): Lm2CatalogControl {
-  return canonicalParse(raw, lm2CatalogControlSchema, "LM2 candidate catalog control is invalid.");
+  try {
+    return canonicalParse(
+      raw,
+      lm2CatalogControlSchema,
+      "LM2 candidate catalog control is invalid.",
+    );
+  } catch {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Lm2Error("store_corrupt", "LM2 candidate catalog control is invalid.");
+    }
+    const legacy = legacyLm2CatalogControlSchema.safeParse(parsed);
+    if (!legacy.success || raw !== `${JSON.stringify(legacy.data)}\n`) {
+      throw new Lm2Error("store_corrupt", "LM2 candidate catalog control is invalid.");
+    }
+    return {
+      ...legacy.data,
+      catalogLock: {
+        ...legacy.data.catalogLock,
+        device: legacy.data.catalogLock.device.toString(),
+        inode: legacy.data.catalogLock.inode.toString(),
+      },
+    };
+  }
 }
 
 export function catalogContentDigest(serialized: string): string {

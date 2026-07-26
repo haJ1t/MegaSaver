@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Stats } from "node:fs";
 import { join } from "node:path";
+import type { LosslessFileIdentity } from "./lm2-fs-platform.js";
 import {
   type Lm2LedgerRecoveryResult,
   type Lm2OperationFence,
@@ -53,7 +54,7 @@ export function prepareLm2LedgerOperation(input: {
   workspaceKey: string;
   ledgerAnchor: DirectoryAnchor;
   fence: Lm2OperationFence;
-  lockIdentity: { device: number; inode: number };
+  lockIdentity: LosslessFileIdentity;
   lockToken: string;
   adoptExistingLedger(ledger: Lm2QuotaLedger, raw: Buffer, stat: Stats): void;
   persist(ledger: Lm2QuotaLedger): void;

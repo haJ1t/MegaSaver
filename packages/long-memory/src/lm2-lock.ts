@@ -1,7 +1,16 @@
 import { randomBytes } from "node:crypto";
-import { closeSync, fsyncSync, ftruncateSync, readSync, writeSync } from "node:fs";
+import {
+  closeSync,
+  fstatSync,
+  fsyncSync,
+  ftruncateSync,
+  lstatSync,
+  readSync,
+  writeSync,
+} from "node:fs";
 import { flockSync } from "fs-ext";
 import { Lm2Error } from "./lm2-errors.js";
+import { type LosslessFileIdentity, losslessFileIdentity } from "./lm2-fs-platform.js";
 import type { EmbeddingPort, Lm2Candidate, ModelDescriptor } from "./lm2-model.js";
 import { closeAnchoredFile, openAnchoredUpdateFile, verifyAnchoredFile } from "./lm2-secure-fs.js";
 
@@ -11,7 +20,7 @@ const TOKEN_BYTES = 65;
 export type WorkspaceFlock = (descriptor: number) => void;
 
 export type WorkspaceIndexLockGuard = {
-  readonly identity: { readonly device: number; readonly inode: number };
+  readonly identity: LosslessFileIdentity;
   readonly token: string;
   assertIntact(): void;
   release(): void;
@@ -107,6 +116,20 @@ function initializeToken(descriptor: number): string {
   return token;
 }
 
+function lockedFileIdentity(file: ReturnType<typeof openAnchoredUpdateFile>): LosslessFileIdentity {
+  const descriptor = fstatSync(file.descriptor, { bigint: true });
+  const path = lstatSync(file.path, { bigint: true });
+  if (
+    !descriptor.isFile() ||
+    !path.isFile() ||
+    descriptor.dev !== path.dev ||
+    descriptor.ino !== path.ino
+  ) {
+    throw new Lm2Error("index_lock_unavailable", "LM2 fixed lock identity changed.");
+  }
+  return losslessFileIdentity(descriptor);
+}
+
 export function acquireWorkspaceIndexLock(
   path: string,
   flock: WorkspaceFlock = exclusiveNonBlocking,
@@ -120,15 +143,7 @@ export function acquireWorkspaceIndexLock(
     const token = existingToken === null ? initializeToken(file.descriptor) : existingToken;
     if (token.length !== 64) throw new Error("invalid fixed lock token");
     verifyAnchoredFile(file);
-    const identity = { device: file.stat.dev, inode: file.stat.ino };
-    if (
-      !Number.isSafeInteger(identity.device) ||
-      identity.device < 0 ||
-      !Number.isSafeInteger(identity.inode) ||
-      identity.inode < 0
-    ) {
-      throw new Error("invalid fixed lock identity");
-    }
+    const identity = lockedFileIdentity(file);
     let released = false;
     const lockedFile = file;
     return {
@@ -139,6 +154,13 @@ export function acquireWorkspaceIndexLock(
         assertIntact() {
           if (released) throw new Lm2Error("index_lock_unavailable", "LM2 lock was released.");
           verifyAnchoredFile(lockedFile);
+          const currentIdentity = lockedFileIdentity(lockedFile);
+          if (
+            currentIdentity.device !== identity.device ||
+            currentIdentity.inode !== identity.inode
+          ) {
+            throw new Lm2Error("index_lock_unavailable", "LM2 fixed lock identity changed.");
+          }
           if (readToken(lockedFile.descriptor) !== token) {
             throw new Lm2Error("index_lock_unavailable", "LM2 fixed lock token changed.");
           }

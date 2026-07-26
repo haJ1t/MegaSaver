@@ -1,3 +1,4 @@
+import type { LosslessFileIdentity } from "./lm2-fs-platform.js";
 import { embeddingInputDigest } from "./lm2-identity.js";
 import type { Lm2Candidate } from "./lm2-model.js";
 import {
@@ -17,7 +18,7 @@ import { vectorSidecarName } from "./lm2-vector-paths.js";
 
 export type Lm2OperationFence = {
   operationId: string;
-  lockIdentity: { device: number; inode: number };
+  lockIdentity: LosslessFileIdentity;
   lockToken: string;
 };
 
@@ -42,15 +43,90 @@ export function lm2DirectoryIsEmpty(path: string): boolean {
 }
 
 export function parseLm2QuotaLedger(raw: Buffer, workspaceKey: string): Lm2QuotaLedger | null {
+  const text = raw.toString("utf8");
   try {
-    const parsed = lm2QuotaLedgerSchema.parse(JSON.parse(raw.toString("utf8")));
-    return parsed.workspaceKey === workspaceKey &&
-      serializeLm2QuotaLedger(parsed) === raw.toString("utf8")
-      ? parsed
+    const source = JSON.parse(text);
+    const parsed = lm2QuotaLedgerSchema.safeParse(source);
+    if (parsed.success) {
+      return parsed.data.workspaceKey === workspaceKey &&
+        serializeLm2QuotaLedger(parsed.data) === text
+        ? parsed.data
+        : null;
+    }
+    const legacy = normalizeLegacyQuotaLedger(source);
+    return legacy !== null &&
+      legacy.workspaceKey === workspaceKey &&
+      serializeLegacyLm2QuotaLedger(legacy) === text
+      ? legacy
       : null;
   } catch {
     return null;
   }
+}
+
+function legacyIdentityText(input: unknown): { device: string; inode: string } | null {
+  if (typeof input !== "object" || input === null) return null;
+  const identity = input as { device?: unknown; inode?: unknown };
+  if (
+    typeof identity.device !== "number" ||
+    !Number.isSafeInteger(identity.device) ||
+    identity.device < 0 ||
+    typeof identity.inode !== "number" ||
+    !Number.isSafeInteger(identity.inode) ||
+    identity.inode < 0
+  ) {
+    return null;
+  }
+  return { device: identity.device.toString(), inode: identity.inode.toString() };
+}
+
+function normalizeLegacyQuotaLedger(source: unknown): Lm2QuotaLedger | null {
+  if (typeof source !== "object" || source === null) return null;
+  const ledger = source as { activeOperation?: unknown; lockIdentity?: unknown } & Record<
+    string,
+    unknown
+  >;
+  const lockIdentity = legacyIdentityText(ledger.lockIdentity);
+  if (lockIdentity === null) return null;
+  const active = ledger.activeOperation;
+  if (active !== null && (typeof active !== "object" || active === null)) return null;
+  const activeIdentity =
+    active === null
+      ? null
+      : legacyIdentityText((active as { lockIdentity?: unknown }).lockIdentity);
+  if (active !== null && activeIdentity === null) return null;
+  const normalized = lm2QuotaLedgerSchema.safeParse({
+    ...ledger,
+    lockIdentity,
+    activeOperation:
+      active === null
+        ? null
+        : {
+            ...(active as Record<string, unknown>),
+            lockIdentity: activeIdentity,
+          },
+  });
+  return normalized.success ? normalized.data : null;
+}
+
+function serializeLegacyLm2QuotaLedger(ledger: Lm2QuotaLedger): string {
+  return `${JSON.stringify({
+    ...ledger,
+    lockIdentity: {
+      device: Number(ledger.lockIdentity.device),
+      inode: Number(ledger.lockIdentity.inode),
+    },
+    activeOperation:
+      ledger.activeOperation === null
+        ? null
+        : {
+            ...ledger.activeOperation,
+            lockIdentity: {
+              device: Number(ledger.activeOperation.lockIdentity.device),
+              inode: Number(ledger.activeOperation.lockIdentity.inode),
+            },
+          },
+  })}\n`;
 }
 
 export function createPendingAllocations(input: {

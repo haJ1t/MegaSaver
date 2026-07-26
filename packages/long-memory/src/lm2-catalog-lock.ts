@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import {
   constants,
+  type BigIntStats,
   closeSync,
   fstatSync,
   fsyncSync,
@@ -41,7 +42,7 @@ const BUSY_CODES = new Set(["EAGAIN", "EWOULDBLOCK"]);
 
 type LockFile = {
   descriptor: number;
-  stat: import("node:fs").Stats;
+  stat: BigIntStats;
   path: string;
 };
 
@@ -77,6 +78,17 @@ function writeToken(descriptor: number): string {
   return token;
 }
 
+function lockIdentityText(stat: BigIntStats): { device: string; inode: string } {
+  if (stat.dev < 0n || stat.ino < 0n) {
+    throw new Lm2Error("store_corrupt", "LM2 catalog lock identity is invalid.");
+  }
+  return { device: stat.dev.toString(), inode: stat.ino.toString() };
+}
+
+function sameLockIdentity(left: BigIntStats, right: BigIntStats): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.mode === right.mode;
+}
+
 function openLock(storage: CatalogStorage): { file: LockFile; created: boolean } {
   verifyDirectoryAnchor(storage.anchor);
   const path = catalogLockPath(storage);
@@ -94,12 +106,12 @@ function openLock(storage: CatalogStorage): { file: LockFile; created: boolean }
     descriptor = openSync(path, secureOpenFlags(constants.O_RDWR));
   }
   try {
-    const stat = fstatSync(descriptor);
-    const named = lstatSync(path);
+    const stat = fstatSync(descriptor, { bigint: true });
+    const named = lstatSync(path, { bigint: true });
     if (
       !stat.isFile() ||
-      !sameFileIdentity(stat, named) ||
-      (process.platform !== "win32" && (stat.mode & 0o777) !== 0o600)
+      !sameLockIdentity(stat, named) ||
+      (process.platform !== "win32" && (stat.mode & 0o777n) !== 0o600n)
     ) {
       throw new Lm2Error("store_corrupt", "LM2 catalog lock identity changed.");
     }
@@ -111,27 +123,19 @@ function openLock(storage: CatalogStorage): { file: LockFile; created: boolean }
   }
 }
 
-function assertSafeIdentity(stat: import("node:fs").Stats): void {
-  if (
-    !Number.isSafeInteger(stat.dev) ||
-    stat.dev < 0 ||
-    !Number.isSafeInteger(stat.ino) ||
-    stat.ino < 0
-  ) {
-    throw new Lm2Error("store_corrupt", "LM2 catalog lock identity is invalid.");
-  }
-}
-
 function assertBinding(storage: CatalogStorage, file: LockFile, control: Lm2CatalogControl): void {
   assertNoV1CatalogState(storage);
-  const descriptorStat = fstatSync(file.descriptor);
-  const namedStat = lstatSync(anchoredChildPath(storage.anchor, LM2_CATALOG_LOCK_NAME));
+  const descriptorStat = fstatSync(file.descriptor, { bigint: true });
+  const namedStat = lstatSync(anchoredChildPath(storage.anchor, LM2_CATALOG_LOCK_NAME), {
+    bigint: true,
+  });
+  const identity = lockIdentityText(file.stat);
   if (
     !descriptorStat.isFile() ||
-    !sameFileIdentity(descriptorStat, file.stat) ||
-    !sameFileIdentity(namedStat, file.stat) ||
-    control.catalogLock.device !== file.stat.dev ||
-    control.catalogLock.inode !== file.stat.ino ||
+    !sameLockIdentity(descriptorStat, file.stat) ||
+    !sameLockIdentity(namedStat, file.stat) ||
+    control.catalogLock.device !== identity.device ||
+    control.catalogLock.inode !== identity.inode ||
     readToken(file.descriptor) !== control.catalogLock.token
   ) {
     throw new Lm2Error("store_corrupt", "LM2 catalog lock binding changed.");
@@ -155,20 +159,20 @@ function bootstrap(
     assertBinding(storage, file, priorControl);
     return priorControl;
   }
-  assertSafeIdentity(file.stat);
   const token = writeToken(file.descriptor);
+  const identity = lockIdentityText(file.stat);
   const control: Lm2CatalogControl = {
     schemaVersion: 2,
-    catalogLock: { device: file.stat.dev, inode: file.stat.ino, token },
+    catalogLock: { ...identity, token },
     emptyCatalogDigest: catalogContentDigest(emptySerialized),
   };
   createCatalogControl(storage, control, () => {
     assertNoV1CatalogState(storage);
-    const descriptorStat = fstatSync(file.descriptor);
-    const namedStat = lstatSync(file.path);
+    const descriptorStat = fstatSync(file.descriptor, { bigint: true });
+    const namedStat = lstatSync(file.path, { bigint: true });
     if (
-      !sameFileIdentity(descriptorStat, file.stat) ||
-      !sameFileIdentity(namedStat, file.stat) ||
+      !sameLockIdentity(descriptorStat, file.stat) ||
+      !sameLockIdentity(namedStat, file.stat) ||
       readToken(file.descriptor) !== token
     ) {
       throw new Lm2Error("store_corrupt", "LM2 catalog lock binding changed.");

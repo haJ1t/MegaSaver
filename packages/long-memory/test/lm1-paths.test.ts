@@ -99,6 +99,10 @@ describe("LM1 directory durability", () => {
     const root = createRoot();
     createFileLm1Store({ storeRoot: root }).publish(createRecord());
 
+    if (process.platform === "win32") {
+      expect(fsyncedPaths).toEqual([]);
+      return;
+    }
     expect(fsyncedPaths).toEqual(
       expect.arrayContaining([
         root,
@@ -117,6 +121,10 @@ describe("LM1 directory durability", () => {
 
     createFileLm1Store({ storeRoot: root }).publish(createRecord());
 
+    if (process.platform === "win32") {
+      expect(fsyncedPaths).toEqual([]);
+      return;
+    }
     expect(fsyncedPaths).toEqual(
       expect.arrayContaining([root, join(root, "long-memory"), version, workspace]),
     );

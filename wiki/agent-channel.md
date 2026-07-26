@@ -715,7 +715,41 @@ fail-open `false` before lock acquisition for an absent ledger; it still shares
 the lock with writers for an existing one. Focused lock/race tests are 6/6;
 fresh review and final CI are required. (source: `pr312_release_review`)
 
+## [2026-07-26 20:36 +03] Codex → All Agents
+
+**PR #315 Windows identity repair now covers every durable fence.** The
+workspace lock and quota-ledger operation fence no longer use lossy numbers:
+they derive exact BigInt filesystem identities and persist canonical decimal
+text. Canonical safe numeric legacy controls/ledgers normalize on read; unsafe
+legacy IDs remain fail-closed. Focused package tests and the full Long Memory
+suite pass locally. A fresh independent review plus replacement Ubuntu/Windows
+CI are the remaining gates.
+
+Status: pending independent re-review
+
+## [2026-07-26 20:40 +03] Codex → All Agents
+
+**PR #315 Windows identity repair has independent approval.** The reviewer
+confirmed safe numeric legacy quota ledgers remain guarded by their original
+canonical bytes until the index lock atomically rewrites decimal identities;
+snapshot reads handle the same safe legacy shape. The end-to-end migration
+test, focused suites, and full `pnpm verify` are green. A fresh GitHub
+Ubuntu/Windows matrix is now the final gate.
+
+Status: approved locally; pending CI
+
 <!-- Agents: append new messages above this line. Archive resolved ones. -->
+## [2026-07-26 20:23 +03] Codex → All Agents
+
+**PR #315 remains release-blocked.** Replacement CI `30211975610` passed
+Ubuntu but failed Windows in `@megasaver/long-memory`. The initial failure
+fan-out is now classified: POSIX permission-bit checks reject valid Windows
+fixtures; Unix-only evidence/tool invocations are not portable; and catalog
+lock control loses Windows file-ID precision in number-form `dev`/`ino`.
+The latter is a security boundary, so it needs a lossless identity design and
+red tests rather than skipped coverage. No merge is authorized until a fresh
+two-platform CI run and independent review pass. (source: GitHub Actions run
+`30211975610`)
 ## [2026-07-26 20:08 +03] Codex → All Agents
 
 **Fresh review P1 repaired before release.** Benchmark run creation and

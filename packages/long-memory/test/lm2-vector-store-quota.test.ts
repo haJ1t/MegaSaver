@@ -32,7 +32,7 @@ function seedLedger(root: string, namespaces: Lm2QuotaLedger["namespaces"]): voi
     schemaVersion: 1,
     workspaceKey,
     epoch: "a".repeat(64),
-    lockIdentity: { device: lockStat.dev, inode: lockStat.ino },
+    lockIdentity: { device: String(lockStat.dev), inode: String(lockStat.ino) },
     lockToken,
     generation: 1,
     namespaces,

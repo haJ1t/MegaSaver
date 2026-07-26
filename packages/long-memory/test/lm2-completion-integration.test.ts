@@ -54,6 +54,17 @@ function replaceRunArgsInteger(evidence: MutationContext, key: string, exactInte
 }
 
 describe("LM2 official-score evidence gate", () => {
+  it("accepts absolute artifact spellings on both supported platforms", () => {
+    const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as {
+      $defs: { absoluteArtifact: { properties: { path: { pattern: string } } } };
+    };
+    const pattern = new RegExp(schema.$defs.absoluteArtifact.properties.path.pattern);
+
+    expect(pattern.test("/tmp/megasaver-transport")).toBe(true);
+    expect(pattern.test("C:\\work\\megasaver-transport.exe")).toBe(true);
+    expect(pattern.test("relative/megasaver-transport")).toBe(false);
+  });
+
   it("lists packaged evidence files through Node filesystem APIs", () => {
     const fixture = createEvidenceFixture();
     const fixtures = completionFixtures as typeof completionFixtures & {

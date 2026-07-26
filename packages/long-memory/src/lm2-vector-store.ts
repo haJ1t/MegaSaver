@@ -2,6 +2,7 @@ import { dirname } from "node:path";
 import { Lm2Error } from "./lm2-errors.js";
 import { modelDescriptorFingerprint } from "./lm2-identity.js";
 import { beginIndexOperation } from "./lm2-index-operation.js";
+import { parseLm2QuotaLedger } from "./lm2-ledger-recovery.js";
 import type { Lm2IndexDeadline, Lm2IndexOperationResult } from "./lm2-lock.js";
 import type {
   EmbeddingPort,
@@ -9,11 +10,7 @@ import type {
   Lm2VectorReadResult,
   ModelDescriptor,
 } from "./lm2-model.js";
-import {
-  MAX_LM2_QUOTA_LEDGER_BYTES,
-  lm2QuotaLedgerSchema,
-  serializeLm2QuotaLedger,
-} from "./lm2-quota-ledger.js";
+import { MAX_LM2_QUOTA_LEDGER_BYTES } from "./lm2-quota-ledger.js";
 import {
   anchoredDirectoryIsEmpty,
   closeDirectoryAnchor,
@@ -116,13 +113,7 @@ function ledgerSnapshot(storeRoot: string, workspaceKey: string) {
       MAX_LM2_QUOTA_LEDGER_BYTES,
     );
     if (read.status !== "valid") return read.status === "missing" ? null : "invalid";
-    const text = read.raw.toString("utf8");
-    const parsed = lm2QuotaLedgerSchema.safeParse(JSON.parse(text));
-    return parsed.success &&
-      parsed.data.workspaceKey === workspaceKey &&
-      serializeLm2QuotaLedger(parsed.data) === text
-      ? parsed.data
-      : "invalid";
+    return parseLm2QuotaLedger(read.raw, workspaceKey) ?? "invalid";
   } catch {
     return "invalid";
   } finally {
