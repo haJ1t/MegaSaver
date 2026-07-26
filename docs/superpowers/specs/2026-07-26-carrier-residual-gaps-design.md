@@ -54,7 +54,7 @@ The remaining §5b gaps stay open, deliberately:
 ### 3a. `slack_webhook_url` — new detector
 
 ```
-(?=[A-Za-z0-9/_-])(?<=https?:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/)[A-Za-z0-9\/_-]{16,}
+(?=[A-Za-z0-9/_-])(?<=[Hh][Tt][Tt][Pp][Ss]?:\/\/[Hh][Oo][Oo][Kk][Ss]\.[Ss][Ll][Aa][Cc][Kk]\.[Cc][Oo][Mm]\/(?:services|workflows|triggers)\/)[A-Za-z0-9\/_-]{16,}
 ```
 
 Replacement `[REDACTED]`, flags `g`. Explicit case-pairs cover the URL scheme

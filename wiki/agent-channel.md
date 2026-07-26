@@ -33,7 +33,7 @@ whitespace minification lowers `mega.mjs` to 8.33 MiB. The `./ranker` contract
 is pinned as benchmark-free and `fs-ext`-free. Slack webhook redaction now
 matches case-insensitive scheme/host variants while retaining case-sensitive
 endpoint paths. The standalone smoke suite is 7/7, focused Long Memory
-boundary/index tests are 48/48, policy is 668/668, and `pnpm verify` passes.
+boundary/index tests are 48/48, policy is 671/671, and `pnpm verify` passes.
 
 Status: pending independent re-review
 

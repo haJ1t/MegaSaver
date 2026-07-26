@@ -170,12 +170,13 @@ export const NEW_DETECTORS = {
     // could not fail, and never walked the lookbehind the guard protects.
     seed: (n) => "password=1234567;".repeat(Math.ceil(n / 17)),
   },
-  // Anchor-scan seed: after `services/` comes `https`, and `:` is outside the
-  // body class, so the 5-char run is under the 16 floor. Every anchor is paid
-  // for and none matches — the maximal cost for this shape.
+  // Anchor-scan seed uses the mixed-case scheme/host accepted by production.
+  // After `services/` comes `https`, and `:` is outside the body class, so the
+  // 5-char run is under the 16 floor. Every anchor is paid for and none matches
+  // — the maximal cost for this shape.
   slack_webhook_url: {
-    re: /(?=[A-Za-z0-9/_-])(?<=https?:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/)[A-Za-z0-9/_-]{16,}/g,
-    seed: (n) => "https://hooks.slack.com/services/".repeat(Math.ceil(n / 33)),
+    re: /(?=[A-Za-z0-9/_-])(?<=[Hh][Tt][Tt][Pp][Ss]?:\/\/[Hh][Oo][Oo][Kk][Ss]\.[Ss][Ll][Aa][Cc][Kk]\.[Cc][Oo][Mm]\/(?:services|workflows|triggers)\/)[A-Za-z0-9/_-]{16,}/g,
+    seed: (n) => "HTTPS://HOOKS.SLACK.COM/services/".repeat(Math.ceil(n / 33)),
   },
   jwk_private_key: {
     re: /\{(?=[^{}]{0,4096}"kty"\s*:\s*"(?:RSA|EC|OKP|oct)")(?=[^{}]{0,4096}"(?:d|k)"\s*:\s*"[A-Za-z0-9_-]{20,}")[^{}]{1,4096}\}/g,
@@ -652,7 +653,7 @@ const CARRIER_SEEDS = {
   // the next quote in the file.
   "conn: unterminated quote": (n) => `;password="${"a".repeat(200)}`.repeat(Math.ceil(n / 212)),
   "gitlab: anchor run": (n) => "glagent-".repeat(Math.ceil(n / 8)),
-  "slack: anchor run": (n) => "https://hooks.slack.com/services/".repeat(Math.ceil(n / 33)),
+  "slack: anchor run": (n) => "HTTPS://HOOKS.SLACK.COM/services/".repeat(Math.ceil(n / 33)),
 };
 
 // Load guard. Twice now a measurement on this repo was taken on a box carrying

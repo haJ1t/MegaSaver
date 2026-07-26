@@ -6766,3 +6766,17 @@ A security re-review is still required before merge. (source:
 `apps/cli/tsup.bundle.config.ts`,
 `packages/long-memory/src/lm2-ranker-entry.ts`,
 `packages/policy/src/redaction-patterns.ts`, PR #312)
+
+## [2026-07-26 18:40 +03] fix | align scoped Slack detector evidence
+
+Security re-review found that broad `gi` also folded Slack's case-sensitive
+endpoint path. The detector now uses explicit case-pairs only for the URI
+scheme and DNS host; `SERVICES`, `Workflows`, and `TRIGGERS` are pinned
+non-matches. The design's displayed pattern and the carrier ReDoS probe now
+carry the exact same expression and mixed-case scheme/host seed as production.
+The local carrier measurement correctly refused at 18.1 load on 10 cores;
+the reviewer independently measured 2→4 MiB growth at 1.94x, 1.97x, and
+2.08x. Policy is 671/671 and `pnpm verify` passes. Fresh re-review remains
+required before merge. (source: `packages/policy/src/redaction-patterns.ts`,
+`packages/policy/test/redact-superlinear.test.ts`,
+`scripts/redos-probe.mjs`, `policy_release_security_review`)
