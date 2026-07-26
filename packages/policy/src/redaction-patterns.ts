@@ -26,6 +26,16 @@ const baseline: RedactionPattern[] = [
     // and the ENTIRE object survives — measured 63 per 100,000 RSA-2048 JWKs,
     // with 5 of 6 CRT parameters intact, which alone reconstruct the key.
     // Ordering here is load-bearing, not cosmetic.
+    // NOT a strict superset, though — the reorder has a right-side cost that an
+    // earlier §5a revision denied. This segment's `[A-Za-z0-9_-]+` is greedy and
+    // unbounded, so it swallows a following base64url run including a later
+    // detector's INDICATOR when the two are glued by zero or more
+    // `[A-Za-z0-9_-]` chars: `<jwt>aws_secret_access_key = <40>` now reports only
+    // `jwt` and leaves the secret in cleartext, and likewise for `bearer`, `SG.`
+    // and `hvs.`. Any other separator terminates the run, which is why no real
+    // tool-output shape triggers it. Both directions are pinned in
+    // test/redact-jwt-order.test.ts — do not "fix" the loss by widening the
+    // class; that reintroduces the quadratic `‡` exists to prevent.
     // JWK. The private material is `d` (asymmetric) or `k` (oct), but an ungated
     // `"d":"…"` is far too loose — measured, it matched 2 of 3 benign JSON
     // objects. So the object must also carry a `kty`, asserted by a LOOKAHEAD so
