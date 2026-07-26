@@ -261,8 +261,7 @@ export async function rankProjectMemories(
       candidateInputOmittedCount: prepared.omitted,
     });
     if (ranked.hybrid.semanticStatus === "degraded") {
-      const safe = await rankSafe();
-      return { memory: memoryFor(safe.orderedCandidateIds), hybrid: safe.hybrid };
+      return { memory: memoryFor(ranked.orderedCandidateIds), hybrid: ranked.hybrid };
     }
     return {
       memory: memoryFor(ranked.orderedCandidateIds),
