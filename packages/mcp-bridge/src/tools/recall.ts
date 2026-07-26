@@ -8,6 +8,7 @@ import {
   isRecallable,
   verificationBadgeFor,
 } from "@megasaver/core";
+import { rankProjectMemories } from "@megasaver/memory-recall";
 import type { SessionId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
@@ -71,9 +72,17 @@ export async function handleRecall(
       }
 
       const allMemory = env.registry.listMemoryEntries(session.projectId);
-      const recallable = allMemory.filter(
+      const scopedMemory = allMemory.filter(
         (m) => isRecallable(m, at) && (m.sessionId === session.id || m.scope === "project"),
       );
+      const ranked = await rankProjectMemories({
+        projectId: session.projectId,
+        entries: scopedMemory,
+        task: intent,
+        storeRoot: env.storeRoot,
+        query: { text: intent, asOf: at },
+      });
+      const recallable = ranked.memory.length > 0 ? ranked.memory : scopedMemory;
       // Pre-recall spot-check (i6 §8.4). recall is unranked, so "top-5
       // anchored hits post-ranking" degrades to the first 5 anchored entries
       // in result order. Pro-only; free tier passes through unchanged.

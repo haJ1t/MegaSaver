@@ -27,6 +27,7 @@
     "@megasaver/content-store": "workspace:*",
     "@megasaver/context-gate": "workspace:*",
     "@megasaver/core": "workspace:*",
+    "@megasaver/memory-recall": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/retrieval": "workspace:*",
     "@megasaver/shared": "workspace:*",
