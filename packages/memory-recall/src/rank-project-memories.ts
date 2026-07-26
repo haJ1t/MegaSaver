@@ -50,6 +50,15 @@ export type RankProjectMemoriesResult = {
   hybrid: HybridReceipt;
 };
 
+function evenlySpaced(entries: readonly MemoryEntry[], limit: number): MemoryEntry[] {
+  if (entries.length <= limit) return [...entries];
+  if (limit === 1) return [entries[0] as MemoryEntry];
+  return Array.from({ length: limit }, (_, index) => {
+    const position = Math.round((index * (entries.length - 1)) / (limit - 1));
+    return entries[position] as MemoryEntry;
+  });
+}
+
 function candidatesFor(input: RankProjectMemoriesInput): {
   entries: MemoryEntry[];
   candidates: Lm2Candidate[];
@@ -76,12 +85,18 @@ function candidatesFor(input: RankProjectMemoriesInput): {
       : (() => {
           const selected: MemoryEntry[] = [];
           const selectedIds = new Set<string>();
-          for (const entry of [...lexical, ...indexed]) {
+          for (const entry of lexical) {
             if (selected.length === MAX_CANDIDATES) break;
             if (!selectedIds.has(entry.id)) {
               selected.push(entry);
               selectedIds.add(entry.id);
             }
+          }
+          const remainingIndexed = indexed.filter((entry) => !selectedIds.has(entry.id));
+          for (const entry of evenlySpaced(remainingIndexed, MAX_CANDIDATES - selected.length)) {
+            if (selected.length === MAX_CANDIDATES) break;
+            selected.push(entry);
+            selectedIds.add(entry.id);
           }
           for (const entry of eligible) {
             if (selected.length === MAX_CANDIDATES) break;
