@@ -115,6 +115,15 @@ callback for its final JSON write; signalling writes remain synchronous where a
 test deliberately pauses the child before the guarded operation. This makes
 the final result observable without weakening lock/replacement assertions.
 
+### Catalog fixture stream completion
+
+The parent-side catalog test fixture treats a child process exit and its stdout
+stream completion as separate facts. It parses the terminal JSON result only
+after both have occurred: Windows can schedule the process `close` callback
+before the final buffered stdout data callback. This is test-protocol ordering
+only; catalog locking, replacement detection, and production persistence code
+remain unchanged.
+
 ### Evidence package inventory names
 
 The official evidence package is a logical artifact tree, not a host-native
@@ -158,3 +167,6 @@ evidence tests pass on both operating systems.
    POSIX runs continue to compare the same canonical `/` artifact names.
 9. A Windows CI run accepts recorded tar listings and drains a signalled child
    result without an omitted or partial JSON payload.
+10. Fixture regressions prove direct, barrier, and signalled appenders tolerate
+    a child `close` event that precedes the final stdout result; the real
+    Windows catalog-process suite preserves both concurrent appends.

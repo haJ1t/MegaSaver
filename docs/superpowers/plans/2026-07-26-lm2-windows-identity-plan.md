@@ -210,3 +210,19 @@ write is flushed to stdout.
 - [x] Normalize archive listing lines and await the final child JSON write.
 - [ ] Run focused catalog/completion tests, root verification, independent
   review, and replacement Ubuntu/Windows CI.
+
+### Task 11: Wait for catalog stdout before parsing terminal JSON
+
+**Files:**
+- Modify: `packages/long-memory/test/lm2-catalog-process-fixtures.ts`
+- Modify: `packages/long-memory/test/lm2-catalog-process-fixtures.test.ts`
+
+**Interfaces:** Catalog fixture completion requires both child exit and stdout
+stream end. The final JSON result may arrive after Windows reports child
+`close`; signal framing remains unchanged.
+
+- [x] Capture the Windows `close`-before-final-stdout race with direct,
+  barrier, and signalled fake-child regressions.
+- [x] Gate terminal JSON parsing on both process close and stdout end.
+- [ ] Run focused catalog/completion tests, root verification, independent
+  review, and replacement Ubuntu/Windows CI.

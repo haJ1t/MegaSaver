@@ -78,9 +78,27 @@ export function runCatalogChild(
       stderr += chunk.toString();
     });
     child.once("error", reject);
+    let exitCode: number | null | undefined;
+    let stdoutEnded = false;
+    const complete = () => {
+      if (exitCode === undefined || !stdoutEnded) return;
+      if (exitCode !== 0) {
+        reject(new Error(stderr));
+        return;
+      }
+      try {
+        resolve((JSON.parse(stdout.trim()) as { result: boolean }).result);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    child.stdout.once("end", () => {
+      stdoutEnded = true;
+      complete();
+    });
     child.once("close", (code) => {
-      if (code !== 0) reject(new Error(stderr));
-      else resolve((JSON.parse(stdout.trim()) as { result: boolean }).result);
+      exitCode = code;
+      complete();
     });
   });
 }
@@ -116,14 +134,30 @@ export function startBarrierAppender(
       resolve(
         () =>
           new Promise<boolean>((finish, rejectFinish) => {
-            child.once("error", rejectFinish);
-            child.once("close", (code) => {
-              if (code !== 0) rejectFinish(new Error(stderr));
-              else {
+            let exitCode: number | null | undefined;
+            let stdoutEnded = false;
+            const complete = () => {
+              if (exitCode === undefined || !stdoutEnded) return;
+              if (exitCode !== 0) {
+                rejectFinish(new Error(stderr));
+                return;
+              }
+              try {
                 finish(
                   (JSON.parse(stdout.slice(separator + 1).trim()) as { result: boolean }).result,
                 );
+              } catch (error) {
+                rejectFinish(error);
               }
+            };
+            child.once("error", rejectFinish);
+            child.stdout.once("end", () => {
+              stdoutEnded = true;
+              complete();
+            });
+            child.once("close", (code) => {
+              exitCode = code;
+              complete();
             });
             child.stdin.end("go\n");
           }),
@@ -159,9 +193,11 @@ export function startSignaledAppender(
     });
     child.once("error", reject);
     const completed = new Promise<boolean>((finish, rejectFinish) => {
-      child.once("error", rejectFinish);
-      child.once("close", (code) => {
-        if (code !== 0) {
+      let exitCode: number | null | undefined;
+      let stdoutEnded = false;
+      const complete = () => {
+        if (exitCode === undefined || !stdoutEnded) return;
+        if (exitCode !== 0) {
           rejectFinish(new Error(stderr));
           return;
         }
@@ -170,8 +206,21 @@ export function startSignaledAppender(
           rejectFinish(new Error(`Catalog appender omitted result: ${stderr}`));
           return;
         }
-        const result = stdout.slice(separator + 1).trim();
-        finish((JSON.parse(result) as { result: boolean }).result);
+        try {
+          const result = stdout.slice(separator + 1).trim();
+          finish((JSON.parse(result) as { result: boolean }).result);
+        } catch (error) {
+          rejectFinish(error);
+        }
+      };
+      child.once("error", rejectFinish);
+      child.stdout.once("end", () => {
+        stdoutEnded = true;
+        complete();
+      });
+      child.once("close", (code) => {
+        exitCode = code;
+        complete();
       });
     });
     child.stdout.on("data", (chunk: Buffer) => {

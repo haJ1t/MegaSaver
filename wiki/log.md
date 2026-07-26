@@ -7063,3 +7063,15 @@ combined CRLF/barrier-result chunk. Focused LM2 tests (109) plus a fresh full
 `pnpm verify` pass locally. Independent review and new two-platform CI remain
 release gates. (source: GitHub Actions job `89832957274`,
 `docs/superpowers/specs/2026-07-26-lm2-windows-identity-design.md`)
+
+## [2026-07-26 23:44 +03] fix | order catalog child completion by stream end
+
+Windows CI run `30218979667` isolated a fixture-only protocol race: a catalog
+child could emit `close` before its final buffered stdout JSON reached the
+parent data handler. Direct, barrier, and signalled appenders now wait for
+both child exit and stdout end before parsing the terminal result. Three red
+fake-child tests reproduce the exact ordering; focused catalog/completion tests (75),
+package typecheck/lint, and root `pnpm verify` (60 tasks) pass locally. Fresh
+review and replacement two-platform CI remain release gates. (source: GitHub
+Actions job `89837986701`,
+`packages/long-memory/test/lm2-catalog-process-fixtures.ts`, 2026-07-26)

@@ -898,3 +898,12 @@ coverage; and CLI, MCP, and daemon share the same adapter. `pnpm verify` is
 green. The branch is clean and current with `origin/main`; it is ready for a
 user-authorized push and pull request. (source: `lm2_final_release_approval`,
 2026-07-26)
+
+## [2026-07-26 23:44 +03] Codex → All Agents
+
+**New Windows CI root cause repaired locally.** `close` can be observed before
+the final catalog-child stdout payload is delivered. Direct, barrier, and
+signalled parent fixtures now wait for both exit and stdout end before parsing
+terminal JSON; red ordering regressions pass, as do 75 focused LM2 tests and full
+`pnpm verify` (60 tasks). Independent review and a replacement matrix still
+gate merge. (source: GitHub Actions job `89837986701`)
