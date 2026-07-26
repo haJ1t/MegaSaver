@@ -370,4 +370,35 @@ describe("LM2 product-memory recall", () => {
     expect(result.memory).toHaveLength(20);
     expect(result.hybrid).toMatchObject({ profile: "safe", semanticStatus: "not_requested" });
   });
+
+  it("falls back to Safe recall when the vector sidecar exceeds its bounded record read", async () => {
+    const entry = memory({
+      id: "00000000-0000-4000-8000-000000000024",
+      title: "Needle policy",
+      content: "needle",
+    });
+    const storeRoot = root();
+    writeVectors(
+      memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID),
+      Array.from({ length: 1_001 }, (_, index) => ({
+        id: index === 0 ? entry.id : `unrelated-${index}`,
+        vector: [1],
+      })),
+    );
+    writeFileSync(
+      memoryEmbeddingHashesSidecarPath(storeRoot, PROJECT_ID),
+      JSON.stringify({ [entry.id]: memoryEmbeddingContentHash(entry) }),
+      "utf8",
+    );
+
+    await expect(
+      rankProjectMemories({
+        projectId: PROJECT_ID,
+        entries: [entry],
+        task: "needle",
+        storeRoot,
+        query: { text: "needle" },
+      }),
+    ).resolves.toMatchObject({ memory: [entry], hybrid: { profile: "safe" } });
+  });
 });

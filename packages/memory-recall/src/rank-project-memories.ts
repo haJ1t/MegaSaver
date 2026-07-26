@@ -26,6 +26,7 @@ import { memoryCandidate } from "./memory-candidate.js";
 import { projectWorkspaceKey } from "./project-workspace-key.js";
 
 const MAX_CANDIDATES = 1_000;
+const LEXICAL_CANDIDATE_BUDGET = 500;
 const LOCAL_MODEL: ModelDescriptor = {
   provider: "local",
   modelId: "Xenova/all-MiniLM-L6-v2",
@@ -57,26 +58,44 @@ function candidatesFor(input: RankProjectMemoriesInput): {
   if (input.entries.length === 0) {
     return { entries: [], candidates: [], omitted: 0 };
   }
-  const entries = searchMemoryEntries(input.entries, {
-    ...input.query,
+  const { text: _text, ...filters } = input.query;
+  const eligible = searchMemoryEntries(input.entries, { ...filters, limit: input.entries.length });
+  const lexical = searchMemoryEntries(input.entries, {
+    ...filters,
     text: input.task,
-    limit: input.entries.length,
+    limit: LEXICAL_CANDIDATE_BUDGET,
   });
-  const selected = entries.slice(0, MAX_CANDIDATES);
+  const selected =
+    eligible.length <= MAX_CANDIDATES
+      ? eligible
+      : [...lexical, ...eligible]
+          .filter(
+            (entry, index, entries) => entries.findIndex(({ id }) => id === entry.id) === index,
+          )
+          .slice(0, MAX_CANDIDATES);
   const workspaceKey = projectWorkspaceKey(input.projectId);
   return {
     entries: selected,
     candidates: selected.map((entry) => memoryCandidate(entry, workspaceKey)),
-    omitted: entries.length - selected.length,
+    omitted: eligible.length - selected.length,
   };
 }
 
-function coreFallback(input: RankProjectMemoriesInput): RankProjectMemoriesResult {
-  const memory = searchMemoryEntries(input.entries, {
-    ...input.query,
-    text: input.task,
-    limit: Math.min(input.query.limit ?? 20, MAX_CANDIDATES),
-  });
+function coreFallback(
+  input: RankProjectMemoriesInput,
+  skipTask = false,
+): RankProjectMemoriesResult {
+  const { text: _text, ...filters } = input.query;
+  const memory = searchMemoryEntries(
+    input.entries,
+    skipTask
+      ? { ...filters, limit: Math.min(input.query.limit ?? 20, MAX_CANDIDATES) }
+      : {
+          ...filters,
+          text: input.task,
+          limit: Math.min(input.query.limit ?? 20, MAX_CANDIDATES),
+        },
+  );
   return {
     memory,
     hybrid: hybridReceiptSchema.parse({
@@ -119,7 +138,12 @@ function vectorReader(input: {
   projectId: ProjectId;
   entries: readonly MemoryEntry[];
 }): { values: Map<string, Float32Array>; reader: Lm2RankVectorReader } {
-  const rawValues = readVectors(memoryEmbeddingsSidecarPath(input.storeRoot, input.projectId));
+  const candidateIds = new Set(input.entries.map((entry) => entry.id));
+  const rawValues = readVectors(memoryEmbeddingsSidecarPath(input.storeRoot, input.projectId), {
+    maxBytes: MAX_LM2_CANDIDATE_CORPUS_UTF8_BYTES,
+    maxRecords: MAX_CANDIDATES,
+    ids: candidateIds,
+  });
   const hashes = readMemoryEmbeddingHashes(input.storeRoot, input.projectId);
   const entriesById = new Map<string, MemoryEntry>(input.entries.map((entry) => [entry.id, entry]));
   const values = new Map(
@@ -168,6 +192,9 @@ function localEmbedding(embedFn: EmbedFn): EmbeddingPort {
 export async function rankProjectMemories(
   input: RankProjectMemoriesInput,
 ): Promise<RankProjectMemoriesResult> {
+  if (input.task.trim().length > MAX_LM2_CANDIDATE_TEXT_CODE_UNITS) {
+    return coreFallback(input, true);
+  }
   const prepared = candidatesFor(input);
   if (exceedsLm2InputLimit({ task: input.task, candidates: prepared.candidates })) {
     return coreFallback(input);
