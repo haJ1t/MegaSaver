@@ -1,9 +1,13 @@
 import { rankBm25 } from "@megasaver/retrieval";
 import { Lm2Error } from "./lm2-errors.js";
 import { canonicalFloat32 } from "./lm2-identity.js";
-import { type Lm2Candidate, MAX_LM2_RANK_CANDIDATES, lm2CandidateSchema } from "./lm2-model.js";
+import {
+  type Lm2Candidate,
+  MAX_LM2_CANDIDATE_CORPUS_UTF8_BYTES,
+  MAX_LM2_RANK_CANDIDATES,
+  lm2CandidateSchema,
+} from "./lm2-model.js";
 
-const MAX_CORPUS_UTF8_BYTES = 64 * 1024 * 1024;
 export const MAX_LM2_LANE_HITS = 1_000;
 const RRF_CONSTANT = 60;
 
@@ -31,7 +35,7 @@ export function parseRankCandidates(
       throw new Lm2Error("candidate_store_invalid", "LM2 candidate response is invalid.");
     }
     corpusBytes += Buffer.byteLength(result.data.text, "utf8");
-    if (!Number.isSafeInteger(corpusBytes) || corpusBytes > MAX_CORPUS_UTF8_BYTES) {
+    if (!Number.isSafeInteger(corpusBytes) || corpusBytes > MAX_LM2_CANDIDATE_CORPUS_UTF8_BYTES) {
       throw new Lm2Error("candidate_store_invalid", "LM2 candidate corpus exceeds its limit.");
     }
     ids.add(result.data.id);
