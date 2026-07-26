@@ -52,7 +52,13 @@ function add(registry: CoreRegistry, id: MemoryEntryId, title: string, content: 
 // → [0,1], LEX's text → [1,0]. Deterministic, no model.
 const buildEmbed = async (texts: readonly string[]) =>
   texts.map((t) =>
-    Float32Array.from([t.includes("storage") ? 0 : 1, t.includes("storage") ? 1 : 0]),
+    Float32Array.from(
+      Array.from({ length: 384 }, (_, index) => {
+        if (index === 0) return t.includes("storage") ? 0 : 1;
+        if (index === 1) return t.includes("storage") ? 1 : 0;
+        return 0;
+      }),
+    ),
   );
 
 let store: string;
@@ -90,13 +96,18 @@ describe("handleIndexMemory", () => {
       { projectId: PROJECT_ID },
     );
 
-    // AFTER: full coverage → semantic path. Query embeds to SEM's direction
-    // [0,1], so SEM (which BM25 dropped) now ranks FIRST. This output is
-    // impossible for the BM25 fallback → proves the semantic path now runs.
+    // AFTER: a task with no lexical overlap embeds to SEM's direction [0,1].
+    // SEM is therefore returned even though BM25 has no possible hit.
     const after = await handleGetRelevantMemories(
-      { registry, storeRoot: store, embedFn: async () => [Float32Array.from([0, 1])] },
-      { projectId: PROJECT_ID, task: "handler" },
+      {
+        registry,
+        storeRoot: store,
+        embedFn: async () => [
+          Float32Array.from(Array.from({ length: 384 }, (_, index) => (index === 1 ? 1 : 0))),
+        ],
+      },
+      { projectId: PROJECT_ID, task: "unrelated" },
     );
-    expect(after.memory.map((m) => m.id)).toEqual([SEM, LEX]);
+    expect(after.memory.map((m) => m.id)).toEqual([SEM]);
   });
 });

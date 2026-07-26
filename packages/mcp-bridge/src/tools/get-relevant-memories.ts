@@ -6,19 +6,14 @@ import {
   type VerificationBadge,
   changedFromFor,
   isRecallable,
-  memoryEmbeddingsSidecarPath,
-  searchMemoryEntriesSemantic,
   verificationBadgeFor,
 } from "@megasaver/core";
-import { embed, readVectors } from "@megasaver/embeddings";
+import { rankProjectMemories } from "@megasaver/memory-recall";
 import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 import { type ContradictedDisclosure, spotCheckHits } from "./code-truth-check.js";
 
-// embedFn is injectable so the boundary can be unit-tested with a fake — no model
-// in CI. storeRoot locates the per-project memory-vector sidecar; absent ⇒ the
-// semantic signal is skipped and BM25 is used.
 export type EmbedFn = (texts: readonly string[]) => Promise<Float32Array[]>;
 export type GetRelevantMemoriesEnv = {
   registry: CoreRegistry;
@@ -52,20 +47,7 @@ export type GetRelevantMemoriesResult = {
   contradictedByCode?: ContradictedDisclosure[];
 };
 
-// Best-effort semantic ranking: returns vector-ranked memories ONLY when a
-// sidecar with FULL coverage of the candidate memories exists AND embedding the
-// task succeeds. Any failure (no storeRoot, no/partial sidecar, model absent,
-// embed throws) returns null so the caller falls back to BM25. Never throws.
-// Mirrors embeddingSignalFor in context-pruning.ts.
-//
-// Full-coverage guard: searchMemoryEntriesSemantic drops any candidate whose
-// vector is missing. No production path embeds on write, so a memory created or
-// approved after the last manual sidecar build is un-vectored — the default
-// steady state is PARTIAL coverage. Ranking a partial sidecar would silently
-// omit a real approved memory. So if any candidate lacks a vector, fall back to
-// BM25 (which returns all matches): results are either full-coverage semantic OR
-// BM25, never a silently-truncated mix.
-async function semanticMemoryRanking(
+async function hybridMemoryRanking(
   env: GetRelevantMemoriesEnv,
   projectId: ProjectId,
   task: string,
@@ -73,29 +55,15 @@ async function semanticMemoryRanking(
   asOf: string,
 ): Promise<MemoryEntry[] | null> {
   if (env.storeRoot === undefined) return null;
-  try {
-    const memoryVectors = readVectors(memoryEmbeddingsSidecarPath(env.storeRoot, projectId));
-    if (memoryVectors.size === 0) return null;
-    const entries = env.registry.listMemoryEntries(projectId);
-    // The same filter searchMemoryEntriesSemantic applies by default: approved,
-    // current-as-of (isRecallable), non-stale. A candidate missing a vector means
-    // partial coverage → BM25. The asOf gate must match so a closed (non-current)
-    // memory without a vector does not force a needless BM25 fallback.
-    const candidates = entries.filter((e) => isRecallable(e, asOf) && !e.stale);
-    if (candidates.some((e) => !memoryVectors.has(e.id))) return null;
-    const [queryVector] = await (env.embedFn ?? embed)([task]);
-    if (queryVector === undefined) return null;
-    // Pass `candidates` (the gated set the coverage check validated), not the raw
-    // entries, so the coverage gate and the ranked input are the same set.
-    return searchMemoryEntriesSemantic(candidates, {
-      queryVector,
-      memoryVectors,
-      asOf,
-      ...(limit !== undefined ? { limit } : {}),
-    });
-  } catch {
-    return null;
-  }
+  const result = await rankProjectMemories({
+    projectId,
+    entries: env.registry.listMemoryEntries(projectId),
+    task,
+    storeRoot: env.storeRoot,
+    query: { text: task, asOf, ...(limit === undefined ? {} : { limit }) },
+    ...(env.embedFn === undefined ? {} : { embed: env.embedFn }),
+  });
+  return [...result.memory];
 }
 
 // changedFrom enrichment (response-only, never persisted): a hit that
@@ -132,7 +100,7 @@ export async function handleGetRelevantMemories(
   const at = asOf ?? new Date().toISOString();
 
   try {
-    const semantic = await semanticMemoryRanking(env, projectId as ProjectId, task, limit, at);
+    const semantic = await hybridMemoryRanking(env, projectId as ProjectId, task, limit, at);
     const ranked =
       semantic ??
       env.registry.searchMemoryEntries(projectId as ProjectId, {

@@ -6,6 +6,7 @@ import {
   memoryTypeSchema,
 } from "@megasaver/core";
 import { checkEntitlement } from "@megasaver/entitlement";
+import { rankProjectMemories } from "@megasaver/memory-recall";
 import { defineCommand } from "citty";
 import { z } from "zod";
 import {
@@ -134,7 +135,19 @@ export async function runMemorySearch(input: RunMemorySearchInput): Promise<0 | 
       return cli.exitCode;
     }
 
-    const hits = registry.searchMemoryEntries(project.id, query);
+    const task = input.queryFlag?.trim();
+    const hits =
+      task === undefined || task === ""
+        ? registry.searchMemoryEntries(project.id, query)
+        : (
+            await rankProjectMemories({
+              projectId: project.id,
+              entries: registry.listMemoryEntries(project.id),
+              task,
+              storeRoot: rootDir,
+              query,
+            })
+          ).memory;
     if (input.jsonFlag) {
       input.stdout(JSON.stringify(hits));
     } else {

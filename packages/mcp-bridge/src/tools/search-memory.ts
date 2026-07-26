@@ -7,11 +7,12 @@ import {
   memoryScopeSchema,
   memoryTypeSchema,
 } from "@megasaver/core";
+import { rankProjectMemories } from "@megasaver/memory-recall";
 import type { ProjectId } from "@megasaver/shared";
 import { z } from "zod";
 import { McpBridgeError } from "../errors.js";
 
-export type SearchMemoryEnv = { registry: CoreRegistry };
+export type SearchMemoryEnv = { registry: CoreRegistry; storeRoot?: string };
 
 export const searchMemoryInputSchema = z
   .object({
@@ -49,7 +50,19 @@ export async function handleSearchMemory(
 
   try {
     const projectId = d.projectId;
-    const memory = env.registry.searchMemoryEntries(projectId as ProjectId, query);
+    const task = query.text?.trim();
+    const memory =
+      env.storeRoot === undefined || task === undefined || task === ""
+        ? env.registry.searchMemoryEntries(projectId as ProjectId, query)
+        : (
+            await rankProjectMemories({
+              projectId: projectId as ProjectId,
+              entries: env.registry.listMemoryEntries(projectId as ProjectId),
+              task,
+              storeRoot: env.storeRoot,
+              query,
+            })
+          ).memory;
     return { memory };
   } catch (err) {
     if (err instanceof CoreRegistryError && err.code === "project_not_found") {

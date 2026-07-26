@@ -387,7 +387,7 @@ export function buildServer(deps: ServerDeps): {
           args,
         );
       case "search_memory":
-        return handleSearchMemory({ registry: deps.registry }, args);
+        return handleSearchMemory({ registry: deps.registry, storeRoot: deps.storeRoot }, args);
       case "get_relevant_memories":
         return handleGetRelevantMemories(
           { registry: deps.registry, storeRoot: deps.storeRoot, isPro: deps.isPro ?? false, now },

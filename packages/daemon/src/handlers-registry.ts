@@ -6,6 +6,7 @@ import {
   runOutputPipeline,
 } from "@megasaver/context-gate";
 import { createJsonDirectoryCoreRegistry, isRecallable, isSafeKeySegment } from "@megasaver/core";
+import { rankProjectMemories } from "@megasaver/memory-recall";
 import { sessionIdSchema } from "@megasaver/shared";
 import { z } from "zod";
 import type { HandlerResponse } from "./handlers.js";
@@ -74,9 +75,16 @@ export async function recallRegistryHandler(
 
   const asOf = parsed.data.asOf ?? new Date().toISOString();
   const allMemory = registry.listMemoryEntries(session.projectId);
-  const memory = allMemory.filter(
+  const scopedMemory = allMemory.filter(
     (m) => isRecallable(m, asOf) && (m.sessionId === session.id || m.scope === "project"),
   );
+  const ranked = await rankProjectMemories({
+    projectId: session.projectId,
+    entries: scopedMemory,
+    task: parsed.data.intent,
+    storeRoot,
+    query: { text: parsed.data.intent, asOf },
+  });
 
   const chunkSets = await listChunkSets({
     storeRoot,
@@ -84,7 +92,10 @@ export async function recallRegistryHandler(
     sessionId: session.id,
   });
 
-  return { status: 200, json: { memory, chunkSets } };
+  return {
+    status: 200,
+    json: { memory: ranked.memory.length > 0 ? ranked.memory : scopedMemory, chunkSets },
+  };
 }
 
 // ─── deps type (shared by exec + read) ───────────────────────────────────────

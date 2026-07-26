@@ -40,6 +40,7 @@ const ALLOWED_MEGA_DEPENDENCIES = [
   "@megasaver/llm-proxy",
   "@megasaver/mcp-bridge",
   "@megasaver/memory-graph",
+  "@megasaver/memory-recall",
   "@megasaver/output-filter",
   "@megasaver/policy",
   "@megasaver/pro-analytics",

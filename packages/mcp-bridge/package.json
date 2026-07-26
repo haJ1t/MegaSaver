@@ -32,6 +32,7 @@
     "@megasaver/embeddings": "workspace:*",
     "@megasaver/evidence-ledger": "workspace:*",
     "@megasaver/indexer": "workspace:*",
+    "@megasaver/memory-recall": "workspace:*",
     "@megasaver/output-filter": "workspace:*",
     "@megasaver/policy": "workspace:*",
     "@megasaver/retrieval": "workspace:*",
