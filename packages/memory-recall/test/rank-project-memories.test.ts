@@ -401,4 +401,45 @@ describe("LM2 product-memory recall", () => {
       }),
     ).resolves.toMatchObject({ memory: [entry], hybrid: { profile: "safe" } });
   });
+
+  it("keeps a recent semantic-only candidate above the lexical window", async () => {
+    const semantic = memory({
+      id: "00000000-0000-4000-8000-000000000025",
+      title: "Semantic candidate",
+      content: "vector-only memory",
+      createdAt: NOW,
+    });
+    const entries = [
+      semantic,
+      ...Array.from({ length: 1_000 }, (_, index) =>
+        memory({
+          id: `00000000-0000-4000-8000-${String(index + 2_000).padStart(12, "0")}`,
+          title: `Older entry ${index}`,
+          content: "unrelated memory",
+          createdAt: `2026-07-${String((index % 25) + 1).padStart(2, "0")}T00:00:00.000Z`,
+        }),
+      ),
+    ];
+    const storeRoot = root();
+    const vector = Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0));
+    writeVectors(memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID), [{ id: semantic.id, vector }]);
+    writeFileSync(
+      memoryEmbeddingHashesSidecarPath(storeRoot, PROJECT_ID),
+      JSON.stringify({ [semantic.id]: memoryEmbeddingContentHash(semantic) }),
+      "utf8",
+    );
+
+    const result = await rankProjectMemories({
+      projectId: PROJECT_ID,
+      entries,
+      task: "no lexical overlap",
+      storeRoot,
+      query: { text: "no lexical overlap" },
+      embed: async () => [new Float32Array(vector)],
+      now: () => 0,
+    });
+
+    expect(result.memory.map((entry) => entry.id)).toContain(semantic.id);
+    expect(result.hybrid.profile).toBe("adaptive");
+  });
 });
