@@ -15,7 +15,7 @@ export async function forwardOrFallback<T>(
   routePath: string,
   body: unknown,
   inProcess: () => Promise<T>,
-  mapResponse: (json: unknown) => T = (j) => j as T,
+  mapResponse: (json: unknown) => T | Promise<T> = (j) => j as T,
 ): Promise<T> {
   try {
     const handle = await getRunningDaemon({ storeRoot });
@@ -24,7 +24,7 @@ export async function forwardOrFallback<T>(
     const res = await handle.request("POST", routePath, body);
     if (!res.ok) return inProcess();
 
-    return mapResponse(await res.json());
+    return await mapResponse(await res.json());
   } catch {
     return inProcess();
   }

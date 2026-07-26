@@ -165,7 +165,7 @@ describe("handleRecall", () => {
     );
   });
 
-  it("returns daemon {memory,chunkSets} when daemon is present, registry NOT read", async () => {
+  it("post-processes daemon recall through the code-truth response contract", async () => {
     const daemonResult = {
       memory: [{ id: "daemon-mem", content: "from daemon" }],
       chunkSets: [{ chunkSetId: "cs-daemon" }],
@@ -182,8 +182,7 @@ describe("handleRecall", () => {
     };
     mockGetRunningDaemon.mockResolvedValue(handle);
 
-    // Registry has no matching session — if in-process ran it would throw session_not_found.
-    const registry = createInMemoryCoreRegistry();
+    const registry = seededRegistry();
     const result = await handleRecall(
       { registry, storeRoot: store },
       { sessionId: SESSION_ID, intent: "build tooling" },
@@ -193,7 +192,8 @@ describe("handleRecall", () => {
       sessionId: SESSION_ID,
       intent: "build tooling",
     });
-    expect(result).toEqual(daemonResult);
+    expect(result.memory).toMatchObject([{ id: "daemon-mem", verification: "unanchored" }]);
+    expect(result.chunkSets).toEqual(daemonResult.chunkSets);
   });
 
   it("falls back to in-process on daemon non-2xx (registry lookup runs)", async () => {

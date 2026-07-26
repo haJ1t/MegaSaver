@@ -134,5 +134,49 @@ export async function handleRecall(
           : {}),
       };
     },
+    async (json) => {
+      const forwarded = json as {
+        memory: readonly MemoryEntry[];
+        chunkSets: readonly ChunkSetSummary[];
+        hybrid?: Awaited<ReturnType<typeof rankProjectMemories>>["hybrid"];
+      };
+      const session = env.registry.getSession(sessionId as SessionId);
+      if (session === null) {
+        throw new McpBridgeError("session_not_found", `session not found: ${sessionId}`);
+      }
+      const allMemory = env.registry.listMemoryEntries(session.projectId);
+      const project = env.registry.getProject(session.projectId);
+      const check =
+        project !== null
+          ? await spotCheckHits(
+              {
+                registry: env.registry,
+                isPro: env.isPro ?? false,
+                now: env.now ?? (() => new Date().toISOString()),
+                ...(env.monotonicNow !== undefined ? { monotonicNow: env.monotonicNow } : {}),
+                ...(env.execGit !== undefined ? { execGit: env.execGit } : {}),
+                ledger: { storeRoot: env.storeRoot, sessionId: session.id },
+              },
+              project.rootPath,
+              forwarded.memory,
+            )
+          : { hits: forwarded.memory, contradictedByCode: [] as ContradictedDisclosure[] };
+      const byId = new Map<string, MemoryEntry>(allMemory.map((memory) => [memory.id, memory]));
+      return {
+        memory: check.hits.map((memory) => {
+          const changedFrom = changedFromFor(memory, byId);
+          return {
+            ...memory,
+            ...(changedFrom === undefined ? {} : { changedFrom }),
+            verification: verificationBadgeFor(memory),
+          };
+        }),
+        chunkSets: forwarded.chunkSets,
+        ...(forwarded.hybrid === undefined ? {} : { hybrid: forwarded.hybrid }),
+        ...(check.contradictedByCode.length === 0
+          ? {}
+          : { contradictedByCode: check.contradictedByCode }),
+      };
+    },
   );
 }
