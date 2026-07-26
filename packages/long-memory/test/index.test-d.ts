@@ -63,6 +63,7 @@ it("preserves LM0 exports while adding LM1 contracts", () => {
   expect(longMemory).not.toHaveProperty("createLm1RecallService");
   expectTypeOf(longMemory.createLm1Runtime).toBeFunction();
   expectTypeOf(longMemory.createLm2Runtime).toBeFunction();
+  expectTypeOf(longMemory.rankLm2Candidates).toBeFunction();
 });
 
 it("adds LM2 contracts without removing LM0 or LM1 root imports", () => {

@@ -53,7 +53,7 @@ export const lm2V2SidecarSchema = z
     schemaVersion: z.literal(2),
     workspaceKey: workspaceKeySchema,
     recordId: lowercaseUuidSchema,
-    kind: z.enum(["state_snapshot", "state_transition"]),
+    kind: z.enum(["state_snapshot", "state_transition", "memory_entry"]),
     sourceDigest: sha256Schema,
     embeddingInputDigest: sha256Schema,
     model: modelDescriptorSchema,
