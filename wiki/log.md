@@ -5662,3 +5662,23 @@ Tests: `apps/cli/test/doctor.test.ts` (`checkSettingsPermissions`, posix-only).
 
 Sources: [[docs/superpowers/specs/2026-07-25-hook-settings-file-mode-design]],
 [[entities/connectors-claude-code]].
+
+## 2026-07-26 — seed-guard allowlist had three dead entries
+
+`MATCH_FREE_BY_DESIGN` exempted three labels the guard never iterates, so they
+exempted nothing while reading as coverage. Removed, and a parity test now
+fails if any exemption names something outside `NEW_DETECTORS`.
+
+The tempting fix — extend the guard to `SEEDS` and `EXTRA_PK_SEEDS` — is wrong,
+and measuring said so: **all ten of those seeds produce zero matches by design**.
+They are worst-case scan seeds where the cost is the engine failing at every
+position, so a match-count guard would exempt 10 of 10. Extending it would have
+produced a guard that skips everything and looks thorough — the same illusion
+the dead entries created.
+
+General shape: **when an allowlist exempts nearly everything it touches, the
+check is the wrong instrument, not the allowlist too short.** For scan seeds the
+answerable question is "does it still contain its anchor?", not "does it
+match?". Left unbuilt and recorded.
+
+Sources: [[docs/superpowers/specs/2026-07-26-probe-parity-design]] §6.
