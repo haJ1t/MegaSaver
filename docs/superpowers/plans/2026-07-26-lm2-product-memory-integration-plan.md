@@ -17,7 +17,8 @@ failure, and MCP/daemon responses now carry the additive `hybrid` receipt.
 final independent and adversarial review plus PR/merge handoff. The reviewer
 provider was restored on 2026-07-26; its first fresh pass found and the branch
 now fixes task-aware candidate preselection plus bounded Safe fallback for
-oversized LM2 inputs. A fresh re-review must verify those P1 closures. A
+oversized LM2 per-candidate and aggregate-corpus inputs. A fresh re-review must
+verify those P1 closures. A
 concrete cross-surface fixture in the CLI suite proves identical Safe ordering
 through the shared adapter, both applicable MCP calls, daemon registry recall,
 and CLI search without

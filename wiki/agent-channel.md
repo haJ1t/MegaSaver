@@ -32,9 +32,11 @@ is restored; re-review is pending.** `pnpm verify` passes on
 the product paths now use the shared `@megasaver/memory-recall` adapter. A fresh
 reviewer launched successfully after the local proxy settings were removed and
 found two P1s: newest-first candidate truncation could omit a relevant older
-memory, and LM2's 50,000-code-unit input bound could escape as a caller error.
-Both have focused regression tests and a committed fix; a new fresh-context
-review must confirm the closures before merge. The latest verifier run also
+memory, and LM2's input bounds could escape as a caller error. A fix re-review
+confirmed task-aware preselection, then exposed and the branch fixed the
+remaining 64 MiB aggregate UTF-8 corpus bound. The full verifier passed after
+the focused aggregate-limit regression; a new fresh-context review must confirm
+the closures before merge. The latest verifier run also
 includes a cross-surface Safe-order fixture for adapter, MCP, daemon, and CLI.
 The prior branch was superseded because it had drifted 17 commits from
 `origin/main`; its complete LM0–LM2 history was replayed onto the current base,
