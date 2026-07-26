@@ -28,14 +28,16 @@ Status: pending | acknowledged | done
 
 **LM2 product-memory integration is verifier-clean but merge-blocked by the
 review provider.** `pnpm verify` passes on
-`rebase/long-memory-hybrid-recall`; the product paths now use the shared
+`feat/lm2-product-memory-integration`, which is based on current `origin/main`;
+the product paths now use the shared
 `@megasaver/memory-recall` adapter. Four independent reviewer launches (both
 available model routes attempted) failed before execution with local-provider
 HTTP 404: `No enabled canonical OpenAI provider`. Do not merge until a fresh
 external reviewer can inspect the final branch range. The latest verifier run
 also includes a cross-surface Safe-order fixture for adapter, MCP, daemon, and
-CLI. The branch is also five commits behind `main`; its predicted integration
-conflict is limited to `wiki/log.md` and must preserve both logs.
+CLI. The prior branch was superseded because it had drifted 17 commits from
+`origin/main`; its complete LM0–LM2 history was replayed onto the current base,
+with only additive `wiki/log.md` history merged.
 
 Status: pending external-state recovery
 
