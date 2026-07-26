@@ -164,7 +164,7 @@ export const NEW_DETECTORS = {
     seed: (n) => `SK${"0123456789abcdef".repeat(2).slice(0, 31)} `.repeat(Math.ceil(n / 34)),
   },
   connection_string_secret: {
-    re: /(?=[^;\s])(?<=(?:^|;)\s{0,8}(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)\s{0,8}=\s{0,8})(?:"[^"]{8,8192}"|'[^']{8,8192}'|[^;\s]{8,})/gi,
+    re: /(?=[^;\s])(?<=(?:^|;)\s{0,8}(?:password|accountkey|sharedaccesskey|sharedaccesssignature|userpassword)\s{0,8}=\s{0,8})(?:"(?:[^"]|""){8,8192}"|'(?:[^']|''){8,8192}'|[^;\s]{8,})/gi,
     // ";password=" is rejected by the `(?=[^;\\s])` guard at EVERY position,
     // because the char after each `=` is `;` — the row was a guard test that
     // could not fail, and never walked the lookbehind the guard protects.

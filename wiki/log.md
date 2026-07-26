@@ -6817,3 +6817,17 @@ artifact. With `packages/long-memory/dist` temporarily absent, the LM1 store
 suite is 28/28; the complete long-memory suite is 45/45 files and 413/413
 tests. (source: `packages/long-memory/test/fixtures/lm1-publish-child.ts`,
 `pr312_release_review`, 2026-07-26)
+
+## [2026-07-26 19:22 +03] fix | restore policy ReDoS probe parity
+
+The replacement LM2 release matrix (PR #315, Ubuntu job `89814290161`) exposed
+a real policy verification regression: the new imported-regex parity test found
+that `scripts/redos-probe.mjs` measured the pre-`230df3f7` connection-string
+regex, while production handles doubled quotes inside ADO.NET quoted secrets.
+The production pattern and the strict parity test were deliberately left
+unchanged; the one probe expression now matches the shipped expression byte for
+byte. The originally failing policy suite is now 19/19 files and 701/701 tests,
+and the full `pnpm verify` gate passed locally. A replacement two-platform CI
+matrix and fresh independent review remain required before merging. (source:
+`docs/superpowers/specs/2026-07-26-policy-probe-parity-design.md`, GitHub
+Actions run `30209915950`)
