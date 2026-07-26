@@ -6928,3 +6928,12 @@ string form. Snapshot reads likewise accept only the safe canonical legacy
 shape. The end-to-end migration case, focused suites, and the full `pnpm
 verify` gate pass; PR #315 is ready for a replacement two-platform CI run.
 (source: `pr312_release_review`, 2026-07-26)
+
+## [2026-07-26 20:47 +03] fix | preserve LM2 source boundary after identity transition
+
+Ubuntu CI found the extended ledger-recovery module at 302 lines, violating the
+project's strict 300-line source boundary. The canonical legacy quota-ledger
+normalizer and serializer now live in a dedicated 76-line module, leaving the
+recovery module at 234 lines without changing its public parser. Source-size,
+ledger, index, read, full verification, and a fresh independent review pass.
+(source: GitHub Actions run `30213074787`, `pr312_release_review`, 2026-07-26)
