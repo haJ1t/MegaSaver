@@ -17,7 +17,8 @@ worktree; no edits on `main`.
    canonical positive and the table-length pin (39), proving both guards live.
 
 3. **Pins for the new row.** Byte pin, `.flags` pin, non-vacuity entry, table
-   length 39 → 40, and extend the ordering `it.each` list to include it.
+   length 39 → 40, and extend the ordering `it.each` list to include it. Use
+   `gi`, not `g`, because URI scheme and DNS host matching is case-insensitive.
    → verify: gate green; flipping the insertion index to last reddens the
    ordering test (guard is load-bearing, not decorative).
 

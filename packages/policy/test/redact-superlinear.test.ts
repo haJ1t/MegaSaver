@@ -78,7 +78,7 @@ describe("structural gates (spec §6.1)", () => {
     ["digitalocean_token", "g"],
     ["twilio_api_key_sid", "g"],
     ["connection_string_secret", "gi"],
-    ["slack_webhook_url", "g"],
+    ["slack_webhook_url", "gi"],
   ])("%s keeps flags %s", (name, flags) => {
     expect(entry(name).pattern.flags).toBe(flags);
   });
@@ -1127,6 +1127,7 @@ describe("residual carriers disclosed in spec §5b", () => {
     ["workflows", `https://hooks.slack.com/workflows/T0000/A0000/1234567890/${HOOK}`],
     ["triggers", `https://hooks.slack.com/triggers/T0000/1234567890/${HOOK}`],
     ["plaintext http", `http://hooks.slack.com/services/T0/B0/${HOOK}`],
+    ["mixed-case scheme and host", `HTTPS://HOOKS.SLACK.COM/services/T0/B0/${HOOK}`],
   ])("redacts a Slack %s webhook URL", (_l, input) => {
     const { redacted, findings } = redactWithFindings(input);
     expect(findings.map((f) => f.name)).toContain("slack_webhook_url");

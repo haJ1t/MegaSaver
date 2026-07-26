@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { MemoryEntry } from "@megasaver/core";
-import type { Lm2Candidate } from "@megasaver/long-memory";
+import type { Lm2Candidate } from "@megasaver/long-memory/ranker";
 import type { WorkspaceKey } from "@megasaver/shared";
 
 export function memoryCandidate(entry: MemoryEntry, workspaceKey: WorkspaceKey): Lm2Candidate {

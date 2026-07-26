@@ -174,7 +174,17 @@ describe("LM2 benchmark admission and filesystem boundary", () => {
     });
     expect(packageJson.exports).toEqual({
       ".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
+      "./ranker": {
+        types: "./dist/lm2-ranker-entry.d.ts",
+        import: "./dist/lm2-ranker-entry.js",
+      },
     });
+    const rankerSource = readFileSync(
+      join(import.meta.dirname, "../src/lm2-ranker-entry.ts"),
+      "utf8",
+    );
+    expect(rankerSource).not.toContain("lm2-benchmark");
+    expect(rankerSource).not.toContain("fs-ext");
     expect(tsup).toContain('"src/lm2-benchmark.ts"');
   });
 });

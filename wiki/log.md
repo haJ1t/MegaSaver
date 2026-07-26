@@ -6400,3 +6400,21 @@ exact redacted output. The reviewer approved the repair with no P0/P1/P2;
 policy tests are 667/667, the whole `pnpm verify` gate passed, and adversarial
 2→4 MiB inputs measured 1.87x (unterminated) and 1.86x (escaped) growth.
 (source: `policy_release_security_review`, 2026-07-26)
+
+## [2026-07-26 18:35 +03] fix | close PR #312 standalone and redaction findings
+
+PR #312 review found three release blockers: the product-recall import pulled
+the Long Memory barrel and thereby placed a native `fs-ext` payload in the
+standalone CLI, the artifact exceeded its 12 MiB ceiling, and uppercase Slack
+webhook URL scheme/host variants escaped redaction. Long Memory now exposes a
+benchmark-free, `fs-ext`-free `./ranker` public entrypoint used only by the
+recall adapter; the single-file CLI bundle applies whitespace minification and
+is 8.33 MiB with no `.node` payload. Slack webhook matching is `gi` and pins
+the uppercase case. The benchmark package-boundary tests now explicitly allow
+only this narrow additional export while proving it contains neither benchmark
+transport nor `fs-ext`. The standalone smoke suite is 7/7, focused Long Memory
+boundary/index tests are 48/48, policy is 668/668, and `pnpm verify` passes.
+A new independent review is still required before merge. (source:
+`apps/cli/tsup.bundle.config.ts`,
+`packages/long-memory/src/lm2-ranker-entry.ts`,
+`packages/policy/src/redaction-patterns.ts`, PR #312)
