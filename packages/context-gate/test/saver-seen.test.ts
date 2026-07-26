@@ -1,14 +1,18 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { hasSeenOutput, hashToolOutput, recordSeenOutput } from "../src/saver-seen.js";
 
 let store: string;
 beforeEach(() => {
   store = mkdtempSync(join(tmpdir(), "mega-seen-"));
 });
-afterEach(() => rmSync(store, { recursive: true, force: true }));
+afterEach(() => {
+  vi.doUnmock("node:fs");
+  vi.resetModules();
+  rmSync(store, { recursive: true, force: true });
+});
 
 const WK = "wk1";
 const SID = "sess-1";
@@ -48,5 +52,22 @@ describe("saver seen-hash ledger", () => {
     writeFileSync(join(store, "stats", WK, "saver-seen", `${SID}.json.lock`), "");
 
     expect(hasSeenOutput(store, WK, SID, h)).toBe(false);
+  });
+
+  it("does not depend on replacing the ledger file", async () => {
+    const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+    vi.doMock("node:fs", () => ({
+      ...actual,
+      renameSync() {
+        throw new Error("injected Windows replacement denial");
+      },
+    }));
+    vi.resetModules();
+    const seen = await import("../src/saver-seen.js");
+    const h = seen.hashToolOutput("no replacement needed");
+
+    seen.recordSeenOutput(store, WK, SID, h);
+
+    expect(seen.hasSeenOutput(store, WK, SID, h)).toBe(true);
   });
 });

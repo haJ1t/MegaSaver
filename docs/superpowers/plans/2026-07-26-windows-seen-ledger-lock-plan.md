@@ -34,7 +34,7 @@ blocking a hook.
   inside the existing writer lock and never propagates an auxiliary write
   failure.
 
-- [ ] **Step 1: Add the failing target-replacement regression test**
+- [x] **Step 1: Add the failing target-replacement regression test**
 
 Mock `node:fs.renameSync` to throw, dynamically import a fresh
 `saver-seen.ts`, then record a hash and assert that it is still reported as
@@ -44,7 +44,7 @@ Run: `pnpm --filter @megasaver/context-gate exec vitest run test/saver-seen.test
 
 Expected before the correction: FAIL with the injected replacement error.
 
-- [ ] **Step 2: Write the ledger directly under the existing writer lock**
+- [x] **Step 2: Write the ledger directly under the existing writer lock**
 
 Replace temporary-file creation and `renameSync` with a direct
 `writeFileSync(path, JSON.stringify({ version: 1, hashes: capped }))`. Catch a
@@ -52,9 +52,14 @@ write error inside the lock callback and return normally, because this ledger's
 documented fail-open result is a redundant compression rather than a failed
 tool hook.
 
-- [ ] **Step 3: Verify the unit and process race contracts**
+- [x] **Step 3: Verify the unit and process race contracts**
 
 Run: `pnpm --filter @megasaver/context-gate exec vitest run test/saver-seen.test.ts test/saver-seen-concurrency.test.ts`
 
 Expected: all seen-ledger unit tests and the four concurrently spawned writers
 pass, including the injected replacement failure contract.
+
+Observed: the injected replacement test was red before implementation; the
+seven focused unit/process tests, package typecheck, lint, and root `pnpm
+verify` are green after implementation. Fresh independent review and a
+replacement two-platform CI matrix remain release gates.

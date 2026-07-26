@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { withFileLock } from "@megasaver/shared/node";
 import { z } from "zod";
@@ -68,8 +68,10 @@ export function recordSeenOutput(
     const hashes = readHashes(path);
     if (!hashes.includes(hash)) hashes.push(hash);
     const capped = hashes.slice(-SEEN_CAP);
-    const tmp = join(dir, `.${randomUUID()}.tmp`);
-    writeFileSync(tmp, JSON.stringify({ version: 1, hashes: capped }));
-    renameSync(tmp, path);
+    try {
+      writeFileSync(path, JSON.stringify({ version: 1, hashes: capped }));
+    } catch {
+      // Auxiliary cache writes may fail open; the next hook recompresses once.
+    }
   });
 }

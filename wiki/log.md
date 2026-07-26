@@ -6971,6 +6971,20 @@ write to “not seen,” which is safe redundant compression. (source: GitHub
 Actions job `89828358449`, `packages/context-gate/src/saver-seen.ts`,
 2026-07-26)
 
+## [2026-07-26 21:56 +03] fix | eliminate Windows seen-ledger replacement race
+
+The injected `renameSync` denial regression failed red against the existing
+writer, proving the auxiliary ledger still depended on target replacement.
+The writer now directly writes its tiny JSON payload while holding the same
+session lock used by every product reader. A write interruption is safe under
+the pre-existing fail-open parser: the following hook treats it as not seen and
+may compress once more, but no hook fails or reads a partial in-process write.
+The replacement-denial contract, four-process lost-update contract, package
+typecheck, lint, and full `pnpm verify` pass locally. Fresh independent review
+and a replacement Windows matrix remain required before merge. (source:
+GitHub Actions job `89828358449`,
+`packages/context-gate/src/saver-seen.ts`, 2026-07-26)
+
 ## [2026-07-26 20:47 +03] fix | preserve LM2 source boundary after identity transition
 
 Ubuntu CI found the extended ledger-recovery module at 302 lines, violating the
