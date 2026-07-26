@@ -356,9 +356,10 @@ the body inserts `[`, which is outside the body class, so the run stops there.
 For jwk/jwt the enclosing span could no longer complete and the whole secret
 survived; for a webhook URL the loss is partial (the characters before the hit).
 
-The webhook detector uses `gi`: both URI schemes and DNS hosts are
-case-insensitive, so uppercase `HTTPS://HOOKS.SLACK.COM` must receive the same
-redaction as its canonical lowercase form. (source:
+The webhook detector uses explicit case-pairs for URI scheme and DNS host, so
+uppercase `HTTPS://HOOKS.SLACK.COM` receives the same redaction as its
+canonical lowercase form without accepting a noncanonical endpoint path.
+(source:
 `packages/policy/src/redaction-patterns.ts`,
 `packages/policy/test/redact-superlinear.test.ts`)
 The ordering pin in `redact-superlinear.test.ts` now covers all three, and its
