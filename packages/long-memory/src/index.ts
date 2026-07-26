@@ -8,6 +8,7 @@ export {
   type Lm2RankResult,
   type RankLm2CandidatesInput,
 } from "./lm2-ranker.js";
+export type { Lm2RankVectorReader } from "./lm2-semantic-lane.js";
 export {
   MAX_LM2_ADMITTED_MODELS,
   MAX_LM2_CANDIDATE_TEXT_CODE_UNITS,

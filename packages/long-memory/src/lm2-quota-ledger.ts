@@ -45,7 +45,7 @@ const recordIdentityInputSchema = z
   .object({
     workspaceKey: workspaceKeySchema,
     id: lowercaseUuidSchema,
-    kind: z.enum(["state_snapshot", "state_transition"]),
+    kind: z.enum(["state_snapshot", "state_transition", "memory_entry"]),
     sourceDigest: sha256Schema,
     embeddingInputDigest: sha256Schema,
     modelFingerprint: sha256Schema,

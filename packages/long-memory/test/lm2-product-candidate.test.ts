@@ -13,14 +13,25 @@ const candidate = {
 describe("LM2 product-memory candidate contract", () => {
   it("admits a memory entry without changing benchmark kinds", () => {
     expect(longMemory.lm2CandidateSchema.safeParse(candidate).success).toBe(true);
-    expect(longMemory.lm2CandidateSchema.safeParse({ ...candidate, kind: "state_snapshot" }).success).toBe(
-      true,
+    expect(
+      longMemory.lm2CandidateSchema.safeParse({ ...candidate, kind: "state_snapshot" }).success,
+    ).toBe(true);
+    expect(longMemory.lm2CandidateSchema.safeParse({ ...candidate, kind: "unknown" }).success).toBe(
+      false,
     );
-    expect(longMemory.lm2CandidateSchema.safeParse({ ...candidate, kind: "unknown" }).success).toBe(false);
   });
 
   it("exports the generic LM2 ranker for product adapters", () => {
     const api = longMemory as unknown as { rankLm2Candidates?: unknown };
     expect(api.rankLm2Candidates).toBeTypeOf("function");
+  });
+
+  it("derives a canonical embedding identity for product memory", () => {
+    expect(() =>
+      longMemory.embeddingInputDigest({
+        kind: "memory_entry",
+        text: candidate.text,
+      }),
+    ).not.toThrow();
   });
 });
