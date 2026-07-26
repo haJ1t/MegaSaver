@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import {
   closeSync,
+  fstatSync,
   fsyncSync,
   mkdirSync,
   openSync,
   readFileSync,
+  readSync,
   renameSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -49,10 +50,22 @@ export function readVectors(
 ): Map<string, Float32Array> {
   let raw: string;
   try {
-    if (options.maxBytes !== undefined && statSync(path).size > options.maxBytes) {
-      throw new RangeError("Vector sidecar exceeds the configured read limit.");
+    if (options.maxBytes !== undefined) {
+      const fd = openSync(path, "r");
+      try {
+        const before = fstatSync(fd).size;
+        if (before > options.maxBytes) return new Map();
+        const bytes = Buffer.alloc(before);
+        if (readSync(fd, bytes, 0, before, 0) !== before || fstatSync(fd).size !== before) {
+          return new Map();
+        }
+        raw = bytes.toString("utf8");
+      } finally {
+        closeSync(fd);
+      }
+    } else {
+      raw = readFileSync(path, "utf8");
     }
-    raw = readFileSync(path, "utf8");
   } catch {
     return new Map();
   }
