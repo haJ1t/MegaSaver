@@ -6844,3 +6844,15 @@ integration suite passes 60/60 and the full `pnpm verify` gate passes locally.
 A fresh reviewer pass and a replacement matrix remain required before merge.
 (source: `packages/long-memory/test/lm2-completion-fixtures.ts`,
 `pr312_release_review`, 2026-07-26)
+
+## [2026-07-26 19:38 +03] fix | serialize Windows saver seen-ledger reads
+
+The final Windows matrix exposed an independent platform race after the LM2
+fixture path completed: a saver hook read a session JSON ledger without the
+writer's lock, so Windows rejected another hook's atomic rename with `EPERM`.
+Both operations now use the same 50 ms stale-aware lock. A contended read
+returns `false`, preserving the established fail-open policy. The new lock
+contention contract and the real four-process race suite pass 6/6 locally.
+Fresh review and a replacement two-platform matrix are required before merge.
+(source: GitHub Actions job `89815835263`,
+`docs/superpowers/specs/2026-07-26-windows-seen-ledger-lock-design.md`)

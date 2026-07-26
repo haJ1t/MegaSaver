@@ -41,4 +41,12 @@ describe("saver seen-hash ledger", () => {
     writeFileSync(join(store, "stats", WK, "saver-seen", `${SID}.json`), "{corrupt");
     expect(hasSeenOutput(store, WK, SID, h)).toBe(false);
   });
+
+  it("fails open instead of reading while a writer holds the ledger lock", () => {
+    const h = hashToolOutput("locked");
+    recordSeenOutput(store, WK, SID, h);
+    writeFileSync(join(store, "stats", WK, "saver-seen", `${SID}.json.lock`), "");
+
+    expect(hasSeenOutput(store, WK, SID, h)).toBe(false);
+  });
 });

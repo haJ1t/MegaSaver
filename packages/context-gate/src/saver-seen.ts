@@ -12,6 +12,7 @@ import { z } from "zod";
 // are naturally session-scoped and small; a 500-hash FIFO cap bounds them.
 
 const SEEN_CAP = 500;
+const SEEN_LOCK_OPTIONS = { deadlineMs: 50, staleMs: 5000 };
 
 const seenSchema = z.object({ version: z.literal(1), hashes: z.array(z.string()) });
 
@@ -39,7 +40,12 @@ export function hasSeenOutput(
   sessionId: string,
   hash: string,
 ): boolean {
-  return readHashes(seenPath(storeRoot, workspaceKey, sessionId)).includes(hash);
+  const path = seenPath(storeRoot, workspaceKey, sessionId);
+  let seen = false;
+  withFileLock(`${path}.lock`, SEEN_LOCK_OPTIONS, () => {
+    seen = readHashes(path).includes(hash);
+  });
+  return seen;
 }
 
 export function recordSeenOutput(
@@ -57,7 +63,7 @@ export function recordSeenOutput(
   // stats/store.ts (E26): deadlineMs 50 (a hook must not stall the agent),
   // staleMs 5000 (a dead writer's lock is stolen). A skipped write is the
   // pre-existing fail-open — one redundant compression, never a broken call.
-  withFileLock(`${path}.lock`, { deadlineMs: 50, staleMs: 5000 }, () => {
+  withFileLock(`${path}.lock`, SEEN_LOCK_OPTIONS, () => {
     const hashes = readHashes(path);
     if (!hashes.includes(hash)) hashes.push(hash);
     const capped = hashes.slice(-SEEN_CAP);
