@@ -32,3 +32,8 @@ Task-based CLI memory search, MCP `get_relevant_memories`, `search_memory`,
 (source: `apps/cli/src/commands/memory/search.ts`,
 `packages/mcp-bridge/src/tools/{get-relevant-memories,search-memory,recall}.ts`,
 `packages/daemon/src/handlers-registry.ts`)
+
+The concrete cross-surface fixture proves the same Safe ordered ids through the
+adapter, MCP relevant-memory/search, daemon registry recall, and CLI search;
+an unapproved proposed memory stays excluded. (source:
+`apps/cli/test/memory/hybrid-recall-surfaces.test.ts`)
