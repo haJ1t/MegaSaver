@@ -18,7 +18,8 @@ worktree; no edits on `main`.
 
 3. **Pins for the new row.** Byte pin, `.flags` pin, non-vacuity entry, table
    length 39 → 40, and extend the ordering `it.each` list to include it. Use
-   `gi`, not `g`, because URI scheme and DNS host matching is case-insensitive.
+   explicit scheme/host case-pairs with `g`, because URI scheme and DNS host
+   matching is case-insensitive but the endpoint path is case-sensitive.
    → verify: gate green; flipping the insertion index to last reddens the
    ordering test (guard is load-bearing, not decorative).
 

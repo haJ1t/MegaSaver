@@ -78,7 +78,7 @@ describe("structural gates (spec §6.1)", () => {
     ["digitalocean_token", "g"],
     ["twilio_api_key_sid", "g"],
     ["connection_string_secret", "gi"],
-    ["slack_webhook_url", "gi"],
+    ["slack_webhook_url", "g"],
   ])("%s keeps flags %s", (name, flags) => {
     expect(entry(name).pattern.flags).toBe(flags);
   });
@@ -131,7 +131,7 @@ describe("post-lock detector bytes", () => {
     ["twilio_api_key_sid", "\\bSK[0-9a-f]{32}\\b"],
     [
       "slack_webhook_url",
-      "(?=[A-Za-z0-9/_-])(?<=https?:\\/\\/hooks\\.slack\\.com\\/(?:services|workflows|triggers)\\/)[A-Za-z0-9/_-]{16,}",
+      "(?=[A-Za-z0-9/_-])(?<=[Hh][Tt][Tt][Pp][Ss]?:\\/\\/[Hh][Oo][Oo][Kk][Ss]\\.[Ss][Ll][Aa][Cc][Kk]\\.[Cc][Oo][Mm]\\/(?:services|workflows|triggers)\\/)[A-Za-z0-9/_-]{16,}",
     ],
     [
       "connection_string_secret",
@@ -1133,6 +1133,16 @@ describe("residual carriers disclosed in spec §5b", () => {
     expect(findings.map((f) => f.name)).toContain("slack_webhook_url");
     expect(redacted).not.toContain(HOOK);
   });
+
+  it.each(["SERVICES", "Workflows", "TRIGGERS"])(
+    "does not redact a Slack webhook with a noncanonical %s path",
+    (path) => {
+      const input = `HTTPS://HOOKS.SLACK.COM/${path}/T0/B0/${HOOK}`;
+      const { redacted, findings } = redactWithFindings(input);
+      expect(findings.map((finding) => finding.name)).not.toContain("slack_webhook_url");
+      expect(redacted).toBe(input);
+    },
+  );
 
   // Host and endpoint kind stay readable: report grouping needs a host, and a
   // reader needs to know which Slack surface leaked. Same reason

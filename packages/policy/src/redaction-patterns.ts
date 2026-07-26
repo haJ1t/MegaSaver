@@ -173,10 +173,11 @@ const baseline: RedactionPattern[] = [
     // Matching only the path AFTER `…/services/` keeps host and endpoint kind
     // in the output: report grouping needs a host. `/` is inside the class
     // because the credential is the whole `T…/B…/token` triple, not the last
-    // segment.
+    // segment. Scheme and host have explicit case pairs; the endpoint path
+    // remains case-sensitive.
     name: "slack_webhook_url",
     pattern:
-      /(?=[A-Za-z0-9/_-])(?<=https?:\/\/hooks\.slack\.com\/(?:services|workflows|triggers)\/)[A-Za-z0-9/_-]{16,}/gi,
+      /(?=[A-Za-z0-9/_-])(?<=[Hh][Tt][Tt][Pp][Ss]?:\/\/[Hh][Oo][Oo][Kk][Ss]\.[Ss][Ll][Aa][Cc][Kk]\.[Cc][Oo][Mm]\/(?:services|workflows|triggers)\/)[A-Za-z0-9/_-]{16,}/g,
     replacement: "[REDACTED]",
   },
   {
