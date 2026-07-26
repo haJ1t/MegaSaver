@@ -30,7 +30,7 @@ Status: pending | acknowledged | done
 review provider.** `pnpm verify` passes on
 `feat/lm2-product-memory-integration`, which is based on current `origin/main`;
 the product paths now use the shared
-`@megasaver/memory-recall` adapter. Four independent reviewer launches (both
+`@megasaver/memory-recall` adapter. Five independent reviewer launches (both
 available model routes attempted) failed before execution with local-provider
 HTTP 404: `No enabled canonical OpenAI provider`. Do not merge until a fresh
 external reviewer can inspect the final branch range. The latest verifier run
@@ -38,6 +38,9 @@ also includes a cross-surface Safe-order fixture for adapter, MCP, daemon, and
 CLI. The prior branch was superseded because it had drifted 17 commits from
 `origin/main`; its complete LM0–LM2 history was replayed onto the current base,
 with only additive `wiki/log.md` history merged.
+
+The most recent fresh-context review attempt targeted this current integration
+branch and again failed before execution with that same local-provider 404.
 
 Status: pending external-state recovery
 

@@ -6323,3 +6323,13 @@ replayed without rewriting the original branch. Only additive `wiki/log.md`
 history required manual union. `pnpm install --frozen-lockfile` and `pnpm verify`
 passed on the new branch. Independent review remains the only release gate.
 (source: branch `feat/lm2-product-memory-integration`, 2026-07-26 verifier)
+
+## [2026-07-26 17:00 +03] review | LM2 integration reviewer unavailable
+
+A fresh independent code-review launch against
+`origin/main..feat/lm2-product-memory-integration` failed before receiving the
+diff: the local reviewer endpoint returned `404 No enabled canonical OpenAI
+provider for model: gpt-5.6-terra`. This is the fifth repeated provider failure,
+not a code-review result. The integration branch remains clean after its frozen
+install and full verifier pass; do not merge until an independent reviewer can
+run. (source: 2026-07-26 `lm2_integration_review` launcher result)
