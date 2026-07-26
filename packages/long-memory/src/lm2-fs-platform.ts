@@ -20,9 +20,16 @@ export function syncDirectoryAnchor(
   anchor: DirectoryAnchor,
   platform: NodeJS.Platform = process.platform,
 ): void {
-  if (platform === "win32") return;
   const descriptor = anchor.chain.at(-1)?.descriptor;
   if (descriptor === undefined)
     throw new Lm2Error("store_corrupt", "LM2 directory anchor is empty.");
+  syncDirectoryDescriptor(descriptor, platform);
+}
+
+export function syncDirectoryDescriptor(
+  descriptor: number,
+  platform: NodeJS.Platform = process.platform,
+): void {
+  if (platform === "win32") return;
   fsyncSync(descriptor);
 }

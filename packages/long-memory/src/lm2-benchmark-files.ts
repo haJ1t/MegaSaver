@@ -11,6 +11,7 @@ import {
   openSafeBenchmarkPath,
   verifySafeBenchmarkPath,
 } from "./lm2-benchmark-safe-path.js";
+import { syncDirectoryDescriptor } from "./lm2-secure-fs.js";
 
 const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/u);
 const tokenSchema = z.string().regex(/^[0-9a-f]{32}$/u);
@@ -126,8 +127,8 @@ export function createBenchmarkRun(input: {
   };
   writeExclusive(join(root, "sentinel.json"), control);
   writeExclusive(join(root, "control.json"), control);
-  fsyncSync(safeRoot.descriptor);
-  fsyncSync(cacheParent.descriptor);
+  syncDirectoryDescriptor(safeRoot.descriptor);
+  syncDirectoryDescriptor(cacheParent.descriptor);
   closeSync(lock.descriptor);
   closeSync(safeRoot.descriptor);
   closeSync(cacheParent.descriptor);
@@ -224,7 +225,7 @@ export function replaceBenchmarkControl(
   renameSync(temporary, join(handle.root.path, "control.json"));
   const replacement = openSafeBenchmarkPath(join(handle.root.path, "control.json"), "read");
   closeSync(replacement.descriptor);
-  fsyncSync(handle.root.descriptor);
+  syncDirectoryDescriptor(handle.root.descriptor);
   assertBenchmarkRunIdentity(handle);
 }
 

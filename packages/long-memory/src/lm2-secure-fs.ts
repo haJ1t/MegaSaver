@@ -18,6 +18,7 @@ export {
   secureDirectoryOpenFlags,
   secureOpenFlags,
   syncDirectoryAnchor,
+  syncDirectoryDescriptor,
 } from "./lm2-fs-platform.js";
 
 type AnchoredIdentity = { path: string; descriptor: number; stat: Stats };

@@ -26,8 +26,8 @@ storage share exactly one platform decision without breaching source limits.
 ## Scope
 
 - Add tested helpers for secure open flags and directory synchronization.
-- Route secure filesystem, catalog lock, benchmark path, and publish code
-  through those helpers.
+- Route secure filesystem, catalog lock, benchmark path/files, and publish
+  code through those helpers.
 - Make the vector-path expectation platform-neutral.
 - Preserve all POSIX security behavior and fail closed for every failed
   identity check.

@@ -4,6 +4,7 @@ import {
   secureDirectoryOpenFlags,
   secureOpenFlags,
   syncDirectoryAnchor,
+  syncDirectoryDescriptor,
 } from "../src/lm2-secure-fs.js";
 
 describe("LM2 portable filesystem guards", () => {
@@ -22,5 +23,6 @@ describe("LM2 portable filesystem guards", () => {
     expect(() =>
       syncDirectoryAnchor({ chain: [{ descriptor: -1 }] } as never, "win32"),
     ).not.toThrow();
+    expect(() => syncDirectoryDescriptor(-1, "win32")).not.toThrow();
   });
 });

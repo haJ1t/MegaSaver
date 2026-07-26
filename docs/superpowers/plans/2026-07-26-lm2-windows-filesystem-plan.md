@@ -55,6 +55,7 @@ Expected: PASS.
 - Modify: `packages/long-memory/src/lm2-secure-fs.ts`
 - Modify: `packages/long-memory/src/lm2-catalog-lock.ts`
 - Modify: `packages/long-memory/src/lm2-benchmark-safe-path.ts`
+- Modify: `packages/long-memory/src/lm2-benchmark-files.ts`
 - Modify: `packages/long-memory/src/lm2-secure-publish-files.ts`
 - Modify: `packages/long-memory/test/lm2-vector-store-validation.test.ts`
 

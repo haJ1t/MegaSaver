@@ -6880,3 +6880,13 @@ because its former 500 ms could expire before reading an existing vector under
 full-Turbo contention. `pnpm verify` passes: 60 tasks; long-memory 46 files /
 416 tests. (source: GitHub Actions run `30211016909`,
 `docs/superpowers/specs/2026-07-26-lm2-windows-filesystem-design.md`)
+
+## [2026-07-26 20:08 +03] fix | cover benchmark directory sync on Windows
+
+Independent review found benchmark-run creation and control replacement still
+fsynced directory descriptors directly. Those calls now route through the same
+Windows-aware directory-sync helper as vector publication; regular-file fsync
+remains unchanged. The new descriptor-level red contract went green with
+benchmark security and transport coverage (6 tests) plus package typecheck.
+(source: `pr312_release_review`,
+`packages/long-memory/src/lm2-benchmark-files.ts`)
