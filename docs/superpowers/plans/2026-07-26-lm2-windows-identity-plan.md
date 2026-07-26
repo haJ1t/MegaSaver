@@ -194,3 +194,19 @@ platform.
   capability boundary.
 - [ ] Run the index-operation suite, root verification, independent review,
   and replacement Ubuntu/Windows CI.
+
+### Task 10: Normalize tar listing lines and drain child results
+
+**Files:**
+- Modify: `benchmarks/longmemeval-v2/official-evidence-archive.mjs`
+- Modify: `packages/long-memory/test/fixtures/lm2-catalog-child.ts`
+
+**Interfaces:** Archive member names are parsed as logical `/` names after
+line-ending normalization. A child appender resolves only after its final JSON
+write is flushed to stdout.
+
+- [x] Capture Windows CI failures for CRLF tar member names and an incomplete
+  signalled-child JSON result.
+- [x] Normalize archive listing lines and await the final child JSON write.
+- [ ] Run focused catalog/completion tests, root verification, independent
+  review, and replacement Ubuntu/Windows CI.

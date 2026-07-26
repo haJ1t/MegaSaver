@@ -7009,6 +7009,20 @@ handle/replacement test, 38 focused tests, package typecheck, lint, and full
 remain required. (source: GitHub Actions job `89823208710`,
 `docs/superpowers/specs/2026-07-26-lm2-windows-identity-design.md`)
 
+## [2026-07-26 23:15 +03] fix | normalize final Windows LM2 text boundaries
+
+Rebased CI run `30218056200` passed Ubuntu but exposed two final Windows text
+boundaries: `tar -tzf` returned CRLF member lines, and a catalog child could
+finish before its last JSON write callback. Archive member parsing now removes
+only the line terminator before type/inventory checks, and the child awaits its
+final result write while preserving synchronous pre-lock signals. The initial
+callback predicate was corrected from `undefined` to Node's success `null`
+after the real catalog suite failed red. Focused catalog + completion tests
+(75), package typecheck, Biome, and fresh `pnpm verify` pass locally. New
+independent review and replacement two-platform CI remain required.
+(source: GitHub Actions job `89835545872`,
+`docs/superpowers/specs/2026-07-26-lm2-windows-identity-design.md`)
+
 ## [2026-07-26 21:09 +03] review | close benchmark directory identity race
 
 Fresh review found that the new Windows directory branch initially captured

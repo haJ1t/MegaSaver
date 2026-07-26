@@ -9,7 +9,7 @@ function fail(message) {
 export function verifyRecordedArchive(packageRoot, archive, files) {
   const prefix = basename(packageRoot);
   const members = execFileSync("tar", ["-tzf", archive], { encoding: "utf8" })
-    .split("\n")
+    .split(/\r?\n/u)
     .filter(Boolean);
   for (const name of members) {
     const directory = name.endsWith("/");

@@ -106,6 +106,15 @@ before `fsync`. This changes no pathname, object, link, mode, or identity
 validation: it only gives the durable-write flush a writable regular-file
 descriptor. Read-only paths remain read-only, and POSIX behavior is unchanged.
 
+### Archive listings and child result flush
+
+Windows `tar` emits CRLF text listings, so archive member parsing canonicalizes
+line endings before using a member name as a second `tar` argument or comparing
+it to the package inventory. The catalog child also awaits the completion
+callback for its final JSON write; signalling writes remain synchronous where a
+test deliberately pauses the child before the guarded operation. This makes
+the final result observable without weakening lock/replacement assertions.
+
 ### Evidence package inventory names
 
 The official evidence package is a logical artifact tree, not a host-native
@@ -147,3 +156,5 @@ evidence tests pass on both operating systems.
    the exclusive writer to use its update descriptor before durability flush.
 8. A Windows CI completion-gate run accepts the portable package inventory;
    POSIX runs continue to compare the same canonical `/` artifact names.
+9. A Windows CI run accepts recorded tar listings and drains a signalled child
+   result without an omitted or partial JSON payload.

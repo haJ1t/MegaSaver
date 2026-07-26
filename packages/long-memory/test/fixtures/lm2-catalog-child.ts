@@ -19,6 +19,15 @@ const encoded = process.argv[2];
 if (encoded === undefined) throw new Error("Missing catalog child input.");
 const input = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as ChildInput;
 
+function writeResult(result: boolean): Promise<void> {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(`${JSON.stringify({ result })}\n`, (error) => {
+      if (error === null) resolve();
+      else reject(error);
+    });
+  });
+}
+
 if (
   input.mode === "append-with-anchor-close-failure" ||
   input.mode === "append-observe-flock" ||
@@ -103,10 +112,10 @@ if (input.mode === "replace-lock-and-append") {
   );
   flockSync(descriptor, "un");
   fs.closeSync(descriptor);
-  process.stdout.write(`${JSON.stringify({ result })}\n`);
+  await writeResult(result);
 } else {
   const result = createLm2CandidateCatalog({ storeRoot: input.storeRoot }).appendPublished(
     input.record as never,
   );
-  process.stdout.write(`${JSON.stringify({ result })}\n`);
+  await writeResult(result);
 }
