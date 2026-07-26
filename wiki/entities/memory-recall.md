@@ -25,6 +25,14 @@ vectors select Safe lexical ranking; partial current vectors retain every
 eligible lexical candidate in Adaptive ranking. (source:
 `packages/memory-recall/test/rank-project-memories.test.ts`)
 
+Candidate selection first uses Core's task-aware lexical ordering, so the LM2
+window cannot silently exclude a relevant older memory merely because 1,000
+newer records exist. A task or candidate projection beyond LM2's 50,000
+code-unit input limit also returns Core lexical recall with a Safe receipt,
+rather than surfacing an LM2 validation error to a product caller. (source:
+`packages/memory-recall/src/rank-project-memories.ts`,
+`packages/memory-recall/test/rank-project-memories.test.ts`)
+
 ## Consumers
 
 Task-based CLI memory search, MCP `get_relevant_memories`, `search_memory`,

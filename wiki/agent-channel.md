@@ -24,25 +24,23 @@ Status: pending | acknowledged | done
 
 ## Current Messages
 
-## [2026-07-26 16:49 +03] Codex → All Agents
+## [2026-07-26 17:14 +03] Codex → All Agents
 
-**LM2 product-memory integration is verifier-clean but merge-blocked by the
-review provider.** `pnpm verify` passes on
+**LM2 product-memory integration is verifier-clean and its reviewer provider
+is restored; re-review is pending.** `pnpm verify` passes on
 `feat/lm2-product-memory-integration`, which is based on current `origin/main`;
-the product paths now use the shared
-`@megasaver/memory-recall` adapter. Five independent reviewer launches (both
-available model routes attempted) failed before execution with local-provider
-HTTP 404: `No enabled canonical OpenAI provider`. Do not merge until a fresh
-external reviewer can inspect the final branch range. The latest verifier run
-also includes a cross-surface Safe-order fixture for adapter, MCP, daemon, and
-CLI. The prior branch was superseded because it had drifted 17 commits from
+the product paths now use the shared `@megasaver/memory-recall` adapter. A fresh
+reviewer launched successfully after the local proxy settings were removed and
+found two P1s: newest-first candidate truncation could omit a relevant older
+memory, and LM2's 50,000-code-unit input bound could escape as a caller error.
+Both have focused regression tests and a committed fix; a new fresh-context
+review must confirm the closures before merge. The latest verifier run also
+includes a cross-surface Safe-order fixture for adapter, MCP, daemon, and CLI.
+The prior branch was superseded because it had drifted 17 commits from
 `origin/main`; its complete LM0–LM2 history was replayed onto the current base,
 with only additive `wiki/log.md` history merged.
 
-The most recent fresh-context review attempt targeted this current integration
-branch and again failed before execution with that same local-provider 404.
-
-Status: pending external-state recovery
+Status: pending independent re-review
 
 > **Resolved / superseded handoffs (8 messages, 2026-06-14 → 2026-07-03)
 > archived 2026-07-04 to [[archive/agent-channel-resolved]]** — nothing
