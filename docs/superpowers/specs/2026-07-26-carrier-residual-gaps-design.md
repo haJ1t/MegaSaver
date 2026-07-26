@@ -182,11 +182,13 @@ dominates and the ratios are meaningless):
 | `conn`: maximal `\s{0,8}` gaps | 2.00 | 3.93 | 7.95 | 16 | **x2.07** |
 | `conn`: unterminated quote | 1.18 | 2.46 | 5.03 | 10 | **x2.06** |
 | `gitlab`: anchor run | 0.54 | 0.91 | 1.82 | 3.70 | **x2.03** |
-| `slack`: anchor run | 1.44 | 2.91 | 5.75 | 12 | **x2.03** |
+| `slack`: anchor run | 1.29 | 2.61 | 4.89 | 9.93 | **x2.03** |
 
 Benign 200 KB build log, constant not growth: `connection_string_secret`
 0.52 -> **0.82 ms** (the `\s{0,8}` gaps cost 1.6x, as predicted),
-`gitlab_token` 0.03 -> 0.03, `slack_webhook_url` 0.54.
+`gitlab_token` 0.03 -> 0.03, `slack_webhook_url` **0.42 ms**. The Slack row
+was re-measured on 2026-07-26 after scoped scheme/host case handling was added
+(quiet 10-core host, load 5.27, Node v25.8.2).
 
 ## 5. Disclosed losses this change creates
 
