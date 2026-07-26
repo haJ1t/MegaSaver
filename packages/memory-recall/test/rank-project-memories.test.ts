@@ -371,7 +371,7 @@ describe("LM2 product-memory recall", () => {
     expect(result.hybrid).toMatchObject({ profile: "safe", semanticStatus: "not_requested" });
   });
 
-  it("falls back to Safe recall when the vector sidecar exceeds its bounded record read", async () => {
+  it("reads a requested vector from a sidecar with more than 1,000 unrelated rows", async () => {
     const entry = memory({
       id: "00000000-0000-4000-8000-000000000024",
       title: "Needle policy",
@@ -382,7 +382,7 @@ describe("LM2 product-memory recall", () => {
       memoryEmbeddingsSidecarPath(storeRoot, PROJECT_ID),
       Array.from({ length: 1_001 }, (_, index) => ({
         id: index === 0 ? entry.id : `unrelated-${index}`,
-        vector: [1],
+        vector: Array.from({ length: 384 }, (_, vectorIndex) => (vectorIndex === 0 ? 1 : 0)),
       })),
     );
     writeFileSync(
@@ -398,8 +398,11 @@ describe("LM2 product-memory recall", () => {
         task: "needle",
         storeRoot,
         query: { text: "needle" },
+        embed: async () => [
+          new Float32Array(Array.from({ length: 384 }, (_, index) => (index === 0 ? 1 : 0))),
+        ],
       }),
-    ).resolves.toMatchObject({ memory: [entry], hybrid: { profile: "safe" } });
+    ).resolves.toMatchObject({ memory: [entry], hybrid: { profile: "adaptive" } });
   });
 
   it("keeps a recent semantic-only candidate above the lexical window", async () => {

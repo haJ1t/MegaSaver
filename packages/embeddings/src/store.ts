@@ -70,13 +70,9 @@ export function readVectors(
     return new Map();
   }
   const out = new Map<string, Float32Array>();
-  let records = 0;
+  let selectedRecords = 0;
   for (const line of raw.split("\n")) {
     if (line.trim().length === 0) continue;
-    records += 1;
-    if (options.maxRecords !== undefined && records > options.maxRecords) {
-      throw new RangeError("Vector sidecar exceeds the configured record limit.");
-    }
     const rawRecord = JSON.parse(line);
     if (
       options.ids !== undefined &&
@@ -87,6 +83,10 @@ export function readVectors(
       continue;
     }
     const rec = vectorRecordSchema.parse(rawRecord);
+    selectedRecords += 1;
+    if (options.maxRecords !== undefined && selectedRecords > options.maxRecords) {
+      throw new RangeError("Vector sidecar exceeds the configured selected-record limit.");
+    }
     out.set(rec.id, Float32Array.from(rec.vector));
   }
   return out;
