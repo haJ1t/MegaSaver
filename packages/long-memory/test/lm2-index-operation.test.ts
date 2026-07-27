@@ -867,11 +867,21 @@ describe("LM2 index operation", () => {
       commitFirst: () => {},
     }).catch((error: unknown) => error);
 
-    expect(exactCleanupRoots(failure)).toEqual(
-      process.platform === "win32"
-        ? [injectedCloseFailures[0]]
-        : [injectedFsyncFailures[0], injectedCloseFailures[0]],
-    );
+    // syncDirectoryDescriptor() returns early on win32 — Windows cannot
+    // FlushFileBuffers a directory handle — so the post-link directory fsync
+    // never runs there and no fsync failure is injectable.
+    //
+    // The counts are pinned FIRST because the aggregate alone cannot tell a
+    // real result from an absent one: indexing an empty injection log yields
+    // `undefined`, so if the harness ever stopped injecting, both sides could
+    // still line up and the test would pass having exercised nothing. Assert
+    // that the injections happened, then that they are what surfaced.
+    expect(injectedFsyncFailures).toHaveLength(process.platform === "win32" ? 0 : 1);
+    expect(injectedCloseFailures).toHaveLength(1);
+    expect(exactCleanupRoots(failure)).toEqual([
+      ...injectedFsyncFailures,
+      ...injectedCloseFailures,
+    ]);
   });
 
   it("carries aggregate cleanup roots through the real blocked receipt", async () => {
