@@ -144,3 +144,46 @@ include only `entry.isFile()` values, and normalize each root-relative path with
 Run: `pnpm --filter @megasaver/long-memory test -- lm2-completion-integration.test.ts`
 
 Expected: the fixture's evidence gate tests pass without invoking Unix `find`.
+
+### Task 5: Make the live-publication timeout test a controlled protocol
+
+**Files:**
+- Modify: `packages/long-memory/test/lm2-index.test.ts`
+
+**Interfaces:**
+- Consumes: the `performance` import already used by the adjacent absolute
+  deadline test and Vitest's fake-timer API.
+- Produces: a timeout test that advances only controlled time after it has
+  observed `publishBatch` enter its gate.
+
+- [ ] **Step 1: Preserve the release failure as red evidence**
+
+Record GitHub Actions run `30248262191`, Ubuntu job `89920138366`: the live
+publication test exceeded Vitest's 30-second ceiling because its five-
+millisecond real deadline expired before the publication-start signal.
+
+- [ ] **Step 2: Replace wall-clock coordination with controlled time**
+
+In `drains a timed-out live publication before finalizing and reports its
+committed prefix`, wrap the test in `vi.useFakeTimers()`/`vi.useRealTimers()`.
+Mock `performance.now()` to return a mutable `now` value, request a 100 ms
+timeout, wait for `publicationStarted`, set `now = 100`, then run
+`await vi.advanceTimersByTimeAsync(100)` before checking that finalization has
+not started. Release the gate and retain the existing receipt assertions.
+
+- [ ] **Step 3: Verify the focused contract repeatedly**
+
+Run:
+`pnpm --filter @megasaver/long-memory exec vitest run test/lm2-index.test.ts -t "drains a timed-out live publication"`
+
+Expected: PASS without a real-time wait; finalization occurs once and the
+receipt retries after one committed record.
+
+- [ ] **Step 4: Verify package and repository gates**
+
+Run:
+`pnpm --filter @megasaver/long-memory test -- lm2-index.test.ts`
+then `pnpm verify`.
+
+Expected: both pass with no source or API changes outside the test and release
+records.
