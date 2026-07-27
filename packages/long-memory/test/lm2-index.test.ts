@@ -1001,42 +1001,50 @@ describe("LM2 explicit indexer", () => {
   });
 
   it("drains a timed-out live publication before finalizing and reports its committed prefix", async () => {
-    const records = [snapshot(0), snapshot(1)];
-    const test = harness(records);
-    let release = () => {};
-    let started = () => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const publicationStarted = new Promise<void>((resolve) => {
-      started = resolve;
-    });
-    test.publishBatch.mockImplementationOnce(async () => {
-      started();
-      await gate;
-      return { published: [records[0]?.id], existing: [], reason: "port_failure" as const };
-    });
+    vi.useFakeTimers();
+    try {
+      let now = 0;
+      vi.spyOn(performance, "now").mockImplementation(() => now);
+      const records = [snapshot(0), snapshot(1)];
+      const test = harness(records);
+      let release = () => {};
+      let started = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const publicationStarted = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      test.publishBatch.mockImplementationOnce(async () => {
+        started();
+        await gate;
+        return { published: [records[0]?.id], existing: [], reason: "port_failure" as const };
+      });
 
-    const pending = test.index.index({
-      workspaceKey,
-      modelFingerprint: modelDescriptorFingerprint(model),
-      maxRecords: 256,
-      timeoutMs: 5,
-    });
-    await publicationStarted;
-    await new Promise((resolve) => setTimeout(resolve, 15));
-    const finalizedBeforeDrain = test.finalize.mock.calls.length;
-    release();
-    const receipt = await pending;
+      const pending = test.index.index({
+        workspaceKey,
+        modelFingerprint: modelDescriptorFingerprint(model),
+        maxRecords: 256,
+        timeoutMs: 100,
+      });
+      await publicationStarted;
+      now = 100;
+      await vi.advanceTimersByTimeAsync(100);
+      const finalizedBeforeDrain = test.finalize.mock.calls.length;
+      release();
+      const receipt = await pending;
 
-    expect(finalizedBeforeDrain).toBe(0);
-    expect(test.finalize).toHaveBeenCalledTimes(1);
-    expect(receipt).toMatchObject({
-      outcome: "retry",
-      indexedCount: 1,
-      transientReason: "timeout",
-    });
-    expect(cursorSequence(receipt.retryCursor)).toBe(2);
+      expect(finalizedBeforeDrain).toBe(0);
+      expect(test.finalize).toHaveBeenCalledTimes(1);
+      expect(receipt).toMatchObject({
+        outcome: "retry",
+        indexedCount: 1,
+        transientReason: "timeout",
+      });
+      expect(cursorSequence(receipt.retryCursor)).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("checks the absolute deadline after a synchronous catalog snapshot", async () => {
