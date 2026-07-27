@@ -7159,3 +7159,17 @@ official score is claimed; complete reader/evaluator-backed web and enterprise
 runs remain required. (source:
 `docs/superpowers/specs/2026-07-27-lm2-darwin-anchor-design.md`, local pinned
 data audit, 2026-07-27)
+
+## [2026-07-27 12:45 +03] fix | bound retrieval's active Windows Vitest pool
+
+PR #321's first Windows CI run failed before either BM25 suite entered a test:
+under the repository-wide Turbo test graph, Vitest timed out fetching the
+shared `src/errors.ts` module for its default fork workers. The retrieval
+package now limits that active Vitest 2.1.9 fork pool to one fork; it neither
+raises timeouts nor adds retries, and Turbo-wide concurrency is unchanged. A
+real configuration contract was red before the setting, then green; the
+retrieval suite passes 43 tests, root `pnpm verify` passes all 60 tasks, and a
+fresh independent reviewer confirmed the active-pool correction after catching
+and closing an initially inactive thread-pool setting. Replacement two-platform
+CI remains the release proof. (source: GitHub Actions run 30253983645 Windows
+job 89938203691; `pr312_release_review`; 2026-07-27)
