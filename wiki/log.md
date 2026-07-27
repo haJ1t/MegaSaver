@@ -7135,3 +7135,12 @@ merged product exposes LM2-backed recall through the existing Core memory
 entries and the CLI, MCP, and daemon adapters; it does not establish an
 official LongMemEval-V2 score. (source: GitHub PR #315; GitHub Actions run
 `30220323813`)
+
+## [2026-07-27 11:34 +03] release | merge deterministic LM2 CI correction
+
+PR #319 merged to `main` at `3190178e` after fresh independent review and
+replacement GitHub Actions run `30249670317`. Ubuntu completed Verify and
+bundle smoke in 7m09s; Windows completed the same gates in 10m49s. The change
+removes only the test's five-millisecond wall-clock race: production indexing,
+public APIs, timeout policy, and durable memory data remain unchanged.
+(source: GitHub PR #319; GitHub Actions run `30249670317`, 2026-07-27)
