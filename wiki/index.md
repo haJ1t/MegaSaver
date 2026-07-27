@@ -39,6 +39,7 @@ updated: 2026-07-26
 - [[concepts/structured-memory-engine]] — DIMMEM, roadmap Phase 1: typed engineering memory (10 MemoryTypes + metadata); reconciles the v0.1 MemoryEntry primitive.
 - [[concepts/memory-superset]] — WS3: superset of mem0/Letta/Zep/Cognee/Memori/claude-mem on our stack. Increment 1 shipped: semantic memory recall (per-project vector sidecar + boundary-embed fallback), `memoryRelevance` wiring (all approved memory's relatedFiles), entity node/edge layer (deterministic, no-LLM); (3)-(6) deferred.
 - [[concepts/long-memory-runtime]] — approved evidence-backed runtime: state/transition evidence plus approved runbooks, gotchas, and premises; product recall now reuses its LM2 ranker without creating a second memory store.
+- [[syntheses/longmemeval-v2-status]] — LM2 product-release and official-evidence status; no official score claim without pinned two-domain verifier evidence.
 - [[concepts/semantic-repo-index]] — roadmap Phase 2: parse repo into typed CodeBlocks (AST) so retrieval works on blocks, not files.
 - [[concepts/context-pruning-engine]] — LAMR, roadmap Phase 3: task-aware multi-factor scoring → 6–8-block context pack; repo-side cousin of context-gate-pipeline.
 - [[concepts/failed-run-learning]] — FORGE, roadmap Phase 5: find similar failures, convert a failure to a rule, rank applicable rules; deterministic (BM25 + path overlap).

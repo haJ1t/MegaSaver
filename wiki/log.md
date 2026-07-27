@@ -7144,3 +7144,32 @@ bundle smoke in 7m09s; Windows completed the same gates in 10m49s. The change
 removes only the test's five-millisecond wall-clock race: production indexing,
 public APIs, timeout policy, and durable memory data remain unchanged.
 (source: GitHub PR #319; GitHub Actions run `30249670317`, 2026-07-27)
+
+## [2026-07-27 12:20 +03] fix | repair LM2 Darwin secure-anchor alias handling
+
+The first pinned public LongMemEval-V2 web trajectory reproduced a macOS-only
+failure after benchmark admission: a literal `/tmp` cache path created the run,
+but the vector store's no-follow directory-anchor walk rejected the root-owned
+Darwin system alias before index publication. LM2 now canonicalizes only a
+verified `/tmp` or `/var` alias to its exact `/private/...` target; arbitrary
+symlinks remain fail-closed. A Darwin transport regression, an arbitrary
+symlink guard, full long-memory suite (48 files / 435 tests), root `pnpm
+verify` (60 tasks), and a real manifest-admitted first insert all pass. No
+official score is claimed; complete reader/evaluator-backed web and enterprise
+runs remain required. (source:
+`docs/superpowers/specs/2026-07-27-lm2-darwin-anchor-design.md`, local pinned
+data audit, 2026-07-27)
+
+## [2026-07-27 12:45 +03] fix | bound retrieval's active Windows Vitest pool
+
+PR #321's first Windows CI run failed before either BM25 suite entered a test:
+under the repository-wide Turbo test graph, Vitest timed out fetching the
+shared `src/errors.ts` module for its default fork workers. The retrieval
+package now limits that active Vitest 2.1.9 fork pool to one fork; it neither
+raises timeouts nor adds retries, and Turbo-wide concurrency is unchanged. A
+real configuration contract was red before the setting, then green; the
+retrieval suite passes 43 tests, root `pnpm verify` passes all 60 tasks, and a
+fresh independent reviewer confirmed the active-pool correction after catching
+and closing an initially inactive thread-pool setting. Replacement two-platform
+CI remains the release proof. (source: GitHub Actions run 30253983645 Windows
+job 89938203691; `pr312_release_review`; 2026-07-27)
