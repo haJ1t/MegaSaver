@@ -67,3 +67,33 @@ that command as Windows `FIND`, rejects `-type`, and prevents the LM2 evidence
 tests from starting. Replace only this file enumeration with a Node `readdir`
 walk. Preserve regular-file-only semantics, root-relative slash-separated paths,
 and SHA-256 values; leave the archive and verifier behavior unchanged.
+
+## Amendment: deterministic live-publication timeout protocol
+
+The release-record PR `#318` exposed one remaining CI-only race in
+`lm2-index.test.ts`. The test that proves an active publication is drained
+before finalization used a five-millisecond real deadline, waited fifteen real
+milliseconds, and assumed the publication had already started. Under a loaded
+runner, setup can consume the five milliseconds before `publishBatch` starts;
+the valid immediate timeout then leaves the test waiting for an event that can
+never occur.
+
+Keep the indexer's production clock and deadline behavior unchanged. The test
+will instead use the already-established `node:perf_hooks` clock seam and
+Vitest fake timers: a controlled `performance.now()` begins at zero, the
+publication signals that it is live, the test advances its controlled clock and
+the timeout timer together, and only then releases the publication gate. This
+preserves the exact production contract under test: a timeout during a live
+publication drains that work, finalizes once, reports its committed prefix, and
+retries at the first uncommitted record.
+
+### Acceptance criteria
+
+1. The regression test contains no real-time sleep and no sub-second setup
+   deadline.
+2. It deterministically observes a live `publishBatch` before expiring the
+   deadline.
+3. It still proves finalization waits for the gated publication and preserves
+   the single committed record in the retry receipt.
+4. Production source, public API, timeout policy, and persistence schema remain
+   unchanged.
