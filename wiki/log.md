@@ -7103,3 +7103,12 @@ timeout policy are unchanged. The focused test, full long-memory suite
 independent review and two-platform replacement CI remain release gates.
 (source: GitHub Actions job `89920138366`,
 `docs/superpowers/specs/2026-07-26-lm2-ci-determinism-design.md`, 2026-07-27)
+
+## [2026-07-27 11:18 +03] review | approve controlled LM2 timeout protocol
+
+A fresh independent reviewer approved the scoped timeout-test diff with no
+P0/P1/P2 findings. The review confirms the test observes a live publication
+before advancing both the timer and monotonic clock, still requires the drain
+before finalization, and restores timer/clock state after the awaited receipt
+clears the production timer. The focused regression passed 1/1 under review.
+(source: `pr312_release_review`, 2026-07-27)
