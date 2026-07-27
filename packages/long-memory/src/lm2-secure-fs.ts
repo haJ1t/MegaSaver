@@ -9,8 +9,9 @@ import {
   readSync,
   readdirSync,
 } from "node:fs";
-import { basename, dirname, join, parse, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, parse, relative, sep } from "node:path";
 import { combineLm2CleanupFailures } from "./lm2-cleanup-errors.js";
+import { canonicalDirectoryAnchorPath } from "./lm2-directory-anchor-path.js";
 import { Lm2Error } from "./lm2-errors.js";
 import { secureDirectoryOpenFlags, secureOpenFlags } from "./lm2-fs-platform.js";
 
@@ -83,7 +84,7 @@ function closeDescriptors(chain: readonly AnchoredIdentity[]): void {
 }
 
 export function openDirectoryAnchor(path: string, allowMissing: boolean): DirectoryAnchor | null {
-  const absolute = resolve(path);
+  const absolute = canonicalDirectoryAnchorPath(path);
   const root = parse(absolute).root;
   const paths = [
     root,

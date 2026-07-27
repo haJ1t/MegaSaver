@@ -1,11 +1,16 @@
-import { readFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { canonicalSha256 } from "../src/lm2-benchmark-canonical.js";
 import { createLm2BenchmarkLineHandler, dispatchLm2BenchmarkLine } from "../src/lm2-benchmark.js";
 import { benchmarkFixture, cleanupBenchmarkRoots } from "./lm2-benchmark-fixtures.js";
 
-afterEach(cleanupBenchmarkRoots);
+const darwinAliasRoots: string[] = [];
+
+afterEach(() => {
+  cleanupBenchmarkRoots();
+  for (const root of darwinAliasRoots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
 
 async function request(payload: object) {
   return JSON.parse(await dispatchLm2BenchmarkLine(JSON.stringify(payload))) as Record<
@@ -15,6 +20,38 @@ async function request(payload: object) {
 }
 
 describe("LM2 stateless benchmark transport", () => {
+  it.skipIf(process.platform !== "darwin")(
+    "indexes a cache rooted through the protected /tmp system alias",
+    async () => {
+      const fixture = benchmarkFixture();
+      const cacheParent = mkdtempSync("/tmp/megasaver-lm2-benchmark-alias-");
+      darwinAliasRoots.push(cacheParent);
+      chmodSync(cacheParent, 0o700);
+      const config = { ...fixture.config, cacheParent };
+      const opened = await request({
+        id: "open",
+        op: "open",
+        config,
+        instanceToken: fixture.instanceToken,
+      });
+      expect(opened).toMatchObject({ ok: true });
+      const identity = opened.result as Record<string, string>;
+      const inserted = await request({
+        id: "insert",
+        op: "insert",
+        config,
+        instanceToken: fixture.instanceToken,
+        sentinelToken: identity.sentinelToken,
+        expectedChainDigest: identity.chainDigest,
+        trajectory: fixture.trajectories[0],
+      });
+      expect(inserted).toMatchObject({
+        ok: true,
+        result: { indexingComplete: true },
+      });
+    },
+  );
+
   it("opens, inserts with synchronous indexing, and queries across independent calls", async () => {
     const fixture = benchmarkFixture();
     const opened = await request({
