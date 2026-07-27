@@ -7112,3 +7112,17 @@ before advancing both the timer and monotonic clock, still requires the drain
 before finalization, and restores timer/clock state after the awaited receipt
 clears the production timer. The focused regression passed 1/1 under review.
 (source: `pr312_release_review`, 2026-07-27)
+
+## [2026-07-27 11:22 +03] ci | replace stale two-runner LM2 release matrix
+
+PR #319's first replacement matrix (`30249330274`) is not actionable test
+evidence: both hosted runners completed install and build, entered `pnpm
+verify`, then stopped reporting state. The workflow record's `updated_at`
+remained at 08:17Z even while the jobs showed later step timestamps, and its
+25-minute job timeout did not fire after more than three hours. Local root
+verification had already passed 60 tasks and the same full long-memory suite;
+there is no runner log, error, or failing test to support a code change. The
+matrix is therefore replaced from the same verified source head; a repeated
+failure must be diagnosed from the new job's first emitted failure rather than
+treated as a retry-success signal.
+(source: GitHub Actions run `30249330274`, workflow `CI`, 2026-07-27)
