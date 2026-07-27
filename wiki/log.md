@@ -7086,3 +7086,20 @@ terminal result. Local catalog fixture/security tests (18) and package
 typecheck pass; full verification, review, and a new Windows matrix remain
 release gates. (source: GitHub Actions job `89840018762`,
 `packages/long-memory/test/fixtures/lm2-catalog-child.ts`, 2026-07-27)
+
+## [2026-07-27 11:15 +03] test | remove LM2 live-publication wall-clock race
+
+The release-record CI run `30248262191` passed Windows (including bundle smoke)
+but Ubuntu job `89920138366` left the LM2 live-publication timeout test waiting
+until Vitest's 30-second ceiling. Its five-millisecond real deadline could
+expire before the publication-start signal on a loaded runner, which is a valid
+immediate timeout rather than a product defect. The regression now starts the
+publication under a controlled `performance.now()`, advances fake time and the
+100 ms timer only after that signal, then releases the gate. It retains the
+behavioral contract: no early finalization, one finalized operation, one
+committed prefix, and a timeout retry at the next record. Production source and
+timeout policy are unchanged. The focused test, full long-memory suite
+(48 files / 433 tests), and root `pnpm verify` (60 tasks) pass locally; fresh
+independent review and two-platform replacement CI remain release gates.
+(source: GitHub Actions job `89920138366`,
+`docs/superpowers/specs/2026-07-26-lm2-ci-determinism-design.md`, 2026-07-27)
