@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ClaudeSessionMeta,
@@ -51,6 +51,18 @@ vi.mock("../../src/lib/claude-sessions-client.js", () => ({
   fetchSessionTokenSaverStats: () => Promise.resolve(null),
   fetchWorkspaceTokenSaverStats: () => Promise.resolve(null),
   fetchDaemonStatus: () => Promise.resolve({ running: true }),
+  // Overview mounts first and probes readiness; stub the three status routes.
+  fetchClaudeHookStatus: () =>
+    Promise.resolve({ connected: true, preInstalled: true, postInstalled: true }),
+  fetchProxyStatus: () =>
+    Promise.resolve({
+      enabled: true,
+      routed: true,
+      routeConflict: false,
+      reconcileBlocked: false,
+      draining: false,
+      url: "http://127.0.0.1:7431",
+    }),
   openClaudeSessionStream: (_dir: string, _id: string, handlers: StreamHandlers) => {
     handlers.onSnapshot({
       projectLabel: "/tmp/alpha",
@@ -79,15 +91,24 @@ afterEach(() => {
 });
 
 describe("Live-first shell flow", () => {
-  it("shows the grouped session home (no project gate)", async () => {
+  // The shell now lands on Overview; Sessions is one nav click away.
+  const renderOnSessions = (): void => {
     render(<App />);
-    await waitFor(() => expect(screen.getByText("alpha")).toBeDefined());
-    expect(screen.getByText("My session")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: /Sessions/ }));
+  };
+
+  it("shows the grouped session home (no project gate)", async () => {
+    renderOnSessions();
+    // Scoped to the page body: the workspace switcher in the top bar shows the
+    // same label, so an unscoped query now matches twice.
+    const page = within(screen.getByTestId("page-container"));
+    await waitFor(() => expect(page.getByText("alpha")).toBeDefined());
+    expect(page.getByText("My session")).toBeDefined();
     expect(screen.queryByText("No projects yet.")).toBeNull();
   });
 
   it("opens the cockpit on the transcript panel when a session is selected", async () => {
-    render(<App />);
+    renderOnSessions();
     await screen.findByText("My session");
     fireEvent.click(screen.getByText("My session"));
     await waitFor(() => expect(screen.getByText("transcript body")).toBeDefined());
@@ -97,7 +118,7 @@ describe("Live-first shell flow", () => {
   });
 
   it("renders telemetry when the Telemetry tab is clicked in the cockpit", async () => {
-    render(<App />);
+    renderOnSessions();
     await screen.findByText("My session");
     fireEvent.click(screen.getByText("My session"));
     await screen.findByText("transcript body");

@@ -23,10 +23,11 @@ describe("WorkspacePage", () => {
           new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
       ),
     );
-    render(
-      <WorkspacePage options={OPTS} activeKey="0123456789abcdef" onWorkspaceChange={() => {}} />,
-    );
-    expect(screen.getByLabelText("Active workspace")).toBeTruthy();
+    render(<WorkspacePage options={OPTS} activeKey="0123456789abcdef" />);
+    // Workspace selection moved to the global top bar (TopBar); the page no
+    // longer owns a picker. Paired with the heading assertion below so this
+    // cannot pass by the page rendering nothing at all.
+    expect(screen.queryByLabelText("Active workspace")).toBeNull();
     // Assert the page's own heading (robust; not coupled to child-panel markup).
     expect(screen.getByRole("heading", { name: /workspace/i })).toBeTruthy();
   });

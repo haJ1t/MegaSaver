@@ -1,10 +1,11 @@
 // Order: alphabetic (AA3 convention for human-facing closed enums).
-// Nav display order lives in NAV_ORDER (components/sidebar.tsx), decoupled
-// from this pinned tuple.
+// Nav display order and grouping live in NAV_GROUPS (components/sidebar.tsx),
+// decoupled from this pinned tuple.
 export const VIEW_IDS = [
   "agent-office",
   "agent-setup",
   "memory",
+  "overview",
   "sessions",
   "token-saver",
   "workspace",
@@ -13,8 +14,9 @@ export type ViewId = (typeof VIEW_IDS)[number];
 
 export const VIEW_LABELS: Record<ViewId, string> = {
   "agent-office": "Agent office",
-  "agent-setup": "Agent setup",
+  "agent-setup": "Setup",
   memory: "Memory",
+  overview: "Overview",
   sessions: "Sessions",
   "token-saver": "Token saver",
   workspace: "Workspace",

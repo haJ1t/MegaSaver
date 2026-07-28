@@ -126,12 +126,19 @@ export function WorkspaceSessionList({
     return <ErrorState error={listError} onRetry={retryList} />;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      <h2 className="text-xl font-semibold tracking-tight text-text-primary mb-4">Sessions</h2>
-      <div className="grid grid-cols-3 gap-3 mb-3">
-        <SummaryCard label="Workspaces" value={groups.length} />
-        <SummaryCard label="Sessions" value={sessions.length} />
-        <SummaryCard label="Live" value={liveCount} />
+    <div className="max-w-[1180px] flex flex-col gap-4 px-5 py-7">
+      <div className="flex items-end gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="m-0 text-2xl font-semibold tracking-tight">Sessions</h1>
+          <p className="mt-1 mb-0 text-text-secondary">
+            Every Claude Code session on this machine, grouped by working directory.
+          </p>
+        </div>
+        <div className="flex gap-6 pb-1">
+          <SummaryStat label="Workspaces" value={groups.length} />
+          <SummaryStat label="Sessions" value={sessions.length} />
+          <SummaryStat label="Live" value={liveCount} accent />
+        </div>
       </div>
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
@@ -141,7 +148,7 @@ export function WorkspaceSessionList({
           <button
             type="button"
             onClick={() => setShareOpen(true)}
-            className="mb-6 shrink-0 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-text-primary hover:bg-surface-elevated cursor-pointer transition-colors"
+            className="shrink-0 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-surface-elevated cursor-pointer transition-colors"
           >
             Share
           </button>
@@ -160,27 +167,28 @@ export function WorkspaceSessionList({
           No Claude Code sessions found in ~/.claude/projects.
         </p>
       ) : (
-        <div
-          data-testid="session-list-card"
-          className="bg-surface border border-border rounded-xl overflow-hidden"
-        >
-          {groups.map((group, groupIndex) => {
+        <div data-testid="session-list-card" className="flex flex-col gap-3.5">
+          {groups.map((group) => {
             const expanded = !collapsed.has(group.cwd);
             return (
-              <div key={group.cwd} className={groupIndex > 0 ? "border-t border-border" : ""}>
+              <section
+                key={group.cwd}
+                className="rounded-xl border border-border bg-surface overflow-hidden"
+              >
                 <button
                   type="button"
                   onClick={() => toggleGroup(group.cwd)}
                   aria-expanded={expanded}
                   title={group.cwd}
-                  className="flex items-center gap-2 w-full px-4 py-2.5 text-left cursor-pointer hover:bg-surface-elevated transition-colors"
+                  className="flex items-center gap-2.5 w-full px-4 py-3 text-left cursor-pointer hover:bg-surface-elevated transition-colors"
                 >
-                  <span className="text-text-muted text-xs">{expanded ? "▾" : "▸"}</span>
-                  <span className="truncate text-xs font-medium text-text-secondary">
-                    {group.label}
+                  <span aria-hidden="true" className="w-2.5 text-text-muted text-2xs">
+                    {expanded ? "▾" : "▸"}
                   </span>
-                  <span className="ml-auto text-[11px] text-text-muted tabular-nums">
-                    {group.sessions.length}
+                  <span className="font-semibold">{group.label}</span>
+                  <span className="truncate font-mono text-xs text-text-muted">{group.cwd}</span>
+                  <span className="ml-auto font-mono text-xs text-text-muted">
+                    {group.sessions.length} sessions
                   </span>
                 </button>
                 {expanded &&
@@ -197,39 +205,39 @@ export function WorkspaceSessionList({
                         onMouseLeave={() => setHoveredKey((prev) => (prev === key ? null : prev))}
                         onFocus={() => setFocusedKey(key)}
                         onBlur={() => setFocusedKey((prev) => (prev === key ? null : prev))}
-                        className="flex items-center gap-3 w-full px-4 py-3 text-left border-t border-border/50 cursor-pointer hover:bg-surface-elevated transition-colors row-enter"
+                        className="flex items-center gap-3 w-full px-4 py-3 text-left border-t border-line-soft cursor-pointer hover:bg-surface-elevated transition-colors row-enter"
                         style={{ animationDelay: `${index * 40}ms` }}
                       >
                         <span
-                          className={`inline-block w-2 h-2 rounded-full shrink-0 ${live ? "bg-ok" : "bg-border"}`}
+                          className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${live ? "bg-ok pulse-dot" : "bg-border"}`}
                           aria-label={live ? "live" : undefined}
                         />
-                        <span className="flex-1 min-w-0 truncate text-sm text-text-primary">
+                        <span className="flex-1 min-w-0 truncate text-text-primary">
                           {s.title || s.id}
                         </span>
                         {revealed ? (
-                          <span className="flex items-center gap-2 text-[11px] text-text-muted">
+                          <span className="flex items-center gap-2 font-mono text-xs text-text-muted">
                             {s.model && (
-                              <span className="px-1.5 py-0.5 rounded bg-surface-elevated text-text-secondary">
+                              <span className="px-2 py-0.5 rounded-sm bg-surface-elevated text-text-secondary">
                                 {shortModel(s.model)}
                               </span>
                             )}
                             {s.isArchived && (
-                              <span className="px-1.5 py-0.5 rounded bg-surface-elevated text-text-muted">
+                              <span className="px-2 py-0.5 rounded-sm bg-surface-elevated text-text-muted">
                                 archived
                               </span>
                             )}
                             <span className="tabular-nums">{relativeTime(s.mtimeMs, nowMs)}</span>
                           </span>
                         ) : (
-                          <span className="text-[11px] text-text-muted tabular-nums">
+                          <span className="font-mono text-xs text-text-muted tabular-nums">
                             {relativeTime(s.mtimeMs, nowMs)}
                           </span>
                         )}
                       </button>
                     );
                   })}
-              </div>
+              </section>
             );
           })}
         </div>
@@ -238,12 +246,24 @@ export function WorkspaceSessionList({
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: number }): JSX.Element {
+function SummaryStat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number;
+  accent?: boolean | undefined;
+}): JSX.Element {
   return (
-    <div className="bg-surface border border-border rounded-xl px-4 py-3">
-      <div className="text-[10px] uppercase tracking-widest text-text-muted">{label}</div>
-      <div className="text-2xl font-semibold tabular-nums text-text-primary">{value}</div>
-    </div>
+    <span>
+      <span
+        className={`block font-mono text-xl tabular-nums ${accent ? "text-ok" : "text-text-primary"}`}
+      >
+        {value}
+      </span>
+      <span className="text-2xs uppercase tracking-[0.08em] text-text-muted">{label}</span>
+    </span>
   );
 }
 
@@ -257,7 +277,7 @@ function SavingsHeadlineStrip({
     return (
       <div
         data-testid="savings-headline"
-        className="mb-6 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text-muted"
+        className="rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-text-muted"
       >
         No savings recorded yet — enable the saver to start.
       </div>

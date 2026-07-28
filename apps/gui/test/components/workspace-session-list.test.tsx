@@ -85,13 +85,15 @@ describe("WorkspaceSessionList", () => {
     expect(onSelect.mock.calls[0]?.[0]?.id).toBe("pick");
   });
 
-  it("wraps groups in a rounded card on a warm background", async () => {
+  it("wraps each workspace group in its own rounded card", async () => {
     stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
     const { container } = render(<WorkspaceSessionList onSelect={() => {}} />);
     await waitFor(() => expect(screen.getByText("alpha")).toBeDefined());
-    const card = container.querySelector("[data-testid='session-list-card']");
-    expect(card).not.toBeNull();
-    expect(card?.className).toMatch(/rounded-xl/);
+    const list = container.querySelector("[data-testid='session-list-card']");
+    expect(list).not.toBeNull();
+    const groupCards = list?.querySelectorAll("section");
+    expect(groupCards?.length).toBe(1);
+    expect(groupCards?.[0]?.className).toMatch(/rounded-xl/);
   });
 
   it("reveals model and archived tags on hover", async () => {

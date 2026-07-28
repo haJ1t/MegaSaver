@@ -7173,3 +7173,124 @@ fresh independent reviewer confirmed the active-pool correction after catching
 and closing an initially inactive thread-pool setting. Replacement two-platform
 CI remains the release proof. (source: GitHub Actions run 30253983645 Windows
 job 89938203691; `pr312_release_review`; 2026-07-27)
+## [2026-07-28] feature | gui-console-redesign
+
+Imported the "Mega Saver Console" prototype from Claude Design
+(`claude.ai/design/p/124f5957…`) and rebuilt `apps/gui` around it on
+`feat/gui-console-redesign`. Frontend-only: no bridge route, no Core change.
+
+- Spec `docs/superpowers/specs/2026-07-28-gui-console-redesign-design.md`,
+  plan `docs/superpowers/plans/2026-07-28-gui-console-redesign.md`.
+- Mapped every prototype surface to a real route first. Four had no backing
+  (sparkline, cross-workspace activity feed, Live brain, office multi-floor +
+  provider picker) and were omitted rather than faked — user decision.
+- Corrected three prototype colours that failed WCAG AA; the contrast suite
+  now pins every text role against every surface in both themes.
+- Caught two real bugs via the DoD gate: `mcp?.agents.filter` threw on a
+  non-null response without an `agents` array (Overview + app shell), and
+  `window.matchMedia` is absent in jsdom (theme toggle).
+- Found `biome.json`'s `useSemanticElements` override pointed at five files
+  deleted by earlier redesigns — matched nothing. Rescoped to one file.
+- Evidence: `pnpm verify` — biome clean, `tsc -b` clean, GUI 641 tests / 85
+  files green; all 7 pages driven in the real app, both themes.
+- Pre-existing flake noted (NOT a regression): `packages/context-gate`
+  `test/saver-seen-concurrency.test.ts` fails under loaded parallel `turbo`;
+  reproduced on a clean tree with the branch stashed.
+
+Updated [[entities/gui]] (console-redesign section + corrected Lint posture).
+
+### [2026-07-28] follow-up | gui-console-redesign review pass
+
+Second-opinion review of the branch caught five things the gate could not:
+
+- **Heading regression:** the sidebar brand was an `<h1>` and every restyled
+  page now has its own `<h1>` → two h1 per document. Sidebar demoted to a
+  `<span>`; the page title is the real h1.
+- **Floor plan was never seen with an occupant** (zero agents in this
+  checkout). Created three real agents through the office API to look: an
+  earlier blind "centre the monitor" tweak had put the monitor (`z-4`) on top
+  of the seated figure (`z-2`), so **no one rendered at all**. The prototype's
+  left offset is load-bearing. Reverted, verified with real agents, agents
+  deleted afterwards. Recorded in spec §3b so it is not "fixed" again.
+- **Illustration hex literals** in `office-floor.tsx` violated the tokens.css
+  no-hex rule → explicit scoped exemption written into spec §3b (decorative
+  fills only; anything meaningful still uses real tokens).
+- **`.claude/launch.json`** pointed at a session-scoped scratchpad path that
+  would break for the user → removed.
+- **Stale docs corrected:** `apps/gui/DESIGN.md` (v3 "Editorial Workspace" →
+  v4 "Console", new font + theme rows) and the Stack paragraph of
+  [[entities/gui]], which still claimed DM Mono/zinc and
+  `prefers-color-scheme`-only theming.
+
+Also measured the font cost, since `apps/gui/dist` ships inside the published
+CLI tarball: Instrument Sans publishes only latin + latin-ext (both wanted —
+Turkish is the planned second locale, CLAUDE.md §11), so its bare imports were
+already minimal; the serif renders one glyph run and was pinned to latin.
+Net dist 1.2M → 1.1M.
+
+**Gate status at hand-off:** biome clean, `tsc -b` clean, GUI 641/641 green.
+`pnpm verify` still exits non-zero for two reasons, **neither from this work**:
+the `context-gate` concurrency flake above, and `conventions:check` failing on
+an uncommitted `CLAUDE.md` edit (OMC section removed, model defaults changed)
+that was already in the working tree at session start and was not made here.
+Because `verify` chains with `&&`, that test flake means `conventions:check`
+never runs in a normal `verify` — worth knowing: DoD item 4 does not currently
+gate DoD item 10.
+
+### [2026-07-28] review | gui-console-redesign — code-reviewer pass
+
+External `code-reviewer` pass in a fresh context returned **REQUEST-CHANGES**
+with 16 findings + nits. All actioned. The four that mattered:
+
+1. **`$NaN` on the flagship savings figure.** `fetchAllWorkspaceTotals` is an
+   unchecked cast; a malformed body (or `[]`, which is *truthy*, so the
+   `totals ?` guard missed it) reached `computeSavingsHeadline` and rendered
+   `$NaN`. The reviewer proved it was rendering in six existing tests with no
+   assertion noticing. Added `isUsableTotals` at the boundary +
+   `test/components/overview-degradation.test.tsx` covering null / `[]` / `{}` /
+   string / NaN-fields, asserting the body never contains "NaN".
+2. **Two of three CLI commands on the Setup page did not exist.**
+   `mega session saver --mode balanced` (saver is a command *group*, no `--mode`)
+   and bare `mega index build` (projectName is a required positional). Corrected
+   to `mega session saver workspace enable --mode balanced` and
+   `mega index build <project>`. Pinned in the component test with a comment
+   naming the three CLI files to re-check, since @megasaver/cli is bin-only and
+   a real parity test would need a cross-package deep import (§8).
+3. **"Install" on the MCP readiness row routed to Token saver**, where MCP
+   install does not live — a dead-end button. Routing now travels on the check
+   object (`fixView`) instead of a label-string match.
+4. **Estimate discipline was dropped.** The new headline rendered a bare `$X.XX`
+   with hand-written pricing prose, while `packages/stats` requires `≈`,
+   `(est.)` and the shared `SAVINGS_FOOTNOTE` so the GUI can never drift from
+   the CLI's price constant. Restored.
+
+Also fixed: stale `floorSelection` across a workspace switch (floor plan showed
+B's agents over a "No agents yet" board); blank office view during load; the
+`nowMs` clock advancing only inside `.then()` in `app.tsx`, which froze the top
+bar's live count during an outage while Overview's list correctly emptied —
+note `session-liveness.ts` *claimed* the shared helper prevented exactly that
+disagreement, which it did not; readiness probes re-firing every 4s because
+`deriveWorkspaceOptions` rebuilds `options` each poll; `needsSetup` never
+refreshing; command-palette focus trap + focus restore; invalid `aria-selected`
+on `role=button`; `aria-label` on a bare `<span>` (ignored by real AT — and the
+test passed only because testing-library reads the attribute, not the computed
+name); tab/tabpanel id linkage + roving arrow keys; the scrim hex literal →
+`--color-scrim`; `greeting()` moved out of `session-liveness.ts` (§8).
+
+**Test coverage was the reviewer's sharpest point:** eight office tests had been
+moved onto the List view when the default became Floor. Each edit was justified
+alone, but the net effect left the *default* view uncovered — and two real bugs
+lived in exactly that path. Coverage restored and extended: new suites for
+TopBar (replacing the deleted WorkspacePicker's, which had left workspace
+switching untested), CommandPalette + `filterCommands`, Toast + `useToast`,
+`greeting`, and Overview failure paths. The `$` assertion was strengthened from
+`/^\$\d/` (which would pass against a hardcoded "$1") to the exact value
+`computeSavingsHeadline` produces.
+
+Evidence after fixes: biome clean, `tsc -b` clean, **GUI 676 tests / 90 files
+green** (was 641/85), zero unhandled rejections, app re-driven with no console
+errors. Unchanged pre-existing failures, both confirmed not from this work:
+the `context-gate` concurrency test (fails under loaded parallel turbo; the
+reviewer could not reproduce it under `pnpm -r`, so it is load-dependent rather
+than deterministic) and `conventions:check` on the stray `CLAUDE.md` edit.
+

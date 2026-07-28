@@ -122,6 +122,13 @@ afterEach(() => {
 });
 
 describe("AgentOfficeView", () => {
+  // The office defaults to the floor plan; these cases assert list-shaped board
+  // behaviour, so they switch views first.
+  async function renderOnList(): Promise<void> {
+    render(<AgentOfficeView />);
+    fireEvent.click(await screen.findByRole("button", { name: /^list$/i }));
+  }
+
   it("shows loading state then workspace selector", async () => {
     stub.fetchWorkspaces = () => Promise.resolve([WS_1, WS_2]);
     render(<AgentOfficeView />);
@@ -134,7 +141,7 @@ describe("AgentOfficeView", () => {
   it("auto-selects workspace when only one exists", async () => {
     stub.fetchWorkspaces = () => Promise.resolve([WS_1]);
     stub.fetchOfficeStatus = () => Promise.resolve(STATUS_WITH_AGENT);
-    render(<AgentOfficeView />);
+    await renderOnList();
     await waitFor(() => expect(screen.getByText("worker-1")).toBeDefined());
   });
 
@@ -145,7 +152,7 @@ describe("AgentOfficeView", () => {
       statusCalledWith = wk;
       return Promise.resolve(STATUS_WITH_AGENT);
     };
-    render(<AgentOfficeView />);
+    await renderOnList();
     await waitFor(() => expect(screen.getByLabelText(/Select workspace/)).toBeDefined());
 
     // Select first workspace
@@ -167,7 +174,7 @@ describe("AgentOfficeView", () => {
       return () => undefined;
     };
 
-    render(<AgentOfficeView />);
+    await renderOnList();
     await waitFor(() => expect(screen.getByText(/No agents yet/)).toBeDefined());
 
     // Simulate a status SSE event — cast to bypass overly-strict narrowing after await
@@ -191,7 +198,7 @@ describe("AgentOfficeView", () => {
       return Promise.resolve(STATUS_WK2);
     };
 
-    render(<AgentOfficeView />);
+    await renderOnList();
     await waitFor(() => expect(screen.getByLabelText(/Select workspace/)).toBeDefined());
 
     // Select wk1 (fetch hangs) then immediately switch to wk2 (resolves).
@@ -218,7 +225,7 @@ describe("AgentOfficeView", () => {
       return () => undefined;
     };
 
-    render(<AgentOfficeView />);
+    await renderOnList();
     await waitFor(() => expect(screen.getByText(/No agents yet/)).toBeDefined());
 
     // Transient blip — EventSource auto-reconnects but fires onError first.
@@ -241,7 +248,7 @@ describe("AgentOfficeView", () => {
       closeCalled++;
     };
 
-    render(<AgentOfficeView />);
+    await renderOnList();
     await waitFor(() => expect(screen.getByLabelText(/Select workspace/)).toBeDefined());
 
     // Select wk1
@@ -263,6 +270,7 @@ describe("AgentOfficeView", () => {
     };
 
     const { unmount } = render(<AgentOfficeView />);
+    fireEvent.click(await screen.findByRole("button", { name: /^list$/i }));
     await waitFor(() => expect(screen.getByText(/No agents yet/)).toBeDefined());
 
     unmount();
@@ -295,7 +303,7 @@ describe("AgentOfficeView", () => {
       captured = input;
       return Promise.resolve(AGENT_WK1);
     };
-    render(<AgentOfficeView />);
+    await renderOnList();
     await waitFor(() => expect(screen.getByText(/No agents yet/)).toBeDefined());
 
     fireEvent.click(screen.getByText(/\+ Add agent/));

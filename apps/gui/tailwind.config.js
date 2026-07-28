@@ -4,7 +4,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["SF Pro Display", "Geist Sans", "Helvetica Neue", "system-ui", "sans-serif"],
+        sans: ["Instrument Sans", "SF Pro Display", "system-ui", "sans-serif"],
+        serif: ["Instrument Serif", "ui-serif", "Georgia", "serif"],
         mono: ["DM Mono", "ui-monospace", "SFMono-Regular", "Consolas", "monospace"],
       },
       colors: {
@@ -17,8 +18,11 @@ export default {
         "text-secondary": "var(--color-text-secondary)",
         "text-muted": "var(--color-text-muted)",
         border: "var(--color-border)",
+        "line-soft": "var(--color-line-soft)",
         accent: "var(--color-accent)",
         "accent-fg": "var(--color-accent-fg)",
+        "accent-soft": "var(--color-accent-soft)",
+        scrim: "var(--color-scrim)",
         danger: "var(--color-danger)",
         "danger-fg": "var(--color-danger-fg)",
         warn: "var(--color-warn)",
@@ -44,36 +48,46 @@ export default {
         DEFAULT: "var(--color-border)",
       },
       fontSize: {
-        // Pin subset: xs sm base lg xl only (spec §6b)
-        xs: ["0.75rem", { lineHeight: "1rem" }],
-        sm: ["0.8125rem", { lineHeight: "1.25rem" }],
-        base: ["0.875rem", { lineHeight: "1.5rem" }],
-        lg: ["1rem", { lineHeight: "1.5rem" }],
-        xl: ["1.125rem", { lineHeight: "1.75rem" }],
+        // Pin subset — extended by the console redesign (2026-07-28 spec §3)
+        // with the meta (2xs), page-title (2xl) and display steps.
+        "2xs": ["0.7143rem", { lineHeight: "1rem" }],
+        xs: ["0.7857rem", { lineHeight: "1.125rem" }],
+        sm: ["0.8571rem", { lineHeight: "1.25rem" }],
+        base: ["1rem", { lineHeight: "1.55" }],
+        lg: ["1.0714rem", { lineHeight: "1.5rem" }],
+        xl: ["1.2857rem", { lineHeight: "1.75rem" }],
+        "2xl": ["1.6429rem", { lineHeight: "2rem" }],
+        display: ["4.2857rem", { lineHeight: "1" }],
       },
       spacing: {
-        // Pin subset: 0 1 2 3 4 6 8 12 (spec §6c)
+        // Pin subset: 0 1 2 3 4 5 6 7 8 12 14 (spec §6c, extended)
         0: "0px",
         1: "4px",
         2: "8px",
         3: "12px",
         4: "16px",
+        5: "20px",
         6: "24px",
+        7: "28px",
         8: "32px",
         12: "48px",
+        14: "56px",
       },
       borderRadius: {
-        // Pin subset: none sm md lg full (spec §6d)
+        // Pin subset: none sm md lg xl 2xl full (spec §6d, extended)
         none: "0",
-        sm: "0.125rem",
-        md: "0.375rem",
-        lg: "0.75rem",
+        sm: "0.375rem",
+        md: "0.5714rem",
+        lg: "0.7143rem",
+        xl: "0.8571rem",
+        "2xl": "1.1429rem",
         full: "9999px",
       },
       boxShadow: {
-        // Pin subset: none sm (spec §6e)
+        // Pin subset: none sm md (spec §6e, extended)
         none: "none",
         sm: "0 2px 8px rgb(0 0 0 / 0.04)",
+        md: "var(--color-shadow)",
       },
     },
   },
