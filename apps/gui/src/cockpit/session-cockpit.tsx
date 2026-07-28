@@ -43,20 +43,18 @@ export function SessionCockpit({
   }, [openGroup]);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-surface border border-border rounded-xl overflow-hidden">
-      <header className="flex items-start gap-4 px-5 py-4 border-b border-border shrink-0">
+    <div className="flex flex-col flex-1 min-h-0">
+      <header className="flex items-center gap-3.5 px-5 pt-4 shrink-0">
         <button
           type="button"
           onClick={onBack}
-          className="mt-1 text-xs text-text-muted hover:text-text-primary transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-surface text-xs cursor-pointer hover:bg-surface-elevated transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
         >
-          ← Back
+          ← Sessions
         </button>
         <div className="flex flex-col min-w-0">
-          <span className="text-lg font-semibold tracking-tight text-text-primary truncate">
-            {title || id}
-          </span>
-          <span className="text-xs text-text-muted truncate" title={cwd}>
+          <h1 className="m-0 text-xl font-semibold tracking-tight truncate">{title || id}</h1>
+          <span className="font-mono text-xs text-text-muted truncate" title={cwd}>
             {cwd}
           </span>
         </div>
@@ -65,7 +63,7 @@ export function SessionCockpit({
       <nav
         ref={navRef}
         aria-label="Cockpit panels"
-        className="flex items-center gap-6 px-5 border-b border-border shrink-0"
+        className="flex items-center gap-5 px-5 mt-3.5 border-b border-border shrink-0"
       >
         {COCKPIT_TAB_GROUPS.map((group) => {
           const inGroup = activeGroupId === group.id;
@@ -88,11 +86,11 @@ export function SessionCockpit({
                   }
                 }}
                 className={[
-                  "px-1 py-3 text-xs transition-colors duration-150 cursor-pointer",
+                  "px-0.5 py-2.5 text-sm border-b-2 transition-colors duration-150 cursor-pointer",
                   "focus-visible:outline-2 focus-visible:outline-offset-2",
                   inGroup
-                    ? "text-text-primary font-medium border-b-2 border-text-primary"
-                    : "text-text-secondary hover:text-text-primary",
+                    ? "text-text-primary font-semibold border-accent"
+                    : "text-text-secondary border-transparent hover:text-text-primary",
                 ].join(" ")}
               >
                 {group.label}
@@ -131,10 +129,10 @@ export function SessionCockpit({
       </nav>
 
       <div className="flex flex-1 min-h-0 overflow-hidden max-lg:flex-col">
-        <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <main className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
           {Body && <Body dir={dir} id={id} cwd={cwd} />}
         </main>
-        <aside className="w-[26%] max-lg:w-full shrink-0 border-l max-lg:border-l-0 max-lg:border-t border-border p-4 overflow-y-auto flex flex-col gap-6">
+        <aside className="w-[288px] max-lg:w-full shrink-0 border-l max-lg:border-l-0 max-lg:border-t border-border bg-surface p-5 overflow-y-auto flex flex-col gap-6">
           <SessionSaverStats dir={dir} id={id} />
         </aside>
       </div>

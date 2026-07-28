@@ -6,9 +6,11 @@ sources:
   - docs/superpowers/specs/2026-05-10-ll-gui-v1-design.md
   - docs/superpowers/specs/2026-07-03-gui-redesign-v3-design.md
   - docs/superpowers/plans/2026-07-03-gui-redesign-v3.md
+  - docs/superpowers/specs/2026-07-28-gui-console-redesign-design.md
+  - docs/superpowers/plans/2026-07-28-gui-console-redesign.md
 status: published
 created: 2026-05-10
-updated: 2026-07-09
+updated: 2026-07-28
 ---
 
 # `@megasaver/gui`
@@ -23,8 +25,11 @@ Vite + React 18 + Tailwind v3.4 (JIT) + a tiny `node:http` bridge
 that imports `@megasaver/core` directly. No router. No state lib —
 React `useState`/`useEffect` hooks. Token system via CSS variables
 in `apps/gui/src/styles/tokens.css`; design language documented in
-`apps/gui/DESIGN.md` ("Editorial Terminal" — DM Mono + zinc + amber
-accent, light/dark via `prefers-color-scheme`).
+`apps/gui/DESIGN.md` ("Console" since 2026-07-28 — Instrument Sans +
+Instrument Serif + DM Mono, warm paper + amber accent; light/dark
+follows the OS **and** can be pinned by a sidebar toggle, see the
+console-redesign section below). Fonts are self-hosted `@fontsource`
+packages, never Google Fonts — the bridge sends CSP `default-src 'self'`.
 
 ## Ports
 
@@ -114,18 +119,21 @@ in fresh contexts.
 
 ## Lint posture
 
-`biome.json` disables `useSemanticElements` for four files:
-`apps/gui/src/components/project-picker.tsx`,
-`apps/gui/src/views/sessions-view.tsx`,
-`apps/gui/src/views/sessions-list.tsx`, and
-`apps/gui/src/views/memory-view.tsx`.
+> **Superseded 2026-07-28** by the console redesign. The five files this
+> section used to name (`project-picker`, `token-saver-modal`,
+> `sessions-view`, `sessions-list`, `memory-view`) had all been deleted by
+> earlier redesigns, so the `biome.json` override matched nothing at all.
 
-These components use `<div role="...">` patterns (e.g. `role="list"`,
-`role="listitem"`, `role="listbox"`/`role="option"`) rather than native
-`<ul>`/`<li>`/`<select>` because the design system's token-driven hover
-and selection states require a flat element hierarchy; wrapping in
-semantic list elements breaks the CSS custom-property cascade. The
-override is intentional and scoped to the four affected files only.
+`biome.json` now disables `useSemanticElements` for exactly one file:
+`apps/gui/src/components/command-palette.tsx`, which uses
+`<div role="dialog">` rather than a native `<dialog>` because jsdom does not
+implement `showModal()` — a native dialog would make the palette untestable.
+Escape handling and initial focus are explicit in the component.
+
+Everything else uses native semantics: the workspace dropdown is a plain
+`<ul>` of `<button>`s (a disclosure, not a listbox — buttons are natively
+focusable, so no ARIA role is needed), and the toast is an `<output>`
+(implicit `role=status`).
 
 ## AA1 / Mega Saver Mode
 
@@ -334,3 +342,73 @@ token-gated) and opens the browser — no clone, no `pnpm dev`.
   Bearer 200, same-origin Origin 200, foreign Origin 403, bound addr 127.0.0.1.
 - Source: `docs/superpowers/specs/2026-07-05-mega-gui-command-design.md`,
   `docs/superpowers/plans/2026-07-05-mega-gui-command.md`.
+
+## Console redesign (2026-07-28, `feat/gui-console-redesign`)
+
+Imports the "Mega Saver Console" prototype from Claude Design
+(`claude.ai/design/p/124f5957…`, `Mega Saver Console.dc.html`) and rebuilds the
+shell around it. **Frontend-only** — no bridge route, no Core change, no new
+`BridgeErrorCode` member. Source: the spec/plan in frontmatter.
+
+- **Seven nav items in three groups** (`NAV_GROUPS` in `components/sidebar.tsx`):
+  Monitor (Overview, Sessions) · Optimize (Token saver, Memory) · Configure
+  (Workspace, Agent office, Setup). `VIEW_IDS` gains `"overview"`, still
+  alphabetically pinned; `agent-setup`'s label is now "Setup".
+- **New chrome:** `components/top-bar.tsx` (global workspace switcher + ⌘K
+  trigger + live count), `command-palette.tsx`, `toast.tsx`, `theme-toggle.tsx`.
+  The per-page `WorkspacePicker` is **deleted** — the top bar is the single
+  switcher. Agent office keeps its own selector because office agents are keyed
+  by workspace at the bridge, not by the session-derived option list.
+- **Overview page** (`views/overview-page.tsx`, new): savings headline via
+  `fetchAllWorkspaceTotals` → `computeSavingsHeadline` (the `$` is computed by
+  `@megasaver/stats`, never a literal), 5 readiness checks over the existing
+  hook/proxy/MCP/daemon/index routes, and a live-session list.
+- **Agent office floor plan** (`views/office/office-floor.tsx`): desks rendered
+  from the real roster, status-driven animation, one floor of ten. Overflow past
+  ten desks is stated in the UI, never silently hidden.
+
+### Token system v3
+
+`tokens.css` moves from `@media (prefers-color-scheme: dark)`-only to
+`:root` (light) / `[data-theme="dark"]` (manual) / `@media (prefers-color-scheme:
+dark) :root:not([data-theme="light"])` (OS default). The dark palette is
+therefore declared **twice** — a media query cannot join a selector list — and
+`accent-contrast.test.ts` pins the two copies identical so they cannot drift.
+That test also selects blocks **by selector, not by `indexOf("@media")`**, which
+the old version did and which this structure breaks.
+
+New roles (spec amendment per the `tokens.css` header rule): `--color-line-soft`,
+`--color-accent-soft`, `--color-shadow`. Fonts are self-hosted `@fontsource`
+packages (Instrument Sans/Serif), not Google Fonts — the bridge sends CSP
+`default-src 'self'`.
+
+**Three prototype colours were corrected for WCAG AA** and must not be reverted
+(the contrast suite fails if they are): light `--color-text-muted`
+`#8d877c`→`#6a645a` (3.19:1), dark `--color-text-muted` `#71747c`→`#868a93`
+(3.48:1), light `--color-accent` `#b45309`→`#a84d07` (4.49:1 on the warmer
+`#f4f2ee` canvas). All roles now clear 4.5:1 against background, surface, raised
+and their own soft fill, in both themes.
+
+### Deliberately NOT built (no backing route)
+
+The prototype's script is entirely mock constants. Four surfaces had no bridge
+route and were omitted rather than faked (user decision, 2026-07-28):
+the 18-day savings sparkline, the cross-workspace "recent activity" feed, the
+Memory "Live brain" panel, and Agent-office multi-floor + provider picker.
+Building them means new endpoints, Zod boundary schemas, new `BridgeErrorCode`
+members and store-root work — a materially larger, non-frontend change.
+
+### Evidence
+
+`pnpm verify`: biome clean, `tsc -b` clean, GUI 641 tests / 85 files green.
+Note `packages/context-gate` `test/saver-seen-concurrency.test.ts` fails under a
+loaded parallel `turbo` run (`expected 40 to be greater than 48`) — reproduced
+on a clean tree with these changes stashed, so it is a **pre-existing
+load-sensitive flake**, not a regression from this work. It passes standalone
+(369/369). Related: [[concepts/redos-growth-ratio-measurement]] records the same
+"ratios break under a parallel turbo run" effect.
+
+Also cleaned up: the `biome.json` `useSemanticElements` override listed five
+files that had all been deleted long before this change and matched nothing; it
+now scopes to `command-palette.tsx` alone (role=dialog div, because jsdom does
+not implement `showModal()`).

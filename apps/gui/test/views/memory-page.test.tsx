@@ -22,8 +22,11 @@ describe("MemoryPage", () => {
           new Response("[]", { status: 200, headers: { "content-type": "application/json" } }),
       ),
     );
-    render(<MemoryPage options={OPTS} activeKey="k1" onWorkspaceChange={() => {}} />);
-    expect(screen.getByLabelText("Active workspace")).toBeTruthy();
+    render(<MemoryPage options={OPTS} activeKey="k1" />);
+    // Workspace selection moved to the global top bar (TopBar); the page no
+    // longer owns a picker. Paired with the heading assertion below so this
+    // cannot pass by the page rendering nothing at all.
+    expect(screen.queryByLabelText("Active workspace")).toBeNull();
     // Page-owned heading is the first match; MemoryPanel renders its own
     // "Memory" heading too, so scope to the page-level one specifically.
     const [pageHeading] = screen.getAllByRole("heading", { name: /memory/i });
@@ -38,7 +41,7 @@ describe("MemoryPage", () => {
           new Response("[]", { status: 200, headers: { "content-type": "application/json" } }),
       ),
     );
-    render(<MemoryPage options={OPTS} activeKey="k1" onWorkspaceChange={() => {}} />);
+    render(<MemoryPage options={OPTS} activeKey="k1" />);
 
     const layout = screen.getByTestId("memory-workspace-layout");
     expect(layout.className).toContain("grid");
@@ -52,7 +55,7 @@ describe("MemoryPage", () => {
   });
 
   it("prompts to select when there is no active workspace", () => {
-    render(<MemoryPage options={[]} activeKey={null} onWorkspaceChange={() => {}} />);
+    render(<MemoryPage options={[]} activeKey={null} />);
     expect(screen.getByText(/select a workspace/i)).toBeTruthy();
   });
 });

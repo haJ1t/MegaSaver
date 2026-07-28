@@ -22,8 +22,11 @@ describe("TokenSaverPage", () => {
           new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
       ),
     );
-    render(<TokenSaverPage options={OPTS} activeKey="k1" onWorkspaceChange={() => {}} />);
-    expect(screen.getByLabelText("Active workspace")).toBeTruthy();
+    render(<TokenSaverPage options={OPTS} activeKey="k1" />);
+    // Workspace selection moved to the global top bar (TopBar); the page no
+    // longer owns a picker. Paired with the heading assertion below so this
+    // cannot pass by the page rendering nothing at all.
+    expect(screen.queryByLabelText("Active workspace")).toBeNull();
     expect(screen.getByRole("heading", { name: /token saver/i })).toBeTruthy();
   });
 });

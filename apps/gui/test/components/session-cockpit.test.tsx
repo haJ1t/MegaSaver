@@ -60,10 +60,10 @@ describe("SessionCockpit", () => {
     await waitFor(() => expect(screen.getByText(/LLM context tokens/)).toBeDefined());
   });
 
-  it("invokes onBack when the Back control is clicked", () => {
+  it("invokes onBack when the back-to-Sessions control is clicked", () => {
     const onBack = vi.fn();
     render(<SessionCockpit dir="d" id="i" cwd="/tmp/w" title="Demo" onBack={onBack} />);
-    fireEvent.click(screen.getByRole("button", { name: /Back/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Sessions/ }));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 

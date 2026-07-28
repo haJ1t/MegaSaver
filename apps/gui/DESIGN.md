@@ -1,9 +1,21 @@
-# Mega Saver GUI v3 — Design System
+# Mega Saver GUI v4 — Design System
 
-Aesthetic direction: **Editorial Workspace**, now amber-accented. Warm monochrome,
-generous whitespace, crisp cards, and typography-led hierarchy, with a persistent
-left sidebar replacing the top-nav pill. The previous dense terminal style has
-been relaxed to reduce eye strain during long sessions.
+Aesthetic direction: **Console** (imported 2026-07-28 from the Claude Design
+prototype `Mega Saver Console.dc.html`; see
+`docs/superpowers/specs/2026-07-28-gui-console-redesign-design.md`).
+Warm paper canvas, amber accent, hairline row rules, and a grouped left sidebar
+(Monitor / Optimize / Configure) beside a top bar carrying the workspace
+switcher, the ⌘K palette and the live-session count.
+
+> **Theme:** follows the OS by default and can be pinned by the sidebar toggle.
+> `tokens.css` declares `:root` (light), `[data-theme="dark"]` (manual) and
+> `@media (prefers-color-scheme: dark) :root:not([data-theme="light"])` (OS).
+> The dark palette is declared twice on purpose — a media query cannot join a
+> selector list — and `test/styles/accent-contrast.test.ts` pins the two copies
+> identical.
+
+> **Contrast is enforced, not advisory.** Three prototype colours were darkened
+> or lightened to clear WCAG AA and must not be reverted (spec §3a).
 
 ---
 
@@ -11,13 +23,16 @@ been relaxed to reduce eye strain during long sessions.
 
 | Token | Value | Use |
 |-------|-------|-----|
-| `font-sans` | `SF Pro Display`, `Geist Sans`, `Helvetica Neue`, `system-ui`, sans-serif | UI chrome, headings, body |
+| `font-sans` | `Instrument Sans`, `SF Pro Display`, `system-ui`, sans-serif | UI chrome, headings, body |
+| `font-serif` | `Instrument Serif`, `ui-serif`, Georgia, serif | Display numerals only (the Overview savings figure) |
 | `font-mono` | `DM Mono`, `ui-monospace`, `SFMono-Regular`, `Consolas`, monospace | Code, timestamps, metrics, kebab-style meta |
 | `text-xs` | 0.75rem / 1rem line-height | Labels, badge text, timestamps |
 | `text-sm` | 0.8125rem / 1.25rem | Secondary body, form hints |
 | `text-base` | 0.875rem / 1.5rem | Default body |
 | `text-lg` | 1rem / 1.5rem | Card titles, cockpit header |
-| `text-xl` | 1.125rem / 1.75rem | Page title only |
+| `text-xl` | 1.2857rem / 1.75rem | Cockpit / section title |
+| `text-2xl` | 1.6429rem / 2rem | Page title |
+| `display` | 4.2857rem / 1 | Serif savings figure (Overview only) |
 | `text-4xl` | 2.25rem / 1 | Hero metrics (tokens saved) |
 | `font-normal` | 400 | Body text |
 | `font-medium` | 500 | Labels, active nav, button text |

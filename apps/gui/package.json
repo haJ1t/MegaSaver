@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "@fontsource/dm-mono": "^5.0.0",
+    "@fontsource/instrument-sans": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
     "@megasaver/agent-office": "workspace:*",
     "@megasaver/connector-claude-code": "workspace:*",
     "@megasaver/connector-generic-cli": "workspace:*",

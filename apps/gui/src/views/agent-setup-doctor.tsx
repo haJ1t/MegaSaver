@@ -129,11 +129,11 @@ export function AgentSetupDoctor(): JSX.Element {
     );
 
   return (
-    <section aria-label="Agent setup" className="flex flex-col gap-6 px-6 py-6 overflow-y-auto">
+    <section aria-label="Agent setup" className="max-w-[880px] flex flex-col gap-3.5 px-5 py-7">
       <header className="flex flex-col gap-1">
-        <h2 className="text-lg font-medium text-text-primary">Agent setup</h2>
-        <p className="text-sm text-text-muted">
-          Install and repair the Mega Saver MCP server for each connected agent.
+        <h1 className="m-0 text-2xl font-semibold tracking-tight">Setup</h1>
+        <p className="mt-1 mb-0 text-text-secondary">
+          Connect Mega Saver to the coding agents on this machine. One click each.
         </p>
       </header>
 
@@ -154,7 +154,7 @@ export function AgentSetupDoctor(): JSX.Element {
       )}
 
       {loadState === "ready" && (
-        <ul className="flex flex-col gap-3">
+        <ul className="flex flex-col gap-3 list-none m-0 p-0">
           {agents.map((agent) => (
             <AgentSetupRow
               key={agent.agentId}
@@ -166,6 +166,26 @@ export function AgentSetupDoctor(): JSX.Element {
           ))}
         </ul>
       )}
+
+      <section className="px-5 py-4 rounded-xl border border-dashed border-border">
+        <h2 className="m-0 mb-1 text-sm font-semibold">Prefer the terminal?</h2>
+        <p className="m-0 mb-2.5 text-sm text-text-secondary">
+          Everything here has a command-line equivalent.
+        </p>
+        {/* Must stay runnable verbatim. @megasaver/cli is bin-only (no exports
+            map), so these cannot be asserted against the citty tree without a
+            cross-package deep import (CLAUDE.md §8). agent-setup-doctor.test.tsx
+            pins the strings instead, so changing them is a deliberate act that
+            forces re-checking against:
+              apps/cli/src/commands/mcp/install.ts
+              apps/cli/src/commands/session/saver/workspace.ts
+              apps/cli/src/commands/index/build.ts  (projectName is positional) */}
+        <div className="flex flex-col gap-1 font-mono text-xs text-text-secondary">
+          <code>mega mcp install --target claude-code</code>
+          <code>mega session saver workspace enable --mode balanced</code>
+          <code>mega index build &lt;project&gt;</code>
+        </div>
+      </section>
     </section>
   );
 }
