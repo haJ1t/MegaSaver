@@ -15,6 +15,13 @@ const safeSegment = z.string().min(1).refine(isSafeSegment, "unsafe path segment
 // pre-B1, so that is the only honest reconstruction).
 const deltaBytesField = z.number().int().optional();
 
+// B3 recovery debt: `kind` marks expansion (chunk re-injection) rows so
+// reports can separate compression credits from recovery debits. Absent =
+// compression (every pre-B3 row). `mode` is optional because an expansion row
+// is charged to the session, not produced under a saver mode.
+const eventKindField = z.enum(["compression", "expansion"]).optional();
+const modeField = tokenSaverModeSchema.optional();
+
 export const tokenSaverEventSchema = z
   .object({
     id: z.string().min(1),
@@ -30,7 +37,8 @@ export const tokenSaverEventSchema = z
     savingRatio: z.number().min(0).max(1),
     chunkSetId: z.string().min(1).optional(),
     summary: z.string(),
-    mode: tokenSaverModeSchema,
+    mode: modeField,
+    kind: eventKindField,
   })
   .strict();
 
@@ -54,7 +62,8 @@ export const overlayTokenSaverEventSchema = z
     savingRatio: z.number().min(0).max(1),
     chunkSetId: z.string().min(1).optional(),
     summary: z.string(),
-    mode: tokenSaverModeSchema,
+    mode: modeField,
+    kind: eventKindField,
     // W5: event-carried counters. Optional so pre-wave-5 JSONL rows keep
     // parsing; rebuilds fold them so a lost summary no longer zeroes them.
     secretsRedacted: z.number().int().nonnegative().optional(),
