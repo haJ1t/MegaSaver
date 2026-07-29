@@ -30,11 +30,36 @@ const rankInputSchema = z
   })
   .passthrough();
 
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/\W+/)
-    .filter((t) => t.length > 0);
+function tokenizeWord(word: string, result: string[]): void {
+  const lowerWord = word.toLowerCase();
+  if (lowerWord.length > 0 && !result.includes(lowerWord)) {
+    result.push(lowerWord);
+  }
+  const subWords = word.split(/[_\.\-]+/u).filter((w) => w.length > 0);
+  for (const sw of subWords) {
+    const lowerSw = sw.toLowerCase();
+    if (lowerSw.length > 0 && !result.includes(lowerSw)) {
+      result.push(lowerSw);
+    }
+    const parts = sw
+      .split(/(?<=[\p{Ll}\p{N}])(?=\p{Lu})|(?<=\p{Lu})(?=\p{Lu}\p{Ll})/u)
+      .map((p) => p.toLowerCase())
+      .filter((p) => p.length > 0);
+    for (const p of parts) {
+      if (!result.includes(p)) {
+        result.push(p);
+      }
+    }
+  }
+}
+
+export function tokenize(text: string): string[] {
+  const result: string[] = [];
+  const rawWords = text.split(/[^\p{L}\p{N}_.\-]+/u).filter((w) => w.length > 0);
+  for (const w of rawWords) {
+    tokenizeWord(w, result);
+  }
+  return result;
 }
 
 export function rankBm25(input: Bm25RankInput): Bm25Result[] {
