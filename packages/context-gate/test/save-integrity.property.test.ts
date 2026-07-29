@@ -6,7 +6,7 @@ import { redact } from "@megasaver/policy";
 import type { ProjectId, SessionId, TokenSaverMode } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchChunk } from "../src/fetch-chunk.js";
-import { readAndFilter, persistChunkSet } from "../src/read.js";
+import { persistChunkSet, readAndFilter } from "../src/read.js";
 import { recordAndFilterOverlayOutput } from "../src/record-output.js";
 import type { RunCommandSpawn } from "../src/run-command.js";
 import { runOverlayOutputExecCommand } from "../src/run-command.js";
@@ -131,6 +131,7 @@ describe("save integrity — read path (readAndFilter + persistChunkSet)", () =>
         projectId: PROJECT_ID,
         createdAt: CREATED_AT,
         path: "sample.ts",
+        raw,
         result: read.result,
       });
 
@@ -174,7 +175,7 @@ describe("save integrity — overlay exec path (runOverlayOutputExecCommand)", (
         spawn,
         now: () => CREATED_AT,
         newId: () => `cs-exec-${mode}`,
-      } as Parameters<typeof runOverlayOutputExecCommand>[0]);
+      } as unknown as Parameters<typeof runOverlayOutputExecCommand>[0]);
 
       child.stdout.emit("data", Buffer.from(raw));
       child.emit("close", 0);

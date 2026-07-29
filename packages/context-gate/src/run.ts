@@ -177,6 +177,7 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
         projectId: settings.projectId,
         createdAt: now(),
         path: input.path,
+        raw: read.raw,
         result: filteredResult,
       });
     } catch (err) {
@@ -355,6 +356,7 @@ export async function runOverlayOutputPipeline(
         liveSessionId: input.liveSessionId,
         createdAt: now(),
         path: input.path,
+        raw: read.raw,
         result: filteredResult,
       });
     } catch (err) {
