@@ -1363,3 +1363,72 @@ correction, not a regression — those numbers were inflated. Also agreed with
 not gating the exec paths yet: make inflation visible first, then pick the
 guard threshold from measured frequency — that is exactly what B1's signed
 delta now records per event.
+
+### [2026-07-29] Saver round 3 → whoever picks up `docs/saver-integrity-spec`
+
+**Where the branch stands.** Round 3 shipped §W1 lever (a) (eligibility floor
+decoupled from the mode budget, `COMPRESS_FLOOR_BYTES = 2_048`), turned the
+admission-guard floors on (`{ absoluteBytes: 256, relative: 0.15 }`), and closed
+the two read-path ledger sites in `run.ts` (MCP envelope counted, signed
+`deltaBytes` persisted). An 18-cycle mutation campaign found no survivor.
+`pnpm verify` exit 0, run twice with the tree byte-identical between the runs.
+Spec §7 is rewritten and is the authority — its "What is still open" section has
+all 17 items with file paths and line numbers.
+
+**Nothing is committed.** Three guard files are still untracked and two of them
+are the only coverage for four defects. Read that item first.
+
+**What to look at hardest, in this order.**
+
+1. *The three untracked guard files* — `packages/context-gate/test/`
+   `recovery-invariants.test.ts`, `floor-decoupling.test.ts`,
+   `ledger-signed-delta.test.ts`. Sole guard for M16a/M16b/M17/M18, second guard
+   for M1/M7/M8. `git add -u` will not pick them up; stage by path. If they miss
+   the merge commit, four defects go to zero coverage silently.
+2. *Whether 2048 is the right eligibility floor.* It is a principled construction
+   (`MIN_TARGET_BYTES` / safe's share) and §W1 says "order 2 KB". But the churn
+   economics argue the other way and are unmeasured (~18k extra cache-creation
+   tokens per rewrite, `wiki/syntheses/saver-cache-churn`), the sizing evidence
+   has a 2x spread at the same cell on an uncommitted corpus (619–1136 B vs
+   2263 B at safe / 3 KB), and no test in the repo can detect a net-negative
+   outcome. Round 3 recorded this as undecidable on present evidence rather than
+   endorsing it. If you disagree, that is the number to argue about.
+3. *Two live production defects nobody owns.* M13 is unmutated in production on
+   `filterOutput`'s outline branch — `output-filter/src/types.ts:248` counts
+   `byteLength(outline.skeleton)` while the result also carries a 48 B summary,
+   and `returnedTokens` under-counts identically. And an unchanged re-read is
+   uncounted entirely: `unchangedResult` (`run.ts:41-56`) returns at `:130` /
+   `:330`, before either event-append site, though it still costs a full envelope.
+4. *`runOverlayOutputPipeline`'s new envelope accounting has no in-repo production
+   caller* — grep across `packages/` and `apps/` excluding tests finds only its
+   definition and the `index.ts` re-export. It is a consistency argument with its
+   exec sibling, not an observed delivery site.
+5. *Three semantic changes shipped with no migration note.* Read-path persisted
+   `returnedBytes`/`bytesSaved`/`savingRatio` now describe the whole MCP envelope
+   (incl. the ranking `trace` when `recordTrace` is on), so audit/GUI aggregates
+   move — 77496 → 75566, 0.873 → 0.851 on one measured read. CLI text output is
+   verified unaffected. Daemon `/excerpt` callers that omit `compressFloorBytes`
+   now get 2048 instead of `modeToBudget(mode)` (`handlers.ts:53`), and no test in
+   the repo can see it. Coarse surfaces (`Task`, `BashOutput`, `Monitor`,
+   `WebSearch`, `ToolSearch`, `mcp__*`) went from `max(modeBudget, 16384)` to a
+   flat 16384 in every mode.
+
+**Deliberately not done, so nobody re-opens it as a bug.**
+
+- `DEFAULT_MODE` stays `"safe"`. §W1 requires it be evaluated on its own so the
+  effect is attributable; that evaluation has not been run.
+- `savingRatio` stays clamped to [0,1] at every ledger site. `stats/src/event.ts`
+  bounds it inside a `.strict()` schema parsed on write, so a negative value
+  throws `StatsError` and turns the tool call into `store_write_failed`. The loss
+  is fully expressible via `deltaBytes`; the signed ratio is derived, not stored.
+- No `deltaRatio` field was added. That is a `packages/stats` packet nobody owns.
+- The net-cost benchmark has not run against the real API, so the A4 gate is NOT
+  met. §7 carries no savings or net-cost claim and none may be added — the ratio
+  ladder measures delivered bytes, not cache-creation tokens.
+- The ratio generator is still not committed (§6 "captured, not asserted").
+- Two `packages/bench-replay` comments cite `BASH_COMPRESS_FLOOR`, which no longer
+  exists (`src/saver-subprocess.ts:19-20`, `src/transform.ts:11-12`). Comments
+  only; no logic depends on them.
+- Exec-path enforcement and W6 condensation remain deferred, unchanged.
+
+Status: pending — needs staging, review and a merge decision.

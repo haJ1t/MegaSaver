@@ -7731,3 +7731,88 @@ claimed — that report was written against a concurrently-edited tree.
   persistence. Nothing is lost, but "raw output is stored" is not true of them.
 - **Ratio generator still not committed**, so §6's "captured, not asserted"
   remains unmet for the new ladder too.
+
+## [2026-07-29] fix | saver integrity — third round: floor decoupled, ledger closed
+
+Third round on `docs/saver-integrity-spec`. It shipped the two items the second
+round left deferred and closed the read-path ledger sites, then re-measured
+everything. Spec §7 rewritten to match (source:
+`docs/superpowers/specs/2026-07-28-saver-compression-integrity-design.md` §7).
+
+`pnpm verify` exit 0, run twice — once on arrival before the first mutation
+(uncached, full run) and once after the last revert, with the tree byte-identical
+between them. `conventions:check` ok. `turbo run test` leg 60/60. Counts quoted
+from the uncached run because the final run was a FULL TURBO cache hit, which is
+legitimate only because the content hash is identical: `context-gate` 59 files /
+417 tests, `output-filter` 51 / 497, `cli` 145 / 1464 + 7 skipped, `core` 913,
+`mcp-bridge` 343, `daemon` 113, `stats` 262, `gui` 676.
+
+**What shipped.**
+
+1. *§W1 lever (a) — the eligibility floor is decoupled from the mode budget.*
+   `COMPRESS_FLOOR_BYTES = 2_048` (`record-output.ts:57`) replaces
+   `input.compressFloorBytes ?? modeToBudget(input.mode)`; `minBytesFor(tool)` in
+   `apps/cli/src/hooks/saver.ts` no longer takes a mode. 2048 is
+   `MIN_TARGET_BYTES` (1024) over safe's 0.5 share — the smallest input at which
+   safe's ratio is its own rather than the clamp.
+2. *Admission-guard floors are ON.* `DEFAULT_SAVING_FLOORS = { absoluteBytes: 256,
+   relative: 0.15 }`, passed explicitly from `record-output.ts:291`; read and exec
+   sites stay on `NO_FLOORS`. They sit ~2x under the worst measured cell at the
+   eligibility floor (`tsc`-shaped output, safe, 2048 B: 619 B delta, ratio
+   0.302), which is why they cannot re-open the #278 dead band — and also why they
+   reject nothing that floor admits.
+3. *The two read-path ledger sites are closed.* `runOutputPipeline` and
+   `runOverlayOutputPipeline` now compute `mcpEnvelopeBytes(result)` after the
+   chunk-set id and shown-dedup, and persist a signed `deltaBytes` alongside the
+   clamped fields. Measured on a 32-byte inflating read: `returnedBytes` 81 → 748,
+   `deltaBytes` absent → −716, `summary.deltaBytesTotal` 0 → −716.
+   `run-command.ts` was resolved as correct-as-is, not fixed: its `deltaBytes` was
+   already signed, and `savingRatio` cannot be made signed because
+   `stats/src/event.ts` bounds it `[0,1]` inside a `.strict()` schema parsed on
+   write — a negative value throws and turns the call into `store_write_failed`.
+
+**Mutation campaign: 18 cycles, all caught, all reverted by hash.** Every earlier
+mutation re-applied rather than inherited; six new (M13, M14, M16a, M16b, M17,
+M17b, plus M18 and M10b beyond the brief). Each cycle rebuilt the workspace, so no
+mutation was "caught" by a compile error. Cross-package resolution was calibrated
+rather than assumed: M13 was run against `context-gate` with and without an
+`output-filter` rebuild, which is what licenses reading that package's zeros as
+"not applicable".
+
+**Corrected numbers.** The ladder was re-run on the same generator and corpus with
+only the floor default changed. 14 of the 18 shared cells are byte-identical;
+exactly four moved, and all four were previously `passthrough` — 6 KB balanced
+6133 → 1205, 6 KB safe 6133 → 3152, 12.5 KB safe 12785 → 5798, 25 KB safe
+25501 → 12133. Nothing above the old floor moved by a byte. A 3 KB row was added.
+No cell is `passthrough` now, so the "no recovery handle below the floor" band
+narrowed from "below 32 KB under the shipped default" to "below 2048 B" — safe at
+1.5 KB is still `passthrough`, so the floor is real. The 250 KB +958 B step
+reproduces in **all three** modes, not the two the previous entry named.
+
+Two earlier records are withdrawn: `passthrough-honesty.test.ts` is tracked
+(`git ls-files` lists it), and M6's "guarded only by an anti-vacuity counter"
+is stale as of HEAD — it now fails the adjacency assertion with a defect-naming
+message. M6 remains single-guarded.
+
+**Still open.** Full list is spec §7 "What is still open", 17 items. The ones that
+would cost most if missed:
+
+- **Three guard files are untracked** — `recovery-invariants`, `floor-decoupling`,
+  `ledger-signed-delta` (all `packages/context-gate/test/`). Sole guard for M16a,
+  M16b, M17, M18; second guard for M1, M7, M8.
+- **Single-guarded defects rose from five to nine**, across five files, two of them
+  untracked.
+- **A4 gate still NOT met.** Net cost is unmeasured; the benchmark has never run
+  against the real API, and `wiki/syntheses/saver-cache-churn` records the existing
+  harness cannot resolve an effect of this size. The floor decoupling raised churn
+  exposure in an unmeasured direction — the saver now fires above 2048 B instead of
+  32 KB. No savings or net-cost claim appears in §7 and none may be added.
+- **M13 is live and unmutated in production** on `filterOutput`'s outline branch
+  (`output-filter/src/types.ts:248`), and an unchanged re-read is uncounted
+  entirely (`run.ts:41-56`, returns before either append site).
+- **Silent semantic changes with no migration note**: read-path persisted bytes now
+  describe the whole MCP envelope (`bytesSaved` 77496 → 75566 on one read); daemon
+  `/excerpt` default drift at `handlers.ts:53`, invisible to its own tests; coarse
+  surfaces moved from `max(modeBudget, 16384)` to a flat 16384.
+- **`DEFAULT_MODE` is still `"safe"`**, and the floor-sizing corpus is uncommitted
+  and fixture-sensitive (2x spread at the same cell).

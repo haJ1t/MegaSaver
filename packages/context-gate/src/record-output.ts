@@ -15,9 +15,9 @@ import {
   filterOutput,
 } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
-import { type TokenSaverMode, type WorkspaceKey, modeToBudget } from "@megasaver/shared";
+import type { TokenSaverMode, WorkspaceKey } from "@megasaver/shared";
 import { appendOverlayEvent } from "@megasaver/stats";
-import { admitCompression } from "./admission-guard.js";
+import { DEFAULT_SAVING_FLOORS, admitCompression } from "./admission-guard.js";
 import { recoverableChunks } from "./recoverable-chunks.js";
 import { buildRecoveryFooter, looksPreTruncated } from "./recovery-footer.js";
 
@@ -42,6 +42,20 @@ const policyRedactSourceRef: SourceRefRedactor = (ref: SourceRef): SourceRef => 
 // on disk forever.
 export const EVIDENCE_RETENTION_MS = 30 * 86_400_000;
 
+// §W1 lever (a): "is this output worth touching at all". It used to be
+// modeToBudget(mode) — the same constant that sized the OUTPUT — which made
+// eligibility a function of how hard the mode compresses. Under the shipped
+// default (safe, 32 KB) that suppressed everything below 32 KB, and since this
+// function returns before storing anything, such output was not merely
+// uncompressed: it had no recovery handle either.
+//
+// 2048 is where safe mode's share stops being overridden: fit.ts targets
+// max(MIN_TARGET_BYTES, rawBytes * ratio), so below MIN_TARGET_BYTES / 0.5 the
+// 1024-byte minimum-signal clamp binds instead of safe's half-share and the
+// saving collapses toward zero. That makes it the smallest input for which
+// every mode's target is still its own ratio.
+export const COMPRESS_FLOOR_BYTES = 2_048;
+
 export type RecordOverlayOutputInput = {
   storeRoot: string;
   // When set, one evidence row is written per compressed+stored chunk set.
@@ -57,7 +71,7 @@ export type RecordOverlayOutputInput = {
   // The byte gate the caller already applied (hook minBytesFor). Both token
   // thresholds derive from it so the caller's gate is the single eligibility
   // authority — no passthrough/light dead band can open between the gate and
-  // the decision (B8). Absent -> modeToBudget(mode) (old callers, old daemon).
+  // the decision (B8). Absent -> COMPRESS_FLOOR_BYTES (old callers, old daemon).
   compressFloorBytes?: number;
   // Ranking hint passed to filterOutput. Optional: when absent, ranking is
   // generic (today's behavior). The hook path fills it from the captured
@@ -168,7 +182,7 @@ export async function recordAndFilterOverlayOutput(
   // UUIDs — evidenceId is UUID-schema-constrained and the ledger is append-only.
   const chunkSetIdGen = input.newId ?? (() => randomUUID());
 
-  const floorBytes = input.compressFloorBytes ?? modeToBudget(input.mode);
+  const floorBytes = input.compressFloorBytes ?? COMPRESS_FLOOR_BYTES;
   // ~4 bytes/token, mirroring output-filter estimateTokens.
   const thresholdTokens = Math.max(1, Math.ceil(floorBytes / 4));
 
@@ -271,10 +285,10 @@ export async function recordAndFilterOverlayOutput(
   // Admission guard, BEFORE any side effect (saveOverlayChunkSet,
   // appendOverlayEvent, evidence): a rewrite must clear the prompt-cache churn
   // it causes, not merely avoid inflating. See admission-guard.ts for why a
-  // one-byte saving used to pass and why that was negative. Degrading to
-  // passthrough also structurally preserves the honest-metrics invariant
-  // returnedTokens <= rawTokens.
-  if (!admitCompression(filtered.rawBytes, finalReturnedBytes).admit) {
+  // one-byte saving used to pass, why that was negative, and how the shipped
+  // floors were measured. Degrading to passthrough also structurally preserves
+  // the honest-metrics invariant returnedTokens <= rawTokens.
+  if (!admitCompression(filtered.rawBytes, finalReturnedBytes, DEFAULT_SAVING_FLOORS).admit) {
     return {
       decision: "passthrough",
       summary: filtered.summary,

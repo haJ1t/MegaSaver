@@ -448,8 +448,11 @@ describe("multi-chunk overlay write (C12)", () => {
     expect(r.chunkSetId).toBeDefined();
   });
 
-  it("B8: gate falls back to modeToBudget(mode) when compressFloorBytes is absent", async () => {
+  it("B8: gate falls back to COMPRESS_FLOOR_BYTES when compressFloorBytes is absent", async () => {
     const storeRoot = store();
+    // Was named "falls back to modeToBudget(mode)". The assertion below still
+    // passed after §W1 lever (a) — 5.1 KB clears 2048 as it cleared 4000 — so
+    // only the name was wrong, and a green suite could not say so.
     const raw = Array.from({ length: 150 }, (_, i) => `line ${i}: build noise xxxxxxxxxx`).join(
       "\n",
     );

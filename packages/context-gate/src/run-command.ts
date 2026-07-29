@@ -454,6 +454,11 @@ export async function runOutputExecCommand(
     // second, and it should be driven by what this measurement reports rather
     // than by assumption.
     deltaBytes: filtered.rawBytes - modelFacingReturnedBytes,
+    // Stays clamped by contract, not by oversight: the stats event schema
+    // bounds savingRatio to [0,1], so a signed ratio would be rejected at the
+    // write boundary and the append would fail the whole call. The B1 shape is
+    // a signed field ALONGSIDE the legacy clamped ones; readers that want the
+    // signed ratio derive it from deltaBytes / rawBytes.
     savingRatio:
       filtered.rawBytes === 0
         ? 0
@@ -690,6 +695,11 @@ export async function runOverlayOutputExecCommand(
     // second, and it should be driven by what this measurement reports rather
     // than by assumption.
     deltaBytes: filtered.rawBytes - modelFacingReturnedBytes,
+    // Stays clamped by contract, not by oversight: the stats event schema
+    // bounds savingRatio to [0,1], so a signed ratio would be rejected at the
+    // write boundary and the append would fail the whole call. The B1 shape is
+    // a signed field ALONGSIDE the legacy clamped ones; readers that want the
+    // signed ratio derive it from deltaBytes / rawBytes.
     savingRatio:
       filtered.rawBytes === 0
         ? 0

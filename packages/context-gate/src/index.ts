@@ -45,6 +45,7 @@ export type {
 } from "./types.js";
 export type { OrchestratorRegistry, SessionView, ProjectView } from "./registry-port.js";
 export {
+  COMPRESS_FLOOR_BYTES,
   EVIDENCE_RETENTION_MS,
   recordAndFilterOverlayOutput,
   type RecordOverlayOutputInput,
