@@ -15,7 +15,7 @@ A feature is "done" only when ALL of these hold. No partial credit.
    - Connector  → real agent run captured.
 6. External reviewer agent pass (`code-reviewer` or `critic`).
    Author and reviewer NEVER same active context.
-7. Verifier agent pass (`omc:verify`) — evidence-based check.
+7. Verifier agent pass (`verifier`) — evidence-based check.
 8. Zero pending TodoWrite items for the feature.
 9. Changeset added (`.changeset/<descriptor>.md`) if package
    public API changed.

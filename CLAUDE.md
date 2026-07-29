@@ -259,21 +259,6 @@ Mega Saver MVP is headless. Design skills activate when GUI work begins.
 - editorial / motion / hero pages     → `gpt-tasteskill`
 - if unsure                           → `taste-skill` default
 
-## OMC — agent delegation
-
-Skills:
-
-- `omc:plan` — strategic planning, optional interview.
-- `omc:ultrawork` — parallel high-throughput.
-- `omc:ralph` — self-referential loop until complete.
-- `omc:team` — N agents on shared list.
-- `omc:debug` — session/repo state diagnose.
-- `omc:trace` — evidence-driven causal tracing.
-- `omc:verify` — verifier pass (process-discipline step 4).
-- `omc:deepinit` — codebase docs (one-time after first feature).
-- `omc:wiki` — persistent knowledge wiki.
-- `omc:autopilot` — full autonomous (avoid until v0.2).
-
 Agents (via Agent tool):
 
 - `executor` — implementation.
@@ -298,7 +283,7 @@ auto-triggers. It enforces:
 
 - Prompt caching always on.
 - Latest model defaults
-  (`claude-opus-4-7` / `claude-sonnet-4-6` / `claude-haiku-4-5`).
+  (`claude-opus-5` / `claude-sonnet-5` / `claude-haiku-4-5`).
 - Streaming where applicable.
 
 Mega Saver does NOT proxy or relay user prompts to LLMs by default.
@@ -519,7 +504,7 @@ A feature is "done" only when ALL of these hold. No partial credit.
    - Connector  → real agent run captured.
 6. External reviewer agent pass (`code-reviewer` or `critic`).
    Author and reviewer NEVER same active context.
-7. Verifier agent pass (`omc:verify`) — evidence-based check.
+7. Verifier agent pass (`verifier`) — evidence-based check.
 8. Zero pending TodoWrite items for the feature.
 9. Changeset added (`.changeset/<descriptor>.md`) if package
    public API changed.
@@ -664,8 +649,8 @@ intensity is allowed.
   compression, memory schema change, session storage format,
   connector core path, public CLI flags, anything touching user
   files at scale.
-- Mandatory: full chain + `omc:architect` for design
-  + `omc:critic` adversarial review + worktree (no `main` edits).
+- Mandatory: full chain + `architect` for design
+  + `critic` adversarial review + worktree (no `main` edits).
 - Required reviewer: `code-reviewer` AND `critic` (separate
   passes).
 - Skill mode: evidence-preserving only. No aggressive compression.
@@ -675,10 +660,10 @@ intensity is allowed.
 - Examples: cryptographic ops, anything that deletes user data,
   anything that mutates user repos beyond known ignore patterns,
   license / permission code, production incident response.
-- Mandatory: HIGH chain + `omc:tracer` evidence loop
-  + `omc:security-reviewer` + verifier with reproduction evidence
+- Mandatory: HIGH chain + `tracer` evidence loop
+  + `security-reviewer` + `verifier` with reproduction evidence
   + manual user confirmation in spec.
-- Forbidden: `autopilot`, `ralph`, or any unsupervised loop.
+- Forbidden: any unsupervised or self-referential loop.
 - Skill mode: debug + evidence only. No log compression.
 
 ## Risk assignment

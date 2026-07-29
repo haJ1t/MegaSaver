@@ -31,21 +31,6 @@ Mega Saver MVP is headless. Design skills activate when GUI work begins.
 - editorial / motion / hero pages     → `gpt-tasteskill`
 - if unsure                           → `taste-skill` default
 
-## OMC — agent delegation
-
-Skills:
-
-- `omc:plan` — strategic planning, optional interview.
-- `omc:ultrawork` — parallel high-throughput.
-- `omc:ralph` — self-referential loop until complete.
-- `omc:team` — N agents on shared list.
-- `omc:debug` — session/repo state diagnose.
-- `omc:trace` — evidence-driven causal tracing.
-- `omc:verify` — verifier pass (process-discipline step 4).
-- `omc:deepinit` — codebase docs (one-time after first feature).
-- `omc:wiki` — persistent knowledge wiki.
-- `omc:autopilot` — full autonomous (avoid until v0.2).
-
 Agents (via Agent tool):
 
 - `executor` — implementation.
@@ -70,7 +55,7 @@ auto-triggers. It enforces:
 
 - Prompt caching always on.
 - Latest model defaults
-  (`claude-opus-4-7` / `claude-sonnet-4-6` / `claude-haiku-4-5`).
+  (`claude-opus-5` / `claude-sonnet-5` / `claude-haiku-4-5`).
 - Streaming where applicable.
 
 Mega Saver does NOT proxy or relay user prompts to LLMs by default.
