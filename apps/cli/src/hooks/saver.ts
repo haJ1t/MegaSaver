@@ -122,13 +122,19 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const stderr = typeof o["stderr"] === "string" ? o["stderr"] : undefined;
   if (stdout !== undefined || stderr !== undefined) {
-    // Wave 1 (A6): pnpm/cargo/webpack put their bulk on stderr — compress the
-    // larger stream, keep the other untouched so the stdout/stderr split survives.
-    // ponytail: the size gate below only sees the chosen slot; two comparably
-    // large streams (each below floor, combined above) still pass through raw.
-    // Handles the dominant "bulk on one stream" case; combined-stream gating +
-    // both-slot compression is a follow-up wave if that leak proves real.
-    const slot = (stderr?.length ?? 0) > (stdout?.length ?? 0) ? "stderr" : "stdout";
+    const hasStdout = stdout !== undefined && stdout.length > 0;
+    const hasStderr = stderr !== undefined && stderr.length > 0;
+    if (hasStdout && hasStderr) {
+      const raw = `${stdout}\n--- STDERR error boundary ---\n${stderr}`;
+      const rebuild = (t: string) => {
+        const parts = t.split(/\n?--- STDERR error boundary ---\n?/);
+        const newStdout = parts[0] ?? "";
+        const newStderr = parts.slice(1).join("\n").trim();
+        return { ...o, stdout: newStdout, stderr: newStderr };
+      };
+      return { raw, rebuild };
+    }
+    const slot = hasStderr ? "stderr" : "stdout";
     const raw = slot === "stderr" ? (stderr as string) : (stdout ?? "");
     return { raw, rebuild: (t) => ({ ...o, [slot]: t }) };
   }
