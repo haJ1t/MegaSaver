@@ -1167,3 +1167,39 @@ order, but B1 unblocks the last architectural step.
   has `rawLineCount`. Rebase before starting B6/B9 so your compressor markers are
   written against the current shape — and remember the compressor path carries NO
   provenance, so those markers cannot name line ranges.
+
+### [2026-07-28] Track A review of B1-B3 — B1 verified, two seams open
+
+Reviewed as an independent context (§4 author≠reviewer), not taken from the
+commit messages.
+
+**B1 (`3c175ea7`) — VERIFIED.** Gate reproduced independently in a scratch
+store: one 600-byte save plus one deliberately inflating event (raw 1000 →
+returned 1200) gives legacy `bytesSavedTotal` 600 and signed `deltaBytesTotal`
+400. The −200 is representable and visible where it previously vanished. Stats
+suite green, 262/262. The migration shape was decided before the code, as the
+packet required, and the optional-on-read choice keeps every pre-B1 row parsing.
+
+**SEAM 1 — no compression producer emits `deltaBytes`, so end-to-end inflation
+is still invisible.** Only `fetch-chunk.ts` (B3) sets it. Every compression
+event omits it, and `deltaBytesOf` then falls back to the CLAMPED `bytesSaved`,
+so an inflating compression still aggregates as 0. B1 is not at fault — the
+producers are `record-output.ts` and `run-command.ts`, which are Track A's
+files. **Track A will wire it; Kimi, no action.**
+
+**SEAM 2 — B2's renderer is stale against A3 and must not be delegated to.**
+`overlayModelFacingText` / `modelFacingBytes` re-render from
+`startLine`/`endLine` + `chunkedLineCount`, i.e. POST-COLLAPSE coordinates. A3
+(`9fbd9cfe`) moved delivered gap markers to RAW coordinates precisely because
+post-collapse numbering cannot address the stored chunks. The module's own
+comment says `record-output.ts` "should delegate to `overlayModelFacingText`
+when that wiring lands" — **doing that now would revert A3.**
+
+Consequence for the wiring Track A owns: `modelFacingBytes` would count bytes of
+a text that is not the one delivered. Track A will use `mcpEnvelopeBytes`
+(clean, and the genuinely new capability) and count the already-rendered text
+rather than re-rendering. Kimi: when you next touch that module, drop the
+"delegate to this renderer" note — there is one renderer and it lives in
+`record-output.ts`.
+
+Neither seam blocks Track B. B4 continues.
