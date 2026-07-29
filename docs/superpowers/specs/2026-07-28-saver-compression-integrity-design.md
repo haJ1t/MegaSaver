@@ -344,6 +344,14 @@ section previously reported is `turbo run test` alone (30 build + 30 test);
 node script, not a turbo task at all. Verify is green; the count described a
 third of it.
 
+**A second hardening and verification round then ran** against the residuals the
+first round declared open. It re-applied every round-1 mutation rather than
+inheriting its receipts, added five more, and fixed the passthrough overshoot.
+Its own `pnpm verify` legs were run before the first mutation and after the last
+revert, with a fresh `pnpm build` between them, both exit 0. Where the two rounds
+disagree, the second round's measurement governs; the disagreements are named at
+the point they occur.
+
 ### §5 Q2 answered — the coordinate question is a split, not a winner
 
 Neither candidate alone. The gate is `types.ts` `compressorEligible`:
@@ -413,99 +421,153 @@ whitespace are no longer byte-recoverable from the chunk store. Neither is
 evidence, the delivered excerpts were already normalized, and line-addressability
 is what the footer promises — that now holds.
 
-### Three non-discriminating tests, and what mutation testing now shows
+### Three non-discriminating tests, and what two rounds of mutation testing show
 
 The critic's mandate was not "do the tests pass" but "do they pass for the right
 reason". Three did not:
 
 | test | passed with the defect fully present | now |
 |---|---|---|
-| `recovery-addressability.test.ts` | A3's interior-marker skew: its per-marker check ("chunk `floor((N-1)/40)` contains raw line N") is true for every N by construction, so its only discriminating assertion was the tail extent | adjacency assertion — the span a marker names must close where the next delivered raw line begins |
+| `recovery-addressability.test.ts` | A3's interior-marker skew: its per-marker check ("chunk `floor((N-1)/40)` contains raw line N") is true for every N by construction, so its only discriminating assertion was the tail extent | adjacency assertion — the span a marker names must close where the next delivered raw line begins; round 2 added continuity and chunk-coordinate assertions to the same file, which catch M10 and M11 but not M6 (see below) |
 | `save-integrity.property.test.ts` | delivered text reduced to the summary line: `universe = delivered + recovered` is satisfied by `recovered` alone, so the delivered half contributed nothing | `assertDeliveredCarriesEvidence` — the delivered half must itself carry raw evidence |
 | the A1 read-path block | the production read path was never executed; the test hand-assembled its own `persistChunkSet` call, so `run.ts:180` — `mega output file`, `mega output filter`, MCP `read-file`, the daemon registry — was uncovered repo-wide | `read-pipeline-recovery.test.ts` drives `runOutputPipeline` itself |
 
-Each defect was then reintroduced and run against the full `packages/context-gate`
-suite (56 files / 388 tests), and the catcher recorded:
+Each defect was then reintroduced as a mutation and the catcher recorded. The
+table below is the **second round's** re-measurement, which supersedes the first
+round's counts wherever they differ: every earlier mutation was re-applied and
+five more were added, run against both suites (`packages/context-gate` 56 files /
+395 tests, `packages/output-filter` 51 files / 494 tests). Each mutation was
+reverted by exact inverse edit; the five production source files snapshotted for
+this round were hashed before the first mutation and after the last revert and
+read identical, and `pnpm verify` was green at both ends (exit 0; its
+`turbo run test` leg 60/60, which is the figure this section corrects above).
 
 | mutation | defect restored | caught by |
 |---|---|---|
 | M1 | `run.ts:180,359` persist the kept excerpts instead of `read.raw` — §1b(i), the most severe finding in the audit | `read-pipeline-recovery.test.ts` **only** (2 tests) |
-| M2 | `returnedTextOf` returns the summary and nothing else | 4 files / 10 tests: `record-output`, `save-integrity.property`, `recovery-addressability`, `coordinate-skew` |
-| M6 | interior markers back in post-collapse space | `recovery-addressability.test.ts` **only** |
-| M7 | `recoverableChunks` chunks un-normalized text | `coordinate-skew.test.ts` **only** |
-| M-footer | footer under-reports `chunkCount`, so the published `i = 0..N-1` cannot reach the lines the markers name | `coordinate-skew.test.ts` |
+| M2 | `returnedTextOf` returns the summary and nothing else | 4 files / 11 tests: `coordinate-skew`, `record-output`, `recovery-addressability`, `save-integrity.property` |
+| M6 | interior markers back in post-collapse space | `recovery-addressability.test.ts` **only** — one test, via its anti-vacuity counter (see below) |
+| M7 | `recoverableChunks` chunks un-normalized text | `coordinate-skew.test.ts` **only** (2 tests) |
+| M8 (new) | `returnedTextOf` appends a content-shaped line that appears nowhere in the raw | `save-integrity.property.test.ts` **only** (3 of 9 cases — the hook path) |
+| M9 (new) | `fitBudget` halves the byte budget it was given | 4 files, both packages: `record-output`, `save-integrity.property` (6 of 9), `output-filter/fit`, `output-filter/rank` |
+| M10 (new) | one interior gap marker suppressed; every survivor still correctly numbered | `recovery-addressability.test.ts` **only**, by its new continuity assertion |
+| M11 (was M-footer) | wrong `chunkCount` to `buildRecoveryFooter`, run in both directions (over- and under-count) | `coordinate-skew` and `recovery-addressability` — both directions, both files |
+| M12 (new) | every stored chunk's `startLine`/`endLine` shifted by one | 4 files / 5 tests: `coordinate-skew`, `read-pipeline-recovery`, `record-output`, `recovery-addressability` |
 
-No mutation in that set survives. That is the whole of the claim: **four named
-defects now fail a mutation. Two classes still cannot be caught at all.**
+No mutation in that set survives. **The two classes previously recorded as
+uncatchable are now closed by mutation receipt, and both closures are
+single-guarded:**
 
-- **Suppressed markers.** A mutation that omits a gap marker for a genuinely
-  omitted region, while leaving every surviving marker correctly addressed, is
-  caught by nothing except `recovery-addressability`'s anti-vacuity counter, and
-  then only as a change of shape, never as a wrong address. A
-  complement-coverage assertion cannot close it: it would fail on correct code,
-  because the collapse stand-in legitimately represents lines no marker names.
-  Closing it needs a production-surface change — excerpt raw spans exposed on
-  `returnedText` — not a test.
-- **Fabrication — inferred from the assertions' shape, not from a mutation.**
-  Every assertion in the suite is containment-shaped: raw lines present in the
-  delivered text, raw lines absent from the omitted ranges. Nothing asserts that
-  delivered content is not invented, so a mutation appending plausible
-  synthesized lines alongside the genuine ones should pass. Unlike M1–M7 above,
-  that is a reading of the assertions, not a receipt: no such mutation has been
-  run, and what would close the gap has not been established.
-- **Single-point coverage** (not a hole, a fragility). M1, M6 and M7 are each
-  caught by exactly one file; only M2 has redundancy. Deleting or weakening any
-  one of those three files silently reopens a flagship defect. Compounding it,
-  `recovery-addressability`'s anti-vacuity guard lands at exactly 2 adjacency
-  checks, with no margin.
+- **Fabrication (M8) is closed on the hook path only.** M8 appends a plausible
+  line resembling its neighbours and absent from the raw; it fails
+  `save-integrity.property`'s three hook-path cases. The other six cases stay
+  green correctly — the read and exec paths do not render through
+  `returnedTextOf`. **No fabrication mutation has been run against the read or
+  exec renderers**, so the class is demonstrated caught on one of three paths,
+  not on all three. Neither `recovery-addressability` nor `coordinate-skew` sees
+  a fabricated line.
+- **Suppressed markers (M10) are closed by a test after all.** The previous entry
+  here said closing this needed a production-surface change — excerpt raw spans
+  on `returnedText` — and not a test. That is now false: the new continuity
+  assertion in `recovery-addressability` ("accounts for every discontinuity
+  between delivered excerpts with a marker") names the exact omitted span,
+  reporting `raw lines 400 and 681 are delivered with no gap marker between
+  them`. Test 1's anti-vacuity counter did not fire, so the continuity assertion
+  caught it on its own terms.
+
+**Single-point coverage got worse, not better.** Five of the eight distinct
+defects are now guarded by exactly one file — M1 (`read-pipeline-recovery`), M6
+and M10 (`recovery-addressability`), M7 (`coordinate-skew`), M8
+(`save-integrity.property`). The first round had three; the two additions are the
+new assertions themselves, each landing with no second guard. Deleting or
+skipping any one of those four files silently un-guards a defect this programme
+classed as a blocker.
+
+**M6's only guard is a shape counter, and the test built to name that defect is
+structurally blind to it.** M6 fires solely on `recovery-addressability` test 1,
+and only through the anti-vacuity counter (`adjacency must be exercised, not
+skipped away: expected 1 to be greater than or equal to 2`) — a message about the
+fixture, saying nothing about mis-addressing. The continuity assertion and the
+chunk-coordinate assertion, both written for this class, stayed green. Cause was
+probed rather than assumed: on the spliced corpus every excerpt has
+`startLine === rawStartLine` because that fixture is deliberately fold-free, so
+post-collapse and raw space coincide and M6 is a literal no-op there. The
+drifting corpus is the only fixture where the two spaces diverge, and there only
+the counter fires. M6's guard holds by accident of fixture shape, and its failure
+message would not lead a reader to the defect.
+
+Two records to keep with the table. **M11 has two guards, not the one the round's
+own hardening report claimed** — `recovery-addressability` catches both
+directions as well as `coordinate-skew`, measured directly. That report was
+written against a concurrently-edited tree, so its other single-file claims carry
+the same staleness risk and were re-checked here rather than inherited.
+**`output-filter`'s 494 tests caught exactly one mutation (M9)**, the only one
+living in that package's source; `context-gate` source is unreachable from there.
+Its zeros in this table are "not applicable", not "not caught".
 
 ### Measured ratio (diagnostic, not the gate)
 
-Fixture, stated because the table this replaces had none: distinct non-repeating
-TypeScript source (~126 B/line, unique identifiers and counters per line so
-nothing collapses), driven through `recordAndFilterOverlayOutput` against the
-built `packages/context-gate/dist/index.js` — the hook path — with
-`storeRawOutput: true`, `includeFooter: true`, and a fresh `mkdtemp` store per
-cell. Sizes are reported alongside every ratio, because a saving ratio without
-its input size is not a statement about the compressor.
+The unit of this table is **`returnedBytes` at a stated input size**, not a
+ratio. `savingRatio` is carried as a derived column, last, because a saving ratio
+quoted without its input size is not a statement about the compressor — it is a
+statement about the denominator.
 
-| input | rawBytes | lines | mode | decision | returnedBytes | savingRatio | chunkCount |
-|---|---:|---:|---|---|---:|---:|---:|
-| 6 KB | 6166 | 49 | aggressive | compressed | 1256 | 0.796 | 2 |
-| 6 KB | 6166 | 49 | balanced | passthrough | 6170 | 0 | — |
-| 6 KB | 6166 | 49 | safe | passthrough | 6170 | 0 | — |
-| 12.5 KB | 12895 | 102 | aggressive | compressed | 1888 | 0.854 | 3 |
-| 12.5 KB | 12895 | 102 | balanced | compressed | 3535 | 0.726 | 3 |
-| 12.5 KB | 12895 | 102 | safe | passthrough | 12846 | 0.004 | — |
-| 25 KB | 25669 | 199 | aggressive | compressed | 3414 | 0.867 | 5 |
-| 25 KB | 25669 | 199 | balanced | compressed | 6710 | 0.739 | 5 |
-| 25 KB | 25669 | 199 | safe | passthrough | 25523 | 0.006 | — |
-| 50 KB | 51261 | 393 | aggressive | compressed | 4304 | 0.916 | 10 |
-| 50 KB | 51261 | 393 | balanced | compressed | 12302 | 0.760 | 10 |
-| 50 KB | 51261 | 393 | safe | compressed | 26125 | 0.490 | 10 |
-| 100 KB | 102434 | 781 | aggressive | compressed | 4307 | 0.958 | 20 |
-| 100 KB | 102434 | 781 | balanced | compressed | 12305 | 0.880 | 20 |
-| 100 KB | 102434 | 781 | safe | compressed | 32461 | 0.683 | 20 |
-| 250 KB | 256054 | 1913 | aggressive | compressed | 4309 | 0.983 | 48 |
-| 250 KB | 256054 | 1913 | balanced | compressed | 12307 | 0.952 | 48 |
-| 250 KB | 256054 | 1913 | safe | compressed | 32463 | 0.873 | 48 |
+Fixture, stated so the numbers can be reproduced: distinct non-repeating
+TypeScript source, driven through `recordAndFilterOverlayOutput` — the hook path
+— against built `dist/`, with `storeRawOutput: true` and a fresh store per cell.
+Each mode's `compressFloorBytes` defaults to `modeToBudget(mode)` = 4000 / 12000
+/ 32000 B (`packages/shared/src/token-saver-mode.ts:15-24`), which is what puts
+each cell in `compressed` or `passthrough`. The corpus was checked
+non-degenerate: at 250 KB it is 3614 lines, 3099 of them distinct, and no
+delivered text in any cell contains a collapse stand-in (`... [repeated N times]`
+or `... [N similar:]`), so these rows measure the budget rather than redundancy.
+This is a **different corpus** from the one the previous table used; its cells
+are not comparable row-by-row with that one, and no column is carried over.
 
-Three readings, all of which the ratio-only table hid:
+| input | mode | rawBytes | decision | returnedBytes | chunkCount | savingRatio (derived) |
+|---|---|---:|---|---:|---:|---:|
+| 6 KB | aggressive | 6133 | compressed | 1101 | 3 | 0.820 |
+| 6 KB | balanced | 6133 | passthrough | 6133 | — | 0 |
+| 6 KB | safe | 6133 | passthrough | 6133 | — | 0 |
+| 12.5 KB | aggressive | 12785 | compressed | 1911 | 5 | 0.851 |
+| 12.5 KB | balanced | 12785 | compressed | 3123 | 5 | 0.756 |
+| 12.5 KB | safe | 12785 | passthrough | 12785 | — | 0 |
+| 25 KB | aggressive | 25501 | compressed | 3027 | 10 | 0.881 |
+| 25 KB | balanced | 25501 | compressed | 6655 | 10 | 0.739 |
+| 25 KB | safe | 25501 | passthrough | 25501 | — | 0 |
+| 50 KB | aggressive | 51152 | compressed | 3030 | 19 | 0.941 |
+| 50 KB | balanced | 51152 | compressed | 11218 | 19 | 0.781 |
+| 50 KB | safe | 51152 | compressed | 25085 | 19 | 0.510 |
+| 100 KB | aggressive | 102391 | compressed | 3032 | 37 | 0.970 |
+| 100 KB | balanced | 102391 | compressed | 11220 | 37 | 0.890 |
+| 100 KB | safe | 102391 | compressed | 30627 | 37 | 0.701 |
+| 250 KB | aggressive | 255975 | compressed | 3990 | 91 | 0.984 |
+| 250 KB | balanced | 255975 | compressed | 12178 | 91 | 0.952 |
+| 250 KB | safe | 255975 | compressed | 31585 | 91 | 0.877 |
 
-1. **`returnedBytes` plateaus per mode; the rising ratio is arithmetic on a fixed
-   ceiling, not compression getting better.** Aggressive returns 4304 / 4307 /
-   4309 B at 50 / 100 / 250 KB; balanced 12302 / 12305 / 12307 B. The ratio
-   climbs from 0.916 to 0.983 purely because `rawBytes` grows against a constant
-   numerator.
-2. **Passthrough can grow the payload, and the metric cannot say so.** At 6 KB,
-   balanced and safe both return 6170 B against 6166 raw — four bytes added,
-   reported as `savingRatio: 0`. Passthrough is not byte-identical in the other
-   direction either (12.5 KB safe: 12846 vs 12895). `savingRatio` is floored at
-   zero and cannot express a net loss; either allow it to go negative or state
-   the floor.
-3. **Below the compress floor there is no recovery handle at all.** Passthrough
-   rows carry no chunk set (`chunkCount: null`), because the pipeline returns
-   early. Recoverability is a property of compressed outputs only.
+Four readings, all of which a ratio-only table hides:
+
+1. **The rising ratio is denominator-driven, not compression getting better.**
+   Aggressive returns 3027 / 3030 / 3032 B at 25 / 50 / 100 KB — a numerator flat
+   to within 5 bytes while the input grows fourfold — and its ratio climbs 0.881
+   → 0.970 on that alone. Balanced is the same shape: 11218 / 11220 B at 50 and
+   100 KB, ratio 0.781 → 0.890.
+2. **Safe does not plateau, and should not be described as if it did.** Safe
+   returns 25085 → 30627 → 31585 B at 50 / 100 / 250 KB: the numerator grows
+   1.26× while the input grows 5×. The ratio still climbs for the same reason —
+   the denominator outruns it — but the ceiling is not pinned the way
+   aggressive's and balanced's are within their measured range.
+3. **The 250 KB cell steps.** Aggressive rises 3032 → 3990 B and balanced 11220 →
+   12178 B, both +958 B, between 100 and 250 KB. That step coincides with
+   `chunkCount` rising 37 → 91. No mechanism is claimed here; the coincidence is
+   recorded so the plateau reading is not over-stated.
+4. **Below the compress floor there is no recovery handle at all.** Every
+   `passthrough` row carries `chunkSetId: null` and `chunkCount: null` **even
+   with `storeRawOutput: true`**, because the early return precedes persistence.
+   Nothing is lost on those cells — the model keeps the full raw and no footer is
+   emitted — but "raw output is stored" is not true of them. Under the shipped
+   default (safe) that covers everything below 32 KB: three of the six sizes
+   here.
 
 The generator ran from the session scratchpad and is **not committed**, so §6's
 "reproduction evidence for every ratio claim … captured, not asserted" is still
@@ -518,6 +580,58 @@ where this section claimed 4.5 %, §1a said 3.7 %, `fit.ts:57` implies 16 %, and
 the critic measured 0.1–1.1 % end-to-end. Four numbers for one cell and no named
 fixture. The direction of the argument is unharmed — the true "before" is worse
 than was claimed — but the cell is unmeasured until the generator is committed.
+
+### Passthrough overshoot — a reporting defect on one path, a payload on another
+
+The previous table showed `passthrough` cells returning more bytes than they
+received (6170 against 6166 raw) under `savingRatio: 0`. Two separate things were
+wrong, and they were fixed differently because they are not the same kind of
+defect.
+
+**Where the overshoot came from.** `filterOutput`'s `returnedBytes` counts the
+summary line plus the excerpt text, and in the non-compressed bands the summary
+line is pure addition. Measured on real repo source before any change, calling
+`filterOutput` **directly** — a different entry point from the ladder above,
+whose bands are set by `compressFloorBytes`, not by `PASSTHROUGH_THRESHOLD_TOKENS`:
+`model-facing-bytes.ts` 2888 → 2931 B (+43), `guard-match.ts` 6793 → 6882 B
+(+89), `predefined-roles.ts` 6883 → 7024 B (+141) — each reported as
+`savingRatio: 0`, indistinguishable from breaking even exactly.
+
+**Does that text reach the model? Per path, not one verdict.**
+
+| path | passthrough text reaches the model | therefore |
+|---|---|---|
+| PostToolUse hook | **No.** `apps/cli/src/hooks/saver.ts:361` returns `PASSTHROUGH` for any non-`compressed` decision; only the compressed branch reaches `updatedToolOutput` at `:371`. The model keeps the original tool output | the overshoot was a **reporting** defect: the rendering was built, returned and discarded |
+| daemon `/excerpt` | **No.** `packages/daemon/src/handlers.ts:47-57` calls the same entry point and `saver-run.ts:125` hands the JSON to the same hook, which discards it identically | same defect, same fix, over HTTP |
+| registry exec / overlay exec / MCP | **Yes.** `packages/mcp-bridge/src/server.ts:316` stringifies the whole struct, so scores, features, warnings and metrics are all model-facing | these paths already count the transport payload (`run-command.ts:432`) and record an unclamped delta |
+
+**What was changed.** Two edits, neither of which shrinks a payload. (i) On the
+hook/daemon path, `record-output.ts`'s `filtered.decision !== "compressed"`
+branch now reports what the model actually keeps — `returnedText: input.raw`,
+`returnedBytes: rawBytes`, zeros — matching the shape the admission-guard branch
+70 lines below already used for the same situation. On a 13-byte payload that
+branch had been reporting 62 returned bytes. (ii) A signed `deltaBytes` was added
+to `FilterOutputResult` and `RecordOverlayOutputResult`, never clamped, alongside
+the existing `bytesSaved` and `savingRatio`, which keep their floor at zero so no
+existing reader changes meaning. `filterOutput`'s `returnedBytes` and
+`savingRatio` are byte-for-byte unchanged in every band; the loss is now
+*representable*, not smaller.
+
+**What the fix costs this table.** Because the non-compressed branch now returns
+the raw, every `passthrough` cell above reads `returnedBytes === rawBytes` and
+`deltaBytes === 0`. The summary-line inflation is therefore **no longer
+observable through this entry point at all** — it can only be measured by calling
+`filterOutput` directly. This ladder cannot serve as a regression witness for it.
+The only thing that pins the `filterOutput`-level relationship is
+`packages/output-filter/test/passthrough-honesty.test.ts`, a single file, and it
+is untracked — `git add -u` will not pick it up.
+
+**Still open on this axis** (unowned files, not touched): `run.ts:229-231` and
+`:380-382` append ledger events straight from `returnedBytes` / `bytesSaved` /
+`savingRatio` with no signed field and no envelope count, so an inflating
+passthrough read still persists as a flat zero saving even though
+`FilterOutputResult.deltaBytes` is now available one line away. Same for the
+clamped event `savingRatio` at `run-command.ts:457-460` and its twin at `:693`.
 
 ### What A4 changed, and where it changed nothing
 
@@ -533,10 +647,12 @@ between the floor and `modeBudget / targetRatio`:
 | **safe (shipped default)** | **32 KB** | **64 KB** | **32–64 KB only** |
 
 Outside those bands the behaviour is byte-identical to before A4: the ceiling
-binds. The ladder above shows the pin directly — aggressive 4304 / 4307 / 4309 B
-and balanced 12302 / 12305 / 12307 B at 50 / 100 / 250 KB; safe 32461 / 32463 B
-at 100 / 250 KB, with its 50 KB cell (26125 B) the one safe row inside the band
-and therefore the one A4 moved.
+binds. The ladder above shows it — aggressive returns 3030 / 3032 / 3990 B and
+balanced 11218 / 11220 / 12178 B at 50 / 100 / 250 KB, each sitting just under
+its 4000 / 12000 B ceiling and flat to within 5 bytes across the 50–100 KB pair.
+Safe returns 30627 / 31585 B at 100 / 250 KB against a 32000 B ceiling; its 50 KB
+cell (25085 B) is the one safe row inside the band, and therefore the one row A4
+moved under the shipped default.
 
 This section previously said "the ratio is now a floor set by policy rather than
 a function of how far the input exceeded a constant". That holds **only inside
@@ -551,7 +667,47 @@ load-bearing on the delivered side) and the ratio is measured, but **net cost is
 unmeasured**: it needs a real-API benchmark, and `wiki/syntheses/saver-cache-churn`
 records that the existing harness could not resolve an effect of this size. B5
 added fresh-store hygiene; the harness has still never run against the real API.
-Until it does, no net-cost claim may be made.
+Until it does, no net-cost claim may be made. Nothing in this section — including
+the ratio ladder, which is a measurement of `returnedBytes` at stated input sizes
+— is a savings claim or a net-cost claim, and none may be added until the
+benchmark runs.
+
+### What is still not covered
+
+Stated flat, from the second round's own receipts. Items 1–6 are live gaps.
+
+1. **Five of eight defects have exactly one guarding file.** M1
+   (`read-pipeline-recovery`), M6 and M10 (`recovery-addressability`), M7
+   (`coordinate-skew`), M8 (`save-integrity.property`). This is worse than the
+   first round's three. Deleting, skipping or weakening any one of those four
+   files silently un-guards a defect classed as a blocker.
+2. **M6 is guarded only by an anti-vacuity counter**, whose failure message
+   describes the fixture rather than the defect, and the continuity test written
+   for that class cannot see M6 at all because its corpus is fold-free. Detailed
+   above.
+3. **Fabrication is demonstrated caught on the hook path only.** No fabrication
+   mutation has been run against the read or exec renderers, which do not go
+   through `returnedTextOf`.
+4. **The `filterOutput`-level passthrough inflation has no witness reachable from
+   the pipeline entry point**, by construction of its own fix; its single guard,
+   `packages/output-filter/test/passthrough-honesty.test.ts`, is untracked.
+5. **Ledger accounting still clamps.** `run.ts:229-231` and `:380-382` and
+   `run-command.ts:457-460` / `:693` persist events with no signed field, so an
+   inflating passthrough read records as a flat zero saving. The signed field
+   exists one line away; the wiring was not done.
+6. **The ratio generator is still not committed** (§6, "captured, not asserted"),
+   so the ladder above is reproducible in principle from its named fixture and
+   not in practice from a script in the repo.
+Two further items are recorded here because a reader needs them, and are **not**
+coverage gaps:
+
+- **The 250 KB step (+958 B in both aggressive and balanced) is unexplained.** It
+  coincides with `chunkCount` 37 → 91; no mechanism has been established and none
+  is asserted. An open measurement question, not a missing test.
+- **`packages/output-filter`'s 494 tests reach none of the `context-gate`
+  defects.** Structural — that package cannot import `context-gate` source — so
+  its zeros read as "not applicable". The consequence to carry is that all eight
+  defects above rest on `context-gate`'s 395 tests alone.
 
 ### Deferred, with reasons
 
@@ -577,9 +733,10 @@ Until it does, no net-cost claim may be made.
   honestly and report a signed delta, so inflation is visible. A guard that
   changes what an MCP client receives should follow that measurement.
 - **W6 condensation.** Unstarted; still gated on a measured head-to-head.
-- **Suppressed-marker coverage.** Needs a production-surface change — excerpt
-  raw spans on `returnedText` — not a test. **Fabrication coverage** is open
-  with no established close; see the mutation subsection above.
+- **Suppressed-marker and fabrication coverage are no longer deferred** — both
+  closed by mutation receipt in the second round (M10, M8). Their residuals moved
+  to "What is still not covered" above: fabrication is demonstrated on the hook
+  path only, and each closure has exactly one guard.
 
 ### Corrections to the audits that produced this spec
 

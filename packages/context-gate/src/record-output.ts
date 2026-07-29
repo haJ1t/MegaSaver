@@ -80,6 +80,13 @@ export type RecordOverlayOutputResult = {
   returnedBytes: number;
   bytesSaved: number;
   savingRatio: number;
+  // Signed savings, never clamped (B1's shape, wired at this producer too):
+  // bytesSaved floors at zero, so on its own it cannot distinguish a
+  // break-even rewrite from an inflating one. Optional for the same reason the
+  // stats event field is: this struct also arrives over HTTP from the daemon
+  // (saver-run.ts casts /excerpt's JSON to it), and a daemon predating the
+  // field omits it. Every branch of recordAndFilterOverlayOutput sets it.
+  deltaBytes?: number;
   chunkSetId?: string;
   chunkCount?: number;
 };
@@ -185,15 +192,25 @@ export async function recordAndFilterOverlayOutput(
     ...(input.intent !== undefined ? { intent: input.intent } : {}),
   });
 
+  // No rewrite happens below the compressed band, so nothing here is delivered:
+  // the PostToolUse hook maps every non-compressed decision to PASSTHROUGH
+  // (saver.ts) and emits no JSON, which leaves the model holding the ORIGINAL
+  // tool output; the daemon's /excerpt only relays this struct back to that
+  // same hook. Reporting returnedTextOf(filtered) and filtered.returnedBytes
+  // therefore described a rendering nobody receives — and since that rendering
+  // prepends a summary line, it measured 30-140 bytes MORE than the raw on
+  // real source files while savingRatio's floor reported that loss as 0.
+  // Report the raw, exactly as the net-negative degradation below does.
   if (filtered.decision !== "compressed") {
     return {
       decision: filtered.decision,
       summary: filtered.summary,
-      returnedText: returnedTextOf(filtered),
+      returnedText: input.raw,
       rawBytes: filtered.rawBytes,
-      returnedBytes: filtered.returnedBytes,
-      bytesSaved: filtered.bytesSaved,
-      savingRatio: filtered.savingRatio,
+      returnedBytes: filtered.rawBytes,
+      bytesSaved: 0,
+      savingRatio: 0,
+      deltaBytes: 0,
     };
   }
 
@@ -266,6 +283,7 @@ export async function recordAndFilterOverlayOutput(
       returnedBytes: filtered.rawBytes,
       bytesSaved: 0,
       savingRatio: 0,
+      deltaBytes: 0,
     };
   }
 
@@ -380,6 +398,10 @@ export async function recordAndFilterOverlayOutput(
     returnedBytes: finalReturnedBytes,
     bytesSaved,
     savingRatio,
+    // Equal to bytesSaved on this branch (it is unclamped here, and the
+    // admission guard forbids a negative), but present so a caller reading
+    // result.deltaBytes never has to know which branch produced the result.
+    deltaBytes: filtered.rawBytes - finalReturnedBytes,
     ...(chunkSetId !== undefined ? { chunkSetId, chunkCount: chunksStored } : {}),
   };
 }

@@ -36,12 +36,62 @@ const LSID = "33333333-3333-4333-8333-333333333333";
 const CREATED_AT = "2026-07-28T00:00:00.000Z";
 const ROOT_PID = String(process.pid);
 
-// Floor on the evidence the model itself receives, in whole raw lines. Measured
-// on this corpus the delivered text carries 40 lines in aggressive, 160 in
-// balanced, 440 in safe; half of the tightest mode leaves ranking and budget
-// tuning room while still being an order of magnitude above what a
-// summary-only or excerpt-free delivery can reach (0-1 lines).
-const MIN_DELIVERED_EVIDENCE_LINES = 20;
+// Per-mode floor on the evidence the model itself receives, in whole raw lines.
+//
+// A single uniform floor could not see partial degradation: the modes deliver
+// very different amounts, so a floor low enough for the tightest mode was slack
+// the widest mode could lose 90% of its evidence inside. Each mode is now
+// pinned near its own measured delivery.
+//
+// MEASURED on this corpus (all three entry points agree exactly, so the table
+// is keyed on mode alone): aggressive 40 distinct raw lines, balanced 160,
+// safe 440. The floors are 0.75x of that. The margin is deliberate and sized
+// from both sides: 25% of drift is ranking and budget-tuning room, while
+// anything that halves a mode's delivery lands at 0.5x and trips the floor.
+//
+// Aggressive's 40 is worth reading twice, because the number is a coincidence
+// with teeth: it equals output-filter's no-blind fallback, which hands back one
+// GENERIC_FALLBACK_LINES_PER_CHUNK-sized chunk whenever the fit step keeps
+// nothing. Aggressive's 4 KB budget admits exactly one 40-line chunk, so
+// squeezing the fit budget moves aggressive from "one chunk that fit" to "one
+// chunk from the fallback" and the delivered line count does not move at all.
+// A future reader tightening aggressive toward 40 would be pinning the floor to
+// the fallback rather than to real ranked delivery.
+const MEASURED_DELIVERED_LINES: Record<TokenSaverMode, number> = {
+  aggressive: 40,
+  balanced: 160,
+  safe: 440,
+};
+const MIN_DELIVERED_EVIDENCE_LINES: Record<TokenSaverMode, number> = {
+  aggressive: 30,
+  balanced: 120,
+  safe: 330,
+};
+
+// The lines the pipeline is entitled to add that are NOT in the tool output.
+//
+// Enumerated by exact form, with the numeric fields spelled out. A generic
+// `^… \[` prefix would be a hole of its own — it accepts any fabricated line
+// dressed as a marker, which is precisely the failure this guard exists to
+// catch, so the list is kept as narrow as the corpus allows.
+//
+// THAT NARROWNESS IS A PRECONDITION, not full coverage of the pipeline. This
+// corpus is generic line-oriented text, so it reaches only generic chunking:
+// the sole markers reachable are the raw-coordinate gap marker, the collapse
+// markers normalize.ts folds runs into, and the recovery footer. The
+// specialized compressors synthesize further forms — `… [N paragraphs]`,
+// `… [N more items]`, `… [N unchanged]`, `… [N passing collapsed]` (indented,
+// which is why matching happens after trim), and tsc's `Top files by error
+// count: …`, which does not begin with `… [` at all. None can fire here.
+// A corpus or classification change must revisit this list before widening it,
+// or a legitimate marker will be reported as fabricated.
+const STRUCTURAL_LINE: readonly RegExp[] = [
+  /^… \[lines \d+-\d+ omitted\]$/,
+  /^… \[remainder omitted — recover any part with the chunk ids below\]$/,
+  /^… \[repeated \d+ times\]$/,
+  /^… \[\d+ similar: .*\]$/,
+  /^\[Mega Saver: compressed \d+→\d+ B .*\]$/,
+];
 
 // Distinct, individually-identifiable lines: every one that goes missing is a
 // nameable loss, and none can be reconstructed from its neighbours. Sized well
@@ -79,12 +129,53 @@ function evidenceLines(raw: string): string[] {
 // Half one: the model is handed real evidence, not a verdict about evidence.
 // Counted in verbatim raw lines because that is what the agent can act on — a
 // summary sentence and a gap marker are navigation, not content.
-function assertDeliveredCarriesEvidence(raw: string, delivered: string): void {
-  const present = evidenceLines(raw).filter((l) => delivered.includes(l));
+function assertDeliveredCarriesEvidence(
+  raw: string,
+  delivered: string,
+  mode: TokenSaverMode,
+): void {
+  const deliveredLines = new Set(trimmedLines(delivered));
+  const present = evidenceLines(raw).filter((l) => deliveredLines.has(l));
   expect(
     present.length,
-    `the delivered text carries ${present.length} verbatim output line(s); below this floor the model is being handed navigation instead of evidence`,
-  ).toBeGreaterThanOrEqual(MIN_DELIVERED_EVIDENCE_LINES);
+    `${mode} delivered ${present.length} verbatim output line(s) against a measured ${MEASURED_DELIVERED_LINES[mode]}; this mode has lost a large share of its evidence, even though other modes may still be intact`,
+  ).toBeGreaterThanOrEqual(MIN_DELIVERED_EVIDENCE_LINES[mode]);
+}
+
+function trimmedLines(text: string): string[] {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+}
+
+// Half three: the delivered text is a SUBSET of the output plus explicit
+// markers. Containment (halves one and two) only ever asks whether real lines
+// are present; on its own it is fully satisfied by a pipeline that hands the
+// model genuine evidence AND invented lines side by side. An agent cannot tell
+// the two apart, which makes fabrication worse than omission — an omission at
+// least announces itself with a gap marker.
+//
+// The summary is stripped POSITIONALLY, not by string membership: the pipeline
+// is entitled to state a verdict, but only in the one place the renderer puts
+// it. Membership would let a fabricated line hide by copying the summary text.
+function assertNoFabrication(raw: string, delivered: string, summary: string): void {
+  expect(
+    delivered.startsWith(summary),
+    "the delivered text must open with the pipeline's own summary",
+  ).toBe(true);
+
+  // Both spellings count as genuine: the delivered text is rendered from the
+  // unredacted output while the stored chunks hold the redacted one, so a
+  // secret-bearing line is authentic in whichever form it survived as.
+  const authentic = new Set([...trimmedLines(raw), ...evidenceLines(raw)]);
+  const invented = trimmedLines(delivered.slice(summary.length)).filter(
+    (l) => !authentic.has(l) && !STRUCTURAL_LINE.some((re) => re.test(l)),
+  );
+  expect(
+    invented.slice(0, 5),
+    `${invented.length} delivered line(s) appear nowhere in the tool output and are not recognised markers — the model is being handed synthesized content it has no way to distinguish from evidence`,
+  ).toEqual([]);
 }
 
 // Half two: nothing is anywhere unreachable.
@@ -128,7 +219,10 @@ describe("save integrity — hook path (recordAndFilterOverlayOutput)", () => {
 
       expect(result.decision).toBe("compressed");
       expect(result.chunkSetId).toBe(`cs-hook-${mode}`);
-      assertDeliveredCarriesEvidence(raw, result.returnedText);
+      assertDeliveredCarriesEvidence(raw, result.returnedText, mode);
+      // The only path that exercises returnedTextOf: the read and exec paths
+      // hand back excerpts and leave rendering to their own callers.
+      assertNoFabrication(raw, result.returnedText, result.summary);
       assertNothingLost(raw, result.returnedText, await recoverAll(store, `cs-hook-${mode}`));
     });
   }
@@ -165,7 +259,11 @@ describe("save integrity — read path (readAndFilter + persistChunkSet)", () =>
       });
 
       const delivered = read.result.excerpts.map((e) => e.text).join("\n");
-      assertDeliveredCarriesEvidence(raw, delivered);
+      assertDeliveredCarriesEvidence(raw, delivered, mode);
+      // Summary + excerpt text is the whole model-facing surface this path
+      // produces; assembling it here keeps the fabrication guard on the
+      // compression layer even where no renderer runs.
+      assertNoFabrication(raw, `${read.result.summary}\n${delivered}`, read.result.summary);
       assertNothingLost(raw, delivered, await recoverAll(store, chunkSetId));
     });
   }
@@ -224,7 +322,8 @@ describe("save integrity — overlay exec path (runOverlayOutputExecCommand)", (
       if (chunkSetId === undefined) return;
 
       const delivered = exec.excerpts.map((e) => e.text).join("\n");
-      assertDeliveredCarriesEvidence(raw, delivered);
+      assertDeliveredCarriesEvidence(raw, delivered, mode);
+      assertNoFabrication(raw, `${exec.summary}\n${delivered}`, exec.summary);
       assertNothingLost(raw, delivered, await recoverAll(store, chunkSetId));
     });
   }

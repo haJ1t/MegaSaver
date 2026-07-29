@@ -37,13 +37,13 @@ function buildLargeFile(): string {
   return `${lines.join("\n")}\n`;
 }
 
-function registry(projectRoot: string): OrchestratorRegistry {
+function registry(projectRoot: string, storeRawOutput = true): OrchestratorRegistry {
   return {
     getSession: (id) =>
       id === SESSION_ID
         ? {
             projectId: PROJECT_ID,
-            tokenSaver: { mode: "balanced", maxReturnedBytes: 800, storeRawOutput: true },
+            tokenSaver: { mode: "balanced", maxReturnedBytes: 800, storeRawOutput },
           }
         : null,
     getProject: (id) => (id === PROJECT_ID ? { rootPath: projectRoot } : null),
@@ -58,16 +58,48 @@ function deliveredTextOf(result: FilterOutputResult): string {
   return [result.summary, ...result.excerpts.map((e) => e.text)].join("\n");
 }
 
+type RecoveredChunk = { startLine: number; endLine: number; text: string };
+
 // Walk the recovery surface exactly as an agent does: the footer advertises
 // i = 0..N-1, so fetch upward until the store says the id does not exist.
-async function recoverAllChunks(storeRoot: string, chunkSetId: string): Promise<string[]> {
-  const texts: string[] = [];
+//
+// Neither read pipeline delivers a recovery footer — buildRecoveryFooter has a
+// single call site (record-output.ts, the exec/hook path), so a read result
+// advertises its recovery surface only through the structured `chunkSetId` and
+// names no chunk count at all. The footer-vs-fetchable contract is therefore
+// policed in coordinate-skew.test.ts, on the path that emits one.
+async function recoverAllChunks(storeRoot: string, chunkSetId: string): Promise<RecoveredChunk[]> {
+  const chunks: RecoveredChunk[] = [];
   for (let i = 0; i < 200; i += 1) {
     const fetched = await fetchChunk({ storeRoot, chunkSetId, chunkId: String(i) });
     if (!fetched.ok) break;
-    texts.push(fetched.chunk.text);
+    chunks.push(fetched.chunk);
   }
-  return texts;
+  return chunks;
+}
+
+// A chunk id is an ADDRESS: startLine/endLine are the only thing that says
+// where in the file its text sits, and text-only assertions cannot see a
+// numbering that is off by one or expressed in a different coordinate space.
+//
+// The oracle is the file the test wrote, split on newlines. That is sound
+// without re-deriving anything through production: the corpus is plain ASCII
+// with no CR, no ANSI and no trailing whitespace, so normalize() is the
+// identity on it, and it carries no secret-shaped substring, so redact() is
+// too. If either ever stopped being the identity here, the text equality below
+// would break rather than silently pass.
+function expectChunksAddressTheFile(chunks: RecoveredChunk[], fileLines: string[]): void {
+  expect(chunks.length).toBeGreaterThan(1);
+  let expectedStart = 1;
+  for (const chunk of chunks) {
+    expect(chunk.startLine).toBe(expectedStart);
+    expect(chunk.endLine).toBeGreaterThanOrEqual(chunk.startLine);
+    expect(fileLines.slice(chunk.startLine - 1, chunk.endLine).join("\n")).toBe(chunk.text);
+    expectedStart = chunk.endLine + 1;
+  }
+  // The addresses must also PARTITION the file: contiguity alone is satisfied
+  // by a set that stops early or runs past the end.
+  expect(expectedStart - 1).toBe(fileLines.length);
 }
 
 describe("runOutputPipeline — what the production read path makes recoverable", () => {
@@ -111,9 +143,40 @@ describe("runOutputPipeline — what the production read path makes recoverable"
     expect(result.chunkSetId).toBe(CHUNK_SET_ID);
 
     const recovered = await recoverAllChunks(store, CHUNK_SET_ID);
-    expect(recovered.join("\n")).toContain(BURIED_LINE);
-    expect(recovered.join("\n")).toContain(LAST_LINE);
-    expect(recovered.length).toBeGreaterThan(1);
+    const recoveredText = recovered.map((c) => c.text).join("\n");
+    expect(recoveredText).toContain(BURIED_LINE);
+    expect(recoveredText).toContain(LAST_LINE);
+    expectChunksAddressTheFile(recovered, buildLargeFile().split("\n"));
+  });
+
+  it("stores nothing and advertises nothing when the session opted out of raw storage", async () => {
+    const outcome = await runOutputPipeline({
+      registry: registry(projectRoot, false),
+      storeRoot: store,
+      sessionId: SESSION_ID,
+      path: logPath,
+      intent: "why did the worker pool fail",
+      now: () => NOW,
+      newId: () => CHUNK_SET_ID,
+      loadPermissions: () => null,
+    });
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    const { result } = outcome;
+
+    // Guards against a vacuous pass: opting out is only meaningful while the
+    // pipeline is still dropping content, so the drop must be permanent here.
+    expect(deliveredTextOf(result)).not.toContain(BURIED_LINE);
+    expect(result.chunkSetId).toBeUndefined();
+
+    // The id probe is what discriminates: `newId` is pinned, so a gate that
+    // persisted anyway would have written the set under exactly this id, and a
+    // chunkSetId-only assertion would still pass on the wire while the raw
+    // output the operator opted out of sat on disk.
+    const probe = await fetchChunk({ storeRoot: store, chunkSetId: CHUNK_SET_ID, chunkId: "0" });
+    expect(probe.ok).toBe(false);
+    if (!probe.ok) expect(probe.reason).toBe("chunk_set_not_found");
   });
 });
 
@@ -158,8 +221,37 @@ describe("runOverlayOutputPipeline — what the production overlay read path mak
     expect(result.chunkSetId).toBe(CHUNK_SET_ID);
 
     const recovered = await recoverAllChunks(store, CHUNK_SET_ID);
-    expect(recovered.join("\n")).toContain(BURIED_LINE);
-    expect(recovered.join("\n")).toContain(LAST_LINE);
-    expect(recovered.length).toBeGreaterThan(1);
+    const recoveredText = recovered.map((c) => c.text).join("\n");
+    expect(recoveredText).toContain(BURIED_LINE);
+    expect(recoveredText).toContain(LAST_LINE);
+    expectChunksAddressTheFile(recovered, buildLargeFile().split("\n"));
+  });
+
+  it("stores nothing and advertises nothing when the workspace opted out of raw storage", async () => {
+    const outcome = await runOverlayOutputPipeline({
+      storeRoot: store,
+      workspaceKey: WORKSPACE_KEY,
+      liveSessionId: LIVE_SESSION_ID,
+      cwd,
+      path: logPath,
+      intent: "why did the worker pool fail",
+      mode: "balanced",
+      maxReturnedBytes: 800,
+      storeRawOutput: false,
+      permissions: null,
+      now: () => NOW,
+      newId: () => CHUNK_SET_ID,
+    });
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    const { result } = outcome;
+
+    expect(deliveredTextOf(result)).not.toContain(BURIED_LINE);
+    expect(result.chunkSetId).toBeUndefined();
+
+    const probe = await fetchChunk({ storeRoot: store, chunkSetId: CHUNK_SET_ID, chunkId: "0" });
+    expect(probe.ok).toBe(false);
+    if (!probe.ok) expect(probe.reason).toBe("chunk_set_not_found");
   });
 });

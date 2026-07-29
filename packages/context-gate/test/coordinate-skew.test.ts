@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { normalize } from "@megasaver/output-filter";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fetchChunk } from "../src/fetch-chunk.js";
 import { recordAndFilterOverlayOutput } from "../src/record-output.js";
@@ -52,6 +53,18 @@ function advertisedChunkCount(delivered: string): number {
   return delivered.includes("mega output chunk") ? 1 : 0;
 }
 
+// Everything the footer instructs the agent to do, read back out of the footer
+// itself. An agent cannot enumerate the store empirically — it can only issue
+// the command it was handed — so the id and the range are as load-bearing as
+// the stored bytes, and neither may be taken from the result object here.
+function advertisedRecovery(delivered: string): { chunkSetId: string; lastIndex: number } {
+  const m = /mega output chunk "([^"]+)" "<i>" \(i = 0\.\.(\d+)\)/.exec(delivered);
+  if (m === null) throw new Error("delivered text carried no multi-chunk recovery instruction");
+  const [, id, last] = m;
+  if (id === undefined || last === undefined) throw new Error("recovery instruction incomplete");
+  return { chunkSetId: id, lastIndex: Number(last) };
+}
+
 async function reachableEndLine(storeRoot: string, chunkSetId: string): Promise<number> {
   let last = 0;
   for (let i = 0; ; i += 1) {
@@ -71,22 +84,25 @@ afterEach(async () => {
   await rm(store, { recursive: true, force: true });
 });
 
+function record(chunkSetId: string, storeRawOutput = true) {
+  return recordAndFilterOverlayOutput({
+    storeRoot: store,
+    workspaceKey: WK,
+    liveSessionId: LSID,
+    raw: progressCorpus(),
+    sourceKind: "command",
+    label: "npm install",
+    mode: "balanced",
+    storeRawOutput,
+    includeFooter: true,
+    newId: () => chunkSetId,
+  });
+}
+
 describe("marker space and chunk space agree on bare-CR output", () => {
   it("never names a line the stored chunks cannot reach", async () => {
-    const raw = progressCorpus();
     const chunkSetId = "cs-skew-balanced";
-    const result = await recordAndFilterOverlayOutput({
-      storeRoot: store,
-      workspaceKey: WK,
-      liveSessionId: LSID,
-      raw,
-      sourceKind: "command",
-      label: "npm install",
-      mode: "balanced",
-      storeRawOutput: true,
-      includeFooter: true,
-      newId: () => chunkSetId,
-    });
+    const result = await record(chunkSetId);
 
     expect(result.decision).toBe("compressed");
 
@@ -110,5 +126,97 @@ describe("marker space and chunk space agree on bare-CR output", () => {
         advertised * OVERLAY_CHUNK_LINES
       } lines, but a marker names line ${maxNamed}`,
     ).toBeLessThanOrEqual(advertised * OVERLAY_CHUNK_LINES);
+  });
+
+  // The footer is the ONLY recovery instruction the model gets. It cannot probe
+  // the store, so "i = 0..N-1" is not a hint about the store — for the agent it
+  // IS the store. A count that undershoots buries evidence behind ids nobody is
+  // told to ask for; one that overshoots sends the agent after chunks that do
+  // not exist. Both are invisible to any test that enumerates ids empirically.
+  it("advertises exactly the chunk ids that resolve, and no others", async () => {
+    const result = await record("cs-skew-footer");
+    expect(result.decision).toBe("compressed");
+
+    const { chunkSetId, lastIndex } = advertisedRecovery(result.returnedText);
+    // The footer states its size twice — "N chunks" and "i = 0..N-1" — and the
+    // agent may act on either.
+    expect(lastIndex + 1).toBe(advertisedChunkCount(result.returnedText));
+    // Guards against a vacuous pass: the single-chunk footer is a different
+    // sentence, and a one-chunk set would make the range check trivial.
+    expect(lastIndex).toBeGreaterThan(0);
+
+    for (let i = 0; i <= lastIndex; i += 1) {
+      const res = await fetchChunk({ storeRoot: store, chunkSetId, chunkId: String(i) });
+      expect(res.ok, `footer advertises i = 0..${lastIndex} but chunk ${i} does not resolve`).toBe(
+        true,
+      );
+    }
+
+    const past = await fetchChunk({ storeRoot: store, chunkSetId, chunkId: String(lastIndex + 1) });
+    expect(
+      past.ok,
+      `footer advertises i = 0..${lastIndex}, but chunk ${lastIndex + 1} also resolves — stored evidence the agent is never told to fetch`,
+    ).toBe(false);
+  });
+
+  // A chunk id is an address. Its startLine/endLine are what let an agent
+  // holding "… [lines 146-902 omitted]" pick one, so storing the right text
+  // under the wrong numbers is the same failure as storing the wrong text.
+  it("stores chunks whose line numbers address the delivered coordinate space", async () => {
+    const chunkSetId = "cs-skew-lines";
+    const result = await record(chunkSetId);
+    expect(result.decision).toBe("compressed");
+
+    // The oracle re-derives the SPACE (normalize, which is what the marker
+    // numbers are counted in) but never the NUMBERING — chunkByLines /
+    // recoverableChunks are what is under test. Redaction is the identity on
+    // this corpus; were that to stop holding, the text equality below breaks
+    // rather than hides it.
+    const lines = normalize(progressCorpus()).split("\n");
+
+    let expectedStart = 1;
+    let fetched = 0;
+    // Bounded: an unbounded walk turns a fetch that always resolves into a hang
+    // instead of a failure.
+    for (let i = 0; i < 200; i += 1) {
+      const res = await fetchChunk({ storeRoot: store, chunkSetId, chunkId: String(i) });
+      if (!res.ok) break;
+      fetched += 1;
+      expect(res.chunk.startLine, `chunk ${i} should address line ${expectedStart} onward`).toBe(
+        expectedStart,
+      );
+      expect(
+        lines.slice(res.chunk.startLine - 1, res.chunk.endLine).join("\n"),
+        `chunk ${i} claims lines ${res.chunk.startLine}-${res.chunk.endLine}, which hold other text`,
+      ).toBe(res.chunk.text);
+      expectedStart = res.chunk.endLine + 1;
+    }
+
+    expect(fetched).toBeGreaterThan(1);
+    expect(expectedStart - 1, "stored addresses do not partition normalized space").toBe(
+      lines.length,
+    );
+  });
+
+  // storeRawOutput=false is lossy AND permanent: the delivered text is all the
+  // agent will ever have. Advertising recovery there would be a lie no fetch
+  // can repair, so the claim must be absent, not merely broken.
+  it("advertises no recovery at all when raw storage is off", async () => {
+    const chunkSetId = "cs-skew-nostore";
+    const result = await record(chunkSetId, false);
+
+    // Guards against a vacuous pass: a passthrough carries no footer for
+    // reasons that have nothing to do with the storage gate.
+    expect(result.decision).toBe("compressed");
+    expect(result.chunkSetId).toBeUndefined();
+    expect(result.returnedText).not.toContain("mega output chunk");
+    // "recover", not "recoverable": the delivered text has more than one way to
+    // promise recovery ("Full output recoverable", "recovered chunks are",
+    // "recover any part with the chunk ids below") and none of them may appear.
+    expect(result.returnedText).not.toContain("recover");
+
+    // `newId` is pinned, so a gate that persisted anyway wrote the set here.
+    const probe = await fetchChunk({ storeRoot: store, chunkSetId, chunkId: "0" });
+    expect(probe.ok).toBe(false);
   });
 });
