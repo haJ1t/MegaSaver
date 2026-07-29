@@ -7530,3 +7530,54 @@ field telemetry + fresh-store guard, tsc/classifier/go-test/prose+json fixes
 against the A1 contract. Outcomes appended to
 [[syntheses/saver-root-cause-2026-07-28]]; B10 diagnosis and per-item detail on
 agent-channel.
+
+## [2026-07-29] release | saver compression & integrity — stages 0-3 complete
+
+Three-track programme consolidated on `docs/saver-integrity-spec`, 41 commits
+ahead of `main`, `pnpm verify` green (60/60). Spec §7 carries the full outcome
+table; review handoff in `plans/2026-07-29-saver-review-handoff.md`.
+
+**The two user complaints, resolved:**
+
+*Unsafe save.* Three of four entry points persisted only the excerpts the fit
+step had KEPT, so whatever it dropped existed nowhere — while the connector
+block advertised "Raw output is stored". A property test made this measurable
+(960-1360 lines lost per case, 3/9 passing); one shared `recoverableChunks`
+helper now derives recovery from the raw output on every path, 9/9. The fourth
+path stored everything but numbered its gap markers in post-collapse space while
+the chunks indexed the raw output, so recovery mis-addressed: a marker reading
+`lines 146-902 omitted` resolved to chunk 3, holding unrelated noise. Line
+provenance through the collapse passes moved markers to raw coordinates.
+
+*No saving.* The eligibility floor and the output budget were the same constant
+and `fitBudget` fills up to it, so the ratio was `1 - budget/rawBytes` — decided
+by input size. The mode budget is now the ceiling and the target is a share of
+the input. Measured, distinct source: balanced 12.5KB 4.5%->72.7%, 25KB
+50.3%->73.3%; aggressive 6KB 27.4%->77.3%. Large inputs unchanged.
+
+**The A4 gate is NOT met and no savings claim may be published.** Its pass
+condition is net cost at constant integrity; net cost is unmeasured and the
+harness that would measure it has never run against the real API.
+
+**Three lessons worth more than the fixes**, each recorded in a commit body:
+
+1. A test can assert self-consistency of a broken mapping. "Chunk
+   floor((N-1)/40) contains raw line N" passes under the WRONG mapping too —
+   both sides apply the same bad assumption. The working assertion was on the
+   extent: the highest line number named must equal the raw line count.
+2. A fixture of identical noise lines makes `toContain` succeed against any
+   chunk in the region. Two tests passed green while the defect was fully
+   present until the fixtures were made discriminating.
+3. A unit test can pass while the system does not move. `record-output` passed
+   `maxReturnedBytes: modeToBudget(mode)` — the filter's own default, so it
+   looked inert — but that field means "the caller chose a size" and suppressed
+   the new target ratio. The real path did not change until that line went.
+
+**Corrections to the external audits that started this:** `bytes/4` is within 4%
+for code, prose and Turkish (only JSON diverges, 1.193), not the claimed ~35%;
+`appendAuditEvent` is not dead code; the seen-ledger is intentional design; and
+the parallel-`turbo` flake is not context-gate-specific.
+
+Deferred with reasons in spec §7: admission-guard floors ship OFF (cost axis,
+and any floor >~1KB re-opens the dead band PR #278 closed), exec-path
+enforcement follows the measurement, W6 condensation unstarted.
