@@ -50,6 +50,7 @@ updated: 2026-07-26
 - [[concepts/proxy-mode]] — Proxy Mode v1.2 (7 phases shipped): public naming mode, output classifier, vitest/tsc compressors + passthrough, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics, replay trace.
 - [[concepts/persistent-proxy-routing]] — proposed dedicated proxy supervisor: persistent CLI/GUI opt-in, nonce/lease route ownership, LaunchAgent lifecycle, drain-safe stop.
 - [[concepts/saver-activation-inheritance]] — proposed exact → Git-family → legacy-root → global Saver activation plus hook heartbeat.
+- [[syntheses/saver-root-cause-2026-07-28]] — **find-only audit (2026-07-28)**: why the saver neither hits 60–90% nor stays lossless. Three design-level causes with measured receipts — floor == budget (fixed-size truncator), delivered vs stored coordinate mismatch (recovery mis-addresses, costs more than the raw read), in-place `tool_result` rewrite. Flags two false claims in [[syntheses/saver-cache-churn]].
 - [[syntheses/saver-cache-churn]] — benchmark finding (2026-07-19): the PostToolUse saver's in-place `tool_result` rewrite invalidates Claude Code's native prompt cache; net cost balanced 0.96x / aggressive 0.93x (no win, aggressive worse). Cache-creation churn cancels compression. First-party fix robust (plain input ≤15 tok). Direction → cache-aware saver spec `docs/superpowers/specs/2026-07-19-cache-aware-saver-design.md`.
 - [[concepts/context-ledger-architecture]] — proposed next architecture: split specs for ContextGate honest ~90% reduction + reliable save ledger.
 - [[concepts/intent-aware-hook]] — Phase 6b (PR #180): UserPromptSubmit hook captures the prompt → fill-gap ranking intent for PostToolUse-captured output.
@@ -114,6 +115,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 - [[syntheses/solo-developer-roadmap]] — active 2026-07-17 reset after v2.1.1 / CLI 2.2.0: the Experience Layer is shipped; Agent Passport → Brain Doctor → Context Contracts → Déjà Vu, with release gates and honest-metrics constraints.
 - [[syntheses/global-agent-continuity-strategy]] — approved 2026-07-19 long-horizon direction: developer-first Agent Continuity Layer, four horizons, platform gates, and privacy/evidence guardrails.
 - [[concepts/proxy-mode]] / Proxy Mode v1.2 — public naming mode, output classifier, vitest/tsc compressors, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics; full spec+plan written and shipped on `docs/contextops-roadmap-phases`.
+- [[syntheses/token-saver-root-cause-2026-07-28]] — 4-scope root-cause investigation: why the saver doesn't save (cache-churn, uncounted re-injection, unguarded MCP paths, bytes/4 accounting) and why it loses info (excerpts-only persistence, compressTsc/go-test silent drops, filenames corruption).
 - [[syntheses/llm-code-problems-research-2026-07]] — external research scan (593+ articles) mapped to 10 prioritized feature proposals (package-hallucination firewall, memory write-verify, silent-failure monitor, MCP security layer…) + validation of existing bets.
 
 ## Sources (pointers to raw + project artifacts)
