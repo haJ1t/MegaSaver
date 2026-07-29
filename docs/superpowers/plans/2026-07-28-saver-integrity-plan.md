@@ -17,7 +17,45 @@ feat/saver-b-accounting     → Track B (Kimi K3)
 feat/saver-c-defects        → Track C (Gemini Flash 3.6)
 ```
 
-Branch from `main`, not from `feat/gui-console-redesign`.
+**Branch point: `docs/saver-integrity-spec`, not `main`.** That branch carries the
+approved spec, both plans, the wiki record and the conventions fix (`main` + 3
+commits: `bfd639f9`, `cd866fa5`, `482b8bc2`). `main` does **not** have them yet, so
+a worktree cut from `main` would contain no source of truth and every track's
+`wiki/log.md` append would conflict on merge. Either fast-forward `main` to this
+branch first and then branch from `main`, or branch all three from
+`docs/saver-integrity-spec` directly.
+
+## Baseline: green, with two environment caveats
+
+Measured 2026-07-28 on the branch point, per package, via
+`../../node_modules/.bin/vitest run`:
+
+| package | result |
+|---|---|
+| `context-gate` | 369 passed, 0 type errors |
+| `output-filter` | 451 passed, 0 type errors |
+| `stats` | 249 passed, 0 type errors |
+| `mcp-bridge` | 343 passed, 1 skipped, 0 type errors |
+| `retrieval` | 43 passed, 0 type errors |
+| `bench-replay` | 149 passed |
+
+Two caveats every agent must be told, so nobody chases a failure that is not
+theirs and nobody invents a private workaround:
+
+1. **`pnpm` is not on PATH in this shell.** `pnpm verify` (DoD item 4) could not be
+   run as written. Fallbacks actually used and known to work — all three tracks
+   use these same commands, or the operator enables pnpm first:
+   - tests: `cd packages/<pkg> && ../../node_modules/.bin/vitest run`
+   - conventions: `node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/conventions-sync/index.ts --check`
+2. **The previously reported `context-gate` concurrency flake did not reproduce**,
+   but it was described as appearing under a parallel `turbo` run, and turbo could
+   not be driven here. Green in isolation is not proof it is gone. If it appears,
+   it is pre-existing — do not attribute it to your track.
+
+Note also that `verify` chains with `&&`, so a test failure means
+`conventions:check` never runs — DoD item 4 does not currently gate item 10. The
+conventions drift that had been red since before this programme is now fixed
+(`bfd639f9`), so the check passes when it is reached.
 
 ## Critical path
 

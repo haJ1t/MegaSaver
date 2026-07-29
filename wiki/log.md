@@ -7484,3 +7484,39 @@ Also recorded in the plan: A0 adds a **third** candidate for the coordinate
 question the spec left open — line provenance, so delivered gap markers speak the
 file's RAW line numbers rather than post-collapse ones. Recommended over the
 footer map, because raw line numbers are what an agent actually reasons in.
+
+## [2026-07-28] chore | clear the two saver-programme dispatch blockers
+
+Both preconditions for handing the approved saver programme to three agents are
+now cleared, on branch `docs/saver-integrity-spec` (`main` + 3).
+
+**Conventions drift (was red since before this work).** `CLAUDE.md` had been
+hand-edited to drop the OMC skill list and bump model defaults without touching
+`docs/conventions/` — the §13 violation `conventions:check` exists to catch, and
+it kept DoD item 4 unreachable for every branch. Per user directive OMC is
+removed for good: the section is gone from `skill-routing.md`, and the four names
+still cited elsewhere map onto agents that already exist in `agent-routing.md`
+(`architect`, `critic`, `tracer`, `security-reviewer`), with DoD item 7's
+`omc:verify` → `verifier`. `conventions:sync --write` regenerated CLAUDE.md,
+AGENTS.md and `.cursor/rules/mega-discipline.mdc`; the check is now clean.
+`wiki/concepts/risk-aware-development.md` mirrors risk-modes by hand and is not a
+sync consumer, so it was fixed separately. Historical plan files under
+`docs/superpowers/plans/` still name the OMC skills and were deliberately left —
+they record what was actually run at the time.
+
+**Baseline verified per package**, since three agents inheriting an unknown-red
+baseline is worse than a known-red one: context-gate 369, output-filter 451,
+stats 249, mcp-bridge 343 (+1 skipped), retrieval 43, bench-replay 149 — all
+green, no type errors.
+
+Two environment caveats recorded in the plan rather than left for each agent to
+rediscover: `pnpm` is not on PATH in this shell (fallback commands written into
+the plan's DoD section so all three tracks use the same ones), and the previously
+reported `context-gate` concurrency flake did not reproduce — but it was reported
+under a parallel `turbo` run, which could not be driven here, so green in
+isolation is not proof it is gone.
+
+Corrected in the plan: worktrees branch from `docs/saver-integrity-spec`, NOT
+`main` — `main` does not yet carry the spec, plans or wiki record, so a worktree
+cut from it would have no source of truth and every track's `log.md` append would
+conflict.
