@@ -7,6 +7,14 @@ import { isSafeSegment } from "./safe-segment.js";
 // breaking segments (`..`, `/`, …) at the schema boundary, before any write.
 const safeSegment = z.string().min(1).refine(isSafeSegment, "unsafe path segment");
 
+// B1 signed savings: `deltaBytes = rawBytes - returnedBytes`, NEVER clamped —
+// negative means the rewrite inflated the payload. `bytesSaved` stays the
+// clamped legacy field for one minor version; aggregates read the signed one.
+// Optional on read so pre-B1 JSONL rows keep parsing; `deltaBytesOf` supplies
+// the legacy interpretation (clamped bytesSaved — inflation was never recorded
+// pre-B1, so that is the only honest reconstruction).
+const deltaBytesField = z.number().int().optional();
+
 export const tokenSaverEventSchema = z
   .object({
     id: z.string().min(1),
@@ -18,6 +26,7 @@ export const tokenSaverEventSchema = z
     rawBytes: z.number().int().nonnegative(),
     returnedBytes: z.number().int().nonnegative(),
     bytesSaved: z.number().int().nonnegative(),
+    deltaBytes: deltaBytesField,
     savingRatio: z.number().min(0).max(1),
     chunkSetId: z.string().min(1).optional(),
     summary: z.string(),
@@ -41,6 +50,7 @@ export const overlayTokenSaverEventSchema = z
     rawBytes: z.number().int().nonnegative(),
     returnedBytes: z.number().int().nonnegative(),
     bytesSaved: z.number().int().nonnegative(),
+    deltaBytes: deltaBytesField,
     savingRatio: z.number().min(0).max(1),
     chunkSetId: z.string().min(1).optional(),
     summary: z.string(),
@@ -53,3 +63,12 @@ export const overlayTokenSaverEventSchema = z
   .strict();
 
 export type OverlayTokenSaverEvent = z.infer<typeof overlayTokenSaverEventSchema>;
+
+// Single read rule for every fold/aggregate: the signed field when the writer
+// emitted it, the legacy clamped value otherwise.
+export function deltaBytesOf(event: {
+  bytesSaved: number;
+  deltaBytes?: number | undefined;
+}): number {
+  return event.deltaBytes ?? event.bytesSaved;
+}
