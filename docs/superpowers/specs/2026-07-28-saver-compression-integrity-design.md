@@ -333,9 +333,16 @@ Per `definition-of-done.md`, plus:
 
 ## 7. Outcomes (2026-07-29)
 
-Implemented across three parallel tracks and consolidated on
-`docs/saver-integrity-spec`. `pnpm verify` green (60/60 turbo tasks: lint,
-typecheck, every package's tests, conventions).
+Implemented across three parallel tracks, consolidated on
+`docs/saver-integrity-spec`, then corrected after external review — code review
+(`docs/superpowers/reviews/track-a-opus-codereview.md`) and adversarial critic
+(`track-a-opus-critic.md`), both fresh contexts, neither the author.
+`pnpm verify` green: exit 0, run twice (before the review's mutation work and
+after every revert), `conventions:check` ok. The "60/60 turbo tasks" figure this
+section previously reported is `turbo run test` alone (30 build + 30 test);
+`turbo run lint typecheck test` is 120 tasks and `conventions:check` is a plain
+node script, not a turbo task at all. Verify is green; the count described a
+third of it.
 
 ### §5 Q2 answered — the coordinate question is a split, not a winner
 
@@ -361,36 +368,207 @@ where they can be true, none where they cannot.**
 | W4/A1 | Save-integrity property test: 9 cases, was 3/9, now 9/9 |
 | W2/A2 | One `recoverableChunks` helper; read + both exec paths persist full redacted raw. Shared `admission-guard.ts` |
 | W3/A3 | Gap markers in raw line space; provenance in `normalize.ts` |
+| W3/A3 (post-review) | `recoverableChunks` indexes the same normalized text the markers are numbered in; `record-output.ts`'s duplicate inline chunker deleted |
 | A3b | Evidence markers reserved in `fitBudget` ahead of score |
-| W1/A4 | `targetBudget`: mode budget is the ceiling, target is a share of the input |
+| W1/A4 | `targetBudget`: mode budget is the ceiling, target is a share of the input — lever (b) of §W1 only; lever (a) did not ship, see Deferred |
 | W0/B1-B5 | Signed `deltaBytes`, model-facing bytes, recovery debt, real BPE count, fresh-store harness |
 | W5/B6-B10, C1-C5 | The twelve defects |
 
+### Coordinate skew — A3 shipped incomplete, review caught it, now closed
+
+A3's contract is that delivered line numbers and stored chunks inhabit one
+coordinate system. As shipped they did not. Markers were numbered in
+`normalize(redact(raw))` space; chunks indexed `redact(raw)`. `normalize` is not
+line-count preserving: `\r → \n` (`normalize.ts:16`) adds a line for every bare
+CR — how npm, pip, curl, wget, docker, cargo and pytest draw progress bars, on
+the hook path that carries the most volume — and the OSC branch of the ANSI
+regex has a negated class that also matches `\n`, removing lines. Under the
+footer's published "~40 lines each" rule a skewed marker then resolves either to
+a chunk index that does not exist, or, in the shrink direction, silently to a
+real chunk holding unrelated content. LF and CRLF are unaffected.
+
+The A3 test could not catch it: its load-bearing assertion was the extent
+invariant that breaks, and its corpus contained no CR. The A1 property test
+could not either — containment holds whether or not the addressing is sound.
+
+Closed by chunking the normalized text in `recoverableChunks` and deleting the
+duplicate inline chunker in `record-output.ts`, so all five persistence sites
+(`read.ts:264`, `read.ts:291`, `run-command.ts:395`, `run-command.ts:656`,
+`record-output.ts:216`) now share one chunking entry point and cannot re-diverge
+without a deliberate re-duplication. `packages/output-filter` exports `normalize`
+for that purpose; re-implementing its regex inside `context-gate` would recreate
+the divergence being closed. Outline mode is untouched and did not need it — it
+renders via `excerptOf(…, null)`, emitting a countless marker and publishing no
+line number.
+
+Covered by `packages/context-gate/test/coordinate-skew.test.ts`, which fails
+without the fix. Input: 400 npm-style progress redraws interleaved with 400
+distinct log lines, balanced mode, hook path. RED: `marker space 1600 vs chunk
+space 800 (skew 800)`. GREEN: highest marker line 1600, highest stored chunk
+`endLine` 1600, skew 0; the footer advertises 40 chunks (`i = 0..39`), so every
+line a marker names is reachable.
+
+Disclosure: stored chunks now hold normalized text, so ANSI escapes and trailing
+whitespace are no longer byte-recoverable from the chunk store. Neither is
+evidence, the delivered excerpts were already normalized, and line-addressability
+is what the footer promises — that now holds.
+
+### Three non-discriminating tests, and what mutation testing now shows
+
+The critic's mandate was not "do the tests pass" but "do they pass for the right
+reason". Three did not:
+
+| test | passed with the defect fully present | now |
+|---|---|---|
+| `recovery-addressability.test.ts` | A3's interior-marker skew: its per-marker check ("chunk `floor((N-1)/40)` contains raw line N") is true for every N by construction, so its only discriminating assertion was the tail extent | adjacency assertion — the span a marker names must close where the next delivered raw line begins |
+| `save-integrity.property.test.ts` | delivered text reduced to the summary line: `universe = delivered + recovered` is satisfied by `recovered` alone, so the delivered half contributed nothing | `assertDeliveredCarriesEvidence` — the delivered half must itself carry raw evidence |
+| the A1 read-path block | the production read path was never executed; the test hand-assembled its own `persistChunkSet` call, so `run.ts:180` — `mega output file`, `mega output filter`, MCP `read-file`, the daemon registry — was uncovered repo-wide | `read-pipeline-recovery.test.ts` drives `runOutputPipeline` itself |
+
+Each defect was then reintroduced and run against the full `packages/context-gate`
+suite (56 files / 388 tests), and the catcher recorded:
+
+| mutation | defect restored | caught by |
+|---|---|---|
+| M1 | `run.ts:180,359` persist the kept excerpts instead of `read.raw` — §1b(i), the most severe finding in the audit | `read-pipeline-recovery.test.ts` **only** (2 tests) |
+| M2 | `returnedTextOf` returns the summary and nothing else | 4 files / 10 tests: `record-output`, `save-integrity.property`, `recovery-addressability`, `coordinate-skew` |
+| M6 | interior markers back in post-collapse space | `recovery-addressability.test.ts` **only** |
+| M7 | `recoverableChunks` chunks un-normalized text | `coordinate-skew.test.ts` **only** |
+| M-footer | footer under-reports `chunkCount`, so the published `i = 0..N-1` cannot reach the lines the markers name | `coordinate-skew.test.ts` |
+
+No mutation in that set survives. That is the whole of the claim: **four named
+defects now fail a mutation. Two classes still cannot be caught at all.**
+
+- **Suppressed markers.** A mutation that omits a gap marker for a genuinely
+  omitted region, while leaving every surviving marker correctly addressed, is
+  caught by nothing except `recovery-addressability`'s anti-vacuity counter, and
+  then only as a change of shape, never as a wrong address. A
+  complement-coverage assertion cannot close it: it would fail on correct code,
+  because the collapse stand-in legitimately represents lines no marker names.
+  Closing it needs a production-surface change — excerpt raw spans exposed on
+  `returnedText` — not a test.
+- **Fabrication — inferred from the assertions' shape, not from a mutation.**
+  Every assertion in the suite is containment-shaped: raw lines present in the
+  delivered text, raw lines absent from the omitted ranges. Nothing asserts that
+  delivered content is not invented, so a mutation appending plausible
+  synthesized lines alongside the genuine ones should pass. Unlike M1–M7 above,
+  that is a reading of the assertions, not a receipt: no such mutation has been
+  run, and what would close the gap has not been established.
+- **Single-point coverage** (not a hole, a fragility). M1, M6 and M7 are each
+  caught by exactly one file; only M2 has redundancy. Deleting or weakening any
+  one of those three files silently reopens a flagship defect. Compounding it,
+  `recovery-addressability`'s anti-vacuity guard lands at exactly 2 adjacency
+  checks, with no margin.
+
 ### Measured ratio (diagnostic, not the gate)
 
-Distinct source, hook path, before → after A4:
+Fixture, stated because the table this replaces had none: distinct non-repeating
+TypeScript source (~126 B/line, unique identifiers and counters per line so
+nothing collapses), driven through `recordAndFilterOverlayOutput` against the
+built `packages/context-gate/dist/index.js` — the hook path — with
+`storeRawOutput: true`, `includeFooter: true`, and a fresh `mkdtemp` store per
+cell. Sizes are reported alongside every ratio, because a saving ratio without
+its input size is not a statement about the compressor.
 
-| mode | 6 KB | 12.5 KB | 25 KB | 50 KB | 250 KB |
-|---|---|---|---|---|---|
-| aggressive | 27.4 → **77.3** | 65.1 → **85.0** | 82.6 → 86.4 | 91.2 | 98.3 |
-| balanced | floor | 4.5 → **72.7** | 50.3 → **73.3** | 75.1 | 95.0 |
-| safe | floor | floor | floor | 34.8 → **48.9** | 86.9 |
+| input | rawBytes | lines | mode | decision | returnedBytes | savingRatio | chunkCount |
+|---|---:|---:|---|---|---:|---:|---:|
+| 6 KB | 6166 | 49 | aggressive | compressed | 1256 | 0.796 | 2 |
+| 6 KB | 6166 | 49 | balanced | passthrough | 6170 | 0 | — |
+| 6 KB | 6166 | 49 | safe | passthrough | 6170 | 0 | — |
+| 12.5 KB | 12895 | 102 | aggressive | compressed | 1888 | 0.854 | 3 |
+| 12.5 KB | 12895 | 102 | balanced | compressed | 3535 | 0.726 | 3 |
+| 12.5 KB | 12895 | 102 | safe | passthrough | 12846 | 0.004 | — |
+| 25 KB | 25669 | 199 | aggressive | compressed | 3414 | 0.867 | 5 |
+| 25 KB | 25669 | 199 | balanced | compressed | 6710 | 0.739 | 5 |
+| 25 KB | 25669 | 199 | safe | passthrough | 25523 | 0.006 | — |
+| 50 KB | 51261 | 393 | aggressive | compressed | 4304 | 0.916 | 10 |
+| 50 KB | 51261 | 393 | balanced | compressed | 12302 | 0.760 | 10 |
+| 50 KB | 51261 | 393 | safe | compressed | 26125 | 0.490 | 10 |
+| 100 KB | 102434 | 781 | aggressive | compressed | 4307 | 0.958 | 20 |
+| 100 KB | 102434 | 781 | balanced | compressed | 12305 | 0.880 | 20 |
+| 100 KB | 102434 | 781 | safe | compressed | 32461 | 0.683 | 20 |
+| 250 KB | 256054 | 1913 | aggressive | compressed | 4309 | 0.983 | 48 |
+| 250 KB | 256054 | 1913 | balanced | compressed | 12307 | 0.952 | 48 |
+| 250 KB | 256054 | 1913 | safe | compressed | 32463 | 0.873 | 48 |
 
-The ratio is now a floor set by policy rather than a function of how far the
-input exceeded a constant. Large inputs are unchanged — the ceiling still binds.
+Three readings, all of which the ratio-only table hid:
+
+1. **`returnedBytes` plateaus per mode; the rising ratio is arithmetic on a fixed
+   ceiling, not compression getting better.** Aggressive returns 4304 / 4307 /
+   4309 B at 50 / 100 / 250 KB; balanced 12302 / 12305 / 12307 B. The ratio
+   climbs from 0.916 to 0.983 purely because `rawBytes` grows against a constant
+   numerator.
+2. **Passthrough can grow the payload, and the metric cannot say so.** At 6 KB,
+   balanced and safe both return 6170 B against 6166 raw — four bytes added,
+   reported as `savingRatio: 0`. Passthrough is not byte-identical in the other
+   direction either (12.5 KB safe: 12846 vs 12895). `savingRatio` is floored at
+   zero and cannot express a net loss; either allow it to go negative or state
+   the floor.
+3. **Below the compress floor there is no recovery handle at all.** Passthrough
+   rows carry no chunk set (`chunkCount: null`), because the pipeline returns
+   early. Recoverability is a property of compressed outputs only.
+
+The generator ran from the session scratchpad and is **not committed**, so §6's
+"reproduction evidence for every ratio claim … captured, not asserted" is still
+unmet for this table. The fixture is named; the script is not in the repo.
+
+Before/after figures are not reproduced here. The before → after ladder this
+section previously published was reproduced independently by the critic to
+within ~1 pt on a comparable fixture, with one exception: balanced @ 12.5 KB,
+where this section claimed 4.5 %, §1a said 3.7 %, `fit.ts:57` implies 16 %, and
+the critic measured 0.1–1.1 % end-to-end. Four numbers for one cell and no named
+fixture. The direction of the argument is unharmed — the true "before" is worse
+than was claimed — but the cell is unmeasured until the generator is committed.
+
+### What A4 changed, and where it changed nothing
+
+A4 sizes the output as `min(targetRatio × rawBytes, modeCeiling)`. Because §W1
+lever (a) did not ship, the eligibility floor is still `modeToBudget(mode)`, so
+A4 alters the outcome only while `rawBytes × targetRatio < modeBudget` — that is,
+between the floor and `modeBudget / targetRatio`:
+
+| mode | floor (unchanged) | crossover | band where A4 changes anything |
+|---|---:|---:|---|
+| aggressive | 4 KB | 32 KB | 4–32 KB |
+| balanced | 12 KB | 48 KB | 12–48 KB |
+| **safe (shipped default)** | **32 KB** | **64 KB** | **32–64 KB only** |
+
+Outside those bands the behaviour is byte-identical to before A4: the ceiling
+binds. The ladder above shows the pin directly — aggressive 4304 / 4307 / 4309 B
+and balanced 12302 / 12305 / 12307 B at 50 / 100 / 250 KB; safe 32461 / 32463 B
+at 100 / 250 KB, with its 50 KB cell (26125 B) the one safe row inside the band
+and therefore the one A4 moved.
+
+This section previously said "the ratio is now a floor set by policy rather than
+a function of how far the input exceeded a constant". That holds **only inside
+those bands**. Above the crossover §1a's original criticism survives intact, and
+under the shipped default it survives everywhere except a 32–64 KB window.
 
 ### The A4 gate is NOT met
 
 Per §W1 the pass condition is **net cost reduction at constant integrity**, with
-ratio as diagnostic only. Integrity holds (9/9) and the ratio is measured, but
-**net cost is unmeasured**: it needs a real-API benchmark, and
-`wiki/syntheses/saver-cache-churn` records that the existing harness could not
-resolve an effect of this size. B5 added fresh-store hygiene; the harness has
-still never run against the real API. Until it does, no net-cost claim may be
-made.
+ratio as diagnostic only. Integrity holds (9/9, and the property test is now
+load-bearing on the delivered side) and the ratio is measured, but **net cost is
+unmeasured**: it needs a real-API benchmark, and `wiki/syntheses/saver-cache-churn`
+records that the existing harness could not resolve an effect of this size. B5
+added fresh-store hygiene; the harness has still never run against the real API.
+Until it does, no net-cost claim may be made.
 
 ### Deferred, with reasons
 
+- **§W1 lever (a) — decoupling the floor from the budget — did not ship.** §W1
+  is two levers: (a) `floorBytes` becomes small, order 2 KB, and (b) `targetRatio`
+  sizes the output. Only (b) shipped. `record-output.ts` still reads
+  `input.compressFloorBytes ?? modeToBudget(input.mode)` and `DEFAULT_MODE` is
+  still `"safe"`, so §1a's "nothing under 32 KB is ever touched" remains true and
+  A4's reach is the band above. Reason: the floor is the same knob as the
+  admission guard below it — moving it is a cost-axis decision (§0, owned by the
+  net-positive spec) — and §W1's own sub-item requires the `DEFAULT_MODE` change
+  to be evaluated on its own so its effect is attributable. That evaluation has
+  not been run. Consequence to carry: below the floor the pipeline returns early
+  and persists no chunk set, so under the shipped default output under 32 KB is
+  not merely uncompressed — it has no recovery handle at all. Measured compress
+  floors on the corpus above: aggressive engages by 6 KB, balanced between 6 and
+  12.5 KB, safe between 25 and 50 KB.
 - **Admission-guard floors ship OFF.** Requiring a minimum saving is the cost
   axis (§0, owned by the net-positive spec), and any floor above ~1 KB re-opens
   the aggressive dead band PR #278 closed. B4's divergence numbers are in;
@@ -399,11 +577,24 @@ made.
   honestly and report a signed delta, so inflation is visible. A guard that
   changes what an MCP client receives should follow that measurement.
 - **W6 condensation.** Unstarted; still gated on a measured head-to-head.
+- **Suppressed-marker coverage.** Needs a production-surface change — excerpt
+  raw spans on `returnedText` — not a test. **Fabrication coverage** is open
+  with no established close; see the mutation subsection above.
 
 ### Corrections to the audits that produced this spec
 
 - `bytes/4` was said to be ~35% off for code. Measured (B4, cl100k_base): code
-  0.975, prose 1.013, Turkish 0.961 — within 4%. **Only JSON diverges** (1.193).
+  0.975, prose 1.013 — within 4%. JSON diverges (1.193).
+- **The Turkish figure previously published here (0.961, and with it the
+  conclusion "only JSON diverges") is withdrawn.** It does not reproduce: run
+  against the repo's own `measureTokenDivergence`, Turkish prose lands well above
+  1.0 — the sign of the claimed error is inverted, so `bytes/4` *understates*
+  Turkish tokens rather than overstating them. No corpus was ever committed, so
+  the original number can only be contradicted, not checked, and no replacement
+  figure is published here because none has been captured under §6. This is not
+  cosmetic: `estimateTokens` is the hot-path admission gate
+  (`record-output.ts:166`), and CLAUDE.md §11 names `tr` as the second locale.
+  Commit a corpus and re-derive.
 - The `context-gate` parallel-`turbo` flake is **not** context-gate-specific: an
   `mcp-bridge` recall test failed once under a parallel run and passed on rerun
   and in isolation.

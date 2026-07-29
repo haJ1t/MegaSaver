@@ -17,13 +17,16 @@ import { runOverlayOutputExecCommand } from "../src/run-command.js";
 // handed, plus whatever the advertised recovery surface can hand back, together
 // still contain everything the tool produced. Nothing may be silently gone.
 //
+// The `plus` is load-bearing in BOTH directions, so the contract is two
+// assertions, not one. A union check alone is satisfied by the recoverable half
+// on its own — the stored chunks are the whole redacted raw — and would pass a
+// pipeline that hands the model a bare summary with zero evidence. So the
+// delivered half is asserted separately, on its own terms.
+//
 // The recovery surface is deliberately exercised the way the footer advertises
 // it — `mega output chunk "<id>" "<i>"` for i = 0.. — not by reaching into the
 // content store. A chunk the published interface cannot reach is not recovered,
 // however faithfully it sits on disk.
-//
-// SHIPS RED. Track B (Kimi) writes B6/B8 against this contract, so it exists
-// before the fixes do; Track A's A2 is what makes the failing paths pass.
 
 const MODES: readonly TokenSaverMode[] = ["aggressive", "balanced", "safe"];
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111" as ProjectId;
@@ -32,6 +35,13 @@ const WK = "0123456789abcdef";
 const LSID = "33333333-3333-4333-8333-333333333333";
 const CREATED_AT = "2026-07-28T00:00:00.000Z";
 const ROOT_PID = String(process.pid);
+
+// Floor on the evidence the model itself receives, in whole raw lines. Measured
+// on this corpus the delivered text carries 40 lines in aggressive, 160 in
+// balanced, 440 in safe; half of the tightest mode leaves ranking and budget
+// tuning room while still being an order of magnitude above what a
+// summary-only or excerpt-free delivery can reach (0-1 lines).
+const MIN_DELIVERED_EVIDENCE_LINES = 20;
 
 // Distinct, individually-identifiable lines: every one that goes missing is a
 // nameable loss, and none can be reconstructed from its neighbours. Sized well
@@ -56,16 +66,31 @@ async function recoverAll(storeRoot: string, chunkSetId: string): Promise<string
   return parts.join("\n");
 }
 
-// The contract. Redaction is applied to the expectation, not asserted away:
-// a secret that policy stripped is intentionally absent and must not count as
-// a loss. Blank lines carry no evidence.
-function assertNothingLost(raw: string, delivered: string, recovered: string): void {
-  const universe = `${delivered}\n${recovered}`;
-  const missing = redact(raw)
+// Redaction is applied to the expectation, not asserted away: a secret that
+// policy stripped is intentionally absent and must not count as a loss. Blank
+// lines carry no evidence.
+function evidenceLines(raw: string): string[] {
+  return redact(raw)
     .redacted.split("\n")
     .map((l) => l.trim())
-    .filter((l) => l.length > 0)
-    .filter((l) => !universe.includes(l));
+    .filter((l) => l.length > 0);
+}
+
+// Half one: the model is handed real evidence, not a verdict about evidence.
+// Counted in verbatim raw lines because that is what the agent can act on — a
+// summary sentence and a gap marker are navigation, not content.
+function assertDeliveredCarriesEvidence(raw: string, delivered: string): void {
+  const present = evidenceLines(raw).filter((l) => delivered.includes(l));
+  expect(
+    present.length,
+    `the delivered text carries ${present.length} verbatim output line(s); below this floor the model is being handed navigation instead of evidence`,
+  ).toBeGreaterThanOrEqual(MIN_DELIVERED_EVIDENCE_LINES);
+}
+
+// Half two: nothing is anywhere unreachable.
+function assertNothingLost(raw: string, delivered: string, recovered: string): void {
+  const universe = `${delivered}\n${recovered}`;
+  const missing = evidenceLines(raw).filter((l) => !universe.includes(l));
   expect(
     missing.slice(0, 5),
     `${missing.length} line(s) exist in neither the delivered text nor any recoverable chunk`,
@@ -100,7 +125,10 @@ describe("save integrity — hook path (recordAndFilterOverlayOutput)", () => {
         includeFooter: true,
         newId: () => `cs-hook-${mode}`,
       });
+
       expect(result.decision).toBe("compressed");
+      expect(result.chunkSetId).toBe(`cs-hook-${mode}`);
+      assertDeliveredCarriesEvidence(raw, result.returnedText);
       assertNothingLost(raw, result.returnedText, await recoverAll(store, `cs-hook-${mode}`));
     });
   }
@@ -122,6 +150,7 @@ describe("save integrity — read path (readAndFilter + persistChunkSet)", () =>
       });
       expect(read.ok).toBe(true);
       if (!read.ok) return;
+      expect(read.result.decision).toBe("compressed");
 
       const chunkSetId = `cs-read-${mode}`;
       await persistChunkSet({
@@ -136,6 +165,7 @@ describe("save integrity — read path (readAndFilter + persistChunkSet)", () =>
       });
 
       const delivered = read.result.excerpts.map((e) => e.text).join("\n");
+      assertDeliveredCarriesEvidence(raw, delivered);
       assertNothingLost(raw, delivered, await recoverAll(store, chunkSetId));
     });
   }
@@ -169,13 +199,13 @@ describe("save integrity — overlay exec path (runOverlayOutputExecCommand)", (
         mode,
         storeRawOutput: true,
         maxReturnedBytes: undefined,
-        permissions: undefined,
+        permissions: null,
         timeoutMs: 5000,
         maxBytes: 1_000_000,
         spawn,
         now: () => CREATED_AT,
         newId: () => `cs-exec-${mode}`,
-      } as unknown as Parameters<typeof runOverlayOutputExecCommand>[0]);
+      });
 
       child.stdout.emit("data", Buffer.from(raw));
       child.emit("close", 0);
@@ -183,9 +213,18 @@ describe("save integrity — overlay exec path (runOverlayOutputExecCommand)", (
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      const r = result as unknown as { chunkSetId?: string; excerpts?: { text: string }[] };
-      const chunkSetId = r.chunkSetId ?? `cs-exec-${mode}`;
-      const delivered = (r.excerpts ?? []).map((e) => e.text).join("\n");
+      // The success arm is `{ ok, result }` — the excerpts and the chunk-set id
+      // live one level down. Read through the declared shape so tsc, not a
+      // cast, is what certifies the field names.
+      const exec = result.result;
+      expect(exec.decision).toBe("compressed");
+
+      const chunkSetId = exec.chunkSetId;
+      expect(chunkSetId).toBe(`cs-exec-${mode}`);
+      if (chunkSetId === undefined) return;
+
+      const delivered = exec.excerpts.map((e) => e.text).join("\n");
+      assertDeliveredCarriesEvidence(raw, delivered);
       assertNothingLost(raw, delivered, await recoverAll(store, chunkSetId));
     });
   }
