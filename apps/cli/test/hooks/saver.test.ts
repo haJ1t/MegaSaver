@@ -1,9 +1,8 @@
 import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { COMPRESS_FLOOR_BYTES } from "@megasaver/context-gate";
 import { recordAndFilterOverlayOutput } from "@megasaver/core";
-import { encodeWorkspaceKey } from "@megasaver/shared";
+import { type TokenSaverMode, encodeWorkspaceKey, modeToBudget } from "@megasaver/shared";
 import { type Mock, describe, expect, it, vi } from "vitest";
 import { NEW_SURFACE_MIN_BYTES, buildSaverDecision, minBytesFor } from "../../src/hooks/saver.js";
 
@@ -813,7 +812,7 @@ describe("footer comes from record (F30)", () => {
 });
 
 describe("B9: safe mode compresses Bash below Claude Code's output ceiling", () => {
-  it("a 33KB Bash output in safe mode reaches record() with a floor under the ~30000-char ceiling", async () => {
+  it("a 33KB Bash output in safe mode reaches record() with the Bash floor above the 32KB budget", async () => {
     const captured: Array<{ compressFloorBytes?: number }> = [];
     const d = deps({
       resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
@@ -824,14 +823,10 @@ describe("B9: safe mode compresses Bash below Claude Code's output ceiling", () 
     });
     const decision = await buildSaverDecision(bigBash("x".repeat(33_000)), d);
     expect("updatedToolOutput" in decision).toBe(true);
-    // Was pinned to 32_001 — the old budget+1 arithmetic, which is itself ABOVE
-    // the truncation ceiling this describe block exists to stay under. §W1
-    // lever (a) removed the budget from the gate, so the ceiling is cleared by
-    // construction instead of by a per-tool workaround.
-    expect(captured[0]?.compressFloorBytes).toBe(COMPRESS_FLOOR_BYTES);
+    expect(captured[0]?.compressFloorBytes).toBe(32_001);
   });
 
-  it("safe mode compresses a 26KB Read (the 32KB budget no longer gates it)", async () => {
+  it("safe mode still passes a 26KB Read through (32KB Read gate intact)", async () => {
     const d = deps({ resolveSettings: () => ({ enabled: true, mode: "safe" as const }) });
     const decision = await buildSaverDecision(
       {
@@ -843,33 +838,12 @@ describe("B9: safe mode compresses Bash below Claude Code's output ceiling", () 
       },
       d,
     );
-    // This assertion is inverted on purpose: it pinned the coupled gate itself
-    // (26 KB < safe's 32 KB budget ⇒ passthrough), which is the behaviour §W1
-    // lever (a) exists to remove, not a requirement about Reads. The floor that
-    // still holds is asserted below.
-    expect("updatedToolOutput" in decision).toBe(true);
-  });
-
-  it("safe mode still passes a Read under the decoupled floor through", async () => {
-    const d = deps({ resolveSettings: () => ({ enabled: true, mode: "safe" as const }) });
-    const decision = await buildSaverDecision(
-      {
-        tool_name: "Read",
-        tool_input: { file_path: "/Users/x/proj/small.txt" },
-        tool_response: { file: { content: "x".repeat(COMPRESS_FLOOR_BYTES) } },
-        session_id: "live-1",
-        cwd: "/Users/x/proj",
-      },
-      d,
-    );
     expect(decision).toEqual({ passthrough: true });
   });
 });
 
 describe("B8: hook forwards its gate as compressFloorBytes", () => {
-  // Was "forwards the 4000 B gate" — 4000 is modeToBudget("aggressive"), so the
-  // number pinned the budget coupling, not the forwarding this describe covers.
-  it("aggressive Read forwards the decoupled gate", async () => {
+  it("aggressive Read forwards the 4000 B gate", async () => {
     const captured: Array<{ compressFloorBytes?: number }> = [];
     const d = deps({
       resolveSettings: () => ({ enabled: true, mode: "aggressive" as const }),
@@ -888,17 +862,11 @@ describe("B8: hook forwards its gate as compressFloorBytes", () => {
       },
       d,
     );
-    expect(captured[0]?.compressFloorBytes).toBe(COMPRESS_FLOOR_BYTES);
+    expect(captured[0]?.compressFloorBytes).toBe(4_000);
   });
 });
 
-// Was "background-shell retrieval shares Bash's ceiling". That cap existed
-// because safe mode's 32000 floor sat above Claude Code's ~30000-char
-// truncation ceiling, so a background log could never clear it. With the gate
-// decoupled from the budget every floor is far under that ceiling, and what is
-// left to pin is the surface split: original tools take the plain floor, newer
-// coarser surfaces take the higher one.
-describe("B9 follow-up: background-shell retrieval takes the new-surface floor", () => {
+describe("B9 follow-up: background-shell retrieval shares Bash's ceiling", () => {
   const shellPayload = (tool: string, text: string) => ({
     tool_name: tool,
     tool_input: { bash_id: "bg-1" },
@@ -907,7 +875,7 @@ describe("B9 follow-up: background-shell retrieval takes the new-surface floor",
     cwd: "/Users/x/proj",
   });
 
-  it("safe mode compresses a 26KB BashOutput with the new-surface floor", async () => {
+  it("safe mode compresses a 26KB BashOutput with the 24000 floor", async () => {
     const captured: Array<{ compressFloorBytes?: number }> = [];
     const d = deps({
       resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
@@ -917,13 +885,11 @@ describe("B9 follow-up: background-shell retrieval takes the new-surface floor",
       }),
     });
     const decision = await buildSaverDecision(shellPayload("BashOutput", "x".repeat(26_000)), d);
-    expect("updatedToolOutput" in decision).toBe(true);
-    // Was 24_000 (the ceiling workaround), reached as min(32000, 24000) — both
-    // terms were budget-derived. The surface class, not the mode, decides now.
-    expect(captured[0]?.compressFloorBytes).toBe(NEW_SURFACE_MIN_BYTES);
+    expect("updatedToolOutput" in decision).toBe(true); // today: passthrough (32000 gate)
+    expect(captured[0]?.compressFloorBytes).toBe(24_000);
   });
 
-  it("safe mode compresses a 26KB Monitor with the new-surface floor", async () => {
+  it("safe mode compresses a 26KB Monitor with the 24000 floor", async () => {
     const captured: Array<{ compressFloorBytes?: number }> = [];
     const d = deps({
       resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
@@ -934,10 +900,10 @@ describe("B9 follow-up: background-shell retrieval takes the new-surface floor",
     });
     const decision = await buildSaverDecision(shellPayload("Monitor", "x".repeat(26_000)), d);
     expect("updatedToolOutput" in decision).toBe(true);
-    expect(captured[0]?.compressFloorBytes).toBe(NEW_SURFACE_MIN_BYTES);
+    expect(captured[0]?.compressFloorBytes).toBe(24_000);
   });
 
-  it("aggressive BashOutput keeps the new-surface floor (not the plain one)", async () => {
+  it("aggressive BashOutput keeps the 16384 new-surface floor (not lowered to 4000)", async () => {
     const captured: Array<{ compressFloorBytes?: number }> = [];
     const d = deps({
       resolveSettings: () => ({ enabled: true, mode: "aggressive" as const }),
@@ -946,27 +912,15 @@ describe("B9 follow-up: background-shell retrieval takes the new-surface floor",
         return RECORDED;
       }),
     });
-    // 17KB clears the new-surface floor; the assertion is that a coarse
-    // surface is NOT dropped to the plain floor every original tool gets.
+    // 17KB > 16384 floor -> compresses; floor must be 16384, not 4000
     await buildSaverDecision(shellPayload("BashOutput", "x".repeat(17_000)), d);
-    expect(captured[0]?.compressFloorBytes).toBe(NEW_SURFACE_MIN_BYTES);
-    expect(NEW_SURFACE_MIN_BYTES).toBeGreaterThan(COMPRESS_FLOOR_BYTES);
+    expect(captured[0]?.compressFloorBytes).toBe(16_384);
   });
 
-  it("Task (subagent report, not shell-truncated) takes the same new-surface floor", async () => {
-    // Was "left at the 32000 safe floor", asserting passthrough at 26 KB. 32000
-    // is modeToBudget("safe"), so the number pinned the coupling; and Task was
-    // singled out only because it was the one new surface NOT capped by the
-    // truncation-ceiling workaround. With that workaround gone there is nothing
-    // left to distinguish it, so what is pinned is the floor it shares.
+  it("Task (subagent report, not shell-truncated) is left at the 32000 safe floor", async () => {
     const d = deps({ resolveSettings: () => ({ enabled: true, mode: "safe" as const }) });
-    const below = await buildSaverDecision(
-      shellPayload("Task", "x".repeat(NEW_SURFACE_MIN_BYTES)),
-      d,
-    );
-    expect(below).toEqual({ passthrough: true });
-    const above = await buildSaverDecision(shellPayload("Task", "x".repeat(26_000)), d);
-    expect("updatedToolOutput" in above).toBe(true);
+    const decision = await buildSaverDecision(shellPayload("Task", "x".repeat(26_000)), d);
+    expect(decision).toEqual({ passthrough: true }); // 26000 < 32000 -> passthrough (documented: Task is unbounded, big reports still compress)
   });
 });
 
@@ -1104,28 +1058,19 @@ describe("first-sight gate + stable chunk id", () => {
 });
 
 describe("safe-mode Bash dead zone fix (Task C4)", () => {
-  // Was "minBytesFor('Bash', mode) > budget for every TokenSaverMode". That
-  // inequality was a proxy: while the gate WAS the budget, a floor at or below
-  // it let an output be admitted that the flat budget could then return whole.
-  // §W1 lever (b) made the returned size a share of the input, so a rewrite is
-  // smaller than its input by construction and the proxy has nothing left to
-  // stand for. The requirement underneath it — a floor a real Bash output can
-  // actually reach, i.e. under Claude Code's ~30000-char truncation ceiling —
-  // is what is asserted instead.
-  const BASH_OUTPUT_CEILING = 30_000;
+  const modes: TokenSaverMode[] = ["aggressive", "balanced", "safe"];
 
-  it("keeps every tool's floor under Claude Code's Bash truncation ceiling", () => {
-    for (const tool of ["Bash", "BashOutput", "Monitor", "Read", "Grep", "Task"]) {
-      expect({ tool, reachable: minBytesFor(tool) < BASH_OUTPUT_CEILING }).toEqual({
-        tool,
-        reachable: true,
-      });
+  it("ensures minBytesFor('Bash', mode) > budget for every TokenSaverMode", () => {
+    for (const mode of modes) {
+      const budget = modeToBudget(mode);
+      const floor = minBytesFor("Bash", mode);
+      expect(floor).toBeGreaterThan(budget);
     }
   });
 
   it("produces a compressed decision for a safe-mode Bash payload just above the floor", async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "saver-c4-"));
-    const floor = minBytesFor("Bash");
+    const floor = minBytesFor("Bash", "safe");
     const payloadSize = floor + 100;
     const bigBashText = "echo line\n".repeat(Math.ceil(payloadSize / 10));
     const d = {
