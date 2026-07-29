@@ -12,14 +12,14 @@ import {
   type FilterDecision,
   type FilterOutputResult,
   type OutputSourceKind,
-  chunkByLines,
   filterOutput,
 } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
 import { type TokenSaverMode, type WorkspaceKey, modeToBudget } from "@megasaver/shared";
 import { appendOverlayEvent } from "@megasaver/stats";
 import { admitCompression } from "./admission-guard.js";
-import { OVERLAY_CHUNK_LINES, buildRecoveryFooter, looksPreTruncated } from "./recovery-footer.js";
+import { recoverableChunks } from "./recoverable-chunks.js";
+import { buildRecoveryFooter, looksPreTruncated } from "./recovery-footer.js";
 
 // Redacts every secret-bearing string field in a SourceRef using the policy
 // redactor. hookTool is a tool name (not secret-bearing) and is left as-is.
@@ -210,17 +210,10 @@ export async function recordAndFilterOverlayOutput(
   let chunks: OverlayChunkSet["chunks"] = [];
   if (input.storeRawOutput) {
     chunkSetId = chunkSetIdGen();
-    const pieces =
-      redactedText === ""
-        ? [{ text: "", startLine: 1, endLine: 1 }]
-        : chunkByLines(redactedText, OVERLAY_CHUNK_LINES);
-    chunks = pieces.map((piece, i) => ({
-      id: String(i),
-      startLine: piece.startLine,
-      endLine: piece.endLine,
-      bytes: Buffer.byteLength(piece.text, "utf8"),
-      text: piece.text,
-    }));
+    // Through recoverableChunks, not an inline chunker: this path used to
+    // duplicate the split, and a second copy is a second coordinate system
+    // waiting to drift away from the delivered gap markers.
+    chunks = recoverableChunks(input.raw);
   }
 
   // F30 honest accounting: persisted numbers count the bytes the model

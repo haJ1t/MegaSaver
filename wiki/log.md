@@ -7581,3 +7581,74 @@ the parallel-`turbo` flake is not context-gate-specific.
 Deferred with reasons in spec §7: admission-guard floors ship OFF (cost axis,
 and any floor >~1KB re-opens the dead band PR #278 closed), exec-path
 enforcement follows the measurement, W6 condensation unstarted.
+
+## [2026-07-29] review | saver integrity — external review corrections
+
+Two fresh-context reviews of `docs/saver-integrity-spec` (code review + critic,
+`docs/superpowers/reviews/track-a-opus-{codereview,critic}.md`). Both found real
+defects behind a green `pnpm verify`. Spec §7 rewritten to match.
+
+**What review found.**
+
+1. *A3 shipped incomplete.* Gap markers were numbered in `normalize(redact(raw))`
+   space while chunks indexed `redact(raw)`. `normalize` is not line-count
+   preserving — a bare CR becomes a newline, which is how npm/pip/curl/docker
+   draw progress bars — so on that input a marker resolved to a chunk index that
+   does not exist, or silently to a real chunk holding unrelated content, under a
+   footer saying "Full output recoverable".
+2. *Three tests passed with the defect they cover fully present.* The
+   addressability test's per-marker check ("chunk `floor((N-1)/40)` contains raw
+   line N") is true for every N by construction. The A1 property test's
+   `universe = delivered + recovered` is satisfied by `recovered` alone, so the
+   delivered half asserted nothing. The A1 read-path block hand-assembled its own
+   `persistChunkSet` call, so `run.ts:180` — the production wiring for
+   `mega output file`, MCP `read-file` and the daemon registry — was uncovered
+   repo-wide; §1b(i), the most severe finding in the audit, could be reinstated
+   with all 60 turbo test tasks green.
+3. *§W1 lever (a) never shipped and was not declared deferred.* The floor is
+   still `modeToBudget`, `DEFAULT_MODE` is still `safe`.
+
+**What changed.** `recoverableChunks` now chunks the normalized text, and
+`record-output.ts`'s duplicate inline chunker is gone, so all five persistence
+sites share one entry point. The three tests were made discriminating and each
+defect was reintroduced as a mutation against the full `packages/context-gate`
+suite (56 files / 388 tests): M1 (kept-excerpts-as-raw on the read path), M2
+(delivered text reduced to the summary), M6 (interior markers in post-collapse
+space), M7 (un-normalized chunking) and a footer under-count all now fail, with
+catchers named in §7. §7 also now carries the fixture for its ratio table, a
+`(size, mode) → rawBytes / decision / returnedBytes / chunkCount` table in place
+of ratios alone, and the band table showing A4 changes nothing outside
+4–32 KB / 12–48 KB / 32–64 KB per mode.
+
+**Superseded records.** The `[2026-07-29] release` entry above states "`bytes/4`
+is within 4% for code, prose and Turkish (only JSON diverges)" — the Turkish
+figure (0.961) does not reproduce, its sign is inverted, and no corpus was ever
+committed, so both it and "only JSON diverges" are withdrawn pending a captured
+corpus. The same entry's "balanced 12.5KB 4.5%" before-figure is one of four
+mutually inconsistent numbers for that cell (§1a 3.7%, `fit.ts:57` 16%, critic
+0.1–1.1%); treat it as unmeasured. "60/60 turbo tasks" describes `turbo run test`
+alone, not all of `pnpm verify`.
+
+**Still open.**
+
+- **A4 gate still NOT met.** Net cost is unmeasured; the harness has never run
+  against the real API. No net-cost or savings claim may be made.
+- **Two classes still uncovered.** A suppressed gap marker for a genuinely
+  omitted region (surviving markers still correct) is visible only as a shape
+  change; closing it needs a production-surface change — excerpt raw spans on
+  `returnedText` — not more tests. And every assertion is containment-shaped, so
+  nothing would detect fabricated delivered lines; that one is inferred from the
+  assertions' shape, not from a mutation receipt, and what closes it is not yet
+  established.
+- **Single-point coverage.** M1, M6 and M7 are each caught by exactly one file;
+  only M2 has redundancy. The anti-vacuity guard in `recovery-addressability`
+  lands at exactly 2 checks with no margin.
+- **Staging hazard.** `packages/context-gate/test/read-pipeline-recovery.test.ts`
+  and `packages/context-gate/test/coordinate-skew.test.ts` are untracked and are
+  the sole catchers for M1 and M7. `git add -u` will not pick them up; they must
+  be staged by path or those two defects silently return to green.
+- **§W1 lever (a)** now recorded as deferred with its reason and its consequence:
+  below the floor the pipeline returns early and persists no chunk set, so under
+  the shipped default output under 32 KB has no recovery handle at all.
+- **Ratio generator not committed** — §6's "captured, not asserted" is unmet for
+  the §7 table.

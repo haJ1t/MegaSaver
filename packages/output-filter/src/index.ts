@@ -1,4 +1,8 @@
 export { chunkByLines } from "./chunk.js";
+// Exported so the recovery chunkers can index the SAME text the delivered gap
+// markers are numbered in. Re-implementing it downstream would let the two
+// coordinate systems drift again the moment one copy changed.
+export { normalize } from "./normalize.js";
 export { rankFeatureNameSchema, type RankFeatureName } from "./rank-features.js";
 export { outputSourceKindSchema, type OutputSourceKind } from "./output-source.js";
 export {
