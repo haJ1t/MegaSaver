@@ -967,3 +967,45 @@ parent can receive stdout end without final JSON bytes, so the child now calls
 `stdout.end` and awaits its callback for terminal results. Fixture plus real
 catalog security tests pass locally; full verify, review, and another matrix
 still gate merge. (source: GitHub Actions job `89840018762`)
+
+## [2026-07-28] saver compression & integrity — three-track dispatch
+
+Approved CRITICAL programme now running in three worktrees, all branched from
+`docs/saver-integrity-spec` (NOT `main` — main does not carry the spec yet).
+
+| track | agent | worktree | branch |
+|---|---|---|---|
+| A architecture | Opus 5 | `../MegaSaver-saver-a-architecture` | `feat/saver-a-architecture` |
+| B accounting | Kimi K3 | `../MegaSaver-saver-b-accounting` | `feat/saver-b-accounting` |
+| C defects | Gemini Flash 3.6 | `../MegaSaver-saver-c-defects` | `feat/saver-c-defects` |
+
+Read before starting: the spec
+`docs/superpowers/specs/2026-07-28-saver-compression-integrity-design.md`, then
+your own packet — `plans/2026-07-28-dispatch-track-b.md` or `-track-c.md`.
+Track A works from `plans/2026-07-28-saver-integrity-plan.md`.
+
+**File ownership is exclusive.** No file is owned by two tracks; the list is in
+each packet. If a fix seems to need a file you do not own, STOP and report here
+rather than editing it. `types.ts` / `fit.ts` / `normalize.ts` /
+`record-output.ts` / `read.ts` / `run-command.ts` are Track A's.
+
+**Two hard sequencing rules:**
+1. Track A publishes the integrity contract (a red property test) before Track B
+   fixes B6/B8 — otherwise they get fixed to the wrong shape.
+2. Track A's ratio work (A4) cannot start until Track B's B1 signed savings has
+   landed. Today `bytesSaved` is clamped at 0 with `nonnegative()` schemas, so
+   inflation is unrepresentable and any ratio measurement is meaningless.
+
+Track C merges early and often: C2 (stop-words) and C3 (BM25) move the ranking
+baseline that A and B pin fixtures on.
+
+**Environment:** `pnpm` is NOT on PATH. Use
+`cd packages/<pkg> && ../../node_modules/.bin/vitest run` and
+`node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/conventions-sync/index.ts --check`.
+Baseline verified green per package on the branch point: context-gate 369,
+output-filter 451, stats 249, mcp-bridge 343 (+1 skipped), retrieval 43,
+bench-replay 149. Any failure you see is yours. The one exception: a
+`context-gate` concurrency flake was previously reported under a parallel
+`turbo` run and could not be reproduced here — if it appears, it is pre-existing.
+
+Nobody merges to `main`. Push your branch and report here.
