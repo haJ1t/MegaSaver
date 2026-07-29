@@ -5,7 +5,9 @@
   chunk persistence (user-recoverable evidence), and public CLI/MCP behaviour.
   Per `risk-modes.md`: HIGH chain + `tracer` evidence loop + `security-reviewer`
   + verifier with reproduction evidence + manual user confirmation. No autopilot.
-- **Status:** DRAFT — awaiting user approval. No implementation until approved.
+- **Status:** APPROVED 2026-07-28. Stages 0-3 implemented on
+  `docs/saver-integrity-spec` (41 commits, three tracks merged); see §7 Outcomes.
+  Stage 4 (condensation) not started. Awaiting external review.
 - **Origin:** find-only audit 2026-07-28 (`wiki/syntheses/saver-root-cause-2026-07-28`),
   reconciled against three independent external LLM audits supplied by the user.
 
@@ -327,3 +329,81 @@ Per `definition-of-done.md`, plus:
   `wiki/syntheses/saver-cache-churn` corrected (its `saverPausedByNetEffect`
   wiring claim is false — no such symbol exists; net-effect is read only by
   `doctor-saver.ts` and `session/saver/resolve.ts`, diagnostic-only).
+
+
+## 7. Outcomes (2026-07-29)
+
+Implemented across three parallel tracks and consolidated on
+`docs/saver-integrity-spec`. `pnpm verify` green (60/60 turbo tasks: lint,
+typecheck, every package's tests, conventions).
+
+### §5 Q2 answered — the coordinate question is a split, not a winner
+
+Neither candidate alone. The gate is `types.ts` `compressorEligible`:
+
+| path | compressor | delivered line numbers |
+|---|---|---|
+| file reads (except `.json`) | off for file sources | RAW line numbers |
+| generic / low-confidence command output | off | RAW line numbers |
+| vitest / tsc / diff / structured | rewrites lines | none — countless marker |
+
+Provenance is threaded through `normalize` → `collapseRepeatedLines` →
+`collapseSimilar`, all fold-only, so every surviving line maps to a contiguous
+raw span. A compressor synthesises lines that exist nowhere in the raw output
+(`compressTsc`'s "Top files by error count: …"), so no raw line can be named and
+the renderer emits a countless marker rather than a false number. **Line numbers
+where they can be true, none where they cannot.**
+
+### What shipped
+
+| workstream | outcome |
+|---|---|
+| W4/A1 | Save-integrity property test: 9 cases, was 3/9, now 9/9 |
+| W2/A2 | One `recoverableChunks` helper; read + both exec paths persist full redacted raw. Shared `admission-guard.ts` |
+| W3/A3 | Gap markers in raw line space; provenance in `normalize.ts` |
+| A3b | Evidence markers reserved in `fitBudget` ahead of score |
+| W1/A4 | `targetBudget`: mode budget is the ceiling, target is a share of the input |
+| W0/B1-B5 | Signed `deltaBytes`, model-facing bytes, recovery debt, real BPE count, fresh-store harness |
+| W5/B6-B10, C1-C5 | The twelve defects |
+
+### Measured ratio (diagnostic, not the gate)
+
+Distinct source, hook path, before → after A4:
+
+| mode | 6 KB | 12.5 KB | 25 KB | 50 KB | 250 KB |
+|---|---|---|---|---|---|
+| aggressive | 27.4 → **77.3** | 65.1 → **85.0** | 82.6 → 86.4 | 91.2 | 98.3 |
+| balanced | floor | 4.5 → **72.7** | 50.3 → **73.3** | 75.1 | 95.0 |
+| safe | floor | floor | floor | 34.8 → **48.9** | 86.9 |
+
+The ratio is now a floor set by policy rather than a function of how far the
+input exceeded a constant. Large inputs are unchanged — the ceiling still binds.
+
+### The A4 gate is NOT met
+
+Per §W1 the pass condition is **net cost reduction at constant integrity**, with
+ratio as diagnostic only. Integrity holds (9/9) and the ratio is measured, but
+**net cost is unmeasured**: it needs a real-API benchmark, and
+`wiki/syntheses/saver-cache-churn` records that the existing harness could not
+resolve an effect of this size. B5 added fresh-store hygiene; the harness has
+still never run against the real API. Until it does, no net-cost claim may be
+made.
+
+### Deferred, with reasons
+
+- **Admission-guard floors ship OFF.** Requiring a minimum saving is the cost
+  axis (§0, owned by the net-positive spec), and any floor above ~1 KB re-opens
+  the aggressive dead band PR #278 closed. B4's divergence numbers are in;
+  enabling the floors is one edit at one call site once that spec decides.
+- **Exec-path enforcement.** Those paths now count the transport payload
+  honestly and report a signed delta, so inflation is visible. A guard that
+  changes what an MCP client receives should follow that measurement.
+- **W6 condensation.** Unstarted; still gated on a measured head-to-head.
+
+### Corrections to the audits that produced this spec
+
+- `bytes/4` was said to be ~35% off for code. Measured (B4, cl100k_base): code
+  0.975, prose 1.013, Turkish 0.961 — within 4%. **Only JSON diverges** (1.193).
+- The `context-gate` parallel-`turbo` flake is **not** context-gate-specific: an
+  `mcp-bridge` recall test failed once under a parallel run and passed on rerun
+  and in isolation.
