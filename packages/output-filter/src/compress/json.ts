@@ -1,9 +1,11 @@
 // Structured-data schematizer. Only the array-collapse path ships: a large
 // homogeneous array of objects becomes its inferred schema + a few verbatim
 // sample rows + a counted marker for the dropped middle. Everything else
-// (small/heterogeneous/non-array/malformed) returns unchanged. Lossless: the
-// raw JSON is still persisted to the ChunkSet and recoverable via
-// mega_fetch_chunk — this only changes what is RETURNED.
+// (small/heterogeneous/non-array/malformed) returns unchanged. Only changes
+// what is RETURNED; recovery reality per entry point: the hook path persists
+// the full redacted raw, read/exec paths persist kept excerpts only until W2
+// unifies them. Intent-matched keys with all-scalar values have those values
+// preserved explicitly; the schema annotation never claims otherwise.
 
 import { tokenizeForMatch } from "../tokenize.js";
 
@@ -59,10 +61,33 @@ export function compressJson(text: string, intent: string | undefined): string {
     for (const k of keys) typesFromSample.get(k)?.add(valueType(el[k]));
   }
 
+  // Intent-matched keys: the old "(kept: intent)" annotation lied — values
+  // were not preserved. Now they are, but only when every value is scalar
+  // (one compact line per key); non-scalar values get an honest annotation.
+  const scalarIntentKeys: string[] = [];
+  const valueLines: string[] = [];
+  for (const k of intentKeys) {
+    const values = (parsed as Record<string, unknown>[]).map((el) => el[k]);
+    const allScalar = values.every(
+      (v) => v === null || ["string", "number", "boolean"].includes(typeof v),
+    );
+    if (allScalar) {
+      scalarIntentKeys.push(k);
+      valueLines.push(
+        `values of intent-matched key ${JSON.stringify(k)} (${values.length}): ${JSON.stringify(values)}`,
+      );
+    }
+  }
+
   const schemaLines = keys.map((k) => {
     const types = [...(typesFromSample.get(k) ?? [])].join("|");
-    const kept = intentKeys.includes(k) ? " (kept: intent)" : "";
-    return `  ${k}: ${types}${kept}`;
+    let note = "";
+    if (scalarIntentKeys.includes(k)) {
+      note = " (intent: values below)";
+    } else if (intentKeys.includes(k)) {
+      note = " (intent: non-scalar values not preserved — recoverable via stored chunks)";
+    }
+    return `  ${k}: ${types}${note}`;
   });
 
   const head = (parsed.slice(0, SAMPLE_FROM_FIRST) as unknown[]).map((e) =>
@@ -75,9 +100,10 @@ export function compressJson(text: string, intent: string | undefined): string {
     `Array<{ ${keys.length} keys }> · ${parsed.length} elements`,
     "schema:",
     ...schemaLines,
+    ...valueLines,
     "first 3:",
     ...head,
-    `… [${dropped} more of same shape]`,
+    `… [${dropped} more of same shape — recoverable via stored chunks]`,
     "last:",
     tail,
   ].join("\n");

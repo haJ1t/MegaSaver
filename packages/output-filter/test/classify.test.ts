@@ -243,7 +243,7 @@ describe("compressByCategory — structured dispatch", () => {
   it("routes structured to the json compressor and collapses the array", () => {
     const r = compressByCategory("structured", LARGE_JSON_ARRAY);
     expect(r.compressor).toBe("structured");
-    expect(r.text).toMatch(/\[\d+ more of same shape\]/);
+    expect(r.text).toMatch(/\[\d+ more of same shape/);
   });
 
   it("threads intent through to force-keep a key", () => {

@@ -37,11 +37,11 @@ describe("compressJson (structured-data schematizer)", () => {
 
     it("drops middle elements behind a counted marker", () => {
       expect(out).not.toContain('"user-50"');
-      expect(out).toMatch(/\[\d+ more of same shape\]/);
+      expect(out).toMatch(/\[\d+ more of same shape/);
     });
 
     it("reports the correct dropped count (total - 3 first - 1 last)", () => {
-      expect(out).toContain("[96 more of same shape]");
+      expect(out).toContain("[96 more of same shape — recoverable via stored chunks]");
     });
 
     it("is dramatically smaller than the raw input", () => {
@@ -112,11 +112,13 @@ describe("compressJson (structured-data schematizer)", () => {
       // Key "ışık" and intent "IŞIK" fold to "isik"; the old ASCII split
       // fragmented them to disjoint pieces ({k} vs {i,ik}) and never matched,
       // so this key would not be force-kept before the shared tokenizer.
+      // B9: the annotation now tells the truth — scalar values are preserved.
       const arr = JSON.stringify(
         Array.from({ length: 30 }, (_, i) => ({ id: i, ışık: i % 2 === 0 })),
       );
       const out = compressJson(arr, "IŞIK durumu");
-      expect(out).toMatch(/ışık:[^\n]*\(kept: intent\)/);
+      expect(out).toMatch(/ışık:[^\n]*\(intent: values below\)/);
+      expect(out).toContain('values of intent-matched key "ışık" (30):');
     });
   });
 });

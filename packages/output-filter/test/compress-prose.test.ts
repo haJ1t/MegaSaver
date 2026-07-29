@@ -128,9 +128,12 @@ describe("compressProse", () => {
   });
 
   describe("measurable reduction", () => {
-    it("reduces a long markdown doc by at least 30%", () => {
+    it("reduces a long markdown doc by at least 25%", () => {
+      // Was 30% pre-B9: the mandatory trailing recoverability note
+      // ("… [collapsed spans recoverable via stored chunks]") is a fixed
+      // per-doc honesty cost the integrity contract (A1) imposes.
       const out = compressProse(LONG_DOC);
-      expect(out.length).toBeLessThan(LONG_DOC.length * 0.7);
+      expect(out.length).toBeLessThan(LONG_DOC.length * 0.75);
     });
   });
 
