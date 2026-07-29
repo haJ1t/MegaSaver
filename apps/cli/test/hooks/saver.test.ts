@@ -2,9 +2,9 @@ import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { recordAndFilterOverlayOutput } from "@megasaver/core";
-import { encodeWorkspaceKey } from "@megasaver/shared";
+import { type TokenSaverMode, encodeWorkspaceKey, modeToBudget } from "@megasaver/shared";
 import { type Mock, describe, expect, it, vi } from "vitest";
-import { NEW_SURFACE_MIN_BYTES, buildSaverDecision } from "../../src/hooks/saver.js";
+import { NEW_SURFACE_MIN_BYTES, buildSaverDecision, minBytesFor } from "../../src/hooks/saver.js";
 
 const FOOTER =
   '\n\n[Mega Saver: compressed 100000→200 B (~25000→50 tokens, 99.8%). Full output recoverable — run: mega output chunk "cs-1" "0" (or MCP proxy_expand_chunk if connected).]';
@@ -807,7 +807,7 @@ describe("footer comes from record (F30)", () => {
 });
 
 describe("B9: safe mode compresses Bash below Claude Code's output ceiling", () => {
-  it("a 26KB Bash output in safe mode reaches record() with the Bash floor", async () => {
+  it("a 33KB Bash output in safe mode reaches record() with the Bash floor above the 32KB budget", async () => {
     const captured: Array<{ compressFloorBytes?: number }> = [];
     const d = deps({
       resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
@@ -816,9 +816,9 @@ describe("B9: safe mode compresses Bash below Claude Code's output ceiling", () 
         return RECORDED;
       }),
     });
-    const decision = await buildSaverDecision(bigBash("x".repeat(26_000)), d);
-    expect("updatedToolOutput" in decision).toBe(true); // today: passthrough (32000 gate)
-    expect(captured[0]?.compressFloorBytes).toBe(24_000);
+    const decision = await buildSaverDecision(bigBash("x".repeat(33_000)), d);
+    expect("updatedToolOutput" in decision).toBe(true);
+    expect(captured[0]?.compressFloorBytes).toBe(32_001);
   });
 
   it("safe mode still passes a 26KB Read through (32KB Read gate intact)", async () => {
@@ -1049,5 +1049,42 @@ describe("first-sight gate + stable chunk id", () => {
     await buildSaverDecision(compressiblePayload(), makeDeps());
     expect(recordedIds[0]).toBe(recordedIds[1]);
     expect(recordedIds[0]).not.toBe("missing");
+  });
+});
+
+describe("safe-mode Bash dead zone fix (Task C4)", () => {
+  const modes: TokenSaverMode[] = ["aggressive", "balanced", "safe"];
+
+  it("ensures minBytesFor('Bash', mode) > budget for every TokenSaverMode", () => {
+    for (const mode of modes) {
+      const budget = modeToBudget(mode);
+      const floor = minBytesFor("Bash", mode);
+      expect(floor).toBeGreaterThan(budget);
+    }
+  });
+
+  it("produces a compressed decision for a safe-mode Bash payload just above the floor", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "saver-c4-"));
+    const floor = minBytesFor("Bash", "safe");
+    const payloadSize = floor + 100;
+    const bigBashText = "echo line\n".repeat(Math.ceil(payloadSize / 10));
+    const d = {
+      ...deps({
+        resolveSettings: () => ({ enabled: true, mode: "safe" as const }),
+      }),
+      storeRoot: tmpDir,
+      record: recordAndFilterOverlayOutput,
+    };
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Bash",
+        tool_input: { command: "echo test" },
+        tool_response: { stdout: bigBashText, stderr: "" },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
   });
 });
