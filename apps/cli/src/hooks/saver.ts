@@ -176,13 +176,15 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     filenames.length > 0 &&
     filenames.every((f) => typeof f === "string")
   ) {
+    const origSet = new Set(filenames as string[]);
     const raw = (filenames as string[]).join("\n");
     if (raw.length === 0) return null;
-    // Drop empties so the appended footer's blank lines don't become bogus
-    // ""-entries; numFiles (preserved via ...o) stays the authoritative count.
     return {
       raw,
-      rebuild: (t) => ({ ...o, filenames: t.split("\n").filter((s) => s.length > 0) }),
+      rebuild: (t) => {
+        const kept = t.split("\n").filter((s) => origSet.has(s));
+        return { ...o, filenames: kept, numFiles: kept.length };
+      },
     };
   }
   // Real Claude Code Read payload: the file body is nested at `file.content`, not
