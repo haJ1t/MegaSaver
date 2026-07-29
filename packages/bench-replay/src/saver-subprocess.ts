@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { ApplySaver } from "./transform.js";
 
 // Runs the REAL shipped saver the way Claude Code does — spawn the hook binary,
@@ -57,12 +59,36 @@ function defaultRun(megaBin: string, cwd: string, storeRoot: string): RunHook {
 // measurement. Seeding is therefore not enough on its own: the enable is read
 // back through the hook's OWN resolution path (`session saver resolve`, from the
 // replay cwd) and a mismatch aborts.
+//
+// Freshness is ENFORCED, not assumed. The justification is workspace-scoped
+// accumulation, not the seen-ledger story (which is session-scoped —
+// saver-seen/<sessionId>.json — and unverified as a carry-over mechanism):
+// net-effect verdicts live at megasaver/stats/<workspaceKey>/net-effect.json
+// and saver events/summaries accumulate per workspace under the same root, so
+// a reused store leaks prior runs into the measured arm's net-effect posture
+// and savings aggregates. The hook resolves its store as
+// <XDG_DATA_HOME>/megasaver (apps/cli/src/store.ts), so that subtree is what
+// must be absent. Even a bare workspace-token-saver-default.json means a
+// previous prepare ran here.
+function assertFreshStore(storeRoot: string): void {
+  for (const sub of ["stats", "content"]) {
+    if (existsSync(join(storeRoot, "megasaver", sub))) {
+      throw new Error(
+        `prepareSaverStore: store must be FRESH per benchmark run — found ${join(storeRoot, "megasaver", sub)}. ` +
+          "Workspace-scoped stats/net-effect records from a prior run contaminate the measured arm; " +
+          "point storeRoot at an empty directory.",
+      );
+    }
+  }
+}
+
 export function prepareSaverStore(input: {
   megaBin: string;
   cwd: string;
   storeRoot: string;
   mode: SaverMode;
 }): void {
+  assertFreshStore(input.storeRoot);
   const run = (args: readonly string[]): string => {
     const [bin, spawnArgs] = spawnParts(input.megaBin, args);
     return execFileSync(bin, spawnArgs, {
