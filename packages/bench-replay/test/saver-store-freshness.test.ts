@@ -44,26 +44,26 @@ describe("prepareSaverStore — fresh store per run", () => {
   it("refuses a store that already carries workspace-scoped stats records", () => {
     const storeRoot = join(root, "used-store");
     mkdirSync(join(storeRoot, "megasaver", "stats", "0123456789abcdef"), { recursive: true });
-    writeFileSync(join(storeRoot, "megasaver", "stats", "0123456789abcdef", "net-effect.json"), "{}");
-    expect(() =>
-      prepareSaverStore({ megaBin, cwd, storeRoot, mode: "balanced" }),
-    ).toThrow(/fresh/);
+    writeFileSync(
+      join(storeRoot, "megasaver", "stats", "0123456789abcdef", "net-effect.json"),
+      "{}",
+    );
+    expect(() => prepareSaverStore({ megaBin, cwd, storeRoot, mode: "balanced" })).toThrow(/fresh/);
   });
 
   it("refuses a store that already carries content/ chunks", () => {
     const storeRoot = join(root, "used-store-2");
     mkdirSync(join(storeRoot, "megasaver", "content", "0123456789abcdef"), { recursive: true });
-    expect(() =>
-      prepareSaverStore({ megaBin, cwd, storeRoot, mode: "balanced" }),
-    ).toThrow(/fresh/);
+    expect(() => prepareSaverStore({ megaBin, cwd, storeRoot, mode: "balanced" })).toThrow(/fresh/);
   });
 
   it("refuses even a store whose only artifact is a prior run's activation record", () => {
     const storeRoot = join(root, "used-store-3");
     mkdirSync(join(storeRoot, "megasaver", "stats"), { recursive: true });
-    writeFileSync(join(storeRoot, "megasaver", "stats", "workspace-token-saver-default.json"), "{}");
-    expect(() =>
-      prepareSaverStore({ megaBin, cwd, storeRoot, mode: "balanced" }),
-    ).toThrow(/fresh/);
+    writeFileSync(
+      join(storeRoot, "megasaver", "stats", "workspace-token-saver-default.json"),
+      "{}",
+    );
+    expect(() => prepareSaverStore({ megaBin, cwd, storeRoot, mode: "balanced" })).toThrow(/fresh/);
   });
 });

@@ -57,19 +57,13 @@ const bytesOf = (text: string): number => Buffer.byteLength(text, "utf8");
 // Bytes the model receives on the overlay/hook path: summary + excerpts +
 // gap markers + footer, separators included. Pass the SAME footer string the
 // caller appends to the delivered text (record-output's recovery footer).
-export function modelFacingBytes(
-  input: OverlayRenderInput,
-  footer?: string,
-): ModelFacingBreakdown {
+export function modelFacingBytes(input: OverlayRenderInput, footer?: string): ModelFacingBreakdown {
   const rendered = overlayModelFacingText(input, footer);
   const summaryBytes = bytesOf(input.summary);
   const excerptBytes = input.excerpts.reduce((sum, e) => sum + bytesOf(e.text), 0);
   const footerBytes = footer === undefined ? 0 : bytesOf(footer);
   const markerRe = /… \[lines \d+-\d+ omitted\]/g;
-  const gapMarkerBytes = (rendered.match(markerRe) ?? []).reduce(
-    (sum, m) => sum + bytesOf(m),
-    0,
-  );
+  const gapMarkerBytes = (rendered.match(markerRe) ?? []).reduce((sum, m) => sum + bytesOf(m), 0);
   const totalBytes = bytesOf(rendered);
   return {
     totalBytes,

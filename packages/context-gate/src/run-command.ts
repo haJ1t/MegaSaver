@@ -13,6 +13,7 @@ import {
   engineRankingDisabledByEnv,
   filterOutput,
   finalizeReplayTrace,
+  mcpEnvelopeBytes,
   pruneTraceSessions,
   seamTraceEnabledByEnv,
   writeReplayTrace,
@@ -428,6 +429,7 @@ export async function runOutputExecCommand(
     }
   }
 
+  const modelFacingReturnedBytes = mcpEnvelopeBytes(result);
   const event: TokenSaverEvent = {
     id: newId(),
     sessionId: input.sessionId,
@@ -436,9 +438,26 @@ export async function runOutputExecCommand(
     sourceKind: "command",
     label: redactedLabel,
     rawBytes: filtered.rawBytes,
-    returnedBytes: filtered.returnedBytes,
-    bytesSaved: filtered.bytesSaved,
-    savingRatio: filtered.savingRatio,
+    // A2.4 (§W0/§W2, using Track B's B2): these paths do not rewrite a buffer —
+    // they hand back a structured result that the MCP server delivers as
+    // `JSON.stringify(payload)`. So the bytes the model receives are the whole
+    // transport payload: excerpt text PLUS every per-excerpt `score`, the
+    // 9-field `features` object, warnings and metrics. `filtered.returnedBytes`
+    // counts only summary + excerpt text and therefore over-reports the saving
+    // on every exec and MCP call.
+    returnedBytes: modelFacingReturnedBytes,
+    bytesSaved: Math.max(0, filtered.rawBytes - modelFacingReturnedBytes),
+    // B1's signed field: unlike bytesSaved it is NOT clamped, so an exec call
+    // whose envelope outweighs its saving now shows up negative instead of as
+    // a flat zero. These paths have no rewrite step to suppress, so making the
+    // inflation visible is the first move; enforcing a guard on them is the
+    // second, and it should be driven by what this measurement reports rather
+    // than by assumption.
+    deltaBytes: filtered.rawBytes - modelFacingReturnedBytes,
+    savingRatio:
+      filtered.rawBytes === 0
+        ? 0
+        : Math.max(0, filtered.rawBytes - modelFacingReturnedBytes) / filtered.rawBytes,
     ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
     summary: filtered.summary,
     mode: settings.mode,
@@ -646,6 +665,7 @@ export async function runOverlayOutputExecCommand(
     result = applyShownDedup({ result, sessionDir, chunkSetId });
   }
 
+  const modelFacingReturnedBytes = mcpEnvelopeBytes(result);
   const event: OverlayTokenSaverEvent = {
     id: newId(),
     workspaceKey: input.workspaceKey,
@@ -654,9 +674,26 @@ export async function runOverlayOutputExecCommand(
     sourceKind: "command",
     label: redactedLabel,
     rawBytes: filtered.rawBytes,
-    returnedBytes: filtered.returnedBytes,
-    bytesSaved: filtered.bytesSaved,
-    savingRatio: filtered.savingRatio,
+    // A2.4 (§W0/§W2, using Track B's B2): these paths do not rewrite a buffer —
+    // they hand back a structured result that the MCP server delivers as
+    // `JSON.stringify(payload)`. So the bytes the model receives are the whole
+    // transport payload: excerpt text PLUS every per-excerpt `score`, the
+    // 9-field `features` object, warnings and metrics. `filtered.returnedBytes`
+    // counts only summary + excerpt text and therefore over-reports the saving
+    // on every exec and MCP call.
+    returnedBytes: modelFacingReturnedBytes,
+    bytesSaved: Math.max(0, filtered.rawBytes - modelFacingReturnedBytes),
+    // B1's signed field: unlike bytesSaved it is NOT clamped, so an exec call
+    // whose envelope outweighs its saving now shows up negative instead of as
+    // a flat zero. These paths have no rewrite step to suppress, so making the
+    // inflation visible is the first move; enforcing a guard on them is the
+    // second, and it should be driven by what this measurement reports rather
+    // than by assumption.
+    deltaBytes: filtered.rawBytes - modelFacingReturnedBytes,
+    savingRatio:
+      filtered.rawBytes === 0
+        ? 0
+        : Math.max(0, filtered.rawBytes - modelFacingReturnedBytes) / filtered.rawBytes,
     ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
     summary: filtered.summary,
     mode: settings.mode,
