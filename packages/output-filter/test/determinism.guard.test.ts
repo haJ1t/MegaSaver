@@ -45,8 +45,14 @@ describe("filterOutput dedupe evidence + ordering guard", () => {
     // AND trips the ts-diagnostic parser (diagnostic: true) — both drive
     // skipDedupe for exactly this evidence class.
     const raw = [
-      scanBlock("alpha", "check flagged handler.ts(3,9): error TS2322: assignment not allowed here"),
-      scanBlock("alpha", "check flagged reducer.ts(3,9): error TS7053: assignment not allowed here"),
+      scanBlock(
+        "alpha",
+        "check flagged handler.ts(3,9): error TS2322: assignment not allowed here",
+      ),
+      scanBlock(
+        "alpha",
+        "check flagged reducer.ts(3,9): error TS7053: assignment not allowed here",
+      ),
     ].join("\n");
 
     const result = await filterOutput({

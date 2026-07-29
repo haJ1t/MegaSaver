@@ -109,8 +109,11 @@ describe("summary schema: signed deltaBytesTotal", () => {
     chunksStoredTotal: 0,
     updatedAt: "2026-05-10T12:00:00.000Z",
   };
-  const validRegistry = { ...validOverlay, sessionId: SESSION_ID };
-  delete (validRegistry as Record<string, unknown>).liveSessionId;
+  const validRegistry = Object.fromEntries(
+    Object.entries({ ...validOverlay, sessionId: SESSION_ID }).filter(
+      ([key]) => key !== "liveSessionId",
+    ),
+  );
 
   it("accepts a negative deltaBytesTotal", () => {
     expect(
