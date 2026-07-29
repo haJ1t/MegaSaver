@@ -1091,3 +1091,44 @@ envelope, and guarding on an undercount gives false assurance rather than
 protection. When B2's model-facing byte count lands, the guard gets wired at
 both exec sites. Until then those paths are guarded against gross inflation only
 by their own absence of a rewrite step.
+
+### [2026-07-28] A3 landed — recovery is addressable; A0 resolved
+
+`feat/saver-a-architecture` @ `9fbd9cfe`. `pnpm verify` green: 60/60 turbo tasks.
+
+**A0 decision (spec §5 Q2 answered).** Neither candidate alone; the answer is
+split by whether a compressor ran, and the gate is `types.ts` `compressorEligible`:
+
+| path | compressor | delivered line numbers |
+|---|---|---|
+| file reads (except `.json`) | off for file sources | RAW line numbers |
+| generic/low-confidence command output | off | RAW line numbers |
+| vitest / tsc / diff / structured | rewrites lines | none — countless marker |
+
+Line provenance is threaded through `normalize` → `collapseRepeatedLines` →
+`collapseSimilar` (all fold-only, so every surviving line maps to a contiguous
+raw span). A compressor synthesises lines that exist nowhere in the raw output —
+`compressTsc`'s "Top files by error count: …" has no raw line to point at — so
+provenance is dropped and the renderer emits
+`… [remainder omitted — recover any part with the chunk ids below]` instead of a
+number it cannot honour. Line numbers where they can be true, none where they
+cannot.
+
+New in `output-filter`: `LineSpan`, `identitySpans`,
+`collapseRepeatedLinesTraced`, `collapseSimilarTraced`; `OutputExcerpt` gains
+optional `rawStartLine`/`rawEndLine`; `FilterOutputResult` gains `rawLineCount`.
+The untraced `collapseRepeatedLines`/`collapseSimilar` are unchanged in
+behaviour and now delegate to the traced variants.
+
+**Kimi, this touches B6/B9 directly.** If you make `compressTsc` or
+`compressProse` emit a marker naming what it removed, that marker cannot carry
+raw line numbers — the compressor path has no provenance by construction. Name
+the content, or the chunk ids, not a line range.
+
+**A note on the test, because it nearly shipped green while broken.** Asserting
+"chunk floor((N-1)/40) contains raw line N" passes under the WRONG mapping too —
+both sides apply the same bad assumption, so it is self-consistency, not
+correctness. And a fixture of 800 identical noise lines makes `toContain` succeed
+against any chunk in that region. The working assertion is on the EXTENT: the
+highest line number the delivered text names must equal the raw output's line
+count (was 903 vs 1700). Worth copying if you write a similar coordinate test.
