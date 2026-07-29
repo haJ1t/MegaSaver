@@ -77,6 +77,7 @@ describe("persistChunkSet — outline bodies vs excerpts", () => {
       projectId: PROJECT_ID,
       createdAt: CREATED_AT,
       path: "/project/src/foo.ts",
+      raw: "export function alpha() { return 1; }\nexport function beta() { return 2; }",
       result: outlineResult(),
     });
 
@@ -94,8 +95,13 @@ describe("persistChunkSet — outline bodies vs excerpts", () => {
     expect(loaded.chunks[1]?.id).toBe("1");
   });
 
-  it("persists excerpts when result has no chunks field (normal mode)", async () => {
+  // Was: "persists excerpts when result has no chunks field". That pinned the
+  // defect — persisting excerpts stores only what the fit step KEPT, so the rest
+  // was recoverable from nowhere while the connector block promised otherwise
+  // (spec 2026-07-28 §W2, measured by save-integrity.property.test.ts).
+  it("persists the whole raw output, not just the kept excerpt (normal mode)", async () => {
     const normalId = "cs-normal-test";
+    const raw = "kept line\ndropped line one\ndropped line two";
     await persistChunkSet({
       storeRoot: store,
       chunkSetId: normalId,
@@ -103,6 +109,7 @@ describe("persistChunkSet — outline bodies vs excerpts", () => {
       projectId: PROJECT_ID,
       createdAt: CREATED_AT,
       path: "/project/src/bar.ts",
+      raw,
       result: normalResult(),
     });
 
@@ -113,8 +120,7 @@ describe("persistChunkSet — outline bodies vs excerpts", () => {
       chunkSetId: normalId,
     });
 
-    // Fallback: 1 excerpt persisted
-    expect(loaded.chunks).toHaveLength(1);
-    expect(loaded.chunks[0]?.text).toBe("normal excerpt text");
+    const recovered = loaded.chunks.map((c) => c.text).join("\n");
+    for (const line of raw.split("\n")) expect(recovered).toContain(line);
   });
 });

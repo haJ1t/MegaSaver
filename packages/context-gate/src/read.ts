@@ -21,6 +21,7 @@ import {
 } from "@megasaver/policy";
 import type { ProjectId, SessionId, TokenSaverMode } from "@megasaver/shared";
 import { loadProjectPermissions } from "./load-project-permissions.js";
+import { recoverableChunks } from "./recoverable-chunks.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
 import type { GateResult, OverlayEffectiveSettings, ResolveResult } from "./types.js";
 
@@ -233,6 +234,7 @@ export async function persistChunkSet(input: {
   projectId: ProjectId;
   createdAt: string;
   path: string;
+  raw: string;
   result: FilterOutputResult;
 }): Promise<void> {
   const chunkSet: ChunkSet = {
@@ -245,14 +247,21 @@ export async function persistChunkSet(input: {
     source: { kind: "file", path: redact(input.path).redacted },
     rawBytes: input.result.rawBytes,
     redacted: (input.result.warnings ?? []).some((w) => w.startsWith("redacted")),
-    // chunks = outline bodies (present only in outline mode); excerpts = the skeleton placeholder. Persist bodies so mega_fetch_chunk returns real declarations.
-    chunks: (input.result.chunks ?? input.result.excerpts).map((e, i) => ({
-      id: String(i),
-      startLine: e.startLine,
-      endLine: e.endLine,
-      bytes: Buffer.byteLength(e.text, "utf8"),
-      text: e.text,
-    })),
+    // Outline mode persists its own bodies: they are a whole-file partition, so
+    // they already satisfy the A1 contract, and their chunk ids address
+    // declarations — the promise mega_fetch_chunk makes in that mode. Every
+    // other read recovers from the raw output, NOT from excerpts, which are
+    // what survived the fit step (spec §W2).
+    chunks:
+      input.result.chunks !== undefined
+        ? input.result.chunks.map((e, i) => ({
+            id: String(i),
+            startLine: e.startLine,
+            endLine: e.endLine,
+            bytes: Buffer.byteLength(e.text, "utf8"),
+            text: e.text,
+          }))
+        : recoverableChunks(input.raw),
   };
   await saveChunkSet({ storeRoot: input.storeRoot, chunkSet });
 }
@@ -264,6 +273,7 @@ export async function persistOverlayChunkSet(input: {
   liveSessionId: string;
   createdAt: string;
   path: string;
+  raw: string;
   result: FilterOutputResult;
 }): Promise<void> {
   const chunkSet: OverlayChunkSet = {
@@ -276,14 +286,9 @@ export async function persistOverlayChunkSet(input: {
     source: { kind: "file", path: redact(input.path).redacted },
     rawBytes: input.result.rawBytes,
     redacted: (input.result.warnings ?? []).some((w) => w.startsWith("redacted")),
-    // Overlay path never carries outline bodies (outline is registry-path only in v1), so excerpts is correct here.
-    chunks: input.result.excerpts.map((e, i) => ({
-      id: String(i),
-      startLine: e.startLine,
-      endLine: e.endLine,
-      bytes: Buffer.byteLength(e.text, "utf8"),
-      text: e.text,
-    })),
+    // The overlay path carries no outline bodies (outline is registry-only in
+    // v1), so there is nothing to preserve: recover from the raw output.
+    chunks: recoverableChunks(input.raw),
   };
   await saveOverlayChunkSet({ storeRoot: input.storeRoot, chunkSet });
 }

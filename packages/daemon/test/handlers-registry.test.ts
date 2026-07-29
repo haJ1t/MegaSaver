@@ -119,6 +119,7 @@ describe("expandRegistryHandler", () => {
       projectId: PROJECT_ID,
       createdAt: TS,
       path: "test.txt",
+      raw: "hello chunk content",
       result: {
         decision: "compressed",
         rawBytes: 100,
@@ -145,6 +146,7 @@ describe("expandRegistryHandler", () => {
       projectId: PROJECT_ID,
       createdAt: TS,
       path: "test.txt",
+      raw: "hello chunk content",
       result: {
         decision: "compressed",
         rawBytes: 100,

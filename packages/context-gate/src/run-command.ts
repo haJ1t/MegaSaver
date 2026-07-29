@@ -47,6 +47,7 @@ import {
   resolveEffectiveSettings,
   resolveOverlayEffectiveSettings,
 } from "./read.js";
+import { recoverableChunks } from "./recoverable-chunks.js";
 import type { OrchestratorRegistry } from "./registry-port.js";
 import { buildSessionHints } from "./session-hints.js";
 import { applyShownDedup } from "./shown-index.js";
@@ -387,13 +388,10 @@ export async function runOutputExecCommand(
       source: { kind: "command", command: redactedCommand, args: redactedArgs },
       rawBytes: filtered.rawBytes,
       redacted,
-      chunks: filtered.excerpts.map((e, i) => ({
-        id: String(i),
-        startLine: e.startLine,
-        endLine: e.endLine,
-        bytes: Buffer.byteLength(e.text, "utf8"),
-        text: e.text,
-      })),
+      // A2 (spec §W2): recovery comes from the raw output, never from
+      // excerpts — excerpts are what survived the fit step, so persisting them
+      // stores only what was already kept and drops the rest for good.
+      chunks: recoverableChunks(outcome.capture.raw),
     };
     try {
       await saveChunkSet({ storeRoot: input.storeRoot, chunkSet });
@@ -633,13 +631,10 @@ export async function runOverlayOutputExecCommand(
       source: { kind: "command", command: redactedCommand, args: redactedArgs },
       rawBytes: filtered.rawBytes,
       redacted,
-      chunks: filtered.excerpts.map((e, i) => ({
-        id: String(i),
-        startLine: e.startLine,
-        endLine: e.endLine,
-        bytes: Buffer.byteLength(e.text, "utf8"),
-        text: e.text,
-      })),
+      // A2 (spec §W2): recovery comes from the raw output, never from
+      // excerpts — excerpts are what survived the fit step, so persisting them
+      // stores only what was already kept and drops the rest for good.
+      chunks: recoverableChunks(outcome.capture.raw),
     };
     try {
       await saveOverlayChunkSet({ storeRoot: input.storeRoot, chunkSet });

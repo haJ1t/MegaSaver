@@ -18,6 +18,7 @@ import {
 import { redact } from "@megasaver/policy";
 import { type TokenSaverMode, type WorkspaceKey, modeToBudget } from "@megasaver/shared";
 import { appendOverlayEvent } from "@megasaver/stats";
+import { admitCompression } from "./admission-guard.js";
 import { OVERLAY_CHUNK_LINES, buildRecoveryFooter, looksPreTruncated } from "./recovery-footer.js";
 
 // Redacts every secret-bearing string field in a SourceRef using the policy
@@ -225,11 +226,13 @@ export async function recordAndFilterOverlayOutput(
   }
   const finalReturnedBytes = Buffer.byteLength(finalText, "utf8");
 
-  // Net-negative guard, BEFORE any side effect (saveOverlayChunkSet,
-  // appendOverlayEvent, evidence): never deliver a replacement at least as
-  // large as the original. Degrading to passthrough also structurally
-  // preserves the honest-metrics invariant returnedTokens <= rawTokens.
-  if (finalReturnedBytes >= filtered.rawBytes) {
+  // Admission guard, BEFORE any side effect (saveOverlayChunkSet,
+  // appendOverlayEvent, evidence): a rewrite must clear the prompt-cache churn
+  // it causes, not merely avoid inflating. See admission-guard.ts for why a
+  // one-byte saving used to pass and why that was negative. Degrading to
+  // passthrough also structurally preserves the honest-metrics invariant
+  // returnedTokens <= rawTokens.
+  if (!admitCompression(filtered.rawBytes, finalReturnedBytes).admit) {
     return {
       decision: "passthrough",
       summary: filtered.summary,
