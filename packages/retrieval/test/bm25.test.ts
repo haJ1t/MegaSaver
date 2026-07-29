@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type Bm25Document, rankBm25 } from "../src/bm25.js";
+import { type Bm25Document, rankBm25, tokenize } from "../src/bm25.js";
 import { RetrievalError } from "../src/errors.js";
 
 const docs: Bm25Document[] = [
@@ -70,5 +70,64 @@ describe("rankBm25", () => {
       expect(err).toBeInstanceOf(RetrievalError);
       expect((err as RetrievalError).code).toBe("invalid_input");
     }
+  });
+});
+
+describe("tokenize (Task C3 identifier splitting)", () => {
+  it("parseConfig produces tokens including parseconfig, parse, config", () => {
+    const tokens = tokenize("parseConfig");
+    expect(tokens).toContain("parseconfig");
+    expect(tokens).toContain("parse");
+    expect(tokens).toContain("config");
+  });
+
+  it("getUserById produces get, user, by, id (plus whole)", () => {
+    const tokens = tokenize("getUserById");
+    expect(tokens).toContain("getuserbyid");
+    expect(tokens).toContain("get");
+    expect(tokens).toContain("user");
+    expect(tokens).toContain("by");
+    expect(tokens).toContain("id");
+  });
+
+  it("auth_token_gen produces auth, token, gen (plus whole)", () => {
+    const tokens = tokenize("auth_token_gen");
+    expect(tokens).toContain("auth");
+    expect(tokens).toContain("token");
+    expect(tokens).toContain("gen");
+  });
+
+  it("HTTPServer produces http, server (plus whole)", () => {
+    const tokens = tokenize("HTTPServer");
+    expect(tokens).toContain("httpserver");
+    expect(tokens).toContain("http");
+    expect(tokens).toContain("server");
+  });
+
+  it("utf8 produces utf8 and is not split into utf/8", () => {
+    const tokens = tokenize("utf8");
+    expect(tokens).toContain("utf8");
+    expect(tokens).not.toContain("utf");
+    expect(tokens).not.toContain("8");
+  });
+
+  it("query for parse ranks a document containing parseConfig above a document containing neither", () => {
+    const testDocs = [
+      { id: "match", text: "function parseConfig() {}" },
+      { id: "other", text: "function processData() {}" },
+    ];
+    const res = rankBm25({ query: "parse", documents: testDocs, topN: 2 });
+    expect(res[0]?.id).toBe("match");
+    expect(res[0]?.score).toBeGreaterThan(0);
+  });
+
+  it("document containing parseConfig ranks at least as high for query parseConfig as before", () => {
+    const testDocs = [
+      { id: "target", text: "function parseConfig() {}" },
+      { id: "other", text: "unrelated content" },
+    ];
+    const res = rankBm25({ query: "parseConfig", documents: testDocs, topN: 2 });
+    expect(res[0]?.id).toBe("target");
+    expect(res[0]?.score).toBeGreaterThan(0);
   });
 });
