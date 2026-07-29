@@ -726,8 +726,13 @@ describe("wave-1 shapes", () => {
     expect(u.numFiles).toBe(u.filenames.length);
   });
 
-  it("compresses the LARGER of stdout/stderr and leaves the other untouched", async () => {
-    const d = deps();
+  it("compresses both stdout and stderr when combined length clears floor (Task C5 supersedes single-slot A6)", async () => {
+    const d = deps({
+      record: vi.fn().mockResolvedValue({
+        ...RECORDED,
+        returnedText: `ok\n--- STDERR error boundary ---\nSHORT${FOOTER}`,
+      }),
+    });
     const out = await buildSaverDecision(
       {
         tool_name: "Bash",
@@ -1086,5 +1091,104 @@ describe("safe-mode Bash dead zone fix (Task C4)", () => {
       d,
     );
     expect("updatedToolOutput" in out).toBe(true);
+  });
+});
+
+describe("combined stdout/stderr stream compression (Task C5)", () => {
+  it("compresses when combined stdout and stderr clear the floor, shortening both fields and preserving extra keys", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "saver-c5-"));
+    const stdout15k = "stdout line content here\n".repeat(600); // ~15 KB
+    const stderr15k = "stderr error line here\n".repeat(600); // ~15 KB
+    const d = {
+      ...deps({
+        resolveSettings: () => ({ enabled: true, mode: "balanced" as const }),
+      }),
+      storeRoot: tmpDir,
+      record: recordAndFilterOverlayOutput,
+    };
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Bash",
+        tool_input: { command: "build.sh" },
+        tool_response: {
+          stdout: stdout15k,
+          stderr: stderr15k,
+          exitCode: 1,
+          interrupted: false,
+        },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    const u = (
+      out as {
+        updatedToolOutput: {
+          stdout?: string;
+          stderr?: string;
+          exitCode?: number;
+          interrupted?: boolean;
+        };
+      }
+    ).updatedToolOutput;
+    expect(typeof u.stdout).toBe("string");
+    expect(typeof u.stderr).toBe("string");
+    expect((u.stdout as string).length).toBeLessThan(stdout15k.length);
+    expect((u.stderr as string).length).toBeLessThan(stderr15k.length);
+    expect(u.exitCode).toBe(1);
+    expect(u.interrupted).toBe(false);
+  });
+
+  it("stdout-only response compresses stdout and preserves stdout key", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "saver-c5-"));
+    const stdout50k = "stdout line\n".repeat(4000);
+    const d = {
+      ...deps({
+        resolveSettings: () => ({ enabled: true, mode: "balanced" as const }),
+      }),
+      storeRoot: tmpDir,
+      record: recordAndFilterOverlayOutput,
+    };
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Bash",
+        tool_input: { command: "run.sh" },
+        tool_response: { stdout: stdout50k },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    const u = (out as { updatedToolOutput: { stdout?: string } }).updatedToolOutput;
+    expect(typeof u.stdout).toBe("string");
+    expect((u.stdout as string).length).toBeLessThan(stdout50k.length);
+  });
+
+  it("stderr-only response compresses stderr and preserves stderr key", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "saver-c5-"));
+    const stderr50k = "stderr error line\n".repeat(4000);
+    const d = {
+      ...deps({
+        resolveSettings: () => ({ enabled: true, mode: "balanced" as const }),
+      }),
+      storeRoot: tmpDir,
+      record: recordAndFilterOverlayOutput,
+    };
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Bash",
+        tool_input: { command: "run.sh" },
+        tool_response: { stderr: stderr50k },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    const u = (out as { updatedToolOutput: { stderr?: string } }).updatedToolOutput;
+    expect(typeof u.stderr).toBe("string");
+    expect((u.stderr as string).length).toBeLessThan(stderr50k.length);
   });
 });
