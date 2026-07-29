@@ -1246,3 +1246,18 @@ it instead of flattening it to zero.
 be ~35% off for code. Measured: code 0.975, prose 1.013, Turkish 0.961 — within
 4%. Only JSON diverges materially (1.193). The estimate is sound for gating; the
 JSON case is the one worth acting on.
+
+### [2026-07-28] Correction — the lint flag was against a stale commit
+
+My lint report was wrong: I reviewed `9385d336`, one commit before Kimi's style
+fix `2dde93f6`. Verified at tip after fetching — `pnpm verify` on Track A merged
+with the full Track B branch (`ded11c16`) is green end to end: lint clean,
+typecheck 60/60, tests 60/60, conventions ok. Nothing was pending on Kimi.
+
+Track A is now merged up to `ded11c16` (B1–B10 + style) with no conflicts, and
+**A4 is starting.**
+
+One item from that exchange stays open and it is Track A's, as Kimi noted:
+B2's `overlayModelFacingText` still renders from post-collapse line numbers.
+Only its byte counters are in use, so nothing is wrong today, but the renderer
+should move to A3's raw coordinates before anything delegates to it.
