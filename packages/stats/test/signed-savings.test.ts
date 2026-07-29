@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -10,10 +10,6 @@ import {
   tokenSaverEventSchema,
 } from "../src/event.js";
 import {
-  overlaySessionTokenSaverStatsSchema,
-  sessionTokenSaverStatsSchema,
-} from "../src/summary.js";
-import {
   type StatsStore,
   appendEvent,
   appendOverlayEvent,
@@ -21,6 +17,10 @@ import {
   readWorkspaceTokenSaverTotals,
   rebuildOverlaySummaryFromEvents,
 } from "../src/store.js";
+import {
+  overlaySessionTokenSaverStatsSchema,
+  sessionTokenSaverStatsSchema,
+} from "../src/summary.js";
 
 const WK = "0123456789abcdef";
 const LSID = "11111111-1111-4111-8111-111111111111";
@@ -109,8 +109,11 @@ describe("summary schema: signed deltaBytesTotal", () => {
     chunksStoredTotal: 0,
     updatedAt: "2026-05-10T12:00:00.000Z",
   };
-  const validRegistry = { ...validOverlay, sessionId: SESSION_ID };
-  delete (validRegistry as Record<string, unknown>).liveSessionId;
+  const validRegistry = Object.fromEntries(
+    Object.entries({ ...validOverlay, sessionId: SESSION_ID }).filter(
+      ([key]) => key !== "liveSessionId",
+    ),
+  );
 
   it("accepts a negative deltaBytesTotal", () => {
     expect(
@@ -185,7 +188,12 @@ describe("store fold: signed aggregate", () => {
   it("registry appendEvent folds the signed delta too", () => {
     const summary = appendEvent({
       store,
-      event: makeRegistryEvent({ bytesSaved: 0, savingRatio: 0, returnedBytes: 1300, deltaBytes: -300 }),
+      event: makeRegistryEvent({
+        bytesSaved: 0,
+        savingRatio: 0,
+        returnedBytes: 1300,
+        deltaBytes: -300,
+      }),
       secretsRedacted: 0,
       chunksStored: 0,
     });

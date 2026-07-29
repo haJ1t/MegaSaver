@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { saveOverlayChunkSet } from "@megasaver/content-store";
-import { appendOverlayEvent, readEvents, readOverlayEvents, readOverlaySummary } from "@megasaver/stats";
+import {
+  appendOverlayEvent,
+  readEvents,
+  readOverlayEvents,
+  readOverlaySummary,
+} from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fetchChunk } from "../src/fetch-chunk.js";
 
@@ -61,14 +66,14 @@ describe("fetchChunk — recovery debt (B3)", () => {
 
     const events = readOverlayEvents({ root: store }, WK, LIVE);
     expect(events).toHaveLength(1);
-    const ev = events[0]!;
-    expect(ev.kind).toBe("expansion");
-    expect(ev.chunkSetId).toBe(SET);
-    expect(ev.rawBytes).toBe(0);
-    expect(ev.returnedBytes).toBe(11);
-    expect(ev.bytesSaved).toBe(0);
-    expect(ev.deltaBytes).toBe(-11);
-    expect(ev.sourceKind).toBe("command");
+    const ev = events[0];
+    expect(ev?.kind).toBe("expansion");
+    expect(ev?.chunkSetId).toBe(SET);
+    expect(ev?.rawBytes).toBe(0);
+    expect(ev?.returnedBytes).toBe(11);
+    expect(ev?.bytesSaved).toBe(0);
+    expect(ev?.deltaBytes).toBe(-11);
+    expect(ev?.sourceKind).toBe("command");
   });
 
   it("net saving: compression credit minus expansion debit", async () => {
@@ -110,15 +115,19 @@ describe("fetchChunk — recovery debt (B3)", () => {
 
     const events = readEvents({ root: store }, PROJECT_ID as never, SESSION_ID as never);
     expect(events).toHaveLength(1);
-    expect(events[0]!.kind).toBe("expansion");
-    expect(events[0]!.deltaBytes).toBe(-13);
-    expect(events[0]!.chunkSetId).toBe("cs-reg");
+    expect(events[0]?.kind).toBe("expansion");
+    expect(events[0]?.deltaBytes).toBe(-13);
+    expect(events[0]?.chunkSetId).toBe("cs-reg");
   });
 
   it("failed fetches record nothing", async () => {
     await seedOverlay();
     await fetchChunk({ storeRoot: store, chunkSetId: SET, chunkId: "9" });
-    await fetchChunk({ storeRoot: store, chunkSetId: "00000000-0000-4000-8000-000000000000", chunkId: "0" });
+    await fetchChunk({
+      storeRoot: store,
+      chunkSetId: "00000000-0000-4000-8000-000000000000",
+      chunkId: "0",
+    });
     expect(readOverlayEvents({ root: store }, WK, LIVE)).toHaveLength(0);
   });
 });
