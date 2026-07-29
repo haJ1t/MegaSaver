@@ -7,7 +7,13 @@ import { type CompressorName, compressByCategory } from "./compress/index.js";
 import { dedupe } from "./dedupe.js";
 import { OutputFilterError } from "./errors.js";
 import { effectiveBudget, fitBudget } from "./fit.js";
-import { collapseRepeatedLines, collapseSimilar, normalize } from "./normalize.js";
+import {
+  type LineSpan,
+  collapseRepeatedLinesTraced,
+  collapseSimilarTraced,
+  identitySpans,
+  normalize,
+} from "./normalize.js";
 import { chunkByFormatWithMeta } from "./parsers/index.js";
 import { outlineFile } from "./parsers/outline.js";
 import {
@@ -73,6 +79,10 @@ export type OutputExcerpt = {
   text: string;
   startLine: number;
   endLine: number;
+  // Position in the RAW output. Present whenever the excerpt is a subset of the
+  // normalized text; absent when a specialized compressor synthesised the line.
+  rawStartLine?: number;
+  rawEndLine?: number;
   score: number;
   features: RankFeatures;
   engine?: EngineScore;
@@ -100,6 +110,8 @@ export type FilterOutputResult = {
   // post-compression space, NOT raw). Lets a renderer place gap markers in
   // the same space as excerpt line numbers instead of mixing in raw lines.
   chunkedLineCount?: number;
+  // Line count of the RAW output. The space `rawStartLine`/`rawEndLine` live in.
+  rawLineCount?: number;
   trace?: RankingTrace;
   chunkSetId?: string;
   chunks?: readonly OutlineBody[];
@@ -145,7 +157,7 @@ function truncateChunkToBytes(chunk: RankedChunk, maxBytes: number): RankedChunk
   return { ...chunk, text, endLine };
 }
 
-function excerptOf(chunk: RankedChunk): OutputExcerpt {
+function excerptOf(chunk: RankedChunk, spans: readonly LineSpan[] | null): OutputExcerpt {
   const base = {
     text: chunk.text,
     startLine: chunk.startLine,
@@ -153,7 +165,21 @@ function excerptOf(chunk: RankedChunk): OutputExcerpt {
     score: chunk.score,
     features: chunk.features,
   };
-  return chunk.engine !== undefined ? { ...base, engine: chunk.engine } : base;
+  // Raw coordinates exist only when the delivered text is a SUBSET of the
+  // normalized output. A specialized compressor synthesises lines that appear
+  // nowhere in the raw output (compressTsc's "Top files by error count: …"),
+  // and there is no honest raw line to point at — so the fields are absent
+  // rather than approximated, and the renderer stops promising line numbers.
+  const raw =
+    spans === null
+      ? undefined
+      : {
+          rawStartLine: (spans[chunk.startLine - 1] ?? spans[0])?.start,
+          rawEndLine: (spans[chunk.endLine - 1] ?? spans[spans.length - 1])?.end,
+        };
+  const withRaw =
+    raw?.rawStartLine !== undefined && raw.rawEndLine !== undefined ? { ...base, ...raw } : base;
+  return chunk.engine !== undefined ? { ...withRaw, engine: chunk.engine } : withRaw;
 }
 
 // Diagnostic/error-family classifications whose chunks are each distinct
@@ -189,7 +215,16 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
       ? { findings: redaction.findings, observed: redaction.observed }
       : undefined;
 
-  const normalized = collapseSimilar(collapseRepeatedLines(normalize(redacted)));
+  // A3 (§W3): carry line provenance through the collapse passes so a delivered
+  // line number can be expressed in the RAW output's coordinate system — the
+  // one the stored chunks index and the one the agent reads its file in.
+  // `normalize` is line-for-line, so identity spans are exact at the seam.
+  const normalizedOnly = normalize(redacted);
+  const afterRepeats = collapseRepeatedLinesTraced(normalizedOnly, identitySpans(normalizedOnly));
+  const afterSimilar = collapseSimilarTraced(afterRepeats.text, afterRepeats.spans);
+  const normalized = afterSimilar.text;
+  const normalizedSpans: LineSpan[] = afterSimilar.spans;
+  const rawLineCount = normalizedOnly.split("\n").length;
   // Classify after ANSI strip, before compressor dispatch (§10.2).
   const command =
     source?.kind === "command" ? `${source.command} ${source.args.join(" ")}`.trim() : undefined;
@@ -212,7 +247,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
         startLine: 1,
         endLine: normalizedLineCount,
       };
-      const excerpt = excerptOf(scoreChunk(intent, skeletonChunk, sessionHints));
+      const excerpt = excerptOf(scoreChunk(intent, skeletonChunk, sessionHints), null);
       const rawTokens = estimateTokens(raw);
       const returnedTokens = estimateTokens(outline.skeleton);
       const bytesSaved = Math.max(0, rawBytes - returnedBytes);
@@ -267,10 +302,14 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
     decision === "compressed" &&
     (!isFileSource || classification.category === "structured") &&
     isConfidentClassification(classification);
+  let provenance: LineSpan[] | null = normalizedSpans;
   if (compressorEligible) {
     const compressed = compressByCategory(classification.category, normalized, intent);
     compressor = compressed.compressor;
     textForChunks = compressed.text;
+    // A compressor rewrites lines; chunk line numbers no longer index the
+    // normalized text, so no raw line can be named for them.
+    if (textForChunks !== normalized) provenance = null;
   }
 
   const {
@@ -341,7 +380,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
       ? `passthrough: ${rawTokens} tokens below compression threshold`
       : summarize(mode, kept, droppedCount);
 
-  const excerpts = kept.map(excerptOf);
+  const excerpts = kept.map((c) => excerptOf(c, provenance));
 
   const returnedBytes =
     Buffer.byteLength(summary, "utf8") +
@@ -377,6 +416,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
     summary,
     excerpts,
     chunkedLineCount,
+    rawLineCount,
     classification,
     decision,
     compressor,

@@ -19,19 +19,45 @@ export function normalize(raw: string): string {
     .join("\n");
 }
 
-export function collapseRepeatedLines(text: string): string {
+// A3 (spec 2026-07-28 §W3): where each surviving line came from in the RAW
+// output, 1-based and inclusive. The collapse passes fold consecutive runs, so
+// output line k stands for a contiguous raw span — that span is the only thing
+// that lets a delivered line number be expressed in the coordinate system the
+// stored chunks actually index (and that the agent reads its file in).
+export type LineSpan = { start: number; end: number };
+
+export function identitySpans(text: string): LineSpan[] {
+  return text.split("\n").map((_, i) => ({ start: i + 1, end: i + 1 }));
+}
+
+export function collapseRepeatedLinesTraced(
+  text: string,
+  spans: readonly LineSpan[],
+): { text: string; spans: LineSpan[] } {
   const lines = text.split("\n");
   const out: string[] = [];
+  const outSpans: LineSpan[] = [];
+  const spanAt = (i: number): LineSpan => spans[i] ?? { start: i + 1, end: i + 1 };
   let i = 0;
   while (i < lines.length) {
     const line = lines[i] as string;
     let run = 1;
     while (i + run < lines.length && lines[i + run] === line) run += 1;
     out.push(line);
-    if (run >= 2) out.push(`… [repeated ${run} times]`);
+    outSpans.push(spanAt(i));
+    if (run >= 2) {
+      out.push(`… [repeated ${run} times]`);
+      // The marker stands for the WHOLE run, first occurrence included: it is
+      // the only delivered token that accounts for the folded lines.
+      outSpans.push({ start: spanAt(i).start, end: spanAt(i + run - 1).end });
+    }
     i += run;
   }
-  return out.join("\n");
+  return { text: out.join("\n"), spans: outSpans };
+}
+
+export function collapseRepeatedLines(text: string): string {
+  return collapseRepeatedLinesTraced(text, identitySpans(text)).text;
 }
 
 // Evidence guard (§12 HIGH): a line carrying any diagnostic signal is never
@@ -72,8 +98,17 @@ function maskTemplate(line: string): string {
 // consecutive lines whose MASKED form is identical into FIRST + marker + LAST,
 // preserving boundary evidence and the count. Conservative — see DIAGNOSTIC.
 export function collapseSimilar(text: string): string {
+  return collapseSimilarTraced(text, identitySpans(text)).text;
+}
+
+export function collapseSimilarTraced(
+  text: string,
+  spans: readonly LineSpan[],
+): { text: string; spans: LineSpan[] } {
   const lines = text.split("\n");
   const out: string[] = [];
+  const outSpans: LineSpan[] = [];
+  const spanAt = (i: number): LineSpan => spans[i] ?? { start: i + 1, end: i + 1 };
   let i = 0;
   while (i < lines.length) {
     const line = lines[i] as string;
@@ -82,6 +117,7 @@ export function collapseSimilar(text: string): string {
     // (e.g. ...T10:00:01) cannot masquerade as a file:line:col position.
     if (DIAGNOSTIC.test(template) || POSITION.test(template)) {
       out.push(line);
+      outSpans.push(spanAt(i));
       i += 1;
       continue;
     }
@@ -89,6 +125,7 @@ export function collapseSimilar(text: string): string {
     // candidates; otherwise collapseRepeatedLines already handled exact dupes.
     if (template === line) {
       out.push(line);
+      outSpans.push(spanAt(i));
       i += 1;
       continue;
     }
@@ -102,12 +139,20 @@ export function collapseSimilar(text: string): string {
     }
     if (run >= 3) {
       out.push(line);
+      outSpans.push(spanAt(i));
       out.push(`… [${run} similar: ${template}]`);
+      // The marker stands for the folded middle only: first and last survive
+      // verbatim and carry their own spans.
+      outSpans.push({ start: spanAt(i + 1).start, end: spanAt(i + run - 2).end });
       out.push(lines[i + run - 1] as string);
+      outSpans.push(spanAt(i + run - 1));
     } else {
-      for (let k = 0; k < run; k += 1) out.push(lines[i + k] as string);
+      for (let k = 0; k < run; k += 1) {
+        out.push(lines[i + k] as string);
+        outSpans.push(spanAt(i + k));
+      }
     }
     i += run;
   }
-  return out.join("\n");
+  return { text: out.join("\n"), spans: outSpans };
 }

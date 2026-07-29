@@ -90,18 +90,43 @@ export type RecordOverlayOutputResult = {
 // collapsed tail can't produce a phantom range. Recovery stays fetch-by-chunk-id
 // (the wave-2 footer), so no line->id promise is made here.
 function returnedTextOf(result: FilterOutputResult): string {
-  const total =
-    result.chunkedLineCount ??
-    (result.excerpts.length > 0 ? Math.max(...result.excerpts.map((e) => e.endLine)) : 0);
+  // A3 (§W3): gap markers are numbered in the RAW output's coordinate system —
+  // the one the stored chunks index and the one the agent reads its file in.
+  //
+  // They used to be numbered in post-collapse space while the chunks indexed
+  // the raw output, so an agent reading `… [lines 146-902 omitted]` had no
+  // sound way to pick a chunk: the published ~40-lines-per-chunk rule resolved
+  // it to unrelated content. Measured on a 1700-line log: the marker resolved
+  // to chunk 3, holding raw lines 121-160; the right chunk was ~23.
+  //
+  // Raw coordinates exist only when every excerpt carries them, i.e. when no
+  // specialized compressor synthesised lines. When one did, no line number is
+  // truthful, so we emit a countless marker rather than a wrong number.
+  const addressable =
+    result.rawLineCount !== undefined &&
+    result.excerpts.every((e) => e.rawStartLine !== undefined && e.rawEndLine !== undefined);
+
   const ordered = [...result.excerpts].sort(
     (a, b) => a.startLine - b.startLine || a.endLine - b.endLine,
   );
   const parts: string[] = [result.summary];
+
+  if (!addressable) {
+    for (const e of ordered) parts.push(e.text);
+    if (ordered.length > 0) {
+      parts.push("… [remainder omitted — recover any part with the chunk ids below]");
+    }
+    return parts.join("\n");
+  }
+
+  const total = result.rawLineCount ?? 0;
   let cursor = 1;
   for (const e of ordered) {
-    if (e.startLine > cursor) parts.push(`… [lines ${cursor}-${e.startLine - 1} omitted]`);
+    const start = e.rawStartLine as number;
+    const end = e.rawEndLine as number;
+    if (start > cursor) parts.push(`… [lines ${cursor}-${start - 1} omitted]`);
     parts.push(e.text);
-    cursor = Math.max(cursor, e.endLine + 1);
+    cursor = Math.max(cursor, end + 1);
   }
   if (cursor <= total) parts.push(`… [lines ${cursor}-${total} omitted]`);
   return parts.join("\n");
