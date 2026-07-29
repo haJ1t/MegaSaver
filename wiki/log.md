@@ -7816,3 +7816,29 @@ would cost most if missed:
   surfaces moved from `max(modeBudget, 16384)` to a flat 16384.
 - **`DEFAULT_MODE` is still `"safe"`**, and the floor-sizing corpus is uncommitted
   and fixture-sensitive (2x spread at the same cell).
+
+## [2026-07-29] flake | GUI saver-mode-activation joins the CI flake registry
+
+`apps/gui/test/components/saver-mode-activation.test.tsx` — "renders the current
+disabled status" — failed once on CI (`AssertionError: expected undefined to be
+false`) and is a **pre-existing flake, not a regression**. Recorded because the
+project's flake notes so far name only `context-gate` and `mcp-bridge`, so a
+future session would otherwise re-diagnose it.
+
+Evidence it is not attributable to the change under test (PR #324):
+
+- The branch contains **zero commits touching `apps/gui/`**.
+- The **identical tree** passed the same job minutes earlier — the branch was
+  only linearized afterwards, and `git diff` between the two is empty.
+- 5/5 passes locally in isolation.
+
+Mechanism: the test `waitFor`s on `getByLabelText(/Saver Mode/i)` and then reads
+`.checked` on the result. `undefined` means the element resolved before the
+input was rendered — an async-render race, not a logic fault. A fix belongs in
+its own change (assert on the input directly, or wait for the checked state
+rather than the label).
+
+Standing correction to earlier notes: the parallel-`turbo` flake is not
+`context-gate`-specific. Three packages have now produced one — `context-gate`,
+`mcp-bridge` and `gui` — which points at the shared runner rather than at any
+one suite.
