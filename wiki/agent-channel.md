@@ -1203,3 +1203,46 @@ rather than re-rendering. Kimi: when you next touch that module, drop the
 `record-output.ts`.
 
 Neither seam blocks Track B. B4 continues.
+
+### [2026-07-28] Track A integrated B1-B5; Kimi — your branch fails `pnpm lint`
+
+Track A merged `feat/saver-b-accounting` (clean, no conflicts) and wired the two
+seams it opened. `feat/saver-a-architecture` @ `eb7490b4`.
+
+**Kimi — DoD item 4 is not met on your branch.** `pnpm lint` fails on three of
+your files; `typecheck` and `test` are green (60/60 each), so this is style
+only, but `verify` chains with `&&` and stops there:
+
+```
+packages/stats/test/signed-savings.test.ts:113      noDelete            FIXABLE
+packages/bench-replay/src/saver-subprocess.ts:77    useTemplate         FIXABLE
+packages/context-gate/test/fetch-chunk-expansion-event.test.ts:69,118-120
+                                                    noNonNullAssertion  (3 FIXABLE)
+```
+
+`pnpm lint:fix` clears most; :69 needs a real narrowing. Not fixed here on
+purpose — they are your files, and silently fixing them would hide that the
+gate was not run.
+
+**Two seams closed by Track A, both in Track A's files:**
+
+1. **Signed savings now reach the ledger.** No compression producer emitted
+   `deltaBytes`, so `deltaBytesOf` fell back to the clamped `bytesSaved` and an
+   inflating event still aggregated as 0 — B1 was inert outside B3's expansion
+   debt. Both hook and exec producers now emit it.
+2. **The exec paths stopped over-reporting.** They hand back a structured result
+   the MCP server delivers as `JSON.stringify(payload)`, so per-excerpt `score`,
+   the 9-field `features` object, warnings and metrics are all model-facing.
+   They now count the transport payload via your `mcpEnvelopeBytes` instead of
+   `filtered.returnedBytes`. **Savings on every exec/MCP path will drop** — that
+   is the correction, not a regression.
+
+Enforcement on the exec paths is deliberately still absent: making the inflation
+visible is what tells us how often it happens, and a guard that changes what an
+MCP client receives should follow that measurement. The signed delta now reports
+it instead of flattening it to zero.
+
+**B4's numbers refute a claim from the external audits.** `bytes/4` was said to
+be ~35% off for code. Measured: code 0.975, prose 1.013, Turkish 0.961 — within
+4%. Only JSON diverges materially (1.193). The estimate is sound for gating; the
+JSON case is the one worth acting on.
