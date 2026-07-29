@@ -1,5 +1,9 @@
 // Extractive prose/markdown compressor. Deterministic, no model.
-// Only changes what is RETURNED — raw text persists in ChunkSet as-is.
+// Only changes what is RETURNED. The D20 collapse trade-off is a conscious
+// accept; the honesty rule (A1 contract): every collapsed span is named by a
+// counted marker, and the output declares the omitted spans recoverable.
+// Recovery reality per entry point: the hook path persists the full redacted
+// raw; read/exec paths persist kept excerpts only until W2 unifies them.
 //
 // Rules:
 //   - Every ATX heading kept verbatim.
@@ -8,6 +12,7 @@
 //   - Fenced code blocks (``` ... ```) and indented code kept verbatim.
 //   - Bullet/numbered lists: keep first 3 items + "… [N more items]" for the rest.
 //   - Short docs (≤500 chars, ≤5 body paragraphs) pass through unchanged.
+//   - Any collapse appends one trailing recoverability note.
 
 const ATX_HEADING = /^#{1,6} /;
 const FENCE_OPEN = /^```/;
@@ -147,10 +152,12 @@ export function compressProse(text: string): string {
   const out: string[] = [];
   let parasSeenInSection = 0;
   let pendingParas = 0;
+  let collapsedAny = false;
 
   const flushPendingParas = () => {
     if (pendingParas > 0) {
       out.push(`… [${pendingParas} paragraph${pendingParas === 1 ? "" : "s"}]`);
+      collapsedAny = true;
       pendingParas = 0;
     }
   };
@@ -187,6 +194,7 @@ export function compressProse(text: string): string {
           out.push(...block.items.slice(0, LIST_KEEP_FIRST));
           const tail = block.items.length - LIST_KEEP_FIRST;
           out.push(`… [${tail} more item${tail === 1 ? "" : "s"}]`);
+          collapsedAny = true;
         }
         break;
 
@@ -197,5 +205,6 @@ export function compressProse(text: string): string {
   }
 
   flushPendingParas();
+  if (collapsedAny) out.push("… [collapsed spans recoverable via stored chunks]");
   return out.join("\n");
 }
