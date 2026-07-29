@@ -168,9 +168,8 @@ describe("filterOutput pipeline (spec §6 / §11)", () => {
 });
 
 describe("filterOutput no-blind floor (mission: never strip what the model needs)", () => {
-  // grep-style output that trips the typescript classifier via a stray
-  // "error TSxxxx:" token but carries no parseable tsc diagnostic, so the
-  // specialized compressor empties it. The model must still get content.
+  // grep-style output with a stray "error TSxxxx:" token. Post-B7 the bare
+  // mention no longer classifies typescript, so this takes the generic path.
   const grepLike = (): string => {
     const lines: string[] = [];
     for (let i = 0; i < 3000; i++) {
@@ -180,12 +179,25 @@ describe("filterOutput no-blind floor (mission: never strip what the model needs
     return lines.join("\n");
   };
 
-  it("returns excerpts when a specialized compressor matches nothing", async () => {
-    const raw = grepLike();
-    const result = await filterOutput(base(raw, { mode: "aggressive" }));
+  it("an empty specialized match yields an explicit marker, never silence", async () => {
+    // tsc-ish command + output with NO diagnostics: the typescript compressor
+    // is confidently selected and finds nothing. Post-B6 the model gets an
+    // exactly-counted omission marker (recoverable via stored chunks) — the
+    // pre-B6 silent empty result is what the no-blind floor used to paper over.
+    const lines: string[] = [];
+    for (let i = 0; i < 3000; i++) {
+      lines.push(`packages/x/src/file${i}.ts:${i}:import { thing } from "./dep";`);
+    }
+    const result = await filterOutput(
+      base(lines.join("\n"), {
+        mode: "aggressive",
+        source: { kind: "command", command: "pnpm", args: ["typecheck"] },
+      }),
+    );
     expect(result.decision).toBe("compressed");
     expect(result.classification.category).toBe("typescript");
-    expect(result.excerpts.length).toBeGreaterThan(0);
+    const text = result.excerpts.map((e) => e.text).join("\n");
+    expect(text).toContain("3000 non-diagnostic lines omitted — recoverable via stored chunks");
   });
 
   it("returns real content, not just the summary line", async () => {
