@@ -38,6 +38,7 @@ export {
   type OverlayRenderInput,
 } from "./model-facing-bytes.js";
 export {
+  countTokens,
   estimateTokens,
   HARD_WRAP_THRESHOLD_TOKENS,
   PASSTHROUGH_THRESHOLD_TOKENS,

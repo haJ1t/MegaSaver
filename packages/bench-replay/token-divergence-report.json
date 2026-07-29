@@ -1,0 +1,41 @@
+{
+  "encoding": "cl100k_base",
+  "samples": [
+    {
+      "name": "code",
+      "bytes": 43290,
+      "estimatedTokens": 10823,
+      "realTokens": 10555,
+      "realOverEstimate": 0.9752379192460501
+    },
+    {
+      "name": "prose",
+      "bytes": 18716,
+      "estimatedTokens": 4679,
+      "realTokens": 4742,
+      "realOverEstimate": 1.0134644154733918
+    },
+    {
+      "name": "json",
+      "bytes": 3642,
+      "estimatedTokens": 911,
+      "realTokens": 1087,
+      "realOverEstimate": 1.1931942919868277
+    },
+    {
+      "name": "turkish",
+      "bytes": 4424,
+      "estimatedTokens": 1106,
+      "realTokens": 1063,
+      "realOverEstimate": 0.961121157323689
+    }
+  ],
+  "overallRealOverEstimate": 0.9958901763799304,
+  "measuredAt": "2026-07-29T10:13:41.943Z",
+  "corpusFiles": [
+    "code",
+    "prose",
+    "json",
+    "turkish"
+  ]
+}
