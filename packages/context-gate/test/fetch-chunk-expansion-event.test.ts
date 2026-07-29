@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { saveOverlayChunkSet } from "@megasaver/content-store";
-import { appendOverlayEvent, readEvents, readOverlayEvents, readOverlaySummary } from "@megasaver/stats";
+import {
+  appendOverlayEvent,
+  readEvents,
+  readOverlayEvents,
+  readOverlaySummary,
+} from "@megasaver/stats";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fetchChunk } from "../src/fetch-chunk.js";
 
@@ -118,7 +123,11 @@ describe("fetchChunk — recovery debt (B3)", () => {
   it("failed fetches record nothing", async () => {
     await seedOverlay();
     await fetchChunk({ storeRoot: store, chunkSetId: SET, chunkId: "9" });
-    await fetchChunk({ storeRoot: store, chunkSetId: "00000000-0000-4000-8000-000000000000", chunkId: "0" });
+    await fetchChunk({
+      storeRoot: store,
+      chunkSetId: "00000000-0000-4000-8000-000000000000",
+      chunkId: "0",
+    });
     expect(readOverlayEvents({ root: store }, WK, LIVE)).toHaveLength(0);
   });
 });

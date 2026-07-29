@@ -309,6 +309,12 @@ export async function recordAndFilterOverlayOutput(
       rawBytes: filtered.rawBytes,
       returnedBytes: finalReturnedBytes,
       bytesSaved,
+      // B1's signed field, wired at the producer: `bytesSaved` is clamped at 0,
+      // so without this the ledger cannot tell a break-even rewrite from an
+      // inflating one. Positive here by construction (the admission guard
+      // rejects the rest), but the field must be present or `deltaBytesOf`
+      // falls back to the clamped value and the capability stays inert.
+      deltaBytes: filtered.rawBytes - finalReturnedBytes,
       savingRatio,
       ...(chunkSetId !== undefined ? { chunkSetId } : {}),
       summary: filtered.summary,

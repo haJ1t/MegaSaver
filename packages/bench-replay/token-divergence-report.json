@@ -32,10 +32,5 @@
   ],
   "overallRealOverEstimate": 0.9958901763799304,
   "measuredAt": "2026-07-29T10:13:41.943Z",
-  "corpusFiles": [
-    "code",
-    "prose",
-    "json",
-    "turkish"
-  ]
+  "corpusFiles": ["code", "prose", "json", "turkish"]
 }

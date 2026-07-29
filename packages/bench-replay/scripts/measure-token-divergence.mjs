@@ -27,12 +27,7 @@ const corpora = [
   },
   {
     name: "json",
-    text: cat([
-      "packages/stats/package.json",
-      "tsconfig.base.json",
-      "biome.json",
-      "turbo.json",
-    ]),
+    text: cat(["packages/stats/package.json", "tsconfig.base.json", "biome.json", "turbo.json"]),
   },
   {
     name: "turkish",
@@ -44,11 +39,7 @@ const report = await measureTokenDivergence(corpora);
 report.measuredAt = new Date().toISOString();
 report.corpusFiles = corpora.map((c) => c.name);
 
-const outPath = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "token-divergence-report.json",
-);
+const outPath = join(dirname(fileURLToPath(import.meta.url)), "..", "token-divergence-report.json");
 writeFileSync(outPath, `${JSON.stringify(report, null, 2)}\n`);
 
 for (const s of report.samples) {

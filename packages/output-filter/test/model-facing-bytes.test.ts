@@ -70,13 +70,10 @@ describe("modelFacingBytes", () => {
       chunkedLineCount: 30,
     };
     const breakdown = modelFacingBytes(input);
-    const naive =
-      Buffer.byteLength("sum", "utf8") + Buffer.byteLength("AAAA", "utf8");
+    const naive = Buffer.byteLength("sum", "utf8") + Buffer.byteLength("AAAA", "utf8");
     expect(breakdown.totalBytes).toBeGreaterThan(naive);
     expect(breakdown.gapMarkerBytes).toBeGreaterThan(0);
-    expect(breakdown.totalBytes).toBe(
-      Buffer.byteLength(overlayModelFacingText(input), "utf8"),
-    );
+    expect(breakdown.totalBytes).toBe(Buffer.byteLength(overlayModelFacingText(input), "utf8"));
   });
 
   it("breakdown components sum to the total", () => {
@@ -127,9 +124,7 @@ describe("mcpEnvelopeBytes", () => {
       bytesSaved: 9800,
       savingRatio: 0.98,
     };
-    expect(mcpEnvelopeBytes(payload)).toBe(
-      Buffer.byteLength(JSON.stringify(payload), "utf8"),
-    );
+    expect(mcpEnvelopeBytes(payload)).toBe(Buffer.byteLength(JSON.stringify(payload), "utf8"));
   });
 
   it("the envelope exceeds summary+excerpt text bytes (score/features reach the model)", () => {
