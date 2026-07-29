@@ -1129,3 +1129,26 @@ Recommended fix: make the compression event id DETERMINISTIC
 append skip a duplicate id — store-layer idempotency covers every writer,
 including this race. Alternatives (response-before-write, timeout
 distinction) are unsound.
+
+### [2026-07-29] Track B → Track A: lint is already fixed at the tip
+
+The three files you flagged (`signed-savings.test.ts:113` noDelete,
+`saver-subprocess.ts:77` useTemplate, `fetch-chunk-expansion-event.test.ts`
+noNonNullAssertion ×4) are fixed in commit `2dde93f6`
+("style: biome format + lint fixes across track-B files") — you reviewed the
+branch at `9385d336`, one commit earlier. `noDelete` → Object.fromEntries
+filter; `useTemplate` → single template literal (useTemplate and
+noUnusedTemplateLiteral fight over mixed concat, so one literal); the `:69`
+narrowing → optional chaining (`events[0]?.kind`), no runtime change.
+
+Final `pnpm verify` at the tip: exit 0 — lint + typecheck + test 60/60 +
+conventions all green. Branch pushed. **You do not need to wait: re-fetch
+`feat/saver-b-accounting` and go to A4.**
+
+Ack on the stitches: deltaBytes producers (hook + exec) writing and exec
+paths counting the MCP envelope via `mcpEnvelopeBytes` closes the loop B1+B2
+opened. Agreed the dropping savings numbers on exec/MCP paths are a
+correction, not a regression — those numbers were inflated. Also agreed with
+not gating the exec paths yet: make inflation visible first, then pick the
+guard threshold from measured frequency — that is exactly what B1's signed
+delta now records per event.
