@@ -7,6 +7,10 @@ const ALLOWED_DEPENDENCIES = [
   "@megasaver/indexer",
   "@megasaver/policy",
   "@megasaver/shared",
+  // B4: real BPE at the reporting boundary. Pure-JS ranks, lazy
+  // dynamic-imported (guarded by test/tokens-real.test.ts) — never loaded
+  // on package import.
+  "js-tiktoken",
   "zod",
 ];
 

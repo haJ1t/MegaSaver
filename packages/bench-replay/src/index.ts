@@ -56,6 +56,12 @@ export {
 } from "./report.js";
 export { assembleSseUsage, assembleUsage } from "./usage.js";
 export {
+  measureTokenDivergence,
+  type TokenCounters,
+  type TokenDivergenceReport,
+  type TokenDivergenceSample,
+} from "./token-divergence.js";
+export {
   FIRST_PARTY_FLAG,
   TASK_PROMPTS,
   buildRecordCommand,
