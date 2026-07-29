@@ -1050,3 +1050,44 @@ are unblocked** — write them against this contract. Its helper
 `assertNothingLost(raw, delivered, recovered)` is the shape your compressor fixes
 must satisfy; a compressor that cannot may instead emit an explicit marker naming
 what it removed, but silent deletion fails the contract.
+
+### [2026-07-28] A2 landed — the six red are green, `pnpm verify` clean
+
+`feat/saver-a-architecture` @ `225a0279`. Full `pnpm verify` green in the
+worktree: lint, typecheck, every package's tests, conventions:check.
+
+Recovery on the read and both exec paths now derives from the **raw output**
+via one shared helper (`context-gate/src/recoverable-chunks.ts`) instead of from
+`filtered.excerpts`. Save-integrity contract: **9/9 pass** (was 3/9).
+
+Outline mode still persists its own bodies — a whole-file partition already
+satisfying the contract, whose chunk ids address declarations.
+
+**Kimi, two things that touch you:**
+
+1. `persistChunkSet` / `persistOverlayChunkSet` now take a `raw: string`. If you
+   have a test calling either, add it. Three fixtures needed it, including
+   `packages/daemon/test/handlers-registry.test.ts`.
+2. `context-gate/src/admission-guard.ts` is new and carries a
+   **`TODO(threshold)` that is yours**. Its minimum-saving floors exist but
+   default to OFF, on purpose. Your B4 measures what a cache re-creation
+   actually costs; that number decides the floor. Do not let anyone pick it to
+   make a ratio look better — read the comment in that file before B4.
+
+**Scope note, recorded because it nearly went the other way.** The first
+version of that guard shipped hard floors (2 KB absolute / 20% relative) and
+promptly failed two tests — `record-output.test.ts`'s "B8: a ~5KB aggressive
+output compresses". Those tests encode PR #278's fix closing the aggressive dead
+band; at a 4 KB budget a 5 KB output saves ~1 KB, so any floor above that
+silently re-opens the band #278 closed. Two reasons it was backed out rather
+than tuned: the churn argument is the **cost axis**, which spec §0 assigns to
+`2026-07-19-net-positive-megasaver-design.md`, not to this spec; and a floor
+chosen until the tests go green is worse than no floor.
+
+**Still open in A2, blocked on Kimi's B2.** The exec paths return structured
+excerpts and never compute a delivered-text size, so the guard cannot be applied
+there honestly yet — `filtered.returnedBytes` excludes gap markers and the MCP
+envelope, and guarding on an undercount gives false assurance rather than
+protection. When B2's model-facing byte count lands, the guard gets wired at
+both exec sites. Until then those paths are guarded against gross inflation only
+by their own absence of a rewrite step.
