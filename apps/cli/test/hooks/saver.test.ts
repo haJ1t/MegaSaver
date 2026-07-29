@@ -641,7 +641,9 @@ describe("wave-1 tool coverage", () => {
 
 describe("wave-1 shapes", () => {
   it("compresses a Glob filenames array and rebuilds it as string[] (spec 2026-07-09 reverses the v1 passthrough)", async () => {
-    const d = deps();
+    const d = deps({
+      record: vi.fn().mockResolvedValue({ ...RECORDED, returnedText: `src/file-0.ts${FOOTER}` }),
+    });
     const out = await buildSaverDecision(
       {
         tool_name: "Glob",
@@ -661,9 +663,8 @@ describe("wave-1 shapes", () => {
     const u = (out as { updatedToolOutput: { filenames: string[]; numFiles: number } })
       .updatedToolOutput;
     expect(Array.isArray(u.filenames)).toBe(true);
-    expect(u.filenames.join("\n")).toContain("SHORT");
-    expect(u.filenames.every((f) => f.length > 0)).toBe(true);
-    expect(u.numFiles).toBe(2_000);
+    expect(u.filenames).toEqual(["src/file-0.ts"]);
+    expect(u.numFiles).toBe(1);
   });
 
   it("compresses Grep files_with_matches filenames", async () => {
@@ -683,6 +684,46 @@ describe("wave-1 shapes", () => {
       d,
     );
     expect("updatedToolOutput" in out).toBe(true);
+  });
+
+  it("rebuilds Glob/Grep filenames array containing ONLY original input paths and updates numFiles", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "saver-c1-"));
+    const paths = Array.from({ length: 2_000 }, (_, i) => `src/file-${i}.ts`);
+    const origSet = new Set(paths);
+    const d = {
+      ...deps(),
+      storeRoot: tmpDir,
+      record: recordAndFilterOverlayOutput,
+    };
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Glob",
+        tool_input: { pattern: "**/*.ts" },
+        tool_response: {
+          filenames: paths,
+          durationMs: 12,
+          numFiles: 2_000,
+          truncated: false,
+        },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    const u = (out as { updatedToolOutput: { filenames: string[]; numFiles: number } })
+      .updatedToolOutput;
+    expect(Array.isArray(u.filenames)).toBe(true);
+
+    for (const f of u.filenames) {
+      expect(origSet.has(f)).toBe(true);
+    }
+    for (const f of u.filenames) {
+      expect(f).not.toMatch(/^\d+ kept, \d+ dropped$/);
+      expect(f).not.toContain("[Mega Saver:");
+      expect(f).not.toMatch(/^… \[lines /);
+    }
+    expect(u.numFiles).toBe(u.filenames.length);
   });
 
   it("compresses the LARGER of stdout/stderr and leaves the other untouched", async () => {
