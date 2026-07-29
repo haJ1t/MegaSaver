@@ -49,7 +49,11 @@ const DIFF_CMD = /\bgit\s+(?:diff|status|log|show)\b/i;
 // match that spanned a newline was already redundant. Do not restore `*`.
 const VITEST_OUT =
   /^\s{0,64}Test Files\s|^\s{0,64}Tests\s+\d|Serialized Error|AssertionError|^\s{0,64}(?:FAIL|PASS)\b|Duration\s+\d/m;
-const TS_OUT = /\(\d+,\d+\):\s+error\s+TS\d+:|error\s+TS\d+:|Found\s+\d+\s+errors?/m;
+const TS_OUT_POSITIONED = /\(\d+,\d+\):\s+error\s+TS\d+:|:\d+:\d+\s+-\s+error\s+TS\d+:/m;
+// A bare `error TSxxxx:` mention (no position) is NOT tsc-output evidence on
+// its own: fetched issue pages, docs and logs quote errors constantly (B7).
+// It only corroborates a tsc-ish command; alone it stays below the floor.
+const TS_OUT_LOOSE = /error\s+TS\d+:|Found\s+\d+\s+errors?/m;
 // Out-only sniff requires a real diff anchor: a `diff --git` header or a
 // `@@ ... @@` hunk. A lone leading +/- line is NOT a confident diff signal
 // — npm/yarn logs, markdown bullets, ASCII tables and console output all
@@ -123,9 +127,16 @@ export function classifyOutput(input: ClassifyInput): Classification {
   }
 
   const tsCmd = TS_CMD.test(command);
-  const tsOut = TS_OUT.test(text);
-  if (tsCmd || tsOut) {
-    return { category: "typescript", confidence: tsCmd && tsOut ? 0.95 : tsCmd ? 0.8 : 0.7 };
+  const tsPositioned = TS_OUT_POSITIONED.test(text);
+  const tsLoose = TS_OUT_LOOSE.test(text);
+  // A bare `error TSxxxx:` mention (tsLoose alone) never classifies: it only
+  // corroborates a tsc-ish command. Quoted errors in fetched docs/issues fall
+  // through to prose/generic instead of the lossy typescript compressor (B7).
+  if (tsCmd || tsPositioned) {
+    return {
+      category: "typescript",
+      confidence: tsCmd && (tsPositioned || tsLoose) ? 0.95 : tsCmd ? 0.8 : 0.7,
+    };
   }
 
   const viCmd = VITEST_CMD.test(command);
