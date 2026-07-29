@@ -81,7 +81,10 @@ export function compressTsc(text: string): string {
       if (attachTo !== null) blanks.push(line);
       continue;
     }
-    if ((INDENTED.test(line) || CODE_FRAME.test(line)) && (attachTo !== null || blanks.length > 0)) {
+    if (
+      (INDENTED.test(line) || CODE_FRAME.test(line)) &&
+      (attachTo !== null || blanks.length > 0)
+    ) {
       if (attachTo !== null) {
         attachTo.push(...blanks, line);
       }

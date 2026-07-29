@@ -72,11 +72,10 @@ function defaultRun(megaBin: string, cwd: string, storeRoot: string): RunHook {
 // previous prepare ran here.
 function assertFreshStore(storeRoot: string): void {
   for (const sub of ["stats", "content"]) {
-    if (existsSync(join(storeRoot, "megasaver", sub))) {
+    const found = join(storeRoot, "megasaver", sub);
+    if (existsSync(found)) {
       throw new Error(
-        `prepareSaverStore: store must be FRESH per benchmark run — found ${join(storeRoot, "megasaver", sub)}. ` +
-          "Workspace-scoped stats/net-effect records from a prior run contaminate the measured arm; " +
-          "point storeRoot at an empty directory.",
+        `prepareSaverStore: store must be FRESH per benchmark run — found ${found}. Workspace-scoped stats/net-effect records from a prior run contaminate the measured arm; point storeRoot at an empty directory.`,
       );
     }
   }
