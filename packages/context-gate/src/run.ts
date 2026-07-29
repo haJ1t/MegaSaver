@@ -2,6 +2,7 @@ import { join } from "node:path";
 import {
   type FilterOutputResult,
   finalizeReplayTrace,
+  mcpEnvelopeBytes,
   pruneTraceSessions,
   seamTraceEnabledByEnv,
   writeReplayTrace,
@@ -216,6 +217,7 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     }
   }
 
+  const modelFacingReturnedBytes = mcpEnvelopeBytes(result);
   const event: TokenSaverEvent = {
     id: newId(),
     sessionId: input.sessionId,
@@ -226,9 +228,26 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
     // chunk-set source is redacted at the persist* sink in read.ts).
     label: redact(input.path).redacted,
     rawBytes: filteredResult.rawBytes,
-    returnedBytes: filteredResult.returnedBytes,
-    bytesSaved: filteredResult.bytesSaved,
-    savingRatio: filteredResult.savingRatio,
+    // Same accounting as the exec paths (A2.4 §W0/§W2 on Track B's B2): this
+    // pipeline hands back a structured result that mcp-bridge delivers as
+    // `JSON.stringify(payload)`, so the model pays for the whole envelope —
+    // per-excerpt `score`, the 9-field `features` object, warnings, metrics —
+    // not just `filteredResult.returnedBytes`, which counts summary + excerpt
+    // text and therefore over-reports the saving on every read.
+    returnedBytes: modelFacingReturnedBytes,
+    bytesSaved: Math.max(0, filteredResult.rawBytes - modelFacingReturnedBytes),
+    // B1's signed field, unclamped: a passthrough read whose envelope outweighs
+    // its saving is a net loss, and the clamped fields can only record it as a
+    // flat zero. Making the inflation visible is the first move; a guard on
+    // this path should be sized from what this measurement reports.
+    deltaBytes: filteredResult.rawBytes - modelFacingReturnedBytes,
+    // Stays clamped by contract: the stats event schema bounds savingRatio to
+    // [0,1], and the B1 migration keeps every legacy field's meaning. Readers
+    // that want the signed ratio derive it from deltaBytes / rawBytes.
+    savingRatio:
+      filteredResult.rawBytes === 0
+        ? 0
+        : Math.max(0, filteredResult.rawBytes - modelFacingReturnedBytes) / filteredResult.rawBytes,
     ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
     summary: filteredResult.summary,
     mode: settings.mode,
@@ -367,6 +386,7 @@ export async function runOverlayOutputPipeline(
     result = applyShownDedup({ result, sessionDir, chunkSetId });
   }
 
+  const modelFacingReturnedBytes = mcpEnvelopeBytes(result);
   const event: OverlayTokenSaverEvent = {
     id: newId(),
     workspaceKey: input.workspaceKey,
@@ -377,9 +397,26 @@ export async function runOverlayOutputPipeline(
     // chunk-set source is redacted at the persist* sink in read.ts).
     label: redact(input.path).redacted,
     rawBytes: filteredResult.rawBytes,
-    returnedBytes: filteredResult.returnedBytes,
-    bytesSaved: filteredResult.bytesSaved,
-    savingRatio: filteredResult.savingRatio,
+    // Same accounting as the exec paths (A2.4 §W0/§W2 on Track B's B2): this
+    // pipeline hands back a structured result that mcp-bridge delivers as
+    // `JSON.stringify(payload)`, so the model pays for the whole envelope —
+    // per-excerpt `score`, the 9-field `features` object, warnings, metrics —
+    // not just `filteredResult.returnedBytes`, which counts summary + excerpt
+    // text and therefore over-reports the saving on every read.
+    returnedBytes: modelFacingReturnedBytes,
+    bytesSaved: Math.max(0, filteredResult.rawBytes - modelFacingReturnedBytes),
+    // B1's signed field, unclamped: a passthrough read whose envelope outweighs
+    // its saving is a net loss, and the clamped fields can only record it as a
+    // flat zero. Making the inflation visible is the first move; a guard on
+    // this path should be sized from what this measurement reports.
+    deltaBytes: filteredResult.rawBytes - modelFacingReturnedBytes,
+    // Stays clamped by contract: the stats event schema bounds savingRatio to
+    // [0,1], and the B1 migration keeps every legacy field's meaning. Readers
+    // that want the signed ratio derive it from deltaBytes / rawBytes.
+    savingRatio:
+      filteredResult.rawBytes === 0
+        ? 0
+        : Math.max(0, filteredResult.rawBytes - modelFacingReturnedBytes) / filteredResult.rawBytes,
     ...(result.chunkSetId !== undefined ? { chunkSetId: result.chunkSetId } : {}),
     summary: filteredResult.summary,
     mode: settings.mode,

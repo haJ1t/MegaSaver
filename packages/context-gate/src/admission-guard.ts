@@ -3,39 +3,51 @@
 // (record-output.ts), so the read and exec paths could deliver a replacement
 // larger than the original with nothing to stop them.
 //
-// WHAT THIS GUARD DOES NOT DECIDE, AND WHY.
+// WHY A MINIMUM SAVING, AND WHY THESE NUMBERS.
 //
-// The obvious next move is to demand a MINIMUM saving rather than merely a
-// non-negative one: rewriting a tool_result mutates the conversation prefix and
-// invalidates the client's native prompt cache, so the prefix is re-billed as
-// cache creation, and a rewrite saving a handful of bytes is strictly negative
-// (wiki/syntheses/saver-cache-churn: measured 0.93-0.97x, worse than baseline).
+// Rewriting a tool_result mutates the conversation prefix and invalidates the
+// client's native prompt cache, so the prefix is re-billed as cache creation
+// (wiki/syntheses/saver-cache-churn). A rewrite that hands back nearly the same
+// bytes pays that churn for nothing, and merely being non-negative does not
+// rule it out — a one-byte saving used to pass this guard.
 //
-// That reasoning is sound and it is deliberately NOT applied here yet:
+// The floors were parameters defaulting to off because any floor above ~1 KB
+// re-opened the "aggressive dead band" PR #278 closed: with a FLAT 4000-byte
+// budget a ~5 KB input saved only ~1 KB. §W1 lever (b) removed that premise —
+// the budget is now a SHARE of the input (output-filter/fit.ts targetBudget),
+// so the saving scales with the input instead of being what is left over after
+// a constant.
 //
-//   1. It is the cost axis, which spec §0 assigns to
-//      2026-07-19-net-positive-megasaver-design.md, not to this spec. This
-//      spec owns integrity and ratio.
-//   2. A minimum-saving floor directly contradicts shipped, tested behaviour:
-//      PR #278 closed the "aggressive dead band" so a ~5 KB output WOULD
-//      compress (see record-output.test.ts, "B8: a ~5KB aggressive output
-//      compresses"). At a 4 KB budget that saving is ~1 KB — any floor above it
-//      silently re-opens the band that fix closed. The churn measurement is
-//      later evidence than #278 and may well win, but reversing a shipped
-//      decision belongs in a spec, not in a helper's constant.
-//   3. Choosing the number before Track B's B4 measures the real token cost of
-//      a cache re-creation would be guessing, and a guessed floor tuned until
-//      the tests go green is worse than no floor.
+// Measured 2026-07-29 through recordAndFilterOverlayOutput (the numbers the
+// guard actually sees: summary + D16 markers + recovery footer, not
+// filterOutput's returnedBytes), over 10 content shapes x 3 modes at raw sizes
+// from the eligibility floor up to 50 KB. The worst cell anywhere at the floor
+// was tsc-shaped output in safe mode at 2048 B: 619 B saved, ratio 0.302. The
+// worst cell is always safe mode at the floor, because safe keeps the largest
+// share (0.5) and the per-delivery overhead is largest relative to the input.
 //
-// So the floors exist as parameters and default to off. When B4 publishes its
-// numbers, the net-positive spec decides whether to enable them and at what
-// value — one edit, at one call site, with the trade-off already written down.
+// Both floors are set ~2x below that worst cell. That is deliberate: their job
+// is to reject a near-no-op rewrite, NOT to act as a second eligibility gate.
+// Nothing above the eligibility floor in the measured corpus is refused, which
+// is precisely why enabling them cannot re-open the #278 band. A floor tuned to
+// bite (0.35 relative would refuse that tsc cell) would re-open it.
+//
+// What these numbers are NOT: an economic break-even. The churn tax measured on
+// a real run was ~18k cache-creation tokens for a single rewrite, which no floor
+// in this range earns back. Sizing the floors against that cost is the cost axis
+// (§0, owned by 2026-07-19-net-positive-megasaver-design.md).
 export type SavingFloors = {
   absoluteBytes: number;
   relative: number;
 };
 
 export const NO_FLOORS: SavingFloors = { absoluteBytes: 0, relative: 0 };
+
+// The floors record-output.ts ships with. Passed explicitly at that call site
+// rather than made the default parameter, so the read and exec paths — which
+// call this guard for a different decision — keep their current behaviour until
+// their own spec moves them.
+export const DEFAULT_SAVING_FLOORS: SavingFloors = { absoluteBytes: 256, relative: 0.15 };
 
 export type AdmissionVerdict =
   | { admit: true }
