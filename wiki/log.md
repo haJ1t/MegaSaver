@@ -7173,6 +7173,7 @@ fresh independent reviewer confirmed the active-pool correction after catching
 and closing an initially inactive thread-pool setting. Replacement two-platform
 CI remains the release proof. (source: GitHub Actions run 30253983645 Windows
 job 89938203691; `pr312_release_review`; 2026-07-27)
+
 ## [2026-07-28] feature | gui-console-redesign
 
 Imported the "Mega Saver Console" prototype from Claude Design
@@ -7237,6 +7238,105 @@ Because `verify` chains with `&&`, that test flake means `conventions:check`
 never runs in a normal `verify` — worth knowing: DoD item 4 does not currently
 gate DoD item 10.
 
+## [2026-07-28] investigation | saver root cause — no savings, unsafe recovery
+
+Find-only audit (user directive: locate the cause, do not fix). New page
+[[syntheses/saver-root-cause-2026-07-28]].
+
+Three design-level causes, each with a measured receipt:
+
+1. **floor == budget.** `minBytesFor` (saver.ts:52-57) and `maxReturnedBytes`
+   (record-output.ts:145) are both `modeToBudget(mode)`, and `fitBudget` packs up
+   to that budget. Ratio is therefore `1 - budget/rawBytes` whenever the returned
+   text reaches the budget — the low-redundancy case (source files). Measured
+   `returnedBytes` is flat at the budget across 6 KB–250 KB in all three modes.
+   Redundant input (logs) can beat that curve via `collapseRepeatedLines`, but
+   `DEFAULT_MODE = "safe"` (resolve-saver-settings.ts:44) means nothing under
+   32 KB is compressed at all, so those cases never reach the collapse passes.
+2. **Two coordinate systems.** Delivered `… [lines X-Y omitted]` markers are in
+   post-collapse space; stored chunks index pre-collapse `redactedText`. Measured:
+   a marker reading `lines 146-902 omitted` resolves (by the only published rule)
+   to chunk 3, which holds unrelated noise; the right chunk is ~23. Recovery
+   mis-addresses, the agent probes further, and total cost exceeds the raw read.
+   `saver-savings-gaps` C13 is marked FIXED but only re-compression was fixed.
+3. **In-place `tool_result` rewrite** vs the client's native prompt cache —
+   already recorded in [[syntheses/saver-cache-churn]], unchanged.
+
+Contradictions flagged against [[syntheses/saver-cache-churn]]: the claimed
+`saverPausedByNetEffect` wiring does not exist (net-effect is diagnostic-only),
+and the session-scoped `saver-seen` ledger cannot explain the run-2 carry-over
+that page's "harness cannot validate any stage" conclusion rests on.
+
+Also noted: `filterOutput`'s own savings numbers exclude gap markers and the
+footer, so `read.ts`, `run-command.ts` (x2) and `bench.ts` over-report; the
+Grep/Glob `filenames` rebuild injects non-path entries into the array; the
+`[repeated N times]` marker is itself droppable by `fitBudget`.
+
+Environment check: no MegaSaver hook in `~/.claude/settings.json`, and
+`~/.local/share/megasaver` holds only the Agent Office seed — the saver is not
+active here, so no field telemetry exists for any of this.
+
+## [2026-07-28] query | token-saver root-cause investigation
+
+User report: saver doesn't save tokens (sometimes expands) and loses info
+when saving. Ran a 4-scope parallel investigation (hook pipeline,
+output-filter internals, savings accounting, proxy/MCP paths). Findings
+filed as [[syntheses/token-saver-root-cause-2026-07-28]]; index updated.
+Headline: "no savings" is architectural (cache-churn-blind byte accounting,
+recovery re-injection never debited, unguarded MCP delivery paths);
+"info loss" is mostly plain bugs (compressTsc silent drops, go-test panic
+drop, excerpts-only persistence on 3 of 4 paths, filenames rebuild
+corruption). Investigation only — no code changed.
+
+## [2026-07-28] spec | saver compression & save-integrity (draft, CRITICAL)
+
+Follow-up to the same-day find-only audit. User supplied three external LLM
+audits; verified each claim against code before planning. New spec
+`docs/superpowers/specs/2026-07-28-saver-compression-integrity-design.md`
+(DRAFT, awaiting approval — no implementation).
+
+Scope split recorded: `2026-07-19-net-positive-megasaver-design.md` keeps the
+cost axis (cache churn, turn count); this spec owns the quality axis
+(compression ratio + save integrity + honest accounting), which that spec does
+not address.
+
+New confirmations beyond the morning audit:
+
+- **Unrecoverable loss on 3 of 4 entry points** — `read.ts:249`,
+  `run-command.ts:390` and `:636` persist `filtered.excerpts` only; just the
+  hook path stores full redacted raw. Dropped bytes exist nowhere on those
+  paths, yet `connectors/shared/src/context-gate-block.ts:28` advertises "Raw
+  output is stored". This outranks the coordinate mismatch: mis-addressed
+  recovery is expensive, absent recovery is impossible.
+- Nine confirmed defects: stop-word-free `tokenizeForMatch` under a ×21 weight
+  (`rank.ts:132-133`); `compressTsc` dropping position-less diagnostics
+  (`compress/tsc.ts:16-34`) fed by a 0.7-confidence output sniff
+  (`classify.ts:127-129`); `parseGoTest` dropping panic blocks
+  (`go-test.ts:15-30`); BM25 `\W+` tokenizer with no identifier split
+  (`bm25.ts:33-38`); the `filenames` corruption; the droppable
+  `[repeated N times]` marker; `bytesSaved` clamped at 0 with a `nonnegative()`
+  schema so inflation is unrepresentable (`stats/event.ts:20,43`);
+  single-slot stdout/stderr; the safe-mode Bash 24 KB/32 KB dead zone.
+- `fetch-chunk.ts` (46 LOC) emits no event ⇒ recovery is never charged back
+  against the reported saving.
+
+Refuted or overstated in the supplied audits, recorded so they are not
+re-planned: the "20x billing" figure (cache write is ~1.25x base; measured net
+is 0.93–0.97x); "`appendAuditEvent` is dead" (called by
+`commands/context/build.ts:38`, just absent from the saver path); "seen-ledger
+decay is a bug" (intentional P1 design, owned by the net-positive spec); and the
+benchmark carry-over attributed to that ledger (it is session-scoped, and
+`bench-replay`'s session id is caller-supplied with no in-repo caller).
+
+Staging locked in the spec: W0 observability first (inflation must be
+representable before any measurement means anything), then the nine bugs, then
+one guarded pipeline + one coordinate system + an integrity property test, and
+only then the floor≠budget ratio lever — with the one-line `DEFAULT_MODE`
+change measured alone first, since it moves more ratio than the redesign.
+Condensation ("RTK parity") is a gated experiment, not a deliverable: the
+naming the user cited resolves to in-repo conventions (`caveman-commit` skill,
+`ponytail:` comment marker), not to a compression feature.
+
 ### [2026-07-28] review | gui-console-redesign — code-reviewer pass
 
 External `code-reviewer` pass in a fresh context returned **REQUEST-CHANGES**
@@ -7294,3 +7394,93 @@ the `context-gate` concurrency test (fails under loaded parallel turbo; the
 reviewer could not reproduce it under `pnpm -r`, so it is load-dependent rather
 than deterministic) and `conventions:check` on the stray `CLAUDE.md` edit.
 
+## [2026-07-28] plan | saver work split across three agents
+
+`docs/superpowers/plans/2026-07-28-saver-integrity-work-split.md` — allocation
+only, gated on approval of the same-day CRITICAL spec.
+
+Split by difficulty AND by disjoint file ownership; no file is owned by two
+tracks, because three agents editing `output-filter/src/types.ts` is a larger
+risk than the work itself.
+
+- **A (HARD, CRITICAL, Opus-class)** — one guarded pipeline, one coordinate
+  system, integrity property test, ratio lever. Owns `record-output.ts`,
+  `read.ts`, `run-command.ts`, `recovery-footer.ts`, `types.ts`, `fit.ts`,
+  `context-gate-block.ts`.
+- **B (MEDIUM, HIGH, Sonnet/Opus)** — signed savings, model-facing byte module
+  (new file, so `types.ts` stays single-owner), recovery-debt event, real
+  tokenizer, field telemetry, plus the three evidence-loss compressors
+  (`compress/tsc.ts`, `classify.ts`, `parsers/go-test.ts`).
+- **C (EASY, MEDIUM, Sonnet/Haiku)** — six isolated defects in `tokenize.ts`,
+  `rank.ts`, `normalize.ts`, `bm25.ts`, `hooks/saver.ts`.
+
+Three sequencing rules recorded because they are the failure modes: A publishes
+the integrity contract before B fixes the lossy compressors; no ratio measurement
+before B's signed savings lands (today `bytesSaved` is clamped at 0 with
+`nonnegative()` schemas, so inflation is unrepresentable); C's ranking fixes move
+the baseline every other track's fixtures pin, so C merges early and often.
+
+Author≠reviewer is free with three agents — rotate A→C, B→A, C→B; Track A also
+needs `critic` and `security-reviewer` separately.
+
+Honest caveat in the doc: parallelism does not shorten the critical path. If the
+ratio number alone is the goal, the shortest path is B's signed savings then the
+one-line `DEFAULT_MODE` change measured alone — one afternoon, not three tracks.
+
+## [2026-07-28] plan | saver work split — concrete model assignment
+
+Work-split plan updated with the user's actual fleet: Track A (CRITICAL
+architecture) → Opus 5, Track B (accounting + evidence-loss compressors) →
+Kimi K3, Track C (five isolated defects) → Gemini Flash 3.6.
+
+Two adjustments the assignment forced:
+
+- **Track C hands over failing tests, not descriptions.** Flash implements
+  red→green; it must not choose a list, threshold or data structure. C2's
+  stop-word list is decided up front and written into the task — and it carries
+  an unresolved §11 question (hardcoded Turkish vs. the not-yet-existing i18n
+  layer) that must be answered before hand-off, not discovered mid-implementation.
+- **Review rotation is by capability, not round-robin.** §4's author≠reviewer is
+  about *context*, not model identity, so a fresh Opus context may review Opus
+  work. Track A (CRITICAL) is therefore never sent to Flash for review; C2/C3 go
+  to Opus because they move the ranking baseline the other tracks pin fixtures on.
+
+Also recorded: the repeat-marker defect moved from Track C to Track A (A3b) —
+merging the marker into its preceding line changes `collapseSimilar`'s fold
+decisions and `test/normalize.test.ts:34,42` pin the exact output, so the real
+fix is that evidence markers must be non-droppable in `fit.ts`. And A defers
+removing `filterOutput`'s `returnedBytes`/`savingRatio` exports to stage 3 —
+a removal against two tracks' in-flight imports is a break, not a conflict.
+
+## [2026-07-28] plan | saver integrity spec APPROVED — step plan written
+
+User approved `specs/2026-07-28-saver-compression-integrity-design.md`. Step plan
+`plans/2026-07-28-saver-integrity-plan.md` derived from it; worktrees branch from
+`main`, not from the current `feat/gui-console-redesign`.
+
+Three defects folded into the spec after approval, found by cross-checking a
+second same-day audit another agent had written to
+[[syntheses/token-saver-root-cause-2026-07-28]] (which this session did not know
+existed until the git status showed it):
+
+- **B10** `dedupe()` runs on the passthrough and light bands
+  (`output-filter/types.ts:296-302`), contradicting the `:250-252` comment that
+  those bands drop no signal.
+- **B11** daemon-timeout double count — `daemon/handlers.ts:47` appends the
+  overlay event, and a client timeout after that write makes `saver-run.ts:108-138`
+  fall back and append it again.
+- **B12** `compressProse` (first paragraph per section + first 3 list items) and
+  `compressJson` (first 3 + last of any array ≥20, intent-matched values not
+  preserved). Prose is `saver-savings-gaps` D20, a conscious accept — re-opened
+  only because the new integrity contract demands a marker or recoverability.
+
+Two claims from that page checked and corrected on the page itself: its A10
+("audit pipeline dead") is wrong — `commands/context/build.ts:38` calls
+`appendAuditEvent`; its B9 (multi-text-block collapse) is overstated — all text
+survives, only inter-block boundaries are lost. The two audit pages are now
+cross-linked as companions rather than left as competing duplicates.
+
+Also recorded in the plan: A0 adds a **third** candidate for the coordinate
+question the spec left open — line provenance, so delivered gap markers speak the
+file's RAW line numbers rather than post-collapse ones. Recommended over the
+footer map, because raw line numbers are what an agent actually reasons in.

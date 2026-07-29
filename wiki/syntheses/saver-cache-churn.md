@@ -146,6 +146,21 @@ ref still exists, so `git merge-base --is-ancestor` reports it unmerged, but
 patch-equivalents on `main`. The guardrail is live, not dormant:
 `apps/cli/src/hooks/saver-run.ts` wires `saverPausedByNetEffect` and the
 seen-hash ledger into the real hook. The harness that could resolve the effect
+
+> **CORRECTION (2026-07-28):** two claims in the paragraph above are false
+> against current code — see [[syntheses/saver-root-cause-2026-07-28]] §D.
+> (1) **`saverPausedByNetEffect` does not exist.** No such symbol is defined or
+> referenced anywhere; net-effect records are read only by
+> `apps/cli/src/commands/doctor-saver.ts` and
+> `apps/cli/src/commands/session/saver/resolve.ts` — diagnostic, never
+> enforcement. Only the seen-hash ledger is actually wired into the hook.
+> (2) **The run-2 carry-over cause is unverified.** `saver-seen.ts:20` keys the
+> ledger at `stats/<wk>/saver-seen/<sessionId>.json` — session-scoped — and
+> `bench-replay`'s session id is caller-supplied (`saver-subprocess.ts:106,114`)
+> with no in-repo caller found. Unless the harness reuses session ids, the stated
+> cause is wrong and run 2's no-op is unexplained. The "no stage can be validated
+> with this harness" conclusion rests on it; fresh-store benchmark hygiene should
+> be justified by workspace-scoped net-effect/stats records instead.
 (`@megasaver/bench-replay`) now exists but has never been run against the real
 API, so the conclusion above applies to shipped behaviour.
 
