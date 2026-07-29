@@ -8,6 +8,7 @@ import { StatsError } from "./errors.js";
 import {
   type OverlayTokenSaverEvent,
   type TokenSaverEvent,
+  deltaBytesOf,
   overlayTokenSaverEventSchema,
   tokenSaverEventSchema,
 } from "./event.js";
@@ -72,12 +73,15 @@ function rebuildSummaryFromEvents(
   sessionId: SessionId,
 ): SessionTokenSaverStats {
   const rebuilt = emptySummary(sessionId);
+  let deltaBytesTotal = 0;
   for (const event of readEvents(store, projectId, sessionId)) {
     rebuilt.eventsTotal += 1;
     rebuilt.rawBytesTotal += event.rawBytes;
     rebuilt.returnedBytesTotal += event.returnedBytes;
     rebuilt.bytesSavedTotal += event.bytesSaved;
+    deltaBytesTotal += deltaBytesOf(event);
   }
+  rebuilt.deltaBytesTotal = deltaBytesTotal;
   rebuilt.savingRatio =
     rebuilt.rawBytesTotal === 0 ? 0 : rebuilt.bytesSavedTotal / rebuilt.rawBytesTotal;
   atomicWriteFile(summaryPath(store, projectId, sessionId), JSON.stringify(rebuilt));
@@ -91,6 +95,7 @@ function emptySummary(sessionId: SessionId): SessionTokenSaverStats {
     rawBytesTotal: 0,
     returnedBytesTotal: 0,
     bytesSavedTotal: 0,
+    deltaBytesTotal: 0,
     savingRatio: 0,
     secretsRedactedTotal: 0,
     chunksStoredTotal: 0,
@@ -124,6 +129,9 @@ export function appendEvent(input: AppendEventInput): SessionTokenSaverStats {
     rawBytesTotal,
     returnedBytesTotal: prior.returnedBytesTotal + event.returnedBytes,
     bytesSavedTotal,
+    // B1: seed a pre-B1 summary from its legacy clamped total, then fold the
+    // signed delta — the signed aggregate stays continuous with history.
+    deltaBytesTotal: (prior.deltaBytesTotal ?? prior.bytesSavedTotal) + deltaBytesOf(event),
     savingRatio: rawBytesTotal === 0 ? 0 : bytesSavedTotal / rawBytesTotal,
     secretsRedactedTotal: prior.secretsRedactedTotal + secretsRedacted,
     chunksStoredTotal: prior.chunksStoredTotal + chunksStored,
@@ -244,6 +252,7 @@ export function rebuildOverlaySummaryFromEvents(
   let rawBytesTotal = 0;
   let returnedBytesTotal = 0;
   let bytesSavedTotal = 0;
+  let deltaBytesTotal = 0;
   let secretsFolded = 0;
   let chunksFolded = 0;
   for (const event of events) {
@@ -251,6 +260,7 @@ export function rebuildOverlaySummaryFromEvents(
     rawBytesTotal += event.rawBytes;
     returnedBytesTotal += event.returnedBytes;
     bytesSavedTotal += event.bytesSaved;
+    deltaBytesTotal += deltaBytesOf(event);
     secretsFolded += event.secretsRedacted ?? 0;
     chunksFolded += event.chunksStored ?? 0;
   }
@@ -260,6 +270,7 @@ export function rebuildOverlaySummaryFromEvents(
     rawBytesTotal,
     returnedBytesTotal,
     bytesSavedTotal,
+    deltaBytesTotal,
     savingRatio: rawBytesTotal === 0 ? 0 : bytesSavedTotal / rawBytesTotal,
     secretsRedactedTotal: carryForward?.secretsRedactedTotal ?? secretsFolded,
     chunksStoredTotal: carryForward?.chunksStoredTotal ?? chunksFolded,
@@ -381,6 +392,7 @@ function emptyOverlaySummary(liveSessionId: string): OverlaySessionTokenSaverSta
     rawBytesTotal: 0,
     returnedBytesTotal: 0,
     bytesSavedTotal: 0,
+    deltaBytesTotal: 0,
     savingRatio: 0,
     secretsRedactedTotal: 0,
     chunksStoredTotal: 0,
@@ -426,6 +438,9 @@ export function appendOverlayEvent(input: AppendOverlayEventInput): OverlaySessi
       rawBytesTotal,
       returnedBytesTotal: base.returnedBytesTotal + event.returnedBytes,
       bytesSavedTotal,
+      // B1: same seeding rule as the registry fold — a pre-B1 summary
+      // contributes its legacy clamped total, then signed deltas accumulate.
+      deltaBytesTotal: (base.deltaBytesTotal ?? base.bytesSavedTotal) + deltaBytesOf(event),
       savingRatio: rawBytesTotal === 0 ? 0 : bytesSavedTotal / rawBytesTotal,
       secretsRedactedTotal: base.secretsRedactedTotal + secretsRedacted,
       chunksStoredTotal: base.chunksStoredTotal + chunksStored,
@@ -481,6 +496,7 @@ export type WorkspaceTokenSaverTotals = {
   rawBytesTotal: number;
   returnedBytesTotal: number;
   bytesSavedTotal: number;
+  deltaBytesTotal: number;
   savingRatio: number;
   secretsRedactedTotal: number;
   chunksStoredTotal: number;
@@ -511,6 +527,7 @@ export function readWorkspaceTokenSaverTotals(
     rawBytesTotal: 0,
     returnedBytesTotal: 0,
     bytesSavedTotal: 0,
+    deltaBytesTotal: 0,
     savingRatio: 0,
     secretsRedactedTotal: 0,
     chunksStoredTotal: 0,
@@ -537,6 +554,9 @@ export function readWorkspaceTokenSaverTotals(
     totals.rawBytesTotal += summary.rawBytesTotal;
     totals.returnedBytesTotal += summary.returnedBytesTotal;
     totals.bytesSavedTotal += summary.bytesSavedTotal;
+    // B1: a summary that never saw a signed append contributes its legacy
+    // clamped total — same seeding rule as the per-session folds.
+    totals.deltaBytesTotal += summary.deltaBytesTotal ?? summary.bytesSavedTotal;
     totals.secretsRedactedTotal += summary.secretsRedactedTotal;
     totals.chunksStoredTotal += summary.chunksStoredTotal;
     // Compare parsed epoch ms, not raw ISO strings: an ISO timestamp with a
@@ -561,6 +581,7 @@ export function readWorkspaceTokenSaverTotals(
 
 export type AllWorkspaceTokenSaverTotals = {
   bytesSavedTotal: number;
+  deltaBytesTotal: number;
   sessionsCount: number;
   savingRatio: number;
   workspaceCount: number;
@@ -573,6 +594,7 @@ export type AllWorkspaceTokenSaverTotals = {
 // effort: a missing stats/ dir yields zeros; an unreadable workspace is skipped.
 export function readAllWorkspaceTokenSaverTotals(store: StatsStore): AllWorkspaceTokenSaverTotals {
   let bytesSavedTotal = 0;
+  let deltaBytesTotal = 0;
   let rawBytesTotal = 0;
   let sessionsCount = 0;
   let workspaceCount = 0;
@@ -590,11 +612,13 @@ export function readAllWorkspaceTokenSaverTotals(store: StatsStore): AllWorkspac
     workspaceCount += 1;
     sessionsCount += totals.sessionsCount;
     bytesSavedTotal += totals.bytesSavedTotal;
+    deltaBytesTotal += totals.deltaBytesTotal;
     rawBytesTotal += totals.rawBytesTotal;
   }
 
   return {
     bytesSavedTotal,
+    deltaBytesTotal,
     sessionsCount,
     savingRatio: rawBytesTotal === 0 ? 0 : bytesSavedTotal / rawBytesTotal,
     workspaceCount,
