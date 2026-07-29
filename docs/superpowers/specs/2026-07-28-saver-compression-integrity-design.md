@@ -1036,3 +1036,39 @@ attributable evaluation has not been run (item 12).
 - The `context-gate` parallel-`turbo` flake is **not** context-gate-specific: an
   `mcp-bridge` recall test failed once under a parallel run and passed on rerun
   and in isolation.
+
+
+## 8. Floor decoupling — implemented, deliberately not adopted (2026-07-29)
+
+§W1 lever (a) was built, tested and then **left out of the default**, by an
+explicit decision after the numbers came in. Recording it here because §7's
+earlier text said it shipped, and it does not.
+
+**What exists.** `COMPRESS_FLOOR_BYTES` (2048) in `record-output.ts` is the
+decoupled eligibility floor, and the admission guard's minimum-saving floors
+(`DEFAULT_SAVING_FLOORS`, 256 B / 0.15) are on. Passing `compressFloorBytes`
+opts in per call. `test/floor-decoupling.test.ts` proves the capability works
+in all three modes.
+
+**What ships.** The default floor is still `modeToBudget(mode)`, and
+`minBytesFor` in the hook still derives per-tool floors from it, including the
+`BASH_COMPRESS_FLOOR` / `BACKGROUND_SHELL_TOOLS` caps that keep safe mode under
+Claude Code's ~30 000-char truncation ceiling. Those were deleted when the floor
+was decoupled and are restored — deleting them would have re-opened the B9 dead
+zone that a separate fix had closed.
+
+**Why not adopted.** Adoption moves the shipped trigger from 32 KB to 2 KB under
+`safe`: far more rewrites, on far smaller outputs. A rewrite invalidates the
+client's prompt cache, and `wiki/syntheses/saver-cache-churn` measured that at
+~18k tokens of cache re-creation — against which the 2 263 B saving measured at
+the 3 KB cell does not pay. The ratio case is measured; the cost case is not,
+and **cost is what the §W1 gate turns on.** The final verifier put it plainly:
+whether 2048 is the right number cannot be defended in either direction on the
+evidence available.
+
+`test/floor-decoupling.test.ts` carries an adoption guard: a test asserting the
+default still passes a 3 KB input through. Wiring the constant in as the default
+fails it, so the change cannot happen silently.
+
+**To adopt:** run the real-API benchmark, and if net cost holds at constant
+integrity, change one default and delete that guard.

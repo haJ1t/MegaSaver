@@ -15,7 +15,7 @@ import {
   filterOutput,
 } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
-import type { TokenSaverMode, WorkspaceKey } from "@megasaver/shared";
+import { type TokenSaverMode, type WorkspaceKey, modeToBudget } from "@megasaver/shared";
 import { appendOverlayEvent } from "@megasaver/stats";
 import { DEFAULT_SAVING_FLOORS, admitCompression } from "./admission-guard.js";
 import { recoverableChunks } from "./recoverable-chunks.js";
@@ -49,11 +49,22 @@ export const EVIDENCE_RETENTION_MS = 30 * 86_400_000;
 // function returns before storing anything, such output was not merely
 // uncompressed: it had no recovery handle either.
 //
+// The decoupled eligibility floor — §W1 lever (a). NOT the default.
+//
 // 2048 is where safe mode's share stops being overridden: fit.ts targets
 // max(MIN_TARGET_BYTES, rawBytes * ratio), so below MIN_TARGET_BYTES / 0.5 the
 // 1024-byte minimum-signal clamp binds instead of safe's half-share and the
 // saving collapses toward zero. That makes it the smallest input for which
 // every mode's target is still its own ratio.
+//
+// It is exported and tested but not wired as the default, because adopting it
+// moves the shipped trigger from 32 KB to 2 KB under `safe` — many more, much
+// smaller rewrites. Rewriting a tool_result invalidates the client's prompt
+// cache, and wiki/syntheses/saver-cache-churn measured that tax at ~18k tokens
+// of cache re-creation, against which a 2 KB saving does not pay. The ratio
+// case for adopting it is measured; the cost case is not, and the cost case is
+// the one the §W1 gate turns on. Pass it explicitly via `compressFloorBytes`
+// to opt in.
 export const COMPRESS_FLOOR_BYTES = 2_048;
 
 export type RecordOverlayOutputInput = {
@@ -182,7 +193,7 @@ export async function recordAndFilterOverlayOutput(
   // UUIDs — evidenceId is UUID-schema-constrained and the ledger is append-only.
   const chunkSetIdGen = input.newId ?? (() => randomUUID());
 
-  const floorBytes = input.compressFloorBytes ?? COMPRESS_FLOOR_BYTES;
+  const floorBytes = input.compressFloorBytes ?? modeToBudget(input.mode);
   // ~4 bytes/token, mirroring output-filter estimateTokens.
   const thresholdTokens = Math.max(1, Math.ceil(floorBytes / 4));
 

@@ -151,7 +151,15 @@ describe("W1 lever (a): the eligibility floor is decoupled from the mode budget"
     expect(bytes).toBeLessThan(modeToBudget("aggressive"));
   });
 
-  it("compresses a ~3 KB input in the shipped default mode and clears the guard", async () => {
+  // The decoupled floor is IMPLEMENTED but NOT the default. Adopting it moves
+  // the shipped trigger from 32 KB to 2 KB under `safe` — far more, far smaller
+  // rewrites — and a rewrite invalidates the client's prompt cache at a measured
+  // ~18k-token tax (wiki/syntheses/saver-cache-churn). The ratio case for it is
+  // measured; the cost case is not, and the §W1 gate turns on cost. So these
+  // tests pin two things: passing the floor explicitly works, and NOT passing it
+  // leaves the conservative behaviour in place.
+
+  it("compresses a ~3 KB input in the default mode when the floor is passed", async () => {
     const r = await recordAndFilterOverlayOutput({
       storeRoot: store(),
       workspaceKey: WK,
@@ -159,10 +167,11 @@ describe("W1 lever (a): the eligibility floor is decoupled from the mode budget"
       raw: SMALL_TS_SOURCE,
       sourceKind: "file",
       label: "/Users/x/proj/src/ledger.ts",
-      // "safe" is DEFAULT_MODE. Its 32 KB budget used to be the eligibility
-      // floor, so this input passed through untouched and no chunk set was
-      // written — the input had no recovery handle at all.
+      // "safe" is DEFAULT_MODE, and its 32 KB budget is still the DEFAULT
+      // eligibility floor — so this input needs the decoupled floor named
+      // explicitly to be touched at all.
       mode: "safe",
+      compressFloorBytes: COMPRESS_FLOOR_BYTES,
       storeRawOutput: true,
       includeFooter: true,
     });
@@ -175,7 +184,7 @@ describe("W1 lever (a): the eligibility floor is decoupled from the mode budget"
     expect(r.savingRatio).toBeGreaterThan(DEFAULT_SAVING_FLOORS.relative);
   });
 
-  it("compresses the same ~3 KB input in every mode, not just the smallest budget", async () => {
+  it("works in every mode once the floor is named, not just the smallest budget", async () => {
     for (const mode of MODES) {
       const r = await recordAndFilterOverlayOutput({
         storeRoot: store(),
@@ -185,11 +194,30 @@ describe("W1 lever (a): the eligibility floor is decoupled from the mode budget"
         sourceKind: "file",
         label: "/Users/x/proj/src/ledger.ts",
         mode,
+        compressFloorBytes: COMPRESS_FLOOR_BYTES,
         storeRawOutput: true,
         includeFooter: true,
       });
       expect({ mode, decision: r.decision }).toEqual({ mode, decision: "compressed" });
     }
+  });
+
+  it("leaves the default coupled to the mode budget until cost is measured", async () => {
+    // The guard against silent adoption: if someone wires COMPRESS_FLOOR_BYTES
+    // in as the default, this fails and they have to justify it against the
+    // churn measurement rather than discovering the change in production.
+    const r = await recordAndFilterOverlayOutput({
+      storeRoot: store(),
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: SMALL_TS_SOURCE,
+      sourceKind: "file",
+      label: "/Users/x/proj/src/ledger.ts",
+      mode: "safe",
+      storeRawOutput: true,
+      includeFooter: true,
+    });
+    expect(r.decision).toBe("passthrough");
   });
 });
 
@@ -229,6 +257,10 @@ describe("W2 follow-up: the shipped admission floors are active", () => {
       sourceKind: "file",
       label: "/Users/x/proj/src/ledger.ts",
       mode: "safe",
+      // Named explicitly: the default floor is still the mode budget, so
+      // without this the input never reaches the guard at all and the spy
+      // records nothing — the assertion would pass vacuously.
+      compressFloorBytes: COMPRESS_FLOOR_BYTES,
       storeRawOutput: true,
       includeFooter: true,
     });

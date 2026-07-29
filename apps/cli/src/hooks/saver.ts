@@ -1,7 +1,7 @@
-import { COMPRESS_FLOOR_BYTES, type FailureKind, hashToolOutput } from "@megasaver/context-gate";
+import { type FailureKind, hashToolOutput } from "@megasaver/context-gate";
 import type { RecordOverlayOutputInput, RecordOverlayOutputResult } from "@megasaver/core";
 import type { OutputSourceKind } from "@megasaver/output-filter";
-import { type TokenSaverMode, encodeWorkspaceKey } from "@megasaver/shared";
+import { type TokenSaverMode, encodeWorkspaceKey, modeToBudget } from "@megasaver/shared";
 
 // PostToolUse processes the OUTPUT of these read/observe tools. Write/Edit and
 // MCP tools are skipped (nothing to read-compress / already proxied).
@@ -23,10 +23,14 @@ const TOOL_SOURCE: Record<string, OutputSourceKind> = {
 
 // Mega's own bridge tools are already compressed upstream — never re-compress.
 const MEGA_MCP_TOOL = /^mcp__megasaver__/i;
-// The six native tools that predate wave-1 take the plain compress floor; every
-// newer/coarser surface (Task/background/search/mcp__*) takes the higher one.
+// The six native tools that predate wave-1 keep their plain mode budget;
+// every newer/coarser surface (Task/background/search/mcp__*) gets the floor.
 const ORIGINAL_TOOLS = new Set(["Read", "LS", "Bash", "Grep", "Glob", "WebFetch"]);
 export const NEW_SURFACE_MIN_BYTES = 16_384;
+// Claude Code truncates Bash output at ~30 000 chars before the hook sees it;
+// a gate at or above that ceiling means "never compress a command" (B9). Keep
+// the Bash floor below the ceiling so safe mode still saves on commands.
+export const BASH_COMPRESS_FLOOR = 24_000;
 
 function resolveSourceKind(tool: string): OutputSourceKind | undefined {
   const mapped = TOOL_SOURCE[tool];
@@ -35,15 +39,27 @@ function resolveSourceKind(tool: string): OutputSourceKind | undefined {
   return undefined;
 }
 
-// §W1 lever (a): the gate answers "is this output worth touching", which does
-// not depend on how hard the mode then compresses — so it no longer derives
-// from modeToBudget. That coupling is what produced the B9 dead zones: safe
-// mode's 32000 floor sat above Claude Code's ~30000-char Bash/background-shell
-// truncation ceiling, so a command could never clear it, and the per-tool
-// min/max juggling that worked around it is gone with the cause. Both floors
-// are now well under that ceiling by construction.
-export function minBytesFor(tool: string): number {
-  return ORIGINAL_TOOLS.has(tool) ? COMPRESS_FLOOR_BYTES : NEW_SURFACE_MIN_BYTES;
+// BashOutput/Monitor retrieve background-shell output, which shares Bash's
+// ~30000-char truncation ceiling (undocumented, but the same shell machinery),
+// so safe mode's 32000 floor would never fire — the B9 dead zone. Cap them
+// below the ceiling too, while keeping the coarse 16384 new-surface floor for
+// aggressive/balanced. Task is a subagent report (not shell-truncated,
+// effectively unbounded) so its large reports already clear 32000 — it keeps
+// the plain new-surface floor.
+const BACKGROUND_SHELL_TOOLS = new Set(["BashOutput", "Monitor"]);
+
+// §W1 lever (a) is implemented but NOT adopted here: the gate still derives
+// from the mode budget. COMPRESS_FLOOR_BYTES (context-gate) is the decoupled
+// value and is exported and tested; wiring it in would move the shipped trigger
+// from 32 KB to 2 KB under `safe`, which is far more, far smaller rewrites —
+// and a rewrite invalidates the client's prompt cache at a measured ~18k-token
+// tax (wiki/syntheses/saver-cache-churn). That trade is unmeasured, and it is
+// the cost axis the §W1 gate turns on, so the conservative floor stays.
+export function minBytesFor(tool: string, mode: TokenSaverMode): number {
+  const budget = modeToBudget(mode);
+  if (tool === "Bash") return Math.max(budget + 1, Math.min(budget, BASH_COMPRESS_FLOOR));
+  const floor = ORIGINAL_TOOLS.has(tool) ? budget : Math.max(budget, NEW_SURFACE_MIN_BYTES);
+  return BACKGROUND_SHELL_TOOLS.has(tool) ? Math.min(floor, BASH_COMPRESS_FLOOR) : floor;
 }
 
 export type SaverSettings = { enabled: boolean; mode: TokenSaverMode };
@@ -313,7 +329,7 @@ async function decide(
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const shape = readOutputShape(p["tool_response"]);
   if (shape === null) return PASSTHROUGH;
-  const floorBytes = minBytesFor(tool);
+  const floorBytes = minBytesFor(tool, settings.mode);
   if (Buffer.byteLength(shape.raw, "utf8") <= floorBytes) return PASSTHROUGH;
 
   // P1: a seen output is already in the conversation and (likely) in the
