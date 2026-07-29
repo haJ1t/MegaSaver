@@ -368,8 +368,8 @@ intensity is allowed.
   compression, memory schema change, session storage format,
   connector core path, public CLI flags, anything touching user
   files at scale.
-- Mandatory: full chain + `omc:architect` for design
-  + `omc:critic` adversarial review + worktree (no `main` edits).
+- Mandatory: full chain + `architect` for design
+  + `critic` adversarial review + worktree (no `main` edits).
 - Required reviewer: `code-reviewer` AND `critic` (separate
   passes).
 - Skill mode: evidence-preserving only. No aggressive compression.
@@ -379,10 +379,10 @@ intensity is allowed.
 - Examples: cryptographic ops, anything that deletes user data,
   anything that mutates user repos beyond known ignore patterns,
   license / permission code, production incident response.
-- Mandatory: HIGH chain + `omc:tracer` evidence loop
-  + `omc:security-reviewer` + verifier with reproduction evidence
+- Mandatory: HIGH chain + `tracer` evidence loop
+  + `security-reviewer` + `verifier` with reproduction evidence
   + manual user confirmation in spec.
-- Forbidden: `autopilot`, `ralph`, or any unsupervised loop.
+- Forbidden: any unsupervised or self-referential loop.
 - Skill mode: debug + evidence only. No log compression.
 
 ## Risk assignment
