@@ -1100,3 +1100,32 @@ committed at `packages/bench-replay/token-divergence-report.json`):
 | overall | 0.996 |
 
 bytes/4 is within ~4% on code/prose/Turkish but understates JSON ~19%.
+
+### [2026-07-29] Track B — B6/B7/B8/B9 landed; B10 diagnosis (fix not mine)
+
+**B6** (`dd495c17`) compressTsc: keeps position-less `error TSxxxx` lines,
+elaborations and code frames; anything genuinely dropped is an exactly-counted
+`… [N non-diagnostic lines omitted — recoverable via stored chunks]` marker.
+**B7** (`51f6c1da`) classifier: bare `error TS…` mention no longer classifies
+(positioned form or tsc-ish command required). **B8** (`12e69d1c`) parseGoTest
+keeps panic blocks (panic: signature). **B9** (`7492b11f`) prose appends a
+recoverability note on any collapse; compressJson actually preserves
+all-scalar intent-key values (the `(kept: intent)` claim was false).
+All against the A1 contract shape. output-filter 489/489 green.
+
+**B10 — daemon-timeout double count, DIAGNOSIS (fix lives in apps/cli, not my
+files — for whoever owns saver-run.ts):**
+`makeRecord` (`apps/cli/src/hooks/saver-run.ts:108-138`) POSTs `/excerpt` with
+a 1500 ms abort. The daemon's `excerptHandler`
+(`packages/daemon/src/handlers.ts:40-58`) runs the full
+`recordAndFilterOverlayOutput`, which appends the overlay event BEFORE
+responding. A client-side abort after the daemon wrote → hook falls back to
+in-process record (line 137) → second event, fresh randomUUID → savings
+double-counted. The chunk-set write is idempotent (content-addressed id, sent
+in the body); the event write is not. `recordDaemonFallback` already counts
+these fallbacks, so the condition is observable in telemetry.
+Recommended fix: make the compression event id DETERMINISTIC
+(e.g. sha256(workspaceKey, liveSessionId, chunkSetId)) and have the store's
+append skip a duplicate id — store-layer idempotency covers every writer,
+including this race. Alternatives (response-before-write, timeout
+distinction) are unsound.

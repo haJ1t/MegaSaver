@@ -7520,3 +7520,13 @@ Corrected in the plan: worktrees branch from `docs/saver-integrity-spec`, NOT
 `main` — `main` does not yet carry the spec, plans or wiki record, so a worktree
 cut from it would have no source of truth and every track's `log.md` append would
 conflict.
+
+## [2026-07-29] query | Track B (saver accounting) landed
+
+B1–B10 of the saver-integrity programme executed on feat/saver-b-accounting
+(TDD throughout): signed savings (B1 gate: negative aggregate in mega audit),
+model-facing bytes module, recovery-debt events, real BPE + divergence numbers,
+field telemetry + fresh-store guard, tsc/classifier/go-test/prose+json fixes
+against the A1 contract. Outcomes appended to
+[[syntheses/saver-root-cause-2026-07-28]]; B10 diagnosis and per-item detail on
+agent-channel.

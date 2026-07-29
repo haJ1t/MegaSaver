@@ -144,3 +144,28 @@ until real-session telemetry exists.
 Architecture, not a bug: floor == budget; delivered space ≠ stored space; in-place
 rewrite vs native cache. B1/B2/C are real defects sitting on top, but none of them
 is the reason the product misses its target.
+
+## Outcomes (updated 2026-07-29, Track B)
+
+Track B (`feat/saver-b-accounting`) landed the W0 observability layer and the
+three evidence-loss compressors against the A1 contract:
+
+- **B1 signed savings:** `deltaBytes`/`deltaBytesTotal` on both event+summary
+  schemas; inflation now produces a NEGATIVE aggregate in `mega audit` (gate
+  demonstrated). Legacy clamped fields kept one minor version.
+- **B2 model-facing bytes:** `model-facing-bytes.ts` created+exported
+  (summary + excerpts + gap markers + footer + MCP envelope); Track A wires.
+- **B3 recovery debt:** `fetchChunk` appends a signed expansion event
+  (`kind:"expansion"`, `deltaBytes = -fetched`); signed aggregates are NET.
+- **B4 real tokenizer:** `countTokens` (cl100k_base, lazy) at the reporting
+  boundary; divergence measured — code 0.975, prose 1.013, json 1.193,
+  turkish 0.961 (bytes/4 understates JSON ~19%).
+- **B5 field telemetry + fresh-store enforcement** in bench-replay.
+- **B6–B9:** compressTsc silent drop, classifier over-reach, go-test panic
+  drop, prose/json dishonest promises — all fixed red→green.
+- **B10 daemon-timeout double count:** diagnosed, fix reported (deterministic
+  event id + store-level idempotency); owner: saver-run.ts.
+
+Remaining from this page's inventory: dedupe-on-passthrough (spec B10) —
+unassigned to any track; stdout/stderr single-stream gate (spec B8) — Track A
+territory (saver.ts is Track C's; see work-split).
