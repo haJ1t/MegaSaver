@@ -1050,3 +1050,53 @@ are unblocked** — write them against this contract. Its helper
 `assertNothingLost(raw, delivered, recovered)` is the shape your compressor fixes
 must satisfy; a compressor that cannot may instead emit an explicit marker naming
 what it removed, but silent deletion fails the contract.
+
+### [2026-07-29] Track B — B1 signed savings LANDED; store.ts ownership flag
+
+**B1 done and gated** (commit `3c175ea7` on `feat/saver-b-accounting`).
+`deltaBytes` (signed, `rawBytes - returnedBytes`, never clamped) is on both
+event schemas; `deltaBytesTotal` on both summary schemas; all folds (append,
+rebuild, workspace totals) accumulate the signed field via `deltaBytesOf`
+(legacy rows read as their clamped `bytesSaved`). Migration shape is in the
+commit body. Gate evidence: inflating event (raw 1000 → returned 1200) →
+`"deltaBytesTotal":-200` in `mega audit session --json`; legacy
+`bytesSavedTotal` still says 0. Stats 262/262 green, repo build+typecheck green.
+**Track A: A4 is unblocked on the accounting side.**
+
+**Ownership flag:** the packet's file list has `stats/event.ts` + `summary.ts`
+for B1, but the summary fold lives in `stats/store.ts`, which **no track owns**.
+I edited it (fold-only, no reader changes) — without it the signed aggregate
+cannot exist. If that was meant to be someone else's, say so and we re-split.
+
+**Known gap (not mine to fix):** the text card `formatOverlaySaverCard`
+(`apps/cli/src/commands/audit/shared.ts`, unowned by any track) still prints
+only clamped `bytesSavedTotal`. The signed number is in `--json` output;
+surfacing it in text cards / GUI needs a CLI+GUI surface pass.
+
+### [2026-07-29] Track B — B3 recovery debt + B4 divergence numbers
+
+**B3 landed** (commit `55f8067f`). `fetchChunk` appends a signed expansion
+event (`kind:"expansion"`, `deltaBytes = -fetched`) on both store layouts;
+the B1 fold makes every signed aggregate NET (compression − Σ expansions).
+Schema: `kind` optional (absent = compression), `mode` now optional (an
+expansion is charged to the session, not produced under a mode). No reader
+consumes `event.mode`; repo typecheck green. **Gap:** daemon overlay handler
+(`packages/daemon/src/handlers.ts:72`) calls `fetchOverlayChunk` directly and
+stays uncounted — outside my file list; route it through `fetchChunk` or give
+`fetchOverlayChunk` the same hook.
+
+**B4 landed** (commit `89f5daf2`). `countTokens` (cl100k_base, lazy + memoized,
+no-eager guard pinned) exported from output-filter; `estimateTokens` untouched
+for hot-path gating. **Divergence numbers Track A's admission guard needs**
+(harness `packages/bench-replay/scripts/measure-token-divergence.mjs`, report
+committed at `packages/bench-replay/token-divergence-report.json`):
+
+| corpus | real/est |
+|---|---|
+| code | 0.975 |
+| prose | 1.013 |
+| json | **1.193** |
+| turkish | 0.961 |
+| overall | 0.996 |
+
+bytes/4 is within ~4% on code/prose/Turkish but understates JSON ~19%.
