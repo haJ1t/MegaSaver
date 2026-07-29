@@ -168,7 +168,14 @@ export async function recordAndFilterOverlayOutput(
   const filtered = await filterOutput({
     raw: input.raw,
     mode: input.mode,
-    maxReturnedBytes: modeToBudget(input.mode),
+    // A4: deliberately NOT passing maxReturnedBytes. It used to be set to
+    // modeToBudget(mode) — the exact value the filter defaults to — so it
+    // changed nothing, but `maxReturnedBytes` means "the caller named an
+    // explicit size" and therefore SUPPRESSES the mode's target ratio. Passing
+    // a redundant default here silently pinned every hook-path output to the
+    // mode ceiling, which is the fixed-size-truncator behaviour A4 exists to
+    // remove. Sessions that genuinely set a size still reach the filter through
+    // run-command's settings.maxReturnedBytes.
     passthroughThresholdTokens: thresholdTokens,
     hardWrapThresholdTokens: thresholdTokens,
     // RAW label, not the redacted one: the file extension must survive for

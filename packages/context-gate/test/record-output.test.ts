@@ -491,20 +491,27 @@ describe("multi-chunk overlay write (C12)", () => {
 
   it("D16: excerpts render in source order with elision markers", async () => {
     const storeRoot = store();
-    // 200 lines; errors at 41-80 and 121-160 outrank filler under budget
-    // pressure; the two kept blocks are non-adjacent -> gap markers. ~40-char
-    // lines keep each 40-line chunk ≈1.6KB so both error chunks fit 4000 B.
+    // Five 130-line blocks; errors in blocks 2 and 4 outrank filler under
+    // budget pressure, and the two kept blocks are non-adjacent -> gap markers.
     // The second block carries the token "failure" (not "FATAL", which the
     // ranker's error lexicon does not recognize) so it scores as an error;
     // the wording stays distinct from block one so simhash cannot collapse them.
+    //
+    // Two things are load-bearing since A4. The budget is a SHARE of the input
+    // (balanced: a quarter), not a flat 4000 B, so the input must be large
+    // enough that the share holds both kept chunks — hence 200 lines of filler
+    // per block, and balanced rather than aggressive, whose eighth fits only
+    // one error region and makes the second assertion fail for a reason that
+    // has nothing to do with D16 rendering. The error blocks stay exactly 40
+    // lines and start on a chunk boundary so each is ONE chunk.
     const block = (start: number, n: number, mk: (i: number) => string) =>
       Array.from({ length: n }, (_, i) => mk(start + i));
     const lines = [
-      ...block(1, 40, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
-      ...block(41, 40, (i) => `ERROR: build exploded at step ${i} ${"x".repeat(10)}`),
-      ...block(81, 40, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
-      ...block(121, 40, (i) => `FATAL: linker gave up on unit ${i} failure ${"x".repeat(10)}`),
-      ...block(161, 40, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
+      ...block(1, 200, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
+      ...block(201, 40, (i) => `ERROR: build exploded at step ${i} ${"x".repeat(10)}`),
+      ...block(241, 200, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
+      ...block(441, 40, (i) => `FATAL: linker gave up on unit ${i} failure ${"x".repeat(10)}`),
+      ...block(481, 200, (i) => `info: quiet filler line ${i} ${"x".repeat(10)}`),
     ];
     const raw = lines.join("\n");
     const r = await recordAndFilterOverlayOutput({
@@ -514,27 +521,31 @@ describe("multi-chunk overlay write (C12)", () => {
       raw,
       sourceKind: "command",
       label: "pnpm verify",
-      mode: "aggressive",
+      mode: "balanced",
       storeRawOutput: true,
       compressFloorBytes: 4000,
     });
     expect(r.decision).toBe("compressed");
     const text = r.returnedText;
     expect(text).toMatch(/… \[lines \d+-\d+ omitted\]/);
-    const firstErr = text.indexOf("ERROR: build exploded at step 41");
-    const secondErr = text.indexOf("FATAL: linker gave up on unit 121");
+    const firstErr = text.indexOf("ERROR: build exploded at step 201");
+    const secondErr = text.indexOf("FATAL: linker gave up on unit 441");
     expect(firstErr).toBeGreaterThan(-1);
     expect(secondErr).toBeGreaterThan(firstErr);
-    const leadMarker = text.indexOf("… [lines 1-40 omitted]");
+    const leadMarker = text.indexOf("… [lines 1-200 omitted]");
     if (leadMarker !== -1) expect(leadMarker).toBeLessThan(firstErr);
   });
 
-  it("D16: gap markers stay in collapsed line space (no phantom raw-space tail)", async () => {
+  // Was: "gap markers stay in collapsed line space (no phantom raw-space tail)".
+  // A3 inverted that: markers are now numbered in RAW space precisely because
+  // collapsed numbering cannot address the stored chunks. The old assertion
+  // also passed vacuously — this fixture produces no gap markers at all, so it
+  // proved nothing in either direction. Re-pointed at what the fixture actually
+  // demonstrates end-to-end, which nothing else covered at this level: a
+  // 2000-line identical run is folded, and its COUNT reaches the model (A3b).
+  // The coordinate question now lives in recovery-addressability.test.ts.
+  it("A3b: a folded run's count survives into the delivered text", async () => {
     const storeRoot = store();
-    // 2030 raw lines, but a 2000-line identical block collapses to a single
-    // '[repeated ...]' line -> excerpts index into a ~30-line collapsed space.
-    // A raw-space total would emit '… [lines 33-2030 omitted]'; markers must
-    // reference the collapsed space, so no 4-digit range may appear.
     const distinct = Array.from(
       { length: 30 },
       (_, i) => `ERROR: build broke at distinct stage ${i} zzz`,
@@ -556,7 +567,10 @@ describe("multi-chunk overlay write (C12)", () => {
       compressFloorBytes: 4000,
     });
     expect(r.decision).toBe("compressed");
-    expect(r.returnedText).not.toMatch(/\d{4,}\s+omitted/);
+    expect(
+      r.returnedText,
+      "without the count the model sees one heartbeat line and cannot know 1999 more existed",
+    ).toContain("[repeated 2000 times]");
   });
 });
 

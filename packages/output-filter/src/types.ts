@@ -6,7 +6,7 @@ import { type Classification, classifyOutput, isConfidentClassification } from "
 import { type CompressorName, compressByCategory } from "./compress/index.js";
 import { dedupe } from "./dedupe.js";
 import { OutputFilterError } from "./errors.js";
-import { effectiveBudget, fitBudget } from "./fit.js";
+import { effectiveBudget, fitBudget, targetBudget } from "./fit.js";
 import {
   type LineSpan,
   collapseRepeatedLinesTraced,
@@ -337,7 +337,15 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   const deduped = skipDedupe ? ranked : dedupe(ranked);
 
   const ordered = [...deduped].sort((a, b) => b.score - a.score);
-  const budget = effectiveBudget(maxReturnedBytes, modeToBudget(mode));
+  // A4 (§W1): the mode budget is the ceiling; the target is a share of the
+  // input. effectiveBudget stays the authority whenever a caller named an
+  // explicit maxReturnedBytes.
+  const budget = targetBudget({
+    rawBytes,
+    mode,
+    modeBudget: effectiveBudget(maxReturnedBytes, modeToBudget(mode)),
+    maxReturnedBytes,
+  });
   let kept = decision === "compressed" ? fitBudget(deduped, budget) : ordered;
   let omitted = deduped.filter((c) => !kept.includes(c));
   let droppedCount = deduped.length - kept.length;

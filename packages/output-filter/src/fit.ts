@@ -46,3 +46,47 @@ export function effectiveBudget(maxReturnedBytes: number | undefined, modeBudget
   if (maxReturnedBytes === undefined) return modeBudget;
   return Math.min(maxReturnedBytes, HARD_CEILING_BYTES);
 }
+
+// A4 (§W1): how much of the input each mode aims to return. The mode budget
+// stays as the CEILING — the most that may ever be returned — and this is the
+// TARGET, expressed relative to the input.
+//
+// Without it the ceiling was doing both jobs, and since the eligibility floor
+// was the same constant, an input that only just cleared the floor was allowed
+// to fill essentially all of it: 12.5 KB of distinct source in balanced mode
+// returned 10.5 KB, a 16% saving for a full rank-and-fit pass. The saving was a
+// function of how far the input happened to exceed a constant, not of how much
+// of it the reader needed.
+//
+// Values are the share of the input each mode returns. safe keeps half —
+// it is the evidence-preserving mode and §12 forbids aggressive compression
+// there; aggressive keeps an eighth. They are deliberately coarse: this is a
+// policy dial, and a precise-looking constant would imply a measurement that
+// has not been made.
+const MODE_TARGET_RATIO: Record<string, number> = {
+  aggressive: 0.125,
+  balanced: 0.25,
+  safe: 0.5,
+};
+
+// The budget the fit step actually fills: the smaller of "this share of the
+// input" and "the most this mode may ever return". A caller-supplied
+// maxReturnedBytes still wins — it is an explicit instruction, not a default.
+export function targetBudget(input: {
+  rawBytes: number;
+  mode: string;
+  modeBudget: number;
+  maxReturnedBytes: number | undefined;
+}): number {
+  if (input.maxReturnedBytes !== undefined) {
+    return Math.min(input.maxReturnedBytes, HARD_CEILING_BYTES);
+  }
+  const ratio = MODE_TARGET_RATIO[input.mode] ?? 1;
+  // Never target below the smallest useful excerpt: a target of a few hundred
+  // bytes on a small input would return a summary and nothing else, which is
+  // the "no-blind" failure the fallback in types.ts exists to prevent.
+  const target = Math.max(MIN_TARGET_BYTES, Math.floor(input.rawBytes * ratio));
+  return Math.min(target, input.modeBudget);
+}
+
+export const MIN_TARGET_BYTES = 1_024;
