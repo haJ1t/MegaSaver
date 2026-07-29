@@ -1,153 +1,54 @@
 import { describe, expect, it } from "vitest";
-import {
-  mcpEnvelopeBytes,
-  modelFacingBytes,
-  overlayModelFacingText,
-} from "../src/model-facing-bytes.js";
+import { mcpEnvelopeBytes, modelFacingBytes } from "../src/model-facing-bytes.js";
 
-const excerpt = (text: string, startLine: number, endLine: number) => ({
-  text,
-  startLine,
-  endLine,
-});
+// The module counts the text that was delivered; it does not render one. The
+// renderer lives in context-gate/record-output.ts and numbers gap markers in
+// raw line space (A3). A second renderer here would have to be kept in sync
+// with it, and that drift is exactly how the two coordinate systems arose.
 
-describe("overlayModelFacingText", () => {
-  it("is the summary alone when there are no excerpts and no tail", () => {
-    expect(overlayModelFacingText({ summary: "s", excerpts: [] })).toBe("s");
-  });
-
-  it("renders excerpts in source order with gap markers between them", () => {
-    const text = overlayModelFacingText({
-      summary: "sum",
-      excerpts: [excerpt("B", 5, 6), excerpt("A", 1, 2)],
-      chunkedLineCount: 8,
-    });
-    expect(text).toBe(
-      ["sum", "A", "… [lines 3-4 omitted]", "B", "… [lines 7-8 omitted]"].join("\n"),
-    );
-  });
-
-  it("opens with a leading marker when the first excerpt does not start at line 1", () => {
-    const text = overlayModelFacingText({
-      summary: "sum",
-      excerpts: [excerpt("X", 3, 4)],
-      chunkedLineCount: 4,
-    });
-    expect(text).toBe(["sum", "… [lines 1-2 omitted]", "X"].join("\n"));
-  });
-
-  it("omits the trailing marker when excerpts reach the last chunked line", () => {
-    const text = overlayModelFacingText({
-      summary: "sum",
-      excerpts: [excerpt("X", 1, 4)],
-      chunkedLineCount: 4,
-    });
-    expect(text).toBe(["sum", "X"].join("\n"));
-  });
-
-  it("falls back to the max excerpt endLine when chunkedLineCount is absent", () => {
-    const text = overlayModelFacingText({
-      summary: "sum",
-      excerpts: [excerpt("X", 1, 4)],
-    });
-    expect(text).toBe(["sum", "X"].join("\n"));
-  });
-
-  it("appends the footer when provided", () => {
-    const text = overlayModelFacingText(
-      { summary: "sum", excerpts: [excerpt("X", 1, 1)], chunkedLineCount: 1 },
-      "[Mega Saver: footer]",
-    );
-    expect(text).toBe("sum\nX\n[Mega Saver: footer]");
-  });
-});
+const bytes = (s: string): number => Buffer.byteLength(s, "utf8");
 
 describe("modelFacingBytes", () => {
-  it("counts summary + excerpts + gap markers + separators — more than summary+excerpts alone", () => {
-    const input = {
-      summary: "sum",
-      excerpts: [excerpt("AAAA", 10, 20)],
-      chunkedLineCount: 30,
-    };
-    const breakdown = modelFacingBytes(input);
-    const naive = Buffer.byteLength("sum", "utf8") + Buffer.byteLength("AAAA", "utf8");
-    expect(breakdown.totalBytes).toBeGreaterThan(naive);
-    expect(breakdown.gapMarkerBytes).toBeGreaterThan(0);
-    expect(breakdown.totalBytes).toBe(Buffer.byteLength(overlayModelFacingText(input), "utf8"));
-  });
+  it("counts the delivered text, not a re-render of its inputs", () => {
+    const summary = "2 kept, 4 dropped";
+    const excerpts = [{ text: "alpha line" }, { text: "beta line" }];
+    const footer = "\n\n[Mega Saver: compressed 100→40 B.]";
+    const delivered = `${summary}\n${excerpts[0]?.text}\n… [lines 5-90 omitted]\n${excerpts[1]?.text}${footer}`;
 
-  it("breakdown components sum to the total", () => {
-    const breakdown = modelFacingBytes(
-      {
-        summary: "sum",
-        excerpts: [excerpt("A", 1, 2), excerpt("B", 5, 6)],
-        chunkedLineCount: 9,
-      },
-      "[Mega Saver: footer]",
+    const b = modelFacingBytes({ delivered, summary, excerpts, footer });
+
+    expect(b.totalBytes).toBe(bytes(delivered));
+    expect(b.summaryBytes).toBe(bytes(summary));
+    expect(b.excerptBytes).toBe(bytes("alpha line") + bytes("beta line"));
+    expect(b.gapMarkerBytes).toBe(bytes("… [lines 5-90 omitted]"));
+    expect(b.footerBytes).toBe(bytes(footer));
+    expect(b.separatorBytes).toBe(
+      b.totalBytes - b.summaryBytes - b.excerptBytes - b.gapMarkerBytes - b.footerBytes,
     );
-    expect(
-      breakdown.summaryBytes +
-        breakdown.excerptBytes +
-        breakdown.gapMarkerBytes +
-        breakdown.footerBytes +
-        breakdown.separatorBytes,
-    ).toBe(breakdown.totalBytes);
-    expect(breakdown.footerBytes).toBe(Buffer.byteLength("[Mega Saver: footer]", "utf8"));
   });
 
-  it("counts UTF-8 in bytes, not JS string length", () => {
-    const breakdown = modelFacingBytes({
-      summary: "öz",
-      excerpts: [],
+  it("counts the countless marker the compressor path emits", () => {
+    const summary = "s";
+    const marker = "… [remainder omitted — recover any part with the chunk ids below]";
+    const delivered = `${summary}\nbody${marker}`;
+    const b = modelFacingBytes({ delivered, summary, excerpts: [{ text: "body" }] });
+    expect(b.gapMarkerBytes).toBe(bytes(marker));
+  });
+
+  it("reports zero footer bytes when none was appended", () => {
+    const b = modelFacingBytes({
+      delivered: "s\nbody",
+      summary: "s",
+      excerpts: [{ text: "body" }],
     });
-    expect(breakdown.totalBytes).toBe(Buffer.byteLength("öz", "utf8"));
-    expect(breakdown.totalBytes).toBeGreaterThan("öz".length);
+    expect(b.footerBytes).toBe(0);
   });
 });
 
 describe("mcpEnvelopeBytes", () => {
-  it("equals the byte length of the JSON the MCP server delivers", () => {
-    const payload = {
-      summary: "sum",
-      excerpts: [
-        {
-          text: "A".repeat(100),
-          startLine: 1,
-          endLine: 3,
-          score: 12.5,
-          features: { errorScore: 4, keywordScore: 0 },
-        },
-      ],
-      decision: "compressed",
-      rawBytes: 10000,
-      returnedBytes: 200,
-      bytesSaved: 9800,
-      savingRatio: 0.98,
-    };
-    expect(mcpEnvelopeBytes(payload)).toBe(Buffer.byteLength(JSON.stringify(payload), "utf8"));
-  });
-
-  it("the envelope exceeds summary+excerpt text bytes (score/features reach the model)", () => {
-    const payload = {
-      summary: "sum",
-      excerpts: [
-        {
-          text: "short",
-          startLine: 1,
-          endLine: 1,
-          score: 12.5,
-          features: { errorScore: 4, keywordScore: 0, pathScore: 1 },
-        },
-      ],
-      rawBytes: 10000,
-      returnedBytes: 8,
-      bytesSaved: 9992,
-      savingRatio: 0.9992,
-      chunkSetId: "abc123",
-    };
-    const textOnly =
-      Buffer.byteLength(payload.summary, "utf8") +
-      Buffer.byteLength(payload.excerpts[0].text, "utf8");
-    expect(mcpEnvelopeBytes(payload)).toBeGreaterThan(textOnly);
+  it("counts every field the MCP transport serialises, not just excerpt text", () => {
+    const payload = { excerpts: [{ text: "x", score: 12.5, features: { errorScore: 4 } }] };
+    expect(mcpEnvelopeBytes(payload)).toBe(bytes(JSON.stringify(payload)));
+    expect(mcpEnvelopeBytes(payload)).toBeGreaterThan(bytes("x"));
   });
 });

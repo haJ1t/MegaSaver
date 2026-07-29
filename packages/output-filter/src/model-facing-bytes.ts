@@ -4,43 +4,17 @@
 // model actually receives more: the `… [lines X-Y omitted]` gap markers, the
 // recovery footer, and — on the MCP transport — the entire JSON envelope
 // (per-excerpt `score` and the 9-field `features` object included,
-// mcp-bridge/src/server.ts `JSON.stringify(payload)`). This module is the
-// single place that counts what the model receives.
+// mcp-bridge/src/server.ts `JSON.stringify(payload)`). This module counts what
+// the model receives.
 //
-// Ownership split: Track B creates and exports this module; Track A wires it
-// into `types.ts` / `record-output.ts`. `record-output.ts`'s `returnedTextOf`
-// should delegate to `overlayModelFacingText` when that wiring lands — until
-// then this renderer mirrors it exactly (D16 source ordering + cursor logic).
-
-export type OverlayRenderInput = {
-  summary: string;
-  excerpts: ReadonlyArray<{ text: string; startLine: number; endLine: number }>;
-  // Total line count of the text the excerpts index into (post-collapse
-  // space). Absent → the max excerpt endLine, matching the renderer fallback.
-  chunkedLineCount?: number | undefined;
-};
-
-// Canonical overlay rendering: summary first, excerpts in SOURCE order, a gap
-// marker wherever kept excerpts are not contiguous, a trailing marker up to
-// the last chunked line. Spliced fragments can never parse as contiguous code.
-export function overlayModelFacingText(input: OverlayRenderInput, footer?: string): string {
-  const total =
-    input.chunkedLineCount ??
-    (input.excerpts.length > 0 ? Math.max(...input.excerpts.map((e) => e.endLine)) : 0);
-  const ordered = [...input.excerpts].sort(
-    (a, b) => a.startLine - b.startLine || a.endLine - b.endLine,
-  );
-  const parts: string[] = [input.summary];
-  let cursor = 1;
-  for (const e of ordered) {
-    if (e.startLine > cursor) parts.push(`… [lines ${cursor}-${e.startLine - 1} omitted]`);
-    parts.push(e.text);
-    cursor = Math.max(cursor, e.endLine + 1);
-  }
-  if (cursor <= total) parts.push(`… [lines ${cursor}-${total} omitted]`);
-  if (footer !== undefined) parts.push(footer);
-  return parts.join("\n");
-}
+// It deliberately does NOT render. An earlier version carried its own copy of
+// the overlay renderer and invited record-output.ts to delegate to it; that
+// copy numbered gap markers in post-collapse space, which A3 replaced with raw
+// coordinates precisely because post-collapse numbering cannot address the
+// stored chunks. Delegating would have reverted A3, and keeping two renderers
+// in sync is the drift that made the two coordinate systems possible in the
+// first place. There is one renderer, in record-output.ts; this counts what it
+// produced.
 
 export type ModelFacingBreakdown = {
   totalBytes: number;
@@ -54,17 +28,27 @@ export type ModelFacingBreakdown = {
 
 const bytesOf = (text: string): number => Buffer.byteLength(text, "utf8");
 
-// Bytes the model receives on the overlay/hook path: summary + excerpts +
-// gap markers + footer, separators included. Pass the SAME footer string the
-// caller appends to the delivered text (record-output's recovery footer).
-export function modelFacingBytes(input: OverlayRenderInput, footer?: string): ModelFacingBreakdown {
-  const rendered = overlayModelFacingText(input, footer);
+// Every gap marker the renderer can emit: the addressable form carrying raw
+// line numbers, and the countless form used where a compressor synthesised
+// lines and no line number would be truthful.
+const GAP_MARKER = /… \[lines \d+-\d+ omitted\]|… \[remainder omitted[^\]]*\]/g;
+
+// Bytes the model receives on the overlay/hook path, measured on the text that
+// was ACTUALLY delivered rather than on a re-render of its inputs.
+export function modelFacingBytes(input: {
+  delivered: string;
+  summary: string;
+  excerpts: ReadonlyArray<{ text: string }>;
+  footer?: string | undefined;
+}): ModelFacingBreakdown {
   const summaryBytes = bytesOf(input.summary);
   const excerptBytes = input.excerpts.reduce((sum, e) => sum + bytesOf(e.text), 0);
-  const footerBytes = footer === undefined ? 0 : bytesOf(footer);
-  const markerRe = /… \[lines \d+-\d+ omitted\]/g;
-  const gapMarkerBytes = (rendered.match(markerRe) ?? []).reduce((sum, m) => sum + bytesOf(m), 0);
-  const totalBytes = bytesOf(rendered);
+  const footerBytes = input.footer === undefined ? 0 : bytesOf(input.footer);
+  const gapMarkerBytes = (input.delivered.match(GAP_MARKER) ?? []).reduce(
+    (sum, m) => sum + bytesOf(m),
+    0,
+  );
+  const totalBytes = bytesOf(input.delivered);
   return {
     totalBytes,
     summaryBytes,
