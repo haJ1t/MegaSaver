@@ -33,9 +33,7 @@ export { MAX_TRACE_SESSIONS, pruneTraceSessions } from "./prune-traces.js";
 export {
   mcpEnvelopeBytes,
   modelFacingBytes,
-  overlayModelFacingText,
   type ModelFacingBreakdown,
-  type OverlayRenderInput,
 } from "./model-facing-bytes.js";
 export {
   countTokens,
