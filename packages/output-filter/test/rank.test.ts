@@ -3,6 +3,7 @@ import { fitBudget } from "../src/fit.js";
 import { chunkByFormat } from "../src/parsers/index.js";
 import { rankFeatureNameSchema } from "../src/rank-features.js";
 import { type Chunk, scoreChunk } from "../src/rank.js";
+import { tokenizeForMatch } from "../src/tokenize.js";
 
 const chunk = (text: string): Chunk => ({ text, startLine: 1, endLine: 1 });
 
@@ -100,6 +101,32 @@ describe("scoreChunk (spec §6 stage 5)", () => {
     const ranked = scoreChunk(undefined, chunk("noise"));
     expect(ranked.features.duplicatePenalty).toBeGreaterThanOrEqual(0);
     expect(ranked.features.noisePenalty).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("scoreChunk stop-word filtering (Task C2)", () => {
+  it("tokenizeForMatch behaviour itself is unchanged (filter applies on intent set)", () => {
+    expect(tokenizeForMatch("the in is bu ve")).toEqual(["the", "in", "is", "bu", "ve"]);
+  });
+
+  it("scores keywordScore === 0 for intent 'the login bug in src/auth.ts' against chunk containing only 'the'", () => {
+    const s = scoreChunk("the login bug in src/auth.ts", chunk("the"));
+    expect(s.features.keywordScore).toBe(0);
+  });
+
+  it("scores keywordScore >= 1 for intent 'the login bug in src/auth.ts' against chunk containing 'login'", () => {
+    const s = scoreChunk("the login bug in src/auth.ts", chunk("login"));
+    expect(s.features.keywordScore).toBeGreaterThanOrEqual(1);
+  });
+
+  it("scores keywordScore === 0 for intent 'nasıl çalışıyor bu fonksiyon' against chunk containing only 'bu'", () => {
+    const s = scoreChunk("nasıl çalışıyor bu fonksiyon", chunk("bu"));
+    expect(s.features.keywordScore).toBe(0);
+  });
+
+  it("scores keywordScore === 0 for an intent consisting only of stop words without throwing", () => {
+    const s = scoreChunk("the in is bu ve", chunk("the in is bu ve login bug"));
+    expect(s.features.keywordScore).toBe(0);
   });
 });
 

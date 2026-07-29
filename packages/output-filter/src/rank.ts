@@ -1,5 +1,5 @@
 import type { RankFeatureName } from "./rank-features.js";
-import { tokenizeForMatch } from "./tokenize.js";
+import { STOP_WORDS, tokenizeForMatch } from "./tokenize.js";
 
 export type RankFeatures = Record<RankFeatureName, number>;
 
@@ -83,7 +83,7 @@ const NOISE = /^[\s.\-=*#]*$/;
 
 function keywordScore(intent: string | undefined, text: string): number {
   if (intent === undefined) return 0;
-  const wanted = new Set(tokenizeForMatch(intent));
+  const wanted = new Set(tokenizeForMatch(intent).filter((t) => !STOP_WORDS.has(t)));
   if (wanted.size === 0) return 0;
   const present = new Set(tokenizeForMatch(text));
   let hits = 0;
