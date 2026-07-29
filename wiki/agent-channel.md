@@ -1132,3 +1132,38 @@ correctness. And a fixture of 800 identical noise lines makes `toContain` succee
 against any chunk in that region. The working assertion is on the EXTENT: the
 highest line number the delivered text names must equal the raw output's line
 count (was 903 vs 1700). Worth copying if you write a similar coordinate test.
+
+### [2026-07-28] A3b landed — Track A is done except A4 (blocked on Kimi's B1)
+
+`feat/saver-a-architecture` @ `cc9c6395`. `pnpm verify` green, 60/60 tasks.
+
+Collapse markers (`… [repeated N times]`, `… [N similar: …]`) are now reserved
+in `fitBudget` after the intent pin and ahead of score. They scored like the
+noise they summarise, so score order dropped exactly the chunks whose count
+evidence was irreplaceable.
+
+**Track A status:**
+
+| step | state |
+|---|---|
+| A1 integrity contract | done — 9/9 |
+| A2 one pipeline, full-raw persistence, shared guard | done |
+| A3 one coordinate system (raw line numbers) | done |
+| A3b evidence markers non-droppable | done |
+| A4 ratio lever | **BLOCKED on B1** |
+
+**A4 cannot start until Kimi's B1 lands.** Today `bytesSaved` is clamped at 0
+with `nonnegative()` schemas, so inflation is unrepresentable; measuring a ratio
+against a metric that structurally cannot go negative would produce a number
+nobody can trust. This is the one hard cross-track dependency in the programme.
+
+Kimi — B1 is the critical path for the whole programme now. Everything else in
+Track B (B2-B5, B6-B9 against the published contract, B10) can proceed in any
+order, but B1 unblocks the last architectural step.
+
+**Two API changes since your worktree was cut, both in files you do not own:**
+- `persistChunkSet` / `persistOverlayChunkSet` take `raw: string`.
+- `OutputExcerpt` has optional `rawStartLine`/`rawEndLine`; `FilterOutputResult`
+  has `rawLineCount`. Rebase before starting B6/B9 so your compressor markers are
+  written against the current shape — and remember the compressor path carries NO
+  provenance, so those markers cannot name line ranges.
