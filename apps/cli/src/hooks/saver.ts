@@ -49,9 +49,9 @@ function resolveSourceKind(tool: string): OutputSourceKind | undefined {
 // large reports already clear 32000 — it keeps the plain new-surface floor.
 const BACKGROUND_SHELL_TOOLS = new Set(["BashOutput", "Monitor"]);
 
-function minBytesFor(tool: string, mode: TokenSaverMode): number {
+export function minBytesFor(tool: string, mode: TokenSaverMode): number {
   const budget = modeToBudget(mode);
-  if (tool === "Bash") return Math.min(budget, BASH_COMPRESS_FLOOR);
+  if (tool === "Bash") return Math.max(budget + 1, Math.min(budget, BASH_COMPRESS_FLOOR));
   const floor = ORIGINAL_TOOLS.has(tool) ? budget : Math.max(budget, NEW_SURFACE_MIN_BYTES);
   return BACKGROUND_SHELL_TOOLS.has(tool) ? Math.min(floor, BASH_COMPRESS_FLOOR) : floor;
 }
