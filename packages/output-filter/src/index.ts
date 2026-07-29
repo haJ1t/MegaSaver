@@ -31,6 +31,13 @@ export {
 } from "./decision-trace.js";
 export { MAX_TRACE_SESSIONS, pruneTraceSessions } from "./prune-traces.js";
 export {
+  mcpEnvelopeBytes,
+  modelFacingBytes,
+  overlayModelFacingText,
+  type ModelFacingBreakdown,
+  type OverlayRenderInput,
+} from "./model-facing-bytes.js";
+export {
   estimateTokens,
   HARD_WRAP_THRESHOLD_TOKENS,
   PASSTHROUGH_THRESHOLD_TOKENS,
