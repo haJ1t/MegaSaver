@@ -4,6 +4,25 @@
 **Branch:** `feat/saver-b-accounting` (from `docs/saver-integrity-spec`)
 **Risk:** HIGH. **Spec:** `docs/superpowers/specs/2026-07-28-saver-compression-integrity-design.md`
 
+## Worktree setup — run this FIRST, before any test
+
+A git worktree shares `.git` but NOT `node_modules` or `dist/`, so a fresh one
+cannot resolve a single workspace import. `turbo` also shells out to a `pnpm`
+binary and fails with "Unable to find package manager binary" unless one is on
+PATH. `pnpm` is not on PATH here, but corepack provides it.
+
+```sh
+corepack enable pnpm --install-directory "$HOME/.local/bin"   # once per machine
+export PATH="$HOME/.local/bin:$PATH"                          # once per shell
+cd <your worktree>
+pnpm install --prefer-offline
+pnpm build            # REQUIRED - vitest resolves @megasaver/* from dist/
+```
+
+Skipping `pnpm build` produces `Failed to resolve entry for package
+"@megasaver/policy"`, which looks like a broken import and is not. After this,
+`pnpm verify` and `pnpm vitest run` work as written.
+
 ## Why this track exists
 
 Today the saver **cannot see itself failing**. `bytesSaved = Math.max(0, …)`
@@ -39,7 +58,7 @@ load-bearing item in the whole programme — do it first.
    `run-command.ts` are **Track A's**. You create and export
    `model-facing-bytes.ts`; **Track A wires it in.** That split exists specifically
    so `types.ts` stays single-owner — do not shortcut it.
-3. `pnpm` is not on PATH. Tests: `cd packages/<pkg> && ../../node_modules/.bin/vitest run`.
+3. Tests (after the setup above): `cd packages/<pkg> && pnpm vitest run`.
    Conventions: `node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/conventions-sync/index.ts --check`
 4. Baseline green: stats 249, mcp-bridge 343 (+1 skipped), output-filter 451,
    bench-replay 149, context-gate 369. Any failure is yours.

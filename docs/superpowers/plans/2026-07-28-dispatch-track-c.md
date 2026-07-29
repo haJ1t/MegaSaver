@@ -4,6 +4,25 @@
 **Branch:** `feat/saver-c-defects` (from `docs/saver-integrity-spec`)
 **Risk:** MEDIUM. **Spec:** `docs/superpowers/specs/2026-07-28-saver-compression-integrity-design.md`
 
+## Worktree setup — run this FIRST, before any test
+
+A git worktree shares `.git` but NOT `node_modules` or `dist/`, so a fresh one
+cannot resolve a single workspace import. `turbo` also shells out to a `pnpm`
+binary and fails with "Unable to find package manager binary" unless one is on
+PATH. `pnpm` is not on PATH here, but corepack provides it.
+
+```sh
+corepack enable pnpm --install-directory "$HOME/.local/bin"   # once per machine
+export PATH="$HOME/.local/bin:$PATH"                          # once per shell
+cd <your worktree>
+pnpm install --prefer-offline
+pnpm build            # REQUIRED - vitest resolves @megasaver/* from dist/
+```
+
+Skipping `pnpm build` produces `Failed to resolve entry for package
+"@megasaver/policy"`, which looks like a broken import and is not. After this,
+`pnpm verify` and `pnpm vitest run` work as written.
+
 ## Rules — read before touching anything
 
 1. **TDD is mandatory.** Write the failing test first, watch it fail, then fix.
@@ -22,9 +41,9 @@
    is specified. If something is genuinely unspecified, ask — do not invent.
 4. **Merge early and often.** C2 and C3 move the ranking baseline that Tracks A
    and B pin fixtures on. Land each task as its own commit as soon as it is green.
-5. `pnpm` is not on PATH. Run tests with:
-   `cd packages/<pkg> && ../../node_modules/.bin/vitest run`
-   For `apps/cli`: `cd apps/cli && ../../node_modules/.bin/vitest run`
+5. Run tests with (after the setup above):
+   `cd packages/<pkg> && pnpm vitest run`
+   For `apps/cli`: `cd apps/cli && pnpm vitest run`
 6. Baseline is green (output-filter 451, retrieval 43). Any failure you see is
    yours.
 

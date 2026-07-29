@@ -42,11 +42,23 @@ Measured 2026-07-28 on the branch point, per package, via
 Two caveats every agent must be told, so nobody chases a failure that is not
 theirs and nobody invents a private workaround:
 
-1. **`pnpm` is not on PATH in this shell.** `pnpm verify` (DoD item 4) could not be
-   run as written. Fallbacks actually used and known to work — all three tracks
-   use these same commands, or the operator enables pnpm first:
-   - tests: `cd packages/<pkg> && ../../node_modules/.bin/vitest run`
-   - conventions: `node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/conventions-sync/index.ts --check`
+1. **`pnpm` is not on PATH, but corepack provides it — and a fresh worktree needs
+   setup before ANY test can run.** A git worktree shares `.git`, not
+   `node_modules` or `dist/`, so a newly created one cannot resolve a single
+   workspace import. `turbo` additionally shells out to a `pnpm` binary and fails
+   with "Unable to find package manager binary" unless one is on PATH.
+
+   **Run this once in each worktree before anything else:**
+   ```sh
+   corepack enable pnpm --install-directory "$HOME/.local/bin"   # once per machine
+   export PATH="$HOME/.local/bin:$PATH"                          # once per shell
+   pnpm install --prefer-offline
+   pnpm build            # REQUIRED — vitest resolves @megasaver/* from dist/
+   ```
+   Skipping `pnpm build` produces
+   `Failed to resolve entry for package "@megasaver/policy"`, which looks like a
+   broken import and is not. After this, `pnpm verify` works as written and the
+   DoD gate is reachable.
 2. **The previously reported `context-gate` concurrency flake did not reproduce**,
    but it was described as appearing under a parallel `turbo` run, and turbo could
    not be driven here. Green in isolation is not proof it is gone. If it appears,

@@ -1009,3 +1009,44 @@ bench-replay 149. Any failure you see is yours. The one exception: a
 `turbo` run and could not be reproduced here — if it appears, it is pre-existing.
 
 Nobody merges to `main`. Push your branch and report here.
+
+### [2026-07-28] CORRECTION — worktree setup, and A1 is published
+
+**Setup instructions in the packets were wrong and are now fixed.** A worktree
+shares `.git` but NOT `node_modules` or `dist/`, so a fresh one resolves no
+workspace import at all. `turbo` also shells out to a `pnpm` binary and dies with
+"Unable to find package manager binary". `pnpm` is not on PATH, but **corepack
+has it** — the earlier "use ../../node_modules/.bin/vitest" workaround was the
+wrong fix and has been removed everywhere. Run this once per worktree:
+
+```sh
+corepack enable pnpm --install-directory "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+pnpm install --prefer-offline
+pnpm build      # REQUIRED — skipping it gives "Failed to resolve entry for
+                # package @megasaver/policy", which looks like a broken import
+                # and is not
+```
+
+**A1 — the save-integrity contract — is published and RED** (commit `95f5f861` on
+`feat/saver-a-architecture`):
+`packages/context-gate/test/save-integrity.property.test.ts`.
+
+Contract: what the model is handed, plus what the advertised recovery surface can
+hand back, still contains everything the tool produced. Recovery is walked
+through `fetchChunk` the way the footer advertises it, not by reading the content
+store — a chunk the published interface cannot reach is not recovered.
+
+Result, 9 cases (3 entry points × 3 modes): **3 pass, 6 fail.**
+
+| entry point | result |
+|---|---|
+| hook (`recordAndFilterOverlayOutput`) | passes all 3 modes — stores full redacted raw |
+| read (`readAndFilter` + `persistChunkSet`) | fails all 3 — 960–1360 lines unreachable |
+| overlay exec (`runOverlayOutputExecCommand`) | fails all 3 — 960–1360 lines unreachable |
+
+The spec's central claim is now measured rather than argued. **Kimi: B6 and B8
+are unblocked** — write them against this contract. Its helper
+`assertNothingLost(raw, delivered, recovered)` is the shape your compressor fixes
+must satisfy; a compressor that cannot may instead emit an explicit marker naming
+what it removed, but silent deletion fails the contract.
