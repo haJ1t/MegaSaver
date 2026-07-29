@@ -106,6 +106,15 @@ export type FilterOutputResult = {
   returnedTokens: number;
   bytesSaved: number;
   savingRatio: number;
+  // Signed counterpart to bytesSaved/savingRatio: rawBytes - returnedBytes,
+  // NEVER clamped. Both of those floor at zero, so on their own they cannot
+  // tell a break-even result from one that handed back MORE than it received
+  // — which the passthrough band routinely does, since the summary line counts
+  // into returnedBytes. Optional because FilterOutputResult is also built
+  // synthetically outside filterOutput (run.ts's unchanged-marker), where no
+  // delivered payload was measured; absent means "not measured". Mirrors the
+  // optional signed field in stats/src/event.ts.
+  deltaBytes?: number;
   // Total line count of the text the excerpts index into (post-collapse /
   // post-compression space, NOT raw). Lets a renderer place gap markers in
   // the same space as excerpt line numbers instead of mixing in raw lines.
@@ -270,6 +279,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
         returnedTokens,
         bytesSaved,
         savingRatio: rawBytes === 0 ? 0 : bytesSaved / rawBytes,
+        deltaBytes: rawBytes - returnedBytes,
         ...(firewall !== undefined ? { firewall } : {}),
       };
       return warnings.length > 0 ? { ...base, warnings } : base;
@@ -434,6 +444,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
     returnedTokens,
     bytesSaved,
     savingRatio,
+    deltaBytes: rawBytes - returnedBytes,
     ...(trace !== undefined ? { trace } : {}),
     ...(firewall !== undefined ? { firewall } : {}),
   };

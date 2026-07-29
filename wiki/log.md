@@ -7652,3 +7652,82 @@ alone, not all of `pnpm verify`.
   the shipped default output under 32 KB has no recovery handle at all.
 - **Ratio generator not committed** — §6's "captured, not asserted" is unmet for
   the §7 table.
+
+## [2026-07-29] test | saver integrity — second mutation round
+
+Second hardening round on `docs/saver-integrity-spec`, closing the residuals the
+first round declared open. Spec §7 rewritten again to match. `pnpm verify` exit 0
+("Tasks: 60 successful, 60 total") run before the first mutation and after the
+last revert, with a fresh `pnpm build` in between; every mutation reverted by
+exact inverse edit, and the five snapshotted production source files hashed
+identical at both ends.
+
+**What the round changed.**
+
+1. *Both "uncatchable" classes are now closed by receipt, not by argument.*
+   Fabrication (M8 — `returnedTextOf` appends a content-shaped line absent from
+   the raw) fails `save-integrity.property`'s three hook-path cases. Suppressed
+   markers (M10 — one interior gap marker dropped, survivors correctly numbered)
+   fail a new continuity assertion in `recovery-addressability` that names the
+   exact omitted span. The previous entry's claim that suppressed markers needed
+   a production-surface change rather than a test is withdrawn — a test closed it.
+2. *Every earlier mutation was re-run, not inherited.* M1, M2, M6, M7 and the
+   footer mutation (now M11) were re-applied against both suites
+   (`context-gate` 56 files / 395 tests, `output-filter` 51 files / 494 tests).
+   Two new mutations were added beyond M8/M10: M9 (`fitBudget` halves its budget)
+   and M12 (stored chunk line numbers shifted by one). No mutation survives.
+3. *Passthrough overshoot was fixed as two different defects.* On the hook and
+   daemon paths the returned text is discarded (`saver.ts:361`), so the
+   overshoot was a **reporting** defect — `record-output.ts`'s non-compressed
+   branch now reports `returnedText: input.raw` and honest byte counts, matching
+   the admission-guard branch below it. On MCP/exec the struct *is* the payload
+   (`mcp-bridge/src/server.ts:316`), and those paths already counted it. Separately,
+   a signed `deltaBytes` was added to `FilterOutputResult` and
+   `RecordOverlayOutputResult`; `bytesSaved` and `savingRatio` keep their floor
+   at zero so no existing reader changes meaning. No payload got smaller.
+
+**Corrected numbers.** §7's ratio table is replaced by a new ladder on a
+different corpus, keyed on `returnedBytes` at a stated input size with
+`savingRatio` demoted to a derived column. The plateau figures the old §7 table
+carried (aggressive ~4.3 KB, balanced ~12.3 KB, safe ~32.5 KB) belong to that
+fixture and are superseded: aggressive returns 3027 / 3030 / 3032 B at 25 / 50 /
+100 KB, balanced 11218 / 11220 B at 50 / 100 KB, and **safe does not plateau at
+all** — 25085 → 30627 → 31585 B at 50 / 100 / 250 KB, a 1.26× numerator against a
+5× input. The ratio climb is denominator-driven in every mode. The 250 KB cell
+steps +958 B in both aggressive and balanced, coinciding with `chunkCount`
+37 → 91; no mechanism is claimed. Also corrected: M2's blast radius is 4 files /
+11 tests (not 10), and M11 has two guards, not the one its hardening report
+claimed — that report was written against a concurrently-edited tree.
+
+**Still open.**
+
+- **A4 gate still NOT met.** Net cost remains unmeasured; the benchmark has never
+  run against the real API. No savings or net-cost claim appears in §7 and none
+  may be added.
+- **Single-file coverage got worse, not better.** Five of eight defects now have
+  exactly one guarding file — M1 (`read-pipeline-recovery`), M6 and M10
+  (`recovery-addressability`), M7 (`coordinate-skew`), M8
+  (`save-integrity.property`). The first round had three; the two new ones are
+  the new assertions themselves.
+- **M6's sole guard is an anti-vacuity counter** whose message describes the
+  fixture, not the defect, and the continuity test built for that class is
+  structurally blind to it: the spliced corpus is fold-free, so
+  `startLine === rawStartLine` on every excerpt and M6 is a no-op there.
+- **Fabrication is proven caught on the hook path only.** The read and exec
+  renderers do not go through `returnedTextOf`; no mutation has been run against
+  them.
+- **Staging hazard narrowed to one file.** The previous entry's two untracked
+  sole-catchers, `read-pipeline-recovery.test.ts` (M1) and `coordinate-skew.test.ts`
+  (M7), are now tracked — that hazard is closed. It has reappeared once, at
+  `packages/output-filter/test/passthrough-honesty.test.ts`: still untracked, and
+  the only thing pinning the `filterOutput`-level inflation, which the fix made
+  unobservable through `recordAndFilterOverlayOutput`. `git add -u` will not pick
+  it up; stage it by path.
+- **Ledger accounting still clamps** at `run.ts:229-231`, `:380-382` and
+  `run-command.ts:457-460` / `:693`: an inflating passthrough read persists as a
+  flat zero saving although `deltaBytes` is available one line away.
+- **Passthrough cells persist no chunk set** — `chunkSetId` and `chunkCount` both
+  null even with `storeRawOutput: true`, because the early return precedes
+  persistence. Nothing is lost, but "raw output is stored" is not true of them.
+- **Ratio generator still not committed**, so §6's "captured, not asserted"
+  remains unmet for the new ladder too.

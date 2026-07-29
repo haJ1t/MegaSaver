@@ -36,6 +36,9 @@ describe("recordAndFilterOverlayOutput", () => {
     expect(res.decision).toBe("compressed");
     expect(res.returnedBytes).toBeLessThan(res.rawBytes);
     expect(res.bytesSaved).toBeGreaterThan(0);
+    // The signed field is the clamp-free source; bytesSaved is its clamp.
+    expect(res.deltaBytes).toBe(res.rawBytes - res.returnedBytes);
+    expect(res.bytesSaved).toBe(Math.max(0, res.deltaBytes ?? 0));
     expect(res.chunkSetId).toBeTypeOf("string");
 
     const summary = readOverlaySummary({ root: storeRoot }, WK, SID);
@@ -67,6 +70,15 @@ describe("recordAndFilterOverlayOutput", () => {
     expect(res.decision).toBe("passthrough");
     expect(res.chunkSetId).toBeUndefined();
     expect(readOverlaySummary({ root: storeRoot }, WK, SID)).toBeNull();
+    // The hook discards returnedText on any non-compressed decision, so what
+    // the model keeps IS the raw. The reported numbers must describe that, not
+    // the summary+excerpts rendering nobody delivers — same shape the
+    // net-negative guard below already reports for the same situation.
+    expect(res.returnedText).toBe("small output\n");
+    expect(res.returnedBytes).toBe(res.rawBytes);
+    expect(res.bytesSaved).toBe(0);
+    expect(res.savingRatio).toBe(0);
+    expect(res.deltaBytes).toBe(0);
   });
 
   it("stores the FULL output (lossless): a marker buried in the middle is recoverable via expand", async () => {

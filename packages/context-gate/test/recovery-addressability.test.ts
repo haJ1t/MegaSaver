@@ -64,7 +64,44 @@ function driftingCorpus(): string {
   return lines.join("\n");
 }
 
+// A SECOND fixture, for a failure the first one structurally cannot express.
+//
+// The first fixture delivers exactly ONE run of verbatim raw lines (raw
+// 801-961), so every gap marker it produces sits at an edge of that single run.
+// Suppress an interior marker there and the only assertion that reacts is the
+// anti-vacuity counter, which reports a change of SHAPE — it never says a line
+// was spliced. That is the M6d residual.
+//
+// Here the intent term is planted in one 40-line block out of every eight, so
+// the fit step keeps several NON-ADJACENT blocks and the delivered text is
+// three verbatim runs with real holes between them. Now a suppressed marker has
+// an observable consequence: two lines that are 280 apart in the raw output
+// become neighbours in the delivered text.
+//
+// Deliberately free of any collapse run — no repeated line, and every line
+// carries a `file.ts:line:col` position, which normalize's POSITION guard
+// exempts from similarity folding. A collapse stand-in (`… [N similar: …]`) is
+// itself a legitimate in-band account of a discontinuity, so its presence would
+// force the walk below to carry an exemption; without one the walk is
+// unconditional. Coordinate-space divergence is the FIRST fixture's job, and
+// suppression is independent of which space the numbers live in.
+function splicedCorpus(): string {
+  const lines: string[] = [];
+  for (let i = 0; i < 1600; i += 1) {
+    const intentBlock = Math.floor(i / OVERLAY_CHUNK_LINES) % 8 === 1;
+    lines.push(
+      intentBlock
+        ? `  at parseConfig (/repo/src/pkg-${i}/config-${i}.ts:${i}:7) payload ${i}`
+        : `  at moduleLoader.require (/repo/src/pkg-${i}/loader-${i}.ts:${i}:1) payload ${i}`,
+    );
+  }
+  return lines.join("\n");
+}
+
 const GAP_MARKER = /^… \[lines (\d+)-(\d+) omitted\]$/;
+// normalize.ts's two collapse stand-ins. Asserted ABSENT from the second
+// fixture's delivery — see splicedCorpus.
+const COLLAPSE_STAND_IN = /^… \[(?:repeated \d+ times|\d+ similar: )/;
 
 let store: string;
 beforeEach(async () => {
@@ -194,5 +231,145 @@ describe("recovery addressability", () => {
         `chunk ${chunkId} for ${marker.text} recovers nothing the model was not already handed`,
       ).toBeGreaterThan(0);
     }
+  });
+
+  it("accounts for every discontinuity between delivered excerpts with a marker", async () => {
+    const raw = splicedCorpus();
+    const rawLines = raw.split("\n");
+    expect(new Set(rawLines).size, "fixture raw lines must be unique").toBe(rawLines.length);
+
+    const result = await recordAndFilterOverlayOutput({
+      storeRoot: store,
+      workspaceKey: WK,
+      liveSessionId: LSID,
+      raw,
+      sourceKind: "command",
+      label: "pnpm test",
+      mode: "balanced",
+      storeRawOutput: true,
+      includeFooter: true,
+      intent: "parseConfig",
+      newId: () => "cs-splice",
+    });
+    expect(result.decision).toBe("compressed");
+
+    const deliveredLines = result.returnedText.split("\n");
+    const rawIndexOfLine = new Map(rawLines.map((line, i) => [line, i + 1]));
+    expect(
+      deliveredLines.filter((line) => COLLAPSE_STAND_IN.test(line)),
+      "this fixture must fold nothing — a stand-in accounts for a discontinuity " +
+        "without a marker, and the walk below deliberately models no such exemption",
+    ).toEqual([]);
+
+    // Positions holding verbatim raw content, in delivery order, bracketed by
+    // two sentinels: raw line 0 before the text starts and raw line
+    // rawLines.length + 1 after it ends. The sentinels turn "the excerpts are
+    // separated by markers" into the stronger "the delivered text accounts for
+    // all rawLines.length lines", which reaches the leading and tail gaps too.
+    const anchors = [
+      { at: -1, raw: 0 },
+      ...deliveredLines.flatMap((line, at) => {
+        const n = rawIndexOfLine.get(line);
+        return n === undefined ? [] : [{ at, raw: n }];
+      }),
+      { at: deliveredLines.length, raw: rawLines.length + 1 },
+    ];
+
+    // CONTINUITY — the contract the marker mechanism exists for. Excerpts are
+    // spliced end to end; a marker is the ONLY thing telling the reader that
+    // two neighbouring lines were not neighbours in the raw output. Where a
+    // marker is missing there is no wrong number to catch and no shape to
+    // notice — the delivered text simply reads as continuous code that never
+    // existed. Each hole between consecutive anchors must therefore be named,
+    // exactly once and to the line.
+    let interiorGaps = 0;
+    for (let k = 1; k < anchors.length; k += 1) {
+      const prev = anchors[k - 1] as { at: number; raw: number };
+      const next = anchors[k] as { at: number; raw: number };
+      if (next.raw === prev.raw + 1) continue;
+
+      const between = deliveredLines.slice(prev.at + 1, next.at);
+      const named = between.flatMap((line) => {
+        const m = GAP_MARKER.exec(line);
+        return m === null ? [] : [[Number(m[1]), Number(m[2])]];
+      });
+      expect(
+        named,
+        named.length === 0
+          ? `raw lines ${prev.raw} and ${next.raw} are delivered with no gap marker ` +
+              `between them, so the ${next.raw - prev.raw - 1} lines in between are omitted ` +
+              `with no sign of it — raw ${prev.raw} and raw ${next.raw} read as contiguous`
+          : `the hole between delivered raw lines ${prev.raw} and ${next.raw} must be ` +
+              `named exactly once, as ${prev.raw + 1}-${next.raw - 1}`,
+      ).toEqual([[prev.raw + 1, next.raw - 1]]);
+
+      const interior = prev.raw > 0 && next.raw <= rawLines.length;
+      if (interior) interiorGaps += 1;
+    }
+
+    // The sentinels make the leading and tail gaps checkable, but only an
+    // INTERIOR hole — verbatim content on both sides — can be silently spliced.
+    // This counts how many suppressions the walk above is able to catch.
+    expect(
+      interiorGaps,
+      "fixture must deliver non-adjacent excerpts, or no suppression is observable",
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("stores every chunk under line numbers that locate its text in the raw output", async () => {
+    const raw = splicedCorpus();
+    const rawLines = raw.split("\n");
+    const chunkSetId = "cs-coords";
+
+    const result = await recordAndFilterOverlayOutput({
+      storeRoot: store,
+      workspaceKey: WK,
+      liveSessionId: LSID,
+      raw,
+      sourceKind: "command",
+      label: "pnpm test",
+      mode: "balanced",
+      storeRawOutput: true,
+      includeFooter: true,
+      intent: "parseConfig",
+      newId: () => chunkSetId,
+    });
+    expect(result.decision).toBe("compressed");
+
+    // The footer publishes the addressable range; an agent that fetches outside
+    // it gets nothing, and content inside a chunk the footer never advertises is
+    // unrecoverable however correctly it was stored.
+    const advertised = /\(i = 0\.\.(\d+)\)/.exec(result.returnedText);
+    const expectedCount = Math.ceil(rawLines.length / OVERLAY_CHUNK_LINES);
+    expect(advertised?.[1], "footer must advertise every stored chunk").toBe(
+      String(expectedCount - 1),
+    );
+
+    // Every chunk, not only the ones a marker points at: a marker resolves to a
+    // chunk id through the published ~L-lines-each rule, so wrong numbers on an
+    // unvisited chunk are what makes the NEXT marker resolve to the wrong place.
+    for (let i = 0; i < expectedCount; i += 1) {
+      const res = await fetchChunk({ storeRoot: store, chunkSetId, chunkId: String(i) });
+      expect(res.ok, `chunk ${i} must exist`).toBe(true);
+      if (!res.ok) continue;
+      const startLine = i * OVERLAY_CHUNK_LINES + 1;
+      const endLine = Math.min(startLine + OVERLAY_CHUNK_LINES - 1, rawLines.length);
+      expect(
+        [res.chunk.startLine, res.chunk.endLine],
+        `chunk ${i} is the ${OVERLAY_CHUNK_LINES}-line slice the footer's rule resolves to`,
+      ).toEqual([startLine, endLine]);
+      expect(
+        res.chunk.text,
+        `chunk ${i} claims raw lines ${res.chunk.startLine}-${res.chunk.endLine}; its text ` +
+          `must be exactly those ${res.chunk.endLine - res.chunk.startLine + 1} lines`,
+      ).toBe(rawLines.slice(res.chunk.startLine - 1, res.chunk.endLine).join("\n"));
+    }
+
+    const past = await fetchChunk({
+      storeRoot: store,
+      chunkSetId,
+      chunkId: String(expectedCount),
+    });
+    expect(past.ok, "the raw output must not extend past the last stored chunk").toBe(false);
   });
 });
