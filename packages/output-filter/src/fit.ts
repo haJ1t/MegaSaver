@@ -1,14 +1,13 @@
+import { EVIDENCE_MARKER } from "./markers.js";
 import type { RankedChunk } from "./rank.js";
 
 export const HARD_CEILING_BYTES = 64_000;
 
-// A3b: the collapse markers normalize.ts emits — `… [repeated N times]` and
-// `… [N similar: <template>]`. Each is the ONLY record that a run was folded,
-// so a chunk carrying one is not filler: drop it and the model is handed a
-// single line with no sign that hundreds more existed, and cannot even know to
-// expand. Anchored on a literal, not on `\s*`, so it carries no backtracking
-// cost on the hot path (see concepts/unbounded-run-redos).
-const EVIDENCE_MARKER = /^… \[(?:repeated \d+ times|\d+ similar: )/m;
+// A3b + SC3-3: a chunk carrying a counted omission marker (markers.ts — the
+// normalize collapse forms AND every compressor/parser marker) is not filler.
+// Each marker is the ONLY record that content was removed; drop it and the
+// model is handed a partial view with no sign that more existed, and cannot
+// even know to expand.
 
 export function fitBudget(chunks: readonly RankedChunk[], budget: number): RankedChunk[] {
   const ordered = [...chunks].sort((a, b) => b.score - a.score);
