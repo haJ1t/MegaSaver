@@ -385,6 +385,38 @@ function loadOverlaySummarySelfHealing(
   }
 }
 
+// Cheap line scan (no schema parse): the append path runs inside the hook and
+// only needs the id, not a validated event. Malformed lines are skipped, same
+// tolerance as readOverlayEvents.
+function overlayEventIdExists(path: string, id: string): boolean {
+  if (!existsSync(path)) return false;
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    if (line.trim() === "") continue;
+    let raw: unknown;
+    try {
+      raw = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof raw === "object" && raw !== null && (raw as { id?: unknown }).id === id) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// B11: writers that derive a deterministic event id (record-output) use this to
+// tell a first append from a replay — e.g. to skip side effects (evidence rows)
+// the duplicate append below silently absorbs.
+export function hasOverlayEvent(
+  store: StatsStore,
+  workspaceKey: string,
+  liveSessionId: string,
+  eventId: string,
+): boolean {
+  return overlayEventIdExists(overlayEventsPath(store, workspaceKey, liveSessionId), eventId);
+}
+
 function emptyOverlaySummary(liveSessionId: string): OverlaySessionTokenSaverStats {
   return {
     liveSessionId,
@@ -410,6 +442,18 @@ export function appendOverlayEvent(input: AppendOverlayEventInput): OverlaySessi
 
   const events = overlayEventsPath(store, event.workspaceKey, event.liveSessionId);
   const summary = overlaySummaryPath(store, event.workspaceKey, event.liveSessionId);
+
+  // B11 idempotency: the daemon can finish its /excerpt write while the hook's
+  // client timeout still triggers the in-process fallback for the SAME output.
+  // Both writers derive the same event id, so a second append with an
+  // already-recorded id is a no-op (never an error) — otherwise the savings
+  // double-count and inflate the recovery-rate denominator the A4 gate reads.
+  if (overlayEventIdExists(events, event.id)) {
+    return (
+      loadOverlaySummarySelfHealing(store, event.workspaceKey, event.liveSessionId) ??
+      emptyOverlaySummary(event.liveSessionId)
+    );
+  }
 
   appendPrivateLine(events, `${JSON.stringify(event)}\n`);
 
