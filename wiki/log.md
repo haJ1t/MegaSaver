@@ -8044,3 +8044,88 @@ though the convergence made it one.
 **A4 remains NOT MET.** Fixing the order sensitivity makes the instrument
 self-consistent; it does not make it the right instrument for the churn tax, and
 it does not fix the rate-card bias sitting on top.
+
+## [2026-07-30] decision | A4 reformulated as a bounded gate — two of three terms settled
+
+User directive: close A4 completely. A4 as written ("net cost reduction", one
+number) is not reachable by any instrument this repo can build — live A/B spreads
+0.68x-1.23x against a ~5% effect on agent-path nondeterminism, and a fixed-
+trajectory replay can never produce recovery turns. Approved reformulation:
+
+> **A4 passes iff `S > 0` and `R < R*`.**
+
+| term | meaning | source | status |
+|---|---|---|---|
+| `S`  | input-side cost saving | replay (per-arm-run cache namespaces) | **open** — needs one real-API run |
+| `R*` | break-even recovery rate | derived offline from a recording | **66.7%** |
+| `R`  | observed recovery rate | production ledger | **2.4%** |
+
+**R < R* holds with a ~28x margin.** Both sides are measured pessimistically, so
+the margin is a floor, not an estimate.
+
+### The mechanism that motivated A4 was misattributed — retracted
+
+`saver-cache-churn` blamed "rewrite tool_result in place -> invalidate the 1h
+prompt cache". That cannot happen: PostToolUse returns `updatedToolOutput`
+(`saver.ts:377`) BEFORE the result enters the transcript, so the compressed bytes
+are what appear on the FIRST send; and recurring tool_results are byte-stable
+across a session (26 of 26 recurring ids, both corpora). There is no earlier
+cached version to invalidate. The 48,005-vs-29,525 figure is one observation from
+a live A/B where the two arms were different conversations — trajectory
+divergence, not a tax with a mechanism. Direction survives; mechanism does not.
+A related replay-visible candidate was also ruled out: prompts run 14k-62k tokens
+against a 1024-token minimum cacheable prefix, so compression cannot drop one
+below the cache floor.
+
+### R* — bounding what cannot be measured
+
+Saving and expansion cost are the same physical quantity, so they compare without
+a token estimate or a rate card. The unit is the BYTE-APPEARANCE: the Messages
+API resends the whole history each turn, so a byte's cost scales with how many
+requests it appears in. Counting plain bytes would price a last-turn expansion
+the same as a first-turn one.
+
+**A modelling error found by mutation testing, not by review.** Expansion was
+first charged the bytes compression REMOVED. Wrong: `mega output chunk` appends
+chunks as new tool_results while the compressed summary stays in history, so an
+expanded session carries BOTH. The cost is the RAW bytes:
+
+```
+baseline             r(N-j+1)
+megasaver, expanded  c(N-j+1) + r(N-j)
+affordable    <=>    (N-j+1)(r-c) >= r(N-j)
+```
+
+Under the wrong model the saving beat the cost for EVERY possible input — R* was
+pinned at 100% regardless of the data, a constant wearing a percent sign. Two
+mutations survived the first test suite and exposed it; one of the two passing
+tests was passing only because a `?? 0` fallback supplied the value it asserted
+on. Measured after the correction: `rec-big/task_1`, balanced, 18 requests,
+saving 442,187 byte-appearances over 3 compressed outputs → **R* = 2/3**.
+
+### R — making the observed rate visible
+
+B3 already writes `kind: "expansion"` rows with `deltaBytes = -fetchedBytes`, so
+"re-injection never debited" was fixed. But **nothing ever read the field**: the
+ledger could show net bytes while the RATE — the only quantity R* compares
+against — stayed invisible. `@megasaver/stats recoveryRate()` now derives it.
+
+Measured on this machine's real ledger: 46 rows, 42 compressed outputs, **1
+expanded → R = 2.4%**. Small n, and it is one operator's workload; but it is real
+use, not a benchmark, and it sits 28x under the bound.
+
+Both sides lean against the saver on purpose: R* assumes the costliest outputs
+are expanded first, each in FULL, immediately after first sight; R counts an
+output expanded by a single chunk as fully expanded.
+
+### Verification
+
+8/8 mutations caught on the break-even math (including the two escapes that
+exposed the modelling error), 5/5 on the recovery rate. `pnpm verify` green.
+
+### What remains
+
+Only `S`. One real-API replay closes A4. Two caveats already recorded stand: the
+corpus is 17/18 opus-5 priced at one flat rate card, so the ratio is directional
+rather than calibrated; and R* is corpus-specific — a workload with many small
+compressed outputs and long sessions would lower it.

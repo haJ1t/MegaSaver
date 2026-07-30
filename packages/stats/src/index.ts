@@ -1,3 +1,4 @@
+export { recoveryRate, type RecoveryRate } from "./recovery-rate.js";
 export {
   tokenSaverEventSchema,
   type TokenSaverEvent,
