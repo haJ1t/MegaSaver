@@ -127,7 +127,39 @@ export async function runOutputPipeline(input: RunOutputInput): Promise<RunOutpu
   const pathHash = hashPath(input.outline === true ? `${gate.absolute}\0outline` : gate.absolute);
   const prior = loadReadIndex(sessionDir)[pathHash];
   if (prior !== undefined && prior.contentHash === newHash) {
-    return { ok: true, result: unchangedResult(prior.chunkSetId, read.raw) };
+    const result = unchangedResult(prior.chunkSetId, read.raw);
+    // Spec §7 item 3: the suppression is itself a delivery — the model pays
+    // for the whole marker envelope — so the re-read reaches the ledger with
+    // envelope-true bytes instead of returning before any append.
+    const returnedBytes = mcpEnvelopeBytes(result);
+    const event: TokenSaverEvent = {
+      id: newId(),
+      sessionId: input.sessionId,
+      projectId: settings.projectId,
+      createdAt: now(),
+      sourceKind: "file",
+      label: redact(input.path).redacted,
+      rawBytes: result.rawBytes,
+      returnedBytes,
+      bytesSaved: Math.max(0, result.rawBytes - returnedBytes),
+      deltaBytes: result.rawBytes - returnedBytes,
+      savingRatio:
+        result.rawBytes === 0 ? 0 : Math.max(0, result.rawBytes - returnedBytes) / result.rawBytes,
+      chunkSetId: prior.chunkSetId,
+      summary: result.summary,
+      mode: settings.mode,
+    };
+    try {
+      appendEvent({
+        store: { root: input.storeRoot },
+        event,
+        secretsRedacted: 0,
+        chunksStored: 0,
+      });
+    } catch (err) {
+      return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
+    }
+    return { ok: true, result };
   }
 
   // Failure-aware ranking: the session's prior SessionFailure signatures boost
@@ -327,7 +359,38 @@ export async function runOverlayOutputPipeline(
   const pathHash = hashPath(gate.absolute);
   const prior = loadReadIndex(sessionDir)[pathHash];
   if (prior !== undefined && prior.contentHash === newHash) {
-    return { ok: true, result: unchangedResult(prior.chunkSetId, read.raw) };
+    const result = unchangedResult(prior.chunkSetId, read.raw);
+    // Spec §7 item 3: same envelope-true accounting as the registry branch —
+    // the suppression is a delivery the ledger must see.
+    const returnedBytes = mcpEnvelopeBytes(result);
+    const event: OverlayTokenSaverEvent = {
+      id: newId(),
+      workspaceKey: input.workspaceKey,
+      liveSessionId: input.liveSessionId,
+      createdAt: now(),
+      sourceKind: "file",
+      label: redact(input.path).redacted,
+      rawBytes: result.rawBytes,
+      returnedBytes,
+      bytesSaved: Math.max(0, result.rawBytes - returnedBytes),
+      deltaBytes: result.rawBytes - returnedBytes,
+      savingRatio:
+        result.rawBytes === 0 ? 0 : Math.max(0, result.rawBytes - returnedBytes) / result.rawBytes,
+      chunkSetId: prior.chunkSetId,
+      summary: result.summary,
+      mode: settings.mode,
+    };
+    try {
+      appendOverlayEvent({
+        store: { root: input.storeRoot },
+        event,
+        secretsRedacted: 0,
+        chunksStored: 0,
+      });
+    } catch (err) {
+      return { ok: false, reason: "store_write_failed", detail: messageOf(err) };
+    }
+    return { ok: true, result };
   }
 
   // Failure-aware ranking: prior overlay failure signatures boost any chunk
