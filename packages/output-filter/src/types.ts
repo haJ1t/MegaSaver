@@ -331,6 +331,7 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
     chunks,
     semantic: usedSemantic,
     diagnostic: usedDiagnostic,
+    dropped: parserDropped,
   } = await chunkByFormatWithMeta(textForChunks, source);
   const scored = chunks.map((c) => scoreChunk(intent, c, sessionHints));
   // §8: engine-aware re-ranking is behind a flag and reuses the base
@@ -371,8 +372,11 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   let omitted = deduped.filter((c) => !kept.includes(c));
   // Counted against the PRE-dedupe universe so simhash folds appear in the
   // dropped count instead of vanishing between `ranked` and `deduped`
-  // (SC3-2 — every removal is either delivered, marked, or counted).
-  let droppedCount = ranked.length - kept.length;
+  // (SC3-2), plus the segments the parser omitted before chunking (SC3-5) —
+  // every removal is either delivered, marked, or counted. The no-blind
+  // fallback below resets this without parserDropped: it re-chunks the whole
+  // normalized output, so parser omissions are back in the universe.
+  let droppedCount = ranked.length - kept.length + parserDropped;
 
   // No-blind floor (mission: never strip what the model needs to decide).
   // The compressed path can yield zero excerpts two ways: a specialized

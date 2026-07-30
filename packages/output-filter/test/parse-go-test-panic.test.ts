@@ -23,7 +23,7 @@ const GO_TEST_PANIC = [
 
 describe("parseGoTest — panic survival (B8)", () => {
   it("keeps a panicking test's block: panic line and stack", () => {
-    const chunks = parseGoTest(GO_TEST_PANIC);
+    const { chunks } = parseGoTest(GO_TEST_PANIC);
     const boom = chunks.find((c) => c.text.includes("TestBoom"));
     expect(boom).toBeDefined();
     expect(boom?.text).toContain("panic: runtime error: index out of range");
@@ -32,7 +32,7 @@ describe("parseGoTest — panic survival (B8)", () => {
   });
 
   it("still keeps the regular FAIL block and collapses the pass", () => {
-    const chunks = parseGoTest(GO_TEST_PANIC);
+    const { chunks } = parseGoTest(GO_TEST_PANIC);
     expect(chunks.some((c) => c.text.includes("TestDivide"))).toBe(true);
     expect(chunks.some((c) => c.text.includes("TestAdd"))).toBe(false);
   });
@@ -44,7 +44,7 @@ describe("parseGoTest — panic survival (B8)", () => {
       "	goroutine 1 [running]:",
       "FAIL\texample.com/x\t0.001s",
     ].join("\n");
-    const chunks = parseGoTest(only);
+    const { chunks } = parseGoTest(only);
     expect(chunks.some((c) => c.text.includes("panic: runtime error"))).toBe(true);
   });
 });
