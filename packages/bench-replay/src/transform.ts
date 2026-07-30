@@ -480,15 +480,53 @@ export function cacheNamespaceMarker(slot: number): string {
 // Non-mutating: the prepared sequences are shared by all four runs, so mutating
 // one would leak a namespace into the others.
 //
-// Prepended INSIDE the first system block rather than added as a new one:
-// `cache_control` is per-block, and the recordings put their breakpoints on
-// `system[2]`/`system[3]` (verified across every recorded request, 2026-07-30),
-// so a marker in `system[0]` changes the key of every breakpoint without moving
-// any of them.
+// Prepended INSIDE an existing system block rather than added as a new one:
+// `cache_control` is per-block, and an extra block would shift every index.
+//
+// WHICH block is load-bearing. `system[0]` in a Claude Code recording is
+// `x-anthropic-billing-header: cc_version=…; cch=…`, and its `cch` changes on
+// EVERY request. If that block reached the cache key no prefix could ever match;
+// the recording's real usage is 945,296 cache_read against 80,240 creation, so
+// the platform strips it before rendering. A marker placed there would be
+// stripped with it — all four arm runs would share one namespace, the isolation
+// would be silently inert, and every "the bodies differ" assertion would still
+// pass because the difference dies at the API, not in the harness.
+//
+// So the marker rides on the block carrying the FIRST `cache_control`. That
+// block is provably part of the cached prefix — it IS a breakpoint — and
+// rekeying it rekeys every later breakpoint too, since each one's prefix
+// contains it. Falls back to the first non-billing-header block when nothing is
+// cacheable.
 // A body seen through the one field this pair of functions touches. Named so the
 // spread below produces a declared `system` property rather than an index
 // signature, which is what lets it be read and written as `.system`.
 type SystemHolder = { system?: unknown };
+
+// Claude Code injects this as `system[0]`; it is not prompt content and its
+// `cch` value changes per request. Excluded from carrying the marker because the
+// platform strips it (see namespaceCacheRun).
+function isBillingHeaderBlock(block: unknown): boolean {
+  const text = (block as { text?: unknown }).text;
+  return typeof text === "string" && text.startsWith("x-anthropic-billing-header:");
+}
+
+function hasText(block: unknown): block is { text: string } {
+  return (
+    typeof block === "object" &&
+    block !== null &&
+    typeof (block as { text?: unknown }).text === "string"
+  );
+}
+
+// The block that will carry the marker: the first breakpoint if there is one,
+// otherwise the first block that is real prompt content.
+function markerBlockIndex(blocks: readonly unknown[]): number {
+  const firstBreakpoint = blocks.findIndex(
+    (b) => hasText(b) && (b as { cache_control?: unknown }).cache_control != null,
+  );
+  if (firstBreakpoint !== -1) return firstBreakpoint;
+  return blocks.findIndex((b) => hasText(b) && !isBillingHeaderBlock(b));
+}
 
 export function namespaceCacheRun(body: RecordedRequest, slot: number): RecordedRequest {
   const marker = cacheNamespaceMarker(slot);
@@ -501,14 +539,15 @@ export function namespaceCacheRun(body: RecordedRequest, slot: number): Recorded
   }
   if (Array.isArray(source.system)) {
     const blocks = [...source.system];
-    const first = blocks[0] as { text?: unknown } | undefined;
-    if (first !== undefined && typeof first.text === "string") {
-      blocks[0] = { ...first, text: marker + first.text };
-    } else {
-      // No text block to extend. A fresh leading block still namespaces the
+    const target = markerBlockIndex(blocks);
+    if (target === -1) {
+      // No block can carry it. A fresh leading block still namespaces the
       // prefix, and because `cache_control` travels on the block object the
       // existing breakpoints keep their meaning at their shifted indices.
       blocks.unshift({ type: "text", text: marker });
+    } else {
+      const block = blocks[target] as { text: string };
+      blocks[target] = { ...block, text: marker + block.text };
     }
     copy.system = blocks;
     return copy;
@@ -538,11 +577,14 @@ export function stripCacheNamespace(body: RecordedRequest): RecordedRequest {
   }
   if (Array.isArray(system)) {
     const blocks = [...system];
-    const first = blocks[0] as { text?: unknown } | undefined;
-    if (first !== undefined && typeof first.text === "string") {
-      const bare = unmark(first.text);
-      if (bare === "") blocks.shift();
-      else blocks[0] = { ...first, text: bare };
+    // Searched rather than assumed at index 0: the marker rides on whichever
+    // block namespaceCacheRun chose, which depends on where the breakpoints are.
+    const marked = blocks.findIndex((b) => hasText(b) && b.text.startsWith(CACHE_NAMESPACE_PREFIX));
+    if (marked !== -1) {
+      const block = blocks[marked] as { text: string };
+      const bare = unmark(block.text);
+      if (bare === "") blocks.splice(marked, 1);
+      else blocks[marked] = { ...block, text: bare };
     }
     return { ...rest, system: blocks } as RecordedRequest;
   }
