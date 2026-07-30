@@ -245,11 +245,11 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   // Narrow `source` to the file variant directly so `source.path` is typed.
   if (parsed.data.outline === true && source?.kind === "file") {
     const outline = await outlineFile(normalized, source.path);
-    const returnedBytes = outline === null ? 0 : Buffer.byteLength(outline.skeleton, "utf8");
+    const skeletonBytes = outline === null ? 0 : Buffer.byteLength(outline.skeleton, "utf8");
     // Size floor: only take the outline branch when the skeleton actually
     // saves context. Otherwise fall through to the normal rank/fit pipeline
     // (still lossless — it persists its own chunks).
-    if (outline !== null && returnedBytes < rawBytes * OUTLINE_MAX_SKELETON_RATIO) {
+    if (outline !== null && skeletonBytes < rawBytes * OUTLINE_MAX_SKELETON_RATIO) {
       const normalizedLineCount = normalized.replace(/\n$/, "").split("\n").length;
       const skeletonChunk = {
         text: outline.skeleton,
@@ -258,11 +258,16 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
       };
       const excerpt = excerptOf(scoreChunk(intent, skeletonChunk, sessionHints), null);
       const rawTokens = estimateTokens(raw);
-      const returnedTokens = estimateTokens(outline.skeleton);
+      // ponytail: tool name hardcoded; lift to a constant when the CLI surface stabilises.
+      const summary = "outline mode: expand bodies via mega_fetch_chunk";
+      // The summary is delivered text, not a label — count it like the main
+      // path does (SC3-1/S4-8, M13: skeleton-only counting overstated every
+      // outline read's saving by the summary's size).
+      const returnedBytes = Buffer.byteLength(summary, "utf8") + skeletonBytes;
+      const returnedTokens = estimateTokens(summary) + estimateTokens(outline.skeleton);
       const bytesSaved = Math.max(0, rawBytes - returnedBytes);
       const base: FilterOutputResult = {
-        // ponytail: tool name hardcoded; lift to a constant when the CLI surface stabilises.
-        summary: "outline mode: expand bodies via mega_fetch_chunk",
+        summary,
         excerpts: [excerpt],
         chunkedLineCount: normalizedLineCount,
         chunks: outline.chunks.map((c) => ({
