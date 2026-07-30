@@ -10,6 +10,45 @@ sources:
 
 # Saver Cache-Churn
 
+## CORRECTION (2026-07-30): the in-place-rewrite mechanism is RETRACTED
+
+The "Claim" below attributes the cost to the saver **rewriting `tool_result` in
+place**, mutating an already-cached prefix and forcing re-creation. **That
+mechanism cannot occur, and is retracted.** Two independent checks, neither
+needing API spend:
+
+1. **Hook timing (code).** `PostToolUse` returns `updatedToolOutput`
+   (`apps/cli/src/hooks/saver.ts:377`) BEFORE the result enters the transcript.
+   The compressed bytes are what appear on the FIRST send. There is no earlier,
+   uncompressed version in the cache to invalidate.
+2. **History is immutable (measured).** Across an 18-request recorded session,
+   26 `tool_result`s recur in more than one request and **26 of 26 are
+   byte-stable** — Claude Code never rewrites history. Checked on both recorded
+   corpora, 0 unstable ids in each.
+
+A related replay-visible mechanism was also checked and ruled out at this corpus
+size: prompts run 14k–62k tokens against a 1024-token minimum cacheable prefix,
+so even 78% compression cannot drop a prompt below the cache floor. Only the
+haiku sidecar sits below it, and that call is identical in both arms.
+
+**What the 48,005 vs 29,525 figure actually is.** One observation from a LIVE A/B
+where the two arms are different conversations. Equal turn *count* does not mean
+equal turn *content*. This page's own Caveats say "n=1 per cell; high run-to-run
+variance … exact magnitudes are not [consistent]", and the Stage A section below
+measures a 0.68x-1.23x spread against a ~5% effect, attributing it to agent-path
+nondeterminism. The 18k should be read as trajectory divergence, not as a tax
+with a mechanism.
+
+**What survives.** The DIRECTION (no measured net win) is still unrefuted — it
+held across two runs and two modes. And "The tension" section below stands
+independently of the retracted mechanism: Claude Code already prices repeated
+tool output at cache_read, so the tokens the saver strips were not going to be
+re-billed at full price anyway. That is an economic argument, not a cache-churn
+argument, and it does not depend on any rewrite occurring.
+
+Consequence for A4: the gate's blocker is NOT "reproduce the churn tax". See
+`wiki/log.md` 2026-07-30 for the reformulation.
+
 ## Claim
 
 On short, cache-friendly coding tasks, MegaSaver's PostToolUse saver does **not**
