@@ -7893,3 +7893,68 @@ prices every token at one flat card). Measured Haiku share of request bytes is
 0.32%, and those sidecar calls carry no `tool_result`, so they are identical in
 both arms — the distortion is ~1.3% of total and largely cancels in the ratio.
 Not a blocker at this size; it would be at a larger share.
+
+## [2026-07-30] measurement | the A4 gate answered: the instrument is 8x too coarse
+
+Second real-API attempt, on a corpus where the saver actually applies. The
+harness refused a verdict again — and this refusal is the answer.
+
+**Corpus.** Three search-heavy sessions recorded against a clone of this
+repository (2,534 files) with `--reuse-repo` + `--prompts`: read every test that
+guards recovery content, trace a tool_result from hook to stored chunk, run the
+context-gate suite and explain its slowest tests. 241 `tool_result` blocks,
+median 2,325 B, p90 15,261 B, max 28,382 B — two orders of magnitude above the
+synthetic corpus.
+
+| floor | eligible |
+|---|---|
+| 2,048 B — decoupled, not adopted | 63.9% |
+| 4,000 B — aggressive | 27.8% |
+| 12,000 B — balanced | 11.2% |
+| 32,000 B — safe (`DEFAULT_MODE`) | **0.0%** |
+
+**Aggressive is not measurable here, and that is correct.** `.megasaver/policy.json`
+declares `{"modeFloor": "balanced"}` and `clampModeToFloor` refuses aggressive on
+this tree — §12 working as designed, since evidence-dropping compression is
+forbidden on a HIGH-risk repo. Relaxing the policy to obtain a number would be
+bending the rule to measure it.
+
+**Balanced is resolvable — checked before spending.** Modelling `targetBudget`
+over the recorded block sizes gives byteRatio 0.659 against the harness's 0.95
+ceiling: the transform moves 34% of tool_result bytes, comfortably inside what
+the instrument can see.
+
+**The result.** The saver applied, and the harness refused on its order check:
+
+> the run is order-sensitive — baseline-first gave **1.598** and megasaver-first
+> gave **1.197** (tolerance 0.15). The gap is prompt-cache warming, not saver
+> behaviour, so there is no verdict to report
+
+That gap, **~0.40 on the ratio, is the number the harness's own KNOWN-UNVALIDATED
+section said did not exist yet**: "prompt-cache nondeterminism is untested and
+unquantified … no ≤5% claim is supportable yet." It is now quantified on this
+instrument, and the mechanism is named. The effect the A4 gate needs to resolve
+is ≤0.05. **The instrument is roughly 8x too coarse for its question.**
+
+**Do not average more runs to escape this.** Order sensitivity is a systematic
+warming asymmetry, not random noise; repeats shrink the standard error of a
+biased estimate, not the bias. Loosening `--order-tolerance` until a verdict
+appears would be tuning the instrument to the answer.
+
+**Directional signal, stated as weak.** Both orderings landed above 1.00
+(baseline ÷ megasaver), which is consistent with the saver not being harmful on
+this corpus. It is not evidence of a saving: the spread is 8x the effect, and the
+harness's own model-mix note says a flat rate card understates magnitude in
+whichever direction it points.
+
+**A4 verdict: NOT MET, and now for a well-founded reason.** Integrity holds, the
+ratio is measured, and net cost remains unmeasurable with this instrument until
+prompt-cache warming is controlled — pinned cache breakpoints, an interleaved
+rather than sequential arm order, or a design that does not price two arms
+against a shared warming history. No savings claim may be published.
+
+Harness defects found and fixed on the way (`b7d76341`): the compressed-recording
+guard matched the footer anywhere in a tool_result, so reading this repo's own
+source made the harness unable to record against its own tree; and `--repo` has
+always begun with `rmSync` on its target, which `--reuse-repo` now avoids while
+refusing a dirty checkout.
