@@ -317,6 +317,35 @@ export const GENERATION_CAP_TOKENS = 1;
 // rejects `budget_tokens >= max_tokens`, so a recording captured with it on
 // cannot be replayed under the cap at all. Caught here, before a request is
 // sent, rather than as a 400 four arm runs deep.
+// `cache_control.scope: "global"` shares a cache entry beyond the session. The
+// API accepts it only when EVERY preceding block is globally scoped too, and
+// tool definitions render before `system` — so a recording whose `system[2]`
+// carries it while 11 tools do not is rejected outright. Claude Code sends
+// exactly that shape and the live session is fine, because it authenticates
+// with a subscription OAuth token (`oauth-2025-04-20` is in its beta set); the
+// replay must use `x-api-key`, where the entitlement does not hold. A paid run
+// died on request 1 with that error.
+//
+// Dropping the field is the smaller change. `scope` selects how WIDELY an entry
+// is shared, not what is cached: the breakpoint stays exactly where the
+// recording put it, so the same bytes are cached at the same boundary. The
+// alternative — adding global scope to every preceding block — would move
+// entries into a shared namespace, which is the opposite of what a per-arm-run
+// namespace is for. Applied to both arms through `capGeneration`'s call sites,
+// so no arm can receive it and not the other.
+function stripGlobalCacheScope(body: RecordedRequest): void {
+  const system = (body as unknown as { system?: unknown }).system;
+  if (!Array.isArray(system)) return;
+  for (const block of system) {
+    if (typeof block !== "object" || block === null) continue;
+    const cc = (block as { cache_control?: unknown }).cache_control;
+    if (typeof cc !== "object" || cc === null) continue;
+    if ((cc as { scope?: unknown }).scope === "global") {
+      delete (cc as { scope?: unknown }).scope;
+    }
+  }
+}
+
 function capGeneration(body: RecordedRequest, index: number): RecordedRequest {
   // A named view of the only two fields this touches. The schema is a
   // passthrough, so both reach us through an index signature; declaring them
@@ -332,6 +361,7 @@ function capGeneration(body: RecordedRequest, index: number): RecordedRequest {
       );
     }
   }
+  stripGlobalCacheScope(capped);
   capped.max_tokens = GENERATION_CAP_TOKENS;
   return capped;
 }
