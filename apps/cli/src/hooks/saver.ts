@@ -184,7 +184,12 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
   }
   // Wave 1 (A5): Grep files_with_matches / Glob expose a filenames array —
   // uncapped 30KB+ leaks in a monorepo. Compress as newline-joined paths;
-  // rebuild keeps the string[] schema (fewer, ranked paths + footer).
+  // rebuild keeps the string[] schema. W4: the rebuilt array must carry the
+  // compression signal itself — an omission marker plus record()'s summary and
+  // recovery-footer lines as trailing entries — or the model reads a silently
+  // shortened list with no recovery handle. B6 still holds: every synthetic
+  // entry sits behind an "… " sentinel so it cannot be mistaken for a result
+  // path, and numFiles counts only genuine paths.
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const filenames = o["filenames"];
   if (
@@ -192,14 +197,21 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     filenames.length > 0 &&
     filenames.every((f) => typeof f === "string")
   ) {
-    const origSet = new Set(filenames as string[]);
-    const raw = (filenames as string[]).join("\n");
+    const orig = filenames as string[];
+    const origSet = new Set(orig);
+    const raw = orig.join("\n");
     if (raw.length === 0) return null;
     return {
       raw,
       rebuild: (t) => {
-        const kept = t.split("\n").filter((s) => origSet.has(s));
-        return { ...o, filenames: kept, numFiles: kept.length };
+        const kept: string[] = [];
+        const extras: string[] = [];
+        for (const line of t.split("\n")) {
+          if (origSet.has(line)) kept.push(line);
+          else if (line.trim().length > 0) extras.push(line.startsWith("… ") ? line : `… ${line}`);
+        }
+        const marker = `… [Mega Saver: ${orig.length - kept.length} of ${orig.length} paths omitted]`;
+        return { ...o, filenames: [...kept, marker, ...extras], numFiles: kept.length };
       },
     };
   }
