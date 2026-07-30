@@ -117,6 +117,7 @@ Slots reserved for future workflow pages: `multi-agent-dogfood`, `design-skill-r
 - [[concepts/proxy-mode]] / Proxy Mode v1.2 — public naming mode, output classifier, vitest/tsc compressors, `proxy_search_code`, flagged engine-aware ranking, hook telemetry + adoption/interception metrics; full spec+plan written and shipped on `docs/contextops-roadmap-phases`.
 - [[syntheses/token-saver-root-cause-2026-07-28]] — 4-scope root-cause investigation: why the saver doesn't save (cache-churn, uncounted re-injection, unguarded MCP paths, bytes/4 accounting) and why it loses info (excerpts-only persistence, compressTsc/go-test silent drops, filenames corruption).
 - [[syntheses/llm-code-problems-research-2026-07]] — external research scan (593+ articles) mapped to 10 prioritized feature proposals (package-hallucination firewall, memory write-verify, silent-failure monitor, MCP security layer…) + validation of existing bets.
+- [[syntheses/saver-audit-2026-07-31]] — 24-agent e2e audit + fix round: safe-mode Bash floor dead zone (32001 > truncation ceiling) and 8 more defects fixed red→green; sibling-parser claim refuted; what still gates 60-90% (A4 real-API leg). Spec §9 has the correction ledger.
 
 ## Sources (pointers to raw + project artifacts)
 

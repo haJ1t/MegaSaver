@@ -169,3 +169,16 @@ three evidence-loss compressors against the A1 contract:
 Remaining from this page's inventory: dedupe-on-passthrough (spec B10) —
 unassigned to any track; stdout/stderr single-stream gate (spec B8) — Track A
 territory (saver.ts is Track C's; see work-split).
+
+## Outcomes (updated 2026-07-31, audit round)
+
+The 2026-07-31 e2e audit ([[syntheses/saver-audit-2026-07-31]], spec §9)
+closed the residuals this page left open: dedupe-on-passthrough (spec B10)
+fixed and its folds counted; the stdout/stderr single-stream gate (spec B8)
+replaced by per-stream structural recording; B2 filenames corruption
+re-closed with a counted omission marker + recovery handle. New closure
+class: foreground Bash's safe-mode floor was budget+1 = 32001 (above the
+truncation ceiling) — fixed to min(budget, 24000). One correction to §A's
+framing: `DEFAULT_MODE = "safe"` governs only disabled() results; enabled
+activations default to balanced, so §A's "safe ⇒ 32 KB floor suppresses most
+traffic" describes the explicit --mode safe configuration.
