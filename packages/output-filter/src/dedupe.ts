@@ -20,10 +20,18 @@ const BAND_SHIFTS = [0n, 16n, 32n, 48n] as const;
 const BAND_MASK = (1n << 16n) - 1n;
 
 export function dedupe(chunks: readonly RankedChunk[]): RankedChunk[] {
-  const kept: RankedChunk[] = [];
+  // Clusters form in score order (ties → earlier), not document order: the
+  // first member seen is the one that survives, and first-in-document let an
+  // early boring chunk outlive a later duplicate carrying the error evidence
+  // (SC3-4). The kept set still returns in document order — the caller's
+  // contract before scoring entered the picture.
+  const byScore = chunks
+    .map((chunk, index) => ({ chunk, index }))
+    .sort((a, b) => b.chunk.score - a.chunk.score || a.index - b.index);
+  const kept: { chunk: RankedChunk; index: number }[] = [];
   const bands = BAND_SHIFTS.map((shift) => ({ shift, buckets: new Map<bigint, bigint[]>() }));
-  for (const chunk of chunks) {
-    const hash = simhash(chunk.text);
+  for (const entry of byScore) {
+    const hash = simhash(entry.chunk.text);
     const isDup = bands.some(
       ({ shift, buckets }) =>
         buckets
@@ -31,7 +39,7 @@ export function dedupe(chunks: readonly RankedChunk[]): RankedChunk[] {
           ?.some((h) => hammingDistance(h, hash) <= HAMMING_DEDUPE_THRESHOLD) === true,
     );
     if (isDup) continue;
-    kept.push(chunk);
+    kept.push(entry);
     for (const { shift, buckets } of bands) {
       const key = (hash >> shift) & BAND_MASK;
       const bucket = buckets.get(key);
@@ -39,5 +47,5 @@ export function dedupe(chunks: readonly RankedChunk[]): RankedChunk[] {
       else bucket.push(hash);
     }
   }
-  return kept;
+  return kept.sort((a, b) => a.index - b.index).map((entry) => entry.chunk);
 }
