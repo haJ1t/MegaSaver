@@ -500,6 +500,25 @@ async function replay(values) {
       // before dying, or the next run has to buy the same data again — which is
       // exactly what happened three times. `pairs` is attached by
       // replayBothOrders precisely so this can happen.
+      // A send that failed mid-arm carries its own rows, not pairs: the arm
+      // never finished, so there is no ratio — only the requests already billed.
+      const partial = err?.perRequest;
+      if (Array.isArray(partial)) {
+        console.log(`\n--- ${task}: ARM ABORTED, but these requests were sent and billed ---`);
+        const sum = (k) => partial.reduce((n, r) => n + r[k], 0);
+        console.log(
+          `  ${partial.length} request(s)  input=${int(sum("inputTokens"))} ` +
+            `cache_creation=${int(sum("cacheCreationTokens"))} cache_read=${int(sum("cacheReadTokens"))} ` +
+            `output=${int(sum("outputTokens"))}`,
+        );
+        for (const [i, r] of partial.entries()) {
+          console.log(
+            `    req ${String(i + 1).padStart(3)}  input=${int(r.inputTokens)} cache_creation=${int(r.cacheCreationTokens)} ` +
+              `cache_read=${int(r.cacheReadTokens)} output=${int(r.outputTokens)}`,
+          );
+        }
+        console.log("  --- end of billed evidence ---\n");
+      }
       const pairs = err?.pairs;
       if (Array.isArray(pairs)) {
         console.log(`\n--- ${task}: NO VERDICT, but these arm runs were sent and billed ---`);

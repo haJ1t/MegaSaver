@@ -8235,3 +8235,18 @@ exposed the gap.
 off: the run reached the API cleanly and the failure was billing, not code. The
 remaining gap is that a mid-arm send failure still discards the usage collected
 so far — 18 baseline and 16 megasaver real requests were lost to it here.
+
+## [2026-07-30] fix | bench-replay: a failed arm keeps its receipts too
+
+The credit-exhaustion run billed 18 baseline and 16 megasaver requests, then
+discarded every usage row when request 17 threw. The order-check refusal had
+already been taught to carry its evidence; the send-failure path had not.
+
+`replayArm` now attaches `perRequest` to the error and the script prints the
+rows and their totals before dying. The refusal is unchanged — a half-sent arm
+looks artificially cheap and is not a measurement — but refusing the RESULT is
+not a reason to destroy the RECEIPTS.
+
+Proved by forcing a mid-arm failure in the dry run, not by unit test alone: the
+same package-to-script glue that silently swallowed the pairs evidence earlier
+(stale `dist/`) is what this depends on.
