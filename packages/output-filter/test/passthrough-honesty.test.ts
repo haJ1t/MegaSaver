@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   HARD_WRAP_THRESHOLD_TOKENS,
   PASSTHROUGH_THRESHOLD_TOKENS,
+  estimateTokens,
   filterOutput,
 } from "../src/index.js";
 import type { FilterOutputResult } from "../src/index.js";
@@ -173,14 +174,21 @@ const LIGHT_BAND_SOURCE = [
 
 // What the caller is actually handed. filterOutput's result IS the payload on
 // the exec and MCP paths — the summary line is delivered text, not a label —
-// so this is the sum returnedBytes has to report. Applied only in tests that
-// pin their decision: the outline branch computes returnedBytes from the
-// skeleton alone and does NOT satisfy this today, so asserting it band-wide
-// would be asserting something measurement contradicts.
+// so this is the sum returnedBytes has to report, in every band including
+// outline (SC3-1/S4-8 closed the outline branch's skeleton-only undercount).
+// Applied in tests that pin their decision so a fixture drifting into another
+// band fails loudly.
 function deliveredBytes(result: FilterOutputResult): number {
   return (
     Buffer.byteLength(result.summary, "utf8") +
     result.excerpts.reduce((sum, e) => sum + Buffer.byteLength(e.text, "utf8"), 0)
+  );
+}
+
+function deliveredTokens(result: FilterOutputResult): number {
+  return (
+    estimateTokens(result.summary) +
+    result.excerpts.reduce((sum, e) => sum + estimateTokens(e.text), 0)
   );
 }
 
@@ -286,6 +294,25 @@ describe("non-compressed bands report what they actually deliver", () => {
     // input size. A large saving here would mean content went missing under a
     // band whose contract is to drop nothing.
     expect(Math.abs(result.deltaBytes ?? 0)).toBeLessThan(result.rawBytes * 0.02);
+  });
+
+  // SC3-1/S4-8 (spec §7 item 2, M13): the outline branch counted the skeleton
+  // alone while the same result carried the summary string — every outline
+  // read's bytesSaved/savingRatio/deltaBytes overstated the saving by the
+  // summary's size, and returnedTokens undercounted identically.
+  it("outline counts its summary into returnedBytes and returnedTokens", async () => {
+    const result = await filterOutput({
+      raw: DISTINCT_TS_SOURCE,
+      mode: "safe",
+      outline: true,
+      source: FILE_SOURCE,
+    });
+
+    expect(result.decision).toBe("outline");
+    expect(result.summary.length).toBeGreaterThan(0);
+    expect(result.returnedBytes).toBe(deliveredBytes(result));
+    expect(result.returnedTokens).toBe(deliveredTokens(result));
+    expect(result.deltaBytes).toBe(result.rawBytes - result.returnedBytes);
   });
 
   it("keeps the signed field in agreement with the clamped one when a saving is real", async () => {
