@@ -349,8 +349,11 @@ describe("global cache scope normalisation", () => {
   it("drops scope:global from both arms", () => {
     const arms = prepareArms({ requests: [scoped()], applySaver: () => null });
     for (const body of [arms.baseline[0], arms.megasaver[0]]) {
-      const blocks = (body as unknown as { system: { cache_control?: Record<string, unknown> }[] })
-        .system;
+      const blocks = (
+        body as unknown as {
+          system: { cache_control?: { type?: string; ttl?: string; scope?: string } }[];
+        }
+      ).system;
       expect(blocks[1]?.cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
     }
   });
@@ -359,13 +362,13 @@ describe("global cache scope normalisation", () => {
     const arms = prepareArms({ requests: [scoped()], applySaver: () => null });
     const blocks = (
       arms.baseline[0] as unknown as {
-        system: { cache_control?: Record<string, unknown> }[];
+        system: { cache_control?: { type?: string; ttl?: string; scope?: string } }[];
       }
     ).system;
     // The breakpoints themselves are load-bearing: removing one would change
     // what is cached and therefore what is measured.
-    expect(blocks[1]?.cache_control?.["type"]).toBe("ephemeral");
-    expect(blocks[1]?.cache_control?.["ttl"]).toBe("1h");
+    expect(blocks[1]?.cache_control?.type).toBe("ephemeral");
+    expect(blocks[1]?.cache_control?.ttl).toBe("1h");
     expect(blocks[2]?.cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
     expect(blocks[0]?.cache_control).toBeUndefined();
   });
@@ -389,10 +392,10 @@ describe("global cache scope normalisation", () => {
     const arms = prepareArms({ requests: [sessionScoped], applySaver: () => null });
     const blocks = (
       arms.baseline[0] as unknown as {
-        system: { cache_control?: Record<string, unknown> }[];
+        system: { cache_control?: { type?: string; ttl?: string; scope?: string } }[];
       }
     ).system;
-    expect(blocks[0]?.cache_control?.["scope"]).toBe("session");
+    expect(blocks[0]?.cache_control?.scope).toBe("session");
   });
 
   it("leaves a recording that never used global scope untouched", () => {
