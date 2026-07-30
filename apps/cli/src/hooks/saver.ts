@@ -28,8 +28,12 @@ const MEGA_MCP_TOOL = /^mcp__megasaver__/i;
 const ORIGINAL_TOOLS = new Set(["Read", "LS", "Bash", "Grep", "Glob", "WebFetch"]);
 export const NEW_SURFACE_MIN_BYTES = 16_384;
 // Claude Code truncates Bash output at ~30 000 chars before the hook sees it;
-// a gate at or above that ceiling means "never compress a command" (B9). Keep
-// the Bash floor below the ceiling so safe mode still saves on commands.
+// a gate at or above that ceiling means "never compress a command" (B9). Cap
+// the Bash floor below the ceiling so safe mode (32 KB budget) still saves on
+// commands; balanced/aggressive budgets already sit under the cap. Post-A4 the
+// fit step targets a share of the input (output-filter targetBudget), so a
+// 24-30 KB command output trims to ~half under safe and clears the admission
+// floors — there is no untrimmed-then-reverted band left to gate out.
 export const BASH_COMPRESS_FLOOR = 24_000;
 
 function resolveSourceKind(tool: string): OutputSourceKind | undefined {
@@ -57,7 +61,7 @@ const BACKGROUND_SHELL_TOOLS = new Set(["BashOutput", "Monitor"]);
 // the cost axis the §W1 gate turns on, so the conservative floor stays.
 export function minBytesFor(tool: string, mode: TokenSaverMode): number {
   const budget = modeToBudget(mode);
-  if (tool === "Bash") return Math.max(budget + 1, Math.min(budget, BASH_COMPRESS_FLOOR));
+  if (tool === "Bash") return Math.min(budget, BASH_COMPRESS_FLOOR);
   const floor = ORIGINAL_TOOLS.has(tool) ? budget : Math.max(budget, NEW_SURFACE_MIN_BYTES);
   return BACKGROUND_SHELL_TOOLS.has(tool) ? Math.min(floor, BASH_COMPRESS_FLOOR) : floor;
 }
