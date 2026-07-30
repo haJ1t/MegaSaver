@@ -342,8 +342,14 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   // usedDiagnostic covers parsers (eslint/pytest/go/cargo/stacktrace) whose
   // outputs classify as generic_shell/unknown — the category set can't catch
   // them, so the parser reports the per-diagnostic shape directly.
+  // Band gate (SC3-2 / spec B10): passthrough/light promise to keep all
+  // chunks, and a near-duplicate is still real signal there — dedupe may fold
+  // only where compression is allowed.
   const skipDedupe =
-    usedSemantic || usedDiagnostic || DIAGNOSTIC_CATEGORIES.has(classification.category);
+    decision !== "compressed" ||
+    usedSemantic ||
+    usedDiagnostic ||
+    DIAGNOSTIC_CATEGORIES.has(classification.category);
   const deduped = skipDedupe ? ranked : dedupe(ranked);
 
   const ordered = [...deduped].sort((a, b) => b.score - a.score);
@@ -358,7 +364,10 @@ export async function filterOutput(input: FilterOutputInput): Promise<FilterOutp
   });
   let kept = decision === "compressed" ? fitBudget(deduped, budget) : ordered;
   let omitted = deduped.filter((c) => !kept.includes(c));
-  let droppedCount = deduped.length - kept.length;
+  // Counted against the PRE-dedupe universe so simhash folds appear in the
+  // dropped count instead of vanishing between `ranked` and `deduped`
+  // (SC3-2 — every removal is either delivered, marked, or counted).
+  let droppedCount = ranked.length - kept.length;
 
   // No-blind floor (mission: never strip what the model needs to decide).
   // The compressed path can yield zero excerpts two ways: a specialized
