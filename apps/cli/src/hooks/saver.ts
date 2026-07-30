@@ -127,7 +127,7 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
   // WebFetch (and other tools) can return the body as a bare string; the
   // updated output must stay a bare string so the tool schema is preserved.
   if (typeof toolOutput === "string") {
-    return toolOutput.length === 0 ? null : { raw: toolOutput, rebuild: (t) => t };
+    return toolOutput.length === 0 ? null : { raw: toolOutput, rebuild: (t: string) => t };
   }
   if (typeof toolOutput !== "object" || toolOutput === null) return null;
   const o = toolOutput as Record<string, unknown>;
@@ -135,7 +135,7 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   if (typeof o["result"] === "string")
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    return { raw: o["result"], rebuild: (t) => ({ ...o, result: t }) };
+    return { raw: o["result"], rebuild: (t: string) => ({ ...o, result: t }) };
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const stdout = typeof o["stdout"] === "string" ? o["stdout"] : undefined;
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
@@ -155,12 +155,12 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     }
     const slot = hasStderr ? "stderr" : "stdout";
     const raw = slot === "stderr" ? (stderr as string) : (stdout ?? "");
-    return { raw, rebuild: (t) => ({ ...o, [slot]: t }) };
+    return { raw, rebuild: (t: string) => ({ ...o, [slot]: t }) };
   }
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   if (typeof o["content"] === "string") {
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    return { raw: o["content"], rebuild: (t) => ({ ...o, content: t }) };
+    return { raw: o["content"], rebuild: (t: string) => ({ ...o, content: t }) };
   }
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   if (Array.isArray(o["content"])) {
@@ -212,7 +212,7 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     if (raw.length === 0) return null;
     return {
       raw,
-      rebuild: (t) => {
+      rebuild: (t: string) => {
         const kept: string[] = [];
         const extras: string[] = [];
         for (const line of t.split("\n")) {
@@ -233,7 +233,7 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
     if (typeof f["content"] === "string")
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-      return { raw: f["content"], rebuild: (t) => ({ ...o, file: { ...f, content: t } }) };
+      return { raw: f["content"], rebuild: (t: string) => ({ ...o, file: { ...f, content: t } }) };
   }
   return null;
 }
