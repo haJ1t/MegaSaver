@@ -167,6 +167,7 @@ async function seedOverlaySummary(
   id: string,
   eventsTotal: number,
   bytesSaved: number,
+  deltaBytesTotal?: number,
 ): Promise<void> {
   await mkdir(join(store, "stats", wk), { recursive: true });
   await writeFile(
@@ -177,6 +178,7 @@ async function seedOverlaySummary(
       rawBytesTotal: bytesSaved + 100,
       returnedBytesTotal: 100,
       bytesSavedTotal: bytesSaved,
+      ...(deltaBytesTotal !== undefined ? { deltaBytesTotal } : {}),
       savingRatio: bytesSaved / (bytesSaved + 100),
       secretsRedactedTotal: 0,
       chunksStoredTotal: 1,
@@ -234,6 +236,23 @@ describe("runHooksStatus — overlay keyspace union (E27)", () => {
     expect(code).toBe(1);
     expect(err.join("\n")).toContain("not found");
   });
+
+  it("headlines net bytes with the gross − re-fetched breakdown when deltas are recorded", async () => {
+    await seedOverlaySummary(WK1, OVERLAY_ID, 2, 900, 700);
+    const { out, code } = await runStatus({ sessionId: OVERLAY_ID });
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("saved: 700 B net (900 B saved − 200 B re-fetched, 90.0%)");
+  });
+
+  it("falls back to the gross line when the summary predates signed deltas", async () => {
+    await seedOverlaySummary(WK1, OVERLAY_ID, 2, 900);
+    const { out, code } = await runStatus({ sessionId: OVERLAY_ID });
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain("(saved 90.0%)");
+    expect(text).not.toContain("re-fetched");
+  });
 });
 
 describe("runHooksStatus — cross-workspace aggregate (E28, no-arg form)", () => {
@@ -245,10 +264,27 @@ describe("runHooksStatus — cross-workspace aggregate (E28, no-arg form)", () =
     const { out, code } = await runStatus();
     expect(code).toBe(0);
     const text = out.join("\n");
-    expect(text).toContain(`${WK1}: 1 sessions, 2 events, saved 900 B`);
-    expect(text).toContain(`${WK2}: 1 sessions, 3 events, saved 100 B`);
-    expect(text).toContain("TOTAL: 2 sessions across 2 workspaces, saved 1000 B");
+    expect(text).toContain(`${WK1}: 1 sessions, 2 events, net saved 900 B`);
+    expect(text).toContain(`${WK2}: 1 sessions, 3 events, net saved 100 B`);
+    expect(text).toContain("TOTAL: 2 sessions across 2 workspaces, net saved 1000 B");
     expect(text).toContain(`${WK1}: invoked ${ts}, completed never, failures 0`);
+  });
+
+  it("headlines net totals with the gross − re-fetched breakdown", async () => {
+    await seedOverlaySummary(WK1, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 2, 900, 700);
+    await seedOverlaySummary(WK2, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", 3, 100, 100);
+    const { out, code } = await runStatus();
+    expect(code).toBe(0);
+    const text = out.join("\n");
+    expect(text).toContain(
+      `${WK1}: 1 sessions, 2 events, net saved 700 B (900 B saved − 200 B re-fetched, 90.0%)`,
+    );
+    expect(text).toContain(
+      `${WK2}: 1 sessions, 3 events, net saved 100 B (100 B saved − 0 B re-fetched, 50.0%)`,
+    );
+    expect(text).toContain(
+      "TOTAL: 2 sessions across 2 workspaces, net saved 800 B (1000 B saved − 200 B re-fetched, 83.3%)",
+    );
   });
 
   it("renders an empty store without erroring", async () => {
