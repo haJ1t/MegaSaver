@@ -45,6 +45,22 @@ describe("dedupe (spec §6 stage 6)", () => {
     expect(out).toHaveLength(2);
   });
 
+  // SC3-4: survival within a cluster was decided by document order, so an
+  // early boring chunk beat a later duplicate carrying the error evidence.
+  it("keeps the highest-scored member of a cluster, not the first-seen", () => {
+    const base = "the quick brown fox jumps over the lazy dog tonight";
+    const out = dedupe([ranked(base, 3), ranked(`${base}.`, 9)]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.text).toBe(`${base}.`);
+  });
+
+  it("breaks score ties toward the earlier chunk", () => {
+    const base = "the quick brown fox jumps over the lazy dog tonight";
+    const out = dedupe([ranked(base, 5), ranked(`${base}.`, 5)]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.text).toBe(base);
+  });
+
   it("pins the dedupe threshold at 3", () => {
     expect(HAMMING_DEDUPE_THRESHOLD).toBe(3);
   });
