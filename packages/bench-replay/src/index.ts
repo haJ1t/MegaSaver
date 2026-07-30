@@ -1,3 +1,4 @@
+export { simulateCacheCost, type CacheCost } from "./cache-model.js";
 export {
   recoveryBreakeven,
   type ExpandableOutput,

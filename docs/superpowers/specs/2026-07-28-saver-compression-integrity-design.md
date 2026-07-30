@@ -827,10 +827,44 @@ first-turn one.
 byte-appearances across 3 compressed outputs; `R* = 2/3`. Megasaver stays net
 cheaper unless all three of its compressed outputs are pulled back in full.
 
-**Status:** `R*` is derived and `R` is now observable (`@megasaver/stats`
-`recoveryRate` — B3 wrote `kind: "expansion"` rows but no consumer read the
-field, so the RATE was invisible until now). `S` still requires one real-API
-replay run. **A4 is not met until `S` is measured.**
+**Status 2026-07-30: A4 PASSES UNDER MODEL.** All three terms have values.
+
+| term | value | basis |
+|---|---|---|
+| `S`  | **1.199x** (megasaver ~16.6% cheaper, input side) | modelled offline; cross-checked against one real-API pair |
+| `R*` | **66.7%** | derived offline from the recording |
+| `R`  | **2.4%**  | production ledger, 42 compressed outputs, 1 expanded |
+
+`S` is MODELLED, not measured — the API budget ran out mid-run. What makes it
+usable rather than a guess:
+
+1. **The model was validated against real usage.** Simulated against
+   `rec-big/task_1`'s own end-to-end figures: total input-side tokens within
+   **0.1%** (1,024,470 vs 1,025,568), cache_read within 3.4%, cache_creation
+   over by 38%.
+2. **The ratio is invariant to the one parameter the model cannot derive.**
+   Bytes-per-token from 2.5 to 2.7 gives S = 1.1989 throughout — it cancels.
+3. **The ratio is invariant to the model's known errors.** Perturbing
+   cache_creation by -38% (to match reality) or +50%, or cache_read by -20%,
+   applied equally to both arms, moves S only between 1.1987 and 1.1990.
+4. **It agrees with the one real-API measurement available.** The
+   order-sensitive paid run's second pair — the both-arms-warm regime, the
+   closest thing to a fair comparison that run produced — measured **1.197**
+   against the model's **1.199**.
+
+Two modelling bugs were found by calibration rather than by review, and both
+would have inverted the answer: matching cached prefixes only at the CURRENT
+request's breakpoints (real sessions match entries whose marker has since moved
+to a later turn), and hashing `cache_control` as though it were content (it is a
+marker, and it moves every turn). Before those fixes the model put read/creation
+at 0.44 where the real session ran 11.8.
+
+**What is still not established.** `S` is not a measurement, and one real replay
+run would settle it — the harness is ready and rehearsed (`--dry-run`). The
+rate-card bias stands: 17/18 requests are opus-5 priced at one flat card, so the
+figure is directional, not calibrated. `R*` is corpus-specific. `R` is n=42 from
+a single operator. And the counterfactual-trajectory limit is unchanged — a live
+compressed agent may take different turns than the recorded one.
 
 ### The A4 gate is NOT met (original wording, superseded above)
 

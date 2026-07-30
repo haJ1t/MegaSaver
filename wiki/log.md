@@ -8158,3 +8158,68 @@ imports from `dist/`, and the first attempt to exercise the refusal path printed
 nothing because the package had not been rebuilt. The library test was green the
 whole time. Glue between a package and its script is not covered by either
 side's tests, and only running it end-to-end found it.
+
+## [2026-07-30] result | A4 passes under model — S derived offline after the API budget ran out
+
+The paid replay died at request 16 of its second arm on `HTTP 400: Your credit
+balance is too low`. 34 real requests went through cleanly first, so the pipeline
+and the `scope: "global"` fix are confirmed against the live API. With no budget
+left, `S` was derived instead of measured.
+
+| term | value | basis |
+|---|---|---|
+| `S`  | **1.199x** | modelled, cross-checked against one real pair |
+| `R*` | **66.7%**  | derived offline |
+| `R`  | **2.4%**   | production ledger |
+
+**A4 passes under model: `S > 0` and `R < R*`, the latter by ~28x.**
+
+### Why a modelled S is usable here
+
+The prompt cache is a deterministic longest-prefix match, and both arms' exact
+bytes and breakpoint positions are in hand. Four things keep the number honest:
+
+- **Validated against real usage.** Total input-side tokens within **0.1%** of
+  the recording's own end-to-end figures (1,024,470 vs 1,025,568); read within
+  3.4%; creation over by 38%.
+- **Invariant to the one free parameter.** bytes-per-token 2.5-2.7 → S = 1.1989
+  throughout. It cancels in a ratio.
+- **Invariant to the model's known errors.** Creation -38% (matching reality) or
+  +50%, read -20%, applied to both arms: S stays in 1.1987-1.1990.
+- **Agrees with the one real measurement.** The order-sensitive run's second pair
+  — both arms warm, the fairest comparison that run produced — measured 1.197
+  against the model's 1.199.
+
+### Calibration found two bugs review did not, and both inverted the answer
+
+1. **Matched only at the CURRENT request's breakpoints.** A growing conversation
+   caches at turn k and reads that entry back at turn k+1, where the marker has
+   moved on. Modelled cache_read was 0 for a session whose real read was 945,296.
+2. **Hashed `cache_control` as content.** It is a marker and it moves every turn,
+   so the same tool_result hashed differently once it left. The match froze at
+   the system prefix (51,161 B) for all 18 requests.
+
+Before the fixes the model put read/creation at 0.44; the real session ran 11.8;
+after, 8.2 and then correct in the split. **A model that agrees with reality only
+after being calibrated against it is worth exactly as much as the calibration** —
+which is why the invariance checks above, not the fit, are the argument.
+
+### A finding that reaches beyond the model
+
+`system[0]` is a synthetic `x-anthropic-billing-header` block whose `cch` value
+changes on EVERY request. If it participated in the cache key, no prefix could
+ever match and cache_read would be 0 — the recording's real 945,296 says the
+platform strips it. **The arm-cache namespace marker is currently prepended to
+`system[0]`.** If that block is stripped, the marker is stripped with it and the
+four arm runs are NOT isolated — the namespacing would be inert and the order
+sensitivity it was built to remove would still be there. The paid run never got
+far enough to show this either way. Recorded as OPEN; the fix is to attach the
+marker to the block carrying the first `cache_control` instead, which is
+guaranteed to be part of the cached prefix.
+
+### Cost discipline
+
+`--dry-run` and the billed-evidence printer landed before this run and both paid
+off: the run reached the API cleanly and the failure was billing, not code. The
+remaining gap is that a mid-arm send failure still discards the usage collected
+so far — 18 baseline and 16 megasaver real requests were lost to it here.
