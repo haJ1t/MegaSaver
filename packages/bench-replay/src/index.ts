@@ -1,4 +1,9 @@
 export {
+  recoveryBreakeven,
+  type ExpandableOutput,
+  type RecoveryBreakeven,
+} from "./recovery-breakeven.js";
+export {
   recordedRequestMetaSchema,
   recordedRequestSchema,
   type Arm,
