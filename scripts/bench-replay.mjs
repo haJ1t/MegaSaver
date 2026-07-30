@@ -255,7 +255,9 @@ function useExistingRepo(repoDir) {
   // Each task ends with `git reset --hard` + `git clean -fd`, so uncommitted
   // work in the target would be destroyed. Refuse rather than discard it.
   if (git("status", "--porcelain").trim() !== "") {
-    fail(`--reuse-repo: ${repoDir} has uncommitted changes — the recorder resets between tasks and would destroy them`);
+    fail(
+      `--reuse-repo: ${repoDir} has uncommitted changes — the recorder resets between tasks and would destroy them`,
+    );
   }
   console.log(`Recording against existing repo ${repoDir} @ ${head.slice(0, 8)}`);
   return head;
@@ -287,14 +289,15 @@ async function record(values) {
   const repoDir = values.repo;
   const claudeBin = values["claude-bin"];
 
-  const baselineCommit = values["reuse-repo"]
-    ? useExistingRepo(repoDir)
-    : setupBenchRepo(repoDir);
+  const baselineCommit = values["reuse-repo"] ? useExistingRepo(repoDir) : setupBenchRepo(repoDir);
 
   // Custom prompts let a corpus be built around the tool-output shape under
   // test; the built-in TASK_PROMPTS target the synthetic app only.
   const prompts = values.prompts
-    ? readFileSync(values.prompts, "utf8").split("\n").map((s) => s.trim()).filter(Boolean)
+    ? readFileSync(values.prompts, "utf8")
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean)
     : TASK_PROMPTS;
   if (prompts.length === 0) fail(`--prompts ${values.prompts}: no non-empty lines`);
 
