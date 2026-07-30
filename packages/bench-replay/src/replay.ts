@@ -209,10 +209,21 @@ export async function replayBothOrders(input: {
   // reading. Only the TOLERANCE crosses this boundary: `buildVerdict` derives
   // the order check — and its refusal — from the very pairs it reports, so the
   // number and the arms shown beside it cannot come from different data.
-  return buildVerdict(input.task, [baselineFirst, megasaverFirst], arms, {
-    orderTolerance: input.orderTolerance,
-    ...(input.baselineDriftSmoke === undefined
-      ? {}
-      : { baselineDriftSmoke: input.baselineDriftSmoke }),
-  });
+  const pairs = [baselineFirst, megasaverFirst];
+  try {
+    return buildVerdict(input.task, pairs, arms, {
+      orderTolerance: input.orderTolerance,
+      ...(input.baselineDriftSmoke === undefined
+        ? {}
+        : { baselineDriftSmoke: input.baselineDriftSmoke }),
+    });
+  } catch (cause) {
+    // Every refusal below this line happens AFTER four arm runs have been sent
+    // and billed. Throwing bare discards the per-request cache numbers that are
+    // the only way to diagnose why — which is how three paid runs in a row
+    // produced a one-line error and nothing else. The refusal is unchanged; the
+    // evidence rides out with it so the caller can print what was paid for.
+    if (cause instanceof Error) Object.assign(cause, { pairs });
+    throw cause;
+  }
 }
