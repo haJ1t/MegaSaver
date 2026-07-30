@@ -312,3 +312,96 @@ describe("prepareArms generation cap", () => {
     ).toThrow(/budget_tokens/);
   });
 });
+
+// A paid run died on request 1 with:
+//   `cache_control.scope: "global"` is only valid when every preceding block is
+//   also globally scoped ... tool definitions render before `system` blocks
+//
+// The body we sent was byte-identical to the recording apart from the
+// generation cap, so the recording itself is what the API rejects. It was
+// captured from Claude Code, whose beta set includes `oauth-2025-04-20` — the
+// live session authenticated with a subscription OAuth token, and global cache
+// scope is not accepted on the `x-api-key` path the replay must use.
+//
+// Normalised away rather than worked around, because the alternative (adding
+// global scope to every preceding block) changes what is cached, and this does
+// not: scope selects how WIDELY a cache entry is shared, and both arms already
+// run in their own namespace. Applied through the same both-arms path as the
+// generation cap, so the symmetry is structural rather than a convention two
+// call sites happen to honour.
+describe("global cache scope normalisation", () => {
+  const scoped = () => ({
+    model: "m",
+    max_tokens: 64000,
+    system: [
+      { type: "text", text: "billing" },
+      {
+        type: "text",
+        text: "core",
+        cache_control: { type: "ephemeral", ttl: "1h", scope: "global" },
+      },
+      { type: "text", text: "more", cache_control: { type: "ephemeral", ttl: "1h" } },
+    ],
+    tools: [{ name: "Bash", description: "d", input_schema: { type: "object" } }],
+    messages: [{ role: "user", content: "hi" }],
+  });
+
+  it("drops scope:global from both arms", () => {
+    const arms = prepareArms({ requests: [scoped()], applySaver: () => null });
+    for (const body of [arms.baseline[0], arms.megasaver[0]]) {
+      const blocks = (body as unknown as { system: { cache_control?: Record<string, unknown> }[] })
+        .system;
+      expect(blocks[1]?.cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
+    }
+  });
+
+  it("keeps the rest of cache_control intact — only scope goes", () => {
+    const arms = prepareArms({ requests: [scoped()], applySaver: () => null });
+    const blocks = (
+      arms.baseline[0] as unknown as {
+        system: { cache_control?: Record<string, unknown> }[];
+      }
+    ).system;
+    // The breakpoints themselves are load-bearing: removing one would change
+    // what is cached and therefore what is measured.
+    expect(blocks[1]?.cache_control?.["type"]).toBe("ephemeral");
+    expect(blocks[1]?.cache_control?.["ttl"]).toBe("1h");
+    expect(blocks[2]?.cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
+    expect(blocks[0]?.cache_control).toBeUndefined();
+  });
+
+  // "global" is the only value the x-api-key path rejects. Deleting `scope`
+  // whenever it is present would silently rewrite a narrower scope into the
+  // default and change what is cached — the exact class of harm this function
+  // avoids by not touching the breakpoints.
+  it("preserves a scope that is not global", () => {
+    const sessionScoped = {
+      model: "m",
+      system: [
+        {
+          type: "text",
+          text: "core",
+          cache_control: { type: "ephemeral", ttl: "1h", scope: "session" },
+        },
+      ],
+      messages: [{ role: "user", content: "hi" }],
+    };
+    const arms = prepareArms({ requests: [sessionScoped], applySaver: () => null });
+    const blocks = (
+      arms.baseline[0] as unknown as {
+        system: { cache_control?: Record<string, unknown> }[];
+      }
+    ).system;
+    expect(blocks[0]?.cache_control?.["scope"]).toBe("session");
+  });
+
+  it("leaves a recording that never used global scope untouched", () => {
+    const plain = {
+      model: "m",
+      system: [{ type: "text", text: "core", cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: "hi" }],
+    };
+    const arms = prepareArms({ requests: [plain], applySaver: () => null });
+    expect((arms.baseline[0] as unknown as { system: unknown }).system).toEqual(plain.system);
+  });
+});
