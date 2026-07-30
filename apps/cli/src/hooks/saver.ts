@@ -113,7 +113,16 @@ const PASSTHROUGH: SaverDecision = { passthrough: true };
 // rebuilder that swaps it for compressed text while preserving every other
 // field (so the emitted shape matches the tool's original schema). Unknown
 // shapes ⇒ null ⇒ caller passes through (original output preserved).
-type Shaped = { raw: string; rebuild: (text: string) => unknown };
+// A Bash response carrying BOTH streams is exposed as two parts: the split is
+// structural, never an in-band boundary line — such a line is a rankable,
+// droppable chunk (dropping it relabels kept stderr evidence as stdout on
+// rebuild) and would be persisted as if the command printed it (HOOK-4).
+type ShapedText = { raw: string; rebuild: (text: string) => unknown };
+type ShapedStreams = {
+  streams: { stdout: string; stderr: string };
+  rebuild: (stdout: string, stderr: string) => unknown;
+};
+type Shaped = ShapedText | ShapedStreams;
 function readOutputShape(toolOutput: unknown): Shaped | null {
   // WebFetch (and other tools) can return the body as a bare string; the
   // updated output must stay a bare string so the tool schema is preserved.
@@ -135,14 +144,14 @@ function readOutputShape(toolOutput: unknown): Shaped | null {
     const hasStdout = stdout !== undefined && stdout.length > 0;
     const hasStderr = stderr !== undefined && stderr.length > 0;
     if (hasStdout && hasStderr) {
-      const raw = `${stdout}\n--- STDERR error boundary ---\n${stderr}`;
-      const rebuild = (t: string) => {
-        const parts = t.split(/\n?--- STDERR error boundary ---\n?/);
-        const newStdout = parts[0] ?? "";
-        const newStderr = parts.slice(1).join("\n").trim();
-        return { ...o, stdout: newStdout, stderr: newStderr };
+      return {
+        streams: { stdout: stdout as string, stderr: stderr as string },
+        rebuild: (newStdout: string, newStderr: string) => ({
+          ...o,
+          stdout: newStdout,
+          stderr: newStderr,
+        }),
       };
-      return { raw, rebuild };
     }
     const slot = hasStderr ? "stderr" : "stdout";
     const raw = slot === "stderr" ? (stderr as string) : (stdout ?? "");
@@ -345,42 +354,58 @@ async function decide(
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const shape = readOutputShape(p["tool_response"]);
   if (shape === null) return PASSTHROUGH;
+  const parts = "streams" in shape ? [shape.streams.stdout, shape.streams.stderr] : [shape.raw];
+  const totalBytes = parts.reduce((sum, part) => sum + Buffer.byteLength(part, "utf8"), 0);
   const floorBytes = minBytesFor(tool, settings.mode);
-  if (Buffer.byteLength(shape.raw, "utf8") <= floorBytes) return PASSTHROUGH;
+  // B8: dual-stream output gates on the COMBINED size, so a small stream never
+  // shields a large one from the floor.
+  if (totalBytes <= floorBytes) return PASSTHROUGH;
 
   // P1: a seen output is already in the conversation and (likely) in the
   // client's prompt cache — rewriting it now would invalidate that cache and
   // bill the whole prefix as a fresh cache write. First sight only.
-  const outputHash = hashToolOutput(shape.raw);
+  const outputHash = hashToolOutput(parts.join("\n"));
   if (deps.hasSeenOutput(deps.storeRoot, workspaceKey, sessionId, outputHash)) return PASSTHROUGH;
 
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const label = labelOf(p["tool_input"], tool);
   ctx.stage = "record";
-  const recorded = await deps.record({
-    storeRoot: deps.storeRoot,
-    // Evidence rows live under <storeRoot>/evidence/<wk>/ — same base root the
-    // MCP approve-memory path reads from. Passing it turns on the best-effort
-    // evidence write inside record(); a failure there never blocks compression.
-    evidenceStoreRoot: deps.storeRoot,
-    workspaceKey,
-    liveSessionId: sessionId,
-    raw: shape.raw,
-    sourceKind,
-    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
-    label: labelOf(p["tool_input"], tool),
-    mode: settings.mode,
-    storeRawOutput: true,
-    // F30: the recovery footer is built INSIDE record() so the persisted
-    // numbers count it; returnedText comes back ready-to-emit.
-    includeFooter: true,
-    // B8: the gate above is the single eligibility authority; record()
-    // collapses the filter thresholds onto it.
-    compressFloorBytes: floorBytes,
-    // P1: content-derived chunk-set id so a re-run at the same position reuses
-    // the same id (idempotent store, no orphan chunk sets).
-    newId: () => `cs-${outputHash.slice(0, 32)}`,
-    ...(sessionIntent !== undefined ? { intent: sessionIntent } : {}),
-  });
-  if (recorded.decision !== "compressed") return PASSTHROUGH;
+  const results: RecordOverlayOutputResult[] = [];
+  for (const part of parts) {
+    const partBytes = Buffer.byteLength(part, "utf8");
+    // Each part forwards its byte share of the floor, so clearing the combined
+    // gate above is exactly clearing every per-part threshold — the hook stays
+    // the single eligibility authority (B8) and record()'s admission guard
+    // still rejects any per-part rewrite that would not pay for itself.
+    const partFloor = Math.max(1, Math.round((floorBytes * partBytes) / totalBytes));
+    const partHash = hashToolOutput(part);
+    results.push(
+      await deps.record({
+        storeRoot: deps.storeRoot,
+        // Evidence rows live under <storeRoot>/evidence/<wk>/ — same base root
+        // the MCP approve-memory path reads from. Passing it turns on the
+        // best-effort evidence write inside record(); a failure there never
+        // blocks compression.
+        evidenceStoreRoot: deps.storeRoot,
+        workspaceKey,
+        liveSessionId: sessionId,
+        raw: part,
+        sourceKind,
+        label,
+        mode: settings.mode,
+        storeRawOutput: true,
+        // F30: the recovery footer is built INSIDE record() so the persisted
+        // numbers count it; returnedText comes back ready-to-emit.
+        includeFooter: true,
+        compressFloorBytes: partFloor,
+        // P1: content-derived chunk-set id so a re-run at the same position
+        // reuses the same id (idempotent store, no orphan chunk sets).
+        newId: () => `cs-${partHash.slice(0, 32)}`,
+        ...(sessionIntent !== undefined ? { intent: sessionIntent } : {}),
+      }),
+    );
+  }
+  if (!results.some((r) => r.decision === "compressed")) return PASSTHROUGH;
 
   // P1: mark seen ONLY after a confirmed compression — a passthrough/too-small
   // output stays unmarked so a later larger version at the same position can
@@ -390,5 +415,15 @@ async function decide(
   // Step 5: a qualifying compression updates the global latestCompression.
   deps.recordCompression(deps.storeRoot, workspaceKey);
 
-  return { updatedToolOutput: shape.rebuild(recorded.returnedText) };
+  // A part record() declined to compress is delivered verbatim — its slot
+  // loses nothing, so it needs no recovery handle.
+  const texts = results.map((r, i) =>
+    r.decision === "compressed" ? r.returnedText : (parts[i] as string),
+  );
+  return {
+    updatedToolOutput:
+      "streams" in shape
+        ? shape.rebuild(texts[0] as string, texts[1] as string)
+        : shape.rebuild(texts[0] as string),
+  };
 }
