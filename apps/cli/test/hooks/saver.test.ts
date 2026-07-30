@@ -663,8 +663,10 @@ describe("wave-1 shapes", () => {
     const u = (out as { updatedToolOutput: { filenames: string[]; numFiles: number } })
       .updatedToolOutput;
     expect(Array.isArray(u.filenames)).toBe(true);
-    expect(u.filenames).toEqual(["src/file-0.ts"]);
+    expect(u.filenames[0]).toBe("src/file-0.ts");
     expect(u.numFiles).toBe(1);
+    expect(u.filenames).toContain("… [Mega Saver: 1999 of 2000 paths omitted]");
+    expect(u.filenames.some((f) => f.includes('mega output chunk "cs-1"'))).toBe(true);
   });
 
   it("compresses Grep files_with_matches filenames", async () => {
@@ -686,7 +688,7 @@ describe("wave-1 shapes", () => {
     expect("updatedToolOutput" in out).toBe(true);
   });
 
-  it("rebuilds Glob/Grep filenames array containing ONLY original input paths and updates numFiles", async () => {
+  it("rebuilds Glob/Grep filenames with paths verbatim and every non-path entry behind the … sentinel", async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "saver-c1-"));
     const paths = Array.from({ length: 2_000 }, (_, i) => `src/file-${i}.ts`);
     const origSet = new Set(paths);
@@ -715,15 +717,49 @@ describe("wave-1 shapes", () => {
       .updatedToolOutput;
     expect(Array.isArray(u.filenames)).toBe(true);
 
+    // B6 still holds: nothing that is not a real result path may be mistakable
+    // for one — every synthetic entry starts with the "… " sentinel.
+    const pathEntries = u.filenames.filter((f) => origSet.has(f));
     for (const f of u.filenames) {
-      expect(origSet.has(f)).toBe(true);
+      if (!origSet.has(f)) expect(f.startsWith("… ")).toBe(true);
     }
-    for (const f of u.filenames) {
-      expect(f).not.toMatch(/^\d+ kept, \d+ dropped$/);
-      expect(f).not.toContain("[Mega Saver:");
-      expect(f).not.toMatch(/^… \[lines /);
+    expect(pathEntries.length).toBeGreaterThan(0);
+    expect(u.numFiles).toBe(pathEntries.length);
+  });
+
+  it("delivers a truncation marker and the recovery handle through the filenames rebuild (W4)", async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "saver-w4-files-"));
+    const paths = Array.from({ length: 2_000 }, (_, i) => `src/pkg-${i % 40}/module-${i}.ts`);
+    const origSet = new Set(paths);
+    const d = {
+      ...deps(),
+      storeRoot: tmpDir,
+      record: recordAndFilterOverlayOutput,
+    };
+    const out = await buildSaverDecision(
+      {
+        tool_name: "Grep",
+        tool_input: { pattern: "TODO" },
+        tool_response: { mode: "files_with_matches", filenames: paths, numFiles: 2_000 },
+        session_id: "live-1",
+        cwd: "/Users/x/proj",
+      },
+      d,
+    );
+    expect("updatedToolOutput" in out).toBe(true);
+    const u = (out as { updatedToolOutput: { filenames: string[]; numFiles: number } })
+      .updatedToolOutput;
+    const delivered = u.filenames.filter((f) => origSet.has(f));
+    const extras = u.filenames.filter((f) => !origSet.has(f));
+    expect(delivered.length).toBeGreaterThan(0);
+    expect(delivered.length).toBeLessThan(2_000);
+    const marker = extras.find((f) => /^… \[Mega Saver: \d+ of 2000 paths omitted\]$/.test(f));
+    expect(marker).toBe(`… [Mega Saver: ${2_000 - delivered.length} of 2000 paths omitted]`);
+    expect(extras.some((f) => f.includes('mega output chunk "cs-'))).toBe(true);
+    for (const f of extras) {
+      expect(f.startsWith("… ")).toBe(true);
     }
-    expect(u.numFiles).toBe(u.filenames.length);
+    expect(u.numFiles).toBe(delivered.length);
   });
 
   it("compresses both stdout and stderr when combined length clears floor (Task C5 supersedes single-slot A6)", async () => {
