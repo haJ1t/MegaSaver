@@ -8006,11 +8006,15 @@ reproduce. That is broader than what it used to catch, not narrower.
 ### Prediction, before the run
 
 1. The two pair ratios converge to within the 0.15 tolerance (from 0.40).
-2. The converged ratio lands **above 1.00**, roughly 1.15–1.60. Megasaver sends
-   strictly fewer tokens through a structurally identical cache pattern, so on
-   the input side it must be cheaper. Pair 2's 1.197 is the closest thing to a
-   fair comparison the old instrument produced and it still favoured baseline
-   slightly, so the fair value should sit at or above it.
+2. The converged ratio lands **above 1.00**, with a floor near 1.2 and **no
+   upper bound stated**. Megasaver sends strictly fewer tokens through a
+   structurally identical cache pattern, so on the input side it must be
+   cheaper. The floor comes from pair 2's 1.197 — but that was measured with
+   BOTH arms warm, where cache_read at 0.1x compresses the absolute gap between
+   two differently-sized prefixes. Cold-cold runs price that same token
+   difference at cache_creation rates (1.25–2x), i.e. 12–20x higher, so the fair
+   value may land well above 1.6. An overshoot is the cold regime pricing the
+   delta honestly, not an anomaly.
 
 ### What the run still will NOT settle — stated in advance
 
@@ -8028,5 +8032,15 @@ If the ratio comes back above 1.00 as predicted, the honest reading is "the save
 sends fewer input tokens", **not** "the saver saves money". If it comes back
 below 1.00, that is a genuine surprise and worth chasing.
 
+**A second, independent bias survives this fix and is NOT addressed by it.** The
+corpus is 17/18 opus-5 plus 1 haiku, priced at one flat rate card, and the
+harness's own note says that biases the ratio toward 1.00 and **understates
+magnitude in whichever direction it points**, by an amount it does not quantify.
+So even a clean convergence yields a number with a known one-sided bias of
+unknown size. Whatever comes back is reportable as a DIRECTION, not as a
+magnitude — a converged ratio is not a calibrated one, and must not be quoted as
+though the convergence made it one.
+
 **A4 remains NOT MET.** Fixing the order sensitivity makes the instrument
-self-consistent; it does not make it the right instrument for the churn tax.
+self-consistent; it does not make it the right instrument for the churn tax, and
+it does not fix the rate-card bias sitting on top.
