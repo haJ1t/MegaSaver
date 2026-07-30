@@ -307,7 +307,15 @@ describe("execHandler", () => {
   });
 
   it("happy path: allowlisted command with injected spawn → 200, compressed result", async () => {
-    const bigOutput = Array.from({ length: 500 }, (_, i) => `file${i}.ts`).join("\n");
+    // Genuinely compressible output: 500 bare `file<i>.ts` lines became
+    // marginal once dedupe stopped shaving passthrough/light bands (SC3-2) —
+    // the envelope overhead alone pushed returnedBytes 6 bytes past raw.
+    // The pin below is about the COMPRESSING happy path, so feed it prose the
+    // filter decisively compresses.
+    const bigOutput = Array.from(
+      { length: 500 },
+      (_, i) => `file${i}.ts lorem ipsum dolor sit amet consectetur adipiscing elit`,
+    ).join("\n");
     const fakeSpawn = makeFakeSpawn(bigOutput);
     const res = await execHandler(
       store,
