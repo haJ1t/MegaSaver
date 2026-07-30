@@ -7842,3 +7842,54 @@ Standing correction to earlier notes: the parallel-`turbo` flake is not
 `context-gate`-specific. Three packages have now produced one — `context-gate`,
 `mcp-bridge` and `gui` — which points at the shared runner rather than at any
 one suite.
+
+## [2026-07-30] measurement | first real-session data: the saver is inert on this corpus
+
+The A4 gate finally got a real-API run, and the harness **refused to return a
+verdict** — correctly, and for the most informative reason in the programme so far.
+
+Recorded four real `claude -p` coding sessions through `bench-replay record`
+(43 requests, 6-19 turns, $1.41 reference cost). Replayed task_1 in balanced
+mode. `buildVerdict` refused:
+
+> the megasaver arm applied the saver 0 times (passthrough=5, failed=0) —
+> it is identical to baseline, so there is no verdict to report
+
+**Why: the tool results are two orders of magnitude below every floor.** Across
+all 288 `tool_result` blocks in the recording — median **329 B**, p90 1,390 B,
+**max 1,991 B**:
+
+| floor | eligible blocks |
+|---|---|
+| 2,048 B — `COMPRESS_FLOOR_BYTES`, decoupled but not adopted | **0 / 288** |
+| 4,000 B — aggressive | **0 / 288** |
+| 12,000 B — balanced | **0 / 288** |
+| 32,000 B — safe (`DEFAULT_MODE`) | **0 / 288** |
+
+Not one block clears even the smallest floor the codebase contains. On this
+workload the entire compression pipeline is inert, in every mode, and the W1(a)
+floor decoupling would not change that either — which retires the open question
+of whether adopting it was worth the churn risk **for corpora of this shape**.
+
+**What this does and does not say.** It is the first field measurement this
+project has ever had; §E of the root-cause audit recorded field telemetry as
+zero. It does NOT say the saver never fires: the corpus is four small feature
+tasks on the harness's own synthetic bench repo, where a `Read` returns a
+200-line file and a `Grep` a handful of hits. It says this corpus cannot measure
+the saver, and the harness was right to refuse rather than print a ratio near
+1.00 that would have read as "no effect".
+
+**Consequence for the A4 gate: still not met, and now for a second, sharper
+reason.** Previously net cost was unmeasured because the instrument could not
+resolve a ≤5% effect. Now we know that on this corpus there is no effect to
+resolve — the treatment never applied. Any future benchmark needs a corpus with
+tool outputs large enough to clear a floor: a large repository, wide greps, long
+build logs, big file reads. Recording against this project's own tree would be
+the obvious next attempt.
+
+Recorded also because it will otherwise be re-derived: the harness prints its own
+model-mix caveat (39 Opus 5 + 4 Haiku 4.5; `normalizedCostUsd` is model-blind and
+prices every token at one flat card). Measured Haiku share of request bytes is
+0.32%, and those sidecar calls carry no `tool_result`, so they are identical in
+both arms — the distortion is ~1.3% of total and largely cancels in the ratio.
+Not a blocker at this size; it would be at a larger share.
