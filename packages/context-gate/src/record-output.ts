@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { type OverlayChunkSet, saveOverlayChunkSet } from "@megasaver/content-store";
 import {
   type EvidenceRecordInput,
@@ -16,7 +16,7 @@ import {
 } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
 import { type TokenSaverMode, type WorkspaceKey, modeToBudget } from "@megasaver/shared";
-import { appendOverlayEvent } from "@megasaver/stats";
+import { appendOverlayEvent, hasOverlayEvent } from "@megasaver/stats";
 import { DEFAULT_SAVING_FLOORS, admitCompression } from "./admission-guard.js";
 import { recoverableChunks } from "./recoverable-chunks.js";
 import { buildRecoveryFooter, looksPreTruncated } from "./recovery-footer.js";
@@ -66,6 +66,14 @@ export const EVIDENCE_RETENTION_MS = 30 * 86_400_000;
 // the one the §W1 gate turns on. Pass it explicitly via `compressFloorBytes`
 // to opt in.
 export const COMPRESS_FLOOR_BYTES = 2_048;
+
+// B11 event-identity bucket. The daemon write and the hook's timeout fallback
+// stamp createdAt seconds apart (1.5s abort + pipeline time), so they share a
+// bucket; a genuine re-delivery of byte-identical output later in the session
+// (the first-sight ledger failing open) lands in a new bucket and still
+// counts. A race exactly on a bucket edge still double-counts — residual
+// probability ~skew/width, against 100% without the bucket.
+export const OVERLAY_EVENT_ID_BUCKET_MS = 600_000;
 
 export type RecordOverlayOutputInput = {
   storeRoot: string;
@@ -189,8 +197,9 @@ export async function recordAndFilterOverlayOutput(
   const now = input.now ?? (() => new Date().toISOString());
   // input.newId derives ONLY the chunk-set id, so identical content re-emitted in
   // a new session yields an identical chunk-set id (P1 cache friendliness). The
-  // per-event audit ids (overlay event id, evidenceId) MUST stay unique random
-  // UUIDs — evidenceId is UUID-schema-constrained and the ledger is append-only.
+  // overlay event id is content-derived too (B11, below); only evidenceId stays
+  // a unique random UUID — it is UUID-schema-constrained — and its append is
+  // gated on the event being a first sight, not a replay.
   const chunkSetIdGen = input.newId ?? (() => randomUUID());
 
   const floorBytes = input.compressFloorBytes ?? modeToBudget(input.mode);
@@ -340,10 +349,32 @@ export async function recordAndFilterOverlayOutput(
     chunkRefs = chunks.map((c) => ({ chunkSetId: csid, chunkId: c.id }));
   }
 
+  // B11: the hook aborts a slow daemon POST and replays the SAME compression
+  // through the in-process fallback — two writers, one compression. The event
+  // identity is derived from the compression's stable inputs plus a coarse
+  // creation bucket (exact createdAt would differ between the racing writers'
+  // clocks) so appendOverlayEvent can absorb the replay as a no-op.
+  const createdBucket = Math.floor(Date.parse(createdAt) / OVERLAY_EVENT_ID_BUCKET_MS);
+  const overlayEventId = `ove-${createHash("sha256")
+    .update(
+      `${input.workspaceKey}\0${input.liveSessionId}\0${input.sourceKind}\0${input.mode}\0${input.label}\0${createdBucket}\0`,
+    )
+    .update(input.raw)
+    .digest("hex")
+    .slice(0, 32)}`;
+  // Read BEFORE the append: once the line is in, first sight and replay are
+  // indistinguishable, and the evidence write below must run only on the first.
+  const alreadyRecorded = hasOverlayEvent(
+    { root: input.storeRoot },
+    input.workspaceKey,
+    input.liveSessionId,
+    overlayEventId,
+  );
+
   appendOverlayEvent({
     store: { root: input.storeRoot },
     event: {
-      id: randomUUID(),
+      id: overlayEventId,
       liveSessionId: input.liveSessionId,
       workspaceKey: input.workspaceKey,
       createdAt,
@@ -371,10 +402,12 @@ export async function recordAndFilterOverlayOutput(
     chunksStored,
   });
 
-  // Evidence write: only when chunk was persisted AND a store is configured.
+  // Evidence write: only when chunk was persisted AND a store is configured AND
+  // the overlay event was a first sight (a B11 replay must not duplicate the
+  // evidence row — the ledger is append-only and its ids are random UUIDs).
   // Fire-and-await but swallowed: evidence failure must never block compressed output
   // (same fail-safe posture as appendOverlayEvent above).
-  if (input.evidenceStoreRoot !== undefined && chunkSetId !== undefined) {
+  if (!alreadyRecorded && input.evidenceStoreRoot !== undefined && chunkSetId !== undefined) {
     const { redacted: redactedReturnedText } = redact(finalText);
     const evidenceRecord: EvidenceRecordInput = {
       evidenceId: randomUUID(),
