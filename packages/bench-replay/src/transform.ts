@@ -338,11 +338,14 @@ function stripGlobalCacheScope(body: RecordedRequest): void {
   if (!Array.isArray(system)) return;
   for (const block of system) {
     if (typeof block !== "object" || block === null) continue;
-    const cc = (block as { cache_control?: unknown }).cache_control;
+    const holder = block as { cache_control?: { scope?: string } & Record<string, unknown> };
+    const cc = holder.cache_control;
     if (typeof cc !== "object" || cc === null) continue;
-    if ((cc as { scope?: unknown }).scope === "global") {
-      delete (cc as { scope?: unknown }).scope;
-    }
+    if (cc.scope !== "global") continue;
+    // Rebuilt without `scope` rather than mutated in place: the breakpoint keeps
+    // every other field, which is what leaves the cached bytes unchanged.
+    const { scope: _global, ...rest } = cc;
+    holder.cache_control = rest;
   }
 }
 
