@@ -8213,9 +8213,21 @@ platform strips it. **The arm-cache namespace marker is currently prepended to
 `system[0]`.** If that block is stripped, the marker is stripped with it and the
 four arm runs are NOT isolated — the namespacing would be inert and the order
 sensitivity it was built to remove would still be there. The paid run never got
-far enough to show this either way. Recorded as OPEN; the fix is to attach the
-marker to the block carrying the first `cache_control` instead, which is
-guaranteed to be part of the cached prefix.
+far enough to show this either way. **CLOSED same day.** The marker now rides on the
+block carrying the first `cache_control` — that block IS a breakpoint, so it is
+provably part of the cached prefix and cannot be stripped, and rekeying it
+rekeys every later breakpoint since each one's prefix contains it. Verified on
+the real recording: the marker lands on `system[2]` (the first block with
+`cache_control`), leaving `system[0]` untouched. `stripCacheNamespace` searches
+for the marker rather than assuming index 0. 4/4 mutations caught, including
+"marker back on system[0]" and "fallback allows the billing header".
+
+The lesson worth keeping: **every existing test passed while the isolation was
+inert.** They asserted that the four bodies differ, which was true in the
+harness and false at the API, because the difference died in a block the
+platform removes. A test that checks what we send cannot see what the platform
+does with it — only reasoning from the recording's own real usage numbers
+exposed the gap.
 
 ### Cost discipline
 
