@@ -778,7 +778,61 @@ it is now 2 KB–64 KB. §1a's "nothing under 32 KB is ever touched" no longer h
 That sentence is in §1a, which this section does not own; it is recorded here as a
 contradiction for whoever revises §1a.
 
-### The A4 gate is NOT met
+### A4 gate — REFORMULATED 2026-07-30 (user-approved)
+
+The original wording below ("net cost reduction", one number) is superseded. It
+was not reachable by any instrument this repo can build, for reasons that are now
+evidenced rather than suspected:
+
+- **Live A/B cannot resolve it.** Spread 0.68x-1.23x against a ~5% effect, driven
+  by agent-path nondeterminism (turn counts differ run to run for the same
+  prompt). That is a systematic confound, not noise, so replicates do not
+  converge on it.
+- **Replay cannot resolve it either.** It is deterministic, but a fixed
+  trajectory can never produce the recovery turns that expansion causes.
+- **The mechanism that motivated the gate was misattributed.** "Rewrite in place
+  -> cache invalidation" cannot occur: PostToolUse returns `updatedToolOutput`
+  before the result enters the transcript (`saver.ts:377`), and recurring
+  tool_results are byte-stable across a session (26/26 measured, both corpora).
+  See the retraction in `wiki/syntheses/saver-cache-churn`.
+
+**The gate is therefore a bounded decision, not a single number:**
+
+> **A4 passes iff `S > 0` and `R < R*`.**
+>
+> | term | meaning | how it is obtained |
+> |---|---|---|
+> | `S`  | input-side cost saving | replay, per-arm-run cache namespaces |
+> | `R*` | break-even recovery rate | derived offline from a recording |
+> | `R`  | observed recovery rate | production ledger, `recoveryRate()` |
+
+`R*` and `R` are both measured **pessimistically**, so the comparison is
+conservative on both sides:
+
+- `R*` assumes the agent expands the COSTLIEST outputs first, expands each one in
+  FULL, and does so immediately after first sight (maximising the requests the
+  recovered bytes ride in). Expansion is charged the RAW bytes, not the bytes
+  compression removed, because `mega output chunk` appends chunks as new
+  tool_results while the compressed summary stays in history — an expanded
+  session carries both.
+- `R` counts an output expanded by a single chunk exactly as one expanded in
+  full, so it overstates recovery.
+
+Both sides are measured in BYTE-APPEARANCES: the Messages API resends the whole
+history every turn, so a byte's cost is proportional to how many requests it
+appears in. Counting plain bytes would price a last-turn expansion the same as a
+first-turn one.
+
+**Measured 2026-07-30** (`rec-big/task_1`, balanced, 18 requests): saving 442,187
+byte-appearances across 3 compressed outputs; `R* = 2/3`. Megasaver stays net
+cheaper unless all three of its compressed outputs are pulled back in full.
+
+**Status:** `R*` is derived and `R` is now observable (`@megasaver/stats`
+`recoveryRate` — B3 wrote `kind: "expansion"` rows but no consumer read the
+field, so the RATE was invisible until now). `S` still requires one real-API
+replay run. **A4 is not met until `S` is measured.**
+
+### The A4 gate is NOT met (original wording, superseded above)
 
 Per §W1 the pass condition is **net cost reduction at constant integrity**, with
 ratio as diagnostic only. Integrity holds (9/9, and the property test is now
