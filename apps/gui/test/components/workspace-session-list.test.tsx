@@ -202,6 +202,25 @@ describe("WorkspaceSessionList", () => {
     expect(headline.textContent).toContain("5.0 sessions reclaimed");
   });
 
+  it("headlines the signed NET when expansions ate into the gross (S4-1)", async () => {
+    stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
+    // 4M gross bytes saved but 2M re-fetched back: the $ must price the net
+    // (500k tokens -> $1.50), never the gross ($3.00).
+    stub.totals = {
+      bytesSavedTotal: 4_000_000,
+      deltaBytesTotal: 2_000_000,
+      sessionsCount: 10,
+      savingRatio: 0.4,
+      workspaceCount: 2,
+    };
+    render(<WorkspaceSessionList onSelect={() => {}} />);
+    const headline = await screen.findByTestId("savings-headline");
+    expect(headline.textContent).toContain("$1.50 saved (est.)");
+    expect(headline.textContent).not.toContain("$3.00");
+    expect(headline.textContent).toContain("2.5 sessions reclaimed");
+    expect(headline.textContent).toContain("re-fetched");
+  });
+
   it("shows the fractional reclaim count without rounding up (conservative)", async () => {
     stub.sessions = [meta({ id: "x", title: "X", projectLabel: "/tmp/alpha" })];
     // 480_000 saved bytes -> 120_000 tokens -> 120_000 / 200_000 = 0.6 windows.

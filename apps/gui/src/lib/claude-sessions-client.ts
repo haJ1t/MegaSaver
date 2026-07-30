@@ -247,6 +247,10 @@ export type WorkspaceTokenSaverTotals = {
 
 export type AllWorkspaceTokenSaverTotals = {
   bytesSavedTotal: number;
+  // Signed net (gross minus expansion debits). The bridge always sends it;
+  // optional so a stale bridge degrades to the gross fallback in
+  // computeSavingsHeadline instead of blanking the headline.
+  deltaBytesTotal?: number;
   sessionsCount: number;
   savingRatio: number;
   workspaceCount: number;
