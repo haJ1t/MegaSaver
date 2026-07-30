@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { replayBothOrders, replayPair } from "../src/replay.js";
+import { replayArm, replayBothOrders, replayPair } from "../src/replay.js";
 import { orderSensitive } from "../src/report.js";
 import { prepareArms, stripCacheNamespace } from "../src/transform.js";
 import type { Arm, RecordedRequest } from "../src/types.js";
@@ -389,5 +389,71 @@ describe("a refused verdict carries the evidence it was refused on", () => {
         now: () => 0,
       }),
     ).rejects.toThrow(/order-sensitive/);
+  });
+});
+
+// The credit-exhaustion run: 18 baseline requests and 16 megasaver requests
+// reached the API and were billed, then request 17 returned HTTP 400 and every
+// one of those usage rows was discarded with the throw. The refusal is right —
+// a half-sent arm is not a measurement and must never be reported as one — but
+// the evidence is not the verdict, and throwing it away makes the next run buy
+// the same rows again.
+//
+// This is the send-failure twin of the order-check refusal above. Same rule:
+// refuse the result, keep the receipts.
+describe("a failed arm carries the usage it already paid for", () => {
+  const failAfter = (n: number) => {
+    let call = 0;
+    return async () => {
+      call += 1;
+      if (call > n) throw new Error("HTTP 400: credit balance is too low");
+      return {
+        input_tokens: 100,
+        cache_creation_input_tokens: 10,
+        cache_read_input_tokens: 90,
+        output_tokens: 1,
+      };
+    };
+  };
+
+  it("attaches the per-request rows collected before the failure", async () => {
+    const twoRequests = [recorded[0] as RecordedRequest, recorded[0] as RecordedRequest];
+    const error = await replayArm({
+      arm: "baseline",
+      cacheSlot: 0,
+      bodies: twoRequests,
+      send: failAfter(1),
+    }).then(
+      () => null,
+      (e: unknown) => e as Error & { perRequest?: unknown },
+    );
+    expect(error?.message).toMatch(/send failed on request 1/);
+    const rows = error?.perRequest as { inputTokens: number }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.inputTokens).toBe(100);
+  });
+
+  it("still refuses the arm — partial usage is evidence, never a result", async () => {
+    await expect(
+      replayArm({
+        arm: "baseline",
+        cacheSlot: 0,
+        bodies: [recorded[0] as RecordedRequest, recorded[0] as RecordedRequest],
+        send: failAfter(1),
+      }),
+    ).rejects.toThrow(/send failed/);
+  });
+
+  it("reports an empty row set when the very first request failed", async () => {
+    const error = await replayArm({
+      arm: "megasaver",
+      cacheSlot: 1,
+      bodies: [recorded[0] as RecordedRequest],
+      send: failAfter(0),
+    }).then(
+      () => null,
+      (e: unknown) => e as Error & { perRequest?: unknown },
+    );
+    expect(error?.perRequest).toEqual([]);
   });
 });

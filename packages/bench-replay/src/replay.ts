@@ -70,9 +70,15 @@ export async function replayArm(input: {
       // enough context (arm, request index, original cause) to find the
       // failure, no retry.
       const reason = cause instanceof Error ? cause.message : String(cause);
-      throw new Error(`replayArm(${input.arm}): send failed on request ${index}: ${reason}`, {
-        cause,
-      });
+      const failure = new Error(
+        `replayArm(${input.arm}): send failed on request ${index}: ${reason}`,
+        { cause },
+      );
+      // The rows already collected were paid for. The arm is still refused —
+      // a half-sent arm looks artificially cheap and is not a measurement — but
+      // refusing the RESULT is not a reason to destroy the RECEIPTS. A credit
+      // exhaustion at request 17 discarded 34 billed rows this way.
+      throw Object.assign(failure, { perRequest });
     }
     const row: RequestUsage = {
       inputTokens: usage.input_tokens ?? 0,
