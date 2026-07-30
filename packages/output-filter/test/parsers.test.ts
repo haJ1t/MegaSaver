@@ -166,7 +166,7 @@ describe("go test parser", () => {
   });
 
   it("produces one chunk per failing test, collapsing passes", () => {
-    const chunks = parseGoTest(GO_TEST);
+    const { chunks } = parseGoTest(GO_TEST);
     const failures = chunks.filter((c) => c.text.includes("--- FAIL:"));
     expect(failures).toHaveLength(2);
     expect(failures[0]?.text).toContain("TestDivide");
