@@ -341,3 +341,53 @@ describe("replayBothOrders transforms once for the whole gate", () => {
     expect(verdict.transform.bytes.transformed).toBeLessThan(verdict.transform.bytes.original);
   });
 });
+
+// Three paid runs died before printing anything. The third got all the way
+// through four arm runs — every token bought and billed — and then threw on the
+// order check, discarding the per-request cache numbers that were the only way
+// to diagnose it. A refusal that destroys its own evidence makes the next run
+// cost exactly as much as the last.
+//
+// The refusal stands: no verdict may be reported. What changes is that the pairs
+// ride out on the error, so the caller can print what was paid for.
+describe("a refused verdict carries the evidence it was refused on", () => {
+  it("attaches both pairs to the error rather than discarding them", async () => {
+    const { send } = scriptedSend([1000, 800, 1000, 1000]);
+    const error = await replayBothOrders({
+      task: "task_1",
+      requests: recorded,
+      applySaver,
+      send,
+      orderTolerance: 0.05,
+      now: () => 0,
+    }).then(
+      () => null,
+      (e: unknown) => e as Error & { pairs?: unknown },
+    );
+    expect(error?.message).toMatch(/order-sensitive/);
+    const pairs = error?.pairs as { order: string; baseline: unknown; megasaver: unknown }[];
+    expect(pairs).toHaveLength(2);
+    expect(pairs.map((p) => p.order)).toEqual(["baseline-first", "megasaver-first"]);
+    // The per-request usage is what a diagnosis needs — the aggregate cannot
+    // show whether the second arm was reading a cache the first one created.
+    for (const pair of pairs) {
+      for (const arm of [pair.baseline, pair.megasaver]) {
+        expect((arm as { perRequest: unknown[] }).perRequest.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("still refuses — the evidence is for the reader, not a way to get a verdict", async () => {
+    const { send } = scriptedSend([1000, 800, 1000, 1000]);
+    await expect(
+      replayBothOrders({
+        task: "task_1",
+        requests: recorded,
+        applySaver,
+        send,
+        orderTolerance: 0.05,
+        now: () => 0,
+      }),
+    ).rejects.toThrow(/order-sensitive/);
+  });
+});

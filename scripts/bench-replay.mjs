@@ -408,13 +408,54 @@ function referenceCostUsd(taskDir) {
   return usage ? normalizedCostUsd(usage) : null;
 }
 
+// A full rehearsal of `replay` with no network. Every stage the paid run
+// executes still runs: store preparation and its mode-floor resolution,
+// prepareArms with the REAL saver subprocess and its per-call contract check,
+// the uncompressed-recording guard, the resolvable-transform refusal, both pair
+// orders, the order check, the drift smoke and the printer.
+//
+// It exists because the first three paid runs each died on a different stage —
+// a saver that never fired, a policy floor clamping the mode, and the order
+// check — and every one of those was detectable without spending a cent. The
+// only thing a dry run CANNOT rehearse is what the API does with the prompt
+// cache, which is the one thing worth paying for.
+//
+// Usage is derived from the body size, so it is deterministic: both pair orders
+// produce identical ratios and the order check passes by construction. That is
+// the point — a dry run validates PLUMBING, and its numbers are not a result.
+function makeDryRunSender() {
+  return async (body) => {
+    const tokens = Math.ceil(JSON.stringify(body).length / 4);
+    // A plausible warm-cache split. The exact division does not matter; what
+    // matters is that all three token fields are populated so every branch of
+    // the cost arithmetic is exercised rather than short-circuited by a zero.
+    const cacheRead = Math.floor(tokens * 0.9);
+    return {
+      input_tokens: 0,
+      cache_creation_input_tokens: tokens - cacheRead,
+      cache_read_input_tokens: cacheRead,
+      output_tokens: 1,
+    };
+  };
+}
+
+const DRY_RUN_BANNER = [
+  "=================================================================",
+  "  DRY RUN — no request was sent and no number below is a result.",
+  "  Token counts are derived from body size. This run proves the",
+  "  pipeline completes; it measures nothing.",
+  "=================================================================",
+].join("\n");
+
 async function replay(values) {
+  const dryRun = values["dry-run"];
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
+  if (!dryRun && !apiKey) {
     fail("ANTHROPIC_API_KEY is not set — replay talks to the real API and cannot authenticate");
   }
+  if (dryRun) console.log(DRY_RUN_BANNER);
 
-  const send = makeSender(values["base-url"], apiKey);
+  const send = dryRun ? makeDryRunSender() : makeSender(values["base-url"], apiKey);
   const orderTolerance = Number(values["order-tolerance"]);
   const driftTolerance = Number(values["drift-tolerance"]);
   const verdicts = [];
@@ -444,14 +485,34 @@ async function replay(values) {
 
     console.log(`=== replaying ${task} (${requests.length} requests, mode ${values.mode}) ===`);
     printModelHistogram(requests);
-    const base = await replayBothOrders({
-      task,
-      requests,
-      metas,
-      applySaver,
-      send,
-      orderTolerance,
-    });
+    let base;
+    try {
+      base = await replayBothOrders({
+        task,
+        requests,
+        metas,
+        applySaver,
+        send,
+        orderTolerance,
+      });
+    } catch (err) {
+      // The refusal already cost four full arm runs. Print what they bought
+      // before dying, or the next run has to buy the same data again — which is
+      // exactly what happened three times. `pairs` is attached by
+      // replayBothOrders precisely so this can happen.
+      const pairs = err?.pairs;
+      if (Array.isArray(pairs)) {
+        console.log(`\n--- ${task}: NO VERDICT, but these arm runs were sent and billed ---`);
+        for (const pair of pairs) {
+          console.log(`  [${pair.order}]`);
+          printArm(pair.baseline);
+          printArm(pair.megasaver);
+          console.log(`  cost ratio (baseline / megasaver): ${pair.costRatio.toFixed(4)}x`);
+        }
+        console.log("  --- end of billed evidence ---\n");
+      }
+      throw err;
+    }
 
     // The drift check needs the replayed cost, which only exists after the
     // replay, so the verdict is rebuilt through its one constructor with the
@@ -482,6 +543,10 @@ async function replay(values) {
   }
 
   printPooled(verdicts.map((v) => v.verdict));
+  // Repeated at the end as well as the start: the pooled figure is the line a
+  // reader is most likely to copy out of a long log, and it must not travel
+  // without the fact that nothing was measured.
+  if (values["dry-run"]) console.log(`\n${DRY_RUN_BANNER}`);
 }
 
 // -------------------------------------------------------------------- output
@@ -677,6 +742,7 @@ const { values, positionals } = parseArgs({
     "mega-bin": { type: "string", default: "mega" },
     mode: { type: "string", default: "balanced" },
     "reuse-repo": { type: "boolean", default: false },
+    "dry-run": { type: "boolean", default: false },
     prompts: { type: "string" },
     "order-tolerance": { type: "string", default: "0.15" },
     "drift-tolerance": { type: "string", default: "0.25" },

@@ -8129,3 +8129,32 @@ Only `S`. One real-API replay closes A4. Two caveats already recorded stand: the
 corpus is 17/18 opus-5 priced at one flat rate card, so the ratio is directional
 rather than calibrated; and R* is corpus-specific — a workload with many small
 compressed outputs and long sessions would lower it.
+
+## [2026-07-30] fix | bench-replay: rehearse before paying, and never discard billed evidence
+
+Three paid runs in a row died before printing a verdict — a saver that never
+fired (small corpus), a policy floor clamping aggressive to balanced, and the
+order check. Every one was detectable without spending anything, and the third
+threw away the per-request cache numbers it had just paid four arm runs to
+collect. Two changes so the next run is the last one needed:
+
+**`--dry-run`.** A full rehearsal with no network. Store preparation and its
+mode-floor resolution, `prepareArms` with the REAL saver subprocess and its
+per-call contract, the uncompressed-recording guard, the resolvable-transform
+refusal, both pair orders, the order check, the drift smoke and the printer all
+execute against a synthetic sender. Usage is derived from body size, so the run
+is deterministic and the two orders agree by construction — it validates
+PLUMBING and measures nothing, which the banner says at both ends of the log.
+Verified end-to-end on `rec-big`: integrity ok, order check passes, pooled
+figure prints, exit 0. The only stage it cannot rehearse is what the API does
+with the prompt cache, which is the one thing worth paying for.
+
+**A refusal now carries its evidence.** `replayBothOrders` attaches the pairs to
+the error and the script prints every arm's per-request usage before dying.
+Confirmed by forcing a real refusal in the dry run.
+
+That second fix caught a bug of exactly the class it was written for: the script
+imports from `dist/`, and the first attempt to exercise the refusal path printed
+nothing because the package had not been rebuilt. The library test was green the
+whole time. Glue between a package and its script is not covered by either
+side's tests, and only running it end-to-end found it.
