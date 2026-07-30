@@ -94,6 +94,21 @@ function rewriteToolResultContent(
 // Only the fixed head is matched; everything after it is interpolated byte counts.
 const SAVER_FOOTER_MARKER = "[Mega Saver: compressed ";
 
+// The same footer, anchored where the saver actually puts it: LAST in the
+// rewritten output (record-output.ts appends it as `finalText = text0 + footer`).
+//
+// Position is the whole discriminator. Matching the opening literal anywhere
+// made a `Read` of any file that MENTIONS the footer look like a compressed
+// recording — which is not hypothetical: it is why this harness could not
+// record against its own repository, tripping on a regex literal in
+// save-integrity.property.test.ts. Anchoring is a tightening, not a loosening:
+// it now demands the footer's real structure and its real position, where the
+// substring match demanded neither.
+//
+// `[^\]]*` cannot backtrack catastrophically — its class excludes the closing
+// delimiter it is searching for, the fix shape from concepts/unbounded-run-redos.
+const SAVER_FOOTER_AT_END = /\[Mega Saver: compressed \d+→\d+ B [^\]]*\]\.?\s*$/;
+
 export type SaverCallViolation = {
   toolUseId: string;
   toolName: string;
@@ -169,7 +184,7 @@ export function assertUncompressedRecording(requests: readonly RecordedRequest[]
       if (!Array.isArray(content)) continue;
       for (const block of content) {
         if (!isToolResultBlock(block)) continue;
-        if (!toolResultText(block.content).includes(SAVER_FOOTER_MARKER)) continue;
+        if (!SAVER_FOOTER_AT_END.test(toolResultText(block.content))) continue;
         throw new Error(
           `assertUncompressedRecording: request ${index}, tool_result ${JSON.stringify(block.tool_use_id)} is already compressed — it carries the saver's "${SAVER_FOOTER_MARKER}" footer, so this conversation was recorded with MegaSaver's hooks ON. Both arms would replay pre-compressed output and the comparison would be meaningless. Re-record it with the saver disabled (mega session saver default disable).`,
         );

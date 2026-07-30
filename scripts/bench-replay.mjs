@@ -238,6 +238,29 @@ dist
 // Deliberately does NOT run `mega init`: that enables the workspace saver, and a
 // recording must be captured with the saver off. (`--setting-sources ""` already
 // keeps `mega hooks` from being installed at all — this is the second lock.)
+// DESTRUCTIVE: deletes repoDir and rebuilds the synthetic bench app in its
+// place. Never point --repo at a repository you care about. `--reuse-repo`
+// records against an existing checkout instead, which is the only way to get a
+// corpus whose tool outputs are large enough for the saver to engage at all —
+// the synthetic app's tool_results measured 329 B median / 1,991 B max, below
+// every eligibility floor in the codebase (wiki/log.md 2026-07-30).
+function useExistingRepo(repoDir) {
+  const git = (...args) => execFileSync("git", args, { cwd: repoDir, encoding: "utf8" });
+  let head;
+  try {
+    head = git("rev-parse", "HEAD").trim();
+  } catch {
+    fail(`--reuse-repo: ${repoDir} is not a git repository`);
+  }
+  // Each task ends with `git reset --hard` + `git clean -fd`, so uncommitted
+  // work in the target would be destroyed. Refuse rather than discard it.
+  if (git("status", "--porcelain").trim() !== "") {
+    fail(`--reuse-repo: ${repoDir} has uncommitted changes — the recorder resets between tasks and would destroy them`);
+  }
+  console.log(`Recording against existing repo ${repoDir} @ ${head.slice(0, 8)}`);
+  return head;
+}
+
 function setupBenchRepo(repoDir) {
   rmSync(repoDir, { recursive: true, force: true });
   mkdirSync(join(repoDir, "src"), { recursive: true });
@@ -264,9 +287,18 @@ async function record(values) {
   const repoDir = values.repo;
   const claudeBin = values["claude-bin"];
 
-  const baselineCommit = setupBenchRepo(repoDir);
+  const baselineCommit = values["reuse-repo"]
+    ? useExistingRepo(repoDir)
+    : setupBenchRepo(repoDir);
 
-  for (const [index, prompt] of TASK_PROMPTS.entries()) {
+  // Custom prompts let a corpus be built around the tool-output shape under
+  // test; the built-in TASK_PROMPTS target the synthetic app only.
+  const prompts = values.prompts
+    ? readFileSync(values.prompts, "utf8").split("\n").map((s) => s.trim()).filter(Boolean)
+    : TASK_PROMPTS;
+  if (prompts.length === 0) fail(`--prompts ${values.prompts}: no non-empty lines`);
+
+  for (const [index, prompt] of prompts.entries()) {
     const task = `task_${index + 1}`;
     const outDir = join(outRoot, task);
     rmSync(outDir, { recursive: true, force: true });
@@ -641,6 +673,8 @@ const { values, positionals } = parseArgs({
     "claude-bin": { type: "string", default: "claude" },
     "mega-bin": { type: "string", default: "mega" },
     mode: { type: "string", default: "balanced" },
+    "reuse-repo": { type: "boolean", default: false },
+    prompts: { type: "string" },
     "order-tolerance": { type: "string", default: "0.15" },
     "drift-tolerance": { type: "string", default: "0.25" },
   },
