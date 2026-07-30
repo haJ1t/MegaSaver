@@ -27,7 +27,7 @@ function recording(sizes: readonly number[]): RecordedRequest[] {
       content: [{ type: "tool_result", tool_use_id: `t${i}`, content: rawOutput(i, bytes) }],
     });
   }
-  return [{ model: "claude-opus-4-8", messages }];
+  return [{ model: "claude-opus-4-8", system: "sys", messages }];
 }
 
 const arm = (cost: number) => ({

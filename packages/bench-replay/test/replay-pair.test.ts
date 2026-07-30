@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { replayBothOrders, replayPair } from "../src/replay.js";
 import { orderSensitive } from "../src/report.js";
-import { prepareArms } from "../src/transform.js";
+import { prepareArms, stripCacheNamespace } from "../src/transform.js";
 import type { Arm, RecordedRequest } from "../src/types.js";
 import { rawOutput, savedOutput } from "./saver-output-fixture.js";
 
@@ -16,6 +16,9 @@ const SAVED = savedOutput(RAW_BYTES, 1000);
 const recorded: RecordedRequest[] = [
   {
     model: "m",
+    // Real recordings always carry one, and the cache-run namespace rides on its
+    // front (replayArm -> namespaceCacheRun), so the fixture keeps one too.
+    system: "sys",
     messages: [
       { role: "assistant", content: [{ type: "tool_use", id: "t", name: "Bash", input: {} }] },
       {
@@ -108,11 +111,13 @@ describe("replayPair", () => {
   });
 });
 
-// Fix A: both arms share a byte-identical system+tools prefix. Whichever runs
-// first pays cache_creation for it; whichever runs second reads it at
+// Fix A: all four arm runs replay a byte-identical system+tools prefix, so
+// whichever ran first paid cache_creation for it and every later run read it at
 // cache_read — a discount worth ~20x that no property of the saver earned. A
-// fixed run order makes that bias invisible; running both orders makes it a
-// number the harness can refuse on.
+// fixed run order made that bias invisible; running both orders made it a number
+// the harness could refuse on, which is what it then did (1.598 vs 1.197,
+// 2026-07-30). Refusing is not measuring: since each run gets its own cache
+// namespace, the discount is gone and the two pairs are independent replicates.
 describe("replayBothOrders", () => {
   it("executes both orders, in sequence, and combines their ratios", async () => {
     const { send, arms } = scriptedSend([1000, 800, 800, 1000]);
@@ -224,10 +229,19 @@ describe("replayBothOrders transforms once for the whole gate", () => {
 
   // Content-blind on purpose: the two ratios must come out equal so the order
   // check passes and the divergence has to be caught by the bytes themselves.
+  //
+  // `sent` records each body with its cache-run namespace STRIPPED, so the
+  // "same arm sends the same bytes in both pairs" invariant survives the marker
+  // that is supposed to differ between runs. `namespaces` records the markers
+  // themselves, so stripping cannot hide a regression that stopped namespacing:
+  // every test that compares stripped bodies also asserts the four runs landed
+  // in four different namespaces.
   function recordingSend() {
     const sent: string[] = [];
+    const namespaces: string[] = [];
     const send = async (body: RecordedRequest) => {
-      sent.push(JSON.stringify(body));
+      sent.push(JSON.stringify(stripCacheNamespace(body)));
+      namespaces.push(JSON.stringify((body as unknown as { system?: unknown }).system));
       return {
         input_tokens: 100,
         cache_creation_input_tokens: 0,
@@ -235,7 +249,7 @@ describe("replayBothOrders transforms once for the whole gate", () => {
         output_tokens: 0,
       };
     };
-    return { send, sent };
+    return { send, sent, namespaces };
   }
 
   it("invokes the saver once per distinct tool_use_id across all four arm runs", async () => {
@@ -258,7 +272,7 @@ describe("replayBothOrders transforms once for the whole gate", () => {
 
   it("sends byte-identical bodies for a given arm in both pairs", async () => {
     let calls = 0;
-    const { send, sent } = recordingSend();
+    const { send, sent, namespaces } = recordingSend();
     await replayBothOrders({
       task: "task_1",
       requests: growing,
@@ -272,6 +286,11 @@ describe("replayBothOrders transforms once for the whole gate", () => {
     // megasaver-first pair: [4,5] megasaver, [6,7] baseline.
     expect(sent.slice(2, 4)).toEqual(sent.slice(4, 6));
     expect(sent.slice(0, 2)).toEqual(sent.slice(6, 8));
+    // …and the four runs really did land in four namespaces, constant within a
+    // run. Without this, stripping the marker above would also hide its absence.
+    const perRun = [namespaces[0], namespaces[2], namespaces[4], namespaces[6]];
+    expect(new Set(perRun).size).toBe(4);
+    for (const start of [0, 2, 4, 6]) expect(namespaces[start]).toBe(namespaces[start + 1]);
   });
 
   // M3: the real saver's first-sight gate compresses a block the first time it
@@ -280,7 +299,7 @@ describe("replayBothOrders transforms once for the whole gate", () => {
   // the verdict was built from pair 1's counters, so it printed anyway.
   it("carries the first-sight decision into both pairs instead of re-deriving it", async () => {
     let calls = 0;
-    const { send, sent } = recordingSend();
+    const { send, sent, namespaces } = recordingSend();
     await replayBothOrders({
       task: "task_1",
       requests: recorded,
@@ -292,8 +311,11 @@ describe("replayBothOrders transforms once for the whole gate", () => {
     expect(calls).toBe(1);
     expect(sent).toHaveLength(4);
     // [1] is the baseline-first pair's megasaver arm, [2] the megasaver-first
-    // pair's. Same arm, same recording — the bytes cannot differ.
+    // pair's. Same arm, same recording — the bytes cannot differ, and the ONE
+    // thing that may differ (the cache-run namespace) is stripped before the
+    // comparison and asserted separately below.
     expect(sent[1]).toBe(sent[2]);
+    expect(namespaces[1]).not.toBe(namespaces[2]);
   });
 
   // M1/M3 reporting gap: costRatio is the mean of BOTH pairs while the verdict

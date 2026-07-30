@@ -7958,3 +7958,75 @@ guard matched the footer anywhere in a tool_result, so reading this repo's own
 source made the harness unable to record against its own tree; and `--repo` has
 always begun with `rmSync` on its target, which `--reuse-repo` now avoids while
 refusing a dirty checkout.
+
+## [2026-07-30] fix | bench-replay: per-arm-RUN prompt-cache namespaces
+
+The 0.40 order sensitivity above is now removed at its mechanism rather than
+averaged over. **Prediction recorded before the re-run, so the result cannot be
+rationalised after it.**
+
+**The level was wrong twice before it was right.** The first fix namespaced the
+cache per ARM. That cannot work: `replayBothOrders` runs two pairs = four arm
+runs, and an arm-scoped marker is constant across both pairs, so pair 2 still
+reads back what pair 1 created. `replay.ts` said so in its own design comment —
+"the two pair runs are NOT separated by a cache cool-down … by the second pair
+every shared prefix is already warm from the first … That is the point." The
+dominant term was never arm position inside a pair; it was **pair position**.
+
+The namespace is therefore scoped per arm RUN — four markers, applied at send
+time in `replayArm`, not at prepare time in `prepareArms`. Each run starts cold
+and warms only itself, which is also what production does: one arm, one session,
+cold at the start.
+
+**Sign check (the reason to believe the mechanism).** `costRatio` is
+`baseline ÷ megasaver`, so above 1.00 means megasaver is cheaper. Run order was
+baseline(1st), megasaver(2nd) | megasaver(3rd), baseline(4th). Pair 1: baseline
+paid cache_creation cold and megasaver read it back → baseline looks expensive →
+**1.598**. Pair 2: both warm, baseline reading its own run-1 bytes → baseline
+looks cheap → **1.197**. Both numbers fall out of warming in the direction
+warming predicts. The 0.40 is an artifact, and it is the artifact we named.
+
+Verified against the recordings, not assumed: `cache_control` sits on
+`system[2]`/`system[3]` in every recorded request, and on no tool definition. The
+prefix order is tools → system → messages, so a marker prepended to `system[0]`
+changes the key of **every** breakpoint without moving any of them. Had the
+breakpoints been on tools, a marker in `system` would have left the tools entry
+shared and the fix would have been silently inert.
+
+Six mutations, six caught — including the two that matter most: `replayArm`
+never applying the namespace (production wiring), and the slot being ARM-scoped
+rather than run-scoped (the wrong-level fix that looks right and measures
+nothing).
+
+`orderSensitive` keeps its name and its code but no longer means what it says:
+with four namespaces, arm position buys no discount, so the two pairs are
+independent **replicates** and disagreement now means the measurement does not
+reproduce. That is broader than what it used to catch, not narrower.
+
+### Prediction, before the run
+
+1. The two pair ratios converge to within the 0.15 tolerance (from 0.40).
+2. The converged ratio lands **above 1.00**, roughly 1.15–1.60. Megasaver sends
+   strictly fewer tokens through a structurally identical cache pattern, so on
+   the input side it must be cheaper. Pair 2's 1.197 is the closest thing to a
+   fair comparison the old instrument produced and it still favoured baseline
+   slightly, so the fair value should sit at or above it.
+
+### What the run still will NOT settle — stated in advance
+
+**A ratio above 1.00 here is not an A4 pass.** `prepareArms` bakes the compressed
+text in from the first request a tool_result appears in, so every megasaver
+prefix is internally cache-consistent. Production is not: the PostToolUse hook
+rewrites a tool_result that the live session has **already cached**, invalidating
+the suffix and re-billing it as cache_creation — the mechanism behind the
+measured 0.93–0.97x net in [[syntheses/saver-cache-churn]]. A byte-replay of a
+pre-built sequence has no analogue of that.
+
+So this instrument measures **input-side token reduction in a self-consistent
+session**, which is one term of the net-cost question and not the contested one.
+If the ratio comes back above 1.00 as predicted, the honest reading is "the saver
+sends fewer input tokens", **not** "the saver saves money". If it comes back
+below 1.00, that is a genuine surprise and worth chasing.
+
+**A4 remains NOT MET.** Fixing the order sensitivity makes the instrument
+self-consistent; it does not make it the right instrument for the churn tax.

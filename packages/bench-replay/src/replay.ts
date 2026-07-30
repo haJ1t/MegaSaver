@@ -1,6 +1,6 @@
 import { normalizedCostUsd } from "@megasaver/stats";
 import { assertResolvableTransform, buildVerdict, costRatioOf } from "./report.js";
-import { prepareArms } from "./transform.js";
+import { cacheRunSlot, namespaceCacheRun, prepareArms } from "./transform.js";
 import type { ApplySaver, PreparedArms } from "./transform.js";
 import type {
   Arm,
@@ -24,12 +24,21 @@ export type SendResult = {
 };
 export type Send = (body: RecordedRequest, meta?: RecordedRequestMeta) => Promise<SendResult>;
 
-// A PURE byte-replay of one precomputed sequence. It never consults the saver:
-// the transform ran once, up front, in `prepareArms`. That is what lets the two
-// pairs send byte-identical bodies for the same arm, which is the only thing
-// that makes comparing their two orders meaningful.
+// A byte-replay of one precomputed sequence. It never consults the saver: the
+// transform ran once, up front, in `prepareArms`. That is what lets both pairs
+// send the same bodies for the same arm, which is what makes comparing their two
+// orders meaningful.
+//
+// The ONE thing it adds per send is this run's cache namespace (`cacheSlot`), so
+// that the four arm runs cannot share prompt-cache entries. It touches only the
+// head of the system prompt and never a tool_result, so the saver's work still
+// reaches the wire exactly as prepared — strip the marker and the bodies for a
+// given arm are identical across pairs (see stripCacheNamespace).
 export async function replayArm(input: {
   arm: Arm;
+  // Which of the four arm runs this is. Distinct per run so each warms only its
+  // own cache; constant across the run so it warms it at all.
+  cacheSlot: number;
   bodies: readonly RecordedRequest[];
   // Index-aligned with `bodies`: one recorded request line + header set each,
   // because Claude Code's anthropic-beta set differs between the main turn and
@@ -50,7 +59,8 @@ export async function replayArm(input: {
 
   // Sequential on purpose: the API's prompt cache is order-dependent, so
   // parallelising would measure a different (and meaningless) cache pattern.
-  for (const [index, body] of input.bodies.entries()) {
+  for (const [index, prepared] of input.bodies.entries()) {
+    const body = namespaceCacheRun(prepared, input.cacheSlot);
     let usage: SendResult;
     try {
       usage = await input.send(body, input.metas?.[index]);
@@ -91,14 +101,16 @@ export async function replayArm(input: {
   };
 }
 
-// Replays both arms back-to-back in the given order. The order is an explicit
-// REQUIRED argument, never a default, because it is a measurement parameter:
-// the two arms share a byte-identical system+tools prefix, so whichever runs
-// first pays cache_creation ($10/Mtok) for it and whichever runs second reads
-// the same bytes at cache_read ($0.50/Mtok) — a ~20x discount handed to the
-// second arm by the calendar, not by the saver. A single run of this function
-// therefore CANNOT produce a trustworthy ratio on its own; use
-// `replayBothOrders`, which is the only path to a verdict.
+// Replays both arms back-to-back in the given order. The order stays an explicit
+// REQUIRED argument, never a default, for two reasons. It selects the two cache
+// namespaces this pair runs in — which is what stops the second arm reading at
+// cache_read ($0.50/Mtok) what the first paid cache_creation ($10/Mtok) to
+// create, a ~20x discount that would otherwise be handed to whichever arm the
+// calendar put second. And it stays a stated measurement parameter so a reader
+// can see which of the four runs produced a given number.
+//
+// `replayBothOrders` remains the only path to a verdict: one pair is a single
+// replicate, and a lone replicate cannot show whether the number reproduces.
 export async function replayPair(input: {
   arms: PreparedArms;
   metas?: readonly RecordedRequestMeta[] | undefined;
@@ -109,6 +121,7 @@ export async function replayPair(input: {
   const run = (arm: Arm): Promise<ArmUsage> =>
     replayArm({
       arm,
+      cacheSlot: cacheRunSlot(input.order, arm),
       bodies: input.arms[arm],
       metas: input.metas,
       send: input.send,
@@ -130,18 +143,30 @@ export async function replayPair(input: {
   return { order: input.order, baseline, megasaver, costRatio: costRatioOf(baseline, megasaver) };
 }
 
-// The only path to a verdict, because it is the only one that can see the
-// order effect at all. Replays the pair twice — baseline-first, then
-// megasaver-first — and refuses if the two ratios disagree beyond
-// `orderTolerance`, on the same fail-closed posture as every other guard here.
+// The only path to a verdict, because it is the only one that replays the pair
+// more than once. Runs it twice — baseline-first, then megasaver-first — and
+// refuses if the two ratios disagree beyond `orderTolerance`, on the same
+// fail-closed posture as every other guard here.
 //
-// ASSUMPTION THE CALLER MUST HONOUR: the two pair runs are NOT separated by a
-// cache cool-down. The Anthropic prompt cache has a ~5 minute TTL, so by the
-// second pair every shared prefix is already warm from the first and both arms
-// read it at cache_read. That is the point: it is what makes the two runs
-// comparable to each other. It also means the reported ratio describes a
-// warm-cache regime, and a caller who inserts a long sleep between the runs
-// invalidates the comparison rather than improving it.
+// WHAT THE SECOND PAIR IS FOR — this changed on 2026-07-30. It used to control
+// for arm order: the four runs shared one cache namespace, so position in the
+// sequence bought a ~20x discount, and running both orders was an attempt to
+// average that away. It did not work. The dominant term was not arm position
+// inside a pair but PAIR position — pair 2 read back what pair 1 created — and
+// no ordering of the arms cancels that. Measured: 1.598 vs 1.197 against a
+// <=0.05 effect.
+//
+// Each arm run now has its own cache namespace (namespaceCacheRun), so all four
+// start cold and warm only themselves. Order no longer carries a discount, which
+// makes the two pairs independent REPLICATES of one measurement. The guard is
+// unchanged in code and stronger in meaning: two ratios that disagree now
+// indicate the measurement does not reproduce, rather than that the calendar
+// favoured one arm.
+//
+// The caller must still NOT insert a cool-down between the pairs. Not for
+// cross-pair warmth — that is gone — but because the two replicates should
+// differ in as little as possible, and elapsed time is a variable like any
+// other.
 export async function replayBothOrders(input: {
   task: string;
   requests: readonly RecordedRequest[];

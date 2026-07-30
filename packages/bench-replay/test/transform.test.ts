@@ -24,10 +24,13 @@ const body = {
 };
 
 describe("transformRequest", () => {
-  it("baseline returns the body unchanged (deep equal, new object)", () => {
+  // Baseline is the recording verbatim: the whole comparison rests on it. The
+  // prompt-cache namespace that keeps the four arm runs from sharing entries is
+  // applied later, at send time, per RUN — not here (see replayArm).
+  it("baseline returns the body unchanged, on a new object", () => {
     const out = transformRequest(body, "baseline", () => "IGNORED");
-    expect(out).toEqual(body);
     expect(out).not.toBe(body);
+    expect(out).toEqual(body);
   });
 
   it("megasaver rewrites tool_result content and leaves everything else intact", () => {
@@ -48,18 +51,19 @@ describe("transformRequest", () => {
 
   it("a passthrough saver decision (null) leaves the tool_result untouched", () => {
     const out = transformRequest(body, "megasaver", () => null);
-    expect(out).toEqual(body);
+    expect(out.messages).toEqual(body.messages);
   });
 
   it("does not mutate the input body", () => {
     const snapshot = JSON.parse(JSON.stringify(body));
     transformRequest(body, "megasaver", () => "X");
-    expect(body).toEqual(snapshot);
+    expect(body.messages).toEqual(snapshot.messages);
   });
 
   it("leaves string-content messages alone (nothing to rewrite)", () => {
-    const plain = { model: "m", messages: [{ role: "user", content: "just text" }] };
-    expect(transformRequest(plain, "megasaver", () => "X")).toEqual(plain);
+    const plain = { model: "m", system: "sys", messages: [{ role: "user", content: "just text" }] };
+    const out = transformRequest(plain, "megasaver", () => "X");
+    expect(out.messages).toEqual(plain.messages);
   });
 
   // Real recorded Claude Code transcripts show tool_result.content as an array of
@@ -69,6 +73,7 @@ describe("transformRequest", () => {
   it("megasaver rewrites array-form tool_result content, merging text blocks and keeping non-text blocks", () => {
     const arrayBody = {
       model: "m",
+      system: "sys",
       messages: [
         {
           role: "assistant",
@@ -102,6 +107,7 @@ describe("transformRequest", () => {
   it("array-form tool_result content with no text blocks is left untouched (nothing to compress)", () => {
     const imageOnlyBody = {
       model: "m",
+      system: "sys",
       messages: [
         {
           role: "assistant",
@@ -119,14 +125,15 @@ describe("transformRequest", () => {
         },
       ],
     };
-    expect(transformRequest(imageOnlyBody, "megasaver", () => "SHOULD NOT BE CALLED")).toEqual(
-      imageOnlyBody,
-    );
+    expect(
+      transformRequest(imageOnlyBody, "megasaver", () => "SHOULD NOT BE CALLED").messages,
+    ).toEqual(imageOnlyBody.messages);
   });
 
   it("a passthrough decision on array-form content leaves it untouched", () => {
     const arrayBody = {
       model: "m",
+      system: "sys",
       messages: [
         {
           role: "assistant",
@@ -140,7 +147,9 @@ describe("transformRequest", () => {
         },
       ],
     };
-    expect(transformRequest(arrayBody, "megasaver", () => null)).toEqual(arrayBody);
+    expect(transformRequest(arrayBody, "megasaver", () => null).messages).toEqual(
+      arrayBody.messages,
+    );
   });
 });
 
@@ -158,6 +167,7 @@ describe("assertUncompressedRecording", () => {
   const withToolResult = (content: unknown) => [
     {
       model: "m",
+      system: "sys",
       messages: [
         { role: "assistant", content: [{ type: "tool_use", id: "t1", name: "Bash", input: {} }] },
         { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content }] },
@@ -199,6 +209,7 @@ describe("prepareArms refuses a contaminated recording", () => {
         requests: [
           {
             model: "m",
+            system: "sys",
             messages: [
               {
                 role: "assistant",
@@ -269,12 +280,22 @@ describe("prepareArms generation cap", () => {
   // prefix (tools -> system -> messages). Changing anything that IS would change
   // the very thing being measured, so the cap must be the ONLY difference from
   // the recording.
+  //
+  // This stayed true through the cache-namespacing work of 2026-07-30. An
+  // intermediate version namespaced `system` HERE, per arm, which broke it; that
+  // was the wrong level (it left the pair-to-pair cache sharing that dominated
+  // the measured 0.40 spread untouched) and the marker now goes on at send time,
+  // per arm RUN, in replayArm. What prepareArms hands out is once again the
+  // recording plus the cap and nothing else.
   it("leaves every cache-keyed field byte-identical to the recording", () => {
     const arms = prepareArms({ requests: recorded, applySaver: () => null });
     const sent = arms.baseline[0] as Record<string, unknown>;
+    const other = arms.megasaver[0] as Record<string, unknown>;
     const original = recorded[0] as Record<string, unknown>;
-    for (const key of ["model", "stream", "system", "tools", "messages"]) {
+
+    for (const key of ["model", "stream", "tools", "messages", "system"]) {
       expect(sent[key]).toEqual(original[key]);
+      expect(sent[key]).toEqual(other[key]);
     }
     expect(Object.keys(sent).sort()).toEqual(Object.keys(original).sort());
   });

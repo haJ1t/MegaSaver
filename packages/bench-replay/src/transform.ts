@@ -1,6 +1,7 @@
 import type {
   Arm,
   RecordedRequest,
+  ReplayOrder,
   SaverOutcomes,
   ToolResultBytes,
   TransformSummary,
@@ -398,4 +399,119 @@ export function prepareArms(input: {
     );
   }
   return { baseline, megasaver, saver, bytes };
+}
+
+// ------------------------------------------------------- cache-run namespacing
+//
+// Prompt caching is a PREFIX MATCH. `prepareArms` builds both arm sequences ONCE
+// and all four arm runs (two arms x two pair orders) replay those same bytes, so
+// every run shares a byte-identical `tools` + `system` head. Measured 2026-07-30:
+// baseline-first gave 1.598 and megasaver-first gave 1.197 — a 0.40 spread
+// against a <=0.05 effect.
+//
+// The dominant term is NOT which arm ran first inside a pair; it is which PAIR
+// ran first. `replayBothOrders` runs the two pairs back-to-back with no cool-down,
+// so pair 2 reads at cache_read what pair 1 paid cache_creation for. An
+// arm-scoped namespace is constant across both pairs and therefore leaves that
+// gap untouched — which is why this is scoped per arm RUN.
+//
+// Four distinct namespaces means all four runs start cold and warm only
+// themselves. That is also the faithful trajectory: production runs ONE arm, in
+// one session, starting cold, and its later requests warm off its earlier ones.
+//
+// Three properties are load-bearing:
+//   CONSTANT within a run  — or the run never warms itself and every request
+//                            pays cache_creation.
+//   DISTINCT across runs   — or the runs share entries and the bias returns.
+//   EQUAL LENGTH + near-identical tokenization across runs — or one run silently
+//                            carries more input tokens than another and the ratio
+//                            inherits the difference. The markers below differ in
+//                            exactly one ASCII digit for that reason; equal byte
+//                            length alone would not guarantee equal token count.
+const CACHE_NAMESPACE_PREFIX = "bench-replay cache namespace ";
+
+const RUN_SLOT: Record<ReplayOrder, Record<Arm, number>> = {
+  "baseline-first": { baseline: 0, megasaver: 1 },
+  "megasaver-first": { baseline: 2, megasaver: 3 },
+};
+
+export function cacheRunSlot(order: ReplayOrder, arm: Arm): number {
+  return RUN_SLOT[order][arm];
+}
+
+export function cacheNamespaceMarker(slot: number): string {
+  return `${CACHE_NAMESPACE_PREFIX}${slot}\n`;
+}
+
+// Returns a body with the run's marker at the very front of the cacheable prefix.
+// Non-mutating: the prepared sequences are shared by all four runs, so mutating
+// one would leak a namespace into the others.
+//
+// Prepended INSIDE the first system block rather than added as a new one:
+// `cache_control` is per-block, and the recordings put their breakpoints on
+// `system[2]`/`system[3]` (verified across every recorded request, 2026-07-30),
+// so a marker in `system[0]` changes the key of every breakpoint without moving
+// any of them.
+// A body seen through the one field this pair of functions touches. Named so the
+// spread below produces a declared `system` property rather than an index
+// signature, which is what lets it be read and written as `.system`.
+type SystemHolder = { system?: unknown };
+
+export function namespaceCacheRun(body: RecordedRequest, slot: number): RecordedRequest {
+  const marker = cacheNamespaceMarker(slot);
+  const source = body as RecordedRequest & SystemHolder;
+  const copy: RecordedRequest & SystemHolder = { ...source };
+
+  if (typeof source.system === "string") {
+    copy.system = marker + source.system;
+    return copy;
+  }
+  if (Array.isArray(source.system)) {
+    const blocks = [...source.system];
+    const first = blocks[0] as { text?: unknown } | undefined;
+    if (first !== undefined && typeof first.text === "string") {
+      blocks[0] = { ...first, text: marker + first.text };
+    } else {
+      // No text block to extend. A fresh leading block still namespaces the
+      // prefix, and because `cache_control` travels on the block object the
+      // existing breakpoints keep their meaning at their shifted indices.
+      blocks.unshift({ type: "text", text: marker });
+    }
+    copy.system = blocks;
+    return copy;
+  }
+  // A recording with no system prompt is namespaced by GAINING one. Refusing
+  // here would buy nothing: the goal is disjoint cache namespaces, and a
+  // synthesized marker achieves exactly that, equal-length in every run.
+  copy.system = marker;
+  return copy;
+}
+
+// Inverse of `namespaceCacheRun`, for assertions that need to compare what two
+// runs sent WITHOUT the namespace difference they are supposed to have. Keeps the
+// "byte-identical bodies per arm across pairs" protection real instead of
+// deleting it.
+export function stripCacheNamespace(body: RecordedRequest): RecordedRequest {
+  const { system, ...rest } = body as RecordedRequest & SystemHolder;
+  const unmark = (text: string): string =>
+    text.startsWith(CACHE_NAMESPACE_PREFIX) ? text.slice(text.indexOf("\n") + 1) : text;
+
+  if (typeof system === "string") {
+    const bare = unmark(system);
+    // An empty remainder means the marker WAS the whole system prompt, i.e. the
+    // recording had none — so the round trip has to drop the field, not leave an
+    // empty one behind.
+    return (bare === "" ? rest : { ...rest, system: bare }) as RecordedRequest;
+  }
+  if (Array.isArray(system)) {
+    const blocks = [...system];
+    const first = blocks[0] as { text?: unknown } | undefined;
+    if (first !== undefined && typeof first.text === "string") {
+      const bare = unmark(first.text);
+      if (bare === "") blocks.shift();
+      else blocks[0] = { ...first, text: bare };
+    }
+    return { ...rest, system: blocks } as RecordedRequest;
+  }
+  return { ...rest, ...(system === undefined ? {} : { system }) } as RecordedRequest;
 }

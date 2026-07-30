@@ -245,10 +245,14 @@ export function pooledCostRatio(verdicts: readonly ReplayVerdict[]): number {
   return Math.exp(sumOfLogs / verdicts.length);
 }
 
-// Two replays of the same pair in OPPOSITE orders must agree, or the number is
-// an artifact of which arm warmed the shared prefix rather than a property of
-// the saver. Same question `verdictStable` asks of two repeat runs, so it reuses
-// the same fail-closed comparison; only the reason for disagreeing differs.
+// The two pairs must agree, or no verdict may be reported. The NAME predates the
+// mechanism: it once controlled for which arm warmed a shared cache prefix, but
+// since 2026-07-30 each of the four arm runs has its own cache namespace, so arm
+// position buys no discount and the two pairs are independent replicates of one
+// measurement (replay.ts, replayBothOrders). Disagreement now means the number
+// does not reproduce — a strictly broader failure than the order artifact this
+// used to catch, and the same fail-closed comparison answers it, which is why
+// this delegates to `verdictStable` rather than restating it.
 export function orderSensitive(ratioAB: number, ratioBA: number, tolerance: number): boolean {
   return !verdictStable(ratioAB, ratioBA, tolerance);
 }
