@@ -8250,3 +8250,18 @@ not a reason to destroy the RECEIPTS.
 Proved by forcing a mid-arm failure in the dry run, not by unit test alone: the
 same package-to-script glue that silently swallowed the pairs evidence earlier
 (stale `dist/`) is what this depends on.
+
+## [2026-07-31] audit+fix | saver e2e audit round: 9 defects red→green, meter repaired
+
+User re-raised the 60-90% ask. 24-agent workflow audit (7 scanners,
+adversarial verification) at `e5a7a6f6`: 63 raw → 14 confirmed P1 (9 distinct)
++ 47 P2/P3, 2 refuted. All 9 fixed TDD on `worktree-feat-saver-audit-fixes`
++ follow-ups (CLI net surfaces, sibling-parser check). Headline: foreground
+Bash never compressed in safe mode (floor budget+1 = 32001 > ~30000 ceiling;
+botched 3732a0cb restore — post-A4 premise). Refuted en route:
+pytest/cargo/eslint/stacktrace parsers are complete partitions (no silent
+omission); DEFAULT_MODE=safe is disabled()-only, enabled default is balanced.
+Ledger honesty: B11 idempotent event ids, unchanged re-reads envelope-true,
+/expand debt, net-first savings surfaces. Full ledger: spec §9 +
+[[syntheses/saver-audit-2026-07-31]]. Adoption (floor/mode) still gated on
+the A4 real-API leg — meter now trustworthy for its R recompute.

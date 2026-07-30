@@ -2,8 +2,9 @@
 // Only changes what is RETURNED. The D20 collapse trade-off is a conscious
 // accept; the honesty rule (A1 contract): every collapsed span is named by a
 // counted marker, and the output declares the omitted spans recoverable.
-// Recovery reality per entry point: the hook path persists the full redacted
-// raw; read/exec paths persist kept excerpts only until W2 unifies them.
+// Recovery reality: every persistence sink recovers from the full redacted
+// raw via recoverableChunks (W2 landed), so collapsed spans are recoverable
+// on all entry points.
 //
 // Rules:
 //   - Every ATX heading kept verbatim.
