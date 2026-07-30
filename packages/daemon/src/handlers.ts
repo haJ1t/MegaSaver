@@ -3,6 +3,7 @@ import {
   fetchOverlayChunk,
   loadProjectPermissions,
   recordAndFilterOverlayOutput,
+  recordOverlayExpansionDebt,
   runOverlayOutputExecCommand,
 } from "@megasaver/context-gate";
 import { isSafeKeySegment, liveSessionIdSchema, workspaceKeySchema } from "@megasaver/core";
@@ -70,7 +71,13 @@ export async function expandHandler(storeRoot: string, body: unknown): Promise<H
   const parsed = expandRequestSchema.safeParse(body);
   if (!parsed.success) return { status: 400, json: { error: parsed.error.message } };
   const res = await fetchOverlayChunk({ storeRoot, ...parsed.data });
-  if (res.ok) return { status: 200, json: { chunk: res.chunk } };
+  if (res.ok) {
+    // S2-3: a daemon-mediated expansion re-injects bytes like any other
+    // recovery route — charge the B3 debt to the session named in the request
+    // so the signed aggregate stays net (best-effort inside).
+    await recordOverlayExpansionDebt({ storeRoot, ...parsed.data, text: res.chunk.text });
+    return { status: 200, json: { chunk: res.chunk } };
+  }
   if (res.reason === "store_corrupt") return { status: 500, json: { error: res.reason } };
   return { status: 404, json: { error: res.reason } };
 }
