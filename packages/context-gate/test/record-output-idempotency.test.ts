@@ -42,6 +42,28 @@ describe("recordAndFilterOverlayOutput — B11 deterministic event identity", ()
     expect(readOverlayEvents({ root: storeRoot }, WK, SID)).toHaveLength(1);
   });
 
+  it("dual-stream parts of one tool call stay distinct events", async () => {
+    // The cli hook records a both-streams Bash response as two per-stream
+    // records with the SAME label in the same bucket; each stream's raw is
+    // part of the identity, so they must never collapse into one event.
+    const stderrRaw = Array.from({ length: 400 }, (_, i) => `err ${i} boom bang crash`).join("\n");
+    const r1 = await record("2026-07-31T12:00:00.000Z");
+    const r2 = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: stderrRaw,
+      sourceKind: "command",
+      label: "run tests",
+      mode: "aggressive",
+      storeRawOutput: true,
+      now: () => "2026-07-31T12:00:00.250Z",
+    });
+    expect(r1.decision).toBe("compressed");
+    expect(r2.decision).toBe("compressed");
+    expect(readOverlayEvents({ root: storeRoot }, WK, SID)).toHaveLength(2);
+  });
+
   it("a genuine later re-delivery of identical output still counts", async () => {
     // First-sight ledger failing open: the model really received the
     // compressed rendering twice, buckets apart — both are honest savings.
