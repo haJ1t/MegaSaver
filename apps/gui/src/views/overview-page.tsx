@@ -214,6 +214,13 @@ export function OverviewPage({
               ? `≈${headline.contextWindowsReclaimed.toFixed(1)} context windows reclaimed across ${totals.workspaceCount} workspace${totals.workspaceCount === 1 ? "" : "s"}.`
               : "No savings recorded yet — turn the saver on to start."}
           </p>
+          {/* S4-1: the $ above prices the signed NET; keep the gross visible
+              as the breakdown so an expansion-heavy session reads honestly. */}
+          {headline && headline.tokensRefetched > 0 ? (
+            <p className="mt-1 mb-0 text-xs text-text-muted tabular-nums">
+              {`≈${compact(headline.grossTokensSaved)} tokens saved − ${compact(headline.tokensRefetched)} re-fetched = ${compact(headline.tokensSaved)} net`}
+            </p>
+          ) : null}
           <p className="mt-4 mb-0 pt-3.5 border-t border-line-soft text-xs text-text-muted">
             {SAVINGS_FOOTNOTE}
           </p>
