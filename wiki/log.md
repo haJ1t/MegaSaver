@@ -8267,3 +8267,22 @@ Ledger honesty: B11 idempotent event ids, unchanged re-reads envelope-true,
 the A4 real-API leg — meter distortions repaired for the known classes
 (double count, uncounted re-reads, outline bytes, expansion debt); residuals
 named in spec §9.
+
+## [2026-07-31] fix | review round on the saver-audit worktree
+
+Combined code-review + critic findings applied on
+`worktree-feat-saver-audit-fixes` (7 items, TDD where behavior changed):
+retracted-churn comments rewritten to the unmeasured-cost truth (saver.ts
+floor rationale + P1 rationale, record-output, admission-guard, saver-seen
+header — cost axis stays gated on A4); B11 dedupe check+append moved under
+the summary file lock with `appendOverlayEvent` returning `appended` and the
+evidence write gated on it (both residuals now named: bucket skew
+P ≈ min(1, skew/600 s) modeled, and lock-contended degrade); savings
+headline gained `netTokensSigned` with `tokensRefetched` from the UNCLAMPED
+delta so losing windows render "≈1000 saved − 2000 re-fetched + overhead =
+−1000 net" across CLI/GUI (gross % labeled "gross"); optional `streamSlot`
+joins the overlay event id so byte-identical dual streams stay two events
+(daemon `/excerpt` carries it; absent = old ids); seen-ledger hash parts
+NUL-joined (newline join aliased part boundaries into false already-seen
+skips); WHY notes on marker reservation, dual-stream stall/partial-failure,
+and deliberately undeduped expansion debt. `pnpm verify` green.
