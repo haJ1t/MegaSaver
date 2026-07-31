@@ -763,13 +763,15 @@ describe("wave-1 shapes", () => {
   });
 
   it("records each stream separately, gated on combined size, each landing in its own slot (C5/B8)", async () => {
-    const calls: Array<{ raw: string; compressFloorBytes?: number }> = [];
-    const record = vi.fn(async (input: { raw: string; compressFloorBytes?: number }) => {
-      calls.push(input);
-      return calls.length === 1
-        ? { ...RECORDED, returnedText: `OUT-EXCERPT${FOOTER}` }
-        : { ...RECORDED, returnedText: `ERR-EXCERPT${FOOTER}` };
-    });
+    const calls: Array<{ raw: string; compressFloorBytes?: number; streamSlot?: string }> = [];
+    const record = vi.fn(
+      async (input: { raw: string; compressFloorBytes?: number; streamSlot?: string }) => {
+        calls.push(input);
+        return calls.length === 1
+          ? { ...RECORDED, returnedText: `OUT-EXCERPT${FOOTER}` }
+          : { ...RECORDED, returnedText: `ERR-EXCERPT${FOOTER}` };
+      },
+    );
     const d = deps({ record });
     // 8KB + 8KB: each stream alone is below the 12000 balanced floor; only the
     // combined size clears it (the B8 win the split must not lose).
@@ -796,6 +798,22 @@ describe("wave-1 shapes", () => {
     expect(calls[0]?.raw).toBe("O".repeat(8_000));
     expect(calls[1]?.raw).toBe("E".repeat(8_000));
     expect(calls.map((c) => c.compressFloorBytes)).toEqual([6_000, 6_000]);
+    // Stream discriminator: byte-identical parts on both streams would derive
+    // the same overlay event id without it (second event absorbed), so each
+    // dual-stream part must name its slot for record()'s identity hash.
+    expect(calls.map((c) => c.streamSlot)).toEqual(["stdout", "stderr"]);
+  });
+
+  it("passes no streamSlot for a single-stream response (old event identity)", async () => {
+    const calls: Array<{ streamSlot?: string }> = [];
+    const record = vi.fn(async (input: { streamSlot?: string }) => {
+      calls.push(input);
+      return RECORDED;
+    });
+    const d = deps({ record });
+    await buildSaverDecision(compressiblePayload(), d);
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(calls[0] !== undefined && "streamSlot" in calls[0]).toBe(false);
   });
 
   it("compresses text blocks in a mixed content array and preserves non-text blocks byte-identical", async () => {

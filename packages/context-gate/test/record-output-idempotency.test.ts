@@ -64,6 +64,72 @@ describe("recordAndFilterOverlayOutput — B11 deterministic event identity", ()
     expect(readOverlayEvents({ root: storeRoot }, WK, SID)).toHaveLength(2);
   });
 
+  it("byte-identical dual-stream parts still record TWO events", async () => {
+    // c2c272bb pinned distinct raws; when a command prints the SAME bytes on
+    // both streams, raw no longer discriminates and the two parts derived one
+    // ove- id — the second event was silently absorbed. The stream slot is
+    // part of the identity exactly when the caller names one.
+    const r1 = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: RAW,
+      sourceKind: "command",
+      label: "run tests",
+      mode: "aggressive",
+      storeRawOutput: true,
+      streamSlot: "stdout",
+      now: () => "2026-07-31T12:00:00.000Z",
+    });
+    const r2 = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: RAW,
+      sourceKind: "command",
+      label: "run tests",
+      mode: "aggressive",
+      storeRawOutput: true,
+      streamSlot: "stderr",
+      now: () => "2026-07-31T12:00:00.250Z",
+    });
+    expect(r1.decision).toBe("compressed");
+    expect(r2.decision).toBe("compressed");
+    expect(readOverlayEvents({ root: storeRoot }, WK, SID)).toHaveLength(2);
+  });
+
+  it("the same slot replayed in the same bucket still dedupes to ONE event", async () => {
+    // The daemon-write-then-timeout race on a dual-stream part: both writers
+    // carry the same streamSlot, so the discriminator must not break B11.
+    const r1 = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: RAW,
+      sourceKind: "command",
+      label: "run tests",
+      mode: "aggressive",
+      storeRawOutput: true,
+      streamSlot: "stdout",
+      now: () => "2026-07-31T12:00:00.000Z",
+    });
+    const r2 = await recordAndFilterOverlayOutput({
+      storeRoot,
+      workspaceKey: WK,
+      liveSessionId: SID,
+      raw: RAW,
+      sourceKind: "command",
+      label: "run tests",
+      mode: "aggressive",
+      storeRawOutput: true,
+      streamSlot: "stdout",
+      now: () => "2026-07-31T12:00:01.500Z",
+    });
+    expect(r1.decision).toBe("compressed");
+    expect(r2.decision).toBe("compressed");
+    expect(readOverlayEvents({ root: storeRoot }, WK, SID)).toHaveLength(1);
+  });
+
   it("a genuine later re-delivery of identical output still counts", async () => {
     // First-sight ledger failing open: the model really received the
     // compressed rendering twice, buckets apart — both are honest savings.
