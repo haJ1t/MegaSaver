@@ -21,15 +21,14 @@ export function stampWorkspaceTelemetry<T extends Record<string, unknown>>(
 ) {
   const workspaceKey: WorkspaceKey = encodeWorkspaceKey(options.workspacePath);
   const fresh = isStoreFresh(options.storeRoot);
-  const rawSessionId =
-    "liveSessionId" in event && typeof event.liveSessionId === "string"
-      ? (event.liveSessionId as string)
-      : undefined;
+  const rec = event as Record<string, unknown>;
+  // biome-ignore lint/complexity/useLiteralKeys: required for TS4111 noUncheckedIndexedAccess
+  const rawSessionId = typeof rec["liveSessionId"] === "string" ? rec["liveSessionId"] : undefined;
 
   return {
     ...event,
     workspaceKey,
-    liveSessionId: options.liveSessionId ?? rawSessionId ?? "sess_default",
+    liveSessionId: options.liveSessionId ?? (rawSessionId as string) ?? "sess_default",
     isFreshStore: fresh,
     createdAt: new Date().toISOString(),
   };
