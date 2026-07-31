@@ -73,3 +73,29 @@ export {
   buildRecordCommand,
   type RecordCommand,
 } from "./record-command.js";
+export {
+  NEG_READ_RATIO_CEILING,
+  PROBE_SLOTS,
+  runIsolationProbe,
+  type IsolationProbeInput,
+  type IsolationProbeRefusal,
+  type IsolationProbeResult,
+} from "./isolation-probe.js";
+export {
+  ARM_RUNS,
+  SAFETY_FACTOR,
+  estimateGateRunBudget,
+  type BudgetEstimate,
+  type BudgetInput,
+} from "./budget.js";
+export {
+  JournalRefusal,
+  RESUME_SLOT_BASE,
+  armRunJournalEntrySchema,
+  completedRuns,
+  loadJournal,
+  nextResumeNamespace,
+  pendingRunIndices,
+  type ArmRunJournalEntry,
+  type JournalRefusalCode,
+} from "./run-journal.js";
