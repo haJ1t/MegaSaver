@@ -20,6 +20,14 @@ function expansionSummary(chunkId: string, fetchedBytes: number): string {
 // locateChunkSet-based resolution could bill another session holding the same
 // content-addressed chunk-set id. Best-effort with a swallowed failure — an
 // accounting error must never block evidence recovery.
+//
+// Debt events use random ids — deliberately NOT the B11 deterministic dedupe.
+// Every re-fetch of the same chunk re-injects real bytes the agent re-pays,
+// so deduping would undercount legitimate repeat fetches; the residual a
+// random id admits is a timeout-replay double-charge, and an OVERSTATED debt
+// understates net savings — conservative for the A4 gate. The asymmetry with
+// the deduped savings credits is intentional: credits inflate the meter,
+// debts deflate it.
 export async function recordOverlayExpansionDebt(input: {
   storeRoot: string;
   workspaceKey: string;
