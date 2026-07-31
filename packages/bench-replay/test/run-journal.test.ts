@@ -56,7 +56,10 @@ describe("run-journal", () => {
   });
 
   it("allocates a fresh namespace on resume, never reusing a burnt one", () => {
-    const rows = [entry({ namespace: 0 }), entry({ armRunIndex: 1, namespace: 1, status: "partial" })];
+    const rows = [
+      entry({ namespace: 0 }),
+      entry({ armRunIndex: 1, namespace: 1, status: "partial" }),
+    ];
     const ns = nextResumeNamespace(rows, 1);
 
     expect(ns).toBeGreaterThanOrEqual(RESUME_SLOT_BASE);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PROBE_SLOTS, runIsolationProbe } from "../src/isolation-probe.js";
-import { cacheNamespaceMarker, stripCacheNamespace } from "../src/transform.js";
 import type { Send } from "../src/replay.js";
+import { cacheNamespaceMarker, stripCacheNamespace } from "../src/transform.js";
 import type { RecordedRequest } from "../src/types.js";
 
 const PREFIX_TOKENS = 60_000;
@@ -31,21 +31,39 @@ function fakeUpstream(opts: { stripsMarker: boolean; neverWarms?: boolean }): Se
   const cache = new Set<string>();
   return async (body) => {
     if (opts.neverWarms) {
-      return { input_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 1 };
+      return {
+        input_tokens: 10,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+        output_tokens: 1,
+      };
     }
     const effective = opts.stripsMarker ? stripCacheNamespace(body) : body;
     const key = JSON.stringify(effective.system ?? "");
     if (cache.has(key)) {
-      return { input_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: PREFIX_TOKENS, output_tokens: 1 };
+      return {
+        input_tokens: 10,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: PREFIX_TOKENS,
+        output_tokens: 1,
+      };
     }
     cache.add(key);
-    return { input_tokens: 10, cache_creation_input_tokens: PREFIX_TOKENS, cache_read_input_tokens: 0, output_tokens: 1 };
+    return {
+      input_tokens: 10,
+      cache_creation_input_tokens: PREFIX_TOKENS,
+      cache_read_input_tokens: 0,
+      output_tokens: 1,
+    };
   };
 }
 
 describe("isolation-probe", () => {
   it("reports isolationLive when the platform honours the namespace marker", async () => {
-    const result = await runIsolationProbe({ recording: recording(), send: fakeUpstream({ stripsMarker: false }) });
+    const result = await runIsolationProbe({
+      recording: recording(),
+      send: fakeUpstream({ stripsMarker: false }),
+    });
 
     expect(result.positiveControlWarmed).toBe(true);
     expect(result.posCell.runB.cacheReadTokens).toBe(PREFIX_TOKENS);
@@ -56,7 +74,10 @@ describe("isolation-probe", () => {
   });
 
   it("reports isolationLive=false when the platform strips the marker block", async () => {
-    const result = await runIsolationProbe({ recording: recording(), send: fakeUpstream({ stripsMarker: true }) });
+    const result = await runIsolationProbe({
+      recording: recording(),
+      send: fakeUpstream({ stripsMarker: true }),
+    });
 
     expect(result.positiveControlWarmed).toBe(true);
     expect(result.negCell.runB.cacheReadTokens).toBe(PREFIX_TOKENS);
@@ -65,7 +86,10 @@ describe("isolation-probe", () => {
   });
 
   it("refuses rather than passing when the positive control never warms", async () => {
-    const result = await runIsolationProbe({ recording: recording(), send: fakeUpstream({ stripsMarker: false, neverWarms: true }) });
+    const result = await runIsolationProbe({
+      recording: recording(),
+      send: fakeUpstream({ stripsMarker: false, neverWarms: true }),
+    });
 
     expect(result.positiveControlWarmed).toBe(false);
     expect(result.isolationLive).toBe(false);
@@ -73,7 +97,10 @@ describe("isolation-probe", () => {
   });
 
   it("refuses an empty recording instead of probing nothing", async () => {
-    const result = await runIsolationProbe({ recording: [], send: fakeUpstream({ stripsMarker: false }) });
+    const result = await runIsolationProbe({
+      recording: [],
+      send: fakeUpstream({ stripsMarker: false }),
+    });
 
     expect(result.isolationLive).toBe(false);
     expect(result.refusal).toBe("empty_recording");
@@ -87,7 +114,12 @@ describe("isolation-probe", () => {
       const blocks = (body as unknown as { system: { text: string }[] }).system;
       const marked = blocks.find((b) => b.text.startsWith(cacheNamespaceMarker(0).slice(0, 20)));
       sent.push(marked?.text.split("\n")[0] ?? "");
-      return { input_tokens: 10, cache_creation_input_tokens: 1, cache_read_input_tokens: 0, output_tokens: 1 };
+      return {
+        input_tokens: 10,
+        cache_creation_input_tokens: 1,
+        cache_read_input_tokens: 0,
+        output_tokens: 1,
+      };
     };
 
     await runIsolationProbe({ recording: recording(), send });

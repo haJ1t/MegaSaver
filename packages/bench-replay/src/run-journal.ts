@@ -26,7 +26,11 @@ const requestUsageSchema = z.object({
 
 export const armRunJournalEntrySchema = z.object({
   recordingId: z.string().min(1),
-  armRunIndex: z.number().int().min(0).max(ARM_RUNS - 1),
+  armRunIndex: z
+    .number()
+    .int()
+    .min(0)
+    .max(ARM_RUNS - 1),
   namespace: z.number().int().min(0),
   status: z.enum(["complete", "partial"]),
   usage: requestUsageSchema.extend({

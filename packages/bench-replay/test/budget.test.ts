@@ -48,7 +48,9 @@ describe("budget", () => {
     const bare = estimateGateRunBudget({ recording, bytesPerToken: 2.6 });
     const enough = bare.estimatedUsd * SAFETY_FACTOR * 1.01;
 
-    expect(estimateGateRunBudget({ recording, bytesPerToken: 2.6, budgetUsd: enough }).wouldRefuse).toBe(false);
+    expect(
+      estimateGateRunBudget({ recording, bytesPerToken: 2.6, budgetUsd: enough }).wouldRefuse,
+    ).toBe(false);
   });
 
   it("still reports an estimate when no budget was supplied, and does not refuse", () => {
