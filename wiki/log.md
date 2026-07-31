@@ -8264,4 +8264,6 @@ omission); DEFAULT_MODE=safe is disabled()-only, enabled default is balanced.
 Ledger honesty: B11 idempotent event ids, unchanged re-reads envelope-true,
 /expand debt, net-first savings surfaces. Full ledger: spec §9 +
 [[syntheses/saver-audit-2026-07-31]]. Adoption (floor/mode) still gated on
-the A4 real-API leg — meter now trustworthy for its R recompute.
+the A4 real-API leg — meter distortions repaired for the known classes
+(double count, uncounted re-reads, outline bytes, expansion debt); residuals
+named in spec §9.
