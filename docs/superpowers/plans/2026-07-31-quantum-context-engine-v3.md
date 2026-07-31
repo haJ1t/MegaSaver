@@ -259,66 +259,174 @@ Run subagent review for Stage A closure.
 ### Task 2: Phase 2 — Stage B P2 Warm-Start Intent Hook & Byte-Stable Context Pack
 
 **Files:**
-- Create: `packages/warmstart/src/warmstart-pack.ts`
-- Modify: `packages/warmstart/src/index.ts`
-- Test: `packages/warmstart/test/warmstart-pack.test.ts`
+- Create: `packages/core/src/warmstart-pack.ts`
+- Modify: `packages/core/src/index.ts`
+- Test: `packages/core/test/warmstart-pack.test.ts`
 - Spec Ref: Section 21.2 #5 (`warmstart-pack-wire`)
 
 **Interfaces:**
-- Consumes: Living code graph summary and intent hooks
-- Produces: `generateWarmStartContextPack(intent: string, maxTokens: number): WarmStartPack`
+- Consumes: Intent string, living code graph summary, memory anchors, maxTokens budget
+- Produces: `generateWarmStartContextPack(intent: string, options?: WarmStartOptions): Promise<WarmStartPack>`
 
-- [ ] **Step 1: Write failing test for Warm-Start byte-stable context pack generation**
+```typescript
+export interface WarmStartOptions {
+  maxTokens?: number; // Target 3000-5000 tokens [TARGET]
+  timeoutMs?: number; // Hard 500ms deadline [TARGET]
+  repoMapSummary?: string;
+  candidateFiles?: string[];
+}
+
+export interface WarmStartPack {
+  intent: string;
+  additionalContext: string;
+  tokenEstimate: number;
+  isTimedOut: boolean;
+  contentHash: string;
+}
+```
+
+- [ ] **Step 1: Write failing unit test for Warm-Start context pack generation & invariants**
 
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { generateWarmStartContextPack } from '../src/warmstart-pack.js';
 
 describe('warmstart-pack', () => {
-  it('generates byte-stable context pack under 500ms and within token limit', async () => {
-    const startTime = Date.now();
-    const pack = await generateWarmStartContextPack('refactor memory module', 4000);
-    const duration = Date.now() - startTime;
+  it('generates byte-stable context pack under token limit and returns canonical hash', async () => {
+    const pack1 = await generateWarmStartContextPack('refactor memory module', {
+      maxTokens: 4000,
+      timeoutMs: 500,
+      repoMapSummary: 'packages: core, stats, warmstart',
+      candidateFiles: ['packages/core/src/index.ts'],
+    });
 
-    expect(duration).toBeLessThan(500);
-    expect(pack.tokenEstimate).toBeLessThanOrEqual(4000);
-    expect(pack.additionalContext).toContain('repo_map_summary');
+    const pack2 = await generateWarmStartContextPack('refactor memory module', {
+      maxTokens: 4000,
+      timeoutMs: 500,
+      repoMapSummary: 'packages: core, stats, warmstart',
+      candidateFiles: ['packages/core/src/index.ts'],
+    });
+
+    expect(pack1.isTimedOut).toBe(false);
+    expect(pack1.additionalContext).toContain('repo_map_summary');
+    expect(pack1.additionalContext).toContain('packages/core/src/index.ts');
+    expect(pack1.tokenEstimate).toBeLessThanOrEqual(4000);
+    // Session byte-stability invariant (DZ2)
+    expect(pack1.contentHash).toBe(pack2.contentHash);
+    expect(pack1.additionalContext).toBe(pack2.additionalContext);
+  });
+
+  it('falls back to empty payload on 500ms timeout deadline', async () => {
+    const pack = await generateWarmStartContextPack('slow build task', {
+      maxTokens: 4000,
+      timeoutMs: 1, // Force timeout fallback
+      repoMapSummary: 'x'.repeat(100000),
+    });
+
+    expect(pack.isTimedOut).toBe(true);
+    expect(pack.additionalContext).toBe('');
+    expect(pack.tokenEstimate).toBe(0);
+  });
+
+  it('physically truncates context payload to fit maxTokens limit', async () => {
+    const hugeRepoMap = 'a'.repeat(20000); // ~5000 tokens
+    const pack = await generateWarmStartContextPack('large payload', {
+      maxTokens: 500, // Small limit
+      timeoutMs: 500,
+      repoMapSummary: hugeRepoMap,
+    });
+
+    expect(pack.additionalContext.length).toBeLessThanOrEqual(2000); // 500 tokens * 4 chars
+    expect(pack.tokenEstimate).toBeLessThanOrEqual(500);
   });
 });
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @megasaver/warmstart test`
-Expected: FAIL
+Run: `pnpm --filter @megasaver/core test`
+Expected: FAIL with module missing error.
 
-- [ ] **Step 3: Implement Warm-Start context pack wire**
+- [ ] **Step 3: Write minimal implementation for Warm-Start context pack assembly**
 
 ```typescript
+import { createHash } from 'node:crypto';
+
+export interface WarmStartOptions {
+  maxTokens?: number;
+  timeoutMs?: number;
+  repoMapSummary?: string;
+  candidateFiles?: string[];
+}
+
 export interface WarmStartPack {
   intent: string;
   additionalContext: string;
   tokenEstimate: number;
+  isTimedOut: boolean;
+  contentHash: string;
 }
 
-export async function generateWarmStartContextPack(intent: string, maxTokens: number): Promise<WarmStartPack> {
-  const contextHeader = `<!-- mega-warmstart: intent="${intent}" -->\n[repo_map_summary: core, telemetry, warmstart, gui]`;
-  const tokenEstimate = Math.ceil(contextHeader.length / 4);
+export async function generateWarmStartContextPack(
+  intent: string,
+  options: WarmStartOptions = {}
+): Promise<WarmStartPack> {
+  const maxTokens = options.maxTokens ?? 4000;
+  const timeoutMs = options.timeoutMs ?? 500;
 
-  return {
-    intent,
-    additionalContext: contextHeader,
-    tokenEstimate: Math.min(tokenEstimate, maxTokens),
-  };
+  const assemblyPromise = (async (): Promise<WarmStartPack> => {
+    const repoMap = options.repoMapSummary ?? 'core, stats, warmstart';
+    const files = (options.candidateFiles ?? []).join(', ');
+
+    let rawContext = `<!-- mega-warmstart: intent="${intent}" -->\n[repo_map_summary: ${repoMap}]\n[candidate_files: ${files}]`;
+
+    // Physically truncate payload to enforce maxTokens ceiling
+    const maxChars = maxTokens * 4;
+    if (rawContext.length > maxChars) {
+      rawContext = rawContext.slice(0, maxChars);
+    }
+
+    const tokenEstimate = Math.ceil(rawContext.length / 4);
+    const contentHash = createHash('sha256').update(rawContext).digest('hex').slice(0, 16);
+
+    return {
+      intent,
+      additionalContext: rawContext,
+      tokenEstimate,
+      isTimedOut: false,
+      contentHash,
+    };
+  })();
+
+  const timeoutPromise = new Promise<WarmStartPack>((resolve) => {
+    setTimeout(() => {
+      resolve({
+        intent,
+        additionalContext: '',
+        tokenEstimate: 0,
+        isTimedOut: true,
+        contentHash: 'e3b0c44298fc1c14', // SHA-256 of empty string
+      });
+    }, timeoutMs);
+  });
+
+  return Promise.race([assemblyPromise, timeoutPromise]);
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Run unit tests to verify they pass**
 
-Run: `pnpm --filter @megasaver/warmstart test`
+Run: `pnpm --filter @megasaver/core test`
 Expected: PASS
 
-- [ ] **Step 5: Architect & Critic subagent review gate for Warm-Start Pack Wire**
+- [ ] **Step 5: Execute empirical benchmark replay exit gate for Stage B**
+
+Run: `pnpm --filter @megasaver/bench-replay test`
+Expected: Assert Stage B benchmark replay passes with `geomean >= 1.5x` [TARGET] (and min task >= 0.90x [TARGET]) on clean M7 store.
+
+- [ ] **Step 6: Architect & Critic subagent review gate for Task 2**
+
+Run subagent review for Stage B closure.
 
 ---
 
