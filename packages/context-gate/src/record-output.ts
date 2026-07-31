@@ -12,11 +12,12 @@ import {
   type FilterDecision,
   type FilterOutputResult,
   type OutputSourceKind,
+  countTokens,
   filterOutput,
 } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
 import { type TokenSaverMode, type WorkspaceKey, modeToBudget } from "@megasaver/shared";
-import { appendOverlayEvent } from "@megasaver/stats";
+import { appendOverlayEvent, isStoreFresh } from "@megasaver/stats";
 import { DEFAULT_SAVING_FLOORS, admitCompression } from "./admission-guard.js";
 import { recoverableChunks } from "./recoverable-chunks.js";
 import { buildRecoveryFooter, looksPreTruncated } from "./recovery-footer.js";
@@ -75,6 +76,7 @@ export const COMPRESS_FLOOR_BYTES = 2_048;
 // counts. A race exactly on a bucket edge still double-counts — residual
 // probability ~skew/width, against 100% without the bucket.
 export const OVERLAY_EVENT_ID_BUCKET_MS = 600_000;
+export const TOKEN_COUNT_BUDGET_MS = 50;
 
 export type RecordOverlayOutputInput = {
   storeRoot: string;
@@ -88,6 +90,7 @@ export type RecordOverlayOutputInput = {
   label: string;
   mode: TokenSaverMode;
   storeRawOutput: boolean;
+  countTokensImpl?: (text: string) => Promise<number>;
   // The byte gate the caller already applied (hook minBytesFor). Both token
   // thresholds derive from it so the caller's gate is the single eligibility
   // authority — no passthrough/light dead band can open between the gate and
@@ -375,6 +378,30 @@ export async function recordAndFilterOverlayOutput(
     .update(input.raw)
     .digest("hex")
     .slice(0, 32)}`;
+  // Measured over the SAME two texts deltaBytes is computed over, so bytes and
+  // tokens describe one object. A failure or a slow lazy encoder load yields
+  // OMITTED fields — a value in a field named rawTokens is measured or absent.
+  const counter = input.countTokensImpl ?? countTokens;
+  let tokenFields: {
+    rawTokens?: number;
+    returnedTokens?: number;
+    deltaTokens?: number;
+  } = {};
+  let timerId: NodeJS.Timeout | undefined;
+  try {
+    const [rawTokens, returnedTokens] = await Promise.race([
+      Promise.all([counter(input.raw), counter(finalText)]),
+      new Promise<never>((_, reject) => {
+        timerId = setTimeout(() => reject(new Error("token_budget_exceeded")), TOKEN_COUNT_BUDGET_MS);
+      }),
+    ]);
+    tokenFields = { rawTokens, returnedTokens, deltaTokens: rawTokens - returnedTokens };
+  } catch {
+    tokenFields = {};
+  } finally {
+    if (timerId !== undefined) clearTimeout(timerId);
+  }
+
   // The append itself reports first sight vs replay: the store checks the id
   // and appends under ONE file lock (the daemon and the hook's timeout
   // fallback race from two processes, so a separate pre-check here would
@@ -398,6 +425,8 @@ export async function recordAndFilterOverlayOutput(
       // rejects the rest), but the field must be present or `deltaBytesOf`
       // falls back to the clamped value and the capability stays inert.
       deltaBytes: filtered.rawBytes - finalReturnedBytes,
+      ...tokenFields,
+      isFreshStore: isStoreFresh(input.storeRoot),
       savingRatio,
       ...(chunkSetId !== undefined ? { chunkSetId } : {}),
       summary: filtered.summary,
