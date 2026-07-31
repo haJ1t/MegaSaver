@@ -1,17 +1,31 @@
+/**
+ * @scaffold LIVING CODE GRAPH DAEMON SCAFFOLD
+ * WARNING: Incremental AST graph delta computation requires @megasaver/indexer daemon.
+ */
 export interface GraphDelta {
   filePath: string;
   changedSymbols: string[];
   impactRadius: string[];
   calculationTimeMs: number;
+  isScaffold: true;
 }
 
-export function computeGraphDelta(filePath: string, changes: string[]): GraphDelta {
+export function computeGraphDeltaScaffold(filePath: string, changes: string[]): GraphDelta {
   const start = performance.now();
-  const changedSymbols = changes.map((c) => c.match(/function\s+(\w+)/)?.[1] ?? "foo");
+  const changedSymbols: string[] = [];
+
+  for (const change of changes) {
+    const match = change.match(/function\s+([A-Za-z0-9_]+)/);
+    if (match?.[1]) {
+      changedSymbols.push(match[1]);
+    }
+  }
+
   return {
     filePath,
     changedSymbols,
-    impactRadius: ["dependent-module-a", "dependent-module-b"],
+    impactRadius: [], // No fake hardcoded modules; real impact radius computed by @megasaver/indexer
     calculationTimeMs: performance.now() - start,
+    isScaffold: true,
   };
 }

@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 
+/**
+ * @scaffold WARMSTART PACK ASSEMBLY SCAFFOLD
+ * WARNING: Basic pack assembly scaffold. Code-truth memory integration and ranking
+ * require the Phase 2 warm-start intent hook.
+ */
 export interface WarmStartOptions {
   maxTokens?: number;
   timeoutMs?: number;
@@ -10,9 +15,10 @@ export interface WarmStartOptions {
 export interface WarmStartPack {
   intent: string;
   additionalContext: string;
-  tokenEstimate: number;
+  characterCount: number;
   isTimedOut: boolean;
   contentHash: string;
+  isScaffold: true;
 }
 
 export async function generateWarmStartContextPack(
@@ -24,40 +30,39 @@ export async function generateWarmStartContextPack(
   const startTime = Date.now();
 
   const assemblyPromise = (async (): Promise<WarmStartPack> => {
-    if (timeoutMs < 5) {
-      await new Promise((r) => setTimeout(r, 10));
-    }
-    const repoMap = options.repoMapSummary ?? "core, stats, warmstart";
+    const repoMap = options.repoMapSummary ?? "";
     const files = (options.candidateFiles ?? []).join(", ");
 
     let rawContext = `<!-- mega-warmstart: intent="${intent}" -->\n[repo_map_summary: ${repoMap}]\n[candidate_files: ${files}]`;
 
-    // Physically truncate payload to enforce maxTokens ceiling
+    // Truncate based on character length limit (approx 4 chars per token ceiling estimate)
     const maxChars = maxTokens * 4;
     if (rawContext.length > maxChars) {
       rawContext = rawContext.slice(0, maxChars);
     }
 
-    const tokenEstimate = Math.ceil(rawContext.length / 4);
+    const characterCount = rawContext.length;
     const contentHash = createHash("sha256").update(rawContext).digest("hex").slice(0, 16);
 
     const elapsed = Date.now() - startTime;
-    if (elapsed > timeoutMs) {
+    if (elapsed >= timeoutMs) {
       return {
         intent,
         additionalContext: "",
-        tokenEstimate: 0,
+        characterCount: 0,
         isTimedOut: true,
         contentHash: "e3b0c44298fc1c14",
+        isScaffold: true,
       };
     }
 
     return {
       intent,
       additionalContext: rawContext,
-      tokenEstimate,
+      characterCount,
       isTimedOut: false,
       contentHash,
+      isScaffold: true,
     };
   })();
 
@@ -66,9 +71,10 @@ export async function generateWarmStartContextPack(
       resolve({
         intent,
         additionalContext: "",
-        tokenEstimate: 0,
+        characterCount: 0,
         isTimedOut: true,
         contentHash: "e3b0c44298fc1c14",
+        isScaffold: true,
       });
     }, timeoutMs);
   });

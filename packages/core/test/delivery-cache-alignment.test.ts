@@ -12,14 +12,14 @@ describe("delivery-cache-alignment", () => {
     expect(ledger.has(hash)).toBe(true);
   });
 
-  it("emits raw PASSTHROUGH on repeat sight to preserve prompt cache zero-churn", () => {
+  it("emits EMIT_UNCHANGED_MARKER on repeat sight to preserve prompt cache zero-churn", () => {
     const content = "export function foo() { return 42; }";
     const hash = "hash_abc123";
     const ledger = new Set<string>([hash]);
 
     const secondDecision = evaluateCacheAlignedTransform(content, hash, ledger);
-    expect(secondDecision.action).toBe("PASSTHROUGH");
-    expect(secondDecision.outputContent).toBe(content);
+    expect(secondDecision.action).toBe("EMIT_UNCHANGED_MARKER");
+    expect(secondDecision.outputContent).toBe(`<!-- mega-unchanged: ${hash} -->`);
   });
 
   it("generates I14/E7 single-coordinate recovery markers when requested", () => {

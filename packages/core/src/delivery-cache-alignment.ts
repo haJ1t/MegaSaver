@@ -14,6 +14,10 @@ export interface TransformDecision {
   coordinates?: CoordinateBounds | undefined;
 }
 
+/**
+ * Evaluates cache-aligned transform decision for tool output delivery.
+ * Preserves prompt cache by returning EMIT_UNCHANGED_MARKER on re-reads.
+ */
 export function evaluateCacheAlignedTransform(
   content: string,
   hash: string,
@@ -22,22 +26,23 @@ export function evaluateCacheAlignedTransform(
 ): TransformDecision {
   if (seenLedger.has(hash)) {
     return {
-      action: "PASSTHROUGH",
+      action: "EMIT_UNCHANGED_MARKER",
       contentHash: hash,
-      outputContent: content,
-      reason: "Content already in seen-hash ledger; raw passthrough preserving prompt cache",
+      outputContent: `<!-- mega-unchanged: ${hash} -->`,
+      reason:
+        "Content already in seen-hash ledger; emitting unchanged marker to preserve prompt cache",
       coordinates,
     };
   }
 
-  // Atomically register seen hash
+  // Atomically register seen hash in ledger on first sight
   seenLedger.add(hash);
 
   return {
     action: "TRANSFORM_FIRST_SIGHT",
     contentHash: hash,
     outputContent: content,
-    reason: "First sight content; transformed chunk registered in ledger",
+    reason: "First sight content; registered in seen-hash ledger",
     coordinates,
   };
 }

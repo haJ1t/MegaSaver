@@ -1,3 +1,8 @@
+/**
+ * @scaffold SPECULATIVE PREFETCH SCAFFOLD
+ * WARNING: Basic Map cache wrapper. Markov scoring, coupling graph, intent matching,
+ * and LRU eviction require the Phase 3 prefetch engine.
+ */
 export function prefetchToLocalCache(
   uri: string,
   content: string,

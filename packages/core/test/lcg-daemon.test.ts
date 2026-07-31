@@ -1,14 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { computeGraphDelta } from "../src/lcg-daemon.js";
+import { computeGraphDeltaScaffold } from "../src/lcg-daemon.js";
 
-describe("lcg-daemon", () => {
-  it("computes sub-millisecond AST graph delta impact (<1ms target)", () => {
+describe("lcg-daemon (Scaffold Check)", () => {
+  it("computes AST graph delta scaffold without fake impact radius assumptions", () => {
     const startTime = performance.now();
-    const delta = computeGraphDelta("packages/core/src/index.ts", ["export function foo()"]);
+    const delta = computeGraphDeltaScaffold("packages/core/src/index.ts", [
+      "export function foo()",
+    ]);
     const elapsed = performance.now() - startTime;
 
     expect(elapsed).toBeLessThan(10);
-    expect(delta.changedSymbols).toContain("foo");
-    expect(delta.impactRadius.length).toBeGreaterThan(0);
+    expect(delta.isScaffold).toBe(true);
+    expect(delta.changedSymbols).toEqual(["foo"]);
+    expect(delta.impactRadius).toEqual([]);
+  });
+
+  it("returns empty changedSymbols when no function pattern is matched", () => {
+    const delta = computeGraphDeltaScaffold("file.ts", ["const x = 123;"]);
+    expect(delta.changedSymbols).toEqual([]);
   });
 });

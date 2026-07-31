@@ -1,3 +1,8 @@
+/**
+ * @scaffold UNVALIDATED EXPERIMENTAL SAB GRAMMAR V0
+ * WARNING: Parity validation requires the Phase 4 eval harness (sab-eval-harness).
+ * DO NOT treat parityValidated as true without benchmark execution proof.
+ */
 export interface SABGrammarRule {
   symbolName: string;
   language: string;
@@ -10,10 +15,11 @@ export function parseSABGrammarV0(
   language: string,
   tokenizerTarget: string,
 ): SABGrammarRule {
+  // @scaffold: Parity is NOT validated until benchmark eval harness runs.
   return {
     symbolName,
     language,
     tokenizerTarget,
-    parityValidated: true,
+    parityValidated: false,
   };
 }

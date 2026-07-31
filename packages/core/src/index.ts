@@ -235,7 +235,7 @@ export {
   type MeshHandle,
 } from "./mesh-handle.js";
 export {
-  computeGraphDelta,
+  computeGraphDeltaScaffold,
   type GraphDelta,
 } from "./lcg-daemon.js";
 export {
@@ -243,7 +243,7 @@ export {
   getPrefetchedContent,
 } from "./speculative-prefetch.js";
 export {
-  evaluateShadowWorktree,
+  evaluateShadowWorktreeScaffold,
   type ShadowVerdict,
 } from "./shadow-verdict.js";
 export {
