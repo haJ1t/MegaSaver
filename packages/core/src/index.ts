@@ -218,3 +218,35 @@ export {
 } from "./autopilot.js";
 export { type VerificationBadge, verificationBadgeFor } from "./verification-badge.js";
 export type { HandoffDirtyState } from "./handoff-export.js";
+export {
+  evaluateCacheAlignedTransform,
+  type CoordinateBounds,
+  type TransformAction,
+  type TransformDecision,
+} from "./delivery-cache-alignment.js";
+export {
+  generateWarmStartContextPack,
+  type WarmStartOptions,
+  type WarmStartPack,
+} from "./warmstart-pack.js";
+export {
+  createMeshHandle,
+  resolveMeshHandle,
+  type MeshHandle,
+} from "./mesh-handle.js";
+export {
+  computeGraphDelta,
+  type GraphDelta,
+} from "./lcg-daemon.js";
+export {
+  prefetchToLocalCache,
+  getPrefetchedContent,
+} from "./speculative-prefetch.js";
+export {
+  evaluateShadowWorktree,
+  type ShadowVerdict,
+} from "./shadow-verdict.js";
+export {
+  parseSABGrammarV0,
+  type SABGrammarRule,
+} from "./sab-grammar.js";

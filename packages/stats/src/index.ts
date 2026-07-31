@@ -1,5 +1,10 @@
 export { recoveryRate, type RecoveryRate } from "./recovery-rate.js";
 export {
+  stampWorkspaceTelemetry,
+  isStoreFresh,
+  type TelemetryOptions,
+} from "./workspace-stamp.js";
+export {
   tokenSaverEventSchema,
   type TokenSaverEvent,
   overlayTokenSaverEventSchema,

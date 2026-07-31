@@ -166,6 +166,9 @@ export type OverlayMemoryEntry = {
   stale: boolean;
   createdAt: string;
   updatedAt: string;
+  validFrom?: string;
+  validTo?: string | null;
+  supersedesId?: string;
 };
 
 export type CreateMemoryInput = {
@@ -458,4 +461,177 @@ export function connectClaudeHook(): Promise<ClaudeHookStatus> {
 
 export function disconnectClaudeHook(): Promise<ClaudeHookStatus> {
   return mutateJson<ClaudeHookStatus>("/api/hooks/claude-code", "DELETE");
+}
+
+export type MemoryHistoryResponse = {
+  entryId: string;
+  chain: OverlayMemoryEntry[];
+  supersedesId: string | null;
+  validFrom: string;
+  validTo: string | null;
+};
+
+export function fetchMemoryHistory(
+  dir: string,
+  id: string,
+  entryId: string,
+): Promise<MemoryHistoryResponse> {
+  return getJson<MemoryHistoryResponse>(
+    `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/memory/${encodeURIComponent(entryId)}/history`,
+  );
+}
+
+export function reopenSessionMemory(
+  dir: string,
+  id: string,
+  entryId: string,
+): Promise<OverlayMemoryEntry> {
+  return mutateJson<OverlayMemoryEntry>(
+    `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/memory/${encodeURIComponent(entryId)}/reopen`,
+    "POST",
+  );
+}
+
+export type MemoryExplainResponse = {
+  entryId: string;
+  confidence: string;
+  effectiveConfidence: number;
+  source: string;
+  scope: string;
+  isCurrent: boolean;
+};
+
+export function fetchMemoryExplain(
+  dir: string,
+  id: string,
+  entryId: string,
+): Promise<MemoryExplainResponse> {
+  return getJson<MemoryExplainResponse>(
+    `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/memory/${encodeURIComponent(entryId)}/explain`,
+  );
+}
+
+export type BrainSyncStatusResponse = {
+  configured: boolean;
+  status: string;
+  lastSyncedAt: string | null;
+};
+
+export function fetchBrainSyncStatus(): Promise<BrainSyncStatusResponse> {
+  return getJson<BrainSyncStatusResponse>("/api/brain/sync/status");
+}
+
+export function triggerBrainSync(): Promise<{ status: string; syncedAt: string }> {
+  return mutateJson<{ status: string; syncedAt: string }>("/api/brain/sync/trigger", "POST");
+}
+
+export type HandoffPackResponse = {
+  targetAgent: string;
+  packed: boolean;
+  findingsCount: number;
+  brief: string;
+};
+
+export function packHandoff(
+  workspaceKey: string,
+  targetAgent: string,
+): Promise<HandoffPackResponse> {
+  return mutateJson<HandoffPackResponse>("/api/handoff/pack", "POST", {
+    workspaceKey,
+    targetAgent,
+  });
+}
+
+export function clearHandoff(
+  workspaceKey: string,
+  targetAgent: string,
+): Promise<{ cleared: boolean; targetAgent: string }> {
+  return mutateJson<{ cleared: boolean; targetAgent: string }>(
+    `/api/handoff/clear?workspaceKey=${encodeURIComponent(workspaceKey)}&targetAgent=${encodeURIComponent(targetAgent)}`,
+    "DELETE",
+  );
+}
+
+export type WarmupResponse = {
+  workspaceKey: string;
+  liveSessionId: string;
+  brief: string;
+};
+
+export function fetchWarmup(dir: string, id: string): Promise<WarmupResponse> {
+  return getJson<WarmupResponse>(
+    `/api/claude-sessions/${encodeURIComponent(dir)}/${encodeURIComponent(id)}/warmup`,
+  );
+}
+
+export type RoiResponse = {
+  savedDollars: number;
+  timeSavedHours: number;
+  roiRatio: number;
+  projectedAnnualSavings: number;
+};
+
+export function fetchRoi(): Promise<RoiResponse> {
+  return getJson<RoiResponse>("/api/roi");
+}
+
+export type BudgetResponse = {
+  monthlyBudgetTokens: number;
+  spentTokens: number;
+  pacePercent: number;
+  isOverBudget: boolean;
+};
+
+export function fetchBudget(): Promise<BudgetResponse> {
+  return getJson<BudgetResponse>("/api/savings/budget");
+}
+
+export function setBudget(monthlyBudgetTokens: number): Promise<BudgetResponse> {
+  return mutateJson<BudgetResponse>("/api/savings/budget", "POST", { monthlyBudgetTokens });
+}
+
+export type ForgeFailuresResponse = {
+  failures: { id: string; pattern: string; occurrences: number; ruleCreated: boolean }[];
+};
+
+export function fetchForgeFailures(): Promise<ForgeFailuresResponse> {
+  return getJson<ForgeFailuresResponse>("/api/forge/failures");
+}
+
+export function postForgeLearn(
+  failureId: string,
+  ruleTitle?: string,
+): Promise<{ learned: boolean; ruleId: string; ruleTitle: string }> {
+  return mutateJson<{ learned: boolean; ruleId: string; ruleTitle: string }>(
+    "/api/forge/learn",
+    "POST",
+    { failureId, ruleTitle },
+  );
+}
+
+export type CacheStatusResponse = {
+  cacheHitRatio: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+  churnDetected: boolean;
+};
+
+export function fetchCacheStatus(): Promise<CacheStatusResponse> {
+  return getJson<CacheStatusResponse>("/api/cache/status");
+}
+
+export function postCacheClear(): Promise<{ cleared: boolean; clearedAt: string }> {
+  return mutateJson<{ cleared: boolean; clearedAt: string }>("/api/cache/clear", "POST");
+}
+
+export type SkillPackItem = { id: string; name: string; version: string; installed: boolean };
+
+export function fetchSkillPacks(): Promise<{ packs: SkillPackItem[] }> {
+  return getJson<{ packs: SkillPackItem[] }>("/api/packs/installed");
+}
+
+export function installSkillPack(packId: string): Promise<{ installed: boolean; packId: string }> {
+  return mutateJson<{ installed: boolean; packId: string }>("/api/packs/install", "POST", {
+    packId,
+  });
 }

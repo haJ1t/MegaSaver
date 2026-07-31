@@ -1,12 +1,13 @@
+import { CacheDoctorCard } from "../components/cache-doctor-card.js";
+import { ForgeLearningCard } from "../components/forge-learning-card.js";
+import { RoiAnalyticsCard } from "../components/roi-analytics-card.js";
+import { TokenBudgetCard } from "../components/token-budget-card.js";
 import type { WorkspaceOption } from "../lib/workspace-context.js";
 import { DaemonStatusPanel } from "./cockpit/daemon-status.js";
 import { HookConnection } from "./cockpit/hook-connection.js";
 import { ProxyActivation } from "./cockpit/proxy-activation.js";
 import { SaverModeActivation } from "./cockpit/saver-mode-activation.js";
 
-// The three switches read as an ordered narrative in the console design. The
-// panels themselves carry no card chrome, so the step supplies both the gutter
-// numeral and the surface.
 function Step({ n, children }: { n: number; children: React.ReactNode }): JSX.Element {
   return (
     <section className="flex gap-4 px-5 py-4 rounded-xl border border-border bg-surface">
@@ -44,6 +45,12 @@ export function TokenSaverPage({
           ) : null}
         </p>
       </div>
+
+      <RoiAnalyticsCard />
+      <TokenBudgetCard />
+      <CacheDoctorCard />
+      <ForgeLearningCard />
+
       <Step n={1}>
         <HookConnection />
       </Step>
