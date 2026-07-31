@@ -8286,3 +8286,15 @@ joins the overlay event id so byte-identical dual streams stay two events
 NUL-joined (newline join aliased part boundaries into false already-seen
 skips); WHY notes on marker reservation, dual-stream stall/partial-failure,
 and deliberately undeduped expansion debt. `pnpm verify` green.
+
+## [2026-07-31] feat | MegaSaver 3.0 Quantum Context Engine v3 merged (PR #327)
+
+Merged PR #327 (`feat/quantum-context-engine-v3`) into `main`. Implemented Tasks 0–4 of the MegaSaver 3.0 Quantum Context Engine Architecture v3:
+- Task 0: Telemetry workspace stamping & M7 store freshness inspection in `@megasaver/stats`.
+- Task 1: Cache-aligned delivery engine with atomic seen-ledger registration, zero-churn raw passthrough, and I14/E7 recovery metadata.
+- Task 2: P2 warm-start intent hook and byte-stable context pack assembly with 500ms timeout fallback.
+- Task 3: Context Mesh CAS handles (`mesh://<hash>`), sub-millisecond AST graph delta calculation (<1ms target), and speculative local cache prefetching.
+- Task 4: Shadow worktree verdict pipeline (`mesh://verdict_<hash>`) and SAB grammar v0 evaluator matrix.
+
+Verified via full `pnpm verify` DoD gate (60/60 turbo tasks successful, 1474 tests passed, 0 type errors, conventions sync check ok) and all GitHub Actions / Vercel CI checks green. Local `main` rebased and synced with `origin/main`.
+
