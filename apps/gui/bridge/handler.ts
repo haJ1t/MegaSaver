@@ -16,16 +16,6 @@ import type {
   SendText,
 } from "./route-context.js";
 import { handleAllWorkspacesTokenSaverStats } from "./routes/all-workspaces-token-saver.js";
-import { dispatchClaudeHooks } from "./routes/claude-hooks.js";
-import {
-  handleDeleteSessionMemory,
-  handleGetSessionMemory,
-  handleGetSessionMemoryExplain,
-  handleGetSessionMemoryHistory,
-  handlePatchSessionMemory,
-  handlePostSessionMemory,
-  handlePostSessionMemoryReopen,
-} from "./routes/claude-session-memory.js";
 import {
   handleDeleteBudget,
   handleGetAlerts,
@@ -36,19 +26,16 @@ import {
 } from "./routes/analytics.js";
 import { handleGetBrainSyncStatus, handlePostBrainSyncTrigger } from "./routes/brain-sync.js";
 import { handleGetCacheStatus, handlePostCacheClear } from "./routes/cache.js";
+import { dispatchClaudeHooks } from "./routes/claude-hooks.js";
 import {
-  handleGetFirewallStatus,
-  handleGetForgeFailures,
-  handlePostForgeLearn,
-} from "./routes/forge.js";
-import { handleDeleteHandoffClear, handlePostHandoffPack } from "./routes/handoff.js";
-import {
-  handleGetSkillPacks,
-  handleGetToolRouter,
-  handlePostSkillPackInstall,
-  handlePostToolRouter,
-} from "./routes/tools-packs.js";
-import { handleGetSessionWarmup } from "./routes/warmup.js";
+  handleDeleteSessionMemory,
+  handleGetSessionMemory,
+  handleGetSessionMemoryExplain,
+  handleGetSessionMemoryHistory,
+  handlePatchSessionMemory,
+  handlePostSessionMemory,
+  handlePostSessionMemoryReopen,
+} from "./routes/claude-session-memory.js";
 import { handleGetSessionTasks } from "./routes/claude-session-tasks.js";
 import { dispatchSessionTokenSaver } from "./routes/claude-session-token-saver.js";
 import {
@@ -62,6 +49,12 @@ import {
   handleGetDecisionTrace,
   handleListDecisionTraceSessions,
 } from "./routes/decision-trace.js";
+import {
+  handleGetFirewallStatus,
+  handleGetForgeFailures,
+  handlePostForgeLearn,
+} from "./routes/forge.js";
+import { handleDeleteHandoffClear, handlePostHandoffPack } from "./routes/handoff.js";
 import { handleGetHealth } from "./routes/health.js";
 import { dispatchMcpSetup } from "./routes/mcp-setup.js";
 import { handleGetMemoryGraph } from "./routes/memory-graph.js";
@@ -85,6 +78,13 @@ import {
 } from "./routes/office.js";
 import { handleListProjects } from "./routes/projects.js";
 import { handleProxySet, handleProxyStatus } from "./routes/proxy.js";
+import {
+  handleGetSkillPacks,
+  handleGetToolRouter,
+  handlePostSkillPackInstall,
+  handlePostToolRouter,
+} from "./routes/tools-packs.js";
+import { handleGetSessionWarmup } from "./routes/warmup.js";
 import { dispatchWorkspaceScoped } from "./routes/workspace-scoped.js";
 import { handleListWorkspaces } from "./routes/workspaces.js";
 import { serveStatic } from "./static.js";

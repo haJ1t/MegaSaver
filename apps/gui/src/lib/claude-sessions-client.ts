@@ -631,10 +631,7 @@ export function fetchSkillPacks(): Promise<{ packs: SkillPackItem[] }> {
 }
 
 export function installSkillPack(packId: string): Promise<{ installed: boolean; packId: string }> {
-  return mutateJson<{ installed: boolean; packId: string }>("/api/packs/install", "POST", { packId });
+  return mutateJson<{ installed: boolean; packId: string }>("/api/packs/install", "POST", {
+    packId,
+  });
 }
-
-
-
-
-

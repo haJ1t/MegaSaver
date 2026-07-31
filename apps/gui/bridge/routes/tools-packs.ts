@@ -36,9 +36,24 @@ export async function handleGetSkillPacks(ctx: RouteContext): Promise<void> {
     200,
     {
       packs: [
-        { id: "context-discipline", name: "Context Discipline Pack", version: "1.2.0", installed: true },
-        { id: "evidence-preservation", name: "Evidence Preservation Pack", version: "1.1.0", installed: true },
-        { id: "output-compression", name: "Output Compression Pack", version: "1.0.4", installed: true },
+        {
+          id: "context-discipline",
+          name: "Context Discipline Pack",
+          version: "1.2.0",
+          installed: true,
+        },
+        {
+          id: "evidence-preservation",
+          name: "Evidence Preservation Pack",
+          version: "1.1.0",
+          installed: true,
+        },
+        {
+          id: "output-compression",
+          name: "Output Compression Pack",
+          version: "1.0.4",
+          installed: true,
+        },
       ],
     },
     ctx.origin,

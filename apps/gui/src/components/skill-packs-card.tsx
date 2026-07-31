@@ -17,9 +17,7 @@ export function SkillPacksCard(): JSX.Element {
   const onInstall = async (packId: string) => {
     try {
       await installSkillPack(packId);
-      setPacks((prev) =>
-        prev.map((p) => (p.id === packId ? { ...p, installed: true } : p)),
-      );
+      setPacks((prev) => prev.map((p) => (p.id === packId ? { ...p, installed: true } : p)));
     } catch {
       // Ignore
     }
@@ -35,7 +33,10 @@ export function SkillPacksCard(): JSX.Element {
       </div>
       <div className="flex flex-col gap-1.5">
         {packs.map((p) => (
-          <div key={p.id} className="flex items-center justify-between p-2 rounded-md border border-border bg-surface-elevated">
+          <div
+            key={p.id}
+            className="flex items-center justify-between p-2 rounded-md border border-border bg-surface-elevated"
+          >
             <div className="flex items-center gap-2">
               <span className="font-medium text-text-primary">{p.name}</span>
               <span className="text-[10px] text-text-muted font-mono">v{p.version}</span>

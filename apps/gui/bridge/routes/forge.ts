@@ -34,7 +34,8 @@ export async function handlePostForgeLearn(ctx: RouteContext): Promise<void> {
     {
       learned: true,
       ruleId: `rule-${payload.failureId ?? "new"}`,
-      ruleTitle: payload.ruleTitle ?? "Always verify non-null state before dereferencing array indices.",
+      ruleTitle:
+        payload.ruleTitle ?? "Always verify non-null state before dereferencing array indices.",
     },
     ctx.origin,
   );

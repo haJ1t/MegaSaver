@@ -36,7 +36,8 @@ export function CacheDoctorCard(): JSX.Element {
           </span>
         </div>
         <span className="text-[11px] text-text-muted">
-          Read: {(cache.cacheReadInputTokens / 1000).toFixed(0)}k | Created: {(cache.cacheCreationInputTokens / 1000).toFixed(0)}k tokens
+          Read: {(cache.cacheReadInputTokens / 1000).toFixed(0)}k | Created:{" "}
+          {(cache.cacheCreationInputTokens / 1000).toFixed(0)}k tokens
         </span>
       </div>
       <button

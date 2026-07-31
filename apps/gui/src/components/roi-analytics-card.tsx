@@ -28,7 +28,9 @@ export function RoiAnalyticsCard(): JSX.Element {
       </div>
       <div className="flex flex-col">
         <span className="text-[11px] text-text-muted">Est. Annual</span>
-        <span className="text-lg font-semibold text-text-primary">${roi.projectedAnnualSavings}</span>
+        <span className="text-lg font-semibold text-text-primary">
+          ${roi.projectedAnnualSavings}
+        </span>
       </div>
     </div>
   );

@@ -83,7 +83,9 @@ export function HandoffCard({ workspaceKey }: { workspaceKey: string }): JSX.Ele
         <div className="p-3 rounded-md border border-border bg-surface-elevated text-xs flex flex-col gap-1">
           <div className="flex justify-between font-semibold text-text-primary">
             <span>Handoff Packet Ready → {status.targetAgent}</span>
-            <span className="text-[10px] text-accent">Redacted Findings: {status.findingsCount}</span>
+            <span className="text-[10px] text-accent">
+              Redacted Findings: {status.findingsCount}
+            </span>
           </div>
           <p className="text-[11px] text-text-muted m-0">{status.brief}</p>
         </div>

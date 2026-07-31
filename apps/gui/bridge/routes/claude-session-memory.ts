@@ -226,7 +226,13 @@ export async function handleGetSessionMemoryHistory(
 ): Promise<void> {
   const idParse = memoryEntryIdSchema.safeParse(entryId);
   if (!idParse.success) {
-    ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+    ctx.sendError(
+      ctx.res,
+      404,
+      "memory_entry_not_found",
+      `Memory entry not found: ${entryId}`,
+      ctx.origin,
+    );
     return;
   }
   const resolved = await resolveSessionWorkspace(ctx, dir, id);
@@ -238,11 +244,19 @@ export async function handleGetSessionMemoryHistory(
     const rows = readOverlayMemory(ctx.storeRoot, resolved.workspaceKey);
     const target = rows.find((r) => r.id === idParse.data);
     if (!target) {
-      ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+      ctx.sendError(
+        ctx.res,
+        404,
+        "memory_entry_not_found",
+        `Memory entry not found: ${entryId}`,
+        ctx.origin,
+      );
       return;
     }
     // Build chain from related rows
-    const chain = rows.filter((r) => r.id === target.id || r.supersedesId === target.id || target.supersedesId === r.id);
+    const chain = rows.filter(
+      (r) => r.id === target.id || r.supersedesId === target.id || target.supersedesId === r.id,
+    );
     ctx.sendJson(
       ctx.res,
       200,
@@ -268,7 +282,13 @@ export async function handlePostSessionMemoryReopen(
 ): Promise<void> {
   const idParse = memoryEntryIdSchema.safeParse(entryId);
   if (!idParse.success) {
-    ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+    ctx.sendError(
+      ctx.res,
+      404,
+      "memory_entry_not_found",
+      `Memory entry not found: ${entryId}`,
+      ctx.origin,
+    );
     return;
   }
   const resolved = await resolveSessionWorkspace(ctx, dir, id);
@@ -280,7 +300,13 @@ export async function handlePostSessionMemoryReopen(
     const rows = readOverlayMemory(ctx.storeRoot, resolved.workspaceKey);
     const index = rows.findIndex((r) => r.id === idParse.data);
     if (index === -1) {
-      ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+      ctx.sendError(
+        ctx.res,
+        404,
+        "memory_entry_not_found",
+        `Memory entry not found: ${entryId}`,
+        ctx.origin,
+      );
       return;
     }
     const prior = rows[index] as OverlayMemoryEntry;
@@ -306,7 +332,13 @@ export async function handleGetSessionMemoryExplain(
 ): Promise<void> {
   const idParse = memoryEntryIdSchema.safeParse(entryId);
   if (!idParse.success) {
-    ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+    ctx.sendError(
+      ctx.res,
+      404,
+      "memory_entry_not_found",
+      `Memory entry not found: ${entryId}`,
+      ctx.origin,
+    );
     return;
   }
   const resolved = await resolveSessionWorkspace(ctx, dir, id);
@@ -318,10 +350,17 @@ export async function handleGetSessionMemoryExplain(
     const rows = readOverlayMemory(ctx.storeRoot, resolved.workspaceKey);
     const target = rows.find((r) => r.id === idParse.data);
     if (!target) {
-      ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+      ctx.sendError(
+        ctx.res,
+        404,
+        "memory_entry_not_found",
+        `Memory entry not found: ${entryId}`,
+        ctx.origin,
+      );
       return;
     }
-    const confidenceMultiplier = target.confidence === "high" ? 1.0 : target.confidence === "medium" ? 0.75 : 0.5;
+    const confidenceMultiplier =
+      target.confidence === "high" ? 1.0 : target.confidence === "medium" ? 0.75 : 0.5;
     ctx.sendJson(
       ctx.res,
       200,
@@ -339,4 +378,3 @@ export async function handleGetSessionMemoryExplain(
     handleCaughtError(ctx.res, ctx.origin, err, ctx.sendError);
   }
 }
-

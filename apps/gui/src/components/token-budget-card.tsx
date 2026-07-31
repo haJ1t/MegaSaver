@@ -43,7 +43,8 @@ export function TokenBudgetCard(): JSX.Element {
           )}
         </div>
         <span className="text-[11px] text-text-muted">
-          Spent: {(budget.spentTokens / 1000000).toFixed(2)}M / Limit: {(budget.monthlyBudgetTokens / 1000000).toFixed(2)}M tokens
+          Spent: {(budget.spentTokens / 1000000).toFixed(2)}M / Limit:{" "}
+          {(budget.monthlyBudgetTokens / 1000000).toFixed(2)}M tokens
         </span>
       </div>
       <div className="flex items-center gap-2">

@@ -33,7 +33,10 @@ export function ForgeLearningCard(): JSX.Element {
         <span className="text-[10px] text-accent font-mono">Auto-Rule Generator</span>
       </div>
       {data.failures.map((f) => (
-        <div key={f.id} className="flex items-center justify-between p-2 rounded-md border border-border bg-surface-elevated">
+        <div
+          key={f.id}
+          className="flex items-center justify-between p-2 rounded-md border border-border bg-surface-elevated"
+        >
           <div className="flex flex-col">
             <span className="font-medium text-text-primary">{f.pattern}</span>
             <span className="text-[10px] text-text-muted">Occurrences: {f.occurrences}</span>

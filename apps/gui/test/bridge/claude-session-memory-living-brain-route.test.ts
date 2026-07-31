@@ -55,7 +55,11 @@ describe("Living Brain extended memory routes", () => {
       await fetch(base(), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ scope: "project", content: "Superseded decision", type: "decision" }),
+        body: JSON.stringify({
+          scope: "project",
+          content: "Superseded decision",
+          type: "decision",
+        }),
       })
     ).json();
 

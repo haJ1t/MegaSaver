@@ -22,8 +22,8 @@ export function stampWorkspaceTelemetry<T extends Record<string, unknown>>(
   const workspaceKey: WorkspaceKey = encodeWorkspaceKey(options.workspacePath);
   const fresh = isStoreFresh(options.storeRoot);
   const rawSessionId =
-    "liveSessionId" in event && typeof event["liveSessionId"] === "string"
-      ? (event["liveSessionId"] as string)
+    "liveSessionId" in event && typeof event.liveSessionId === "string"
+      ? (event.liveSessionId as string)
       : undefined;
 
   return {

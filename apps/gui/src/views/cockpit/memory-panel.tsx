@@ -190,7 +190,8 @@ export function MemoryPanel({ dir, id }: { dir: string; id: string }): JSX.Eleme
             </button>
           </div>
           <p className="text-[11px] text-text-muted">
-            Confidence: {activeExplain.confidence} (Effective: {activeExplain.effectiveConfidence}) | Source: {activeExplain.source}
+            Confidence: {activeExplain.confidence} (Effective: {activeExplain.effectiveConfidence})
+            | Source: {activeExplain.source}
           </p>
         </div>
       )}
