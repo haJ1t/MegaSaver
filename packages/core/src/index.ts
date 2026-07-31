@@ -242,6 +242,15 @@ export {
   prefetchToLocalCache,
   getPrefetchedContent,
 } from "./speculative-prefetch.js";
+export {
+  evaluateShadowWorktree,
+  type ShadowVerdict,
+} from "./shadow-verdict.js";
+export {
+  parseSABGrammarV0,
+  type SABGrammarRule,
+} from "./sab-grammar.js";
+
 
 
 

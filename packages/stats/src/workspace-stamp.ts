@@ -25,7 +25,7 @@ export function stampWorkspaceTelemetry<T extends Record<string, any>>(
   return {
     ...event,
     workspaceKey,
-    liveSessionId: options.liveSessionId ?? event.liveSessionId ?? 'sess_default',
+    liveSessionId: options.liveSessionId ?? (event as any).liveSessionId ?? 'sess_default',
     isFreshStore: fresh,
     createdAt: new Date().toISOString(),
   };
