@@ -303,7 +303,7 @@ function SavingsHeadlineStrip({
       <span className="tabular-nums">≈{reclaimed} sessions reclaimed</span>
       {headline.tokensRefetched > 0 ? (
         <span className="text-text-muted tabular-nums">
-          {` · net of ${compactTokens(headline.tokensRefetched)} tokens re-fetched`}
+          {` · net of ${compactTokens(headline.tokensRefetched)} tokens re-fetched + overhead`}
         </span>
       ) : null}
     </div>

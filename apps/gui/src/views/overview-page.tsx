@@ -51,6 +51,11 @@ function compact(n: number): string {
   return String(Math.round(n));
 }
 
+// U+2212 minus so a losing window renders "−1.0k", matching the CLI surfaces.
+function compactSigned(n: number): string {
+  return n < 0 ? `−${compact(-n)}` : compact(n);
+}
+
 function Card({
   label,
   children,
@@ -214,11 +219,12 @@ export function OverviewPage({
               ? `≈${headline.contextWindowsReclaimed.toFixed(1)} context windows reclaimed across ${totals.workspaceCount} workspace${totals.workspaceCount === 1 ? "" : "s"}.`
               : "No savings recorded yet — turn the saver on to start."}
           </p>
-          {/* S4-1: the $ above prices the signed NET; keep the gross visible
-              as the breakdown so an expansion-heavy session reads honestly. */}
+          {/* S4-1: the $ above prices the net clamped at 0; the breakdown
+              renders the SIGNED net so a window that re-fetched more than it
+              saved reads as the loss it is, never a flattering zero. */}
           {headline && headline.tokensRefetched > 0 ? (
             <p className="mt-1 mb-0 text-xs text-text-muted tabular-nums">
-              {`≈${compact(headline.grossTokensSaved)} tokens saved − ${compact(headline.tokensRefetched)} re-fetched = ${compact(headline.tokensSaved)} net`}
+              {`≈${compact(headline.grossTokensSaved)} tokens saved − ${compact(headline.tokensRefetched)} re-fetched + overhead = ${compactSigned(headline.netTokensSigned)} net`}
             </p>
           ) : null}
           <p className="mt-4 mb-0 pt-3.5 border-t border-line-soft text-xs text-text-muted">

@@ -242,7 +242,9 @@ describe("runHooksStatus — overlay keyspace union (E27)", () => {
     const { out, code } = await runStatus({ sessionId: OVERLAY_ID });
     expect(code).toBe(0);
     const text = out.join("\n");
-    expect(text).toContain("saved: 700 B net (900 B saved − 200 B re-fetched, 90.0%)");
+    expect(text).toContain(
+      "saved: 700 B net (900 B saved − 200 B re-fetched + overhead, 90.0% gross)",
+    );
   });
 
   it("falls back to the gross line when the summary predates signed deltas", async () => {
@@ -277,13 +279,13 @@ describe("runHooksStatus — cross-workspace aggregate (E28, no-arg form)", () =
     expect(code).toBe(0);
     const text = out.join("\n");
     expect(text).toContain(
-      `${WK1}: 1 sessions, 2 events, net saved 700 B (900 B saved − 200 B re-fetched, 90.0%)`,
+      `${WK1}: 1 sessions, 2 events, net saved 700 B (900 B saved − 200 B re-fetched + overhead, 90.0% gross)`,
     );
     expect(text).toContain(
-      `${WK2}: 1 sessions, 3 events, net saved 100 B (100 B saved − 0 B re-fetched, 50.0%)`,
+      `${WK2}: 1 sessions, 3 events, net saved 100 B (100 B saved − 0 B re-fetched + overhead, 50.0% gross)`,
     );
     expect(text).toContain(
-      "TOTAL: 2 sessions across 2 workspaces, net saved 800 B (1000 B saved − 200 B re-fetched, 83.3%)",
+      "TOTAL: 2 sessions across 2 workspaces, net saved 800 B (1000 B saved − 200 B re-fetched + overhead, 83.3% gross)",
     );
   });
 

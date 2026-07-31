@@ -59,14 +59,18 @@ describe("computeSavingsHeadline — signed net (S4-1)", () => {
       savingRatio: 0.41,
     });
     expect(headline.tokensSaved).toBe(1_000_000);
+    expect(headline.netTokensSigned).toBe(1_000_000);
     expect(headline.grossTokensSaved).toBe(2_000_000);
     expect(headline.tokensRefetched).toBe(1_000_000);
-    expect(headline.grossTokensSaved - headline.tokensRefetched).toBe(headline.tokensSaved);
+    expect(headline.grossTokensSaved - headline.tokensRefetched).toBe(headline.netTokensSigned);
     expect(headline.dollarsSaved).toBe(3.0);
     expect(headline.contextWindowsReclaimed).toBe(5);
   });
 
-  it("clamps a negative net at zero instead of pricing a negative saving", () => {
+  it("clamps the priced net at zero but keeps the signed loss and true refetch", () => {
+    // 100k gross tokens, signed net −25k: the $ must not go negative, but the
+    // refetch derives from the UNCLAMPED delta (125k > gross) so the loss is
+    // visible — clamping it at gross hid exactly the losing sessions.
     const headline = computeSavingsHeadline({
       bytesSavedTotal: 400_000,
       deltaBytesTotal: -100_000,
@@ -75,8 +79,10 @@ describe("computeSavingsHeadline — signed net (S4-1)", () => {
     });
     expect(headline.tokensSaved).toBe(0);
     expect(headline.dollarsSaved).toBe(0);
+    expect(headline.netTokensSigned).toBe(-25_000);
     expect(headline.grossTokensSaved).toBe(100_000);
-    expect(headline.tokensRefetched).toBe(100_000);
+    expect(headline.tokensRefetched).toBe(125_000);
+    expect(headline.grossTokensSaved - headline.tokensRefetched).toBe(headline.netTokensSigned);
   });
 
   it("falls back to gross when the signed total is absent (legacy callers)", () => {
@@ -86,6 +92,7 @@ describe("computeSavingsHeadline — signed net (S4-1)", () => {
       savingRatio: 0.4,
     });
     expect(headline.tokensSaved).toBe(1_000_000);
+    expect(headline.netTokensSigned).toBe(1_000_000);
     expect(headline.grossTokensSaved).toBe(1_000_000);
     expect(headline.tokensRefetched).toBe(0);
   });

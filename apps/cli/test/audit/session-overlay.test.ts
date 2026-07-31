@@ -143,7 +143,9 @@ describe("mega audit session — overlay fallback", () => {
 
     expect(code).toBe(0);
     const out = lines.join("\n");
-    expect(out).toContain("saved:   60000 bytes net (73493 B saved − 13493 B re-fetched, 81%)");
+    expect(out).toContain(
+      "saved:   60000 bytes net (73493 B saved − 13493 B re-fetched + overhead, 81% gross)",
+    );
   });
 
   it("resolves the overlay summary across multiple workspaces deterministically", async () => {
