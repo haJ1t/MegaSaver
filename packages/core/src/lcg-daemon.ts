@@ -7,11 +7,11 @@ export interface GraphDelta {
 
 export function computeGraphDelta(filePath: string, changes: string[]): GraphDelta {
   const start = performance.now();
-  const changedSymbols = changes.map((c) => c.match(/function\s+(\w+)/)?.[1] ?? 'foo');
+  const changedSymbols = changes.map((c) => c.match(/function\s+(\w+)/)?.[1] ?? "foo");
   return {
     filePath,
     changedSymbols,
-    impactRadius: ['dependent-module-a', 'dependent-module-b'],
+    impactRadius: ["dependent-module-a", "dependent-module-b"],
     calculationTimeMs: performance.now() - start,
   };
 }

@@ -20,9 +20,35 @@ import { dispatchClaudeHooks } from "./routes/claude-hooks.js";
 import {
   handleDeleteSessionMemory,
   handleGetSessionMemory,
+  handleGetSessionMemoryExplain,
+  handleGetSessionMemoryHistory,
   handlePatchSessionMemory,
   handlePostSessionMemory,
+  handlePostSessionMemoryReopen,
 } from "./routes/claude-session-memory.js";
+import {
+  handleDeleteBudget,
+  handleGetAlerts,
+  handleGetBenchReport,
+  handleGetBudget,
+  handleGetRoi,
+  handlePostBudget,
+} from "./routes/analytics.js";
+import { handleGetBrainSyncStatus, handlePostBrainSyncTrigger } from "./routes/brain-sync.js";
+import { handleGetCacheStatus, handlePostCacheClear } from "./routes/cache.js";
+import {
+  handleGetFirewallStatus,
+  handleGetForgeFailures,
+  handlePostForgeLearn,
+} from "./routes/forge.js";
+import { handleDeleteHandoffClear, handlePostHandoffPack } from "./routes/handoff.js";
+import {
+  handleGetSkillPacks,
+  handleGetToolRouter,
+  handlePostSkillPackInstall,
+  handlePostToolRouter,
+} from "./routes/tools-packs.js";
+import { handleGetSessionWarmup } from "./routes/warmup.js";
 import { handleGetSessionTasks } from "./routes/claude-session-tasks.js";
 import { dispatchSessionTokenSaver } from "./routes/claude-session-token-saver.js";
 import {
@@ -349,6 +375,138 @@ export function createBridgeHandler(opts: BridgeHandlerOptions): BridgeHandler {
       const id = decodeURIComponent(memoryGraphMatch[2] as string);
       await handleGetMemoryGraph(ctx, dir, id);
       return;
+    }
+
+    if (path === "/api/roi") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleGetRoi(ctx);
+      return;
+    }
+    if (path === "/api/savings/budget") {
+      if (method === "GET") {
+        await handleGetBudget(ctx);
+        return;
+      }
+      if (method === "POST") {
+        await handlePostBudget(ctx);
+        return;
+      }
+      if (method === "DELETE") {
+        await handleDeleteBudget(ctx);
+        return;
+      }
+      return methodNotAllowed(res, method, origin);
+    }
+    if (path === "/api/alerts") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleGetAlerts(ctx);
+      return;
+    }
+    if (path === "/api/bench/report") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleGetBenchReport(ctx);
+      return;
+    }
+    if (path === "/api/forge/failures") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleGetForgeFailures(ctx);
+      return;
+    }
+    if (path === "/api/forge/learn") {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      await handlePostForgeLearn(ctx);
+      return;
+    }
+    if (path === "/api/firewall/status") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleGetFirewallStatus(ctx);
+      return;
+    }
+    if (path === "/api/cache/status") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleGetCacheStatus(ctx);
+      return;
+    }
+    if (path === "/api/cache/clear") {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      await handlePostCacheClear(ctx);
+      return;
+    }
+    if (path === "/api/tools/router") {
+      if (method === "GET") {
+        await handleGetToolRouter(ctx);
+        return;
+      }
+      if (method === "POST") {
+        await handlePostToolRouter(ctx);
+        return;
+      }
+      return methodNotAllowed(res, method, origin);
+    }
+    if (path === "/api/packs/installed") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleGetSkillPacks(ctx);
+      return;
+    }
+    if (path === "/api/packs/install") {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      await handlePostSkillPackInstall(ctx);
+      return;
+    }
+
+    if (path === "/api/brain/sync/status") {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      await handleGetBrainSyncStatus(ctx);
+      return;
+    }
+    if (path === "/api/brain/sync/trigger") {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      await handlePostBrainSyncTrigger(ctx);
+      return;
+    }
+    if (path === "/api/handoff/pack") {
+      if (method !== "POST") return methodNotAllowed(res, method, origin);
+      await handlePostHandoffPack(ctx);
+      return;
+    }
+    if (path === "/api/handoff/clear") {
+      if (method !== "DELETE") return methodNotAllowed(res, method, origin);
+      await handleDeleteHandoffClear(ctx);
+      return;
+    }
+
+    const claudeWarmupMatch = path.match(/^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/warmup$/);
+    if (claudeWarmupMatch) {
+      if (method !== "GET") return methodNotAllowed(res, method, origin);
+      const dir = decodeURIComponent(claudeWarmupMatch[1] as string);
+      const id = decodeURIComponent(claudeWarmupMatch[2] as string);
+      await handleGetSessionWarmup(ctx, dir, id);
+      return;
+    }
+
+    const claudeMemoryActionMatch = path.match(
+      /^\/api\/claude-sessions\/([^/]+)\/([^/]+?)\/memory\/([^/]+)\/(history|reopen|explain)$/,
+    );
+    if (claudeMemoryActionMatch) {
+      const dir = decodeURIComponent(claudeMemoryActionMatch[1] as string);
+      const id = decodeURIComponent(claudeMemoryActionMatch[2] as string);
+      const entryId = decodeURIComponent(claudeMemoryActionMatch[3] as string);
+      const action = claudeMemoryActionMatch[4];
+      if (action === "history") {
+        if (method !== "GET") return methodNotAllowed(res, method, origin);
+        await handleGetSessionMemoryHistory(ctx, dir, id, entryId);
+        return;
+      }
+      if (action === "reopen") {
+        if (method !== "POST") return methodNotAllowed(res, method, origin);
+        await handlePostSessionMemoryReopen(ctx, dir, id, entryId);
+        return;
+      }
+      if (action === "explain") {
+        if (method !== "GET") return methodNotAllowed(res, method, origin);
+        await handleGetSessionMemoryExplain(ctx, dir, id, entryId);
+        return;
+      }
     }
 
     const claudeMemoryMatch = path.match(

@@ -217,3 +217,126 @@ export async function handleDeleteSessionMemory(
     handleCaughtError(ctx.res, ctx.origin, err, ctx.sendError);
   }
 }
+
+export async function handleGetSessionMemoryHistory(
+  ctx: RouteContext,
+  dir: string,
+  id: string,
+  entryId: string,
+): Promise<void> {
+  const idParse = memoryEntryIdSchema.safeParse(entryId);
+  if (!idParse.success) {
+    ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+    return;
+  }
+  const resolved = await resolveSessionWorkspace(ctx, dir, id);
+  if (resolved === "unsafe" || resolved === "not_found") {
+    sendSessionResolveError(ctx, resolved, dir, id);
+    return;
+  }
+  try {
+    const rows = readOverlayMemory(ctx.storeRoot, resolved.workspaceKey);
+    const target = rows.find((r) => r.id === idParse.data);
+    if (!target) {
+      ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+      return;
+    }
+    // Build chain from related rows
+    const chain = rows.filter((r) => r.id === target.id || r.supersedesId === target.id || target.supersedesId === r.id);
+    ctx.sendJson(
+      ctx.res,
+      200,
+      {
+        entryId: target.id,
+        chain,
+        supersedesId: target.supersedesId ?? null,
+        validFrom: target.validFrom ?? target.createdAt,
+        validTo: target.validTo ?? null,
+      },
+      ctx.origin,
+    );
+  } catch (err) {
+    handleCaughtError(ctx.res, ctx.origin, err, ctx.sendError);
+  }
+}
+
+export async function handlePostSessionMemoryReopen(
+  ctx: RouteContext,
+  dir: string,
+  id: string,
+  entryId: string,
+): Promise<void> {
+  const idParse = memoryEntryIdSchema.safeParse(entryId);
+  if (!idParse.success) {
+    ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+    return;
+  }
+  const resolved = await resolveSessionWorkspace(ctx, dir, id);
+  if (resolved === "unsafe" || resolved === "not_found") {
+    sendSessionResolveError(ctx, resolved, dir, id);
+    return;
+  }
+  try {
+    const rows = readOverlayMemory(ctx.storeRoot, resolved.workspaceKey);
+    const index = rows.findIndex((r) => r.id === idParse.data);
+    if (index === -1) {
+      ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+      return;
+    }
+    const prior = rows[index] as OverlayMemoryEntry;
+    const updated = overlayMemoryEntrySchema.parse({
+      ...prior,
+      validTo: null,
+      updatedAt: ctx.now(),
+    });
+    const next = rows.slice();
+    next[index] = updated;
+    writeOverlayMemory(ctx.storeRoot, resolved.workspaceKey, next);
+    ctx.sendJson(ctx.res, 200, updated, ctx.origin);
+  } catch (err) {
+    handleCaughtError(ctx.res, ctx.origin, err, ctx.sendError);
+  }
+}
+
+export async function handleGetSessionMemoryExplain(
+  ctx: RouteContext,
+  dir: string,
+  id: string,
+  entryId: string,
+): Promise<void> {
+  const idParse = memoryEntryIdSchema.safeParse(entryId);
+  if (!idParse.success) {
+    ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+    return;
+  }
+  const resolved = await resolveSessionWorkspace(ctx, dir, id);
+  if (resolved === "unsafe" || resolved === "not_found") {
+    sendSessionResolveError(ctx, resolved, dir, id);
+    return;
+  }
+  try {
+    const rows = readOverlayMemory(ctx.storeRoot, resolved.workspaceKey);
+    const target = rows.find((r) => r.id === idParse.data);
+    if (!target) {
+      ctx.sendError(ctx.res, 404, "memory_entry_not_found", `Memory entry not found: ${entryId}`, ctx.origin);
+      return;
+    }
+    const confidenceMultiplier = target.confidence === "high" ? 1.0 : target.confidence === "medium" ? 0.75 : 0.5;
+    ctx.sendJson(
+      ctx.res,
+      200,
+      {
+        entryId: target.id,
+        confidence: target.confidence,
+        effectiveConfidence: confidenceMultiplier,
+        source: target.source,
+        scope: target.scope,
+        isCurrent: target.validTo == null,
+      },
+      ctx.origin,
+    );
+  } catch (err) {
+    handleCaughtError(ctx.res, ctx.origin, err, ctx.sendError);
+  }
+}
+

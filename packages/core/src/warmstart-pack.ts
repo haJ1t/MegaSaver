@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash } from "node:crypto";
 
 export interface WarmStartOptions {
   maxTokens?: number;
@@ -17,7 +17,7 @@ export interface WarmStartPack {
 
 export async function generateWarmStartContextPack(
   intent: string,
-  options: WarmStartOptions = {}
+  options: WarmStartOptions = {},
 ): Promise<WarmStartPack> {
   const maxTokens = options.maxTokens ?? 4000;
   const timeoutMs = options.timeoutMs ?? 500;
@@ -27,8 +27,8 @@ export async function generateWarmStartContextPack(
     if (timeoutMs < 5) {
       await new Promise((r) => setTimeout(r, 10));
     }
-    const repoMap = options.repoMapSummary ?? 'core, stats, warmstart';
-    const files = (options.candidateFiles ?? []).join(', ');
+    const repoMap = options.repoMapSummary ?? "core, stats, warmstart";
+    const files = (options.candidateFiles ?? []).join(", ");
 
     let rawContext = `<!-- mega-warmstart: intent="${intent}" -->\n[repo_map_summary: ${repoMap}]\n[candidate_files: ${files}]`;
 
@@ -39,16 +39,16 @@ export async function generateWarmStartContextPack(
     }
 
     const tokenEstimate = Math.ceil(rawContext.length / 4);
-    const contentHash = createHash('sha256').update(rawContext).digest('hex').slice(0, 16);
+    const contentHash = createHash("sha256").update(rawContext).digest("hex").slice(0, 16);
 
     const elapsed = Date.now() - startTime;
     if (elapsed > timeoutMs) {
       return {
         intent,
-        additionalContext: '',
+        additionalContext: "",
         tokenEstimate: 0,
         isTimedOut: true,
-        contentHash: 'e3b0c44298fc1c14',
+        contentHash: "e3b0c44298fc1c14",
       };
     }
 
@@ -65,10 +65,10 @@ export async function generateWarmStartContextPack(
     setTimeout(() => {
       resolve({
         intent,
-        additionalContext: '',
+        additionalContext: "",
         tokenEstimate: 0,
         isTimedOut: true,
-        contentHash: 'e3b0c44298fc1c14',
+        contentHash: "e3b0c44298fc1c14",
       });
     }, timeoutMs);
   });

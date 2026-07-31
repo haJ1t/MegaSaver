@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { HandoffCard } from "../components/handoff-card.js";
+import { SkillPacksCard } from "../components/skill-packs-card.js";
 import type { WorkspaceOption } from "../lib/workspace-context.js";
 import { WorkspaceContextPanel } from "./cockpit/workspace-context-panel.js";
 import { WorkspaceIndexPanel } from "./cockpit/workspace-index-panel.js";
@@ -40,6 +42,8 @@ export function WorkspacePage({
         <p className="text-sm text-text-muted">Select a workspace to inspect.</p>
       ) : (
         <>
+          <HandoffCard workspaceKey={key} />
+
           <div
             role="tablist"
             aria-label="Workspace facets"
@@ -92,6 +96,8 @@ export function WorkspacePage({
             {tab === "Tools" ? <WorkspaceToolsPanel workspaceKey={key} /> : null}
             {tab === "Permissions" ? <WorkspacePermissionsPanel workspaceKey={key} /> : null}
           </section>
+
+          <SkillPacksCard />
         </>
       )}
     </div>

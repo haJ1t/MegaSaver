@@ -1,11 +1,17 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { BrainSyncCard } from "../../components/brain-sync-card.js";
 import { ErrorState, LoadingState } from "../../components/states.js";
 import type { BridgeError } from "../../components/states.js";
 import {
+  type MemoryExplainResponse,
+  type MemoryHistoryResponse,
   type OverlayMemoryEntry,
   createSessionMemory,
   deleteSessionMemory,
+  fetchMemoryExplain,
+  fetchMemoryHistory,
   fetchSessionMemory,
+  reopenSessionMemory,
 } from "../../lib/claude-sessions-client.js";
 
 export function MemoryPanel({ dir, id }: { dir: string; id: string }): JSX.Element {
@@ -15,6 +21,9 @@ export function MemoryPanel({ dir, id }: { dir: string; id: string }): JSX.Eleme
   const [draft, setDraft] = useState("");
   const [scope, setScope] = useState<"session" | "project">("session");
   const [refreshNonce, setRefreshNonce] = useState(0);
+
+  const [activeHistory, setActiveHistory] = useState<MemoryHistoryResponse | null>(null);
+  const [activeExplain, setActiveExplain] = useState<MemoryExplainResponse | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce intentionally re-triggers the load effect
   useEffect(() => {
@@ -69,12 +78,50 @@ export function MemoryPanel({ dir, id }: { dir: string; id: string }): JSX.Eleme
     [dir, id],
   );
 
+  const onHistory = useCallback(
+    async (entryId: string) => {
+      try {
+        const history = await fetchMemoryHistory(dir, id, entryId);
+        setActiveHistory(history);
+      } catch (err) {
+        setError(err as BridgeError);
+      }
+    },
+    [dir, id],
+  );
+
+  const onExplain = useCallback(
+    async (entryId: string) => {
+      try {
+        const explain = await fetchMemoryExplain(dir, id, entryId);
+        setActiveExplain(explain);
+      } catch (err) {
+        setError(err as BridgeError);
+      }
+    },
+    [dir, id],
+  );
+
+  const onReopen = useCallback(
+    async (entryId: string) => {
+      try {
+        const updated = await reopenSessionMemory(dir, id, entryId);
+        setRows((prev) => (prev ?? []).map((r) => (r.id === entryId ? updated : r)));
+      } catch (err) {
+        setError(err as BridgeError);
+      }
+    },
+    [dir, id],
+  );
+
   return (
     <section
       aria-label="Session memory"
       className="flex flex-col gap-3 px-6 py-6 overflow-y-auto flex-1 min-h-0"
     >
-      <h3 className="text-sm text-text-muted uppercase tracking-widest">Memory</h3>
+      <h3 className="text-sm text-text-muted uppercase tracking-widest">Memory (Living Brain)</h3>
+
+      <BrainSyncCard />
 
       <form onSubmit={onCreate} className="flex flex-col gap-2">
         <label htmlFor="memory-draft" className="text-xs text-text-muted">
@@ -111,6 +158,43 @@ export function MemoryPanel({ dir, id }: { dir: string; id: string }): JSX.Eleme
       {state === "ready" && rows && rows.length === 0 && (
         <p className="text-xs text-text-muted">No memory yet.</p>
       )}
+
+      {activeHistory && (
+        <div className="p-3 rounded-md border border-border bg-surface-elevated text-xs flex flex-col gap-1">
+          <div className="flex justify-between items-center font-semibold">
+            <span>Lineage History</span>
+            <button
+              type="button"
+              onClick={() => setActiveHistory(null)}
+              className="text-text-muted cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="text-[11px] text-text-muted">
+            Entry: {activeHistory.entryId} (Chain: {activeHistory.chain.length} versions)
+          </p>
+        </div>
+      )}
+
+      {activeExplain && (
+        <div className="p-3 rounded-md border border-border bg-surface-elevated text-xs flex flex-col gap-1">
+          <div className="flex justify-between items-center font-semibold">
+            <span>Memory Ranking Explain</span>
+            <button
+              type="button"
+              onClick={() => setActiveExplain(null)}
+              className="text-text-muted cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="text-[11px] text-text-muted">
+            Confidence: {activeExplain.confidence} (Effective: {activeExplain.effectiveConfidence}) | Source: {activeExplain.source}
+          </p>
+        </div>
+      )}
+
       {rows && rows.length > 0 && (
         <ul className="flex flex-col gap-1">
           {rows.map((row) => (
@@ -120,6 +204,29 @@ export function MemoryPanel({ dir, id }: { dir: string; id: string }): JSX.Eleme
             >
               <span className="text-text-primary flex-1">{row.content}</span>
               <span className="text-text-muted">{row.scope}</span>
+              <button
+                type="button"
+                onClick={() => onHistory(row.id)}
+                className="text-text-muted hover:text-text-primary cursor-pointer text-[11px]"
+              >
+                History
+              </button>
+              <button
+                type="button"
+                onClick={() => onExplain(row.id)}
+                className="text-text-muted hover:text-text-primary cursor-pointer text-[11px]"
+              >
+                Explain
+              </button>
+              {row.validTo != null && (
+                <button
+                  type="button"
+                  onClick={() => onReopen(row.id)}
+                  className="text-accent hover:underline cursor-pointer text-[11px]"
+                >
+                  Reopen
+                </button>
+              )}
               <button
                 type="button"
                 aria-label={`Delete ${row.title}`}

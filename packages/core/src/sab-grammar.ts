@@ -8,7 +8,7 @@ export interface SABGrammarRule {
 export function parseSABGrammarV0(
   symbolName: string,
   language: string,
-  tokenizerTarget: string
+  tokenizerTarget: string,
 ): SABGrammarRule {
   return {
     symbolName,

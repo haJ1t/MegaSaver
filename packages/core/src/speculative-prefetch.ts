@@ -1,4 +1,8 @@
-export function prefetchToLocalCache(uri: string, content: string, cache: Map<string, string>): void {
+export function prefetchToLocalCache(
+  uri: string,
+  content: string,
+  cache: Map<string, string>,
+): void {
   cache.set(uri, content);
 }
 
