@@ -13,6 +13,41 @@ export interface MeshHandle {
   kind: "chunk-set" | "ast-skeleton" | "graph-slice" | "handoff" | "verdict";
 }
 
+export interface ResolveMeshOptions {
+  requestedWorkspacePath: string;
+  requestedRunNamespace: string;
+}
+
+/**
+ * Parses a canonical msr://<ws>/<ns>/<hash>#kind URI into structured components.
+ * Returns null if URI format is invalid.
+ */
+export function parseMeshUri(uri: string): {
+  workspaceKey: WorkspaceKey;
+  runNamespace: string;
+  contentHash: string;
+  kind: string;
+} | null {
+  if (!uri.startsWith("msr://")) return null;
+
+  const withoutScheme = uri.slice(6); // remove msr://
+  const [pathPart, kindPart] = withoutScheme.split("#");
+  if (!pathPart) return null;
+
+  const segments = pathPart.split("/");
+  if (segments.length !== 3) return null;
+
+  const [workspaceKey, runNamespace, contentHash] = segments;
+  if (!workspaceKey || !runNamespace || !contentHash) return null;
+
+  return {
+    workspaceKey: workspaceKey as WorkspaceKey,
+    runNamespace,
+    contentHash,
+    kind: kindPart ?? "chunk-set",
+  };
+}
+
 /**
  * Mints a namespace-isolated MeshHandle (I8 compliance).
  * Prevents cross-session GC clobbering (E14 root cause fix).
@@ -44,6 +79,38 @@ export function createMeshHandle(
   };
 }
 
-export function resolveMeshHandle(uri: string, store: Map<string, string>): string | null {
+/**
+ * Resolves a MeshHandle or URI from the CAS store with I8 workspace & namespace protection.
+ * Rejects resolution if requested workspaceKey or runNamespace does not match the handle (workspace_mismatch).
+ */
+export function resolveMeshHandle(
+  handleOrUri: MeshHandle | string,
+  store: Map<string, string>,
+  options?: ResolveMeshOptions,
+): string | null {
+  const uri = typeof handleOrUri === "string" ? handleOrUri : handleOrUri.uri;
+
+  if (options) {
+    const parsed = parseMeshUri(uri);
+    if (parsed) {
+      const requestedKey = encodeWorkspaceKey(options.requestedWorkspacePath);
+      if (
+        requestedKey !== parsed.workspaceKey ||
+        options.requestedRunNamespace !== parsed.runNamespace
+      ) {
+        // I8 Enforcement: Reject cross-workspace / cross-namespace resolution
+        return null;
+      }
+    } else if (typeof handleOrUri !== "string") {
+      const requestedKey = encodeWorkspaceKey(options.requestedWorkspacePath);
+      if (
+        requestedKey !== handleOrUri.workspaceKey ||
+        options.requestedRunNamespace !== handleOrUri.runNamespace
+      ) {
+        return null;
+      }
+    }
+  }
+
   return store.get(uri) ?? null;
 }

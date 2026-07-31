@@ -27,7 +27,21 @@ export async function generateWarmStartContextPack(
 ): Promise<WarmStartPack> {
   const maxTokens = options.maxTokens ?? 4000;
   const timeoutMs = options.timeoutMs ?? 500;
-  const startTime = Date.now();
+
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<WarmStartPack>((resolve) => {
+    timerId = setTimeout(() => {
+      resolve({
+        intent,
+        additionalContext: "",
+        characterCount: 0,
+        isTimedOut: true,
+        contentHash: "e3b0c44298fc1c14",
+        isScaffold: true,
+      });
+    }, timeoutMs);
+  });
 
   const assemblyPromise = (async (): Promise<WarmStartPack> => {
     const repoMap = options.repoMapSummary ?? "";
@@ -44,18 +58,6 @@ export async function generateWarmStartContextPack(
     const characterCount = rawContext.length;
     const contentHash = createHash("sha256").update(rawContext).digest("hex").slice(0, 16);
 
-    const elapsed = Date.now() - startTime;
-    if (elapsed >= timeoutMs) {
-      return {
-        intent,
-        additionalContext: "",
-        characterCount: 0,
-        isTimedOut: true,
-        contentHash: "e3b0c44298fc1c14",
-        isScaffold: true,
-      };
-    }
-
     return {
       intent,
       additionalContext: rawContext,
@@ -66,18 +68,11 @@ export async function generateWarmStartContextPack(
     };
   })();
 
-  const timeoutPromise = new Promise<WarmStartPack>((resolve) => {
-    setTimeout(() => {
-      resolve({
-        intent,
-        additionalContext: "",
-        characterCount: 0,
-        isTimedOut: true,
-        contentHash: "e3b0c44298fc1c14",
-        isScaffold: true,
-      });
-    }, timeoutMs);
-  });
-
-  return Promise.race([assemblyPromise, timeoutPromise]);
+  try {
+    return await Promise.race([assemblyPromise, timeoutPromise]);
+  } finally {
+    if (timerId !== undefined) {
+      clearTimeout(timerId);
+    }
+  }
 }

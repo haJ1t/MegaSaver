@@ -68,7 +68,14 @@ export {
   resetOverlayOnDisable,
 } from "./store.js";
 
-export { StatsError, statsErrorCodeSchema, type StatsErrorCode } from "./errors.js";
+export {
+  StatsError,
+  statsErrorCodeSchema,
+  type StatsErrorCode,
+  TelemetryValidationError,
+  telemetryValidationErrorCodeSchema,
+  type TelemetryValidationErrorCode,
+} from "./errors.js";
 
 export {
   type AdoptionMetrics,
