@@ -8298,3 +8298,72 @@ Merged PR #327 (`feat/quantum-context-engine-v3`) into `main`. Implemented Tasks
 
 Verified via full `pnpm verify` DoD gate (60/60 turbo tasks successful, 1474 tests passed, 0 type errors, conventions sync check ok) and all GitHub Actions / Vercel CI checks green. Local `main` rebased and synced with `origin/main`.
 
+
+## [2026-08-01] spec | child-spec #2: bench-replay real gate run
+
+`docs/superpowers/specs/2026-08-01-bench-replay-real-gate-run-design.md` — HIGH,
+draft, closes Phase 0 by settling A4's one open term, `S`.
+
+The spec's premise is that the blocker is **not budget, it is an unproven
+instrument**. `S = 1.199x` is modelled only; the three paid attempts failed for
+three different reasons (corpus 0/288 eligible; order-sensitive 1.598 vs 1.197
+against a ≤0.05 effect; credit exhaustion at request 16 of arm 2). The
+per-arm-RUN cache namespacing built to remove the warming asymmetry has never
+run against the live API — and its predecessor was **inert while every test
+passed**, because the marker rode `system[0]`, a block the platform strips.
+
+Centrepiece: a **live cache-isolation probe** (Task A) that gates all spending.
+Four single-request runs in two cells — POS (`ns_P`, `ns_P`) proves the probe can
+observe a `cache_read` at all; NEG (`ns_N1`, `ns_N2`) asserts it cannot. `k = 1`
+so no intra-run warming can confound read attribution; cells use disjoint
+namespaces so they cannot warm each other. `isolationLive = POS.runB.cache_read
+> 0 && NEG.runB.cache_read / POS.runB.cache_read < 0.10`. The signal is derived
+from the API's own `usage`, because a test that checks what we send cannot see
+what the platform does with it.
+
+Supporting: pre-flight budget refusal (`estimate × 1.3 > budget` ⇒ do not start);
+arm-run-BOUNDARY checkpointing (a partially sent arm run is kept as receipts but
+may never feed a verdict — a mid-arm resume would splice two warming histories).
+
+Pinned as non-negotiable: `MAX_BYTE_RATIO` 0.95, `MIN_DRIFT_SMOKE_TOLERANCE` 0.1
+and `orderTolerance` 0.15 are constants, not knobs; aggressive stays refused by
+`clampModeToFloor`; the offline model may not be recalibrated against the run it
+validates; no savings claim may be published either way. A refusal from a proven
+instrument closes the spec — an accepted verdict from an unproven one does not.
+
+## [2026-08-01] plan | child-spec #2 TDD plan written
+
+`docs/superpowers/plans/2026-08-01-bench-replay-real-gate-run-plan.md` — four
+tasks, only the last one spends money.
+
+T1 `isolation-probe.ts`, T2 `budget.ts`, T3 `run-journal.ts` are pure modules
+driven through the existing `Send` seam, so every test runs against a fake
+upstream at zero API cost. The T1 fake reproduces the real defect directly: a
+`stripsMarker: true` upstream strips the marker-bearing block before computing
+its cache key, which is what the platform does to `system[0]` — under it the
+probe must report `isolationLive: false`. That is the regression the previous
+mechanism had no way to fail.
+
+T4 is the operator runbook plus the export surface; the paid run is a procedure,
+not code, and three of its outcomes are STOP (positive control never warmed,
+isolation inert, ratio between 0.10 and 0.90).
+
+Two self-review fixes before saving: the probe test hardcoded a wrong marker
+prefix (`CACHE_NAMESPACE_PREFIX` is module-private — the test now builds
+expectations with the exported `cacheNamespaceMarker`), and the budget test
+re-derived its expectation with the same `simulateCacheCost` +
+`normalizedCostUsd` the implementation uses, which passes for any
+wrong-but-consistent formula. Replaced with properties a wrong implementation
+breaks: the x4 relation, monotonicity in recording size, and output priced at
+`GENERATION_CAP_TOKENS`.
+
+## [2026-08-01] feat | child-spec #2 landed: the gate run has an instrument
+
+Three modules, no API spend in tests. `runIsolationProbe` derives isolation from
+the API's own usage — POS proves a read is observable, NEG asserts it is not —
+because the predecessor was inert while every "the bodies differ" test passed.
+`estimateGateRunBudget` refuses to start a run whose safety-adjusted cost
+exceeds the budget. `run-journal` checkpoints at the arm-run BOUNDARY: a partial
+run keeps its receipts and never feeds a verdict.
+
+`S` remains open until the paid run; the runbook is the procedure.
