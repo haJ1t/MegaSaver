@@ -374,7 +374,11 @@ async function decide(
   // mechanism once cited here was retracted (wiki/syntheses/saver-cache-churn,
   // CORRECTION 2026-07-30). The first-sight ledger is the conservative choice
   // while the A4 billed-S leg is open.
-  const outputHash = hashToolOutput(parts.join("\n"));
+  // "\0" join, not "\n": streams routinely contain newlines, so a newline
+  // join aliases part boundaries ({a\nb, c} == {a, b\nc}) and a different
+  // response could read as already-seen — an aliased skip is a silent
+  // compression loss, unlike the ledger's usual fail-open direction.
+  const outputHash = hashToolOutput(parts.join("\0"));
   if (deps.hasSeenOutput(deps.storeRoot, workspaceKey, sessionId, outputHash)) return PASSTHROUGH;
 
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
