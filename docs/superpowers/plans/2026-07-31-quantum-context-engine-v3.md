@@ -127,27 +127,62 @@ Run subagent review for Phase 0 telemetry and benchmark readiness.
 - Spec Ref: Section 21.2 #3 (`delivery-cache-alignment`), #4 (`recovery-single-coordinate-space`)
 
 **Interfaces:**
-- Consumes: `SeenHashLedger` from `@megasaver/core`
-- Produces: `evaluateCacheAlignedTransform(content: string, hash: string): TransformDecision`
+- Consumes: `seenLedger: Set<string>` from `@megasaver/core`
+- Produces: `evaluateCacheAlignedTransform(content: string, hash: string, seenLedger: Set<string>, coordinates?: CoordinateBounds): TransformDecision`
 
-- [ ] **Step 1: Write failing test for S6a first-sight-only transform decision**
+```typescript
+export interface CoordinateBounds {
+  rawStartLine: number;
+  rawEndLine: number;
+  casHash?: string;
+}
+
+export type TransformAction = 'TRANSFORM_FIRST_SIGHT' | 'PASSTHROUGH' | 'EMIT_UNCHANGED_MARKER';
+
+export interface TransformDecision {
+  action: TransformAction;
+  contentHash: string;
+  outputContent: string;
+  reason: string;
+  coordinates?: CoordinateBounds;
+}
+```
+
+- [ ] **Step 1: Write failing unit test for S6a decision automaton & recovery bounds**
 
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { evaluateCacheAlignedTransform } from '../../src/saver/delivery-cache-alignment.js';
 
 describe('delivery-cache-alignment', () => {
-  it('applies transform on first-sight but emits marker/passthrough on seen content', () => {
+  it('applies transform and atomically registers hash on first sight', () => {
     const content = 'export function foo() { return 42; }';
     const hash = 'hash_abc123';
     const ledger = new Set<string>();
 
     const firstDecision = evaluateCacheAlignedTransform(content, hash, ledger);
     expect(firstDecision.action).toBe('TRANSFORM_FIRST_SIGHT');
+    expect(ledger.has(hash)).toBe(true);
+  });
 
-    ledger.add(hash);
+  it('emits raw PASSTHROUGH on repeat sight to preserve prompt cache zero-churn', () => {
+    const content = 'export function foo() { return 42; }';
+    const hash = 'hash_abc123';
+    const ledger = new Set<string>([hash]);
+
     const secondDecision = evaluateCacheAlignedTransform(content, hash, ledger);
-    expect(secondDecision.action).toBe('EMIT_UNCHANGED_MARKER');
+    expect(secondDecision.action).toBe('PASSTHROUGH');
+    expect(secondDecision.outputContent).toBe(content);
+  });
+
+  it('generates I14/E7 single-coordinate recovery markers when requested', () => {
+    const content = 'export function bar() { return 100; }';
+    const hash = 'hash_xyz789';
+    const ledger = new Set<string>();
+    const coords = { rawStartLine: 1, rawEndLine: 10, casHash: hash };
+
+    const decision = evaluateCacheAlignedTransform(content, hash, ledger, coords);
+    expect(decision.coordinates).toEqual(coords);
   });
 });
 ```
@@ -155,45 +190,69 @@ describe('delivery-cache-alignment', () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @megasaver/core test`
-Expected: FAIL
+Expected: FAIL with module missing error.
 
-- [ ] **Step 3: Implement S6a decision automaton**
+- [ ] **Step 3: Write minimal implementation for S6a decision automaton**
 
 ```typescript
-export type TransformAction = 'TRANSFORM_FIRST_SIGHT' | 'EMIT_UNCHANGED_MARKER' | 'PASSTHROUGH';
+export interface CoordinateBounds {
+  rawStartLine: number;
+  rawEndLine: number;
+  casHash?: string;
+}
+
+export type TransformAction = 'TRANSFORM_FIRST_SIGHT' | 'PASSTHROUGH' | 'EMIT_UNCHANGED_MARKER';
 
 export interface TransformDecision {
   action: TransformAction;
   contentHash: string;
+  outputContent: string;
   reason: string;
+  coordinates?: CoordinateBounds;
 }
 
 export function evaluateCacheAlignedTransform(
   content: string,
   hash: string,
-  seenLedger: Set<string>
+  seenLedger: Set<string>,
+  coordinates?: CoordinateBounds
 ): TransformDecision {
   if (seenLedger.has(hash)) {
     return {
-      action: 'EMIT_UNCHANGED_MARKER',
+      action: 'PASSTHROUGH',
       contentHash: hash,
-      reason: 'Content already seen in ledger; preventing cache churn',
+      outputContent: content,
+      reason: 'Content already in seen-hash ledger; raw passthrough preserving prompt cache',
+      coordinates,
     };
   }
+
+  // Atomically register seen hash
+  seenLedger.add(hash);
+
   return {
     action: 'TRANSFORM_FIRST_SIGHT',
     contentHash: hash,
-    reason: 'First sight content; chunk transform allowed',
+    outputContent: content,
+    reason: 'First sight content; transformed chunk registered in ledger',
+    coordinates,
   };
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Run unit tests to verify they pass**
 
 Run: `pnpm --filter @megasaver/core test`
 Expected: PASS
 
-- [ ] **Step 5: Architect & Critic subagent review gate for S6a Delivery Engine**
+- [ ] **Step 5: Execute empirical benchmark replay exit gate**
+
+Run: `pnpm --filter @megasaver/bench-replay test`
+Expected: Assert Stage A benchmark replay passes with `geomean >= 1.00x` [TARGET] on clean M7 store.
+
+- [ ] **Step 6: Architect & Critic subagent review gate for Task 1**
+
+Run subagent review for Stage A closure.
 
 ---
 

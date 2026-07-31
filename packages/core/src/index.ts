@@ -218,3 +218,10 @@ export {
 } from "./autopilot.js";
 export { type VerificationBadge, verificationBadgeFor } from "./verification-badge.js";
 export type { HandoffDirtyState } from "./handoff-export.js";
+export {
+  evaluateCacheAlignedTransform,
+  type CoordinateBounds,
+  type TransformAction,
+  type TransformDecision,
+} from "./delivery-cache-alignment.js";
+
