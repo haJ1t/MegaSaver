@@ -97,6 +97,14 @@ export type RecordOverlayOutputInput = {
   // generic (today's behavior). The hook path fills it from the captured
   // session prompt; proxy tools already pass their own explicit intent.
   intent?: string;
+  // Which stream of a dual-stream (stdout+stderr) tool response this part is.
+  // Joins the overlay event identity when present: byte-identical parts on
+  // BOTH streams otherwise derive the same ove- id and the second event is
+  // silently absorbed. Absent = old identity (backward compatible — old
+  // events and single-part callers keep their ids). The daemon /excerpt body
+  // carries it so the daemon and the in-process fallback derive the SAME id
+  // for the same part.
+  streamSlot?: "stdout" | "stderr";
   // F30: when true and the decision compresses with a stored chunk set, the
   // canonical recovery footer is appended to returnedText INSIDE record so
   // the persisted returnedBytes/bytesSaved count everything the model
@@ -357,9 +365,12 @@ export async function recordAndFilterOverlayOutput(
   // creation bucket (exact createdAt would differ between the racing writers'
   // clocks) so appendOverlayEvent can absorb the replay as a no-op.
   const createdBucket = Math.floor(Date.parse(createdAt) / OVERLAY_EVENT_ID_BUCKET_MS);
+  // streamSlot joins the identity ONLY when present, so an absent slot hashes
+  // to the exact pre-slot id (old daemons/callers stay id-compatible).
+  const slotSegment = input.streamSlot !== undefined ? `${input.streamSlot}\0` : "";
   const overlayEventId = `ove-${createHash("sha256")
     .update(
-      `${input.workspaceKey}\0${input.liveSessionId}\0${input.sourceKind}\0${input.mode}\0${input.label}\0${createdBucket}\0`,
+      `${input.workspaceKey}\0${input.liveSessionId}\0${input.sourceKind}\0${input.mode}\0${input.label}\0${createdBucket}\0${slotSegment}`,
     )
     .update(input.raw)
     .digest("hex")

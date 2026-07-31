@@ -357,6 +357,12 @@ async function decide(
   const shape = readOutputShape(p["tool_response"]);
   if (shape === null) return PASSTHROUGH;
   const parts = "streams" in shape ? [shape.streams.stdout, shape.streams.stderr] : [shape.raw];
+  // Dual-stream parts share workspace/session/label/raw-independent identity
+  // inputs, so byte-identical stdout+stderr would derive one overlay event id
+  // and the second event would be absorbed — name the slot so record() can
+  // discriminate. Single-part shapes stay slotless (old event identity).
+  const slots: readonly ("stdout" | "stderr" | undefined)[] =
+    "streams" in shape ? ["stdout", "stderr"] : [undefined];
   const totalBytes = parts.reduce((sum, part) => sum + Buffer.byteLength(part, "utf8"), 0);
   const floorBytes = minBytesFor(tool, settings.mode);
   // B8: dual-stream output gates on the COMBINED size, so a small stream never
@@ -375,8 +381,9 @@ async function decide(
   const label = labelOf(p["tool_input"], tool);
   ctx.stage = "record";
   const results: RecordOverlayOutputResult[] = [];
-  for (const part of parts) {
+  for (const [i, part] of parts.entries()) {
     const partBytes = Buffer.byteLength(part, "utf8");
+    const slot = slots[i];
     // Each part forwards its byte share of the floor, so clearing the combined
     // gate above is exactly clearing every per-part threshold — the hook stays
     // the single eligibility authority (B8) and record()'s admission guard
@@ -406,6 +413,7 @@ async function decide(
         // reuses the same id (idempotent store, no orphan chunk sets).
         newId: () => `cs-${partHash.slice(0, 32)}`,
         ...(sessionIntent !== undefined ? { intent: sessionIntent } : {}),
+        ...(slot !== undefined ? { streamSlot: slot } : {}),
       }),
     );
   }

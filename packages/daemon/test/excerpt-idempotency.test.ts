@@ -70,6 +70,53 @@ describe("excerpt daemon-write-then-timeout-fallback idempotency", () => {
     expect(evidence).toHaveLength(1);
   });
 
+  it("daemon and fallback derive the SAME id for the same dual-stream part", async () => {
+    // streamSlot rides the /excerpt body so a slot-carrying part dedupes
+    // across the daemon write and the in-process replay, while its
+    // byte-identical sibling stream stays a distinct event.
+    const daemonRes = await excerptHandler(store, {
+      workspaceKey: WS,
+      liveSessionId: LIVE,
+      raw: RAW,
+      sourceKind: "command",
+      label: "run tests",
+      mode: "aggressive",
+      storeRawOutput: true,
+      chunkSetId: CHUNK_SET_ID,
+      streamSlot: "stdout",
+    });
+    expect(daemonRes.status).toBe(200);
+
+    const replay = await recordAndFilterOverlayOutput({
+      storeRoot: store,
+      workspaceKey: WS,
+      liveSessionId: LIVE,
+      raw: RAW,
+      sourceKind: "command",
+      label: "run tests",
+      mode: "aggressive",
+      storeRawOutput: true,
+      newId: () => CHUNK_SET_ID,
+      streamSlot: "stdout",
+    });
+    expect(replay.decision).toBe("compressed");
+    expect(readOverlayEvents({ root: store }, WS, LIVE)).toHaveLength(1);
+
+    const sibling = await excerptHandler(store, {
+      workspaceKey: WS,
+      liveSessionId: LIVE,
+      raw: RAW,
+      sourceKind: "command",
+      label: "run tests",
+      mode: "aggressive",
+      storeRawOutput: true,
+      chunkSetId: CHUNK_SET_ID,
+      streamSlot: "stderr",
+    });
+    expect(sibling.status).toBe(200);
+    expect(readOverlayEvents({ root: store }, WS, LIVE)).toHaveLength(2);
+  });
+
   it("a DIFFERENT output in the same session still records its own event", async () => {
     await excerptHandler(store, {
       workspaceKey: WS,
