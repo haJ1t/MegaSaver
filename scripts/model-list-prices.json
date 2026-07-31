@@ -1,0 +1,10 @@
+{
+  "capturedAt": "2026-08-01",
+  "source": "public pricing pages, USD per million input tokens",
+  "unknownModelId": "claude-sonnet-5",
+  "prices": {
+    "claude-opus-5": { "inputPerMTokUsd": 15.0 },
+    "claude-sonnet-5": { "inputPerMTokUsd": 3.0 },
+    "claude-haiku-4-5": { "inputPerMTokUsd": 0.8 }
+  }
+}
