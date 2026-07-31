@@ -804,6 +804,37 @@ describe("wave-1 shapes", () => {
     expect(calls.map((c) => c.streamSlot)).toEqual(["stdout", "stderr"]);
   });
 
+  it("dual-stream part boundaries cannot alias in the seen-ledger hash", async () => {
+    const X = "x".repeat(8_000);
+    const Y = "y".repeat(8_000);
+    const Z = "z".repeat(8_000);
+    const payload = (stdout: string, stderr: string) => ({
+      tool_name: "Bash",
+      tool_input: { command: "pnpm build" },
+      tool_response: { stdout, stderr, interrupted: false, isImage: false },
+      session_id: "live-1",
+      cwd: "/Users/x/proj",
+    });
+    const seen: string[] = [];
+    const d1 = deps({
+      recordSeenOutput: (_root: string, _wk: string, _sid: string, hash: string) => {
+        seen.push(hash);
+      },
+    });
+    const out1 = await buildSaverDecision(payload(`${X}\n${Y}`, Z), d1);
+    expect("updatedToolOutput" in out1).toBe(true);
+    expect(seen).toHaveLength(1);
+
+    // {X\nY, Z} and {X, Y\nZ} are DIFFERENT responses, but a ledger that
+    // joined parts with "\n" hashed both to hash("X\nY\nZ") — the sibling
+    // was treated as already seen and passed through uncompressed.
+    const d2 = deps({
+      hasSeenOutput: (_root: string, _wk: string, _sid: string, hash: string) => hash === seen[0],
+    });
+    const out2 = await buildSaverDecision(payload(X, `${Y}\n${Z}`), d2);
+    expect("updatedToolOutput" in out2).toBe(true);
+  });
+
   it("passes no streamSlot for a single-stream response (old event identity)", async () => {
     const calls: Array<{ streamSlot?: string }> = [];
     const record = vi.fn(async (input: { streamSlot?: string }) => {
