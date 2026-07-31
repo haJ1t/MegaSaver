@@ -28,6 +28,17 @@ export async function generateWarmStartContextPack(
   const maxTokens = options.maxTokens ?? 4000;
   const timeoutMs = options.timeoutMs ?? 500;
 
+  if (timeoutMs <= 0) {
+    return {
+      intent,
+      additionalContext: "",
+      characterCount: 0,
+      isTimedOut: true,
+      contentHash: "e3b0c44298fc1c14",
+      isScaffold: true,
+    };
+  }
+
   let timerId: ReturnType<typeof setTimeout> | undefined;
 
   const timeoutPromise = new Promise<WarmStartPack>((resolve) => {

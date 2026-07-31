@@ -51,6 +51,25 @@ describe("mesh-handle (I8 Compliance)", () => {
     expect(wrongNs).toBeNull();
   });
 
+  it("rejects resolution (returns null) if options is missing or URI is malformed (Fail-Closed)", () => {
+    const payload = "payload";
+    const cwd = "/Users/ozger/Desktop/MegaSaver";
+    const ns = "sess_1";
+    const store = new Map<string, string>([["invalid-uri", payload]]);
+
+    // Missing options -> null
+    // @ts-expect-error testing missing options
+    expect(resolveMeshHandle("msr://ws/ns/hash#kind", store)).toBeNull();
+
+    // Malformed URI -> null
+    expect(
+      resolveMeshHandle("invalid-uri", store, {
+        requestedWorkspacePath: cwd,
+        requestedRunNamespace: ns,
+      }),
+    ).toBeNull();
+  });
+
   it("parses valid msr:// URIs into components", () => {
     const parsed = parseMeshUri("msr://wsk_abc/sess_123/hash_456#ast-skeleton");
     expect(parsed).toEqual({
@@ -59,6 +78,12 @@ describe("mesh-handle (I8 Compliance)", () => {
       contentHash: "hash_456",
       kind: "ast-skeleton",
     });
+  });
+
+  it("returns null when parsing invalid URIs", () => {
+    expect(parseMeshUri("http://example.com")).toBeNull();
+    expect(parseMeshUri("msr://only_one_part")).toBeNull();
+    expect(parseMeshUri("")).toBeNull();
   });
 
   it("throws an Error if workspacePath or runNamespace is missing at minting time", () => {

@@ -20,7 +20,7 @@ export interface ResolveMeshOptions {
 
 /**
  * Parses a canonical msr://<ws>/<ns>/<hash>#kind URI into structured components.
- * Returns null if URI format is invalid.
+ * Returns null if URI format is invalid or missing scheme/namespace.
  */
 export function parseMeshUri(uri: string): {
   workspaceKey: WorkspaceKey;
@@ -28,7 +28,9 @@ export function parseMeshUri(uri: string): {
   contentHash: string;
   kind: string;
 } | null {
-  if (!uri.startsWith("msr://")) return null;
+  if (!uri || typeof uri !== "string" || !uri.startsWith("msr://")) {
+    return null;
+  }
 
   const withoutScheme = uri.slice(6); // remove msr://
   const [pathPart, kindPart] = withoutScheme.split("#");
@@ -80,36 +82,30 @@ export function createMeshHandle(
 }
 
 /**
- * Resolves a MeshHandle or URI from the CAS store with I8 workspace & namespace protection.
- * Rejects resolution if requested workspaceKey or runNamespace does not match the handle (workspace_mismatch).
+ * Resolves a MeshHandle or URI from the CAS store with REQUIRED I8 workspace & namespace protection.
+ * FAIL-CLOSED: Rejects resolution (returns null) if options is missing, URI is malformed,
+ * or requested workspaceKey/runNamespace does not match the handle (workspace_mismatch).
  */
 export function resolveMeshHandle(
   handleOrUri: MeshHandle | string,
   store: Map<string, string>,
-  options?: ResolveMeshOptions,
+  options: ResolveMeshOptions,
 ): string | null {
-  const uri = typeof handleOrUri === "string" ? handleOrUri : handleOrUri.uri;
+  if (!options || !options.requestedWorkspacePath || !options.requestedRunNamespace) {
+    return null;
+  }
 
-  if (options) {
-    const parsed = parseMeshUri(uri);
-    if (parsed) {
-      const requestedKey = encodeWorkspaceKey(options.requestedWorkspacePath);
-      if (
-        requestedKey !== parsed.workspaceKey ||
-        options.requestedRunNamespace !== parsed.runNamespace
-      ) {
-        // I8 Enforcement: Reject cross-workspace / cross-namespace resolution
-        return null;
-      }
-    } else if (typeof handleOrUri !== "string") {
-      const requestedKey = encodeWorkspaceKey(options.requestedWorkspacePath);
-      if (
-        requestedKey !== handleOrUri.workspaceKey ||
-        options.requestedRunNamespace !== handleOrUri.runNamespace
-      ) {
-        return null;
-      }
-    }
+  const uri = typeof handleOrUri === "string" ? handleOrUri : handleOrUri.uri;
+  const parsed = parseMeshUri(uri);
+  if (!parsed) {
+    // Fail-Closed: Reject malformed or non-msr:// URIs immediately
+    return null;
+  }
+
+  const requestedKey = encodeWorkspaceKey(options.requestedWorkspacePath);
+  if (requestedKey !== parsed.workspaceKey || options.requestedRunNamespace !== parsed.runNamespace) {
+    // I8 Enforcement: Reject cross-workspace / cross-namespace resolution
+    return null;
   }
 
   return store.get(uri) ?? null;

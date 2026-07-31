@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TelemetryValidationError } from "../src/errors.js";
-import { isStoreFresh, stampWorkspaceTelemetry } from "../src/workspace-stamp.js";
+import { type TelemetryOptions, isStoreFresh, stampWorkspaceTelemetry } from "../src/workspace-stamp.js";
 
 describe("workspace-stamp (Child-Spec #1 Field Telemetry)", () => {
   const tmpBase = join(process.cwd(), "tmp-test-store-freshness");
@@ -27,7 +27,6 @@ describe("workspace-stamp (Child-Spec #1 Field Telemetry)", () => {
   it("isStoreFresh returns true only for an existing directory with no stats or content subdirs", () => {
     expect(isStoreFresh(tmpBase)).toBe(true);
 
-    // Add stats dir -> should become false
     const statsDir = join(tmpBase, "stats");
     mkdirSync(statsDir, { recursive: true });
     expect(isStoreFresh(tmpBase)).toBe(false);
@@ -39,7 +38,7 @@ describe("workspace-stamp (Child-Spec #1 Field Telemetry)", () => {
     expect(isStoreFresh(tmpBase)).toBe(false);
   });
 
-  it("stampWorkspaceTelemetry throws TelemetryValidationError with missing_workspace_path when workspacePath is empty", () => {
+  it("stampWorkspaceTelemetry parses Zod schema and throws TelemetryValidationError with missing_workspace_path when workspacePath is empty", () => {
     try {
       stampWorkspaceTelemetry(
         { id: "evt_1" },
@@ -52,7 +51,7 @@ describe("workspace-stamp (Child-Spec #1 Field Telemetry)", () => {
     }
   });
 
-  it("stampWorkspaceTelemetry throws TelemetryValidationError with missing_store_root when storeRoot is empty", () => {
+  it("stampWorkspaceTelemetry parses Zod schema and throws TelemetryValidationError with missing_store_root when storeRoot is empty", () => {
     try {
       stampWorkspaceTelemetry(
         { id: "evt_1" },
@@ -65,11 +64,11 @@ describe("workspace-stamp (Child-Spec #1 Field Telemetry)", () => {
     }
   });
 
-  it("stampWorkspaceTelemetry throws TelemetryValidationError with missing_session_id when liveSessionId is missing (no dummy fallbacks)", () => {
+  it("stampWorkspaceTelemetry throws TelemetryValidationError with missing_session_id when liveSessionId is missing from both options and event payload", () => {
     try {
       stampWorkspaceTelemetry(
         { id: "evt_1" },
-        { workspacePath: "/Users/test/repo", storeRoot: tmpBase, liveSessionId: "" },
+        { workspacePath: "/Users/test/repo", storeRoot: tmpBase },
       );
       expect.unreachable("should have thrown TelemetryValidationError");
     } catch (err) {
@@ -101,13 +100,17 @@ describe("workspace-stamp (Child-Spec #1 Field Telemetry)", () => {
     expect(new Date(stamped.createdAt).toISOString()).toBe(stamped.createdAt);
   });
 
-  it("preserves liveSessionId from event payload if not explicitly passed in options", () => {
+  it("preserves liveSessionId from event payload without requiring type casts when options omits liveSessionId", () => {
     const cwd = "/Users/ozger/Desktop/MegaSaver";
-
-    const stamped = stampWorkspaceTelemetry({ id: "evt_456", liveSessionId: "sess_payload_99" }, {
+    const options: TelemetryOptions = {
       workspacePath: cwd,
       storeRoot: tmpBase,
-    } as unknown as TelemetryOptions);
+    };
+
+    const stamped = stampWorkspaceTelemetry(
+      { id: "evt_456", liveSessionId: "sess_payload_99" },
+      options,
+    );
 
     expect(stamped.liveSessionId).toBe("sess_payload_99");
   });

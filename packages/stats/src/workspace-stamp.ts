@@ -7,7 +7,7 @@ import { TelemetryValidationError } from "./errors.js";
 export const telemetryOptionsSchema = z.object({
   workspacePath: z.string().trim().min(1, "workspacePath must be non-empty"),
   storeRoot: z.string().trim().min(1, "storeRoot must be non-empty"),
-  liveSessionId: z.string().trim().min(1, "liveSessionId must be non-empty"),
+  liveSessionId: z.string().trim().min(1, "liveSessionId must be non-empty").optional(),
 });
 
 export type TelemetryOptions = z.infer<typeof telemetryOptionsSchema>;
@@ -30,56 +30,55 @@ export function isStoreFresh(storeRoot?: string): boolean {
 
 /**
  * Stamps a telemetry event with a deterministic workspaceKey, session ID, and freshness state.
- * Validates options using telemetryOptionsSchema and throws TelemetryValidationError on missing boundary fields.
+ * Validates boundary options using telemetryOptionsSchema.safeParse and throws typed TelemetryValidationError on invalid fields.
  */
 export function stampWorkspaceTelemetry<T extends Record<string, unknown>>(
   event: T,
   options: TelemetryOptions,
 ) {
-  if (!options || typeof options !== "object") {
-    throw new TelemetryValidationError("schema_invalid", "options object required");
-  }
-
-  if (
-    !options.workspacePath ||
-    typeof options.workspacePath !== "string" ||
-    options.workspacePath.trim() === ""
-  ) {
+  const parsed = telemetryOptionsSchema.safeParse(options);
+  if (!parsed.success) {
+    const firstIssue = parsed.error.issues[0];
+    const pathName = firstIssue?.path[0];
+    if (pathName === "workspacePath") {
+      throw new TelemetryValidationError(
+        "missing_workspace_path",
+        firstIssue?.message ?? "stampWorkspaceTelemetry requires a non-empty workspacePath",
+      );
+    }
+    if (pathName === "storeRoot") {
+      throw new TelemetryValidationError(
+        "missing_store_root",
+        firstIssue?.message ?? "stampWorkspaceTelemetry requires a non-empty storeRoot",
+      );
+    }
+    if (pathName === "liveSessionId") {
+      throw new TelemetryValidationError(
+        "missing_session_id",
+        firstIssue?.message ?? "stampWorkspaceTelemetry requires a non-empty liveSessionId",
+      );
+    }
     throw new TelemetryValidationError(
-      "missing_workspace_path",
-      "stampWorkspaceTelemetry requires a non-empty workspacePath",
+      "schema_invalid",
+      firstIssue?.message ?? "stampWorkspaceTelemetry options schema invalid",
     );
   }
 
-  if (
-    !options.storeRoot ||
-    typeof options.storeRoot !== "string" ||
-    options.storeRoot.trim() === ""
-  ) {
-    throw new TelemetryValidationError(
-      "missing_store_root",
-      "stampWorkspaceTelemetry requires a non-empty storeRoot",
-    );
-  }
-
+  const validOptions = parsed.data;
   const rec = event as Record<string, unknown>;
   // biome-ignore lint/complexity/useLiteralKeys: required for TS4111 noUncheckedIndexedAccess
   const rawSessionId = typeof rec["liveSessionId"] === "string" ? rec["liveSessionId"] : undefined;
-  const effectiveSessionId = options.liveSessionId ?? rawSessionId;
+  const effectiveSessionId = validOptions.liveSessionId ?? rawSessionId;
 
-  if (
-    !effectiveSessionId ||
-    typeof effectiveSessionId !== "string" ||
-    effectiveSessionId.trim() === ""
-  ) {
+  if (!effectiveSessionId || typeof effectiveSessionId !== "string" || effectiveSessionId.trim() === "") {
     throw new TelemetryValidationError(
       "missing_session_id",
       "stampWorkspaceTelemetry requires a valid liveSessionId (dummy fallbacks forbidden)",
     );
   }
 
-  const workspaceKey: WorkspaceKey = encodeWorkspaceKey(options.workspacePath);
-  const fresh = isStoreFresh(options.storeRoot);
+  const workspaceKey: WorkspaceKey = encodeWorkspaceKey(validOptions.workspacePath);
+  const fresh = isStoreFresh(validOptions.storeRoot);
 
   return {
     ...event,
