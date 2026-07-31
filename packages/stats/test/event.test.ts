@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tokenSaverEventSchema } from "../src/event.js";
+import { deltaTokensOf, overlayTokenSaverEventSchema, tokenSaverEventSchema } from "../src/event.js";
 
 const SESSION_ID = "11111111-1111-4111-8111-111111111111";
 const PROJECT_ID = "22222222-2222-4222-8222-222222222222";
@@ -74,5 +74,47 @@ describe("tokenSaverEventSchema", () => {
 
   it("rejects an empty chunkSetId when present", () => {
     expect(tokenSaverEventSchema.safeParse({ ...validEvent, chunkSetId: "" }).success).toBe(false);
+  });
+});
+
+describe("measured token fields", () => {
+  const base = {
+    id: "ove-1",
+    liveSessionId: "sess-1",
+    workspaceKey: "wsk-1",
+    createdAt: "2026-08-01T00:00:00.000Z",
+    sourceKind: "file" as const,
+    label: "read",
+    rawBytes: 4000,
+    returnedBytes: 1000,
+    bytesSaved: 3000,
+    deltaBytes: 3000,
+    savingRatio: 0.75,
+    summary: "s",
+  };
+
+  it("parses a pre-measurement row that carries no token fields", () => {
+    const parsed = overlayTokenSaverEventSchema.parse(base);
+    expect(deltaTokensOf(parsed)).toBeUndefined();
+  });
+
+  it("keeps a negative deltaTokens — inflation must stay visible", () => {
+    const parsed = overlayTokenSaverEventSchema.parse({
+      ...base,
+      rawTokens: 900,
+      returnedTokens: 1300,
+      deltaTokens: -400,
+    });
+    expect(parsed.deltaTokens).toBe(-400);
+    expect(deltaTokensOf(parsed)).toBe(-400);
+  });
+
+  it("rejects a negative rawTokens — a count cannot be below zero", () => {
+    expect(() => overlayTokenSaverEventSchema.parse({ ...base, rawTokens: -1 })).toThrow();
+  });
+
+  it("never derives deltaTokens from bytes when the field is absent", () => {
+    const parsed = overlayTokenSaverEventSchema.parse({ ...base, rawTokens: 900 });
+    expect(deltaTokensOf(parsed)).toBeUndefined();
   });
 });

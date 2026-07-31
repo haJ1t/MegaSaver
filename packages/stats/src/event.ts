@@ -15,6 +15,12 @@ const safeSegment = z.string().min(1).refine(isSafeSegment, "unsafe path segment
 // pre-B1, so that is the only honest reconstruction).
 const deltaBytesField = z.number().int().optional();
 
+// Measured with the real tokenizer at the write boundary. Optional so every
+// pre-measurement row keeps parsing — absence means UNMEASURED, never zero and
+// never bytes/4. Signed like deltaBytes: negative means the rewrite inflated.
+const tokenCountField = z.number().int().nonnegative().optional();
+const deltaTokensField = z.number().int().optional();
+
 // B3 recovery debt: `kind` marks expansion (chunk re-injection) rows so
 // reports can separate compression credits from recovery debits. Absent =
 // compression (every pre-B3 row). `mode` is optional because an expansion row
@@ -34,6 +40,9 @@ export const tokenSaverEventSchema = z
     returnedBytes: z.number().int().nonnegative(),
     bytesSaved: z.number().int().nonnegative(),
     deltaBytes: deltaBytesField,
+    rawTokens: tokenCountField,
+    returnedTokens: tokenCountField,
+    deltaTokens: deltaTokensField,
     savingRatio: z.number().min(0).max(1),
     chunkSetId: z.string().min(1).optional(),
     summary: z.string(),
@@ -59,6 +68,9 @@ export const overlayTokenSaverEventSchema = z
     returnedBytes: z.number().int().nonnegative(),
     bytesSaved: z.number().int().nonnegative(),
     deltaBytes: deltaBytesField,
+    rawTokens: tokenCountField,
+    returnedTokens: tokenCountField,
+    deltaTokens: deltaTokensField,
     savingRatio: z.number().min(0).max(1),
     chunkSetId: z.string().min(1).optional(),
     summary: z.string(),
@@ -80,4 +92,12 @@ export function deltaBytesOf(event: {
   deltaBytes?: number | undefined;
 }): number {
   return event.deltaBytes ?? event.bytesSaved;
+}
+
+// Deliberately NOT falling back to tokensFromBytes(deltaBytes): a caller that
+// cannot tell a measured token from an estimated one will mix them into one
+// total. Callers that want the estimate ask for it explicitly and report the
+// split (see estimated-value.ts).
+export function deltaTokensOf(event: { deltaTokens?: number | undefined }): number | undefined {
+  return event.deltaTokens;
 }
