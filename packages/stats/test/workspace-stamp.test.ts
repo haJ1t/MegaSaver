@@ -3,7 +3,11 @@ import { join } from "node:path";
 import { encodeWorkspaceKey } from "@megasaver/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TelemetryValidationError } from "../src/errors.js";
-import { type TelemetryOptions, isStoreFresh, stampWorkspaceTelemetry } from "../src/workspace-stamp.js";
+import {
+  type TelemetryOptions,
+  isStoreFresh,
+  stampWorkspaceTelemetry,
+} from "../src/workspace-stamp.js";
 
 describe("workspace-stamp (Child-Spec #1 Field Telemetry)", () => {
   const tmpBase = join(process.cwd(), "tmp-test-store-freshness");

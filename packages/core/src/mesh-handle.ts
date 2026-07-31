@@ -103,7 +103,10 @@ export function resolveMeshHandle(
   }
 
   const requestedKey = encodeWorkspaceKey(options.requestedWorkspacePath);
-  if (requestedKey !== parsed.workspaceKey || options.requestedRunNamespace !== parsed.runNamespace) {
+  if (
+    requestedKey !== parsed.workspaceKey ||
+    options.requestedRunNamespace !== parsed.runNamespace
+  ) {
     // I8 Enforcement: Reject cross-workspace / cross-namespace resolution
     return null;
   }

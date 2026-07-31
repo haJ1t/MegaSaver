@@ -70,7 +70,11 @@ export function stampWorkspaceTelemetry<T extends Record<string, unknown>>(
   const rawSessionId = typeof rec["liveSessionId"] === "string" ? rec["liveSessionId"] : undefined;
   const effectiveSessionId = validOptions.liveSessionId ?? rawSessionId;
 
-  if (!effectiveSessionId || typeof effectiveSessionId !== "string" || effectiveSessionId.trim() === "") {
+  if (
+    !effectiveSessionId ||
+    typeof effectiveSessionId !== "string" ||
+    effectiveSessionId.trim() === ""
+  ) {
     throw new TelemetryValidationError(
       "missing_session_id",
       "stampWorkspaceTelemetry requires a valid liveSessionId (dummy fallbacks forbidden)",
