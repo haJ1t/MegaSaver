@@ -107,12 +107,12 @@ export function stampWorkspaceTelemetry<T extends Record<string, any>>(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @megasaver/telemetry test`
 Expected: PASS
 
-- [ ] **Step 5: Architect & Critic subagent review gate for Phase 0 Grounding**
+- [x] **Step 5: Architect & Critic subagent review gate for Phase 0 Grounding**
 
 Run subagent review for Phase 0 telemetry and benchmark readiness.
 
