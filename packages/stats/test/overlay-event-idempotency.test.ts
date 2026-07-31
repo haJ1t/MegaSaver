@@ -47,7 +47,12 @@ const makeEvent = (overrides: Partial<OverlayTokenSaverEvent> = {}): OverlayToke
 
 describe("appendOverlayEvent — B11 same-identity idempotency", () => {
   it("a second append with the same id is a no-op, not an error", () => {
-    appendOverlayEvent({ store, event: makeEvent(), secretsRedacted: 0, chunksStored: 1 });
+    const first = appendOverlayEvent({
+      store,
+      event: makeEvent(),
+      secretsRedacted: 0,
+      chunksStored: 1,
+    });
     const summary = appendOverlayEvent({
       // The daemon-write-then-client-timeout race replays the SAME compression
       // with a fresh createdAt; only the identity may decide.
@@ -61,6 +66,10 @@ describe("appendOverlayEvent — B11 same-identity idempotency", () => {
       .split("\n")
       .filter((l) => l.trim() !== "");
     expect(lines).toHaveLength(1);
+    // The return tells first sight from replay, so callers (record-output's
+    // evidence write) need no separate pre-check scan of the ledger.
+    expect(first.appended).toBe(true);
+    expect(summary.appended).toBe(false);
     expect(summary.eventsTotal).toBe(1);
     expect(summary.bytesSavedTotal).toBe(800);
     expect(summary.deltaBytesTotal).toBe(800);
@@ -75,6 +84,7 @@ describe("appendOverlayEvent — B11 same-identity idempotency", () => {
       secretsRedacted: 0,
       chunksStored: 1,
     });
+    expect(summary.appended).toBe(true);
     expect(summary.eventsTotal).toBe(2);
     expect(summary.bytesSavedTotal).toBe(1600);
   });
