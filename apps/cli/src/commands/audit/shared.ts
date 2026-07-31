@@ -7,17 +7,25 @@ import {
   savingsHeadlineFromTokens,
 } from "@megasaver/core";
 
-// S4-1 net-first: headline the signed net (clamped at 0 for display, like
-// computeSavingsHeadline) with gross and re-fetched as the breakdown. A pre-B1
-// summary carries no deltaBytesTotal — no expansion data exists, so only the
-// gross line is honest there.
+// U+2212 minus so a loss renders as "−1000", never the hyphen-minus that some
+// fonts render ambiguously next to the ≈/− arithmetic already on these lines.
+function signedNum(n: number): string {
+  return n < 0 ? `−${Math.abs(n)}` : String(n);
+}
+
+// S4-1 net-first: headline the SIGNED net — a window that re-fetched more
+// than it saved must read negative here, not clamp to a flattering zero (only
+// the priced $ clamps). Gross and re-fetched + overhead stay visible as the
+// breakdown; the % is the GROSS savingRatio and is labeled as such so it is
+// never mistaken for a net rate. A pre-B1 summary carries no deltaBytesTotal
+// — no expansion data exists, so only the gross line is honest there.
 function savedLineOf(summary: OverlaySessionTokenSaverStats, savingPct: number): string {
   if (summary.deltaBytesTotal === undefined) {
     return `  saved:   ${summary.bytesSavedTotal} bytes (${savingPct}%)`;
   }
-  const net = Math.max(0, summary.deltaBytesTotal);
+  const net = summary.deltaBytesTotal;
   const refetched = summary.bytesSavedTotal - net;
-  return `  saved:   ${net} bytes net (${summary.bytesSavedTotal} B saved − ${refetched} B re-fetched, ${savingPct}%)`;
+  return `  saved:   ${signedNum(net)} bytes net (${summary.bytesSavedTotal} B saved − ${refetched} B re-fetched + overhead, ${savingPct}% gross)`;
 }
 
 export function formatOverlaySaverCard(
@@ -64,8 +72,9 @@ export function auditSavingsHeadline(summary: AuditSummary): SavingsHeadline {
 }
 
 // Zero GROSS must not flex a fake "$0.00 saved!" — render an honest line. A
-// zero NET with a non-zero gross is different: savings happened and were spent
-// back on expansions, so the breakdown renders and the loss stays visible.
+// non-positive NET with a non-zero gross is different: savings happened and
+// were spent back (and then some) on expansions, so the breakdown renders
+// with the SIGNED net and the loss stays visible.
 export function formatSavingsHeadlineLines(headline: SavingsHeadline): string[] {
   if (headline.grossTokensSaved === 0) {
     return ["No savings recorded in this window yet."];
@@ -73,7 +82,7 @@ export function formatSavingsHeadlineLines(headline: SavingsHeadline): string[] 
   const saved =
     headline.tokensRefetched === 0
       ? `Saved ≈${headline.tokensSaved} tokens`
-      : `Saved ≈${headline.tokensSaved} tokens net (≈${headline.grossTokensSaved} saved − ${headline.tokensRefetched} re-fetched)`;
+      : `Saved ≈${headline.tokensSaved} tokens net (≈${headline.grossTokensSaved} saved − ${headline.tokensRefetched} re-fetched + overhead = ${signedNum(headline.netTokensSigned)} net)`;
   return [
     `${saved} ≈ ${formatDollarsSaved(headline.dollarsSaved)} (est.) · ≈${headline.contextWindowsReclaimed.toFixed(1)} sessions' worth of context (200K each).`,
     SAVINGS_FOOTNOTE,

@@ -142,6 +142,7 @@ describe("mega audit report", () => {
     const payload = JSON.parse(lines.join("\n"));
     expect(payload.savingsHeadline).toEqual({
       tokensSaved: 4700,
+      netTokensSigned: 4700,
       grossTokensSaved: 4700,
       tokensRefetched: 0,
       dollarsSaved: (4700 / 1_000_000) * 3.0,
@@ -218,7 +219,7 @@ describe("formatSavingsHeadlineLines — net-first contract (S4-1)", () => {
   it("headlines the net and shows the gross − re-fetched breakdown", () => {
     const out = formatSavingsHeadlineLines(refetchedHeadline());
     expect(out[0]).toContain("Saved ≈7000 tokens net");
-    expect(out[0]).toContain("≈10000 saved − 3000 re-fetched");
+    expect(out[0]).toContain("≈10000 saved − 3000 re-fetched + overhead = 7000 net");
   });
 
   it("keeps the plain wording when nothing was re-fetched", () => {
@@ -229,7 +230,10 @@ describe("formatSavingsHeadlineLines — net-first contract (S4-1)", () => {
     expect(out[0]).not.toContain("re-fetched");
   });
 
-  it("reports a fully re-fetched window as zero net, not 'no savings'", () => {
+  it("reports a fully re-fetched window with the true loss, not a flattering clamp", () => {
+    // 1000 gross tokens, signed net −1000: the clamped headline $ stays 0, but
+    // the breakdown must show the REAL 2000 re-fetched and the −1000 net —
+    // clamping the refetch at gross hid exactly the sessions that lose money.
     const out = formatSavingsHeadlineLines(
       computeSavingsHeadline({
         bytesSavedTotal: 4_000,
@@ -240,6 +244,6 @@ describe("formatSavingsHeadlineLines — net-first contract (S4-1)", () => {
     );
     expect(out.join("\n")).not.toContain("No savings recorded");
     expect(out[0]).toContain("Saved ≈0 tokens net");
-    expect(out[0]).toContain("≈1000 saved − 1000 re-fetched");
+    expect(out[0]).toContain("≈1000 saved − 2000 re-fetched + overhead = −1000 net");
   });
 });

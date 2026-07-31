@@ -44,11 +44,18 @@ export interface SavingsHeadlineTotals {
 export interface SavingsHeadline {
   // The headline number: NET tokens (gross minus everything re-fetched back),
   // clamped at zero — a negative net is real but a negative "$ saved" reads
-  // as noise; the breakdown fields below keep the loss visible.
+  // as noise. The UNCLAMPED fields below carry the loss: netTokensSigned goes
+  // negative and tokensRefetched exceeds gross exactly when a window lost
+  // more than it saved, so every breakdown renders the true
+  // "X saved − Y re-fetched + overhead = Z net".
   tokensSaved: number;
+  // Signed net, never clamped. Equal to tokensSaved when non-negative.
+  netTokensSigned: number;
   grossTokensSaved: number;
-  // grossTokensSaved − tokensSaved, so "X saved − Y re-fetched = Z net" is
-  // arithmetically exact in the displayed token space.
+  // grossTokensSaved − netTokensSigned (derived from the UNCLAMPED delta, so
+  // it can exceed gross); "X saved − Y = Z net" is arithmetically exact in
+  // the displayed token space. The negative-delta pool includes envelope
+  // overhead, not only refetches — surfaces label it "re-fetched + overhead".
   tokensRefetched: number;
   dollarsSaved: number;
   contextWindowsReclaimed: number;
@@ -66,11 +73,15 @@ export function computeSavingsHeadline(
   opts?: { inputPricePerMTok?: number },
 ): SavingsHeadline {
   const grossTokens = tokensFromBytes(totals.bytesSavedTotal);
-  const netTokens = tokensFromBytes(Math.max(0, totals.deltaBytesTotal ?? totals.bytesSavedTotal));
+  // Signed BEFORE clamping: the clamp is a display rule for the priced $ only.
+  // Deriving tokensRefetched from a pre-clamped net capped it at gross, which
+  // erased exactly the windows that re-fetched more than they saved.
+  const netTokensSigned = tokensFromBytes(totals.deltaBytesTotal ?? totals.bytesSavedTotal);
   return {
-    ...savingsHeadlineFromTokens(netTokens, totals.savingRatio, opts),
+    ...savingsHeadlineFromTokens(Math.max(0, netTokensSigned), totals.savingRatio, opts),
+    netTokensSigned,
     grossTokensSaved: grossTokens,
-    tokensRefetched: grossTokens - netTokens,
+    tokensRefetched: grossTokens - netTokensSigned,
   };
 }
 
@@ -86,6 +97,7 @@ export function savingsHeadlineFromTokens(
   const inputPricePerMTok = opts?.inputPricePerMTok ?? INPUT_PRICE_PER_MTOK_USD;
   return {
     tokensSaved,
+    netTokensSigned: tokensSaved,
     grossTokensSaved: tokensSaved,
     tokensRefetched: 0,
     dollarsSaved: (tokensSaved / 1_000_000) * inputPricePerMTok,

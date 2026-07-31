@@ -65,12 +65,18 @@ function renderText(metrics: ProxyMetrics): string[] {
   return lines;
 }
 
-// S4-1 net-first: the headline byte figure is the signed net (clamped at 0 for
-// display, like computeSavingsHeadline); gross and re-fetched stay visible so
-// an expansion-heavy session cannot hide its cost behind the gross.
+// U+2212 minus so a loss renders as "−1000 B", matching the audit surfaces.
+function signedNum(n: number): string {
+  return n < 0 ? `−${Math.abs(n)}` : String(n);
+}
+
+// S4-1 net-first: the headline byte figure is the SIGNED net — a workspace
+// that re-fetched more than it saved must read negative, not clamp to zero
+// (only the priced $ clamps). The re-fetched + overhead figure derives from
+// the unclamped delta so it can exceed gross, and the % is the GROSS
+// savingRatio, labeled as such so it is never mistaken for a net rate.
 function netSavedBreakdown(grossBytes: number, deltaBytes: number, pctLabel: string): string {
-  const net = Math.max(0, deltaBytes);
-  return `net saved ${net} B (${grossBytes} B saved − ${grossBytes - net} B re-fetched, ${pctLabel})`;
+  return `net saved ${signedNum(deltaBytes)} B (${grossBytes} B saved − ${grossBytes - deltaBytes} B re-fetched + overhead, ${pctLabel} gross)`;
 }
 
 // E27: an overlay session (keyed by Claude transcript UUID) is registered
@@ -95,10 +101,12 @@ function renderOverlayStatus(
       `  bytes: ${s.rawBytesTotal} raw -> ${s.returnedBytesTotal} returned (saved ${pct}%)`,
     );
   } else {
-    const net = Math.max(0, s.deltaBytesTotal);
+    // Signed net — a losing session must read negative here (S4-1); the % is
+    // the gross ratio, labeled so.
+    const net = s.deltaBytesTotal;
     input.stdout(`  bytes: ${s.rawBytesTotal} raw -> ${s.returnedBytesTotal} returned`);
     input.stdout(
-      `  saved: ${net} B net (${s.bytesSavedTotal} B saved − ${s.bytesSavedTotal - net} B re-fetched, ${pct}%)`,
+      `  saved: ${signedNum(net)} B net (${s.bytesSavedTotal} B saved − ${s.bytesSavedTotal - net} B re-fetched + overhead, ${pct}% gross)`,
     );
   }
   input.stdout(`  updated: ${s.updatedAt}`);
