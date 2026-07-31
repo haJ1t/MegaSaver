@@ -34,9 +34,12 @@ Grep/Glob rebuild delivers omission marker + recovery handle with honest
 events); ALL compressor markers non-droppable (shared `EVIDENCE_MARKER`);
 dedupe gated to compressed band + folds counted + keeps highest-scored;
 outline counts its summary (M13); go-test reports omissions; overlay events
-idempotent (B11 double count → ~0.3% bucket-edge residue); unchanged re-read
-ledgered envelope-true; daemon `/expand` charges expansion debt; savings
-surfaces (headline/GUI/CLI) show signed NET with gross−refetched breakdown.
+idempotent (B11 double count; check+append now under the summary lock —
+residuals: bucket skew P ≈ min(1, skew/600 s) modeled not measured, and a
+lock-contended append degrading to unlocked check-then-append); unchanged
+re-read ledgered envelope-true; daemon `/expand` charges expansion debt;
+savings surfaces (headline/GUI/CLI) show signed NET with gross−refetched
+breakdown.
 
 ## Refuted during execution (do not re-open)
 

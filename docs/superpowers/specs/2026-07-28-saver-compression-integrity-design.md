@@ -1213,8 +1213,15 @@ correct-not-rewrite rule:
   "B10" row uses the plan's renumbering (= daemon double count, spec B11) —
   read that row as B11. Spec-B11 is also now fixed: overlay event ids are
   deterministic (`ove-<sha256>` + 10-minute bucket) and the store append is
-  idempotent; residual double-count window is a bucket-edge race (~0.3% of
-  the former exposure).
+  idempotent, with the existence check and the append performed under the
+  same summary file lock (the daemon and the hook fallback are concurrent by
+  construction, so a check-then-append outside the lock could interleave —
+  that was the second residual until this round closed it). Two residuals
+  remain, both named: (a) bucket skew — when the two writers stamp different
+  10-minute buckets they derive different ids; P ≈ min(1, skew/600 s),
+  modeled, not measured; (b) a lock-contended append (50 ms deadline
+  exceeded) degrades to the unlocked check-then-append so no event is lost,
+  re-opening the interleave for that append only.
 - **§7 item 2 (outline M13-live) fixed** — outline counts its summary into
   `returnedBytes`/`returnedTokens`. **Item 3 (unchanged re-read uncounted)
   fixed** — both unchanged branches append an envelope-true, signed event;
