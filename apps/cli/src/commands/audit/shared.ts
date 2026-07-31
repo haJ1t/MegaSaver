@@ -2,6 +2,7 @@ import {
   type AuditSummary,
   type OverlaySessionTokenSaverStats,
   SAVINGS_FOOTNOTE,
+  type SavedValueEstimate,
   type SavingsHeadline,
   formatDollarsSaved,
   savingsHeadlineFromTokens,
@@ -87,4 +88,27 @@ export function formatSavingsHeadlineLines(headline: SavingsHeadline): string[] 
     `${saved} ≈ ${formatDollarsSaved(headline.dollarsSaved)} (est.) · ≈${headline.contextWindowsReclaimed.toFixed(1)} sessions' worth of context (200K each).`,
     SAVINGS_FOOTNOTE,
   ];
+}
+
+const pct = (v: number): string => `${Math.round(v * 100)}%`;
+
+// Tokens first, dollars subordinate. The dollar line may not be emitted without
+// its date and its upper-bound caveat, so no caller can render a bare figure.
+export function renderSavedValueLines(estimate: SavedValueEstimate): string[] {
+  const lines = [
+    `Tokens saved (net, measured):  ${estimate.netTokensMeasured.toLocaleString("en-US")}`,
+    `Estimated value:               ~$${estimate.estimatedUsd.toFixed(2)}  (est.)`,
+    `  published list input rates, captured ${estimate.capturedAt}`,
+    "  upper bound — ignores prompt-cache discounts on tokens that would have",
+    "  been re-read rather than re-sent",
+  ];
+  if (estimate.unknownModelTokenShare > 0) {
+    lines.push(`  unknown-model share: ${pct(estimate.unknownModelTokenShare)}`);
+  }
+  if (estimate.measuredCoverage < 1) {
+    lines.push(
+      `measured coverage: ${pct(estimate.measuredCoverage)} of rows (rest pre-measurement, read as bytes/4)`,
+    );
+  }
+  return lines;
 }
