@@ -380,6 +380,13 @@ async function decide(
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const label = labelOf(p["tool_input"], tool);
   ctx.stage = "record";
+  // The parts record SEQUENTIALLY, which a dual-stream response pays for
+  // twice: worst case is two full daemon timeouts (2 x 1.5 s) before the
+  // in-process fallbacks run, and a throw on part 2 leaves part 1's chunk set
+  // and event already persisted while the whole decision falls to
+  // passthrough. Both are accepted fail-open costs: the stall is bounded and
+  // rare (a hung daemon), and the orphaned part-1 store is recoverable
+  // evidence, never delivered — the model keeps the original output.
   const results: RecordOverlayOutputResult[] = [];
   for (const [i, part] of parts.entries()) {
     const partBytes = Buffer.byteLength(part, "utf8");

@@ -32,6 +32,14 @@ export function fitBudget(chunks: readonly RankedChunk[], budget: number): Ranke
   // like the noise it summarises, so score order alone reliably drops exactly
   // the chunks whose count evidence is irreplaceable. Each still yields to the
   // budget, and no chunk is admitted that would overflow it.
+  //
+  // The grammar test cannot tell a saver-synthesized marker from a RAW line
+  // that happens to match it (e.g. a log replaying an earlier compressed
+  // output), so such raw lines are reserved too. The bias is bounded — the
+  // byte budget is still enforced and displaced chunks are still counted as
+  // drops — and it errs toward keeping lines that CLAIM omitted content,
+  // which is the safe direction. A provenance bit on synthesized markers
+  // would remove the ambiguity; future work.
   for (const chunk of ordered) {
     if (!taken.has(chunk) && EVIDENCE_MARKER.test(chunk.text)) reserve(chunk);
   }
