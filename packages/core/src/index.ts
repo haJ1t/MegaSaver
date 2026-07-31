@@ -229,5 +229,19 @@ export {
   type WarmStartOptions,
   type WarmStartPack,
 } from "./warmstart-pack.js";
+export {
+  createMeshHandle,
+  resolveMeshHandle,
+  type MeshHandle,
+} from "./mesh-handle.js";
+export {
+  computeGraphDelta,
+  type GraphDelta,
+} from "./lcg-daemon.js";
+export {
+  prefetchToLocalCache,
+  getPrefetchedContent,
+} from "./speculative-prefetch.js";
+
 
 
