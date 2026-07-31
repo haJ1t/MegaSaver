@@ -16,7 +16,7 @@ import {
 } from "@megasaver/output-filter";
 import { redact } from "@megasaver/policy";
 import { type TokenSaverMode, type WorkspaceKey, modeToBudget } from "@megasaver/shared";
-import { appendOverlayEvent, hasOverlayEvent } from "@megasaver/stats";
+import { appendOverlayEvent } from "@megasaver/stats";
 import { DEFAULT_SAVING_FLOORS, admitCompression } from "./admission-guard.js";
 import { recoverableChunks } from "./recoverable-chunks.js";
 import { buildRecoveryFooter, looksPreTruncated } from "./recovery-footer.js";
@@ -364,16 +364,12 @@ export async function recordAndFilterOverlayOutput(
     .update(input.raw)
     .digest("hex")
     .slice(0, 32)}`;
-  // Read BEFORE the append: once the line is in, first sight and replay are
-  // indistinguishable, and the evidence write below must run only on the first.
-  const alreadyRecorded = hasOverlayEvent(
-    { root: input.storeRoot },
-    input.workspaceKey,
-    input.liveSessionId,
-    overlayEventId,
-  );
-
-  appendOverlayEvent({
+  // The append itself reports first sight vs replay: the store checks the id
+  // and appends under ONE file lock (the daemon and the hook's timeout
+  // fallback race from two processes, so a separate pre-check here would
+  // re-open the interleave), and the evidence write below runs only when
+  // `appended` says this writer won.
+  const { appended } = appendOverlayEvent({
     store: { root: input.storeRoot },
     event: {
       id: overlayEventId,
@@ -409,7 +405,7 @@ export async function recordAndFilterOverlayOutput(
   // evidence row — the ledger is append-only and its ids are random UUIDs).
   // Fire-and-await but swallowed: evidence failure must never block compressed output
   // (same fail-safe posture as appendOverlayEvent above).
-  if (!alreadyRecorded && input.evidenceStoreRoot !== undefined && chunkSetId !== undefined) {
+  if (appended && input.evidenceStoreRoot !== undefined && chunkSetId !== undefined) {
     const { redacted: redactedReturnedText } = redact(finalText);
     const evidenceRecord: EvidenceRecordInput = {
       evidenceId: randomUUID(),
